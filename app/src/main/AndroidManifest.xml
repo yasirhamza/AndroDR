@@ -43,6 +43,17 @@
                 android:value="GENERIC" />
         </service>
 
+        <!-- FileProvider for sharing exported reports -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
+
         <!-- Disable WorkManager's default auto-initializer so we can provide
              a custom HiltWorkerFactory via Configuration.Provider. -->
         <provider
