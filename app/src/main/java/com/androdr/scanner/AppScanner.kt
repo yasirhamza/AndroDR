@@ -7,7 +7,7 @@ import android.content.pm.PackageManager
 import android.os.Build
 import com.androdr.data.model.AppRisk
 import com.androdr.data.model.RiskLevel
-import com.androdr.ioc.IocDatabase
+import com.androdr.ioc.IocResolver
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -17,7 +17,7 @@ import javax.inject.Singleton
 @Singleton
 class AppScanner @Inject constructor(
     @ApplicationContext private val context: Context,
-    private val iocDatabase: IocDatabase
+    private val iocResolver: IocResolver
 ) {
 
     /**
@@ -65,7 +65,7 @@ class AppScanner @Inject constructor(
 
             // ── 1. IOC database check ──────────────────────────────────────
             val iocHit = try {
-                iocDatabase.isKnownBadPackage(packageName)
+                iocResolver.isKnownBadPackage(packageName)
             } catch (e: Exception) {
                 null
             }

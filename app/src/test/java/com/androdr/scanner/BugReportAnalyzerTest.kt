@@ -2,7 +2,7 @@ package com.androdr.scanner
 
 import android.content.Context
 import com.androdr.ioc.BadPackageInfo
-import com.androdr.ioc.IocDatabase
+import com.androdr.ioc.IocResolver
 import io.mockk.every
 import io.mockk.mockk
 import org.junit.Assert.assertEquals
@@ -14,13 +14,13 @@ import java.io.ByteArrayInputStream
 class BugReportAnalyzerTest {
 
     private val mockContext: Context = mockk(relaxed = true)
-    private val mockIocDatabase: IocDatabase = mockk()
+    private val mockIocResolver: IocResolver = mockk()
     private lateinit var analyzer: BugReportAnalyzer
 
     @Before
     fun setUp() {
-        every { mockIocDatabase.isKnownBadPackage(any()) } returns null
-        analyzer = BugReportAnalyzer(mockContext, mockIocDatabase)
+        every { mockIocResolver.isKnownBadPackage(any()) } returns null
+        analyzer = BugReportAnalyzer(mockContext, mockIocResolver)
     }
 
     private fun streamOf(text: String) =
@@ -154,7 +154,7 @@ class BugReportAnalyzerTest {
             severity = "CRITICAL",
             description = "Commercial stalkerware."
         )
-        every { mockIocDatabase.isKnownBadPackage("com.flexispy.android") } returns stalkerwareInfo
+        every { mockIocResolver.isKnownBadPackage("com.flexispy.android") } returns stalkerwareInfo
 
         val text = "    package:com.flexispy.android"
         val findings = analyzer.analyzeTextEntry("dumpstate", streamOf(text))
@@ -169,7 +169,7 @@ class BugReportAnalyzerTest {
 
     @Test
     fun `legitimate package in installed list produces no finding`() {
-        every { mockIocDatabase.isKnownBadPackage("com.google.android.gms") } returns null
+        every { mockIocResolver.isKnownBadPackage("com.google.android.gms") } returns null
         val text = "    package:com.google.android.gms"
         val findings = analyzer.analyzeTextEntry("dumpstate", streamOf(text))
         assertTrue(findings.none { it.category == "KnownMalware" })
@@ -184,7 +184,7 @@ class BugReportAnalyzerTest {
             severity = "HIGH",
             description = "Moderate risk spyware."
         )
-        every { mockIocDatabase.isKnownBadPackage("com.some.spyware") } returns highSeverityInfo
+        every { mockIocResolver.isKnownBadPackage("com.some.spyware") } returns highSeverityInfo
 
         val text = "    package:com.some.spyware"
         val findings = analyzer.analyzeTextEntry("dumpstate", streamOf(text))
