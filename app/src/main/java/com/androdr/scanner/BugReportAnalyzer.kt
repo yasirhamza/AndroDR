@@ -275,7 +275,7 @@ class BugReportAnalyzer @Inject constructor(
             }
         }
 
-        findings
+        return findings
     }
 
     /**
