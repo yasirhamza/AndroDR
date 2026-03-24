@@ -67,9 +67,9 @@ class AppScanner @Inject constructor(
             val iocHit = try {
                 iocDatabase.isKnownBadPackage(packageName)
             } catch (e: Exception) {
-                false
+                null
             }
-            if (iocHit) {
+            if (iocHit != null) {
                 isKnownMalware = true
                 riskLevel = RiskLevel.CRITICAL
                 reasons.add("Package name matches known malware or stalkerware IOC database entry")
