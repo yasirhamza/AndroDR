@@ -192,26 +192,30 @@ private fun DeviceFlagItem(flag: DeviceFlag) {
                         modifier = Modifier.weight(1f)
                     )
                     Spacer(modifier = Modifier.width(8.dp))
-                    SeverityChip(severity = flag.severity)
+                    SeverityChip(severity = flag.severity, active = flag.isTriggered)
                 }
-                Text(
-                    text = flag.description,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                if (flag.isTriggered) {
+                    Text(
+                        text = flag.description,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
             }
         }
     }
 }
 
 @Composable
-private fun SeverityChip(severity: Severity) {
-    val (color, label) = when (severity) {
-        Severity.CRITICAL -> Pair(Color(0xFFCF6679), "CRITICAL")
-        Severity.HIGH -> Pair(Color(0xFFFF9800), "HIGH")
-        Severity.MEDIUM -> Pair(Color(0xFFFFD600), "MEDIUM")
-        Severity.INFO -> Pair(Color(0xFF00D4AA), "INFO")
+private fun SeverityChip(severity: Severity, active: Boolean = true) {
+    val severityColor = when (severity) {
+        Severity.CRITICAL -> Color(0xFFCF6679)
+        Severity.HIGH -> Color(0xFFFF9800)
+        Severity.MEDIUM -> Color(0xFFFFD600)
+        Severity.INFO -> Color(0xFF00D4AA)
     }
+    val label = severity.name
+    val color = if (active) severityColor else Color(0xFF888888)
     SuggestionChip(
         onClick = {},
         label = {
