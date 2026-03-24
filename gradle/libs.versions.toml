@@ -31,6 +31,10 @@ kotlinxSerialization = "1.7.1"
 # WorkManager
 workManager = "2.9.1"
 
+# Code quality & security
+detekt = "1.23.7"
+owaspDepCheck = "9.2.0"
+
 # Testing
 junit = "4.13.2"
 junitExt = "1.2.1"
@@ -94,3 +98,5 @@ kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "ko
 kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
 hilt = { id = "com.google.dagger.hilt.android", version.ref = "hilt" }
 ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
+detekt = { id = "io.gitlab.arturbosch.detekt", version.ref = "detekt" }
+owasp-dependency-check = { id = "org.owasp.dependencycheck", version.ref = "owaspDepCheck" }
