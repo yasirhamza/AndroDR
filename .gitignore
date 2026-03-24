@@ -9,8 +9,7 @@
 .cxx
 local.properties
 
-# Gradle wrapper jar (keep wrapper properties but not the jar)
-gradle/wrapper/gradle-wrapper.jar
+# Gradle wrapper jar is committed (required for CI and first-time builds)
 
 # Generated files
 app/build/
