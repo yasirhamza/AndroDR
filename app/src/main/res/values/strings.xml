@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- App name -->
+    <string name="app_name">AndroDR</string>
+
+    <!-- Accessibility / content descriptions -->
+    <string name="cd_shield">Shield icon</string>
+
+    <!-- Dashboard -->
+    <string name="run_scan">Run Scan</string>
+    <string name="scanning">Scanning…</string>
+    <string name="summary_app_risks">App Risks</string>
+    <string name="summary_device_flags">Device Flags</string>
+    <string name="summary_dns_blocked">DNS Blocked</string>
+    <string name="summary_last_scan">Last Scan</string>
+    <string name="never">Never</string>
+    <string name="diff_banner">%1$d new risk(s) since last scan</string>
+
+    <!-- App Scan -->
+    <string name="filter_all">All</string>
+    <string name="no_risks_found">No risks found</string>
+    <string name="label_reasons">Reasons</string>
+    <string name="label_dangerous_permissions">Dangerous Permissions</string>
+    <string name="badge_known_malware">⚠ Known Malware</string>
+    <string name="badge_sideloaded">Sideloaded</string>
+
+    <!-- Device Audit -->
+    <string name="device_all_clear">All checks passed</string>
+    <string name="no_scan_yet">Run a scan to see device audit results</string>
+    <string name="section_issues_found">Issues Found</string>
+    <string name="section_checks_passed">Checks Passed</string>
+
+    <!-- DNS Monitor -->
+    <string name="dns_vpn_title">DNS Monitor VPN</string>
+    <string name="vpn_status_running">Running — DNS traffic is being filtered</string>
+    <string name="vpn_status_stopped">Stopped — enable to start filtering</string>
+    <string name="domains_blocked">domain(s) blocked</string>
+    <string name="enable_vpn">Enable VPN</string>
+    <string name="tab_all_events">All Events</string>
+    <string name="tab_blocked_only">Blocked Only</string>
+    <string name="no_dns_events">No DNS events yet</string>
+    <string name="no_blocked_events">No blocked events</string>
+    <string name="status_blocked">BLOCKED</string>
+    <string name="status_allowed">ALLOWED</string>
+
+    <!-- History -->
+    <string name="no_scan_history">No scan history yet</string>
+    <string name="run_first_scan_hint">Go to Dashboard and tap "Run Scan" to get started</string>
+    <string name="scan_summary_title">Scan Summary</string>
+    <string name="first_scan_no_comparison">First scan — no comparison available</string>
+    <string name="diff_new_risks">New Risks</string>
+    <string name="diff_resolved">Resolved</string>
+    <string name="diff_no_changes">No changes since previous scan</string>
+
+    <!-- Bug Report -->
+    <string name="bugreport_instructions_title">How to generate a bug report</string>
+    <string name="bugreport_select_file">Select Bug Report File (.zip)</string>
+    <string name="bugreport_analyzing">Analyzing bug report…</string>
+    <string name="bugreport_empty_state">No analysis yet</string>
+    <string name="bugreport_empty_hint">Select a bug report .zip file to start analysis</string>
+
+    <!-- Navigation labels -->
+    <string name="nav_dashboard">Dashboard</string>
+    <string name="nav_apps">Apps</string>
+    <string name="nav_device">Device</string>
+    <string name="nav_network">Network</string>
+    <string name="nav_history">History</string>
+</resources>
