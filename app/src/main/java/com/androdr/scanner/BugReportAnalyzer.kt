@@ -2,7 +2,7 @@ package com.androdr.scanner
 
 import android.content.Context
 import android.net.Uri
-import com.androdr.ioc.IocDatabase
+import com.androdr.ioc.IocResolver
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -16,7 +16,7 @@ import javax.inject.Singleton
 @Singleton
 class BugReportAnalyzer @Inject constructor(
     @ApplicationContext private val context: Context,
-    private val iocDatabase: IocDatabase
+    private val iocResolver: IocResolver
 ) {
 
     data class BugReportFinding(
@@ -206,7 +206,7 @@ class BugReportAnalyzer @Inject constructor(
                 // ── Installed package list section ───────────────────────
                 installedPackageRegex.findAll(line).forEach { match ->
                     val pkgName = match.groupValues[1]
-                    val iocHit = iocDatabase.isKnownBadPackage(pkgName)
+                    val iocHit = iocResolver.isKnownBadPackage(pkgName)
                     if (iocHit != null) {
                         findings.add(
                             BugReportFinding(
