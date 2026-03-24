@@ -2,10 +2,12 @@ package com.androdr.scanner
 
 import android.content.Context
 import android.net.Uri
+import com.androdr.ioc.IocDatabase
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.BufferedReader
+import java.io.InputStream
 import java.io.InputStreamReader
 import java.util.zip.ZipInputStream
 import javax.inject.Inject
@@ -13,7 +15,8 @@ import javax.inject.Singleton
 
 @Singleton
 class BugReportAnalyzer @Inject constructor(
-    @ApplicationContext private val context: Context
+    @ApplicationContext private val context: Context,
+    private val iocDatabase: IocDatabase
 ) {
 
     data class BugReportFinding(
@@ -57,23 +60,6 @@ class BugReportAnalyzer @Inject constructor(
     private val installedPackageRegex = Regex(
         """^.*package:([a-zA-Z][a-zA-Z0-9._]+)""",
         RegexOption.MULTILINE
-    )
-
-    /**
-     * Hard-coded list of known-bad package names for simple string matching
-     * within the bug-report package list section.  In production this would be
-     * loaded from [com.androdr.ioc.IocDatabase].
-     */
-    private val knownBadPackages = setOf(
-        "com.flexispy.android",
-        "com.mspy.android",
-        "com.cerberus.app",
-        "com.spyware.android",
-        "org.telegram.messenger.spy",
-        "com.thetruthspy",
-        "com.highsterspy",
-        "com.ispyoo",
-        "com.spyera"
     )
 
     // ── Zip entry name patterns that contain useful text ─────────────────────
@@ -121,7 +107,7 @@ class BugReportAnalyzer @Inject constructor(
                     val isRelevant = relevantEntryNames.any { entryName.contains(it) }
 
                     if (isRelevant && !entry.isDirectory) {
-                        val entryFindings = analyzeTextEntry(entryName, zip)
+                        val entryFindings = analyzeTextEntry(entryName, zip as InputStream)
                         findings.addAll(entryFindings)
                     }
 
@@ -145,10 +131,10 @@ class BugReportAnalyzer @Inject constructor(
     }
 
     /**
-     * Reads a single text entry from an already-positioned [ZipInputStream] and
+     * Reads a single text entry from an already-positioned [InputStream] and
      * returns all findings for that entry.  The stream is NOT closed by this method.
      */
-    private fun analyzeTextEntry(entryName: String, zip: ZipInputStream): List<BugReportFinding> {
+    internal fun analyzeTextEntry(entryName: String, stream: InputStream): List<BugReportFinding> {
         val findings = mutableListOf<BugReportFinding>()
 
         // fatalCrashCounts maps process name → crash count
@@ -161,7 +147,7 @@ class BugReportAnalyzer @Inject constructor(
         var lineNumber = 0
 
         try {
-            BufferedReader(InputStreamReader(zip, Charsets.UTF_8)).forEachLine { line ->
+            BufferedReader(InputStreamReader(stream, Charsets.UTF_8)).forEachLine { line ->
                 lineNumber++
 
                 // ── Spyware/stalkerware process names ────────────────────
@@ -220,13 +206,15 @@ class BugReportAnalyzer @Inject constructor(
                 // ── Installed package list section ───────────────────────
                 installedPackageRegex.findAll(line).forEach { match ->
                     val pkgName = match.groupValues[1]
-                    if (pkgName in knownBadPackages) {
+                    val iocHit = iocDatabase.isKnownBadPackage(pkgName)
+                    if (iocHit != null) {
                         findings.add(
                             BugReportFinding(
-                                severity = "CRITICAL",
+                                severity = iocHit.severity,
                                 category = "KnownMalware",
-                                description = "Known malicious package '$pkgName' found in installed " +
-                                    "package list within $entryName"
+                                description = "Known ${iocHit.category} package '$pkgName' " +
+                                    "(${iocHit.name}) found in installed package list within " +
+                                    "$entryName — ${iocHit.description}"
                             )
                         )
                     }
