@@ -32,18 +32,19 @@ A seamless local + remote CI/CD pipeline where:
 
 Already covers:
 - Build + unit tests on every push and PR to `main`
-- Debug APK uploaded as artifact (14-day retention)
+- Debug APK uploaded as artifact with `if: success()` — **change to `if: always()`** so the APK is available even when lint/detekt steps fail
 
 ### Extension: instrumented test job
 
-Add a second job `instrumented-test` to `android-build.yml` that runs **on PRs to `main` only** (not every push, to keep CI fast).
+Add `instrumented-test` job to `android-build.yml`. Add a job-level `if: github.event_name == 'pull_request'` guard so it runs **only on PRs to `main`**, not on every push.
 
-Note: no `androidTest/` source set exists yet — this job is infrastructure-only until Phase 2. The upload step uses `if-no-files-found: warn` to avoid silent failures.
+Note: no `androidTest/` source set exists yet — this job is infrastructure-only until Phase 2. The upload step uses `if-no-files-found: warn`.
 
 ```yaml
 instrumented-test:
   runs-on: ubuntu-latest
   needs: build
+  if: github.event_name == 'pull_request'
 
   steps:
     - uses: actions/checkout@v4
@@ -83,7 +84,6 @@ instrumented-test:
 ```
 
 **Notes:**
-- `needs: build` ensures this job only runs if the build job passes
 - `api-level: 34` matches `compileSdk`; align with local AVD API level when writing instrumented tests (Phase 2)
 - KVM enablement is required for hardware-accelerated emulation on GitHub's Ubuntu runners
 
@@ -93,7 +93,7 @@ instrumented-test:
 
 ### `scripts/smoke-test.sh`
 
-Claude runs this **on demand** when a smoke test on the local emulator is needed. It handles the full cycle: start AVD → build → install → launch → logcat check → kill AVD.
+Claude runs this **on demand** when a smoke test on the local emulator is needed. Full cycle: start AVD → build → install → launch → logcat check → kill AVD.
 
 The debug build uses `applicationIdSuffix = ".debug"`, so the installed package is `com.androdr.debug`.
 
@@ -176,7 +176,7 @@ chmod +x scripts/smoke-test.sh
 
 ## Section 3 — CLAUDE.md additions
 
-Add a **Local development** section to `CLAUDE.md`:
+Update the existing `CLAUDE.md` **Build requirements** line from `JDK 17` to `JDK 21` (CI uses JDK 21). Add a **Local development** section:
 
 ```markdown
 ## Local development
@@ -203,11 +203,11 @@ Debug package ID: `com.androdr.debug` (applicationIdSuffix = ".debug").
 
 ## Section 4 — Secure SDLC gates
 
-All four gates run on every PR to `main`. No emulator needed — fast, parallelizable with the `build` job.
+All gates run on every PR to `main`. No emulator needed.
 
 ### 4a. Lint gate
 
-Add `lintDebug` as a step inside the existing `build` job (after unit tests):
+Add to `android-build.yml` `build` job (after unit tests):
 
 ```yaml
 - name: Run lint
@@ -223,7 +223,7 @@ Add `lintDebug` as a step inside the existing `build` job (after unit tests):
     if-no-files-found: warn
 ```
 
-Enable `warningsAsErrors` for CI by adding to `app/build.gradle.kts`:
+Add to `app/build.gradle.kts` inside the `android {}` block:
 
 ```kotlin
 lint {
@@ -234,12 +234,29 @@ lint {
 
 ### 4b. SAST — detekt
 
-Add the `detekt` Gradle plugin with a security-focused config:
+Add to `gradle/libs.versions.toml`:
+
+```toml
+[versions]
+detekt = "1.23.7"   # Kotlin 2.0 compatible; re-evaluate when upgrading Kotlin past 2.0
+
+[plugins]
+detekt = { id = "io.gitlab.arturbosch.detekt", version.ref = "detekt" }
+```
+
+Apply in `build.gradle.kts` (root) using the version catalog pattern:
 
 ```kotlin
-// app/build.gradle.kts
 plugins {
-    id("io.gitlab.arturbosch.detekt") version "1.23.x"
+    alias(libs.plugins.detekt) apply false
+}
+```
+
+Apply in `app/build.gradle.kts`:
+
+```kotlin
+plugins {
+    alias(libs.plugins.detekt)
 }
 
 detekt {
@@ -248,9 +265,9 @@ detekt {
 }
 ```
 
-Create `config/detekt.yml` enabling rules from `detekt-rules-libraries` covering:
+Create `config/detekt.yml` enabling rules covering:
 - Hardcoded credentials / secrets
-- Insecure random (`java.util.Random` instead of `SecureRandom`)
+- `java.util.Random` instead of `SecureRandom`
 - Unsafe reflection
 - Overly broad exception catches that may swallow security errors
 
@@ -272,12 +289,21 @@ CI step in `build` job:
 
 ### 4c. Dependency vulnerability scanning
 
-Add OWASP Dependency-Check Gradle plugin:
+Add to `gradle/libs.versions.toml`:
+
+```toml
+[versions]
+owaspDepCheck = "9.2.0"
+
+[plugins]
+owasp-dependency-check = { id = "org.owasp.dependencycheck", version.ref = "owaspDepCheck" }
+```
+
+Apply in root `build.gradle.kts`:
 
 ```kotlin
-// build.gradle.kts (root)
 plugins {
-    id("org.owasp.dependencycheck") version "9.x.x"
+    alias(libs.plugins.owasp-dependency-check)
 }
 
 dependencyCheck {
@@ -286,11 +312,12 @@ dependencyCheck {
 }
 ```
 
-CI step (runs in parallel with `build`, not dependent on it):
+Add a separate `dependency-scan` job with `if: github.event_name == 'pull_request'` guard:
 
 ```yaml
 dependency-scan:
   runs-on: ubuntu-latest
+  if: github.event_name == 'pull_request'
 
   steps:
     - uses: actions/checkout@v4
@@ -326,7 +353,7 @@ updates:
 
 ### 4d. Secret scanning — gitleaks
 
-Runs on every **push** (not just PRs) to catch secrets before they spread:
+Runs on every **push** (not just PRs). Uses direct CLI invocation to avoid the `GITLEAKS_LICENSE` requirement of the managed action:
 
 ```yaml
 secret-scan:
@@ -337,30 +364,37 @@ secret-scan:
       with:
         fetch-depth: 0   # full history required for gitleaks
 
+    - name: Install gitleaks
+      run: |
+        curl -sSL https://github.com/gitleaks/gitleaks/releases/latest/download/gitleaks_linux_x64.tar.gz \
+          | tar -xz gitleaks
+        sudo mv gitleaks /usr/local/bin/
+
     - name: Scan for secrets
-      uses: gitleaks/gitleaks-action@v2
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: gitleaks detect --source . --verbose
 ```
+
+No secrets or licences required. Uses gitleaks' built-in ruleset.
 
 ### 4e. APK security check
 
-Runs after `assembleDebug` in the `build` job. Uses `apkanalyzer` (bundled with the Android SDK installed by `android-actions/setup-android`) to verify:
-- `android:debuggable` is not `true` in release builds (checked on the debug variant only for expected value)
-- No components are exported without explicit `android:permission`
+Runs in the `build` job after `assembleDebug`. Uses `apkanalyzer` from the Android build-tools. The binary path is resolved explicitly to avoid glob expansion issues:
 
 ```yaml
 - name: APK security check
   run: |
+    BUILD_TOOLS=$(ls -d $ANDROID_HOME/build-tools/*/ | tail -1)
     APK=app/build/outputs/apk/debug/app-debug.apk
-    # Dump manifest and check for unprotected exported components
-    $ANDROID_HOME/build-tools/*/apkanalyzer manifest print "$APK" | \
-      grep -E 'exported="true"' | \
-      grep -v 'permission=' && \
-      echo "WARNING: exported component(s) without permission found" || true
+    MANIFEST=$("${BUILD_TOOLS}apkanalyzer" manifest print "$APK")
+    # Warn on exported components without explicit permission
+    if echo "$MANIFEST" | grep -qE 'exported="true"' && \
+       ! echo "$MANIFEST" | grep -qE 'permission='; then
+      echo "WARNING: exported component(s) without permission found"
+    fi
+    echo "APK advisory check complete (advisory only in Phase 1)"
 ```
 
-This step is advisory in Phase 1 (warns, does not fail). It becomes a hard gate in Phase 3 when release APKs are built.
+Advisory-only in Phase 1 (does not fail the build). Becomes a hard gate in Phase 3.
 
 ---
 
@@ -368,8 +402,8 @@ This step is advisory in Phase 1 (warns, does not fail). It becomes a hard gate 
 
 | Phase | When | What it adds |
 |---|---|---|
-| **Phase 1 — MVP (this spec)** | Now | Remote: `instrumented-test` job (infra-only), lint gate, detekt SAST, OWASP dep-check, gitleaks, APK advisory check. Local: `smoke-test.sh` on demand |
-| **Phase 2 — Gradle Managed Devices** | When first `androidTest/` tests exist | Replace `smoke-test.sh` with `./gradlew managedDeviceDebugAndroidTest`; CI uses same task. Align CI emulator API level with local AVD |
+| **Phase 1 — MVP (this spec)** | Now | Remote: `instrumented-test` (infra-only), lint gate, detekt SAST, OWASP dep-check, gitleaks, APK advisory check. Local: `smoke-test.sh` on demand |
+| **Phase 2 — Gradle Managed Devices** | When first `androidTest/` tests exist | Replace `smoke-test.sh` with `./gradlew managedDeviceDebugAndroidTest`; CI uses same task; align CI emulator API level with local AVD |
 | **Phase 3 — Release signing + hard security gates** | Approaching first release | Tag-triggered signing workflow; APK security check becomes hard gate; MobSF deep scan added |
 | **Phase 4 — Play Store delivery** | Targeting Play Store | `gradle-play-publisher` auto-deploys to internal track on tags |
 
@@ -381,13 +415,14 @@ Each phase is additive — Phase 1 requires no rework to move forward.
 
 | File | Change |
 |---|---|
-| `.github/workflows/android-build.yml` | **Edit** — add `instrumented-test`, `dependency-scan`, `secret-scan` jobs; add lint + detekt + APK check steps to `build` job |
-| `scripts/smoke-test.sh` | **Create** (new `scripts/` directory + file) |
+| `.github/workflows/android-build.yml` | **Edit** — change APK upload to `if: always()`; add lint, detekt, APK check steps to `build` job; add `instrumented-test`, `dependency-scan`, `secret-scan` jobs with correct `if:` guards |
+| `gradle/libs.versions.toml` | **Edit** — add `detekt = "1.23.7"`, `owaspDepCheck = "9.2.0"` to `[versions]`; add plugin entries to `[plugins]` |
+| `build.gradle.kts` | **Edit** — add `alias(libs.plugins.detekt) apply false` and `alias(libs.plugins.owasp-dependency-check)` + `dependencyCheck {}` config |
+| `app/build.gradle.kts` | **Edit** — add `alias(libs.plugins.detekt)` + `detekt {}` config; add `lint { warningsAsErrors abortOnError }` |
 | `config/detekt.yml` | **Create** (new `config/` directory + file) |
-| `app/build.gradle.kts` | **Edit** — add `lint { warningsAsErrors detekt plugin }` |
-| `build.gradle.kts` | **Edit** — add OWASP dependency-check plugin |
+| `scripts/smoke-test.sh` | **Create** (new `scripts/` directory + file) |
 | `.github/dependabot.yml` | **Create** |
-| `CLAUDE.md` | **Edit** — add Local development section |
+| `CLAUDE.md` | **Edit** — update JDK 17 → 21; add Local development section |
 
 ---
 
@@ -397,7 +432,9 @@ Each phase is additive — Phase 1 requires no rework to move forward.
 - Lint errors and detekt violations fail the PR
 - Dependency with CVSS ≥ 7.0 fails the `dependency-scan` job
 - Secret committed to any branch is caught by gitleaks on push
+- `instrumented-test` and `dependency-scan` jobs only run on PRs, not on every push
+- APK upload artifact available even when lint/detekt fail (`if: always()`)
 - `smoke-test.sh` runs end-to-end on `Medium_Phone_API_36.1` without manual steps
 - Logcat crash check exits non-zero on fatal errors
-- `CLAUDE.md` documents `ANDROID_HOME`, AVD name, and debug package ID
+- `CLAUDE.md` documents JDK 21, `ANDROID_HOME`, AVD name, and debug package ID
 - Existing `build` CI job behaviour is unaffected for passing code
