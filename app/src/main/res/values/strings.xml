@@ -59,6 +59,12 @@
     <string name="bugreport_empty_state">No analysis yet</string>
     <string name="bugreport_empty_hint">Select a bug report .zip file to start analysis</string>
 
+    <!-- Report export -->
+    <string name="report_export_label">Export Report</string>
+    <string name="report_export_cd">Share security report</string>
+    <string name="report_share_title">Share Security Report</string>
+    <string name="report_share_subject">AndroDR Security Report</string>
+
     <!-- Navigation labels -->
     <string name="nav_dashboard">Dashboard</string>
     <string name="nav_apps">Apps</string>

@@ -1,5 +1,6 @@
 package com.androdr.ui.history
 
+import android.content.Intent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.shrinkVertically
@@ -15,22 +16,26 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SuggestionChip
 import androidx.compose.material3.SuggestionChipDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -48,9 +53,26 @@ import java.util.Locale
 fun HistoryScreen(
     viewModel: HistoryViewModel = hiltViewModel()
 ) {
-    val allScans by viewModel.allScans.collectAsStateWithLifecycle()
+    val allScans   by viewModel.allScans.collectAsStateWithLifecycle()
     val selectedScan by viewModel.selectedScan.collectAsStateWithLifecycle()
     val selectedDiff by viewModel.selectedDiff.collectAsStateWithLifecycle()
+    val exporting  by viewModel.exporting.collectAsStateWithLifecycle()
+    val shareUri   by viewModel.shareUri.collectAsStateWithLifecycle()
+
+    val context = LocalContext.current
+
+    // Fire the system share sheet as soon as the URI is ready
+    LaunchedEffect(shareUri) {
+        val uri = shareUri ?: return@LaunchedEffect
+        val intent = Intent(Intent.ACTION_SEND).apply {
+            type = "text/plain"
+            putExtra(Intent.EXTRA_STREAM, uri)
+            putExtra(Intent.EXTRA_SUBJECT, context.getString(R.string.report_share_subject))
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        context.startActivity(Intent.createChooser(intent, context.getString(R.string.report_share_title)))
+        viewModel.onShareConsumed()
+    }
 
     if (allScans.isEmpty()) {
         Box(
@@ -94,7 +116,9 @@ fun HistoryScreen(
                 isSelected = isSelected,
                 diff = if (isSelected) selectedDiff else null,
                 isFirstScan = allScans.last().id == scan.id,
-                onClick = { viewModel.selectScan(scan) }
+                exporting = exporting,
+                onClick = { viewModel.selectScan(scan) },
+                onExport = { viewModel.exportReport(scan) }
             )
         }
     }
@@ -106,7 +130,9 @@ private fun ScanHistoryItem(
     isSelected: Boolean,
     diff: ScanOrchestrator.ScanDiff?,
     isFirstScan: Boolean,
-    onClick: () -> Unit
+    exporting: Boolean,
+    onClick: () -> Unit,
+    onExport: () -> Unit
 ) {
     val dateFormatter = remember { SimpleDateFormat("MMM d, yyyy  HH:mm", Locale.getDefault()) }
     val dateString = dateFormatter.format(Date(scan.timestamp))
@@ -201,6 +227,33 @@ private fun ScanHistoryItem(
                     } else {
                         DiffSection(diff = diff)
                     }
+
+                    // Export button
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.End
+                    ) {
+                        if (exporting) {
+                            CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                        }
+                        IconButton(onClick = onExport, enabled = !exporting) {
+                            Icon(
+                                imageVector = Icons.Filled.Share,
+                                contentDescription = stringResource(R.string.report_export_cd),
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                        Text(
+                            text = stringResource(R.string.report_export_label),
+                            style = MaterialTheme.typography.labelMedium,
+                            color = if (exporting)
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                            else
+                                MaterialTheme.colorScheme.primary
+                        )
+                    }
                 }
             }
         }
@@ -210,8 +263,7 @@ private fun ScanHistoryItem(
 @Composable
 private fun DiffSection(diff: ScanOrchestrator.ScanDiff) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        // New risks
-        val totalNew = diff.newRisks.size + diff.newFlags.size
+        val totalNew      = diff.newRisks.size + diff.newFlags.size
         val totalResolved = diff.resolvedRisks.size + diff.resolvedFlags.size
 
         if (totalNew > 0) {
@@ -269,4 +321,3 @@ private fun DiffSection(diff: ScanOrchestrator.ScanDiff) {
         }
     }
 }
-

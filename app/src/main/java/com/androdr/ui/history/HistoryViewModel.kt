@@ -1,9 +1,11 @@
 package com.androdr.ui.history
 
+import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.androdr.data.model.ScanResult
 import com.androdr.data.repo.ScanRepository
+import com.androdr.reporting.ReportExporter
 import com.androdr.scanner.ScanOrchestrator
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -12,12 +14,14 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 @HiltViewModel
 class HistoryViewModel @Inject constructor(
     private val repository: ScanRepository,
-    private val orchestrator: ScanOrchestrator
+    private val orchestrator: ScanOrchestrator,
+    private val reportExporter: ReportExporter
 ) : ViewModel() {
 
     /** Full scan history, newest first. */
@@ -38,16 +42,40 @@ class HistoryViewModel @Inject constructor(
         combine(allScans, _selectedScan) { scans, selected ->
             if (selected == null) return@combine null
             val idx = scans.indexOfFirst { it.id == selected.id }
-            // scans is ordered newest-first; the predecessor is at idx+1
             val predecessor = scans.getOrNull(idx + 1) ?: return@combine null
             orchestrator.computeDiff(predecessor, selected)
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
-    /**
-     * Selects [scan] as the active detail item and triggers a diff computation
-     * against its predecessor in [allScans].
-     */
+    /** Emits a [Uri] when a report is ready to share; null when idle or after consumption. */
+    private val _shareUri = MutableStateFlow<Uri?>(null)
+    val shareUri: StateFlow<Uri?> = _shareUri.asStateFlow()
+
+    /** Whether a report export is currently in progress. */
+    private val _exporting = MutableStateFlow(false)
+    val exporting: StateFlow<Boolean> = _exporting.asStateFlow()
+
     fun selectScan(scan: ScanResult) {
         _selectedScan.value = scan
+    }
+
+    /**
+     * Exports [scan] to a cached text file and emits its [FileProvider] URI via
+     * [shareUri]. The Composable observes [shareUri] and fires the share intent.
+     */
+    fun exportReport(scan: ScanResult) {
+        if (_exporting.value) return
+        viewModelScope.launch {
+            _exporting.value = true
+            try {
+                _shareUri.value = reportExporter.export(scan)
+            } finally {
+                _exporting.value = false
+            }
+        }
+    }
+
+    /** Call after the share intent has been launched to reset the URI state. */
+    fun onShareConsumed() {
+        _shareUri.value = null
     }
 }
