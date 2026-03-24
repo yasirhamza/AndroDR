@@ -37,7 +37,7 @@ class DashboardViewModel @Inject constructor(
      */
     val scanDiff: StateFlow<ScanOrchestrator.ScanDiff?> = repository.allScans
         .map { scans ->
-            if (scans.size >= 2) orchestrator.diff(scans[1], scans[0]) else null
+            if (scans.size >= 2) orchestrator.computeDiff(scans[1], scans[0]) else null
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 

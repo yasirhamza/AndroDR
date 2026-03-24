@@ -8,7 +8,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.androdr.data.model.DnsEvent
 import com.androdr.data.repo.ScanRepository
-import com.androdr.vpn.DnsVpnService
+import com.androdr.network.DnsVpnService
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
