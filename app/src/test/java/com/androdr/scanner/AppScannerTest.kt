@@ -6,7 +6,7 @@ import android.content.pm.PackageInfo
 import android.content.pm.PackageManager
 import com.androdr.data.model.RiskLevel
 import com.androdr.ioc.BadPackageInfo
-import com.androdr.ioc.IocDatabase
+import com.androdr.ioc.IocResolver
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
@@ -20,14 +20,14 @@ class AppScannerTest {
 
     private val mockContext: Context = mockk(relaxed = true)
     private val mockPm: PackageManager = mockk(relaxed = true)
-    private val mockIocDatabase: IocDatabase = mockk()
+    private val mockIocResolver: IocResolver = mockk()
     private lateinit var scanner: AppScanner
 
     @Before
     fun setUp() {
         every { mockContext.packageManager } returns mockPm
-        every { mockIocDatabase.isKnownBadPackage(any()) } returns null
-        scanner = AppScanner(mockContext, mockIocDatabase)
+        every { mockIocResolver.isKnownBadPackage(any()) } returns null
+        scanner = AppScanner(mockContext, mockIocResolver)
     }
 
     private fun makePackageInfo(
@@ -57,7 +57,7 @@ class AppScannerTest {
     fun `known malware package is flagged as CRITICAL`() = runTest {
         val pkgInfo = makePackageInfo("com.flexispy.android")
         every { mockPm.getInstalledPackages(any<Int>()) } returns listOf(pkgInfo)
-        every { mockIocDatabase.isKnownBadPackage("com.flexispy.android") } returns BadPackageInfo(
+        every { mockIocResolver.isKnownBadPackage("com.flexispy.android") } returns BadPackageInfo(
             packageName = "com.flexispy.android",
             name = "FlexiSPY",
             category = "STALKERWARE",
@@ -202,7 +202,7 @@ class AppScannerTest {
         )
         val pkgInfo = makePackageInfo("com.evil.known", permissions = perms)
         every { mockPm.getInstalledPackages(any<Int>()) } returns listOf(pkgInfo)
-        every { mockIocDatabase.isKnownBadPackage("com.evil.known") } returns BadPackageInfo(
+        every { mockIocResolver.isKnownBadPackage("com.evil.known") } returns BadPackageInfo(
             packageName = "com.evil.known",
             name = "EvilApp",
             category = "SPYWARE",
