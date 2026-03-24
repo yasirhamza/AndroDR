@@ -33,6 +33,7 @@ import com.androdr.ui.device.DeviceAuditScreen
 import com.androdr.ui.history.HistoryScreen
 import com.androdr.ui.network.DnsMonitorScreen
 import com.androdr.ui.theme.AndroDRTheme
+import android.app.Activity
 import dagger.hilt.android.AndroidEntryPoint
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent

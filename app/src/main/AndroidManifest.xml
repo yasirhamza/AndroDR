@@ -32,7 +32,7 @@
 
         <!-- DNS VPN Service -->
         <service
-            android:name=".service.DnsVpnService"
+            android:name=".network.DnsVpnService"
             android:exported="true"
             android:permission="android.permission.BIND_VPN_SERVICE">
             <intent-filter>

@@ -40,7 +40,7 @@ class HistoryViewModel @Inject constructor(
             val idx = scans.indexOfFirst { it.id == selected.id }
             // scans is ordered newest-first; the predecessor is at idx+1
             val predecessor = scans.getOrNull(idx + 1) ?: return@combine null
-            orchestrator.diff(predecessor, selected)
+            orchestrator.computeDiff(predecessor, selected)
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
     /**

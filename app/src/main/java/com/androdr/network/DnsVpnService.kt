@@ -19,7 +19,7 @@ import java.net.DatagramPacket
 import java.net.DatagramSocket
 import java.net.InetAddress
 import java.nio.ByteBuffer
-import java.util.concurrent.atomic.AtomicBoolean
+import kotlinx.coroutines.flow.MutableStateFlow
 import javax.inject.Inject
 
 /**
@@ -40,7 +40,7 @@ class DnsVpnService : VpnService() {
         const val ACTION_STOP  = "com.androdr.STOP_VPN"
 
         /** `true` while the tunnel is established and the read loop is active. */
-        val isRunning: AtomicBoolean = AtomicBoolean(false)
+        val isRunning = MutableStateFlow(false)
 
         // Upstream DNS resolver
         private const val UPSTREAM_DNS_HOST = "8.8.8.8"
@@ -90,7 +90,7 @@ class DnsVpnService : VpnService() {
     // ── VPN lifecycle ─────────────────────────────────────────────────────────
 
     private fun startVpn() {
-        if (isRunning.get()) return  // already running — ignore duplicate start
+        if (isRunning.value) return  // already running — ignore duplicate start
 
         val fd = try {
             Builder()
@@ -105,7 +105,7 @@ class DnsVpnService : VpnService() {
         } ?: return   // establish() returns null if the user hasn't granted VPN permission
 
         tunFd = fd
-        isRunning.set(true)
+        isRunning.value = true
 
         readLoopJob = serviceScope.launch {
             runPacketLoop(fd)
@@ -113,7 +113,7 @@ class DnsVpnService : VpnService() {
     }
 
     private fun stopVpn() {
-        isRunning.set(false)
+        isRunning.value = false
         readLoopJob?.cancel()
         readLoopJob = null
         try { tunFd?.close() } catch (_: Exception) {}
@@ -136,7 +136,7 @@ class DnsVpnService : VpnService() {
         val outputStream = FileOutputStream(fd.fileDescriptor)
         val buffer       = ByteArray(MAX_DNS_PACKET_SIZE)
 
-        while (serviceScope.isActive && isRunning.get()) {
+        while (serviceScope.isActive && isRunning.value) {
             val bytesRead = try {
                 inputStream.read(buffer)
             } catch (e: Exception) {
