@@ -1,0 +1,41 @@
+*.iml
+.gradle
+/local.properties
+/.idea
+.DS_Store
+/build
+/captures
+.externalNativeBuild
+.cxx
+local.properties
+
+# Gradle wrapper jar (keep wrapper properties but not the jar)
+gradle/wrapper/gradle-wrapper.jar
+
+# Generated files
+app/build/
+
+# Keystore files
+*.jks
+*.keystore
+
+# IntelliJ / Android Studio
+*.idea/
+*.iws
+*.ipr
+out/
+
+# OS X
+.DS_Store
+
+# Windows
+Thumbs.db
+
+# Node
+node_modules/
+
+# Kotlin
+*.class
+
+# Virtual machine crash logs
+hs_err_pid*
