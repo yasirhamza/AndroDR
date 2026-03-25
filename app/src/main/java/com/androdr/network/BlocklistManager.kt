@@ -39,6 +39,8 @@ class BlocklistManager @Inject constructor(
      * @param domain The fully-qualified domain name to test.  A trailing dot is stripped before
      *               the lookup (common in DNS wire-format representations).
      */
+    @Suppress("ReturnCount") // Domain hierarchy walk uses early returns on hit and TLD boundary;
+    // flattening into a single expression would obscure the label-stripping loop logic.
     fun isBlocked(domain: String): Boolean {
         if (domain.isBlank()) return false
 
@@ -68,6 +70,8 @@ class BlocklistManager @Inject constructor(
      */
     private fun loadBlocklist(): HashSet<String> {
         val set = HashSet<String>(8192)
+        @Suppress("TooGenericExceptionCaught", "SwallowedException") // openRawResource can throw
+        // NotFoundException if the resource is absent (e.g. during tests); empty set = pass all.
         try {
             context.resources.openRawResource(R.raw.domain_blocklist).use { stream ->
                 BufferedReader(InputStreamReader(stream, Charsets.UTF_8)).forEachLine { raw ->

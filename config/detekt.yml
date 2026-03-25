@@ -1,0 +1,34 @@
+# detekt configuration — security-focused ruleset for AndroDR
+# buildUponDefaultConfig = true means all default rules apply unless overridden here
+
+complexity:
+  active: true
+
+potential-bugs:
+  active: true
+  CastToNullableType:
+    active: true
+  LateinitUsage:
+    active: true
+
+style:
+  active: true
+  MagicNumber:
+    active: false   # too noisy for Android UI code
+
+exceptions:
+  active: true
+  TooGenericExceptionCaught:
+    active: true
+    exceptionNames:
+      - 'Exception'
+      - 'Throwable'
+    allowedExceptionNameRegex: '_|(ignore|expected).*'
+  TooGenericExceptionThrown:
+    active: true
+
+naming:
+  active: true
+  FunctionNaming:
+    # Jetpack Compose composable functions use PascalCase by convention
+    functionPattern: '[a-zA-Z][a-zA-Z0-9]*'

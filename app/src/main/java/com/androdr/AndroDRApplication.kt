@@ -21,7 +21,9 @@ import javax.inject.Inject
 @HiltAndroidApp
 class AndroDRApplication : Application(), Configuration.Provider {
 
+    @Suppress("LateinitUsage") // Hilt @Inject requires lateinit on Application subclasses
     @Inject lateinit var workerFactory: HiltWorkerFactory
+    @Suppress("LateinitUsage") // Hilt @Inject requires lateinit on Application subclasses
     @Inject lateinit var iocResolver: IocResolver
 
     override val workManagerConfiguration: Configuration

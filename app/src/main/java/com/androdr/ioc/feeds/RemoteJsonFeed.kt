@@ -34,6 +34,8 @@ class RemoteJsonFeed(
 
     private val json = Json { ignoreUnknownKeys = true }
 
+    @Suppress("TooGenericExceptionCaught") // Network/JSON operations can throw IOException,
+    // SSLException, or SerializationException; all are logged and result in empty list.
     override suspend fun fetch(): List<IocEntry> = withContext(Dispatchers.IO) {
         try {
             val connection = (URL(url).openConnection() as HttpURLConnection).apply {

@@ -46,6 +46,8 @@ class ReportExporter @Inject constructor(
     }
 
     /** Captures recent log lines from this process (does not require READ_LOGS). */
+    @Suppress("TooGenericExceptionCaught") // Runtime.exec and stream reads can throw IOException or
+    // SecurityException on restricted profiles; logged and falling back to empty list is correct.
     private fun captureLogcat(): List<String> = try {
         val pid = android.os.Process.myPid().toString()
         val proc = Runtime.getRuntime().exec(
