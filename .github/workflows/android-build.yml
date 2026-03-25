@@ -57,9 +57,9 @@ jobs:
 
       - name: APK security check
         run: |
-          BUILD_TOOLS=$(ls -d $ANDROID_HOME/build-tools/*/ | tail -1)
+          APKANALYZER=$(find $ANDROID_HOME/cmdline-tools -name apkanalyzer -type f 2>/dev/null | head -1)
           APK=app/build/outputs/apk/debug/app-debug.apk
-          MANIFEST=$("${BUILD_TOOLS}apkanalyzer" manifest print "$APK")
+          MANIFEST=$("$APKANALYZER" manifest print "$APK")
           if echo "$MANIFEST" | grep -qE 'exported="true"' && \
              ! echo "$MANIFEST" | grep -qE 'permission='; then
             echo "WARNING: exported component(s) without permission found"
