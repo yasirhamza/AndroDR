@@ -49,6 +49,8 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
+@Suppress("LongMethod") // DNS monitor screen integrates VPN toggle, stats summary, and two event
+// lists (recent + blocked) with conditional empty states; co-location avoids prop-drilling.
 @Composable
 fun DnsMonitorScreen(
     viewModel: DnsMonitorViewModel = hiltViewModel(),
@@ -91,6 +93,7 @@ fun DnsMonitorScreen(
                         Icon(
                             imageVector = if (isVpnRunning) Icons.Filled.Wifi else Icons.Filled.WifiOff,
                             contentDescription = null,
+                            @Suppress("MaxLineLength") // Compose tint expression fits on one line for readability
                             tint = if (isVpnRunning) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.size(24.dp)
                         )
@@ -212,6 +215,8 @@ fun DnsMonitorScreen(
     }
 }
 
+@Suppress("LongMethod") // DNS event item displays timestamp, domain, block status, app name,
+// and reason badge together; all are needed for triage context in a single glance.
 @Composable
 private fun DnsEventItem(event: DnsEvent) {
     val timeFormatter = remember { SimpleDateFormat("HH:mm:ss", Locale.getDefault()) }

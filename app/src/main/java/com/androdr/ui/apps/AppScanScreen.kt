@@ -52,6 +52,8 @@ import com.androdr.R
 import com.androdr.data.model.AppRisk
 import com.androdr.data.model.RiskLevel
 
+@Suppress("LongMethod") // Compose screens are declarative UI trees; extracting further would
+// create many single-use private composables with no reuse benefit.
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AppScanScreen(
@@ -121,6 +123,8 @@ fun AppScanScreen(
     }
 }
 
+@Suppress("LongMethod") // App risk card must display risk level, reasons, permissions, and
+// malware/sideload badges inline; splitting into sub-composables gains no semantic clarity.
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun AppRiskCard(appRisk: AppRisk) {

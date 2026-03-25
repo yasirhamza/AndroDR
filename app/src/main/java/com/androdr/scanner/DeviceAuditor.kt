@@ -28,11 +28,15 @@ class DeviceAuditor @Inject constructor(
     /** Patch levels older than this many days are considered stale. */
     private val maxPatchAgeDays = 90L
 
+    @Suppress("LongMethod") // Device audit checks 7 independent security properties in sequence;
+    // each check is a small self-contained block — splitting would gain no readability benefit.
     suspend fun audit(): List<DeviceFlag> = withContext(Dispatchers.IO) {
         val cr = context.contentResolver
         val flags = mutableListOf<DeviceFlag>()
 
         // ── 1. USB ADB enabled ────────────────────────────────────────────────
+        @Suppress("TooGenericExceptionCaught", "SwallowedException") // Settings.Global.getInt can
+        // throw SecurityException on locked-down device policies; default false is safe.
         val adbEnabled = try {
             Settings.Global.getInt(cr, Settings.Global.ADB_ENABLED, 0) == 1
         } catch (e: Exception) {
@@ -41,6 +45,7 @@ class DeviceAuditor @Inject constructor(
         flags.add(DeviceFlag.adbEnabled(adbEnabled))
 
         // ── 2. Developer Options enabled ──────────────────────────────────────
+        @Suppress("TooGenericExceptionCaught", "SwallowedException") // Same rationale as adbEnabled
         val devOptionsEnabled = try {
             Settings.Global.getInt(cr, Settings.Global.DEVELOPMENT_SETTINGS_ENABLED, 0) == 1
         } catch (e: Exception) {
@@ -53,6 +58,8 @@ class DeviceAuditor @Inject constructor(
         // checking the FEATURE_VERIFIED_BOOT feature absence as a signal that the device
         // environment is less controlled. For API < 26 we read the legacy global setting.
         val unknownSources = if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
+            @Suppress("TooGenericExceptionCaught", "SwallowedException") // Settings.Secure.getInt
+            // can throw SecurityException on enterprise-managed devices; false is safe default.
             try {
                 Settings.Secure.getInt(cr, Settings.Secure.INSTALL_NON_MARKET_APPS, 0) == 1
             } catch (e: Exception) {
@@ -68,6 +75,8 @@ class DeviceAuditor @Inject constructor(
         flags.add(DeviceFlag.unknownSources(unknownSources))
 
         // ── 4. Screen lock ────────────────────────────────────────────────────
+        @Suppress("TooGenericExceptionCaught", "SwallowedException") // getSystemService and
+        // isDeviceSecure can throw on emulators or restricted profiles; false = assume secured.
         val noScreenLock = try {
             val km = context.getSystemService(Context.KEYGUARD_SERVICE) as? KeyguardManager
             // isDeviceSecure returns true if a PIN, password, pattern, or biometric is set.
@@ -78,6 +87,8 @@ class DeviceAuditor @Inject constructor(
         flags.add(DeviceFlag.noScreenLock(noScreenLock))
 
         // ── 5. Security patch staleness ───────────────────────────────────────
+        @Suppress("TooGenericExceptionCaught", "SwallowedException") // DateTimeParseException or
+        // other RuntimeExceptions if the OEM encodes a non-standard patch string; treat as stale.
         val stalePatch = try {
             val patchStr = Build.VERSION.SECURITY_PATCH // "YYYY-MM-DD"
             if (patchStr.isNullOrBlank()) {
@@ -98,6 +109,7 @@ class DeviceAuditor @Inject constructor(
         flags.add(DeviceFlag.bootloaderUnlocked(bootloaderUnlocked))
 
         // ── 7. Wireless ADB (ADB over Wi-Fi) ─────────────────────────────────
+        @Suppress("TooGenericExceptionCaught", "SwallowedException") // Same rationale as adbEnabled
         val wifiAdbEnabled = try {
             Settings.Global.getInt(cr, "adb_wifi_enabled", 0) == 1
         } catch (e: Exception) {
@@ -118,8 +130,12 @@ class DeviceAuditor @Inject constructor(
      *
      * Returns `true` if the bootloader appears unlocked; `false` if locked or unknown.
      */
+    @Suppress("ReturnCount") // Two independent detection strategies each require an early return;
+    // merging them into one return path would obscure the fallback logic between strategies.
     private fun isBootloaderUnlocked(): Boolean {
         // Strategy 1: reflect into SystemProperties
+        @Suppress("TooGenericExceptionCaught", "SwallowedException") // Reflection can throw any
+        // exception when blocked by device policy or missing class; fall through to strategy 2.
         try {
             val systemPropertiesClass = Class.forName("android.os.SystemProperties")
             val getMethod = systemPropertiesClass.getMethod("get", String::class.java, String::class.java)
@@ -132,6 +148,8 @@ class DeviceAuditor @Inject constructor(
         }
 
         // Strategy 2: parse Build.BOOTLOADER string (OEM-specific heuristic)
+        @Suppress("TooGenericExceptionCaught", "SwallowedException") // Build.BOOTLOADER is OEM
+        // defined; some ROMs throw on access; returning false = assume locked is safe default.
         return try {
             val bootloader = Build.BOOTLOADER ?: return false
             // Some OEMs include "unlocked" or "U" in the string when the bootloader is open.

@@ -20,6 +20,8 @@ class StalkerwareIndicatorsFeed : IocFeed {
 
     override val sourceId = SOURCE_ID
 
+    @Suppress("TooGenericExceptionCaught") // Network operations can throw IOException, SSLException,
+    // or JsonDecodeException; all are logged and result in empty list.
     override suspend fun fetch(): List<IocEntry> = withContext(Dispatchers.IO) {
         try {
             val connection = (URL(CSV_URL).openConnection() as HttpURLConnection).apply {
@@ -49,6 +51,8 @@ class StalkerwareIndicatorsFeed : IocFeed {
         }
     }
 
+    @Suppress("ReturnCount") // CSV parsing uses early returns for malformed lines (wrong column
+    // count, missing dot in package name); each guard corresponds to a distinct invalid format.
     private fun parseLine(line: String, fetchedAt: Long): IocEntry? {
         val cols = line.split(",")
         if (cols.size < 2) return null

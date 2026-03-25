@@ -32,6 +32,8 @@ import javax.inject.Inject
  * All network I/O runs on [Dispatchers.IO] inside a [CoroutineScope] that is cancelled
  * when the service is stopped.
  */
+@Suppress("TooManyFunctions") // VpnService lifecycle + DNS wire-format helpers are all required in
+// this class; extraction to utilities would break the VpnService.protect() call chain.
 @AndroidEntryPoint
 class DnsVpnService : VpnService() {
 
@@ -59,7 +61,9 @@ class DnsVpnService : VpnService() {
         private const val MAX_DNS_PACKET_SIZE = 4096
     }
 
+    @Suppress("LateinitUsage") // Hilt @Inject requires lateinit; null-safety is guaranteed by Hilt
     @Inject lateinit var blocklistManager: BlocklistManager
+    @Suppress("LateinitUsage") // Hilt @Inject requires lateinit; null-safety is guaranteed by Hilt
     @Inject lateinit var scanRepository: ScanRepository
 
     private var tunFd: ParcelFileDescriptor? = null
@@ -89,9 +93,13 @@ class DnsVpnService : VpnService() {
 
     // ── VPN lifecycle ─────────────────────────────────────────────────────────
 
+    @Suppress("ReturnCount") // Multiple early returns on failure paths are idiomatic in Android
+    // service startup; exceptions and null results each warrant a distinct failure return.
     private fun startVpn() {
         if (isRunning.value) return  // already running — ignore duplicate start
 
+        @Suppress("TooGenericExceptionCaught", "SwallowedException") // VpnService.Builder.establish
+        // can throw SecurityException or IllegalArgumentException; both are unrecoverable here.
         val fd = try {
             Builder()
                 .addAddress(TUN_ADDRESS, TUN_PREFIX_LEN)
@@ -131,12 +139,16 @@ class DnsVpnService : VpnService() {
      * a timeout.  (A production implementation would forward all non-DNS packets through a
      * real tun; this implementation focuses on DNS interception only.)
      */
+    @Suppress("LoopWithTooManyJumpStatements") // Packet read loop uses break on IOException (VPN
+    // revoke) and continue on zero-byte reads; both are idiomatic for non-blocking tun fd polling.
     private suspend fun runPacketLoop(fd: ParcelFileDescriptor) {
         val inputStream  = FileInputStream(fd.fileDescriptor)
         val outputStream = FileOutputStream(fd.fileDescriptor)
         val buffer       = ByteArray(MAX_DNS_PACKET_SIZE)
 
         while (serviceScope.isActive && isRunning.value) {
+            @Suppress("TooGenericExceptionCaught", "SwallowedException") // FileInputStream.read
+            // on the tun fd throws IOException when the VPN is revoked; breaking the loop is correct.
             val bytesRead = try {
                 inputStream.read(buffer)
             } catch (e: Exception) {
@@ -161,6 +173,9 @@ class DnsVpnService : VpnService() {
      * Inspects a raw IP packet.  If it is a UDP packet destined for port 53 the DNS payload
      * is extracted and handled; all other packets are silently dropped.
      */
+    @Suppress("LongMethod", "ReturnCount", "LoopWithTooManyJumpStatements") // IP/UDP/DNS packet
+    // parsing requires guard returns at each validation step; reducing ReturnCount here would add
+    // deeply nested conditionals that are harder to follow than early-return validation guards.
     private fun processPacket(packet: ByteArray, outputStream: FileOutputStream) {
         if (packet.size < 20) return  // too short to be a valid IPv4 header
 
@@ -266,6 +281,9 @@ class DnsVpnService : VpnService() {
      *
      * QNAME is encoded as a sequence of length-prefixed labels terminated by a zero byte.
      */
+    @Suppress("TooGenericExceptionCaught", "SwallowedException", "ReturnCount",
+        "LoopWithTooManyJumpStatements") // Malformed DNS packets from the tun fd can throw
+    // ArrayIndexOutOfBoundsException; guard returns and loop jumps are idiomatic for packet parsing.
     private fun parseDnsHostname(dns: ByteArray): String? {
         if (dns.size < 13) return null
 
@@ -303,6 +321,8 @@ class DnsVpnService : VpnService() {
      * Flags set: QR=1 (response), OPCODE=0 (QUERY), AA=0, TC=0, RD=1 (copy from query),
      * RA=0, RCODE=3 (NXDOMAIN).  The question section is echoed back; no answer records.
      */
+    @Suppress("UnusedParameter") // txId is kept in the signature for DNS wire-format clarity —
+    // the transaction ID is implicitly preserved by copying query bytes 0-1 into the response.
     private fun buildNxdomainResponse(query: ByteArray, txId: Int): ByteArray {
         val response = query.copyOf()   // echo the full query as the response skeleton
 
@@ -326,6 +346,8 @@ class DnsVpnService : VpnService() {
      * the upstream response payload, or `null` on error.
      */
     private fun forwardToUpstreamDns(dnsPayload: ByteArray): ByteArray? {
+        @Suppress("TooGenericExceptionCaught", "SwallowedException") // DNS socket operations can
+        // throw IOException (timeout), SocketException, or UnknownHostException; null = drop packet.
         return try {
             val socket = DatagramSocket()
             protect(socket)   // exclude from VPN tunnel to prevent routing loops

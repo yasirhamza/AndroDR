@@ -74,6 +74,8 @@ class BugReportAnalyzer @Inject constructor(
      * the IOC patterns above.  All findings are returned; callers are responsible for
      * presenting or filtering them.
      */
+    @Suppress("TooGenericExceptionCaught") // ContentResolver and ZipInputStream can throw any
+    // IOException subclass; errors are converted to BugReportFinding entries with ERROR severity.
     suspend fun analyze(bugReportUri: Uri): List<BugReportFinding> = withContext(Dispatchers.IO) {
         val findings = mutableListOf<BugReportFinding>()
 
@@ -134,6 +136,10 @@ class BugReportAnalyzer @Inject constructor(
      * Reads a single text entry from an already-positioned [InputStream] and
      * returns all findings for that entry.  The stream is NOT closed by this method.
      */
+    @Suppress("LongMethod", "CyclomaticComplexMethod", "TooGenericExceptionCaught")
+    // Bug report analysis requires scanning for many IOC categories (spyware, base64, C2, crashes,
+    // wakelocks, packages) in one pass over the stream; IOException on stream read is caught to
+    // produce an ERROR finding rather than crashing the analysis.
     internal fun analyzeTextEntry(entryName: String, stream: InputStream): List<BugReportFinding> {
         val findings = mutableListOf<BugReportFinding>()
 

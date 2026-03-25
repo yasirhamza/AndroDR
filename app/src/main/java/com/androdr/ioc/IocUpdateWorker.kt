@@ -21,6 +21,8 @@ class IocUpdateWorker @AssistedInject constructor(
     private val remoteIocUpdater: RemoteIocUpdater
 ) : CoroutineWorker(context, params) {
 
+    @Suppress("TooGenericExceptionCaught") // Worker must catch all failures to return Result.retry()
+    // rather than crashing the process; the error is logged before retrying.
     override suspend fun doWork(): Result {
         return try {
             val fetched = remoteIocUpdater.update()

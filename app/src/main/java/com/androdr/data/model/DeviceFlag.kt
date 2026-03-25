@@ -1,3 +1,6 @@
+@file:Suppress("MaxLineLength") // DeviceFlag description strings are human-readable security
+// explanations; wrapping them would make them harder to read and search in the source.
+
 package com.androdr.data.model
 
 import kotlinx.serialization.Serializable

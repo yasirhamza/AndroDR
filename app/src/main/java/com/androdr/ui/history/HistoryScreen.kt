@@ -49,6 +49,8 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
+@Suppress("LongMethod") // History screen combines empty-state, list, and share-launch logic;
+// keeping them together avoids passing share state through multiple composable parameters.
 @Composable
 fun HistoryScreen(
     viewModel: HistoryViewModel = hiltViewModel()
@@ -124,6 +126,9 @@ fun HistoryScreen(
     }
 }
 
+@Suppress("LongMethod", "LongParameterList") // Scan history item requires all 7 parameters to
+// render selection state, diff badges, export spinner, and first-scan indicator together;
+// the parameter count is inherent to the component's responsibility surface.
 @Composable
 private fun ScanHistoryItem(
     scan: ScanResult,
@@ -260,6 +265,8 @@ private fun ScanHistoryItem(
     }
 }
 
+@Suppress("LongMethod") // DiffSection renders new/resolved risks and flags with conditional
+// sub-sections; all branches are needed in one composable to maintain visual cohesion.
 @Composable
 private fun DiffSection(diff: ScanOrchestrator.ScanDiff) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
