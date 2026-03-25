@@ -23,4 +23,6 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun iocEntryDao(): IocEntryDao
 
     abstract fun domainIocEntryDao(): DomainIocEntryDao
+
+    abstract fun knownAppEntryDao(): KnownAppEntryDao
 }
