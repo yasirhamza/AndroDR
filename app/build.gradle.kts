@@ -76,7 +76,9 @@ android {
         // ObsoleteSdkInt: the mipmap-anydpi-v26 folder is the Android Studio scaffold default;
         // renaming it would require manifest + AAPT reference updates with no functional benefit
         // since the adaptive icon is only drawn on API 26+ devices anyway.
-        disable += setOf("GradleDependency", "AndroidGradlePluginVersion", "ObsoleteSdkInt")
+        // OldTargetApi: targetSdk=34 is intentional; bump to 35 requires behavioral regression
+        // testing against Android 15 changes before it can be safely promoted.
+        disable += setOf("GradleDependency", "AndroidGradlePluginVersion", "ObsoleteSdkInt", "OldTargetApi")
     }
 }
 
