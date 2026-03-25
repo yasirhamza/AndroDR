@@ -5,8 +5,8 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -18,18 +18,27 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -44,9 +53,8 @@ import com.androdr.data.model.ScanResult
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import java.util.concurrent.TimeUnit
 
-@Suppress("LongMethod") // Dashboard orchestrates scan trigger, diff banner, risk card, and
-// summary cards together; co-location allows single ViewModel observation without callbacks.
 @Composable
 fun DashboardScreen(
     viewModel: DashboardViewModel = hiltViewModel(),
@@ -55,127 +63,255 @@ fun DashboardScreen(
     val latestScan by viewModel.latestScan.collectAsStateWithLifecycle()
     val isScanning by viewModel.isScanning.collectAsStateWithLifecycle()
     val scanDiff by viewModel.scanDiff.collectAsStateWithLifecycle()
+    val iocEntryCount by viewModel.iocEntryCount.collectAsStateWithLifecycle()
+    val iocLastUpdated by viewModel.iocLastUpdated.collectAsStateWithLifecycle()
+    val isUpdatingIoc by viewModel.isUpdatingIoc.collectAsStateWithLifecycle()
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
-    ) {
-        // Header
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Icon(
-                imageVector = Icons.Filled.Security,
-                contentDescription = stringResource(R.string.cd_shield),
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(36.dp)
-            )
-            Spacer(modifier = Modifier.width(12.dp))
-            Text(
-                text = stringResource(R.string.app_name),
-                style = MaterialTheme.typography.headlineMedium,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.primary
-            )
+    val snackbarHostState = remember { SnackbarHostState() }
+
+    LaunchedEffect(Unit) {
+        viewModel.iocErrorEvent.collect { message ->
+            snackbarHostState.showSnackbar(message)
         }
+    }
 
-        // Overall risk level card
-        RiskLevelCard(latestScan = latestScan)
-
-        // Diff banner
-        AnimatedVisibility(
-            visible = scanDiff != null &&
-                (scanDiff!!.newRisks.isNotEmpty() || scanDiff!!.newFlags.isNotEmpty()),
-            enter = fadeIn(),
-            exit = fadeOut()
+    Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) }
+    ) { innerPadding ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(innerPadding)
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            scanDiff?.let { diff ->
-                val newCount = diff.newRisks.size + diff.newFlags.size
-                DiffBanner(newCount = newCount)
-            }
-        }
-
-        // Run Scan button
-        Button(
-            onClick = { viewModel.runScan() },
-            enabled = !isScanning,
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            if (isScanning) {
-                CircularProgressIndicator(
-                    modifier = Modifier.size(20.dp),
-                    strokeWidth = 2.dp,
-                    color = MaterialTheme.colorScheme.onPrimary
+            // Header
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.Security,
+                    contentDescription = stringResource(R.string.cd_shield),
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(36.dp)
                 )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(stringResource(R.string.scanning))
-            } else {
-                Text(stringResource(R.string.run_scan))
+                Spacer(modifier = Modifier.width(12.dp))
+                Text(
+                    text = stringResource(R.string.app_name),
+                    style = MaterialTheme.typography.headlineMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary
+                )
             }
-        }
 
-        // Summary cards grid (2x2)
-        val riskyAppCount = latestScan?.appRisks
-            ?.count { it.riskLevel != RiskLevel.LOW } ?: 0
-        val deviceFlagCount = latestScan?.deviceFlags
-            ?.count { it.isTriggered } ?: 0
-        val blockedDnsCount = 0 // DNS blocked count shown via separate screen; no direct field in ScanResult
-        val lastScanTime = latestScan?.timestamp?.let { ts ->
-            SimpleDateFormat("MMM d, HH:mm", Locale.getDefault()).format(Date(ts))
-        } ?: stringResource(R.string.never)
+            RiskLevelCard(latestScan = latestScan)
 
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            SummaryCard(
-                modifier = Modifier.weight(1f),
-                title = stringResource(R.string.summary_app_risks),
-                value = riskyAppCount.toString(),
-                onClick = { onNavigate("apps") }
-            )
-            SummaryCard(
-                modifier = Modifier.weight(1f),
-                title = stringResource(R.string.summary_device_flags),
-                value = deviceFlagCount.toString(),
-                onClick = { onNavigate("device") }
-            )
-        }
+            AnimatedVisibility(
+                visible = scanDiff != null &&
+                    (scanDiff!!.newRisks.isNotEmpty() || scanDiff!!.newFlags.isNotEmpty()),
+                enter = fadeIn(),
+                exit = fadeOut()
+            ) {
+                scanDiff?.let { diff ->
+                    val newCount = diff.newRisks.size + diff.newFlags.size
+                    DiffBanner(newCount = newCount)
+                }
+            }
 
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            SummaryCard(
-                modifier = Modifier.weight(1f),
-                title = stringResource(R.string.summary_dns_blocked),
-                value = blockedDnsCount.toString(),
-                onClick = { onNavigate("network") }
+            // Run Scan button
+            Button(
+                onClick = { viewModel.runScan() },
+                enabled = !isScanning,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                if (isScanning) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(20.dp),
+                        strokeWidth = 2.dp,
+                        color = MaterialTheme.colorScheme.onPrimary
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(stringResource(R.string.scanning))
+                } else {
+                    Text(stringResource(R.string.run_scan))
+                }
+            }
+
+            // Threat Database card
+            ThreatDatabaseCard(
+                entryCount = iocEntryCount,
+                lastUpdated = iocLastUpdated,
+                isUpdating = isUpdatingIoc,
+                onUpdateClick = { viewModel.updateIoc() }
             )
-            SummaryCard(
-                modifier = Modifier.weight(1f),
-                title = stringResource(R.string.summary_last_scan),
-                value = lastScanTime,
-                onClick = { onNavigate("history") }
-            )
+
+            // Summary cards grid (2x2)
+            val riskyAppCount = latestScan?.appRisks
+                ?.count { it.riskLevel != RiskLevel.LOW } ?: 0
+            val deviceFlagCount = latestScan?.deviceFlags
+                ?.count { it.isTriggered } ?: 0
+            val lastScanTime = latestScan?.timestamp?.let { ts ->
+                SimpleDateFormat("MMM d, HH:mm", Locale.getDefault()).format(Date(ts))
+            } ?: stringResource(R.string.never)
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                SummaryCard(
+                    modifier = Modifier.weight(1f),
+                    title = stringResource(R.string.summary_app_risks),
+                    value = riskyAppCount.toString(),
+                    onClick = { onNavigate("apps") }
+                )
+                SummaryCard(
+                    modifier = Modifier.weight(1f),
+                    title = stringResource(R.string.summary_device_flags),
+                    value = deviceFlagCount.toString(),
+                    onClick = { onNavigate("device") }
+                )
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                SummaryCard(
+                    modifier = Modifier.weight(1f),
+                    title = stringResource(R.string.summary_dns_blocked),
+                    value = "0",
+                    onClick = { onNavigate("network") }
+                )
+                SummaryCard(
+                    modifier = Modifier.weight(1f),
+                    title = stringResource(R.string.summary_last_scan),
+                    value = lastScanTime,
+                    onClick = { onNavigate("history") }
+                )
+            }
         }
     }
 }
 
-@Suppress("LongMethod") // Risk level card displays color-coded status, scan timestamp, and
-// per-category counts (risks + flags) with conditional null-state; all required for triage.
+@Composable
+private fun ThreatDatabaseCard(
+    entryCount: Int,
+    lastUpdated: Long?,
+    isUpdating: Boolean,
+    onUpdateClick: () -> Unit
+) {
+    val now = System.currentTimeMillis()
+    val isNeverUpdated = lastUpdated == null
+    val isStale = lastUpdated != null && (now - lastUpdated) > 24 * 60 * 60 * 1000L
+    val isFresh = lastUpdated != null && !isStale
+
+    val cardColor = when {
+        isFresh -> Color(0xFF00D4AA).copy(alpha = 0.15f)
+        else    -> Color(0xFFFF9800).copy(alpha = 0.15f)
+    }
+    val iconTint = when {
+        isFresh -> Color(0xFF00D4AA)
+        else    -> Color(0xFFFF9800)
+    }
+    val icon = when {
+        isFresh        -> Icons.Filled.CheckCircle
+        isNeverUpdated -> Icons.Filled.Warning
+        else           -> Icons.Filled.Refresh
+    }
+    val statusText = when {
+        isNeverUpdated -> "Threat database not loaded · $entryCount indicators"
+        isStale        -> "$entryCount indicators · Updated ${relativeTime(lastUpdated!!, now)} · Stale"
+        else           -> "$entryCount indicators · Updated ${relativeTime(lastUpdated!!, now)}"
+    }
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = cardColor)
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = iconTint,
+                    modifier = Modifier.size(20.dp)
+                )
+                Text(
+                    text = statusText,
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+            }
+
+            if (isFresh) {
+                OutlinedButton(
+                    onClick = onUpdateClick,
+                    enabled = !isUpdating,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    UpdateButtonContent(isUpdating = isUpdating)
+                }
+            } else {
+                Button(
+                    onClick = onUpdateClick,
+                    enabled = !isUpdating,
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color(0xFFFF9800)
+                    )
+                ) {
+                    UpdateButtonContent(isUpdating = isUpdating)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun UpdateButtonContent(isUpdating: Boolean) {
+    if (isUpdating) {
+        CircularProgressIndicator(
+            modifier = Modifier.size(16.dp),
+            strokeWidth = 2.dp,
+            color = MaterialTheme.colorScheme.onPrimary
+        )
+        Spacer(modifier = Modifier.width(8.dp))
+        Text("Updating...")
+    } else {
+        Text("Update Now")
+    }
+}
+
+private fun relativeTime(timestamp: Long, now: Long): String {
+    val diffMs = now - timestamp
+    val minutes = TimeUnit.MILLISECONDS.toMinutes(diffMs)
+    val hours = TimeUnit.MILLISECONDS.toHours(diffMs)
+    val days = TimeUnit.MILLISECONDS.toDays(diffMs)
+    return when {
+        minutes < 1  -> "just now"
+        minutes < 60 -> "${minutes}m ago"
+        hours < 24   -> "${hours}h ago"
+        else         -> "${days}d ago"
+    }
+}
+
 @Composable
 private fun RiskLevelCard(latestScan: ScanResult?) {
     val (riskColor, riskLabel) = when (latestScan?.overallRiskLevel) {
         RiskLevel.CRITICAL -> Pair(Color(0xFFCF6679), "CRITICAL")
-        RiskLevel.HIGH -> Pair(Color(0xFFFF9800), "HIGH")
-        RiskLevel.MEDIUM -> Pair(Color(0xFFFFD600), "MEDIUM")
-        RiskLevel.LOW -> Pair(Color(0xFF00D4AA), "LOW")
-        null -> Pair(Color(0xFF00D4AA), "—")
+        RiskLevel.HIGH     -> Pair(Color(0xFFFF9800), "HIGH")
+        RiskLevel.MEDIUM   -> Pair(Color(0xFFFFD600), "MEDIUM")
+        RiskLevel.LOW      -> Pair(Color(0xFF00D4AA), "LOW")
+        null               -> Pair(Color(0xFF00D4AA), "—")
     }
 
     Card(
@@ -229,8 +365,6 @@ private fun RiskLevelCard(latestScan: ScanResult?) {
     }
 }
 
-@Suppress("LongMethod") // Diff banner includes icon, count, and explanatory text with spacing
-// and color theming; the length is inherent to the Compose declarative layout model.
 @Composable
 private fun DiffBanner(newCount: Int) {
     Card(
@@ -259,8 +393,6 @@ private fun DiffBanner(newCount: Int) {
     }
 }
 
-@Suppress("LongMethod") // Summary card combines clickable surface, icon row, value text, and
-// chevron; the layout length reflects Compose verbosity, not logic complexity.
 @Composable
 private fun SummaryCard(
     title: String,
