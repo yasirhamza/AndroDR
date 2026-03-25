@@ -45,6 +45,8 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
+@Suppress("LongMethod") // Dashboard orchestrates scan trigger, diff banner, risk card, and
+// summary cards together; co-location allows single ViewModel observation without callbacks.
 @Composable
 fun DashboardScreen(
     viewModel: DashboardViewModel = hiltViewModel(),
@@ -164,6 +166,8 @@ fun DashboardScreen(
     }
 }
 
+@Suppress("LongMethod") // Risk level card displays color-coded status, scan timestamp, and
+// per-category counts (risks + flags) with conditional null-state; all required for triage.
 @Composable
 private fun RiskLevelCard(latestScan: ScanResult?) {
     val (riskColor, riskLabel) = when (latestScan?.overallRiskLevel) {
@@ -225,6 +229,8 @@ private fun RiskLevelCard(latestScan: ScanResult?) {
     }
 }
 
+@Suppress("LongMethod") // Diff banner includes icon, count, and explanatory text with spacing
+// and color theming; the length is inherent to the Compose declarative layout model.
 @Composable
 private fun DiffBanner(newCount: Int) {
     Card(
@@ -253,6 +259,8 @@ private fun DiffBanner(newCount: Int) {
     }
 }
 
+@Suppress("LongMethod") // Summary card combines clickable surface, icon row, value text, and
+// chevron; the layout length reflects Compose verbosity, not logic complexity.
 @Composable
 private fun SummaryCard(
     title: String,

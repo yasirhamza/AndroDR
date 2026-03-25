@@ -65,6 +65,8 @@ private val bottomNavDestinations = listOf(
     NavDestination("history", "History", Icons.Filled.History),
 )
 
+@Suppress("LongMethod") // AndroDRApp is the root nav host; it contains the VPN permission
+// launcher, bottom bar, and NavHost with all 6 destinations — inherently a longer composable.
 @Composable
 private fun AndroDRApp() {
     val navController = rememberNavController()

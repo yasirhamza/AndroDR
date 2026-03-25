@@ -50,6 +50,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.androdr.R
 import com.androdr.scanner.BugReportAnalyzer
 
+@Suppress("LongMethod") // Bug report screen combines file-picker launch, progress state,
+// empty-state, and findings list; splitting would require threading state through extra wrappers.
 @Composable
 fun BugReportScreen(
     viewModel: BugReportViewModel = hiltViewModel()
@@ -223,6 +225,8 @@ fun BugReportScreen(
     }
 }
 
+@Suppress("LongMethod") // Finding card shows icon, severity badge, category, and description
+// with per-severity color theming; all content is needed together for visual context.
 @Composable
 private fun BugReportFindingCard(finding: BugReportAnalyzer.BugReportFinding) {
     val (icon, color) = findingIconAndColor(finding.severity)

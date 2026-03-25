@@ -36,6 +36,8 @@ import com.androdr.R
 import com.androdr.data.model.DeviceFlag
 import com.androdr.data.model.Severity
 
+@Suppress("LongMethod") // Device audit screen renders a summary header plus a grouped list of
+// device flags; co-location of triggered/clean sections avoids threading count state externally.
 @Composable
 fun DeviceAuditScreen(
     viewModel: DeviceAuditViewModel = hiltViewModel()
@@ -153,6 +155,8 @@ private fun SectionHeader(text: String, color: Color) {
     )
 }
 
+@Suppress("LongMethod") // Device flag item displays triggered/safe badge, name, description,
+// and severity chip inline; all are required for a single-glance security triage decision.
 @Composable
 private fun DeviceFlagItem(flag: DeviceFlag) {
     Card(
@@ -206,6 +210,8 @@ private fun DeviceFlagItem(flag: DeviceFlag) {
     }
 }
 
+@Suppress("LongMethod") // Severity chip renders color-coded label with all four severity tiers;
+// the when-block and conditional alpha are inherent to the multi-level severity design.
 @Composable
 private fun SeverityChip(severity: Severity, active: Boolean = true) {
     val severityColor = when (severity) {
