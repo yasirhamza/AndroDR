@@ -66,6 +66,9 @@ fun DashboardScreen(
     val iocEntryCount by viewModel.iocEntryCount.collectAsStateWithLifecycle()
     val iocLastUpdated by viewModel.iocLastUpdated.collectAsStateWithLifecycle()
     val isUpdatingIoc by viewModel.isUpdatingIoc.collectAsStateWithLifecycle()
+    val domainIocEntryCount by viewModel.domainIocEntryCount.collectAsStateWithLifecycle()
+    val domainIocLastUpdated by viewModel.domainIocLastUpdated.collectAsStateWithLifecycle()
+    val isUpdatingDomainIoc by viewModel.isUpdatingDomainIoc.collectAsStateWithLifecycle()
 
     val snackbarHostState = remember { SnackbarHostState() }
 
@@ -144,7 +147,11 @@ fun DashboardScreen(
                 entryCount = iocEntryCount,
                 lastUpdated = iocLastUpdated,
                 isUpdating = isUpdatingIoc,
-                onUpdateClick = { viewModel.updateIoc() }
+                onUpdateClick = { viewModel.updateIoc() },
+                domainEntryCount = domainIocEntryCount,
+                domainLastUpdated = domainIocLastUpdated,
+                isUpdatingDomain = isUpdatingDomainIoc,
+                onUpdateDomainClick = { viewModel.updateDomainIoc() }
             )
 
             // Summary cards grid (2x2)
@@ -201,9 +208,15 @@ private fun ThreatDatabaseCard(
     entryCount: Int,
     lastUpdated: Long?,
     isUpdating: Boolean,
-    onUpdateClick: () -> Unit
+    onUpdateClick: () -> Unit,
+    domainEntryCount: Int,
+    domainLastUpdated: Long?,
+    isUpdatingDomain: Boolean,
+    onUpdateDomainClick: () -> Unit
 ) {
     val now = System.currentTimeMillis()
+
+    // ── Package IOC row state ──────────────────────────────────────────────────
     val isNeverUpdated = lastUpdated == null
     val isStale = lastUpdated != null && (now - lastUpdated) > 24 * 60 * 60 * 1000L
     val isFresh = lastUpdated != null && !isStale
@@ -227,6 +240,26 @@ private fun ThreatDatabaseCard(
         else           -> "$entryCount indicators · Updated ${relativeTime(lastUpdated!!, now)}"
     }
 
+    // ── Domain IOC row state ───────────────────────────────────────────────────
+    val isDomainNeverUpdated = domainLastUpdated == null
+    val isDomainStale = domainLastUpdated != null && (now - domainLastUpdated) > 24 * 60 * 60 * 1000L
+    val isDomainFresh = domainLastUpdated != null && !isDomainStale
+
+    val domainIconTint = when {
+        isDomainFresh -> Color(0xFF00D4AA)
+        else          -> Color(0xFFFF9800)
+    }
+    val domainIcon = when {
+        isDomainFresh        -> Icons.Filled.CheckCircle
+        isDomainNeverUpdated -> Icons.Filled.Warning
+        else                 -> Icons.Filled.Refresh
+    }
+    val domainStatusText = when {
+        isDomainNeverUpdated -> "$domainEntryCount domain indicators · Remote update pending"
+        isDomainStale        -> "$domainEntryCount domain indicators · Updated ${relativeTime(domainLastUpdated!!, now)} · Stale"
+        else                 -> "$domainEntryCount domain indicators · Updated ${relativeTime(domainLastUpdated!!, now)}"
+    }
+
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = cardColor)
@@ -235,6 +268,7 @@ private fun ThreatDatabaseCard(
             modifier = Modifier.padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
+            // ── Package IOC row ────────────────────────────────────────────────
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -271,6 +305,46 @@ private fun ThreatDatabaseCard(
                     )
                 ) {
                     UpdateButtonContent(isUpdating = isUpdating)
+                }
+            }
+
+            // ── Domain IOC row ─────────────────────────────────────────────────
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Icon(
+                    imageVector = domainIcon,
+                    contentDescription = null,
+                    tint = domainIconTint,
+                    modifier = Modifier.size(20.dp)
+                )
+                Text(
+                    text = domainStatusText,
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+            }
+
+            if (isDomainFresh) {
+                OutlinedButton(
+                    onClick = onUpdateDomainClick,
+                    enabled = !isUpdatingDomain,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    UpdateButtonContent(isUpdating = isUpdatingDomain)
+                }
+            } else {
+                Button(
+                    onClick = onUpdateDomainClick,
+                    enabled = !isUpdatingDomain,
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color(0xFFFF9800)
+                    )
+                ) {
+                    UpdateButtonContent(isUpdating = isUpdatingDomain)
                 }
             }
         }
