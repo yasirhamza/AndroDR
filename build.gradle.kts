@@ -7,7 +7,7 @@ plugins {
     alias(libs.plugins.hilt) apply false
     alias(libs.plugins.ksp) apply false
     alias(libs.plugins.detekt) apply false
-    id("org.owasp.dependencycheck") version "9.2.0"
+    alias(libs.plugins.owasp.dependency.check)
 }
 
 dependencyCheck {
