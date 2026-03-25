@@ -20,7 +20,7 @@ hilt = "2.51.1"
 hiltNavigationCompose = "1.2.0"
 
 # Room
-room = "2.6.1"
+room = "2.8.4"
 
 # Coroutines
 coroutines = "1.8.1"
