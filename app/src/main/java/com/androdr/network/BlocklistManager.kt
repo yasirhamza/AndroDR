@@ -1,6 +1,7 @@
 package com.androdr.network
 
 import android.content.Context
+import android.util.Log
 import com.androdr.R
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.io.BufferedReader
@@ -20,6 +21,10 @@ import javax.inject.Singleton
 class BlocklistManager @Inject constructor(
     @ApplicationContext private val context: Context
 ) {
+
+    companion object {
+        private const val TAG = "BlocklistManager"
+    }
 
     /**
      * The loaded blocklist.  Initialized at most once via [loadBlocklist].
@@ -82,6 +87,7 @@ class BlocklistManager @Inject constructor(
                 }
             }
         } catch (e: Exception) {
+            Log.w(TAG, "BlocklistManager: blocklist load failed: ${e.message}")
             // Resource missing or IO error — return empty set so the rest of the app keeps
             // working; the VPN service will pass all traffic through when the list is absent.
         }
