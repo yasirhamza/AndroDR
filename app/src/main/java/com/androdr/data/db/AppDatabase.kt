@@ -9,8 +9,8 @@ import com.androdr.data.model.IocEntry
 import com.androdr.data.model.ScanResult
 
 @Database(
-    entities = [ScanResult::class, DnsEvent::class, IocEntry::class, DomainIocEntry::class],
-    version = 3,
+    entities = [ScanResult::class, DnsEvent::class, IocEntry::class, DomainIocEntry::class, KnownAppDbEntry::class],
+    version = 4,
     exportSchema = false
 )
 @TypeConverters(Converters::class)
