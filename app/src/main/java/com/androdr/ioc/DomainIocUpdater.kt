@@ -2,7 +2,6 @@ package com.androdr.ioc
 
 import android.util.Log
 import com.androdr.data.db.DomainIocEntryDao
-import com.androdr.ioc.feeds.MvtIndicatorsFeed
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
@@ -20,7 +19,7 @@ import javax.inject.Singleton
 class DomainIocUpdater @Inject constructor(
     private val domainIocEntryDao: DomainIocEntryDao,
     private val domainIocResolver: DomainIocResolver,
-    private val feeds: List<DomainIocFeed> = listOf(MvtIndicatorsFeed())
+    private val feeds: @JvmSuppressWildcards List<DomainIocFeed>
 ) {
 
     suspend fun update(): Int = withContext(Dispatchers.IO) {
