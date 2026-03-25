@@ -6,7 +6,7 @@ ADB="$ANDROID_HOME/platform-tools/adb"
 EMULATOR="$ANDROID_HOME/emulator/emulator"
 AVD_NAME="Medium_Phone_API_36.1"
 APP_PACKAGE="com.androdr.debug"
-MAIN_ACTIVITY="com.androdr.debug/.MainActivity"
+MAIN_ACTIVITY="com.androdr.debug/com.androdr.MainActivity"
 LOGCAT_OUT="build/smoke-logcat.txt"
 LOGCAT_DURATION=15
 
