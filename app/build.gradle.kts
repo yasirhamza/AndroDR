@@ -62,6 +62,12 @@ android {
         }
     }
 
+    testOptions {
+        unitTests {
+            isReturnDefaultValues = true  // prevents android.util.Log stubs from throwing in JUnit tests
+        }
+    }
+
     lint {
         warningsAsErrors = true
         abortOnError = true
