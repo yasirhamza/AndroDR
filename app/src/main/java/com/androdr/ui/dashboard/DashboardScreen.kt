@@ -54,6 +54,7 @@ import java.util.Date
 import java.util.Locale
 import java.util.concurrent.TimeUnit
 
+@Suppress("LongMethod") // Compose UI functions are inherently long; structure is clear via sections
 @Composable
 fun DashboardScreen(
     viewModel: DashboardViewModel = hiltViewModel(),
@@ -194,6 +195,7 @@ fun DashboardScreen(
     }
 }
 
+@Suppress("LongMethod") // Compose UI functions are inherently long; structure is clear via sections
 @Composable
 private fun ThreatDatabaseCard(
     entryCount: Int,
