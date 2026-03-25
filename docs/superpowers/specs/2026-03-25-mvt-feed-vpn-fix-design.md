@@ -37,38 +37,74 @@ One line added to `DnsVpnService.startVpn()` inside the `Builder()` call:
 
 ### New Room entity: `DomainIocEntry`
 
+**Package:** `com.androdr.data.model`
+
 ```kotlin
 @Entity(tableName = "domain_ioc_entries")
 data class DomainIocEntry(
-    @PrimaryKey val domain: String,
-    val campaignName: String,   // e.g. "NSO Group Pegasus"
-    val severity: String,       // "CRITICAL" for all mercenary spyware entries
-    val source: String,         // e.g. "mvt_pegasus", "mvt_predator"
+    @PrimaryKey val domain: String,   // e.g. "weather4free.com", lowercase, no trailing dot
+    val campaignName: String,          // e.g. "NSO Group Pegasus"
+    val severity: String,              // "CRITICAL" for all mercenary spyware entries
+    val source: String,                // e.g. "mvt_pegasus", "mvt_predator"
     val fetchedAt: Long
 )
 ```
 
-Kept deliberately minimal. `domain` is the primary key (lowercase, no trailing dot). `source` is a slug derived from the campaign name in `indicators.yaml`, used for stale-entry pruning.
+`domain` is the primary key, stored lowercase without a trailing dot, at whatever granularity the feed provides (apex or full subdomain). Subdomain resolution is handled at lookup time via label-stripping (see `DomainIocResolver`).
 
 ### New DAO: `DomainIocEntryDao`
+
+**Package:** `com.androdr.data.db`
 
 Methods:
 - `upsertAll(entries: List<DomainIocEntry>)`
 - `getAll(): List<DomainIocEntry>`
 - `count(): Int`
 - `deleteStaleEntries(source: String, before: Long)`
-- `mostRecentFetchTime(): Long?`
+- `mostRecentFetchTime(): Long?` — returns global max `fetchedAt` across all sources (same behaviour as `IocEntryDao.mostRecentFetchTime()`; known limitation: a partial update failure still shows an optimistic timestamp)
 
 ### Room migration
 
-`AppDatabase` version incremented by 1. Migration adds `domain_ioc_entries` table. Auto-migration annotation used if schema export is enabled; otherwise a manual `Migration` object.
+`AppDatabase` currently has `exportSchema = false`, which means **auto-migration is not available** (Room auto-migration requires schema JSON exports). The only viable path is a manual `Migration` object, following the exact pattern of the existing `MIGRATION_1_2` in `Migrations.kt`:
+
+```kotlin
+val MIGRATION_2_3 = object : Migration(2, 3) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("""
+            CREATE TABLE IF NOT EXISTS `domain_ioc_entries` (
+                `domain` TEXT NOT NULL,
+                `campaignName` TEXT NOT NULL,
+                `severity` TEXT NOT NULL,
+                `source` TEXT NOT NULL,
+                `fetchedAt` INTEGER NOT NULL,
+                PRIMARY KEY(`domain`)
+            )
+        """)
+    }
+}
+```
+
+`AppDatabase` version advances from **2 to 3** and `MIGRATION_2_3` is added to the `databaseBuilder` call in `AppModule`.
 
 ### New in-memory resolver: `DomainIocResolver`
 
+**Package:** `com.androdr.ioc`
+
 - `@Singleton`, Hilt-injected
-- Holds `AtomicReference<Map<String, DomainIocEntry>?>` populated from Room
-- `suspend fun refreshCache()` — loads all rows into the map
-- `fun isKnownBadDomain(domain: String): DomainIocEntry?` — O(1) lookup; returns `null` if not found or cache not yet loaded
+- Holds `AtomicReference<Map<String, DomainIocEntry>?>` keyed by exact domain (lowercase, no trailing dot)
+- `suspend fun refreshCache()` — loads all rows from Room into the map
+- `fun isKnownBadDomain(domain: String): DomainIocEntry?` — performs the same label-stripping walk as `BlocklistManager.isBlocked()` (O(k) where k = number of labels), so that a query for `c2.pegasus-domain.example` matches an IOC entry keyed on `pegasus-domain.example`. Returns `null` if not found or cache not yet loaded.
+
+The label-stripping walk:
+```
+candidate = domain.trimEnd('.').lowercase()
+while candidate is not empty:
+    if candidate in cache → return cache[candidate]
+    dotIndex = candidate.indexOf('.')
+    if dotIndex < 0 → break   // reached TLD
+    candidate = candidate.substring(dotIndex + 1)
+return null
+```
 
 ---
 
@@ -86,6 +122,8 @@ Each entry has `type: github` and a `github:` block with `owner`, `repo`, `branc
 
 ### New interface: `DomainIocFeed`
 
+**Package:** `com.androdr.ioc`
+
 ```kotlin
 interface DomainIocFeed {
     val sourceId: String
@@ -97,6 +135,8 @@ Mirrors the existing `IocFeed` interface; return an empty list on any failure (n
 
 ### New feed: `MvtIndicatorsFeed`
 
+**Package:** `com.androdr.ioc.feeds`
+
 Implementation steps:
 
 1. Fetch `indicators.yaml` via `HttpURLConnection` (15 s timeout, `User-Agent: AndroDR/1.0`)
@@ -106,14 +146,16 @@ Implementation steps:
    - `github:` block with `owner`, `repo`, `branch`, `path` sub-keys
 3. Construct raw GitHub URL: `https://raw.githubusercontent.com/<owner>/<repo>/<branch>/<path>`
 4. Fetch all STIX2 files in parallel (one coroutine per campaign) using `coroutineScope { async { ... } }`
-5. For each STIX2 JSON response, parse `indicator` objects whose `pattern_type == "stix"` and `pattern` matches the regex `\[domain-name:value='([^']+)'\]`
-6. Return `DomainIocEntry` for each extracted domain, tagged with `source = "mvt_<slug>"` where `<slug>` is the campaign name lowercased with spaces replaced by underscores
+5. For each STIX2 JSON response, parse `indicator` objects whose `pattern_type == "stix"`. Extract all domain names from the `pattern` field using `Regex("""domain-name:value\s*=\s*'([^']+)'""").findAll(pattern)` — note `findAll` (not `find`) to handle compound OR patterns such as `[domain-name:value = 'foo.com' OR domain-name:value = 'bar.com']`
+6. Return `DomainIocEntry` for each extracted domain, tagged with `source = "mvt_<slug>"` where `<slug>` is the campaign name lowercased with non-alphanumeric characters replaced by underscores
 
-No external YAML or STIX library. Both formats are regular enough for simple parsing.
+**Visibility:** `parseIndicatorsYaml()` and `parseStix2()` are `internal` functions (not `private`) so they are directly reachable from unit tests in the `test` source set without reflection.
 
-**Source ID:** `"mvt_indicators"` (parent); individual campaign slugs used for stale-entry pruning.
+**Source ID:** `"mvt_indicators"` (parent); individual campaign slugs used for stale-entry pruning per source.
 
 ### New orchestrator: `DomainIocUpdater`
+
+**Package:** `com.androdr.ioc`
 
 ```kotlin
 @Singleton
@@ -128,6 +170,21 @@ class DomainIocUpdater @Inject constructor(
 ```
 
 Mirrors `RemoteIocUpdater` exactly. Returns total domain entries stored (0 if all feeds failed).
+
+**Dependency constraint:** `MvtIndicatorsFeed` is constructed directly (not Hilt-injected) inside `DomainIocUpdater`, following the same pattern as `RemoteJsonFeed` and `StalkerwareIndicatorsFeed` in `RemoteIocUpdater`. `MvtIndicatorsFeed` must therefore remain a pure class with no injected dependencies — it uses `HttpURLConnection` directly. If future feeds require injection, the feeds list should be moved to a Hilt `Set<DomainIocFeed>` multibinding.
+
+### `IocUpdateWorker` update
+
+`IocUpdateWorker` currently calls only `remoteIocUpdater.update()`. It must also call `domainIocUpdater.update()` so that scheduled background refreshes keep domain IOCs up to date. Without this change, domain IOCs are only refreshed via manual Dashboard taps and the "Updated Xh ago" staleness display will show permanently stale after a while.
+
+`IocUpdateWorker` is updated to inject `DomainIocUpdater` and call both updaters in parallel:
+```kotlin
+coroutineScope {
+    async { remoteIocUpdater.update() }
+    async { domainIocUpdater.update() }
+}
+```
+**Known limitation (pre-existing):** Both `update()` implementations swallow network failures internally and return `0` rather than throwing. As a result, `Result.retry()` is never triggered by network failures — the worker always returns `Result.success()`. This matches the current single-updater behaviour in the existing `IocUpdateWorker`.
 
 ---
 
@@ -146,13 +203,34 @@ Default for `domain_ioc_block_mode` is `false` (detect-only) because blocking C2
 
 ### New: `SettingsRepository`
 
-- `@Singleton`, Hilt-injected
-- Wraps DataStore; exposes `blocklistBlockMode: Flow<Boolean>` and `domainIocBlockMode: Flow<Boolean>`
+**Package:** `com.androdr.data.repo`
+
+- `@Singleton`, Hilt-injected; DataStore provided via Hilt in `AppModule`
+- Exposes `blocklistBlockMode: Flow<Boolean>` and `domainIocBlockMode: Flow<Boolean>`
 - `suspend fun setBlocklistBlockMode(value: Boolean)` and `suspend fun setDomainIocBlockMode(value: Boolean)`
 
-### `DnsVpnService` query path (updated)
+### `DnsVpnService` DataStore collection
 
-`DnsVpnService` receives `DomainIocResolver` and `SettingsRepository` via Hilt injection. Policy values are read once at query time from the latest emitted DataStore value (cached as `StateFlow` collected in the service scope).
+`DnsVpnService` receives `DomainIocResolver` and `SettingsRepository` via Hilt injection. Policy values are maintained as `MutableStateFlow` fields in the service, updated by coroutines launched in `serviceScope` that collect from `SettingsRepository`:
+
+```kotlin
+private var blocklistBlockMode = MutableStateFlow(true)
+private var domainIocBlockMode = MutableStateFlow(false)
+
+// called in startVpn():
+serviceScope.launch { settingsRepository.blocklistBlockMode.collect { blocklistBlockMode.value = it } }
+serviceScope.launch { settingsRepository.domainIocBlockMode.collect { domainIocBlockMode.value = it } }
+```
+
+This mirrors the existing `isRunning` pattern. `collectAsStateWithLifecycle` is a Compose API and must not be used in a `Service`.
+
+`DnsVpnService` also triggers `domainIocResolver.refreshCache()` when the tunnel starts. Because `refreshCache()` is a `suspend fun` and `startVpn()` is a regular (non-suspending) function, the call must be wrapped in a launch:
+```kotlin
+// in startVpn(), after the settings collection launches:
+serviceScope.launch { domainIocResolver.refreshCache() }
+```
+
+### `DnsVpnService` query path (updated)
 
 ```
 For each DNS hostname:
@@ -165,17 +243,25 @@ For each DNS hostname:
   3. Neither → forward; log (existing behaviour)
 ```
 
-`DnsVpnService` also calls `DomainIocResolver.refreshCache()` on service start so domain hits are available immediately.
-
 ---
 
 ## Part 5: UI
 
 ### New `SettingsViewModel`
 
-Shared between `SettingsScreen` and `NetworkScreen`. Collects both `Flow<Boolean>` values from `SettingsRepository` as `StateFlow`; exposes toggle functions.
+**Package:** `com.androdr.ui.settings`
+
+`@HiltViewModel`. Each screen that uses it (`SettingsScreen`, `NetworkScreen`) receives its own Hilt-scoped instance via `hiltViewModel()` — this is correct because both instances read from the same `SettingsRepository` DataStore, so they are always in sync. There is no need for a shared nav-graph-scoped ViewModel.
+
+Exposes:
+- `blocklistBlockMode: StateFlow<Boolean>`
+- `domainIocBlockMode: StateFlow<Boolean>`
+- `fun setBlocklistBlockMode(value: Boolean)`
+- `fun setDomainIocBlockMode(value: Boolean)`
 
 ### New `SettingsScreen`
+
+**Package:** `com.androdr.ui.settings`
 
 Added to the nav graph. Reachable via a gear icon in the Dashboard header row.
 
@@ -191,11 +277,11 @@ Threat Intelligence Domains (MVT/Pegasus/Predator)
 
 ### `NetworkScreen` quick toggles
 
-Two `Switch` rows added above the DNS event list, bound to the same `SettingsViewModel`:
+Two `Switch` rows added above the DNS event list, bound to a local `SettingsViewModel` instance (same DataStore, same values):
 
 ```
-Blocklist:    [Block | Detect]
-IOC Domains:  [Block | Detect]
+Blocklist:    [Switch] Block / Detect
+IOC Domains:  [Switch] Block / Detect
 ```
 
 ### `DashboardViewModel` additions
@@ -220,31 +306,34 @@ Staleness logic (>24 h = stale, orange) applies independently to each row.
 
 ## File Change Summary
 
-| File | Change |
-|------|--------|
-| `DnsVpnService.kt` | Add `.addDisallowedApplication(packageName)`; inject `DomainIocResolver`, `SettingsRepository`; update query path |
-| `DomainIocEntry.kt` (new) | Room entity |
-| `DomainIocEntryDao.kt` (new) | Room DAO |
-| `DomainIocResolver.kt` (new) | In-memory cache + lookup |
-| `DomainIocFeed.kt` (new) | Interface |
-| `MvtIndicatorsFeed.kt` (new) | Feed implementation |
-| `DomainIocUpdater.kt` (new) | Orchestrator |
-| `SettingsRepository.kt` (new) | DataStore wrapper |
-| `SettingsViewModel.kt` (new) | Shared ViewModel for settings |
-| `SettingsScreen.kt` (new) | Settings UI |
-| `NetworkScreen.kt` | Add quick policy toggles |
-| `DashboardViewModel.kt` | Add domain IOC state + `updateDomainIoc()` |
-| `DashboardScreen.kt` | Update `ThreatDatabaseCard` to show two rows |
-| `AppDatabase.kt` | Version bump + migration for `domain_ioc_entries` |
-| `AppModule.kt` / DI | Provide `DomainIocUpdater`, `SettingsRepository`, DataStore |
-| `MainActivity.kt` / nav graph | Add Settings destination + gear icon |
+| File | Package | Change |
+|------|---------|--------|
+| `DnsVpnService.kt` | `com.androdr.network` | Add `.addDisallowedApplication(packageName)`; inject `DomainIocResolver`, `SettingsRepository`; collect settings into local `MutableStateFlow`; update query path |
+| `DomainIocEntry.kt` (new) | `com.androdr.data.model` | Room entity |
+| `DomainIocEntryDao.kt` (new) | `com.androdr.data.db` | Room DAO |
+| `DomainIocResolver.kt` (new) | `com.androdr.ioc` | In-memory cache + hierarchical lookup |
+| `DomainIocFeed.kt` (new) | `com.androdr.ioc` | Interface |
+| `MvtIndicatorsFeed.kt` (new) | `com.androdr.ioc.feeds` | Feed implementation with `internal` parse functions |
+| `DomainIocUpdater.kt` (new) | `com.androdr.ioc` | Orchestrator |
+| `SettingsRepository.kt` (new) | `com.androdr.data.repo` | DataStore wrapper |
+| `SettingsViewModel.kt` (new) | `com.androdr.ui.settings` | HiltViewModel for settings |
+| `SettingsScreen.kt` (new) | `com.androdr.ui.settings` | Settings UI |
+| `NetworkScreen.kt` | `com.androdr.ui.network` | Add quick policy toggles; imports `SettingsViewModel` from `com.androdr.ui.settings` (do not create a second ViewModel class in the network package) |
+| `DashboardViewModel.kt` | `com.androdr.ui.dashboard` | Add domain IOC state + `updateDomainIoc()` |
+| `DashboardScreen.kt` | `com.androdr.ui.dashboard` | Update `ThreatDatabaseCard` to show two rows |
+| `Migrations.kt` | `com.androdr.data.db` | Add `MIGRATION_2_3` |
+| `AppDatabase.kt` | `com.androdr.data.db` | Version 2 → 3; register `MIGRATION_2_3`; add `DomainIocEntryDao` |
+| `AppModule.kt` | `com.androdr.di` | Provide DataStore instance + `SettingsRepository` (both need explicit `@Provides`; `DomainIocUpdater` is `@Singleton @Inject constructor` so Hilt auto-binds it — no explicit `@Provides` needed) |
+| `IocUpdateWorker.kt` | `com.androdr.ioc` | Inject `DomainIocUpdater`; run both updaters in parallel |
+| `MainActivity.kt` / nav graph | `com.androdr` | Add Settings destination + gear icon in Dashboard header |
 
 ---
 
 ## Testing
 
-- Unit test `MvtIndicatorsFeed.parseStix2()` with a fixture STIX2 snippet — verify domain extraction
-- Unit test `MvtIndicatorsFeed.parseIndicatorsYaml()` with a fixture YAML snippet — verify URL construction
-- Unit test `DomainIocResolver` — verify cache miss returns null, cache hit returns entry
-- Unit test `SettingsRepository` — verify DataStore read/write round-trip (using TestDataStore)
+- Unit test `MvtIndicatorsFeed.parseStix2()` (`internal`) — fixture STIX2 JSON with single-domain and compound OR patterns; verify all domains extracted
+- Unit test `MvtIndicatorsFeed.parseIndicatorsYaml()` (`internal`) — fixture YAML; verify correct raw GitHub URLs constructed per campaign
+- Unit test `DomainIocResolver.isKnownBadDomain()` — verify apex match, subdomain match via label-stripping, no false positive on unrelated domain, cache-miss returns null
+- Unit test `SettingsRepository` — verify DataStore read/write round-trip using `TestDataStore` / in-memory DataStore
+- Unit test `IocUpdateWorker` — verify both `remoteIocUpdater.update()` and `domainIocUpdater.update()` are called
 - Existing `AppScanner` and `BugReportAnalyzer` tests unaffected
