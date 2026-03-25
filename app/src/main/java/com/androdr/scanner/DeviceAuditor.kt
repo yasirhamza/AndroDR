@@ -4,6 +4,7 @@ import android.app.KeyguardManager
 import android.content.Context
 import android.os.Build
 import android.provider.Settings
+import android.util.Log
 import com.androdr.data.model.DeviceFlag
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
@@ -18,6 +19,10 @@ import javax.inject.Singleton
 class DeviceAuditor @Inject constructor(
     @ApplicationContext private val context: Context
 ) {
+
+    private companion object {
+        private const val TAG = "DeviceAuditor"
+    }
 
     /**
      * The most recent known security patch date used as the reference point for
@@ -40,6 +45,7 @@ class DeviceAuditor @Inject constructor(
         val adbEnabled = try {
             Settings.Global.getInt(cr, Settings.Global.ADB_ENABLED, 0) == 1
         } catch (e: Exception) {
+            Log.w(TAG, "DeviceAuditor: ADB_ENABLED setting read failed: ${e.message}")
             false
         }
         flags.add(DeviceFlag.adbEnabled(adbEnabled))
@@ -49,6 +55,7 @@ class DeviceAuditor @Inject constructor(
         val devOptionsEnabled = try {
             Settings.Global.getInt(cr, Settings.Global.DEVELOPMENT_SETTINGS_ENABLED, 0) == 1
         } catch (e: Exception) {
+            Log.w(TAG, "DeviceAuditor: DEVELOPMENT_SETTINGS_ENABLED setting read failed: ${e.message}")
             false
         }
         flags.add(DeviceFlag.devOptionsEnabled(devOptionsEnabled))
@@ -63,6 +70,7 @@ class DeviceAuditor @Inject constructor(
             try {
                 Settings.Secure.getInt(cr, Settings.Secure.INSTALL_NON_MARKET_APPS, 0) == 1
             } catch (e: Exception) {
+                Log.w(TAG, "DeviceAuditor: INSTALL_NON_MARKET_APPS setting read failed: ${e.message}")
                 false
             }
         } else {
@@ -82,6 +90,7 @@ class DeviceAuditor @Inject constructor(
             // isDeviceSecure returns true if a PIN, password, pattern, or biometric is set.
             km?.isDeviceSecure?.not() ?: true
         } catch (e: Exception) {
+            Log.w(TAG, "DeviceAuditor: screen lock state check failed: ${e.message}")
             false
         }
         flags.add(DeviceFlag.noScreenLock(noScreenLock))
@@ -100,6 +109,7 @@ class DeviceAuditor @Inject constructor(
                 ChronoUnit.DAYS.between(patchDate, referenceDate) > maxPatchAgeDays
             }
         } catch (e: Exception) {
+            Log.w(TAG, "DeviceAuditor: security patch level parse failed: ${e.message}")
             true // Parse failure — treat as stale
         }
         flags.add(DeviceFlag.stalePatchLevel(stalePatch))
@@ -113,6 +123,7 @@ class DeviceAuditor @Inject constructor(
         val wifiAdbEnabled = try {
             Settings.Global.getInt(cr, "adb_wifi_enabled", 0) == 1
         } catch (e: Exception) {
+            Log.w(TAG, "DeviceAuditor: adb_wifi_enabled setting read failed: ${e.message}")
             false
         }
         flags.add(DeviceFlag.wifiAdbEnabled(wifiAdbEnabled))
@@ -144,6 +155,7 @@ class DeviceAuditor @Inject constructor(
                 return verifiedBootState.lowercase() == "orange"
             }
         } catch (e: Exception) {
+            Log.w(TAG, "DeviceAuditor: SystemProperties reflection blocked, falling through: ${e.message}")
             // Reflection blocked on this device/API level — fall through
         }
 
@@ -155,6 +167,7 @@ class DeviceAuditor @Inject constructor(
             // Some OEMs include "unlocked" or "U" in the string when the bootloader is open.
             bootloader.lowercase().contains("unlocked") || bootloader.lowercase().contains("-u-")
         } catch (e: Exception) {
+            Log.w(TAG, "DeviceAuditor: bootloader lock state check failed: ${e.message}")
             false
         }
     }

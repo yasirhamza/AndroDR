@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
 import android.os.Build
+import android.util.Log
 import com.androdr.data.model.AppRisk
 import com.androdr.data.model.RiskLevel
 import com.androdr.ioc.IocResolver
@@ -19,6 +20,10 @@ class AppScanner @Inject constructor(
     @ApplicationContext private val context: Context,
     private val iocResolver: IocResolver
 ) {
+
+    private companion object {
+        private const val TAG = "AppScanner"
+    }
 
     /**
      * Dangerous permission combinations that, when two or more appear together,
@@ -50,6 +55,7 @@ class AppScanner @Inject constructor(
         val installedPackages = try {
             pm.getInstalledPackages(PackageManager.GET_PERMISSIONS)
         } catch (e: Exception) {
+            Log.w(TAG, "AppScanner: getInstalledPackages failed: ${e.message}")
             emptyList()
         }
 
@@ -63,6 +69,7 @@ class AppScanner @Inject constructor(
             val appName = try {
                 pm.getApplicationLabel(appInfo).toString()
             } catch (e: Exception) {
+                Log.w(TAG, "AppScanner: getApplicationLabel failed for $packageName: ${e.message}")
                 packageName
             }
 
@@ -77,6 +84,7 @@ class AppScanner @Inject constructor(
             val iocHit = try {
                 iocResolver.isKnownBadPackage(packageName)
             } catch (e: Exception) {
+                Log.w(TAG, "AppScanner: IOC lookup failed for $packageName: ${e.message}")
                 null
             }
             if (iocHit != null) {
@@ -169,6 +177,7 @@ class AppScanner @Inject constructor(
                 pm.getInstallerPackageName(packageName)
             }
         } catch (e: Exception) {
+            Log.w(TAG, "AppScanner: getInstallerPackageName failed for $packageName: ${e.message}")
             null
         }
     }

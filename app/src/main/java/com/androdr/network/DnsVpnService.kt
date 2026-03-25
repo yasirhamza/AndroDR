@@ -3,6 +3,7 @@ package com.androdr.network
 import android.content.Intent
 import android.net.VpnService
 import android.os.ParcelFileDescriptor
+import android.util.Log
 import com.androdr.data.model.DnsEvent
 import com.androdr.data.repo.ScanRepository
 import dagger.hilt.android.AndroidEntryPoint
@@ -38,6 +39,8 @@ import javax.inject.Inject
 class DnsVpnService : VpnService() {
 
     companion object {
+        private const val TAG = "DnsVpnService"
+
         const val ACTION_START = "com.androdr.START_VPN"
         const val ACTION_STOP  = "com.androdr.STOP_VPN"
 
@@ -109,6 +112,7 @@ class DnsVpnService : VpnService() {
                 .setBlocking(false)
                 .establish()
         } catch (e: Exception) {
+            Log.w(TAG, "DnsVpnService: VPN tunnel establishment failed: ${e.message}")
             return
         } ?: return   // establish() returns null if the user hasn't granted VPN permission
 
@@ -152,6 +156,7 @@ class DnsVpnService : VpnService() {
             val bytesRead = try {
                 inputStream.read(buffer)
             } catch (e: Exception) {
+                Log.w(TAG, "DnsVpnService: tun fd read failed (VPN likely revoked): ${e.message}")
                 break
             }
 
@@ -309,6 +314,7 @@ class DnsVpnService : VpnService() {
                 pos += labelLen
             }
         } catch (e: Exception) {
+            Log.w(TAG, "DnsVpnService: DNS hostname parsing failed (malformed packet): ${e.message}")
             return null
         }
 
@@ -367,6 +373,7 @@ class DnsVpnService : VpnService() {
 
             responseBuffer.copyOf(responsePacket.length)
         } catch (e: Exception) {
+            Log.w(TAG, "DnsVpnService: upstream DNS forward failed: ${e.message}")
             null
         }
     }
