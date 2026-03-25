@@ -142,6 +142,7 @@ dependencies {
     testImplementation(libs.junit)
     testImplementation(libs.mockk)
     testImplementation(libs.kotlinx.coroutines.test)
+    testImplementation(libs.org.json) // provides org.json.JSONObject for JVM unit tests
 
     // Instrumented tests
     androidTestImplementation(libs.androidx.junit)
