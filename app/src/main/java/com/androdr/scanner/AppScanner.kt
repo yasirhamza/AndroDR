@@ -94,10 +94,23 @@ class AppScanner @Inject constructor(
             }
 
             // ── 2. Dangerous permission combination scoring ────────────────
+            // System apps with known OEM/AOSP prefixes legitimately hold multiple sensitive
+            // permissions (e.g. Messages needs SMS+Location+Contacts); scoring them would produce
+            // false positives on every stock device. Only score non-system apps and system apps
+            // with unknown prefixes (which are already flagged by the firmware-implant check).
+            val isSystemApp = appInfo.flags and ApplicationInfo.FLAG_SYSTEM != 0
+            val knownSystemPrefixes = listOf(
+                "com.android.", "com.google.", "android", "com.qualcomm.",
+                "com.samsung.", "com.sec.", "com.motorola.", "com.oneplus.",
+                "com.miui.", "com.lge.", "com.htc.", "com.sony.",
+                "com.huawei.", "com.asus.", "com.oppo.", "com.realme.",
+                "com.vivo.", "org.lineageos.", "com.cyanogenmod."
+            )
+            val looksLikeKnownSystem = knownSystemPrefixes.any { packageName.startsWith(it) }
             val grantedPermissions = pkg.requestedPermissions?.toList() ?: emptyList()
             val matchedSurveillancePerms = grantedPermissions
                 .filter { it in surveillancePermissions }
-            if (matchedSurveillancePerms.size >= 2) {
+            if (matchedSurveillancePerms.size >= 2 && !(isSystemApp && looksLikeKnownSystem)) {
                 @Suppress("MaxLineLength") // Inline ternary is clearest for this threshold check
                 val newLevel = if (matchedSurveillancePerms.size >= 4) RiskLevel.CRITICAL else RiskLevel.HIGH
                 if (newLevel.score > riskLevel.score) riskLevel = newLevel
@@ -110,7 +123,6 @@ class AppScanner @Inject constructor(
             }
 
             // ── 3. Sideload detection ──────────────────────────────────────
-            val isSystemApp = appInfo.flags and ApplicationInfo.FLAG_SYSTEM != 0
             if (!isSystemApp) {
                 val installerPackage = getInstallerPackageName(pm, packageName)
                 if (installerPackage != playStoreInstaller) {
@@ -124,14 +136,6 @@ class AppScanner @Inject constructor(
 
             // ── 4. Pre-installed anomaly check ────────────────────────────
             if (isSystemApp) {
-                val knownSystemPrefixes = listOf(
-                    "com.android.", "com.google.", "android", "com.qualcomm.",
-                    "com.samsung.", "com.sec.", "com.motorola.", "com.oneplus.",
-                    "com.miui.", "com.lge.", "com.htc.", "com.sony.",
-                    "com.huawei.", "com.asus.", "com.oppo.", "com.realme.",
-                    "com.vivo.", "org.lineageos.", "com.cyanogenmod."
-                )
-                val looksLikeKnownSystem = knownSystemPrefixes.any { packageName.startsWith(it) }
                 if (!looksLikeKnownSystem) {
                     val newLevel = RiskLevel.HIGH
                     if (newLevel.score > riskLevel.score) riskLevel = newLevel

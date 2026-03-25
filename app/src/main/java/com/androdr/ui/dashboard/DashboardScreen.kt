@@ -222,7 +222,7 @@ private fun ThreatDatabaseCard(
         else           -> Icons.Filled.Refresh
     }
     val statusText = when {
-        isNeverUpdated -> "Threat database not loaded · $entryCount indicators"
+        isNeverUpdated -> "$entryCount bundled indicators · Remote update pending"
         isStale        -> "$entryCount indicators · Updated ${relativeTime(lastUpdated!!, now)} · Stale"
         else           -> "$entryCount indicators · Updated ${relativeTime(lastUpdated!!, now)}"
     }
