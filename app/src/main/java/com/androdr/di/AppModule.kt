@@ -4,9 +4,13 @@ import android.content.Context
 import androidx.room.Room
 import com.androdr.data.db.AppDatabase
 import com.androdr.data.db.DnsEventDao
+import com.androdr.data.db.DomainIocEntryDao
 import com.androdr.data.db.IocEntryDao
 import com.androdr.data.db.MIGRATION_1_2
+import com.androdr.data.db.MIGRATION_2_3
 import com.androdr.data.db.ScanResultDao
+import com.androdr.ioc.DomainIocFeed
+import com.androdr.ioc.feeds.MvtIndicatorsFeed
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -22,7 +26,7 @@ object AppModule {
     @Singleton
     fun provideDatabase(@ApplicationContext ctx: Context): AppDatabase =
         Room.databaseBuilder(ctx, AppDatabase::class.java, "androdr.db")
-            .addMigrations(MIGRATION_1_2)
+            .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
             .build()
 
     @Provides
@@ -33,4 +37,11 @@ object AppModule {
 
     @Provides
     fun provideIocEntryDao(db: AppDatabase): IocEntryDao = db.iocEntryDao()
+
+    @Provides
+    fun provideDomainIocEntryDao(db: AppDatabase): DomainIocEntryDao = db.domainIocEntryDao()
+
+    @Provides
+    @Singleton
+    fun provideDomainIocFeeds(): @JvmSuppressWildcards List<DomainIocFeed> = listOf(MvtIndicatorsFeed())
 }

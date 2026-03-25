@@ -7,6 +7,8 @@ import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 
 /**
  * Periodic WorkManager job that triggers a full IOC feed update.
@@ -18,15 +20,15 @@ import dagger.assisted.AssistedInject
 class IocUpdateWorker @AssistedInject constructor(
     @Assisted context: Context,
     @Assisted params: WorkerParameters,
-    private val remoteIocUpdater: RemoteIocUpdater
+    private val remoteIocUpdater: RemoteIocUpdater,
+    private val domainIocUpdater: DomainIocUpdater
 ) : CoroutineWorker(context, params) {
 
-    @Suppress("TooGenericExceptionCaught") // Worker must catch all failures to return Result.retry()
-    // rather than crashing the process; the error is logged before retrying.
+    @Suppress("TooGenericExceptionCaught")
     override suspend fun doWork(): Result {
         return try {
-            val fetched = remoteIocUpdater.update()
-            Log.i(TAG, "Worker finished — $fetched entries fetched")
+            val fetched = runBothUpdaters(remoteIocUpdater, domainIocUpdater)
+            Log.i(TAG, "Worker finished — $fetched entries fetched total")
             Result.success()
         } catch (e: Exception) {
             Log.e(TAG, "Worker failed: ${e.message}")
@@ -38,4 +40,14 @@ class IocUpdateWorker @AssistedInject constructor(
         private const val TAG = "IocUpdateWorker"
         const val WORK_NAME = "ioc_periodic_update"
     }
+}
+
+/** Runs both updaters in parallel; returns combined entry count. Extracted for testability. */
+internal suspend fun runBothUpdaters(
+    remoteIocUpdater: RemoteIocUpdater,
+    domainIocUpdater: DomainIocUpdater
+): Int = coroutineScope {
+    val pkg    = async { remoteIocUpdater.update() }
+    val domain = async { domainIocUpdater.update() }
+    pkg.await() + domain.await()
 }
