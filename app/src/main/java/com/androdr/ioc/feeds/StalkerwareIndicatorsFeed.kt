@@ -12,19 +12,24 @@ import java.net.URL
  * Fetches stalkerware package-name indicators from the community-maintained
  * AssoEchap/stalkerware-indicators GitHub repository.
  *
- * Expected CSV format (first row is a header):
- *   Package name,Classification,Version,SHA256
- *   com.example.spy,stalkerware,,
+ * Parses the top-level ioc.yaml file. Each entry is a YAML mapping with a
+ * `type` field and a `packages` list:
+ *
+ *   - name: TheTruthSpy
+ *     type: stalkerware
+ *     packages:
+ *     - com.apspy.app
+ *     - com.fone
  */
 class StalkerwareIndicatorsFeed : IocFeed {
 
     override val sourceId = SOURCE_ID
 
-    @Suppress("TooGenericExceptionCaught") // Network operations can throw IOException, SSLException,
-    // or JsonDecodeException; all are logged and result in empty list.
+    @Suppress("TooGenericExceptionCaught") // Network operations can throw IOException, SSLException;
+    // all are logged and result in an empty list rather than crashing the update flow.
     override suspend fun fetch(): List<IocEntry> = withContext(Dispatchers.IO) {
         try {
-            val connection = (URL(CSV_URL).openConnection() as HttpURLConnection).apply {
+            val connection = (URL(YAML_URL).openConnection() as HttpURLConnection).apply {
                 connectTimeout = 15_000
                 readTimeout = 15_000
                 requestMethod = "GET"
@@ -36,12 +41,7 @@ class StalkerwareIndicatorsFeed : IocFeed {
                     return@withContext emptyList()
                 }
                 val now = System.currentTimeMillis()
-                connection.inputStream.bufferedReader().use { reader ->
-                    reader.lineSequence()
-                        .drop(1) // skip header row
-                        .mapNotNull { line -> parseLine(line, now) }
-                        .toList()
-                }
+                parseYaml(connection.inputStream.bufferedReader().readText(), now)
             } finally {
                 connection.disconnect()
             }
@@ -51,40 +51,71 @@ class StalkerwareIndicatorsFeed : IocFeed {
         }
     }
 
-    @Suppress("ReturnCount") // CSV parsing uses early returns for malformed lines (wrong column
-    // count, missing dot in package name); each guard corresponds to a distinct invalid format.
-    private fun parseLine(line: String, fetchedAt: Long): IocEntry? {
-        val cols = line.split(",")
-        if (cols.size < 2) return null
-        val packageName = cols[0].trim()
-        val classificationRaw = cols[1].trim()
-        // Require at least two dots to filter out header artifacts and short strings
-        if (packageName.count { it == '.' } < 1 || !packageName.contains('.')) return null
-        val classificationUpper = classificationRaw.uppercase()
-        val category = when {
-            classificationUpper.contains("STALKER") -> "STALKERWARE"
-            classificationUpper.contains("SPYWARE") -> "SPYWARE"
-            classificationUpper.contains("MONITOR") -> "MONITORING"
-            else -> "STALKERWARE"
+    /**
+     * Minimal line-based YAML parser for the AssoEchap ioc.yaml structure.
+     * No external YAML library required — the format is regular enough to
+     * parse with a simple state machine.
+     */
+    internal fun parseYaml(yaml: String, fetchedAt: Long): List<IocEntry> {
+        val results = mutableListOf<IocEntry>()
+        var currentType = "stalkerware"
+        var currentName = ""
+        var inPackages = false
+
+        for (line in yaml.lines()) {
+            when {
+                line.startsWith("- name:") -> {
+                    currentName = line.removePrefix("- name:").trim()
+                    inPackages = false
+                }
+                line.trimStart().startsWith("type:") -> {
+                    currentType = line.trimStart().removePrefix("type:").trim()
+                    inPackages = false
+                }
+                line.trimStart() == "packages:" -> {
+                    inPackages = true
+                }
+                inPackages && line.trimStart().startsWith("- ") && !line.startsWith("- name:") -> {
+                    val pkg = line.trimStart().removePrefix("- ").trim()
+                    // Only process lines that look like package names (contain a dot, no spaces)
+                    if (pkg.contains('.') && !pkg.contains(' ')) {
+                        val category = when {
+                            currentType.contains("stalker", ignoreCase = true) -> "STALKERWARE"
+                            currentType.contains("spy", ignoreCase = true)     -> "SPYWARE"
+                            currentType.contains("monitor", ignoreCase = true) -> "MONITORING"
+                            else -> "STALKERWARE"
+                        }
+                        val displayName = currentName.ifBlank {
+                            pkg.substringAfterLast('.').replaceFirstChar { it.uppercase() }
+                        }
+                        results.add(
+                            IocEntry(
+                                packageName = pkg,
+                                name = displayName,
+                                category = category,
+                                severity = "CRITICAL",
+                                description = "Listed in the community stalkerware-indicators " +
+                                    "database (type: $currentType). " +
+                                    "See https://github.com/AssoEchap/stalkerware-indicators",
+                                source = sourceId,
+                                fetchedAt = fetchedAt
+                            )
+                        )
+                    }
+                }
+                // Any non-package-list line resets the inPackages flag
+                inPackages && !line.trimStart().startsWith("- ") && line.isNotBlank() -> {
+                    inPackages = false
+                }
+            }
         }
-        val displayName = packageName.substringAfterLast('.').replaceFirstChar { it.uppercase() }
-        return IocEntry(
-            packageName = packageName,
-            name = displayName,
-            category = category,
-            severity = "CRITICAL",
-            description = "Listed in the community stalkerware-indicators database " +
-                "(classification: $classificationRaw). " +
-                "See https://github.com/AssoEchap/stalkerware-indicators",
-            source = sourceId,
-            fetchedAt = fetchedAt
-        )
+        return results
     }
 
     companion object {
         private const val TAG = "StalkerwareIndicatorsFeed"
         const val SOURCE_ID = "stalkerware_indicators"
-        private const val CSV_URL =
-            "https://raw.githubusercontent.com/AssoEchap/stalkerware-indicators/master/generated/ioc.csv"
+        private const val YAML_URL =
+            "https://raw.githubusercontent.com/AssoEchap/stalkerware-indicators/master/ioc.yaml"
     }
 }
