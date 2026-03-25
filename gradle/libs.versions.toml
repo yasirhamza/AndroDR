@@ -31,6 +31,9 @@ kotlinxSerialization = "1.7.1"
 # WorkManager
 workManager = "2.9.1"
 
+# DataStore
+datastore = "1.1.1"
+
 # Code quality & security
 detekt = "1.23.7"
 owaspDepCheck = "9.2.0"
@@ -92,6 +95,9 @@ org-json = { group = "org.json", name = "json", version.ref = "orgJson" }
 androidx-work-runtime-ktx = { group = "androidx.work", name = "work-runtime-ktx", version.ref = "workManager" }
 androidx-hilt-work = { group = "androidx.hilt", name = "hilt-work", version.ref = "hiltNavigationCompose" }
 androidx-hilt-compiler = { group = "androidx.hilt", name = "hilt-compiler", version.ref = "hiltNavigationCompose" }
+
+# DataStore
+androidx-datastore-preferences = { group = "androidx.datastore", name = "datastore-preferences", version.ref = "datastore" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

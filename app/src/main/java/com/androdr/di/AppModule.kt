@@ -1,6 +1,9 @@
 package com.androdr.di
 
 import android.content.Context
+import androidx.datastore.core.DataStore
+import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.preferencesDataStore
 import androidx.room.Room
 import com.androdr.data.db.AppDatabase
 import com.androdr.data.db.DnsEventDao
@@ -17,6 +20,9 @@ import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
 import javax.inject.Singleton
+
+private val Context.settingsDataStore: DataStore<Preferences>
+    by preferencesDataStore(name = "androdr_settings")
 
 @Module
 @InstallIn(SingletonComponent::class)
@@ -44,4 +50,9 @@ object AppModule {
     @Provides
     @Singleton
     fun provideDomainIocFeeds(): @JvmSuppressWildcards List<DomainIocFeed> = listOf(MvtIndicatorsFeed())
+
+    @Provides
+    @Singleton
+    fun provideSettingsDataStore(@ApplicationContext ctx: Context): DataStore<Preferences> =
+        ctx.settingsDataStore
 }
