@@ -44,6 +44,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.androdr.R
+import com.androdr.ui.settings.SettingsViewModel
 import com.androdr.data.model.DnsEvent
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -54,11 +55,14 @@ import java.util.Locale
 @Composable
 fun DnsMonitorScreen(
     viewModel: DnsMonitorViewModel = hiltViewModel(),
+    settingsViewModel: SettingsViewModel = hiltViewModel(),
     onRequestVpnPermission: (Intent) -> Unit = {}
 ) {
     val recentEvents by viewModel.recentEvents.collectAsStateWithLifecycle()
     val blockedEvents by viewModel.blockedEvents.collectAsStateWithLifecycle()
     val isVpnRunning by viewModel.isVpnRunning.collectAsStateWithLifecycle()
+    val blocklistBlockMode by settingsViewModel.blocklistBlockMode.collectAsStateWithLifecycle()
+    val domainIocBlockMode by settingsViewModel.domainIocBlockMode.collectAsStateWithLifecycle()
     val context = LocalContext.current
 
     var selectedTab by remember { mutableIntStateOf(0) }
@@ -159,6 +163,28 @@ fun DnsMonitorScreen(
                     ) {
                         Text(stringResource(R.string.enable_vpn))
                     }
+                }
+            }
+        }
+
+        // Policy toggles
+        Card(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
+            Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("DNS Policy", style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Row(modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween) {
+                    Text("Blocklist: Block", style = MaterialTheme.typography.bodyMedium)
+                    Switch(checked = blocklistBlockMode,
+                        onCheckedChange = { settingsViewModel.setBlocklistBlockMode(it) })
+                }
+                Row(modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween) {
+                    Text("IOC Domains: Block", style = MaterialTheme.typography.bodyMedium)
+                    Switch(checked = domainIocBlockMode,
+                        onCheckedChange = { settingsViewModel.setDomainIocBlockMode(it) })
                 }
             }
         }
