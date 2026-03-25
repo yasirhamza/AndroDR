@@ -2,9 +2,11 @@ package com.androdr.ui.dashboard
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.androdr.data.db.DomainIocEntryDao
 import com.androdr.data.db.IocEntryDao
 import com.androdr.data.model.ScanResult
 import com.androdr.data.repo.ScanRepository
+import com.androdr.ioc.DomainIocUpdater
 import com.androdr.ioc.IocDatabase
 import com.androdr.ioc.RemoteIocUpdater
 import com.androdr.scanner.ScanOrchestrator
@@ -27,7 +29,9 @@ class DashboardViewModel @Inject constructor(
     private val repository: ScanRepository,
     private val iocEntryDao: IocEntryDao,
     private val iocDatabase: IocDatabase,
-    private val remoteIocUpdater: RemoteIocUpdater
+    private val remoteIocUpdater: RemoteIocUpdater,
+    private val domainIocEntryDao: DomainIocEntryDao,
+    private val domainIocUpdater: DomainIocUpdater
 ) : ViewModel() {
 
     val latestScan: StateFlow<ScanResult?> = repository.allScans
@@ -59,14 +63,32 @@ class DashboardViewModel @Inject constructor(
     private val _iocErrorEvent = MutableSharedFlow<String>(extraBufferCapacity = 1)
     val iocErrorEvent: SharedFlow<String> = _iocErrorEvent.asSharedFlow()
 
+    // ── Domain IOC state ───────────────────────────────────────────────────────
+
+    private val _domainIocEntryCount = MutableStateFlow(0)
+    val domainIocEntryCount: StateFlow<Int> = _domainIocEntryCount.asStateFlow()
+
+    private val _domainIocLastUpdated = MutableStateFlow<Long?>(null)
+    val domainIocLastUpdated: StateFlow<Long?> = _domainIocLastUpdated.asStateFlow()
+
+    private val _isUpdatingDomainIoc = MutableStateFlow(false)
+    val isUpdatingDomainIoc: StateFlow<Boolean> = _isUpdatingDomainIoc.asStateFlow()
+
     init {
-        viewModelScope.launch { refreshIocState() }
+        viewModelScope.launch {
+            refreshIocState()
+            refreshDomainIocState()
+        }
     }
 
     // ── Public functions ───────────────────────────────────────────────────────
 
     fun updateIoc() {
         viewModelScope.launch { doUpdate() }
+    }
+
+    fun updateDomainIoc() {
+        viewModelScope.launch { doUpdateDomain() }
     }
 
     fun runScan() {
@@ -108,5 +130,26 @@ class DashboardViewModel @Inject constructor(
     private suspend fun refreshIocState() {
         _iocEntryCount.value = iocEntryDao.count() + bundledCount
         _iocLastUpdated.value = iocEntryDao.mostRecentFetchTime()
+    }
+
+    @Suppress("TooGenericExceptionCaught")
+    private suspend fun doUpdateDomain() {
+        _isUpdatingDomainIoc.value = true
+        try {
+            val fetched = domainIocUpdater.update()
+            if (fetched == 0) {
+                _iocErrorEvent.tryEmit("Failed to update domain threat database. Check your connection.")
+            }
+            refreshDomainIocState()
+        } catch (e: Exception) {
+            _iocErrorEvent.tryEmit("Domain threat database update failed: ${e.message}")
+        } finally {
+            _isUpdatingDomainIoc.value = false
+        }
+    }
+
+    private suspend fun refreshDomainIocState() {
+        _domainIocEntryCount.value = domainIocEntryDao.count()
+        _domainIocLastUpdated.value = domainIocEntryDao.mostRecentFetchTime()
     }
 }
