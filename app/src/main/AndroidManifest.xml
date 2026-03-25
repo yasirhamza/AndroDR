@@ -3,12 +3,26 @@
     xmlns:tools="http://schemas.android.com/tools">
 
     <!-- Permissions -->
-    <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" />
+    <!--
+      QueryAllPackagesPermission: AndroDR is a security/EDR app that intentionally enumerates
+      all installed packages to detect known-malicious apps. A <queries> filter would defeat
+      the purpose of the full-device scan.
+    -->
+    <uses-permission
+        android:name="android.permission.QUERY_ALL_PACKAGES"
+        tools:ignore="QueryAllPackagesPermission" />
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
-    <uses-permission android:name="android.permission.READ_LOGS" />
+    <!--
+      ProtectedPermissions: READ_LOGS is required for the EDR logcat capture feature
+      (ReportExporter). The app targets sideloaded/enterprise deployment where this
+      permission can be granted via adb or MDM; it is intentional and documented.
+    -->
+    <uses-permission
+        android:name="android.permission.READ_LOGS"
+        tools:ignore="ProtectedPermissions" />
 
     <application
         android:name=".AndroDRApplication"
