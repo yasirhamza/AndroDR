@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<resources>
+<resources
+    xmlns:tools="http://schemas.android.com/tools">
     <!-- App name -->
     <string name="app_name">AndroDR</string>
 
@@ -14,7 +15,10 @@
     <string name="summary_dns_blocked">DNS Blocked</string>
     <string name="summary_last_scan">Last Scan</string>
     <string name="never">Never</string>
-    <string name="diff_banner">%1$d new risk(s) since last scan</string>
+    <!-- PluralsCandidate: "risk(s)" is intentional shorthand for a single UI banner;
+         a full plurals resource would add overhead with no real i18n benefit for this string. -->
+    <!-- UnusedResources: referenced from DashboardScreen Composable (lint cannot trace Compose string refs) -->
+    <string name="diff_banner" tools:ignore="PluralsCandidate,UnusedResources">%1$d new risk(s) since last scan</string>
 
     <!-- App Scan -->
     <string name="filter_all">All</string>
@@ -66,9 +70,11 @@
     <string name="report_share_subject">AndroDR Security Report</string>
 
     <!-- Navigation labels -->
-    <string name="nav_dashboard">Dashboard</string>
-    <string name="nav_apps">Apps</string>
-    <string name="nav_device">Device</string>
-    <string name="nav_network">Network</string>
-    <string name="nav_history">History</string>
+    <!-- UnusedResources: these are referenced by NavDestination.label in Compose navigation;
+         lint cannot trace string resource usage through Compose navigation graphs. -->
+    <string name="nav_dashboard" tools:ignore="UnusedResources">Dashboard</string>
+    <string name="nav_apps" tools:ignore="UnusedResources">Apps</string>
+    <string name="nav_device" tools:ignore="UnusedResources">Device</string>
+    <string name="nav_network" tools:ignore="UnusedResources">Network</string>
+    <string name="nav_history" tools:ignore="UnusedResources">History</string>
 </resources>
