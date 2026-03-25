@@ -108,6 +108,7 @@ class DnsVpnService : VpnService() {
                 .addAddress(TUN_ADDRESS, TUN_PREFIX_LEN)
                 .addDnsServer(DNS_SERVER_IP)
                 .addRoute("0.0.0.0", 0)
+                .addDisallowedApplication(packageName)
                 .setSession("AndroDR DNS Filter")
                 .setBlocking(false)
                 .establish()
