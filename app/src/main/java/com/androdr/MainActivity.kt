@@ -32,6 +32,7 @@ import com.androdr.ui.dashboard.DashboardScreen
 import com.androdr.ui.device.DeviceAuditScreen
 import com.androdr.ui.history.HistoryScreen
 import com.androdr.ui.network.DnsMonitorScreen
+import com.androdr.ui.settings.SettingsScreen
 import com.androdr.ui.theme.AndroDRTheme
 import android.app.Activity
 import dagger.hilt.android.AndroidEntryPoint
@@ -163,6 +164,9 @@ private fun AndroDRApp() {
             }
             composable("bugreport") {
                 BugReportScreen()
+            }
+            composable("settings") {
+                SettingsScreen()
             }
         }
     }
