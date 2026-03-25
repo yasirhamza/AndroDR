@@ -90,11 +90,12 @@ fun DnsMonitorScreen(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
+                        val vpnIconTint = if (isVpnRunning) MaterialTheme.colorScheme.primary
+                            else MaterialTheme.colorScheme.onSurfaceVariant
                         Icon(
                             imageVector = if (isVpnRunning) Icons.Filled.Wifi else Icons.Filled.WifiOff,
                             contentDescription = null,
-                            @Suppress("MaxLineLength") // Compose tint expression fits on one line for readability
-                            tint = if (isVpnRunning) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                            tint = vpnIconTint,
                             modifier = Modifier.size(24.dp)
                         )
                         Column {
