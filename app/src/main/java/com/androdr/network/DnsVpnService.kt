@@ -6,6 +6,8 @@ import android.os.ParcelFileDescriptor
 import android.util.Log
 import com.androdr.data.model.DnsEvent
 import com.androdr.data.repo.ScanRepository
+import com.androdr.data.repo.SettingsRepository
+import com.androdr.ioc.DomainIocResolver
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -68,10 +70,17 @@ class DnsVpnService : VpnService() {
     @Inject lateinit var blocklistManager: BlocklistManager
     @Suppress("LateinitUsage") // Hilt @Inject requires lateinit; null-safety is guaranteed by Hilt
     @Inject lateinit var scanRepository: ScanRepository
+    @Suppress("LateinitUsage")
+    @Inject lateinit var domainIocResolver: DomainIocResolver
+    @Suppress("LateinitUsage")
+    @Inject lateinit var settingsRepository: SettingsRepository
 
     private var tunFd: ParcelFileDescriptor? = null
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var readLoopJob: Job? = null
+
+    private val blocklistBlockMode = MutableStateFlow(true)
+    private val domainIocBlockMode = MutableStateFlow(false)
 
     // ── Lifecycle ─────────────────────────────────────────────────────────────
 
@@ -119,6 +128,14 @@ class DnsVpnService : VpnService() {
 
         tunFd = fd
         isRunning.value = true
+
+        serviceScope.launch {
+            settingsRepository.blocklistBlockMode.collect { blocklistBlockMode.value = it }
+        }
+        serviceScope.launch {
+            settingsRepository.domainIocBlockMode.collect { domainIocBlockMode.value = it }
+        }
+        serviceScope.launch { domainIocResolver.refreshCache() }
 
         readLoopJob = serviceScope.launch {
             runPacketLoop(fd)
@@ -223,58 +240,83 @@ class DnsVpnService : VpnService() {
         // Extract source IP address (bytes 12–15) so we can route the reply back
         val srcIpBytes = packet.copyOfRange(12, 16)
 
-        if (blocklistManager.isBlocked(hostname)) {
-            // Log the block event (fire-and-forget on IO dispatcher)
-            serviceScope.launch {
-                runCatching {
-                    scanRepository.logDnsEvent(
-                        DnsEvent(
-                            timestamp = System.currentTimeMillis(),
-                            domain    = hostname,
-                            appUid    = -1,
-                            appName   = null,
-                            isBlocked = true,
-                            reason    = "Domain matched blocklist"
-                        )
-                    )
+        val isBlocklisted = blocklistManager.isBlocked(hostname)
+        val iocHit = if (!isBlocklisted) domainIocResolver.isKnownBadDomain(hostname) else null
+
+        when {
+            isBlocklisted && blocklistBlockMode.value -> {
+                serviceScope.launch {
+                    runCatching {
+                        scanRepository.logDnsEvent(DnsEvent(
+                            timestamp = System.currentTimeMillis(), domain = hostname,
+                            appUid = -1, appName = null, isBlocked = true, reason = "blocklist"
+                        ))
+                    }
+                }
+                val nxResponse = buildNxdomainResponse(dnsPayload, txId)
+                val responsePacket = wrapInIpUdp(nxResponse, intArrayOf(10, 0, 0, 1),
+                    byteArrayToIntArray(srcIpBytes), DNS_PORT, srcPort)
+                try { outputStream.write(responsePacket) } catch (_: Exception) {}
+            }
+            isBlocklisted -> {
+                // detect-only: forward but log as flagged
+                serviceScope.launch {
+                    val response = forwardToUpstreamDns(dnsPayload) ?: return@launch
+                    val responsePacket = wrapInIpUdp(response, intArrayOf(10, 0, 0, 1),
+                        byteArrayToIntArray(srcIpBytes), DNS_PORT, srcPort)
+                    try { outputStream.write(responsePacket) } catch (_: Exception) {}
+                    runCatching {
+                        scanRepository.logDnsEvent(DnsEvent(
+                            timestamp = System.currentTimeMillis(), domain = hostname,
+                            appUid = -1, appName = null, isBlocked = false, reason = "blocklist_detect"
+                        ))
+                    }
                 }
             }
-
-            // Send NXDOMAIN response back through the tun interface
-            val nxResponse = buildNxdomainResponse(dnsPayload, txId)
-            val responsePacket = wrapInIpUdp(
-                payload    = nxResponse,
-                srcIp      = intArrayOf(10, 0, 0, 1),   // DNS_SERVER_IP virtual address
-                dstIp      = byteArrayToIntArray(srcIpBytes),
-                srcPort    = DNS_PORT,
-                dstPort    = srcPort
-            )
-            try { outputStream.write(responsePacket) } catch (_: Exception) {}
-        } else {
-            // Forward to upstream DNS and relay the real response
-            serviceScope.launch {
-                val response = forwardToUpstreamDns(dnsPayload) ?: return@launch
-                val responsePacket = wrapInIpUdp(
-                    payload    = response,
-                    srcIp      = intArrayOf(10, 0, 0, 1),
-                    dstIp      = byteArrayToIntArray(srcIpBytes),
-                    srcPort    = DNS_PORT,
-                    dstPort    = srcPort
-                )
+            iocHit != null && domainIocBlockMode.value -> {
+                serviceScope.launch {
+                    runCatching {
+                        scanRepository.logDnsEvent(DnsEvent(
+                            timestamp = System.currentTimeMillis(), domain = hostname,
+                            appUid = -1, appName = null, isBlocked = true,
+                            reason = "IOC: ${iocHit.campaignName}"
+                        ))
+                    }
+                }
+                val nxResponse = buildNxdomainResponse(dnsPayload, txId)
+                val responsePacket = wrapInIpUdp(nxResponse, intArrayOf(10, 0, 0, 1),
+                    byteArrayToIntArray(srcIpBytes), DNS_PORT, srcPort)
                 try { outputStream.write(responsePacket) } catch (_: Exception) {}
-
-                // Log all allowed DNS queries so the DNS monitor shows live traffic
-                runCatching {
-                    scanRepository.logDnsEvent(
-                        DnsEvent(
-                            timestamp = System.currentTimeMillis(),
-                            domain    = hostname,
-                            appUid    = -1,
-                            appName   = null,
-                            isBlocked = false,
-                            reason    = null
-                        )
-                    )
+            }
+            iocHit != null -> {
+                // detect-only for IOC domain
+                serviceScope.launch {
+                    val response = forwardToUpstreamDns(dnsPayload) ?: return@launch
+                    val responsePacket = wrapInIpUdp(response, intArrayOf(10, 0, 0, 1),
+                        byteArrayToIntArray(srcIpBytes), DNS_PORT, srcPort)
+                    try { outputStream.write(responsePacket) } catch (_: Exception) {}
+                    runCatching {
+                        scanRepository.logDnsEvent(DnsEvent(
+                            timestamp = System.currentTimeMillis(), domain = hostname,
+                            appUid = -1, appName = null, isBlocked = false,
+                            reason = "IOC_detect: ${iocHit.campaignName}"
+                        ))
+                    }
+                }
+            }
+            else -> {
+                // allowed — forward and log
+                serviceScope.launch {
+                    val response = forwardToUpstreamDns(dnsPayload) ?: return@launch
+                    val responsePacket = wrapInIpUdp(response, intArrayOf(10, 0, 0, 1),
+                        byteArrayToIntArray(srcIpBytes), DNS_PORT, srcPort)
+                    try { outputStream.write(responsePacket) } catch (_: Exception) {}
+                    runCatching {
+                        scanRepository.logDnsEvent(DnsEvent(
+                            timestamp = System.currentTimeMillis(), domain = hostname,
+                            appUid = -1, appName = null, isBlocked = false, reason = null
+                        ))
+                    }
                 }
             }
         }
