@@ -262,8 +262,19 @@ class DnsVpnService : VpnService() {
                 )
                 try { outputStream.write(responsePacket) } catch (_: Exception) {}
 
-                // Optionally log allowed events (omit to reduce DB noise — uncomment if needed)
-                // scanRepository.logDnsEvent(DnsEvent(..., isBlocked = false, ...))
+                // Log all allowed DNS queries so the DNS monitor shows live traffic
+                runCatching {
+                    scanRepository.logDnsEvent(
+                        DnsEvent(
+                            timestamp = System.currentTimeMillis(),
+                            domain    = hostname,
+                            appUid    = -1,
+                            appName   = null,
+                            isBlocked = false,
+                            reason    = null
+                        )
+                    )
+                }
             }
         }
     }
