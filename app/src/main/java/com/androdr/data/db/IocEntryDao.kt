@@ -24,6 +24,9 @@ interface IocEntryDao {
     @Query("SELECT MAX(fetchedAt) FROM ioc_entries WHERE source = :source")
     suspend fun lastFetchTime(source: String): Long?
 
+    @Query("SELECT MAX(fetchedAt) FROM ioc_entries")
+    suspend fun mostRecentFetchTime(): Long?
+
     /** Removes entries from [source] that were not refreshed in the latest fetch run. */
     @Query("DELETE FROM ioc_entries WHERE source = :source AND fetchedAt < :olderThan")
     suspend fun deleteStaleEntries(source: String, olderThan: Long)
