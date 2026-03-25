@@ -1,5 +1,6 @@
 package com.androdr.scanner
 
+import android.annotation.SuppressLint
 import android.app.KeyguardManager
 import android.content.Context
 import android.os.Build
@@ -61,25 +62,15 @@ class DeviceAuditor @Inject constructor(
         flags.add(DeviceFlag.devOptionsEnabled(devOptionsEnabled))
 
         // ── 3. Install from unknown sources ───────────────────────────────────
-        // On API 26+ the permission is per-app (no global setting); we approximate by
-        // checking the FEATURE_VERIFIED_BOOT feature absence as a signal that the device
-        // environment is less controlled. For API < 26 we read the legacy global setting.
-        val unknownSources = if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
-            @Suppress("TooGenericExceptionCaught", "SwallowedException") // Settings.Secure.getInt
-            // can throw SecurityException on enterprise-managed devices; false is safe default.
-            try {
-                Settings.Secure.getInt(cr, Settings.Secure.INSTALL_NON_MARKET_APPS, 0) == 1
-            } catch (e: Exception) {
-                Log.w(TAG, "DeviceAuditor: INSTALL_NON_MARKET_APPS setting read failed: ${e.message}")
-                false
-            }
-        } else {
+        // minSdk = 26 (O) so the per-app unknown-sources permission model always applies.
+        // We cannot reliably read the per-package allow-unknown-sources state without a
+        // system permission, so we approximate via Verified Boot feature absence.
+        val unknownSources =
             // On API 26+ we cannot reliably read per-package allow-unknown-sources state
             // without holding a system permission. Instead, check whether the device
             // advertises Verified Boot support; its absence suggests a more permissive
             // environment. This is an approximation only.
             !context.packageManager.hasSystemFeature("android.software.verified_boot")
-        }
         flags.add(DeviceFlag.unknownSources(unknownSources))
 
         // ── 4. Screen lock ────────────────────────────────────────────────────
@@ -143,6 +134,10 @@ class DeviceAuditor @Inject constructor(
      */
     @Suppress("ReturnCount") // Two independent detection strategies each require an early return;
     // merging them into one return path would obscure the fallback logic between strategies.
+    // PrivateApi: Reflecting android.os.SystemProperties is the only way to read
+    // ro.boot.verifiedbootstate from a non-system app; this is an intentional EDR capability.
+    // The catch block handles cases where reflection is blocked, making it safe to use.
+    @SuppressLint("PrivateApi")
     private fun isBootloaderUnlocked(): Boolean {
         // Strategy 1: reflect into SystemProperties
         @Suppress("TooGenericExceptionCaught", "SwallowedException") // Reflection can throw any
