@@ -88,6 +88,8 @@ class DashboardViewModel @Inject constructor(
 
     // ── Private helpers ────────────────────────────────────────────────────────
 
+    @Suppress("TooGenericExceptionCaught") // remoteIocUpdater.update() can throw IOException or
+    // SQLiteException; both are caught here to surface a user-visible error via the snackbar.
     private suspend fun doUpdate() {
         _isUpdatingIoc.value = true
         try {
@@ -96,6 +98,8 @@ class DashboardViewModel @Inject constructor(
                 _iocErrorEvent.tryEmit("Failed to update threat database. Check your connection.")
             }
             refreshIocState()
+        } catch (e: Exception) {
+            _iocErrorEvent.tryEmit("Threat database update failed: ${e.message}")
         } finally {
             _isUpdatingIoc.value = false
         }

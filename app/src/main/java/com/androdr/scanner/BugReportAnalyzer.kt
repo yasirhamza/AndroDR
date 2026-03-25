@@ -156,18 +156,42 @@ class BugReportAnalyzer @Inject constructor(
             BufferedReader(InputStreamReader(stream, Charsets.UTF_8)).forEachLine { line ->
                 lineNumber++
 
-                // ── Spyware/stalkerware process names ────────────────────
-                val spyMatch = spywareProcessRegex.find(line)
-                if (spyMatch != null) {
-                    findings.add(
-                        BugReportFinding(
-                            severity = "CRITICAL",
-                            category = "KnownMalware",
-                            description = "Known spyware/stalkerware keyword '${spyMatch.value}' " +
-                                "detected in $entryName at line $lineNumber: " +
-                                line.take(200).trim()
+                // ── Installed package list section ───────────────────────
+                // Check IOC DB first; if a package hit is found, skip keyword matching on this
+                // line to avoid double-counting (a package name like "com.flexispy.android" would
+                // otherwise also fire the spyware keyword regex).
+                var iocHitOnLine = false
+                installedPackageRegex.findAll(line).forEach { match ->
+                    val pkgName = match.groupValues[1]
+                    val iocHit = iocResolver.isKnownBadPackage(pkgName)
+                    if (iocHit != null) {
+                        iocHitOnLine = true
+                        findings.add(
+                            BugReportFinding(
+                                severity = iocHit.severity,
+                                category = "KnownMalware",
+                                description = "Known ${iocHit.category} package '$pkgName' " +
+                                    "(${iocHit.name}) found in installed package list within " +
+                                    "$entryName — ${iocHit.description}"
+                            )
                         )
-                    )
+                    }
+                }
+
+                if (!iocHitOnLine) {
+                    // ── Spyware/stalkerware process names ────────────────────
+                    val spyMatch = spywareProcessRegex.find(line)
+                    if (spyMatch != null) {
+                        findings.add(
+                            BugReportFinding(
+                                severity = "CRITICAL",
+                                category = "KnownMalware",
+                                description = "Known spyware/stalkerware keyword '${spyMatch.value}' " +
+                                    "detected in $entryName at line $lineNumber: " +
+                                    line.take(200).trim()
+                            )
+                        )
+                    }
                 }
 
                 // ── Suspicious base64 blobs ──────────────────────────────
@@ -207,23 +231,6 @@ class BugReportAnalyzer @Inject constructor(
                     wakelockCount++
                     if (firstWakelockLine < 0) firstWakelockLine = lineNumber
                     lastWakelockLine = lineNumber
-                }
-
-                // ── Installed package list section ───────────────────────
-                installedPackageRegex.findAll(line).forEach { match ->
-                    val pkgName = match.groupValues[1]
-                    val iocHit = iocResolver.isKnownBadPackage(pkgName)
-                    if (iocHit != null) {
-                        findings.add(
-                            BugReportFinding(
-                                severity = iocHit.severity,
-                                category = "KnownMalware",
-                                description = "Known ${iocHit.category} package '$pkgName' " +
-                                    "(${iocHit.name}) found in installed package list within " +
-                                    "$entryName — ${iocHit.description}"
-                            )
-                        )
-                    }
                 }
             }
         } catch (e: Exception) {
