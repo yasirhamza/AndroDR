@@ -7,6 +7,7 @@ import android.content.pm.PackageManager
 import android.os.Build
 import android.util.Log
 import com.androdr.data.model.AppRisk
+import com.androdr.data.model.AppTelemetry
 import com.androdr.data.model.KnownAppCategory
 import com.androdr.data.model.RiskLevel
 import com.androdr.ioc.CertHashIocResolver
@@ -308,6 +309,116 @@ class AppScanner @Inject constructor(
         }
 
         risks.sortedByDescending { it.riskLevel.score }
+    }
+
+    /**
+     * Collects per-app telemetry metadata for every installed package without performing
+     * any detection or risk-scoring logic. The returned [AppTelemetry] list feeds into the
+     * SIGMA rule engine which applies its own detection rules independently.
+     */
+    @Suppress("LongMethod", "CyclomaticComplexMethod")
+    suspend fun collectTelemetry(): List<AppTelemetry> = withContext(Dispatchers.IO) {
+        val pm = context.packageManager
+        val signingFlag = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P)
+            PackageManager.GET_SIGNING_CERTIFICATES
+        else
+            @Suppress("DEPRECATION") PackageManager.GET_SIGNATURES
+
+        @Suppress("TooGenericExceptionCaught", "SwallowedException")
+        val installedPackages = try {
+            pm.getInstalledPackages(
+                PackageManager.GET_PERMISSIONS or signingFlag
+                    or PackageManager.GET_SERVICES or PackageManager.GET_RECEIVERS
+            )
+        } catch (e: Exception) {
+            Log.w(TAG, "collectTelemetry: getInstalledPackages with extended flags failed, retrying minimal: ${e.message}")
+            try {
+                pm.getInstalledPackages(PackageManager.GET_PERMISSIONS)
+            } catch (e2: Exception) {
+                Log.w(TAG, "collectTelemetry: getInstalledPackages failed: ${e2.message}")
+                emptyList()
+            }
+        }
+
+        val telemetryList = mutableListOf<AppTelemetry>()
+
+        for (pkg in installedPackages) {
+            val packageName = pkg.packageName ?: continue
+            val appInfo = pkg.applicationInfo ?: continue
+            @Suppress("TooGenericExceptionCaught", "SwallowedException")
+            val appName = try {
+                pm.getApplicationLabel(appInfo).toString()
+            } catch (e: Exception) {
+                Log.w(TAG, "collectTelemetry: getApplicationLabel failed for $packageName: ${e.message}")
+                packageName
+            }
+
+            val isSystemApp = appInfo.flags and ApplicationInfo.FLAG_SYSTEM != 0
+
+            // Cert hash — skip for system apps (same rationale as scan())
+            @Suppress("TooGenericExceptionCaught", "SwallowedException")
+            val certHash = if (!isSystemApp) {
+                try {
+                    extractCertHash(pkg)
+                } catch (e: Exception) {
+                    Log.w(TAG, "collectTelemetry: cert hash extraction failed for $packageName: ${e.message}")
+                    null
+                }
+            } else {
+                null
+            }
+
+            // Installer source
+            val installerPackage = if (!isSystemApp) getInstallerPackageName(pm, packageName) else null
+            val fromTrustedStore = installerPackage != null &&
+                (installerPackage in trustedInstallers ||
+                    installerPackage.startsWith("com.samsung.") ||
+                    installerPackage.startsWith("com.sec."))
+
+            // Known-app resolver
+            val knownApp = knownAppResolver.lookup(packageName)
+            val isSamsungOemPackage = samsungOemPrefixes.any { packageName.startsWith(it) }
+            val isKnownOemApp = knownApp?.category in setOf(
+                KnownAppCategory.OEM, KnownAppCategory.AOSP, KnownAppCategory.GOOGLE
+            ) || (isSystemApp && knownOemPrefixes.any { packageName.startsWith(it) })
+                || isSamsungOemPackage
+
+            val isSideloaded = !isSystemApp && !fromTrustedStore && !isKnownOemApp
+
+            // Surveillance permissions
+            val grantedPermissions = pkg.requestedPermissions?.toList() ?: emptyList()
+            val matchedSurveillancePerms = grantedPermissions.filter { it in surveillancePermissions }
+
+            // Accessibility service
+            val hasAccessibilityService = pkg.services?.any { svc ->
+                svc.permission == "android.permission.BIND_ACCESSIBILITY_SERVICE"
+            } == true
+
+            // Device admin
+            val hasDeviceAdmin = pkg.receivers?.any { recv ->
+                recv.permission == "android.permission.BIND_DEVICE_ADMIN"
+            } == true
+
+            telemetryList.add(
+                AppTelemetry(
+                    packageName = packageName,
+                    appName = appName,
+                    certHash = certHash,
+                    isSystemApp = isSystemApp,
+                    fromTrustedStore = fromTrustedStore,
+                    installer = installerPackage,
+                    isSideloaded = isSideloaded,
+                    isKnownOemApp = isKnownOemApp,
+                    permissions = matchedSurveillancePerms.map { it.substringAfterLast('.') },
+                    surveillancePermissionCount = matchedSurveillancePerms.size,
+                    hasAccessibilityService = hasAccessibilityService,
+                    hasDeviceAdmin = hasDeviceAdmin,
+                    knownAppCategory = knownApp?.category?.name
+                )
+            )
+        }
+
+        telemetryList
     }
 
     private fun extractCertHash(packageInfo: android.content.pm.PackageInfo): String? {
