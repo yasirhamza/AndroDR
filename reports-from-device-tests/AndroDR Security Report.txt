@@ -1,0 +1,398 @@
+============================================================
+  AndroDR Security Report
+  Generated : 2026-03-25 20:25:25
+  Scan time : 2026-03-25 20:24:29
+  Android   : 16 (API 36)
+  Device    : samsung SM-S938B
+  Patch     : 2026-02-05
+============================================================
+
+  OVERALL RISK: CRITICAL
+
+------------------------------------------------------------
+  DEVICE CHECKS
+------------------------------------------------------------
+  0 of 7 checks triggered
+
+  Checks passed:
+  [✓]  HIGH      USB Debugging Enabled
+  [✓]  MEDIUM    Developer Options Enabled
+  [✓]  HIGH      Install from Unknown Sources Allowed
+  [✓]  CRITICAL  No Screen Lock Set
+  [✓]  HIGH      Security Patch Out of Date
+  [✓]  CRITICAL  Bootloader Unlocked
+  [✓]  HIGH      Wireless ADB Enabled
+------------------------------------------------------------
+  APP RISKS
+------------------------------------------------------------
+  32 application(s) flagged
+  0 known malware · 10 risky sideloads
+
+  ●  CRITICAL  Link to Windows
+     Package : com.microsoft.appmanager
+     Reasons : Holds 8 sensitive surveillance-capable permissions simultaneously: READ_EXTERNAL_STORAGE, READ_SMS, SEND_SMS, READ_CONTACTS, CAMERA, ACCESS_FINE_LOCATION, READ_CALL_LOG, RECORD_AUDIO; App has system-level privileges (FLAG_SYSTEM) but does not match any known OEM or AOSP package prefix — possible firmware implant
+     Perms   : android.permission.READ_EXTERNAL_STORAGE, android.permission.READ_SMS, android.permission.SEND_SMS, android.permission.READ_CONTACTS, android.permission.CAMERA, android.permission.ACCESS_FINE_LOCATION, android.permission.READ_CALL_LOG, android.permission.RECORD_AUDIO
+
+  ●  CRITICAL  Watch Manager
+     Package : com.samsung.wearable.watchuniteplugin
+     Flags   : Sideloaded
+     Reasons : Holds 8 sensitive surveillance-capable permissions simultaneously: READ_EXTERNAL_STORAGE, READ_CONTACTS, ACCESS_FINE_LOCATION, CAMERA, PROCESS_OUTGOING_CALLS, READ_CALL_LOG, READ_SMS, SEND_SMS; App was not installed via a trusted app store (installer: com.samsung.android.app.watchmanager)
+     Perms   : android.permission.READ_EXTERNAL_STORAGE, android.permission.READ_CONTACTS, android.permission.ACCESS_FINE_LOCATION, android.permission.CAMERA, android.permission.PROCESS_OUTGOING_CALLS, android.permission.READ_CALL_LOG, android.permission.READ_SMS, android.permission.SEND_SMS
+
+  ●  HIGH      Samsung account
+     Package : com.osp.app.signin
+     Reasons : Holds 3 sensitive surveillance-capable permissions simultaneously: CAMERA, READ_CONTACTS, ACCESS_FINE_LOCATION; App has system-level privileges (FLAG_SYSTEM) but does not match any known OEM or AOSP package prefix — possible firmware implant
+     Perms   : android.permission.CAMERA, android.permission.READ_CONTACTS, android.permission.ACCESS_FINE_LOCATION
+
+  ●  HIGH      Microsoft SwiftKey Keyboard
+     Package : com.touchtype.swiftkey
+     Reasons : Holds 3 sensitive surveillance-capable permissions simultaneously: RECORD_AUDIO, CAMERA, READ_EXTERNAL_STORAGE; App has system-level privileges (FLAG_SYSTEM) but does not match any known OEM or AOSP package prefix — possible firmware implant
+     Perms   : android.permission.RECORD_AUDIO, android.permission.CAMERA, android.permission.READ_EXTERNAL_STORAGE
+
+  ●  HIGH      SKMSAgentService
+     Package : com.skms.android.agent
+     Reasons : App has system-level privileges (FLAG_SYSTEM) but does not match any known OEM or AOSP package prefix — possible firmware implant
+     Perms   : android.permission.READ_EXTERNAL_STORAGE
+
+  ●  HIGH      CACertApp
+     Package : vendor.qti.hardware.cacert.server
+     Reasons : App has system-level privileges (FLAG_SYSTEM) but does not match any known OEM or AOSP package prefix — possible firmware implant
+
+  ●  HIGH      Configuration message
+     Package : com.wsomacp
+     Reasons : App has system-level privileges (FLAG_SYSTEM) but does not match any known OEM or AOSP package prefix — possible firmware implant
+
+  ●  HIGH      Foundation
+     Package : com.monotype.android.font.foundation
+     Reasons : App has system-level privileges (FLAG_SYSTEM) but does not match any known OEM or AOSP package prefix — possible firmware implant
+
+  ●  HIGH      TxPwrAdmin
+     Package : vendor.qti.data.txpwradmin
+     Reasons : App has system-level privileges (FLAG_SYSTEM) but does not match any known OEM or AOSP package prefix — possible firmware implant
+
+  ●  HIGH      Galaxy Buds2 Pro Manager
+     Package : com.samsung.accessory.zenithmgr
+     Flags   : Sideloaded
+     Reasons : Holds 2 sensitive surveillance-capable permissions simultaneously: READ_CONTACTS, READ_CALL_LOG; App was not installed via a trusted app store (installer: com.samsung.android.app.watchmanager)
+     Perms   : android.permission.READ_CONTACTS, android.permission.READ_CALL_LOG
+
+  ●  HIGH      OneDrive
+     Package : com.microsoft.skydrive
+     Reasons : Holds 2 sensitive surveillance-capable permissions simultaneously: READ_CONTACTS, CAMERA; App has system-level privileges (FLAG_SYSTEM) but does not match any known OEM or AOSP package prefix — possible firmware implant
+     Perms   : android.permission.READ_CONTACTS, android.permission.CAMERA
+
+  ●  HIGH      SamsungOne
+     Package : com.monotype.android.font.samsungone
+     Reasons : App has system-level privileges (FLAG_SYSTEM) but does not match any known OEM or AOSP package prefix — possible firmware implant
+
+  ●  HIGH      Meta Services
+     Package : com.facebook.services
+     Reasons : App has system-level privileges (FLAG_SYSTEM) but does not match any known OEM or AOSP package prefix — possible firmware implant
+
+  ●  HIGH      QDCM-FF
+     Package : com.qti.snapdragon.qdcm_ff
+     Reasons : App has system-level privileges (FLAG_SYSTEM) but does not match any known OEM or AOSP package prefix — possible firmware implant
+
+  ●  HIGH      My Galaxy
+     Package : com.mygalaxy.service
+     Reasons : App has system-level privileges (FLAG_SYSTEM) but does not match any known OEM or AOSP package prefix — possible firmware implant
+
+  ●  HIGH      Microsoft SwiftKey Factory Settings
+     Package : com.swiftkey.swiftkeyconfigurator
+     Reasons : App has system-level privileges (FLAG_SYSTEM) but does not match any known OEM or AOSP package prefix — possible firmware implant
+
+  ●  HIGH      SEMFactoryApp
+     Package : com.sem.factoryapp
+     Reasons : App has system-level privileges (FLAG_SYSTEM) but does not match any known OEM or AOSP package prefix — possible firmware implant
+
+  ●  HIGH      Meta App Installer
+     Package : com.facebook.system
+     Reasons : App has system-level privileges (FLAG_SYSTEM) but does not match any known OEM or AOSP package prefix — possible firmware implant
+
+  ●  HIGH      KnoxVpnPacProcessor
+     Package : com.knox.vpn.proxyhandler
+     Reasons : App has system-level privileges (FLAG_SYSTEM) but does not match any known OEM or AOSP package prefix — possible firmware implant
+
+  ●  HIGH      Watch Face Manager
+     Package : com.samsung.wearable.watchfaceplugin
+     Flags   : Sideloaded
+     Reasons : Holds 2 sensitive surveillance-capable permissions simultaneously: CAMERA, READ_EXTERNAL_STORAGE; App was not installed via a trusted app store (installer: com.samsung.android.app.watchmanager)
+     Perms   : android.permission.CAMERA, android.permission.READ_EXTERNAL_STORAGE
+
+  ●  HIGH      Hiya Service
+     Package : com.hiya.star
+     Reasons : App has system-level privileges (FLAG_SYSTEM) but does not match any known OEM or AOSP package prefix — possible firmware implant
+
+  ●  HIGH      Software update
+     Package : com.wssyncmldm
+     Reasons : App has system-level privileges (FLAG_SYSTEM) but does not match any known OEM or AOSP package prefix — possible firmware implant
+
+  ●  HIGH      Meta App Manager
+     Package : com.facebook.appmanager
+     Reasons : App has system-level privileges (FLAG_SYSTEM) but does not match any known OEM or AOSP package prefix — possible firmware implant
+
+  ●  HIGH      QCC
+     Package : com.qti.qcc
+     Reasons : App has system-level privileges (FLAG_SYSTEM) but does not match any known OEM or AOSP package prefix — possible firmware implant
+
+  ●  HIGH      Roboto
+     Package : com.monotype.android.font.roboto
+     Reasons : App has system-level privileges (FLAG_SYSTEM) but does not match any known OEM or AOSP package prefix — possible firmware implant
+
+  ●  MEDIUM    [DB] Collins Cobuild Advanced Dictionary
+     Package : com.diotek.diodict3.lookup.adddict.engeng
+     Flags   : Sideloaded
+     Reasons : App was not installed via a trusted app store (installer: com.samsung.android.scloud)
+
+  ●  MEDIUM    Clock
+     Package : com.sec.android.app.clockpackage
+     Flags   : Sideloaded
+     Reasons : App was not installed via a trusted app store (installer: com.samsung.android.app.updatecenter)
+     Perms   : android.permission.READ_EXTERNAL_STORAGE
+
+  ●  MEDIUM    AndroDR
+     Package : com.androdr.debug
+     Flags   : Sideloaded
+     Reasons : App was not installed via a trusted app store (installer: com.google.android.packageinstaller)
+
+  ●  MEDIUM    Samsung Kids
+     Package : com.sec.android.app.kidshome
+     Flags   : Sideloaded
+     Reasons : App was not installed via a trusted app store (installer: unknown)
+     Perms   : android.permission.READ_CONTACTS
+
+  ●  MEDIUM    Samsung TV Plus
+     Package : com.samsung.android.tvplus
+     Flags   : Sideloaded
+     Reasons : App was not installed via a trusted app store (installer: unknown)
+
+  ●  MEDIUM    Swing
+     Package : com.sec.android.app.sbrowser.webapk.w3191d47e9727f5d05ebb621ca4fc750b1
+     Flags   : Sideloaded
+     Reasons : App was not installed via a trusted app store (installer: com.sec.android.app.sbrowser)
+
+  ●  MEDIUM    القرآن الكريم
+     Package : tech.massyve.quran
+     Flags   : Sideloaded
+     Reasons : App was not installed via a trusted app store (installer: com.samsung.android.scloud)
+     Perms   : android.permission.ACCESS_FINE_LOCATION
+
+------------------------------------------------------------
+  DNS ACTIVITY
+------------------------------------------------------------
+  18 events · 0 blocked
+
+  [ALLOWED]  20:20:23  z-m-gateway.facebook.com                            ← uid:-1
+  [ALLOWED]  20:20:22  mtalk.google.com                                    ← uid:-1
+  [ALLOWED]  20:20:21  firebaseremoteconfigrealtime.googleapis.com         ← uid:-1
+  [ALLOWED]  20:03:55  www.perplexity.ai                                   ← uid:-1
+  [ALLOWED]  20:03:52  z-m-gateway.facebook.com                            ← uid:-1
+  [ALLOWED]  20:03:51  mtalk.google.com                                    ← uid:-1
+  [ALLOWED]  20:03:51  firebaseremoteconfigrealtime.googleapis.com         ← uid:-1
+  [ALLOWED]  19:59:06  play.googleapis.com                                 ← uid:-1
+  [ALLOWED]  19:58:54  samsung.telemetry.eyeo.com                          ← uid:-1
+  [ALLOWED]  19:58:54  androidwearcloudsync-pa.googleapis.com              ← uid:-1
+  [ALLOWED]  19:58:43  drivefrontend-pa.googleapis.com                     ← uid:-1
+  [ALLOWED]  19:58:40  subscriptionsmanagement-pa.googleapis.com           ← uid:-1
+  [ALLOWED]  19:58:40  subscriptionsfirstparty-pa.googleapis.com           ← uid:-1
+  [ALLOWED]  19:58:31  vas.samsungapps.com                                 ← uid:-1
+  [ALLOWED]  19:58:25  www.perplexity.ai                                   ← uid:-1
+  [ALLOWED]  19:58:18  z-m-gateway.facebook.com                            ← uid:-1
+  [ALLOWED]  19:58:16  mtalk.google.com                                    ← uid:-1
+  [ALLOWED]  19:58:16  androidplatformbackuprestore-pa.googleapis.com      ← uid:-1
+------------------------------------------------------------
+  APPLICATION LOG  (189 lines)
+------------------------------------------------------------
+  --------- beginning of main
+  03-25 20:24:23.113 28305 28305 I m.androdr.debug: Late-enabling -Xcheck:jni
+  03-25 20:24:23.132 28305 28305 I m.androdr.debug: Using CollectorTypeCMC GC.
+  03-25 20:24:23.146 28305 28305 D nativeloader: Load libframework-connectivity-tiramisu-jni.so using APEX ns com_android_tethering for caller /apex/com.android.tethering/javalib/framework-connectivity-t.jar: ok
+  03-25 20:24:23.149 28305 28305 D ActivityThread: setConscryptValidator
+  03-25 20:24:23.149 28305 28305 D ActivityThread: setConscryptValidator - put
+  03-25 20:24:23.161 28305 28305 D CompatChangeReporter: Compat change id reported: 242716250; UID 10397; state: ENABLED
+  03-25 20:24:23.378 28305 28305 D nativeloader: Configuring clns-9 for other apk /data/app/~~Dy6LnImeRLWg57WRvYnnuQ==/com.androdr.debug-pHbzgsWOPd9kBwaS0mBBFQ==/base.apk. target_sdk_version=34, uses_libraries=, library_path=/data/app/~~Dy6LnImeRLWg57WRvYnnuQ==/com.androdr.debug-pHbzgsWOPd9kBwaS0mBBFQ==/lib/arm64:/data/app/~~Dy6LnImeRLWg57WRvYnnuQ==/com.androdr.debug-pHbzgsWOPd9kBwaS0mBBFQ==/base.apk!/lib/arm64-v8a, permitted_path=/data:/mnt/expand:/data/user/0/com.androdr.debug
+  03-25 20:24:23.417 28305 28344 E ashmem  : Pinning is deprecated since Android Q. Please use trim or other methods.
+  03-25 20:24:23.420 28305 28305 D WM-PackageManagerHelper: Skipping component enablement for androidx.work.impl.background.systemjob.SystemJobService
+  03-25 20:24:23.420 28305 28305 D WM-Schedulers: Created SystemJobScheduler and enabled SystemJobService
+  --------- beginning of system
+  03-25 20:24:23.425 28305 28305 D ActivityThread: com.androdr.debug will use render engine as VK
+  03-25 20:24:23.426 28305 28305 D HWUI    : HWUI - treat SMPTE_170M as sRGB
+  03-25 20:24:23.427 28305 28348 I DisplayManager: Choreographer implicitly registered for the refresh rate.
+  03-25 20:24:23.429 28305 28348 D HWUI    : CacheManager constructor. deviceInfo=(1080, 1920)
+  03-25 20:24:23.430 28305 28348 D vulkan  : searching for layers in '/data/app/~~Dy6LnImeRLWg57WRvYnnuQ==/com.androdr.debug-pHbzgsWOPd9kBwaS0mBBFQ==/lib/arm64'
+  03-25 20:24:23.431 28305 28348 D vulkan  : searching for layers in '/data/app/~~Dy6LnImeRLWg57WRvYnnuQ==/com.androdr.debug-pHbzgsWOPd9kBwaS0mBBFQ==/base.apk!/lib/arm64-v8a'
+  03-25 20:24:23.438 28305 28305 D DesktopModeFlags: Toggle override initialized to: OVERRIDE_UNSET
+  03-25 20:24:23.439 28305 28305 I DecorView: setWindowBackground: isPopOver=false color=ff303030 d=android.graphics.drawable.ColorDrawable@6a4ee1b
+  03-25 20:24:23.448 28305 28305 D ViewRootImpl: desktopMode is false
+  03-25 20:24:23.449 28305 28305 I ViewRootImpl: dVRR is disabled
+  03-25 20:24:23.449 28305 28305 D HardwareRenderer: onDisplayChanged. displayId=0 current wxh=1440x3120 mLargest wxh=0x0
+  03-25 20:24:23.449 28305 28305 D HardwareRenderer: Set largestWidth and largestHeight as logical resolution. (1440x3120)
+  03-25 20:24:23.456 28305 28360 D qdgralloc: Fetching IMapper5 from QtiMapper5
+  03-25 20:24:23.469 28305 28360 I SnapAlloc: Graphics lib is available
+  03-25 20:24:23.469 28305 28348 E Adreno-AppProfiles: QSPM AIDL service doesn't exist
+  03-25 20:24:23.470 28305 28348 I AdrenoVK-0: ===== BEGIN DUMP OF OVERRIDDEN SETTINGS =====
+  03-25 20:24:23.470 28305 28348 I AdrenoVK-0: ===== END DUMP OF OVERRIDDEN SETTINGS =====
+  03-25 20:24:23.470 28305 28348 D qdgralloc: Fetching IMapper5 from QtiMapper5
+  03-25 20:24:23.474 28305 28348 I Adreno-UNKNOWN: Using previously loaded IMapper library.
+  03-25 20:24:23.475 28305 28348 I AdrenoVK-0: QUALCOMM build          : e4a2ccdb56, Icac6f3510c
+  03-25 20:24:23.475 28305 28348 I AdrenoVK-0: Build Date              : 07/21/25
+  03-25 20:24:23.475 28305 28348 I AdrenoVK-0: Shader Compiler Version : E031.47.18.36
+  03-25 20:24:23.475 28305 28348 I AdrenoVK-0: Local Branch            : 
+  03-25 20:24:23.475 28305 28348 I AdrenoVK-0: Remote Branch           : refs/tags/AU_LINUX_ANDROID_LA.VENDOR.15.4.0.11.00.00.1088.743
+  03-25 20:24:23.475 28305 28348 I AdrenoVK-0: Remote Branch           : NONE
+  03-25 20:24:23.475 28305 28348 I AdrenoVK-0: Reconstruct Branch      : NOTHING
+  03-25 20:24:23.475 28305 28348 I AdrenoVK-0: Build Config            : S P 18.0.0 AArch64
+  03-25 20:24:23.475 28305 28348 I AdrenoVK-0: Driver Path             : /vendor/lib64/hw/vulkan.adreno.so
+  03-25 20:24:23.475 28305 28348 I AdrenoVK-0: Driver Version          : 0800.40.1
+  03-25 20:24:23.475 28305 28348 I AdrenoVK-0: PFP                     : 0x01500077
+  03-25 20:24:23.475 28305 28348 I AdrenoVK-0: ME                      : 0x01500014
+  03-25 20:24:23.475 28305 28348 I AdrenoVK-0: Application Name    : android framework
+  03-25 20:24:23.475 28305 28348 I AdrenoVK-0: Application Version : 0x00000000
+  03-25 20:24:23.475 28305 28348 I AdrenoVK-0: Engine Name         : android framework
+  03-25 20:24:23.475 28305 28348 I AdrenoVK-0: Engine Version      : 0x00000000
+  03-25 20:24:23.475 28305 28348 I AdrenoVK-0: Api Version         : 0x00401000
+  03-25 20:24:23.480 28305 28348 D HWUI    : setMaxSurfaceArea requested wxh=(1440,3120) requestedSurfaceArea(4492800) mMaxSurfaceArea(2073600)
+  03-25 20:24:23.480 28305 28348 D NativeCustomFrequencyManager: [NativeCFMS] BpCustomFrequencyManager::BpCustomFrequencyManager()
+  03-25 20:24:23.485 28305 28358 E perf_hint: Session ID too large, must fit 32-bit integer
+  03-25 20:24:23.486 28305 28305 D InputTransport: Input channel constructed: 'b7a0284', fd=127
+  03-25 20:24:23.486 28305 28305 I InsetsController: onStateChanged: host=com.androdr.debug/com.androdr.MainActivity, from=android.view.ViewRootImpl.onInsetsStateChanged:3026, state=InsetsState: {mDisplayFrame=Rect(0, 0 - 1440, 3120), mDisplayCutout=DisplayCutout{insets=Rect(0, 113 - 0, 0) waterfall=Insets{left=0, top=0, right=0, bottom=0} boundingRect={Bounds=[Rect(0, 0 - 0, 0), Rect(685, 0 - 755, 113), Rect(0, 0 - 0, 0), Rect(0, 0 - 0, 0)]} cutoutPathParserInfo={CutoutPathParserInfo{displayWidth=1440 displayHeight=3120 physicalDisplayWidth=1440 physicalDisplayHeight=3120 density={3.75} cutoutSpec={M 0,0 H -9.333333333333333 V 30.13333333333333 H 9.333333333333333 V 0 H 0 Z @dp} rotation={0} scale={1.0} physicalPixelDisplaySizeRatio={1.0}}} sideOverrides={}}, mRoundedCorners=RoundedCorners{[RoundedCorner{position=TopLeft, radius=56, center=Point(56, 56)}, RoundedCorner{position=TopRight, radius=56, center=Point(1384, 56)}, RoundedCorner{position=BottomRight, radius=56, center=Point(1384, 3064)}, RoundedCorner{position=BottomLeft, radius=56, center=Point(56, 3064)}]}  mRoundedCornerFrame=Rect(0, 0 - 1440, 3120), mPrivacyIndicatorBounds=PrivacyIndicatorBounds {static bounds=Rect(1275, 0 - 1440, 113) rotation=0}, mDisplayShape=DisplayShape{ spec=-311912193 displayWidth=1440 displayHeight=3120 physicalPixelDisplaySizeRatio=1.0 rotation=0 offsetX=0 offsetY=0 scale=1.0}, mSources= { InsetsSource: {8f3f0000 mType=statusBars mFrame=[0,0][1440,113] mVisible=true mFlags= mSideHint=TOP mBoundingRects=null}, InsetsSource: {8f3f0005 mType=mandatorySystemGestures mFrame=[0,0][1440,158] mVisible=true mFlags= mSideHint=TOP mBoundingRects=null}, InsetsSource: {8f3f0006 mType=tappableElement mFrame=[0,0][1440,113] mVisible=true mFlags= mSideHint=TOP mBoundingRects=null}, InsetsSource: {b3f00001 mType=navigationBars mFrame=[0,2940][1440,3120] mVisible=true mFlags= mSideHint=BOTTOM mBoundingRects=null}, InsetsSource: {b3f00004 mType=systemGestures mFrame=[0,0][0,0] mVisible=true mFlags= mSideHint=NONE mBoundingRects=null}, InsetsSource: {b3f00005 mType=mandatorySystemGestures mFrame=[0,2940][1440,3120] mVisible=true mFlags= mSideHint=BOTTOM mBoundingRects=null}, InsetsSource: {b3f00006 mType=tappableElement mFrame=[0,2940][1440,3120] mVisible=true mFlags= mSideHint=BOTTOM mBoundingRects=null}, InsetsSource: {b3f00024 mType=systemGestures mFrame=[0,0][0,0] mVisible=true mFlags= mSideHint=NONE mBoundingRects=null}, InsetsSource: {3 mType=ime mFrame=[0,0][0,0] mVisible=false mFlags= mSideHint=NONE mBoundingRects=null}, InsetsSource: {27 mType=displayCutout mFrame=[0,0][1440,113] mVisible=true mFlags= mSideHint=TOP mBoundingRects=null} }
+  03-25 20:24:23.487 28305 28305 I VRI[MainActivity]@48192e8: synced displayState. AttachInfo displayState=2
+  03-25 20:24:23.487 28305 28305 I VRI[MainActivity]@48192e8: setView = com.android.internal.policy.DecorView@c50f594 IsHRR=false mFlingFrameRateChange=0 TM=true
+  03-25 20:24:23.487 28305 28305 I IDS_TAG : Clearing training data of com.androdr.AndroDRApplication@777cdd3
+  03-25 20:24:23.488 28305 28305 I IDS_TAG : Starting IDS observe window
+  03-25 20:24:23.488 28305 28305 I IDS_TAG : Getting Shared Preference for com.androdr.AndroDRApplication@777cdd3 uid = 10397
+  03-25 20:24:23.489 28305 28305 I IDS_TAG : App com.androdr.AndroDRApplication@777cdd3 has not finished training
+  03-25 20:24:23.489 28305 28348 D HWUI    : HWUI - treat SMPTE_170M as sRGB
+  03-25 20:24:23.489 28305 28305 I IDS_TAG : Closing IDS observe window
+  03-25 20:24:23.489 28305 28305 I IDS_TAG : Getting Shared Preference for com.androdr.AndroDRApplication@777cdd3 uid = 10397
+  03-25 20:24:23.489 28305 28305 I IDS_TAG : IDS count updated to 1 for com.androdr.AndroDRApplication@777cdd3
+  03-25 20:24:23.546 28305 28305 W m.androdr.debug: Method boolean androidx.compose.runtime.snapshots.SnapshotStateList.conditionalUpdate(boolean, kotlin.jvm.functions.Function1) failed lock verification and will run slower.
+  03-25 20:24:23.546 28305 28305 W m.androdr.debug: Common causes for lock verification issues are non-optimized dex code
+  03-25 20:24:23.546 28305 28305 W m.androdr.debug: and incorrect proguard optimizations.
+  03-25 20:24:23.546 28305 28305 W m.androdr.debug: Method boolean androidx.compose.runtime.snapshots.SnapshotStateList.conditionalUpdate$default(androidx.compose.runtime.snapshots.SnapshotStateList, boolean, kotlin.jvm.functions.Function1, int, java.lang.Object) failed lock verification and will run slower.
+  03-25 20:24:23.546 28305 28305 W m.androdr.debug: Method java.lang.Object androidx.compose.runtime.snapshots.SnapshotStateList.mutate(kotlin.jvm.functions.Function1) failed lock verification and will run slower.
+  03-25 20:24:23.546 28305 28305 W m.androdr.debug: Method void androidx.compose.runtime.snapshots.SnapshotStateList.update(boolean, kotlin.jvm.functions.Function1) failed lock verification and will run slower.
+  03-25 20:24:23.546 28305 28305 W m.androdr.debug: Method void androidx.compose.runtime.snapshots.SnapshotStateList.update$default(androidx.compose.runtime.snapshots.SnapshotStateList, boolean, kotlin.jvm.functions.Function1, int, java.lang.Object) failed lock verification and will run slower.
+  03-25 20:24:23.547 28305 28317 I m.androdr.debug: Compiler allocated 5066KB to compile void android.view.ViewRootImpl.performTraversals()
+  03-25 20:24:23.631 28305 28305 E m.androdr.debug: Unable to open libpenguin.so: dlopen failed: library "libpenguin.so" not found.
+  03-25 20:24:23.631 28305 28305 I BufferQueueProducer: [](id:6e9100000000,api:0,p:373721424,c:28305) setDequeueTimeout:2077252342
+  03-25 20:24:23.631 28305 28305 I BLASTBufferQueue_Java: new BLASTBufferQueue, mName= VRI[MainActivity]@48192e8 mNativeObject= 0xb4000077f647e330 caller= android.view.ViewRootImpl.updateBlastSurfaceIfNeeded:3585 android.view.ViewRootImpl.relayoutWindow:11685 android.view.ViewRootImpl.performTraversals:4804 android.view.ViewRootImpl.doTraversal:3924 android.view.ViewRootImpl$TraversalRunnable.run:12903 android.view.Choreographer$CallbackRecord.run:1901 android.view.Choreographer$CallbackRecord.run:1910 android.view.Choreographer.doCallbacks:1367 android.view.Choreographer.doFrame:1292 android.view.Choreographer$FrameDisplayEventReceiver.run:1870 
+  03-25 20:24:23.631 28305 28305 I BLASTBufferQueue_Java: update, w= 1440 h= 3120 mName = VRI[MainActivity]@48192e8 mNativeObject= 0xb4000077f647e330 sc.mNativeObject= 0xb4000078e645b250 format= -1 caller= android.view.ViewRootImpl.updateBlastSurfaceIfNeeded:3590 android.view.ViewRootImpl.relayoutWindow:11685 android.view.ViewRootImpl.performTraversals:4804 android.view.ViewRootImpl.doTraversal:3924 android.view.ViewRootImpl$TraversalRunnable.run:12903 android.view.Choreographer$CallbackRecord.run:1901 
+  03-25 20:24:23.632 28305 28305 I VRI[MainActivity]@48192e8: Relayout returned: old=(0,0,1440,3120) new=(0,0,1440,3120) relayoutAsync=false req=(1440,3120)0 dur=2 res=0x3 s={true 0xb40000773647f3d0} ch=true seqId=0
+  03-25 20:24:23.632 28305 28305 I VRI[MainActivity]@48192e8: performConfigurationChange setNightDimText nightDimLevel=0
+  03-25 20:24:23.632 28305 28305 D VRI[MainActivity]@48192e8: mThreadedRenderer.initialize() mSurface={isValid=true 0xb40000773647f3d0} hwInitialized=true
+  03-25 20:24:23.638 28305 28305 D VRI[MainActivity]@48192e8: reportNextDraw android.view.ViewRootImpl.performTraversals:5443 android.view.ViewRootImpl.doTraversal:3924 android.view.ViewRootImpl$TraversalRunnable.run:12903 android.view.Choreographer$CallbackRecord.run:1901 android.view.Choreographer$CallbackRecord.run:1910 
+  03-25 20:24:23.638 28305 28305 D VRI[MainActivity]@48192e8: Setup new sync=wmsSync-VRI[MainActivity]@48192e8#0
+  03-25 20:24:23.638 28305 28305 I VRI[MainActivity]@48192e8: Creating new active sync group VRI[MainActivity]@48192e8#1
+  03-25 20:24:23.638 28305 28305 D VRI[MainActivity]@48192e8: registerCallbacksForSync syncBuffer=false
+  03-25 20:24:23.643 28305 28360 D VRI[MainActivity]@48192e8: Received frameDrawingCallback syncResult=0 frameNum=1.
+  03-25 20:24:23.643 28305 28360 I VRI[MainActivity]@48192e8: mWNT: t=0xb400007816479290 mBlastBufferQueue=0xb4000077f647e330 fn= 1 HdrRenderState mRenderHdrSdrRatio=1.0 caller= android.view.ViewRootImpl$12.onFrameDraw:15441 android.view.ThreadedRenderer$1.onFrameDraw:718 <bottom of call stack> 
+  03-25 20:24:23.643 28305 28360 I VRI[MainActivity]@48192e8: Setting up sync and frameCommitCallback
+  03-25 20:24:23.644 28305 28348 I AdrenoUtils: <ReadGpuID:366>: Reading chip ID through GSL
+  03-25 20:24:23.652 28305 28348 I BLASTBufferQueue: [VRI[MainActivity]@48192e8#0](f:0,a:0,s:0) onFrameAvailable the first frame is available
+  03-25 20:24:23.652 28305 28348 I SurfaceComposerClient: apply transaction with the first frame. layerId: 70145, bufferData(ID: 121569049313283, frameNumber: 1)
+  03-25 20:24:23.652 28305 28348 I VRI[MainActivity]@48192e8: Received frameCommittedCallback lastAttemptedDrawFrameNum=1 didProduceBuffer=true
+  03-25 20:24:23.653 28305 28348 D HWUI    : CFMS:: SetUp Pid : 28305    Tid : 28348
+  03-25 20:24:23.653 28305 28305 D VRI[MainActivity]@48192e8: reportDrawFinished seqId=0
+  03-25 20:24:23.795 28305 28305 I InsetsSourceConsumer: applyRequestedVisibilityToControl: visible=true, type=navigationBars, host=com.androdr.debug/com.androdr.MainActivity
+  03-25 20:24:23.795 28305 28305 I InsetsSourceConsumer: applyRequestedVisibilityToControl: visible=true, type=statusBars, host=com.androdr.debug/com.androdr.MainActivity
+  03-25 20:24:23.802 28305 28305 D VRI[MainActivity]@48192e8: mThreadedRenderer.initializeIfNeeded()#2 mSurface={isValid=true 0xb40000773647f3d0}
+  03-25 20:24:23.803 28305 28305 D InputMethodManagerUtils: startInputInner - Id : 0
+  03-25 20:24:23.803 28305 28305 I InputMethodManager: startInputInner - IInputMethodManagerGlobalInvoker.startInputOrWindowGainedFocus
+  03-25 20:24:23.805 28305 28330 D InputTransport: Input channel constructed: 'ClientS', fd=164
+  03-25 20:24:23.845 28305 28305 I InputMethodManager: handleMessage: setImeVisibility visible=false
+  03-25 20:24:23.845 28305 28305 D InsetsController: hide(ime(), fromIme=false)
+  03-25 20:24:23.845 28305 28305 I ImeTracker: com.androdr.debug:a13abb85: onCancelled at PHASE_CLIENT_ALREADY_HIDDEN
+  03-25 20:24:25.890 28305 28305 I VRI[MainActivity]@48192e8: ViewPostIme pointer 0
+  03-25 20:24:25.897 28305 28305 I VRI[MainActivity]@48192e8: call setFrameRateCategory for touch hint category=high hint, reason=touch, vri=VRI[MainActivity]@48192e8
+  03-25 20:24:25.979 28305 28305 I VRI[MainActivity]@48192e8: ViewPostIme pointer 1
+  03-25 20:24:28.908 28305 28509 D ProfileInstaller: Installing profile for com.androdr.debug
+  03-25 20:24:28.982 28305 28305 I VRI[MainActivity]@48192e8: call setFrameRateCategory for touch hint category=no preference, reason=boost timeout, vri=VRI[MainActivity]@48192e8
+  03-25 20:24:34.630 28305 28305 I VRI[MainActivity]@48192e8: ViewPostIme pointer 0
+  03-25 20:24:34.635 28305 28305 I VRI[MainActivity]@48192e8: call setFrameRateCategory for touch hint category=high hint, reason=touch, vri=VRI[MainActivity]@48192e8
+  03-25 20:24:34.649 28305 28318 W m.androdr.debug: userfaultfd: MOVE ioctl seems unsupported: Connection timed out
+  03-25 20:24:34.703 28305 28305 I VRI[MainActivity]@48192e8: ViewPostIme pointer 1
+  03-25 20:24:37.038 28305 28305 I VRI[MainActivity]@48192e8: ViewPostIme pointer 0
+  03-25 20:24:37.101 28305 28305 I VRI[MainActivity]@48192e8: ViewPostIme pointer 1
+  03-25 20:24:38.007 28305 28342 W RemoteJsonFeed: Feed community_json returned HTTP 404
+  03-25 20:24:38.007 28305 28342 W RemoteIocUpdater: Feed 'community_json': no entries returned
+  03-25 20:24:38.086 28305 28469 I RemoteIocUpdater: Feed 'stalkerware_indicators': 611 entries upserted
+  03-25 20:24:38.097 28305 28469 I RemoteIocUpdater: Update complete — total DB entries: 608, fetched: 611
+  03-25 20:24:38.910 28305 28305 I VRI[MainActivity]@48192e8: ViewPostIme pointer 0
+  03-25 20:24:38.982 28305 28305 I VRI[MainActivity]@48192e8: ViewPostIme pointer 1
+  03-25 20:24:39.419 28305 28340 D CompatChangeReporter: Compat change id reported: 247079863; UID 10397; state: ENABLED
+  03-25 20:24:40.087 28305 28645 I DomainIocUpdater: Domain feed 'mvt_indicators': 6456 entries upserted
+  03-25 20:24:40.122 28305 28645 I DomainIocUpdater: Domain update complete — fetched: 6456, DB: 6309
+  03-25 20:24:40.790 28305 28305 I VRI[MainActivity]@48192e8: ViewPostIme pointer 0
+  03-25 20:24:41.255 28305 28305 I VRI[MainActivity]@48192e8: ViewPostIme pointer 1
+  03-25 20:24:42.662 28305 28305 I VRI[MainActivity]@48192e8: ViewPostIme pointer 0
+  03-25 20:24:42.777 28305 28305 I VRI[MainActivity]@48192e8: ViewPostIme pointer 1
+  03-25 20:24:42.822 28305 28305 W WindowOnBackDispatcher: OnBackInvokedCallback is not enabled for the application.
+  03-25 20:24:42.822 28305 28305 W WindowOnBackDispatcher: Set 'android:enableOnBackInvokedCallback="true"' in the application manifest.
+  03-25 20:24:45.483 28305 28305 I VRI[MainActivity]@48192e8: ViewPostIme pointer 0
+  03-25 20:24:45.573 28305 28305 I VRI[MainActivity]@48192e8: ViewPostIme pointer 1
+  03-25 20:24:48.577 28305 28305 I VRI[MainActivity]@48192e8: call setFrameRateCategory for touch hint category=no preference, reason=boost timeout, vri=VRI[MainActivity]@48192e8
+  03-25 20:24:49.178 28305 28305 I VRI[MainActivity]@48192e8: ViewPostIme pointer 0
+  03-25 20:24:49.181 28305 28305 I VRI[MainActivity]@48192e8: call setFrameRateCategory for touch hint category=high hint, reason=touch, vri=VRI[MainActivity]@48192e8
+  03-25 20:24:49.802 28305 28305 I VRI[MainActivity]@48192e8: ViewPostIme pointer 1
+  03-25 20:24:50.427 28305 28305 I VRI[MainActivity]@48192e8: ViewPostIme pointer 0
+  03-25 20:24:50.941 28305 28305 I VRI[MainActivity]@48192e8: ViewPostIme pointer 1
+  03-25 20:24:52.643 28305 28305 I VRI[MainActivity]@48192e8: ViewPostIme pointer 0
+  03-25 20:24:52.714 28305 28305 I VRI[MainActivity]@48192e8: ViewPostIme pointer 1
+  03-25 20:24:53.767 28305 28305 I VRI[MainActivity]@48192e8: ViewPostIme pointer 0
+  03-25 20:24:53.822 28305 28305 I VRI[MainActivity]@48192e8: ViewPostIme pointer 1
+  03-25 20:24:54.490 28305 28305 I VRI[MainActivity]@48192e8: ViewPostIme pointer 0
+  03-25 20:24:54.713 28305 28305 I VRI[MainActivity]@48192e8: ViewPostIme pointer 1
+  03-25 20:24:55.171 28305 28305 I VRI[MainActivity]@48192e8: ViewPostIme pointer 0
+  03-25 20:24:55.347 28305 28305 I VRI[MainActivity]@48192e8: ViewPostIme pointer 1
+  03-25 20:24:55.763 28305 28305 I VRI[MainActivity]@48192e8: ViewPostIme pointer 0
+  03-25 20:24:55.978 28305 28305 I VRI[MainActivity]@48192e8: ViewPostIme pointer 1
+  03-25 20:24:57.538 28305 28305 I VRI[MainActivity]@48192e8: ViewPostIme pointer 0
+  03-25 20:24:57.591 28305 28305 I VRI[MainActivity]@48192e8: ViewPostIme pointer 1
+  03-25 20:24:58.168 28305 28305 I VRI[MainActivity]@48192e8: ViewPostIme pointer 0
+  03-25 20:24:58.342 28305 28305 I VRI[MainActivity]@48192e8: ViewPostIme pointer 1
+  03-25 20:24:58.785 28305 28305 I VRI[MainActivity]@48192e8: ViewPostIme pointer 0
+  03-25 20:24:59.649 28305 28305 I VRI[MainActivity]@48192e8: ViewPostIme pointer 1
+  03-25 20:25:02.438 28305 28305 I VRI[MainActivity]@48192e8: ViewPostIme pointer 0
+  03-25 20:25:02.653 28305 28305 I VRI[MainActivity]@48192e8: call setFrameRateCategory for touch hint category=no preference, reason=boost timeout, vri=VRI[MainActivity]@48192e8
+  03-25 20:25:02.656 28305 28305 I VRI[MainActivity]@48192e8: call setFrameRateCategory for touch hint category=high hint, reason=touch, vri=VRI[MainActivity]@48192e8
+  03-25 20:25:02.695 28305 28305 I VRI[MainActivity]@48192e8: ViewPostIme pointer 1
+  03-25 20:25:05.698 28305 28305 I VRI[MainActivity]@48192e8: call setFrameRateCategory for touch hint category=no preference, reason=boost timeout, vri=VRI[MainActivity]@48192e8
+  03-25 20:25:06.176 28305 28305 I VRI[MainActivity]@48192e8: ViewPostIme pointer 0
+  03-25 20:25:06.181 28305 28305 I VRI[MainActivity]@48192e8: call setFrameRateCategory for touch hint category=high hint, reason=touch, vri=VRI[MainActivity]@48192e8
+  03-25 20:25:06.256 28305 28305 I VRI[MainActivity]@48192e8: ViewPostIme pointer 1
+  03-25 20:25:08.599 28305 28305 I VRI[MainActivity]@48192e8: ViewPostIme pointer 0
+  03-25 20:25:08.606 28305 28305 W Choreographer: Frame time is 0.058934 ms in the future!  Check that graphics HAL is generating vsync timestamps using the correct timebase.
+  03-25 20:25:08.695 28305 28305 I VRI[MainActivity]@48192e8: ViewPostIme pointer 1
+  03-25 20:25:11.703 28305 28305 I VRI[MainActivity]@48192e8: call setFrameRateCategory for touch hint category=no preference, reason=boost timeout, vri=VRI[MainActivity]@48192e8
+  03-25 20:25:14.292 28305 28305 I VRI[MainActivity]@48192e8: ViewPostIme pointer 0
+  03-25 20:25:14.302 28305 28305 I VRI[MainActivity]@48192e8: call setFrameRateCategory for touch hint category=high hint, reason=touch, vri=VRI[MainActivity]@48192e8
+  03-25 20:25:14.449 28305 28305 I VRI[MainActivity]@48192e8: ViewPostIme pointer 1
+  03-25 20:25:15.028 28305 28305 I VRI[MainActivity]@48192e8: ViewPostIme pointer 0
+  03-25 20:25:15.148 28305 28305 I VRI[MainActivity]@48192e8: ViewPostIme pointer 1
+  03-25 20:25:17.072 28305 28305 I VRI[MainActivity]@48192e8: ViewPostIme pointer 0
+  03-25 20:25:17.177 28305 28305 I VRI[MainActivity]@48192e8: ViewPostIme pointer 1
+  03-25 20:25:17.449 28305 28305 I ImeFocusController: onPreWindowFocus: skipped hasWindowFocus=false mHasImeFocus=true
+  03-25 20:25:17.450 28305 28305 I ImeFocusController: onPostWindowFocus: skipped hasWindowFocus=false mHasImeFocus=true
+  03-25 20:25:17.561 28305 28305 I InsetsController: onStateChanged: host=com.androdr.debug/com.androdr.MainActivity, from=android.view.ViewRootImpl.onInsetsStateChanged:3026, state=InsetsState: {mDisplayFrame=Rect(0, 0 - 1440, 3120), mDisplayCutout=DisplayCutout{insets=Rect(0, 113 - 0, 0) waterfall=Insets{left=0, top=0, right=0, bottom=0} boundingRect={Bounds=[Rect(0, 0 - 0, 0), Rect(685, 0 - 755, 113), Rect(0, 0 - 0, 0), Rect(0, 0 - 0, 0)]} cutoutPathParserInfo={CutoutPathParserInfo{displayWidth=1440 displayHeight=3120 physicalDisplayWidth=1440 physicalDisplayHeight=3120 density={3.75} cutoutSpec={M 0,0 H -9.333333333333333 V 30.13333333333333 H 9.333333333333333 V 0 H 0 Z @dp} rotation={0} scale={1.0} physicalPixelDisplaySizeRatio={1.0}}} sideOverrides={}}, mRoundedCorners=RoundedCorners{[RoundedCorner{position=TopLeft, radius=56, center=Point(56, 56)}, RoundedCorner{position=TopRight, radius=56, center=Point(1384, 56)}, RoundedCorner{position=BottomRight, radius=56, center=Point(1384, 3064)}, RoundedCorner{position=BottomLeft, radius=56, center=Point(56, 3064)}]}  mRoundedCornerFrame=Rect(0, 0 - 1440, 3120), mPrivacyIndicatorBounds=PrivacyIndicatorBounds {static bounds=Rect(1275, 0 - 1440, 113) rotation=0}, mDisplayShape=DisplayShape{ spec=-311912193 displayWidth=1440 displayHeight=3120 physicalPixelDisplaySizeRatio=1.0 rotation=0 offsetX=0 offsetY=0 scale=1.0}, mSources= { InsetsSource: {8f3f0000 mType=statusBars mFrame=[0,0][1440,113] mVisible=false mFlags= mSideHint=TOP mBoundingRects=null}, InsetsSource: {8f3f0005 mType=mandatorySystemGestures mFrame=[0,0][1440,158] mVisible=true mFlags= mSideHint=TOP mBoundingRects=null}, InsetsSource: {8f3f0006 mType=tappableElement mFrame=[0,0][1440,113] mVisible=true mFlags= mSideHint=TOP mBoundingRects=null}, InsetsSource: {b3f00001 mType=navigationBars mFrame=[0,2940][1440,3120] mVisible=true mFlags= mSideHint=BOTTOM mBoundingRects=null}, InsetsSource: {b3f00004 mType=systemGestures mFrame=[0,0][0,0] mVisible=true mFlags= mSideHint=NONE mBoundingRects=null}, InsetsSource: {b3f00005 mType=mandatorySystemGestures mFrame=[0,2940][1440,3120] mVisible=true mFlags= mSideHint=BOTTOM mBoundingRects=null}, InsetsSource: {b3f00006 mType=tappableElement mFrame=[0,2940][1440,3120] mVisible=true mFlags= mSideHint=BOTTOM mBoundingRects=null}, InsetsSource: {b3f00024 mType=systemGestures mFrame=[0,0][0,0] mVisible=true mFlags= mSideHint=NONE mBoundingRects=null}, InsetsSource: {3 mType=ime mFrame=[0,0][0,0] mVisible=false mFlags= mSideHint=NONE mBoundingRects=null}, InsetsSource: {27 mType=displayCutout mFrame=[0,0][1440,113] mVisible=true mFlags= mSideHint=TOP mBoundingRects=null} }
+  03-25 20:25:17.562 28305 28305 I VRI[MainActivity]@48192e8: handleResized, frames=ClientWindowFrames{frame=[0,0][1440,3120] display=[0,0][1440,3120] parentFrame=[0,0][0,0]} displayId=0 dragResizing=false compatScale=1.0 frameChanged=false attachedFrameChanged=false configChanged=false displayChanged=false compatScaleChanged=false dragResizingChanged=false
+  03-25 20:25:17.569 28305 28305 D InputTransport: Input channel destroyed: 'ClientS', fd=164
+  03-25 20:25:20.184 28305 28305 I VRI[MainActivity]@48192e8: call setFrameRateCategory for touch hint category=no preference, reason=boost timeout, vri=VRI[MainActivity]@48192e8
+  03-25 20:25:22.043 28305 28305 I InsetsController: onStateChanged: host=com.androdr.debug/com.androdr.MainActivity, from=android.view.ViewRootImpl.onInsetsStateChanged:3026, state=InsetsState: {mDisplayFrame=Rect(0, 0 - 1440, 3120), mDisplayCutout=DisplayCutout{insets=Rect(0, 113 - 0, 0) waterfall=Insets{left=0, top=0, right=0, bottom=0} boundingRect={Bounds=[Rect(0, 0 - 0, 0), Rect(685, 0 - 755, 113), Rect(0, 0 - 0, 0), Rect(0, 0 - 0, 0)]} cutoutPathParserInfo={CutoutPathParserInfo{displayWidth=1440 displayHeight=3120 physicalDisplayWidth=1440 physicalDisplayHeight=3120 density={3.75} cutoutSpec={M 0,0 H -9.333333333333333 V 30.13333333333333 H 9.333333333333333 V 0 H 0 Z @dp} rotation={0} scale={1.0} physicalPixelDisplaySizeRatio={1.0}}} sideOverrides={}}, mRoundedCorners=RoundedCorners{[RoundedCorner{position=TopLeft, radius=56, center=Point(56, 56)}, RoundedCorner{position=TopRight, radius=56, center=Point(1384, 56)}, RoundedCorner{position=BottomRight, radius=56, center=Point(1384, 3064)}, RoundedCorner{position=BottomLeft, radius=56, center=Point(56, 3064)}]}  mRoundedCornerFrame=Rect(0, 0 - 1440, 3120), mPrivacyIndicatorBounds=PrivacyIndicatorBounds {static bounds=Rect(1275, 0 - 1440, 113) rotation=0}, mDisplayShape=DisplayShape{ spec=-311912193 displayWidth=1440 displayHeight=3120 physicalPixelDisplaySizeRatio=1.0 rotation=0 offsetX=0 offsetY=0 scale=1.0}, mSources= { InsetsSource: {8f3f0000 mType=statusBars mFrame=[0,0][1440,113] mVisible=true mFlags= mSideHint=TOP mBoundingRects=null}, InsetsSource: {8f3f0005 mType=mandatorySystemGestures mFrame=[0,0][1440,158] mVisible=true mFlags= mSideHint=TOP mBoundingRects=null}, InsetsSource: {8f3f0006 mType=tappableElement mFrame=[0,0][1440,113] mVisible=true mFlags= mSideHint=TOP mBoundingRects=null}, InsetsSource: {b3f00001 mType=navigationBars mFrame=[0,2940][1440,3120] mVisible=true mFlags= mSideHint=BOTTOM mBoundingRects=null}, InsetsSource: {b3f00004 mType=systemGestures mFrame=[0,0][0,0] mVisible=true mFlags= mSideHint=NONE mBoundingRects=null}, InsetsSource: {b3f00005 mType=mandatorySystemGestures mFrame=[0,2940][1440,3120] mVisible=true mFlags= mSideHint=BOTTOM mBoundingRects=null}, InsetsSource: {b3f00006 mType=tappableElement mFrame=[0,2940][1440,3120] mVisible=true mFlags= mSideHint=BOTTOM mBoundingRects=null}, InsetsSource: {b3f00024 mType=systemGestures mFrame=[0,0][0,0] mVisible=true mFlags= mSideHint=NONE mBoundingRects=null}, InsetsSource: {3 mType=ime mFrame=[0,0][0,0] mVisible=false mFlags= mSideHint=NONE mBoundingRects=null}, InsetsSource: {27 mType=displayCutout mFrame=[0,0][1440,113] mVisible=true mFlags= mSideHint=TOP mBoundingRects=null} }
+  03-25 20:25:22.044 28305 28305 I VRI[MainActivity]@48192e8: handleResized, frames=ClientWindowFrames{frame=[0,0][1440,3120] display=[0,0][1440,3120] parentFrame=[0,0][0,0]} displayId=0 dragResizing=false compatScale=1.0 frameChanged=false attachedFrameChanged=false configChanged=false displayChanged=false compatScaleChanged=false dragResizingChanged=false
+  03-25 20:25:22.193 28305 28305 I InsetsSourceConsumer: applyRequestedVisibilityToControl: visible=true, type=navigationBars, host=com.androdr.debug/com.androdr.MainActivity
+  03-25 20:25:22.193 28305 28305 I InsetsSourceConsumer: applyRequestedVisibilityToControl: visible=true, type=statusBars, host=com.androdr.debug/com.androdr.MainActivity
+  03-25 20:25:22.193 28305 28305 D VRI[MainActivity]@48192e8: mThreadedRenderer.initializeIfNeeded()#2 mSurface={isValid=true 0xb40000773647f3d0}
+  03-25 20:25:22.194 28305 28305 D InputMethodManagerUtils: startInputInner - Id : 0
+  03-25 20:25:22.194 28305 28305 I InputMethodManager: startInputInner - IInputMethodManagerGlobalInvoker.startInputOrWindowGainedFocus
+  03-25 20:25:22.195 28305 28305 I InputMethodManager: handleMessage: setImeVisibility visible=false
+  03-25 20:25:22.195 28305 28305 D InsetsController: hide(ime(), fromIme=false)
+  03-25 20:25:22.195 28305 28305 I ImeTracker: com.androdr.debug:908484be: onCancelled at PHASE_CLIENT_ALREADY_HIDDEN
+  03-25 20:25:22.196 28305 28330 D InputTransport: Input channel constructed: 'ClientS', fd=162
+  03-25 20:25:25.311 28305 28305 I VRI[MainActivity]@48192e8: ViewPostIme pointer 0
+  03-25 20:25:25.317 28305 28305 I VRI[MainActivity]@48192e8: call setFrameRateCategory for touch hint category=high hint, reason=touch, vri=VRI[MainActivity]@48192e8
+  03-25 20:25:25.332 28305 28305 I VRI[MainActivity]@48192e8: ViewPostIme pointer 1
+
+============================================================
+  End of report · AndroDR · scan id 1774459469085
+============================================================
