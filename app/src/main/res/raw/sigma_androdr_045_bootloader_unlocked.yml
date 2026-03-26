@@ -1,0 +1,15 @@
+title: Bootloader unlocked
+id: androdr-045
+status: production
+author: AndroDR
+date: 2026/03/27
+logsource:
+    product: androdr
+    service: device_auditor
+detection:
+    selection:
+        bootloader_unlocked: true
+    condition: selection
+level: critical
+remediation:
+    - "Re-lock the bootloader unless you need it for custom ROM development."

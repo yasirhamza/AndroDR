@@ -1,0 +1,15 @@
+title: No screen lock configured
+id: androdr-043
+status: production
+author: AndroDR
+date: 2026/03/27
+logsource:
+    product: androdr
+    service: device_auditor
+detection:
+    selection:
+        screen_lock_enabled: false
+    condition: selection
+level: critical
+remediation:
+    - "Set a PIN, password, pattern, or biometric lock to protect your device."

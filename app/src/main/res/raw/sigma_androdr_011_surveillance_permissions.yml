@@ -1,0 +1,23 @@
+title: Sideloaded app with surveillance permission cluster
+id: androdr-011
+status: production
+description: Sideloaded app holds multiple surveillance-capable permissions.
+author: AndroDR
+date: 2026/03/27
+tags:
+    - attack.t1429
+    - attack.t1430
+    - attack.t1512
+    - attack.t1636
+logsource:
+    product: androdr
+    service: app_scanner
+detection:
+    selection:
+        is_system_app: false
+        from_trusted_store: false
+        surveillance_permission_count|gte: 2
+    condition: selection
+level: high
+remediation:
+    - "This app has extensive surveillance capabilities. If you did not install it intentionally, uninstall it."

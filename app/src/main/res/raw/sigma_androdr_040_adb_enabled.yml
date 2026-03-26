@@ -1,0 +1,17 @@
+title: USB Debugging enabled
+id: androdr-040
+status: production
+author: AndroDR
+date: 2026/03/27
+tags:
+    - attack.t1404
+logsource:
+    product: androdr
+    service: device_auditor
+detection:
+    selection:
+        adb_enabled: true
+    condition: selection
+level: high
+remediation:
+    - "Disable USB Debugging in Developer Options when not actively developing."

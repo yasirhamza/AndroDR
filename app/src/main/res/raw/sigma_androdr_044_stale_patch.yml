@@ -1,0 +1,15 @@
+title: Security patch more than 90 days old
+id: androdr-044
+status: production
+author: AndroDR
+date: 2026/03/27
+logsource:
+    product: androdr
+    service: device_auditor
+detection:
+    selection:
+        patch_age_days|gte: 90
+    condition: selection
+level: high
+remediation:
+    - "Update your device to the latest security patch level."
