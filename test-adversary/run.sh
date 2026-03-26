@@ -72,6 +72,11 @@ if ! python3 -c "import yaml" 2>/dev/null; then
     exit 1
 fi
 
+# Check 7z (needed for AES-encrypted MalwareBazaar ZIPs)
+if ! command -v 7z &>/dev/null; then
+    echo "WARNING: 7z not found — Track 1 & 2 downloads will fail. Install: sudo apt install p7zip-full"
+fi
+
 # Check MalwareBazaar key (only warn — not needed for fixture-only runs)
 if [ -z "${MALWAREBAZAAR_API_KEY:-}" ]; then
     echo "WARNING: MALWAREBAZAAR_API_KEY not set — Track 1 & 2 scenarios will be skipped."
@@ -173,16 +178,18 @@ run_scenario() {
             fi
             echo "  Downloading from MalwareBazaar..."
             curl -s -X POST https://mb-api.abuse.ch/api/v1/ \
-                -d "query=get_file&sha256=$sha256" \
+                -d "query=get_file&sha256_hash=$sha256" \
                 -H "Auth-Key: $MALWAREBAZAAR_API_KEY" \
                 -o "$WORKDIR/sample.zip"
             cd "$WORKDIR"
-            unzip -q -o sample.zip 2>/dev/null || true
-            # MalwareBazaar zips contain the file with its sha256 as the name
-            apk_path="$WORKDIR/$sha256"
+            7z x -pinfected -aoa -o"$WORKDIR" sample.zip >/dev/null 2>&1 || true
+            # MalwareBazaar zips contain the file named <sha256>.apk
+            apk_path="$WORKDIR/${sha256}.apk"
             if [ ! -f "$apk_path" ]; then
-                # try finding any APK
-                apk_path=$(find "$WORKDIR" -name "*.apk" -o -name "$sha256" | head -1)
+                apk_path="$WORKDIR/$sha256"
+            fi
+            if [ ! -f "$apk_path" ]; then
+                apk_path=$(find "$WORKDIR" -name "*.apk" | head -1 || true)
             fi
             if [ ! -f "$apk_path" ]; then
                 echo "  FAIL — could not extract sample from ZIP"
