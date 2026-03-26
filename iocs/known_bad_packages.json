@@ -593,5 +593,19 @@
     "category": "STALKERWARE",
     "severity": "HIGH",
     "description": "Consumer stalkerware with stealth operation mode. Logs all device activity and transmits to remote dashboard without user indication."
+  },
+  {
+    "packageName": "com.android.bsp",
+    "name": "Pegasus Disguise (com.android.bsp)",
+    "category": "NATION_STATE_SPYWARE",
+    "severity": "CRITICAL",
+    "description": "Pegasus disguise package name documented by MVT (Mobile Verification Toolkit) indicators. Used by NSO Group for surveillance implant masquerading as Android system component."
+  },
+  {
+    "packageName": "com.network.android",
+    "name": "Pegasus Disguise (com.network.android)",
+    "category": "NATION_STATE_SPYWARE",
+    "severity": "CRITICAL",
+    "description": "Pegasus disguise package name documented by MVT (Mobile Verification Toolkit) indicators. Used by NSO Group for surveillance implant masquerading as network service."
   }
 ]
