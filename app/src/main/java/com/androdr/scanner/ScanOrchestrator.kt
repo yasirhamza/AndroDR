@@ -6,6 +6,9 @@ import com.androdr.data.model.AppRisk
 import com.androdr.data.model.DeviceFlag
 import com.androdr.data.model.ScanResult
 import com.androdr.data.repo.ScanRepository
+import com.androdr.ioc.CertHashIocResolver
+import com.androdr.ioc.DomainIocResolver
+import com.androdr.ioc.IocResolver
 import com.androdr.scanner.BugReportAnalyzer.BugReportFinding
 import com.androdr.sigma.FindingMapper
 import com.androdr.sigma.SigmaRuleEngine
@@ -25,8 +28,24 @@ class ScanOrchestrator @Inject constructor(
     private val deviceAuditor: DeviceAuditor,
     private val bugReportAnalyzer: BugReportAnalyzer,
     private val scanRepository: ScanRepository,
-    private val sigmaRuleEngine: SigmaRuleEngine
+    private val sigmaRuleEngine: SigmaRuleEngine,
+    private val iocResolver: IocResolver,
+    private val certHashIocResolver: CertHashIocResolver,
+    private val domainIocResolver: DomainIocResolver
 ) {
+
+    private var ruleEngineInitialized = false
+
+    private fun initRuleEngine() {
+        if (ruleEngineInitialized) return
+        sigmaRuleEngine.setIocLookups(mapOf(
+            "package_ioc_db" to { v -> iocResolver.isKnownBadPackage(v.toString()) != null },
+            "cert_hash_ioc_db" to { v -> certHashIocResolver.isKnownBadCert(v.toString()) != null },
+            "domain_ioc_db" to { v -> domainIocResolver.isKnownBadDomain(v.toString()) != null }
+        ))
+        sigmaRuleEngine.loadBundledRules()
+        ruleEngineInitialized = true
+    }
 
     /**
      * Runs a full device scan.
@@ -36,6 +55,8 @@ class ScanOrchestrator @Inject constructor(
      * into a [ScanResult], saved to the database, and returned.
      */
     suspend fun runFullScan(): ScanResult = coroutineScope {
+        initRuleEngine()
+
         val appRisksDeferred   = async { runCatching { appScanner.scan() }.getOrDefault(emptyList()) }
         val deviceFlagsDeferred = async { runCatching { deviceAuditor.audit() }.getOrDefault(emptyList()) }
 
