@@ -4,6 +4,9 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.androdr.data.db.DomainIocEntryDao
 import com.androdr.data.db.IocEntryDao
+import com.androdr.data.db.KnownAppEntryDao
+import com.androdr.ioc.KnownAppDatabase
+import com.androdr.ioc.KnownAppUpdater
 import com.androdr.data.model.ScanResult
 import com.androdr.data.repo.ScanRepository
 import com.androdr.ioc.DomainIocUpdater
@@ -31,7 +34,10 @@ class DashboardViewModel @Inject constructor(
     private val iocDatabase: IocDatabase,
     private val remoteIocUpdater: RemoteIocUpdater,
     private val domainIocEntryDao: DomainIocEntryDao,
-    private val domainIocUpdater: DomainIocUpdater
+    private val domainIocUpdater: DomainIocUpdater,
+    private val knownAppDatabase: KnownAppDatabase,
+    private val knownAppEntryDao: KnownAppEntryDao,
+    private val knownAppUpdater: KnownAppUpdater
 ) : ViewModel() {
 
     val latestScan: StateFlow<ScanResult?> = repository.allScans
@@ -74,10 +80,24 @@ class DashboardViewModel @Inject constructor(
     private val _isUpdatingDomainIoc = MutableStateFlow(false)
     val isUpdatingDomainIoc: StateFlow<Boolean> = _isUpdatingDomainIoc.asStateFlow()
 
+    // ── Known-app state ────────────────────────────────────────────────────────
+
+    private val bundledKnownAppCount = knownAppDatabase.size
+
+    private val _knownAppEntryCount = MutableStateFlow(bundledKnownAppCount)
+    val knownAppEntryCount: StateFlow<Int> = _knownAppEntryCount.asStateFlow()
+
+    private val _knownAppLastUpdated = MutableStateFlow<Long?>(null)
+    val knownAppLastUpdated: StateFlow<Long?> = _knownAppLastUpdated.asStateFlow()
+
+    private val _isUpdatingKnownApps = MutableStateFlow(false)
+    val isUpdatingKnownApps: StateFlow<Boolean> = _isUpdatingKnownApps.asStateFlow()
+
     init {
         viewModelScope.launch {
             refreshIocState()
             refreshDomainIocState()
+            refreshKnownAppState()
         }
     }
 
@@ -151,5 +171,34 @@ class DashboardViewModel @Inject constructor(
     private suspend fun refreshDomainIocState() {
         _domainIocEntryCount.value = domainIocEntryDao.count()
         _domainIocLastUpdated.value = domainIocEntryDao.mostRecentFetchTime()
+    }
+
+    fun updateKnownApps() {
+        viewModelScope.launch { doUpdateKnownApps() }
+    }
+
+    @Suppress("TooGenericExceptionCaught")
+    private suspend fun doUpdateKnownApps() {
+        _isUpdatingKnownApps.value = true
+        try {
+            val fetched = knownAppUpdater.update()
+            if (fetched == 0) {
+                _iocErrorEvent.tryEmit("Failed to update known-app database. Check your connection.")
+            }
+            refreshKnownAppState()
+        } catch (e: Exception) {
+            _iocErrorEvent.tryEmit("Known-app database update failed: ${e.message}")
+        } finally {
+            _isUpdatingKnownApps.value = false
+        }
+    }
+
+    private suspend fun refreshKnownAppState() {
+        // After remote data loads, show DB count alone (bundled entries are upserted into Room
+        // with the same primary key, so adding bundledKnownAppCount here would double-count).
+        // The initial MutableStateFlow(bundledKnownAppCount) covers the pre-load state.
+        val dbCount = knownAppEntryDao.count()
+        _knownAppEntryCount.value = if (dbCount > 0) dbCount else bundledKnownAppCount
+        _knownAppLastUpdated.value = knownAppEntryDao.mostRecentFetchTime()
     }
 }
