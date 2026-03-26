@@ -23,6 +23,7 @@ Each item should be driven by a failing test before implementation (TDD).
 
 ## Potential Future Work
 
+- **Threat hunting / forensic analysis mode** — MVT-style deep device inspection: parse SMS/call/browser databases from device backups, extract filesystem artifacts, cross-reference against IOC lists. Targeted at trained analysts for post-compromise investigation. Requires backup access permissions and analyst-facing UI.
 - iOS companion app (out of scope for Android-only release)
 - Remote report upload / SIEM integration
 - Real-time permission-use monitoring (camera/mic activation events)
