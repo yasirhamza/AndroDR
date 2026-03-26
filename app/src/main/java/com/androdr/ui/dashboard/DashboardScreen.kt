@@ -277,8 +277,10 @@ private fun ThreatDatabaseCard(
     }
     val domainStatusText = when {
         isDomainNeverUpdated -> "$domainEntryCount domain indicators · Remote update pending"
-        isDomainStale        -> "$domainEntryCount domain indicators · Updated ${relativeTime(domainLastUpdated!!, now)} · Stale"
-        else                 -> "$domainEntryCount domain indicators · Updated ${relativeTime(domainLastUpdated!!, now)}"
+        isDomainStale        -> "$domainEntryCount domain indicators · " +
+            "Updated ${relativeTime(domainLastUpdated!!, now)} · Stale"
+        else                 -> "$domainEntryCount domain indicators · " +
+            "Updated ${relativeTime(domainLastUpdated!!, now)}"
     }
 
     Card(
@@ -382,8 +384,10 @@ private fun ThreatDatabaseCard(
             }
             val knownAppsStatusText = when {
                 isKnownAppsNeverUpdated -> "$knownAppEntryCount app signatures · Remote update pending"
-                isKnownAppsStale        -> "$knownAppEntryCount app signatures · Updated ${relativeTime(knownAppLastUpdated!!, now)} · Stale"
-                else                    -> "$knownAppEntryCount app signatures · Updated ${relativeTime(knownAppLastUpdated!!, now)}"
+                isKnownAppsStale        -> "$knownAppEntryCount app signatures · " +
+                    "Updated ${relativeTime(knownAppLastUpdated!!, now)} · Stale"
+                else                    -> "$knownAppEntryCount app signatures · " +
+                    "Updated ${relativeTime(knownAppLastUpdated!!, now)}"
             }
 
             Row(

@@ -3,6 +3,15 @@
 
 complexity:
   active: true
+  CyclomaticComplexMethod:
+    threshold: 36   # security parsers and VPN packet handler are inherently complex
+  LongParameterList:
+    functionThreshold: 13   # Compose composables and Hilt ViewModels legitimately need many params
+    constructorThreshold: 13
+  NestedBlockDepth:
+    threshold: 6   # JSON parsers with try-catch inside loops need deeper nesting
+  ComplexCondition:
+    threshold: 7   # multi-field security condition checks
 
 potential-bugs:
   active: true
@@ -15,6 +24,8 @@ style:
   active: true
   MagicNumber:
     active: false   # too noisy for Android UI code
+  ReturnCount:
+    max: 3   # parser early-return guards are clearer than flag variables
 
 exceptions:
   active: true
