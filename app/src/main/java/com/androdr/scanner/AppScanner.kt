@@ -150,6 +150,7 @@ class AppScanner @Inject constructor(
                 null
             }
             if (certHash != null) {
+                @Suppress("TooGenericExceptionCaught", "SwallowedException")
                 val certHit = try {
                     certHashIocResolver.isKnownBadCert(certHash)
                 } catch (e: Exception) {
