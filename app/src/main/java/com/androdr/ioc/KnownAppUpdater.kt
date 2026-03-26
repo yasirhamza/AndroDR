@@ -15,7 +15,7 @@ import javax.inject.Singleton
 class KnownAppUpdater @Inject constructor(
     private val dao: KnownAppEntryDao,
     private val resolver: KnownAppResolver,
-    @JvmSuppressWildcards private val feeds: List<KnownAppFeed>
+    private val feeds: @JvmSuppressWildcards List<KnownAppFeed>
 ) {
     suspend fun update(): Int = withContext(Dispatchers.IO) {
         var totalStored = 0
