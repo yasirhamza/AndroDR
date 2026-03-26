@@ -7,8 +7,10 @@ import android.content.pm.PackageManager
 import android.os.Build
 import android.util.Log
 import com.androdr.data.model.AppRisk
+import com.androdr.data.model.KnownAppCategory
 import com.androdr.data.model.RiskLevel
 import com.androdr.ioc.IocResolver
+import com.androdr.ioc.KnownAppResolver
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -18,7 +20,8 @@ import javax.inject.Singleton
 @Singleton
 class AppScanner @Inject constructor(
     @ApplicationContext private val context: Context,
-    private val iocResolver: IocResolver
+    private val iocResolver: IocResolver,
+    private val knownAppResolver: KnownAppResolver
 ) {
 
     private companion object {
@@ -41,8 +44,11 @@ class AppScanner @Inject constructor(
         Manifest.permission.READ_EXTERNAL_STORAGE
     )
 
-    /** The official Play Store installer package name. */
-    private val playStoreInstaller = "com.android.vending"
+    /** Trusted app store installer package names (Play Store + Samsung Galaxy Store). */
+    private val trustedInstallers = setOf(
+        "com.android.vending",            // Google Play Store
+        "com.sec.android.app.samsungapps" // Samsung Galaxy Store
+    )
 
     @Suppress("LongMethod", "CyclomaticComplexMethod", "LoopWithTooManyJumpStatements")
     // Security scan logic requires comprehensive checks across multiple risk categories;
@@ -93,24 +99,32 @@ class AppScanner @Inject constructor(
                 reasons.add("Package name matches known malware or stalkerware IOC database entry")
             }
 
-            // ── 2. Dangerous permission combination scoring ────────────────
-            // System apps with known OEM/AOSP prefixes legitimately hold multiple sensitive
-            // permissions (e.g. Messages needs SMS+Location+Contacts); scoring them would produce
-            // false positives on every stock device. Only score non-system apps and system apps
-            // with unknown prefixes (which are already flagged by the firmware-implant check).
-            val isSystemApp = appInfo.flags and ApplicationInfo.FLAG_SYSTEM != 0
-            val knownSystemPrefixes = listOf(
-                "com.android.", "com.google.", "android", "com.qualcomm.",
-                "com.samsung.", "com.sec.", "com.motorola.", "com.oneplus.",
-                "com.miui.", "com.lge.", "com.htc.", "com.sony.",
-                "com.huawei.", "com.asus.", "com.oppo.", "com.realme.",
-                "com.vivo.", "org.lineageos.", "com.cyanogenmod."
+            // ── Resolver lookup ────────────────────────────────────────────
+            val knownApp = knownAppResolver.lookup(packageName)
+            val isKnownOemApp = knownApp?.category in setOf(
+                KnownAppCategory.OEM, KnownAppCategory.AOSP, KnownAppCategory.GOOGLE
             )
-            val looksLikeKnownSystem = knownSystemPrefixes.any { packageName.startsWith(it) }
+
+            // ── 2. Dangerous permission combination scoring ────────────────
+            // Only score sideloaded (untrusted-source) user apps. System apps are handled by the
+            // firmware-implant check below; trusted-store apps (Play, Samsung Store, Samsung
+            // ecosystem) have curated review processes that make stalkerware distribution via them
+            // highly unlikely. Scoring them produces only noise.
+            val isSystemApp = appInfo.flags and ApplicationInfo.FLAG_SYSTEM != 0
+            // Compute installer source once — used by both permission scoring and sideload check.
+            // Any com.samsung.* or com.sec.* package acting as an installer is a Samsung ecosystem
+            // component (Watch Manager, Cloud, Update Center, etc.) and is treated as trusted.
+            val installerPackage = if (!isSystemApp) getInstallerPackageName(pm, packageName) else null
+            val fromTrustedStore = installerPackage != null &&
+                (installerPackage in trustedInstallers ||
+                    installerPackage.startsWith("com.samsung.") ||
+                    installerPackage.startsWith("com.sec."))
+
             val grantedPermissions = pkg.requestedPermissions?.toList() ?: emptyList()
             val matchedSurveillancePerms = grantedPermissions
                 .filter { it in surveillancePermissions }
-            if (matchedSurveillancePerms.size >= 2 && !(isSystemApp && looksLikeKnownSystem)) {
+            // Permission scoring only applies to non-system apps from untrusted sources.
+            if (matchedSurveillancePerms.size >= 2 && !isSystemApp && !fromTrustedStore) {
                 @Suppress("MaxLineLength") // Inline ternary is clearest for this threshold check
                 val newLevel = if (matchedSurveillancePerms.size >= 4) RiskLevel.CRITICAL else RiskLevel.HIGH
                 if (newLevel.score > riskLevel.score) riskLevel = newLevel
@@ -122,21 +136,33 @@ class AppScanner @Inject constructor(
                 )
             }
 
+            // ── 2b. Impersonation detection ───────────────────────────────
+            // A USER_APP entry sideloaded from an untrusted source is likely
+            // a spoofed APK masquerading as the legitimate app.
+            if (!isSystemApp && !fromTrustedStore &&
+                knownApp?.category == KnownAppCategory.USER_APP) {
+                val newLevel = RiskLevel.HIGH
+                if (newLevel.score > riskLevel.score) riskLevel = newLevel
+                reasons.add(
+                    "Package name matches well-known app '${knownApp.displayName}' but was not " +
+                        "installed from a trusted store — possible impersonation"
+                )
+            }
+
             // ── 3. Sideload detection ──────────────────────────────────────
-            if (!isSystemApp) {
-                val installerPackage = getInstallerPackageName(pm, packageName)
-                if (installerPackage != playStoreInstaller) {
-                    isSideloaded = true
-                    val newLevel = RiskLevel.MEDIUM
-                    if (newLevel.score > riskLevel.score) riskLevel = newLevel
-                    val source = installerPackage ?: "unknown"
-                    reasons.add("App was not installed via Google Play Store (installer: $source)")
-                }
+            // Also skip known-OEM apps: Samsung user apps (e.g. Samsung Kids, Samsung TV
+            // Plus) may not be FLAG_SYSTEM but arrive with a null installer via OEM provisioning.
+            if (!isSystemApp && !fromTrustedStore && !isKnownOemApp) {
+                isSideloaded = true
+                val newLevel = RiskLevel.MEDIUM
+                if (newLevel.score > riskLevel.score) riskLevel = newLevel
+                val source = installerPackage ?: "unknown"
+                reasons.add("App was not installed via a trusted app store (installer: $source)")
             }
 
             // ── 4. Pre-installed anomaly check ────────────────────────────
             if (isSystemApp) {
-                if (!looksLikeKnownSystem) {
+                if (!isKnownOemApp) {
                     val newLevel = RiskLevel.HIGH
                     if (newLevel.score > riskLevel.score) riskLevel = newLevel
                     reasons.add(
