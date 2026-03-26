@@ -16,8 +16,10 @@ import com.androdr.data.db.MIGRATION_2_3
 import com.androdr.data.db.MIGRATION_3_4
 import com.androdr.data.db.MIGRATION_4_5
 import com.androdr.data.db.ScanResultDao
+import com.androdr.ioc.CertHashIocFeed
 import com.androdr.ioc.DomainIocFeed
 import com.androdr.ioc.KnownAppFeed
+import com.androdr.ioc.feeds.MalwareBazaarCertFeed
 import com.androdr.ioc.feeds.MvtIndicatorsFeed
 import com.androdr.ioc.feeds.PlexusKnownAppFeed
 import com.androdr.ioc.feeds.UadKnownAppFeed
@@ -68,6 +70,11 @@ object AppModule {
     @Singleton
     fun provideKnownAppFeeds(): @JvmSuppressWildcards List<KnownAppFeed> =
         listOf(UadKnownAppFeed(), PlexusKnownAppFeed())
+
+    @Provides
+    @Singleton
+    fun provideCertHashIocFeeds(): @JvmSuppressWildcards List<CertHashIocFeed> =
+        listOf(MalwareBazaarCertFeed())
 
     @Provides
     @Singleton
