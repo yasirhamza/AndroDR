@@ -1,9 +1,11 @@
 <!-- app/src/debug/AndroidManifest.xml -->
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
     <application>
         <receiver
             android:name="com.androdr.debug.ScanBroadcastReceiver"
-            android:exported="true">
+            android:exported="true"
+            tools:ignore="ExportedReceiver">
             <intent-filter>
                 <action android:name="com.androdr.ACTION_SCAN" />
             </intent-filter>
