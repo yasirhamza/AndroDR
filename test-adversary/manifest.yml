@@ -7,7 +7,7 @@ scenarios:
     track: 1
     description: "Cerberus Android banking trojan"
     source: malwarebazaar
-    sha256: "<pin>"
+    sha256: "8beae1f6b21cec17eed82fb7af25e1782d5b7bf10fd22369603313f1b1a5e5e4"
     tags: [android, cerberus, banker]
     attack: [T1429, T1636]
     expected_patterns:
@@ -17,19 +17,81 @@ scenarios:
     track: 1
     description: "SpyNote remote access trojan"
     source: malwarebazaar
-    sha256: "<pin>"
+    sha256: "17372844a0ecb548c70275a5e06f522a2445f2781410a246130757e0b7bc5396"
     tags: [android, spynote, rat]
     attack: [T1429, T1430, T1512]
     expected_patterns:
       - "Package name matches known malware or stalkerware IOC database entry"
 
-  # ── Track 2: Stalkerware ───────────────────────────────────────────────
-  - id: flexispy_stalkerware
-    track: 2
-    description: "FlexiSpy-derived commercial stalkerware"
+  - id: anubis_banker
+    track: 1
+    description: "Anubis Android banking trojan with SMS stealing"
     source: malwarebazaar
-    sha256: "<pin>"
-    tags: [android, stalkerware]
+    sha256: "392272ef515d2f60f2c058675d637bf63a265800b8e4613ed9f72eeb8ebb323d"
+    tags: [android, Anubis, banker, sms-stealer]
+    attack: [T1429, T1636]
+    expected_patterns:
+      - "Package name matches known malware or stalkerware IOC database entry"
+
+  - id: brata_rat
+    track: 1
+    description: "BRATA Android remote access trojan"
+    source: malwarebazaar
+    sha256: "f690e30b6ee25c153effc5620fd7ec61481a449a127b54a67c7afc4c13d7917f"
+    tags: [android, BRATA, banker, trojan]
+    attack: [T1429, T1636]
+    expected_patterns:
+      - "Package name matches known malware or stalkerware IOC database entry"
+
+  - id: hydra_dropper
+    track: 1
+    description: "Hydra Android banking trojan dropper"
+    source: malwarebazaar
+    sha256: "c565f4b9b3c6bb095c6ce62ab02c5cc8a84502231f4facdddb6f3d7af2321b5e"
+    tags: [android, Hydra, banker]
+    attack: [T1429, T1636]
+    expected_patterns:
+      - "Package name matches known malware or stalkerware IOC database entry"
+
+  - id: vultur_rat
+    track: 1
+    description: "Vultur Android RAT with screen recording"
+    source: malwarebazaar
+    sha256: "f4d7e9ec4eda034c29b8d73d479084658858f56e67909c2ffedf9223d7ca9bd2"
+    tags: [android, Vultur, trojan]
+    attack: [T1429, T1512, T1636]
+    expected_patterns:
+      - "Package name matches known malware or stalkerware IOC database entry"
+
+  # ── Track 2: Stalkerware ───────────────────────────────────────────────
+  - id: thetruthspy_stalkerware
+    track: 2
+    description: "TheTruthSpy commercial stalkerware"
+    source: malwarebazaar
+    sha256: "92c3337b3d74f2aab8f0ca3a6f045719a3301519810d535856ff11dd743b523c"
+    tags: [android, stalkerware, TheTruthSpy]
+    attack: [T1429, T1430, T1512, T1636]
+    expected_patterns:
+      - "sensitive surveillance-capable permissions simultaneously"
+      - "App was not installed via a trusted app store"
+
+  - id: andrmonitor_stalkerware
+    track: 2
+    description: "AndrMonitor commercial stalkerware"
+    source: malwarebazaar
+    sha256: "4b4c1064e3994b59904749fb706c8dfdcc6a50c203694bb45a6d1b4ce11795b3"
+    tags: [android, AndrMonitor, stalkerware]
+    attack: [T1429, T1430, T1512, T1636]
+    expected_patterns:
+      - "sensitive surveillance-capable permissions simultaneously"
+      - "App was not installed via a trusted app store"
+
+  - id: tispy_stalkerware
+    track: 2
+    description: "TiSpy commercial stalkerware"
+    source: malwarebazaar
+    sha256: "4bcb6951c5f78c646c19771ff58c2ea749e734ae3fa916f130aeee8e083ca2e4"
+    tags: [android, TiSpy, stalkerware]
     attack: [T1429, T1430, T1512, T1636]
     expected_patterns:
       - "sensitive surveillance-capable permissions simultaneously"
