@@ -6,7 +6,7 @@
 
 **Architecture:** Two-phase scan: Phase 1 collects normalized telemetry (AppTelemetry, DeviceTelemetry). Phase 2 evaluates SIGMA YAML rules against telemetry and produces findings. Findings map to existing AppRisk/DeviceFlag models for the UI. Rules are bundled + fetched from `android-sigma-rules/rules` repo.
 
-**Tech Stack:** Kotlin, SnakeYAML (YAML parsing), Hilt DI, kotlinx.serialization
+**Tech Stack:** Kotlin, snakeyaml-engine (YAML 1.2 parsing), Hilt DI, kotlinx.serialization
 
 **Spec:** `docs/superpowers/specs/2026-03-27-sigma-rule-engine-design.md`
 
@@ -58,7 +58,7 @@ app/src/main/java/com/androdr/ioc/IocUpdateWorker.kt         # add rule feed upd
 
 In `app/build.gradle.kts`, add to the `dependencies` block:
 ```kotlin
-implementation("org.yaml:snakeyaml:2.2")
+implementation("org.snakeyaml:snakeyaml-engine:2.7")
 ```
 
 - [ ] **Step 2: Create `AppTelemetry.kt`**
@@ -212,17 +212,20 @@ enum class SigmaModifier {
 // app/src/main/java/com/androdr/sigma/SigmaRuleParser.kt
 package com.androdr.sigma
 
-import org.yaml.snakeyaml.Yaml
+import org.snakeyaml.engine.v2.api.Load
+import org.snakeyaml.engine.v2.api.LoadSettings
 import android.util.Log
 
 object SigmaRuleParser {
 
     private const val TAG = "SigmaRuleParser"
-    private val yaml = Yaml()
+    private val settings = LoadSettings.builder().build()
 
+    @Suppress("UNCHECKED_CAST")
     fun parse(yamlContent: String): SigmaRule? {
         return try {
-            val doc = yaml.load<Map<String, Any>>(yamlContent) ?: return null
+            val load = Load(settings)
+            val doc = load.loadOne(yamlContent) as? Map<String, Any> ?: return null
             parseDocument(doc)
         } catch (e: Exception) {
             Log.w(TAG, "Failed to parse SIGMA rule: ${e.message}")
@@ -230,9 +233,11 @@ object SigmaRuleParser {
         }
     }
 
+    @Suppress("UNCHECKED_CAST")
     fun parseAll(yamlContent: String): List<SigmaRule> {
         return try {
-            yaml.loadAll(yamlContent)
+            val load = Load(settings)
+            load.loadAllFromString(yamlContent)
                 .filterIsInstance<Map<String, Any>>()
                 .mapNotNull { parseDocument(it) }
         } catch (e: Exception) {
