@@ -54,12 +54,13 @@ File: `app/src/main/java/com/androdr/data/model/CertHashIocEntry.kt`
 
 ### 2. `CertHashIocEntryDao` (Room DAO)
 
-Methods:
+Methods (all `suspend`):
 - `getByCertHash(certHash: String): CertHashIocEntry?`
 - `getAll(): List<CertHashIocEntry>`
 - `upsertAll(entries: List<CertHashIocEntry>)`
 - `count(): Int`
 - `lastFetchTime(source: String): Long?`
+- `mostRecentFetchTime(): Long?` — global latest fetch (used by DashboardViewModel)
 - `deleteStaleEntries(source: String, olderThan: Long)`
 
 File: `app/src/main/java/com/androdr/data/db/CertHashIocEntryDao.kt`
@@ -71,7 +72,7 @@ File: `app/src/main/java/com/androdr/data/db/CertHashIocEntryDao.kt`
 - Two-tier lookup: Room cache → bundled `CertHashIocDatabase` fallback
 - `isKnownBadCert(certHash: String): CertHashIocEntry?` — synchronous
 - `refreshCache()` — loads all Room entries into memory
-- `remoteEntryCount(): Int`
+- `suspend fun remoteEntryCount(): Int` — delegates to DAO `count()`, must be suspend
 
 File: `app/src/main/java/com/androdr/ioc/CertHashIocResolver.kt`
 
@@ -83,7 +84,9 @@ File: `app/src/main/java/com/androdr/ioc/CertHashIocResolver.kt`
 
 File: `app/src/main/java/com/androdr/ioc/CertHashIocDatabase.kt`
 
-### 5. Bundled data: `iocs/known_bad_certs.json`
+### 5. Bundled data: `app/src/main/res/raw/known_bad_certs.json`
+
+Source-tree location: `iocs/known_bad_certs.json` (copied to `res/raw/` during build, same pattern as `known_bad_packages.json`).
 
 JSON array of known-bad signing cert hashes. Seeded from MalwareBazaar samples tested during adversary simulation:
 
@@ -115,8 +118,7 @@ File: `app/src/main/java/com/androdr/ioc/CertHashIocFeed.kt`
 ### 7. `MalwareBazaarCertFeed` (feed implementation)
 
 - Queries MalwareBazaar API for Android malware signing certificate info
-- Uses `MALWAREBAZAAR_API_KEY` from build config or preferences
-- Returns empty list if API key is not configured (no crash)
+- `MALWAREBAZAAR_API_KEY` is **strictly optional** — the feed returns an empty list if not configured. The project compiles and runs fully offline without any API keys (per CLAUDE.md). The bundled `known_bad_certs.json` provides baseline detection without this feed.
 - Source ID: `"malwarebazaar_certs"`
 
 **API approach:** MalwareBazaar doesn't have a direct "list all cert hashes" endpoint. Instead:
@@ -124,6 +126,7 @@ File: `app/src/main/java/com/androdr/ioc/CertHashIocFeed.kt`
 - For each returned sample, the response includes `signature` field with cert info
 - Extract and deduplicate cert SHA-256 hashes per family
 - Tracked families: Cerberus, SpyNote, Anubis, BRATA, Hydra, Vultur, stalkerware
+- If API key is not set, skip silently — no crash, no error log, just empty list
 
 File: `app/src/main/java/com/androdr/ioc/feeds/MalwareBazaarCertFeed.kt`
 
@@ -178,6 +181,8 @@ val flags = PackageManager.GET_PERMISSIONS or
         @Suppress("DEPRECATION") PackageManager.GET_SIGNATURES
 ```
 
+**Performance/compatibility note:** Adding `GET_SIGNING_CERTIFICATES` increases the data returned per package. Some OEMs may behave unexpectedly with combined flags. Wrap the `getInstalledPackages(flags)` call in a try/catch — if it fails with the signing flag, fall back to `GET_PERMISSIONS` only and skip cert hash checking for that scan. This matches the existing error handling pattern at the top of `scan()`.
+
 File: `app/src/main/java/com/androdr/scanner/AppScanner.kt`
 
 ### 10. Room migration 4→5
@@ -205,9 +210,33 @@ File: `app/src/main/java/com/androdr/data/db/Migrations.kt`
 - Provide `CertHashIocUpdater` singleton
 - Add `CertHashIocUpdater.update()` to `IocUpdateWorker`
 
-### 12. `IocUpdateWorker` change
+### 12. `IocUpdateWorker` changes
 
-Add `certHashIocUpdater.update()` alongside existing updater calls.
+- Add `CertHashIocUpdater` as a constructor parameter (injected via `@AssistedInject`)
+- Add `certHashIocUpdater.update()` call in `runAllUpdaters()` alongside the existing 3 updaters
+- Update `IocUpdateWorkerTest` to provide the new parameter in test setup
+
+### 13. `DashboardViewModel` integration
+
+Add cert hash IOC state to the dashboard, following the existing pattern for package IOCs and domain IOCs:
+
+- New `certHashIocCount: StateFlow<Int>` — total cert hash IOC entries
+- New `certHashIocLastUpdate: StateFlow<Long?>` — last fetch timestamp
+- New `refreshCertHashIocState()` method — reads from `CertHashIocEntryDao`
+- Wire into `ThreatDatabaseCard` composable alongside existing IOC counts
+- Constructor injection: add `CertHashIocEntryDao` parameter
+
+### 14. `test-adversary/run.sh` update
+
+The existing `mercenary_cert_hash` scenario seeds the cert hash into the wrong table (`ioc_entries`). Update the seeding logic to INSERT into `cert_hash_ioc_entries` with the correct schema:
+
+```bash
+$ADB shell "run-as com.androdr.debug sqlite3 $db_path \
+    \"INSERT OR REPLACE INTO cert_hash_ioc_entries \
+    (certHash, familyName, category, severity, description, source, fetchedAt) \
+    VALUES ('$cert_hash', 'Test Fixture', 'TEST', 'CRITICAL', \
+    'Adversary simulation test cert', 'adversary-test', $(date +%s000));\""
+```
 
 ---
 
