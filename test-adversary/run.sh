@@ -330,7 +330,7 @@ run_scenario() {
         done < <(get_cleanup_cmds "$id")
     fi
     if [ -n "${pkg_name:-}" ]; then
-        $ADB uninstall "$pkg_name" 2>/dev/null || true
+        $ADB uninstall "$pkg_name" >/dev/null 2>&1 || true
         # Remove from tracked array (safe for empty arrays)
         local new_arr=()
         for p in "${INSTALLED_PACKAGES[@]+"${INSTALLED_PACKAGES[@]}"}"; do
@@ -344,7 +344,7 @@ run_scenario() {
 # ── Main loop ─────────────────────────────────────────────────────────────────
 
 while IFS= read -r scenario_id; do
-    run_scenario "$scenario_id"
+    run_scenario "$scenario_id" || true
 done < <(get_scenario_ids)
 
 # ── Summary ───────────────────────────────────────────────────────────────────
