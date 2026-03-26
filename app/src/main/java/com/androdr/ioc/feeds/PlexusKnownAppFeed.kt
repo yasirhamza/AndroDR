@@ -62,7 +62,7 @@ class PlexusKnownAppFeed : KnownAppFeed {
                 )
             }
             val meta = PlexusMeta(
-                currentPage = metaObj.optInt("current_page", 1),
+                currentPage = metaObj.optInt("page_number", 1), // API returns "page_number", not "current_page"
                 totalPages  = metaObj.optInt("total_pages", 1)
             )
             Pair(entries, meta)
