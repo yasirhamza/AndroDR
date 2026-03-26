@@ -11,7 +11,7 @@ scenarios:
     tags: [android, cerberus, banker]
     attack: [T1429, T1636]
     expected_patterns:
-      - "Package name matches known malware or stalkerware IOC database entry"
+      - "App was not installed via a trusted app store"
 
   - id: spynote_rat
     track: 1
@@ -21,7 +21,7 @@ scenarios:
     tags: [android, spynote, rat]
     attack: [T1429, T1430, T1512]
     expected_patterns:
-      - "Package name matches known malware or stalkerware IOC database entry"
+      - "App was not installed via a trusted app store"
 
   - id: anubis_banker
     track: 1
@@ -31,7 +31,7 @@ scenarios:
     tags: [android, Anubis, banker, sms-stealer]
     attack: [T1429, T1636]
     expected_patterns:
-      - "Package name matches known malware or stalkerware IOC database entry"
+      - "App was not installed via a trusted app store"
 
   - id: brata_rat
     track: 1
@@ -41,7 +41,7 @@ scenarios:
     tags: [android, BRATA, banker, trojan]
     attack: [T1429, T1636]
     expected_patterns:
-      - "Package name matches known malware or stalkerware IOC database entry"
+      - "App was not installed via a trusted app store"
 
   - id: hydra_dropper
     track: 1
@@ -51,7 +51,7 @@ scenarios:
     tags: [android, Hydra, banker]
     attack: [T1429, T1636]
     expected_patterns:
-      - "Package name matches known malware or stalkerware IOC database entry"
+      - "App was not installed via a trusted app store"
 
   - id: vultur_rat
     track: 1
@@ -61,7 +61,7 @@ scenarios:
     tags: [android, Vultur, trojan]
     attack: [T1429, T1512, T1636]
     expected_patterns:
-      - "Package name matches known malware or stalkerware IOC database entry"
+      - "App was not installed via a trusted app store"
 
   # ── Track 2: Stalkerware ───────────────────────────────────────────────
   - id: thetruthspy_stalkerware

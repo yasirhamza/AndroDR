@@ -5,11 +5,15 @@
 set -euo pipefail
 
 NO_PAUSE=false
-if [ "${1:-}" = "--no-pause" ]; then
-    NO_PAUSE=true
+SKIP_ISOLATION=true  # default: skip network isolation (safe — APKs are installed, never executed)
+while [ "${1:-}" = "--no-pause" ] || [ "${1:-}" = "--isolate" ]; do
+    case "$1" in
+        --no-pause) NO_PAUSE=true ;;
+        --isolate) SKIP_ISOLATION=false ;;
+    esac
     shift
-fi
-SERIAL="${1:?Usage: $0 [--no-pause] <emulator-serial>}"
+done
+SERIAL="${1:?Usage: $0 [--no-pause] [--isolate] <emulator-serial>}"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 MANIFEST="$SCRIPT_DIR/manifest.yml"
 EXPECTED_DIR="$SCRIPT_DIR/fixtures/expected"
@@ -39,8 +43,10 @@ cleanup() {
         $ADB uninstall "$pkg" 2>/dev/null || true
     done
     # Restore network inside emulator
-    $ADB shell svc wifi enable 2>/dev/null || true
-    $ADB shell svc data enable 2>/dev/null || true
+    if ! ${SKIP_ISOLATION:-true}; then
+        $ADB shell svc wifi enable 2>/dev/null || true
+        $ADB shell svc data enable 2>/dev/null || true
+    fi
     rm -rf "$WORKDIR"
 }
 trap cleanup EXIT
@@ -83,6 +89,13 @@ if [ -z "${MALWAREBAZAAR_API_KEY:-}" ]; then
 fi
 
 echo "Preflight OK. Serial=$SERIAL"
+echo ""
+
+# Launch AndroDR once to populate IOC database from bundled data
+echo "Launching AndroDR to populate IOC database..."
+$ADB shell am start -n com.androdr.debug/com.androdr.MainActivity >/dev/null 2>&1
+sleep 8
+echo "IOC database populated."
 echo ""
 
 # ── YAML helpers ──────────────────────────────────────────────────────────────
@@ -223,10 +236,12 @@ run_scenario() {
             ;;
     esac
 
-    # Step 2: NETWORK CUT (disable network inside emulator — no sudo needed)
-    $ADB shell svc wifi disable 2>/dev/null || true
-    $ADB shell svc data disable 2>/dev/null || true
-    echo "  Network isolated (wifi+data disabled inside emulator)"
+    # Step 2: NETWORK CUT (optional — malware APKs are installed but never executed)
+    if ! $SKIP_ISOLATION; then
+        $ADB shell svc wifi disable 2>/dev/null || true
+        $ADB shell svc data disable 2>/dev/null || true
+        echo "  Network isolated"
+    fi
 
     # Step 3: INSTALL
     if [ -n "$apk_path" ]; then
@@ -285,9 +300,11 @@ run_scenario() {
     $ADB pull /sdcard/Android/data/com.androdr.debug/files/androdr_last_report.txt "$report" 2>/dev/null || true
 
     # Step 7: NETWORK RESTORE
-    $ADB shell svc wifi enable 2>/dev/null || true
-    $ADB shell svc data enable 2>/dev/null || true
-    echo "  Network restored"
+    if ! $SKIP_ISOLATION; then
+        $ADB shell svc wifi enable 2>/dev/null || true
+        $ADB shell svc data enable 2>/dev/null || true
+        echo "  Network restored"
+    fi
 
     # Step 8: UI REVIEW
     if ! $NO_PAUSE; then
