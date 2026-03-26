@@ -3,6 +3,9 @@
 
 complexity:
   active: true
+  TooManyFunctions:
+    thresholdInClasses: 15   # ViewModels grow as IOC types are added (package, domain, cert hash, known app)
+    thresholdInObjects: 15   # DI modules (AppModule) grow with each new DAO/feed/updater provider
   CyclomaticComplexMethod:
     threshold: 36   # security parsers and VPN packet handler are inherently complex
   LongParameterList:

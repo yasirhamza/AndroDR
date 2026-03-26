@@ -10,7 +10,10 @@ import com.androdr.data.model.CertHashIocEntry
 import com.androdr.data.model.ScanResult
 
 @Database(
-    entities = [ScanResult::class, DnsEvent::class, IocEntry::class, DomainIocEntry::class, KnownAppDbEntry::class, CertHashIocEntry::class],
+    entities = [
+        ScanResult::class, DnsEvent::class, IocEntry::class,
+        DomainIocEntry::class, KnownAppDbEntry::class, CertHashIocEntry::class
+    ],
     version = 5,
     exportSchema = false
 )
