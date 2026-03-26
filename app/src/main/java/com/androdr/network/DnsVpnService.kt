@@ -116,10 +116,13 @@ class DnsVpnService : VpnService() {
             Builder()
                 .addAddress(TUN_ADDRESS, TUN_PREFIX_LEN)
                 .addDnsServer(DNS_SERVER_IP)
-                .addRoute("0.0.0.0", 0)
+                // Route ONLY the fake DNS server IP through the tun so that the VPN
+                // intercepts DNS queries without touching any other traffic.  Routing
+                // "0.0.0.0/0" would forward every TCP/UDP packet through the tun and
+                // silently drop non-DNS packets, breaking all non-DNS connectivity.
+                .addRoute(DNS_SERVER_IP, 32)
                 .addDisallowedApplication(packageName)
                 .setSession("AndroDR DNS Filter")
-                .setBlocking(false)
                 .establish()
         } catch (e: Exception) {
             Log.w(TAG, "DnsVpnService: VPN tunnel establishment failed: ${e.message}")
@@ -157,9 +160,8 @@ class DnsVpnService : VpnService() {
      * Reads raw IP packets from the tun device, identifies UDP/53 DNS queries, and
      * either responds with NXDOMAIN (blocked) or forwards to the real upstream resolver.
      *
-     * Non-DNS packets are silently dropped — they will be retransmitted by the stack after
-     * a timeout.  (A production implementation would forward all non-DNS packets through a
-     * real tun; this implementation focuses on DNS interception only.)
+     * Because only [DNS_SERVER_IP]/32 is routed through the tun, only DNS packets
+     * arrive here; other IP traffic goes directly to the network and is unaffected.
      */
     @Suppress("LoopWithTooManyJumpStatements") // Packet read loop uses break on IOException (VPN
     // revoke) and continue on zero-byte reads; both are idiomatic for non-blocking tun fd polling.
