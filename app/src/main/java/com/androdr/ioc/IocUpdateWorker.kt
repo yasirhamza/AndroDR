@@ -10,24 +10,19 @@ import dagger.assisted.AssistedInject
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 
-/**
- * Periodic WorkManager job that triggers a full IOC feed update.
- *
- * Scheduled every 12 hours (when network is available). On failure it retries
- * with exponential back-off up to the WorkManager default ceiling.
- */
 @HiltWorker
 class IocUpdateWorker @AssistedInject constructor(
     @Assisted context: Context,
     @Assisted params: WorkerParameters,
     private val remoteIocUpdater: RemoteIocUpdater,
-    private val domainIocUpdater: DomainIocUpdater
+    private val domainIocUpdater: DomainIocUpdater,
+    private val knownAppUpdater: KnownAppUpdater
 ) : CoroutineWorker(context, params) {
 
     @Suppress("TooGenericExceptionCaught")
     override suspend fun doWork(): Result {
         return try {
-            val fetched = runBothUpdaters(remoteIocUpdater, domainIocUpdater)
+            val fetched = runAllUpdaters(remoteIocUpdater, domainIocUpdater, knownAppUpdater)
             Log.i(TAG, "Worker finished — $fetched entries fetched total")
             Result.success()
         } catch (e: Exception) {
@@ -42,12 +37,14 @@ class IocUpdateWorker @AssistedInject constructor(
     }
 }
 
-/** Runs both updaters in parallel; returns combined entry count. Extracted for testability. */
-internal suspend fun runBothUpdaters(
-    remoteIocUpdater: RemoteIocUpdater,
-    domainIocUpdater: DomainIocUpdater
+/** Runs all three updaters in parallel; returns combined entry count. Extracted for testability. */
+internal suspend fun runAllUpdaters(
+    remoteIoc: RemoteIocUpdater,
+    domainIoc: DomainIocUpdater,
+    knownApp: KnownAppUpdater
 ): Int = coroutineScope {
-    val pkg    = async { remoteIocUpdater.update() }
-    val domain = async { domainIocUpdater.update() }
-    pkg.await() + domain.await()
+    val a = async { remoteIoc.update() }
+    val b = async { domainIoc.update() }
+    val c = async { knownApp.update() }
+    a.await() + b.await() + c.await()
 }
