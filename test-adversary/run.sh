@@ -4,12 +4,26 @@
 # Prerequisites: Linux host, MALWAREBAZAAR_API_KEY set, emulator running with com.androdr.debug installed
 set -euo pipefail
 
-SERIAL="${1:?Usage: $0 <emulator-serial>}"
+NO_PAUSE=false
+if [ "${1:-}" = "--no-pause" ]; then
+    NO_PAUSE=true
+    shift
+fi
+SERIAL="${1:?Usage: $0 [--no-pause] <emulator-serial>}"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 MANIFEST="$SCRIPT_DIR/manifest.yml"
 EXPECTED_DIR="$SCRIPT_DIR/fixtures/expected"
 FIXTURE_DIR="$SCRIPT_DIR/fixtures/mercenary"
-ADB="adb -s $SERIAL"
+
+# Resolve adb from ANDROID_HOME if not on PATH
+if command -v adb &>/dev/null; then
+    ADB="adb -s $SERIAL"
+elif [ -n "${ANDROID_HOME:-}" ] && [ -x "$ANDROID_HOME/platform-tools/adb" ]; then
+    ADB="$ANDROID_HOME/platform-tools/adb -s $SERIAL"
+else
+    echo "ERROR: adb not found. Set ANDROID_HOME or add adb to PATH." >&2
+    exit 1
+fi
 WORKDIR=$(mktemp -d /tmp/androdr-adversary-XXXXXX)
 
 # Track results for summary
@@ -17,18 +31,16 @@ declare -A RESULTS
 
 # Cleanup trap — always restore network and uninstall test APKs
 INSTALLED_PACKAGES=()
-IPTABLES_RULE_ACTIVE=false
-EMULATOR_IF=""
 
 cleanup() {
     echo ""
     echo ">>> Cleaning up..."
-    for pkg in "${INSTALLED_PACKAGES[@]}"; do
+    for pkg in "${INSTALLED_PACKAGES[@]+"${INSTALLED_PACKAGES[@]}"}"; do
         $ADB uninstall "$pkg" 2>/dev/null || true
     done
-    if $IPTABLES_RULE_ACTIVE && [ -n "$EMULATOR_IF" ]; then
-        sudo iptables -D FORWARD -o "$EMULATOR_IF" -j DROP 2>/dev/null || true
-    fi
+    # Restore network inside emulator
+    $ADB shell svc wifi enable 2>/dev/null || true
+    $ADB shell svc data enable 2>/dev/null || true
     rm -rf "$WORKDIR"
 }
 trap cleanup EXIT
@@ -38,17 +50,13 @@ trap cleanup EXIT
 echo "=== AndroDR Adversary Simulation ==="
 echo ""
 
-# Check Linux
-if [ "$(uname)" != "Linux" ]; then
-    echo "ERROR: This harness requires Linux (iptables for network isolation)." >&2
-    exit 1
-fi
+# Network isolation uses adb shell svc wifi/data disable — works on any host OS
 
 # Check emulator online
 if ! $ADB get-state 2>/dev/null | grep -q "device"; then
     echo "ERROR: Emulator $SERIAL not found or not online." >&2
     echo "Available devices:" >&2
-    adb devices >&2
+    $ADB devices >&2
     exit 1
 fi
 
@@ -208,23 +216,24 @@ run_scenario() {
             ;;
     esac
 
-    # Step 2: NETWORK CUT
-    EMULATOR_IF=$($ADB shell ip route 2>/dev/null | grep default | awk '{print $5}' | head -1)
-    if [ -n "$EMULATOR_IF" ]; then
-        sudo iptables -I FORWARD -o "$EMULATOR_IF" -j DROP 2>/dev/null || true
-        IPTABLES_RULE_ACTIVE=true
-        echo "  Network isolated (interface=$EMULATOR_IF)"
-    fi
+    # Step 2: NETWORK CUT (disable network inside emulator — no sudo needed)
+    $ADB shell svc wifi disable 2>/dev/null || true
+    $ADB shell svc data disable 2>/dev/null || true
+    echo "  Network isolated (wifi+data disabled inside emulator)"
 
     # Step 3: INSTALL
     if [ -n "$apk_path" ]; then
         echo "  Installing $apk_path..."
         if $ADB install -t "$apk_path" 2>&1 | tail -1 | grep -q "Success"; then
-            # Extract package name for cleanup
-            pkg_name=$($ADB shell pm list packages -f 2>/dev/null | grep "$(basename "$apk_path" .apk)" | head -1 | sed 's/.*=//' || true)
+            # Extract package name: use aapt2 if available, then grep pm list
+            pkg_name=$(aapt2 dump packagename "$apk_path" 2>/dev/null || true)
+            if [ -z "$pkg_name" ] && [ -n "${ANDROID_HOME:-}" ]; then
+                local aapt_bin="$ANDROID_HOME/build-tools/$(ls "$ANDROID_HOME/build-tools/" 2>/dev/null | sort -V | tail -1)/aapt2"
+                pkg_name=$("$aapt_bin" dump packagename "$apk_path" 2>/dev/null || true)
+            fi
             if [ -z "$pkg_name" ]; then
-                # Fallback: try to get from aapt
-                pkg_name=$(aapt2 dump packagename "$apk_path" 2>/dev/null || true)
+                # Last resort: diff pm list before/after install
+                pkg_name=$($ADB shell pm list packages 2>/dev/null | tail -1 | sed 's/package://' || true)
             fi
             if [ -n "$pkg_name" ]; then
                 INSTALLED_PACKAGES+=("$pkg_name")
@@ -269,16 +278,16 @@ run_scenario() {
     $ADB pull /sdcard/Android/data/com.androdr.debug/files/androdr_last_report.txt "$report" 2>/dev/null || true
 
     # Step 7: NETWORK RESTORE
-    if $IPTABLES_RULE_ACTIVE && [ -n "$EMULATOR_IF" ]; then
-        sudo iptables -D FORWARD -o "$EMULATOR_IF" -j DROP 2>/dev/null || true
-        IPTABLES_RULE_ACTIVE=false
-        echo "  Network restored"
-    fi
+    $ADB shell svc wifi enable 2>/dev/null || true
+    $ADB shell svc data enable 2>/dev/null || true
+    echo "  Network restored"
 
     # Step 8: UI REVIEW
-    echo ""
-    echo "  >>> Review AndroDR UI on the emulator. Press ENTER to continue."
-    read -r _
+    if ! $NO_PAUSE; then
+        echo ""
+        echo "  >>> Review AndroDR UI on the emulator. Press ENTER to continue."
+        read -r _
+    fi
 
     # Step 9: DIFF
     local patterns_file="$EXPECTED_DIR/${id}.patterns"
@@ -290,7 +299,7 @@ run_scenario() {
         echo "  No patterns file: $patterns_file"
         fail=true
     else
-        while IFS= read -r pattern; do
+        while IFS= read -r pattern || [ -n "$pattern" ]; do
             [ -z "$pattern" ] && continue
             if ! grep -qF "$pattern" "$report"; then
                 echo "  MISS: pattern not found: '$pattern'"
@@ -322,7 +331,12 @@ run_scenario() {
     fi
     if [ -n "${pkg_name:-}" ]; then
         $ADB uninstall "$pkg_name" 2>/dev/null || true
-        INSTALLED_PACKAGES=("${INSTALLED_PACKAGES[@]/$pkg_name}")
+        # Remove from tracked array (safe for empty arrays)
+        local new_arr=()
+        for p in "${INSTALLED_PACKAGES[@]+"${INSTALLED_PACKAGES[@]}"}"; do
+            [ "$p" != "$pkg_name" ] && new_arr+=("$p")
+        done
+        INSTALLED_PACKAGES=("${new_arr[@]+"${new_arr[@]}"}")
     fi
     echo ""
 }
