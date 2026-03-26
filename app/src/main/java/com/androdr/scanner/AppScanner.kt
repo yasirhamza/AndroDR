@@ -9,8 +9,10 @@ import android.util.Log
 import com.androdr.data.model.AppRisk
 import com.androdr.data.model.KnownAppCategory
 import com.androdr.data.model.RiskLevel
+import com.androdr.ioc.CertHashIocResolver
 import com.androdr.ioc.IocResolver
 import com.androdr.ioc.KnownAppResolver
+import java.security.MessageDigest
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -21,7 +23,8 @@ import javax.inject.Singleton
 class AppScanner @Inject constructor(
     @ApplicationContext private val context: Context,
     private val iocResolver: IocResolver,
-    private val knownAppResolver: KnownAppResolver
+    private val knownAppResolver: KnownAppResolver,
+    private val certHashIocResolver: CertHashIocResolver
 ) {
 
     private companion object {
@@ -86,13 +89,22 @@ class AppScanner @Inject constructor(
     // null-guard continues are the clearest way to skip invalid package entries early.
     suspend fun scan(): List<AppRisk> = withContext(Dispatchers.IO) {
         val pm = context.packageManager
-        @Suppress("TooGenericExceptionCaught", "SwallowedException") // PackageManager can throw
-        // undocumented RuntimeExceptions on some OEMs; returning empty list is safe fallback.
+        val signingFlag = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P)
+            PackageManager.GET_SIGNING_CERTIFICATES
+        else
+            @Suppress("DEPRECATION") PackageManager.GET_SIGNATURES
+
+        @Suppress("TooGenericExceptionCaught", "SwallowedException")
         val installedPackages = try {
-            pm.getInstalledPackages(PackageManager.GET_PERMISSIONS)
+            pm.getInstalledPackages(PackageManager.GET_PERMISSIONS or signingFlag)
         } catch (e: Exception) {
-            Log.w(TAG, "AppScanner: getInstalledPackages failed: ${e.message}")
-            emptyList()
+            Log.w(TAG, "AppScanner: getInstalledPackages with signing flag failed, retrying without: ${e.message}")
+            try {
+                pm.getInstalledPackages(PackageManager.GET_PERMISSIONS)
+            } catch (e2: Exception) {
+                Log.w(TAG, "AppScanner: getInstalledPackages failed: ${e2.message}")
+                emptyList()
+            }
         }
 
         val risks = mutableListOf<AppRisk>()
@@ -127,6 +139,29 @@ class AppScanner @Inject constructor(
                 isKnownMalware = true
                 riskLevel = RiskLevel.CRITICAL
                 reasons.add("Package name matches known malware or stalkerware IOC database entry")
+            }
+
+            // ── 1b. Cert hash IOC check ─────────────────────────────────
+            @Suppress("TooGenericExceptionCaught", "SwallowedException")
+            val certHash = try {
+                extractCertHash(pkg)
+            } catch (e: Exception) {
+                Log.w(TAG, "AppScanner: cert hash extraction failed for $packageName: ${e.message}")
+                null
+            }
+            if (certHash != null) {
+                val certHit = try {
+                    certHashIocResolver.isKnownBadCert(certHash)
+                } catch (e: Exception) {
+                    Log.w(TAG, "AppScanner: cert hash IOC lookup failed for $packageName: ${e.message}")
+                    null
+                }
+                if (certHit != null) {
+                    isKnownMalware = true
+                    val newLevel = RiskLevel.CRITICAL
+                    if (newLevel.score > riskLevel.score) riskLevel = newLevel
+                    reasons.add("Known malicious signing certificate (${certHit.familyName})")
+                }
             }
 
             val isSystemApp = appInfo.flags and ApplicationInfo.FLAG_SYSTEM != 0
@@ -224,6 +259,18 @@ class AppScanner @Inject constructor(
         }
 
         risks.sortedByDescending { it.riskLevel.score }
+    }
+
+    private fun extractCertHash(packageInfo: android.content.pm.PackageInfo): String? {
+        val signatures = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            packageInfo.signingInfo?.apkContentsSigners
+        } else {
+            @Suppress("DEPRECATION")
+            packageInfo.signatures
+        }
+        val cert = signatures?.firstOrNull() ?: return null
+        val digest = MessageDigest.getInstance("SHA-256")
+        return digest.digest(cert.toByteArray()).joinToString("") { "%02x".format(it) }
     }
 
     /**
