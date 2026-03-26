@@ -66,21 +66,38 @@ class ScanOrchestrator @Inject constructor(
      * (each is already wrapped with [kotlinx.coroutines.withContext]).  The results are combined
      * into a [ScanResult], saved to the database, and returned.
      */
+    @Suppress("LongMethod") // Two-phase scan: telemetry collection + SIGMA rule evaluation
     suspend fun runFullScan(): ScanResult = coroutineScope {
         initRuleEngine()
 
-        val appRisksDeferred   = async { runCatching { appScanner.scan() }.getOrDefault(emptyList()) }
-        val deviceFlagsDeferred = async { runCatching { deviceAuditor.audit() }.getOrDefault(emptyList()) }
+        // Phase 1: Collect telemetry (no detection logic)
+        val appTelemetryDeferred = async {
+            runCatching { appScanner.collectTelemetry() }.getOrDefault(emptyList())
+        }
+        val deviceTelemetryDeferred = async {
+            runCatching { deviceAuditor.collectTelemetry() }.getOrDefault(emptyList())
+        }
+        // Keep hardcoded device flags as fallback until device auditor rules are verified
+        val deviceFlagsFallbackDeferred = async {
+            runCatching { deviceAuditor.audit() }.getOrDefault(emptyList())
+        }
 
-        val appRisks   = appRisksDeferred.await()
-        val deviceFlags = deviceFlagsDeferred.await()
+        val appTelemetry = appTelemetryDeferred.await()
+        val deviceTelemetry = deviceTelemetryDeferred.await()
+        val deviceFlagsFallback = deviceFlagsFallbackDeferred.await()
 
-        // Phase 2: SIGMA rule evaluation (coexistence — logged only, not used for ScanResult yet)
-        val appTelemetry = runCatching { appScanner.collectTelemetry() }.getOrDefault(emptyList())
-        val sigmaFindings = sigmaRuleEngine.evaluateApps(appTelemetry)
-        val sigmaAppRisks = FindingMapper.toAppRisks(appTelemetry, sigmaFindings)
-        Log.i(TAG, "SIGMA engine: ${sigmaFindings.size} findings from ${sigmaRuleEngine.ruleCount()} rules " +
-            "(hardcoded: ${appRisks.size} risks, sigma: ${sigmaAppRisks.size} risks)")
+        // Phase 2: SIGMA rule evaluation
+        val appFindings = sigmaRuleEngine.evaluateApps(appTelemetry)
+        val appRisks = FindingMapper.toAppRisks(appTelemetry, appFindings)
+
+        // Use hardcoded device flags for now — device auditor rule evaluation
+        // requires further testing before switching
+        val deviceFlags = deviceFlagsFallback
+        Log.d(TAG, "Device telemetry collected: ${deviceTelemetry.size} checks")
+
+        Log.i(TAG, "Scan complete — SIGMA: ${appFindings.size} findings from " +
+            "${sigmaRuleEngine.ruleCount()} rules → ${appRisks.size} app risks, " +
+            "${deviceFlags.count { it.isTriggered }} device flags triggered")
 
         val now = System.currentTimeMillis()
         val result = ScanResult(
@@ -88,7 +105,7 @@ class ScanOrchestrator @Inject constructor(
             timestamp          = now,
             appRisks           = appRisks,
             deviceFlags        = deviceFlags,
-            bugReportFindings  = emptyList(),   // populated separately via analyzeBugReport()
+            bugReportFindings  = emptyList(),
             riskySideloadCount = appRisks.count { it.isSideloaded },
             knownMalwareCount  = appRisks.count { it.isKnownMalware }
         )
