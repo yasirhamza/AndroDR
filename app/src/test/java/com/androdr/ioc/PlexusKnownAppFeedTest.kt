@@ -18,7 +18,7 @@ class PlexusKnownAppFeedTest {
                 {"name": "WhatsApp", "package": "com.whatsapp"},
                 {"name": "Signal",   "package": "org.thoughtcrime.securesms"}
               ],
-              "meta": {"current_page": 1, "total_pages": 1, "per_page": 500, "total_apps": 2}
+              "meta": {"page_number": 1, "total_pages": 1, "per_page": 500, "total_apps": 2}
             }
         """.trimIndent()
         val (entries, meta) = feed.parsePlexusPage(json)!!
@@ -34,7 +34,7 @@ class PlexusKnownAppFeedTest {
     @Test
     fun `empty data array returns no entries`() {
         val json = """
-            {"data": [], "meta": {"current_page": 1, "total_pages": 1, "per_page": 500, "total_apps": 0}}
+            {"data": [], "meta": {"page_number": 1, "total_pages": 1, "per_page": 500, "total_apps": 0}}
         """.trimIndent()
         val (entries, _) = feed.parsePlexusPage(json)!!
         assertTrue(entries.isEmpty())
@@ -43,7 +43,7 @@ class PlexusKnownAppFeedTest {
     @Test
     fun `multi-page meta is parsed correctly`() {
         val json = """
-            {"data": [], "meta": {"current_page": 3, "total_pages": 19, "per_page": 500, "total_apps": 9333}}
+            {"data": [], "meta": {"page_number": 3, "total_pages": 19, "per_page": 500, "total_apps": 9333}}
         """.trimIndent()
         val (_, meta) = feed.parsePlexusPage(json)!!
         assertEquals(3, meta.currentPage)
@@ -59,7 +59,7 @@ class PlexusKnownAppFeedTest {
     @Test
     fun `morePages is false when currentPage equals totalPages`() {
         val json = """
-            {"data": [], "meta": {"current_page": 1, "total_pages": 1, "per_page": 500, "total_apps": 1}}
+            {"data": [], "meta": {"page_number": 1, "total_pages": 1, "per_page": 500, "total_apps": 1}}
         """.trimIndent()
         val (_, meta) = feed.parsePlexusPage(json)!!
         assertTrue(meta.currentPage >= meta.totalPages)
@@ -68,7 +68,7 @@ class PlexusKnownAppFeedTest {
     @Test
     fun `morePages is true when currentPage is less than totalPages`() {
         val json = """
-            {"data": [], "meta": {"current_page": 1, "total_pages": 2, "per_page": 500, "total_apps": 600}}
+            {"data": [], "meta": {"page_number": 1, "total_pages": 2, "per_page": 500, "total_apps": 600}}
         """.trimIndent()
         val (_, meta) = feed.parsePlexusPage(json)!!
         assertTrue(meta.currentPage < meta.totalPages)

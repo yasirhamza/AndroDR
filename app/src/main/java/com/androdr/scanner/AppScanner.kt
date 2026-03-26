@@ -26,6 +26,36 @@ class AppScanner @Inject constructor(
 
     private companion object {
         private const val TAG = "AppScanner"
+
+        /**
+         * Package prefixes for system apps that are always legitimate OEM/AOSP components.
+         * Used as a fallback when [KnownAppResolver] has no entry for a system app — the resolver
+         * covers well-known packages explicitly, but Samsung/Qualcomm ship hundreds of subsystem
+         * packages (TTS voices, Wi-Fi resources, game drivers, etc.) that no community feed tracks.
+         * Without this fallback, all unrecognised system apps would fire the firmware-implant alert.
+         */
+        private val knownOemPrefixes = listOf(
+            // AOSP / Google
+            "com.android.", "com.google.", "android",
+            // Chipset vendors
+            "com.qualcomm.", "com.qti.", "vendor.qti.",
+            // Samsung / Knox / SEC
+            "com.samsung.", "com.sec.", "com.osp.", "com.knox.",
+            "com.skms.", "com.mygalaxy.", "com.monotype.", "com.hiya.",
+            "com.sem.", "com.swiftkey.",
+            "com.wsomacp", "com.wssyncmldm",
+            // Samsung partnership pre-installs
+            "com.microsoft.", "com.touchtype.",
+            "com.facebook.",
+            // Other common pre-installs
+            "com.amazon.",
+            // Other Android OEMs
+            "com.motorola.", "com.oneplus.", "com.miui.", "com.lge.",
+            "com.htc.", "com.sony.", "com.huawei.", "com.asus.",
+            "com.oppo.", "com.realme.", "com.vivo.",
+            // Custom ROMs
+            "org.lineageos.", "com.cyanogenmod."
+        )
     }
 
     /**
@@ -99,18 +129,22 @@ class AppScanner @Inject constructor(
                 reasons.add("Package name matches known malware or stalkerware IOC database entry")
             }
 
+            val isSystemApp = appInfo.flags and ApplicationInfo.FLAG_SYSTEM != 0
+
             // ── Resolver lookup ────────────────────────────────────────────
             val knownApp = knownAppResolver.lookup(packageName)
+            // The resolver covers packages explicitly known to community feeds. As a fallback for
+            // system apps not in any feed (Samsung TTS voices, Wi-Fi resource APKs, GPU drivers,
+            // etc.), use the OEM prefix list so they are not misclassified as firmware implants.
             val isKnownOemApp = knownApp?.category in setOf(
                 KnownAppCategory.OEM, KnownAppCategory.AOSP, KnownAppCategory.GOOGLE
-            )
+            ) || (isSystemApp && knownOemPrefixes.any { packageName.startsWith(it) })
 
             // ── 2. Dangerous permission combination scoring ────────────────
             // Only score sideloaded (untrusted-source) user apps. System apps are handled by the
             // firmware-implant check below; trusted-store apps (Play, Samsung Store, Samsung
             // ecosystem) have curated review processes that make stalkerware distribution via them
             // highly unlikely. Scoring them produces only noise.
-            val isSystemApp = appInfo.flags and ApplicationInfo.FLAG_SYSTEM != 0
             // Compute installer source once — used by both permission scoring and sideload check.
             // Any com.samsung.* or com.sec.* package acting as an installer is a Samsung ecosystem
             // component (Watch Manager, Cloud, Update Center, etc.) and is treated as trusted.
