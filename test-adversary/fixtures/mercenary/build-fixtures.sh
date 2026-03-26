@@ -4,6 +4,7 @@ cd "$(dirname "$0")"
 
 JAVA_HOME="${JAVA_HOME:-/home/yasir/Applications/android-studio/jbr}"
 export JAVA_HOME
+export PATH="$JAVA_HOME/bin:$PATH"
 
 # Create local.properties if missing
 if [ ! -f local.properties ]; then

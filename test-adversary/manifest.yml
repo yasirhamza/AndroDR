@@ -41,7 +41,7 @@ scenarios:
     description: "App using known Pegasus disguise package name (com.android.bsp)"
     source: fixture
     fixture: fixtures/mercenary/spyware-package-name.apk
-    sha256: "<pin>"
+    sha256: "ab62a82d7752a52bc81001c7fc990037b45040f68e98769492f877815375876d"
     attack: [T1418]
     expected_patterns:
       - "Package name matches known malware or stalkerware IOC database entry"
@@ -51,7 +51,7 @@ scenarios:
     description: "App signed with cert hash seeded into IOC DB"
     source: fixture
     fixture: fixtures/mercenary/cert-hash-ioc.apk
-    sha256: "<pin>"
+    sha256: "342b67f0f9dab0358a2933ff1c1a78710653e7509bf07a31a65ddd8318aff935"
     attack: [T1628]
     expected_patterns:
       - "Known malicious signing certificate"
@@ -62,7 +62,7 @@ scenarios:
     description: "App registering AccessibilityService"
     source: fixture
     fixture: fixtures/mercenary/accessibility-abuse.apk
-    sha256: "<pin>"
+    sha256: "ab643d7778c6a1e2ccdde9fcb623e9929bd0e5dd4e32e4a029ec97f5d69d31a1"
     attack: [T1626]
     expected_patterns:
       - "Registered as an accessibility service"
@@ -73,7 +73,7 @@ scenarios:
     description: "App registering DeviceAdminReceiver"
     source: fixture
     fixture: fixtures/mercenary/device-admin-abuse.apk
-    sha256: "<pin>"
+    sha256: "e1a4cf8bacfdf209c03d5986dae5f1ac7b9d3f4290d00dc3da2e2d3a8ef861df"
     attack: [T1401]
     expected_patterns:
       - "Registered as a device administrator"
@@ -84,7 +84,7 @@ scenarios:
     description: "Sideloaded app with full surveillance permission cluster"
     source: fixture
     fixture: fixtures/mercenary/surveillance-permissions.apk
-    sha256: "<pin>"
+    sha256: "4fc97d9c9b906fcc16755af69da850ca3c8cb4cd3263691f50c276050e9fe4a7"
     attack: [T1429, T1430, T1512, T1636]
     expected_patterns:
       - "sensitive surveillance-capable permissions simultaneously"
