@@ -1,1 +1,44 @@
-[]
+[
+  {
+    "certHash": "fac61745dc0903786fb9ede62a962b399f7348f0bb6f899b8332667591033b9c",
+    "familyName": "Cerberus",
+    "category": "BANKER",
+    "severity": "CRITICAL",
+    "description": "Cerberus Android banking trojan signing certificate"
+  },
+  {
+    "certHash": "159777041b3b2f5d0464c87c3194f08070aa0744895695f960b3dbacceb2f020",
+    "familyName": "SpyNote",
+    "category": "RAT",
+    "severity": "CRITICAL",
+    "description": "SpyNote Android remote access trojan signing certificate"
+  },
+  {
+    "certHash": "a40da80a59d170caa950cf15c18c454d47a39b26989d8b640ecd745ba71bf5dc",
+    "familyName": "BRATA",
+    "category": "RAT",
+    "severity": "CRITICAL",
+    "description": "BRATA Android remote access trojan signing certificate"
+  },
+  {
+    "certHash": "90be68b9a75663ab55bd3e724f3c0df7b106286d8c50f146192545d00e5f2f42",
+    "familyName": "TheTruthSpy",
+    "category": "STALKERWARE",
+    "severity": "CRITICAL",
+    "description": "TheTruthSpy commercial stalkerware signing certificate"
+  },
+  {
+    "certHash": "0321fb7295da7c63acc9824457a46200446a2d1e4ec30fc329a5089c687357fc",
+    "familyName": "TiSpy",
+    "category": "STALKERWARE",
+    "severity": "CRITICAL",
+    "description": "TiSpy commercial stalkerware signing certificate"
+  },
+  {
+    "certHash": "8585dd60a09e8a8f42d362fd1d982edb245d55696608f2ac9080fd56757d983e",
+    "familyName": "Test Fixture",
+    "category": "TEST",
+    "severity": "CRITICAL",
+    "description": "Adversary simulation test fixture signing certificate"
+  }
+]
