@@ -118,6 +118,41 @@ data class AppTelemetry(
 
 Similar classes for `DeviceTelemetry` and `DnsTelemetry`.
 
+### 2b. Future Service Field Vocabularies (reserved)
+
+These services are not yet implemented but their field vocabularies are defined
+here so that rules can be written against them today (with `status: experimental`)
+and will activate once the corresponding scanner ships.
+
+**`service: network_monitor`** (roadmap #6) — one record per outbound connection:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `destination_ip` | String | IPv4/IPv6 address |
+| `destination_port` | Int | TCP/UDP port |
+| `protocol` | String | "tcp" or "udp" |
+| `app_uid` | Int | UID of connecting app |
+| `app_name` | String? | Name of connecting app |
+| `timestamp` | Long | Epoch millis |
+
+**`service: file_scanner`** (roadmap #8) — one record per file path checked:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `file_path` | String | Absolute path on device |
+| `file_exists` | Boolean | Whether the file was found |
+| `file_size` | Long? | Size in bytes if exists |
+| `file_modified` | Long? | Last modified epoch millis |
+
+**`service: process_monitor`** (roadmap #9) — one record per running process:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `process_name` | String | Process name from /proc or ActivityManager |
+| `process_uid` | Int | UID of the process |
+| `package_name` | String? | Associated package name if known |
+| `is_foreground` | Boolean | Whether the process is in foreground |
+
 ### 3. Rule Format
 
 Standard SIGMA YAML with AndroDR extensions:
