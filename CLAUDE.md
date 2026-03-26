@@ -30,6 +30,9 @@ local VPN service, and generates structured security reports.
 
 # Build a release APK (minified + shrunk)
 ./gradlew assembleRelease
+
+# Refresh bundled known-good apps snapshot (requires network)
+python3 scripts/generate_known_good_apps.py
 ```
 
 ## Project layout
