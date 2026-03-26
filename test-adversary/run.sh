@@ -279,14 +279,15 @@ run_scenario() {
     if [ "$id" = "mercenary_cert_hash" ] && [ -n "$apk_path" ]; then
         echo "  Seeding cert hash into IOC DB..."
         local cert_hash
-        cert_hash=$(keytool -printcert -jarfile "$apk_path" 2>/dev/null | grep "SHA256:" | head -1 | awk '{print $2}' | tr -d ':')
+        cert_hash=$(keytool -printcert -jarfile "$apk_path" 2>/dev/null | grep "SHA256:" | head -1 | awk '{print $2}' | tr -d ':' | tr 'A-F' 'a-f')
         if [ -n "$cert_hash" ]; then
-            # Push cert hash into Room DB via adb shell using sqlite3 (available on emulator)
             local db_path="/data/data/com.androdr.debug/databases/androdr.db"
             $ADB shell "run-as com.androdr.debug sqlite3 $db_path \
-                \"INSERT OR REPLACE INTO ioc_entries (package_name, source_id, fetched_at) \
-                VALUES ('cert:$cert_hash', 'adversary-test', $(date +%s000));\"" 2>/dev/null || \
-                echo "  WARNING: Could not seed cert hash — roadmap #7 test will fail regardless"
+                \"INSERT OR REPLACE INTO cert_hash_ioc_entries \
+                (certHash, familyName, category, severity, description, source, fetchedAt) \
+                VALUES ('$cert_hash', 'Test Fixture', 'TEST', 'CRITICAL', \
+                'Adversary simulation test cert', 'adversary-test', $(date +%s000));\"" 2>/dev/null || \
+                echo "  WARNING: Could not seed cert hash into DB"
         fi
     fi
 
