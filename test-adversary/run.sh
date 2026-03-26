@@ -343,9 +343,10 @@ run_scenario() {
 
 # ── Main loop ─────────────────────────────────────────────────────────────────
 
-while IFS= read -r scenario_id; do
+SCENARIO_IDS=$(get_scenario_ids)
+for scenario_id in $SCENARIO_IDS; do
     run_scenario "$scenario_id" || true
-done < <(get_scenario_ids)
+done
 
 # ── Summary ───────────────────────────────────────────────────────────────────
 
