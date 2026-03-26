@@ -7,6 +7,7 @@ import com.androdr.data.model.KnownAppEntry
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -17,7 +18,18 @@ class KnownAppUpdater @Inject constructor(
     private val resolver: KnownAppResolver,
     private val feeds: @JvmSuppressWildcards List<KnownAppFeed>
 ) {
-    suspend fun update(): Int = withContext(Dispatchers.IO) {
+    /** Guards against concurrent update calls (e.g. WorkManager + user-triggered scan). */
+    private val updateMutex = Mutex()
+
+    suspend fun update(): Int {
+        if (!updateMutex.tryLock()) {
+            Log.d(TAG, "Known-app update already in progress — skipping concurrent call")
+            return 0
+        }
+        return try { doUpdate() } finally { updateMutex.unlock() }
+    }
+
+    private suspend fun doUpdate(): Int = withContext(Dispatchers.IO) {
         var totalStored = 0
         coroutineScope {
             val deferreds = feeds.map { feed ->
