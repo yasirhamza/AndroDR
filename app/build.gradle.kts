@@ -129,6 +129,9 @@ dependencies {
     // kotlinx.serialization
     implementation(libs.kotlinx.serialization.json)
 
+    // YAML parsing (SIGMA rule engine)
+    implementation("org.snakeyaml:snakeyaml-engine:2.7")
+
     // Debug tooling
     debugImplementation(libs.androidx.compose.ui.tooling)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
