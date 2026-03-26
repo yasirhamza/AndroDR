@@ -21,6 +21,7 @@ class PlexusKnownAppFeed : KnownAppFeed {
         val collected = mutableListOf<KnownAppEntry>()
         var page = 1
         try {
+            @Suppress("LoopWithTooManyJumpStatements")
             do {
                 val raw = httpGet("$PLEXUS_BASE_URL&page=$page")
                     ?: break
