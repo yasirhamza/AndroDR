@@ -1,0 +1,15 @@
+title: Wireless ADB enabled
+id: androdr-046
+status: production
+author: AndroDR
+date: 2026/03/27
+logsource:
+    product: androdr
+    service: device_auditor
+detection:
+    selection:
+        wifi_adb_enabled: true
+    condition: selection
+level: high
+remediation:
+    - "Disable Wireless ADB — any device on the same network can connect."

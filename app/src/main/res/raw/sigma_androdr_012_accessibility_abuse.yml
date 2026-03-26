@@ -1,0 +1,20 @@
+title: Sideloaded app with accessibility service
+id: androdr-012
+status: production
+description: Sideloaded app registers an AccessibilityService, enabling screen reading and keylogging.
+author: AndroDR
+date: 2026/03/27
+tags:
+    - attack.t1626
+logsource:
+    product: androdr
+    service: app_scanner
+detection:
+    selection:
+        is_system_app: false
+        from_trusted_store: false
+        has_accessibility_service: true
+    condition: selection
+level: high
+remediation:
+    - "This app can read your screen content. Go to Settings > Accessibility and disable its service before uninstalling."

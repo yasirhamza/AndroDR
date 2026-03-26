@@ -1,0 +1,15 @@
+title: Developer Options enabled
+id: androdr-041
+status: production
+author: AndroDR
+date: 2026/03/27
+logsource:
+    product: androdr
+    service: device_auditor
+detection:
+    selection:
+        dev_options_enabled: true
+    condition: selection
+level: medium
+remediation:
+    - "Disable Developer Options unless actively needed."

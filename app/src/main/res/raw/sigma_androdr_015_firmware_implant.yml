@@ -1,0 +1,19 @@
+title: System app with unknown origin
+id: androdr-015
+status: production
+description: System-level app does not match any known OEM or AOSP package prefix.
+author: AndroDR
+date: 2026/03/27
+tags:
+    - attack.t1398
+logsource:
+    product: androdr
+    service: app_scanner
+detection:
+    selection:
+        is_system_app: true
+        is_known_oem_app: false
+    condition: selection
+level: high
+remediation:
+    - "This app has system privileges but does not match any known manufacturer package."

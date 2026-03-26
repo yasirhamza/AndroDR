@@ -1,0 +1,20 @@
+title: Sideloaded app impersonating a well-known app
+id: androdr-014
+status: production
+description: Package name matches a known legitimate app but was installed from an untrusted source.
+author: AndroDR
+date: 2026/03/27
+tags:
+    - attack.t1036.005
+logsource:
+    product: androdr
+    service: app_scanner
+detection:
+    selection:
+        is_system_app: false
+        from_trusted_store: false
+        known_app_category: USER_APP
+    condition: selection
+level: high
+remediation:
+    - "This app impersonates a well-known app but was not installed from a trusted store."

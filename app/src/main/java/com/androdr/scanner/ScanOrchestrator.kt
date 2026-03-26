@@ -11,6 +11,7 @@ import com.androdr.ioc.DomainIocResolver
 import com.androdr.ioc.IocResolver
 import com.androdr.scanner.BugReportAnalyzer.BugReportFinding
 import com.androdr.sigma.FindingMapper
+import com.androdr.sigma.SigmaRuleFeed
 import com.androdr.sigma.SigmaRuleEngine
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
@@ -31,12 +32,13 @@ class ScanOrchestrator @Inject constructor(
     private val sigmaRuleEngine: SigmaRuleEngine,
     private val iocResolver: IocResolver,
     private val certHashIocResolver: CertHashIocResolver,
-    private val domainIocResolver: DomainIocResolver
+    private val domainIocResolver: DomainIocResolver,
+    private val sigmaRuleFeed: SigmaRuleFeed
 ) {
 
     private var ruleEngineInitialized = false
 
-    private fun initRuleEngine() {
+    private suspend fun initRuleEngine() {
         if (ruleEngineInitialized) return
         sigmaRuleEngine.setIocLookups(mapOf(
             "package_ioc_db" to { v -> iocResolver.isKnownBadPackage(v.toString()) != null },
@@ -44,6 +46,16 @@ class ScanOrchestrator @Inject constructor(
             "domain_ioc_db" to { v -> domainIocResolver.isKnownBadDomain(v.toString()) != null }
         ))
         sigmaRuleEngine.loadBundledRules()
+        // Fetch remote rules in background — non-blocking, failures are silent
+        @Suppress("TooGenericExceptionCaught")
+        try {
+            val remoteRules = sigmaRuleFeed.fetch()
+            if (remoteRules.isNotEmpty()) {
+                sigmaRuleEngine.setRemoteRules(remoteRules)
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Remote SIGMA rule fetch failed: ${e.message}")
+        }
         ruleEngineInitialized = true
     }
 

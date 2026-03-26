@@ -1,0 +1,17 @@
+title: Install from Unknown Sources allowed
+id: androdr-042
+status: production
+author: AndroDR
+date: 2026/03/27
+tags:
+    - attack.t1476
+logsource:
+    product: androdr
+    service: device_auditor
+detection:
+    selection:
+        unknown_sources_enabled: true
+    condition: selection
+level: high
+remediation:
+    - "Disable installation from unknown sources to prevent sideloaded threats."

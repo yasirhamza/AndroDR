@@ -1,0 +1,24 @@
+title: Sideloaded app with accessibility service AND surveillance permissions
+id: androdr-017
+status: experimental
+description: Combines screen reading capability with surveillance permissions — a hallmark of stalkerware.
+author: AndroDR
+date: 2026/03/27
+tags:
+    - attack.t1626
+    - attack.t1429
+    - attack.t1430
+logsource:
+    product: androdr
+    service: app_scanner
+detection:
+    selection:
+        is_system_app: false
+        from_trusted_store: false
+        has_accessibility_service: true
+        surveillance_permission_count|gte: 2
+    condition: selection
+level: critical
+remediation:
+    - "This app combines screen reading with surveillance permissions."
+    - "Disable its accessibility service in Settings, then uninstall."

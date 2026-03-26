@@ -1,0 +1,18 @@
+title: DNS query to known C2 domain
+id: androdr-003
+status: production
+description: DNS query matched a known command-and-control domain from threat intelligence feeds.
+author: AndroDR
+date: 2026/03/27
+tags:
+    - attack.t1437
+logsource:
+    product: androdr
+    service: dns_monitor
+detection:
+    selection:
+        domain|ioc_lookup: domain_ioc_db
+    condition: selection
+level: critical
+remediation:
+    - "A connection to a known command-and-control server was blocked."
