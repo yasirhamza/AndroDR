@@ -2,6 +2,7 @@ package com.androdr.ui.dashboard
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.androdr.data.db.CertHashIocEntryDao
 import com.androdr.data.db.DomainIocEntryDao
 import com.androdr.data.db.IocEntryDao
 import com.androdr.data.db.KnownAppEntryDao
@@ -37,7 +38,8 @@ class DashboardViewModel @Inject constructor(
     private val domainIocUpdater: DomainIocUpdater,
     private val knownAppDatabase: KnownAppDatabase,
     private val knownAppEntryDao: KnownAppEntryDao,
-    private val knownAppUpdater: KnownAppUpdater
+    private val knownAppUpdater: KnownAppUpdater,
+    private val certHashIocEntryDao: CertHashIocEntryDao
 ) : ViewModel() {
 
     val latestScan: StateFlow<ScanResult?> = repository.allScans
@@ -93,11 +95,20 @@ class DashboardViewModel @Inject constructor(
     private val _isUpdatingKnownApps = MutableStateFlow(false)
     val isUpdatingKnownApps: StateFlow<Boolean> = _isUpdatingKnownApps.asStateFlow()
 
+    // ── Cert-hash IOC state ─────────────────────────────────────────────────
+
+    private val _certHashIocEntryCount = MutableStateFlow(0)
+    val certHashIocEntryCount: StateFlow<Int> = _certHashIocEntryCount.asStateFlow()
+
+    private val _certHashIocLastUpdated = MutableStateFlow<Long?>(null)
+    val certHashIocLastUpdated: StateFlow<Long?> = _certHashIocLastUpdated.asStateFlow()
+
     init {
         viewModelScope.launch {
             refreshIocState()
             refreshDomainIocState()
             refreshKnownAppState()
+            refreshCertHashIocState()
         }
     }
 
@@ -200,5 +211,10 @@ class DashboardViewModel @Inject constructor(
         val dbCount = knownAppEntryDao.count()
         _knownAppEntryCount.value = if (dbCount > 0) dbCount else bundledKnownAppCount
         _knownAppLastUpdated.value = knownAppEntryDao.mostRecentFetchTime()
+    }
+
+    private suspend fun refreshCertHashIocState() {
+        _certHashIocEntryCount.value = certHashIocEntryDao.count()
+        _certHashIocLastUpdated.value = certHashIocEntryDao.mostRecentFetchTime()
     }
 }
