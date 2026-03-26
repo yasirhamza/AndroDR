@@ -1,0 +1,131 @@
+version: 1
+
+scenarios:
+
+  # ── Track 1: Commodity malware ─────────────────────────────────────────
+  - id: cerberus_banker
+    track: 1
+    description: "Cerberus Android banking trojan"
+    source: malwarebazaar
+    sha256: "<pin>"
+    tags: [android, cerberus, banker]
+    attack: [T1429, T1636]
+    expected_patterns:
+      - "Package name matches known malware or stalkerware IOC database entry"
+
+  - id: spynote_rat
+    track: 1
+    description: "SpyNote remote access trojan"
+    source: malwarebazaar
+    sha256: "<pin>"
+    tags: [android, spynote, rat]
+    attack: [T1429, T1430, T1512]
+    expected_patterns:
+      - "Package name matches known malware or stalkerware IOC database entry"
+
+  # ── Track 2: Stalkerware ───────────────────────────────────────────────
+  - id: flexispy_stalkerware
+    track: 2
+    description: "FlexiSpy-derived commercial stalkerware"
+    source: malwarebazaar
+    sha256: "<pin>"
+    tags: [android, stalkerware]
+    attack: [T1429, T1430, T1512, T1636]
+    expected_patterns:
+      - "sensitive surveillance-capable permissions simultaneously"
+      - "App was not installed via a trusted app store"
+
+  # ── Track 3: Mercenary spyware simulation ──────────────────────────────
+  - id: mercenary_package_name
+    track: 3
+    description: "App using known Pegasus disguise package name (com.android.bsp)"
+    source: fixture
+    fixture: fixtures/mercenary/spyware-package-name.apk
+    sha256: "<pin>"
+    attack: [T1418]
+    expected_patterns:
+      - "Package name matches known malware or stalkerware IOC database entry"
+
+  - id: mercenary_cert_hash
+    track: 3
+    description: "App signed with cert hash seeded into IOC DB"
+    source: fixture
+    fixture: fixtures/mercenary/cert-hash-ioc.apk
+    sha256: "<pin>"
+    attack: [T1628]
+    expected_patterns:
+      - "Known malicious signing certificate"
+    roadmap_issue: 7
+
+  - id: mercenary_accessibility
+    track: 3
+    description: "App registering AccessibilityService"
+    source: fixture
+    fixture: fixtures/mercenary/accessibility-abuse.apk
+    sha256: "<pin>"
+    attack: [T1626]
+    expected_patterns:
+      - "Registered as an accessibility service"
+    roadmap_issue: 10
+
+  - id: mercenary_device_admin
+    track: 3
+    description: "App registering DeviceAdminReceiver"
+    source: fixture
+    fixture: fixtures/mercenary/device-admin-abuse.apk
+    sha256: "<pin>"
+    attack: [T1401]
+    expected_patterns:
+      - "Registered as a device administrator"
+    roadmap_issue: 10
+
+  - id: surveillance_permissions
+    track: 3
+    description: "Sideloaded app with full surveillance permission cluster"
+    source: fixture
+    fixture: fixtures/mercenary/surveillance-permissions.apk
+    sha256: "<pin>"
+    attack: [T1429, T1430, T1512, T1636]
+    expected_patterns:
+      - "sensitive surveillance-capable permissions simultaneously"
+      - "App was not installed via a trusted app store"
+
+  - id: mercenary_file_artifacts
+    track: 3
+    description: "Known spyware file paths injected via ADB"
+    source: adb_inject
+    inject:
+      - type: file
+        adb_cmd: "shell touch /data/local/tmp/.raptor"
+        cleanup: "shell rm -f /data/local/tmp/.raptor"
+      - type: file
+        adb_cmd: "shell touch /data/local/tmp/.stat"
+        cleanup: "shell rm -f /data/local/tmp/.stat"
+    attack: [T1533]
+    expected_patterns:
+      - "file_artifact"
+    roadmap_issue: 8
+
+  - id: mercenary_dns_c2
+    track: 3
+    description: "DNS query to known Predator C2 domain"
+    source: adb_inject
+    inject:
+      - type: dns_query
+        adb_cmd: "shell nslookup cdn-tp2.xyz 10.0.0.2"
+    attack: [T1437]
+    expected_patterns:
+      - "[BLOCKED]"
+      - "cdn-tp2.xyz"
+
+  - id: mercenary_ip_c2
+    track: 3
+    description: "Direct TCP connection to known C2 IP"
+    source: adb_inject
+    inject:
+      - type: tcp_connect
+        adb_cmd: "shell curl --connect-timeout 3 --max-time 5 -sk https://198.199.119.161:443 || true"
+    attack: [T1437.001]
+    expected_patterns:
+      - "198.199.119.161"
+    roadmap_issue: 6
