@@ -1,11 +1,14 @@
 package com.androdr.scanner
 
 import android.net.Uri
+import android.util.Log
 import com.androdr.data.model.AppRisk
 import com.androdr.data.model.DeviceFlag
 import com.androdr.data.model.ScanResult
 import com.androdr.data.repo.ScanRepository
 import com.androdr.scanner.BugReportAnalyzer.BugReportFinding
+import com.androdr.sigma.FindingMapper
+import com.androdr.sigma.SigmaRuleEngine
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import javax.inject.Inject
@@ -21,7 +24,8 @@ class ScanOrchestrator @Inject constructor(
     private val appScanner: AppScanner,
     private val deviceAuditor: DeviceAuditor,
     private val bugReportAnalyzer: BugReportAnalyzer,
-    private val scanRepository: ScanRepository
+    private val scanRepository: ScanRepository,
+    private val sigmaRuleEngine: SigmaRuleEngine
 ) {
 
     /**
@@ -37,6 +41,13 @@ class ScanOrchestrator @Inject constructor(
 
         val appRisks   = appRisksDeferred.await()
         val deviceFlags = deviceFlagsDeferred.await()
+
+        // Phase 2: SIGMA rule evaluation (coexistence — logged only, not used for ScanResult yet)
+        val appTelemetry = runCatching { appScanner.collectTelemetry() }.getOrDefault(emptyList())
+        val sigmaFindings = sigmaRuleEngine.evaluateApps(appTelemetry)
+        val sigmaAppRisks = FindingMapper.toAppRisks(appTelemetry, sigmaFindings)
+        Log.i(TAG, "SIGMA engine: ${sigmaFindings.size} findings from ${sigmaRuleEngine.ruleCount()} rules " +
+            "(hardcoded: ${appRisks.size} risks, sigma: ${sigmaAppRisks.size} risks)")
 
         val now = System.currentTimeMillis()
         val result = ScanResult(
@@ -110,4 +121,8 @@ class ScanOrchestrator @Inject constructor(
         val newFlags:      List<DeviceFlag>,
         val resolvedFlags: List<DeviceFlag>
     )
+
+    companion object {
+        private const val TAG = "ScanOrchestrator"
+    }
 }

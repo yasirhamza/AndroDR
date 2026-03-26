@@ -130,7 +130,7 @@ dependencies {
     implementation(libs.kotlinx.serialization.json)
 
     // YAML parsing (SIGMA rule engine)
-    implementation("org.snakeyaml:snakeyaml-engine:2.7")
+    implementation(libs.snakeyaml.engine)
 
     // Debug tooling
     debugImplementation(libs.androidx.compose.ui.tooling)

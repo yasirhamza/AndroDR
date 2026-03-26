@@ -16,6 +16,7 @@ class SigmaRuleEngine @Inject constructor(
     private var rules: List<SigmaRule> = emptyList()
     private var iocLookups: Map<String, (Any) -> Boolean> = emptyMap()
 
+    @Suppress("TooGenericExceptionCaught")
     fun loadBundledRules() {
         val loaded = mutableListOf<SigmaRule>()
         try {

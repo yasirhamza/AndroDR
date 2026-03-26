@@ -331,7 +331,7 @@ class AppScanner @Inject constructor(
                     or PackageManager.GET_SERVICES or PackageManager.GET_RECEIVERS
             )
         } catch (e: Exception) {
-            Log.w(TAG, "collectTelemetry: getInstalledPackages with extended flags failed, retrying minimal: ${e.message}")
+            Log.w(TAG, "collectTelemetry: getInstalledPackages extended flags failed: ${e.message}")
             try {
                 pm.getInstalledPackages(PackageManager.GET_PERMISSIONS)
             } catch (e2: Exception) {
@@ -342,6 +342,7 @@ class AppScanner @Inject constructor(
 
         val telemetryList = mutableListOf<AppTelemetry>()
 
+        @Suppress("LoopWithTooManyJumpStatements")
         for (pkg in installedPackages) {
             val packageName = pkg.packageName ?: continue
             val appInfo = pkg.applicationInfo ?: continue
