@@ -6,11 +6,12 @@ import androidx.room.TypeConverters
 import com.androdr.data.model.DnsEvent
 import com.androdr.data.model.DomainIocEntry
 import com.androdr.data.model.IocEntry
+import com.androdr.data.model.CertHashIocEntry
 import com.androdr.data.model.ScanResult
 
 @Database(
-    entities = [ScanResult::class, DnsEvent::class, IocEntry::class, DomainIocEntry::class, KnownAppDbEntry::class],
-    version = 4,
+    entities = [ScanResult::class, DnsEvent::class, IocEntry::class, DomainIocEntry::class, KnownAppDbEntry::class, CertHashIocEntry::class],
+    version = 5,
     exportSchema = false
 )
 @TypeConverters(Converters::class)
@@ -25,4 +26,6 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun domainIocEntryDao(): DomainIocEntryDao
 
     abstract fun knownAppEntryDao(): KnownAppEntryDao
+
+    abstract fun certHashIocEntryDao(): CertHashIocEntryDao
 }
