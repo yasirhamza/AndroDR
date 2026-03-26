@@ -821,7 +821,7 @@ git commit -m "feat: wire CertHashIocUpdater into IocUpdateWorker and add dashbo
 For each pinned sample in `test-adversary/manifest.yml`, download via MalwareBazaar API, extract with 7z, and get the signing cert hash:
 
 ```bash
-export MALWAREBAZAAR_API_KEY="REDACTED_MALWAREBAZAAR_KEY"
+export MALWAREBAZAAR_API_KEY="$MALWAREBAZAAR_API_KEY"
 export JAVA_HOME=/home/yasir/Applications/android-studio/jbr
 export PATH=$JAVA_HOME/bin:$PATH
 
@@ -958,7 +958,7 @@ git push origin main
 export JAVA_HOME=/home/yasir/Applications/android-studio/jbr
 export ANDROID_HOME=~/Android/Sdk
 export PATH=$JAVA_HOME/bin:$ANDROID_HOME/platform-tools:$PATH
-export MALWAREBAZAAR_API_KEY="REDACTED_MALWAREBAZAAR_KEY"
+export MALWAREBAZAAR_API_KEY="$MALWAREBAZAAR_API_KEY"
 ./gradlew installDebug
 ./test-adversary/run.sh --no-pause emulator-5554
 ```
