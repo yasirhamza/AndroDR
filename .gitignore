@@ -38,3 +38,10 @@ node_modules/
 
 # Virtual machine crash logs
 hs_err_pid*
+
+# Adversary simulation fixtures (rebuilt from source via build-fixtures.sh)
+test-adversary/fixtures/mercenary/*.apk
+test-adversary/fixtures/mercenary/*.jks
+test-adversary/fixtures/mercenary/local.properties
+test-adversary/fixtures/mercenary/**/build/
+test-adversary/fixtures/mercenary/.gradle/
