@@ -106,9 +106,12 @@ class AppScanner @Inject constructor(
 
         @Suppress("TooGenericExceptionCaught", "SwallowedException")
         val installedPackages = try {
-            pm.getInstalledPackages(PackageManager.GET_PERMISSIONS or signingFlag)
+            pm.getInstalledPackages(
+                PackageManager.GET_PERMISSIONS or signingFlag
+                    or PackageManager.GET_SERVICES or PackageManager.GET_RECEIVERS
+            )
         } catch (e: Exception) {
-            Log.w(TAG, "AppScanner: getInstalledPackages with signing flag failed, retrying without: ${e.message}")
+            Log.w(TAG, "AppScanner: getInstalledPackages with extended flags failed, retrying minimal: ${e.message}")
             try {
                 pm.getInstalledPackages(PackageManager.GET_PERMISSIONS)
             } catch (e2: Exception) {
@@ -248,6 +251,30 @@ class AppScanner @Inject constructor(
                 if (newLevel.score > riskLevel.score) riskLevel = newLevel
                 val source = installerPackage ?: "unknown"
                 reasons.add("App was not installed via a trusted app store (installer: $source)")
+            }
+
+            // ── 3b. Accessibility service / Device Admin abuse ─────────
+            // Stalkerware abuses AccessibilityService for screen reading and keylogging,
+            // and DeviceAdminReceiver to prevent uninstallation. Skip system apps (TalkBack,
+            // MDM agents are legitimate). Escalate to CRITICAL if also sideloaded.
+            if (!isSystemApp) {
+                val hasAccessibilityService = pkg.services?.any { svc ->
+                    svc.permission == "android.permission.BIND_ACCESSIBILITY_SERVICE"
+                } == true
+                if (hasAccessibilityService) {
+                    val newLevel = if (isSideloaded) RiskLevel.CRITICAL else RiskLevel.HIGH
+                    if (newLevel.score > riskLevel.score) riskLevel = newLevel
+                    reasons.add("Registered as an accessibility service")
+                }
+
+                val hasDeviceAdmin = pkg.receivers?.any { recv ->
+                    recv.permission == "android.permission.BIND_DEVICE_ADMIN"
+                } == true
+                if (hasDeviceAdmin) {
+                    val newLevel = if (isSideloaded) RiskLevel.CRITICAL else RiskLevel.HIGH
+                    if (newLevel.score > riskLevel.score) riskLevel = newLevel
+                    reasons.add("Registered as a device administrator")
+                }
             }
 
             // ── 4. Pre-installed anomaly check ────────────────────────────
