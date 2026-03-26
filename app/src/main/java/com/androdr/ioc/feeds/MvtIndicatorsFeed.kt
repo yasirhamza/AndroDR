@@ -112,6 +112,7 @@ class MvtIndicatorsFeed : DomainIocFeed {
         return try {
             val objects: JSONArray = JSONObject(json).optJSONArray("objects") ?: return emptyList()
             val results = mutableListOf<DomainIocEntry>()
+            @Suppress("LoopWithTooManyJumpStatements")
             for (i in 0 until objects.length()) {
                 val obj = objects.getJSONObject(i)
                 if (obj.optString("type") != "indicator") continue
