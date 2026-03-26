@@ -16,13 +16,14 @@ class IocUpdateWorker @AssistedInject constructor(
     @Assisted params: WorkerParameters,
     private val remoteIocUpdater: RemoteIocUpdater,
     private val domainIocUpdater: DomainIocUpdater,
-    private val knownAppUpdater: KnownAppUpdater
+    private val knownAppUpdater: KnownAppUpdater,
+    private val certHashIocUpdater: CertHashIocUpdater
 ) : CoroutineWorker(context, params) {
 
     @Suppress("TooGenericExceptionCaught")
     override suspend fun doWork(): Result {
         return try {
-            val fetched = runAllUpdaters(remoteIocUpdater, domainIocUpdater, knownAppUpdater)
+            val fetched = runAllUpdaters(remoteIocUpdater, domainIocUpdater, knownAppUpdater, certHashIocUpdater)
             Log.i(TAG, "Worker finished — $fetched entries fetched total")
             Result.success()
         } catch (e: Exception) {
@@ -37,14 +38,16 @@ class IocUpdateWorker @AssistedInject constructor(
     }
 }
 
-/** Runs all three updaters in parallel; returns combined entry count. Extracted for testability. */
+/** Runs all four updaters in parallel; returns combined entry count. Extracted for testability. */
 internal suspend fun runAllUpdaters(
     remoteIoc: RemoteIocUpdater,
     domainIoc: DomainIocUpdater,
-    knownApp: KnownAppUpdater
+    knownApp: KnownAppUpdater,
+    certHashIoc: CertHashIocUpdater
 ): Int = coroutineScope {
     val a = async { remoteIoc.update() }
     val b = async { domainIoc.update() }
     val c = async { knownApp.update() }
-    a.await() + b.await() + c.await()
+    val d = async { certHashIoc.update() }
+    a.await() + b.await() + c.await() + d.await()
 }

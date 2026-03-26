@@ -10,22 +10,25 @@ import org.junit.Test
 
 class IocUpdateWorkerTest {
 
-    private val remoteIocUpdater: RemoteIocUpdater = mockk()
-    private val domainIocUpdater: DomainIocUpdater = mockk()
-    private val knownAppUpdater:  KnownAppUpdater  = mockk()
+    private val remoteIocUpdater:   RemoteIocUpdater   = mockk()
+    private val domainIocUpdater:   DomainIocUpdater   = mockk()
+    private val knownAppUpdater:    KnownAppUpdater    = mockk()
+    private val certHashIocUpdater: CertHashIocUpdater = mockk()
 
     @Test
-    fun `runAllUpdaters calls all three updaters and sums counts`() = runTest {
+    fun `runAllUpdaters calls all four updaters and sums counts`() = runTest {
         coEvery { remoteIocUpdater.update() } returns 10
         coEvery { domainIocUpdater.update() } returns 20
         coEvery { knownAppUpdater.update()  } returns 15
+        coEvery { certHashIocUpdater.update() } returns 5
 
-        val total = runAllUpdaters(remoteIocUpdater, domainIocUpdater, knownAppUpdater)
+        val total = runAllUpdaters(remoteIocUpdater, domainIocUpdater, knownAppUpdater, certHashIocUpdater)
 
-        assertEquals(45, total)
+        assertEquals(50, total)
         coVerify { remoteIocUpdater.update() }
         coVerify { domainIocUpdater.update() }
         coVerify { knownAppUpdater.update()  }
+        coVerify { certHashIocUpdater.update() }
     }
 
     @Test
@@ -33,9 +36,10 @@ class IocUpdateWorkerTest {
         coEvery { remoteIocUpdater.update() } throws RuntimeException("network error")
         coEvery { domainIocUpdater.update() } returns 5
         coEvery { knownAppUpdater.update()  } returns 15
+        coEvery { certHashIocUpdater.update() } returns 3
 
         try {
-            runAllUpdaters(remoteIocUpdater, domainIocUpdater, knownAppUpdater)
+            runAllUpdaters(remoteIocUpdater, domainIocUpdater, knownAppUpdater, certHashIocUpdater)
             fail("Expected RuntimeException to be thrown")
         } catch (e: RuntimeException) {
             assertEquals("network error", e.message)
