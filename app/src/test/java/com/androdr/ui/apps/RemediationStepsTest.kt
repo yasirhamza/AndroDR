@@ -54,7 +54,10 @@ class RemediationStepsTest {
     @Test
     fun `surveillance permissions reason produces review instruction`() {
         val steps = remediationSteps(risk(
-            reasons = listOf("Holds 4 sensitive surveillance-capable permissions simultaneously: RECORD_AUDIO, CAMERA, ACCESS_FINE_LOCATION, READ_CONTACTS")
+            reasons = listOf(
+                "Holds 4 sensitive surveillance-capable permissions simultaneously: " +
+                    "RECORD_AUDIO, CAMERA, ACCESS_FINE_LOCATION, READ_CONTACTS"
+            )
         ))
         assertTrue(steps.any { "surveillance" in it.lowercase() })
     }
