@@ -1,0 +1,33 @@
+title: Sideloaded app with system-impersonating name
+id: androdr-016
+status: production
+description: >
+    Detects apps installed from untrusted sources that use display names
+    mimicking system components.
+author: AndroDR
+date: 2026/03/27
+tags:
+    - attack.t1036.005
+logsource:
+    product: androdr
+    service: app_scanner
+detection:
+    selection_untrusted:
+        is_system_app: false
+        from_trusted_store: false
+    selection_name:
+        app_name|contains:
+            - System
+            - Service
+            - Google
+            - Android
+            - Samsung
+            - Update
+            - Security
+    condition: selection_untrusted and selection_name
+level: high
+falsepositives:
+    - Legitimate developer tools with system-sounding names
+remediation:
+    - "This app's name impersonates a system component but was installed from an untrusted source."
+    - "Uninstall it unless you specifically installed it."
