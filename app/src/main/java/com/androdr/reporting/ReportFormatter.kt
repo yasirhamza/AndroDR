@@ -85,7 +85,8 @@ object ReportFormatter {
             dnsEvents.take(500).forEach { event ->
                 val time = dnsFmt.format(Date(event.timestamp))
                 val state = if (event.isBlocked) "[BLOCKED]" else "[ALLOWED]"
-                val app = event.appName ?: "uid:${event.appUid}"
+                val app = event.appName
+                    ?: if (event.appUid == -1) "unknown" else "uid:${event.appUid}"
                 appendLine("  $state  $time  ${event.domain.padEnd(50)}  ← $app")
                 if (event.isBlocked && event.reason != null) {
                     appendLine("           reason: ${event.reason}")
