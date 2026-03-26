@@ -59,6 +59,16 @@ class AppScanner @Inject constructor(
             // Custom ROMs
             "org.lineageos.", "com.cyanogenmod."
         )
+
+        /**
+         * Samsung-specific package prefixes for apps delivered via OEM provisioning
+         * without FLAG_SYSTEM. These are legitimate Samsung apps (TV Plus, Kids,
+         * Game Launcher, etc.) that arrive with a null installer.
+         */
+        private val samsungOemPrefixes = listOf(
+            "com.samsung.", "com.sec.", "com.knox.", "com.osp.",
+            "com.sem.", "com.skms.", "com.mygalaxy."
+        )
     }
 
     /**
@@ -141,40 +151,50 @@ class AppScanner @Inject constructor(
                 reasons.add("Package name matches known malware or stalkerware IOC database entry")
             }
 
+            val isSystemApp = appInfo.flags and ApplicationInfo.FLAG_SYSTEM != 0
+
             // ── 1b. Cert hash IOC check ─────────────────────────────────
-            @Suppress("TooGenericExceptionCaught", "SwallowedException")
-            val certHash = try {
-                extractCertHash(pkg)
-            } catch (e: Exception) {
-                Log.w(TAG, "AppScanner: cert hash extraction failed for $packageName: ${e.message}")
-                null
-            }
-            if (certHash != null) {
+            // Skip for system apps: many malware samples are signed with the publicly
+            // available AOSP test key, which also signs legitimate system components
+            // like CTS shims. A cert hash match on a system app is a false positive.
+            if (!isSystemApp) {
                 @Suppress("TooGenericExceptionCaught", "SwallowedException")
-                val certHit = try {
-                    certHashIocResolver.isKnownBadCert(certHash)
+                val certHash = try {
+                    extractCertHash(pkg)
                 } catch (e: Exception) {
-                    Log.w(TAG, "AppScanner: cert hash IOC lookup failed for $packageName: ${e.message}")
+                    Log.w(TAG, "AppScanner: cert hash extraction failed for $packageName: ${e.message}")
                     null
                 }
-                if (certHit != null) {
-                    isKnownMalware = true
-                    val newLevel = RiskLevel.CRITICAL
-                    if (newLevel.score > riskLevel.score) riskLevel = newLevel
-                    reasons.add("Known malicious signing certificate (${certHit.familyName})")
+                if (certHash != null) {
+                    @Suppress("TooGenericExceptionCaught", "SwallowedException")
+                    val certHit = try {
+                        certHashIocResolver.isKnownBadCert(certHash)
+                    } catch (e: Exception) {
+                        Log.w(TAG, "AppScanner: cert hash IOC lookup failed for $packageName: ${e.message}")
+                        null
+                    }
+                    if (certHit != null) {
+                        isKnownMalware = true
+                        val newLevel = RiskLevel.CRITICAL
+                        if (newLevel.score > riskLevel.score) riskLevel = newLevel
+                        reasons.add("Known malicious signing certificate (${certHit.familyName})")
+                    }
                 }
             }
-
-            val isSystemApp = appInfo.flags and ApplicationInfo.FLAG_SYSTEM != 0
 
             // ── Resolver lookup ────────────────────────────────────────────
             val knownApp = knownAppResolver.lookup(packageName)
             // The resolver covers packages explicitly known to community feeds. As a fallback for
             // system apps not in any feed (Samsung TTS voices, Wi-Fi resource APKs, GPU drivers,
             // etc.), use the OEM prefix list so they are not misclassified as firmware implants.
+            // Samsung delivers many user apps (TV Plus, Kids, Game Launcher) via OEM
+            // provisioning without FLAG_SYSTEM and with a null installer. Treat Samsung-prefixed
+            // packages as OEM apps regardless of the system flag to avoid false sideload alerts.
+            val isSamsungOemPackage = samsungOemPrefixes.any { packageName.startsWith(it) }
             val isKnownOemApp = knownApp?.category in setOf(
                 KnownAppCategory.OEM, KnownAppCategory.AOSP, KnownAppCategory.GOOGLE
             ) || (isSystemApp && knownOemPrefixes.any { packageName.startsWith(it) })
+                || isSamsungOemPackage
 
             // ── 2. Dangerous permission combination scoring ────────────────
             // Only score sideloaded (untrusted-source) user apps. System apps are handled by the
