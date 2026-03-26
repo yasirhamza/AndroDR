@@ -6,6 +6,7 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.preferencesDataStore
 import androidx.room.Room
 import com.androdr.data.db.AppDatabase
+import com.androdr.data.db.CertHashIocEntryDao
 import com.androdr.data.db.DnsEventDao
 import com.androdr.data.db.DomainIocEntryDao
 import com.androdr.data.db.IocEntryDao
@@ -13,6 +14,7 @@ import com.androdr.data.db.KnownAppEntryDao
 import com.androdr.data.db.MIGRATION_1_2
 import com.androdr.data.db.MIGRATION_2_3
 import com.androdr.data.db.MIGRATION_3_4
+import com.androdr.data.db.MIGRATION_4_5
 import com.androdr.data.db.ScanResultDao
 import com.androdr.ioc.DomainIocFeed
 import com.androdr.ioc.KnownAppFeed
@@ -37,7 +39,7 @@ object AppModule {
     @Singleton
     fun provideDatabase(@ApplicationContext ctx: Context): AppDatabase =
         Room.databaseBuilder(ctx, AppDatabase::class.java, "androdr.db")
-            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
+            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
             .build()
 
     @Provides
@@ -58,6 +60,9 @@ object AppModule {
 
     @Provides
     fun provideKnownAppEntryDao(db: AppDatabase): KnownAppEntryDao = db.knownAppEntryDao()
+
+    @Provides
+    fun provideCertHashIocEntryDao(db: AppDatabase): CertHashIocEntryDao = db.certHashIocEntryDao()
 
     @Provides
     @Singleton
