@@ -71,6 +71,9 @@ fun DashboardScreen(
     val domainIocEntryCount by viewModel.domainIocEntryCount.collectAsStateWithLifecycle()
     val domainIocLastUpdated by viewModel.domainIocLastUpdated.collectAsStateWithLifecycle()
     val isUpdatingDomainIoc by viewModel.isUpdatingDomainIoc.collectAsStateWithLifecycle()
+    val knownAppEntryCount by viewModel.knownAppEntryCount.collectAsStateWithLifecycle()
+    val knownAppLastUpdated by viewModel.knownAppLastUpdated.collectAsStateWithLifecycle()
+    val isUpdatingKnownApps by viewModel.isUpdatingKnownApps.collectAsStateWithLifecycle()
 
     val snackbarHostState = remember { SnackbarHostState() }
 
@@ -161,7 +164,11 @@ fun DashboardScreen(
                 domainEntryCount = domainIocEntryCount,
                 domainLastUpdated = domainIocLastUpdated,
                 isUpdatingDomain = isUpdatingDomainIoc,
-                onUpdateDomainClick = { viewModel.updateDomainIoc() }
+                onUpdateDomainClick = { viewModel.updateDomainIoc() },
+                knownAppEntryCount = knownAppEntryCount,
+                knownAppLastUpdated = knownAppLastUpdated,
+                isUpdatingKnownApps = isUpdatingKnownApps,
+                onUpdateKnownAppsClick = { viewModel.updateKnownApps() }
             )
 
             // Summary cards grid (2x2)
@@ -222,7 +229,11 @@ private fun ThreatDatabaseCard(
     domainEntryCount: Int,
     domainLastUpdated: Long?,
     isUpdatingDomain: Boolean,
-    onUpdateDomainClick: () -> Unit
+    onUpdateDomainClick: () -> Unit,
+    knownAppEntryCount: Int,
+    knownAppLastUpdated: Long?,
+    isUpdatingKnownApps: Boolean,
+    onUpdateKnownAppsClick: () -> Unit
 ) {
     val now = System.currentTimeMillis()
 
@@ -355,6 +366,46 @@ private fun ThreatDatabaseCard(
                     )
                 ) {
                     UpdateButtonContent(isUpdating = isUpdatingDomain)
+                }
+            }
+
+            // ── Known-app DB row ───────────────────────────────────────────────────────
+            val isKnownAppsNeverUpdated = knownAppLastUpdated == null
+            val isKnownAppsStale = knownAppLastUpdated != null && (now - knownAppLastUpdated) > 24 * 60 * 60 * 1000L
+            val isKnownAppsFresh = knownAppLastUpdated != null && !isKnownAppsStale
+
+            val knownAppsIconTint = if (isKnownAppsFresh) Color(0xFF00D4AA) else Color(0xFFFF9800)
+            val knownAppsIcon = when {
+                isKnownAppsFresh        -> Icons.Filled.CheckCircle
+                isKnownAppsNeverUpdated -> Icons.Filled.Warning
+                else                    -> Icons.Filled.Refresh
+            }
+            val knownAppsStatusText = when {
+                isKnownAppsNeverUpdated -> "$knownAppEntryCount app signatures · Remote update pending"
+                isKnownAppsStale        -> "$knownAppEntryCount app signatures · Updated ${relativeTime(knownAppLastUpdated!!, now)} · Stale"
+                else                    -> "$knownAppEntryCount app signatures · Updated ${relativeTime(knownAppLastUpdated!!, now)}"
+            }
+
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Icon(imageVector = knownAppsIcon, contentDescription = null, tint = knownAppsIconTint,
+                    modifier = Modifier.size(20.dp))
+                Text(text = knownAppsStatusText, style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
+            }
+
+            if (isKnownAppsFresh) {
+                OutlinedButton(onClick = onUpdateKnownAppsClick, enabled = !isUpdatingKnownApps,
+                    modifier = Modifier.fillMaxWidth()) {
+                    UpdateButtonContent(isUpdating = isUpdatingKnownApps)
+                }
+            } else {
+                Button(onClick = onUpdateKnownAppsClick, enabled = !isUpdatingKnownApps,
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF9800))) {
+                    UpdateButtonContent(isUpdating = isUpdatingKnownApps)
                 }
             }
         }
