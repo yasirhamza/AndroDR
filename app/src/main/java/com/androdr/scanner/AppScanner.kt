@@ -255,9 +255,10 @@ class AppScanner @Inject constructor(
 
             // ── 3b. Accessibility service / Device Admin abuse ─────────
             // Stalkerware abuses AccessibilityService for screen reading and keylogging,
-            // and DeviceAdminReceiver to prevent uninstallation. Skip system apps (TalkBack,
-            // MDM agents are legitimate). Escalate to CRITICAL if also sideloaded.
-            if (!isSystemApp) {
+            // and DeviceAdminReceiver to prevent uninstallation. Only flag apps from
+            // untrusted sources — trusted-store apps (Microsoft Defender, Bitwarden,
+            // Google DPC, etc.) use these APIs legitimately and passed store review.
+            if (!isSystemApp && !fromTrustedStore) {
                 val hasAccessibilityService = pkg.services?.any { svc ->
                     svc.permission == "android.permission.BIND_ACCESSIBILITY_SERVICE"
                 } == true
