@@ -7,6 +7,7 @@ import android.os.Build
 import android.provider.Settings
 import android.util.Log
 import com.androdr.data.model.DeviceFlag
+import com.androdr.data.model.DeviceTelemetry
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -120,6 +121,102 @@ class DeviceAuditor @Inject constructor(
         flags.add(DeviceFlag.wifiAdbEnabled(wifiAdbEnabled))
 
         flags.toList()
+    }
+
+    /**
+     * Collects device posture telemetry using the same checks as [audit] but returns
+     * structured [DeviceTelemetry] entries — one per check — for the SIGMA rule engine.
+     * Each entry carries both its own trigger state and a snapshot of all posture fields
+     * so that rules can correlate multiple signals.
+     */
+    @Suppress("LongMethod")
+    suspend fun collectTelemetry(): List<DeviceTelemetry> = withContext(Dispatchers.IO) {
+        val cr = context.contentResolver
+
+        // ── Gather all check values (same logic as audit()) ────────────────────
+        @Suppress("TooGenericExceptionCaught", "SwallowedException")
+        val adbEnabled = try {
+            Settings.Global.getInt(cr, Settings.Global.ADB_ENABLED, 0) == 1
+        } catch (e: Exception) {
+            Log.w(TAG, "collectTelemetry: ADB_ENABLED setting read failed: ${e.message}")
+            false
+        }
+
+        @Suppress("TooGenericExceptionCaught", "SwallowedException")
+        val devOptionsEnabled = try {
+            Settings.Global.getInt(cr, Settings.Global.DEVELOPMENT_SETTINGS_ENABLED, 0) == 1
+        } catch (e: Exception) {
+            Log.w(TAG, "collectTelemetry: DEVELOPMENT_SETTINGS_ENABLED setting read failed: ${e.message}")
+            false
+        }
+
+        val unknownSourcesEnabled =
+            !context.packageManager.hasSystemFeature("android.software.verified_boot")
+
+        @Suppress("TooGenericExceptionCaught", "SwallowedException")
+        val noScreenLock = try {
+            val km = context.getSystemService(Context.KEYGUARD_SERVICE) as? KeyguardManager
+            km?.isDeviceSecure?.not() ?: true
+        } catch (e: Exception) {
+            Log.w(TAG, "collectTelemetry: screen lock state check failed: ${e.message}")
+            false
+        }
+
+        @Suppress("TooGenericExceptionCaught", "SwallowedException")
+        val patchStr = Build.VERSION.SECURITY_PATCH ?: ""
+        var patchAgeDays = 0
+        @Suppress("TooGenericExceptionCaught", "SwallowedException")
+        val stalePatch = try {
+            if (patchStr.isBlank()) {
+                true
+            } else {
+                val formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd")
+                val patchDate = LocalDate.parse(patchStr, formatter)
+                val referenceDate = LocalDate.parse(latestKnownPatch, formatter)
+                val age = ChronoUnit.DAYS.between(patchDate, referenceDate)
+                patchAgeDays = age.toInt()
+                age > maxPatchAgeDays
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "collectTelemetry: security patch level parse failed: ${e.message}")
+            true
+        }
+
+        val bootloaderUnlocked = isBootloaderUnlocked()
+
+        @Suppress("TooGenericExceptionCaught", "SwallowedException")
+        val wifiAdbEnabled = try {
+            Settings.Global.getInt(cr, "adb_wifi_enabled", 0) == 1
+        } catch (e: Exception) {
+            Log.w(TAG, "collectTelemetry: adb_wifi_enabled setting read failed: ${e.message}")
+            false
+        }
+
+        val screenLockEnabled = !noScreenLock
+
+        // ── Build one DeviceTelemetry per check ────────────────────────────────
+        fun entry(checkId: String, isTriggered: Boolean) = DeviceTelemetry(
+            checkId = checkId,
+            isTriggered = isTriggered,
+            adbEnabled = adbEnabled,
+            devOptionsEnabled = devOptionsEnabled,
+            unknownSourcesEnabled = unknownSourcesEnabled,
+            screenLockEnabled = screenLockEnabled,
+            patchLevel = patchStr,
+            patchAgeDays = patchAgeDays,
+            bootloaderUnlocked = bootloaderUnlocked,
+            wifiAdbEnabled = wifiAdbEnabled
+        )
+
+        listOf(
+            entry("adb_enabled", adbEnabled),
+            entry("dev_options_enabled", devOptionsEnabled),
+            entry("unknown_sources", unknownSourcesEnabled),
+            entry("no_screen_lock", noScreenLock),
+            entry("stale_patch_level", stalePatch),
+            entry("bootloader_unlocked", bootloaderUnlocked),
+            entry("wifi_adb_enabled", wifiAdbEnabled)
+        )
     }
 
     /**
