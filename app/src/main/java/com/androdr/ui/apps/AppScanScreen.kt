@@ -301,3 +301,40 @@ fun riskLevelColor(riskLevel: RiskLevel): Color = when (riskLevel) {
     RiskLevel.MEDIUM -> Color(0xFFFFD600)
     RiskLevel.LOW -> Color(0xFF00D4AA)
 }
+
+/** Derives actionable remediation steps from an [AppRisk]'s flags and reasons. */
+internal fun remediationSteps(risk: AppRisk): List<String> {
+    val steps = mutableListOf<String>()
+    val reasonsJoined = risk.reasons.joinToString(" ")
+
+    if (risk.isKnownMalware) {
+        steps.add("Uninstall this app immediately \u2014 it matches a known malware database entry.")
+    }
+
+    if ("signing certificate" in reasonsJoined) {
+        steps.add("This app is signed by a known malware developer. Uninstall it even if the app name looks legitimate.")
+    }
+
+    if ("accessibility service" in reasonsJoined.lowercase()) {
+        steps.add("This app can read your screen content. Go to Settings \u2192 Accessibility and disable its service before uninstalling.")
+    }
+
+    if ("device administrator" in reasonsJoined.lowercase()) {
+        steps.add("This app has prevented its own uninstallation. Go to Settings \u2192 Security \u2192 Device Admin Apps and remove it first.")
+    }
+
+    if ("surveillance-capable permissions" in reasonsJoined) {
+        steps.add("This app has extensive surveillance capabilities. If you did not install it intentionally, uninstall it.")
+    }
+
+    if (risk.isSideloaded && steps.isEmpty()) {
+        steps.add("This app was not installed from a trusted app store. Verify you intended to install it.")
+    }
+
+    if (steps.isEmpty()) {
+        steps.add("Review this app and decide whether to keep it.")
+    }
+
+    steps.add("Run another scan after taking action to confirm the threat is resolved.")
+    return steps
+}
