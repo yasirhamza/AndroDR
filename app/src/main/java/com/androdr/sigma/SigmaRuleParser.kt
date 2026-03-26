@@ -10,7 +10,7 @@ object SigmaRuleParser {
     private const val TAG = "SigmaRuleParser"
     private val settings = LoadSettings.builder().build()
 
-    @Suppress("UNCHECKED_CAST")
+    @Suppress("UNCHECKED_CAST", "TooGenericExceptionCaught")
     fun parse(yamlContent: String): SigmaRule? {
         return try {
             val load = Load(settings)
@@ -22,7 +22,7 @@ object SigmaRuleParser {
         }
     }
 
-    @Suppress("UNCHECKED_CAST")
+    @Suppress("UNCHECKED_CAST", "TooGenericExceptionCaught")
     fun parseAll(yamlContent: String): List<SigmaRule> {
         return try {
             val load = Load(settings)
@@ -35,7 +35,7 @@ object SigmaRuleParser {
         }
     }
 
-    @Suppress("TooGenericExceptionCaught")
+    @Suppress("TooGenericExceptionCaught", "ReturnCount")
     private fun parseDocument(doc: Map<String, Any>): SigmaRule? {
         return try {
             val logsource = doc["logsource"] as? Map<*, *> ?: return null

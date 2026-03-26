@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Sigma rule YAML files are loaded at runtime via R.raw reflection in SigmaRuleEngine -->
+<resources xmlns:tools="http://schemas.android.com/tools"
+    tools:keep="@raw/sigma_*" />

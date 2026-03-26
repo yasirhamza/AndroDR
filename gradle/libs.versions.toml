@@ -34,6 +34,9 @@ workManager = "2.9.1"
 # DataStore
 datastore = "1.1.1"
 
+# YAML parsing
+snakeyamlEngine = "2.7"
+
 # Code quality & security
 detekt = "1.23.7"
 owaspDepCheck = "9.2.0"
@@ -98,6 +101,9 @@ androidx-hilt-compiler = { group = "androidx.hilt", name = "hilt-compiler", vers
 
 # DataStore
 androidx-datastore-preferences = { group = "androidx.datastore", name = "datastore-preferences", version.ref = "datastore" }
+
+# YAML parsing
+snakeyaml-engine = { group = "org.snakeyaml", name = "snakeyaml-engine", version.ref = "snakeyamlEngine" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

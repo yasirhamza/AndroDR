@@ -64,7 +64,7 @@ object SigmaRuleEvaluator {
         }
     }
 
-    @Suppress("CyclomaticComplexMethod")
+    @Suppress("CyclomaticComplexMethod", "ReturnCount")
     private fun evaluateFieldMatcher(
         matcher: SigmaFieldMatcher,
         record: Map<String, Any?>,
@@ -126,6 +126,7 @@ object SigmaRuleEvaluator {
         }
     }
 
+    @Suppress("ReturnCount")
     private fun matchEquals(fieldValue: Any?, expected: Any): Boolean {
         if (fieldValue == null) return false
         if (fieldValue is Boolean && expected is Boolean) return fieldValue == expected

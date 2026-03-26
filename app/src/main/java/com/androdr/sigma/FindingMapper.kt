@@ -86,14 +86,22 @@ object FindingMapper {
         "wifi_adb_enabled" to "Wireless ADB"
     )
 
+    @Suppress("MaxLineLength")
     private val CHECK_DESCRIPTIONS = mapOf(
-        "adb_enabled" to "ADB (Android Debug Bridge) is currently enabled. This allows a connected computer to execute arbitrary commands on the device.",
-        "dev_options_enabled" to "Developer Options are turned on. This exposes advanced settings that can weaken device security.",
-        "unknown_sources" to "One or more apps are permitted to install APKs from outside the Play Store, increasing the risk of sideloaded malware.",
-        "no_screen_lock" to "The device has no PIN, password, pattern, or biometric lock configured, leaving it fully accessible if lost or stolen.",
-        "stale_patch_level" to "The device's security patch level is more than 90 days old and may be missing critical vulnerability fixes.",
-        "bootloader_unlocked" to "The bootloader is unlocked, which disables Verified Boot and allows unsigned or modified system images to run.",
-        "wifi_adb_enabled" to "ADB over Wi-Fi is active. Any device on the same network may be able to connect and issue debug commands."
+        "adb_enabled" to
+            "ADB (Android Debug Bridge) is currently enabled. This allows a connected computer to execute arbitrary commands on the device.",
+        "dev_options_enabled" to
+            "Developer Options are turned on. This exposes advanced settings that can weaken device security.",
+        "unknown_sources" to
+            "One or more apps are permitted to install APKs from outside the Play Store, increasing the risk of sideloaded malware.",
+        "no_screen_lock" to
+            "The device has no PIN, password, pattern, or biometric lock configured, leaving it fully accessible if lost or stolen.",
+        "stale_patch_level" to
+            "The device's security patch level is more than 90 days old and may be missing critical vulnerability fixes.",
+        "bootloader_unlocked" to
+            "The bootloader is unlocked, which disables Verified Boot and allows unsigned or modified system images to run.",
+        "wifi_adb_enabled" to
+            "ADB over Wi-Fi is active. Any device on the same network may be able to connect and issue debug commands."
     )
 
     private val CHECK_SEVERITIES = mapOf(
