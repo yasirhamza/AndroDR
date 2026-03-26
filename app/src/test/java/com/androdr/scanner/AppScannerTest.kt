@@ -8,6 +8,7 @@ import com.androdr.data.model.KnownAppCategory
 import com.androdr.data.model.KnownAppEntry
 import com.androdr.data.model.RiskLevel
 import com.androdr.ioc.BadPackageInfo
+import com.androdr.ioc.CertHashIocResolver
 import com.androdr.ioc.IocResolver
 import com.androdr.ioc.KnownAppResolver
 import io.mockk.every
@@ -25,6 +26,7 @@ class AppScannerTest {
     private val mockPm: PackageManager = mockk(relaxed = true)
     private val mockIocResolver: IocResolver = mockk()
     private val mockKnownAppResolver: KnownAppResolver = mockk()
+    private val mockCertHashIocResolver: CertHashIocResolver = mockk()
     private lateinit var scanner: AppScanner
 
     @Before
@@ -32,7 +34,8 @@ class AppScannerTest {
         every { mockContext.packageManager } returns mockPm
         every { mockIocResolver.isKnownBadPackage(any()) } returns null
         every { mockKnownAppResolver.lookup(any()) } returns null  // default: unknown app
-        scanner = AppScanner(mockContext, mockIocResolver, mockKnownAppResolver)
+        every { mockCertHashIocResolver.isKnownBadCert(any()) } returns null
+        scanner = AppScanner(mockContext, mockIocResolver, mockKnownAppResolver, mockCertHashIocResolver)
     }
 
     private fun makePackageInfo(
