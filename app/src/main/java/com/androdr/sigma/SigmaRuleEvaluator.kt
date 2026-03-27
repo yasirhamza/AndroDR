@@ -1,13 +1,20 @@
 // app/src/main/java/com/androdr/sigma/SigmaRuleEvaluator.kt
 package com.androdr.sigma
 
+@kotlinx.serialization.Serializable
 data class Finding(
     val ruleId: String,
     val title: String,
+    val description: String = "",
     val level: String,
-    val tags: List<String>,
-    val remediation: List<String>,
-    val matchedRecord: Map<String, Any?>
+    val category: FindingCategory = FindingCategory.DEVICE_POSTURE,
+    val tags: List<String> = emptyList(),
+    val remediation: List<String> = emptyList(),
+    val iconHint: String = "",
+    val safeTitle: String = "",
+    val triggered: Boolean = true,
+    val evidence: Evidence = Evidence.None,
+    val matchContext: Map<String, String> = emptyMap()
 )
 
 /**

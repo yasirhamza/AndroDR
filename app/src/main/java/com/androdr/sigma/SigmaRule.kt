@@ -12,7 +12,8 @@ data class SigmaRule(
     val tags: List<String>,
     val detection: SigmaDetection,
     val falsepositives: List<String>,
-    val remediation: List<String>
+    val remediation: List<String>,
+    val display: SigmaDisplay = SigmaDisplay()
 )
 
 data class SigmaDetection(
@@ -42,3 +43,12 @@ enum class SigmaModifier {
     LT,
     IOC_LOOKUP
 }
+
+data class SigmaDisplay(
+    val category: String = "device_posture",
+    val icon: String = "",
+    val triggeredTitle: String = "",
+    val safeTitle: String = "",
+    val evidenceType: String = "none",
+    val summaryTemplate: String = ""
+)
