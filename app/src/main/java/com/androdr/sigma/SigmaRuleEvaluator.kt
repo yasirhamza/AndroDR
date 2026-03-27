@@ -27,28 +27,70 @@ object SigmaRuleEvaluator {
         rules: List<SigmaRule>,
         records: List<Map<String, Any?>>,
         service: String,
-        iocLookups: Map<String, (Any) -> Boolean> = emptyMap()
+        iocLookups: Map<String, (Any) -> Boolean> = emptyMap(),
+        evidenceProviders: Map<String, EvidenceProvider> = emptyMap()
     ): List<Finding> {
         val matchingRules = rules.filter { it.service == service }
         val findings = mutableListOf<Finding>()
-
         for (record in records) {
             for (rule in matchingRules) {
-                if (evaluateCondition(rule.detection, record, iocLookups)) {
-                    findings.add(Finding(
-                        ruleId = rule.id,
-                        title = rule.title,
-                        level = rule.level,
-                        tags = rule.tags,
-                        remediation = rule.remediation,
-                        matchContext = record.mapKeys { it.key }
-                            .mapValues { it.value?.toString() ?: "" }
-                    ))
+                val matched = evaluateCondition(rule.detection, record, iocLookups)
+                val category = parseCategory(rule.display.category)
+                if (matched) {
+                    val evidenceType = rule.display.evidenceType
+                    val provider = evidenceProviders[evidenceType]
+                    if (provider != null && evidenceType != "none") {
+                        val results = provider.provide(rule, record)
+                        for (result in results) {
+                            findings.add(buildFinding(rule, category, true, record, result))
+                        }
+                        if (results.isEmpty()) {
+                            findings.add(buildFinding(rule, category, true, record, null))
+                        }
+                    } else {
+                        findings.add(buildFinding(rule, category, true, record, null))
+                    }
+                } else if (category == FindingCategory.DEVICE_POSTURE) {
+                    findings.add(buildFinding(rule, category, false, record, null))
                 }
             }
         }
-
         return findings
+    }
+
+    private fun buildFinding(
+        rule: SigmaRule, category: FindingCategory, triggered: Boolean,
+        record: Map<String, Any?>, evidenceResult: EvidenceResult?
+    ): Finding {
+        val titleTemplate = if (triggered) {
+            rule.display.triggeredTitle.ifEmpty { rule.title }
+        } else {
+            rule.display.safeTitle.ifEmpty { rule.title }
+        }
+        val titleVars = evidenceResult?.titleVars ?: emptyMap()
+        val remediationVars = evidenceResult?.remediationVars ?: emptyMap()
+        return Finding(
+            ruleId = rule.id,
+            title = TemplateResolver.resolve(titleTemplate, titleVars),
+            description = rule.description,
+            level = rule.level,
+            category = category,
+            tags = rule.tags,
+            remediation = TemplateResolver.resolveAll(rule.remediation, remediationVars),
+            iconHint = rule.display.icon,
+            safeTitle = TemplateResolver.resolve(rule.display.safeTitle, titleVars),
+            triggered = triggered,
+            evidence = evidenceResult?.evidence ?: Evidence.None,
+            matchContext = record.filterValues { it !is List<*> && it !is Map<*, *> }
+                .mapValues { (_, v) -> v?.toString() ?: "" }
+        )
+    }
+
+    private fun parseCategory(category: String): FindingCategory = when (category.lowercase()) {
+        "device_posture" -> FindingCategory.DEVICE_POSTURE
+        "app_risk" -> FindingCategory.APP_RISK
+        "network" -> FindingCategory.NETWORK
+        else -> FindingCategory.DEVICE_POSTURE
     }
 
     private fun evaluateCondition(
