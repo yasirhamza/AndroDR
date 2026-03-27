@@ -52,9 +52,25 @@ def _expand_profile(
 ) -> list[str]:
     """Recursively expand a profile into a flat list of scenario-ID patterns.
 
-    A profile entry can be:
-    - a plain scenario ID or glob pattern  (e.g. ``"stalk_*"``)
-    - ``"@other_profile"`` — recursively includes that profile's patterns
+    Supports two profile formats:
+
+    **Flat list** (used by unit tests / legacy)::
+
+        profiles:
+          pegasus: [mercenary_package_name, mercenary_cert_hash]
+
+    **Dict with keys** (v3 manifest)::
+
+        profiles:
+          pegasus:
+            description: "..."
+            scenarios: [mercenary_package_name, ...]
+          journalist:
+            profiles: [pegasus, predator]   # nested profile references
+            scenarios: [stalk_*]
+
+    In the flat-list format, entries starting with ``@`` are recursive
+    profile references (e.g. ``"@pegasus"``).
 
     Circular references are detected via *visited*.
     """
@@ -66,18 +82,30 @@ def _expand_profile(
     visited.add(profile_name)
 
     profiles = manifest.get("profiles", {})
-    entries = profiles.get(profile_name)
-    if entries is None:
+    entry = profiles.get(profile_name)
+    if entry is None:
         return []
 
     patterns: list[str] = []
-    for entry in entries:
-        if isinstance(entry, str) and entry.startswith("@"):
-            # Recursive profile reference
-            nested = entry[1:]
-            patterns.extend(_expand_profile(manifest, nested, visited))
-        else:
-            patterns.append(str(entry))
+
+    # Dict-style profile (v3 manifest): has 'scenarios' and/or 'profiles' keys
+    if isinstance(entry, dict):
+        # Recursively include nested profiles
+        for nested in entry.get("profiles", []):
+            patterns.extend(_expand_profile(manifest, str(nested), visited))
+        # Include scenario ID patterns
+        for s in entry.get("scenarios", []):
+            patterns.append(str(s))
+    else:
+        # Flat list style (unit tests / legacy)
+        for item in entry:
+            if isinstance(item, str) and item.startswith("@"):
+                # Recursive profile reference
+                nested = item[1:]
+                patterns.extend(_expand_profile(manifest, nested, visited))
+            else:
+                patterns.append(str(item))
+
     return patterns
 
 
