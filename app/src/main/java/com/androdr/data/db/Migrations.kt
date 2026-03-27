@@ -70,3 +70,23 @@ val MIGRATION_4_5 = object : Migration(4, 5) {
         )
     }
 }
+
+val MIGRATION_5_6 = object : Migration(5, 6) {
+    override fun migrate(database: SupportSQLiteDatabase) {
+        database.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS cve_entries (
+                cveId              TEXT NOT NULL PRIMARY KEY,
+                description        TEXT NOT NULL,
+                severity           TEXT NOT NULL,
+                fixedInPatchLevel  TEXT NOT NULL,
+                cisaDateAdded      TEXT NOT NULL,
+                isActivelyExploited INTEGER NOT NULL,
+                vendorProject      TEXT NOT NULL,
+                product            TEXT NOT NULL,
+                lastUpdated        INTEGER NOT NULL
+            )
+            """.trimIndent()
+        )
+    }
+}

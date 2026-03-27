@@ -7,14 +7,16 @@ import com.androdr.data.model.DnsEvent
 import com.androdr.data.model.DomainIocEntry
 import com.androdr.data.model.IocEntry
 import com.androdr.data.model.CertHashIocEntry
+import com.androdr.data.model.CveEntity
 import com.androdr.data.model.ScanResult
 
 @Database(
     entities = [
         ScanResult::class, DnsEvent::class, IocEntry::class,
-        DomainIocEntry::class, KnownAppDbEntry::class, CertHashIocEntry::class
+        DomainIocEntry::class, KnownAppDbEntry::class, CertHashIocEntry::class,
+        CveEntity::class
     ],
-    version = 5,
+    version = 6,
     exportSchema = false
 )
 @TypeConverters(Converters::class)
@@ -31,4 +33,6 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun knownAppEntryDao(): KnownAppEntryDao
 
     abstract fun certHashIocEntryDao(): CertHashIocEntryDao
+
+    abstract fun cveDao(): CveDao
 }
