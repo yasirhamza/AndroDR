@@ -51,7 +51,7 @@ import java.util.Date
 import java.util.Locale
 
 @Suppress("LongMethod") // DNS monitor screen integrates VPN toggle, stats summary, and two event
-// lists (recent + blocked) with conditional empty states; co-location avoids prop-drilling.
+// lists (recent + matched) with conditional empty states; co-location avoids prop-drilling.
 @Composable
 fun DnsMonitorScreen(
     viewModel: DnsMonitorViewModel = hiltViewModel(),

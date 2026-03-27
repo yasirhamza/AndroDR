@@ -43,6 +43,10 @@ class DashboardViewModel @Inject constructor(
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
+    val matchedDnsCount: StateFlow<Int> = repository.matchedDnsEvents
+        .map { it.size }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 0)
+
     private val bundledCount = iocDatabase.getAllBadPackages().size
 
     private val _iocEntryCount = MutableStateFlow(bundledCount)
