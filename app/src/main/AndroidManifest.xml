@@ -24,6 +24,16 @@
         android:name="android.permission.READ_LOGS"
         tools:ignore="ProtectedPermissions" />
 
+    <!--
+      MANAGE_EXTERNAL_STORAGE: Required by FileArtifactScanner to check known spyware
+      artifact paths on external storage (e.g. /sdcard/.hidden_config). On API 30+,
+      scoped storage blocks access without this permission. Google Play requires a
+      declaration form justifying this as a security/antivirus use case.
+    -->
+    <uses-permission
+        android:name="android.permission.MANAGE_EXTERNAL_STORAGE"
+        tools:ignore="ScopedStorage" />
+
     <application
         android:name=".AndroDRApplication"
         android:allowBackup="false"

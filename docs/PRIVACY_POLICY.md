@@ -49,6 +49,7 @@ All scan data is stored locally in an on-device database. **None of it is ever t
 | `FOREGROUND_SERVICE` | To run the DNS monitoring VPN service while the app is in the background. |
 | `ACCESS_NETWORK_STATE` | To check network connectivity before fetching IOC feed updates. |
 | `READ_LOGS` | To capture AndroDR's own process log for inclusion in user-initiated security reports. This permission reads only the app's own log output (`logcat --pid`), not system-wide logs. It is used exclusively when you manually export a report. |
+| `MANAGE_EXTERNAL_STORAGE` | To scan external storage for known spyware file artifacts. On Android 11+, scoped storage prevents apps from checking arbitrary file paths without this permission. AndroDR checks a small set of known artifact paths documented in forensic research — it does not browse or index your files. |
 
 ---
 
