@@ -20,6 +20,7 @@ import com.androdr.ioc.CertHashIocFeed
 import com.androdr.ioc.DomainIocFeed
 import com.androdr.ioc.KnownAppFeed
 import com.androdr.ioc.feeds.MalwareBazaarCertFeed
+import com.androdr.ioc.feeds.HaGeZiTifFeed
 import com.androdr.ioc.feeds.MvtIndicatorsFeed
 import com.androdr.ioc.feeds.PlexusKnownAppFeed
 import com.androdr.ioc.feeds.ThreatFoxDomainFeed
@@ -63,7 +64,8 @@ object AppModule {
     fun provideDomainIocFeeds(): @JvmSuppressWildcards List<DomainIocFeed> = listOf(
         MvtIndicatorsFeed(),
         ZimperiumIocFeed(),
-        ThreatFoxDomainFeed()
+        ThreatFoxDomainFeed(),
+        HaGeZiTifFeed()
     )
 
     @Provides
