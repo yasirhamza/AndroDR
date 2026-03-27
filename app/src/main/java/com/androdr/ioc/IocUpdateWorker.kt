@@ -7,6 +7,7 @@ import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
+import com.androdr.ioc.CveDatabase
 import com.androdr.sigma.SigmaRuleEngine
 import com.androdr.sigma.SigmaRuleFeed
 import kotlinx.coroutines.async
@@ -21,7 +22,8 @@ class IocUpdateWorker @AssistedInject constructor(
     private val knownAppUpdater: KnownAppUpdater,
     private val certHashIocUpdater: CertHashIocUpdater,
     private val sigmaRuleFeed: SigmaRuleFeed,
-    private val sigmaRuleEngine: SigmaRuleEngine
+    private val sigmaRuleEngine: SigmaRuleEngine,
+    private val cveDatabase: CveDatabase
 ) : CoroutineWorker(context, params) {
 
     @Suppress("TooGenericExceptionCaught")
@@ -30,6 +32,7 @@ class IocUpdateWorker @AssistedInject constructor(
             val fetched = runAllUpdaters(remoteIocUpdater, domainIocUpdater, knownAppUpdater, certHashIocUpdater)
             // Refresh SIGMA rules independently — never blocks IOC update success
             refreshSigmaRules()
+            refreshCveDatabase()
             Log.i(TAG, "Worker finished — $fetched IOC entries, ${sigmaRuleEngine.ruleCount()} SIGMA rules")
             Result.success()
         } catch (e: Exception) {
@@ -49,6 +52,16 @@ class IocUpdateWorker @AssistedInject constructor(
             }
         } catch (e: Exception) {
             Log.w(TAG, "SIGMA rule refresh failed: ${e.message}")
+        }
+    }
+
+    @Suppress("TooGenericExceptionCaught")
+    private suspend fun refreshCveDatabase() {
+        try {
+            cveDatabase.refresh()
+            Log.i(TAG, "CVE database refreshed: ${cveDatabase.getActivelyExploitedCount()} Android CVEs")
+        } catch (e: Exception) {
+            Log.w(TAG, "CVE database refresh failed (non-fatal): ${e.message}")
         }
     }
 

@@ -7,6 +7,7 @@ import android.os.Build
 import android.provider.Settings
 import android.util.Log
 import com.androdr.data.model.DeviceTelemetry
+import com.androdr.ioc.CveDatabase
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -18,7 +19,8 @@ import javax.inject.Singleton
 
 @Singleton
 class DeviceAuditor @Inject constructor(
-    @ApplicationContext private val context: Context
+    @ApplicationContext private val context: Context,
+    private val cveDatabase: CveDatabase
 ) {
 
     private companion object {
@@ -86,6 +88,8 @@ class DeviceAuditor @Inject constructor(
             0
         }
 
+        val unpatchedCves = cveDatabase.getUnpatchedCves(patchStr)
+
         val bootloaderUnlocked = isBootloaderUnlocked()
 
         @Suppress("TooGenericExceptionCaught", "SwallowedException")
@@ -110,7 +114,8 @@ class DeviceAuditor @Inject constructor(
             patchLevel = patchStr,
             patchAgeDays = patchAgeDays,
             bootloaderUnlocked = bootloaderUnlocked,
-            wifiAdbEnabled = wifiAdbEnabled
+            wifiAdbEnabled = wifiAdbEnabled,
+            unpatchedCveCount = unpatchedCves.size
         ))
     }
 
