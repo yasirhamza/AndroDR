@@ -23,6 +23,7 @@ import com.androdr.ioc.feeds.MalwareBazaarCertFeed
 import com.androdr.ioc.feeds.MvtIndicatorsFeed
 import com.androdr.ioc.feeds.PlexusKnownAppFeed
 import com.androdr.ioc.feeds.UadKnownAppFeed
+import com.androdr.ioc.feeds.ZimperiumIocFeed
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -58,7 +59,10 @@ object AppModule {
 
     @Provides
     @Singleton
-    fun provideDomainIocFeeds(): @JvmSuppressWildcards List<DomainIocFeed> = listOf(MvtIndicatorsFeed())
+    fun provideDomainIocFeeds(): @JvmSuppressWildcards List<DomainIocFeed> = listOf(
+        MvtIndicatorsFeed(),
+        ZimperiumIocFeed()
+    )
 
     @Provides
     fun provideKnownAppEntryDao(db: AppDatabase): KnownAppEntryDao = db.knownAppEntryDao()
