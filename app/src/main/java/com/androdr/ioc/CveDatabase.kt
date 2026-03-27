@@ -23,6 +23,7 @@ import javax.inject.Singleton
 @Singleton
 class CveDatabase @Inject constructor() {
 
+    @Volatile
     private var androidCveEntries: List<CveEntry> = emptyList()
 
     suspend fun refresh() = withContext(Dispatchers.IO) {
