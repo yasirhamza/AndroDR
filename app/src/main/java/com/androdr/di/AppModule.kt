@@ -63,7 +63,7 @@ object AppModule {
     @Singleton
     fun provideDomainIocFeeds(): @JvmSuppressWildcards List<DomainIocFeed> = listOf(
         MvtIndicatorsFeed(),
-        ZimperiumIocFeed(),
+        // ZimperiumIocFeed() — disabled: repo files inaccessible via raw URLs (Git LFS)
         ThreatFoxDomainFeed(),
         HaGeZiTifFeed()
     )

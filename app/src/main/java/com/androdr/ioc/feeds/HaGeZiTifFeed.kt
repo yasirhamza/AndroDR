@@ -30,12 +30,15 @@ class HaGeZiTifFeed : DomainIocFeed {
     }
 
     /**
-     * Parses a plain-text domain list: one domain per line, skipping comments (#) and blanks.
+     * Parses Adblock Plus format: extracts domains from `||domain^` lines.
+     * Skips comments (! lines), metadata, and non-domain entries.
      */
     internal fun parseDomainList(text: String, fetchedAt: Long): List<DomainIocEntry> {
         return text.lines()
             .map { it.trim() }
-            .filter { it.isNotEmpty() && !it.startsWith("#") }
+            .filter { it.startsWith("||") && it.endsWith("^") }
+            .map { line -> line.removePrefix("||").removeSuffix("^") }
+            .filter { it.isNotEmpty() && !it.contains("*") }
             .map { domain ->
                 DomainIocEntry(
                     domain = domain.lowercase(),
@@ -70,7 +73,7 @@ class HaGeZiTifFeed : DomainIocFeed {
         const val SOURCE_ID = "hagezi_tif"
         private const val CAMPAIGN_NAME = "HaGeZi TIF"
         private const val TIF_URL =
-            "https://raw.githubusercontent.com/hagezi/dns-blocklists/main/domains/tif.medium.txt"
+            "https://raw.githubusercontent.com/hagezi/dns-blocklists/main/adblock/tif.medium.txt"
         private const val TIMEOUT_MS = 15_000
         private const val USER_AGENT = "AndroDR/1.0"
     }

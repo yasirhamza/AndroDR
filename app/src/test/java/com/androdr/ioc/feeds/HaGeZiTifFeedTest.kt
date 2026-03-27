@@ -9,11 +9,13 @@ class HaGeZiTifFeedTest {
     private val feed = HaGeZiTifFeed()
 
     @Test
-    fun `parseDomainList extracts domains from plain text`() {
+    fun `parseDomainList extracts domains from adblock format`() {
         val text = """
-            malware.example.com
-            phishing.evil.org
-            tracker.bad.net
+            [Adblock Plus]
+            ! Title: HaGeZi TIF
+            ||malware.example.com^
+            ||phishing.evil.org^
+            ||tracker.bad.net^
         """.trimIndent()
         val entries = feed.parseDomainList(text, 1000L)
         assertEquals(3, entries.size)
@@ -23,30 +25,32 @@ class HaGeZiTifFeedTest {
     }
 
     @Test
-    fun `parseDomainList skips comments and empty lines`() {
+    fun `parseDomainList skips comments and metadata lines`() {
         val text = """
-            # This is a header comment
-            # Another comment
-            malware.example.com
-
-            # Inline comment
-            phishing.evil.org
-
+            [Adblock Plus]
+            ! Title: Test
+            ! Last modified: today
+            ||malware.example.com^
+            ||phishing.evil.org^
         """.trimIndent()
         val entries = feed.parseDomainList(text, 1000L)
         assertEquals(2, entries.size)
     }
 
     @Test
-    fun `parseDomainList lowercases domains`() {
-        val text = "Malware.EXAMPLE.Com"
+    fun `parseDomainList skips wildcard entries`() {
+        val text = """
+            ||*.example.com^
+            ||clean.example.com^
+        """.trimIndent()
         val entries = feed.parseDomainList(text, 1000L)
-        assertEquals("malware.example.com", entries[0].domain)
+        assertEquals(1, entries.size)
+        assertEquals("clean.example.com", entries[0].domain)
     }
 
     @Test
     fun `parseDomainList sets correct metadata`() {
-        val text = "evil.example.com"
+        val text = "||evil.example.com^"
         val entries = feed.parseDomainList(text, 9999L)
         val entry = entries[0]
         assertEquals("HaGeZi TIF", entry.campaignName)
@@ -63,8 +67,9 @@ class HaGeZiTifFeedTest {
     @Test
     fun `parseDomainList returns empty list for comments-only input`() {
         val text = """
-            # comment one
-            # comment two
+            [Adblock Plus]
+            ! comment one
+            ! comment two
         """.trimIndent()
         assertTrue(feed.parseDomainList(text, 0L).isEmpty())
     }
