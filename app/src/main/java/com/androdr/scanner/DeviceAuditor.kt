@@ -31,7 +31,7 @@ class DeviceAuditor @Inject constructor(
      * The most recent known security patch date used as the reference point for
      * staleness checks. Update this value when a newer patch series is released.
      */
-    private val latestKnownPatch = "2025-03-01"
+    private val latestKnownPatch = "2026-03-01"
 
     /**
      * Collects device posture telemetry and returns structured [DeviceTelemetry]
