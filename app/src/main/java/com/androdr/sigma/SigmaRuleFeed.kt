@@ -53,9 +53,7 @@ class SigmaRuleFeed @Inject constructor(
         val rules = mutableListOf<SigmaRule>()
         try {
             val manifest = fetchUrl("${baseUrl}rules.txt") ?: return emptyList()
-            val ruleFiles = manifest.lines()
-                .map { it.trim() }
-                .filter { it.endsWith(".yml") }
+            val ruleFiles = parseManifest(manifest)
 
             for (file in ruleFiles) {
                 val yaml = fetchUrl("$baseUrl$file") ?: continue
@@ -91,5 +89,11 @@ class SigmaRuleFeed @Inject constructor(
         private const val DEFAULT_BASE_URL =
             "https://raw.githubusercontent.com/android-sigma-rules/rules/main/"
         private const val TIMEOUT_MS = 10_000
+
+        /** Parse a rules.txt manifest into a list of .yml file paths. */
+        fun parseManifest(manifest: String): List<String> =
+            manifest.lines()
+                .map { it.trim() }
+                .filter { it.endsWith(".yml") && !it.startsWith("#") }
     }
 }
