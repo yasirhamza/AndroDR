@@ -47,11 +47,20 @@ class SettingsRepository @Inject constructor(
         dataStore.edit { it[KEY_CUSTOM_RULE_URLS] = value }
     }
 
+    @Suppress("TooGenericExceptionCaught", "SwallowedException")
     suspend fun getCustomRuleUrlsList(): List<String> =
         customRuleUrls.first()
             .lines()
             .map { it.trim() }
-            .filter { it.isNotBlank() && it.startsWith("http") }
+            .filter { url ->
+                url.isNotBlank() && try {
+                    val uri = java.net.URI(url)
+                    uri.scheme in listOf("http", "https") &&
+                        !uri.host.isNullOrEmpty()
+                } catch (e: Exception) {
+                    false
+                }
+            }
 
     companion object {
         private val KEY_BLOCKLIST_BLOCK_MODE  = booleanPreferencesKey("blocklist_block_mode")
