@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<network-security-config>
+    <!-- Default: trust system CAs only (no user-installed CAs) -->
+    <base-config cleartextTrafficPermitted="false">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+
+    <!-- Pin CISA feed domain -->
+    <domain-config>
+        <domain includeSubdomains="true">cisa.gov</domain>
+        <pin-set expiration="2027-01-01">
+            <!-- DigiCert Global Root G2 (CISA's root CA) -->
+            <pin digest="SHA-256">i7WTqTvh0OioIruIfFR4kMPnBqrS2rdiVPl/s2uC/CY=</pin>
+            <!-- Backup: DigiCert Global Root CA -->
+            <pin digest="SHA-256">r/mIkG3eEpVdm+u/ko/cwxzOMo1bk4TyHIlByibiA5E=</pin>
+        </pin-set>
+    </domain-config>
+
+    <!-- Pin Google Storage (OSV feeds) -->
+    <domain-config>
+        <domain includeSubdomains="true">storage.googleapis.com</domain>
+        <pin-set expiration="2027-01-01">
+            <!-- GTS Root R1 (Google Trust Services) -->
+            <pin digest="SHA-256">hxqRlPTu1bMS/0DITB1SSu0vd4u/8l8TPoNPPhzumzc=</pin>
+            <!-- Backup: GlobalSign Root CA - R2 -->
+            <pin digest="SHA-256">iie1VXtL7HzAMF+/PVPR9xzT80kQxdZeJ+zduCB3uj0=</pin>
+        </pin-set>
+    </domain-config>
+
+    <!-- Pin GitHub (SIGMA rule feed) -->
+    <domain-config>
+        <domain includeSubdomains="true">raw.githubusercontent.com</domain>
+        <pin-set expiration="2027-01-01">
+            <!-- DigiCert Global Root G2 -->
+            <pin digest="SHA-256">i7WTqTvh0OioIruIfFR4kMPnBqrS2rdiVPl/s2uC/CY=</pin>
+            <!-- Backup: DigiCert Global Root CA -->
+            <pin digest="SHA-256">r/mIkG3eEpVdm+u/ko/cwxzOMo1bk4TyHIlByibiA5E=</pin>
+        </pin-set>
+    </domain-config>
+</network-security-config>

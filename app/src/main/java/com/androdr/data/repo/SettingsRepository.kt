@@ -52,15 +52,38 @@ class SettingsRepository @Inject constructor(
         customRuleUrls.first()
             .lines()
             .map { it.trim() }
-            .filter { url ->
-                url.isNotBlank() && try {
-                    val uri = java.net.URI(url)
-                    uri.scheme in listOf("http", "https") &&
-                        !uri.host.isNullOrEmpty()
-                } catch (e: Exception) {
-                    false
-                }
-            }
+            .filter { isValidRuleUrl(it) }
+
+    private fun isValidRuleUrl(url: String): Boolean {
+        if (url.isBlank()) return false
+        return try {
+            val uri = java.net.URI(url)
+            // Require HTTPS
+            if (uri.scheme?.lowercase() != "https") return false
+            val host = uri.host ?: return false
+            if (host.isEmpty()) return false
+            // Block private/reserved IP ranges and localhost
+            if (isPrivateOrReservedHost(host)) return false
+            true
+        } catch (e: Exception) {
+            false
+        }
+    }
+
+    @Suppress("TooGenericExceptionCaught", "SwallowedException")
+    private fun isPrivateOrReservedHost(host: String): Boolean {
+        val lower = host.lowercase()
+        if (lower == "localhost" || lower == "127.0.0.1" || lower == "::1") return true
+        if (lower == "0.0.0.0") return true
+        // Block metadata service
+        if (lower == "169.254.169.254") return true
+        return try {
+            val addr = java.net.InetAddress.getByName(host)
+            addr.isLoopbackAddress || addr.isLinkLocalAddress || addr.isSiteLocalAddress
+        } catch (e: Exception) {
+            false
+        }
+    }
 
     companion object {
         private val KEY_BLOCKLIST_BLOCK_MODE  = booleanPreferencesKey("blocklist_block_mode")
