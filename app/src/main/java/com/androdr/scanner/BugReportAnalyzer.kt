@@ -29,7 +29,7 @@ class BugReportAnalyzer @Inject constructor(
 
     /** Matches process names associated with known spyware / stalkerware families. */
     private val spywareProcessRegex = Regex(
-        """pegasus|spyware|flexispy|mspy|cerberus|droiddream""",
+        """pegasus|spyware|flexispy|mspy|cerberus|droiddream|BIGPRETZEL|graphite""",
         RegexOption.IGNORE_CASE
     )
 
