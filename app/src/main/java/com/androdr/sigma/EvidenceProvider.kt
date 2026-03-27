@@ -15,9 +15,9 @@ fun interface EvidenceProvider {
 class CveEvidenceProvider(private val allRules: List<SigmaRule>) : EvidenceProvider {
     private val campaignMap: Map<String, List<String>> by lazy { buildCampaignMap() }
 
-    @Suppress("UNCHECKED_CAST")
     override fun provide(rule: SigmaRule, record: Map<String, Any?>): List<EvidenceResult> {
-        val cves = record["unpatched_cves"] as? List<CveEntity> ?: return emptyList()
+        val rawList = record["unpatched_cves"] as? List<*> ?: return emptyList()
+        val cves = rawList.filterIsInstance<CveEntity>()
         if (cves.isEmpty()) return emptyList()
         val cveEvidences = cves.map { cve ->
             CveEvidence(

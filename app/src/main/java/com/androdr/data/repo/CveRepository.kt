@@ -60,7 +60,7 @@ class CveRepository @Inject constructor(
                     product.contains("android") || product.contains("chromium")) {
                     entries.add(CveEntity(
                         cveId = vuln.getString("cveID"),
-                        description = vuln.optString("shortDescription", "Actively exploited vulnerability"),
+                        description = vuln.optString("shortDescription", "Actively exploited vulnerability").take(500),
                         severity = "CRITICAL",
                         fixedInPatchLevel = "",
                         cisaDateAdded = vuln.optString("dateAdded", ""),

@@ -23,10 +23,6 @@
     <!-- App Scan -->
     <string name="filter_all">All</string>
     <string name="no_risks_found">No risks found</string>
-    <string name="label_reasons">Reasons</string>
-    <string name="label_dangerous_permissions">Dangerous Permissions</string>
-    <string name="badge_known_malware">⚠ Known Malware</string>
-    <string name="badge_sideloaded">Sideloaded</string>
 
     <!-- Device Audit -->
     <string name="device_all_clear">All checks passed</string>
