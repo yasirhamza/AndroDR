@@ -28,10 +28,12 @@ class DeviceAuditor @Inject constructor(
     }
 
     /**
-     * The most recent known security patch date used as the reference point for
-     * staleness checks. Update this value when a newer patch series is released.
+     * Dynamic reference date for patch staleness: first day of the current month.
+     * A device is "stale" if its patch level is more than 90 days before this date.
+     * No manual updates needed — adjusts automatically each month.
      */
-    private val latestKnownPatch = "2026-03-01"
+    private val latestKnownPatch: String
+        get() = LocalDate.now().withDayOfMonth(1).format(DateTimeFormatter.ofPattern("yyyy-MM-dd"))
 
     /**
      * Collects device posture telemetry and returns structured [DeviceTelemetry]
