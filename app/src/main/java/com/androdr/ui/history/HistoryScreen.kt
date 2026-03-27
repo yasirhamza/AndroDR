@@ -61,7 +61,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.androdr.R
 import com.androdr.data.model.ScanResult
 import com.androdr.scanner.ScanOrchestrator
-import com.androdr.ui.apps.riskLevelColor
+import com.androdr.ui.common.severityColor
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -168,7 +168,7 @@ private fun ScanReportBottomSheet(
     val context = LocalContext.current
     val dateFormatter = remember { SimpleDateFormat("MMM d, yyyy  HH:mm", Locale.getDefault()) }
     val dateString = dateFormatter.format(Date(scan.timestamp))
-    val riskColor = riskLevelColor(scan.overallRiskLevel)
+    val riskColor = severityColor(scan.overallRiskLevel.name)
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -314,7 +314,7 @@ private fun ScanHistoryItem(
     val dateString = dateFormatter.format(Date(scan.timestamp))
 
     val riskLevel = scan.overallRiskLevel
-    val riskColor = riskLevelColor(riskLevel)
+    val riskColor = severityColor(riskLevel.name)
 
     Card(
         modifier = Modifier
@@ -341,8 +341,8 @@ private fun ScanHistoryItem(
                         fontWeight = FontWeight.SemiBold
                     )
                     Text(
-                        text = "${scan.appRisks.size} app risk(s) · " +
-                            "${scan.deviceFlags.count { it.isTriggered }} device flag(s)",
+                        text = "${scan.appRisks.count { it.triggered }} app risk(s) \u00b7 " +
+                            "${scan.deviceFlags.count { it.triggered }} device flag(s)",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -384,10 +384,10 @@ private fun ScanHistoryItem(
                     )
                     Text(
                         text = buildString {
-                            append("• ${scan.appRisks.size} app risk(s) detected\n")
-                            append("• ${scan.knownMalwareCount} known malware app(s)\n")
-                            append("• ${scan.riskySideloadCount} sideloaded app(s)\n")
-                            append("• ${scan.deviceFlags.count { it.isTriggered }} device flag(s) triggered")
+                            append("\u2022 ${scan.appRisks.count { it.triggered }} app risk(s) detected\n")
+                            append("\u2022 ${scan.knownMalwareCount} known malware app(s)\n")
+                            append("\u2022 ${scan.riskySideloadCount} sideloaded app(s)\n")
+                            append("\u2022 ${scan.deviceFlags.count { it.triggered }} device flag(s) triggered")
                         },
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurface
@@ -453,13 +453,13 @@ private fun ScanHistoryItem(
     }
 }
 
-@Suppress("LongMethod") // DiffSection renders new/resolved risks and flags with conditional
+@Suppress("LongMethod") // DiffSection renders new/resolved findings with conditional
 // sub-sections; all branches are needed in one composable to maintain visual cohesion.
 @Composable
 private fun DiffSection(diff: ScanOrchestrator.ScanDiff) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        val totalNew      = diff.newRisks.size + diff.newFlags.size
-        val totalResolved = diff.resolvedRisks.size + diff.resolvedFlags.size
+        val totalNew      = diff.newFindings.size
+        val totalResolved = diff.resolvedFindings.size
 
         if (totalNew > 0) {
             Text(
@@ -468,16 +468,9 @@ private fun DiffSection(diff: ScanOrchestrator.ScanDiff) {
                 fontWeight = FontWeight.Bold,
                 color = Color(0xFFCF6679)
             )
-            diff.newRisks.forEach { app ->
+            diff.newFindings.forEach { finding ->
                 Text(
-                    text = "• ${app.appName} (${app.riskLevel.name})",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = Color(0xFFCF6679)
-                )
-            }
-            diff.newFlags.forEach { flag ->
-                Text(
-                    text = "• ${flag.title}",
+                    text = "\u2022 ${finding.title} (${finding.level.uppercase()})",
                     style = MaterialTheme.typography.bodySmall,
                     color = Color(0xFFCF6679)
                 )
@@ -491,16 +484,9 @@ private fun DiffSection(diff: ScanOrchestrator.ScanDiff) {
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.primary
             )
-            diff.resolvedRisks.forEach { app ->
+            diff.resolvedFindings.forEach { finding ->
                 Text(
-                    text = "• ${app.appName}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.primary
-                )
-            }
-            diff.resolvedFlags.forEach { flag ->
-                Text(
-                    text = "• ${flag.title}",
+                    text = "\u2022 ${finding.title}",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.primary
                 )

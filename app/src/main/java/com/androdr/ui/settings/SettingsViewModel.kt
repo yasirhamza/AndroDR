@@ -6,10 +6,10 @@ import androidx.lifecycle.viewModelScope
 import com.androdr.data.db.CertHashIocEntryDao
 import com.androdr.data.db.DomainIocEntryDao
 import com.androdr.data.db.IocEntryDao
+import com.androdr.data.repo.CveRepository
 import com.androdr.data.repo.SettingsRepository
 import com.androdr.ioc.CertHashIocDatabase
 import com.androdr.ioc.CertHashIocUpdater
-import com.androdr.ioc.CveDatabase
 import com.androdr.ioc.DomainIocUpdater
 import com.androdr.ioc.KnownAppUpdater
 import com.androdr.ioc.RemoteIocUpdater
@@ -37,7 +37,7 @@ class SettingsViewModel @Inject constructor(
     private val certHashIocEntryDao: CertHashIocEntryDao,
     private val certHashIocDatabase: CertHashIocDatabase,
     private val sigmaRuleEngine: SigmaRuleEngine,
-    private val cveDatabase: CveDatabase,
+    private val cveRepository: CveRepository,
     private val remoteIocUpdater: RemoteIocUpdater,
     private val domainIocUpdater: DomainIocUpdater,
     private val knownAppUpdater: KnownAppUpdater,
@@ -134,7 +134,7 @@ class SettingsViewModel @Inject constructor(
 
                 // Refresh CVE database
                 try {
-                    cveDatabase.refresh()
+                    cveRepository.refresh()
                 } catch (e: Exception) {
                     Log.w(TAG, "CVE database refresh failed: ${e.message}")
                 }
@@ -156,7 +156,7 @@ class SettingsViewModel @Inject constructor(
             // Thread-safe: getAllBadCerts() returns a lazily-initialized immutable list;
             // refreshStats() runs on viewModelScope (single coroutine, sequential reads)
             _certHashIocCount.value = certHashIocEntryDao.count() + certHashIocDatabase.getAllBadCerts().size
-            _cveCount.value = cveDatabase.getActivelyExploitedCount()
+            _cveCount.value = cveRepository.getActivelyExploitedCount()
 
             // Determine most recent fetch time across all IOC tables
             val times = listOfNotNull(

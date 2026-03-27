@@ -13,8 +13,6 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -23,13 +21,13 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Warning
-import androidx.compose.material3.AssistChip
-import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -60,8 +58,11 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.androdr.R
-import com.androdr.data.model.AppRisk
-import com.androdr.data.model.RiskLevel
+import com.androdr.sigma.Finding
+import com.androdr.ui.common.SeverityChip
+import com.androdr.ui.common.severityColor
+
+private val FILTER_LEVELS = listOf("critical", "high", "medium", "low")
 
 @Suppress("LongMethod")
 @OptIn(ExperimentalMaterial3Api::class)
@@ -69,9 +70,9 @@ import com.androdr.data.model.RiskLevel
 fun AppScanScreen(
     viewModel: AppScanViewModel = hiltViewModel()
 ) {
-    val filteredRisks by viewModel.filteredRisks.collectAsStateWithLifecycle()
+    val filteredGroups by viewModel.filteredGroupedApps.collectAsStateWithLifecycle()
     val filterLevel by viewModel.filterLevel.collectAsStateWithLifecycle()
-    var selectedRisk by remember { mutableStateOf<AppRisk?>(null) }
+    var selectedGroup by remember { mutableStateOf<AppGroup?>(null) }
 
     Column(modifier = Modifier.fillMaxSize()) {
         // Filter chips row
@@ -88,16 +89,16 @@ fun AppScanScreen(
                     label = { Text(stringResource(R.string.filter_all)) }
                 )
             }
-            items(RiskLevel.values()) { level ->
+            items(FILTER_LEVELS) { level ->
                 FilterChip(
-                    selected = filterLevel == level,
+                    selected = filterLevel.equals(level, ignoreCase = true),
                     onClick = { viewModel.setFilter(level) },
-                    label = { Text(level.name) }
+                    label = { Text(level.uppercase()) }
                 )
             }
         }
 
-        if (filteredRisks.isEmpty()) {
+        if (filteredGroups.isEmpty()) {
             // Empty state
             Box(
                 modifier = Modifier.fillMaxSize(),
@@ -126,20 +127,20 @@ fun AppScanScreen(
                 contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                items(filteredRisks) { appRisk ->
-                    AppRiskCard(
-                        appRisk = appRisk,
-                        onClick = { selectedRisk = appRisk }
+                items(filteredGroups) { group ->
+                    AppGroupCard(
+                        group = group,
+                        onClick = { selectedGroup = group }
                     )
                 }
             }
         }
     }
 
-    selectedRisk?.let { risk ->
-        AppRiskDetailSheet(
-            risk = risk,
-            onDismiss = { selectedRisk = null }
+    selectedGroup?.let { group ->
+        AppGroupDetailSheet(
+            group = group,
+            onDismiss = { selectedGroup = null }
         )
     }
 }
@@ -147,7 +148,9 @@ fun AppScanScreen(
 @Suppress("LongMethod")
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun AppRiskCard(appRisk: AppRisk, onClick: () -> Unit) {
+private fun AppGroupCard(group: AppGroup, onClick: () -> Unit) {
+    val color = severityColor(group.highestLevel)
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -167,16 +170,16 @@ private fun AppRiskCard(appRisk: AppRisk, onClick: () -> Unit) {
                 modifier = Modifier
                     .size(44.dp)
                     .background(
-                        color = riskLevelColor(appRisk.riskLevel).copy(alpha = 0.25f),
+                        color = color.copy(alpha = 0.25f),
                         shape = CircleShape
                     ),
                 contentAlignment = Alignment.Center
             ) {
                 Text(
-                    text = appRisk.appName.firstOrNull()?.uppercase() ?: "?",
+                    text = group.appName.firstOrNull()?.uppercase() ?: "?",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
-                    color = riskLevelColor(appRisk.riskLevel)
+                    color = color
                 )
             }
 
@@ -184,49 +187,29 @@ private fun AppRiskCard(appRisk: AppRisk, onClick: () -> Unit) {
 
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = appRisk.appName,
+                    text = group.appName,
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.SemiBold
                 )
                 Text(
-                    text = appRisk.packageName,
+                    text = group.packageName,
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
-                if (appRisk.isKnownMalware || appRisk.isSideloaded) {
+                if (group.findings.size > 1) {
                     Spacer(modifier = Modifier.height(4.dp))
-                    FlowRow(
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
-                        verticalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        if (appRisk.isKnownMalware) {
-                            SuggestionChip(
-                                onClick = {},
-                                label = { Text(stringResource(R.string.badge_known_malware)) },
-                                colors = SuggestionChipDefaults.suggestionChipColors(
-                                    containerColor = Color(0xFFCF6679).copy(alpha = 0.2f),
-                                    labelColor = Color(0xFFCF6679)
-                                )
-                            )
-                        }
-                        if (appRisk.isSideloaded) {
-                            SuggestionChip(
-                                onClick = {},
-                                label = { Text(stringResource(R.string.badge_sideloaded)) },
-                                colors = SuggestionChipDefaults.suggestionChipColors(
-                                    containerColor = Color(0xFFFF9800).copy(alpha = 0.2f),
-                                    labelColor = Color(0xFFFF9800)
-                                )
-                            )
-                        }
-                    }
+                    Text(
+                        text = "${group.findings.size} findings",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
             }
 
             Spacer(modifier = Modifier.width(8.dp))
 
             // Risk level chip
-            RiskChip(riskLevel = appRisk.riskLevel)
+            RiskChip(level = group.highestLevel)
         }
     }
 }
@@ -234,10 +217,10 @@ private fun AppRiskCard(appRisk: AppRisk, onClick: () -> Unit) {
 @Suppress("LongMethod")
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
-private fun AppRiskDetailSheet(risk: AppRisk, onDismiss: () -> Unit) {
+private fun AppGroupDetailSheet(group: AppGroup, onDismiss: () -> Unit) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val context = LocalContext.current
-    val steps = remember(risk) { remediationSteps(risk) }
+    val color = severityColor(group.highestLevel)
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -250,63 +233,62 @@ private fun AppRiskDetailSheet(risk: AppRisk, onDismiss: () -> Unit) {
                 .padding(horizontal = 24.dp)
                 .padding(bottom = 16.dp)
         ) {
-         // Scrollable content
-         Column(
-            modifier = Modifier
-                .weight(1f, fill = false)
-                .verticalScroll(rememberScrollState()),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
-         ) {
-            // Header: icon + app name + package + RiskChip
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
+            // Scrollable content
+            Column(
+                modifier = Modifier
+                    .weight(1f, fill = false)
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                Box(
-                    modifier = Modifier
-                        .size(48.dp)
-                        .background(
-                            color = riskLevelColor(risk.riskLevel).copy(alpha = 0.25f),
-                            shape = CircleShape
-                        ),
-                    contentAlignment = Alignment.Center
+                // Header: icon + app name + package + RiskChip
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(
-                        text = risk.appName.firstOrNull()?.uppercase() ?: "?",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = riskLevelColor(risk.riskLevel)
-                    )
+                    Box(
+                        modifier = Modifier
+                            .size(48.dp)
+                            .background(
+                                color = color.copy(alpha = 0.25f),
+                                shape = CircleShape
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = group.appName.firstOrNull()?.uppercase() ?: "?",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = color
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.width(12.dp))
+
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = group.appName,
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        Text(
+                            text = group.packageName,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+
+                    RiskChip(level = group.highestLevel)
                 }
 
-                Spacer(modifier = Modifier.width(12.dp))
+                HorizontalDivider()
 
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = risk.appName,
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                    Text(
-                        text = risk.packageName,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-
-                RiskChip(riskLevel = risk.riskLevel)
-            }
-
-            HorizontalDivider()
-
-            // "Why it's flagged" section
-            if (risk.reasons.isNotEmpty()) {
+                // Findings section
                 Text(
-                    text = stringResource(R.string.label_reasons),
+                    text = "Findings (${group.findings.size})",
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.SemiBold
                 )
-                risk.reasons.forEach { reason ->
+                group.findings.forEach { finding ->
                     Row(
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         verticalAlignment = Alignment.Top
@@ -314,60 +296,46 @@ private fun AppRiskDetailSheet(risk: AppRisk, onDismiss: () -> Unit) {
                         Icon(
                             imageVector = Icons.Filled.Warning,
                             contentDescription = null,
-                            tint = riskLevelColor(risk.riskLevel),
+                            tint = severityColor(finding.level),
                             modifier = Modifier.size(18.dp)
                         )
+                        Column {
+                            Text(
+                                text = finding.title,
+                                style = MaterialTheme.typography.bodySmall,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            if (finding.description.isNotEmpty()) {
+                                Text(
+                                    text = finding.description,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                    }
+                }
+
+                HorizontalDivider()
+
+                // Remediation section
+                val allRemediation = group.findings.flatMap { it.remediation }.distinct()
+                if (allRemediation.isNotEmpty()) {
+                    Text(
+                        text = "What to do",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    allRemediation.forEachIndexed { index, step ->
                         Text(
-                            text = reason,
+                            text = "${index + 1}. $step",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurface
                         )
                     }
                 }
-            }
-
-            HorizontalDivider()
-
-            // "What to do" section
-            Text(
-                text = "What to do",
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.SemiBold
-            )
-            steps.forEachIndexed { index, step ->
-                Text(
-                    text = "${index + 1}. $step",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-            }
-
-            // Permissions section
-            if (risk.dangerousPermissions.isNotEmpty()) {
-                Text(
-                    text = stringResource(R.string.label_dangerous_permissions),
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.SemiBold
-                )
-                FlowRow(
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    verticalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    risk.dangerousPermissions.forEach { perm ->
-                        val shortPerm = perm.substringAfterLast('.')
-                        AssistChip(
-                            onClick = {},
-                            label = { Text(shortPerm, style = MaterialTheme.typography.labelSmall) },
-                            colors = AssistChipDefaults.assistChipColors(
-                                containerColor = Color(0xFFFF9800).copy(alpha = 0.15f),
-                                labelColor = Color(0xFFFF9800)
-                            )
-                        )
-                    }
-                }
-            }
-
-         } // end scrollable column
+            } // end scrollable column
 
             Spacer(modifier = Modifier.height(16.dp))
 
@@ -375,7 +343,7 @@ private fun AppRiskDetailSheet(risk: AppRisk, onDismiss: () -> Unit) {
             Button(
                 onClick = {
                     val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
-                        data = Uri.parse("package:${risk.packageName}")
+                        data = Uri.parse("package:${group.packageName}")
                     }
                     context.startActivity(intent)
                 },
@@ -407,13 +375,13 @@ private fun AppRiskDetailSheet(risk: AppRisk, onDismiss: () -> Unit) {
 }
 
 @Composable
-fun RiskChip(riskLevel: RiskLevel, modifier: Modifier = Modifier) {
-    val color = riskLevelColor(riskLevel)
+fun RiskChip(level: String, modifier: Modifier = Modifier) {
+    val color = severityColor(level)
     SuggestionChip(
         onClick = {},
         label = {
             Text(
-                text = riskLevel.name,
+                text = level.uppercase(),
                 style = MaterialTheme.typography.labelSmall,
                 fontWeight = FontWeight.Bold
             )
@@ -426,58 +394,4 @@ fun RiskChip(riskLevel: RiskLevel, modifier: Modifier = Modifier) {
     )
 }
 
-fun riskLevelColor(riskLevel: RiskLevel): Color = when (riskLevel) {
-    RiskLevel.CRITICAL -> Color(0xFFCF6679)
-    RiskLevel.HIGH -> Color(0xFFFF9800)
-    RiskLevel.MEDIUM -> Color(0xFFFFD600)
-    RiskLevel.LOW -> Color(0xFF00D4AA)
-}
-
-/** Derives actionable remediation steps from an [AppRisk]'s flags and reasons. */
-internal fun remediationSteps(risk: AppRisk): List<String> {
-    val steps = mutableListOf<String>()
-    val reasonsJoined = risk.reasons.joinToString(" ")
-
-    if (risk.isKnownMalware) {
-        steps.add("Uninstall this app immediately \u2014 it matches a known malware database entry.")
-    }
-
-    if ("signing certificate" in reasonsJoined) {
-        steps.add(
-            "This app is signed by a known malware developer. " +
-                "Uninstall it even if the app name looks legitimate."
-        )
-    }
-
-    if ("accessibility service" in reasonsJoined.lowercase()) {
-        steps.add(
-            "This app can read your screen content. Go to Settings \u2192 " +
-                "Accessibility and disable its service before uninstalling."
-        )
-    }
-
-    if ("device administrator" in reasonsJoined.lowercase()) {
-        steps.add(
-            "This app has prevented its own uninstallation. Go to Settings \u2192 " +
-                "Security \u2192 Device Admin Apps and remove it first."
-        )
-    }
-
-    if ("surveillance-capable permissions" in reasonsJoined) {
-        steps.add(
-            "This app has extensive surveillance capabilities. " +
-                "If you did not install it intentionally, uninstall it."
-        )
-    }
-
-    if (risk.isSideloaded && steps.isEmpty()) {
-        steps.add("This app was not installed from a trusted app store. Verify you intended to install it.")
-    }
-
-    if (steps.isEmpty()) {
-        steps.add("Review this app and decide whether to keep it.")
-    }
-
-    steps.add("Run another scan after taking action to confirm the threat is resolved.")
-    return steps
-}
+fun riskLevelColor(level: String): Color = severityColor(level)
