@@ -62,7 +62,7 @@ class ScanOrchestrator @Inject constructor(
     /**
      * Runs a full device scan.
      *
-     * [AppScanner.scan] and [DeviceAuditor.audit] execute concurrently on the IO dispatcher
+     * [AppScanner.collectTelemetry] and [DeviceAuditor.audit] execute concurrently on the IO dispatcher
      * (each is already wrapped with [kotlinx.coroutines.withContext]).  The results are combined
      * into a [ScanResult], saved to the database, and returned.
      */
