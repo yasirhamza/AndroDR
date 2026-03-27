@@ -1,49 +1,43 @@
 package com.androdr.data.db
 
 import androidx.room.TypeConverter
-import com.androdr.data.model.AppRisk
-import com.androdr.data.model.DeviceFlag
+import com.androdr.sigma.Evidence
+import com.androdr.sigma.Finding
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.builtins.serializer
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.modules.SerializersModule
+import kotlinx.serialization.modules.polymorphic
+import kotlinx.serialization.modules.subclass
 
 object Converters {
+    private val module = SerializersModule {
+        polymorphic(Evidence::class) {
+            subclass(Evidence.None::class)
+            subclass(Evidence.CveList::class)
+            subclass(Evidence.IocMatch::class)
+            subclass(Evidence.PermissionCluster::class)
+        }
+    }
 
-    private val json = Json { ignoreUnknownKeys = true }
+    private val json = Json {
+        ignoreUnknownKeys = true
+        serializersModule = module
+    }
 
-    // ── List<AppRisk> ──────────────────────────────────────────────────────────
+    @TypeConverter @JvmStatic
+    fun fromFindingList(value: List<Finding>): String =
+        json.encodeToString(ListSerializer(Finding.serializer()), value)
 
-    @TypeConverter
-    @JvmStatic
-    fun fromAppRiskList(value: List<AppRisk>): String =
-        json.encodeToString(ListSerializer(AppRisk.serializer()), value)
+    @TypeConverter @JvmStatic
+    fun toFindingList(value: String): List<Finding> =
+        json.decodeFromString(ListSerializer(Finding.serializer()), value)
 
-    @TypeConverter
-    @JvmStatic
-    fun toAppRiskList(value: String): List<AppRisk> =
-        json.decodeFromString(ListSerializer(AppRisk.serializer()), value)
-
-    // ── List<DeviceFlag> ───────────────────────────────────────────────────────
-
-    @TypeConverter
-    @JvmStatic
-    fun fromDeviceFlagList(value: List<DeviceFlag>): String =
-        json.encodeToString(ListSerializer(DeviceFlag.serializer()), value)
-
-    @TypeConverter
-    @JvmStatic
-    fun toDeviceFlagList(value: String): List<DeviceFlag> =
-        json.decodeFromString(ListSerializer(DeviceFlag.serializer()), value)
-
-    // ── List<String> ───────────────────────────────────────────────────────────
-
-    @TypeConverter
-    @JvmStatic
+    @TypeConverter @JvmStatic
     fun fromStringList(value: List<String>): String =
         json.encodeToString(ListSerializer(String.serializer()), value)
 
-    @TypeConverter
-    @JvmStatic
+    @TypeConverter @JvmStatic
     fun toStringList(value: String): List<String> =
         json.decodeFromString(ListSerializer(String.serializer()), value)
 }
