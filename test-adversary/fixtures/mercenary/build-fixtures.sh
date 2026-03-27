@@ -41,6 +41,10 @@ MODULES=(
     "accessibility-abuse"
     "device-admin-abuse"
     "surveillance-permissions"
+    "system-name-disguise"
+    "impersonation-play-store"
+    "multi-abuse-combo"
+    "firmware-implant-sim"
 )
 
 echo ""
