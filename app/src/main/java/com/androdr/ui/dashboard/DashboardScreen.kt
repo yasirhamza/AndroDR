@@ -47,6 +47,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.androdr.R
 import com.androdr.data.model.RiskLevel
 import com.androdr.data.model.ScanResult
+import com.androdr.ui.common.severityColor
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -112,13 +113,12 @@ fun DashboardScreen(
             RiskLevelCard(latestScan = latestScan)
 
             AnimatedVisibility(
-                visible = scanDiff != null &&
-                    (scanDiff!!.newRisks.isNotEmpty() || scanDiff!!.newFlags.isNotEmpty()),
+                visible = scanDiff != null && scanDiff!!.newFindings.isNotEmpty(),
                 enter = fadeIn(),
                 exit = fadeOut()
             ) {
                 scanDiff?.let { diff ->
-                    val newCount = diff.newRisks.size + diff.newFlags.size
+                    val newCount = diff.newFindings.size
                     DiffBanner(newCount = newCount)
                 }
             }
@@ -144,9 +144,9 @@ fun DashboardScreen(
 
             // Summary cards grid (2x2)
             val riskyAppCount = latestScan?.appRisks
-                ?.count { it.riskLevel != RiskLevel.LOW } ?: 0
+                ?.count { it.triggered } ?: 0
             val deviceFlagCount = latestScan?.deviceFlags
-                ?.count { it.isTriggered } ?: 0
+                ?.count { it.triggered } ?: 0
             val lastScanTime = latestScan?.timestamp?.let { ts ->
                 SimpleDateFormat("MMM d, HH:mm", Locale.getDefault()).format(Date(ts))
             } ?: stringResource(R.string.never)
@@ -197,7 +197,7 @@ private fun RiskLevelCard(latestScan: ScanResult?) {
         RiskLevel.HIGH     -> Pair(Color(0xFFFF9800), "HIGH")
         RiskLevel.MEDIUM   -> Pair(Color(0xFFFFD600), "MEDIUM")
         RiskLevel.LOW      -> Pair(Color(0xFF00D4AA), "LOW")
-        null               -> Pair(Color(0xFF00D4AA), "—")
+        null               -> Pair(Color(0xFF00D4AA), "\u2014")
     }
 
     Card(
@@ -239,10 +239,10 @@ private fun RiskLevelCard(latestScan: ScanResult?) {
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             } else {
-                val appRiskCount = latestScan.appRisks.size
-                val flagCount = latestScan.deviceFlags.count { it.isTriggered }
+                val appRiskCount = latestScan.appRisks.count { it.triggered }
+                val flagCount = latestScan.deviceFlags.count { it.triggered }
                 Text(
-                    text = "$appRiskCount app risk(s) · $flagCount device flag(s) triggered",
+                    text = "$appRiskCount app risk(s) \u00b7 $flagCount device flag(s) triggered",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
