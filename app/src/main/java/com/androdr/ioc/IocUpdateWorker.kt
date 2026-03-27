@@ -7,6 +7,8 @@ import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
+import com.androdr.sigma.SigmaRuleEngine
+import com.androdr.sigma.SigmaRuleFeed
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 
@@ -17,18 +19,35 @@ class IocUpdateWorker @AssistedInject constructor(
     private val remoteIocUpdater: RemoteIocUpdater,
     private val domainIocUpdater: DomainIocUpdater,
     private val knownAppUpdater: KnownAppUpdater,
-    private val certHashIocUpdater: CertHashIocUpdater
+    private val certHashIocUpdater: CertHashIocUpdater,
+    private val sigmaRuleFeed: SigmaRuleFeed,
+    private val sigmaRuleEngine: SigmaRuleEngine
 ) : CoroutineWorker(context, params) {
 
     @Suppress("TooGenericExceptionCaught")
     override suspend fun doWork(): Result {
         return try {
             val fetched = runAllUpdaters(remoteIocUpdater, domainIocUpdater, knownAppUpdater, certHashIocUpdater)
-            Log.i(TAG, "Worker finished — $fetched entries fetched total")
+            // Refresh SIGMA rules from remote repos
+            refreshSigmaRules()
+            Log.i(TAG, "Worker finished — $fetched IOC entries, ${sigmaRuleEngine.ruleCount()} SIGMA rules")
             Result.success()
         } catch (e: Exception) {
             Log.e(TAG, "Worker failed: ${e.message}")
             Result.retry()
+        }
+    }
+
+    @Suppress("TooGenericExceptionCaught")
+    private suspend fun refreshSigmaRules() {
+        try {
+            val remoteRules = sigmaRuleFeed.fetch()
+            if (remoteRules.isNotEmpty()) {
+                sigmaRuleEngine.setRemoteRules(remoteRules)
+                Log.i(TAG, "SIGMA rules refreshed: ${remoteRules.size} remote rules loaded")
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "SIGMA rule refresh failed: ${e.message}")
         }
     }
 

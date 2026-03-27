@@ -1,6 +1,7 @@
 package com.androdr.sigma
 
 import android.util.Log
+import com.androdr.data.repo.SettingsRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.net.HttpURLConnection
@@ -9,30 +10,55 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Fetches SIGMA rules from the public android-sigma-rules/rules GitHub repo.
- * Returns parsed rules that can be merged into [SigmaRuleEngine] via [setRemoteRules].
+ * Fetches SIGMA rules from the default public repo and any custom rule URLs
+ * configured in settings. Returns parsed rules for [SigmaRuleEngine.setRemoteRules].
  */
 @Singleton
-class SigmaRuleFeed @Inject constructor() {
+class SigmaRuleFeed @Inject constructor(
+    private val settingsRepository: SettingsRepository
+) {
 
     @Suppress("TooGenericExceptionCaught")
     suspend fun fetch(): List<SigmaRule> = withContext(Dispatchers.IO) {
+        val allRules = mutableListOf<SigmaRule>()
+
+        // Default public repo
+        allRules.addAll(fetchFromRepo(DEFAULT_BASE_URL))
+
+        // Custom rule URLs from settings
+        @Suppress("TooGenericExceptionCaught", "SwallowedException")
+        val customUrls = try {
+            settingsRepository.getCustomRuleUrlsList()
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to read custom rule URLs: ${e.message}")
+            emptyList()
+        }
+        for (url in customUrls) {
+            val baseUrl = if (url.endsWith("/")) url else "$url/"
+            allRules.addAll(fetchFromRepo(baseUrl))
+        }
+
+        Log.i(TAG, "Fetched ${allRules.size} remote SIGMA rules from ${1 + customUrls.size} source(s)")
+        allRules
+    }
+
+    @Suppress("TooGenericExceptionCaught")
+    private fun fetchFromRepo(baseUrl: String): List<SigmaRule> {
         val rules = mutableListOf<SigmaRule>()
         try {
-            val manifest = fetchUrl(MANIFEST_URL) ?: return@withContext emptyList()
+            val manifest = fetchUrl("${baseUrl}rules.txt") ?: return emptyList()
             val ruleFiles = manifest.lines()
                 .map { it.trim() }
                 .filter { it.endsWith(".yml") }
 
             for (file in ruleFiles) {
-                val yaml = fetchUrl("$BASE_URL$file") ?: continue
+                val yaml = fetchUrl("$baseUrl$file") ?: continue
                 SigmaRuleParser.parse(yaml)?.let { rules.add(it) }
             }
-            Log.i(TAG, "Fetched ${rules.size} remote SIGMA rules")
         } catch (e: Exception) {
-            Log.w(TAG, "Failed to fetch remote SIGMA rules: ${e.message}")
+            Log.w(TAG, "Failed to fetch rules from $baseUrl: ${e.message}")
         }
-        rules
+        return rules
     }
 
     @Suppress("TooGenericExceptionCaught")
@@ -41,6 +67,7 @@ class SigmaRuleFeed @Inject constructor() {
             val conn = URL(url).openConnection() as HttpURLConnection
             conn.connectTimeout = TIMEOUT_MS
             conn.readTimeout = TIMEOUT_MS
+            conn.setRequestProperty("User-Agent", "AndroDR/1.0")
             if (conn.responseCode == HttpURLConnection.HTTP_OK) {
                 conn.inputStream.bufferedReader().use { it.readText() }
             } else {
@@ -54,9 +81,8 @@ class SigmaRuleFeed @Inject constructor() {
 
     companion object {
         private const val TAG = "SigmaRuleFeed"
-        private const val BASE_URL =
+        private const val DEFAULT_BASE_URL =
             "https://raw.githubusercontent.com/android-sigma-rules/rules/main/"
-        private const val MANIFEST_URL = "${BASE_URL}rules.txt"
         private const val TIMEOUT_MS = 10_000
     }
 }
