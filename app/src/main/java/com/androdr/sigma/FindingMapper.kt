@@ -21,13 +21,7 @@ object FindingMapper {
         return findingsByPackage.mapNotNull { (packageName, packageFindings) ->
             val app = telemetry.find { it.packageName == packageName } ?: return@mapNotNull null
 
-            val reasons = packageFindings.flatMap { finding ->
-                if (finding.remediation.isNotEmpty()) {
-                    listOf(finding.title)
-                } else {
-                    listOf(finding.title)
-                }
-            }
+            val reasons = packageFindings.map { it.title }
 
             val highestLevel = packageFindings
                 .map { sigmaLevelToRiskLevel(it.level) }
