@@ -26,6 +26,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.Button
@@ -413,7 +414,7 @@ private fun ScanHistoryItem(
                         // View Report button
                         IconButton(onClick = onViewReport) {
                             Icon(
-                                imageVector = Icons.Filled.ContentCopy,
+                                imageVector = Icons.Filled.Description,
                                 contentDescription = "View full report",
                                 tint = MaterialTheme.colorScheme.primary
                             )
