@@ -42,6 +42,7 @@ class CveRepository @Inject constructor(
             val conn = URL(CISA_KEV_URL).openConnection() as HttpURLConnection
             conn.connectTimeout = TIMEOUT_MS
             conn.readTimeout = TIMEOUT_MS
+            conn.instanceFollowRedirects = false
             conn.setRequestProperty("User-Agent", "AndroDR/1.0")
             if (conn.responseCode != HttpURLConnection.HTTP_OK) {
                 Log.w(TAG, "CISA KEV fetch failed: HTTP ${conn.responseCode}")
@@ -84,6 +85,7 @@ class CveRepository @Inject constructor(
             val conn = URL(OSV_ANDROID_URL).openConnection() as HttpURLConnection
             conn.connectTimeout = TIMEOUT_MS
             conn.readTimeout = TIMEOUT_MS
+            conn.instanceFollowRedirects = false
             conn.setRequestProperty("User-Agent", "AndroDR/1.0")
             if (conn.responseCode != HttpURLConnection.HTTP_OK) {
                 Log.w(TAG, "OSV fetch failed: HTTP ${conn.responseCode}")
