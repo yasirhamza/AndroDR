@@ -226,3 +226,20 @@ stagefright-exploit.net
 janus-exploit-cdn.xyz
 dirty-cow-android.net
 towelroot-exploit.xyz
+# Paragon Graphite spyware C2 domains (Citizen Lab 2025)
+forti.external-staging-02.com
+awake-wood.io
+forti.paraccess.com
+modern-money.org
+ancient-thing.it
+external-astra.com
+internal-abba.com
+external-cap.com
+external-drt.com
+external-muki.com
+forti.external-muki.com
+external-cag.com
+forti.external-sht-prd-4.com
+forti.external-shotgun3.com
+forti.external-sht.com
+forti.internal-stg.com

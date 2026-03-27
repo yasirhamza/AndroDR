@@ -1,0 +1,25 @@
+title: DNS query to known Graphite/Paragon C2 domain
+id: androdr-005
+status: production
+description: >
+    Detects DNS queries to infrastructure associated with Paragon's
+    Graphite mercenary spyware, based on Citizen Lab research.
+author: AndroDR
+date: 2026/03/27
+references:
+    - https://citizenlab.ca/tag/paragon/
+tags:
+    - attack.t1437
+logsource:
+    product: androdr
+    service: dns_monitor
+detection:
+    selection:
+        domain|ioc_lookup: domain_ioc_db
+    condition: selection
+level: critical
+falsepositives:
+    - Domains may be repurposed after takedown
+remediation:
+    - "A connection to infrastructure associated with Paragon Graphite spyware was blocked."
+    - "This may indicate your device is targeted by a nation-state level threat."
