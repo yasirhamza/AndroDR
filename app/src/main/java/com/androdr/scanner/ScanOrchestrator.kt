@@ -27,6 +27,8 @@ import javax.inject.Singleton
 class ScanOrchestrator @Inject constructor(
     private val appScanner: AppScanner,
     private val deviceAuditor: DeviceAuditor,
+    private val processScanner: ProcessScanner,
+    private val fileArtifactScanner: FileArtifactScanner,
     private val bugReportAnalyzer: BugReportAnalyzer,
     private val scanRepository: ScanRepository,
     private val sigmaRuleEngine: SigmaRuleEngine,
@@ -77,9 +79,17 @@ class ScanOrchestrator @Inject constructor(
         val deviceTelemetryDeferred = async {
             runCatching { deviceAuditor.collectTelemetry() }.getOrDefault(emptyList())
         }
+        val processTelemetryDeferred = async {
+            runCatching { processScanner.collectTelemetry() }.getOrDefault(emptyList())
+        }
+        val fileTelemetryDeferred = async {
+            runCatching { fileArtifactScanner.collectTelemetry() }.getOrDefault(emptyList())
+        }
 
         val appTelemetry = appTelemetryDeferred.await()
         val deviceTelemetry = deviceTelemetryDeferred.await()
+        val processTelemetry = processTelemetryDeferred.await()
+        val fileTelemetry = fileTelemetryDeferred.await()
 
         // Phase 2: SIGMA rule evaluation — all detection via rules
         val appFindings = sigmaRuleEngine.evaluateApps(appTelemetry)
@@ -88,9 +98,15 @@ class ScanOrchestrator @Inject constructor(
         val deviceFindings = sigmaRuleEngine.evaluateDevice(deviceTelemetry)
         val deviceFlags = FindingMapper.toDeviceFlags(deviceTelemetry, deviceFindings)
 
-        Log.i(TAG, "Scan complete — SIGMA: ${appFindings.size + deviceFindings.size} findings from " +
+        val processFindings = sigmaRuleEngine.evaluateProcesses(processTelemetry)
+        val fileFindings = sigmaRuleEngine.evaluateFiles(fileTelemetry)
+
+        val totalFindings = appFindings.size + deviceFindings.size +
+            processFindings.size + fileFindings.size
+        Log.i(TAG, "Scan complete — SIGMA: $totalFindings findings from " +
             "${sigmaRuleEngine.ruleCount()} rules → ${appRisks.size} app risks, " +
-            "${deviceFlags.count { it.isTriggered }} device flags triggered")
+            "${deviceFlags.count { it.isTriggered }} device flags triggered, " +
+            "${processFindings.size} process findings, ${fileFindings.size} file findings")
 
         val now = System.currentTimeMillis()
         val result = ScanResult(

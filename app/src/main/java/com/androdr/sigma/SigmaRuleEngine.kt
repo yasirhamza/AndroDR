@@ -5,6 +5,8 @@ import android.content.Context
 import android.util.Log
 import com.androdr.data.model.AppTelemetry
 import com.androdr.data.model.DeviceTelemetry
+import com.androdr.data.model.FileArtifactTelemetry
+import com.androdr.data.model.ProcessTelemetry
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -60,6 +62,16 @@ class SigmaRuleEngine @Inject constructor(
     fun evaluateDevice(telemetry: List<DeviceTelemetry>): List<Finding> {
         val records = telemetry.map { it.toFieldMap() }
         return SigmaRuleEvaluator.evaluate(rules, records, "device_auditor", iocLookups)
+    }
+
+    fun evaluateProcesses(telemetry: List<ProcessTelemetry>): List<Finding> {
+        val records = telemetry.map { it.toFieldMap() }
+        return SigmaRuleEvaluator.evaluate(rules, records, "process_monitor", iocLookups)
+    }
+
+    fun evaluateFiles(telemetry: List<FileArtifactTelemetry>): List<Finding> {
+        val records = telemetry.map { it.toFieldMap() }
+        return SigmaRuleEvaluator.evaluate(rules, records, "file_scanner", iocLookups)
     }
 
     fun ruleCount(): Int = rules.size
