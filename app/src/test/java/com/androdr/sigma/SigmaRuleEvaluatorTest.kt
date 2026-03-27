@@ -206,4 +206,42 @@ class SigmaRuleEvaluatorTest {
         assertEquals(1, findings.size)
         assertEquals("Test", findings[0].title)
     }
+
+    @Test
+    fun `regex pattern exceeding max length is rejected`() {
+        val longPattern = "a".repeat(501)
+        val rule = makeRule(
+            selections = mapOf("selection" to SigmaSelection(listOf(
+                SigmaFieldMatcher("app_name", SigmaModifier.RE, listOf(longPattern))
+            )))
+        )
+        val record = mapOf<String, Any?>("app_name" to "a".repeat(501))
+        val findings = SigmaRuleEvaluator.evaluate(listOf(rule), listOf(record), "app_scanner")
+        assertEquals(0, findings.size)
+    }
+
+    @Test
+    fun `invalid regex pattern does not crash`() {
+        val rule = makeRule(
+            selections = mapOf("selection" to SigmaSelection(listOf(
+                SigmaFieldMatcher("app_name", SigmaModifier.RE, listOf("[invalid"))
+            )))
+        )
+        val record = mapOf<String, Any?>("app_name" to "test")
+        val findings = SigmaRuleEvaluator.evaluate(listOf(rule), listOf(record), "app_scanner")
+        assertEquals(0, findings.size)
+    }
+
+    @Test
+    fun `valid regex pattern matches correctly`() {
+        val rule = makeRule(
+            selections = mapOf("selection" to SigmaSelection(listOf(
+                SigmaFieldMatcher("app_name", SigmaModifier.RE, listOf("^System.*Service$"))
+            )))
+        )
+        val match = mapOf<String, Any?>("app_name" to "System Update Service")
+        val noMatch = mapOf<String, Any?>("app_name" to "User App")
+        assertEquals(1, SigmaRuleEvaluator.evaluate(listOf(rule), listOf(match), "app_scanner").size)
+        assertEquals(0, SigmaRuleEvaluator.evaluate(listOf(rule), listOf(noMatch), "app_scanner").size)
+    }
 }

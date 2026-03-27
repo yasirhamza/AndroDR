@@ -23,6 +23,41 @@ data class Finding(
  */
 object SigmaRuleEvaluator {
 
+    private val regexCache = java.util.concurrent.ConcurrentHashMap<String, Regex>()
+    private val invalidPatterns = java.util.Collections.newSetFromMap(
+        java.util.concurrent.ConcurrentHashMap<String, Boolean>()
+    )
+    private const val REGEX_TIMEOUT_MS = 1000L
+    private const val MAX_REGEX_LENGTH = 500
+
+    private fun safeRegexMatch(pattern: String, input: String): Boolean {
+        if (pattern.length > MAX_REGEX_LENGTH) return false
+        if (pattern in invalidPatterns) return false
+
+        val regex = regexCache.getOrPut(pattern) {
+            try {
+                Regex(pattern)
+            } catch (e: Exception) {
+                invalidPatterns.add(pattern)
+                return false
+            }
+        }
+
+        // Run match with timeout to prevent ReDoS
+        val future = java.util.concurrent.ForkJoinPool.commonPool().submit<Boolean> {
+            regex.containsMatchIn(input)
+        }
+        return try {
+            future.get(REGEX_TIMEOUT_MS, java.util.concurrent.TimeUnit.MILLISECONDS)
+        } catch (e: java.util.concurrent.TimeoutException) {
+            future.cancel(true)
+            android.util.Log.w("SigmaRuleEvaluator", "Regex timed out (possible ReDoS): ${pattern.take(50)}...")
+            false
+        } catch (e: Exception) {
+            false
+        }
+    }
+
     fun evaluate(
         rules: List<SigmaRule>,
         records: List<Map<String, Any?>>,
@@ -149,7 +184,7 @@ object SigmaRuleEvaluator {
             SigmaModifier.RE -> {
                 val strValue = fieldValue?.toString() ?: return false
                 matcher.values.any { pattern ->
-                    Regex(pattern.toString()).containsMatchIn(strValue)
+                    safeRegexMatch(pattern.toString(), strValue)
                 }
             }
             SigmaModifier.GTE -> {

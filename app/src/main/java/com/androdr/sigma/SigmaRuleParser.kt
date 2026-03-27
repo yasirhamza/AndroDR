@@ -8,6 +8,7 @@ import android.util.Log
 object SigmaRuleParser {
 
     private const val TAG = "SigmaRuleParser"
+    internal const val MAX_REGEX_LENGTH = 500
     private val settings = LoadSettings.builder().build()
 
     @Suppress("UNCHECKED_CAST", "TooGenericExceptionCaught")
@@ -89,11 +90,34 @@ object SigmaRuleParser {
                 else -> listOf(value)
             }
 
-            matchers.add(SigmaFieldMatcher(
-                fieldName = fieldName,
-                modifier = modifier,
-                values = values
-            ))
+            // Validate regex patterns at parse time: reject patterns that are
+            // too long (> MAX_REGEX_LENGTH chars) to reduce ReDoS surface area.
+            if (modifier == SigmaModifier.RE) {
+                val validValues = values.filter { pattern ->
+                    val p = pattern.toString()
+                    if (p.length > MAX_REGEX_LENGTH) {
+                        Log.w(TAG, "Rejecting regex pattern exceeding $MAX_REGEX_LENGTH chars: ${p.take(50)}...")
+                        false
+                    } else {
+                        true
+                    }
+                }
+                if (validValues.isEmpty()) {
+                    Log.w(TAG, "All regex patterns rejected for field '$fieldName'; skipping matcher")
+                    continue
+                }
+                matchers.add(SigmaFieldMatcher(
+                    fieldName = fieldName,
+                    modifier = modifier,
+                    values = validValues
+                ))
+            } else {
+                matchers.add(SigmaFieldMatcher(
+                    fieldName = fieldName,
+                    modifier = modifier,
+                    values = values
+                ))
+            }
         }
 
         return SigmaSelection(fieldMatchers = matchers)
