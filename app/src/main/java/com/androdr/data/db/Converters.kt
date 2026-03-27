@@ -1,5 +1,6 @@
 package com.androdr.data.db
 
+import android.util.Log
 import androidx.room.TypeConverter
 import com.androdr.sigma.Evidence
 import com.androdr.sigma.Finding
@@ -29,9 +30,14 @@ object Converters {
     fun fromFindingList(value: List<Finding>): String =
         json.encodeToString(ListSerializer(Finding.serializer()), value)
 
+    @Suppress("TooGenericExceptionCaught")
     @TypeConverter @JvmStatic
-    fun toFindingList(value: String): List<Finding> =
+    fun toFindingList(value: String): List<Finding> = try {
         json.decodeFromString(ListSerializer(Finding.serializer()), value)
+    } catch (e: Exception) {
+        Log.w("Converters", "Failed to deserialize findings (pre-migration data?): ${e.message}")
+        emptyList()
+    }
 
     @TypeConverter @JvmStatic
     fun fromStringList(value: List<String>): String =
