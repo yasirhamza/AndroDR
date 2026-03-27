@@ -41,7 +41,8 @@ object SigmaRuleEvaluator {
                         level = rule.level,
                         tags = rule.tags,
                         remediation = rule.remediation,
-                        matchedRecord = record
+                        matchContext = record.mapKeys { it.key }
+                            .mapValues { it.value?.toString() ?: "" }
                     ))
                 }
             }

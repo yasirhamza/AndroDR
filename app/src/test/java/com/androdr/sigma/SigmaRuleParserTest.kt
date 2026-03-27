@@ -91,6 +91,87 @@ class SigmaRuleParserTest {
     }
 
     @Test
+    fun `parses display block`() {
+        val yaml = """
+            title: USB Debugging enabled
+            id: test-display
+            logsource:
+                product: androdr
+                service: device_auditor
+            detection:
+                selection:
+                    adb_enabled: true
+                condition: selection
+            level: high
+            display:
+                category: device_posture
+                icon: usb
+                triggered_title: "USB Debugging Enabled"
+                safe_title: "USB Debugging Disabled"
+                evidence_type: none
+                summary_template: ""
+            remediation:
+                - "Disable USB Debugging"
+        """.trimIndent()
+
+        val rule = SigmaRuleParser.parse(yaml)
+        assertNotNull(rule)
+        assertEquals("device_posture", rule!!.display.category)
+        assertEquals("usb", rule.display.icon)
+        assertEquals("USB Debugging Enabled", rule.display.triggeredTitle)
+        assertEquals("USB Debugging Disabled", rule.display.safeTitle)
+        assertEquals("none", rule.display.evidenceType)
+    }
+
+    @Test
+    fun `display block is optional`() {
+        val yaml = """
+            title: No display
+            id: test-no-display
+            logsource:
+                product: androdr
+                service: app_scanner
+            detection:
+                selection:
+                    is_sideloaded: true
+                condition: selection
+            level: medium
+        """.trimIndent()
+
+        val rule = SigmaRuleParser.parse(yaml)
+        assertNotNull(rule)
+        assertEquals("device_posture", rule!!.display.category)
+        assertEquals("none", rule.display.evidenceType)
+        assertEquals("", rule.display.triggeredTitle)
+    }
+
+    @Test
+    fun `parses campaign tags from tags list`() {
+        val yaml = """
+            title: Campaign rule
+            id: test-campaign
+            logsource:
+                product: androdr
+                service: device_auditor
+            detection:
+                selection:
+                    unpatched_cve_count|gte: 1
+                condition: selection
+            level: critical
+            tags:
+                - attack.t1404
+                - campaign.pegasus
+                - campaign.predator
+        """.trimIndent()
+
+        val rule = SigmaRuleParser.parse(yaml)
+        assertNotNull(rule)
+        val campaigns = rule!!.tags.filter { it.startsWith("campaign.") }
+        assertEquals(2, campaigns.size)
+        assertEquals("campaign.pegasus", campaigns[0])
+    }
+
+    @Test
     fun `parses tags and falsepositives`() {
         val yaml = """
             title: Tagged rule

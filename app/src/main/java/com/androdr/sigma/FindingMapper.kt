@@ -15,7 +15,7 @@ object FindingMapper {
         findings: List<Finding>
     ): List<AppRisk> {
         val findingsByPackage = findings.groupBy {
-            it.matchedRecord["package_name"]?.toString() ?: ""
+            it.matchContext["package_name"] ?: ""
         }
 
         return findingsByPackage.mapNotNull { (packageName, packageFindings) ->
