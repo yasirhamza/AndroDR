@@ -33,11 +33,17 @@ class SigmaRuleFeed @Inject constructor(
             Log.w(TAG, "Failed to read custom rule URLs: ${e.message}")
             emptyList()
         }
+        val failedUrls = mutableListOf<String>()
         for (url in customUrls) {
             val baseUrl = if (url.endsWith("/")) url else "$url/"
-            allRules.addAll(fetchFromRepo(baseUrl))
+            val rules = fetchFromRepo(baseUrl)
+            if (rules.isEmpty()) failedUrls.add(url)
+            allRules.addAll(rules)
         }
 
+        if (failedUrls.isNotEmpty()) {
+            Log.e(TAG, "Failed to fetch from ${failedUrls.size} custom rule URL(s): $failedUrls")
+        }
         Log.i(TAG, "Fetched ${allRules.size} remote SIGMA rules from ${1 + customUrls.size} source(s)")
         allRules
     }

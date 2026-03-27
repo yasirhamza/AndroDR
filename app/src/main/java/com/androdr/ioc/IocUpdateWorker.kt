@@ -28,12 +28,13 @@ class IocUpdateWorker @AssistedInject constructor(
     override suspend fun doWork(): Result {
         return try {
             val fetched = runAllUpdaters(remoteIocUpdater, domainIocUpdater, knownAppUpdater, certHashIocUpdater)
-            // Refresh SIGMA rules from remote repos
+            // Refresh SIGMA rules independently — never blocks IOC update success
             refreshSigmaRules()
             Log.i(TAG, "Worker finished — $fetched IOC entries, ${sigmaRuleEngine.ruleCount()} SIGMA rules")
             Result.success()
         } catch (e: Exception) {
-            Log.e(TAG, "Worker failed: ${e.message}")
+            // Only IOC updater failures trigger retry — SIGMA failures are caught in refreshSigmaRules()
+            Log.e(TAG, "IOC update failed: ${e.message}")
             Result.retry()
         }
     }
