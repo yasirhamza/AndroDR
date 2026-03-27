@@ -17,6 +17,7 @@ class SigmaRuleEngine @Inject constructor(
 ) {
     private var rules: List<SigmaRule> = emptyList()
     private var iocLookups: Map<String, (Any) -> Boolean> = emptyMap()
+    private var evidenceProviders: Map<String, EvidenceProvider> = emptyMap()
 
     init {
         loadBundledRules()
@@ -58,24 +59,30 @@ class SigmaRuleEngine @Inject constructor(
         iocLookups = lookups
     }
 
+    fun setEvidenceProviders(providers: Map<String, EvidenceProvider>) {
+        evidenceProviders = providers
+    }
+
+    fun getRules(): List<SigmaRule> = rules
+
     fun evaluateApps(telemetry: List<AppTelemetry>): List<Finding> {
         val records = telemetry.map { it.toFieldMap() }
-        return SigmaRuleEvaluator.evaluate(rules, records, "app_scanner", iocLookups)
+        return SigmaRuleEvaluator.evaluate(rules, records, "app_scanner", iocLookups, evidenceProviders)
     }
 
     fun evaluateDevice(telemetry: List<DeviceTelemetry>): List<Finding> {
         val records = telemetry.map { it.toFieldMap() }
-        return SigmaRuleEvaluator.evaluate(rules, records, "device_auditor", iocLookups)
+        return SigmaRuleEvaluator.evaluate(rules, records, "device_auditor", iocLookups, evidenceProviders)
     }
 
     fun evaluateProcesses(telemetry: List<ProcessTelemetry>): List<Finding> {
         val records = telemetry.map { it.toFieldMap() }
-        return SigmaRuleEvaluator.evaluate(rules, records, "process_monitor", iocLookups)
+        return SigmaRuleEvaluator.evaluate(rules, records, "process_monitor", iocLookups, evidenceProviders)
     }
 
     fun evaluateFiles(telemetry: List<FileArtifactTelemetry>): List<Finding> {
         val records = telemetry.map { it.toFieldMap() }
-        return SigmaRuleEvaluator.evaluate(rules, records, "file_scanner", iocLookups)
+        return SigmaRuleEvaluator.evaluate(rules, records, "file_scanner", iocLookups, evidenceProviders)
     }
 
     fun ruleCount(): Int = rules.size
