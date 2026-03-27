@@ -73,6 +73,7 @@ class SigmaRuleFeed @Inject constructor(
             val conn = URL(url).openConnection() as HttpURLConnection
             conn.connectTimeout = TIMEOUT_MS
             conn.readTimeout = TIMEOUT_MS
+            conn.instanceFollowRedirects = false
             conn.setRequestProperty("User-Agent", "AndroDR/1.0")
             if (conn.responseCode == HttpURLConnection.HTTP_OK) {
                 conn.inputStream.bufferedReader().use { it.readText() }

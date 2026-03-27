@@ -70,19 +70,20 @@ class SettingsRepository @Inject constructor(
         }
     }
 
-    @Suppress("TooGenericExceptionCaught", "SwallowedException")
     private fun isPrivateOrReservedHost(host: String): Boolean {
         val lower = host.lowercase()
         if (lower == "localhost" || lower == "127.0.0.1" || lower == "::1") return true
         if (lower == "0.0.0.0") return true
-        // Block metadata service
+        // Block cloud metadata service
         if (lower == "169.254.169.254") return true
-        return try {
-            val addr = java.net.InetAddress.getByName(host)
-            addr.isLoopbackAddress || addr.isLinkLocalAddress || addr.isSiteLocalAddress
-        } catch (e: Exception) {
-            false
-        }
+        // Block private IP ranges (RFC 1918 + link-local) without DNS resolution
+        // to avoid DNS rebinding attacks and blocking network calls during validation
+        if (lower.startsWith("10.")) return true
+        if (lower.startsWith("192.168.")) return true
+        if (lower.matches(Regex("""172\.(1[6-9]|2\d|3[01])\..*"""))) return true
+        if (lower.startsWith("169.254.")) return true
+        if (lower.startsWith("fd") || lower.startsWith("fe80:")) return true
+        return false
     }
 
     companion object {
