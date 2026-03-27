@@ -11,7 +11,8 @@ data class DeviceTelemetry(
     val patchAgeDays: Int = 0,
     val bootloaderUnlocked: Boolean = false,
     val wifiAdbEnabled: Boolean = false,
-    val unpatchedCveCount: Int = 0
+    val unpatchedCveCount: Int = 0,
+    val unpatchedCves: List<Any> = emptyList()
 ) {
     fun toFieldMap(): Map<String, Any?> = mapOf(
         "check_id" to checkId,
@@ -24,6 +25,7 @@ data class DeviceTelemetry(
         "patch_age_days" to patchAgeDays,
         "bootloader_unlocked" to bootloaderUnlocked,
         "wifi_adb_enabled" to wifiAdbEnabled,
-        "unpatched_cve_count" to unpatchedCveCount
+        "unpatched_cve_count" to unpatchedCveCount,
+        "unpatched_cves" to unpatchedCves
     )
 }
