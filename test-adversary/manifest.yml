@@ -266,8 +266,7 @@ scenarios:
     sha256: "342b67f0f9dab0358a2933ff1c1a78710653e7509bf07a31a65ddd8318aff935"
     attack: [T1628]
     expected_patterns:
-      - "Malicious Certificate"
-    roadmap_issue: 7
+      - "known threat developer"
 
   - id: mercenary_accessibility
     track: 3
@@ -280,8 +279,7 @@ scenarios:
     sha256: "ab643d7778c6a1e2ccdde9fcb623e9929bd0e5dd4e32e4a029ec97f5d69d31a1"
     attack: [T1626]
     expected_patterns:
-      - "Accessibility Abuse"
-    roadmap_issue: 10
+      - "can read your screen content"
 
   - id: mercenary_device_admin
     track: 3
@@ -294,8 +292,7 @@ scenarios:
     sha256: "e1a4cf8bacfdf209c03d5986dae5f1ac7b9d3f4290d00dc3da2e2d3a8ef861df"
     attack: [T1401]
     expected_patterns:
-      - "Device Admin Abuse"
-    roadmap_issue: 10
+      - "Device Admin Apps and remove this app"
 
   - id: surveillance_permissions
     track: 3
