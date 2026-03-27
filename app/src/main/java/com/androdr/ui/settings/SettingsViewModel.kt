@@ -20,6 +20,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -47,7 +49,7 @@ class SettingsViewModel @Inject constructor(
     val domainIocBlockMode = settingsRepository.domainIocBlockMode
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
 
-    val customRuleUrls = settingsRepository.customRuleUrls
+    val customRuleUrls: StateFlow<String> get() = _customRuleUrlsInput.asStateFlow()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), "")
 
     // Threat database stats
@@ -84,8 +86,21 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch { settingsRepository.setDomainIocBlockMode(value) }
     }
 
+    private val _customRuleUrlsInput = MutableStateFlow("")
+
+    init {
+        @Suppress("OPT_IN_USAGE")
+        viewModelScope.launch {
+            _customRuleUrlsInput.value = settingsRepository.customRuleUrls.first()
+            @OptIn(kotlinx.coroutines.FlowPreview::class)
+            _customRuleUrlsInput
+                .debounce(DEBOUNCE_MS)
+                .collect { settingsRepository.setCustomRuleUrls(it) }
+        }
+    }
+
     fun setCustomRuleUrls(value: String) {
-        viewModelScope.launch { settingsRepository.setCustomRuleUrls(value) }
+        _customRuleUrlsInput.value = value
     }
 
     /** Triggers all feed updates, SIGMA rule refresh, and CVE refresh. */
@@ -151,5 +166,6 @@ class SettingsViewModel @Inject constructor(
 
     companion object {
         private const val TAG = "SettingsViewModel"
+        private const val DEBOUNCE_MS = 500L
     }
 }
