@@ -2,15 +2,15 @@ package com.androdr.scanner
 
 import android.net.Uri
 import android.util.Log
-import com.androdr.data.model.AppRisk
-import com.androdr.data.model.DeviceFlag
 import com.androdr.data.model.ScanResult
 import com.androdr.data.repo.ScanRepository
 import com.androdr.ioc.CertHashIocResolver
 import com.androdr.ioc.DomainIocResolver
 import com.androdr.ioc.IocResolver
 import com.androdr.scanner.BugReportAnalyzer.BugReportFinding
-import com.androdr.sigma.FindingMapper
+import com.androdr.sigma.CveEvidenceProvider
+import com.androdr.sigma.Finding
+import com.androdr.sigma.FindingCategory
 import com.androdr.sigma.SigmaRuleFeed
 import com.androdr.sigma.SigmaRuleEngine
 import kotlinx.coroutines.async
@@ -58,6 +58,9 @@ class ScanOrchestrator @Inject constructor(
         } catch (e: Exception) {
             Log.w(TAG, "Remote SIGMA rule fetch failed: ${e.message}")
         }
+        sigmaRuleEngine.setEvidenceProviders(mapOf(
+            "cve_list" to CveEvidenceProvider(sigmaRuleEngine.getRules())
+        ))
         ruleEngineInitialized = true
     }
 
@@ -92,31 +95,30 @@ class ScanOrchestrator @Inject constructor(
         val fileTelemetry = fileTelemetryDeferred.await()
 
         // Phase 2: SIGMA rule evaluation — all detection via rules
-        val appFindings = sigmaRuleEngine.evaluateApps(appTelemetry)
-        val appRisks = FindingMapper.toAppRisks(appTelemetry, appFindings)
+        val allFindings = mutableListOf<Finding>()
+        allFindings.addAll(sigmaRuleEngine.evaluateApps(appTelemetry))
+        allFindings.addAll(sigmaRuleEngine.evaluateDevice(deviceTelemetry))
+        allFindings.addAll(sigmaRuleEngine.evaluateProcesses(processTelemetry))
+        allFindings.addAll(sigmaRuleEngine.evaluateFiles(fileTelemetry))
 
-        val deviceFindings = sigmaRuleEngine.evaluateDevice(deviceTelemetry)
-        val deviceFlags = FindingMapper.toDeviceFlags(deviceTelemetry, deviceFindings)
+        val sideloadedCount = allFindings.count {
+            it.category == FindingCategory.APP_RISK && it.matchContext["is_sideloaded"] == "true"
+        }
+        val malwareCount = allFindings.count {
+            it.level == "critical" && it.ruleId.startsWith("androdr-00")
+        }
 
-        val processFindings = sigmaRuleEngine.evaluateProcesses(processTelemetry)
-        val fileFindings = sigmaRuleEngine.evaluateFiles(fileTelemetry)
-
-        val totalFindings = appFindings.size + deviceFindings.size +
-            processFindings.size + fileFindings.size
-        Log.i(TAG, "Scan complete — SIGMA: $totalFindings findings from " +
-            "${sigmaRuleEngine.ruleCount()} rules → ${appRisks.size} app risks, " +
-            "${deviceFlags.count { it.isTriggered }} device flags triggered, " +
-            "${processFindings.size} process findings, ${fileFindings.size} file findings")
+        Log.i(TAG, "Scan complete — SIGMA: ${allFindings.size} findings from " +
+            "${sigmaRuleEngine.ruleCount()} rules")
 
         val now = System.currentTimeMillis()
         val result = ScanResult(
             id                 = now,
             timestamp          = now,
-            appRisks           = appRisks,
-            deviceFlags        = deviceFlags,
+            findings           = allFindings,
             bugReportFindings  = emptyList(),
-            riskySideloadCount = appRisks.count { it.isSideloaded },
-            knownMalwareCount  = appRisks.count { it.isKnownMalware }
+            riskySideloadCount = sideloadedCount,
+            knownMalwareCount  = malwareCount
         )
 
         runCatching { scanRepository.saveScan(result) }
@@ -140,45 +142,33 @@ class ScanOrchestrator @Inject constructor(
      * @return A [ScanDiff] describing what changed between the two scans.
      */
     fun computeDiff(newer: ScanResult, older: ScanResult): ScanDiff {
-        val olderPackageNames = older.appRisks.map { it.packageName }.toSet()
-        val newerPackageNames = newer.appRisks.map { it.packageName }.toSet()
-
-        val newRisks      = newer.appRisks.filter { it.packageName !in olderPackageNames }
-        val resolvedRisks = older.appRisks.filter { it.packageName !in newerPackageNames }
-
-        val olderFlagIds = older.deviceFlags
-            .filter { it.isTriggered }
-            .map { it.id }
+        val olderTriggeredIds = older.findings
+            .filter { it.triggered }
+            .map { it.ruleId }
             .toSet()
-        val newerFlagIds = newer.deviceFlags
-            .filter { it.isTriggered }
-            .map { it.id }
+        val newerTriggeredIds = newer.findings
+            .filter { it.triggered }
+            .map { it.ruleId }
             .toSet()
 
-        val newFlags      = newer.deviceFlags.filter { it.isTriggered && it.id !in olderFlagIds }
-        val resolvedFlags = older.deviceFlags.filter { it.isTriggered && it.id !in newerFlagIds }
+        val newFindings = newer.findings.filter { it.triggered && it.ruleId !in olderTriggeredIds }
+        val resolvedFindings = older.findings.filter { it.triggered && it.ruleId !in newerTriggeredIds }
 
         return ScanDiff(
-            newRisks      = newRisks,
-            resolvedRisks = resolvedRisks,
-            newFlags      = newFlags,
-            resolvedFlags = resolvedFlags
+            newFindings      = newFindings,
+            resolvedFindings = resolvedFindings
         )
     }
 
     /**
      * Describes the delta between two consecutive scans.
      *
-     * @property newRisks      Risky apps present in [newer] but not in [older].
-     * @property resolvedRisks Risky apps that were in [older] but are no longer in [newer].
-     * @property newFlags      Device-level flags that became triggered in [newer].
-     * @property resolvedFlags Device-level flags that were triggered in [older] but not in [newer].
+     * @property newFindings      Findings present in [newer] but not in [older].
+     * @property resolvedFindings Findings that were in [older] but are no longer in [newer].
      */
     data class ScanDiff(
-        val newRisks:      List<AppRisk>,
-        val resolvedRisks: List<AppRisk>,
-        val newFlags:      List<DeviceFlag>,
-        val resolvedFlags: List<DeviceFlag>
+        val newFindings:      List<Finding>,
+        val resolvedFindings: List<Finding>
     )
 
     companion object {

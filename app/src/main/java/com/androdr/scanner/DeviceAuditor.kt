@@ -7,7 +7,7 @@ import android.os.Build
 import android.provider.Settings
 import android.util.Log
 import com.androdr.data.model.DeviceTelemetry
-import com.androdr.ioc.CveDatabase
+import com.androdr.data.repo.CveRepository
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -20,7 +20,7 @@ import javax.inject.Singleton
 @Singleton
 class DeviceAuditor @Inject constructor(
     @ApplicationContext private val context: Context,
-    private val cveDatabase: CveDatabase
+    private val cveRepository: CveRepository
 ) {
 
     private companion object {
@@ -90,7 +90,7 @@ class DeviceAuditor @Inject constructor(
             0
         }
 
-        val unpatchedCves = cveDatabase.getUnpatchedCves(patchStr)
+        val unpatchedCves = cveRepository.getUnpatchedCves(patchStr)
 
         val bootloaderUnlocked = isBootloaderUnlocked()
 
@@ -117,7 +117,8 @@ class DeviceAuditor @Inject constructor(
             patchAgeDays = patchAgeDays,
             bootloaderUnlocked = bootloaderUnlocked,
             wifiAdbEnabled = wifiAdbEnabled,
-            unpatchedCveCount = unpatchedCves.size
+            unpatchedCveCount = unpatchedCves.size,
+            unpatchedCves = unpatchedCves
         ))
     }
 
