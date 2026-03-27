@@ -6,7 +6,6 @@ import android.content.Context
 import android.os.Build
 import android.provider.Settings
 import android.util.Log
-import com.androdr.data.model.DeviceFlag
 import com.androdr.data.model.DeviceTelemetry
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
@@ -32,108 +31,17 @@ class DeviceAuditor @Inject constructor(
      */
     private val latestKnownPatch = "2025-03-01"
 
-    /** Patch levels older than this many days are considered stale. */
-    private val maxPatchAgeDays = 90L
-
-    @Suppress("LongMethod") // Device audit checks 7 independent security properties in sequence;
-    // each check is a small self-contained block — splitting would gain no readability benefit.
-    suspend fun audit(): List<DeviceFlag> = withContext(Dispatchers.IO) {
-        val cr = context.contentResolver
-        val flags = mutableListOf<DeviceFlag>()
-
-        // ── 1. USB ADB enabled ────────────────────────────────────────────────
-        @Suppress("TooGenericExceptionCaught", "SwallowedException") // Settings.Global.getInt can
-        // throw SecurityException on locked-down device policies; default false is safe.
-        val adbEnabled = try {
-            Settings.Global.getInt(cr, Settings.Global.ADB_ENABLED, 0) == 1
-        } catch (e: Exception) {
-            Log.w(TAG, "DeviceAuditor: ADB_ENABLED setting read failed: ${e.message}")
-            false
-        }
-        flags.add(DeviceFlag.adbEnabled(adbEnabled))
-
-        // ── 2. Developer Options enabled ──────────────────────────────────────
-        @Suppress("TooGenericExceptionCaught", "SwallowedException") // Same rationale as adbEnabled
-        val devOptionsEnabled = try {
-            Settings.Global.getInt(cr, Settings.Global.DEVELOPMENT_SETTINGS_ENABLED, 0) == 1
-        } catch (e: Exception) {
-            Log.w(TAG, "DeviceAuditor: DEVELOPMENT_SETTINGS_ENABLED setting read failed: ${e.message}")
-            false
-        }
-        flags.add(DeviceFlag.devOptionsEnabled(devOptionsEnabled))
-
-        // ── 3. Install from unknown sources ───────────────────────────────────
-        // minSdk = 26 (O) so the per-app unknown-sources permission model always applies.
-        // We cannot reliably read the per-package allow-unknown-sources state without a
-        // system permission, so we approximate via Verified Boot feature absence.
-        val unknownSources =
-            // On API 26+ we cannot reliably read per-package allow-unknown-sources state
-            // without holding a system permission. Instead, check whether the device
-            // advertises Verified Boot support; its absence suggests a more permissive
-            // environment. This is an approximation only.
-            !context.packageManager.hasSystemFeature("android.software.verified_boot")
-        flags.add(DeviceFlag.unknownSources(unknownSources))
-
-        // ── 4. Screen lock ────────────────────────────────────────────────────
-        @Suppress("TooGenericExceptionCaught", "SwallowedException") // getSystemService and
-        // isDeviceSecure can throw on emulators or restricted profiles; false = assume secured.
-        val noScreenLock = try {
-            val km = context.getSystemService(Context.KEYGUARD_SERVICE) as? KeyguardManager
-            // isDeviceSecure returns true if a PIN, password, pattern, or biometric is set.
-            km?.isDeviceSecure?.not() ?: true
-        } catch (e: Exception) {
-            Log.w(TAG, "DeviceAuditor: screen lock state check failed: ${e.message}")
-            false
-        }
-        flags.add(DeviceFlag.noScreenLock(noScreenLock))
-
-        // ── 5. Security patch staleness ───────────────────────────────────────
-        @Suppress("TooGenericExceptionCaught", "SwallowedException") // DateTimeParseException or
-        // other RuntimeExceptions if the OEM encodes a non-standard patch string; treat as stale.
-        val stalePatch = try {
-            val patchStr = Build.VERSION.SECURITY_PATCH // "YYYY-MM-DD"
-            if (patchStr.isNullOrBlank()) {
-                true // Cannot determine patch level — treat as stale
-            } else {
-                val formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd")
-                val patchDate = LocalDate.parse(patchStr, formatter)
-                val referenceDate = LocalDate.parse(latestKnownPatch, formatter)
-                ChronoUnit.DAYS.between(patchDate, referenceDate) > maxPatchAgeDays
-            }
-        } catch (e: Exception) {
-            Log.w(TAG, "DeviceAuditor: security patch level parse failed: ${e.message}")
-            true // Parse failure — treat as stale
-        }
-        flags.add(DeviceFlag.stalePatchLevel(stalePatch))
-
-        // ── 6. Bootloader lock state ──────────────────────────────────────────
-        val bootloaderUnlocked = isBootloaderUnlocked()
-        flags.add(DeviceFlag.bootloaderUnlocked(bootloaderUnlocked))
-
-        // ── 7. Wireless ADB (ADB over Wi-Fi) ─────────────────────────────────
-        @Suppress("TooGenericExceptionCaught", "SwallowedException") // Same rationale as adbEnabled
-        val wifiAdbEnabled = try {
-            Settings.Global.getInt(cr, "adb_wifi_enabled", 0) == 1
-        } catch (e: Exception) {
-            Log.w(TAG, "DeviceAuditor: adb_wifi_enabled setting read failed: ${e.message}")
-            false
-        }
-        flags.add(DeviceFlag.wifiAdbEnabled(wifiAdbEnabled))
-
-        flags.toList()
-    }
-
     /**
-     * Collects device posture telemetry using the same checks as [audit] but returns
-     * structured [DeviceTelemetry] entries — one per check — for the SIGMA rule engine.
-     * Each entry carries both its own trigger state and a snapshot of all posture fields
-     * so that rules can correlate multiple signals.
+     * Collects device posture telemetry and returns structured [DeviceTelemetry]
+     * entries for the SIGMA rule engine. Each entry carries both its own trigger
+     * state and a snapshot of all posture fields so that rules can correlate
+     * multiple signals.
      */
     @Suppress("LongMethod")
     suspend fun collectTelemetry(): List<DeviceTelemetry> = withContext(Dispatchers.IO) {
         val cr = context.contentResolver
 
-        // ── Gather all check values (same logic as audit()) ────────────────────
+        // ── Gather all device posture check values ────────────────────────────
         @Suppress("TooGenericExceptionCaught", "SwallowedException")
         val adbEnabled = try {
             Settings.Global.getInt(cr, Settings.Global.ADB_ENABLED, 0) == 1
@@ -162,24 +70,20 @@ class DeviceAuditor @Inject constructor(
             false
         }
 
-        @Suppress("TooGenericExceptionCaught", "SwallowedException")
         val patchStr = Build.VERSION.SECURITY_PATCH ?: ""
-        var patchAgeDays = 0
         @Suppress("TooGenericExceptionCaught", "SwallowedException")
-        val stalePatch = try {
+        val patchAgeDays = try {
             if (patchStr.isBlank()) {
-                true
+                0
             } else {
                 val formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd")
                 val patchDate = LocalDate.parse(patchStr, formatter)
                 val referenceDate = LocalDate.parse(latestKnownPatch, formatter)
-                val age = ChronoUnit.DAYS.between(patchDate, referenceDate)
-                patchAgeDays = age.toInt()
-                age > maxPatchAgeDays
+                ChronoUnit.DAYS.between(patchDate, referenceDate).toInt()
             }
         } catch (e: Exception) {
             Log.w(TAG, "collectTelemetry: security patch level parse failed: ${e.message}")
-            true
+            0
         }
 
         val bootloaderUnlocked = isBootloaderUnlocked()
@@ -194,10 +98,11 @@ class DeviceAuditor @Inject constructor(
 
         val screenLockEnabled = !noScreenLock
 
-        // ── Build one DeviceTelemetry per check ────────────────────────────────
-        fun entry(checkId: String, isTriggered: Boolean) = DeviceTelemetry(
-            checkId = checkId,
-            isTriggered = isTriggered,
+        // Single telemetry record with all device posture fields — SIGMA rules
+        // evaluate against this one record, each rule matching its own field(s).
+        listOf(DeviceTelemetry(
+            checkId = "device_posture",
+            isTriggered = false,
             adbEnabled = adbEnabled,
             devOptionsEnabled = devOptionsEnabled,
             unknownSourcesEnabled = unknownSourcesEnabled,
@@ -206,17 +111,7 @@ class DeviceAuditor @Inject constructor(
             patchAgeDays = patchAgeDays,
             bootloaderUnlocked = bootloaderUnlocked,
             wifiAdbEnabled = wifiAdbEnabled
-        )
-
-        listOf(
-            entry("adb_enabled", adbEnabled),
-            entry("dev_options_enabled", devOptionsEnabled),
-            entry("unknown_sources", unknownSourcesEnabled),
-            entry("no_screen_lock", noScreenLock),
-            entry("stale_patch_level", stalePatch),
-            entry("bootloader_unlocked", bootloaderUnlocked),
-            entry("wifi_adb_enabled", wifiAdbEnabled)
-        )
+        ))
     }
 
     /**
