@@ -60,6 +60,7 @@ fun DashboardScreen(
     val latestScan by viewModel.latestScan.collectAsStateWithLifecycle()
     val isScanning by viewModel.isScanning.collectAsStateWithLifecycle()
     val scanDiff by viewModel.scanDiff.collectAsStateWithLifecycle()
+    val matchedDnsCount by viewModel.matchedDnsCount.collectAsStateWithLifecycle()
 
     val snackbarHostState = remember { SnackbarHostState() }
 
@@ -175,7 +176,7 @@ fun DashboardScreen(
                 SummaryCard(
                     modifier = Modifier.weight(1f),
                     title = stringResource(R.string.summary_dns_matched),
-                    value = "0",
+                    value = matchedDnsCount.toString(),
                     onClick = { onNavigate("network") }
                 )
                 SummaryCard(

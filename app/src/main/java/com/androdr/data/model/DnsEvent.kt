@@ -13,6 +13,11 @@ data class DnsEvent(
     val domain: String,
     val appUid: Int,
     val appName: String?,
+    /**
+     * Whether the DNS response was replaced with NXDOMAIN (block mode).
+     * Note: UI display uses [reason] != null for "matched" status, not this field.
+     * This field records the actual blocking action taken.
+     */
     val isBlocked: Boolean,
     val reason: String?
 )

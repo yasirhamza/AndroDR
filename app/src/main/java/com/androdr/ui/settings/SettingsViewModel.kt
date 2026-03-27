@@ -153,6 +153,8 @@ class SettingsViewModel @Inject constructor(
             _sigmaRuleCount.value = sigmaRuleEngine.ruleCount()
             _domainIocCount.value = domainIocEntryDao.count()
             _packageIocCount.value = iocEntryDao.count()
+            // Thread-safe: getAllBadCerts() returns a lazily-initialized immutable list;
+            // refreshStats() runs on viewModelScope (single coroutine, sequential reads)
             _certHashIocCount.value = certHashIocEntryDao.count() + certHashIocDatabase.getAllBadCerts().size
             _cveCount.value = cveDatabase.getActivelyExploitedCount()
 
