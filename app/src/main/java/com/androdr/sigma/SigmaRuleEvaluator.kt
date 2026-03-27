@@ -28,11 +28,15 @@ object SigmaRuleEvaluator {
         java.util.concurrent.ConcurrentHashMap<String, Boolean>()
     )
     private const val REGEX_TIMEOUT_MS = 1000L
-    private const val MAX_REGEX_LENGTH = 500
+    private const val MAX_REGEX_LENGTH = SigmaRuleParser.MAX_REGEX_LENGTH
+    private const val MAX_REGEX_CACHE_SIZE = 256
 
     private fun safeRegexMatch(pattern: String, input: String): Boolean {
         if (pattern.length > MAX_REGEX_LENGTH) return false
         if (pattern in invalidPatterns) return false
+
+        // Evict cache if it grows beyond bound (defense against rule-sourced DoS)
+        if (regexCache.size > MAX_REGEX_CACHE_SIZE) regexCache.clear()
 
         val regex = regexCache.getOrPut(pattern) {
             try {
