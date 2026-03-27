@@ -13,5 +13,11 @@ detection:
         adb_enabled: true
     condition: selection
 level: high
+display:
+    category: device_posture
+    icon: usb
+    triggered_title: "USB Debugging Enabled"
+    safe_title: "USB Debugging Disabled"
+    evidence_type: none
 remediation:
     - "Disable USB Debugging in Developer Options when not actively developing."

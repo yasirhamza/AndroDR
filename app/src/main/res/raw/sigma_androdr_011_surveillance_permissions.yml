@@ -19,5 +19,10 @@ detection:
         surveillance_permission_count|gte: 2
     condition: selection
 level: high
+display:
+    category: app_risk
+    icon: visibility
+    triggered_title: "Surveillance Permissions"
+    evidence_type: none
 remediation:
     - "This app has extensive surveillance capabilities. If you did not install it intentionally, uninstall it."

@@ -14,5 +14,10 @@ detection:
         domain|ioc_lookup: domain_ioc_db
     condition: selection
 level: critical
+display:
+    category: app_risk
+    icon: warning
+    triggered_title: "Malicious Domain"
+    evidence_type: ioc_match
 remediation:
     - "A connection to a known command-and-control server was blocked."

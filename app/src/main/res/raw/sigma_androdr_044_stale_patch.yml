@@ -11,5 +11,11 @@ detection:
         patch_age_days|gte: 90
     condition: selection
 level: high
+display:
+    category: device_posture
+    icon: update
+    triggered_title: "Security Patch Outdated"
+    safe_title: "Security Patch Current"
+    evidence_type: none
 remediation:
     - "Update your device to the latest security patch level."

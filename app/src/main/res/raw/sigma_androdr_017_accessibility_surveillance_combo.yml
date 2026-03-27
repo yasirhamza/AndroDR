@@ -19,6 +19,11 @@ detection:
         surveillance_permission_count|gte: 2
     condition: selection
 level: critical
+display:
+    category: app_risk
+    icon: visibility
+    triggered_title: "Stalkerware Pattern"
+    evidence_type: none
 remediation:
     - "This app combines screen reading with surveillance permissions."
     - "Disable its accessibility service in Settings, then uninstall."

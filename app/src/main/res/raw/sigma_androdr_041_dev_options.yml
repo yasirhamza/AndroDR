@@ -11,5 +11,11 @@ detection:
         dev_options_enabled: true
     condition: selection
 level: medium
+display:
+    category: device_posture
+    icon: settings
+    triggered_title: "Developer Options Enabled"
+    safe_title: "Developer Options Disabled"
+    evidence_type: none
 remediation:
     - "Disable Developer Options unless actively needed."

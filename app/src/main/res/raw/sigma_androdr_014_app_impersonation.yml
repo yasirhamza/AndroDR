@@ -16,5 +16,10 @@ detection:
         known_app_category: USER_APP
     condition: selection
 level: high
+display:
+    category: app_risk
+    icon: content_copy
+    triggered_title: "App Impersonation"
+    evidence_type: none
 remediation:
     - "This app impersonates a well-known app but was not installed from a trusted store."

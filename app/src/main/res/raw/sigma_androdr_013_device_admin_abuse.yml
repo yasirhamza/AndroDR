@@ -16,5 +16,10 @@ detection:
         has_device_admin: true
     condition: selection
 level: high
+display:
+    category: app_risk
+    icon: admin_panel_settings
+    triggered_title: "Device Admin Abuse"
+    evidence_type: none
 remediation:
     - "Go to Settings > Security > Device Admin Apps and remove this app first, then uninstall."
