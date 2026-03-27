@@ -62,7 +62,7 @@ class ScanOrchestrator @Inject constructor(
     /**
      * Runs a full device scan.
      *
-     * [AppScanner.collectTelemetry] and [DeviceAuditor.audit] execute concurrently on the IO dispatcher
+     * [AppScanner.collectTelemetry] and [DeviceAuditor.collectTelemetry] execute concurrently on the IO dispatcher
      * (each is already wrapped with [kotlinx.coroutines.withContext]).  The results are combined
      * into a [ScanResult], saved to the database, and returned.
      */
@@ -77,25 +77,18 @@ class ScanOrchestrator @Inject constructor(
         val deviceTelemetryDeferred = async {
             runCatching { deviceAuditor.collectTelemetry() }.getOrDefault(emptyList())
         }
-        // Keep hardcoded device flags as fallback until device auditor rules are verified
-        val deviceFlagsFallbackDeferred = async {
-            runCatching { deviceAuditor.audit() }.getOrDefault(emptyList())
-        }
 
         val appTelemetry = appTelemetryDeferred.await()
         val deviceTelemetry = deviceTelemetryDeferred.await()
-        val deviceFlagsFallback = deviceFlagsFallbackDeferred.await()
 
-        // Phase 2: SIGMA rule evaluation
+        // Phase 2: SIGMA rule evaluation — all detection via rules
         val appFindings = sigmaRuleEngine.evaluateApps(appTelemetry)
         val appRisks = FindingMapper.toAppRisks(appTelemetry, appFindings)
 
-        // Use hardcoded device flags for now — device auditor rule evaluation
-        // requires further testing before switching
-        val deviceFlags = deviceFlagsFallback
-        Log.d(TAG, "Device telemetry collected: ${deviceTelemetry.size} checks")
+        val deviceFindings = sigmaRuleEngine.evaluateDevice(deviceTelemetry)
+        val deviceFlags = FindingMapper.toDeviceFlags(deviceTelemetry, deviceFindings)
 
-        Log.i(TAG, "Scan complete — SIGMA: ${appFindings.size} findings from " +
+        Log.i(TAG, "Scan complete — SIGMA: ${appFindings.size + deviceFindings.size} findings from " +
             "${sigmaRuleEngine.ruleCount()} rules → ${appRisks.size} app risks, " +
             "${deviceFlags.count { it.isTriggered }} device flags triggered")
 
