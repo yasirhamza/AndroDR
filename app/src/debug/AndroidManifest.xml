@@ -8,6 +8,7 @@
             tools:ignore="ExportedReceiver">
             <intent-filter>
                 <action android:name="com.androdr.ACTION_SCAN" />
+                <action android:name="com.androdr.ACTION_UPDATE" />
             </intent-filter>
         </receiver>
     </application>

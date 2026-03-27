@@ -106,11 +106,14 @@ fi
 echo "Preflight OK. Serial=$SERIAL"
 echo ""
 
-# Launch AndroDR once to populate IOC database from bundled data
-echo "Launching AndroDR to populate IOC database..."
-$ADB shell am start -n com.androdr.debug/com.androdr.MainActivity >/dev/null 2>&1
-sleep 8
-echo "IOC database populated."
+# Launch AndroDR and trigger threat database update (IOCs + CVEs)
+echo "Launching AndroDR and updating threat databases..."
+$ADB shell am start -n com.androdr.debug/com.androdr.MainActivity </dev/null >/dev/null 2>&1
+sleep 5
+$ADB shell am broadcast -a com.androdr.ACTION_UPDATE -n com.androdr.debug/com.androdr.debug.ScanBroadcastReceiver </dev/null >/dev/null 2>&1
+echo "  Waiting for CVE + IOC download (up to 45s)..."
+sleep 45
+echo "Threat databases updated."
 echo ""
 
 # ── Scenario selection ───────────────────────────────────────────────────────
@@ -417,6 +420,9 @@ if [ "$MODE" = "load" ] || [ "$MODE" = "guided" ]; then
     # ── Batch install all selected scenarios ─────────────────────────────
     > "$STATE_FILE"
 
+    # Save stdin fd, redirect to /dev/null for install phase (ADB/keytool consume stdin)
+    exec 3<&0 0</dev/null
+
     for scenario_id in $SELECTED_IDS; do
         source=$(get_field "$scenario_id" "source")
         sha256=$(get_field "$scenario_id" "sha256")
@@ -453,7 +459,7 @@ if [ "$MODE" = "load" ] || [ "$MODE" = "guided" ]; then
 
         if [ -n "$apk_path" ]; then
             echo "  Installing $scenario_id..."
-            if $ADB install -t "$apk_path" 2>&1 | tail -1 | grep -q "Success"; then
+            if $ADB install -t "$apk_path" </dev/null 2>&1 | tail -1 | grep -q "Success"; then
                 local_pkg=$(get_pkg_name "$apk_path")
                 [ -n "$local_pkg" ] && echo "$local_pkg" >> "$STATE_FILE"
                 INSTALLED_PACKAGES+=("${local_pkg:-unknown}")
@@ -467,7 +473,7 @@ if [ "$MODE" = "load" ] || [ "$MODE" = "guided" ]; then
             while IFS= read -r cmd; do
                 [ -z "$cmd" ] && continue
                 echo "  Injecting ($scenario_id): adb $cmd"
-                $ADB $cmd 2>/dev/null || true
+                $ADB $cmd </dev/null 2>/dev/null || true
             done < <(get_inject_cmds "$scenario_id")
         fi
 
@@ -479,14 +485,17 @@ if [ "$MODE" = "load" ] || [ "$MODE" = "guided" ]; then
                     \"INSERT OR REPLACE INTO cert_hash_ioc_entries \
                     (certHash, familyName, category, severity, description, source, fetchedAt) \
                     VALUES ('$cert_hash', 'Test Fixture', 'TEST', 'CRITICAL', \
-                    'Adversary simulation test cert', 'adversary-test', $(date +%s000));\"" 2>/dev/null || true
+                    'Adversary simulation test cert', 'adversary-test', $(date +%s000));\"" </dev/null 2>/dev/null || true
             fi
         fi
     done
 
+    # Restore stdin for interactive prompts
+    exec 0<&3 3<&-
+
     echo ""
     echo "  Triggering scan..."
-    $ADB shell am broadcast -a com.androdr.ACTION_SCAN -n com.androdr.debug/com.androdr.debug.ScanBroadcastReceiver >/dev/null 2>&1
+    $ADB shell am broadcast -a com.androdr.ACTION_SCAN -n com.androdr.debug/com.androdr.debug.ScanBroadcastReceiver </dev/null >/dev/null 2>&1
     sleep 15
 
     REPORT="$WORKDIR/androdr-loaded.txt"

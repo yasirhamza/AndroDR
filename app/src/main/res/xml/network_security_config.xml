@@ -10,33 +10,33 @@
     <!-- Pin CISA feed domain -->
     <domain-config>
         <domain includeSubdomains="true">cisa.gov</domain>
-        <pin-set expiration="2027-01-01">
-            <!-- DigiCert Global Root G2 (CISA's root CA) -->
-            <pin digest="SHA-256">i7WTqTvh0OioIruIfFR4kMPnBqrS2rdiVPl/s2uC/CY=</pin>
-            <!-- Backup: DigiCert Global Root CA -->
-            <pin digest="SHA-256">r/mIkG3eEpVdm+u/ko/cwxzOMo1bk4TyHIlByibiA5E=</pin>
+        <pin-set expiration="2027-06-01">
+            <!-- DigiCert Global G3 TLS ECC SHA384 2020 CA1 (intermediate) -->
+            <pin digest="SHA-256">qBRjZmOmkSNJL0p70zek7odSIzqs/muR4Jk9xYyCP+E=</pin>
+            <!-- Leaf: www.homelandsecurity.gov -->
+            <pin digest="SHA-256">aMs+EaUklWPQX1BUlfn0NuPZZfgh+zL3/zVKxWtfNfo=</pin>
         </pin-set>
     </domain-config>
 
     <!-- Pin Google Storage (OSV feeds) -->
     <domain-config>
         <domain includeSubdomains="true">storage.googleapis.com</domain>
-        <pin-set expiration="2027-01-01">
-            <!-- GTS Root R1 (Google Trust Services) -->
-            <pin digest="SHA-256">hxqRlPTu1bMS/0DITB1SSu0vd4u/8l8TPoNPPhzumzc=</pin>
-            <!-- Backup: GlobalSign Root CA - R2 -->
-            <pin digest="SHA-256">iie1VXtL7HzAMF+/PVPR9xzT80kQxdZeJ+zduCB3uj0=</pin>
+        <pin-set expiration="2027-06-01">
+            <!-- GTS Root R1 -->
+            <pin digest="SHA-256">hxqRlPTu1bMS/0DITB1SSu0vd4u/8l8TjPgfaAp63Gc=</pin>
+            <!-- WR2 intermediate -->
+            <pin digest="SHA-256">YPtHaftLw6/0vnc2BnNKGF54xiCA28WFcccjkA4ypCM=</pin>
         </pin-set>
     </domain-config>
 
     <!-- Pin GitHub (SIGMA rule feed) -->
     <domain-config>
         <domain includeSubdomains="true">raw.githubusercontent.com</domain>
-        <pin-set expiration="2027-01-01">
-            <!-- DigiCert Global Root G2 -->
-            <pin digest="SHA-256">i7WTqTvh0OioIruIfFR4kMPnBqrS2rdiVPl/s2uC/CY=</pin>
-            <!-- Backup: DigiCert Global Root CA -->
-            <pin digest="SHA-256">r/mIkG3eEpVdm+u/ko/cwxzOMo1bk4TyHIlByibiA5E=</pin>
+        <pin-set expiration="2027-06-01">
+            <!-- Let's Encrypt R12 intermediate -->
+            <pin digest="SHA-256">kZwN96eHtZftBWrOZUsd6cA4es80n3NzSk/XtYz2EqQ=</pin>
+            <!-- Leaf: *.github.io -->
+            <pin digest="SHA-256">ccs02cz7WiIuRPsyJxR7Gs1f3flkG9wDnaPocSu+U+8=</pin>
         </pin-set>
     </domain-config>
 </network-security-config>
