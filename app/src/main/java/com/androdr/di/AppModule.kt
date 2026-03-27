@@ -22,6 +22,7 @@ import com.androdr.ioc.KnownAppFeed
 import com.androdr.ioc.feeds.MalwareBazaarCertFeed
 import com.androdr.ioc.feeds.MvtIndicatorsFeed
 import com.androdr.ioc.feeds.PlexusKnownAppFeed
+import com.androdr.ioc.feeds.ThreatFoxDomainFeed
 import com.androdr.ioc.feeds.UadKnownAppFeed
 import com.androdr.ioc.feeds.ZimperiumIocFeed
 import dagger.Module
@@ -61,7 +62,8 @@ object AppModule {
     @Singleton
     fun provideDomainIocFeeds(): @JvmSuppressWildcards List<DomainIocFeed> = listOf(
         MvtIndicatorsFeed(),
-        ZimperiumIocFeed()
+        ZimperiumIocFeed(),
+        ThreatFoxDomainFeed()
     )
 
     @Provides
