@@ -43,24 +43,36 @@ object FindingMapper {
     }
 
     fun toDeviceFlags(
-        telemetry: List<DeviceTelemetry>,
+        @Suppress("UnusedParameter") telemetry: List<DeviceTelemetry>,
         findings: List<Finding>
     ): List<DeviceFlag> {
-        val triggeredIds = findings.map {
-            it.matchedRecord["check_id"]?.toString() ?: ""
-        }.toSet()
+        val triggeredCheckIds = findings.mapNotNull { RULE_TO_CHECK[it.ruleId] }.toSet()
 
-        return telemetry.map { check ->
-            val isTriggered = check.checkId in triggeredIds
+        return ALL_CHECK_IDS.map { checkId ->
             DeviceFlag(
-                id = check.checkId,
-                title = CHECK_TITLES[check.checkId] ?: check.checkId,
-                description = CHECK_DESCRIPTIONS[check.checkId] ?: "",
-                severity = CHECK_SEVERITIES[check.checkId] ?: Severity.MEDIUM,
-                isTriggered = isTriggered
+                id = checkId,
+                title = CHECK_TITLES[checkId] ?: checkId,
+                description = CHECK_DESCRIPTIONS[checkId] ?: "",
+                severity = CHECK_SEVERITIES[checkId] ?: Severity.MEDIUM,
+                isTriggered = checkId in triggeredCheckIds
             )
         }
     }
+
+    private val ALL_CHECK_IDS = listOf(
+        "adb_enabled", "dev_options_enabled", "unknown_sources",
+        "no_screen_lock", "stale_patch_level", "bootloader_unlocked", "wifi_adb_enabled"
+    )
+
+    private val RULE_TO_CHECK = mapOf(
+        "androdr-040" to "adb_enabled",
+        "androdr-041" to "dev_options_enabled",
+        "androdr-042" to "unknown_sources",
+        "androdr-043" to "no_screen_lock",
+        "androdr-044" to "stale_patch_level",
+        "androdr-045" to "bootloader_unlocked",
+        "androdr-046" to "wifi_adb_enabled"
+    )
 
     private fun sigmaLevelToRiskLevel(level: String): RiskLevel = when (level.lowercase()) {
         "critical" -> RiskLevel.CRITICAL
