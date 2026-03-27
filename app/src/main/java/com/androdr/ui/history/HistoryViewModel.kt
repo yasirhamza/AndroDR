@@ -3,9 +3,11 @@ package com.androdr.ui.history
 import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.androdr.data.db.DnsEventDao
 import com.androdr.data.model.ScanResult
 import com.androdr.data.repo.ScanRepository
 import com.androdr.reporting.ReportExporter
+import com.androdr.reporting.ReportFormatter
 import com.androdr.scanner.ScanOrchestrator
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -21,7 +23,8 @@ import javax.inject.Inject
 class HistoryViewModel @Inject constructor(
     private val repository: ScanRepository,
     private val orchestrator: ScanOrchestrator,
-    private val reportExporter: ReportExporter
+    private val reportExporter: ReportExporter,
+    private val dnsEventDao: DnsEventDao
 ) : ViewModel() {
 
     /** Full scan history, newest first. */
@@ -54,8 +57,31 @@ class HistoryViewModel @Inject constructor(
     private val _exporting = MutableStateFlow(false)
     val exporting: StateFlow<Boolean> = _exporting.asStateFlow()
 
+    /** The scan currently shown in the detail bottom sheet; null when sheet is hidden. */
+    private val _sheetScan = MutableStateFlow<ScanResult?>(null)
+    val sheetScan: StateFlow<ScanResult?> = _sheetScan.asStateFlow()
+
+    /** Formatted report text for the bottom sheet scan. */
+    private val _sheetReportText = MutableStateFlow("")
+    val sheetReportText: StateFlow<String> = _sheetReportText.asStateFlow()
+
     fun selectScan(scan: ScanResult) {
         _selectedScan.value = scan
+    }
+
+    /** Opens the detail bottom sheet for [scan] and generates the report text. */
+    fun openSheet(scan: ScanResult) {
+        _sheetScan.value = scan
+        viewModelScope.launch {
+            val dnsEvents = dnsEventDao.getRecentSnapshot()
+            _sheetReportText.value = ReportFormatter.formatScanReport(scan, dnsEvents, emptyList())
+        }
+    }
+
+    /** Closes the detail bottom sheet. */
+    fun closeSheet() {
+        _sheetScan.value = null
+        _sheetReportText.value = ""
     }
 
     /**

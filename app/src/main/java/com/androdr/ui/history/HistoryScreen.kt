@@ -1,6 +1,10 @@
 package com.androdr.ui.history
 
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
 import android.content.Intent
+import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.shrinkVertically
@@ -9,25 +13,36 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.SuggestionChip
 import androidx.compose.material3.SuggestionChipDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -37,6 +52,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -49,8 +65,9 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-@Suppress("LongMethod") // History screen combines empty-state, list, and share-launch logic;
-// keeping them together avoids passing share state through multiple composable parameters.
+@Suppress("LongMethod") // History screen combines empty-state, list, share-launch, and bottom sheet
+// logic; keeping them together avoids passing share state through multiple composable parameters.
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HistoryScreen(
     viewModel: HistoryViewModel = hiltViewModel()
@@ -60,6 +77,8 @@ fun HistoryScreen(
     val selectedDiff by viewModel.selectedDiff.collectAsStateWithLifecycle()
     val exporting  by viewModel.exporting.collectAsStateWithLifecycle()
     val shareUri   by viewModel.shareUri.collectAsStateWithLifecycle()
+    val sheetScan  by viewModel.sheetScan.collectAsStateWithLifecycle()
+    val sheetReportText by viewModel.sheetReportText.collectAsStateWithLifecycle()
 
     val context = LocalContext.current
 
@@ -120,13 +139,163 @@ fun HistoryScreen(
                 isFirstScan = allScans.last().id == scan.id,
                 exporting = exporting,
                 onClick = { viewModel.selectScan(scan) },
-                onExport = { viewModel.exportReport(scan) }
+                onExport = { viewModel.exportReport(scan) },
+                onViewReport = { viewModel.openSheet(scan) }
             )
+        }
+    }
+
+    // Detail bottom sheet
+    sheetScan?.let { scan ->
+        ScanReportBottomSheet(
+            scan = scan,
+            reportText = sheetReportText,
+            onDismiss = { viewModel.closeSheet() }
+        )
+    }
+}
+
+@Suppress("LongMethod")
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ScanReportBottomSheet(
+    scan: ScanResult,
+    reportText: String,
+    onDismiss: () -> Unit
+) {
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val context = LocalContext.current
+    val dateFormatter = remember { SimpleDateFormat("MMM d, yyyy  HH:mm", Locale.getDefault()) }
+    val dateString = dateFormatter.format(Date(scan.timestamp))
+    val riskColor = riskLevelColor(scan.overallRiskLevel)
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 24.dp)
+                .padding(bottom = 16.dp)
+        ) {
+            // Header: date + risk level
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Scan Report",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = dateString,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                SuggestionChip(
+                    onClick = {},
+                    label = {
+                        Text(
+                            text = scan.overallRiskLevel.name,
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Bold
+                        )
+                    },
+                    colors = SuggestionChipDefaults.suggestionChipColors(
+                        containerColor = riskColor.copy(alpha = 0.2f),
+                        labelColor = riskColor
+                    )
+                )
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+            HorizontalDivider()
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // Scrollable report body
+            Column(
+                modifier = Modifier
+                    .weight(1f, fill = false)
+                    .verticalScroll(rememberScrollState())
+            ) {
+                if (reportText.isEmpty()) {
+                    CircularProgressIndicator(modifier = Modifier.align(Alignment.CenterHorizontally))
+                } else {
+                    Text(
+                        text = reportText,
+                        style = MaterialTheme.typography.bodySmall,
+                        fontFamily = FontFamily.Monospace,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+            HorizontalDivider()
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // Action buttons
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                OutlinedButton(
+                    onClick = {
+                        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE)
+                            as ClipboardManager
+                        clipboard.setPrimaryClip(
+                            ClipData.newPlainText("AndroDR Report", reportText)
+                        )
+                        Toast.makeText(context, "Report copied to clipboard", Toast.LENGTH_SHORT)
+                            .show()
+                    },
+                    modifier = Modifier.weight(1f),
+                    enabled = reportText.isNotEmpty()
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.ContentCopy,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Copy")
+                }
+                Button(
+                    onClick = {
+                        val intent = Intent(Intent.ACTION_SEND).apply {
+                            type = "text/plain"
+                            putExtra(Intent.EXTRA_TEXT, reportText)
+                            putExtra(Intent.EXTRA_SUBJECT, "AndroDR Security Report")
+                        }
+                        context.startActivity(
+                            Intent.createChooser(intent, "Share Security Report")
+                        )
+                    },
+                    modifier = Modifier.weight(1f),
+                    enabled = reportText.isNotEmpty()
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.Share,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Share")
+                }
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
         }
     }
 }
 
-@Suppress("LongMethod", "LongParameterList") // Scan history item requires all 7 parameters to
+@Suppress("LongMethod", "LongParameterList") // Scan history item requires all parameters to
 // render selection state, diff badges, export spinner, and first-scan indicator together;
 // the parameter count is inherent to the component's responsibility surface.
 @Composable
@@ -137,7 +306,8 @@ private fun ScanHistoryItem(
     isFirstScan: Boolean,
     exporting: Boolean,
     onClick: () -> Unit,
-    onExport: () -> Unit
+    onExport: () -> Unit,
+    onViewReport: () -> Unit
 ) {
     val dateFormatter = remember { SimpleDateFormat("MMM d, yyyy  HH:mm", Locale.getDefault()) }
     val dateString = dateFormatter.format(Date(scan.timestamp))
@@ -233,13 +403,30 @@ private fun ScanHistoryItem(
                         DiffSection(diff = diff)
                     }
 
-                    // Export button
+                    // Action buttons row
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.End
                     ) {
+                        // View Report button
+                        IconButton(onClick = onViewReport) {
+                            Icon(
+                                imageVector = Icons.Filled.ContentCopy,
+                                contentDescription = "View full report",
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                        Text(
+                            text = "View Report",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier
+                                .clickable(onClick = onViewReport)
+                                .padding(end = 16.dp)
+                        )
+
                         if (exporting) {
                             CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
                         }
