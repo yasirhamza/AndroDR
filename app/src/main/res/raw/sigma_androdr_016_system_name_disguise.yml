@@ -13,6 +13,7 @@ detection:
     selection_untrusted:
         is_system_app: false
         from_trusted_store: false
+        is_known_oem_app: false
     selection_name:
         app_name|contains:
             - System
