@@ -35,8 +35,8 @@ class ScanRepository @Inject constructor(
     /** Emits up to 200 most recent DNS events, newest first. */
     val recentDnsEvents: Flow<List<DnsEvent>> = dnsEventDao.getRecentEvents()
 
-    /** Emits all blocked DNS events, newest first. */
-    val blockedDnsEvents: Flow<List<DnsEvent>> = dnsEventDao.getBlockedEvents()
+    /** Emits all DNS events that matched an IOC or blocklist, newest first. */
+    val matchedDnsEvents: Flow<List<DnsEvent>> = dnsEventDao.getMatchedEvents()
 
     /** Records a single [DnsEvent] captured by the VPN layer. */
     suspend fun logDnsEvent(event: DnsEvent) {

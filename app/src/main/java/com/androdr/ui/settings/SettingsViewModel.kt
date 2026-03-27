@@ -7,6 +7,7 @@ import com.androdr.data.db.CertHashIocEntryDao
 import com.androdr.data.db.DomainIocEntryDao
 import com.androdr.data.db.IocEntryDao
 import com.androdr.data.repo.SettingsRepository
+import com.androdr.ioc.CertHashIocDatabase
 import com.androdr.ioc.CertHashIocUpdater
 import com.androdr.ioc.CveDatabase
 import com.androdr.ioc.DomainIocUpdater
@@ -34,6 +35,7 @@ class SettingsViewModel @Inject constructor(
     private val iocEntryDao: IocEntryDao,
     private val domainIocEntryDao: DomainIocEntryDao,
     private val certHashIocEntryDao: CertHashIocEntryDao,
+    private val certHashIocDatabase: CertHashIocDatabase,
     private val sigmaRuleEngine: SigmaRuleEngine,
     private val cveDatabase: CveDatabase,
     private val remoteIocUpdater: RemoteIocUpdater,
@@ -151,7 +153,7 @@ class SettingsViewModel @Inject constructor(
             _sigmaRuleCount.value = sigmaRuleEngine.ruleCount()
             _domainIocCount.value = domainIocEntryDao.count()
             _packageIocCount.value = iocEntryDao.count()
-            _certHashIocCount.value = certHashIocEntryDao.count()
+            _certHashIocCount.value = certHashIocEntryDao.count() + certHashIocDatabase.getAllBadCerts().size
             _cveCount.value = cveDatabase.getActivelyExploitedCount()
 
             // Determine most recent fetch time across all IOC tables

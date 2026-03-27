@@ -24,8 +24,8 @@ class DnsMonitorViewModel @Inject constructor(
     val recentEvents: StateFlow<List<DnsEvent>> = repository.recentDnsEvents
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
-    /** All DNS events that were blocked, newest first. */
-    val blockedEvents: StateFlow<List<DnsEvent>> = repository.blockedDnsEvents
+    /** All DNS events that matched an IOC or blocklist, newest first. */
+    val matchedEvents: StateFlow<List<DnsEvent>> = repository.matchedDnsEvents
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     /** Whether the DNS VPN service is currently active. */

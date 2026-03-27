@@ -79,16 +79,16 @@ object ReportFormatter {
         if (dnsEvents.isEmpty()) {
             appendLine("  No DNS events recorded.")
         } else {
-            val blocked = dnsEvents.count { it.isBlocked }
-            appendLine("  ${dnsEvents.size} events · $blocked blocked")
+            val matched = dnsEvents.count { it.reason != null }
+            appendLine("  ${dnsEvents.size} events · $matched matched")
             appendLine()
             dnsEvents.take(500).forEach { event ->
                 val time = dnsFmt.format(Date(event.timestamp))
-                val state = if (event.isBlocked) "[BLOCKED]" else "[ALLOWED]"
+                val state = if (event.reason != null) "[MATCHED]" else "[ALLOWED]"
                 val app = event.appName
                     ?: if (event.appUid == -1) "unknown" else "uid:${event.appUid}"
                 appendLine("  $state  $time  ${event.domain.padEnd(50)}  ← $app")
-                if (event.isBlocked && event.reason != null) {
+                if (event.reason != null) {
                     appendLine("           reason: ${event.reason}")
                 }
             }

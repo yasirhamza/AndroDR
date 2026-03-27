@@ -17,20 +17,16 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -54,7 +50,6 @@ import com.androdr.data.model.ScanResult
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
-import java.util.concurrent.TimeUnit
 
 @Suppress("LongMethod") // Compose UI functions are inherently long; structure is clear via sections
 @Composable
@@ -65,15 +60,6 @@ fun DashboardScreen(
     val latestScan by viewModel.latestScan.collectAsStateWithLifecycle()
     val isScanning by viewModel.isScanning.collectAsStateWithLifecycle()
     val scanDiff by viewModel.scanDiff.collectAsStateWithLifecycle()
-    val iocEntryCount by viewModel.iocEntryCount.collectAsStateWithLifecycle()
-    val iocLastUpdated by viewModel.iocLastUpdated.collectAsStateWithLifecycle()
-    val isUpdatingIoc by viewModel.isUpdatingIoc.collectAsStateWithLifecycle()
-    val domainIocEntryCount by viewModel.domainIocEntryCount.collectAsStateWithLifecycle()
-    val domainIocLastUpdated by viewModel.domainIocLastUpdated.collectAsStateWithLifecycle()
-    val isUpdatingDomainIoc by viewModel.isUpdatingDomainIoc.collectAsStateWithLifecycle()
-    val knownAppEntryCount by viewModel.knownAppEntryCount.collectAsStateWithLifecycle()
-    val knownAppLastUpdated by viewModel.knownAppLastUpdated.collectAsStateWithLifecycle()
-    val isUpdatingKnownApps by viewModel.isUpdatingKnownApps.collectAsStateWithLifecycle()
 
     val snackbarHostState = remember { SnackbarHostState() }
 
@@ -155,22 +141,6 @@ fun DashboardScreen(
                 }
             }
 
-            // Threat Database card
-            ThreatDatabaseCard(
-                entryCount = iocEntryCount,
-                lastUpdated = iocLastUpdated,
-                isUpdating = isUpdatingIoc,
-                onUpdateClick = { viewModel.updateIoc() },
-                domainEntryCount = domainIocEntryCount,
-                domainLastUpdated = domainIocLastUpdated,
-                isUpdatingDomain = isUpdatingDomainIoc,
-                onUpdateDomainClick = { viewModel.updateDomainIoc() },
-                knownAppEntryCount = knownAppEntryCount,
-                knownAppLastUpdated = knownAppLastUpdated,
-                isUpdatingKnownApps = isUpdatingKnownApps,
-                onUpdateKnownAppsClick = { viewModel.updateKnownApps() }
-            )
-
             // Summary cards grid (2x2)
             val riskyAppCount = latestScan?.appRisks
                 ?.count { it.riskLevel != RiskLevel.LOW } ?: 0
@@ -204,7 +174,7 @@ fun DashboardScreen(
             ) {
                 SummaryCard(
                     modifier = Modifier.weight(1f),
-                    title = stringResource(R.string.summary_dns_blocked),
+                    title = stringResource(R.string.summary_dns_matched),
                     value = "0",
                     onClick = { onNavigate("network") }
                 )
@@ -216,231 +186,6 @@ fun DashboardScreen(
                 )
             }
         }
-    }
-}
-
-@Suppress("LongMethod") // Compose UI functions are inherently long; structure is clear via sections
-@Composable
-private fun ThreatDatabaseCard(
-    entryCount: Int,
-    lastUpdated: Long?,
-    isUpdating: Boolean,
-    onUpdateClick: () -> Unit,
-    domainEntryCount: Int,
-    domainLastUpdated: Long?,
-    isUpdatingDomain: Boolean,
-    onUpdateDomainClick: () -> Unit,
-    knownAppEntryCount: Int,
-    knownAppLastUpdated: Long?,
-    isUpdatingKnownApps: Boolean,
-    onUpdateKnownAppsClick: () -> Unit
-) {
-    val now = System.currentTimeMillis()
-
-    // ── Package IOC row state ──────────────────────────────────────────────────
-    val isNeverUpdated = lastUpdated == null
-    val isStale = lastUpdated != null && (now - lastUpdated) > 24 * 60 * 60 * 1000L
-    val isFresh = lastUpdated != null && !isStale
-
-    val cardColor = when {
-        isFresh -> Color(0xFF00D4AA).copy(alpha = 0.15f)
-        else    -> Color(0xFFFF9800).copy(alpha = 0.15f)
-    }
-    val iconTint = when {
-        isFresh -> Color(0xFF00D4AA)
-        else    -> Color(0xFFFF9800)
-    }
-    val icon = when {
-        isFresh        -> Icons.Filled.CheckCircle
-        isNeverUpdated -> Icons.Filled.Warning
-        else           -> Icons.Filled.Refresh
-    }
-    val statusText = when {
-        isNeverUpdated -> "$entryCount bundled indicators · Remote update pending"
-        isStale        -> "$entryCount indicators · Updated ${relativeTime(lastUpdated!!, now)} · Stale"
-        else           -> "$entryCount indicators · Updated ${relativeTime(lastUpdated!!, now)}"
-    }
-
-    // ── Domain IOC row state ───────────────────────────────────────────────────
-    val isDomainNeverUpdated = domainLastUpdated == null
-    val isDomainStale = domainLastUpdated != null && (now - domainLastUpdated) > 24 * 60 * 60 * 1000L
-    val isDomainFresh = domainLastUpdated != null && !isDomainStale
-
-    val domainIconTint = when {
-        isDomainFresh -> Color(0xFF00D4AA)
-        else          -> Color(0xFFFF9800)
-    }
-    val domainIcon = when {
-        isDomainFresh        -> Icons.Filled.CheckCircle
-        isDomainNeverUpdated -> Icons.Filled.Warning
-        else                 -> Icons.Filled.Refresh
-    }
-    val domainStatusText = when {
-        isDomainNeverUpdated -> "$domainEntryCount domain indicators · Remote update pending"
-        isDomainStale        -> "$domainEntryCount domain indicators · " +
-            "Updated ${relativeTime(domainLastUpdated!!, now)} · Stale"
-        else                 -> "$domainEntryCount domain indicators · " +
-            "Updated ${relativeTime(domainLastUpdated!!, now)}"
-    }
-
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = cardColor)
-    ) {
-        Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            // ── Package IOC row ────────────────────────────────────────────────
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Icon(
-                    imageVector = icon,
-                    contentDescription = null,
-                    tint = iconTint,
-                    modifier = Modifier.size(20.dp)
-                )
-                Text(
-                    text = statusText,
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-            }
-
-            if (isFresh) {
-                OutlinedButton(
-                    onClick = onUpdateClick,
-                    enabled = !isUpdating,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    UpdateButtonContent(isUpdating = isUpdating)
-                }
-            } else {
-                Button(
-                    onClick = onUpdateClick,
-                    enabled = !isUpdating,
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = Color(0xFFFF9800)
-                    )
-                ) {
-                    UpdateButtonContent(isUpdating = isUpdating)
-                }
-            }
-
-            // ── Domain IOC row ─────────────────────────────────────────────────
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Icon(
-                    imageVector = domainIcon,
-                    contentDescription = null,
-                    tint = domainIconTint,
-                    modifier = Modifier.size(20.dp)
-                )
-                Text(
-                    text = domainStatusText,
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-            }
-
-            if (isDomainFresh) {
-                OutlinedButton(
-                    onClick = onUpdateDomainClick,
-                    enabled = !isUpdatingDomain,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    UpdateButtonContent(isUpdating = isUpdatingDomain)
-                }
-            } else {
-                Button(
-                    onClick = onUpdateDomainClick,
-                    enabled = !isUpdatingDomain,
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = Color(0xFFFF9800)
-                    )
-                ) {
-                    UpdateButtonContent(isUpdating = isUpdatingDomain)
-                }
-            }
-
-            // ── Known-app DB row ───────────────────────────────────────────────────────
-            val isKnownAppsNeverUpdated = knownAppLastUpdated == null
-            val isKnownAppsStale = knownAppLastUpdated != null && (now - knownAppLastUpdated) > 24 * 60 * 60 * 1000L
-            val isKnownAppsFresh = knownAppLastUpdated != null && !isKnownAppsStale
-
-            val knownAppsIconTint = if (isKnownAppsFresh) Color(0xFF00D4AA) else Color(0xFFFF9800)
-            val knownAppsIcon = when {
-                isKnownAppsFresh        -> Icons.Filled.CheckCircle
-                isKnownAppsNeverUpdated -> Icons.Filled.Warning
-                else                    -> Icons.Filled.Refresh
-            }
-            val knownAppsStatusText = when {
-                isKnownAppsNeverUpdated -> "$knownAppEntryCount app signatures · Remote update pending"
-                isKnownAppsStale        -> "$knownAppEntryCount app signatures · " +
-                    "Updated ${relativeTime(knownAppLastUpdated!!, now)} · Stale"
-                else                    -> "$knownAppEntryCount app signatures · " +
-                    "Updated ${relativeTime(knownAppLastUpdated!!, now)}"
-            }
-
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Icon(imageVector = knownAppsIcon, contentDescription = null, tint = knownAppsIconTint,
-                    modifier = Modifier.size(20.dp))
-                Text(text = knownAppsStatusText, style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
-            }
-
-            if (isKnownAppsFresh) {
-                OutlinedButton(onClick = onUpdateKnownAppsClick, enabled = !isUpdatingKnownApps,
-                    modifier = Modifier.fillMaxWidth()) {
-                    UpdateButtonContent(isUpdating = isUpdatingKnownApps)
-                }
-            } else {
-                Button(onClick = onUpdateKnownAppsClick, enabled = !isUpdatingKnownApps,
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF9800))) {
-                    UpdateButtonContent(isUpdating = isUpdatingKnownApps)
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun UpdateButtonContent(isUpdating: Boolean) {
-    if (isUpdating) {
-        CircularProgressIndicator(
-            modifier = Modifier.size(16.dp),
-            strokeWidth = 2.dp,
-            color = MaterialTheme.colorScheme.onPrimary
-        )
-        Spacer(modifier = Modifier.width(8.dp))
-        Text("Updating...")
-    } else {
-        Text("Update Now")
-    }
-}
-
-private fun relativeTime(timestamp: Long, now: Long): String {
-    val diffMs = now - timestamp
-    val minutes = TimeUnit.MILLISECONDS.toMinutes(diffMs)
-    val hours = TimeUnit.MILLISECONDS.toHours(diffMs)
-    val days = TimeUnit.MILLISECONDS.toDays(diffMs)
-    return when {
-        minutes < 1  -> "just now"
-        minutes < 60 -> "${minutes}m ago"
-        hours < 24   -> "${hours}h ago"
-        else         -> "${days}d ago"
     }
 }
 

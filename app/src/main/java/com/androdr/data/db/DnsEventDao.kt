@@ -12,8 +12,8 @@ interface DnsEventDao {
     @Query("SELECT * FROM DnsEvent ORDER BY timestamp DESC LIMIT 200")
     fun getRecentEvents(): Flow<List<DnsEvent>>
 
-    @Query("SELECT * FROM DnsEvent WHERE isBlocked = 1 ORDER BY timestamp DESC")
-    fun getBlockedEvents(): Flow<List<DnsEvent>>
+    @Query("SELECT * FROM DnsEvent WHERE reason IS NOT NULL ORDER BY timestamp DESC")
+    fun getMatchedEvents(): Flow<List<DnsEvent>>
 
     /** One-shot snapshot for report export; not a Flow. */
     @Query("SELECT * FROM DnsEvent ORDER BY timestamp DESC LIMIT 500")
