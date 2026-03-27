@@ -18,7 +18,8 @@ class SigmaRuleEvaluatorTest {
         id = id, title = "Test", status = "production", description = "",
         product = "androdr", service = service, level = level,
         tags = emptyList(), detection = SigmaDetection(selections, condition),
-        falsepositives = emptyList(), remediation = listOf("Fix it")
+        falsepositives = emptyList(), remediation = listOf("Fix it"),
+        display = SigmaDisplay(category = if (service == "device_auditor") "device_posture" else "app_risk")
     )
 
     @Test
@@ -123,5 +124,86 @@ class SigmaRuleEvaluatorTest {
         assertFalse(SigmaRuleEvaluator.evaluateConditionExpression("a and b", mapOf("a" to true, "b" to false)))
         assertTrue(SigmaRuleEvaluator.evaluateConditionExpression("a or b", mapOf("a" to false, "b" to true)))
         assertFalse(SigmaRuleEvaluator.evaluateConditionExpression("a or b", mapOf("a" to false, "b" to false)))
+    }
+
+    @Test
+    fun `device posture rule emits safe finding when not matched`() {
+        val rule = makeRule(
+            service = "device_auditor",
+            selections = mapOf("selection" to SigmaSelection(listOf(
+                SigmaFieldMatcher("adb_enabled", SigmaModifier.EQUALS, listOf(true))
+            )))
+        ).copy(display = SigmaDisplay(category = "device_posture", triggeredTitle = "ADB Enabled", safeTitle = "ADB Disabled", evidenceType = "none"))
+        val record = mapOf<String, Any?>("adb_enabled" to false)
+        val findings = SigmaRuleEvaluator.evaluate(listOf(rule), listOf(record), "device_auditor")
+        assertEquals(1, findings.size)
+        assertEquals(false, findings[0].triggered)
+        assertEquals("ADB Disabled", findings[0].title)
+        assertEquals(FindingCategory.DEVICE_POSTURE, findings[0].category)
+    }
+
+    @Test
+    fun `device posture rule emits triggered finding with display title`() {
+        val rule = makeRule(
+            service = "device_auditor",
+            selections = mapOf("selection" to SigmaSelection(listOf(
+                SigmaFieldMatcher("adb_enabled", SigmaModifier.EQUALS, listOf(true))
+            )))
+        ).copy(display = SigmaDisplay(category = "device_posture", triggeredTitle = "ADB Enabled", safeTitle = "ADB Disabled", evidenceType = "none"))
+        val record = mapOf<String, Any?>("adb_enabled" to true)
+        val findings = SigmaRuleEvaluator.evaluate(listOf(rule), listOf(record), "device_auditor")
+        assertEquals(1, findings.size)
+        assertEquals(true, findings[0].triggered)
+        assertEquals("ADB Enabled", findings[0].title)
+    }
+
+    @Test
+    fun `app_risk rule does not emit when not matched`() {
+        val rule = makeRule(selections = mapOf("selection" to SigmaSelection(listOf(
+            SigmaFieldMatcher("is_sideloaded", SigmaModifier.EQUALS, listOf(true))
+        )))).copy(display = SigmaDisplay(category = "app_risk"))
+        val record = mapOf<String, Any?>("is_sideloaded" to false)
+        val findings = SigmaRuleEvaluator.evaluate(listOf(rule), listOf(record), "app_scanner")
+        assertEquals(0, findings.size)
+    }
+
+    @Test
+    fun `evidence provider called when evidence_type is set`() {
+        val rule = makeRule(
+            service = "device_auditor",
+            selections = mapOf("selection" to SigmaSelection(listOf(
+                SigmaFieldMatcher("unpatched_cve_count", SigmaModifier.GTE, listOf(1))
+            ))), level = "critical"
+        ).copy(
+            display = SigmaDisplay(category = "device_posture", triggeredTitle = "{count} Unpatched CVEs", evidenceType = "cve_list"),
+            remediation = listOf("Update to {target_patch_level}.")
+        )
+        var providerCalled = false
+        val providers = mapOf<String, EvidenceProvider>("cve_list" to EvidenceProvider { _, _ ->
+            providerCalled = true
+            listOf(EvidenceResult(
+                evidence = Evidence.CveList(emptyList(), "2025-03-01", 0),
+                titleVars = mapOf("count" to "5"),
+                remediationVars = mapOf("target_patch_level" to "2025-03-01")
+            ))
+        })
+        val record = mapOf<String, Any?>("unpatched_cve_count" to 5)
+        val findings = SigmaRuleEvaluator.evaluate(listOf(rule), listOf(record), "device_auditor", evidenceProviders = providers)
+        assertTrue(providerCalled)
+        assertEquals(1, findings.size)
+        assertEquals("5 Unpatched CVEs", findings[0].title)
+        assertEquals("Update to 2025-03-01.", findings[0].remediation[0])
+        assertTrue(findings[0].evidence is Evidence.CveList)
+    }
+
+    @Test
+    fun `backward compat - rule without display block uses title field`() {
+        val rule = makeRule(selections = mapOf("selection" to SigmaSelection(listOf(
+            SigmaFieldMatcher("is_sideloaded", SigmaModifier.EQUALS, listOf(true))
+        ))))
+        val record = mapOf<String, Any?>("is_sideloaded" to true)
+        val findings = SigmaRuleEvaluator.evaluate(listOf(rule), listOf(record), "app_scanner")
+        assertEquals(1, findings.size)
+        assertEquals("Test", findings[0].title)
     }
 }
