@@ -17,15 +17,10 @@ detection:
     selection_name:
         app_name|contains:
             - System
-            - Service
             - Google
             - Android
             - Samsung
-            - Update
-            - Security
             - Settings
-            - Phone
-            - Messenger
     condition: selection_untrusted and selection_name
 level: high
 falsepositives:

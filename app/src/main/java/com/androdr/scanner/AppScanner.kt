@@ -122,6 +122,7 @@ class AppScanner @Inject constructor(
         @Suppress("LoopWithTooManyJumpStatements")
         for (pkg in installedPackages) {
             val packageName = pkg.packageName ?: continue
+            if (packageName.startsWith("com.androdr")) continue
             val appInfo = pkg.applicationInfo ?: continue
             @Suppress("TooGenericExceptionCaught", "SwallowedException")
             val appName = try {
