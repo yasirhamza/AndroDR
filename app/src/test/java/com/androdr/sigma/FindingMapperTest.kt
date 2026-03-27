@@ -3,7 +3,9 @@ package com.androdr.sigma
 
 import com.androdr.data.model.AppTelemetry
 import com.androdr.data.model.RiskLevel
+import com.androdr.data.model.Severity
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -54,5 +56,32 @@ class FindingMapperTest {
         assertEquals(1, risks.size)
         assertEquals(RiskLevel.CRITICAL, risks[0].riskLevel)
         assertEquals(2, risks[0].reasons.size)
+    }
+
+    @Test
+    fun `maps device findings to DeviceFlags with correct triggered state`() {
+        val findings = listOf(
+            Finding("androdr-040", "USB Debugging enabled", "high",
+                listOf("attack.t1404"), listOf("Disable USB Debugging"),
+                mapOf("adb_enabled" to true)),
+            Finding("androdr-043", "No screen lock", "critical",
+                emptyList(), emptyList(),
+                mapOf("screen_lock_enabled" to false))
+        )
+        val flags = FindingMapper.toDeviceFlags(emptyList(), findings)
+
+        assertEquals(7, flags.size)
+
+        val adb = flags.find { it.id == "adb_enabled" }!!
+        assertTrue(adb.isTriggered)
+        assertEquals("USB Debugging", adb.title)
+        assertEquals(Severity.HIGH, adb.severity)
+
+        val screenLock = flags.find { it.id == "no_screen_lock" }!!
+        assertTrue(screenLock.isTriggered)
+        assertEquals(Severity.CRITICAL, screenLock.severity)
+
+        val wifiAdb = flags.find { it.id == "wifi_adb_enabled" }!!
+        assertFalse(wifiAdb.isTriggered)
     }
 }
