@@ -25,7 +25,7 @@ class FindingMapperTest {
             ruleId = "androdr-010", title = "Sideloaded app",
             level = "medium", tags = emptyList(),
             remediation = listOf("Review this app"),
-            matchedRecord = mapOf("package_name" to "com.evil.app")
+            matchContext = mapOf("package_name" to "com.evil.app")
         ))
 
         val risks = FindingMapper.toAppRisks(telemetry, findings)
@@ -46,10 +46,12 @@ class FindingMapperTest {
             knownAppCategory = null
         ))
         val findings = listOf(
-            Finding("androdr-002", "Cert hash match", "critical", emptyList(), emptyList(),
-                mapOf("package_name" to "com.evil.app")),
-            Finding("androdr-012", "Accessibility abuse", "high", emptyList(), emptyList(),
-                mapOf("package_name" to "com.evil.app"))
+            Finding(ruleId = "androdr-002", title = "Cert hash match", level = "critical",
+                tags = emptyList(), remediation = emptyList(),
+                matchContext = mapOf("package_name" to "com.evil.app")),
+            Finding(ruleId = "androdr-012", title = "Accessibility abuse", level = "high",
+                tags = emptyList(), remediation = emptyList(),
+                matchContext = mapOf("package_name" to "com.evil.app"))
         )
 
         val risks = FindingMapper.toAppRisks(telemetry, findings)
@@ -61,12 +63,12 @@ class FindingMapperTest {
     @Test
     fun `maps device findings to DeviceFlags with correct triggered state`() {
         val findings = listOf(
-            Finding("androdr-040", "USB Debugging enabled", "high",
-                listOf("attack.t1404"), listOf("Disable USB Debugging"),
-                mapOf("adb_enabled" to true)),
-            Finding("androdr-043", "No screen lock", "critical",
-                emptyList(), emptyList(),
-                mapOf("screen_lock_enabled" to false))
+            Finding(ruleId = "androdr-040", title = "USB Debugging enabled", level = "high",
+                tags = listOf("attack.t1404"), remediation = listOf("Disable USB Debugging"),
+                matchContext = mapOf("adb_enabled" to "true")),
+            Finding(ruleId = "androdr-043", title = "No screen lock", level = "critical",
+                tags = emptyList(), remediation = emptyList(),
+                matchContext = mapOf("screen_lock_enabled" to "false"))
         )
         val flags = FindingMapper.toDeviceFlags(emptyList(), findings)
 

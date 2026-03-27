@@ -52,7 +52,8 @@ object SigmaRuleParser {
                 tags = (doc["tags"] as? List<*>)?.map { it.toString() } ?: emptyList(),
                 detection = parseDetection(detectionMap),
                 falsepositives = (doc["falsepositives"] as? List<*>)?.map { it.toString() } ?: emptyList(),
-                remediation = (doc["remediation"] as? List<*>)?.map { it.toString() } ?: emptyList()
+                remediation = (doc["remediation"] as? List<*>)?.map { it.toString() } ?: emptyList(),
+                display = parseDisplay(doc["display"] as? Map<*, *>)
             )
         } catch (e: Exception) {
             Log.w(TAG, "Failed to parse SIGMA document: ${e.message}")
@@ -96,6 +97,18 @@ object SigmaRuleParser {
         }
 
         return SigmaSelection(fieldMatchers = matchers)
+    }
+
+    private fun parseDisplay(displayMap: Map<*, *>?): SigmaDisplay {
+        if (displayMap == null) return SigmaDisplay()
+        return SigmaDisplay(
+            category = displayMap["category"]?.toString() ?: "device_posture",
+            icon = displayMap["icon"]?.toString() ?: "",
+            triggeredTitle = displayMap["triggered_title"]?.toString() ?: "",
+            safeTitle = displayMap["safe_title"]?.toString() ?: "",
+            evidenceType = displayMap["evidence_type"]?.toString() ?: "none",
+            summaryTemplate = displayMap["summary_template"]?.toString() ?: ""
+        )
     }
 
     private fun parseFieldAndModifier(key: String): Pair<String, SigmaModifier> {
