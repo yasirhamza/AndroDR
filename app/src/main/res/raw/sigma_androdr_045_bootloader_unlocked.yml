@@ -11,5 +11,11 @@ detection:
         bootloader_unlocked: true
     condition: selection
 level: critical
+display:
+    category: device_posture
+    icon: lock_open
+    triggered_title: "Bootloader Unlocked"
+    safe_title: "Bootloader Locked"
+    evidence_type: none
 remediation:
     - "Re-lock the bootloader unless you need it for custom ROM development."

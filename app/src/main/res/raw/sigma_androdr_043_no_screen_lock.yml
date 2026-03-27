@@ -11,5 +11,11 @@ detection:
         screen_lock_enabled: false
     condition: selection
 level: critical
+display:
+    category: device_posture
+    icon: lock_open
+    triggered_title: "No Screen Lock"
+    safe_title: "Screen Lock Enabled"
+    evidence_type: none
 remediation:
     - "Set a PIN, password, pattern, or biometric lock to protect your device."

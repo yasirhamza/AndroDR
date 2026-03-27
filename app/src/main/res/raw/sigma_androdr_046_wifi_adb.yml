@@ -11,5 +11,11 @@ detection:
         wifi_adb_enabled: true
     condition: selection
 level: high
+display:
+    category: device_posture
+    icon: wifi
+    triggered_title: "Wireless ADB Enabled"
+    safe_title: "Wireless ADB Disabled"
+    evidence_type: none
 remediation:
     - "Disable Wireless ADB — any device on the same network can connect."

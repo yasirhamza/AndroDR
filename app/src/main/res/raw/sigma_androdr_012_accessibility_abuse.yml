@@ -16,5 +16,10 @@ detection:
         has_accessibility_service: true
     condition: selection
 level: high
+display:
+    category: app_risk
+    icon: accessibility
+    triggered_title: "Accessibility Abuse"
+    evidence_type: none
 remediation:
     - "This app can read your screen content. Go to Settings > Accessibility and disable its service before uninstalling."

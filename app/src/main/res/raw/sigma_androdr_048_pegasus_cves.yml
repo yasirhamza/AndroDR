@@ -1,0 +1,31 @@
+title: CVE exploited by Pegasus spyware
+id: androdr-048
+status: production
+description: >
+    Device has unpatched CVEs known to be exploited by NSO Group's
+    Pegasus mercenary spyware.
+author: AndroDR
+date: 2026/03/27
+tags:
+    - attack.t1404
+    - campaign.pegasus
+logsource:
+    product: androdr
+    service: device_auditor
+detection:
+    selection:
+        unpatched_cve_id|contains:
+            - "CVE-2023-41064"
+            - "CVE-2021-30860"
+            - "CVE-2023-41061"
+    condition: selection
+display:
+    category: device_posture
+    icon: shield_alert
+    triggered_title: "{count} CVEs linked to Pegasus"
+    safe_title: "No Pegasus-linked CVEs"
+    evidence_type: cve_list
+    summary_template: "Pegasus spyware exploits {count} unpatched CVEs on this device"
+level: critical
+remediation:
+    - "Update to the latest security patch immediately. These CVEs are exploited by Pegasus spyware."

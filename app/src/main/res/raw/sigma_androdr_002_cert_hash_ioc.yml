@@ -14,5 +14,10 @@ detection:
         cert_hash|ioc_lookup: cert_hash_ioc_db
     condition: selection
 level: critical
+display:
+    category: app_risk
+    icon: warning
+    triggered_title: "Malicious Certificate"
+    evidence_type: ioc_match
 remediation:
     - "This app is signed by a known threat developer. Uninstall it even if the name looks legitimate."

@@ -18,6 +18,11 @@ detection:
         domain|ioc_lookup: domain_ioc_db
     condition: selection
 level: critical
+display:
+    category: app_risk
+    icon: warning
+    triggered_title: "Graphite/Paragon Spyware"
+    evidence_type: none
 falsepositives:
     - Domains may be repurposed after takedown
 remediation:

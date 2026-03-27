@@ -1,0 +1,30 @@
+title: CVE exploited by Graphite spyware
+id: androdr-050
+status: production
+description: >
+    Device has unpatched CVEs known to be exploited by Paragon's
+    Graphite mercenary spyware.
+author: AndroDR
+date: 2026/03/27
+tags:
+    - attack.t1404
+    - campaign.graphite
+logsource:
+    product: androdr
+    service: device_auditor
+detection:
+    selection:
+        unpatched_cve_id|contains:
+            - "CVE-2024-31320"
+            - "CVE-2024-29748"
+    condition: selection
+display:
+    category: device_posture
+    icon: shield_alert
+    triggered_title: "{count} CVEs linked to Graphite"
+    safe_title: "No Graphite-linked CVEs"
+    evidence_type: cve_list
+    summary_template: "Graphite/Paragon spyware exploits {count} unpatched CVEs on this device"
+level: critical
+remediation:
+    - "Update to the latest security patch immediately. These CVEs are exploited by Graphite spyware."

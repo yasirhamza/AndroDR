@@ -16,5 +16,10 @@ detection:
         is_known_oem_app: false
     condition: selection
 level: medium
+display:
+    category: app_risk
+    icon: download
+    triggered_title: "Sideloaded Application"
+    evidence_type: none
 remediation:
     - "This app was not installed from a trusted app store. Verify you intended to install it."

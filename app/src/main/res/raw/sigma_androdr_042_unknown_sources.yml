@@ -13,5 +13,11 @@ detection:
         unknown_sources_enabled: true
     condition: selection
 level: high
+display:
+    category: device_posture
+    icon: warning
+    triggered_title: "Unknown Sources Enabled"
+    safe_title: "Unknown Sources Disabled"
+    evidence_type: none
 remediation:
     - "Disable installation from unknown sources to prevent sideloaded threats."
