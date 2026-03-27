@@ -59,7 +59,7 @@ fun DnsMonitorScreen(
     onRequestVpnPermission: (Intent) -> Unit = {}
 ) {
     val recentEvents by viewModel.recentEvents.collectAsStateWithLifecycle()
-    val blockedEvents by viewModel.blockedEvents.collectAsStateWithLifecycle()
+    val matchedEvents by viewModel.matchedEvents.collectAsStateWithLifecycle()
     val isVpnRunning by viewModel.isVpnRunning.collectAsStateWithLifecycle()
     val blocklistBlockMode by settingsViewModel.blocklistBlockMode.collectAsStateWithLifecycle()
     val domainIocBlockMode by settingsViewModel.domainIocBlockMode.collectAsStateWithLifecycle()
@@ -68,7 +68,7 @@ fun DnsMonitorScreen(
     var selectedTab by remember { mutableIntStateOf(0) }
     val tabs = listOf(
         stringResource(R.string.tab_all_events),
-        stringResource(R.string.tab_blocked_only)
+        stringResource(R.string.tab_matched_only)
     )
 
     Column(modifier = Modifier.fillMaxSize()) {
@@ -139,9 +139,9 @@ fun DnsMonitorScreen(
                     )
                 }
 
-                // Blocked count stat
+                // Matched count stat
                 Text(
-                    text = "${blockedEvents.size} ${stringResource(R.string.domains_blocked)}",
+                    text = "${matchedEvents.size} ${stringResource(R.string.domains_matched)}",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -201,7 +201,7 @@ fun DnsMonitorScreen(
         }
 
         // Events list
-        val displayEvents = if (selectedTab == 0) recentEvents else blockedEvents
+        val displayEvents = if (selectedTab == 0) recentEvents else matchedEvents
 
         if (displayEvents.isEmpty()) {
             Box(
@@ -222,7 +222,7 @@ fun DnsMonitorScreen(
                         text = if (selectedTab == 0)
                             stringResource(R.string.no_dns_events)
                         else
-                            stringResource(R.string.no_blocked_events),
+                            stringResource(R.string.no_matched_events),
                         style = MaterialTheme.typography.bodyLarge,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -249,10 +249,12 @@ private fun DnsEventItem(event: DnsEvent) {
     val timeFormatter = remember { SimpleDateFormat("HH:mm:ss", Locale.getDefault()) }
     val timeString = timeFormatter.format(Date(event.timestamp))
 
+    val isMatched = event.reason != null
+
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
-            containerColor = if (event.isBlocked)
+            containerColor = if (isMatched)
                 Color(0xFFCF6679).copy(alpha = 0.08f)
             else
                 MaterialTheme.colorScheme.surfaceContainerHigh
@@ -268,7 +270,7 @@ private fun DnsEventItem(event: DnsEvent) {
                     text = event.domain,
                     style = MaterialTheme.typography.bodyMedium,
                     fontWeight = FontWeight.SemiBold,
-                    color = if (event.isBlocked) Color(0xFFCF6679)
+                    color = if (isMatched) Color(0xFFCF6679)
                     else MaterialTheme.colorScheme.onSurface
                 )
                 Text(
@@ -287,8 +289,8 @@ private fun DnsEventItem(event: DnsEvent) {
                 onClick = {},
                 label = {
                     Text(
-                        text = if (event.isBlocked)
-                            stringResource(R.string.status_blocked)
+                        text = if (isMatched)
+                            stringResource(R.string.status_matched)
                         else
                             stringResource(R.string.status_allowed),
                         style = MaterialTheme.typography.labelSmall,
@@ -296,11 +298,11 @@ private fun DnsEventItem(event: DnsEvent) {
                     )
                 },
                 colors = SuggestionChipDefaults.suggestionChipColors(
-                    containerColor = if (event.isBlocked)
+                    containerColor = if (isMatched)
                         Color(0xFFCF6679).copy(alpha = 0.2f)
                     else
                         MaterialTheme.colorScheme.primary.copy(alpha = 0.15f),
-                    labelColor = if (event.isBlocked) Color(0xFFCF6679)
+                    labelColor = if (isMatched) Color(0xFFCF6679)
                     else MaterialTheme.colorScheme.primary
                 )
             )

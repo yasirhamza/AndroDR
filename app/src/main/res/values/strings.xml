@@ -12,7 +12,7 @@
     <string name="scanning">Scanning…</string>
     <string name="summary_app_risks">App Risks</string>
     <string name="summary_device_flags">Device Flags</string>
-    <string name="summary_dns_blocked">DNS Blocked</string>
+    <string name="summary_dns_matched">DNS Matched</string>
     <string name="summary_last_scan">Last Scan</string>
     <string name="never">Never</string>
     <!-- PluralsCandidate: "risk(s)" is intentional shorthand for a single UI banner;
@@ -38,13 +38,13 @@
     <string name="dns_vpn_title">DNS Monitor VPN</string>
     <string name="vpn_status_running">Running — DNS traffic is being filtered</string>
     <string name="vpn_status_stopped">Stopped — enable to start filtering</string>
-    <string name="domains_blocked">domain(s) blocked</string>
+    <string name="domains_matched">domain(s) matched</string>
     <string name="enable_vpn">Enable VPN</string>
     <string name="tab_all_events">All Events</string>
-    <string name="tab_blocked_only">Blocked Only</string>
+    <string name="tab_matched_only">Matched Only</string>
     <string name="no_dns_events">No DNS events yet</string>
-    <string name="no_blocked_events">No blocked events</string>
-    <string name="status_blocked">BLOCKED</string>
+    <string name="no_matched_events">No matched events</string>
+    <string name="status_matched">MATCHED</string>
     <string name="status_allowed">ALLOWED</string>
 
     <!-- History -->
