@@ -73,6 +73,7 @@ val MIGRATION_4_5 = object : Migration(4, 5) {
 
 val MIGRATION_5_6 = object : Migration(5, 6) {
     override fun migrate(database: SupportSQLiteDatabase) {
+        // 1. Add CVE entries table
         database.execSQL(
             """
             CREATE TABLE IF NOT EXISTS cve_entries (
@@ -88,5 +89,30 @@ val MIGRATION_5_6 = object : Migration(5, 6) {
             )
             """.trimIndent()
         )
+
+        // 2. Migrate ScanResult: replace appRisks+deviceFlags columns with findings
+        // SQLite doesn't support DROP COLUMN, so recreate the table
+        database.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS ScanResult_new (
+                id                 INTEGER NOT NULL PRIMARY KEY,
+                timestamp          INTEGER NOT NULL,
+                findings           TEXT NOT NULL,
+                bugReportFindings  TEXT NOT NULL,
+                riskySideloadCount INTEGER NOT NULL,
+                knownMalwareCount  INTEGER NOT NULL
+            )
+            """.trimIndent()
+        )
+        // Copy compatible columns; old scan data is lost (findings column gets empty list)
+        database.execSQL(
+            """
+            INSERT INTO ScanResult_new (id, timestamp, findings, bugReportFindings, riskySideloadCount, knownMalwareCount)
+            SELECT id, timestamp, '[]', bugReportFindings, riskySideloadCount, knownMalwareCount
+            FROM ScanResult
+            """.trimIndent()
+        )
+        database.execSQL("DROP TABLE ScanResult")
+        database.execSQL("ALTER TABLE ScanResult_new RENAME TO ScanResult")
     }
 }
