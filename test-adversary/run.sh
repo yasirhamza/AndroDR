@@ -479,7 +479,7 @@ if [ "$MODE" = "load" ] || [ "$MODE" = "guided" ]; then
 
         if [ "$scenario_id" = "mercenary_cert_hash" ] && [ -n "$apk_path" ]; then
             echo "  Seeding cert hash..."
-            cert_hash=$(keytool -printcert -jarfile "$apk_path" 2>/dev/null | grep "SHA256:" | head -1 | awk '{print $2}' | tr -d ':' | tr 'A-F' 'a-f')
+            cert_hash=$(keytool -printcert -jarfile "$apk_path" 2>/dev/null | grep "SHA256:" | head -1 | awk '{print $2}' | tr -d ':' | tr 'A-F' 'a-f' || true)
             if [ -n "$cert_hash" ]; then
                 $ADB shell "run-as com.androdr.debug sqlite3 /data/data/com.androdr.debug/databases/androdr.db \
                     \"INSERT OR REPLACE INTO cert_hash_ioc_entries \
@@ -509,10 +509,15 @@ if [ "$MODE" = "load" ] || [ "$MODE" = "guided" ]; then
     echo "  Open the app on the emulator to explore."
     echo ""
     if [ "$MODE" = "load" ]; then
-        echo "  Press ENTER when done to clean up."
-        echo "  (If interrupted: ./test-adversary/cleanup.sh $SERIAL)"
-        echo "============================================================"
-        read -r _
+        if $NO_PAUSE; then
+            echo "  Run ./test-adversary/cleanup.sh $SERIAL when done."
+            echo "============================================================"
+        else
+            echo "  Press ENTER when done to clean up."
+            echo "  (If interrupted: ./test-adversary/cleanup.sh $SERIAL)"
+            echo "============================================================"
+            read -r _
+        fi
         exit 0
     fi
 
