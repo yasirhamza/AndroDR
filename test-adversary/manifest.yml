@@ -368,7 +368,7 @@ scenarios:
     description: "App masquerading as System Update"
     source: fixture
     fixture: fixtures/mercenary/system-name-disguise.apk
-    sha256: "<pin>"
+    sha256: "b2c2a396b08f3589877813d410b3c92e3ccf05965e01e8ade4e08a508308ba5d"
     tags: [android, impersonation, system]
     expected_patterns:
       - "system-impersonating name"
@@ -381,7 +381,7 @@ scenarios:
     description: "App impersonating Google Play Services"
     source: fixture
     fixture: fixtures/mercenary/impersonation-play-store.apk
-    sha256: "<pin>"
+    sha256: "5c3994e5f205e6471eca1e4dbceb32c96ea42694bde1a8d9b6af12a83f153042"
     tags: [android, impersonation, play-store]
     expected_patterns:
       - "system-impersonating name"
@@ -394,7 +394,7 @@ scenarios:
     description: "App with accessibility + device admin + surveillance permissions"
     source: fixture
     fixture: fixtures/mercenary/multi-abuse-combo.apk
-    sha256: "<pin>"
+    sha256: "fb74f35dde8dea0b6721d208fb111467336f9da79fedd7510eab30ec94d5f252"
     tags: [android, multi-abuse, stalkerware-pattern]
     expected_patterns:
       - "surveillance capabilities"
@@ -409,7 +409,7 @@ scenarios:
     description: "App mimicking system partition install path"
     source: fixture
     fixture: fixtures/mercenary/firmware-implant-sim.apk
-    sha256: "<pin>"
+    sha256: "e269cc870f05ad795b1b327f8f1f2f103af41215537d1be16f106471a38961fc"
     tags: [android, firmware, implant]
     expected_patterns:
       - "system-impersonating name"
