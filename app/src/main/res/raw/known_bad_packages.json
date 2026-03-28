@@ -593,5 +593,166 @@
     "category": "STALKERWARE",
     "severity": "HIGH",
     "description": "Consumer stalkerware with stealth operation mode. Logs all device activity and transmits to remote dashboard without user indication."
+  },
+  {
+    "packageName": "com.thetruthspy",
+    "name": "TheTruthSpy",
+    "category": "STALKERWARE",
+    "severity": "CRITICAL",
+    "description": "TheTruthSpy stalkerware \u2014 if not self-installed, contact a DV hotline"
+  },
+  {
+    "packageName": "com.ttsapp",
+    "name": "TheTruthSpy",
+    "category": "STALKERWARE",
+    "severity": "CRITICAL",
+    "description": "TheTruthSpy stalkerware alias \u2014 if not self-installed, contact a DV hotline"
+  },
+  {
+    "packageName": "com.ispyoo",
+    "name": "TheTruthSpy",
+    "category": "STALKERWARE",
+    "severity": "CRITICAL",
+    "description": "TheTruthSpy/iSpyoo stalkerware \u2014 if not self-installed, contact a DV hotline"
+  },
+  {
+    "packageName": "com.mxspy",
+    "name": "TheTruthSpy",
+    "category": "STALKERWARE",
+    "severity": "CRITICAL",
+    "description": "TheTruthSpy/MxSpy stalkerware \u2014 if not self-installed, contact a DV hotline"
+  },
+  {
+    "packageName": "com.spyzee",
+    "name": "TheTruthSpy",
+    "category": "STALKERWARE",
+    "severity": "CRITICAL",
+    "description": "TheTruthSpy/Spyzee stalkerware \u2014 if not self-installed, contact a DV hotline"
+  },
+  {
+    "packageName": "com.apspy",
+    "name": "TheTruthSpy",
+    "category": "STALKERWARE",
+    "severity": "CRITICAL",
+    "description": "TheTruthSpy/ApSpy stalkerware \u2014 if not self-installed, contact a DV hotline"
+  },
+  {
+    "packageName": "com.vvt.android",
+    "name": "FlexiSpy",
+    "category": "STALKERWARE",
+    "severity": "CRITICAL",
+    "description": "FlexiSpy stalkerware \u2014 if not self-installed, contact a DV hotline"
+  },
+  {
+    "packageName": "com.fp.backup",
+    "name": "FlexiSpy",
+    "category": "STALKERWARE",
+    "severity": "CRITICAL",
+    "description": "FlexiSpy stalkerware disguised as backup \u2014 if not self-installed, contact a DV hotline"
+  },
+  {
+    "packageName": "com.lsdroid.cerberus",
+    "name": "Cerberus",
+    "category": "STALKERWARE",
+    "severity": "CRITICAL",
+    "description": "Cerberus anti-theft app abused as stalkerware \u2014 if not self-installed, contact a DV hotline"
+  },
+  {
+    "packageName": "com.surebrec",
+    "name": "Cerberus",
+    "category": "STALKERWARE",
+    "severity": "CRITICAL",
+    "description": "Cerberus stalkerware alias \u2014 if not self-installed, contact a DV hotline"
+  },
+  {
+    "packageName": "com.mspy",
+    "name": "mSpy",
+    "category": "STALKERWARE",
+    "severity": "CRITICAL",
+    "description": "mSpy stalkerware \u2014 if not self-installed, contact a DV hotline"
+  },
+  {
+    "packageName": "com.eyezy",
+    "name": "mSpy",
+    "category": "STALKERWARE",
+    "severity": "CRITICAL",
+    "description": "Eyezy/mSpy stalkerware \u2014 if not self-installed, contact a DV hotline"
+  },
+  {
+    "packageName": "med.mspy",
+    "name": "mSpy",
+    "category": "STALKERWARE",
+    "severity": "CRITICAL",
+    "description": "mSpy stalkerware variant \u2014 if not self-installed, contact a DV hotline"
+  },
+  {
+    "packageName": "update.service.android",
+    "name": "mSpy",
+    "category": "STALKERWARE",
+    "severity": "CRITICAL",
+    "description": "mSpy stalkerware disguised as system update \u2014 if not self-installed, contact a DV hotline"
+  },
+  {
+    "packageName": "core.update.framework",
+    "name": "mSpy",
+    "category": "STALKERWARE",
+    "severity": "CRITICAL",
+    "description": "mSpy stalkerware disguised as framework update \u2014 if not self-installed, contact a DV hotline"
+  },
+  {
+    "packageName": "com.cocospy",
+    "name": "Cocospy",
+    "category": "STALKERWARE",
+    "severity": "CRITICAL",
+    "description": "Cocospy stalkerware \u2014 if not self-installed, contact a DV hotline"
+  },
+  {
+    "packageName": "com.duiyun",
+    "name": "Cocospy",
+    "category": "STALKERWARE",
+    "severity": "CRITICAL",
+    "description": "Cocospy/Duiyun stalkerware \u2014 if not self-installed, contact a DV hotline"
+  },
+  {
+    "packageName": "com.sc.cocospy",
+    "name": "Cocospy",
+    "category": "STALKERWARE",
+    "severity": "CRITICAL",
+    "description": "Cocospy stalkerware variant \u2014 if not self-installed, contact a DV hotline"
+  },
+  {
+    "packageName": "com.sc.fonemonitor",
+    "name": "Cocospy",
+    "category": "STALKERWARE",
+    "severity": "CRITICAL",
+    "description": "Cocospy/FoneMonitor stalkerware \u2014 if not self-installed, contact a DV hotline"
+  },
+  {
+    "packageName": "com.sc.spyic",
+    "name": "Cocospy",
+    "category": "STALKERWARE",
+    "severity": "CRITICAL",
+    "description": "Cocospy/Spyic stalkerware \u2014 if not self-installed, contact a DV hotline"
+  },
+  {
+    "packageName": "com.sc.spyzie",
+    "name": "Cocospy",
+    "category": "STALKERWARE",
+    "severity": "CRITICAL",
+    "description": "Cocospy/Spyzie stalkerware \u2014 if not self-installed, contact a DV hotline"
+  },
+  {
+    "packageName": "com.spyic",
+    "name": "Cocospy",
+    "category": "STALKERWARE",
+    "severity": "CRITICAL",
+    "description": "Spyic stalkerware (Cocospy cluster) \u2014 if not self-installed, contact a DV hotline"
+  },
+  {
+    "packageName": "com.minspy",
+    "name": "Cocospy",
+    "category": "STALKERWARE",
+    "severity": "CRITICAL",
+    "description": "Minspy stalkerware (Cocospy cluster) \u2014 if not self-installed, contact a DV hotline"
   }
 ]
