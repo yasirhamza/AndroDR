@@ -2,6 +2,8 @@ package com.androdr.scanner
 
 import android.net.Uri
 import android.util.Log
+import com.androdr.data.db.ForensicTimelineEventDao
+import com.androdr.data.db.toForensicTimelineEvent
 import com.androdr.data.model.ScanResult
 import com.androdr.data.repo.ScanRepository
 import com.androdr.ioc.CertHashIocResolver
@@ -34,6 +36,7 @@ class ScanOrchestrator @Inject constructor(
     private val appOpsScanner: AppOpsScanner,
     private val bugReportAnalyzer: BugReportAnalyzer,
     private val scanRepository: ScanRepository,
+    private val forensicTimelineEventDao: ForensicTimelineEventDao,
     private val sigmaRuleEngine: SigmaRuleEngine,
     private val iocResolver: IocResolver,
     private val certHashIocResolver: CertHashIocResolver,
@@ -145,6 +148,12 @@ class ScanOrchestrator @Inject constructor(
         )
 
         runCatching { scanRepository.saveScan(result) }
+        runCatching {
+            val timelineEvents = allFindings
+                .filter { it.triggered }
+                .map { it.toForensicTimelineEvent(result) }
+            forensicTimelineEventDao.insertAll(timelineEvents)
+        }
         result
     }
 
@@ -175,6 +184,13 @@ class ScanOrchestrator @Inject constructor(
             }
         )
         runCatching { scanRepository.saveScan(scanResult) }
+        runCatching {
+            val timelineEvents = mutableListOf<com.androdr.data.model.ForensicTimelineEvent>()
+            timelineEvents.addAll(result.findings.filter { it.triggered }
+                .map { it.toForensicTimelineEvent(scanResult) })
+            timelineEvents.addAll(result.timeline.map { it.toForensicTimelineEvent(scanResult.id) })
+            forensicTimelineEventDao.insertAll(timelineEvents)
+        }
 
         return result
     }
