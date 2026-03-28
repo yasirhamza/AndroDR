@@ -58,6 +58,8 @@
     <string name="bugreport_analyzing">Analyzing bug report…</string>
     <string name="bugreport_empty_state">No analysis yet</string>
     <string name="bugreport_empty_hint">Select a bug report .zip file to start analysis</string>
+    <string name="dashboard_bugreport_title">Bug Report Analysis</string>
+    <string name="dashboard_bugreport_hint">Analyze a bug report .zip for spyware indicators</string>
 
     <!-- Report export -->
     <string name="report_export_label">Export Report</string>
