@@ -64,23 +64,34 @@ class BugReportAnalyzer @Inject constructor(
                 ZipInputStream(stream1.buffered()).use { zip ->
                     var entry = zip.nextEntry
                     while (entry != null) {
-                        if (!entry.isDirectory &&
-                            entry.name.lowercase().contains("dumpstate")
-                        ) {
+                        // Match the main dumpstate file: top-level entries like
+                        // "dumpstate.txt" or "bugreport-*.txt", NOT nested paths
+                        // like "FS/vendor/.../dumpstate-default.xml".
+                        val entryFileName = entry.name.substringAfterLast("/").lowercase()
+                        val isDumpstate = !entry.isDirectory && (
+                            entryFileName == "dumpstate.txt" ||
+                            entryFileName.startsWith("bugreport-") &&
+                                entryFileName.endsWith(".txt")
+                        )
+                        if (isDumpstate) {
                             val sections = sectionParser.extractSections(
                                 zip, // stream directly — no buffering into byte[]
                                 neededSections
                             )
 
-                            for (mod in sectionModules) {
-                                for (sectionName in mod.targetSections!!) {
-                                    val sectionText = sections[sectionName] ?: continue
-                                    val result = mod.analyze(sectionText, iocResolver)
-                                    findings.addAll(result.findings)
-                                    timelineEvents.addAll(result.timeline)
+                            // Only break if we actually found sections — otherwise
+                            // try the next dumpstate-like entry.
+                            if (sections.isNotEmpty()) {
+                                for (mod in sectionModules) {
+                                    for (sectionName in mod.targetSections!!) {
+                                        val sectionText = sections[sectionName] ?: continue
+                                        val result = mod.analyze(sectionText, iocResolver)
+                                        findings.addAll(result.findings)
+                                        timelineEvents.addAll(result.timeline)
+                                    }
                                 }
+                                break
                             }
-                            break // only one dumpstate entry expected
                         }
                         try {
                             zip.closeEntry()
