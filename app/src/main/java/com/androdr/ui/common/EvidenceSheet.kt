@@ -146,6 +146,8 @@ private fun CveListContent(evidence: Evidence.CveList, remediation: List<String>
     }
 }
 
+// Compose composable rendering CVE card details; splitting would fragment cohesive UI logic
+@Suppress("LongMethod")
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun CveCard(cve: CveEvidence) {

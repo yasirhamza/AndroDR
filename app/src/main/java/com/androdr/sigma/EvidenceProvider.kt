@@ -27,9 +27,20 @@ class CveEvidenceProvider(private val allRules: List<SigmaRule>) : EvidenceProvi
         }
         val campaignCount = cveEvidences.count { it.campaigns.isNotEmpty() }
         val targetPatchLevel = cves.maxOf { it.fixedInPatchLevel }
-        val evidence = Evidence.CveList(cves = cveEvidences, targetPatchLevel = targetPatchLevel, campaignCount = campaignCount)
-        val titleVars = mapOf("count" to cves.size.toString(), "campaign_count" to campaignCount.toString())
-        val remediationVars = mapOf("target_patch_level" to targetPatchLevel, "count" to cves.size.toString(), "campaign_count" to campaignCount.toString())
+        val evidence = Evidence.CveList(
+            cves = cveEvidences,
+            targetPatchLevel = targetPatchLevel,
+            campaignCount = campaignCount
+        )
+        val titleVars = mapOf(
+            "count" to cves.size.toString(),
+            "campaign_count" to campaignCount.toString()
+        )
+        val remediationVars = mapOf(
+            "target_patch_level" to targetPatchLevel,
+            "count" to cves.size.toString(),
+            "campaign_count" to campaignCount.toString()
+        )
         return listOf(EvidenceResult(evidence, titleVars, remediationVars))
     }
 

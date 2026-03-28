@@ -31,6 +31,8 @@ object SigmaRuleEvaluator {
     private const val MAX_REGEX_LENGTH = SigmaRuleParser.MAX_REGEX_LENGTH
     private const val MAX_REGEX_CACHE_SIZE = 256
 
+    // Defensive regex matching with multiple bail-out points for safety
+    @Suppress("ReturnCount", "TooGenericExceptionCaught", "SwallowedException")
     private fun safeRegexMatch(pattern: String, input: String): Boolean {
         if (pattern.length > MAX_REGEX_LENGTH) return false
         if (pattern in invalidPatterns) return false
