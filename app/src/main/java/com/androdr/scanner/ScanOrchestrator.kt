@@ -128,7 +128,7 @@ class ScanOrchestrator @Inject constructor(
             it.category == FindingCategory.APP_RISK && it.matchContext["is_sideloaded"] == "true"
         }
         val malwareCount = allFindings.count {
-            it.level == "critical" && it.ruleId.startsWith("androdr-00")
+            it.level == "critical" && it.ruleId in KNOWN_MALWARE_RULE_IDS
         }
 
         Log.i(TAG, "Scan complete — SIGMA: ${allFindings.size} findings from " +
@@ -171,7 +171,7 @@ class ScanOrchestrator @Inject constructor(
             },
             riskySideloadCount = 0,
             knownMalwareCount = result.findings.count {
-                it.level == "critical" && it.ruleId.startsWith("androdr-0")
+                it.level == "critical" && it.ruleId in KNOWN_MALWARE_RULE_IDS
             }
         )
         runCatching { scanRepository.saveScan(scanResult) }
@@ -218,5 +218,8 @@ class ScanOrchestrator @Inject constructor(
 
     companion object {
         private const val TAG = "ScanOrchestrator"
+
+        /** Rule IDs that represent confirmed malware matches (IOC database hits). */
+        private val KNOWN_MALWARE_RULE_IDS = setOf("androdr-001", "androdr-002")
     }
 }
