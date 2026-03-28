@@ -10,13 +10,11 @@ object TimelineExporter {
 
     private const val RULE = "============================================================"
     private const val THIN = "------------------------------------------------------------"
-    private val timestampFmt = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US)
-    private val dateFmt = SimpleDateFormat("yyyy-MM-dd", Locale.US)
 
     fun formatPlaintext(events: List<ForensicTimelineEvent>): String = buildString {
         appendLine(RULE)
         appendLine("  AndroDR Forensic Timeline")
-        appendLine("  Generated: ${timestampFmt.format(Date())}")
+        appendLine("  Generated: ${SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).format(Date())}")
         appendLine("  Android: ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT})")
         appendLine("  Device: ${Build.MANUFACTURER} ${Build.MODEL}")
         appendLine("  Events: ${events.size}")
@@ -33,7 +31,7 @@ object TimelineExporter {
         val sorted = events.sortedByDescending { it.timestamp }
         var currentDate = ""
         for (event in sorted) {
-            val date = if (event.timestamp > 0) dateFmt.format(Date(event.timestamp)) else "Unknown"
+            val date = if (event.timestamp > 0) SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date(event.timestamp)) else "Unknown"
             if (date != currentDate) {
                 currentDate = date
                 appendLine(THIN)
@@ -70,7 +68,7 @@ object TimelineExporter {
 
         for (event in events.sortedBy { it.timestamp }) {
             val ts = event.timestamp.toString()
-            val iso = if (event.timestamp > 0) timestampFmt.format(Date(event.timestamp)) else ""
+            val iso = if (event.timestamp > 0) SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).format(Date(event.timestamp)) else ""
             val module = csvEscape(event.source)
             val eventType = csvEscape(event.category)
             val data = csvEscape(event.description)
@@ -83,8 +81,13 @@ object TimelineExporter {
         }
     }
 
-    private fun csvEscape(value: String): String =
-        if (value.contains(',') || value.contains('"') || value.contains('\n')) {
-            "\"${value.replace("\"", "\"\"")}\""
+    private fun csvEscape(value: String): String {
+        // Prevent CSV formula injection (cells starting with =, +, -, @, \t, \r)
+        val sanitized = if (value.isNotEmpty() && value[0] in setOf('=', '+', '-', '@', '\t', '\r')) {
+            "'" + value
         } else value
+        return if (sanitized.contains(',') || sanitized.contains('"') || sanitized.contains('\n')) {
+            "\"${sanitized.replace("\"", "\"\"")}\""
+        } else sanitized
+    }
 }

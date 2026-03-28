@@ -1,9 +1,18 @@
 package com.androdr.data.model
 
 import androidx.room.Entity
+import androidx.room.Index
 import androidx.room.PrimaryKey
 
-@Entity(tableName = "forensic_timeline")
+@Entity(
+    tableName = "forensic_timeline",
+    indices = [
+        Index("timestamp"),
+        Index("severity"),
+        Index("packageName"),
+        Index("source")
+    ]
+)
 data class ForensicTimelineEvent(
     @PrimaryKey(autoGenerate = true)
     val id: Long = 0,

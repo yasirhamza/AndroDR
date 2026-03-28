@@ -32,7 +32,7 @@ fun Finding.toForensicTimelineEvent(scanResult: ScanResult): ForensicTimelineEve
         },
         description = this.title,
         details = this.description,
-        severity = this.level,
+        severity = this.level.uppercase(),
         packageName = this.matchContext["package_name"] ?: "",
         ruleId = this.ruleId,
         scanResultId = scanResult.id,

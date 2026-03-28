@@ -148,5 +148,6 @@ val MIGRATION_6_7 = object : Migration(6, 7) {
         database.execSQL("CREATE INDEX IF NOT EXISTS index_forensic_timeline_timestamp ON forensic_timeline(timestamp)")
         database.execSQL("CREATE INDEX IF NOT EXISTS index_forensic_timeline_severity ON forensic_timeline(severity)")
         database.execSQL("CREATE INDEX IF NOT EXISTS index_forensic_timeline_packageName ON forensic_timeline(packageName)")
+        database.execSQL("CREATE INDEX IF NOT EXISTS index_forensic_timeline_source ON forensic_timeline(source)")
     }
 }
