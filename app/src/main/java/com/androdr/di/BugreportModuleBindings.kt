@@ -1,8 +1,10 @@
 package com.androdr.di
 
 import com.androdr.scanner.bugreport.AccessibilityModule
+import com.androdr.scanner.bugreport.AppOpsModule
 import com.androdr.scanner.bugreport.BugreportModule
 import com.androdr.scanner.bugreport.LegacyScanModule
+import com.androdr.scanner.bugreport.ReceiverModule
 import dagger.Binds
 import dagger.Module
 import dagger.hilt.InstallIn
@@ -14,4 +16,6 @@ import dagger.multibindings.IntoSet
 abstract class BugreportModuleBindings {
     @Binds @IntoSet abstract fun legacy(m: LegacyScanModule): BugreportModule
     @Binds @IntoSet abstract fun accessibility(m: AccessibilityModule): BugreportModule
+    @Binds @IntoSet abstract fun receivers(m: ReceiverModule): BugreportModule
+    @Binds @IntoSet abstract fun appOps(m: AppOpsModule): BugreportModule
 }
