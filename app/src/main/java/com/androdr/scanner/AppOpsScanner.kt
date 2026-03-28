@@ -38,7 +38,9 @@ class AppOpsScanner @Inject constructor(
         "android:request_install_packages"
     )
 
-    @Suppress("TooGenericExceptionCaught")
+    // The inner op loop uses `continue` for null/unknown-op cases and for permission mode
+    // filtering — both are necessary guard clauses, not control-flow complexity.
+    @Suppress("TooGenericExceptionCaught", "LoopWithTooManyJumpStatements")
     suspend fun collectTelemetry(): List<AppOpsTelemetry> = withContext(Dispatchers.IO) {
         val opsManager = context.getSystemService(Context.APP_OPS_SERVICE) as? AppOpsManager
             ?: return@withContext emptyList()
