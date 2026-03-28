@@ -2,6 +2,7 @@ package com.androdr.scanner
 
 import android.app.AppOpsManager
 import android.content.Context
+import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
 import android.os.Build
 import android.util.Log
@@ -54,7 +55,7 @@ class AppOpsScanner @Inject constructor(
             for (pkgInfo in installedPackages) {
                 val packageName = pkgInfo.packageName ?: continue
                 val appInfo = pkgInfo.applicationInfo ?: continue
-                val isSystem = OemPackageHelper.isSystemOrOem(packageName, appInfo)
+                val isSystem = appInfo.flags and ApplicationInfo.FLAG_SYSTEM != 0
                 val uid = appInfo.uid
 
                 for (opStr in dangerousOps) {

@@ -2,6 +2,7 @@ package com.androdr.scanner
 
 import android.accessibilityservice.AccessibilityServiceInfo
 import android.content.Context
+import android.content.pm.ApplicationInfo
 import android.util.Log
 import android.view.accessibility.AccessibilityManager
 import com.androdr.data.model.AccessibilityTelemetry
@@ -25,9 +26,7 @@ class AccessibilityAuditScanner @Inject constructor(
 
         services.mapNotNull { info ->
             val serviceInfo = info.resolveInfo?.serviceInfo ?: return@mapNotNull null
-            val isSystem = OemPackageHelper.isSystemOrOem(
-                serviceInfo.packageName, serviceInfo.applicationInfo
-            )
+            val isSystem = serviceInfo.applicationInfo?.flags?.and(ApplicationInfo.FLAG_SYSTEM) != 0
             AccessibilityTelemetry(
                 packageName = serviceInfo.packageName,
                 serviceName = serviceInfo.name,
