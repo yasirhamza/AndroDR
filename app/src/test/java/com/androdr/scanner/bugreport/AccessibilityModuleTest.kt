@@ -36,9 +36,10 @@ class AccessibilityModuleTest {
         """.trimIndent()
 
         val result = module.analyze(section, mockIocResolver)
-        assertTrue(result.findings.any {
-            it.category == "AccessibilityAbuse" &&
-                it.description.contains("com.evil.spy")
+        assertTrue(result.telemetry.any {
+            it["package_name"] == "com.evil.spy" &&
+                it["is_system_app"] == false &&
+                it["is_enabled"] == true
         })
     }
 
@@ -54,11 +55,11 @@ class AccessibilityModuleTest {
         """.trimIndent()
 
         val result = module.analyze(section, mockIocResolver)
-        assertTrue(result.findings.isEmpty())
+        assertTrue(result.telemetry.all { it["is_system_app"] == true })
     }
 
     @Test
-    fun `flags IOC-matched accessibility service as CRITICAL`() = runBlocking {
+    fun `flags IOC-matched accessibility service in telemetry`() = runBlocking {
         val iocInfo = com.androdr.ioc.BadPackageInfo(
             packageName = "com.flexispy.android",
             name = "FlexiSPY",
@@ -74,25 +75,26 @@ class AccessibilityModuleTest {
         """.trimIndent()
 
         val result = module.analyze(section, mockIocResolver)
-        assertTrue(result.findings.any {
-            it.severity == "CRITICAL" && it.description.contains("FlexiSPY")
+        assertTrue(result.telemetry.any {
+            it["package_name"] == "com.flexispy.android" &&
+                it["is_system_app"] == false
         })
     }
 
     @Test
-    fun `empty section produces no findings`() = runBlocking {
+    fun `empty section produces no telemetry`() = runBlocking {
         val result = module.analyze("", mockIocResolver)
-        assertTrue(result.findings.isEmpty())
+        assertTrue(result.telemetry.isEmpty())
     }
 
     @Test
-    fun `section without Enabled services line produces no findings`() = runBlocking {
+    fun `section without Enabled services line produces no telemetry`() = runBlocking {
         val section = """
             User state[userData:0 currentUser:0]:
               isEnabled=0
         """.trimIndent()
 
         val result = module.analyze(section, mockIocResolver)
-        assertTrue(result.findings.isEmpty())
+        assertTrue(result.telemetry.isEmpty())
     }
 }

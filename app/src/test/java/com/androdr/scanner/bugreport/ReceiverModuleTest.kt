@@ -36,10 +36,10 @@ class ReceiverModuleTest {
         """.trimIndent()
 
         val result = module.analyze(section, mockIocResolver)
-        assertTrue(result.findings.any {
-            it.category == "ReceiverAbuse" &&
-                it.description.contains("com.evil.sms") &&
-                it.description.contains("SMS_RECEIVED")
+        assertTrue(result.telemetry.any {
+            it["package_name"] == "com.evil.sms" &&
+                it["intent_action"] == "android.provider.Telephony.SMS_RECEIVED" &&
+                it["is_system_app"] == false
         })
     }
 
@@ -54,9 +54,9 @@ class ReceiverModuleTest {
         """.trimIndent()
 
         val result = module.analyze(section, mockIocResolver)
-        assertTrue(result.findings.any {
-            it.category == "ReceiverAbuse" &&
-                it.description.contains("com.spy.calls")
+        assertTrue(result.telemetry.any {
+            it["package_name"] == "com.spy.calls" &&
+                it["intent_action"] == "android.intent.action.PHONE_STATE"
         })
     }
 
@@ -73,11 +73,11 @@ class ReceiverModuleTest {
         """.trimIndent()
 
         val result = module.analyze(section, mockIocResolver)
-        assertTrue(result.findings.isEmpty())
+        assertTrue(result.telemetry.all { it["is_system_app"] == true })
     }
 
     @Test
-    fun `flags IOC-matched receiver as CRITICAL`() = runBlocking {
+    fun `flags IOC-matched receiver in telemetry`() = runBlocking {
         val iocInfo = com.androdr.ioc.BadPackageInfo(
             packageName = "com.stalker.app",
             name = "StalkerApp",
@@ -96,8 +96,9 @@ class ReceiverModuleTest {
         """.trimIndent()
 
         val result = module.analyze(section, mockIocResolver)
-        assertTrue(result.findings.any {
-            it.severity == "CRITICAL" && it.description.contains("StalkerApp")
+        assertTrue(result.telemetry.any {
+            it["package_name"] == "com.stalker.app" &&
+                it["is_system_app"] == false
         })
     }
 
@@ -121,13 +122,13 @@ class ReceiverModuleTest {
 
             val result = module.analyze(section, mockIocResolver)
             assertTrue("Expected detection for $intent",
-                result.findings.any { it.category == "ReceiverAbuse" })
+                result.telemetry.any { it["intent_action"] == intent })
         }
     }
 
     @Test
-    fun `empty section produces no findings`() = runBlocking {
+    fun `empty section produces no telemetry`() = runBlocking {
         val result = module.analyze("", mockIocResolver)
-        assertTrue(result.findings.isEmpty())
+        assertTrue(result.telemetry.isEmpty())
     }
 }

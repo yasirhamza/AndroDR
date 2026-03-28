@@ -35,10 +35,10 @@ class AppOpsModuleTest {
         """.trimIndent()
 
         val result = module.analyze(section, mockIocResolver)
-        assertTrue(result.findings.any {
-            it.category == "AppOpsAbuse" &&
-                it.description.contains("REQUEST_INSTALL_PACKAGES") &&
-                it.description.contains("com.suspicious.installer")
+        assertTrue(result.telemetry.any {
+            it["package_name"] == "com.suspicious.installer" &&
+                it["operation"] == "REQUEST_INSTALL_PACKAGES" &&
+                it["is_system_app"] == false
         })
     }
 
@@ -52,14 +52,14 @@ class AppOpsModuleTest {
         """.trimIndent()
 
         val result = module.analyze(section, mockIocResolver)
-        assertTrue(result.findings.any {
-            it.category == "AppOpsAbuse" &&
-                it.description.contains("com.android.shell")
+        assertTrue(result.telemetry.any {
+            it["package_name"] == "com.android.shell" &&
+                it["operation"] == "CAMERA"
         })
     }
 
     @Test
-    fun `flags IOC-matched package as CRITICAL`() = runBlocking {
+    fun `flags IOC-matched package in telemetry`() = runBlocking {
         val iocInfo = com.androdr.ioc.BadPackageInfo(
             packageName = "com.flexispy.android",
             name = "FlexiSPY",
@@ -77,8 +77,10 @@ class AppOpsModuleTest {
         """.trimIndent()
 
         val result = module.analyze(section, mockIocResolver)
-        assertTrue(result.findings.any {
-            it.severity == "CRITICAL" && it.description.contains("FlexiSPY")
+        assertTrue(result.telemetry.any {
+            it["package_name"] == "com.flexispy.android" &&
+                it["operation"] == "CAMERA" &&
+                it["is_system_app"] == false
         })
     }
 
@@ -98,7 +100,7 @@ class AppOpsModuleTest {
     }
 
     @Test
-    fun `normal system app ops do not trigger findings`() = runBlocking {
+    fun `normal system app ops produce telemetry with is_system_app true`() = runBlocking {
         val section = """
             Uid 1000:
               Package com.android.systemui:
@@ -107,13 +109,14 @@ class AppOpsModuleTest {
         """.trimIndent()
 
         val result = module.analyze(section, mockIocResolver)
-        assertTrue(result.findings.isEmpty())
+        // WAKE_LOCK is not a dangerous op so telemetry should be empty
+        assertTrue(result.telemetry.isEmpty())
     }
 
     @Test
-    fun `empty section produces no findings`() = runBlocking {
+    fun `empty section produces no telemetry or timeline`() = runBlocking {
         val result = module.analyze("", mockIocResolver)
-        assertTrue(result.findings.isEmpty())
+        assertTrue(result.telemetry.isEmpty())
         assertTrue(result.timeline.isEmpty())
     }
 }
