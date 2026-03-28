@@ -37,8 +37,11 @@ class BugReportAnalyzer @Inject constructor(
      * all entries, dispatches section-targeted modules against parsed dumpsys sections
      * and raw-entry modules against all ZIP entries, then aggregates findings.
      */
-    @Suppress("TooGenericExceptionCaught") // ContentResolver and ZipInputStream can throw any
-    // IOException subclass; errors are converted to BugReportFinding entries with ERROR severity.
+    // Two-pass ZIP processing with section extraction and module dispatch — the linear flow
+    // through both passes is clearer as a single function than split across helpers.
+    @Suppress("LongMethod", "TooGenericExceptionCaught") // LongMethod: see above;
+    // TooGenericExceptionCaught: ContentResolver and ZipInputStream can throw any IOException
+    // subclass; errors are converted to BugReportFinding entries with ERROR severity.
     suspend fun analyze(bugReportUri: Uri): List<BugReportFinding> = withContext(Dispatchers.IO) {
         val findings = mutableListOf<BugReportFinding>()
         val timelineEvents = mutableListOf<TimelineEvent>()
@@ -143,6 +146,9 @@ class BugReportAnalyzer @Inject constructor(
      * Opens the bug report URI via ContentResolver and returns the stream,
      * or adds an error finding and returns null.
      */
+    // Module execution can throw any exception; errors are caught and logged rather than
+    // crashing the analysis — catching Exception is intentional here.
+    @Suppress("TooGenericExceptionCaught")
     private fun openBugReportStream(
         bugReportUri: Uri,
         findings: MutableList<BugReportFinding>

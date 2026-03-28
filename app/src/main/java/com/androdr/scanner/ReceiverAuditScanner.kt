@@ -25,6 +25,9 @@ class ReceiverAuditScanner @Inject constructor(
         "android.intent.action.NEW_OUTGOING_CALL"
     )
 
+    // The loop uses `continue` for dedup (seen set) and processes receivers — the two
+    // jump points are necessary and the logic is clear without further decomposition.
+    @Suppress("LoopWithTooManyJumpStatements")
     suspend fun collectTelemetry(): List<ReceiverTelemetry> = withContext(Dispatchers.IO) {
         val pm = context.packageManager
         val results = mutableListOf<ReceiverTelemetry>()

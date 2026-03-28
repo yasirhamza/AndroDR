@@ -23,7 +23,11 @@ class AccessibilityAuditScannerTest {
         return AccessibilityAuditScanner(mockContext)
     }
 
-    private fun mockServiceInfo(packageName: String, serviceName: String, isSystem: Boolean = false): AccessibilityServiceInfo {
+    private fun mockServiceInfo(
+        packageName: String,
+        serviceName: String,
+        isSystem: Boolean = false
+    ): AccessibilityServiceInfo {
         val info = mockk<AccessibilityServiceInfo>()
         val resolveInfo = mockk<ResolveInfo>()
         val serviceInfo = ServiceInfo()

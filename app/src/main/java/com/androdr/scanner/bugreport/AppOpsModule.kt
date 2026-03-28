@@ -27,6 +27,9 @@ class AppOpsModule @Inject constructor() : BugreportModule {
     )
     private val uidLineRegex = Regex("""^Uid\s+(\d+):""", RegexOption.MULTILINE)
 
+    // Multi-step analysis with UID splitting, package iteration, op checking, and timeline
+    // generation — splitting into sub-functions would fragment tightly coupled analysis logic.
+    @Suppress("LongMethod")
     override suspend fun analyze(sectionText: String, iocResolver: IocResolver): ModuleResult {
         val findings = mutableListOf<BugReportFinding>()
         val timeline = mutableListOf<TimelineEvent>()
