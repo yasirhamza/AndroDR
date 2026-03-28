@@ -243,3 +243,13 @@ forti.external-sht-prd-4.com
 forti.external-shotgun3.com
 forti.external-sht.com
 forti.internal-stg.com
+
+# Public repo IOC data (auto-merged)
+appjiagu.com
+cerberusapp.com
+djp.bz
+dmw.bz
+mflx.biz
+phonedata.me
+spyzie.io
+thd.cc
