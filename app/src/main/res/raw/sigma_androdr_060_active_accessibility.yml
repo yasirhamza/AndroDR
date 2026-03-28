@@ -1,0 +1,25 @@
+title: Non-system app with active accessibility service
+id: androdr-060
+status: production
+description: A non-system app has an accessibility service currently enabled. Accessibility services can read screen content, capture keystrokes, and perform UI actions.
+author: AndroDR
+date: 2026/03/28
+tags:
+    - attack.t1626
+logsource:
+    product: androdr
+    service: accessibility_audit
+detection:
+    selection:
+        is_system_app: false
+        is_enabled: true
+    condition: selection
+level: high
+display:
+    category: app_risk
+    icon: accessibility
+    triggered_title: "Active Accessibility Service"
+    evidence_type: none
+remediation:
+    - "This app has an active accessibility service that can read your screen. Go to Settings > Accessibility and disable it."
+    - "If you did not intentionally enable this service, it may be stalkerware."
