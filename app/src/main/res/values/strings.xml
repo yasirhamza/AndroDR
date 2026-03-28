@@ -75,4 +75,12 @@
     <string name="nav_device" tools:ignore="UnusedResources">Device</string>
     <string name="nav_network" tools:ignore="UnusedResources">Network</string>
     <string name="nav_history" tools:ignore="UnusedResources">History</string>
+
+    <!-- Timeline -->
+    <string name="nav_timeline" tools:ignore="UnusedResources">Timeline</string>
+    <string name="timeline_empty">No timeline events yet</string>
+    <string name="timeline_empty_hint">Run a scan or analyze a bug report to populate the timeline</string>
+    <string name="timeline_export_txt">Export Text</string>
+    <string name="timeline_export_csv">Export CSV</string>
+    <string name="timeline_filter_all">All</string>
 </resources>
