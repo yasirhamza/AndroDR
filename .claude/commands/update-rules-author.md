@@ -14,19 +14,42 @@ You receive:
 - `example_rules`: 5-10 existing rules as style reference
 - `existing_rule_index`: list of existing rule IDs, titles, and IOC references
 
+## CRITICAL: IOC Data vs Rules — Know the Difference
+
+**IOC data** (package names, cert hashes, domains, IPs) should be added to `ioc-data/` YAML files in the public rules repo — NOT expressed as individual SIGMA rules. The generic IOC lookup rules (androdr-001, 002, 003) already catch ALL entries in those databases. Creating a per-family rule for each malware family is wasteful and duplicates what IOC lookups do.
+
+**SIGMA rules** are for behavioral/TTP patterns that IOC lookups CANNOT express — permission combinations, accessibility+surveillance combos, system name impersonation, device posture checks.
+
+### Decision Gate (mandatory for every SIR)
+
+Ask: "Would adding this threat's indicators to the IOC database and relying on the generic lookup rules achieve the same detection?"
+- **YES** → Output IOC data entries (package names, cert hashes, domains) to `ioc-data/`. Include family name and remediation text in the description field. Do NOT create a SIGMA rule.
+- **NO** → The threat has a unique behavioral pattern not expressible as an IOC. Create a SIGMA rule.
+
+### Examples
+
+**IOC data (do NOT create a rule):**
+- "FlexiSpy uses package name com.flexispy.android" → add to `ioc-data/package-names.yml`
+- "Cerberus C2 domain cerberusapp.com" → add to `ioc-data/c2-domains.yml`
+- "TheTruthSpy cert hash abc123..." → add to `ioc-data/cert-hashes.yml`
+
+**SIGMA rule (DO create):**
+- "Sideloaded app with 4+ surveillance permissions + accessibility service" → behavioral pattern
+- "System name disguise: app named 'Google services' from untrusted source" → heuristic
+- "Device patch level older than 90 days" → posture check
+
 ## Rule Generation Strategy
 
-For each SIR, determine the rule type based on content:
+For each SIR that PASSES the Decision Gate (behavioral/TTP patterns only):
 
 | SIR Content | Rule Type | Service |
 |-------------|-----------|---------|
-| Package names, cert hashes | IOC lookup rule | `app_scanner` |
 | Permission clusters, accessibility abuse | Behavioral rule | `app_scanner` |
 | CVEs with patch levels | Device posture rule | `device_auditor` |
-| C2 domains, distribution URLs | Network rule | `dns_monitor` |
-| Mixed indicators + behaviors | Multiple rules (one per type) | Mixed |
+| Unique behavioral patterns | TTP rule | `app_scanner` |
+| Mixed indicators + behaviors | IOC data + behavioral rule(s) | Mixed |
 
-A single SIR can produce multiple rules. Increment the rule ID for each.
+A single SIR can produce IOC data entries AND/OR rules. Most SIRs will produce ONLY IOC data.
 
 ## Rule Template
 
