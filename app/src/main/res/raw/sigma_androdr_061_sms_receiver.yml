@@ -1,7 +1,7 @@
-title: App intercepting incoming SMS
+title: App registered for SMS broadcasts
 id: androdr-061
 status: production
-description: A non-system app is registered to receive incoming SMS messages. Legitimate apps rarely need this — it is a strong stalkerware/spyware indicator.
+description: A non-system app is registered to receive SMS broadcasts. Many legitimate apps register for this via SDKs (Firebase Auth, Braze) for OTP verification. This is a weak signal alone — investigate only when combined with other indicators.
 author: AndroDR
 date: 2026/03/28
 tags:
@@ -16,11 +16,11 @@ detection:
     filter_known_good:
         package_name|ioc_lookup: known_good_app_db
     condition: selection and not filter_known_good
-level: critical
+level: medium
 display:
     category: app_risk
     icon: sms
-    triggered_title: "SMS Interception"
+    triggered_title: "SMS Broadcast Receiver"
     evidence_type: none
 remediation:
-    - "This app can read your incoming text messages. If you did not grant this explicitly, uninstall it immediately."
+    - "This app is registered to receive SMS broadcasts. This is common for apps using OTP verification. Review if you expect this behavior."

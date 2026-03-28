@@ -1,7 +1,7 @@
-title: App monitoring phone call state
+title: App registered for phone call broadcasts
 id: androdr-062
 status: production
-description: A non-system app is registered for PHONE_STATE or NEW_OUTGOING_CALL broadcasts, enabling it to monitor incoming and outgoing calls.
+description: A non-system app is registered for PHONE_STATE or NEW_OUTGOING_CALL broadcasts. Some legitimate apps (VoIP, call screening) register for these. This is a weak signal alone — investigate when combined with other indicators.
 author: AndroDR
 date: 2026/03/28
 tags:
@@ -19,11 +19,11 @@ detection:
     filter_known_good:
         package_name|ioc_lookup: known_good_app_db
     condition: selection_phone_state and not filter_known_good or selection_outgoing_call and not filter_known_good
-level: critical
+level: medium
 display:
     category: app_risk
     icon: phone
-    triggered_title: "Call Monitoring"
+    triggered_title: "Phone Call Broadcast Receiver"
     evidence_type: none
 remediation:
-    - "This app can monitor your phone calls. If you did not grant this permission, uninstall it immediately."
+    - "This app is registered for phone call broadcasts. Review if you expect this behavior from this app."
