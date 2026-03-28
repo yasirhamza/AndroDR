@@ -45,11 +45,11 @@ class PublicRepoIocFeed @Inject constructor(
         total
     }
 
+    // Non-fatal: fetch failure returns 0, other feeds continue
     @Suppress("TooGenericExceptionCaught", "SwallowedException")
     private suspend fun fetchAndUpsertPackages(fetchedAt: Long): Int {
         val yaml = fetchUrl("${BASE_URL}ioc-data/package-names.yml") ?: return 0
         val entries = parseIocYaml(yaml)
-        if (entries.isEmpty()) return 0
 
         val iocEntries = entries.map { entry ->
             IocEntry(
@@ -65,8 +65,9 @@ class PublicRepoIocFeed @Inject constructor(
 
         if (iocEntries.isNotEmpty()) {
             iocEntryDao.upsertAll(iocEntries)
-            iocEntryDao.deleteStaleEntries(SOURCE_ID, fetchedAt - 1)
         }
+        // Always clean stale entries — even if fetch returned empty, so stale data doesn't persist
+        iocEntryDao.deleteStaleEntries(SOURCE_ID, fetchedAt - 1)
         return iocEntries.size
     }
 
@@ -74,7 +75,6 @@ class PublicRepoIocFeed @Inject constructor(
     private suspend fun fetchAndUpsertDomains(fetchedAt: Long): Int {
         val yaml = fetchUrl("${BASE_URL}ioc-data/c2-domains.yml") ?: return 0
         val entries = parseIocYaml(yaml)
-        if (entries.isEmpty()) return 0
 
         val domainEntries = entries.map { entry ->
             DomainIocEntry(
@@ -88,8 +88,8 @@ class PublicRepoIocFeed @Inject constructor(
 
         if (domainEntries.isNotEmpty()) {
             domainIocEntryDao.upsertAll(domainEntries)
-            domainIocEntryDao.deleteStaleEntries(SOURCE_ID, fetchedAt - 1)
         }
+        domainIocEntryDao.deleteStaleEntries(SOURCE_ID, fetchedAt - 1)
         return domainEntries.size
     }
 
@@ -97,7 +97,6 @@ class PublicRepoIocFeed @Inject constructor(
     private suspend fun fetchAndUpsertCertHashes(fetchedAt: Long): Int {
         val yaml = fetchUrl("${BASE_URL}ioc-data/cert-hashes.yml") ?: return 0
         val entries = parseIocYaml(yaml)
-        if (entries.isEmpty()) return 0
 
         val certEntries = entries.map { entry ->
             CertHashIocEntry(
@@ -113,17 +112,22 @@ class PublicRepoIocFeed @Inject constructor(
 
         if (certEntries.isNotEmpty()) {
             certHashIocEntryDao.upsertAll(certEntries)
-            certHashIocEntryDao.deleteStaleEntries(SOURCE_ID, fetchedAt - 1)
         }
+        certHashIocEntryDao.deleteStaleEntries(SOURCE_ID, fetchedAt - 1)
         return certEntries.size
     }
 
     @Suppress("UNCHECKED_CAST", "TooGenericExceptionCaught", "SwallowedException")
     internal fun parseIocYaml(yamlContent: String): List<Map<String, Any>> {
         return try {
-            val load = Load(LoadSettings.builder().build())
-            val doc = load.loadFromString(yamlContent) as? Map<String, Any> ?: return emptyList()
-            (doc["entries"] as? List<Map<String, Any>>) ?: emptyList()
+            val settings = LoadSettings.builder()
+                .setAllowDuplicateKeys(false)
+                .setMaxAliasesForCollections(10)
+                .build()
+            val load = Load(settings)
+            val doc = load.loadFromString(yamlContent) as? Map<*, *> ?: return emptyList()
+            val entries = doc["entries"] as? List<*> ?: return emptyList()
+            entries.mapNotNull { it as? Map<String, Any> }
         } catch (e: Exception) {
             Log.w(TAG, "Failed to parse IOC YAML: ${e.message}")
             emptyList()
@@ -132,19 +136,27 @@ class PublicRepoIocFeed @Inject constructor(
 
     @Suppress("TooGenericExceptionCaught", "SwallowedException")
     private fun fetchUrl(url: String): String? {
+        val conn = try {
+            URL(url).openConnection() as HttpURLConnection
+        } catch (e: Exception) {
+            Log.w(TAG, "HTTP connection failed for $url: ${e.message}")
+            return null
+        }
         return try {
-            val conn = URL(url).openConnection() as HttpURLConnection
             conn.connectTimeout = TIMEOUT_MS
             conn.readTimeout = TIMEOUT_MS
             conn.setRequestProperty("User-Agent", "AndroDR/1.0")
             if (conn.responseCode == HttpURLConnection.HTTP_OK) {
                 conn.inputStream.bufferedReader().use { it.readText() }
             } else {
+                Log.w(TAG, "HTTP ${conn.responseCode} from $url")
                 null
             }
         } catch (e: Exception) {
             Log.w(TAG, "HTTP fetch failed for $url: ${e.message}")
             null
+        } finally {
+            conn.disconnect()
         }
     }
 

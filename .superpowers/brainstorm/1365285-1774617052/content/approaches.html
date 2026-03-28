@@ -1,0 +1,64 @@
+<h2>Three Architectural Approaches</h2>
+<p class="subtitle">Enhanced CVE display + SIGMA engine revision — pick the approach</p>
+
+<div class="options">
+  <div class="option" data-choice="a" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>Surgical Enhancement</h3>
+      <p><strong>Change the minimum to unblock issue #25.</strong></p>
+      <ul style="margin:8px 0;padding-left:20px;font-size:14px;color:#aaa;">
+        <li>Extend <code>Finding</code> with an <code>evidence: List&lt;Evidence&gt;</code> payload</li>
+        <li>Evaluator emits N atomic findings for CVE rule</li>
+        <li>Add OSV merge to <code>CveDatabase</code>, persist to Room</li>
+        <li>Campaign tags on rule YAML</li>
+        <li>Bottom sheet UI for CVE list</li>
+        <li><code>FindingMapper</code> stays but becomes evidence-aware</li>
+      </ul>
+      <div class="pros-cons" style="margin-top:12px;">
+        <div class="pros"><h4>Pros</h4><ul><li>Smallest diff, fastest delivery</li><li>Low regression risk</li></ul></div>
+        <div class="cons"><h4>Cons</h4><ul><li>FindingMapper stays hard-coded</li><li>Generic rendering not addressed</li><li>Technical debt accumulates</li></ul></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="b" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>Engine Rethink (Recommended)</h3>
+      <p><strong>Redesign the finding→UI pipeline. Eliminate FindingMapper. Deliver CVE feature on the new architecture.</strong></p>
+      <ul style="margin:8px 0;padding-left:20px;font-size:14px;color:#aaa;">
+        <li>Findings become self-describing: title, severity, description, evidence, remediation, display hints — all from rule YAML</li>
+        <li>Generic renderers with display primitives (severity list, expandable section, tag group, key-value evidence)</li>
+        <li>Evaluator supports 1:N emission (one rule → N atomic findings)</li>
+        <li>FindingMapper eliminated — findings render directly</li>
+        <li>CVE feature built on the new pipeline: Room persistence, OSV merge, campaign tags, bottom sheet</li>
+        <li>Existing 20 rules migrated to carry display metadata</li>
+      </ul>
+      <div class="pros-cons" style="margin-top:12px;">
+        <div class="pros"><h4>Pros</h4><ul><li>Eliminates hard-coded translation layer</li><li>Future rules render without Kotlin changes</li><li>Aligns with public repo vision</li><li>CVE feature validates the new architecture</li></ul></div>
+        <div class="cons"><h4>Cons</h4><ul><li>Larger scope — touches engine, all rules, UI, data layer</li><li>Needs careful migration of 20 existing rules</li><li>Moderate regression risk</li></ul></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="c" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>Full Platform Overhaul</h3>
+      <p><strong>Everything in B, plus future-facing platform capabilities.</strong></p>
+      <ul style="margin:8px 0;padding-left:20px;font-size:14px;color:#aaa;">
+        <li>Everything from approach B</li>
+        <li>Rule schema versioning (v1 → v2 migration support)</li>
+        <li>Rule dependencies and chaining (rule A's output feeds rule B)</li>
+        <li>SARIF/OCSF export format for findings</li>
+        <li>Finding lifecycle (new → acknowledged → resolved → suppressed)</li>
+        <li>Per-finding dismiss/snooze in UI</li>
+      </ul>
+      <div class="pros-cons" style="margin-top:12px;">
+        <div class="pros"><h4>Pros</h4><ul><li>Most complete long-term architecture</li><li>Export-ready data model</li><li>Professional finding management</li></ul></div>
+        <div class="cons"><h4>Cons</h4><ul><li>Massive scope — weeks of work</li><li>YAGNI risk: building for hypothetical needs</li><li>Delays the CVE feature significantly</li><li>Rule chaining adds complexity with no current consumer</li></ul></div>
+      </div>
+    </div>
+  </div>
+</div>
