@@ -1,7 +1,8 @@
 # AndroDR — Feature Roadmap
 
-Items are listed in rough priority order within each section.
-This file is updated as gaps are identified; it does not imply a delivery schedule.
+The canonical source of truth for open work is the
+[GitHub issue tracker](https://github.com/yasirhamza/AndroDR/issues).
+This file is a human-readable snapshot refreshed at milestones.
 
 ---
 
@@ -48,15 +49,51 @@ This file is updated as gaps are identified; it does not imply a delivery schedu
 
 ---
 
+## Open — MVT-Parity Forensic Analysis (#11)
+
+Kotlin port of MVT's detection logic — bugreport parsing + runtime API equivalents.
+Prioritized by: detection value × user impact × publishability.
+
+### Tier 1 — Foundation
+
+| Priority | Issue | Description |
+|----------|-------|-------------|
+| 1 | #31 | Expose Bug Report Analysis in Dashboard UI |
+| 2 | #32 | Dumpsys section parser for structured bugreport analysis |
+
+### Tier 2 — High-Value Detection
+
+| Priority | Issue | Description |
+|----------|-------|-------------|
+| 3 | #33 | AppOps permission usage analysis (bugreport + runtime) |
+| 4 | #34 | Broadcast receiver audit — SMS/call interception (bugreport + runtime) |
+| 5 | #35 | Enabled accessibility services audit (bugreport + runtime) |
+
+### Tier 3 — Moderate Value
+
+| Priority | Issue | Description |
+|----------|-------|-------------|
+| 6 | #36 | Battery daily install/uninstall timeline (bugreport) |
+| 7 | #37 | Full STIX2 indicator pattern support |
+| 8 | #38 | Activity/intent handler audit (bugreport) |
+
+### Tier 4 — Specialist / Forensic
+
+| Priority | Issue | Description |
+|----------|-------|-------------|
+| 9 | #39 | Database operations audit (bugreport) |
+| 10 | #40 | ADB trusted keys + PlatformCompat audit (bugreport) |
+| 11 | #41 | Cross-module forensic timeline view |
+
+---
+
 ## Future Work
 
 | Feature | Issue | Notes |
 |---------|-------|-------|
-| Threat hunting / forensic analysis mode | #11 | MVT-style deep device inspection from backups |
 | Public SIGMA rule repository | — | Community-contributed detection rules (separate repo) |
 | iOS companion app | — | Out of scope for Android-only release |
 | Remote report upload / SIEM integration | — | Enterprise feature |
-| Real-time permission-use monitoring | — | Camera/mic activation events |
 
 ---
 
