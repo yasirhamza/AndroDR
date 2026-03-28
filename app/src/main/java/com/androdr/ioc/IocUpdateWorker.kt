@@ -21,6 +21,7 @@ class IocUpdateWorker @AssistedInject constructor(
     private val domainIocUpdater: DomainIocUpdater,
     private val knownAppUpdater: KnownAppUpdater,
     private val certHashIocUpdater: CertHashIocUpdater,
+    private val publicRepoIocFeed: PublicRepoIocFeed,
     private val sigmaRuleFeed: SigmaRuleFeed,
     private val sigmaRuleEngine: SigmaRuleEngine,
     private val cveRepository: CveRepository
@@ -30,6 +31,8 @@ class IocUpdateWorker @AssistedInject constructor(
     override suspend fun doWork(): Result {
         return try {
             val fetched = runAllUpdaters(remoteIocUpdater, domainIocUpdater, knownAppUpdater, certHashIocUpdater)
+            // Fetch IOC data from public rules repo
+            refreshPublicRepoIoc()
             // Refresh SIGMA rules independently — never blocks IOC update success
             refreshSigmaRules()
             refreshCveDatabase()
@@ -62,6 +65,18 @@ class IocUpdateWorker @AssistedInject constructor(
             Log.i(TAG, "CVE database refreshed: ${cveRepository.getActivelyExploitedCount()} Android CVEs")
         } catch (e: Exception) {
             Log.w(TAG, "CVE database refresh failed (non-fatal): ${e.message}")
+        }
+    }
+
+    @Suppress("TooGenericExceptionCaught")
+    private suspend fun refreshPublicRepoIoc() {
+        try {
+            val count = publicRepoIocFeed.update()
+            if (count > 0) {
+                Log.i(TAG, "Public repo IOC feed: $count entries loaded")
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Public repo IOC feed failed (non-fatal): ${e.message}")
         }
     }
 
