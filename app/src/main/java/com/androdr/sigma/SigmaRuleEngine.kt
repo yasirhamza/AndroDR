@@ -3,11 +3,14 @@ package com.androdr.sigma
 
 import android.content.Context
 import android.util.Log
+import com.androdr.data.model.AccessibilityTelemetry
+import com.androdr.data.model.AppOpsTelemetry
 import com.androdr.data.model.AppTelemetry
 import com.androdr.data.model.DeviceTelemetry
 import com.androdr.data.model.DnsEvent
 import com.androdr.data.model.FileArtifactTelemetry
 import com.androdr.data.model.ProcessTelemetry
+import com.androdr.data.model.ReceiverTelemetry
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -89,6 +92,21 @@ class SigmaRuleEngine @Inject constructor(
     fun evaluateFiles(telemetry: List<FileArtifactTelemetry>): List<Finding> {
         val records = telemetry.map { it.toFieldMap() }
         return SigmaRuleEvaluator.evaluate(rules, records, "file_scanner", iocLookups, evidenceProviders)
+    }
+
+    fun evaluateAccessibility(telemetry: List<AccessibilityTelemetry>): List<Finding> {
+        val records = telemetry.map { it.toFieldMap() }
+        return SigmaRuleEvaluator.evaluate(rules, records, "accessibility_audit", iocLookups, evidenceProviders)
+    }
+
+    fun evaluateReceivers(telemetry: List<ReceiverTelemetry>): List<Finding> {
+        val records = telemetry.map { it.toFieldMap() }
+        return SigmaRuleEvaluator.evaluate(rules, records, "receiver_audit", iocLookups, evidenceProviders)
+    }
+
+    fun evaluateAppOps(telemetry: List<AppOpsTelemetry>): List<Finding> {
+        val records = telemetry.map { it.toFieldMap() }
+        return SigmaRuleEvaluator.evaluate(rules, records, "appops_audit", iocLookups, evidenceProviders)
     }
 
     fun ruleCount(): Int = rules.size
