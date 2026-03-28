@@ -109,6 +109,10 @@ class SigmaRuleEngine @Inject constructor(
         return SigmaRuleEvaluator.evaluate(rules, records, "appops_audit", iocLookups, evidenceProviders)
     }
 
+    fun evaluateGeneric(records: List<Map<String, Any?>>, service: String): List<Finding> {
+        return SigmaRuleEvaluator.evaluate(rules, records, service, iocLookups, evidenceProviders)
+    }
+
     fun ruleCount(): Int = rules.size
 
     companion object {

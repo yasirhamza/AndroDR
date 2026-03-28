@@ -7,6 +7,8 @@ import com.androdr.data.model.TimelineEvent
 import com.androdr.ioc.IocResolver
 import com.androdr.scanner.bugreport.BugreportModule
 import com.androdr.scanner.bugreport.DumpsysSectionParser
+import com.androdr.sigma.Finding
+import com.androdr.sigma.SigmaRuleEngine
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -19,13 +21,20 @@ import javax.inject.Singleton
 class BugReportAnalyzer @Inject constructor(
     @ApplicationContext private val context: Context,
     private val iocResolver: IocResolver,
-    private val modules: Set<@JvmSuppressWildcards BugreportModule>
+    private val modules: Set<@JvmSuppressWildcards BugreportModule>,
+    private val sigmaRuleEngine: SigmaRuleEngine
 ) {
 
     data class BugReportFinding(
         val severity: String,
         val category: String,
         val description: String
+    )
+
+    data class BugReportAnalysisResult(
+        val findings: List<Finding>,
+        val legacyFindings: List<BugReportFinding>,
+        val timeline: List<TimelineEvent>
     )
 
     private val sectionParser = DumpsysSectionParser()
@@ -36,15 +45,19 @@ class BugReportAnalyzer @Inject constructor(
      * The method opens the zip through the [android.content.ContentResolver], iterates
      * all entries, dispatches section-targeted modules against parsed dumpsys sections
      * and raw-entry modules against all ZIP entries, then aggregates findings.
+     *
+     * Telemetry-producing modules have their output evaluated by the SIGMA rule engine
+     * to produce [Finding] objects. Legacy modules produce [BugReportFinding] directly.
      */
     // Two-pass ZIP processing with section extraction and module dispatch — the linear flow
     // through both passes is clearer as a single function than split across helpers.
     @Suppress("LongMethod", "TooGenericExceptionCaught") // LongMethod: see above;
     // TooGenericExceptionCaught: ContentResolver and ZipInputStream can throw any IOException
     // subclass; errors are converted to BugReportFinding entries with ERROR severity.
-    suspend fun analyze(bugReportUri: Uri): List<BugReportFinding> = withContext(Dispatchers.IO) {
-        val findings = mutableListOf<BugReportFinding>()
-        val timelineEvents = mutableListOf<TimelineEvent>()
+    suspend fun analyze(bugReportUri: Uri): BugReportAnalysisResult = withContext(Dispatchers.IO) {
+        val allFindings = mutableListOf<Finding>()
+        val allLegacyFindings = mutableListOf<BugReportFinding>()
+        val allTimelineEvents = mutableListOf<TimelineEvent>()
 
         // Separate modules into section-targeted vs raw-entry
         val sectionModules = modules.filter { it.targetSections != null }
@@ -57,8 +70,8 @@ class BugReportAnalyzer @Inject constructor(
         // Only the needed section strings are held in memory (a few MB each),
         // not the entire ZIP contents.
         if (sectionModules.isNotEmpty() && neededSections.isNotEmpty()) {
-            val stream1 = openBugReportStream(bugReportUri, findings)
-                ?: return@withContext findings
+            val stream1 = openBugReportStream(bugReportUri, allLegacyFindings)
+                ?: return@withContext BugReportAnalysisResult(allFindings, allLegacyFindings, allTimelineEvents)
 
             try {
                 ZipInputStream(stream1.buffered()).use { zip ->
@@ -86,8 +99,7 @@ class BugReportAnalyzer @Inject constructor(
                                     for (sectionName in mod.targetSections!!) {
                                         val sectionText = sections[sectionName] ?: continue
                                         val result = mod.analyze(sectionText, iocResolver)
-                                        findings.addAll(result.findings)
-                                        timelineEvents.addAll(result.timeline)
+                                        processModuleResult(result, allFindings, allLegacyFindings, allTimelineEvents)
                                     }
                                 }
                                 break
@@ -100,22 +112,22 @@ class BugReportAnalyzer @Inject constructor(
                     }
                 }
             } catch (e: Exception) {
-                findings.add(
+                allLegacyFindings.add(
                     BugReportFinding(
                         severity = "ERROR",
                         category = "IO",
                         description = "Failed to read zip contents (pass 1): ${e.message}"
                     )
                 )
-                return@withContext findings
+                return@withContext BugReportAnalysisResult(allFindings, allLegacyFindings, allTimelineEvents)
             }
         }
 
         // ── Pass 2: Re-open URI, stream raw entries to raw modules ───────────
         // Each entry is streamed directly to modules without buffering into memory.
         if (rawModules.isNotEmpty()) {
-            val stream2 = openBugReportStream(bugReportUri, findings)
-                ?: return@withContext findings
+            val stream2 = openBugReportStream(bugReportUri, allLegacyFindings)
+                ?: return@withContext BugReportAnalysisResult(allFindings, allLegacyFindings, allTimelineEvents)
 
             try {
                 ZipInputStream(stream2.buffered()).use { zip ->
@@ -134,12 +146,11 @@ class BugReportAnalyzer @Inject constructor(
 
                     for (mod in rawModules) {
                         val result = mod.analyzeRaw(entrySequence, iocResolver)
-                        findings.addAll(result.findings)
-                        timelineEvents.addAll(result.timeline)
+                        processModuleResult(result, allFindings, allLegacyFindings, allTimelineEvents)
                     }
                 }
             } catch (e: Exception) {
-                findings.add(
+                allLegacyFindings.add(
                     BugReportFinding(
                         severity = "ERROR",
                         category = "IO",
@@ -149,8 +160,28 @@ class BugReportAnalyzer @Inject constructor(
             }
         }
 
-        Log.d("BugReportAnalyzer", "Collected ${timelineEvents.size} timeline events")
-        findings
+        Log.d("BugReportAnalyzer", "Collected ${allTimelineEvents.size} timeline events, " +
+            "${allFindings.size} SIGMA findings, ${allLegacyFindings.size} legacy findings")
+        BugReportAnalysisResult(allFindings, allLegacyFindings, allTimelineEvents)
+    }
+
+    /**
+     * Processes a [com.androdr.scanner.bugreport.ModuleResult]: evaluates telemetry through
+     * the SIGMA rule engine and collects legacy findings and timeline events.
+     */
+    private fun processModuleResult(
+        result: com.androdr.scanner.bugreport.ModuleResult,
+        allFindings: MutableList<Finding>,
+        allLegacyFindings: MutableList<BugReportFinding>,
+        allTimelineEvents: MutableList<TimelineEvent>
+    ) {
+        if (result.telemetry.isNotEmpty()) {
+            allFindings.addAll(
+                sigmaRuleEngine.evaluateGeneric(result.telemetry, result.telemetryService)
+            )
+        }
+        allLegacyFindings.addAll(result.legacyFindings)
+        allTimelineEvents.addAll(result.timeline)
     }
 
     /**

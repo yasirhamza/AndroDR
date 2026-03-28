@@ -7,7 +7,6 @@ import com.androdr.data.repo.ScanRepository
 import com.androdr.ioc.CertHashIocResolver
 import com.androdr.ioc.DomainIocResolver
 import com.androdr.ioc.IocResolver
-import com.androdr.scanner.BugReportAnalyzer.BugReportFinding
 import com.androdr.sigma.CveEvidenceProvider
 import com.androdr.sigma.Finding
 import com.androdr.sigma.FindingCategory
@@ -145,13 +144,35 @@ class ScanOrchestrator @Inject constructor(
     }
 
     /**
-     * Delegates to [BugReportAnalyzer.analyze].
+     * Analyzes a bug report, evaluates telemetry through SIGMA rules,
+     * and persists the result in scan history.
      *
      * @param uri Content URI pointing to the bugreport .zip file.
-     * @return List of [BugReportFinding] items (may be empty on a clean report).
+     * @return [BugReportAnalyzer.BugReportAnalysisResult] with SIGMA findings,
+     *         legacy findings, and timeline events.
      */
-    suspend fun analyzeBugReport(uri: Uri): List<BugReportFinding> =
-        bugReportAnalyzer.analyze(uri)
+    suspend fun analyzeBugReport(uri: Uri): BugReportAnalyzer.BugReportAnalysisResult {
+        initRuleEngine()
+        val result = bugReportAnalyzer.analyze(uri)
+
+        // Persist as ScanResult so it shows in history
+        val now = System.currentTimeMillis()
+        val scanResult = ScanResult(
+            id = now,
+            timestamp = now,
+            findings = result.findings,
+            bugReportFindings = result.legacyFindings.map {
+                "${it.severity} | ${it.category} | ${it.description}"
+            },
+            riskySideloadCount = 0,
+            knownMalwareCount = result.findings.count {
+                it.level == "critical" && it.ruleId.startsWith("androdr-0")
+            }
+        )
+        runCatching { scanRepository.saveScan(scanResult) }
+
+        return result
+    }
 
     /**
      * Computes a diff between two [ScanResult] snapshots.

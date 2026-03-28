@@ -74,7 +74,7 @@ class LegacyScanModule @Inject constructor() : BugreportModule {
                 findings.addAll(analyzeTextEntry(entryName, stream, iocResolver))
             }
         }
-        return ModuleResult(findings, emptyList())
+        return ModuleResult(legacyFindings = findings)
     }
 
     /**

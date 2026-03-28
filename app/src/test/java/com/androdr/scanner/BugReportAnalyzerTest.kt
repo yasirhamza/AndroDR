@@ -4,6 +4,7 @@ import android.content.Context
 import com.androdr.ioc.BadPackageInfo
 import com.androdr.ioc.IocResolver
 import com.androdr.scanner.bugreport.LegacyScanModule
+import com.androdr.sigma.SigmaRuleEngine
 import io.mockk.every
 import io.mockk.mockk
 import org.junit.Assert.assertEquals
@@ -16,14 +17,16 @@ class BugReportAnalyzerTest {
 
     private val mockContext: Context = mockk(relaxed = true)
     private val mockIocResolver: IocResolver = mockk()
+    private val mockSigmaRuleEngine: SigmaRuleEngine = mockk(relaxed = true)
     private lateinit var analyzer: BugReportAnalyzer
     private lateinit var legacyModule: LegacyScanModule
 
     @Before
     fun setUp() {
         every { mockIocResolver.isKnownBadPackage(any()) } returns null
+        every { mockSigmaRuleEngine.evaluateGeneric(any(), any()) } returns emptyList()
         legacyModule = LegacyScanModule()
-        analyzer = BugReportAnalyzer(mockContext, mockIocResolver, setOf(legacyModule))
+        analyzer = BugReportAnalyzer(mockContext, mockIocResolver, setOf(legacyModule), mockSigmaRuleEngine)
     }
 
     private fun streamOf(text: String) =
