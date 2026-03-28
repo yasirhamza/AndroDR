@@ -42,21 +42,27 @@ object ReportFormatter {
         appendLine()
 
         // -- Device checks --------------------------------------------------------
-        section("DEVICE CHECKS")
-        val triggered = scan.deviceFlags.filter { it.triggered }
-        val passed    = scan.deviceFlags.filter { !it.triggered }
-        appendLine("  ${triggered.size} of ${scan.deviceFlags.size} checks triggered")
-        appendLine()
+        val allDeviceFlags = scan.deviceFlags
+        if (allDeviceFlags.isNotEmpty()) {
+            section("DEVICE CHECKS")
+            val triggered = allDeviceFlags.filter { it.triggered }
+            val passed    = allDeviceFlags.filter { !it.triggered }
+            appendLine("  ${triggered.size} of ${allDeviceFlags.size} checks triggered")
+            appendLine()
 
-        if (triggered.isNotEmpty()) {
-            appendLine("  Issues found:")
-            triggered.sortedByDescending { severityOrdinal(it.level) }.forEach { finding ->
-                appendFinding(finding)
+            if (triggered.isNotEmpty()) {
+                appendLine("  Issues found:")
+                triggered.sortedByDescending { severityOrdinal(it.level) }.forEach { finding ->
+                    appendFinding(finding)
+                }
             }
-        }
-        if (passed.isNotEmpty()) {
-            appendLine("  Checks passed:")
-            passed.forEach { finding -> appendFinding(finding) }
+            if (passed.isNotEmpty()) {
+                appendLine("  Checks passed:")
+                passed.forEach { finding -> appendFinding(finding) }
+            }
+        } else {
+            section("DEVICE CHECKS")
+            appendLine("  (Bug report analysis — device checks require a live scan)")
         }
 
         // -- App risks ------------------------------------------------------------
