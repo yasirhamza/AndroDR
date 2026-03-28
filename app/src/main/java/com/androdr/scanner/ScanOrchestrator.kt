@@ -24,6 +24,7 @@ import javax.inject.Singleton
  * result diffing.
  */
 @Singleton
+@Suppress("LongParameterList") // All parameters are Hilt-injected dependencies
 class ScanOrchestrator @Inject constructor(
     private val appScanner: AppScanner,
     private val deviceAuditor: DeviceAuditor,
