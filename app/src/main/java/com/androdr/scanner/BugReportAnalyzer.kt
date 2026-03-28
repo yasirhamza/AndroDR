@@ -8,7 +8,6 @@ import com.androdr.scanner.bugreport.DumpsysSectionParser
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import java.io.ByteArrayInputStream
 import java.io.InputStream
 import java.util.zip.ZipInputStream
 import javax.inject.Inject
@@ -41,7 +40,108 @@ class BugReportAnalyzer @Inject constructor(
     suspend fun analyze(bugReportUri: Uri): List<BugReportFinding> = withContext(Dispatchers.IO) {
         val findings = mutableListOf<BugReportFinding>()
 
-        val inputStream = try {
+        // Separate modules into section-targeted vs raw-entry
+        val sectionModules = modules.filter { it.targetSections != null }
+        val rawModules = modules.filter { it.targetSections == null }
+
+        // Collect all target section names needed by section modules
+        val neededSections = sectionModules.flatMap { it.targetSections!! }.toSet()
+
+        // ── Pass 1: Stream through ZIP to extract dumpsys sections ───────────
+        // Only the needed section strings are held in memory (a few MB each),
+        // not the entire ZIP contents.
+        if (sectionModules.isNotEmpty() && neededSections.isNotEmpty()) {
+            val stream1 = openBugReportStream(bugReportUri, findings)
+                ?: return@withContext findings
+
+            try {
+                ZipInputStream(stream1.buffered()).use { zip ->
+                    var entry = zip.nextEntry
+                    while (entry != null) {
+                        if (!entry.isDirectory &&
+                            entry.name.lowercase().contains("dumpstate")
+                        ) {
+                            val sections = sectionParser.extractSections(
+                                zip, // stream directly — no buffering into byte[]
+                                neededSections
+                            )
+
+                            for (mod in sectionModules) {
+                                for (sectionName in mod.targetSections!!) {
+                                    val sectionText = sections[sectionName] ?: continue
+                                    val result = mod.analyze(sectionText, iocResolver)
+                                    findings.addAll(result.findings)
+                                }
+                            }
+                            break // only one dumpstate entry expected
+                        }
+                        try {
+                            zip.closeEntry()
+                        } catch (_: Exception) { /* ignore close errors */ }
+                        entry = try { zip.nextEntry } catch (_: Exception) { null }
+                    }
+                }
+            } catch (e: Exception) {
+                findings.add(
+                    BugReportFinding(
+                        severity = "ERROR",
+                        category = "IO",
+                        description = "Failed to read zip contents (pass 1): ${e.message}"
+                    )
+                )
+                return@withContext findings
+            }
+        }
+
+        // ── Pass 2: Re-open URI, stream raw entries to raw modules ───────────
+        // Each entry is streamed directly to modules without buffering into memory.
+        if (rawModules.isNotEmpty()) {
+            val stream2 = openBugReportStream(bugReportUri, findings)
+                ?: return@withContext findings
+
+            try {
+                ZipInputStream(stream2.buffered()).use { zip ->
+                    val entrySequence = sequence {
+                        var entry = zip.nextEntry
+                        while (entry != null) {
+                            if (!entry.isDirectory) {
+                                yield(entry.name to (zip as InputStream))
+                            }
+                            try {
+                                zip.closeEntry()
+                            } catch (_: Exception) { /* ignore close errors */ }
+                            entry = try { zip.nextEntry } catch (_: Exception) { null }
+                        }
+                    }
+
+                    for (mod in rawModules) {
+                        val result = mod.analyzeRaw(entrySequence, iocResolver)
+                        findings.addAll(result.findings)
+                    }
+                }
+            } catch (e: Exception) {
+                findings.add(
+                    BugReportFinding(
+                        severity = "ERROR",
+                        category = "IO",
+                        description = "Failed to read zip contents (pass 2): ${e.message}"
+                    )
+                )
+            }
+        }
+
+        findings
+    }
+
+    /**
+     * Opens the bug report URI via ContentResolver and returns the stream,
+     * or adds an error finding and returns null.
+     */
+    private fun openBugReportStream(
+        bugReportUri: Uri,
+        findings: MutableList<BugReportFinding>
+    ): InputStream? {
+        val stream = try {
             context.contentResolver.openInputStream(bugReportUri)
         } catch (e: Exception) {
             findings.add(
@@ -51,8 +151,10 @@ class BugReportAnalyzer @Inject constructor(
                     description = "Could not open bug report file: ${e.message}"
                 )
             )
-            return@withContext findings
-        } ?: run {
+            return null
+        }
+
+        if (stream == null) {
             findings.add(
                 BugReportFinding(
                     severity = "ERROR",
@@ -60,77 +162,8 @@ class BugReportAnalyzer @Inject constructor(
                     description = "ContentResolver returned null stream for the provided URI"
                 )
             )
-            return@withContext findings
         }
-
-        // Separate modules into section-targeted vs raw-entry
-        val sectionModules = modules.filter { it.targetSections != null }
-        val rawModules = modules.filter { it.targetSections == null }
-
-        // Collect all target section names needed by section modules
-        val neededSections = sectionModules.flatMap { it.targetSections!! }.toSet()
-
-        // Read ZIP entries into memory so we can pass them to both section and raw modules
-        val entryBytes = mutableListOf<Pair<String, ByteArray>>()
-
-        try {
-            ZipInputStream(inputStream.buffered()).use { zip ->
-                var entry = zip.nextEntry
-                while (entry != null) {
-                    if (!entry.isDirectory) {
-                        val bytes = zip.readBytes()
-                        entryBytes.add(entry.name to bytes)
-                    }
-                    try {
-                        zip.closeEntry()
-                    } catch (_: Exception) { /* ignore close errors */ }
-                    entry = try { zip.nextEntry } catch (_: Exception) { null }
-                }
-            }
-        } catch (e: Exception) {
-            findings.add(
-                BugReportFinding(
-                    severity = "ERROR",
-                    category = "IO",
-                    description = "Failed to read zip contents: ${e.message}"
-                )
-            )
-            return@withContext findings
-        }
-
-        // ── Section-targeted modules ─────────────────────────────────────────
-        if (sectionModules.isNotEmpty() && neededSections.isNotEmpty()) {
-            // Find the dumpstate entry (primary source of dumpsys output)
-            val dumpstateEntry = entryBytes.find {
-                it.first.lowercase().contains("dumpstate")
-            }
-
-            if (dumpstateEntry != null) {
-                val sections = sectionParser.extractSections(
-                    ByteArrayInputStream(dumpstateEntry.second),
-                    neededSections
-                )
-
-                for (mod in sectionModules) {
-                    for (sectionName in mod.targetSections!!) {
-                        val sectionText = sections[sectionName] ?: continue
-                        val result = mod.analyze(sectionText, iocResolver)
-                        findings.addAll(result.findings)
-                    }
-                }
-            }
-        }
-
-        // ── Raw-entry modules ────────────────────────────────────────────────
-        for (mod in rawModules) {
-            val entrySequence = entryBytes.asSequence().map { (name, bytes) ->
-                name to ByteArrayInputStream(bytes) as InputStream
-            }
-            val result = mod.analyzeRaw(entrySequence, iocResolver)
-            findings.addAll(result.findings)
-        }
-
-        findings
+        return stream
     }
 
     /**

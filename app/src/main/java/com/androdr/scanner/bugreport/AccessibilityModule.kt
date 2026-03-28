@@ -21,7 +21,7 @@ class AccessibilityModule @Inject constructor() : BugreportModule {
     )
 
     private val enabledServiceRegex = Regex(
-        """^\s+([a-zA-Z][a-zA-Z0-9._]+)/(\.\w+)""",
+        """^\s+([a-zA-Z][a-zA-Z0-9._]+)/([.\w]+)""",
         RegexOption.MULTILINE
     )
 

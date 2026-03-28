@@ -32,7 +32,10 @@ class AppOpsScanner @Inject constructor(
         AppOpsManager.OPSTR_READ_CALL_LOG,
         AppOpsManager.OPSTR_FINE_LOCATION,
         AppOpsManager.OPSTR_READ_SMS,
-        AppOpsManager.OPSTR_READ_EXTERNAL_STORAGE
+        AppOpsManager.OPSTR_READ_EXTERNAL_STORAGE,
+        // Not a public OPSTR_* constant but valid on API 26+; the per-op try/catch handles
+        // any platform that doesn't recognise it.
+        "android:request_install_packages"
     )
 
     @Suppress("TooGenericExceptionCaught")

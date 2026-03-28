@@ -28,7 +28,7 @@ class ReceiverModule @Inject constructor() : BugreportModule {
     )
 
     private val receiverEntryRegex = Regex(
-        """^\s+\d+\s+([a-zA-Z][a-zA-Z0-9._]+)/(\.?\w+)""",
+        """^\s+\d+\s+([a-zA-Z][a-zA-Z0-9._]+)/([.\w]+)""",
         RegexOption.MULTILINE
     )
 
