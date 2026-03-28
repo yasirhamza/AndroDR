@@ -27,6 +27,8 @@ import androidx.compose.ui.unit.dp
 import com.androdr.sigma.Evidence
 import com.androdr.sigma.Finding
 
+// Compose composable rendering a finding card with evidence summary; splitting would fragment UI logic
+@Suppress("LongMethod")
 @Composable
 fun FindingCard(finding: Finding, onEvidenceTap: ((Finding) -> Unit)? = null) {
     val hasEvidence = finding.evidence !is Evidence.None && finding.triggered
@@ -47,20 +49,45 @@ fun FindingCard(finding: Finding, onEvidenceTap: ((Finding) -> Unit)? = null) {
                 modifier = Modifier.size(24.dp)
             )
             Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                    Text(text = finding.title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = finding.title,
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.weight(1f)
+                    )
                     Spacer(modifier = Modifier.width(8.dp))
                     SeverityChip(level = finding.level, active = finding.triggered)
                 }
                 if (finding.triggered && finding.description.isNotEmpty()) {
-                    Text(text = finding.description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(
+                        text = finding.description,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
                 if (hasEvidence) {
                     val summary = evidenceSummary(finding.evidence)
                     if (summary.isNotEmpty()) {
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                            Text(text = summary, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            Icon(imageVector = Icons.Filled.ChevronRight, contentDescription = "View details", modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Text(
+                                text = summary,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Icon(
+                                imageVector = Icons.Filled.ChevronRight,
+                                contentDescription = "View details",
+                                modifier = Modifier.size(16.dp),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
                         }
                     }
                 }

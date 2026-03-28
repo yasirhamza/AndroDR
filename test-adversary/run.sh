@@ -4,16 +4,31 @@
 # Prerequisites: Linux host, MALWAREBAZAAR_API_KEY set, emulator running with com.androdr.debug installed
 set -euo pipefail
 
+MODE="regression"
 NO_PAUSE=false
-SKIP_ISOLATION=true  # default: skip network isolation (safe — APKs are installed, never executed)
-while [ "${1:-}" = "--no-pause" ] || [ "${1:-}" = "--isolate" ]; do
+SKIP_ISOLATION=true
+PROFILE=""
+TRACK_FILTER=""
+RISK_FILTER=""
+ONLY_FILTER=""
+RANDOM_N=""
+
+while [[ "${1:-}" == --* ]]; do
     case "$1" in
         --no-pause) NO_PAUSE=true ;;
         --isolate) SKIP_ISOLATION=false ;;
+        --load) MODE="load" ;;
+        --guided) MODE="guided" ;;
+        --profile) shift; PROFILE="$1" ;;
+        --track) shift; TRACK_FILTER="$1" ;;
+        --risk) shift; RISK_FILTER="$1" ;;
+        --only) shift; ONLY_FILTER="$1" ;;
+        --random) shift; RANDOM_N="$1" ;;
+        *) echo "Unknown flag: $1" >&2; exit 1 ;;
     esac
     shift
 done
-SERIAL="${1:?Usage: $0 [--no-pause] [--isolate] <emulator-serial>}"
+SERIAL="${1:?Usage: $0 [--load|--guided] [--profile X] [--track N] [--risk high,medium] [--random N] [--only a,b] [--no-pause] <emulator-serial>}"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 MANIFEST="$SCRIPT_DIR/manifest.yml"
 EXPECTED_DIR="$SCRIPT_DIR/fixtures/expected"
@@ -91,11 +106,33 @@ fi
 echo "Preflight OK. Serial=$SERIAL"
 echo ""
 
-# Launch AndroDR once to populate IOC database from bundled data
-echo "Launching AndroDR to populate IOC database..."
-$ADB shell am start -n com.androdr.debug/com.androdr.MainActivity >/dev/null 2>&1
-sleep 8
-echo "IOC database populated."
+# Launch AndroDR and trigger threat database update (IOCs + CVEs)
+echo "Launching AndroDR and updating threat databases..."
+$ADB shell am start -n com.androdr.debug/com.androdr.MainActivity </dev/null >/dev/null 2>&1
+sleep 5
+$ADB shell am broadcast -a com.androdr.ACTION_UPDATE -n com.androdr.debug/com.androdr.debug.ScanBroadcastReceiver </dev/null >/dev/null 2>&1
+echo "  Waiting for CVE + IOC download (up to 45s)..."
+sleep 45
+echo "Threat databases updated."
+echo ""
+
+# ── Scenario selection ───────────────────────────────────────────────────────
+
+SELECTOR_ARGS="$MANIFEST"
+[ -n "$PROFILE" ] && SELECTOR_ARGS="$SELECTOR_ARGS --profile $PROFILE"
+[ -n "$TRACK_FILTER" ] && SELECTOR_ARGS="$SELECTOR_ARGS --track $TRACK_FILTER"
+[ -n "$RISK_FILTER" ] && SELECTOR_ARGS="$SELECTOR_ARGS --risk $RISK_FILTER"
+[ -n "$ONLY_FILTER" ] && SELECTOR_ARGS="$SELECTOR_ARGS --only $ONLY_FILTER"
+[ -n "$RANDOM_N" ] && SELECTOR_ARGS="$SELECTOR_ARGS --random $RANDOM_N"
+
+SELECTED_IDS=$(python3 "$SCRIPT_DIR/selector.py" $SELECTOR_ARGS)
+if [ $? -ne 0 ] || [ -z "$SELECTED_IDS" ]; then
+    echo "ERROR: No scenarios selected. Check your filters." >&2
+    exit 1
+fi
+
+SCENARIO_COUNT=$(echo "$SELECTED_IDS" | wc -l)
+echo "Selected $SCENARIO_COUNT scenarios."
 echo ""
 
 # ── YAML helpers ──────────────────────────────────────────────────────────────
@@ -156,6 +193,17 @@ for s in m['scenarios']:
             if c:
                 print(c)
 "
+}
+
+get_pkg_name() {
+    local apk="$1"
+    local pkg=""
+    if [ -n "${ANDROID_HOME:-}" ]; then
+        local aapt_bin="$ANDROID_HOME/build-tools/$(ls "$ANDROID_HOME/build-tools/" 2>/dev/null | sort -V | tail -1)/aapt2"
+        pkg=$("$aapt_bin" dump packagename "$apk" 2>/dev/null || true)
+    fi
+    [ -z "$pkg" ] && pkg=$(aapt2 dump packagename "$apk" 2>/dev/null || true)
+    echo "$pkg"
 }
 
 # ── Per-scenario execution ────────────────────────────────────────────────────
@@ -366,10 +414,214 @@ run_scenario() {
     echo ""
 }
 
+STATE_FILE="/tmp/androdr-loaded-packages.txt"
+
+if [ "$MODE" = "load" ] || [ "$MODE" = "guided" ]; then
+    # ── Batch install all selected scenarios ─────────────────────────────
+    > "$STATE_FILE"
+
+    # Save stdin fd, redirect to /dev/null for install phase (ADB/keytool consume stdin)
+    exec 3<&0 0</dev/null
+
+    for scenario_id in $SELECTED_IDS; do
+        source=$(get_field "$scenario_id" "source")
+        sha256=$(get_field "$scenario_id" "sha256")
+        fixture=$(get_field "$scenario_id" "fixture")
+        apk_path=""
+
+        case "$source" in
+            malwarebazaar)
+                if [ -z "${MALWAREBAZAAR_API_KEY:-}" ]; then
+                    echo "  SKIP $scenario_id — no API key"; continue
+                fi
+                if [ "$sha256" = "<pin>" ] || [ -z "$sha256" ]; then
+                    echo "  SKIP $scenario_id — SHA256 not pinned"; continue
+                fi
+                echo "  Downloading $scenario_id..."
+                curl -s -X POST https://mb-api.abuse.ch/api/v1/ \
+                    -d "query=get_file&sha256_hash=$sha256" \
+                    -H "Auth-Key: $MALWAREBAZAAR_API_KEY" \
+                    -o "$WORKDIR/sample-${scenario_id}.zip"
+                cd "$WORKDIR"
+                7z x -pinfected -aoa -o"$WORKDIR" "sample-${scenario_id}.zip" >/dev/null 2>&1 || true
+                apk_path="$WORKDIR/${sha256}.apk"
+                [ -f "$apk_path" ] || apk_path="$WORKDIR/$sha256"
+                [ -f "$apk_path" ] || apk_path=$(find "$WORKDIR" -name "*.apk" -newer "$WORKDIR/sample-${scenario_id}.zip" 2>/dev/null | head -1 || true)
+                [ -f "$apk_path" ] || { echo "  FAIL $scenario_id — could not extract"; continue; }
+                ;;
+            fixture)
+                apk_path="$SCRIPT_DIR/$fixture"
+                [ -f "$apk_path" ] || { echo "  FAIL $scenario_id — fixture not found: $apk_path"; continue; }
+                ;;
+            adb_inject) ;;
+            *) continue ;;
+        esac
+
+        if [ -n "$apk_path" ]; then
+            echo "  Installing $scenario_id..."
+            if $ADB install -t "$apk_path" </dev/null 2>&1 | tail -1 | grep -q "Success"; then
+                local_pkg=$(get_pkg_name "$apk_path")
+                [ -n "$local_pkg" ] && echo "$local_pkg" >> "$STATE_FILE"
+                INSTALLED_PACKAGES+=("${local_pkg:-unknown}")
+                echo "  Installed: $local_pkg"
+            else
+                echo "  WARNING: $scenario_id install may have failed"
+            fi
+        fi
+
+        if [ "$source" = "adb_inject" ]; then
+            while IFS= read -r cmd; do
+                [ -z "$cmd" ] && continue
+                echo "  Injecting ($scenario_id): adb $cmd"
+                $ADB $cmd </dev/null 2>/dev/null || true
+            done < <(get_inject_cmds "$scenario_id")
+        fi
+
+        if [ "$scenario_id" = "mercenary_cert_hash" ] && [ -n "$apk_path" ]; then
+            echo "  Seeding cert hash..."
+            cert_hash=$(keytool -printcert -jarfile "$apk_path" 2>/dev/null | grep "SHA256:" | head -1 | awk '{print $2}' | tr -d ':' | tr 'A-F' 'a-f' || true)
+            if [ -n "$cert_hash" ]; then
+                $ADB shell "run-as com.androdr.debug sqlite3 /data/data/com.androdr.debug/databases/androdr.db \
+                    \"INSERT OR REPLACE INTO cert_hash_ioc_entries \
+                    (certHash, familyName, category, severity, description, source, fetchedAt) \
+                    VALUES ('$cert_hash', 'Test Fixture', 'TEST', 'CRITICAL', \
+                    'Adversary simulation test cert', 'adversary-test', $(date +%s000));\"" </dev/null 2>/dev/null || true
+            fi
+        fi
+    done
+
+    # Restore stdin for interactive prompts
+    exec 0<&3 3<&-
+
+    echo ""
+    echo "  Triggering scan..."
+    $ADB shell am broadcast -a com.androdr.ACTION_SCAN -n com.androdr.debug/com.androdr.debug.ScanBroadcastReceiver </dev/null >/dev/null 2>&1
+    sleep 15
+
+    REPORT="$WORKDIR/androdr-loaded.txt"
+    $ADB pull /sdcard/Android/data/com.androdr.debug/files/androdr_last_report.txt "$REPORT" 2>/dev/null || true
+
+    installed_count=$(wc -l < "$STATE_FILE" 2>/dev/null || echo 0)
+
+    echo ""
+    echo "============================================================"
+    echo "  AndroDR loaded with $installed_count samples."
+    echo "  Open the app on the emulator to explore."
+    echo ""
+    if [ "$MODE" = "load" ]; then
+        if $NO_PAUSE; then
+            echo "  Run ./test-adversary/cleanup.sh $SERIAL when done."
+            echo "============================================================"
+        else
+            echo "  Press ENTER when done to clean up."
+            echo "  (If interrupted: ./test-adversary/cleanup.sh $SERIAL)"
+            echo "============================================================"
+            read -r _
+        fi
+        exit 0
+    fi
+
+    # ── Guided mode: category walkthrough ────────────────────────────────
+    echo "  Guided walkthrough starting. Press ENTER after each category."
+    echo "  (If interrupted: ./test-adversary/cleanup.sh $SERIAL)"
+    echo "============================================================"
+    echo ""
+
+    GUIDED_PASS=0
+    GUIDED_FAIL=0
+    GUIDED_EXPECTED=0
+
+    # Category 1: Device Posture (always shown)
+    echo "═══════════════════════════════════════════════════"
+    echo "  CATEGORY 1: Device Posture"
+    echo "═══════════════════════════════════════════════════"
+    echo "  Check the Device tab in AndroDR."
+    echo ""
+    echo "  Report assertions:"
+    for pattern in "USB Debugging" "Screen Lock" "CVEs"; do
+        if grep -qF "$pattern" "$REPORT" 2>/dev/null; then
+            echo "  ✓ \"$pattern\" found"
+            ((GUIDED_PASS++)) || true
+        else
+            echo "  ✗ \"$pattern\" not found"
+            ((GUIDED_FAIL++)) || true
+        fi
+    done
+    echo ""
+    echo "  Press ENTER to continue..."
+    read -r _
+
+    # Remaining categories by track
+    declare -A TRACK_CATS
+    TRACK_CATS[1]="Commodity Malware"
+    TRACK_CATS[2]="Stalkerware"
+    TRACK_CATS[3]="Mercenary Simulation"
+    TRACK_CATS[4]="CVE Detection"
+
+    cat_num=2
+    for track_num in 1 2 3 4; do
+        cat_name="${TRACK_CATS[$track_num]}"
+        has_scenarios=false
+
+        for scenario_id in $SELECTED_IDS; do
+            t=$(get_field "$scenario_id" "track")
+            [ "$t" = "$track_num" ] && has_scenarios=true && break
+        done
+        $has_scenarios || continue
+
+        echo ""
+        echo "═══════════════════════════════════════════════════"
+        echo "  CATEGORY $cat_num: $cat_name"
+        echo "═══════════════════════════════════════════════════"
+        echo ""
+
+        for scenario_id in $SELECTED_IDS; do
+            t=$(get_field "$scenario_id" "track")
+            [ "$t" = "$track_num" ] || continue
+
+            roadmap=$(get_field "$scenario_id" "roadmap_issue")
+            patterns_file="$EXPECTED_DIR/${scenario_id}.patterns"
+            [ -f "$patterns_file" ] || continue
+
+            echo "  Scenario: $scenario_id"
+            while IFS= read -r pattern || [ -n "$pattern" ]; do
+                [ -z "$pattern" ] && continue
+                if grep -qF "$pattern" "$REPORT" 2>/dev/null; then
+                    echo "    ✓ \"$pattern\""
+                    ((GUIDED_PASS++)) || true
+                else
+                    if [ -n "$roadmap" ] && [ "$roadmap" != "None" ] && [ "$roadmap" != "" ]; then
+                        echo "    ○ \"$pattern\" (expected fail — roadmap #$roadmap)"
+                        ((GUIDED_EXPECTED++)) || true
+                    else
+                        echo "    ✗ \"$pattern\" MISS"
+                        ((GUIDED_FAIL++)) || true
+                    fi
+                fi
+            done < "$patterns_file"
+        done
+
+        echo ""
+        echo "  Press ENTER to continue..."
+        read -r _
+        ((cat_num++)) || true
+    done
+
+    echo ""
+    echo "═══════════════════════════════════════════════════"
+    echo "  GUIDED SUMMARY"
+    echo "═══════════════════════════════════════════════════"
+    echo "  Assertions: $GUIDED_PASS passed, $GUIDED_FAIL failed, $GUIDED_EXPECTED expected fail"
+    echo ""
+    echo "  Press ENTER to clean up."
+    read -r _
+    exit 0
+fi
+
 # ── Main loop ─────────────────────────────────────────────────────────────────
 
-SCENARIO_IDS=$(get_scenario_ids)
-for scenario_id in $SCENARIO_IDS; do
+# ── Regression mode ──────────────────────────────────────────────────────────
+for scenario_id in $SELECTED_IDS; do
     run_scenario "$scenario_id" || true
 done
 
@@ -380,7 +632,7 @@ echo "  SUMMARY"
 echo "============================================================"
 printf "  %-30s  %s\n" "SCENARIO" "RESULT"
 printf "  %-30s  %s\n" "--------" "------"
-for id in $(get_scenario_ids); do
+for id in $SELECTED_IDS; do
     result="${RESULTS[$id]:-NOT RUN}"
     printf "  %-30s  %s\n" "$id" "$result"
 done

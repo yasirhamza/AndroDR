@@ -19,8 +19,17 @@ fun SeverityChip(level: String, active: Boolean = true) {
     val color = if (active) severityColor else Color(0xFF888888)
     SuggestionChip(
         onClick = {},
-        label = { Text(text = level.uppercase(), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold) },
-        colors = SuggestionChipDefaults.suggestionChipColors(containerColor = color.copy(alpha = 0.2f), labelColor = color)
+        label = {
+            Text(
+                text = level.uppercase(),
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.Bold
+            )
+        },
+        colors = SuggestionChipDefaults.suggestionChipColors(
+            containerColor = color.copy(alpha = 0.2f),
+            labelColor = color
+        )
     )
 }
 

@@ -5,6 +5,7 @@ import android.content.Context
 import android.util.Log
 import com.androdr.data.model.AppTelemetry
 import com.androdr.data.model.DeviceTelemetry
+import com.androdr.data.model.DnsEvent
 import com.androdr.data.model.FileArtifactTelemetry
 import com.androdr.data.model.ProcessTelemetry
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -78,6 +79,11 @@ class SigmaRuleEngine @Inject constructor(
     fun evaluateProcesses(telemetry: List<ProcessTelemetry>): List<Finding> {
         val records = telemetry.map { it.toFieldMap() }
         return SigmaRuleEvaluator.evaluate(rules, records, "process_monitor", iocLookups, evidenceProviders)
+    }
+
+    fun evaluateDns(events: List<DnsEvent>): List<Finding> {
+        val records = events.map { it.toFieldMap() }
+        return SigmaRuleEvaluator.evaluate(rules, records, "dns_monitor", iocLookups, evidenceProviders)
     }
 
     fun evaluateFiles(telemetry: List<FileArtifactTelemetry>): List<Finding> {

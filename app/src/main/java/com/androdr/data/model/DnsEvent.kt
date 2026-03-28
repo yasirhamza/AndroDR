@@ -20,4 +20,12 @@ data class DnsEvent(
      */
     val isBlocked: Boolean,
     val reason: String?
-)
+) {
+    fun toFieldMap(): Map<String, Any?> = mapOf(
+        "domain" to domain,
+        "app_uid" to appUid,
+        "source_package" to appName,
+        "is_blocked" to isBlocked,
+        "reason" to reason
+    )
+}

@@ -1,10 +1,43 @@
-version: 2
+version: 3
+
+profiles:
+  pegasus:
+    description: "NSO Group Pegasus mercenary spyware"
+    scenarios: [mercenary_package_name, cve_campaign_pegasus, surveillance_permissions, system_name_disguise]
+
+  predator:
+    description: "Intellexa Predator mercenary spyware"
+    scenarios: [cve_predator_campaign, surveillance_permissions]
+
+  graphite:
+    description: "Paragon Graphite mercenary spyware"
+    scenarios: [cve_graphite_campaign, surveillance_permissions]
+
+  journalist:
+    description: "Threat model for journalists/activists"
+    profiles: [pegasus, predator, graphite]
+    scenarios: [thetruthspy_stalkerware, andrmonitor_stalkerware, tispy_stalkerware, cocospy_stalkerware, mspy_stalkerware, eyezy_stalkerware, mercenary_*]
+
+  banking:
+    description: "Banking trojan threat landscape"
+    scenarios: [cerberus_banker, anubis_banker, brata_rat, hydra_dropper, vultur_rat, sharkbot_banker, ermac_stealer, godfather_banker, hookbot_rat]
+
+  stalkerware:
+    description: "Commercial surveillance / stalkerware"
+    scenarios: [thetruthspy_stalkerware, andrmonitor_stalkerware, tispy_stalkerware, cocospy_stalkerware, mspy_stalkerware, eyezy_stalkerware]
+
+  full:
+    description: "All scenarios"
+    scenarios: ["*"]
 
 scenarios:
 
   # ── Track 1: Commodity malware ─────────────────────────────────────────
   - id: cerberus_banker
     track: 1
+    risk: medium
+    technique: T1429
+    tactic: collection
     description: "Cerberus Android banking trojan"
     source: malwarebazaar
     sha256: "8beae1f6b21cec17eed82fb7af25e1782d5b7bf10fd22369603313f1b1a5e5e4"
@@ -15,6 +48,9 @@ scenarios:
 
   - id: spynote_rat
     track: 1
+    risk: medium
+    technique: T1429
+    tactic: collection
     description: "SpyNote remote access trojan"
     source: malwarebazaar
     sha256: "17372844a0ecb548c70275a5e06f522a2445f2781410a246130757e0b7bc5396"
@@ -25,6 +61,9 @@ scenarios:
 
   - id: anubis_banker
     track: 1
+    risk: medium
+    technique: T1429
+    tactic: collection
     description: "Anubis Android banking trojan with SMS stealing"
     source: malwarebazaar
     sha256: "392272ef515d2f60f2c058675d637bf63a265800b8e4613ed9f72eeb8ebb323d"
@@ -35,6 +74,9 @@ scenarios:
 
   - id: brata_rat
     track: 1
+    risk: medium
+    technique: T1429
+    tactic: collection
     description: "BRATA Android remote access trojan"
     source: malwarebazaar
     sha256: "f690e30b6ee25c153effc5620fd7ec61481a449a127b54a67c7afc4c13d7917f"
@@ -45,6 +87,9 @@ scenarios:
 
   - id: hydra_dropper
     track: 1
+    risk: medium
+    technique: T1429
+    tactic: collection
     description: "Hydra Android banking trojan dropper"
     source: malwarebazaar
     sha256: "c565f4b9b3c6bb095c6ce62ab02c5cc8a84502231f4facdddb6f3d7af2321b5e"
@@ -55,6 +100,9 @@ scenarios:
 
   - id: vultur_rat
     track: 1
+    risk: medium
+    technique: T1429
+    tactic: collection
     description: "Vultur Android RAT with screen recording"
     source: malwarebazaar
     sha256: "f4d7e9ec4eda034c29b8d73d479084658858f56e67909c2ffedf9223d7ca9bd2"
@@ -63,9 +111,60 @@ scenarios:
     expected_patterns:
       - "not installed from a trusted app store"
 
+  - id: sharkbot_banker
+    track: 1
+    risk: high
+    technique: T1429
+    tactic: collection
+    description: "SharkBot ATS-based auto-transfer banking trojan"
+    source: malwarebazaar
+    sha256: "<pin>"
+    tags: [android, SharkBot, banker]
+    expected_patterns:
+      - "not installed from a trusted app store"
+
+  - id: ermac_stealer
+    track: 1
+    risk: high
+    technique: T1417
+    tactic: credential-access
+    description: "Ermac 2.0 credential overlay stealer"
+    source: malwarebazaar
+    sha256: "<pin>"
+    tags: [android, Ermac, stealer]
+    expected_patterns:
+      - "not installed from a trusted app store"
+
+  - id: godfather_banker
+    track: 1
+    risk: medium
+    technique: T1429
+    tactic: collection
+    description: "GodFather banking trojan"
+    source: malwarebazaar
+    sha256: "<pin>"
+    tags: [android, GodFather, banker]
+    expected_patterns:
+      - "not installed from a trusted app store"
+
+  - id: hookbot_rat
+    track: 1
+    risk: medium
+    technique: T1512
+    tactic: collection
+    description: "Hook screen streaming RAT"
+    source: malwarebazaar
+    sha256: "<pin>"
+    tags: [android, Hook, rat]
+    expected_patterns:
+      - "not installed from a trusted app store"
+
   # ── Track 2: Stalkerware ───────────────────────────────────────────────
   - id: thetruthspy_stalkerware
     track: 2
+    risk: high
+    technique: T1429
+    tactic: collection
     description: "TheTruthSpy commercial stalkerware"
     source: malwarebazaar
     sha256: "92c3337b3d74f2aab8f0ca3a6f045719a3301519810d535856ff11dd743b523c"
@@ -77,6 +176,9 @@ scenarios:
 
   - id: andrmonitor_stalkerware
     track: 2
+    risk: high
+    technique: T1429
+    tactic: collection
     description: "AndrMonitor commercial stalkerware"
     source: malwarebazaar
     sha256: "4b4c1064e3994b59904749fb706c8dfdcc6a50c203694bb45a6d1b4ce11795b3"
@@ -88,6 +190,9 @@ scenarios:
 
   - id: tispy_stalkerware
     track: 2
+    risk: high
+    technique: T1429
+    tactic: collection
     description: "TiSpy commercial stalkerware"
     source: malwarebazaar
     sha256: "4bcb6951c5f78c646c19771ff58c2ea749e734ae3fa916f130aeee8e083ca2e4"
@@ -97,9 +202,51 @@ scenarios:
       - "surveillance capabilities"
       - "not installed from a trusted app store"
 
+  - id: cocospy_stalkerware
+    track: 2
+    risk: high
+    technique: T1430
+    tactic: collection
+    description: "Cocospy commercial stalkerware (location + calls)"
+    source: malwarebazaar
+    sha256: "<pin>"
+    tags: [android, Cocospy, stalkerware]
+    expected_patterns:
+      - "surveillance capabilities"
+      - "not installed from a trusted app store"
+
+  - id: mspy_stalkerware
+    track: 2
+    risk: high
+    technique: T1429
+    tactic: collection
+    description: "mSpy comprehensive monitoring stalkerware"
+    source: malwarebazaar
+    sha256: "<pin>"
+    tags: [android, mSpy, stalkerware]
+    expected_patterns:
+      - "surveillance capabilities"
+      - "not installed from a trusted app store"
+
+  - id: eyezy_stalkerware
+    track: 2
+    risk: medium
+    technique: T1636
+    tactic: collection
+    description: "Eyezy social media monitoring stalkerware"
+    source: malwarebazaar
+    sha256: "<pin>"
+    tags: [android, Eyezy, stalkerware]
+    expected_patterns:
+      - "surveillance capabilities"
+      - "not installed from a trusted app store"
+
   # ── Track 3: Mercenary spyware simulation ──────────────────────────────
   - id: mercenary_package_name
     track: 3
+    risk: high
+    technique: T1418
+    tactic: discovery
     description: "App using known Pegasus disguise package name (com.android.bsp)"
     source: fixture
     fixture: fixtures/mercenary/spyware-package-name.apk
@@ -110,39 +257,48 @@ scenarios:
 
   - id: mercenary_cert_hash
     track: 3
+    risk: high
+    technique: T1628
+    tactic: defense-evasion
     description: "App signed with cert hash seeded into IOC DB"
     source: fixture
     fixture: fixtures/mercenary/cert-hash-ioc.apk
     sha256: "342b67f0f9dab0358a2933ff1c1a78710653e7509bf07a31a65ddd8318aff935"
     attack: [T1628]
     expected_patterns:
-      - "Malicious Certificate"
-    roadmap_issue: 7
+      - "known threat developer"
 
   - id: mercenary_accessibility
     track: 3
+    risk: high
+    technique: T1626
+    tactic: persistence
     description: "App registering AccessibilityService"
     source: fixture
     fixture: fixtures/mercenary/accessibility-abuse.apk
     sha256: "ab643d7778c6a1e2ccdde9fcb623e9929bd0e5dd4e32e4a029ec97f5d69d31a1"
     attack: [T1626]
     expected_patterns:
-      - "Accessibility Abuse"
-    roadmap_issue: 10
+      - "can read your screen content"
 
   - id: mercenary_device_admin
     track: 3
+    risk: high
+    technique: T1401
+    tactic: persistence
     description: "App registering DeviceAdminReceiver"
     source: fixture
     fixture: fixtures/mercenary/device-admin-abuse.apk
     sha256: "e1a4cf8bacfdf209c03d5986dae5f1ac7b9d3f4290d00dc3da2e2d3a8ef861df"
     attack: [T1401]
     expected_patterns:
-      - "Device Admin Abuse"
-    roadmap_issue: 10
+      - "Device Admin Apps and remove this app"
 
   - id: surveillance_permissions
     track: 3
+    risk: high
+    technique: T1429
+    tactic: collection
     description: "Sideloaded app with full surveillance permission cluster"
     source: fixture
     fixture: fixtures/mercenary/surveillance-permissions.apk
@@ -154,6 +310,9 @@ scenarios:
 
   - id: mercenary_file_artifacts
     track: 3
+    risk: medium
+    technique: T1533
+    tactic: collection
     description: "Known spyware file paths injected via ADB"
     source: adb_inject
     inject:
@@ -170,6 +329,9 @@ scenarios:
 
   - id: mercenary_dns_c2
     track: 3
+    risk: medium
+    technique: T1437
+    tactic: command-and-control
     description: "DNS query to known Predator C2 domain"
     source: adb_inject
     inject:
@@ -182,6 +344,9 @@ scenarios:
 
   - id: mercenary_ip_c2
     track: 3
+    risk: medium
+    technique: T1437
+    tactic: command-and-control
     description: "Direct TCP connection to known C2 IP"
     source: adb_inject
     inject:
@@ -192,9 +357,66 @@ scenarios:
       - "198.199.119.161"
     roadmap_issue: 6
 
+  - id: system_name_disguise
+    track: 3
+    risk: high
+    technique: T1036
+    tactic: defense-evasion
+    description: "App masquerading as System Update"
+    source: fixture
+    fixture: fixtures/mercenary/system-name-disguise.apk
+    sha256: "b2c2a396b08f3589877813d410b3c92e3ccf05965e01e8ade4e08a508308ba5d"
+    tags: [android, impersonation, system]
+    expected_patterns:
+      - "system-impersonating name"
+
+  - id: impersonation_play_store
+    track: 3
+    risk: high
+    technique: T1036
+    tactic: defense-evasion
+    description: "App impersonating Google Play Services"
+    source: fixture
+    fixture: fixtures/mercenary/impersonation-play-store.apk
+    sha256: "5c3994e5f205e6471eca1e4dbceb32c96ea42694bde1a8d9b6af12a83f153042"
+    tags: [android, impersonation, play-store]
+    expected_patterns:
+      - "system-impersonating name"
+
+  - id: multi_abuse_combo
+    track: 3
+    risk: high
+    technique: T1626
+    tactic: persistence
+    description: "App with accessibility + device admin + surveillance permissions"
+    source: fixture
+    fixture: fixtures/mercenary/multi-abuse-combo.apk
+    sha256: "fb74f35dde8dea0b6721d208fb111467336f9da79fedd7510eab30ec94d5f252"
+    tags: [android, multi-abuse, stalkerware-pattern]
+    expected_patterns:
+      - "surveillance capabilities"
+      - "accessibility"
+      - "device administrator"
+
+  - id: firmware_implant_sim
+    track: 3
+    risk: medium
+    technique: T1542
+    tactic: persistence
+    description: "App mimicking system partition install path"
+    source: fixture
+    fixture: fixtures/mercenary/firmware-implant-sim.apk
+    sha256: "e269cc870f05ad795b1b327f8f1f2f103af41215537d1be16f106471a38961fc"
+    tags: [android, firmware, implant]
+    expected_patterns:
+      - "system-impersonating name"
+
   # ── Track 4: CVE vulnerability detection (NEW — issue #25) ────────────
   - id: cve_unpatched_detection
     track: 4
+    risk: high
+    technique: T1404
+    tactic: initial-access
     description: "Device with stale patch level triggers CVE finding with evidence"
     source: adb_inject
     inject: []
@@ -208,6 +430,9 @@ scenarios:
 
   - id: cve_campaign_pegasus
     track: 4
+    risk: high
+    technique: T1404
+    tactic: initial-access
     description: "Pegasus campaign rule fires when device has matching unpatched CVEs"
     source: adb_inject
     inject: []
@@ -223,6 +448,9 @@ scenarios:
 
   - id: cve_settings_display
     track: 4
+    risk: high
+    technique: T1404
+    tactic: initial-access
     description: "Settings threat DB shows CVE count after update"
     source: adb_inject
     inject:
@@ -233,3 +461,36 @@ scenarios:
       # After a scan, the report header shows patch level
       - "Patch"
       - "OVERALL RISK"
+
+  - id: cve_stale_patch
+    track: 4
+    risk: high
+    technique: T1404
+    tactic: initial-access
+    description: "Device with patch level >90 days old triggers stale finding"
+    source: adb_inject
+    inject: []
+    expected_patterns:
+      - "Security Patch Outdated"
+
+  - id: cve_predator_campaign
+    track: 4
+    risk: high
+    technique: T1404
+    tactic: initial-access
+    description: "Predator campaign rule fires for matching unpatched CVEs"
+    source: adb_inject
+    inject: []
+    expected_patterns:
+      - "Predator"
+
+  - id: cve_graphite_campaign
+    track: 4
+    risk: high
+    technique: T1404
+    tactic: initial-access
+    description: "Graphite campaign rule fires for matching unpatched CVEs"
+    source: adb_inject
+    inject: []
+    expected_patterns:
+      - "Graphite"
