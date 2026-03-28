@@ -2,6 +2,7 @@ package com.androdr.scanner
 
 import android.content.Context
 import android.content.Intent
+import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
 import android.util.Log
 import com.androdr.data.model.ReceiverTelemetry
@@ -40,7 +41,7 @@ class ReceiverAuditScanner @Inject constructor(
                 val ai = ri.activityInfo ?: continue
                 val key = ai.packageName to action
                 if (!seen.add(key)) continue
-                val isSystem = OemPackageHelper.isSystemOrOem(ai.packageName, ai.applicationInfo)
+                val isSystem = ai.applicationInfo?.flags?.and(ApplicationInfo.FLAG_SYSTEM) != 0
                 results.add(ReceiverTelemetry(
                     packageName = ai.packageName,
                     intentAction = action,
