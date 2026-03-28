@@ -28,6 +28,7 @@ class ReceiverAuditScanner @Inject constructor(
     suspend fun collectTelemetry(): List<ReceiverTelemetry> = withContext(Dispatchers.IO) {
         val pm = context.packageManager
         val results = mutableListOf<ReceiverTelemetry>()
+        val seen = mutableSetOf<Pair<String, String>>()
 
         for (action in sensitiveIntents) {
             val intent = Intent(action)
@@ -35,6 +36,8 @@ class ReceiverAuditScanner @Inject constructor(
             val receivers = pm.queryBroadcastReceivers(intent, PackageManager.GET_META_DATA)
             for (ri in receivers) {
                 val ai = ri.activityInfo ?: continue
+                val key = ai.packageName to action
+                if (!seen.add(key)) continue
                 val isSystem = ai.applicationInfo?.flags?.and(ApplicationInfo.FLAG_SYSTEM) != 0
                 results.add(ReceiverTelemetry(
                     packageName = ai.packageName,

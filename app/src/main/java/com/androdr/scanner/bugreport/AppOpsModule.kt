@@ -80,9 +80,12 @@ class AppOpsModule @Inject constructor() : BugreportModule {
                         ))
                     }
 
-                    if (opName in dangerousOps) {
+                    if (opName in dangerousOps && opName !in riskyOps) {
                         val opStart = opMatch.range.last
-                        val accessMatch = accessLineRegex.find(pkgBlock, opStart)
+                        val nextOp = opLineRegex.find(pkgBlock, opStart + 1)
+                        val opEnd = nextOp?.range?.first ?: pkgBlock.length
+                        val opBlock = pkgBlock.substring(opStart, opEnd)
+                        val accessMatch = accessLineRegex.find(opBlock)
                         timeline.add(TimelineEvent(
                             timestamp = -1,
                             source = "appops",
@@ -104,7 +107,7 @@ class AppOpsModule @Inject constructor() : BugreportModule {
         if (matches.isEmpty()) return emptyList()
 
         return matches.mapIndexed { index, match ->
-            val uid = match.groupValues[1].toIntOrNull() ?: 0
+            val uid = match.groupValues[1].toIntOrNull() ?: 99999
             val start = match.range.first
             val end = if (index + 1 < matches.size) matches[index + 1].range.first else text.length
             uid to text.substring(start, end)

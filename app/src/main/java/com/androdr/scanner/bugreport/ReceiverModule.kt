@@ -45,14 +45,10 @@ class ReceiverModule @Inject constructor() : BugreportModule {
             val intentStart = sectionText.indexOf("$intent:", nonDataStart)
             if (intentStart < 0) continue
 
-            // Find end: next sensitive intent header or next major section
-            val nextIntentStarts = sensitiveIntents
-                .filter { it != intent }
-                .mapNotNull { other ->
-                    val idx = sectionText.indexOf("$other:", intentStart + intent.length)
-                    if (idx > 0) idx else null
-                }
-            val blockEnd = if (nextIntentStarts.isNotEmpty()) nextIntentStarts.min() else sectionText.length
+            // Find next intent header (any intent, not just sensitive ones)
+            val nextHeaderRegex = Regex("""^\s{18,}\S+.*:$""", RegexOption.MULTILINE)
+            val nextHeader = nextHeaderRegex.find(sectionText, intentStart + intent.length + 1)
+            val blockEnd = nextHeader?.range?.first ?: sectionText.length
             val block = sectionText.substring(intentStart, blockEnd)
 
             receiverEntryRegex.findAll(block).forEach { match ->

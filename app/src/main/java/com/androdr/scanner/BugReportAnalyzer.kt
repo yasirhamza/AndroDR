@@ -2,6 +2,8 @@ package com.androdr.scanner
 
 import android.content.Context
 import android.net.Uri
+import android.util.Log
+import com.androdr.data.model.TimelineEvent
 import com.androdr.ioc.IocResolver
 import com.androdr.scanner.bugreport.BugreportModule
 import com.androdr.scanner.bugreport.DumpsysSectionParser
@@ -39,6 +41,7 @@ class BugReportAnalyzer @Inject constructor(
     // IOException subclass; errors are converted to BugReportFinding entries with ERROR severity.
     suspend fun analyze(bugReportUri: Uri): List<BugReportFinding> = withContext(Dispatchers.IO) {
         val findings = mutableListOf<BugReportFinding>()
+        val timelineEvents = mutableListOf<TimelineEvent>()
 
         // Separate modules into section-targeted vs raw-entry
         val sectionModules = modules.filter { it.targetSections != null }
@@ -71,6 +74,7 @@ class BugReportAnalyzer @Inject constructor(
                                     val sectionText = sections[sectionName] ?: continue
                                     val result = mod.analyze(sectionText, iocResolver)
                                     findings.addAll(result.findings)
+                                    timelineEvents.addAll(result.timeline)
                                 }
                             }
                             break // only one dumpstate entry expected
@@ -117,6 +121,7 @@ class BugReportAnalyzer @Inject constructor(
                     for (mod in rawModules) {
                         val result = mod.analyzeRaw(entrySequence, iocResolver)
                         findings.addAll(result.findings)
+                        timelineEvents.addAll(result.timeline)
                     }
                 }
             } catch (e: Exception) {
@@ -130,6 +135,7 @@ class BugReportAnalyzer @Inject constructor(
             }
         }
 
+        Log.d("BugReportAnalyzer", "Collected ${timelineEvents.size} timeline events")
         findings
     }
 
