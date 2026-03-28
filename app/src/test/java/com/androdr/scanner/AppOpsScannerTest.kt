@@ -2,6 +2,7 @@ package com.androdr.scanner
 
 import android.app.AppOpsManager
 import android.content.Context
+import android.content.pm.PackageManager
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
@@ -19,10 +20,12 @@ class AppOpsScannerTest {
     }
 
     @Test
-    fun `returns empty when no packages have ops`() = runTest {
+    fun `returns empty when no packages installed`() = runTest {
         val mockOps: AppOpsManager = mockk(relaxed = true)
+        val mockPm: PackageManager = mockk(relaxed = true)
         every { mockContext.getSystemService(Context.APP_OPS_SERVICE) } returns mockOps
-        every { mockOps.getPackagesForOps(any()) } returns null
+        every { mockContext.packageManager } returns mockPm
+        every { mockPm.getInstalledPackages(any<Int>()) } returns emptyList()
         assertTrue(AppOpsScanner(mockContext).collectTelemetry().isEmpty())
     }
 }
