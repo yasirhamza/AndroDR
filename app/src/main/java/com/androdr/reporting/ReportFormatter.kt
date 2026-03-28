@@ -61,7 +61,7 @@ object ReportFormatter {
 
         // -- App risks ------------------------------------------------------------
         section("APP RISKS")
-        val appRisks = scan.appRisks.filter { it.triggered }
+        val appRisks = scan.appRisks.filter { it.triggered && it.level.lowercase() != "informational" }
         if (appRisks.isEmpty()) {
             appendLine("  No high-risk applications detected.")
         } else {
