@@ -2,7 +2,6 @@ package com.androdr.data.db
 
 import com.androdr.data.model.DnsEvent
 import com.androdr.data.model.ScanResult
-import com.androdr.sigma.Evidence
 import com.androdr.sigma.Finding
 import com.androdr.sigma.FindingCategory
 import org.junit.Assert.assertEquals
@@ -59,7 +58,7 @@ class TimelineAdapterTest {
         val event = finding.toForensicTimelineEvent(scanResult)
         assertEquals("app_scanner", event.source)
         assertEquals("app_risk", event.category)
-        assertEquals("high", event.severity)
+        assertEquals("HIGH", event.severity)
         assertEquals("androdr-060", event.ruleId)
         assertEquals(5000L, event.scanResultId)
         assertEquals("com.evil.spy", event.packageName)

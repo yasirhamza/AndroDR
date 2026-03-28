@@ -40,18 +40,15 @@ interface ForensicTimelineEventDao {
     @Query("SELECT DISTINCT packageName FROM forensic_timeline WHERE packageName != '' ORDER BY packageName")
     suspend fun getDistinctPackages(): List<String>
 
-    @Query("SELECT * FROM forensic_timeline ORDER BY timestamp ASC")
+    @Query("SELECT * FROM forensic_timeline ORDER BY timestamp ASC LIMIT 10000")
     suspend fun getAllForExport(): List<ForensicTimelineEvent>
 
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    @Insert(onConflict = OnConflictStrategy.ABORT)
     suspend fun insertAll(events: List<ForensicTimelineEvent>)
 
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    @Insert(onConflict = OnConflictStrategy.ABORT)
     suspend fun insert(event: ForensicTimelineEvent)
 
     @Query("DELETE FROM forensic_timeline WHERE createdAt < :cutoff")
     suspend fun deleteOlderThan(cutoff: Long)
-
-    @Query("SELECT COUNT(*) FROM forensic_timeline")
-    suspend fun count(): Int
 }

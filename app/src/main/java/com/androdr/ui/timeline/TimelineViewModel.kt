@@ -118,10 +118,10 @@ class TimelineViewModel @Inject constructor(
                     val ts = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
                     val file = File(reportsDir, "androdr_timeline_$ts.$extension")
                     file.writeText(text, Charsets.UTF_8)
-                    FileProvider.getUriForFile(
-                        appContext, "${appContext.packageName}.fileprovider", file
-                    )
+                    FileProvider.getUriForFile(appContext, "${appContext.packageName}.fileprovider", file)
                 }
+            } catch (e: Exception) {
+                android.util.Log.e("TimelineViewModel", "Export failed: ${e.message}", e)
             } finally {
                 _exporting.value = false
             }
