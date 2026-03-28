@@ -16,6 +16,7 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 @Singleton
+@Suppress("TooManyFunctions") // Each evaluate* method maps a telemetry type to the rule evaluator
 class SigmaRuleEngine @Inject constructor(
     @ApplicationContext private val context: Context
 ) {
