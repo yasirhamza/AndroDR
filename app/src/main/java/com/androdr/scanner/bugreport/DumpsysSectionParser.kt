@@ -3,7 +3,6 @@ package com.androdr.scanner.bugreport
 import java.io.BufferedReader
 import java.io.InputStream
 import java.io.InputStreamReader
-import java.util.zip.ZipInputStream
 
 class DumpsysSectionParser {
 
@@ -73,17 +72,4 @@ class DumpsysSectionParser {
         return if (inSection) sb.toString() else null
     }
 
-    fun iterateZipEntries(
-        zipStream: ZipInputStream,
-        namePattern: Regex
-    ): Sequence<Pair<String, InputStream>> = sequence {
-        var entry = try { zipStream.nextEntry } catch (_: Exception) { null }
-        while (entry != null) {
-            if (!entry.isDirectory && namePattern.containsMatchIn(entry.name)) {
-                yield(entry.name to (zipStream as InputStream))
-            }
-            try { zipStream.closeEntry() } catch (_: Exception) { }
-            entry = try { zipStream.nextEntry } catch (_: Exception) { null }
-        }
-    }
 }
