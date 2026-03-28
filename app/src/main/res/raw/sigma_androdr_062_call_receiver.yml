@@ -16,7 +16,9 @@ detection:
     selection_outgoing_call:
         intent_action: "android.intent.action.NEW_OUTGOING_CALL"
         is_system_app: false
-    condition: selection_phone_state or selection_outgoing_call
+    filter_known_good:
+        package_name|ioc_lookup: known_good_app_db
+    condition: selection_phone_state and not filter_known_good or selection_outgoing_call and not filter_known_good
 level: critical
 display:
     category: app_risk
