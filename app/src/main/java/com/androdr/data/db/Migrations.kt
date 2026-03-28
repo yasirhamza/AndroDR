@@ -145,9 +145,13 @@ val MIGRATION_6_7 = object : Migration(6, 7) {
                 createdAt           INTEGER NOT NULL
             )
         """.trimIndent())
-        database.execSQL("CREATE INDEX IF NOT EXISTS index_forensic_timeline_timestamp ON forensic_timeline(timestamp)")
-        database.execSQL("CREATE INDEX IF NOT EXISTS index_forensic_timeline_severity ON forensic_timeline(severity)")
-        database.execSQL("CREATE INDEX IF NOT EXISTS index_forensic_timeline_packageName ON forensic_timeline(packageName)")
-        database.execSQL("CREATE INDEX IF NOT EXISTS index_forensic_timeline_source ON forensic_timeline(source)")
+        @Suppress("MaxLineLength") // Index names must match Room's auto-generated convention
+        val indexes = listOf(
+            "CREATE INDEX IF NOT EXISTS index_forensic_timeline_timestamp ON forensic_timeline(timestamp)",
+            "CREATE INDEX IF NOT EXISTS index_forensic_timeline_severity ON forensic_timeline(severity)",
+            "CREATE INDEX IF NOT EXISTS index_forensic_timeline_packageName ON forensic_timeline(packageName)",
+            "CREATE INDEX IF NOT EXISTS index_forensic_timeline_source ON forensic_timeline(source)"
+        )
+        indexes.forEach { database.execSQL(it) }
     }
 }
