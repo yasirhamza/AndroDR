@@ -6,8 +6,10 @@ import com.androdr.scanner.BugReportAnalyzer.BugReportFinding
 import java.io.InputStream
 
 data class ModuleResult(
-    val findings: List<BugReportFinding>,
-    val timeline: List<TimelineEvent>
+    val telemetry: List<Map<String, Any?>> = emptyList(),
+    val telemetryService: String = "",
+    val legacyFindings: List<BugReportFinding> = emptyList(),
+    val timeline: List<TimelineEvent> = emptyList()
 )
 
 interface BugreportModule {
@@ -18,11 +20,11 @@ interface BugreportModule {
     suspend fun analyze(
         sectionText: String,
         iocResolver: IocResolver
-    ): ModuleResult = ModuleResult(emptyList(), emptyList())
+    ): ModuleResult = ModuleResult()
 
     /** Analyze raw ZIP entries. Override for modules with targetSections == null. */
     suspend fun analyzeRaw(
         entries: Sequence<Pair<String, InputStream>>,
         iocResolver: IocResolver
-    ): ModuleResult = ModuleResult(emptyList(), emptyList())
+    ): ModuleResult = ModuleResult()
 }

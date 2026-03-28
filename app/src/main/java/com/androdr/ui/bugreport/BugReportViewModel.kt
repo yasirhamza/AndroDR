@@ -1,27 +1,53 @@
 package com.androdr.ui.bugreport
 
+import android.content.Context
 import android.net.Uri
+import androidx.core.content.FileProvider
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.androdr.data.model.TimelineEvent
+import com.androdr.reporting.TimelineFormatter
 import com.androdr.scanner.BugReportAnalyzer
 import com.androdr.scanner.ScanOrchestrator
+import com.androdr.sigma.Finding
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.io.File
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import javax.inject.Inject
 
 @HiltViewModel
 class BugReportViewModel @Inject constructor(
+    @ApplicationContext private val appContext: Context,
     private val orchestrator: ScanOrchestrator
 ) : ViewModel() {
 
-    private val _findings = MutableStateFlow<List<BugReportAnalyzer.BugReportFinding>>(emptyList())
-    val findings: StateFlow<List<BugReportAnalyzer.BugReportFinding>> = _findings.asStateFlow()
+    private val _findings = MutableStateFlow<List<Finding>>(emptyList())
+    val findings: StateFlow<List<Finding>> = _findings.asStateFlow()
+
+    private val _legacyFindings = MutableStateFlow<List<BugReportAnalyzer.BugReportFinding>>(emptyList())
+    val legacyFindings: StateFlow<List<BugReportAnalyzer.BugReportFinding>> = _legacyFindings.asStateFlow()
+
+    private val _timeline = MutableStateFlow<List<TimelineEvent>>(emptyList())
+    val timeline: StateFlow<List<TimelineEvent>> = _timeline.asStateFlow()
 
     private val _isAnalyzing = MutableStateFlow(false)
     val isAnalyzing: StateFlow<Boolean> = _isAnalyzing.asStateFlow()
+
+    /** Emits a [Uri] when a report is ready to share; null when idle or after consumption. */
+    private val _shareUri = MutableStateFlow<Uri?>(null)
+    val shareUri: StateFlow<Uri?> = _shareUri.asStateFlow()
+
+    private val _exporting = MutableStateFlow(false)
+    val exporting: StateFlow<Boolean> = _exporting.asStateFlow()
 
     /**
      * User-facing instructions for generating a bug report.
@@ -55,17 +81,60 @@ class BugReportViewModel @Inject constructor(
 
     /**
      * Analyzes the bug report zip at the given [uri].
-     * Updates [isAnalyzing] and [findings] reactively.
+     * Updates [isAnalyzing], [findings], [legacyFindings], and [timeline] reactively.
      */
     fun analyzeUri(uri: Uri) {
         viewModelScope.launch {
             _isAnalyzing.value = true
             _findings.value = emptyList()
+            _legacyFindings.value = emptyList()
+            _timeline.value = emptyList()
             try {
-                _findings.value = orchestrator.analyzeBugReport(uri)
+                val result = orchestrator.analyzeBugReport(uri)
+                _findings.value = result.findings
+                _legacyFindings.value = result.legacyFindings
+                _timeline.value = result.timeline
             } finally {
                 _isAnalyzing.value = false
             }
         }
+    }
+
+    /**
+     * Exports the current analysis results (SIGMA findings, legacy findings,
+     * and timeline) to a cached text file and emits its FileProvider URI
+     * via [shareUri] for sharing.
+     */
+    fun exportReport() {
+        if (_exporting.value) return
+        viewModelScope.launch {
+            _exporting.value = true
+            try {
+                val text = TimelineFormatter.formatTimeline(
+                    _timeline.value,
+                    _legacyFindings.value,
+                    _findings.value
+                )
+                _shareUri.value = withContext(Dispatchers.IO) {
+                    val reportsDir = File(appContext.cacheDir, "reports").apply { mkdirs() }
+                    val filenameFmt = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US)
+                    val filename = "androdr_bugreport_${filenameFmt.format(Date())}.txt"
+                    val reportFile = File(reportsDir, filename)
+                    reportFile.writeText(text, Charsets.UTF_8)
+                    FileProvider.getUriForFile(
+                        appContext,
+                        "${appContext.packageName}.fileprovider",
+                        reportFile
+                    )
+                }
+            } finally {
+                _exporting.value = false
+            }
+        }
+    }
+
+    /** Call after the share intent has been launched to reset the URI state. */
+    fun onShareConsumed() {
+        _shareUri.value = null
     }
 }

@@ -1,5 +1,6 @@
 package com.androdr.ui.bugreport
 
+import android.content.Intent
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -23,6 +24,7 @@ import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -32,8 +34,10 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -42,6 +46,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -49,17 +54,38 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.androdr.R
 import com.androdr.scanner.BugReportAnalyzer
+import com.androdr.ui.common.FindingCard
 
 @Suppress("LongMethod") // Bug report screen combines file-picker launch, progress state,
-// empty-state, and findings list; splitting would require threading state through extra wrappers.
+// empty-state, findings list, and export; splitting would require threading state through extra wrappers.
 @Composable
 fun BugReportScreen(
     viewModel: BugReportViewModel = hiltViewModel()
 ) {
     val findings by viewModel.findings.collectAsStateWithLifecycle()
+    val legacyFindings by viewModel.legacyFindings.collectAsStateWithLifecycle()
+    val timeline by viewModel.timeline.collectAsStateWithLifecycle()
     val isAnalyzing by viewModel.isAnalyzing.collectAsStateWithLifecycle()
+    val exporting by viewModel.exporting.collectAsStateWithLifecycle()
+    val shareUri by viewModel.shareUri.collectAsStateWithLifecycle()
+
+    val context = LocalContext.current
 
     var instructionsExpanded by remember { mutableStateOf(false) }
+
+    // Launch share intent when a report URI is ready
+    LaunchedEffect(shareUri) {
+        shareUri?.let { uri ->
+            val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                type = "text/plain"
+                putExtra(Intent.EXTRA_STREAM, uri)
+                putExtra(Intent.EXTRA_SUBJECT, "AndroDR Bug Report Analysis")
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+            context.startActivity(Intent.createChooser(shareIntent, "Share Analysis Report"))
+            viewModel.onShareConsumed()
+        }
+    }
 
     // File picker launcher — filter for zip files
     val filePickerLauncher = rememberLauncherForActivityResult(
@@ -67,6 +93,8 @@ fun BugReportScreen(
     ) { uri: Uri? ->
         uri?.let { viewModel.analyzeUri(it) }
     }
+
+    val hasResults = findings.isNotEmpty() || legacyFindings.isNotEmpty()
 
     Column(modifier = Modifier.fillMaxSize()) {
         LazyColumn(
@@ -174,7 +202,7 @@ fun BugReportScreen(
             }
 
             // Empty state before any analysis
-            if (!isAnalyzing && findings.isEmpty()) {
+            if (!isAnalyzing && !hasResults) {
                 item {
                     Box(
                         modifier = Modifier
@@ -208,17 +236,80 @@ fun BugReportScreen(
             }
 
             // Analysis results
-            if (!isAnalyzing && findings.isNotEmpty()) {
+            if (!isAnalyzing && hasResults) {
+                // Export button
                 item {
-                    Text(
-                        text = "${findings.size} finding(s)",
-                        style = MaterialTheme.typography.labelLarge,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        val totalCount = findings.count { it.triggered } + legacyFindings.size
+                        Text(
+                            text = "$totalCount finding(s)",
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        OutlinedButton(
+                            onClick = { viewModel.exportReport() },
+                            enabled = !exporting
+                        ) {
+                            Icon(
+                                imageVector = Icons.Filled.Share,
+                                contentDescription = stringResource(R.string.report_export_cd),
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(stringResource(R.string.report_export_label))
+                        }
+                    }
                 }
-                items(findings) { finding ->
-                    BugReportFindingCard(finding = finding)
+
+                // SIGMA findings (evaluated by rule engine)
+                val triggeredFindings = findings.filter { it.triggered }
+                if (triggeredFindings.isNotEmpty()) {
+                    item {
+                        Text(
+                            text = "Rule-Based Findings",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                    items(triggeredFindings) { finding ->
+                        FindingCard(finding = finding)
+                    }
+                }
+
+                // Legacy findings (from pattern scanning)
+                if (legacyFindings.isNotEmpty()) {
+                    item {
+                        Text(
+                            text = "Pattern Scan Findings",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                    items(legacyFindings) { finding ->
+                        BugReportFindingCard(finding = finding)
+                    }
+                }
+
+                // Timeline events
+                if (timeline.isNotEmpty()) {
+                    item {
+                        Text(
+                            text = "Timeline (${timeline.size} events)",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                    items(timeline.sortedBy { it.timestamp }) { event ->
+                        TimelineEventCard(event = event)
+                    }
                 }
             }
         }
@@ -278,7 +369,58 @@ private fun BugReportFindingCard(finding: BugReportAnalyzer.BugReportFinding) {
     }
 }
 
-private fun findingIconAndColor(severity: String): Pair<ImageVector, Color> = when (severity) {
+@Composable
+private fun TimelineEventCard(event: com.androdr.data.model.TimelineEvent) {
+    val (icon, color) = findingIconAndColor(event.severity)
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+        )
+    ) {
+        Row(
+            modifier = Modifier.padding(12.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = event.severity,
+                tint = color,
+                modifier = Modifier.size(20.dp)
+            )
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(2.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = event.source,
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        text = event.category,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Text(
+                    text = event.description,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+            }
+        }
+    }
+}
+
+private fun findingIconAndColor(severity: String): Pair<ImageVector, Color> = when (severity.uppercase()) {
     "CRITICAL" -> Pair(Icons.Filled.Error, Color(0xFFCF6679))
     "HIGH" -> Pair(Icons.Filled.Warning, Color(0xFFFF9800))
     "MEDIUM" -> Pair(Icons.Filled.Warning, Color(0xFFFFD600))

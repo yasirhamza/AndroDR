@@ -1,7 +1,6 @@
 package com.androdr.scanner.bugreport
 
 import com.androdr.ioc.IocResolver
-import com.androdr.scanner.BugReportAnalyzer.BugReportFinding
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -33,19 +32,18 @@ class ReceiverModule @Inject constructor() : BugreportModule {
     )
 
     override suspend fun analyze(sectionText: String, iocResolver: IocResolver): ModuleResult {
-        val findings = mutableListOf<BugReportFinding>()
+        val telemetry = mutableListOf<Map<String, Any?>>()
 
         val receiverTableStart = sectionText.indexOf("Receiver Resolver Table:")
-        if (receiverTableStart < 0) return ModuleResult(findings, emptyList())
+        if (receiverTableStart < 0) return ModuleResult(telemetryService = "receiver_audit")
 
         val nonDataStart = sectionText.indexOf("Non-Data Actions:", receiverTableStart)
-        if (nonDataStart < 0) return ModuleResult(findings, emptyList())
+        if (nonDataStart < 0) return ModuleResult(telemetryService = "receiver_audit")
 
         for (intent in sensitiveIntents) {
             val intentStart = sectionText.indexOf("$intent:", nonDataStart)
             if (intentStart < 0) continue
 
-            // Find next intent header (any intent, not just sensitive ones)
             val nextHeaderRegex = Regex("""^\s{18,}\S+.*:$""", RegexOption.MULTILINE)
             val nextHeader = nextHeaderRegex.find(sectionText, intentStart + intent.length + 1)
             val blockEnd = nextHeader?.range?.first ?: sectionText.length
@@ -54,33 +52,20 @@ class ReceiverModule @Inject constructor() : BugreportModule {
             receiverEntryRegex.findAll(block).forEach { match ->
                 val packageName = match.groupValues[1]
                 val componentName = match.groupValues[2]
+                val isSystemApp = systemPackagePrefixes.any { packageName.startsWith(it) }
 
-                val iocHit = iocResolver.isKnownBadPackage(packageName)
-                if (iocHit != null) {
-                    findings.add(BugReportFinding(
-                        severity = iocHit.severity,
-                        category = "ReceiverAbuse",
-                        description = "Known ${iocHit.category} package '$packageName' " +
-                            "(${iocHit.name}) registered for $intent broadcast — " +
-                            iocHit.description
-                    ))
-                    return@forEach
-                }
-
-                if (systemPackagePrefixes.any { packageName.startsWith(it) }) {
-                    return@forEach
-                }
-
-                findings.add(BugReportFinding(
-                    severity = "CRITICAL",
-                    category = "ReceiverAbuse",
-                    description = "Non-system app '$packageName/$componentName' " +
-                        "registered for $intent broadcast — this is a strong " +
-                        "stalkerware indicator"
+                telemetry.add(mapOf(
+                    "package_name" to packageName,
+                    "intent_action" to intent,
+                    "component_name" to componentName,
+                    "is_system_app" to isSystemApp
                 ))
             }
         }
 
-        return ModuleResult(findings = findings, timeline = emptyList())
+        return ModuleResult(
+            telemetry = telemetry,
+            telemetryService = "receiver_audit"
+        )
     }
 }
