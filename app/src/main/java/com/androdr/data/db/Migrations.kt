@@ -116,3 +116,37 @@ val MIGRATION_5_6 = object : Migration(5, 6) {
         database.execSQL("ALTER TABLE ScanResult_new RENAME TO ScanResult")
     }
 }
+
+val MIGRATION_6_7 = object : Migration(6, 7) {
+    override fun migrate(database: SupportSQLiteDatabase) {
+        database.execSQL("""
+            CREATE TABLE IF NOT EXISTS forensic_timeline (
+                id                  INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                timestamp           INTEGER NOT NULL,
+                timestampPrecision  TEXT NOT NULL DEFAULT 'exact',
+                source              TEXT NOT NULL,
+                category            TEXT NOT NULL,
+                description         TEXT NOT NULL,
+                details             TEXT NOT NULL DEFAULT '',
+                severity            TEXT NOT NULL,
+                packageName         TEXT NOT NULL DEFAULT '',
+                appName             TEXT NOT NULL DEFAULT '',
+                processUid          INTEGER NOT NULL DEFAULT -1,
+                iocIndicator        TEXT NOT NULL DEFAULT '',
+                iocType             TEXT NOT NULL DEFAULT '',
+                iocSource           TEXT NOT NULL DEFAULT '',
+                campaignName        TEXT NOT NULL DEFAULT '',
+                correlationId       TEXT NOT NULL DEFAULT '',
+                ruleId              TEXT NOT NULL DEFAULT '',
+                scanResultId        INTEGER NOT NULL DEFAULT -1,
+                attackTechniqueId   TEXT NOT NULL DEFAULT '',
+                isFromBugreport     INTEGER NOT NULL DEFAULT 0,
+                isFromRuntime       INTEGER NOT NULL DEFAULT 0,
+                createdAt           INTEGER NOT NULL
+            )
+        """.trimIndent())
+        database.execSQL("CREATE INDEX IF NOT EXISTS index_forensic_timeline_timestamp ON forensic_timeline(timestamp)")
+        database.execSQL("CREATE INDEX IF NOT EXISTS index_forensic_timeline_severity ON forensic_timeline(severity)")
+        database.execSQL("CREATE INDEX IF NOT EXISTS index_forensic_timeline_packageName ON forensic_timeline(packageName)")
+    }
+}

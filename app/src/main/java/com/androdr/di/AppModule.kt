@@ -16,7 +16,9 @@ import com.androdr.data.db.MIGRATION_2_3
 import com.androdr.data.db.MIGRATION_3_4
 import com.androdr.data.db.MIGRATION_4_5
 import com.androdr.data.db.MIGRATION_5_6
+import com.androdr.data.db.MIGRATION_6_7
 import com.androdr.data.db.CveDao
+import com.androdr.data.db.ForensicTimelineEventDao
 import com.androdr.data.db.ScanResultDao
 import com.androdr.ioc.CertHashIocFeed
 import com.androdr.ioc.DomainIocFeed
@@ -46,7 +48,7 @@ object AppModule {
     @Singleton
     fun provideDatabase(@ApplicationContext ctx: Context): AppDatabase =
         Room.databaseBuilder(ctx, AppDatabase::class.java, "androdr.db")
-            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
+            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7)
             .build()
 
     @Provides
@@ -78,6 +80,10 @@ object AppModule {
 
     @Provides
     fun provideCveDao(db: AppDatabase): CveDao = db.cveDao()
+
+    @Provides
+    fun provideForensicTimelineEventDao(db: AppDatabase): ForensicTimelineEventDao =
+        db.forensicTimelineEventDao()
 
     @Provides
     @Singleton
