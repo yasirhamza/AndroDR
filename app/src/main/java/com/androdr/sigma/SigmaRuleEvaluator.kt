@@ -236,17 +236,35 @@ object SigmaRuleEvaluator {
             return selectionResults[tokens[0]] ?: false
         }
 
-        var result = selectionResults[tokens[0]] ?: false
-        var i = 1
+        // Handle leading "not"
+        var i = 0
+        var negate = false
+        if (tokens[0].lowercase() == "not") {
+            negate = true
+            i = 1
+        }
+        var result = selectionResults[tokens[i]] ?: false
+        if (negate) {
+            result = !result
+            negate = false
+        }
+        i++
         while (i < tokens.size - 1) {
             val operator = tokens[i].lowercase()
-            val operand = selectionResults[tokens[i + 1]] ?: false
+            i++
+            // Handle "not" modifier before operand
+            val nextNegate = if (i < tokens.size && tokens[i].lowercase() == "not") {
+                i++
+                true
+            } else false
+            var operand = selectionResults[tokens.getOrNull(i) ?: ""] ?: false
+            if (nextNegate) operand = !operand
             result = when (operator) {
                 "and" -> result && operand
                 "or" -> result || operand
                 else -> result
             }
-            i += 2
+            i++
         }
 
         return result

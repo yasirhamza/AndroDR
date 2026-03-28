@@ -13,7 +13,9 @@ detection:
     selection:
         is_system_app: false
         is_enabled: true
-    condition: selection
+    filter_known_good:
+        package_name|ioc_lookup: known_good_app_db
+    condition: selection and not filter_known_good
 level: high
 display:
     category: app_risk

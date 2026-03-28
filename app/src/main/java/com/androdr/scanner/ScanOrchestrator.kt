@@ -38,7 +38,8 @@ class ScanOrchestrator @Inject constructor(
     private val iocResolver: IocResolver,
     private val certHashIocResolver: CertHashIocResolver,
     private val domainIocResolver: DomainIocResolver,
-    private val sigmaRuleFeed: SigmaRuleFeed
+    private val sigmaRuleFeed: SigmaRuleFeed,
+    private val knownAppResolver: com.androdr.ioc.KnownAppResolver
 ) {
 
     private var ruleEngineInitialized = false
@@ -48,7 +49,11 @@ class ScanOrchestrator @Inject constructor(
         sigmaRuleEngine.setIocLookups(mapOf(
             "package_ioc_db" to { v -> iocResolver.isKnownBadPackage(v.toString()) != null },
             "cert_hash_ioc_db" to { v -> certHashIocResolver.isKnownBadCert(v.toString()) != null },
-            "domain_ioc_db" to { v -> domainIocResolver.isKnownBadDomain(v.toString()) != null }
+            "domain_ioc_db" to { v -> domainIocResolver.isKnownBadDomain(v.toString()) != null },
+            "known_good_app_db" to { v ->
+                val entry = knownAppResolver.lookup(v.toString())
+                entry != null && entry.category != com.androdr.data.model.KnownAppCategory.USER_APP
+            }
         ))
         sigmaRuleEngine.loadBundledRules()
         // Fetch remote rules in background — non-blocking, failures are silent
