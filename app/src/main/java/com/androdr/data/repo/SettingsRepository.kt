@@ -47,13 +47,14 @@ class SettingsRepository @Inject constructor(
         dataStore.edit { it[KEY_CUSTOM_RULE_URLS] = value }
     }
 
-    @Suppress("TooGenericExceptionCaught", "SwallowedException")
     suspend fun getCustomRuleUrlsList(): List<String> =
         customRuleUrls.first()
             .lines()
             .map { it.trim() }
             .filter { isValidRuleUrl(it) }
 
+    // URL validation uses early returns to reject each invalid condition clearly
+    @Suppress("ReturnCount", "TooGenericExceptionCaught", "SwallowedException")
     private fun isValidRuleUrl(url: String): Boolean {
         if (url.isBlank()) return false
         return try {
@@ -70,6 +71,8 @@ class SettingsRepository @Inject constructor(
         }
     }
 
+    // Checking multiple private/reserved IP ranges requires individual early returns
+    @Suppress("ReturnCount")
     private fun isPrivateOrReservedHost(host: String): Boolean {
         val lower = host.lowercase()
         if (lower == "localhost" || lower == "127.0.0.1" || lower == "::1") return true

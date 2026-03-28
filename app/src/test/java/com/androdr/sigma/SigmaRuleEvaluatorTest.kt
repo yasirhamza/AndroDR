@@ -133,7 +133,12 @@ class SigmaRuleEvaluatorTest {
             selections = mapOf("selection" to SigmaSelection(listOf(
                 SigmaFieldMatcher("adb_enabled", SigmaModifier.EQUALS, listOf(true))
             )))
-        ).copy(display = SigmaDisplay(category = "device_posture", triggeredTitle = "ADB Enabled", safeTitle = "ADB Disabled", evidenceType = "none"))
+        ).copy(display = SigmaDisplay(
+            category = "device_posture",
+            triggeredTitle = "ADB Enabled",
+            safeTitle = "ADB Disabled",
+            evidenceType = "none"
+        ))
         val record = mapOf<String, Any?>("adb_enabled" to false)
         val findings = SigmaRuleEvaluator.evaluate(listOf(rule), listOf(record), "device_auditor")
         assertEquals(1, findings.size)
@@ -149,7 +154,12 @@ class SigmaRuleEvaluatorTest {
             selections = mapOf("selection" to SigmaSelection(listOf(
                 SigmaFieldMatcher("adb_enabled", SigmaModifier.EQUALS, listOf(true))
             )))
-        ).copy(display = SigmaDisplay(category = "device_posture", triggeredTitle = "ADB Enabled", safeTitle = "ADB Disabled", evidenceType = "none"))
+        ).copy(display = SigmaDisplay(
+            category = "device_posture",
+            triggeredTitle = "ADB Enabled",
+            safeTitle = "ADB Disabled",
+            evidenceType = "none"
+        ))
         val record = mapOf<String, Any?>("adb_enabled" to true)
         val findings = SigmaRuleEvaluator.evaluate(listOf(rule), listOf(record), "device_auditor")
         assertEquals(1, findings.size)
@@ -175,7 +185,11 @@ class SigmaRuleEvaluatorTest {
                 SigmaFieldMatcher("unpatched_cve_count", SigmaModifier.GTE, listOf(1))
             ))), level = "critical"
         ).copy(
-            display = SigmaDisplay(category = "device_posture", triggeredTitle = "{count} Unpatched CVEs", evidenceType = "cve_list"),
+            display = SigmaDisplay(
+                category = "device_posture",
+                triggeredTitle = "{count} Unpatched CVEs",
+                evidenceType = "cve_list"
+            ),
             remediation = listOf("Update to {target_patch_level}.")
         )
         var providerCalled = false
@@ -188,7 +202,10 @@ class SigmaRuleEvaluatorTest {
             ))
         })
         val record = mapOf<String, Any?>("unpatched_cve_count" to 5)
-        val findings = SigmaRuleEvaluator.evaluate(listOf(rule), listOf(record), "device_auditor", evidenceProviders = providers)
+        val findings = SigmaRuleEvaluator.evaluate(
+            listOf(rule), listOf(record), "device_auditor",
+            evidenceProviders = providers
+        )
         assertTrue(providerCalled)
         assertEquals(1, findings.size)
         assertEquals("5 Unpatched CVEs", findings[0].title)

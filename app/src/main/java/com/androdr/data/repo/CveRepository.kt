@@ -110,7 +110,8 @@ class CveRepository @Inject constructor(
         }
     }
 
-    @Suppress("TooGenericExceptionCaught")
+    // Parsing function uses early returns for invalid data and nested loops for JSON traversal
+    @Suppress("TooGenericExceptionCaught", "ReturnCount", "NestedBlockDepth", "SwallowedException")
     private fun parseOsvEntry(json: String, now: Long): CveEntity? {
         return try {
             val obj = JSONObject(json)
