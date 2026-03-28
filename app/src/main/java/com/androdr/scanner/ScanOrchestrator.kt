@@ -29,6 +29,9 @@ class ScanOrchestrator @Inject constructor(
     private val deviceAuditor: DeviceAuditor,
     private val processScanner: ProcessScanner,
     private val fileArtifactScanner: FileArtifactScanner,
+    private val accessibilityAuditScanner: AccessibilityAuditScanner,
+    private val receiverAuditScanner: ReceiverAuditScanner,
+    private val appOpsScanner: AppOpsScanner,
     private val bugReportAnalyzer: BugReportAnalyzer,
     private val scanRepository: ScanRepository,
     private val sigmaRuleEngine: SigmaRuleEngine,
@@ -88,11 +91,23 @@ class ScanOrchestrator @Inject constructor(
         val fileTelemetryDeferred = async {
             runCatching { fileArtifactScanner.collectTelemetry() }.getOrDefault(emptyList())
         }
+        val accessibilityTelemetryDeferred = async {
+            runCatching { accessibilityAuditScanner.collectTelemetry() }.getOrDefault(emptyList())
+        }
+        val receiverTelemetryDeferred = async {
+            runCatching { receiverAuditScanner.collectTelemetry() }.getOrDefault(emptyList())
+        }
+        val appOpsTelemetryDeferred = async {
+            runCatching { appOpsScanner.collectTelemetry() }.getOrDefault(emptyList())
+        }
 
         val appTelemetry = appTelemetryDeferred.await()
         val deviceTelemetry = deviceTelemetryDeferred.await()
         val processTelemetry = processTelemetryDeferred.await()
         val fileTelemetry = fileTelemetryDeferred.await()
+        val accessibilityTelemetry = accessibilityTelemetryDeferred.await()
+        val receiverTelemetry = receiverTelemetryDeferred.await()
+        val appOpsTelemetry = appOpsTelemetryDeferred.await()
 
         // Phase 2: SIGMA rule evaluation — all detection via rules
         val allFindings = mutableListOf<Finding>()
@@ -100,6 +115,9 @@ class ScanOrchestrator @Inject constructor(
         allFindings.addAll(sigmaRuleEngine.evaluateDevice(deviceTelemetry))
         allFindings.addAll(sigmaRuleEngine.evaluateProcesses(processTelemetry))
         allFindings.addAll(sigmaRuleEngine.evaluateFiles(fileTelemetry))
+        allFindings.addAll(sigmaRuleEngine.evaluateAccessibility(accessibilityTelemetry))
+        allFindings.addAll(sigmaRuleEngine.evaluateReceivers(receiverTelemetry))
+        allFindings.addAll(sigmaRuleEngine.evaluateAppOps(appOpsTelemetry))
 
         val sideloadedCount = allFindings.count {
             it.category == FindingCategory.APP_RISK && it.matchContext["is_sideloaded"] == "true"
