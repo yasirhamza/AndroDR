@@ -61,17 +61,22 @@ object ReportFormatter {
 
         // -- App risks ------------------------------------------------------------
         section("APP RISKS")
-        val appRisks = scan.appRisks
+        val appRisks = scan.appRisks.filter { it.triggered }
         if (appRisks.isEmpty()) {
             appendLine("  No high-risk applications detected.")
         } else {
-            val triggeredApps = appRisks.filter { it.triggered }
-            appendLine("  ${triggeredApps.size} application finding(s) flagged")
+            // Group findings by package name for a clean per-app display
+            val byPackage = appRisks.groupBy {
+                it.matchContext["package_name"]?.toString() ?: "unknown"
+            }
+            appendLine("  ${byPackage.size} application(s) flagged")
             appendLine("  ${scan.knownMalwareCount} known malware \u00b7 ${scan.riskySideloadCount} risky sideloads")
             appendLine()
-            triggeredApps.sortedByDescending { severityOrdinal(it.level) }.forEach { finding ->
-                appendAppFinding(finding)
-            }
+            byPackage.entries
+                .sortedByDescending { (_, findings) -> findings.maxOf { severityOrdinal(it.level) } }
+                .forEach { (pkg, findings) ->
+                    appendGroupedAppFindings(pkg, findings)
+                }
         }
 
         // -- DNS activity ---------------------------------------------------------
@@ -132,12 +137,28 @@ object ReportFormatter {
         }
     }
 
-    private fun StringBuilder.appendAppFinding(finding: Finding) {
-        val risk = finding.level.uppercase().padEnd(8)
-        appendLine("  \u25cf  $risk  ${finding.matchContext["app_name"] ?: finding.title}")
-        appendLine("     Package : ${finding.matchContext["package_name"] ?: "unknown"}")
-        if (finding.remediation.isNotEmpty()) {
-            appendLine("     Action  : ${finding.remediation.joinToString("; ")}")
+    private fun StringBuilder.appendGroupedAppFindings(pkg: String, findings: List<Finding>) {
+        val highest = findings.maxByOrNull { severityOrdinal(it.level) } ?: return
+        val risk = highest.level.uppercase().padEnd(8)
+        val appName = highest.matchContext["app_name"]?.toString() ?: pkg
+        val isKnownMalware = findings.any { it.ruleId.startsWith("androdr-00") }
+        val isSideloaded = findings.any { it.ruleId == "androdr-010" }
+
+        val flags = buildList {
+            if (isKnownMalware) add("\u26a0 Known Malware")
+            if (isSideloaded) add("Sideloaded")
+        }
+
+        appendLine("  \u25cf  $risk  $appName")
+        appendLine("     Package : $pkg")
+        if (flags.isNotEmpty()) {
+            appendLine("     Flags   : ${flags.joinToString(" \u00b7 ")}")
+        }
+        val reasons = findings.map { it.title }.distinct()
+        appendLine("     Reasons : ${reasons.joinToString("; ")}")
+        val allRemediation = findings.flatMap { it.remediation }.distinct()
+        if (allRemediation.isNotEmpty()) {
+            appendLine("     Action  : ${allRemediation.first()}")
         }
         appendLine()
     }
