@@ -1,7 +1,7 @@
 title: App registered for SMS broadcasts
 id: androdr-061
 status: production
-description: A non-system app is registered to receive SMS broadcasts. Many legitimate apps register for this via SDKs (Firebase Auth, Braze) for OTP verification. This is a weak signal alone — investigate only when combined with other indicators.
+description: A non-system app is registered to receive SMS broadcasts. Many legitimate apps register for this via SDKs (Firebase Auth, Braze) for OTP verification. Informational — only significant when combined with other indicators.
 author: AndroDR
 date: 2026/03/28
 tags:
@@ -16,11 +16,11 @@ detection:
     filter_known_good:
         package_name|ioc_lookup: known_good_app_db
     condition: selection and not filter_known_good
-level: medium
+level: informational
 display:
     category: app_risk
     icon: sms
     triggered_title: "SMS Broadcast Receiver"
     evidence_type: none
 remediation:
-    - "This app is registered to receive SMS broadcasts. This is common for apps using OTP verification. Review if you expect this behavior."
+    - "This app is registered to receive SMS broadcasts. This is common for apps using OTP verification."

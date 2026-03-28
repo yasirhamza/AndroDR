@@ -244,7 +244,9 @@ fun BugReportScreen(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        val totalCount = findings.count { it.triggered } + legacyFindings.size
+                        val totalCount = findings.count {
+                            it.triggered && it.level.lowercase() != "informational"
+                        } + legacyFindings.size
                         Text(
                             text = "$totalCount finding(s)",
                             style = MaterialTheme.typography.labelLarge,
@@ -267,7 +269,10 @@ fun BugReportScreen(
                 }
 
                 // SIGMA findings (evaluated by rule engine)
-                val triggeredFindings = findings.filter { it.triggered }
+                // Exclude informational-level findings from display — they appear in timeline/export only
+                val triggeredFindings = findings.filter {
+                    it.triggered && it.level.lowercase() != "informational"
+                }
                 if (triggeredFindings.isNotEmpty()) {
                     item {
                         Text(

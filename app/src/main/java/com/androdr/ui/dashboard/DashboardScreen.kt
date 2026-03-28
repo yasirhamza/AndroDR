@@ -145,7 +145,7 @@ fun DashboardScreen(
 
             // Summary cards grid (2x2)
             val riskyAppCount = latestScan?.appRisks
-                ?.count { it.triggered } ?: 0
+                ?.count { it.triggered && it.level.lowercase() != "informational" } ?: 0
             val deviceFlagCount = latestScan?.deviceFlags
                 ?.count { it.triggered } ?: 0
             val lastScanTime = latestScan?.timestamp?.let { ts ->
