@@ -1,0 +1,27 @@
+title: App monitoring phone call state
+id: androdr-062
+status: production
+description: A non-system app is registered for PHONE_STATE or NEW_OUTGOING_CALL broadcasts, enabling it to monitor incoming and outgoing calls.
+author: AndroDR
+date: 2026/03/28
+tags:
+    - attack.t1636
+logsource:
+    product: androdr
+    service: receiver_audit
+detection:
+    selection_phone_state:
+        intent_action: "android.intent.action.PHONE_STATE"
+        is_system_app: false
+    selection_outgoing_call:
+        intent_action: "android.intent.action.NEW_OUTGOING_CALL"
+        is_system_app: false
+    condition: selection_phone_state or selection_outgoing_call
+level: critical
+display:
+    category: app_risk
+    icon: phone
+    triggered_title: "Call Monitoring"
+    evidence_type: none
+remediation:
+    - "This app can monitor your phone calls. If you did not grant this permission, uninstall it immediately."

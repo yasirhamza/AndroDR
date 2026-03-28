@@ -1,0 +1,24 @@
+title: App intercepting incoming SMS
+id: androdr-061
+status: production
+description: A non-system app is registered to receive incoming SMS messages. Legitimate apps rarely need this — it is a strong stalkerware/spyware indicator.
+author: AndroDR
+date: 2026/03/28
+tags:
+    - attack.t1636
+logsource:
+    product: androdr
+    service: receiver_audit
+detection:
+    selection:
+        intent_action: "android.provider.Telephony.SMS_RECEIVED"
+        is_system_app: false
+    condition: selection
+level: critical
+display:
+    category: app_risk
+    icon: sms
+    triggered_title: "SMS Interception"
+    evidence_type: none
+remediation:
+    - "This app can read your incoming text messages. If you did not grant this explicitly, uninstall it immediately."
