@@ -1,0 +1,215 @@
+package com.androdr.ui.timeline
+
+import android.content.Intent
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Timeline
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.dp
+import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.androdr.R
+import com.androdr.data.model.ForensicTimelineEvent
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+
+private val dateGroupFmt = SimpleDateFormat("MMM dd, yyyy", Locale.US)
+
+@Suppress("LongMethod") // Timeline screen combines top bar, filter chips, grouped event list,
+// empty state, and export menu — inherently a longer composable.
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun TimelineScreen(
+    viewModel: TimelineViewModel = hiltViewModel()
+) {
+    val events by viewModel.events.collectAsStateWithLifecycle()
+    val severityFilter by viewModel.severityFilter.collectAsStateWithLifecycle()
+    val shareUri by viewModel.shareUri.collectAsStateWithLifecycle()
+    val exporting by viewModel.exporting.collectAsStateWithLifecycle()
+
+    val context = LocalContext.current
+
+    var exportMenuExpanded by remember { mutableStateOf(false) }
+    var selectedEvent by remember { mutableStateOf<ForensicTimelineEvent?>(null) }
+
+    // Launch share intent when a report URI is ready
+    LaunchedEffect(shareUri) {
+        shareUri?.let { uri ->
+            val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                type = "text/plain"
+                putExtra(Intent.EXTRA_STREAM, uri)
+                putExtra(Intent.EXTRA_SUBJECT, "AndroDR Timeline Report")
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+            context.startActivity(Intent.createChooser(shareIntent, "Share Timeline Report"))
+            viewModel.onShareConsumed()
+        }
+    }
+
+    Column(modifier = Modifier.fillMaxSize()) {
+        TopAppBar(
+            title = { Text("Timeline") },
+            actions = {
+                if (exporting) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(24.dp),
+                        strokeWidth = 2.dp
+                    )
+                } else {
+                    Box {
+                        IconButton(onClick = { exportMenuExpanded = true }) {
+                            Icon(
+                                imageVector = Icons.Filled.MoreVert,
+                                contentDescription = "Export options"
+                            )
+                        }
+                        DropdownMenu(
+                            expanded = exportMenuExpanded,
+                            onDismissRequest = { exportMenuExpanded = false }
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text(stringResource(R.string.timeline_export_txt)) },
+                                onClick = {
+                                    exportMenuExpanded = false
+                                    viewModel.exportPlaintext()
+                                }
+                            )
+                            DropdownMenuItem(
+                                text = { Text(stringResource(R.string.timeline_export_csv)) },
+                                onClick = {
+                                    exportMenuExpanded = false
+                                    viewModel.exportCsv()
+                                }
+                            )
+                        }
+                    }
+                }
+            }
+        )
+
+        // Severity filter chips
+        val filterOptions = listOf(
+            null to stringResource(R.string.timeline_filter_all),
+            "CRITICAL" to "Critical",
+            "HIGH" to "High",
+            "MEDIUM" to "Medium"
+        )
+        LazyRow(
+            contentPadding = PaddingValues(horizontal = 16.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            items(filterOptions) { (severity, label) ->
+                FilterChip(
+                    selected = severityFilter == severity,
+                    onClick = { viewModel.setSeverityFilter(severity) },
+                    label = { Text(label) }
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        if (events.isEmpty()) {
+            // Empty state
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.Timeline,
+                        contentDescription = null,
+                        modifier = Modifier.size(64.dp),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                    )
+                    Text(
+                        text = stringResource(R.string.timeline_empty),
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        text = stringResource(R.string.timeline_empty_hint),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                    )
+                }
+            }
+        } else {
+            // Group events by date
+            val grouped = events.groupBy { event ->
+                if (event.timestamp > 0) dateGroupFmt.format(Date(event.timestamp))
+                else "Unknown Date"
+            }
+
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                grouped.forEach { (dateLabel, dateEvents) ->
+                    item(key = "header_$dateLabel") {
+                        Text(
+                            text = dateLabel,
+                            style = MaterialTheme.typography.titleSmall,
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.padding(vertical = 4.dp)
+                        )
+                    }
+                    items(
+                        items = dateEvents,
+                        key = { it.id }
+                    ) { event ->
+                        TimelineEventCard(
+                            event = event,
+                            onClick = { selectedEvent = event }
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    // Detail bottom sheet
+    selectedEvent?.let { event ->
+        TimelineEventDetailSheet(
+            event = event,
+            onDismiss = { selectedEvent = null }
+        )
+    }
+}

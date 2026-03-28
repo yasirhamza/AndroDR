@@ -4,9 +4,8 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.BugReport
 import androidx.compose.material.icons.filled.Dashboard
-import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.Timeline
 import androidx.compose.material.icons.filled.PhoneAndroid
 import androidx.compose.material.icons.filled.Wifi
 import androidx.compose.material.icons.outlined.Apps
@@ -32,6 +31,7 @@ import com.androdr.ui.dashboard.DashboardScreen
 import com.androdr.ui.device.DeviceAuditScreen
 import com.androdr.ui.history.HistoryScreen
 import com.androdr.ui.network.DnsMonitorScreen
+import com.androdr.ui.timeline.TimelineScreen
 import com.androdr.ui.settings.SettingsScreen
 import com.androdr.ui.theme.AndroDRTheme
 import android.app.Activity
@@ -63,7 +63,7 @@ private val bottomNavDestinations = listOf(
     NavDestination("apps", "Apps", Icons.Outlined.Apps),
     NavDestination("device", "Device", Icons.Filled.PhoneAndroid),
     NavDestination("network", "Network", Icons.Filled.Wifi),
-    NavDestination("history", "History", Icons.Filled.History),
+    NavDestination("timeline", "Timeline", Icons.Filled.Timeline),
 )
 
 @Suppress("LongMethod") // AndroDRApp is the root nav host; it contains the VPN permission
@@ -161,6 +161,9 @@ private fun AndroDRApp() {
             }
             composable("history") {
                 HistoryScreen()
+            }
+            composable("timeline") {
+                TimelineScreen()
             }
             composable("bugreport") {
                 BugReportScreen()
