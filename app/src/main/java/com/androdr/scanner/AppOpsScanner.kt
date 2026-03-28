@@ -3,6 +3,7 @@ package com.androdr.scanner
 import android.app.AppOpsManager
 import android.content.Context
 import android.content.pm.ApplicationInfo
+import android.content.pm.PackageManager
 import android.os.Build
 import android.util.Log
 import com.androdr.data.model.AppOpsTelemetry
@@ -12,12 +13,19 @@ import kotlinx.coroutines.withContext
 import javax.inject.Inject
 import javax.inject.Singleton
 
+/**
+ * Collects AppOps telemetry by checking dangerous permission usage per installed package.
+ *
+ * Uses [AppOpsManager.unsafeCheckOpNoThrow] (public API) instead of the @SystemApi
+ * [getPackagesForOps] which is unavailable to regular apps.
+ */
 @Singleton
 class AppOpsScanner @Inject constructor(
     @ApplicationContext private val context: Context
 ) {
 
-    private val dangerousOps = arrayOf(
+    /** Dangerous ops to check per package. Values are AppOpsManager.OPSTR_* constants. */
+    private val dangerousOps = listOf(
         AppOpsManager.OPSTR_CAMERA,
         AppOpsManager.OPSTR_RECORD_AUDIO,
         AppOpsManager.OPSTR_READ_CONTACTS,
@@ -36,51 +44,41 @@ class AppOpsScanner @Inject constructor(
         val results = mutableListOf<AppOpsTelemetry>()
 
         try {
-            val packages = opsManager.getPackagesForOps(dangerousOps)
-                ?: return@withContext emptyList()
+            @Suppress("QueryPermissionsNeeded")
+            val installedPackages = pm.getInstalledPackages(PackageManager.GET_PERMISSIONS)
 
-            for (pkg in packages) {
-                val packageName = pkg.packageName ?: continue
-                val isSystem = try {
-                    val appInfo = pm.getApplicationInfo(packageName, 0)
-                    appInfo.flags and ApplicationInfo.FLAG_SYSTEM != 0
-                } catch (_: Exception) {
-                    false
-                }
+            for (pkgInfo in installedPackages) {
+                val packageName = pkgInfo.packageName ?: continue
+                val appInfo = pkgInfo.applicationInfo ?: continue
+                val isSystem = appInfo.flags and ApplicationInfo.FLAG_SYSTEM != 0
+                val uid = appInfo.uid
 
-                val ops = pkg.ops ?: continue
-                for (op in ops) {
-                    val opName = op.opStr ?: continue
-
-                    var lastAccess = 0L
-                    var lastReject = 0L
-                    var accessCount = 0
-
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                        try {
-                            val entries = op.attributedOpEntries
-                            for ((_, entry) in entries) {
-                                val access = entry.getLastAccessTime(
-                                    AppOpsManager.OP_FLAGS_ALL
-                                )
-                                val reject = entry.getLastRejectTime(
-                                    AppOpsManager.OP_FLAGS_ALL
-                                )
-                                if (access > lastAccess) lastAccess = access
-                                if (reject > lastReject) lastReject = reject
-                                accessCount++
-                            }
-                        } catch (_: Exception) { }
+                for (opStr in dangerousOps) {
+                    val mode = try {
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                            opsManager.unsafeCheckOpNoThrow(opStr, uid, packageName)
+                        } else {
+                            @Suppress("DEPRECATION")
+                            opsManager.checkOpNoThrow(opStr, uid, packageName)
+                        }
+                    } catch (_: Exception) {
+                        continue
                     }
 
-                    results.add(AppOpsTelemetry(
-                        packageName = packageName,
-                        operation = opName,
-                        lastAccessTime = lastAccess,
-                        lastRejectTime = lastReject,
-                        accessCount = accessCount,
-                        isSystemApp = isSystem
-                    ))
+                    // Only record ops that are allowed (MODE_ALLOWED = 0) or foreground-only (MODE_FOREGROUND = 4)
+                    if (mode == AppOpsManager.MODE_ALLOWED ||
+                        (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q &&
+                            mode == AppOpsManager.MODE_FOREGROUND)
+                    ) {
+                        results.add(AppOpsTelemetry(
+                            packageName = packageName,
+                            operation = opStr,
+                            lastAccessTime = 0L, // not available via public API
+                            lastRejectTime = 0L,
+                            accessCount = 0,
+                            isSystemApp = isSystem
+                        ))
+                    }
                 }
             }
         } catch (e: Exception) {
