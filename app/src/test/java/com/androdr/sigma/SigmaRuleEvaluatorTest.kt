@@ -127,6 +127,92 @@ class SigmaRuleEvaluatorTest {
     }
 
     @Test
+    fun `condition expression supports not operator`() {
+        // "selection and not filter" — the pattern used by known_good_app_db rules
+        // selection=true, filter=true → should NOT fire (known good app)
+        assertFalse(SigmaRuleEvaluator.evaluateConditionExpression(
+            "selection and not filter", mapOf("selection" to true, "filter" to true)
+        ))
+        // selection=true, filter=false → SHOULD fire (unknown app)
+        assertTrue(SigmaRuleEvaluator.evaluateConditionExpression(
+            "selection and not filter", mapOf("selection" to true, "filter" to false)
+        ))
+        // selection=false, filter=false → should NOT fire (doesn't match selection)
+        assertFalse(SigmaRuleEvaluator.evaluateConditionExpression(
+            "selection and not filter", mapOf("selection" to false, "filter" to false)
+        ))
+    }
+
+    @Test
+    fun `condition expression supports leading not`() {
+        assertTrue(SigmaRuleEvaluator.evaluateConditionExpression(
+            "not a", mapOf("a" to false)
+        ))
+        assertFalse(SigmaRuleEvaluator.evaluateConditionExpression(
+            "not a", mapOf("a" to true)
+        ))
+    }
+
+    @Test
+    fun `condition expression supports or with not`() {
+        // "sel_a and not filter or sel_b and not filter" — pattern from call receiver rule
+        assertTrue(SigmaRuleEvaluator.evaluateConditionExpression(
+            "sel_a and not filter or sel_b and not filter",
+            mapOf("sel_a" to true, "sel_b" to false, "filter" to false)
+        ))
+        assertTrue(SigmaRuleEvaluator.evaluateConditionExpression(
+            "sel_a and not filter or sel_b and not filter",
+            mapOf("sel_a" to false, "sel_b" to true, "filter" to false)
+        ))
+        // Both match but filter is true → neither should fire
+        assertFalse(SigmaRuleEvaluator.evaluateConditionExpression(
+            "sel_a and not filter or sel_b and not filter",
+            mapOf("sel_a" to true, "sel_b" to true, "filter" to true)
+        ))
+    }
+
+    @Test
+    fun `ioc_lookup filter integration with not operator`() {
+        // Simulates the known_good_app_db pattern end-to-end
+        val rule = makeRule(
+            selections = mapOf(
+                "selection" to SigmaSelection(listOf(
+                    SigmaFieldMatcher("is_system_app", SigmaModifier.EQUALS, listOf(false)),
+                    SigmaFieldMatcher("is_enabled", SigmaModifier.EQUALS, listOf(true))
+                )),
+                "filter_known_good" to SigmaSelection(listOf(
+                    SigmaFieldMatcher("package_name", SigmaModifier.IOC_LOOKUP, listOf("known_good_db"))
+                ))
+            ),
+            condition = "selection and not filter_known_good"
+        )
+
+        val iocLookups = mapOf<String, (Any) -> Boolean>(
+            "known_good_db" to { pkg -> pkg.toString() in setOf("com.x8bit.bitwarden", "com.google.chrome") }
+        )
+
+        // Known good app — should NOT fire
+        val knownGoodRecord = mapOf<String, Any?>(
+            "is_system_app" to false, "is_enabled" to true,
+            "package_name" to "com.x8bit.bitwarden"
+        )
+        val knownGoodFindings = SigmaRuleEvaluator.evaluate(
+            listOf(rule), listOf(knownGoodRecord), "app_scanner", iocLookups
+        )
+        assertTrue("Known good app should not trigger", knownGoodFindings.none { it.triggered })
+
+        // Unknown app — SHOULD fire
+        val unknownRecord = mapOf<String, Any?>(
+            "is_system_app" to false, "is_enabled" to true,
+            "package_name" to "com.evil.spy"
+        )
+        val unknownFindings = SigmaRuleEvaluator.evaluate(
+            listOf(rule), listOf(unknownRecord), "app_scanner", iocLookups
+        )
+        assertTrue("Unknown app should trigger", unknownFindings.any { it.triggered })
+    }
+
+    @Test
     fun `device posture rule emits safe finding when not matched`() {
         val rule = makeRule(
             service = "device_auditor",
