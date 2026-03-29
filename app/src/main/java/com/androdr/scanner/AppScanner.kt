@@ -54,8 +54,8 @@ class AppScanner @Inject constructor(
             // US carriers
             "com.tmobile.", "com.sprint.",
             "com.att.", "com.vzw.", "com.verizon.",
-            // Carrier pre-install platforms
-            "com.ironsrc.aura.", "com.dti.att.",
+            // Carrier pre-install platforms (NOT including IronSource Aura — that's invasive adware)
+            "com.dti.",
             // Other common pre-installs
             "com.amazon.",
             // Other Android OEMs
