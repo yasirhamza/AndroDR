@@ -2,6 +2,7 @@ package com.androdr.di
 
 import com.androdr.scanner.bugreport.AccessibilityModule
 import com.androdr.scanner.bugreport.AppOpsModule
+import com.androdr.scanner.bugreport.BatteryDailyModule
 import com.androdr.scanner.bugreport.BugreportModule
 import com.androdr.scanner.bugreport.LegacyScanModule
 import com.androdr.scanner.bugreport.ReceiverModule
@@ -18,4 +19,5 @@ abstract class BugreportModuleBindings {
     @Binds @IntoSet abstract fun accessibility(m: AccessibilityModule): BugreportModule
     @Binds @IntoSet abstract fun receivers(m: ReceiverModule): BugreportModule
     @Binds @IntoSet abstract fun appOps(m: AppOpsModule): BugreportModule
+    @Binds @IntoSet abstract fun batteryDaily(m: BatteryDailyModule): BugreportModule
 }
