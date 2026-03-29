@@ -51,4 +51,7 @@ interface ForensicTimelineEventDao {
 
     @Query("DELETE FROM forensic_timeline WHERE createdAt < :cutoff")
     suspend fun deleteOlderThan(cutoff: Long)
+
+    @Query("DELETE FROM forensic_timeline WHERE source = :source")
+    suspend fun deleteBySource(source: String)
 }
