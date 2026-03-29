@@ -1,7 +1,7 @@
 title: Non-system app accessed microphone
 id: androdr-063
 status: production
-description: A non-system app has used the microphone (RECORD_AUDIO). This is expected for phone/messaging apps but suspicious for utilities or background apps.
+description: A non-system app has used the microphone (RECORD_AUDIO). Expected for phone, messaging, and voice assistant apps. Review if the app is unexpected.
 author: AndroDR
 date: 2026/03/28
 tags:
@@ -13,8 +13,10 @@ detection:
     selection:
         operation: "android:record_audio"
         is_system_app: false
-    condition: selection
-level: high
+    filter_known_good:
+        package_name|ioc_lookup: known_good_app_db
+    condition: selection and not filter_known_good
+level: medium
 display:
     category: app_risk
     icon: mic
@@ -22,4 +24,3 @@ display:
     evidence_type: none
 remediation:
     - "This app has accessed your microphone. Review whether this is expected behavior."
-    - "Check Settings > Privacy > Permission manager > Microphone to see and revoke access."

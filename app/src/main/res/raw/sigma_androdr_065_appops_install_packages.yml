@@ -1,7 +1,7 @@
 title: App can install packages from unknown sources
 id: androdr-065
 status: production
-description: A non-system app has REQUEST_INSTALL_PACKAGES permission, allowing it to install APKs. This is a sideloading vector that malware uses to install additional payloads.
+description: A non-system app has REQUEST_INSTALL_PACKAGES permission, allowing it to install APKs. Some legitimate apps (file managers, app stores) require this.
 author: AndroDR
 date: 2026/03/28
 tags:
@@ -13,12 +13,14 @@ detection:
     selection:
         operation: "android:request_install_packages"
         is_system_app: false
-    condition: selection
-level: high
+    filter_known_good:
+        package_name|ioc_lookup: known_good_app_db
+    condition: selection and not filter_known_good
+level: medium
 display:
     category: app_risk
     icon: download
     triggered_title: "Can Install APKs"
     evidence_type: none
 remediation:
-    - "This app can install other apps. Go to Settings > Apps > Special access > Install unknown apps and revoke this permission."
+    - "This app can install other apps. Go to Settings > Apps > Special access > Install unknown apps to review."

@@ -1,7 +1,7 @@
 title: Non-system app accessed camera
 id: androdr-064
 status: production
-description: A non-system app has used the camera. Expected for camera/messaging apps but suspicious for background utilities.
+description: A non-system app has used the camera. Expected for camera, messaging, and social media apps. Review if the app is unexpected.
 author: AndroDR
 date: 2026/03/28
 tags:
@@ -13,8 +13,10 @@ detection:
     selection:
         operation: "android:camera"
         is_system_app: false
-    condition: selection
-level: high
+    filter_known_good:
+        package_name|ioc_lookup: known_good_app_db
+    condition: selection and not filter_known_good
+level: medium
 display:
     category: app_risk
     icon: camera
@@ -22,4 +24,3 @@ display:
     evidence_type: none
 remediation:
     - "This app has accessed your camera. Review whether this is expected behavior."
-    - "Check Settings > Privacy > Permission manager > Camera to see and revoke access."
