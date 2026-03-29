@@ -368,7 +368,7 @@ scenarios:
     sha256: "b2c2a396b08f3589877813d410b3c92e3ccf05965e01e8ade4e08a508308ba5d"
     tags: [android, impersonation, system]
     expected_patterns:
-      - "system-impersonating name"
+      - "impersonates a system component"
 
   - id: impersonation_play_store
     track: 3
@@ -381,7 +381,7 @@ scenarios:
     sha256: "5c3994e5f205e6471eca1e4dbceb32c96ea42694bde1a8d9b6af12a83f153042"
     tags: [android, impersonation, play-store]
     expected_patterns:
-      - "system-impersonating name"
+      - "impersonates a system component"
 
   - id: multi_abuse_combo
     track: 3
@@ -395,8 +395,8 @@ scenarios:
     tags: [android, multi-abuse, stalkerware-pattern]
     expected_patterns:
       - "surveillance capabilities"
-      - "accessibility"
-      - "device administrator"
+      - "Accessibility Abuse"
+      - "Device Admin Abuse"
 
   - id: firmware_implant_sim
     track: 3
@@ -409,7 +409,7 @@ scenarios:
     sha256: "e269cc870f05ad795b1b327f8f1f2f103af41215537d1be16f106471a38961fc"
     tags: [android, firmware, implant]
     expected_patterns:
-      - "system-impersonating name"
+      - "impersonates a system component"
 
   # ── Track 4: CVE vulnerability detection (NEW — issue #25) ────────────
   - id: cve_unpatched_detection
