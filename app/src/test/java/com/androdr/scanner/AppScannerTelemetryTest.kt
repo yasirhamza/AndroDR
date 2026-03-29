@@ -10,6 +10,7 @@ import android.content.pm.ActivityInfo
 import com.androdr.data.model.KnownAppCategory
 import com.androdr.data.model.KnownAppEntry
 import com.androdr.ioc.KnownAppResolver
+import com.androdr.ioc.OemPrefixResolver
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
@@ -24,6 +25,7 @@ class AppScannerTelemetryTest {
     private lateinit var context: Context
     private lateinit var pm: PackageManager
     private lateinit var knownAppResolver: KnownAppResolver
+    private lateinit var oemPrefixResolver: OemPrefixResolver
     private lateinit var scanner: AppScanner
 
     @Before
@@ -31,11 +33,12 @@ class AppScannerTelemetryTest {
         context = mockk(relaxed = true)
         pm = mockk(relaxed = true)
         knownAppResolver = mockk(relaxed = true)
+        oemPrefixResolver = OemPrefixResolver()
 
         every { context.packageManager } returns pm
         every { knownAppResolver.lookup(any()) } returns null
 
-        scanner = AppScanner(context, knownAppResolver)
+        scanner = AppScanner(context, knownAppResolver, oemPrefixResolver)
     }
 
     /**
