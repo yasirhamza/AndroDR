@@ -62,4 +62,10 @@ class OemPrefixResolverTest {
     fun `IronSource Aura is NOT an OEM prefix`() {
         assertFalse(resolver.isOemPrefix("com.ironsrc.aura.tmo"))
     }
+
+    @Test
+    fun `android prefix does not match androidmalware packages`() {
+        assertFalse(resolver.isOemPrefix("androidmalware.evil.spy"))
+        assertTrue(resolver.isOemPrefix("android.provider.contacts"))
+    }
 }

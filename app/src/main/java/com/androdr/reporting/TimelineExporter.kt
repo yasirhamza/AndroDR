@@ -42,10 +42,12 @@ object TimelineExporter {
         appendLine()
 
         val sorted = filtered.sortedByDescending { it.timestamp }
+        val dateFmt = SimpleDateFormat("yyyy-MM-dd", Locale.US)
+        val timeFmt = SimpleDateFormat("HH:mm:ss", Locale.US)
         var currentDate = ""
         for (event in sorted) {
             val date = if (event.timestamp > 0)
-                SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date(event.timestamp))
+                dateFmt.format(Date(event.timestamp))
             else "Unknown"
             if (date != currentDate) {
                 currentDate = date
@@ -54,7 +56,7 @@ object TimelineExporter {
                 appendLine(THIN)
             }
             val time = if (event.timestamp > 0) {
-                SimpleDateFormat("HH:mm:ss", Locale.US).format(Date(event.timestamp))
+                timeFmt.format(Date(event.timestamp))
             } else "??:??:??"
             val sev = event.severity.uppercase().padEnd(8)
             appendLine("  [$sev] $time  ${event.description}")

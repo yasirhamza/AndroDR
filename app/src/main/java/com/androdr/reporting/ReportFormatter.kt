@@ -14,9 +14,6 @@ import java.util.Locale
  */
 object ReportFormatter {
 
-    private val timestampFmt = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US)
-    private val dnsFmt = SimpleDateFormat("HH:mm:ss", Locale.US)
-
     @Suppress("LongMethod", "CyclomaticComplexMethod") // Report formatting requires assembling all
     // sections (header, device flags, app risks, DNS events, logs) in a specific order; the
     // branching reflects the conditional severity/status display logic per section.
@@ -25,6 +22,8 @@ object ReportFormatter {
         dnsEvents: List<DnsEvent>,
         logLines: List<String>
     ): String = buildString {
+        val timestampFmt = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US)
+        val dnsFmt = SimpleDateFormat("HH:mm:ss", Locale.US)
         val generated = timestampFmt.format(Date())
         val scanDate = timestampFmt.format(Date(scan.timestamp))
 
