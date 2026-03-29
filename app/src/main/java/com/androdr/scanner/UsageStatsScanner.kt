@@ -35,6 +35,8 @@ class UsageStatsScanner @Inject constructor(
     suspend fun collectTimelineEvents(
         hoursBack: Int = 24
     ): List<ForensicTimelineEvent> = withContext(Dispatchers.IO) {
+        require(hoursBack in 1..168) { "hoursBack must be between 1 hour and 1 week" }
+
         val usm = context.getSystemService(Context.USAGE_STATS_SERVICE) as? UsageStatsManager
             ?: return@withContext emptyList()
 
@@ -64,7 +66,8 @@ class UsageStatsScanner @Inject constructor(
             val packageName = event.packageName ?: continue
 
             // Skip OEM/system apps — only track user-installed app activity
-            if (oemPrefixResolver.isOemPrefix(packageName)) continue
+            if (oemPrefixResolver.isOemPrefix(packageName) ||
+                oemPrefixResolver.isPartnershipPrefix(packageName)) continue
 
             result.add(ForensicTimelineEvent(
                 timestamp = event.timeStamp,

@@ -152,17 +152,24 @@ class ScanOrchestrator @Inject constructor(
         )
 
         runCatching { scanRepository.saveScan(result) }
+            .onFailure { Log.e(TAG, "Failed to save scan result", it) }
         runCatching {
             val timelineEvents = allFindings
                 .filter { it.triggered }
                 .map { it.toForensicTimelineEvent(result) }
             forensicTimelineEventDao.insertAll(timelineEvents)
-        }
+        }.onFailure { Log.e(TAG, "Failed to persist timeline events", it) }
 
         // Usage stats produce timeline events directly (observational data, not SIGMA telemetry)
         val usageEvents = usageEventsDeferred.await()
         if (usageEvents.isNotEmpty()) {
-            runCatching { forensicTimelineEventDao.insertAll(usageEvents) }
+            val tagged = usageEvents.map { it.copy(scanResultId = result.id) }
+            // Remove stale usage_stats events before inserting fresh ones
+            runCatching {
+                forensicTimelineEventDao.deleteBySource("usage_stats")
+            }.onFailure { Log.e(TAG, "Failed to delete stale usage events", it) }
+            runCatching { forensicTimelineEventDao.insertAll(tagged) }
+                .onFailure { Log.e(TAG, "Failed to persist usage events", it) }
         }
 
         result
