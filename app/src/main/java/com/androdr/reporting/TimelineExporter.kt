@@ -64,11 +64,15 @@ object TimelineExporter {
     }
 
     fun formatCsv(events: List<ForensicTimelineEvent>): String = buildString {
-        appendLine("timestamp,isodate,module,event,data,package,severity,ioc_indicator,ioc_type,campaign")
+        appendLine("timestamp,isodate,module,event,data,package,severity,ioc_indicator,ioc_type,ioc_source,campaign,mitre_technique,details")
+
+        val utcFmt = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US).apply {
+            timeZone = java.util.TimeZone.getTimeZone("UTC")
+        }
 
         for (event in events.sortedBy { it.timestamp }) {
             val ts = event.timestamp.toString()
-            val iso = if (event.timestamp > 0) SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).format(Date(event.timestamp)) else ""
+            val iso = if (event.timestamp > 0) utcFmt.format(Date(event.timestamp)) else ""
             val module = csvEscape(event.source)
             val eventType = csvEscape(event.category)
             val data = csvEscape(event.description)
@@ -76,8 +80,11 @@ object TimelineExporter {
             val sev = event.severity
             val ioc = csvEscape(event.iocIndicator)
             val iocType = csvEscape(event.iocType)
+            val iocSrc = csvEscape(event.iocSource)
             val campaign = csvEscape(event.campaignName)
-            appendLine("$ts,$iso,$module,$eventType,$data,$pkg,$sev,$ioc,$iocType,$campaign")
+            val mitre = csvEscape(event.attackTechniqueId)
+            val details = csvEscape(event.details)
+            appendLine("$ts,$iso,$module,$eventType,$data,$pkg,$sev,$ioc,$iocType,$iocSrc,$campaign,$mitre,$details")
         }
     }
 

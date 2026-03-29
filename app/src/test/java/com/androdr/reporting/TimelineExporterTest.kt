@@ -39,6 +39,9 @@ class TimelineExporterTest {
         assertTrue(lines[0].contains("timestamp"))
         assertTrue(lines[0].contains("module"))
         assertTrue(lines[0].contains("event"))
+        assertTrue(lines[0].contains("ioc_source"))
+        assertTrue(lines[0].contains("mitre_technique"))
+        assertTrue(lines[0].contains("details"))
         assertTrue(lines.size >= 3)
     }
 
