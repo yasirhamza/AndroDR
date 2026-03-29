@@ -170,15 +170,16 @@ class AppScanner @Inject constructor(
             val installerPackage = if (!isSystemApp) getInstallerPackageName(pm, packageName) else null
             val fromTrustedStore = installerPackage != null &&
                 (installerPackage in trustedInstallers ||
-                    installerPackage.startsWith("com.samsung.") ||
-                    installerPackage.startsWith("com.sec."))
+                    knownOemPrefixes.any { installerPackage.startsWith(it) })
 
             // Known-app resolver
             val knownApp = knownAppResolver.lookup(packageName)
             val isSamsungOemPackage = samsungOemPrefixes.any { packageName.startsWith(it) }
+            // Primary: known-good DB (Plexus/UAD feeds, 14k+ apps)
+            // Fallback: OEM prefix matching (for apps not in DB yet)
             val isKnownOemApp = knownApp?.category in setOf(
                 KnownAppCategory.OEM, KnownAppCategory.AOSP, KnownAppCategory.GOOGLE
-            ) || (isSystemApp && knownOemPrefixes.any { packageName.startsWith(it) })
+            ) || knownOemPrefixes.any { packageName.startsWith(it) }
                 || isSamsungOemPackage
 
             val isSideloaded = !isSystemApp && !fromTrustedStore && !isKnownOemApp
