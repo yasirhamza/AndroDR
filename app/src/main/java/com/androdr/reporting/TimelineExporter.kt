@@ -21,14 +21,26 @@ object TimelineExporter {
         appendLine(RULE)
         appendLine()
 
-        if (events.isEmpty()) {
-            appendLine("  No timeline events recorded.")
+        // Exclude informational events and deduplicate by description+package
+        val filtered = events
+            .filter { it.severity.uppercase() != "INFORMATIONAL" }
+            .distinctBy { "${it.description}|${it.packageName}|${it.ruleId}" }
+
+        if (filtered.isEmpty()) {
+            appendLine("  No significant timeline events recorded.")
+            appendLine("  (${events.size} informational events excluded)")
             appendLine()
             appendLine(RULE)
             return@buildString
         }
 
-        val sorted = events.sortedByDescending { it.timestamp }
+        appendLine("  Significant events: ${filtered.size}")
+        if (events.size > filtered.size) {
+            appendLine("  (${events.size - filtered.size} informational events excluded)")
+        }
+        appendLine()
+
+        val sorted = filtered.sortedByDescending { it.timestamp }
         var currentDate = ""
         for (event in sorted) {
             val date = if (event.timestamp > 0) SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date(event.timestamp)) else "Unknown"
