@@ -34,6 +34,7 @@ class ScanOrchestrator @Inject constructor(
     private val accessibilityAuditScanner: AccessibilityAuditScanner,
     private val receiverAuditScanner: ReceiverAuditScanner,
     private val appOpsScanner: AppOpsScanner,
+    private val usageStatsScanner: UsageStatsScanner,
     private val bugReportAnalyzer: BugReportAnalyzer,
     private val scanRepository: ScanRepository,
     private val forensicTimelineEventDao: ForensicTimelineEventDao,
@@ -108,6 +109,9 @@ class ScanOrchestrator @Inject constructor(
         val appOpsTelemetryDeferred = async {
             runCatching { appOpsScanner.collectTelemetry() }.getOrDefault(emptyList())
         }
+        val usageEventsDeferred = async {
+            runCatching { usageStatsScanner.collectTimelineEvents() }.getOrDefault(emptyList())
+        }
 
         val appTelemetry = appTelemetryDeferred.await()
         val deviceTelemetry = deviceTelemetryDeferred.await()
@@ -154,6 +158,13 @@ class ScanOrchestrator @Inject constructor(
                 .map { it.toForensicTimelineEvent(result) }
             forensicTimelineEventDao.insertAll(timelineEvents)
         }
+
+        // Usage stats produce timeline events directly (observational data, not SIGMA telemetry)
+        val usageEvents = usageEventsDeferred.await()
+        if (usageEvents.isNotEmpty()) {
+            runCatching { forensicTimelineEventDao.insertAll(usageEvents) }
+        }
+
         result
     }
 

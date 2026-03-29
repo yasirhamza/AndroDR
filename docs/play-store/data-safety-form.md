@@ -22,7 +22,7 @@
 | **Files and docs** | No | No | Bug reports are user-selected and processed on-device only |
 | **Calendar** | No | No | |
 | **Contacts** | No | No | |
-| **App activity** | No | No | Installed app list is scanned on-device only, never transmitted |
+| **App activity** | No | No | Installed app list is scanned on-device only, never transmitted. App usage stats (foreground transitions) are collected on-device only when the user grants the PACKAGE_USAGE_STATS permission via Settings; this data is never transmitted. |
 | **Web browsing** | No | No | |
 | **App info and performance** | No | No | No crash reporting, no analytics |
 | **Device or other IDs** | No | No | No IMEI, serial, advertising ID collection |
