@@ -99,6 +99,18 @@ class TimelineViewModel @Inject constructor(
         _packageFilter.value = null
     }
 
+    /** Generated plaintext report for viewing/copying. Populated on demand. */
+    private val _reportText = MutableStateFlow("")
+    val reportText: StateFlow<String> = _reportText.asStateFlow()
+
+    /** Generates the plaintext report for the view/copy sheet. */
+    fun generateReport() {
+        viewModelScope.launch {
+            val allEvents = withContext(Dispatchers.IO) { dao.getAllForExport() }
+            _reportText.value = TimelineExporter.formatPlaintext(allEvents)
+        }
+    }
+
     fun exportPlaintext() = export("txt") { TimelineExporter.formatPlaintext(it) }
     fun exportCsv() = export("csv") { TimelineExporter.formatCsv(it) }
 
