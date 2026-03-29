@@ -32,8 +32,8 @@ class BatteryDailyModuleTest {
             Daily stats:
               Current start time: 2026-03-28-01-00-01
               Package changes:
-                Update com.example.app vers=100
-                Update com.example.app vers=0
+                +pkg=com.example.app vers=100
+                -pkg=com.example.app vers=100
         """.trimIndent()
 
         val result = module.analyze(section, mockIocResolver)
@@ -49,8 +49,8 @@ class BatteryDailyModuleTest {
     fun `detects version downgrade`() = runBlocking {
         val section = """
             Package changes:
-              Update com.suspect.app vers=200
-              Update com.suspect.app vers=100
+              +pkg=com.suspect.app vers=200
+              +pkg=com.suspect.app vers=100
         """.trimIndent()
 
         val result = module.analyze(section, mockIocResolver)
@@ -73,7 +73,7 @@ class BatteryDailyModuleTest {
 
         val section = """
             Package changes:
-              Update com.mspy.android vers=0
+              -pkg=com.mspy.android vers=100
         """.trimIndent()
 
         val result = module.analyze(section, mockIocResolver)
@@ -93,9 +93,9 @@ class BatteryDailyModuleTest {
     fun `deduplicates repeated entries`() = runBlocking {
         val section = """
             Package changes:
-              Update com.example.app vers=100
-              Update com.example.app vers=100
-              Update com.example.app vers=100
+              +pkg=com.example.app vers=100
+              +pkg=com.example.app vers=100
+              +pkg=com.example.app vers=100
         """.trimIndent()
 
         val result = module.analyze(section, mockIocResolver)

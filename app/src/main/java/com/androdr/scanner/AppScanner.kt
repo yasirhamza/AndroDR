@@ -115,6 +115,7 @@ class AppScanner @Inject constructor(
             val isKnownOemApp = knownApp?.category in setOf(
                 KnownAppCategory.OEM, KnownAppCategory.AOSP, KnownAppCategory.GOOGLE
             ) || oemPrefixResolver.isOemPrefix(packageName)
+                || (isSystemApp && oemPrefixResolver.isPartnershipPrefix(packageName))
 
             val isSideloaded = !isSystemApp && !fromTrustedStore && !isKnownOemApp
 
