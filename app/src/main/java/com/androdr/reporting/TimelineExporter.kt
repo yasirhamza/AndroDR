@@ -43,7 +43,9 @@ object TimelineExporter {
         val sorted = filtered.sortedByDescending { it.timestamp }
         var currentDate = ""
         for (event in sorted) {
-            val date = if (event.timestamp > 0) SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date(event.timestamp)) else "Unknown"
+            val date = if (event.timestamp > 0)
+                SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date(event.timestamp))
+            else "Unknown"
             if (date != currentDate) {
                 currentDate = date
                 appendLine(THIN)
@@ -76,7 +78,10 @@ object TimelineExporter {
     }
 
     fun formatCsv(events: List<ForensicTimelineEvent>): String = buildString {
-        appendLine("timestamp,isodate,module,event,data,package,severity,ioc_indicator,ioc_type,ioc_source,campaign,mitre_technique,details")
+        appendLine(
+            "timestamp,isodate,module,event,data,package,severity," +
+                "ioc_indicator,ioc_type,ioc_source,campaign,mitre_technique,details"
+        )
 
         val utcFmt = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US).apply {
             timeZone = java.util.TimeZone.getTimeZone("UTC")
