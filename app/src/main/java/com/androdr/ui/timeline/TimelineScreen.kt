@@ -1,32 +1,48 @@
 package com.androdr.ui.timeline
 
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
 import android.content.Intent
+import android.widget.Toast
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Timeline
+import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -37,6 +53,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -62,8 +80,11 @@ fun TimelineScreen(
 
     val context = LocalContext.current
 
+    val reportText by viewModel.reportText.collectAsStateWithLifecycle()
+
     var exportMenuExpanded by remember { mutableStateOf(false) }
     var selectedEvent by remember { mutableStateOf<ForensicTimelineEvent?>(null) }
+    var showReportSheet by remember { mutableStateOf(false) }
 
     // Launch share intent when a report URI is ready
     LaunchedEffect(shareUri) {
@@ -83,6 +104,36 @@ fun TimelineScreen(
         TopAppBar(
             title = { Text("Timeline") },
             actions = {
+                // View report
+                IconButton(
+                    onClick = {
+                        viewModel.generateReport()
+                        showReportSheet = true
+                    },
+                    enabled = events.isNotEmpty()
+                ) {
+                    Icon(Icons.Filled.Description, contentDescription = "View report")
+                }
+                // Copy to clipboard
+                IconButton(
+                    onClick = {
+                        if (reportText.isNotEmpty()) {
+                            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE)
+                                as ClipboardManager
+                            clipboard.setPrimaryClip(
+                                ClipData.newPlainText("AndroDR Timeline", reportText)
+                            )
+                            Toast.makeText(context, "Timeline copied to clipboard", Toast.LENGTH_SHORT).show()
+                        } else {
+                            viewModel.generateReport()
+                            Toast.makeText(context, "Generating report...", Toast.LENGTH_SHORT).show()
+                        }
+                    },
+                    enabled = events.isNotEmpty()
+                ) {
+                    Icon(Icons.Filled.ContentCopy, contentDescription = "Copy report")
+                }
+                // Export menu
                 if (exporting) {
                     CircularProgressIndicator(
                         modifier = Modifier.size(24.dp),
@@ -90,11 +141,11 @@ fun TimelineScreen(
                     )
                 } else {
                     Box {
-                        IconButton(onClick = { exportMenuExpanded = true }) {
-                            Icon(
-                                imageVector = Icons.Filled.MoreVert,
-                                contentDescription = "Export options"
-                            )
+                        IconButton(
+                            onClick = { exportMenuExpanded = true },
+                            enabled = events.isNotEmpty()
+                        ) {
+                            Icon(Icons.Filled.Share, contentDescription = "Export")
                         }
                         DropdownMenu(
                             expanded = exportMenuExpanded,
@@ -230,5 +281,106 @@ fun TimelineScreen(
             event = event,
             onDismiss = { selectedEvent = null }
         )
+    }
+
+    // Report viewing bottom sheet
+    if (showReportSheet) {
+        ReportViewSheet(
+            reportText = reportText,
+            onDismiss = { showReportSheet = false },
+            onCopy = {
+                val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE)
+                    as ClipboardManager
+                clipboard.setPrimaryClip(
+                    ClipData.newPlainText("AndroDR Timeline", reportText)
+                )
+                Toast.makeText(context, "Timeline copied to clipboard", Toast.LENGTH_SHORT).show()
+            },
+            onShare = {
+                val intent = Intent(Intent.ACTION_SEND).apply {
+                    type = "text/plain"
+                    putExtra(Intent.EXTRA_TEXT, reportText)
+                    putExtra(Intent.EXTRA_SUBJECT, "AndroDR Forensic Timeline")
+                }
+                context.startActivity(Intent.createChooser(intent, "Share Timeline"))
+            }
+        )
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ReportViewSheet(
+    reportText: String,
+    onDismiss: () -> Unit,
+    onCopy: () -> Unit,
+    onShare: () -> Unit
+) {
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    ) {
+        Column(
+            modifier = Modifier.padding(horizontal = 24.dp, vertical = 16.dp)
+        ) {
+            Text(
+                text = "Forensic Timeline Report",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold
+            )
+            Spacer(modifier = Modifier.height(12.dp))
+            HorizontalDivider()
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // Scrollable report body
+            Column(
+                modifier = Modifier
+                    .weight(1f, fill = false)
+                    .verticalScroll(rememberScrollState())
+            ) {
+                if (reportText.isEmpty()) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.align(Alignment.CenterHorizontally)
+                    )
+                } else {
+                    Text(
+                        text = reportText,
+                        style = MaterialTheme.typography.bodySmall,
+                        fontFamily = FontFamily.Monospace,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+            HorizontalDivider()
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // Action buttons
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                OutlinedButton(
+                    onClick = onCopy,
+                    modifier = Modifier.weight(1f),
+                    enabled = reportText.isNotEmpty()
+                ) {
+                    Icon(Icons.Filled.ContentCopy, null, Modifier.size(18.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text("Copy")
+                }
+                Button(
+                    onClick = onShare,
+                    modifier = Modifier.weight(1f),
+                    enabled = reportText.isNotEmpty()
+                ) {
+                    Icon(Icons.Filled.Share, null, Modifier.size(18.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text("Share")
+                }
+            }
+            Spacer(modifier = Modifier.height(16.dp))
+        }
     }
 }
