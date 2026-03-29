@@ -1,7 +1,9 @@
 package com.androdr.data.repo
 
 import com.androdr.data.db.DnsEventDao
+import com.androdr.data.db.ForensicTimelineEventDao
 import com.androdr.data.db.ScanResultDao
+import com.androdr.data.db.toForensicTimelineEvent
 import com.androdr.data.model.DnsEvent
 import com.androdr.data.model.ScanResult
 import kotlinx.coroutines.flow.Flow
@@ -11,7 +13,8 @@ import javax.inject.Singleton
 @Singleton
 class ScanRepository @Inject constructor(
     private val scanResultDao: ScanResultDao,
-    private val dnsEventDao: DnsEventDao
+    private val dnsEventDao: DnsEventDao,
+    private val forensicTimelineEventDao: ForensicTimelineEventDao
 ) {
 
     // ── Scan results ───────────────────────────────────────────────────────────
@@ -41,6 +44,10 @@ class ScanRepository @Inject constructor(
     /** Records a single [DnsEvent] captured by the VPN layer. */
     suspend fun logDnsEvent(event: DnsEvent) {
         dnsEventDao.insert(event)
+        // Also record matched DNS events in the forensic timeline
+        if (event.reason != null) {
+            runCatching { forensicTimelineEventDao.insert(event.toForensicTimelineEvent()) }
+        }
     }
 
     /**

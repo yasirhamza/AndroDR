@@ -33,6 +33,7 @@ class ReceiverModule @Inject constructor() : BugreportModule {
 
     override suspend fun analyze(sectionText: String, iocResolver: IocResolver): ModuleResult {
         val telemetry = mutableListOf<Map<String, Any?>>()
+        val seen = mutableSetOf<Pair<String, String>>() // (packageName, intentAction)
 
         val receiverTableStart = sectionText.indexOf("Receiver Resolver Table:")
         if (receiverTableStart < 0) return ModuleResult(telemetryService = "receiver_audit")
@@ -52,6 +53,7 @@ class ReceiverModule @Inject constructor() : BugreportModule {
             receiverEntryRegex.findAll(block).forEach { match ->
                 val packageName = match.groupValues[1]
                 val componentName = match.groupValues[2]
+                if (!seen.add(packageName to intent)) return@forEach
                 val isSystemApp = systemPackagePrefixes.any { packageName.startsWith(it) }
 
                 telemetry.add(mapOf(
