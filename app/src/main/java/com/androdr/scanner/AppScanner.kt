@@ -9,6 +9,7 @@ import android.util.Log
 import com.androdr.data.model.AppTelemetry
 import com.androdr.data.model.KnownAppCategory
 import com.androdr.ioc.KnownAppResolver
+import com.androdr.ioc.OemPrefixResolver
 import java.security.MessageDigest
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
@@ -19,63 +20,12 @@ import javax.inject.Singleton
 @Singleton
 class AppScanner @Inject constructor(
     @ApplicationContext private val context: Context,
-    private val knownAppResolver: KnownAppResolver
+    private val knownAppResolver: KnownAppResolver,
+    private val oemPrefixResolver: OemPrefixResolver
 ) {
 
     private companion object {
         private const val TAG = "AppScanner"
-
-        /**
-         * Package prefixes for system apps that are always legitimate OEM/AOSP components.
-         * Used as a fallback when [KnownAppResolver] has no entry for a system app — the resolver
-         * covers well-known packages explicitly, but Samsung/Qualcomm ship hundreds of subsystem
-         * packages (TTS voices, Wi-Fi resources, game drivers, etc.) that no community feed tracks.
-         * Without this fallback, all unrecognised system apps would fire the firmware-implant alert.
-         */
-        private val knownOemPrefixes = listOf(
-            // AOSP / Google
-            "com.android.", "com.google.", "android",
-            // Chipset vendors
-            "com.qualcomm.", "com.qti.", "vendor.qti.",
-            "com.mediatek.", "com.mtk.",
-            // Board support / ODM
-            "com.bsp.", "com.wingtech.", "com.longcheer.",
-            // Samsung / Knox / SEC
-            "com.samsung.", "com.sec.", "com.osp.", "com.knox.",
-            "com.skms.", "com.mygalaxy.", "com.monotype.", "com.hiya.",
-            "com.sem.", "com.swiftkey.",
-            "com.wsomacp", "com.wssyncmldm",
-            // Samsung partnership pre-installs
-            "com.microsoft.", "com.touchtype.",
-            "com.facebook.",
-            // Xiaomi / MIUI / Redmi
-            "com.miui.", "com.xiaomi.", "com.mi.",
-            "com.duokan.", "com.mipay.",
-            // US carriers
-            "com.tmobile.", "com.sprint.",
-            "com.att.", "com.vzw.", "com.verizon.",
-            // Carrier pre-install platforms (NOT including IronSource Aura — that's invasive adware)
-            "com.dti.",
-            // Other common pre-installs
-            "com.amazon.",
-            // Other Android OEMs
-            "com.motorola.", "com.oneplus.", "com.lge.",
-            "com.htc.", "com.sony.", "com.huawei.", "com.asus.",
-            "com.oppo.", "com.realme.", "com.vivo.",
-            "com.coloros.", "com.heytap.", "com.oplus.",
-            // Custom ROMs
-            "org.lineageos.", "com.cyanogenmod."
-        )
-
-        /**
-         * Samsung-specific package prefixes for apps delivered via OEM provisioning
-         * without FLAG_SYSTEM. These are legitimate Samsung apps (TV Plus, Kids,
-         * Game Launcher, etc.) that arrive with a null installer.
-         */
-        private val samsungOemPrefixes = listOf(
-            "com.samsung.", "com.sec.", "com.knox.", "com.osp.",
-            "com.sem.", "com.skms.", "com.mygalaxy."
-        )
     }
 
     /**
@@ -92,19 +42,6 @@ class AppScanner @Inject constructor(
         Manifest.permission.ACCESS_FINE_LOCATION,
         Manifest.permission.CAMERA,
         Manifest.permission.READ_EXTERNAL_STORAGE
-    )
-
-    /** Trusted app store installer package names (Play Store + Samsung Galaxy Store). */
-    private val trustedInstallers = setOf(
-        "com.android.vending",            // Google Play Store
-        "com.sec.android.app.samsungapps", // Samsung Galaxy Store
-        "com.xiaomi.market",              // Xiaomi GetApps (Mi Market)
-        "com.xiaomi.mipicks",             // Xiaomi Mi Picks
-        "com.miui.packageinstaller",      // MIUI Package Installer
-        "com.heytap.market",              // OPPO/Realme App Market
-        "com.coloros.safecenter",          // ColorOS Safe Center
-        "com.huawei.appmarket",           // Huawei AppGallery
-        "com.bbk.appstore"               // Vivo App Store
     )
 
     /**
@@ -169,18 +106,15 @@ class AppScanner @Inject constructor(
             // Installer source
             val installerPackage = if (!isSystemApp) getInstallerPackageName(pm, packageName) else null
             val fromTrustedStore = installerPackage != null &&
-                (installerPackage in trustedInstallers ||
-                    knownOemPrefixes.any { installerPackage.startsWith(it) })
+                oemPrefixResolver.isTrustedInstaller(installerPackage)
 
             // Known-app resolver
             val knownApp = knownAppResolver.lookup(packageName)
-            val isSamsungOemPackage = samsungOemPrefixes.any { packageName.startsWith(it) }
             // Primary: known-good DB (Plexus/UAD feeds, 14k+ apps)
             // Fallback: OEM prefix matching (for apps not in DB yet)
             val isKnownOemApp = knownApp?.category in setOf(
                 KnownAppCategory.OEM, KnownAppCategory.AOSP, KnownAppCategory.GOOGLE
-            ) || knownOemPrefixes.any { packageName.startsWith(it) }
-                || isSamsungOemPackage
+            ) || oemPrefixResolver.isOemPrefix(packageName)
 
             val isSideloaded = !isSystemApp && !fromTrustedStore && !isKnownOemApp
 
