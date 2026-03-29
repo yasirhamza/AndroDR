@@ -128,12 +128,41 @@ decisions:
 
 This feeds back into AndroDR's development roadmap.
 
-## IOC Rules
+## IOC Data Integrity Rules
 
-- NEVER invent IOCs. Every indicator in a rule must come from the source SIR.
+- NEVER invent IOCs. Every indicator must come from the source SIR.
 - NEVER extrapolate patterns (e.g., "similar package names would be...")
 - NEVER fill in missing fields with guesses
+- NEVER use category values: TEST, FIXTURE, SIMULATION, DEBUG
+- NEVER use familyName containing: test, fixture, simulation, sample, example
 - If a SIR has only IPs and AndroDR doesn't monitor raw IP connections, flag as skip
+
+### Mandatory `source` field
+
+Every IOC data entry MUST include a `source` field tracing to a verified feed:
+
+```yaml
+entries:
+  - indicator: "com.flexispy.android"
+    family: "FlexiSPY"
+    category: "STALKERWARE"
+    severity: "CRITICAL"
+    description: "..."
+    source: "stalkerware-indicators"   # ← MANDATORY
+```
+
+Allowed sources: `stalkerware-indicators`, `malwarebazaar`, `threatfox`,
+`amnesty-investigations`, `citizenlab-indicators`, `mvt-indicators`,
+`virustotal`, `android-security-bulletin`
+
+Entries without a valid `source` will be REJECTED by the validation gate.
+
+### NEVER harvest IOCs from test devices
+
+If running adversary simulation, IOC data (package names, cert hashes, domains)
+must come from the SOURCE THREAT INTELLIGENCE, not from scanning the test device.
+Harvesting hashes from installed apps on test devices and labeling them as threat
+IOCs creates false positives in production.
 
 ## Output
 
@@ -146,6 +175,18 @@ Return a JSON object:
       "rule_id": "androdr-NNN",
       "source_sirs": ["threatfox-android-anatsa"],
       "decisions": [ ... ]
+    }
+  ],
+  "ioc_data": [
+    {
+      "type": "package_name",
+      "indicator": "com.example.malware",
+      "family": "MalwareName",
+      "category": "TROJAN",
+      "severity": "CRITICAL",
+      "description": "...",
+      "source": "malwarebazaar",
+      "source_sir": "threatfox-android-example"
     }
   ]
 }

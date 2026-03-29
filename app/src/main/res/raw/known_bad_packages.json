@@ -4,755 +4,863 @@
     "name": "FlexiSPY",
     "category": "STALKERWARE",
     "severity": "CRITICAL",
-    "description": "Commercial stalkerware with deep device surveillance including call interception, ambient recording, and GPS tracking. Hides from victim."
+    "description": "Commercial stalkerware with deep device surveillance including call interception, ambient recording, and GPS tracking. Hides from victim.",
+    "source": "stalkerware-indicators"
   },
   {
     "packageName": "com.mspy.android",
     "name": "mSpy",
     "category": "STALKERWARE",
     "severity": "CRITICAL",
-    "description": "Commercial stalkerware sold for parental monitoring. Exfiltrates SMS, calls, location, and app activity to remote servers without consent."
+    "description": "Commercial stalkerware sold for parental monitoring. Exfiltrates SMS, calls, location, and app activity to remote servers without consent.",
+    "source": "stalkerware-indicators"
   },
   {
     "packageName": "com.mobilespy.android",
     "name": "mSpy Agent",
     "category": "STALKERWARE",
     "severity": "CRITICAL",
-    "description": "mSpy monitoring agent disguised as a system component. Runs persistently in the background to upload device data."
+    "description": "mSpy monitoring agent disguised as a system component. Runs persistently in the background to upload device data.",
+    "source": "stalkerware-indicators"
   },
   {
     "packageName": "com.spyic.android",
     "name": "Spyic",
     "category": "STALKERWARE",
     "severity": "HIGH",
-    "description": "Commercial stalkerware that provides SMS, call log, GPS location, and social media monitoring via a web dashboard."
+    "description": "Commercial stalkerware that provides SMS, call log, GPS location, and social media monitoring via a web dashboard.",
+    "source": "stalkerware-indicators"
   },
   {
     "packageName": "com.cocospy.android",
     "name": "Cocospy",
     "category": "STALKERWARE",
     "severity": "HIGH",
-    "description": "Commercial stalkerware sharing infrastructure with Spyic. Stealth mode hides app icon from launcher."
+    "description": "Commercial stalkerware sharing infrastructure with Spyic. Stealth mode hides app icon from launcher.",
+    "source": "stalkerware-indicators"
   },
   {
     "packageName": "com.hoverwatch.android",
     "name": "Hoverwatch",
     "category": "STALKERWARE",
     "severity": "HIGH",
-    "description": "Commercial stalkerware that captures screenshots, records calls, tracks location, and logs keystrokes. Invisible mode available."
+    "description": "Commercial stalkerware that captures screenshots, records calls, tracks location, and logs keystrokes. Invisible mode available.",
+    "source": "stalkerware-indicators"
   },
   {
     "packageName": "com.famisafe.android",
     "name": "FamiSafe",
     "category": "STALKERWARE",
     "severity": "MEDIUM",
-    "description": "Parental control / stalkerware hybrid by Wondershare. Tracks real-time GPS, app usage, and browsing history."
+    "description": "Parental control / stalkerware hybrid by Wondershare. Tracks real-time GPS, app usage, and browsing history.",
+    "source": "stalkerware-indicators"
   },
   {
     "packageName": "com.spyzie.android",
     "name": "Spyzie",
     "category": "STALKERWARE",
     "severity": "HIGH",
-    "description": "Commercial stalkerware that monitors SMS, calls, WhatsApp, Facebook, and GPS location without the target's knowledge."
+    "description": "Commercial stalkerware that monitors SMS, calls, WhatsApp, Facebook, and GPS location without the target's knowledge.",
+    "source": "stalkerware-indicators"
   },
   {
     "packageName": "com.umobix.agent",
     "name": "uMobix",
     "category": "STALKERWARE",
     "severity": "HIGH",
-    "description": "Commercial stalkerware with keylogger, social media monitoring, and live GPS tracking capabilities."
+    "description": "Commercial stalkerware with keylogger, social media monitoring, and live GPS tracking capabilities.",
+    "source": "stalkerware-indicators"
   },
   {
     "packageName": "com.eyezy.android",
     "name": "Eyezy",
     "category": "STALKERWARE",
     "severity": "HIGH",
-    "description": "Commercial stalkerware marketed as parental monitoring. Captures keystrokes, reads encrypted messages, and tracks location."
+    "description": "Commercial stalkerware marketed as parental monitoring. Captures keystrokes, reads encrypted messages, and tracks location.",
+    "source": "stalkerware-indicators"
   },
   {
     "packageName": "com.ispyoo.android",
     "name": "iSpyoo",
     "category": "STALKERWARE",
     "severity": "HIGH",
-    "description": "Commercial stalkerware that monitors calls, SMS, GPS, and social media. Rebranded variant of TheTruthSpy infrastructure."
+    "description": "Commercial stalkerware that monitors calls, SMS, GPS, and social media. Rebranded variant of TheTruthSpy infrastructure.",
+    "source": "stalkerware-indicators"
   },
   {
     "packageName": "com.thetruthspy.android",
     "name": "TheTruthSpy",
     "category": "STALKERWARE",
     "severity": "CRITICAL",
-    "description": "Stalkerware with documented massive data breach. Collects SMS, calls, GPS, photos, and real-time location from victims."
+    "description": "Stalkerware with documented massive data breach. Collects SMS, calls, GPS, photos, and real-time location from victims.",
+    "source": "stalkerware-indicators"
   },
   {
     "packageName": "com.copy9.android",
     "name": "Copy9",
     "category": "STALKERWARE",
     "severity": "HIGH",
-    "description": "Stalkerware from TheTruthSpy group. Uploads SMS, contacts, WhatsApp messages, and GPS coordinates to remote C2."
+    "description": "Stalkerware from TheTruthSpy group. Uploads SMS, contacts, WhatsApp messages, and GPS coordinates to remote C2.",
+    "source": "stalkerware-indicators"
   },
   {
     "packageName": "com.spymaster.android",
     "name": "SpyMaster Pro",
     "category": "STALKERWARE",
     "severity": "HIGH",
-    "description": "Commercial stalkerware that hides its icon and silently exfiltrates device data including call recordings and messages."
+    "description": "Commercial stalkerware that hides its icon and silently exfiltrates device data including call recordings and messages.",
+    "source": "stalkerware-indicators"
   },
   {
     "packageName": "com.cerberus.rat",
     "name": "Cerberus Banking Trojan",
     "category": "BANKING_TROJAN",
     "severity": "CRITICAL",
-    "description": "Android banking trojan capable of overlay attacks, SMS interception for 2FA bypass, RAT functionality, and credential theft."
+    "description": "Android banking trojan capable of overlay attacks, SMS interception for 2FA bypass, RAT functionality, and credential theft.",
+    "source": "malwarebazaar"
   },
   {
     "packageName": "com.cerberus.android",
     "name": "Cerberus",
     "category": "BANKING_TROJAN",
     "severity": "CRITICAL",
-    "description": "Cerberus banking trojan variant. Uses Accessibility Services for keylogging and fake overlay screens to steal banking credentials."
+    "description": "Cerberus banking trojan variant. Uses Accessibility Services for keylogging and fake overlay screens to steal banking credentials.",
+    "source": "malwarebazaar"
   },
   {
     "packageName": "com.android.play.games",
     "name": "Anubis Banking Trojan",
     "category": "BANKING_TROJAN",
     "severity": "CRITICAL",
-    "description": "Anubis banking trojan disguised as Google Play Games. Steals banking credentials, intercepts SMS, and has RAT capabilities."
+    "description": "Anubis banking trojan disguised as Google Play Games. Steals banking credentials, intercepts SMS, and has RAT capabilities.",
+    "source": "malwarebazaar"
   },
   {
     "packageName": "com.google.android.verify",
     "name": "BankBot",
     "category": "BANKING_TROJAN",
     "severity": "CRITICAL",
-    "description": "BankBot trojan disguised as Google verification service. Performs overlay attacks against banking apps to steal credentials."
+    "description": "BankBot trojan disguised as Google verification service. Performs overlay attacks against banking apps to steal credentials.",
+    "source": "malwarebazaar"
   },
   {
     "packageName": "com.sms.receive.checkandroid",
     "name": "EventBot",
     "category": "BANKING_TROJAN",
     "severity": "CRITICAL",
-    "description": "EventBot banking trojan that abuses Android Accessibility Services to steal data from 200+ financial apps and intercept SMS."
+    "description": "EventBot banking trojan that abuses Android Accessibility Services to steal data from 200+ financial apps and intercept SMS.",
+    "source": "malwarebazaar"
   },
   {
     "packageName": "com.sharkbot.android",
     "name": "SharkBot",
     "category": "BANKING_TROJAN",
     "severity": "CRITICAL",
-    "description": "SharkBot banking trojan that performs Automatic Transfer System (ATS) attacks to initiate unauthorized money transfers."
+    "description": "SharkBot banking trojan that performs Automatic Transfer System (ATS) attacks to initiate unauthorized money transfers.",
+    "source": "malwarebazaar"
   },
   {
     "packageName": "com.antivirus.protect",
     "name": "SharkBot Dropper",
     "category": "BANKING_TROJAN",
     "severity": "CRITICAL",
-    "description": "SharkBot malware dropper disguised as antivirus application. Was distributed via Google Play Store before removal."
+    "description": "SharkBot malware dropper disguised as antivirus application. Was distributed via Google Play Store before removal.",
+    "source": "malwarebazaar"
   },
   {
     "packageName": "com.brata.android",
     "name": "BRATA",
     "category": "BANKING_TROJAN",
     "severity": "CRITICAL",
-    "description": "BRATA Android banking trojan with factory reset capability. Intercepts OTPs, overlays banking apps, and wipes devices after fraud."
+    "description": "BRATA Android banking trojan with factory reset capability. Intercepts OTPs, overlays banking apps, and wipes devices after fraud.",
+    "source": "malwarebazaar"
   },
   {
     "packageName": "com.flubot.android",
     "name": "FluBot",
     "category": "BANKING_TROJAN",
     "severity": "CRITICAL",
-    "description": "FluBot (Cabassous) banking trojan spread via smishing. Steals banking credentials, contact lists, and spreads itself via SMS."
+    "description": "FluBot (Cabassous) banking trojan spread via smishing. Steals banking credentials, contact lists, and spreads itself via SMS.",
+    "source": "malwarebazaar"
   },
   {
     "packageName": "com.droidjack.server",
     "name": "DroidJack RAT",
     "category": "RAT",
     "severity": "CRITICAL",
-    "description": "DroidJack (SandroRAT) remote access trojan providing full device control: camera, microphone, SMS, calls, and file system access."
+    "description": "DroidJack (SandroRAT) remote access trojan providing full device control: camera, microphone, SMS, calls, and file system access.",
+    "source": "malwarebazaar"
   },
   {
     "packageName": "com.androrat.server",
     "name": "AndroRAT",
     "category": "RAT",
     "severity": "CRITICAL",
-    "description": "AndroRAT open-source remote administration tool. Provides remote control over calls, SMS, GPS, camera, and microphone."
+    "description": "AndroRAT open-source remote administration tool. Provides remote control over calls, SMS, GPS, camera, and microphone.",
+    "source": "malwarebazaar"
   },
   {
     "packageName": "com.spynote.rat",
     "name": "SpyNote RAT",
     "category": "RAT",
     "severity": "CRITICAL",
-    "description": "SpyNote (CypherRat) remote access trojan. Exfiltrates SMS, contacts, call logs, and enables live camera/microphone streaming."
+    "description": "SpyNote (CypherRat) remote access trojan. Exfiltrates SMS, contacts, call logs, and enables live camera/microphone streaming.",
+    "source": "malwarebazaar"
   },
   {
     "packageName": "com.spymax.android",
     "name": "SpyMax RAT",
     "category": "RAT",
     "severity": "CRITICAL",
-    "description": "SpyMax commercial RAT toolkit. Provides keylogging, SMS interception, call recording, GPS tracking, and remote shell."
+    "description": "SpyMax commercial RAT toolkit. Provides keylogging, SMS interception, call recording, GPS tracking, and remote shell.",
+    "source": "malwarebazaar"
   },
   {
     "packageName": "com.ahmyth.android",
     "name": "AhMyth RAT",
     "category": "RAT",
     "severity": "CRITICAL",
-    "description": "AhMyth open-source Android RAT. Steals SMS, contacts, call logs, location data, and captures camera images remotely."
+    "description": "AhMyth open-source Android RAT. Steals SMS, contacts, call logs, location data, and captures camera images remotely.",
+    "source": "malwarebazaar"
   },
   {
     "packageName": "com.network.module",
     "name": "Pegasus Indicator (NSO Group)",
     "category": "NATION_STATE_SPYWARE",
     "severity": "CRITICAL",
-    "description": "Package name associated with Pegasus spyware by NSO Group per Citizen Lab and Amnesty International research. Zero-click exploit delivery."
+    "description": "Package name associated with Pegasus spyware by NSO Group per Citizen Lab and Amnesty International research. Zero-click exploit delivery.",
+    "source": "amnesty-investigations"
   },
   {
     "packageName": "com.apple.selfservice",
     "name": "Pegasus Indicator (NSO Group)",
     "category": "NATION_STATE_SPYWARE",
     "severity": "CRITICAL",
-    "description": "Package name impersonating Apple service identified in Pegasus spyware IOC reports. Used to masquerade as legitimate system component."
+    "description": "Package name impersonating Apple service identified in Pegasus spyware IOC reports. Used to masquerade as legitimate system component.",
+    "source": "amnesty-investigations"
   },
   {
     "packageName": "com.highsierrainc.update",
     "name": "Pegasus Indicator (NSO Group)",
     "category": "NATION_STATE_SPYWARE",
     "severity": "CRITICAL",
-    "description": "Package name linked to Pegasus spyware infrastructure identified in Citizen Lab forensic analysis of compromised devices."
+    "description": "Package name linked to Pegasus spyware infrastructure identified in Citizen Lab forensic analysis of compromised devices.",
+    "source": "amnesty-investigations"
   },
   {
     "packageName": "com.faceapp.filter",
     "name": "Pegasus Delivery Vector",
     "category": "NATION_STATE_SPYWARE",
     "severity": "CRITICAL",
-    "description": "Trojanized application package used as a Pegasus delivery vector. Masquerades as popular app while installing surveillance implant."
+    "description": "Trojanized application package used as a Pegasus delivery vector. Masquerades as popular app while installing surveillance implant.",
+    "source": "amnesty-investigations"
   },
   {
     "packageName": "com.system.update.service",
     "name": "Pegasus Persistence Component",
     "category": "NATION_STATE_SPYWARE",
     "severity": "CRITICAL",
-    "description": "System update masquerade package associated with advanced persistent spyware implants including Pegasus-related indicators."
+    "description": "System update masquerade package associated with advanced persistent spyware implants including Pegasus-related indicators.",
+    "source": "amnesty-investigations"
   },
   {
     "packageName": "com.whatsapp.update",
     "name": "Pegasus WhatsApp Exploit Indicator",
     "category": "NATION_STATE_SPYWARE",
     "severity": "CRITICAL",
-    "description": "Package impersonating WhatsApp update, associated with NSO Group Pegasus delivery following the CVE-2019-3568 WhatsApp exploit."
+    "description": "Package impersonating WhatsApp update, associated with NSO Group Pegasus delivery following the CVE-2019-3568 WhatsApp exploit.",
+    "source": "amnesty-investigations"
   },
   {
     "packageName": "com.android.updater",
     "name": "FinFisher / FinSpy",
     "category": "NATION_STATE_SPYWARE",
     "severity": "CRITICAL",
-    "description": "FinFisher (FinSpy) commercial spyware sold to governments. Full device takeover including encrypted communications interception."
+    "description": "FinFisher (FinSpy) commercial spyware sold to governments. Full device takeover including encrypted communications interception.",
+    "source": "amnesty-investigations"
   },
   {
     "packageName": "com.adobe.flash.player",
     "name": "FinSpy Dropper",
     "category": "NATION_STATE_SPYWARE",
     "severity": "CRITICAL",
-    "description": "FinFisher spyware dropper masquerading as Adobe Flash Player. Installs surveillance implant with keylogging and call interception."
+    "description": "FinFisher spyware dropper masquerading as Adobe Flash Player. Installs surveillance implant with keylogging and call interception.",
+    "source": "amnesty-investigations"
   },
   {
     "packageName": "com.system.manager.service",
     "name": "Chrysaor Spyware (Google TAG)",
     "category": "NATION_STATE_SPYWARE",
     "severity": "CRITICAL",
-    "description": "Package associated with Chrysaor Android spyware (Pegasus Android cousin) documented by Google and Lookout Security."
+    "description": "Package associated with Chrysaor Android spyware (Pegasus Android cousin) documented by Google and Lookout Security.",
+    "source": "amnesty-investigations"
   },
   {
     "packageName": "com.network.manager.update",
     "name": "Predator Spyware Indicator",
     "category": "NATION_STATE_SPYWARE",
     "severity": "CRITICAL",
-    "description": "Package name pattern associated with Cytrox Predator spyware per Citizen Lab and Meta threat intelligence reporting."
+    "description": "Package name pattern associated with Cytrox Predator spyware per Citizen Lab and Meta threat intelligence reporting.",
+    "source": "amnesty-investigations"
   },
   {
     "packageName": "com.google.android.gms.update",
     "name": "GinMaster Trojan",
     "category": "TROJAN",
     "severity": "HIGH",
-    "description": "GinMaster trojan disguised as Google Play Services update. Roots device, installs backdoor, and exfiltrates device identifiers."
+    "description": "GinMaster trojan disguised as Google Play Services update. Roots device, installs backdoor, and exfiltrates device identifiers.",
+    "source": "malwarebazaar"
   },
   {
     "packageName": "com.android.service.system",
     "name": "DroidDream Trojan",
     "category": "TROJAN",
     "severity": "HIGH",
-    "description": "DroidDream malware family that exploits CVE-2010-EASY root exploit. Exfiltrates IMEI, IMSI, and installs additional payloads."
+    "description": "DroidDream malware family that exploits CVE-2010-EASY root exploit. Exfiltrates IMEI, IMSI, and installs additional payloads.",
+    "source": "malwarebazaar"
   },
   {
     "packageName": "com.fake.google.play",
     "name": "Marcher Banking Trojan",
     "category": "BANKING_TROJAN",
     "severity": "CRITICAL",
-    "description": "Marcher banking trojan that performs overlay attacks on banking and payment apps to steal credentials and credit card data."
+    "description": "Marcher banking trojan that performs overlay attacks on banking and payment apps to steal credentials and credit card data.",
+    "source": "malwarebazaar"
   },
   {
     "packageName": "com.google.playservice",
     "name": "Marcher Variant",
     "category": "BANKING_TROJAN",
     "severity": "CRITICAL",
-    "description": "Marcher banking trojan variant impersonating Google Play Services. Monitors app launches and overlays fake login screens."
+    "description": "Marcher banking trojan variant impersonating Google Play Services. Monitors app launches and overlays fake login screens.",
+    "source": "malwarebazaar"
   },
   {
     "packageName": "com.spy.phone.app",
     "name": "SpyPhone Android",
     "category": "STALKERWARE",
     "severity": "HIGH",
-    "description": "Consumer-grade stalkerware that logs SMS, calls, and GPS. Uploaded to public trackers and third-party stores."
+    "description": "Consumer-grade stalkerware that logs SMS, calls, and GPS. Uploaded to public trackers and third-party stores.",
+    "source": "stalkerware-indicators"
   },
   {
     "packageName": "com.mobile.tracker.free",
     "name": "Mobile Tracker Free",
     "category": "STALKERWARE",
     "severity": "HIGH",
-    "description": "Stalkerware marketed for parental and employee monitoring. Identified by EXODUS Privacy as exfiltrating data without transparent disclosure."
+    "description": "Stalkerware marketed for parental and employee monitoring. Identified by EXODUS Privacy as exfiltrating data without transparent disclosure.",
+    "source": "stalkerware-indicators"
   },
   {
     "packageName": "com.wspy.android",
     "name": "Wspy",
     "category": "STALKERWARE",
     "severity": "HIGH",
-    "description": "Commercial stalkerware with WhatsApp, Viber, and Snapchat message interception. Variant of iSpyoo/TheTruthSpy infrastructure."
+    "description": "Commercial stalkerware with WhatsApp, Viber, and Snapchat message interception. Variant of iSpyoo/TheTruthSpy infrastructure.",
+    "source": "stalkerware-indicators"
   },
   {
     "packageName": "com.phone.monitor.agent",
     "name": "PhoneMonitor",
     "category": "STALKERWARE",
     "severity": "HIGH",
-    "description": "Consumer stalkerware agent providing silent SMS, call, and GPS monitoring. Installs without clear consent disclosure to target device owner."
+    "description": "Consumer stalkerware agent providing silent SMS, call, and GPS monitoring. Installs without clear consent disclosure to target device owner.",
+    "source": "stalkerware-indicators"
   },
   {
     "packageName": "com.kidsguard.android",
     "name": "KidsGuard Pro",
     "category": "STALKERWARE",
     "severity": "HIGH",
-    "description": "KidsGuard Pro by ClevGuard. Monitors WhatsApp, Snapchat, Instagram, records calls, and tracks GPS with hidden operation mode."
+    "description": "KidsGuard Pro by ClevGuard. Monitors WhatsApp, Snapchat, Instagram, records calls, and tracks GPS with hidden operation mode.",
+    "source": "stalkerware-indicators"
   },
   {
     "packageName": "com.clevguard.android",
     "name": "ClevGuard Agent",
     "category": "STALKERWARE",
     "severity": "HIGH",
-    "description": "ClevGuard monitoring agent. Part of stalkerware infrastructure flagged by Google Play Store for policy violations."
+    "description": "ClevGuard monitoring agent. Part of stalkerware infrastructure flagged by Google Play Store for policy violations.",
+    "source": "stalkerware-indicators"
   },
   {
     "packageName": "com.vkurse.android",
     "name": "SpyHuman",
     "category": "STALKERWARE",
     "severity": "HIGH",
-    "description": "SpyHuman stalkerware that intercepts calls, SMS, WhatsApp, and monitors browsing history without target awareness."
+    "description": "SpyHuman stalkerware that intercepts calls, SMS, WhatsApp, and monitors browsing history without target awareness.",
+    "source": "stalkerware-indicators"
   },
   {
     "packageName": "com.spyera.android",
     "name": "Spyera",
     "category": "STALKERWARE",
     "severity": "CRITICAL",
-    "description": "Commercial stalkerware with ambient listening, call interception, encrypted communication monitoring, and keylogging capabilities."
+    "description": "Commercial stalkerware with ambient listening, call interception, encrypted communication monitoring, and keylogging capabilities.",
+    "source": "stalkerware-indicators"
   },
   {
     "packageName": "com.highster.mobile",
     "name": "Highster Mobile",
     "category": "STALKERWARE",
     "severity": "HIGH",
-    "description": "Commercial stalkerware that exfiltrates SMS, GPS location, call logs, photos, and social media messages."
+    "description": "Commercial stalkerware that exfiltrates SMS, GPS location, call logs, photos, and social media messages.",
+    "source": "stalkerware-indicators"
   },
   {
     "packageName": "com.auto.forward.sms",
     "name": "Auto Forward SMS",
     "category": "STALKERWARE",
     "severity": "HIGH",
-    "description": "SMS forwarding stalkerware that silently redirects all inbound and outbound SMS to attacker-controlled numbers or emails."
+    "description": "SMS forwarding stalkerware that silently redirects all inbound and outbound SMS to attacker-controlled numbers or emails.",
+    "source": "stalkerware-indicators"
   },
   {
     "packageName": "com.spybubble.android",
     "name": "SpyBubble",
     "category": "STALKERWARE",
     "severity": "HIGH",
-    "description": "SpyBubble commercial stalkerware. Tracks GPS, monitors calls and SMS, and exfiltrates WhatsApp and social media messages."
+    "description": "SpyBubble commercial stalkerware. Tracks GPS, monitors calls and SMS, and exfiltrates WhatsApp and social media messages.",
+    "source": "stalkerware-indicators"
   },
   {
     "packageName": "com.nexspy.android",
     "name": "NexSpy",
     "category": "STALKERWARE",
     "severity": "HIGH",
-    "description": "NexSpy stalkerware with GPS tracking, SMS/call monitoring, and social media interception. Identified by Kaspersky threat research."
+    "description": "NexSpy stalkerware with GPS tracking, SMS/call monitoring, and social media interception. Identified by Kaspersky threat research.",
+    "source": "stalkerware-indicators"
   },
   {
     "packageName": "com.xnspy.android",
     "name": "XNSPY",
     "category": "STALKERWARE",
     "severity": "HIGH",
-    "description": "Commercial stalkerware marketed for parental monitoring. Monitors calls, SMS, emails, GPS, and social media apps covertly."
+    "description": "Commercial stalkerware marketed for parental monitoring. Monitors calls, SMS, emails, GPS, and social media apps covertly.",
+    "source": "stalkerware-indicators"
   },
   {
     "packageName": "com.moniterro.agent",
     "name": "Moniterro",
     "category": "STALKERWARE",
     "severity": "HIGH",
-    "description": "Moniterro stalkerware with screen recording, keylogging, and social media monitoring. Hides from app drawer."
+    "description": "Moniterro stalkerware with screen recording, keylogging, and social media monitoring. Hides from app drawer.",
+    "source": "stalkerware-indicators"
   },
   {
     "packageName": "com.system.cleaner.boost",
     "name": "Joker Spyware",
     "category": "PREMIUM_DIALER_FRAUD",
     "severity": "HIGH",
-    "description": "Joker (Bread) malware family disguised as utility app. Subscribes victims to premium SMS services and exfiltrates contact data."
+    "description": "Joker (Bread) malware family disguised as utility app. Subscribes victims to premium SMS services and exfiltrates contact data.",
+    "source": "malwarebazaar"
   },
   {
     "packageName": "com.battery.saver.clean",
     "name": "Joker Variant",
     "category": "PREMIUM_DIALER_FRAUD",
     "severity": "HIGH",
-    "description": "Joker malware variant. Removed from Google Play Store multiple times. Performs WAP billing fraud and SMS interception."
+    "description": "Joker malware variant. Removed from Google Play Store multiple times. Performs WAP billing fraud and SMS interception.",
+    "source": "malwarebazaar"
   },
   {
     "packageName": "com.android.phone.manager",
     "name": "xHelper Dropper",
     "category": "TROJAN",
     "severity": "CRITICAL",
-    "description": "xHelper persistent Android trojan dropper. Reinstalls itself even after factory reset by abusing device partition mounts."
+    "description": "xHelper persistent Android trojan dropper. Reinstalls itself even after factory reset by abusing device partition mounts.",
+    "source": "malwarebazaar"
   },
   {
     "packageName": "com.phone.speed.booster",
     "name": "HummingBad",
     "category": "ADWARE_MALWARE",
     "severity": "HIGH",
-    "description": "HummingBad malware that roots devices, installs fraudulent apps, and generates $300k/month in fraudulent ad revenue."
+    "description": "HummingBad malware that roots devices, installs fraudulent apps, and generates $300k/month in fraudulent ad revenue.",
+    "source": "malwarebazaar"
   },
   {
     "packageName": "com.update.system.checker",
     "name": "Gooligan",
     "category": "TROJAN",
     "severity": "HIGH",
-    "description": "Gooligan campaign malware that roots Android devices, steals Google authentication tokens, and installs fraudulent apps."
+    "description": "Gooligan campaign malware that roots Android devices, steals Google authentication tokens, and installs fraudulent apps.",
+    "source": "malwarebazaar"
   },
   {
     "packageName": "com.sms.spy.agent",
     "name": "SMSSpy",
     "category": "STALKERWARE",
     "severity": "HIGH",
-    "description": "SMS spy agent that silently forwards all SMS messages to attacker-controlled endpoint. Used in targeted surveillance campaigns."
+    "description": "SMS spy agent that silently forwards all SMS messages to attacker-controlled endpoint. Used in targeted surveillance campaigns.",
+    "source": "stalkerware-indicators"
   },
   {
     "packageName": "com.android.security.update",
     "name": "Triout Spyware",
     "category": "SPYWARE",
     "severity": "CRITICAL",
-    "description": "Triout Android spyware framework that records calls, logs SMS, captures images, and records video, uploading to C2 server."
+    "description": "Triout Android spyware framework that records calls, logs SMS, captures images, and records video, uploading to C2 server.",
+    "source": "threatfox"
   },
   {
     "packageName": "com.talkback.service.update",
     "name": "FakeApp Accessibility Abuse",
     "category": "SPYWARE",
     "severity": "HIGH",
-    "description": "Malware abusing Android Accessibility Services disguised as TalkBack update to perform keylogging and UI interaction monitoring."
+    "description": "Malware abusing Android Accessibility Services disguised as TalkBack update to perform keylogging and UI interaction monitoring.",
+    "source": "threatfox"
   },
   {
     "packageName": "com.androspy.pro",
     "name": "AndroSpy",
     "category": "RAT",
     "severity": "CRITICAL",
-    "description": "AndroSpy commercial RAT available on underground forums. Full device control including live camera, microphone, and GPS streaming."
+    "description": "AndroSpy commercial RAT available on underground forums. Full device control including live camera, microphone, and GPS streaming.",
+    "source": "malwarebazaar"
   },
   {
     "packageName": "com.comet.rat.android",
     "name": "CometRAT",
     "category": "RAT",
     "severity": "CRITICAL",
-    "description": "CometRAT Android remote access trojan. Exfiltrates device data, enables remote shell, and intercepts communications."
+    "description": "CometRAT Android remote access trojan. Exfiltrates device data, enables remote shell, and intercepts communications.",
+    "source": "malwarebazaar"
   },
   {
     "packageName": "com.blackshades.rat",
     "name": "BlackShades Mobile",
     "category": "RAT",
     "severity": "CRITICAL",
-    "description": "BlackShades Android RAT variant. Provides remote access to device camera, microphone, file system, and messaging apps."
+    "description": "BlackShades Android RAT variant. Provides remote access to device camera, microphone, file system, and messaging apps.",
+    "source": "malwarebazaar"
   },
   {
     "packageName": "com.ginmaster.root",
     "name": "GinMaster Root Exploit",
     "category": "TROJAN",
     "severity": "CRITICAL",
-    "description": "GinMaster malware that exploits rooting vulnerabilities to install persistent backdoor and steal device identifiers."
+    "description": "GinMaster malware that exploits rooting vulnerabilities to install persistent backdoor and steal device identifiers.",
+    "source": "malwarebazaar"
   },
   {
     "packageName": "com.system.service.daemon",
     "name": "Dendroid RAT",
     "category": "RAT",
     "severity": "CRITICAL",
-    "description": "Dendroid Android RAT sold on underground forums. Intercepts calls/SMS, activates camera/microphone, and performs HTTP flooding."
+    "description": "Dendroid Android RAT sold on underground forums. Intercepts calls/SMS, activates camera/microphone, and performs HTTP flooding.",
+    "source": "malwarebazaar"
   },
   {
     "packageName": "com.android.flash.service",
     "name": "Dvmap Trojan",
     "category": "TROJAN",
     "severity": "CRITICAL",
-    "description": "Dvmap Android trojan that patches system libraries to inject malicious code. First Android malware to inject code into system runtime."
+    "description": "Dvmap Android trojan that patches system libraries to inject malicious code. First Android malware to inject code into system runtime.",
+    "source": "malwarebazaar"
   },
   {
     "packageName": "com.whatsapp.messenger.plus",
     "name": "WhatsApp Mod Malware",
     "category": "TROJAN",
     "severity": "HIGH",
-    "description": "Malicious WhatsApp modification that bundles Triada/Trojan downloader. Distributed through unofficial channels."
+    "description": "Malicious WhatsApp modification that bundles Triada/Trojan downloader. Distributed through unofficial channels.",
+    "source": "malwarebazaar"
   },
   {
     "packageName": "com.triada.dropper",
     "name": "Triada Trojan",
     "category": "TROJAN",
     "severity": "CRITICAL",
-    "description": "Triada modular Android trojan that embeds into Zygote process. Pre-installed on some low-cost Android devices from supply chain compromise."
+    "description": "Triada modular Android trojan that embeds into Zygote process. Pre-installed on some low-cost Android devices from supply chain compromise.",
+    "source": "malwarebazaar"
   },
   {
     "packageName": "com.hermit.stalkerware",
     "name": "Hermit Spyware (RCS Lab)",
     "category": "NATION_STATE_SPYWARE",
     "severity": "CRITICAL",
-    "description": "Hermit enterprise spyware by RCS Lab documented by Lookout and Google TAG. Used by government entities against journalists and activists."
+    "description": "Hermit enterprise spyware by RCS Lab documented by Lookout and Google TAG. Used by government entities against journalists and activists.",
+    "source": "amnesty-investigations"
   },
   {
     "packageName": "com.cytrox.predator",
     "name": "Predator Spyware (Cytrox)",
     "category": "NATION_STATE_SPYWARE",
     "severity": "CRITICAL",
-    "description": "Predator spyware by Cytrox/Intellexa. Documented by Citizen Lab and Meta. Used against politicians and journalists via zero-click exploits."
+    "description": "Predator spyware by Cytrox/Intellexa. Documented by Citizen Lab and Meta. Used against politicians and journalists via zero-click exploits.",
+    "source": "amnesty-investigations"
   },
   {
     "packageName": "com.candiru.spyware",
     "name": "DevilsTongue (Candiru)",
     "category": "NATION_STATE_SPYWARE",
     "severity": "CRITICAL",
-    "description": "Candiru spyware tool documented by Citizen Lab and Microsoft. Android component of cross-platform surveillance product."
+    "description": "Candiru spyware tool documented by Citizen Lab and Microsoft. Android component of cross-platform surveillance product.",
+    "source": "amnesty-investigations"
   },
   {
     "packageName": "com.mms.service.recv",
     "name": "StageFright Exploit Dropper",
     "category": "EXPLOIT_DROPPER",
     "severity": "CRITICAL",
-    "description": "Malware exploiting CVE-2015-1538 (StageFright) via malicious MMS. Delivers payload upon receipt of crafted multimedia message."
+    "description": "Malware exploiting CVE-2015-1538 (StageFright) via malicious MMS. Delivers payload upon receipt of crafted multimedia message.",
+    "source": "malwarebazaar"
   },
   {
     "packageName": "com.settings.manager.update",
     "name": "Agent Smith Malware",
     "category": "TROJAN",
     "severity": "HIGH",
-    "description": "Agent Smith malware that replaces legitimate apps with malicious versions by exploiting Android package installation vulnerabilities."
+    "description": "Agent Smith malware that replaces legitimate apps with malicious versions by exploiting Android package installation vulnerabilities.",
+    "source": "malwarebazaar"
   },
   {
     "packageName": "com.fake.flash.update",
     "name": "Vultur Banking Trojan",
     "category": "BANKING_TROJAN",
     "severity": "CRITICAL",
-    "description": "Vultur Android banking trojan that uses VNC screen recording to capture banking app credentials in real time."
+    "description": "Vultur Android banking trojan that uses VNC screen recording to capture banking app credentials in real time.",
+    "source": "malwarebazaar"
   },
   {
     "packageName": "com.hook.banking.android",
     "name": "Hook Banking Trojan",
     "category": "BANKING_TROJAN",
     "severity": "CRITICAL",
-    "description": "Hook Android banking trojan (ERMAC fork). Captures credentials from 700+ banking and cryptocurrency apps via overlay attacks."
+    "description": "Hook Android banking trojan (ERMAC fork). Captures credentials from 700+ banking and cryptocurrency apps via overlay attacks.",
+    "source": "malwarebazaar"
   },
   {
     "packageName": "com.ermac.banking",
     "name": "ERMAC Banking Trojan",
     "category": "BANKING_TROJAN",
     "severity": "CRITICAL",
-    "description": "ERMAC Android banking trojan targeting 467 banking and wallet apps. Intercepts 2FA codes and performs wallet seed phrase theft."
+    "description": "ERMAC Android banking trojan targeting 467 banking and wallet apps. Intercepts 2FA codes and performs wallet seed phrase theft.",
+    "source": "malwarebazaar"
   },
   {
     "packageName": "com.hydra.banking.rat",
     "name": "Hydra Banking Trojan",
     "category": "BANKING_TROJAN",
     "severity": "CRITICAL",
-    "description": "Hydra banking trojan that requests dangerous permissions and uses Accessibility Services to steal banking credentials and bypass 2FA."
+    "description": "Hydra banking trojan that requests dangerous permissions and uses Accessibility Services to steal banking credentials and bypass 2FA.",
+    "source": "malwarebazaar"
   },
   {
     "packageName": "com.spynger.monitor",
     "name": "Spynger",
     "category": "STALKERWARE",
     "severity": "HIGH",
-    "description": "Spynger stalkerware marketed for partner monitoring. Tracks GPS, intercepts WhatsApp and Telegram, and records calls covertly."
+    "description": "Spynger stalkerware marketed for partner monitoring. Tracks GPS, intercepts WhatsApp and Telegram, and records calls covertly.",
+    "source": "stalkerware-indicators"
   },
   {
     "packageName": "com.minspy.android",
     "name": "Minspy",
     "category": "STALKERWARE",
     "severity": "HIGH",
-    "description": "Minspy stalkerware sharing backend infrastructure with Spyic/Cocospy. Exfiltrates device data to shared server infrastructure."
+    "description": "Minspy stalkerware sharing backend infrastructure with Spyic/Cocospy. Exfiltrates device data to shared server infrastructure.",
+    "source": "stalkerware-indicators"
   },
   {
     "packageName": "com.teensafe.monitor",
     "name": "TeenSafe",
     "category": "STALKERWARE",
     "severity": "MEDIUM",
-    "description": "TeenSafe parental monitoring app that exposed credentials of thousands of accounts. Classified as stalkerware by AV vendors."
+    "description": "TeenSafe parental monitoring app that exposed credentials of thousands of accounts. Classified as stalkerware by AV vendors.",
+    "source": "stalkerware-indicators"
   },
   {
     "packageName": "com.phone.spy.stealth",
     "name": "Stealth Phone Spy",
     "category": "STALKERWARE",
     "severity": "HIGH",
-    "description": "Consumer stalkerware with stealth operation mode. Logs all device activity and transmits to remote dashboard without user indication."
+    "description": "Consumer stalkerware with stealth operation mode. Logs all device activity and transmits to remote dashboard without user indication.",
+    "source": "stalkerware-indicators"
   },
   {
     "packageName": "com.thetruthspy",
     "name": "TheTruthSpy",
     "category": "STALKERWARE",
     "severity": "CRITICAL",
-    "description": "TheTruthSpy stalkerware \u2014 if not self-installed, contact a DV hotline"
+    "description": "TheTruthSpy stalkerware \u2014 if not self-installed, contact a DV hotline",
+    "source": "stalkerware-indicators"
   },
   {
     "packageName": "com.ttsapp",
     "name": "TheTruthSpy",
     "category": "STALKERWARE",
     "severity": "CRITICAL",
-    "description": "TheTruthSpy stalkerware alias \u2014 if not self-installed, contact a DV hotline"
+    "description": "TheTruthSpy stalkerware alias \u2014 if not self-installed, contact a DV hotline",
+    "source": "stalkerware-indicators"
   },
   {
     "packageName": "com.ispyoo",
     "name": "TheTruthSpy",
     "category": "STALKERWARE",
     "severity": "CRITICAL",
-    "description": "TheTruthSpy/iSpyoo stalkerware \u2014 if not self-installed, contact a DV hotline"
+    "description": "TheTruthSpy/iSpyoo stalkerware \u2014 if not self-installed, contact a DV hotline",
+    "source": "stalkerware-indicators"
   },
   {
     "packageName": "com.mxspy",
     "name": "TheTruthSpy",
     "category": "STALKERWARE",
     "severity": "CRITICAL",
-    "description": "TheTruthSpy/MxSpy stalkerware \u2014 if not self-installed, contact a DV hotline"
+    "description": "TheTruthSpy/MxSpy stalkerware \u2014 if not self-installed, contact a DV hotline",
+    "source": "stalkerware-indicators"
   },
   {
     "packageName": "com.spyzee",
     "name": "TheTruthSpy",
     "category": "STALKERWARE",
     "severity": "CRITICAL",
-    "description": "TheTruthSpy/Spyzee stalkerware \u2014 if not self-installed, contact a DV hotline"
+    "description": "TheTruthSpy/Spyzee stalkerware \u2014 if not self-installed, contact a DV hotline",
+    "source": "stalkerware-indicators"
   },
   {
     "packageName": "com.apspy",
     "name": "TheTruthSpy",
     "category": "STALKERWARE",
     "severity": "CRITICAL",
-    "description": "TheTruthSpy/ApSpy stalkerware \u2014 if not self-installed, contact a DV hotline"
+    "description": "TheTruthSpy/ApSpy stalkerware \u2014 if not self-installed, contact a DV hotline",
+    "source": "stalkerware-indicators"
   },
   {
     "packageName": "com.vvt.android",
     "name": "FlexiSpy",
     "category": "STALKERWARE",
     "severity": "CRITICAL",
-    "description": "FlexiSpy stalkerware \u2014 if not self-installed, contact a DV hotline"
+    "description": "FlexiSpy stalkerware \u2014 if not self-installed, contact a DV hotline",
+    "source": "stalkerware-indicators"
   },
   {
     "packageName": "com.fp.backup",
     "name": "FlexiSpy",
     "category": "STALKERWARE",
     "severity": "CRITICAL",
-    "description": "FlexiSpy stalkerware disguised as backup \u2014 if not self-installed, contact a DV hotline"
+    "description": "FlexiSpy stalkerware disguised as backup \u2014 if not self-installed, contact a DV hotline",
+    "source": "stalkerware-indicators"
   },
   {
     "packageName": "com.lsdroid.cerberus",
     "name": "Cerberus",
     "category": "STALKERWARE",
     "severity": "CRITICAL",
-    "description": "Cerberus anti-theft app abused as stalkerware \u2014 if not self-installed, contact a DV hotline"
+    "description": "Cerberus anti-theft app abused as stalkerware \u2014 if not self-installed, contact a DV hotline",
+    "source": "stalkerware-indicators"
   },
   {
     "packageName": "com.surebrec",
     "name": "Cerberus",
     "category": "STALKERWARE",
     "severity": "CRITICAL",
-    "description": "Cerberus stalkerware alias \u2014 if not self-installed, contact a DV hotline"
+    "description": "Cerberus stalkerware alias \u2014 if not self-installed, contact a DV hotline",
+    "source": "stalkerware-indicators"
   },
   {
     "packageName": "com.mspy",
     "name": "mSpy",
     "category": "STALKERWARE",
     "severity": "CRITICAL",
-    "description": "mSpy stalkerware \u2014 if not self-installed, contact a DV hotline"
+    "description": "mSpy stalkerware \u2014 if not self-installed, contact a DV hotline",
+    "source": "stalkerware-indicators"
   },
   {
     "packageName": "com.eyezy",
     "name": "mSpy",
     "category": "STALKERWARE",
     "severity": "CRITICAL",
-    "description": "Eyezy/mSpy stalkerware \u2014 if not self-installed, contact a DV hotline"
+    "description": "Eyezy/mSpy stalkerware \u2014 if not self-installed, contact a DV hotline",
+    "source": "stalkerware-indicators"
   },
   {
     "packageName": "med.mspy",
     "name": "mSpy",
     "category": "STALKERWARE",
     "severity": "CRITICAL",
-    "description": "mSpy stalkerware variant \u2014 if not self-installed, contact a DV hotline"
+    "description": "mSpy stalkerware variant \u2014 if not self-installed, contact a DV hotline",
+    "source": "stalkerware-indicators"
   },
   {
     "packageName": "update.service.android",
     "name": "mSpy",
     "category": "STALKERWARE",
     "severity": "CRITICAL",
-    "description": "mSpy stalkerware disguised as system update \u2014 if not self-installed, contact a DV hotline"
+    "description": "mSpy stalkerware disguised as system update \u2014 if not self-installed, contact a DV hotline",
+    "source": "stalkerware-indicators"
   },
   {
     "packageName": "core.update.framework",
     "name": "mSpy",
     "category": "STALKERWARE",
     "severity": "CRITICAL",
-    "description": "mSpy stalkerware disguised as framework update \u2014 if not self-installed, contact a DV hotline"
+    "description": "mSpy stalkerware disguised as framework update \u2014 if not self-installed, contact a DV hotline",
+    "source": "stalkerware-indicators"
   },
   {
     "packageName": "com.cocospy",
     "name": "Cocospy",
     "category": "STALKERWARE",
     "severity": "CRITICAL",
-    "description": "Cocospy stalkerware \u2014 if not self-installed, contact a DV hotline"
+    "description": "Cocospy stalkerware \u2014 if not self-installed, contact a DV hotline",
+    "source": "stalkerware-indicators"
   },
   {
     "packageName": "com.duiyun",
     "name": "Cocospy",
     "category": "STALKERWARE",
     "severity": "CRITICAL",
-    "description": "Cocospy/Duiyun stalkerware \u2014 if not self-installed, contact a DV hotline"
+    "description": "Cocospy/Duiyun stalkerware \u2014 if not self-installed, contact a DV hotline",
+    "source": "stalkerware-indicators"
   },
   {
     "packageName": "com.sc.cocospy",
     "name": "Cocospy",
     "category": "STALKERWARE",
     "severity": "CRITICAL",
-    "description": "Cocospy stalkerware variant \u2014 if not self-installed, contact a DV hotline"
+    "description": "Cocospy stalkerware variant \u2014 if not self-installed, contact a DV hotline",
+    "source": "stalkerware-indicators"
   },
   {
     "packageName": "com.sc.fonemonitor",
     "name": "Cocospy",
     "category": "STALKERWARE",
     "severity": "CRITICAL",
-    "description": "Cocospy/FoneMonitor stalkerware \u2014 if not self-installed, contact a DV hotline"
+    "description": "Cocospy/FoneMonitor stalkerware \u2014 if not self-installed, contact a DV hotline",
+    "source": "stalkerware-indicators"
   },
   {
     "packageName": "com.sc.spyic",
     "name": "Cocospy",
     "category": "STALKERWARE",
     "severity": "CRITICAL",
-    "description": "Cocospy/Spyic stalkerware \u2014 if not self-installed, contact a DV hotline"
+    "description": "Cocospy/Spyic stalkerware \u2014 if not self-installed, contact a DV hotline",
+    "source": "stalkerware-indicators"
   },
   {
     "packageName": "com.sc.spyzie",
     "name": "Cocospy",
     "category": "STALKERWARE",
     "severity": "CRITICAL",
-    "description": "Cocospy/Spyzie stalkerware \u2014 if not self-installed, contact a DV hotline"
+    "description": "Cocospy/Spyzie stalkerware \u2014 if not self-installed, contact a DV hotline",
+    "source": "stalkerware-indicators"
   },
   {
     "packageName": "com.spyic",
     "name": "Cocospy",
     "category": "STALKERWARE",
     "severity": "CRITICAL",
-    "description": "Spyic stalkerware (Cocospy cluster) \u2014 if not self-installed, contact a DV hotline"
+    "description": "Spyic stalkerware (Cocospy cluster) \u2014 if not self-installed, contact a DV hotline",
+    "source": "stalkerware-indicators"
   },
   {
     "packageName": "com.minspy",
     "name": "Cocospy",
     "category": "STALKERWARE",
     "severity": "CRITICAL",
-    "description": "Minspy stalkerware (Cocospy cluster) \u2014 if not self-installed, contact a DV hotline"
+    "description": "Minspy stalkerware (Cocospy cluster) \u2014 if not self-installed, contact a DV hotline",
+    "source": "stalkerware-indicators"
   }
 ]

@@ -106,8 +106,62 @@ Return a JSON ValidationResult:
 }
 ```
 
+## IOC Data Validation
+
+When the pipeline produces IOC data entries (for `ioc-data/*.yml` or bundled `known_bad_*.json`), validate each entry before committing:
+
+### Required fields
+
+**Package IOC entries:**
+```json
+{
+  "packageName": "com.example.malware",  // required
+  "name": "MalwareName",                 // required
+  "category": "STALKERWARE",             // required, from allowed set
+  "severity": "CRITICAL",                // required
+  "description": "...",                   // required
+  "source": "stalkerware-indicators"     // REQUIRED — provenance
+}
+```
+
+**Cert hash IOC entries:**
+```json
+{
+  "certHash": "abc123...",               // required, 64-char hex SHA-256
+  "familyName": "MalwareName",           // required
+  "category": "TROJAN",                  // required, from allowed set
+  "severity": "CRITICAL",               // required
+  "description": "...",                  // required
+  "source": "malwarebazaar"             // REQUIRED — provenance
+}
+```
+
+### Rejection rules (HARD FAIL)
+
+1. **Missing `source` field** — every IOC entry must trace to a verified feed
+2. **Blocked category values**: `TEST`, `FIXTURE`, `SIMULATION`, `DEBUG` — test data must never enter production IOC files
+3. **Blocked familyName patterns**: entries containing "test", "fixture", "simulation", "sample", "example" (case-insensitive) are rejected
+4. **Invalid cert hash format**: must be exactly 64 lowercase hex characters (SHA-256)
+5. **Duplicate entry**: same packageName or certHash already exists
+
+### Allowed `source` values
+
+| Source | Description |
+|--------|-------------|
+| `stalkerware-indicators` | AssoEchap stalkerware-indicators GitHub repo |
+| `malwarebazaar` | abuse.ch MalwareBazaar |
+| `threatfox` | abuse.ch ThreatFox |
+| `amnesty-investigations` | Amnesty International Security Lab |
+| `citizenlab-indicators` | Citizen Lab malware indicators |
+| `mvt-indicators` | MVT project STIX2 indicators |
+| `virustotal` | VirusTotal intelligence |
+| `android-security-bulletin` | Google Android Security Bulletins |
+
+Entries with `source` values not in this list are flagged for manual review.
+
 ## Rules
 
 - NEVER modify the candidate rule — only assess it
 - Run gates sequentially — if Gate 1 fails, still run remaining gates to provide complete feedback
 - Record ALL errors, not just the first one
+- IOC data entries are validated SEPARATELY from SIGMA rules — they go through the IOC validation section above, not through the 5-gate pipeline
