@@ -22,6 +22,7 @@ class IocUpdateWorker @AssistedInject constructor(
     private val knownAppUpdater: KnownAppUpdater,
     private val certHashIocUpdater: CertHashIocUpdater,
     private val publicRepoIocFeed: PublicRepoIocFeed,
+    private val oemPrefixResolver: OemPrefixResolver,
     private val sigmaRuleFeed: SigmaRuleFeed,
     private val sigmaRuleEngine: SigmaRuleEngine,
     private val cveRepository: CveRepository
@@ -33,6 +34,8 @@ class IocUpdateWorker @AssistedInject constructor(
             val fetched = runAllUpdaters(remoteIocUpdater, domainIocUpdater, knownAppUpdater, certHashIocUpdater)
             // Fetch IOC data from public rules repo
             refreshPublicRepoIoc()
+            // Refresh OEM prefix / trusted installer lists
+            refreshOemPrefixes()
             // Refresh SIGMA rules independently — never blocks IOC update success
             refreshSigmaRules()
             refreshCveDatabase()
@@ -77,6 +80,15 @@ class IocUpdateWorker @AssistedInject constructor(
             }
         } catch (e: Exception) {
             Log.w(TAG, "Public repo IOC feed failed (non-fatal): ${e.message}")
+        }
+    }
+
+    @Suppress("TooGenericExceptionCaught")
+    private suspend fun refreshOemPrefixes() {
+        try {
+            oemPrefixResolver.refresh()
+        } catch (e: Exception) {
+            Log.w(TAG, "OEM prefix refresh failed (non-fatal): ${e.message}")
         }
     }
 
