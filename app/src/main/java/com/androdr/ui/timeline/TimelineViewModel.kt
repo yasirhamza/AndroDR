@@ -114,6 +114,9 @@ class TimelineViewModel @Inject constructor(
     fun exportPlaintext() = export("txt") { TimelineExporter.formatPlaintext(it) }
     fun exportCsv() = export("csv") { TimelineExporter.formatCsv(it) }
 
+    @Suppress("TooGenericExceptionCaught") // Export can throw IOException (disk full, no
+    // permission) or SecurityException (FileProvider misconfiguration) — catching Exception
+    // ensures the exporting flag is always reset and the error is logged regardless of type.
     private fun export(extension: String, formatter: (List<ForensicTimelineEvent>) -> String) {
         if (_exporting.value) return
         viewModelScope.launch {

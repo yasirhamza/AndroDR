@@ -157,5 +157,8 @@ private fun severityIconAndColor(severity: String) = when (severity.uppercase())
     else -> Icons.Filled.Info to Color(0xFF00D4AA)
 }
 
-private fun formatTime(ts: Long) = if (ts > 0) SimpleDateFormat("HH:mm:ss", Locale.US).format(Date(ts)) else "??:??:??"
-private fun formatDate(ts: Long) = if (ts > 0) SimpleDateFormat("MMM dd, yyyy", Locale.US).format(Date(ts)) else "Unknown"
+private fun formatTime(ts: Long) =
+    if (ts > 0) SimpleDateFormat("HH:mm:ss", Locale.US).format(Date(ts)) else "??:??:??"
+
+private fun formatDate(ts: Long) =
+    if (ts > 0) SimpleDateFormat("MMM dd, yyyy", Locale.US).format(Date(ts)) else "Unknown"

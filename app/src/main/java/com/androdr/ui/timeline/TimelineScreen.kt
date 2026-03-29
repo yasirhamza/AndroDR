@@ -308,6 +308,8 @@ fun TimelineScreen(
     }
 }
 
+@Suppress("LongMethod") // Sheet includes header, scrollable body, dividers, and two action
+// buttons — the structure cannot be meaningfully split without losing cohesion.
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun ReportViewSheet(
