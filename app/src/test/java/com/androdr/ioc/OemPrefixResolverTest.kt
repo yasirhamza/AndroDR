@@ -43,19 +43,46 @@ class OemPrefixResolverTest {
     }
 
     @Test
-    fun `parseOemPrefixYaml extracts prefixes and installers`() {
+    fun `parseOemPrefixYaml separates strict and partnership prefixes`() {
         val yaml = """
             version: "2026-03-29"
-            test_prefixes:
+            oem_prefixes:
               - "com.test."
               - "com.example."
+            partnership_prefixes:
+              - "com.partner."
             trusted_installers:
               - "com.test.market"
         """.trimIndent()
         val result = resolver.parseOemPrefixYaml(yaml)
-        assertTrue(result.prefixes.contains("com.test."))
-        assertTrue(result.prefixes.contains("com.example."))
+        assertTrue(result.strictPrefixes.contains("com.test."))
+        assertTrue(result.strictPrefixes.contains("com.example."))
+        assertFalse(result.strictPrefixes.contains("com.partner."))
+        assertTrue(result.partnershipPrefixes.contains("com.partner."))
         assertTrue(result.installers.contains("com.test.market"))
+    }
+
+    @Test
+    fun `partnership prefixes are not strict OEM prefixes`() {
+        // Partnership pre-installs (Facebook, Microsoft, etc.) should NOT match isOemPrefix
+        assertFalse(resolver.isOemPrefix("com.facebook.katana"))
+        assertFalse(resolver.isOemPrefix("com.microsoft.office.word"))
+        assertFalse(resolver.isOemPrefix("com.monotype.android.font"))
+        assertFalse(resolver.isOemPrefix("com.hiya.star"))
+    }
+
+    @Test
+    fun `partnership prefixes match isPartnershipPrefix`() {
+        assertTrue(resolver.isPartnershipPrefix("com.facebook.katana"))
+        assertTrue(resolver.isPartnershipPrefix("com.microsoft.office.word"))
+        assertTrue(resolver.isPartnershipPrefix("com.touchtype.swiftkey"))
+        assertTrue(resolver.isPartnershipPrefix("com.monotype.android.font"))
+        assertTrue(resolver.isPartnershipPrefix("com.hiya.star"))
+    }
+
+    @Test
+    fun `digitalturbine is a strict OEM prefix`() {
+        assertTrue(resolver.isOemPrefix("com.digitalturbine.ultraman"))
     }
 
     @Test

@@ -11,7 +11,7 @@ class BatteryDailyModule @Inject constructor() : BugreportModule {
     override val targetSections: List<String> = listOf("batterystats")
 
     private val packageChangeRegex = Regex(
-        """^\s+Update\s+(\S+)\s+vers=(\d+)""",
+        """^\s+([+-])pkg=(\S+)\s+vers=(\d+)""",
         RegexOption.MULTILINE
     )
 
@@ -34,13 +34,14 @@ class BatteryDailyModule @Inject constructor() : BugreportModule {
             val block = sectionText.substring(blockStart, blockEnd)
 
             packageChangeRegex.findAll(block).forEach { match ->
-                val packageName = match.groupValues[1]
-                val version = match.groupValues[2].toLongOrNull() ?: 0
+                val sign = match.groupValues[1]
+                val packageName = match.groupValues[2]
+                val version = match.groupValues[3].toLongOrNull() ?: 0
 
                 versionHistory.getOrPut(packageName) { mutableListOf() }.add(version)
 
-                when {
-                    version == 0L -> {
+                when (sign) {
+                    "-" -> {
                         // Uninstall
                         timeline.add(TimelineEvent(
                             timestamp = -1,
@@ -112,7 +113,7 @@ class BatteryDailyModule @Inject constructor() : BugreportModule {
 
         return ModuleResult(
             telemetry = telemetry,
-            telemetryService = "app_scanner",
+            telemetryService = "battery_daily",
             timeline = dedupedTimeline
         )
     }

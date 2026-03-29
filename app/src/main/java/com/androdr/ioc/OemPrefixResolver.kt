@@ -14,10 +14,21 @@ import javax.inject.Singleton
 @Singleton
 class OemPrefixResolver @Inject constructor() {
 
-    private val data = AtomicReference(ParsedOemData(BUNDLED_PREFIXES, BUNDLED_INSTALLERS))
+    private val data = AtomicReference(
+        ParsedOemData(BUNDLED_STRICT_PREFIXES, BUNDLED_PARTNERSHIP_PREFIXES, BUNDLED_INSTALLERS)
+    )
 
+    /** Returns true if the package matches a strict OEM prefix (always OEM regardless of FLAG_SYSTEM). */
     fun isOemPrefix(packageName: String): Boolean =
-        data.get().prefixes.any { packageName.startsWith(it) }
+        data.get().strictPrefixes.any { packageName.startsWith(it) }
+
+    /** Returns true if the package matches a strict OEM prefix. Alias for [isOemPrefix]. */
+    fun isStrictOemPrefix(packageName: String): Boolean =
+        data.get().strictPrefixes.any { packageName.startsWith(it) }
+
+    /** Returns true if the package matches a partnership prefix (only OEM when app has FLAG_SYSTEM). */
+    fun isPartnershipPrefix(packageName: String): Boolean =
+        data.get().partnershipPrefixes.any { packageName.startsWith(it) }
 
     fun isTrustedInstaller(installer: String): Boolean =
         installer in data.get().installers || isOemPrefix(installer)
@@ -33,21 +44,25 @@ class OemPrefixResolver @Inject constructor() {
             val parsed = parseOemPrefixYaml(yaml)
 
             // Sanity checks — reject obviously malicious remote data
-            if (parsed.prefixes.any { it.length < 4 }) {
+            val allPrefixes = parsed.strictPrefixes + parsed.partnershipPrefixes
+            if (allPrefixes.any { it.length < 4 }) {
                 Log.w(TAG, "Remote OEM prefix feed rejected: prefix too short (possible wildcard attack)")
                 return@withContext
             }
-            if (parsed.prefixes.size > 500) {
-                Log.w(TAG, "Remote OEM prefix feed rejected: too many prefixes (${parsed.prefixes.size})")
+            if (allPrefixes.size > 500) {
+                Log.w(TAG, "Remote OEM prefix feed rejected: too many prefixes (${allPrefixes.size})")
                 return@withContext
             }
 
-            if (parsed.prefixes.isNotEmpty() || parsed.installers.isNotEmpty()) {
+            if (allPrefixes.isNotEmpty() || parsed.installers.isNotEmpty()) {
+                val current = data.get()
                 data.set(ParsedOemData(
-                    if (parsed.prefixes.isNotEmpty()) parsed.prefixes else data.get().prefixes,
-                    if (parsed.installers.isNotEmpty()) parsed.installers else data.get().installers
+                    if (parsed.strictPrefixes.isNotEmpty()) parsed.strictPrefixes else current.strictPrefixes,
+                    if (parsed.partnershipPrefixes.isNotEmpty()) parsed.partnershipPrefixes else current.partnershipPrefixes,
+                    if (parsed.installers.isNotEmpty()) parsed.installers else current.installers
                 ))
-                Log.i(TAG, "OEM data refreshed: ${data.get().prefixes.size} prefixes, ${data.get().installers.size} installers")
+                val updated = data.get()
+                Log.i(TAG, "OEM data refreshed: ${updated.strictPrefixes.size} strict + ${updated.partnershipPrefixes.size} partnership prefixes, ${updated.installers.size} installers")
             }
         } catch (e: Exception) {
             Log.w(TAG, "OEM prefix refresh failed: ${e.message}")
@@ -55,7 +70,8 @@ class OemPrefixResolver @Inject constructor() {
     }
 
     internal data class ParsedOemData(
-        val prefixes: Set<String>,
+        val strictPrefixes: Set<String>,
+        val partnershipPrefixes: Set<String>,
         val installers: Set<String>
     )
 
@@ -68,13 +84,20 @@ class OemPrefixResolver @Inject constructor() {
                 .build()
             val load = Load(settings)
             val doc = load.loadFromString(yamlContent) as? Map<*, *>
-                ?: return ParsedOemData(emptySet(), emptySet())
+                ?: return ParsedOemData(emptySet(), emptySet(), emptySet())
 
-            // Collect all prefix lists (any key ending in _prefixes)
-            val allPrefixes = mutableSetOf<String>()
+            // Collect prefix lists: keys containing "partner" go to partnership, others to strict
+            val strictPrefixes = mutableSetOf<String>()
+            val partnershipPrefixes = mutableSetOf<String>()
             for ((key, value) in doc) {
-                if (key.toString().endsWith("_prefixes") && value is List<*>) {
-                    value.filterIsInstance<String>().forEach { allPrefixes.add(it) }
+                val keyStr = key.toString()
+                if (keyStr.endsWith("_prefixes") && value is List<*>) {
+                    val prefixes = value.filterIsInstance<String>()
+                    if (keyStr.contains("partner")) {
+                        partnershipPrefixes.addAll(prefixes)
+                    } else {
+                        strictPrefixes.addAll(prefixes)
+                    }
                 }
             }
 
@@ -82,10 +105,10 @@ class OemPrefixResolver @Inject constructor() {
             val installerList = (doc["trusted_installers"] as? List<*>)
                 ?.filterIsInstance<String>()?.toSet() ?: emptySet()
 
-            ParsedOemData(allPrefixes, installerList)
+            ParsedOemData(strictPrefixes, partnershipPrefixes, installerList)
         } catch (e: Exception) {
             Log.w(TAG, "Failed to parse OEM prefix YAML: ${e.message}")
-            ParsedOemData(emptySet(), emptySet())
+            ParsedOemData(emptySet(), emptySet(), emptySet())
         }
     }
 
@@ -118,27 +141,32 @@ class OemPrefixResolver @Inject constructor() {
         private const val MAX_RESPONSE_SIZE = 100_000
 
         // Bundled fallback — used before first remote fetch succeeds
-        private val BUNDLED_PREFIXES = setOf(
+        // Strict: always treated as OEM regardless of FLAG_SYSTEM
+        private val BUNDLED_STRICT_PREFIXES = setOf(
             "com.android.", "com.google.", "android.",
             "com.qualcomm.", "com.qti.", "vendor.qti.",
             "com.mediatek.", "com.mtk.",
             "com.bsp.", "com.wingtech.", "com.longcheer.",
             "com.samsung.", "com.sec.", "com.osp.", "com.knox.",
-            "com.skms.", "com.mygalaxy.", "com.monotype.", "com.hiya.",
-            "com.sem.", "com.swiftkey.",
+            "com.skms.", "com.mygalaxy.", "com.sem.", "com.swiftkey.",
             "com.wsomacp", "com.wssyncmldm",
-            "com.microsoft.", "com.touchtype.", "com.facebook.",
             "com.miui.", "com.xiaomi.", "com.mi.",
             "com.duokan.", "com.mipay.",
             "com.tmobile.", "com.sprint.",
             "com.att.", "com.vzw.", "com.verizon.",
-            "com.dti.",
+            "com.dti.", "com.digitalturbine.",
             "com.amazon.",
             "com.motorola.", "com.oneplus.", "com.lge.",
             "com.htc.", "com.sony.", "com.huawei.", "com.asus.",
             "com.oppo.", "com.realme.", "com.vivo.",
             "com.coloros.", "com.heytap.", "com.oplus.",
             "org.lineageos.", "com.cyanogenmod."
+        )
+
+        // Partnership: only treated as OEM when app has FLAG_SYSTEM
+        private val BUNDLED_PARTNERSHIP_PREFIXES = setOf(
+            "com.microsoft.", "com.touchtype.", "com.facebook.",
+            "com.monotype.", "com.hiya."
         )
 
         private val BUNDLED_INSTALLERS = setOf(
