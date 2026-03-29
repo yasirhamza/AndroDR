@@ -16,6 +16,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -41,16 +42,15 @@ class TimelineViewModel @Inject constructor(
     private val _packageFilter = MutableStateFlow<String?>(null)
     val packageFilter: StateFlow<String?> = _packageFilter.asStateFlow()
 
-    // Trigger re-query when any filter changes
-    private val _filterTrigger = MutableStateFlow(0L)
-
     @OptIn(ExperimentalCoroutinesApi::class)
-    val events: StateFlow<List<ForensicTimelineEvent>> = _filterTrigger
-        .flatMapLatest {
+    val events: StateFlow<List<ForensicTimelineEvent>> = combine(
+        _severityFilter, _sourceFilter, _packageFilter
+    ) { sev, src, pkg -> Triple(sev, src, pkg) }
+        .flatMapLatest { (sev, src, pkg) ->
             when {
-                _packageFilter.value != null -> dao.getEventsByPackage(_packageFilter.value!!)
-                _sourceFilter.value != null -> dao.getEventsBySource(_sourceFilter.value!!)
-                _severityFilter.value != null -> dao.getEventsBySeverity(listOf(_severityFilter.value!!))
+                pkg != null -> dao.getEventsByPackage(pkg)
+                src != null -> dao.getEventsBySource(src)
+                sev != null -> dao.getEventsBySeverity(listOf(sev))
                 else -> dao.getRecentEvents()
             }
         }
@@ -79,28 +79,24 @@ class TimelineViewModel @Inject constructor(
         _packageFilter.value = null
         _sourceFilter.value = null
         _severityFilter.value = severity
-        _filterTrigger.value = System.nanoTime()
     }
 
     fun setSourceFilter(source: String?) {
         _packageFilter.value = null
         _severityFilter.value = null
         _sourceFilter.value = source
-        _filterTrigger.value = System.nanoTime()
     }
 
     fun setPackageFilter(pkg: String?) {
         _severityFilter.value = null
         _sourceFilter.value = null
         _packageFilter.value = pkg
-        _filterTrigger.value = System.nanoTime()
     }
 
     fun clearFilters() {
         _severityFilter.value = null
         _sourceFilter.value = null
         _packageFilter.value = null
-        _filterTrigger.value = System.nanoTime()
     }
 
     fun exportPlaintext() = export("txt") { TimelineExporter.formatPlaintext(it) }

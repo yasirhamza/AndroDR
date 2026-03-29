@@ -140,6 +140,25 @@ fun TimelineScreen(
             }
         }
 
+        // Package filter chips
+        val packages by viewModel.availablePackages.collectAsStateWithLifecycle()
+        val packageFilter by viewModel.packageFilter.collectAsStateWithLifecycle()
+
+        if (packages.isNotEmpty()) {
+            LazyRow(
+                contentPadding = PaddingValues(horizontal = 16.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                items(packages.take(10)) { pkg ->
+                    FilterChip(
+                        selected = packageFilter == pkg,
+                        onClick = { viewModel.setPackageFilter(if (packageFilter == pkg) null else pkg) },
+                        label = { Text(pkg.substringAfterLast("."), maxLines = 1) }
+                    )
+                }
+            }
+        }
+
         Spacer(modifier = Modifier.height(8.dp))
 
         if (events.isEmpty()) {
