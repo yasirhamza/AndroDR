@@ -862,5 +862,13 @@
     "severity": "CRITICAL",
     "description": "Minspy stalkerware (Cocospy cluster) \u2014 if not self-installed, contact a DV hotline",
     "source": "stalkerware-indicators"
+  },
+  {
+    "packageName": "com.android.bsp",
+    "name": "Pegasus Disguise (BSP)",
+    "category": "MERCENARY",
+    "severity": "CRITICAL",
+    "description": "Package name used by NSO Group Pegasus spyware to disguise itself as an Android system component.",
+    "source": "amnesty-investigations"
   }
 ]
