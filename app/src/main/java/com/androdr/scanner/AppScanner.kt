@@ -37,6 +37,9 @@ class AppScanner @Inject constructor(
             "com.android.", "com.google.", "android",
             // Chipset vendors
             "com.qualcomm.", "com.qti.", "vendor.qti.",
+            "com.mediatek.", "com.mtk.",
+            // Board support / ODM
+            "com.bsp.", "com.wingtech.", "com.longcheer.",
             // Samsung / Knox / SEC
             "com.samsung.", "com.sec.", "com.osp.", "com.knox.",
             "com.skms.", "com.mygalaxy.", "com.monotype.", "com.hiya.",
@@ -45,12 +48,16 @@ class AppScanner @Inject constructor(
             // Samsung partnership pre-installs
             "com.microsoft.", "com.touchtype.",
             "com.facebook.",
+            // Xiaomi / MIUI / Redmi
+            "com.miui.", "com.xiaomi.", "com.mi.",
+            "com.duokan.", "com.mipay.",
             // Other common pre-installs
             "com.amazon.",
             // Other Android OEMs
-            "com.motorola.", "com.oneplus.", "com.miui.", "com.lge.",
+            "com.motorola.", "com.oneplus.", "com.lge.",
             "com.htc.", "com.sony.", "com.huawei.", "com.asus.",
             "com.oppo.", "com.realme.", "com.vivo.",
+            "com.coloros.", "com.heytap.", "com.oplus.",
             // Custom ROMs
             "org.lineageos.", "com.cyanogenmod."
         )
@@ -85,7 +92,14 @@ class AppScanner @Inject constructor(
     /** Trusted app store installer package names (Play Store + Samsung Galaxy Store). */
     private val trustedInstallers = setOf(
         "com.android.vending",            // Google Play Store
-        "com.sec.android.app.samsungapps" // Samsung Galaxy Store
+        "com.sec.android.app.samsungapps", // Samsung Galaxy Store
+        "com.xiaomi.market",              // Xiaomi GetApps (Mi Market)
+        "com.xiaomi.mipicks",             // Xiaomi Mi Picks
+        "com.miui.packageinstaller",      // MIUI Package Installer
+        "com.heytap.market",              // OPPO/Realme App Market
+        "com.coloros.safecenter",          // ColorOS Safe Center
+        "com.huawei.appmarket",           // Huawei AppGallery
+        "com.bbk.appstore"               // Vivo App Store
     )
 
     /**

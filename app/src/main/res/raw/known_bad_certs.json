@@ -33,12 +33,5 @@
     "category": "STALKERWARE",
     "severity": "CRITICAL",
     "description": "TiSpy commercial stalkerware signing certificate"
-  },
-  {
-    "certHash": "8585dd60a09e8a8f42d362fd1d982edb245d55696608f2ac9080fd56757d983e",
-    "familyName": "Test Fixture",
-    "category": "TEST",
-    "severity": "CRITICAL",
-    "description": "Adversary simulation test fixture signing certificate"
   }
 ]
