@@ -3,6 +3,7 @@ package com.androdr.scanner
 import android.app.usage.UsageEvents
 import android.app.usage.UsageStatsManager
 import android.content.Context
+import android.content.pm.PackageManager
 import android.util.Log
 import com.androdr.data.model.ForensicTimelineEvent
 import com.androdr.ioc.OemPrefixResolver
@@ -56,12 +57,18 @@ class UsageStatsScanner @Inject constructor(
 
         val result = mutableListOf<ForensicTimelineEvent>()
         val event = UsageEvents.Event()
+        val pm = context.packageManager
+        val labelCache = mutableMapOf<String, String>()
 
         while (events.hasNextEvent()) {
             events.getNextEvent(event)
 
-            // Only track foreground events — background events are too noisy
-            if (event.eventType != UsageEvents.Event.ACTIVITY_RESUMED) continue
+            // Track foreground and background transitions for forensic correlation
+            val (category, verb) = when (event.eventType) {
+                UsageEvents.Event.ACTIVITY_RESUMED -> "app_foreground" to "opened"
+                UsageEvents.Event.ACTIVITY_PAUSED -> "app_background" to "closed"
+                else -> continue
+            }
 
             val packageName = event.packageName ?: continue
 
@@ -69,19 +76,36 @@ class UsageStatsScanner @Inject constructor(
             if (oemPrefixResolver.isOemPrefix(packageName) ||
                 oemPrefixResolver.isPartnershipPrefix(packageName)) continue
 
+            // Resolve app label (cached to avoid repeated PM lookups)
+            @Suppress("TooGenericExceptionCaught")
+            val appLabel = labelCache.getOrPut(packageName) {
+                try {
+                    pm.getApplicationLabel(
+                        pm.getApplicationInfo(packageName, 0)
+                    ).toString()
+                } catch (_: PackageManager.NameNotFoundException) {
+                    packageName
+                } catch (_: Exception) {
+                    packageName
+                }
+            }
+
             result.add(ForensicTimelineEvent(
                 timestamp = event.timeStamp,
                 source = "usage_stats",
-                category = "app_foreground",
-                description = "App opened: $packageName",
+                category = category,
+                description = "App $verb: $appLabel",
                 severity = "INFO",
                 packageName = packageName,
+                appName = appLabel,
                 isFromRuntime = true
             ))
         }
 
-        // Deduplicate consecutive opens of the same app (common with activity transitions)
-        val deduped = result.distinctBy { "${it.packageName}|${it.timestamp / 60000}" }
+        // Deduplicate rapid transitions of same app+category within same minute
+        val deduped = result.distinctBy {
+            "${it.packageName}|${it.category}|${it.timestamp / 60000}"
+        }
 
         Log.d(TAG, "Collected ${deduped.size} usage events (from ${result.size} raw)")
         deduped
