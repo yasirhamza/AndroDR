@@ -61,7 +61,7 @@ class TimelineExporterTest {
     @Test
     fun `empty events produce valid output`() {
         val text = TimelineExporter.formatPlaintext(emptyList())
-        assertTrue(text.contains("No timeline events"))
+        assertTrue(text.contains("No significant timeline events"))
         val csv = TimelineExporter.formatCsv(emptyList())
         assertTrue(csv.lines().first().contains("timestamp"))
     }
