@@ -14,14 +14,13 @@ import javax.inject.Singleton
 @Singleton
 class OemPrefixResolver @Inject constructor() {
 
-    private val prefixes = AtomicReference<Set<String>>(BUNDLED_PREFIXES)
-    private val installers = AtomicReference<Set<String>>(BUNDLED_INSTALLERS)
+    private val data = AtomicReference(ParsedOemData(BUNDLED_PREFIXES, BUNDLED_INSTALLERS))
 
     fun isOemPrefix(packageName: String): Boolean =
-        prefixes.get().any { packageName.startsWith(it) }
+        data.get().prefixes.any { packageName.startsWith(it) }
 
     fun isTrustedInstaller(installer: String): Boolean =
-        installer in installers.get() || isOemPrefix(installer)
+        installer in data.get().installers || isOemPrefix(installer)
 
     /**
      * Fetches the latest OEM prefix list from the public rules repo.
@@ -32,13 +31,23 @@ class OemPrefixResolver @Inject constructor() {
         try {
             val yaml = fetchUrl(PREFIXES_URL) ?: return@withContext
             val parsed = parseOemPrefixYaml(yaml)
-            if (parsed.prefixes.isNotEmpty()) {
-                prefixes.set(parsed.prefixes)
-                Log.i(TAG, "OEM prefixes refreshed: ${parsed.prefixes.size} prefixes")
+
+            // Sanity checks — reject obviously malicious remote data
+            if (parsed.prefixes.any { it.length < 4 }) {
+                Log.w(TAG, "Remote OEM prefix feed rejected: prefix too short (possible wildcard attack)")
+                return@withContext
             }
-            if (parsed.installers.isNotEmpty()) {
-                installers.set(parsed.installers)
-                Log.i(TAG, "Trusted installers refreshed: ${parsed.installers.size} installers")
+            if (parsed.prefixes.size > 500) {
+                Log.w(TAG, "Remote OEM prefix feed rejected: too many prefixes (${parsed.prefixes.size})")
+                return@withContext
+            }
+
+            if (parsed.prefixes.isNotEmpty() || parsed.installers.isNotEmpty()) {
+                data.set(ParsedOemData(
+                    if (parsed.prefixes.isNotEmpty()) parsed.prefixes else data.get().prefixes,
+                    if (parsed.installers.isNotEmpty()) parsed.installers else data.get().installers
+                ))
+                Log.i(TAG, "OEM data refreshed: ${data.get().prefixes.size} prefixes, ${data.get().installers.size} installers")
             }
         } catch (e: Exception) {
             Log.w(TAG, "OEM prefix refresh failed: ${e.message}")
@@ -90,7 +99,12 @@ class OemPrefixResolver @Inject constructor() {
             conn.readTimeout = TIMEOUT_MS
             conn.setRequestProperty("User-Agent", "AndroDR/1.0")
             if (conn.responseCode == HttpURLConnection.HTTP_OK) {
-                conn.inputStream.bufferedReader().use { it.readText() }
+                val body = conn.inputStream.bufferedReader().use { it.readText() }
+                if (body.length > MAX_RESPONSE_SIZE) {
+                    Log.w(TAG, "Response too large: ${body.length} bytes")
+                    return null
+                }
+                body
             } else null
         } catch (e: Exception) { null }
         finally { conn.disconnect() }
@@ -101,10 +115,11 @@ class OemPrefixResolver @Inject constructor() {
         private const val PREFIXES_URL =
             "https://raw.githubusercontent.com/android-sigma-rules/rules/main/ioc-data/known-oem-prefixes.yml"
         private const val TIMEOUT_MS = 10_000
+        private const val MAX_RESPONSE_SIZE = 100_000
 
         // Bundled fallback — used before first remote fetch succeeds
         private val BUNDLED_PREFIXES = setOf(
-            "com.android.", "com.google.", "android",
+            "com.android.", "com.google.", "android.",
             "com.qualcomm.", "com.qti.", "vendor.qti.",
             "com.mediatek.", "com.mtk.",
             "com.bsp.", "com.wingtech.", "com.longcheer.",

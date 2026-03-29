@@ -122,8 +122,8 @@ class BatteryDailyModule @Inject constructor() : BugreportModule {
         val nextDaily = text.indexOf("Daily stats:", fromIndex)
         val nextCurrent = text.indexOf("Current start time:", fromIndex)
         val candidates = listOfNotNull(
-            if (nextDaily > 0) nextDaily else null,
-            if (nextCurrent > 0) nextCurrent else null,
+            if (nextDaily != -1) nextDaily else null,
+            if (nextCurrent != -1) nextCurrent else null,
             text.length
         )
         return candidates.min()
