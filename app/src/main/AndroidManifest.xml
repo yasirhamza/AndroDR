@@ -23,6 +23,15 @@
     <uses-permission
         android:name="android.permission.READ_LOGS"
         tools:ignore="ProtectedPermissions" />
+    <!--
+      PACKAGE_USAGE_STATS: Required by UsageStatsScanner to query app foreground/background
+      events for the forensic timeline. This is a special permission — the user must
+      manually grant it via Settings > Apps > Special access > Usage access.
+      The scanner gracefully returns empty data if this permission is not granted.
+    -->
+    <uses-permission
+        android:name="android.permission.PACKAGE_USAGE_STATS"
+        tools:ignore="ProtectedPermissions" />
 
     <!--
       MANAGE_EXTERNAL_STORAGE: Required by FileArtifactScanner to check known spyware
