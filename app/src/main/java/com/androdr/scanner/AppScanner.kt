@@ -51,6 +51,11 @@ class AppScanner @Inject constructor(
             // Xiaomi / MIUI / Redmi
             "com.miui.", "com.xiaomi.", "com.mi.",
             "com.duokan.", "com.mipay.",
+            // US carriers
+            "com.tmobile.", "com.sprint.",
+            "com.att.", "com.vzw.", "com.verizon.",
+            // Carrier pre-install platforms
+            "com.ironsrc.aura.", "com.dti.att.",
             // Other common pre-installs
             "com.amazon.",
             // Other Android OEMs

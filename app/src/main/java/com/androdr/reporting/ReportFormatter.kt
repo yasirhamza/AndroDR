@@ -31,6 +31,7 @@ object ReportFormatter {
         // -- Header ---------------------------------------------------------------
         appendLine(RULE)
         appendLine("  AndroDR Security Report")
+        appendLine("  Version   : ${com.androdr.BuildConfig.VERSION_NAME}")
         appendLine("  Generated : $generated")
         appendLine("  Scan time : $scanDate")
         appendLine("  Android   : ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT})")
