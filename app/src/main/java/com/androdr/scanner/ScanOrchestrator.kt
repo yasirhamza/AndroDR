@@ -2,6 +2,7 @@ package com.androdr.scanner
 
 import android.net.Uri
 import android.util.Log
+import com.androdr.data.db.DnsEventDao
 import com.androdr.data.db.ForensicTimelineEventDao
 import com.androdr.data.db.toForensicTimelineEvent
 import com.androdr.data.model.ScanResult
@@ -39,6 +40,7 @@ class ScanOrchestrator @Inject constructor(
     private val usageStatsScanner: UsageStatsScanner,
     private val bugReportAnalyzer: BugReportAnalyzer,
     private val scanRepository: ScanRepository,
+    private val dnsEventDao: DnsEventDao,
     private val forensicTimelineEventDao: ForensicTimelineEventDao,
     private val sigmaRuleEngine: SigmaRuleEngine,
     private val iocResolver: IocResolver,
@@ -133,6 +135,14 @@ class ScanOrchestrator @Inject constructor(
         allFindings.addAll(sigmaRuleEngine.evaluateAccessibility(accessibilityTelemetry))
         allFindings.addAll(sigmaRuleEngine.evaluateReceivers(receiverTelemetry))
         allFindings.addAll(sigmaRuleEngine.evaluateAppOps(appOpsTelemetry))
+
+        // Post-hoc DNS evaluation — SIGMA rules evaluate recent DNS events for reporting
+        val recentDnsEvents = runCatching {
+            dnsEventDao.getRecentSnapshot()
+        }.getOrDefault(emptyList())
+        if (recentDnsEvents.isNotEmpty()) {
+            allFindings.addAll(sigmaRuleEngine.evaluateDns(recentDnsEvents))
+        }
 
         val sideloadedCount = allFindings.count {
             it.category == FindingCategory.APP_RISK && it.matchContext["is_sideloaded"] == "true"
