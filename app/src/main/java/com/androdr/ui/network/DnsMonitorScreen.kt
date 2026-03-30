@@ -170,19 +170,19 @@ fun DnsMonitorScreen(
         // Policy toggles
         Card(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
             Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("DNS Policy", style = MaterialTheme.typography.labelLarge,
+                Text(stringResource(R.string.dns_policy_title), style = MaterialTheme.typography.labelLarge,
                     color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Row(modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween) {
-                    Text("Blocklist: Block", style = MaterialTheme.typography.bodyMedium)
+                    Text(stringResource(R.string.dns_blocklist_block), style = MaterialTheme.typography.bodyMedium)
                     Switch(checked = blocklistBlockMode,
                         onCheckedChange = { settingsViewModel.setBlocklistBlockMode(it) })
                 }
                 Row(modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween) {
-                    Text("IOC Domains: Block", style = MaterialTheme.typography.bodyMedium)
+                    Text(stringResource(R.string.dns_ioc_domains_block), style = MaterialTheme.typography.bodyMedium)
                     Switch(checked = domainIocBlockMode,
                         onCheckedChange = { settingsViewModel.setDomainIocBlockMode(it) })
                 }
