@@ -64,7 +64,10 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-private val dateGroupFmt = SimpleDateFormat("MMM dd, yyyy", Locale.US)
+private data class DateEntry(
+    val clusters: MutableList<EventCluster> = mutableListOf(),
+    val standaloneEvents: MutableList<ForensicTimelineEvent> = mutableListOf()
+)
 
 @Suppress("LongMethod") // Timeline screen combines top bar, filter chips, grouped event list,
 // empty state, and export menu — inherently a longer composable.
@@ -244,32 +247,28 @@ fun TimelineScreen(
         } else {
             val (clusters, standalone) = partitioned
 
-            // Build date-grouped structure: clusters keyed by first event date,
-            // standalone events keyed by their own date.
-            data class DateEntry(
-                val clusters: List<EventCluster>,
-                val standaloneEvents: List<ForensicTimelineEvent>
-            )
-            val dateMap = mutableMapOf<String, DateEntry>()
+            // Build date-grouped structure using mutable lists to avoid O(n^2) list concatenation.
+            val dateGrouped = remember(partitioned) {
+                val fmt = SimpleDateFormat("MMM dd, yyyy", Locale.US)
+                fun dateKey(ts: Long) =
+                    if (ts > 0) fmt.format(Date(ts)) else "Unknown Date"
 
-            fun dateKey(ts: Long) =
-                if (ts > 0) dateGroupFmt.format(Date(ts)) else "Unknown Date"
-
-            clusters.forEach { cluster ->
-                val key = dateKey(cluster.events.first().timestamp)
-                val entry = dateMap.getOrPut(key) { DateEntry(emptyList(), emptyList()) }
-                dateMap[key] = entry.copy(clusters = entry.clusters + listOf(cluster))
-            }
-            standalone.forEach { event ->
-                val key = dateKey(event.timestamp)
-                val entry = dateMap.getOrPut(key) { DateEntry(emptyList(), emptyList()) }
-                dateMap[key] = entry.copy(standaloneEvents = entry.standaloneEvents + event)
+                val dateMap = mutableMapOf<String, DateEntry>()
+                clusters.forEach { cluster ->
+                    val key = dateKey(cluster.events.first().timestamp)
+                    dateMap.getOrPut(key) { DateEntry() }.clusters.add(cluster)
+                }
+                standalone.forEach { event ->
+                    val key = dateKey(event.timestamp)
+                    dateMap.getOrPut(key) { DateEntry() }.standaloneEvents.add(event)
+                }
+                dateMap
             }
 
             // Sort date keys descending (most recent first) using the original event list order
-            val sortedDateKeys = dateMap.keys.sortedByDescending { key ->
-                val allEvents = (dateMap[key]?.clusters?.flatMap { it.events }.orEmpty()) +
-                    (dateMap[key]?.standaloneEvents.orEmpty())
+            val sortedDateKeys = dateGrouped.keys.sortedByDescending { key ->
+                val allEvents = (dateGrouped[key]?.clusters?.flatMap { it.events }.orEmpty()) +
+                    (dateGrouped[key]?.standaloneEvents.orEmpty())
                 allEvents.maxOfOrNull { it.timestamp } ?: 0L
             }
 
@@ -279,7 +278,7 @@ fun TimelineScreen(
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 sortedDateKeys.forEach { dateLabel ->
-                    val entry = dateMap[dateLabel] ?: return@forEach
+                    val entry = dateGrouped[dateLabel] ?: return@forEach
                     item(key = "header_$dateLabel") {
                         Text(
                             text = dateLabel,

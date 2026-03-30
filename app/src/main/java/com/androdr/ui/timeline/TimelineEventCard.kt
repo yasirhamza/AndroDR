@@ -202,9 +202,9 @@ fun CorrelationClusterCard(
                 )
             }
             Spacer(modifier = Modifier.height(8.dp))
-            cluster.events.forEach { event ->
+            cluster.events.forEachIndexed { index, event ->
                 TimelineEventCard(event = event, onClick = { onEventTap(event) })
-                if (event != cluster.events.last()) {
+                if (index < cluster.events.lastIndex) {
                     // Vertical connector line
                     Box(
                         modifier = Modifier
