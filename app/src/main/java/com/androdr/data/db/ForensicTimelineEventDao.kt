@@ -50,10 +50,10 @@ interface ForensicTimelineEventDao {
     @Query("SELECT * FROM forensic_timeline ORDER BY timestamp ASC LIMIT 10000")
     suspend fun getAllForExport(): List<ForensicTimelineEvent>
 
-    @Insert(onConflict = OnConflictStrategy.ABORT)
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insertAll(events: List<ForensicTimelineEvent>)
 
-    @Insert(onConflict = OnConflictStrategy.ABORT)
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insert(event: ForensicTimelineEvent)
 
     @Query("DELETE FROM forensic_timeline WHERE createdAt < :cutoff")
