@@ -31,6 +31,7 @@ import androidx.compose.material3.SuggestionChipDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -221,8 +222,10 @@ fun CorrelationClusterCard(
 
 @Composable
 fun ScanGroupHeader(group: ScanGroup) {
-    val fmt = SimpleDateFormat("MMM dd, yyyy HH:mm", Locale.US)
-    val dateStr = if (group.timestamp > 0) fmt.format(Date(group.timestamp)) else "Unknown"
+    val dateStr = remember(group.timestamp) {
+        if (group.timestamp > 0) SimpleDateFormat("MMM dd, yyyy HH:mm", Locale.US).format(Date(group.timestamp))
+        else "Unknown"
+    }
     val typeLabel = when {
         group.scanId == -1L -> "Unassociated Events"
         group.isFromBugreport -> "Bug Report Analysis"
