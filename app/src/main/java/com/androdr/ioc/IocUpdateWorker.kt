@@ -25,6 +25,7 @@ class IocUpdateWorker @AssistedInject constructor(
     private val knownAppUpdater: KnownAppUpdater,
     private val certHashIocUpdater: CertHashIocUpdater,
     private val publicRepoIocFeed: PublicRepoIocFeed,
+    private val knownAppResolver: KnownAppResolver,
     private val oemPrefixResolver: OemPrefixResolver,
     private val sigmaRuleFeed: SigmaRuleFeed,
     private val sigmaRuleEngine: SigmaRuleEngine,
@@ -86,6 +87,9 @@ class IocUpdateWorker @AssistedInject constructor(
             val count = publicRepoIocFeed.update()
             if (count > 0) {
                 Log.i(TAG, "Public repo IOC feed: $count entries loaded")
+                // Popular apps are upserted into KnownAppEntry table by PublicRepoIocFeed,
+                // so refresh the KnownAppResolver cache to pick up the new entries.
+                knownAppResolver.refreshCache()
             }
         } catch (e: Exception) {
             Log.w(TAG, "Public repo IOC feed failed (non-fatal): ${e.message}")

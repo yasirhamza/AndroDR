@@ -212,7 +212,7 @@
   {
     "packageName": "ai.perplexity.app.android",
     "displayName": "Perplexity",
-    "category": "POPULAR",
+    "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
   },
@@ -20211,7 +20211,7 @@
   {
     "packageName": "com.dashlane",
     "displayName": "Dashlane",
-    "category": "POPULAR",
+    "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
   },
@@ -48288,7 +48288,7 @@
   {
     "packageName": "com.onepassword.android",
     "displayName": "1Password",
-    "category": "POPULAR",
+    "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
   },
@@ -73614,7 +73614,7 @@
   {
     "packageName": "com.x8bit.bitwarden",
     "displayName": "Bitwarden",
-    "category": "POPULAR",
+    "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
   },
@@ -100398,20 +100398,6 @@
     "displayName": "File Manager\nStock File Manager",
     "category": "OEM",
     "sourceId": "bundled",
-    "fetchedAt": 0
-  },
-  {
-    "packageName": "com.microsoft.scmx",
-    "displayName": "Microsoft Defender",
-    "category": "POPULAR",
-    "sourceId": "manual-popular",
-    "fetchedAt": 0
-  },
-  {
-    "packageName": "com.lastpass.lpandroid",
-    "displayName": "LastPass",
-    "category": "POPULAR",
-    "sourceId": "manual-trusted",
     "fetchedAt": 0
   }
 ]

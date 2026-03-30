@@ -10,7 +10,8 @@ class PublicRepoIocFeedTest {
     private val feed = PublicRepoIocFeed(
         iocEntryDao = io.mockk.mockk(),
         domainIocEntryDao = io.mockk.mockk(),
-        certHashIocEntryDao = io.mockk.mockk()
+        certHashIocEntryDao = io.mockk.mockk(),
+        knownAppEntryDao = io.mockk.mockk()
     )
 
     @Test
@@ -66,6 +67,53 @@ class PublicRepoIocFeedTest {
         """.trimIndent()
 
         val entries = feed.parseIocYaml(yaml)
+        assertTrue(entries.isEmpty())
+    }
+
+    @Test
+    fun `parsePopularAppsYaml extracts entries from valid YAML`() {
+        val yaml = """
+            version: "2026-03-30"
+            description: "Popular apps"
+            entries:
+              - packageName: "com.whatsapp"
+                displayName: "WhatsApp"
+              - packageName: "com.instagram.android"
+                displayName: "Instagram"
+        """.trimIndent()
+
+        val entries = feed.parsePopularAppsYaml(yaml)
+        assertEquals(2, entries.size)
+        assertEquals("com.whatsapp", entries[0]["packageName"])
+        assertEquals("WhatsApp", entries[0]["displayName"])
+        assertEquals("com.instagram.android", entries[1]["packageName"])
+    }
+
+    @Test
+    fun `parsePopularAppsYaml returns empty for empty entries`() {
+        val yaml = """
+            version: "2026-03-30"
+            entries: []
+        """.trimIndent()
+
+        val entries = feed.parsePopularAppsYaml(yaml)
+        assertTrue(entries.isEmpty())
+    }
+
+    @Test
+    fun `parsePopularAppsYaml returns empty for invalid YAML`() {
+        val entries = feed.parsePopularAppsYaml("not valid yaml [[[")
+        assertTrue(entries.isEmpty())
+    }
+
+    @Test
+    fun `parsePopularAppsYaml returns empty for missing entries key`() {
+        val yaml = """
+            version: "2026-03-30"
+            description: "No entries"
+        """.trimIndent()
+
+        val entries = feed.parsePopularAppsYaml(yaml)
         assertTrue(entries.isEmpty())
     }
 }
