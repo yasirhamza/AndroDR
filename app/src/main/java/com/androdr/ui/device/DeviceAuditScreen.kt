@@ -131,6 +131,9 @@ fun DeviceAuditScreen(
                         finding = finding,
                         onEvidenceTap = { selectedFinding = it }
                     )
+                    if (finding.triggered && finding.remediation.isNotEmpty()) {
+                        RemediationCard(finding = finding)
+                    }
                 }
             }
 
@@ -165,6 +168,35 @@ private fun SectionHeader(text: String, color: Color) {
         color = color,
         modifier = Modifier.padding(vertical = 8.dp)
     )
+}
+
+@Composable
+private fun RemediationCard(finding: Finding) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = 36.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+        )
+    ) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            Text(
+                stringResource(R.string.what_to_do),
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.primary
+            )
+            finding.remediation.forEach { step ->
+                Text(
+                    "\u2022 $step",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 4.dp)
+                )
+            }
+        }
+    }
 }
 
 private fun severityOrdinal(level: String): Int = when (level.lowercase()) {
