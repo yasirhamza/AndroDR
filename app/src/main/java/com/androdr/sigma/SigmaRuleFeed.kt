@@ -67,8 +67,10 @@ class SigmaRuleFeed @Inject constructor(
 
     @Suppress("TooGenericExceptionCaught")
     private fun fetchUrl(url: String): String? {
+        val conn = try {
+            URL(url).openConnection() as HttpURLConnection
+        } catch (e: Exception) { return null }
         return try {
-            val conn = URL(url).openConnection() as HttpURLConnection
             conn.connectTimeout = TIMEOUT_MS
             conn.readTimeout = TIMEOUT_MS
             conn.instanceFollowRedirects = false
@@ -81,6 +83,8 @@ class SigmaRuleFeed @Inject constructor(
         } catch (e: Exception) {
             Log.w(TAG, "HTTP fetch failed for $url: ${e.message}")
             null
+        } finally {
+            conn.disconnect()
         }
     }
 

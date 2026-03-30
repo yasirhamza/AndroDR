@@ -20,13 +20,9 @@ import javax.inject.Singleton
 class SigmaRuleEngine @Inject constructor(
     @ApplicationContext private val context: Context
 ) {
-    private var rules: List<SigmaRule> = emptyList()
-    private var iocLookups: Map<String, (Any) -> Boolean> = emptyMap()
-    private var evidenceProviders: Map<String, EvidenceProvider> = emptyMap()
-
-    init {
-        loadBundledRules()
-    }
+    @Volatile private var rules: List<SigmaRule> = emptyList()
+    @Volatile private var iocLookups: Map<String, (Any) -> Boolean> = emptyMap()
+    @Volatile private var evidenceProviders: Map<String, EvidenceProvider> = emptyMap()
 
     @Suppress("TooGenericExceptionCaught")
     fun loadBundledRules() {

@@ -9,7 +9,7 @@ import kotlinx.coroutines.flow.Flow
 @Dao
 interface ScanResultDao {
 
-    @Query("SELECT * FROM ScanResult ORDER BY timestamp DESC")
+    @Query("SELECT * FROM ScanResult ORDER BY timestamp DESC LIMIT 50")
     fun getAllScans(): Flow<List<ScanResult>>
 
     @Query("SELECT * FROM ScanResult ORDER BY timestamp DESC LIMIT 2")

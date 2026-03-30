@@ -131,6 +131,10 @@ class BugReportAnalyzer @Inject constructor(
 
             try {
                 ZipInputStream(stream2.buffered()).use { zip ->
+                    // NOTE: The entrySequence is backed by a live ZipInputStream and can only be
+                    // consumed once. This works because there is currently only one raw module
+                    // (LegacyScanModule). If additional raw modules are added, entries must be
+                    // buffered or the stream re-opened.
                     val entrySequence = sequence {
                         var entry = zip.nextEntry
                         while (entry != null) {
