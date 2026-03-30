@@ -86,4 +86,70 @@
     <string name="timeline_group_date">By Date</string>
     <string name="timeline_group_scan">By Scan</string>
     <string name="timeline_scan_empty">No scan-grouped events</string>
+    <string name="timeline_range_24h">24h</string>
+    <string name="timeline_range_7d">7d</string>
+    <string name="timeline_range_30d">30d</string>
+
+    <!-- Dashboard — externalized -->
+    <string name="dashboard_overall_risk">Overall Risk</string>
+    <string name="dashboard_no_scan_yet">No scan performed yet. Tap \"Run Scan\" to analyse your device.</string>
+    <!-- PluralsCandidate: shorthand for compact dashboard display -->
+    <string name="dashboard_risk_summary" tools:ignore="PluralsCandidate">%1$d app risk(s) \u00b7 %2$d device flag(s) triggered</string>
+    <!-- PluralsCandidate: shorthand for compact diff banner display -->
+    <string name="dashboard_new_risks" tools:ignore="PluralsCandidate">%1$d new risk(s) since last scan</string>
+    <string name="cd_settings">Settings</string>
+
+    <!-- Device Audit — externalized -->
+    <!-- PluralsCandidate: shorthand for compact audit summary -->
+    <string name="device_checks_passed" tools:ignore="PluralsCandidate">%1$d / %2$d checks passed</string>
+    <!-- PluralsCandidate: shorthand for compact issue count -->
+    <string name="device_issues_attention" tools:ignore="PluralsCandidate">%1$d issue(s) require attention</string>
+
+    <!-- DNS Monitor — externalized -->
+    <string name="dns_policy_title">DNS Policy</string>
+    <string name="dns_blocklist_block">Blocklist: Block</string>
+    <string name="dns_ioc_domains_block">IOC Domains: Block</string>
+
+    <!-- Bug Report — externalized -->
+    <string name="bugreport_rule_findings">Rule-Based Findings</string>
+    <string name="bugreport_pattern_findings">Pattern Scan Findings</string>
+    <!-- PluralsCandidate: shorthand for finding count display -->
+    <string name="bugreport_finding_count" tools:ignore="PluralsCandidate">%1$d finding(s)</string>
+    <string name="bugreport_timeline_count">Timeline (%1$d events)</string>
+    <string name="cd_collapse">Collapse</string>
+    <string name="cd_expand">Expand</string>
+
+    <!-- Timeline — externalized -->
+    <string name="timeline_title">Timeline</string>
+    <string name="cd_view_report">View report</string>
+    <string name="cd_copy_report">Copy report</string>
+    <string name="cd_export">Export</string>
+    <string name="timeline_copied">Timeline copied to clipboard</string>
+    <string name="timeline_generating">Generating report\u2026</string>
+    <string name="timeline_report_title">Forensic Timeline Report</string>
+    <string name="timeline_copy">Copy</string>
+    <string name="timeline_share">Share</string>
+    <string name="timeline_filter_critical">Critical</string>
+    <string name="timeline_filter_high">High</string>
+    <string name="timeline_filter_medium">Medium</string>
+
+    <!-- Timeline Event Card — externalized -->
+    <string name="timeline_detail_description">Description</string>
+    <string name="timeline_detail_details">Details</string>
+    <string name="timeline_detail_package">Package</string>
+    <string name="timeline_detail_ioc_match">IOC Match</string>
+    <string name="timeline_detail_campaign">Campaign</string>
+    <string name="timeline_detail_rule">Rule</string>
+    <string name="timeline_detail_mitre">MITRE ATT\&amp;CK</string>
+    <string name="timeline_scan_unassociated">Unassociated Events</string>
+    <string name="timeline_scan_bugreport">Bug Report Analysis</string>
+    <string name="timeline_scan_runtime">Runtime Scan</string>
+    <string name="timeline_scan_unknown">Unknown</string>
+    <!-- PluralsCandidate: shorthand for compact event count -->
+    <string name="timeline_event_count" tools:ignore="PluralsCandidate">%1$d events</string>
+
+    <!-- Finding Card — externalized -->
+    <string name="finding_triggered">Triggered</string>
+    <string name="finding_passed">Passed</string>
+    <string name="finding_view_details">View details</string>
 </resources>

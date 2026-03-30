@@ -137,7 +137,7 @@ fun BugReportScreen(
                                         Icons.Filled.ExpandLess
                                     else
                                         Icons.Filled.ExpandMore,
-                                    contentDescription = if (instructionsExpanded) "Collapse" else "Expand"
+                                    contentDescription = if (instructionsExpanded) stringResource(R.string.cd_collapse) else stringResource(R.string.cd_expand)
                                 )
                             }
                         }
@@ -248,7 +248,7 @@ fun BugReportScreen(
                             it.triggered && it.level.lowercase() != "informational"
                         } + legacyFindings.size
                         Text(
-                            text = "$totalCount finding(s)",
+                            text = stringResource(R.string.bugreport_finding_count, totalCount),
                             style = MaterialTheme.typography.labelLarge,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onSurface
@@ -276,7 +276,7 @@ fun BugReportScreen(
                 if (triggeredFindings.isNotEmpty()) {
                     item {
                         Text(
-                            text = "Rule-Based Findings",
+                            text = stringResource(R.string.bugreport_rule_findings),
                             style = MaterialTheme.typography.titleSmall,
                             fontWeight = FontWeight.SemiBold,
                             color = MaterialTheme.colorScheme.primary
@@ -291,7 +291,7 @@ fun BugReportScreen(
                 if (legacyFindings.isNotEmpty()) {
                     item {
                         Text(
-                            text = "Pattern Scan Findings",
+                            text = stringResource(R.string.bugreport_pattern_findings),
                             style = MaterialTheme.typography.titleSmall,
                             fontWeight = FontWeight.SemiBold,
                             color = MaterialTheme.colorScheme.primary
@@ -306,7 +306,7 @@ fun BugReportScreen(
                 if (timeline.isNotEmpty()) {
                     item {
                         Text(
-                            text = "Timeline (${timeline.size} events)",
+                            text = stringResource(R.string.bugreport_timeline_count, timeline.size),
                             style = MaterialTheme.typography.titleSmall,
                             fontWeight = FontWeight.SemiBold,
                             color = MaterialTheme.colorScheme.primary

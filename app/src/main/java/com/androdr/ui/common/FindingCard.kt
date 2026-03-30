@@ -22,8 +22,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.androdr.R
 import com.androdr.sigma.Evidence
 import com.androdr.sigma.Finding
 
@@ -44,7 +46,7 @@ fun FindingCard(finding: Finding, onEvidenceTap: ((Finding) -> Unit)? = null) {
         Row(modifier = Modifier.padding(16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             Icon(
                 imageVector = if (finding.triggered) Icons.Filled.Cancel else Icons.Filled.CheckCircle,
-                contentDescription = if (finding.triggered) "Triggered" else "Passed",
+                contentDescription = if (finding.triggered) stringResource(R.string.finding_triggered) else stringResource(R.string.finding_passed),
                 tint = if (finding.triggered) Color(0xFFCF6679) else MaterialTheme.colorScheme.primary,
                 modifier = Modifier.size(24.dp)
             )
@@ -84,7 +86,7 @@ fun FindingCard(finding: Finding, onEvidenceTap: ((Finding) -> Unit)? = null) {
                             )
                             Icon(
                                 imageVector = Icons.Filled.ChevronRight,
-                                contentDescription = "View details",
+                                contentDescription = stringResource(R.string.finding_view_details),
                                 modifier = Modifier.size(16.dp),
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant
                             )

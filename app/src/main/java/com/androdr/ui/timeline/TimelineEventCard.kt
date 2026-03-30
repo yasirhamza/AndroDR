@@ -36,8 +36,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.androdr.R
 import com.androdr.data.model.ForensicTimelineEvent
 import com.androdr.ui.common.SeverityChip
 import java.text.SimpleDateFormat
@@ -123,13 +125,13 @@ fun TimelineEventDetailSheet(
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             HorizontalDivider()
-            DetailSection("Description", event.description)
-            if (event.details.isNotEmpty()) DetailSection("Details", event.details)
-            if (event.packageName.isNotEmpty()) DetailSection("Package", event.packageName)
-            if (event.iocIndicator.isNotEmpty()) DetailSection("IOC Match", "${event.iocIndicator} (${event.iocType})")
-            if (event.campaignName.isNotEmpty()) DetailSection("Campaign", event.campaignName)
-            if (event.ruleId.isNotEmpty()) DetailSection("Rule", event.ruleId)
-            if (event.attackTechniqueId.isNotEmpty()) DetailSection("MITRE ATT&CK", event.attackTechniqueId)
+            DetailSection(stringResource(R.string.timeline_detail_description), event.description)
+            if (event.details.isNotEmpty()) DetailSection(stringResource(R.string.timeline_detail_details), event.details)
+            if (event.packageName.isNotEmpty()) DetailSection(stringResource(R.string.timeline_detail_package), event.packageName)
+            if (event.iocIndicator.isNotEmpty()) DetailSection(stringResource(R.string.timeline_detail_ioc_match), "${event.iocIndicator} (${event.iocType})")
+            if (event.campaignName.isNotEmpty()) DetailSection(stringResource(R.string.timeline_detail_campaign), event.campaignName)
+            if (event.ruleId.isNotEmpty()) DetailSection(stringResource(R.string.timeline_detail_rule), event.ruleId)
+            if (event.attackTechniqueId.isNotEmpty()) DetailSection(stringResource(R.string.timeline_detail_mitre), event.attackTechniqueId)
             Spacer(modifier = Modifier.height(32.dp))
         }
     }
@@ -224,12 +226,14 @@ fun CorrelationClusterCard(
 fun ScanGroupHeader(group: ScanGroup) {
     val dateStr = remember(group.timestamp) {
         if (group.timestamp > 0) SimpleDateFormat("MMM dd, yyyy HH:mm", Locale.US).format(Date(group.timestamp))
-        else "Unknown"
+        else ""
     }
+    val unknownStr = stringResource(R.string.timeline_scan_unknown)
+    val displayDate = dateStr.ifEmpty { unknownStr }
     val typeLabel = when {
-        group.scanId == -1L -> "Unassociated Events"
-        group.isFromBugreport -> "Bug Report Analysis"
-        else -> "Runtime Scan"
+        group.scanId == -1L -> stringResource(R.string.timeline_scan_unassociated)
+        group.isFromBugreport -> stringResource(R.string.timeline_scan_bugreport)
+        else -> stringResource(R.string.timeline_scan_runtime)
     }
 
     Card(
@@ -252,7 +256,7 @@ fun ScanGroupHeader(group: ScanGroup) {
                     fontWeight = FontWeight.Bold
                 )
                 Text(
-                    dateStr,
+                    displayDate,
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -262,7 +266,7 @@ fun ScanGroupHeader(group: ScanGroup) {
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    "${group.eventCount} events",
+                    stringResource(R.string.timeline_event_count, group.eventCount),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )

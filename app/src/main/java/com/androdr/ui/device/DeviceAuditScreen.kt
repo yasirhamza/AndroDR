@@ -77,13 +77,13 @@ fun DeviceAuditScreen(
                 )
                 Column {
                     Text(
-                        text = "$passedCount / $totalCount checks passed",
+                        text = stringResource(R.string.device_checks_passed, passedCount, totalCount),
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold
                     )
                     if (triggeredCount > 0) {
                         Text(
-                            text = "$triggeredCount issue(s) require attention",
+                            text = stringResource(R.string.device_issues_attention, triggeredCount),
                             style = MaterialTheme.typography.bodySmall,
                             color = Color(0xFFCF6679)
                         )

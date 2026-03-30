@@ -105,7 +105,7 @@ fun DashboardScreen(
                 IconButton(onClick = { onNavigate("settings") }) {
                     Icon(
                         imageVector = Icons.Filled.Settings,
-                        contentDescription = "Settings",
+                        contentDescription = stringResource(R.string.cd_settings),
                         tint = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
@@ -249,7 +249,7 @@ private fun RiskLevelCard(latestScan: ScanResult?) {
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             Text(
-                text = "Overall Risk",
+                text = stringResource(R.string.dashboard_overall_risk),
                 style = MaterialTheme.typography.labelLarge,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -272,7 +272,7 @@ private fun RiskLevelCard(latestScan: ScanResult?) {
             }
             if (latestScan == null) {
                 Text(
-                    text = "No scan performed yet. Tap \"Run Scan\" to analyse your device.",
+                    text = stringResource(R.string.dashboard_no_scan_yet),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -280,7 +280,7 @@ private fun RiskLevelCard(latestScan: ScanResult?) {
                 val appRiskCount = latestScan.appRisks.count { it.triggered }
                 val flagCount = latestScan.deviceFlags.count { it.triggered }
                 Text(
-                    text = "$appRiskCount app risk(s) \u00b7 $flagCount device flag(s) triggered",
+                    text = stringResource(R.string.dashboard_risk_summary, appRiskCount, flagCount),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -308,7 +308,7 @@ private fun DiffBanner(newCount: Int) {
                 tint = Color(0xFFFF9800)
             )
             Text(
-                text = "$newCount new risk(s) since last scan",
+                text = stringResource(R.string.dashboard_new_risks, newCount),
                 style = MaterialTheme.typography.bodyMedium,
                 fontWeight = FontWeight.SemiBold,
                 color = Color(0xFFFF9800)
