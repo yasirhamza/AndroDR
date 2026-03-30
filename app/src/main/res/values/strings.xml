@@ -154,6 +154,9 @@
     <!-- PluralsCandidate: shorthand for compact event count -->
     <string name="timeline_event_count" tools:ignore="PluralsCandidate">%1$d events</string>
 
+    <!-- Device audit remediation -->
+    <string name="what_to_do">What to do</string>
+
     <!-- Finding Card — externalized -->
     <string name="finding_triggered">Triggered</string>
     <string name="finding_passed">Passed</string>
