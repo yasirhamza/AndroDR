@@ -137,7 +137,11 @@ fun BugReportScreen(
                                         Icons.Filled.ExpandLess
                                     else
                                         Icons.Filled.ExpandMore,
-                                    contentDescription = if (instructionsExpanded) stringResource(R.string.cd_collapse) else stringResource(R.string.cd_expand)
+                                    contentDescription = if (instructionsExpanded) {
+                                        stringResource(R.string.cd_collapse)
+                                    } else {
+                                        stringResource(R.string.cd_expand)
+                                    }
                                 )
                             }
                         }

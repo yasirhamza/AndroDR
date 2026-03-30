@@ -11,6 +11,7 @@ object TimelineExporter {
     private const val RULE = "============================================================"
     private const val THIN = "------------------------------------------------------------"
 
+    @Suppress("LongMethod") // Report formatting assembles header, filters, date groups, and footer
     fun formatPlaintext(events: List<ForensicTimelineEvent>): String = buildString {
         appendLine(RULE)
         appendLine("  AndroDR Forensic Timeline")

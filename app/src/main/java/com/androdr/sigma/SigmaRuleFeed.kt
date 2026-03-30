@@ -69,7 +69,10 @@ class SigmaRuleFeed @Inject constructor(
     private fun fetchUrl(url: String): String? {
         val conn = try {
             URL(url).openConnection() as HttpURLConnection
-        } catch (e: Exception) { return null }
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to open connection to $url: ${e.message}")
+            return null
+        }
         return try {
             conn.connectTimeout = TIMEOUT_MS
             conn.readTimeout = TIMEOUT_MS

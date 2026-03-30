@@ -57,12 +57,29 @@ class OemPrefixResolver @Inject constructor() {
             if (allPrefixes.isNotEmpty() || parsed.installers.isNotEmpty()) {
                 val current = data.get()
                 data.set(ParsedOemData(
-                    if (parsed.strictPrefixes.isNotEmpty()) parsed.strictPrefixes else current.strictPrefixes,
-                    if (parsed.partnershipPrefixes.isNotEmpty()) parsed.partnershipPrefixes else current.partnershipPrefixes,
-                    if (parsed.installers.isNotEmpty()) parsed.installers else current.installers
+                    strictPrefixes = if (parsed.strictPrefixes.isNotEmpty()) {
+                        parsed.strictPrefixes
+                    } else {
+                        current.strictPrefixes
+                    },
+                    partnershipPrefixes = if (parsed.partnershipPrefixes.isNotEmpty()) {
+                        parsed.partnershipPrefixes
+                    } else {
+                        current.partnershipPrefixes
+                    },
+                    installers = if (parsed.installers.isNotEmpty()) {
+                        parsed.installers
+                    } else {
+                        current.installers
+                    }
                 ))
                 val updated = data.get()
-                Log.i(TAG, "OEM data refreshed: ${updated.strictPrefixes.size} strict + ${updated.partnershipPrefixes.size} partnership prefixes, ${updated.installers.size} installers")
+                Log.i(
+                    TAG,
+                    "OEM data refreshed: ${updated.strictPrefixes.size} strict + " +
+                        "${updated.partnershipPrefixes.size} partnership prefixes, " +
+                        "${updated.installers.size} installers"
+                )
             }
         } catch (e: Exception) {
             Log.w(TAG, "OEM prefix refresh failed: ${e.message}")
@@ -112,7 +129,7 @@ class OemPrefixResolver @Inject constructor() {
         }
     }
 
-    @Suppress("TooGenericExceptionCaught")
+    @Suppress("TooGenericExceptionCaught", "SwallowedException")
     private fun fetchUrl(url: String): String? {
         val conn = try {
             URL(url).openConnection() as HttpURLConnection

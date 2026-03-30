@@ -99,7 +99,7 @@ class CorrelationEngine @Inject constructor() {
     }
 
     private fun detectInstallThenAdmin(
-        sorted: List<ForensicTimelineEvent>, pkg: String,
+        sorted: List<ForensicTimelineEvent>, @Suppress("UnusedParameter") pkg: String,
         clusters: MutableList<EventCluster>, used: MutableSet<Long>
     ) {
         val installs = sorted.filter {
@@ -125,7 +125,7 @@ class CorrelationEngine @Inject constructor() {
     }
 
     private fun detectPermissionThenC2(
-        sorted: List<ForensicTimelineEvent>, pkg: String,
+        sorted: List<ForensicTimelineEvent>, @Suppress("UnusedParameter") pkg: String,
         clusters: MutableList<EventCluster>, used: MutableSet<Long>
     ) {
         val permEvents = sorted.filter {
@@ -150,7 +150,7 @@ class CorrelationEngine @Inject constructor() {
     }
 
     private fun detectMultiPermissionBurst(
-        sorted: List<ForensicTimelineEvent>, pkg: String,
+        sorted: List<ForensicTimelineEvent>, @Suppress("UnusedParameter") pkg: String,
         clusters: MutableList<EventCluster>, used: MutableSet<Long>
     ) {
         val permEvents = sorted.filter {
@@ -176,7 +176,7 @@ class CorrelationEngine @Inject constructor() {
     }
 
     private fun detectInstallThenPermission(
-        sorted: List<ForensicTimelineEvent>, pkg: String,
+        sorted: List<ForensicTimelineEvent>, @Suppress("UnusedParameter") pkg: String,
         clusters: MutableList<EventCluster>, used: MutableSet<Long>
     ) {
         val installs = sorted.filter {

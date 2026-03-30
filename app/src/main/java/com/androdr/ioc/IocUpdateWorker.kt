@@ -16,6 +16,7 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 
 @HiltWorker
+@Suppress("LongParameterList") // All parameters are Hilt-injected dependencies
 class IocUpdateWorker @AssistedInject constructor(
     @Assisted context: Context,
     @Assisted params: WorkerParameters,

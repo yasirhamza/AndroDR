@@ -46,7 +46,11 @@ fun FindingCard(finding: Finding, onEvidenceTap: ((Finding) -> Unit)? = null) {
         Row(modifier = Modifier.padding(16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             Icon(
                 imageVector = if (finding.triggered) Icons.Filled.Cancel else Icons.Filled.CheckCircle,
-                contentDescription = if (finding.triggered) stringResource(R.string.finding_triggered) else stringResource(R.string.finding_passed),
+                contentDescription = if (finding.triggered) {
+                    stringResource(R.string.finding_triggered)
+                } else {
+                    stringResource(R.string.finding_passed)
+                },
                 tint = if (finding.triggered) Color(0xFFCF6679) else MaterialTheme.colorScheme.primary,
                 modifier = Modifier.size(24.dp)
             )

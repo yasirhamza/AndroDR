@@ -126,12 +126,33 @@ fun TimelineEventDetailSheet(
             )
             HorizontalDivider()
             DetailSection(stringResource(R.string.timeline_detail_description), event.description)
-            if (event.details.isNotEmpty()) DetailSection(stringResource(R.string.timeline_detail_details), event.details)
-            if (event.packageName.isNotEmpty()) DetailSection(stringResource(R.string.timeline_detail_package), event.packageName)
-            if (event.iocIndicator.isNotEmpty()) DetailSection(stringResource(R.string.timeline_detail_ioc_match), "${event.iocIndicator} (${event.iocType})")
-            if (event.campaignName.isNotEmpty()) DetailSection(stringResource(R.string.timeline_detail_campaign), event.campaignName)
-            if (event.ruleId.isNotEmpty()) DetailSection(stringResource(R.string.timeline_detail_rule), event.ruleId)
-            if (event.attackTechniqueId.isNotEmpty()) DetailSection(stringResource(R.string.timeline_detail_mitre), event.attackTechniqueId)
+            if (event.details.isNotEmpty()) {
+                DetailSection(stringResource(R.string.timeline_detail_details), event.details)
+            }
+            if (event.packageName.isNotEmpty()) {
+                DetailSection(stringResource(R.string.timeline_detail_package), event.packageName)
+            }
+            if (event.iocIndicator.isNotEmpty()) {
+                DetailSection(
+                    stringResource(R.string.timeline_detail_ioc_match),
+                    "${event.iocIndicator} (${event.iocType})"
+                )
+            }
+            if (event.campaignName.isNotEmpty()) {
+                DetailSection(
+                    stringResource(R.string.timeline_detail_campaign),
+                    event.campaignName
+                )
+            }
+            if (event.ruleId.isNotEmpty()) {
+                DetailSection(stringResource(R.string.timeline_detail_rule), event.ruleId)
+            }
+            if (event.attackTechniqueId.isNotEmpty()) {
+                DetailSection(
+                    stringResource(R.string.timeline_detail_mitre),
+                    event.attackTechniqueId
+                )
+            }
             Spacer(modifier = Modifier.height(32.dp))
         }
     }
