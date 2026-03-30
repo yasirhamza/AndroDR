@@ -64,15 +64,23 @@ class TimelineViewModel @Inject constructor(
     private val _packageFilter = MutableStateFlow<String?>(null)
     val packageFilter: StateFlow<String?> = _packageFilter.asStateFlow()
 
+    private val _dateRange = MutableStateFlow<Pair<Long, Long>?>(null)
+    val dateRange: StateFlow<Pair<Long, Long>?> = _dateRange.asStateFlow()
+
+    private data class FilterState(
+        val sev: String?, val src: String?, val pkg: String?, val dateRange: Pair<Long, Long>?
+    )
+
     @OptIn(ExperimentalCoroutinesApi::class)
     val events: StateFlow<List<ForensicTimelineEvent>> = combine(
-        _severityFilter, _sourceFilter, _packageFilter
-    ) { sev, src, pkg -> Triple(sev, src, pkg) }
-        .flatMapLatest { (sev, src, pkg) ->
+        _severityFilter, _sourceFilter, _packageFilter, _dateRange
+    ) { sev, src, pkg, range -> FilterState(sev, src, pkg, range) }
+        .flatMapLatest { filter ->
             when {
-                pkg != null -> dao.getEventsByPackage(pkg)
-                src != null -> dao.getEventsBySource(src)
-                sev != null -> dao.getEventsBySeverity(listOf(sev))
+                filter.dateRange != null -> dao.getEventsInRange(filter.dateRange.first, filter.dateRange.second)
+                filter.pkg != null -> dao.getEventsByPackage(filter.pkg)
+                filter.src != null -> dao.getEventsBySource(filter.src)
+                filter.sev != null -> dao.getEventsBySeverity(listOf(filter.sev))
                 else -> dao.getRecentEvents()
             }
         }
@@ -171,10 +179,22 @@ class TimelineViewModel @Inject constructor(
         _packageFilter.value = pkg
     }
 
+    fun setDateRange(start: Long, end: Long) {
+        _severityFilter.value = null
+        _sourceFilter.value = null
+        _packageFilter.value = null
+        _dateRange.value = start to end
+    }
+
+    fun clearDateRange() {
+        _dateRange.value = null
+    }
+
     fun clearFilters() {
         _severityFilter.value = null
         _sourceFilter.value = null
         _packageFilter.value = null
+        _dateRange.value = null
     }
 
     /** Generated plaintext report for viewing/copying. Populated on demand. */

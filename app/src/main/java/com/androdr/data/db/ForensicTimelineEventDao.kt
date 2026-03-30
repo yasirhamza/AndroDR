@@ -34,6 +34,13 @@ interface ForensicTimelineEventDao {
     """)
     fun getEventsByPackage(packageName: String): Flow<List<ForensicTimelineEvent>>
 
+    @Query("""
+        SELECT * FROM forensic_timeline
+        WHERE timestamp BETWEEN :startMs AND :endMs
+        ORDER BY timestamp DESC LIMIT 500
+    """)
+    fun getEventsInRange(startMs: Long, endMs: Long): Flow<List<ForensicTimelineEvent>>
+
     @Query("SELECT DISTINCT source FROM forensic_timeline ORDER BY source")
     suspend fun getDistinctSources(): List<String>
 
