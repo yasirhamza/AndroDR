@@ -65,8 +65,8 @@ import java.util.Date
 import java.util.Locale
 
 private data class DateEntry(
-    val clusters: MutableList<EventCluster> = mutableListOf(),
-    val standaloneEvents: MutableList<ForensicTimelineEvent> = mutableListOf()
+    val clusters: List<EventCluster> = emptyList(),
+    val standaloneEvents: List<ForensicTimelineEvent> = emptyList()
 )
 
 @Suppress("LongMethod") // Timeline screen combines top bar, filter chips, grouped event list,
@@ -316,29 +316,37 @@ fun TimelineScreen(
         } else {
             val (clusters, standalone) = partitioned
 
-            // Build date-grouped structure using mutable lists to avoid O(n^2) list concatenation.
-            val dateGrouped = remember(partitioned) {
+            // Build date-grouped structure using mutable builders then convert to immutable DateEntry.
+            val (dateGrouped, sortedDateKeys) = remember(partitioned) {
                 val fmt = SimpleDateFormat("MMM dd, yyyy", Locale.US)
                 fun dateKey(ts: Long) =
                     if (ts > 0) fmt.format(Date(ts)) else "Unknown Date"
 
-                val dateMap = mutableMapOf<String, DateEntry>()
+                // Use mutable accumulators during construction to avoid O(n^2) list concatenation.
+                val clusterBuilder = mutableMapOf<String, MutableList<EventCluster>>()
+                val standaloneBuilder = mutableMapOf<String, MutableList<ForensicTimelineEvent>>()
                 clusters.forEach { cluster ->
                     val key = dateKey(cluster.events.first().timestamp)
-                    dateMap.getOrPut(key) { DateEntry() }.clusters.add(cluster)
+                    clusterBuilder.getOrPut(key) { mutableListOf() }.add(cluster)
                 }
                 standalone.forEach { event ->
                     val key = dateKey(event.timestamp)
-                    dateMap.getOrPut(key) { DateEntry() }.standaloneEvents.add(event)
+                    standaloneBuilder.getOrPut(key) { mutableListOf() }.add(event)
                 }
-                dateMap
-            }
-
-            // Sort date keys descending (most recent first) using the original event list order
-            val sortedDateKeys = dateGrouped.keys.sortedByDescending { key ->
-                val allEvents = (dateGrouped[key]?.clusters?.flatMap { it.events }.orEmpty()) +
-                    (dateGrouped[key]?.standaloneEvents.orEmpty())
-                allEvents.maxOfOrNull { it.timestamp } ?: 0L
+                val allKeys = (clusterBuilder.keys + standaloneBuilder.keys).toSet()
+                val immutableMap: Map<String, DateEntry> = allKeys.associateWith { key ->
+                    DateEntry(
+                        clusters = clusterBuilder[key].orEmpty(),
+                        standaloneEvents = standaloneBuilder[key].orEmpty()
+                    )
+                }
+                val sorted = immutableMap.keys.sortedByDescending { key ->
+                    val allEvents =
+                        (immutableMap[key]?.clusters?.flatMap { it.events }.orEmpty()) +
+                            (immutableMap[key]?.standaloneEvents.orEmpty())
+                    allEvents.maxOfOrNull { it.timestamp } ?: 0L
+                }
+                immutableMap to sorted
             }
 
             LazyColumn(
@@ -392,7 +400,7 @@ fun TimelineScreen(
     if (showReportSheet) {
         ReportViewSheet(
             reportText = reportText,
-            onDismiss = { showReportSheet = false },
+            onDismiss = { showReportSheet = false; viewModel.clearReport() },
             onCopy = {
                 val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE)
                     as ClipboardManager

@@ -79,10 +79,14 @@ class TimelineViewModel @Inject constructor(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     // StateFlow already guarantees distinctUntilChanged semantics, so no explicit call needed.
+    // Only compute the partition when DATE mode is active to avoid redundant work in SCAN mode.
     val partitionedEvents: StateFlow<Pair<List<EventCluster>, List<ForensicTimelineEvent>>> =
-        events.map { eventList ->
-            if (eventList.isEmpty()) emptyList<EventCluster>() to emptyList()
-            else correlationEngine.partition(eventList)
+        combine(events, _groupMode) { eventList, mode ->
+            if (mode != TimelineGroupMode.DATE || eventList.isEmpty()) {
+                emptyList<EventCluster>() to emptyList<ForensicTimelineEvent>()
+            } else {
+                correlationEngine.partition(eventList)
+            }
         }.flowOn(Dispatchers.Default).stateIn(
             viewModelScope,
             SharingStarted.WhileSubscribed(5000),
@@ -176,6 +180,11 @@ class TimelineViewModel @Inject constructor(
     /** Generated plaintext report for viewing/copying. Populated on demand. */
     private val _reportText = MutableStateFlow("")
     val reportText: StateFlow<String> = _reportText.asStateFlow()
+
+    /** Clears the generated report text (e.g. when the report sheet is dismissed). */
+    fun clearReport() {
+        _reportText.value = ""
+    }
 
     /** Generates the plaintext report for the view/copy sheet. */
     fun generateReport() {
