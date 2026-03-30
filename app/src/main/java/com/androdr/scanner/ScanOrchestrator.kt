@@ -61,7 +61,7 @@ class ScanOrchestrator @Inject constructor(
             "domain_ioc_db" to { v -> domainIocResolver.isKnownBadDomain(v.toString()) != null },
             "known_good_app_db" to { v ->
                 val entry = knownAppResolver.lookup(v.toString())
-                entry != null && entry.category != com.androdr.data.model.KnownAppCategory.USER_APP
+                entry != null && entry.category in TRUSTED_CATEGORIES
             }
         ))
         sigmaRuleEngine.loadBundledRules()
@@ -268,5 +268,13 @@ class ScanOrchestrator @Inject constructor(
 
         /** Rule IDs that represent confirmed malware matches (IOC database hits). */
         private val KNOWN_MALWARE_RULE_IDS = setOf("androdr-001", "androdr-002")
+
+        /** App categories treated as trusted by the known_good_app_db IOC lookup. */
+        private val TRUSTED_CATEGORIES = setOf(
+            com.androdr.data.model.KnownAppCategory.AOSP,
+            com.androdr.data.model.KnownAppCategory.GOOGLE,
+            com.androdr.data.model.KnownAppCategory.OEM,
+            com.androdr.data.model.KnownAppCategory.POPULAR
+        )
     }
 }
