@@ -90,6 +90,12 @@
     <string name="timeline_range_7d">7d</string>
     <string name="timeline_range_30d">30d</string>
 
+    <!-- Post-scan guidance -->
+    <string name="guidance_critical">Immediate action needed. Tap \"App Risks\" below to see which apps should be removed.</string>
+    <string name="guidance_high">Some issues found. Review the flagged items and follow the suggested actions.</string>
+    <string name="guidance_medium">Minor items to review. Your phone is mostly secure.</string>
+    <string name="guidance_low">Your phone looks secure. No urgent issues found.</string>
+
     <!-- Dashboard — externalized -->
     <string name="dashboard_overall_risk">Overall Risk</string>
     <string name="dashboard_no_scan_yet">No scan performed yet. Tap \"Run Scan\" to analyse your device.</string>
