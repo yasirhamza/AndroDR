@@ -15,6 +15,7 @@ class BatteryDailyModule @Inject constructor() : BugreportModule {
         RegexOption.MULTILINE
     )
 
+    @Suppress("LongMethod") // Multi-phase analysis: parse changes, detect downgrades, IOC check, dedup
     override suspend fun analyze(sectionText: String, iocResolver: IocResolver): ModuleResult {
         val telemetry = mutableListOf<Map<String, Any?>>()
         val timeline = mutableListOf<TimelineEvent>()

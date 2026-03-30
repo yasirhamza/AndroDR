@@ -47,8 +47,8 @@ class UsageStatsScanner @Inject constructor(
         val events = try {
             usm.queryEvents(startTime, endTime)
         } catch (e: SecurityException) {
-            // PACKAGE_USAGE_STATS not granted — fail silently
-            Log.d(TAG, "Usage stats permission not granted")
+            // PACKAGE_USAGE_STATS not granted — fail silently; permission absence is expected
+            Log.d(TAG, "Usage stats permission not granted: ${e.message}")
             return@withContext emptyList()
         } catch (e: Exception) {
             Log.w(TAG, "Usage stats query failed: ${e.message}")
@@ -62,44 +62,7 @@ class UsageStatsScanner @Inject constructor(
 
         while (events.hasNextEvent()) {
             events.getNextEvent(event)
-
-            // Track foreground and background transitions for forensic correlation
-            val (category, verb) = when (event.eventType) {
-                UsageEvents.Event.ACTIVITY_RESUMED -> "app_foreground" to "opened"
-                UsageEvents.Event.ACTIVITY_PAUSED -> "app_background" to "closed"
-                else -> continue
-            }
-
-            val packageName = event.packageName ?: continue
-
-            // Skip OEM/system apps — only track user-installed app activity
-            if (oemPrefixResolver.isOemPrefix(packageName) ||
-                oemPrefixResolver.isPartnershipPrefix(packageName)) continue
-
-            // Resolve app label (cached to avoid repeated PM lookups)
-            @Suppress("TooGenericExceptionCaught")
-            val appLabel = labelCache.getOrPut(packageName) {
-                try {
-                    pm.getApplicationLabel(
-                        pm.getApplicationInfo(packageName, 0)
-                    ).toString()
-                } catch (_: PackageManager.NameNotFoundException) {
-                    packageName
-                } catch (_: Exception) {
-                    packageName
-                }
-            }
-
-            result.add(ForensicTimelineEvent(
-                timestamp = event.timeStamp,
-                source = "usage_stats",
-                category = category,
-                description = "App $verb: $appLabel",
-                severity = "INFO",
-                packageName = packageName,
-                appName = appLabel,
-                isFromRuntime = true
-            ))
+            processUsageEvent(event, pm, labelCache, result)
         }
 
         // Deduplicate rapid transitions of same app+category within same minute
@@ -109,6 +72,54 @@ class UsageStatsScanner @Inject constructor(
 
         Log.d(TAG, "Collected ${deduped.size} usage events (from ${result.size} raw)")
         deduped
+    }
+
+    /**
+     * Processes a single UsageEvents.Event and appends a ForensicTimelineEvent to [result]
+     * if the event represents a relevant foreground/background transition for a non-OEM app.
+     */
+    @Suppress("TooGenericExceptionCaught")
+    private fun processUsageEvent(
+        event: UsageEvents.Event,
+        pm: PackageManager,
+        labelCache: MutableMap<String, String>,
+        result: MutableList<ForensicTimelineEvent>
+    ) {
+        val (category, verb) = when (event.eventType) {
+            UsageEvents.Event.ACTIVITY_RESUMED -> "app_foreground" to "opened"
+            UsageEvents.Event.ACTIVITY_PAUSED -> "app_background" to "closed"
+            else -> return
+        }
+
+        val packageName = event.packageName ?: return
+
+        // Skip OEM/system apps — only track user-installed app activity
+        if (oemPrefixResolver.isOemPrefix(packageName) ||
+            oemPrefixResolver.isPartnershipPrefix(packageName)) return
+
+        // Resolve app label (cached to avoid repeated PM lookups)
+        val appLabel = labelCache.getOrPut(packageName) {
+            try {
+                pm.getApplicationLabel(
+                    pm.getApplicationInfo(packageName, 0)
+                ).toString()
+            } catch (_: PackageManager.NameNotFoundException) {
+                packageName
+            } catch (_: Exception) {
+                packageName
+            }
+        }
+
+        result.add(ForensicTimelineEvent(
+            timestamp = event.timeStamp,
+            source = "usage_stats",
+            category = category,
+            description = "App $verb: $appLabel",
+            severity = "INFO",
+            packageName = packageName,
+            appName = appLabel,
+            isFromRuntime = true
+        ))
     }
 
     companion object {

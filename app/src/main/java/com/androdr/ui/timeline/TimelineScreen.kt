@@ -129,10 +129,18 @@ fun TimelineScreen(
                             clipboard.setPrimaryClip(
                                 ClipData.newPlainText("AndroDR Timeline", reportText)
                             )
-                            Toast.makeText(context, context.getString(R.string.timeline_copied), Toast.LENGTH_SHORT).show()
+                            Toast.makeText(
+                                context,
+                                context.getString(R.string.timeline_copied),
+                                Toast.LENGTH_SHORT
+                            ).show()
                         } else {
                             viewModel.generateReport()
-                            Toast.makeText(context, context.getString(R.string.timeline_generating), Toast.LENGTH_SHORT).show()
+                            Toast.makeText(
+                                context,
+                                context.getString(R.string.timeline_generating),
+                                Toast.LENGTH_SHORT
+                            ).show()
                         }
                     },
                     enabled = events.isNotEmpty()
@@ -445,7 +453,11 @@ fun TimelineScreen(
                 clipboard.setPrimaryClip(
                     ClipData.newPlainText("AndroDR Timeline", reportText)
                 )
-                Toast.makeText(context, context.getString(R.string.timeline_copied), Toast.LENGTH_SHORT).show()
+                Toast.makeText(
+                    context,
+                    context.getString(R.string.timeline_copied),
+                    Toast.LENGTH_SHORT
+                ).show()
             },
             onShare = {
                 val intent = Intent(Intent.ACTION_SEND).apply {

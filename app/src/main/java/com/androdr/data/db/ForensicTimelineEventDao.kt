@@ -8,6 +8,7 @@ import com.androdr.data.model.ForensicTimelineEvent
 import kotlinx.coroutines.flow.Flow
 
 @Dao
+@Suppress("TooManyFunctions") // Room DAO with filtered queries for timeline
 interface ForensicTimelineEventDao {
 
     @Query("SELECT * FROM forensic_timeline ORDER BY timestamp DESC LIMIT :limit")
