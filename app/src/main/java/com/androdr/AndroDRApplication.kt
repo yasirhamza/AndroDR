@@ -9,8 +9,11 @@ import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.NetworkType
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
+import com.androdr.ioc.CertHashIocResolver
+import com.androdr.ioc.DomainIocResolver
 import com.androdr.ioc.IocResolver
 import com.androdr.ioc.IocUpdateWorker
+import com.androdr.ioc.KnownAppResolver
 import dagger.hilt.android.HiltAndroidApp
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -25,6 +28,12 @@ class AndroDRApplication : Application(), Configuration.Provider {
     @Inject lateinit var workerFactory: HiltWorkerFactory
     @Suppress("LateinitUsage") // Hilt @Inject requires lateinit on Application subclasses
     @Inject lateinit var iocResolver: IocResolver
+    @Suppress("LateinitUsage")
+    @Inject lateinit var knownAppResolver: KnownAppResolver
+    @Suppress("LateinitUsage")
+    @Inject lateinit var certHashIocResolver: CertHashIocResolver
+    @Suppress("LateinitUsage")
+    @Inject lateinit var domainIocResolver: DomainIocResolver
 
     override val workManagerConfiguration: Configuration
         get() = Configuration.Builder()
@@ -37,6 +46,9 @@ class AndroDRApplication : Application(), Configuration.Provider {
         // any previously fetched remote IOCs are available before the next update run.
         CoroutineScope(Dispatchers.IO).launch {
             iocResolver.refreshCache()
+            knownAppResolver.refreshCache()
+            certHashIocResolver.refreshCache()
+            domainIocResolver.refreshCache()
         }
         scheduleIocUpdates()
     }

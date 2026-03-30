@@ -7,6 +7,7 @@ enum class KnownAppCategory {
     AOSP,
     GOOGLE,
     OEM,
+    POPULAR,
     USER_APP
 }
 

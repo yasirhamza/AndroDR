@@ -36,7 +36,7 @@
   },
   {
     "packageName": "S.N.A.K.E",
-    "displayName": "WORM 🐍",
+    "displayName": "WORM \ud83d\udc0d",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -212,7 +212,7 @@
   {
     "packageName": "ai.perplexity.app.android",
     "displayName": "Perplexity",
-    "category": "USER_APP",
+    "category": "POPULAR",
     "sourceId": "bundled",
     "fetchedAt": 0
   },
@@ -239,7 +239,7 @@
   },
   {
     "packageName": "ai.regainapp",
-    "displayName": " Regain",
+    "displayName": "\u00a0Regain",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -267,7 +267,7 @@
   },
   {
     "packageName": "air.RTE.OSMF.Minimal",
-    "displayName": "RTÉ Player",
+    "displayName": "RT\u00c9 Player",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -379,14 +379,14 @@
   },
   {
     "packageName": "air.com.fernus.acil.sorucozum",
-    "displayName": "Acil Video Çözüm",
+    "displayName": "Acil Video \u00c7\u00f6z\u00fcm",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
   },
   {
     "packageName": "air.com.fernus.apotemi.acikkitap",
-    "displayName": "Apotemi Açık Kitap",
+    "displayName": "Apotemi A\u00e7\u0131k Kitap",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -400,14 +400,14 @@
   },
   {
     "packageName": "air.com.fernus.vectorvideo.orbital",
-    "displayName": "Orbital Video Çözüm",
+    "displayName": "Orbital Video \u00c7\u00f6z\u00fcm",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
   },
   {
     "packageName": "air.com.fernus.vectorvideo.orjinal",
-    "displayName": "Orijinal Matematik Video Çözüm",
+    "displayName": "Orijinal Matematik Video \u00c7\u00f6z\u00fcm",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -1436,7 +1436,7 @@
   },
   {
     "packageName": "app.hkbus",
-    "displayName": "巴士到站預報 - hkbus.app",
+    "displayName": "\u5df4\u58eb\u5230\u7ad9\u9810\u5831 - hkbus.app",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -2073,7 +2073,7 @@
   },
   {
     "packageName": "ar.com.bancar.uala",
-    "displayName": "Ualá",
+    "displayName": "Ual\u00e1",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -2262,7 +2262,7 @@
   },
   {
     "packageName": "at.bitfire.icsdroid",
-    "displayName": "ICSx⁵",
+    "displayName": "ICSx\u2075",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -2332,7 +2332,7 @@
   },
   {
     "packageName": "at.falter.wienisst",
-    "displayName": "Lokalführer",
+    "displayName": "Lokalf\u00fchrer",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -2416,7 +2416,7 @@
   },
   {
     "packageName": "at.helloagain.muellerde",
-    "displayName": "Müller",
+    "displayName": "M\u00fcller",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -2444,7 +2444,7 @@
   },
   {
     "packageName": "at.joeclub.app.joecard",
-    "displayName": "jö",
+    "displayName": "j\u00f6",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -2500,14 +2500,14 @@
   },
   {
     "packageName": "at.oeamtc.android",
-    "displayName": "ÖAMTC",
+    "displayName": "\u00d6AMTC",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
   },
   {
     "packageName": "at.oebb.ts",
-    "displayName": "ÖBB Tickets",
+    "displayName": "\u00d6BB Tickets",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -2521,7 +2521,7 @@
   },
   {
     "packageName": "at.orf.oe1",
-    "displayName": "Ö1",
+    "displayName": "\u00d61",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -3179,14 +3179,14 @@
   },
   {
     "packageName": "be.health.vidis",
-    "displayName": "Mes médicaments",
+    "displayName": "Mes m\u00e9dicaments",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
   },
   {
     "packageName": "be.irm.kmi.meteo",
-    "displayName": "IRM Météo",
+    "displayName": "IRM M\u00e9t\u00e9o",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -3319,7 +3319,7 @@
   },
   {
     "packageName": "bg.medicalrecord.generali",
-    "displayName": "Моето Здравно Досие",
+    "displayName": "\u041c\u043e\u0435\u0442\u043e \u0417\u0434\u0440\u0430\u0432\u043d\u043e \u0414\u043e\u0441\u0438\u0435",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -3333,7 +3333,7 @@
   },
   {
     "packageName": "bg.sofiyskavoda.app",
-    "displayName": "Софийска Вода",
+    "displayName": "\u0421\u043e\u0444\u0438\u0439\u0441\u043a\u0430 \u0412\u043e\u0434\u0430",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -3473,7 +3473,7 @@
   },
   {
     "packageName": "br.com.bradseg.segurobradescosaude",
-    "displayName": "Brad Saúde",
+    "displayName": "Brad Sa\u00fade",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -3536,7 +3536,7 @@
   },
   {
     "packageName": "br.com.meliuz",
-    "displayName": "Méliuz",
+    "displayName": "M\u00e9liuz",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -3690,21 +3690,21 @@
   },
   {
     "packageName": "br.gov.serpro.cnhe",
-    "displayName": "Carteira Digital de Trânsito",
+    "displayName": "Carteira Digital de Tr\u00e2nsito",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
   },
   {
     "packageName": "br.jus.tse.eleitoral.etitulo",
-    "displayName": "e-Título",
+    "displayName": "e-T\u00edtulo",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
   },
   {
     "packageName": "br.mobilibus.kde",
-    "displayName": "KdêBus",
+    "displayName": "Kd\u00eaBus",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -3746,7 +3746,7 @@
   },
   {
     "packageName": "by.mts.client",
-    "displayName": "Мой МТС",
+    "displayName": "\u041c\u043e\u0439 \u041c\u0422\u0421",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -3872,14 +3872,14 @@
   },
   {
     "packageName": "callfilter.app.ru",
-    "displayName": "Фильтр Звонков РФ",
+    "displayName": "\u0424\u0438\u043b\u044c\u0442\u0440 \u0417\u0432\u043e\u043d\u043a\u043e\u0432 \u0420\u0424",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
   },
   {
     "packageName": "canvasm.myo2",
-    "displayName": "Mein O₂",
+    "displayName": "Mein O\u2082",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -3928,7 +3928,7 @@
   },
   {
     "packageName": "cat.ereza.properbusbcn",
-    "displayName": "Próximo bus Barcelona",
+    "displayName": "Pr\u00f3ximo bus Barcelona",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -4026,7 +4026,7 @@
   },
   {
     "packageName": "cdev.knots",
-    "displayName": "Узлы",
+    "displayName": "\u0423\u0437\u043b\u044b",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -4481,7 +4481,7 @@
   },
   {
     "packageName": "ch.threema.app.work",
-    "displayName": "Threema Work",
+    "displayName": "Threema\u00a0Work",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -4761,7 +4761,7 @@
   },
   {
     "packageName": "cn.gov.tax.its",
-    "displayName": "个人所得税",
+    "displayName": "\u4e2a\u4eba\u6240\u5f97\u7a0e",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -4782,7 +4782,7 @@
   },
   {
     "packageName": "cn.morfans.chenjunyu19.mediavolume",
-    "displayName": "Medienlautstärke-Kachel",
+    "displayName": "Medienlautst\u00e4rke-Kachel",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -5475,7 +5475,7 @@
   },
   {
     "packageName": "cn.ylkj.zmjh",
-    "displayName": "朝暮计划",
+    "displayName": "\u671d\u66ae\u8ba1\u5212",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -5678,7 +5678,7 @@
   },
   {
     "packageName": "co.sitic.pp",
-    "displayName": "Designed to remotely lock the phone (by sending a simple SMS) in case you don't pay your bill\nhttps://www.reddit.com/r/Android/comments/fde3l6/3rd_party_telemetry_found_in_nokia_smartphones/fjh4zbx/?context=3\nThis app was pre-installed on phone not served by that carrier (América Móvil) from South America.\nNormally you should not have this app anymore because it was removed by Nokia during an Android 10 update.\n",
+    "displayName": "Designed to remotely lock the phone (by sending a simple SMS) in case you don't pay your bill\nhttps://www.reddit.com/r/Android/comments/fde3l6/3rd_party_telemetry_found_in_nokia_smartphones/fjh4zbx/?context=3\nThis app was pre-installed on phone not served by that carrier (Am\u00e9rica M\u00f3vil) from South America.\nNormally you should not have this app anymore because it was removed by Nokia during an Android 10 update.\n",
     "category": "OEM",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -6133,7 +6133,7 @@
   },
   {
     "packageName": "com.HoYoverse.hkrpgoversea",
-    "displayName": "Honkai: Star Rail",
+    "displayName": "Honkai:\u00a0Star\u00a0Rail",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -6175,7 +6175,7 @@
   },
   {
     "packageName": "com.Infofer.ImtMobile",
-    "displayName": "CFR Călători",
+    "displayName": "CFR C\u0103l\u0103tori",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -6308,7 +6308,7 @@
   },
   {
     "packageName": "com.MinnaNoGinko.bankapp",
-    "displayName": "みんなの銀行",
+    "displayName": "\u307f\u3093\u306a\u306e\u9280\u884c",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -6637,7 +6637,7 @@
   },
   {
     "packageName": "com.YostarJP.BlueArchive",
-    "displayName": "ブルアカ",
+    "displayName": "\u30d6\u30eb\u30a2\u30ab",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -6700,14 +6700,14 @@
   },
   {
     "packageName": "com.aaa.android.discounts",
-    "displayName": "AAA Mobile (https://play.google.com/store/apps/details?id=com.aaa.android.discounts)\nKind of GPS that helps you find Point of interest (POI) like hotels, restaurants, and car repair facilities from the AAA databases.\nNOTE : You’ll have to sign up for an AAA membership to enjoy all of the features and functionality of the Android app.\nAAA = American Automobile Association",
+    "displayName": "AAA Mobile (https://play.google.com/store/apps/details?id=com.aaa.android.discounts)\nKind of GPS that helps you find Point of interest (POI) like hotels, restaurants, and car repair facilities from the AAA databases.\nNOTE : You\u2019ll have to sign up for an AAA membership to enjoy all of the features and functionality of the Android app.\nAAA = American Automobile Association",
     "category": "OEM",
     "sourceId": "bundled",
     "fetchedAt": 0
   },
   {
     "packageName": "com.aaa.android.discounts.vpl",
-    "displayName": "AAA Mobile (https://play.google.com/store/apps/details?id=com.aaa.android.discounts)\nKind of GPS that helps you find Point of interest (POI) like hotels, restaurants, and car repair facilities from the AAA databases.\nNOTE : You’ll have to sign up for an AAA membership to enjoy all of the features and functionality of the Android app.\nAAA = American Automobile Association",
+    "displayName": "AAA Mobile (https://play.google.com/store/apps/details?id=com.aaa.android.discounts)\nKind of GPS that helps you find Point of interest (POI) like hotels, restaurants, and car repair facilities from the AAA databases.\nNOTE : You\u2019ll have to sign up for an AAA membership to enjoy all of the features and functionality of the Android app.\nAAA = American Automobile Association",
     "category": "OEM",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -6847,7 +6847,7 @@
   },
   {
     "packageName": "com.accenture.oneapp",
-    "displayName": "Allianz'ım",
+    "displayName": "Allianz'\u0131m",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -7099,7 +7099,7 @@
   },
   {
     "packageName": "com.aditya1875.pokeverse",
-    "displayName": "Pokéverse",
+    "displayName": "Pok\u00e9verse",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -7162,7 +7162,7 @@
   },
   {
     "packageName": "com.adpdigital.mbs.ayande",
-    "displayName": "همراه کارت",
+    "displayName": "\u0647\u0645\u0631\u0627\u0647 \u06a9\u0627\u0631\u062a",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -7638,7 +7638,7 @@
   },
   {
     "packageName": "com.akakce.akakce",
-    "displayName": "Akakçe",
+    "displayName": "Akak\u00e7e",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -7729,7 +7729,7 @@
   },
   {
     "packageName": "com.akylas.weather",
-    "displayName": "OSS Météo",
+    "displayName": "OSS M\u00e9t\u00e9o",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -7792,7 +7792,7 @@
   },
   {
     "packageName": "com.alborgis.seo",
-    "displayName": "Aves de España",
+    "displayName": "Aves de Espa\u00f1a",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -7855,7 +7855,7 @@
   },
   {
     "packageName": "com.alexisblaze.japanese_grammar",
-    "displayName": "文法ガイド",
+    "displayName": "\u6587\u6cd5\u30ac\u30a4\u30c9",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -7897,7 +7897,7 @@
   },
   {
     "packageName": "com.ali.gad.samer",
-    "displayName": "محاضرات الشيخ سمير مصطفى",
+    "displayName": "\u0645\u062d\u0627\u0636\u0631\u0627\u062a \u0627\u0644\u0634\u064a\u062e \u0633\u0645\u064a\u0631 \u0645\u0635\u0637\u0641\u0649",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -7953,7 +7953,7 @@
   },
   {
     "packageName": "com.aljazeera360",
-    "displayName": "الجزيرة 360",
+    "displayName": "\u0627\u0644\u062c\u0632\u064a\u0631\u0629 360",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -7995,7 +7995,7 @@
   },
   {
     "packageName": "com.almaany.aren",
-    "displayName": "المعاني عربي إنجليزي",
+    "displayName": "\u0627\u0644\u0645\u0639\u0627\u0646\u064a \u0639\u0631\u0628\u064a \u0625\u0646\u062c\u0644\u064a\u0632\u064a",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -8331,14 +8331,14 @@
   },
   {
     "packageName": "com.amundi_ee.monEpargne",
-    "displayName": "Mon Épargne",
+    "displayName": "Mon \u00c9pargne",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
   },
   {
     "packageName": "com.anagan.qgo",
-    "displayName": "Quest Games Optimizer 🚀",
+    "displayName": "Quest Games Optimizer \ud83d\ude80",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -8415,7 +8415,7 @@
   },
   {
     "packageName": "com.android.MGC",
-    "displayName": "Câmera",
+    "displayName": "C\u00e2mera",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -9066,7 +9066,7 @@
   },
   {
     "packageName": "com.android.dynsystem",
-    "displayName": "Dynamic System Updates\nRuns on boot, but doesn't seem to run in the background beyond that.\nTreble gives the ability to boot an AOSP Generic System Image (GSI) on any supported device.\nDynamic System Updates allows to boot into a Generic System Image (GSI) without interfering with the current installation.\nThat means the bootloader doesn’t need to be unlocked and the user data doesn’t need to be wiped.\nhttps://developer.android.com/topic/dsu",
+    "displayName": "Dynamic System Updates\nRuns on boot, but doesn't seem to run in the background beyond that.\nTreble gives the ability to boot an AOSP Generic System Image (GSI) on any supported device.\nDynamic System Updates allows to boot into a Generic System Image (GSI) without interfering with the current installation.\nThat means the bootloader doesn\u2019t need to be unlocked and the user data doesn\u2019t need to be wiped.\nhttps://developer.android.com/topic/dsu",
     "category": "AOSP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -12384,7 +12384,7 @@
   },
   {
     "packageName": "com.android.writeimei",
-    "displayName": "The com.android.writeimei package is responsible for handling the IMEI (International Mobile Equipment Identity) number on the device. This app is used for writing or managing the device’s IMEI, which is a unique identifier for mobile devices. Removing or tampering with this package can cause significant issues, such as loss of network connectivity, inability to make calls or send texts, and potential bootloop issues.",
+    "displayName": "The com.android.writeimei package is responsible for handling the IMEI (International Mobile Equipment Identity) number on the device. This app is used for writing or managing the device\u2019s IMEI, which is a unique identifier for mobile devices. Removing or tampering with this package can cause significant issues, such as loss of network connectivity, inability to make calls or send texts, and potential bootloop issues.",
     "category": "OEM",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -12503,7 +12503,7 @@
   },
   {
     "packageName": "com.anneitech.jptransit",
-    "displayName": "换乘案内",
+    "displayName": "\u6362\u4e58\u6848\u5185",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -12706,7 +12706,7 @@
   },
   {
     "packageName": "com.apachenetwork.musicme.mediatheque",
-    "displayName": "musicMe pour bibliothèques",
+    "displayName": "musicMe pour biblioth\u00e8ques",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -12993,7 +12993,7 @@
   },
   {
     "packageName": "com.appdiction.mydefi",
-    "displayName": "Mydéfi",
+    "displayName": "Myd\u00e9fi",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -13077,7 +13077,7 @@
   },
   {
     "packageName": "com.applidium.vianavigo",
-    "displayName": "IDF Mobilités",
+    "displayName": "IDF Mobilit\u00e9s",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -13224,7 +13224,7 @@
   },
   {
     "packageName": "com.arabiait.fatawaothaimeen",
-    "displayName": "فتاوى الشيخ ابن عثيمين",
+    "displayName": "\u0641\u062a\u0627\u0648\u0649 \u0627\u0644\u0634\u064a\u062e \u0627\u0628\u0646 \u0639\u062b\u064a\u0645\u064a\u0646",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -13378,7 +13378,7 @@
   },
   {
     "packageName": "com.artefakt.frontieresmedia",
-    "displayName": "Frontières",
+    "displayName": "Fronti\u00e8res",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -14666,7 +14666,7 @@
   },
   {
     "packageName": "com.autonavi.minimap",
-    "displayName": "高德地图 (Yeah no english translation) (https://play.google.com/store/apps/details?id=com.autonavi.minimap)\nXiaomi GPS\n",
+    "displayName": "\u9ad8\u5fb7\u5730\u56fe (Yeah no english translation) (https://play.google.com/store/apps/details?id=com.autonavi.minimap)\nXiaomi GPS\n",
     "category": "OEM",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -14960,14 +14960,14 @@
   },
   {
     "packageName": "com.baidu.searchbox",
-    "displayName": "百度 (https://play.google.com/store/apps/details?id=com.baidu.searchbox)\nBaidu App search engine.\n",
+    "displayName": "\u767e\u5ea6 (https://play.google.com/store/apps/details?id=com.baidu.searchbox)\nBaidu App search engine.\n",
     "category": "OEM",
     "sourceId": "bundled",
     "fetchedAt": 0
   },
   {
     "packageName": "com.bakira.plan",
-    "displayName": "小计划",
+    "displayName": "\u5c0f\u8ba1\u5212",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -14981,14 +14981,14 @@
   },
   {
     "packageName": "com.bandainamcoent.idolmaster_gakuen",
-    "displayName": "学マス",
+    "displayName": "\u5b66\u30de\u30b9",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
   },
   {
     "packageName": "com.bandainamcoent.imas_millionlive_theaterdays",
-    "displayName": "ミリシタ",
+    "displayName": "\u30df\u30ea\u30b7\u30bf",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -15366,7 +15366,7 @@
   },
   {
     "packageName": "com.bcp.bank.bcp",
-    "displayName": "Banca Móvil BCP",
+    "displayName": "Banca M\u00f3vil BCP",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -15443,14 +15443,14 @@
   },
   {
     "packageName": "com.beeptopay.android",
-    "displayName": "beep™",
+    "displayName": "beep\u2122",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
   },
   {
     "packageName": "com.belbim.istanbulkart",
-    "displayName": "İstanbulkart",
+    "displayName": "\u0130stanbulkart",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -15646,7 +15646,7 @@
   },
   {
     "packageName": "com.bgy.speechtext",
-    "displayName": "语音转文字",
+    "displayName": "\u8bed\u97f3\u8f6c\u6587\u5b57",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -16318,7 +16318,7 @@
   },
   {
     "packageName": "com.blurb.checkout",
-    "displayName": "Blurb Checkout\nProvides book purchase and checkout for Samsung’s Story Album app (discontinued)\n",
+    "displayName": "Blurb Checkout\nProvides book purchase and checkout for Samsung\u2019s Story Album app (discontinued)\n",
     "category": "OEM",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -16465,7 +16465,7 @@
   },
   {
     "packageName": "com.boedec.hoel.frequencygenerator",
-    "displayName": "Générateur de fréquence",
+    "displayName": "G\u00e9n\u00e9rateur de fr\u00e9quence",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -17088,7 +17088,7 @@
   },
   {
     "packageName": "com.byagowi.persiancalendar",
-    "displayName": "تقویم فارسی",
+    "displayName": "\u062a\u0642\u0648\u06cc\u0645 \u0641\u0627\u0631\u0633\u06cc",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -17109,7 +17109,7 @@
   },
   {
     "packageName": "com.bycalendar.mfrl",
-    "displayName": "免费日历万年历",
+    "displayName": "\u514d\u8d39\u65e5\u5386\u4e07\u5e74\u5386",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -17396,7 +17396,7 @@
   },
   {
     "packageName": "com.capitainetrain.android",
-    "displayName": "Trainline for Business",
+    "displayName": "Trainline\u00a0for\u00a0Business",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -17767,7 +17767,7 @@
   },
   {
     "packageName": "com.charm.discipline",
-    "displayName": "自律打卡",
+    "displayName": "\u81ea\u5f8b\u6253\u5361",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -18019,7 +18019,7 @@
   },
   {
     "packageName": "com.cinepolis.go",
-    "displayName": "Cinépolis Go",
+    "displayName": "Cin\u00e9polis Go",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -18075,7 +18075,7 @@
   },
   {
     "packageName": "com.cittadigitale",
-    "displayName": "PalerMobilità",
+    "displayName": "PalerMobilit\u00e0",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -18306,7 +18306,7 @@
   },
   {
     "packageName": "com.cm_prod.bad",
-    "displayName": "Crédit Mutuel",
+    "displayName": "Cr\u00e9dit Mutuel",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -19762,7 +19762,7 @@
   },
   {
     "packageName": "com.credit_coop.android.mobilebanking",
-    "displayName": "Crédit Coopératif Mobile",
+    "displayName": "Cr\u00e9dit Coop\u00e9ratif Mobile",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -19965,7 +19965,7 @@
   },
   {
     "packageName": "com.cuiet.cuiet.premium",
-    "displayName": "Nicht Stören",
+    "displayName": "Nicht St\u00f6ren",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -20056,7 +20056,7 @@
   },
   {
     "packageName": "com.cylonid.nativealpha",
-    "displayName": "Native α",
+    "displayName": "Native \u03b1",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -20211,7 +20211,7 @@
   {
     "packageName": "com.dashlane",
     "displayName": "Dashlane",
-    "category": "USER_APP",
+    "category": "POPULAR",
     "sourceId": "bundled",
     "fetchedAt": 0
   },
@@ -20735,7 +20735,7 @@
   },
   {
     "packageName": "com.devlabor.mobile.deponie.ludann",
-    "displayName": "Abfall-App Lüchow-Dannenberg",
+    "displayName": "Abfall-App L\u00fcchow-Dannenberg",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -20959,7 +20959,7 @@
   },
   {
     "packageName": "com.digiturk.tod.mobil",
-    "displayName": "TOD Türkiye",
+    "displayName": "TOD T\u00fcrkiye",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -21183,7 +21183,7 @@
   },
   {
     "packageName": "com.dmall.mfandroid",
-    "displayName": "n11-getiralışveriş",
+    "displayName": "n11-getiral\u0131\u015fveri\u015f",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -21393,7 +21393,7 @@
   },
   {
     "packageName": "com.doudoubird.calendar",
-    "displayName": "日程日历",
+    "displayName": "\u65e5\u7a0b\u65e5\u5386",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -21757,7 +21757,7 @@
   },
   {
     "packageName": "com.dtechno.higurashi.mei",
-    "displayName": "ひぐらし命",
+    "displayName": "\u3072\u3050\u3089\u3057\u547d",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -21911,7 +21911,7 @@
   },
   {
     "packageName": "com.duorong.smarttool",
-    "displayName": "时光序",
+    "displayName": "\u65f6\u5149\u5e8f",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -22065,7 +22065,7 @@
   },
   {
     "packageName": "com.dyson.mobile.android",
-    "displayName": "My﻿Dyson",
+    "displayName": "My\ufeffDyson",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -22527,7 +22527,7 @@
   },
   {
     "packageName": "com.ei.payment.app.cm",
-    "displayName": "Crédit Mutuel Pay",
+    "displayName": "Cr\u00e9dit Mutuel Pay",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -22562,7 +22562,7 @@
   },
   {
     "packageName": "com.ekitan.android",
-    "displayName": "乗換案内",
+    "displayName": "\u4e57\u63db\u6848\u5185",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -22583,7 +22583,7 @@
   },
   {
     "packageName": "com.elcorteingles.app",
-    "displayName": "El Corte Inglés",
+    "displayName": "El Corte Ingl\u00e9s",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -22688,7 +22688,7 @@
   },
   {
     "packageName": "com.emlakbank.mobil",
-    "displayName": "Emlak Katılım",
+    "displayName": "Emlak Kat\u0131l\u0131m",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -24424,7 +24424,7 @@
   },
   {
     "packageName": "com.fankes.coloros.notify",
-    "displayName": "ColorOS 通知图标增强",
+    "displayName": "ColorOS \u901a\u77e5\u56fe\u6807\u589e\u5f3a",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -24620,7 +24620,7 @@
   },
   {
     "packageName": "com.feralinteractive.gridautosport_edition_android",
-    "displayName": "GRID™ Autosport",
+    "displayName": "GRID\u2122 Autosport",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -24648,7 +24648,7 @@
   },
   {
     "packageName": "com.fernus.vectorvideo.ucdortbesnew",
-    "displayName": "ÜçDörtBeş Video Çözüm",
+    "displayName": "\u00dc\u00e7D\u00f6rtBe\u015f Video \u00c7\u00f6z\u00fcm",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -25082,7 +25082,7 @@
   },
   {
     "packageName": "com.fivehundredpx.viewer.main",
-    "displayName": "500px中国版",
+    "displayName": "500px\u4e2d\u56fd\u7248",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -25614,7 +25614,7 @@
   },
   {
     "packageName": "com.foxconn.ifaa",
-    "displayName": "IFAA = (China’s) Internet Finance Authentication Alliance\nProvides biometric authentication for Alipay. Probably safe to disable if you don't use it.",
+    "displayName": "IFAA = (China\u2019s) Internet Finance Authentication Alliance\nProvides biometric authentication for Alipay. Probably safe to disable if you don't use it.",
     "category": "OEM",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -25838,7 +25838,7 @@
   },
   {
     "packageName": "com.fruntera.fmg",
-    "displayName": "FM Gràcia",
+    "displayName": "FM Gr\u00e0cia",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -26118,7 +26118,7 @@
   },
   {
     "packageName": "com.galaxyfirsatlari",
-    "displayName": "Galaxy Fırsatları (https://play.google.com/store/apps/details?id=com.galaxyfirsatlari)\nSamsung-only app for Turkish people\nRecommands you stuff to buy. You are supposed to save money but we all know this kind of apps\nencourages consumption.\nExodus found 10 trackers and 17 permissions : https://reports.exodus-privacy.eu.org/fr/reports/143830/\n",
+    "displayName": "Galaxy F\u0131rsatlar\u0131 (https://play.google.com/store/apps/details?id=com.galaxyfirsatlari)\nSamsung-only app for Turkish people\nRecommands you stuff to buy. You are supposed to save money but we all know this kind of apps\nencourages consumption.\nExodus found 10 trackers and 17 permissions : https://reports.exodus-privacy.eu.org/fr/reports/143830/\n",
     "category": "OEM",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -26174,7 +26174,7 @@
   },
   {
     "packageName": "com.gamelikeapps.darts",
-    "displayName": "Compteur de Fléchettes",
+    "displayName": "Compteur de Fl\u00e9chettes",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -26384,7 +26384,7 @@
   },
   {
     "packageName": "com.gemeindewaldbuttel.app",
-    "displayName": "Waldbüttelbrunn",
+    "displayName": "Waldb\u00fcttelbrunn",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -26755,7 +26755,7 @@
   },
   {
     "packageName": "com.github.axet.callrecorder",
-    "displayName": "Запись звонков",
+    "displayName": "\u0417\u0430\u043f\u0438\u0441\u044c \u0437\u0432\u043e\u043d\u043a\u043e\u0432",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -27350,7 +27350,7 @@
   },
   {
     "packageName": "com.gnivts.selfemployed",
-    "displayName": "Мой Налог",
+    "displayName": "\u041c\u043e\u0439 \u041d\u0430\u043b\u043e\u0433",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -28253,7 +28253,7 @@
   },
   {
     "packageName": "com.google.android.apps.restore",
-    "displayName": "The backup restore wizard used for pulling Android system backups from your Google account.\nRuns on boot.\nYou only need this if you factory restore, in which case it’s automatically re-enabled for you.",
+    "displayName": "The backup restore wizard used for pulling Android system backups from your Google account.\nRuns on boot.\nYou only need this if you factory restore, in which case it\u2019s automatically re-enabled for you.",
     "category": "GOOGLE",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -28778,7 +28778,7 @@
   },
   {
     "packageName": "com.google.android.contactkeys",
-    "displayName": "Android System Key Verifier is a system service for verifying interlocutors using messengers with end-to-end encryption.\nIts job is to verify end-to-end encryption keys across chat apps.\nIt has no internet permissions and performs local key comparisons only.\nIt doesn’t access your chats, contacts, or files.\nIt doesn’t run in the background unless called by another apps\nhttps://grouphowto.com/com-google-android-contactkeys/\nhttps://developers.google.com/android/binary_transparency/google1p/overview",
+    "displayName": "Android System Key Verifier is a system service for verifying interlocutors using messengers with end-to-end encryption.\nIts job is to verify end-to-end encryption keys across chat apps.\nIt has no internet permissions and performs local key comparisons only.\nIt doesn\u2019t access your chats, contacts, or files.\nIt doesn\u2019t run in the background unless called by another apps\nhttps://grouphowto.com/com-google-android-contactkeys/\nhttps://developers.google.com/android/binary_transparency/google1p/overview",
     "category": "GOOGLE",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -29086,7 +29086,7 @@
   },
   {
     "packageName": "com.google.android.inputmethod.latin",
-    "displayName": "Gboard – the Google Keyboard (https://play.google.com/store/apps/details?id=com.google.android.inputmethod.latin)\nSometimes the only keyboard app on a phone; Make sure you have another installed before you disable.",
+    "displayName": "Gboard \u2013 the Google Keyboard (https://play.google.com/store/apps/details?id=com.google.android.inputmethod.latin)\nSometimes the only keyboard app on a phone; Make sure you have another installed before you disable.",
     "category": "GOOGLE",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -29163,7 +29163,7 @@
   },
   {
     "packageName": "com.google.android.modulemetadata",
-    "displayName": "Module that contains metadata about the list of modules on the device. And that’s about it.\nI wouldn't advise you to mess with it as it could break important modules (see #37)\nGood explanation of what android modules are : https://www.xda-developers.com/android-project-mainline-modules-explanation/",
+    "displayName": "Module that contains metadata about the list of modules on the device. And that\u2019s about it.\nI wouldn't advise you to mess with it as it could break important modules (see #37)\nGood explanation of what android modules are : https://www.xda-developers.com/android-project-mainline-modules-explanation/",
     "category": "AOSP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -30073,7 +30073,7 @@
   },
   {
     "packageName": "com.google.android.wearable.app.cn",
-    "displayName": "Wear OS by Google",
+    "displayName": "Wear\u00a0OS by Google",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -30157,7 +30157,7 @@
   },
   {
     "packageName": "com.google.android.wifi.resources.overlay.pineapple",
-    "displayName": "An overlay for com.android.wifi.resources for devices using the “pineapple” Wi‑Fi HAL (Google’s internal codename for a Wi‑Fi module configuration). Not safe to remove, especially on Android 13+.",
+    "displayName": "An overlay for com.android.wifi.resources for devices using the \u201cpineapple\u201d Wi\u2011Fi HAL (Google\u2019s internal codename for a Wi\u2011Fi module configuration). Not safe to remove, especially on Android 13+.",
     "category": "OEM",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -30276,7 +30276,7 @@
   },
   {
     "packageName": "com.google.mainline.telemetry",
-    "displayName": "Contains data on which versions of modules are installed. Google Play uses this data to determine if updates are available for the modules, and to show which security patch is installed.\nThis module doesn’t contain active code and has no functionality on its own.\nAnyway I wont trust it when adservices are also in mainline.\nhttps://www.xda-developers.com/android-project-mainline-modules-explanation/\nhttps://gitlab.com/W1nst0n/universal-android-debloater/-/issues/27#note_410012436",
+    "displayName": "Contains data on which versions of modules are installed. Google Play uses this data to determine if updates are available for the modules, and to show which security patch is installed.\nThis module doesn\u2019t contain active code and has no functionality on its own.\nAnyway I wont trust it when adservices are also in mainline.\nhttps://www.xda-developers.com/android-project-mainline-modules-explanation/\nhttps://gitlab.com/W1nst0n/universal-android-debloater/-/issues/27#note_410012436",
     "category": "GOOGLE",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -31039,7 +31039,7 @@
   },
   {
     "packageName": "com.hassaneltantawy.hisnelmoslem",
-    "displayName": "حصن المسلم",
+    "displayName": "\u062d\u0635\u0646 \u0627\u0644\u0645\u0633\u0644\u0645",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -31340,7 +31340,7 @@
   },
   {
     "packageName": "com.hermes.mk.asia",
-    "displayName": "世界計畫",
+    "displayName": "\u4e16\u754c\u8a08\u756b",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -31704,7 +31704,7 @@
   },
   {
     "packageName": "com.hizligo.sebit",
-    "displayName": "Hızlıgo",
+    "displayName": "H\u0131zl\u0131go",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -31767,7 +31767,7 @@
   },
   {
     "packageName": "com.hmdglobal.support",
-    "displayName": "My Phone (https://play.google.com/store/apps/details?id=com.hmdglobal.support)\nLets you join the Nokia phones community, get app recommendations, explore your phone’s user guide and more.\n",
+    "displayName": "My Phone (https://play.google.com/store/apps/details?id=com.hmdglobal.support)\nLets you join the Nokia phones community, get app recommendations, explore your phone\u2019s user guide and more.\n",
     "category": "OEM",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -31781,7 +31781,7 @@
   },
   {
     "packageName": "com.hoffnung",
-    "displayName": "TPMS. Remote Config Test.\n⚠️ WARNING: uninstalling might cause bootloops and screen flicker! Disabling this also may remove the ability to see notifications on your lock screen.\nhttps://xdaforums.com/t/infinix-note-10-uninstall-tpms-com-hoffnung-package-causes-bootloop.4647456",
+    "displayName": "TPMS. Remote Config Test.\n\u26a0\ufe0f WARNING: uninstalling might cause bootloops and screen flicker! Disabling this also may remove the ability to see notifications on your lock screen.\nhttps://xdaforums.com/t/infinix-note-10-uninstall-tpms-com-hoffnung-package-causes-bootloop.4647456",
     "category": "OEM",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -31914,7 +31914,7 @@
   },
   {
     "packageName": "com.htetznaing.adbotg",
-    "displayName": "ADB⚡OTG",
+    "displayName": "ADB\u26a1OTG",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -32845,7 +32845,7 @@
   },
   {
     "packageName": "com.huawei.hwid",
-    "displayName": "Huawei Mobile Services\nHuawei’s alternative to Google Play Services. Needed to access advanced Huawei features.\nA Huawei ID is required to access services, like Themes, Mobile Cloud, HiCare, Huawei Wear, Huawei Health. This may break an app like InPost Mobile, see:\nhttps://github.com/0x192/universal-android-debloater/issues/477\nSee more about Huawei Mobile Services: https://www.xda-developers.com/huawei-hms-core-android-alternative-google-play-services-gms/",
+    "displayName": "Huawei Mobile Services\nHuawei\u2019s alternative to Google Play Services. Needed to access advanced Huawei features.\nA Huawei ID is required to access services, like Themes, Mobile Cloud, HiCare, Huawei Wear, Huawei Health. This may break an app like InPost Mobile, see:\nhttps://github.com/0x192/universal-android-debloater/issues/477\nSee more about Huawei Mobile Services: https://www.xda-developers.com/huawei-hms-core-android-alternative-google-play-services-gms/",
     "category": "OEM",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -33720,7 +33720,7 @@
   },
   {
     "packageName": "com.huaxia.calendar",
-    "displayName": "华夏日历万年历",
+    "displayName": "\u534e\u590f\u65e5\u5386\u4e07\u5e74\u5386",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -33874,7 +33874,7 @@
   },
   {
     "packageName": "com.hydroquebec.mf_android",
-    "displayName": "Hydro-Québec",
+    "displayName": "Hydro-Qu\u00e9bec",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -33895,7 +33895,7 @@
   },
   {
     "packageName": "com.hyperlync.Sprint.Backup",
-    "displayName": "Sprint Backup\" (https://play.google.com/store/apps/details?id=com.hyperlync.Sprint.Backup)\nLets you backup your phone’s content to your Sprint Backup account.\nFYI : This app is developped by Hyperlync Technologies an Israel-based company which provide cyber-security solutions.\nIt is now owned by Edition Ltd a big Singapour based company (https://www.reuters.com/companies/EDITol.SI)\n",
+    "displayName": "Sprint Backup\" (https://play.google.com/store/apps/details?id=com.hyperlync.Sprint.Backup)\nLets you backup your phone\u2019s content to your Sprint Backup account.\nFYI : This app is developped by Hyperlync Technologies an Israel-based company which provide cyber-security solutions.\nIt is now owned by Edition Ltd a big Singapour based company (https://www.reuters.com/companies/EDITol.SI)\n",
     "category": "OEM",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -34021,7 +34021,7 @@
   },
   {
     "packageName": "com.idamob.tinkoff.android",
-    "displayName": "Т-Банк",
+    "displayName": "\u0422-\u0411\u0430\u043d\u043a",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -34063,14 +34063,14 @@
   },
   {
     "packageName": "com.ideomobile.hapoalim",
-    "displayName": "בנק הפועלים",
+    "displayName": "\u05d1\u05e0\u05e7 \u05d4\u05e4\u05d5\u05e2\u05dc\u05d9\u05dd",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
   },
   {
     "packageName": "com.ideomobile.leumicard",
-    "displayName": "‏max‏",
+    "displayName": "\u200fmax\u200f",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -34434,7 +34434,7 @@
   },
   {
     "packageName": "com.indalweb.aficionFBPA",
-    "displayName": "Afición FBPA",
+    "displayName": "Afici\u00f3n FBPA",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -35169,7 +35169,7 @@
   },
   {
     "packageName": "com.itau",
-    "displayName": "Itaú",
+    "displayName": "Ita\u00fa",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -35225,7 +35225,7 @@
   },
   {
     "packageName": "com.iudesk.android.photo.editor",
-    "displayName": "Photo Editor",
+    "displayName": "Photo\u00a0Editor",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -35358,7 +35358,7 @@
   },
   {
     "packageName": "com.jamworks.dynamicspot",
-    "displayName": "dynamic​Spot",
+    "displayName": "dynamic\u200bSpot",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -35428,14 +35428,14 @@
   },
   {
     "packageName": "com.jcdecaux.vls.lyon",
-    "displayName": "Vélo'v officiel",
+    "displayName": "V\u00e9lo'v officiel",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
   },
   {
     "packageName": "com.jcdecaux.vls.toulouse",
-    "displayName": "vélôToulouse",
+    "displayName": "v\u00e9l\u00f4Toulouse",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -35617,7 +35617,7 @@
   },
   {
     "packageName": "com.jingmeng.chronometer",
-    "displayName": "AI日程",
+    "displayName": "AI\u65e5\u7a0b",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -36100,7 +36100,7 @@
   },
   {
     "packageName": "com.kakaku.kakakucomapp",
-    "displayName": "価格.com",
+    "displayName": "\u4fa1\u683c.com",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -36170,7 +36170,7 @@
   },
   {
     "packageName": "com.karababapps.ferheng",
-    "displayName": "Ferheng - Kürtçe Sözlük",
+    "displayName": "Ferheng - K\u00fcrt\u00e7e S\u00f6zl\u00fck",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -36205,7 +36205,7 @@
   },
   {
     "packageName": "com.kaspersky.safekids",
-    "displayName": "Kaspersky Safe Kids",
+    "displayName": "Kaspersky\u00a0Safe\u00a0Kids",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -36247,7 +36247,7 @@
   },
   {
     "packageName": "com.kazumaproject.markdownhelperkeyboard",
-    "displayName": "スミレ 日本語キーボード",
+    "displayName": "\u30b9\u30df\u30ec \u65e5\u672c\u8a9e\u30ad\u30fc\u30dc\u30fc\u30c9",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -36520,7 +36520,7 @@
   },
   {
     "packageName": "com.kimcy929.secretvideorecorder",
-    "displayName": "Быстрая видеозапись",
+    "displayName": "\u0411\u044b\u0441\u0442\u0440\u0430\u044f \u0432\u0438\u0434\u0435\u043e\u0437\u0430\u043f\u0438\u0441\u044c",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -36583,7 +36583,7 @@
   },
   {
     "packageName": "com.kitapkocum.app",
-    "displayName": "Kitap Koçum",
+    "displayName": "Kitap Ko\u00e7um",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -36702,7 +36702,7 @@
   },
   {
     "packageName": "com.koithe.app.th",
-    "displayName": "KOI Thé",
+    "displayName": "KOI Th\u00e9",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -36772,7 +36772,7 @@
   },
   {
     "packageName": "com.kounan.sellpay",
-    "displayName": "セルペイ",
+    "displayName": "\u30bb\u30eb\u30da\u30a4",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -36786,7 +36786,7 @@
   },
   {
     "packageName": "com.kouzoh.mercari",
-    "displayName": "メルカリ",
+    "displayName": "\u30e1\u30eb\u30ab\u30ea",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -36898,7 +36898,7 @@
   },
   {
     "packageName": "com.ktb.customer.qr",
-    "displayName": "เป๋าตัง",
+    "displayName": "\u0e40\u0e1b\u0e4b\u0e32\u0e15\u0e31\u0e07",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -36989,7 +36989,7 @@
   },
   {
     "packageName": "com.kuveytturk.mobil",
-    "displayName": "Kuveyt Türk",
+    "displayName": "Kuveyt T\u00fcrk",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -37003,21 +37003,21 @@
   },
   {
     "packageName": "com.kvt.ziogas",
-    "displayName": "Žiogas",
+    "displayName": "\u017diogas",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
   },
   {
     "packageName": "com.kyivdigital",
-    "displayName": "Київ Цифровий",
+    "displayName": "\u041a\u0438\u0457\u0432 \u0426\u0438\u0444\u0440\u043e\u0432\u0438\u0439",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
   },
   {
     "packageName": "com.kyivstar.mykyivstar",
-    "displayName": "Мій Київстар",
+    "displayName": "\u041c\u0456\u0439 \u041a\u0438\u0457\u0432\u0441\u0442\u0430\u0440",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -37311,7 +37311,7 @@
   },
   {
     "packageName": "com.leesfamous.app",
-    "displayName": "Lee’s Famous Recipe Chicken",
+    "displayName": "Lee\u2019s Famous Recipe Chicken",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -37402,7 +37402,7 @@
   },
   {
     "packageName": "com.lenovo.leos.appstore",
-    "displayName": "Lenovo Application Center 应用中心\nLenovo chinese app store",
+    "displayName": "Lenovo Application Center \u5e94\u7528\u4e2d\u5fc3\nLenovo chinese app store",
     "category": "OEM",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -37899,7 +37899,7 @@
   },
   {
     "packageName": "com.lge.gallery.vr.wallpaper",
-    "displayName": "LG 360 Image Wallpaper\nProvides VR (360°) wallpapers.",
+    "displayName": "LG 360 Image Wallpaper\nProvides VR (360\u00b0) wallpapers.",
     "category": "OEM",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -38025,7 +38025,7 @@
   },
   {
     "packageName": "com.lge.hotspotlauncher",
-    "displayName": "LG Mobile Hotspot\nProvides hotspot feature enabling you to share the phone’s 4G data connection with any Wi-Fi capable devices.\n",
+    "displayName": "LG Mobile Hotspot\nProvides hotspot feature enabling you to share the phone\u2019s 4G data connection with any Wi-Fi capable devices.\n",
     "category": "OEM",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -38074,7 +38074,7 @@
   },
   {
     "packageName": "com.lge.iftttmanager",
-    "displayName": "LG Smart settings\nIFTTT = “if this, then that.”. Smart Settings can be seens as IFTTT.\nSome events automatically triggers actions.\n",
+    "displayName": "LG Smart settings\nIFTTT = \u201cif this, then that.\u201d. Smart Settings can be seens as IFTTT.\nSome events automatically triggers actions.\n",
     "category": "OEM",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -38221,7 +38221,7 @@
   },
   {
     "packageName": "com.lge.lgfmservice",
-    "displayName": "Wifi Hotspot service\nREMINDER : Hotspot enable you to share the phone’s 4G data connection with any Wi-Fi capable devices.\nIt is not the Hotspot feature. Only the widget !\n\nDual SIM status widget\nProbably only present in dual sim LG phone variants. Does not remove the persistent notification or dual SIM functionality.\n\nService menus. I believe if you remove the last one the secret code you can dial doesn't work anymore (who needs it anyway..?)\n\nLG support App remote access\nYou probably don't want that to happen\n\nLAOP test [MORE INFO NEEDED]\nI don't know what LAOP is. I could not find information about it. It's a test so it's probably fine. I have removed it.",
+    "displayName": "Wifi Hotspot service\nREMINDER : Hotspot enable you to share the phone\u2019s 4G data connection with any Wi-Fi capable devices.\nIt is not the Hotspot feature. Only the widget !\n\nDual SIM status widget\nProbably only present in dual sim LG phone variants. Does not remove the persistent notification or dual SIM functionality.\n\nService menus. I believe if you remove the last one the secret code you can dial doesn't work anymore (who needs it anyway..?)\n\nLG support App remote access\nYou probably don't want that to happen\n\nLAOP test [MORE INFO NEEDED]\nI don't know what LAOP is. I could not find information about it. It's a test so it's probably fine. I have removed it.",
     "category": "OEM",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -38613,7 +38613,7 @@
   },
   {
     "packageName": "com.lge.snappage",
-    "displayName": "Snap Page\nPart of the QuickMemo+ app, lets you capture the text/images/URL from a web page without grabbing ads.\nIt’s much like instapaper or pocket app, but it works locally, like reading mode on some browsers, saving only the body of the article.\nhttp://www.lg.com/us/mobile-phones/g4/display\n",
+    "displayName": "Snap Page\nPart of the QuickMemo+ app, lets you capture the text/images/URL from a web page without grabbing ads.\nIt\u2019s much like instapaper or pocket app, but it works locally, like reading mode on some browsers, saving only the body of the article.\nhttp://www.lg.com/us/mobile-phones/g4/display\n",
     "category": "OEM",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -38746,7 +38746,7 @@
   },
   {
     "packageName": "com.lge.video.vr.wallpaper",
-    "displayName": "Video Wallpaper\nLG 360° VR Wallpapers\n",
+    "displayName": "Video Wallpaper\nLG 360\u00b0 VR Wallpapers\n",
     "category": "OEM",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -38781,7 +38781,7 @@
   },
   {
     "packageName": "com.lge.vrplayer",
-    "displayName": "LG VR player\nEnables you to watch 360° pictures/videos.\n",
+    "displayName": "LG VR player\nEnables you to watch 360\u00b0 pictures/videos.\n",
     "category": "OEM",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -39096,7 +39096,7 @@
   },
   {
     "packageName": "com.lizard.schedule",
-    "displayName": "计划表",
+    "displayName": "\u8ba1\u5212\u8868",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -39712,7 +39712,7 @@
   },
   {
     "packageName": "com.madarsoft.quran",
-    "displayName": "مصحف المدينة",
+    "displayName": "\u0645\u0635\u062d\u0641 \u0627\u0644\u0645\u062f\u064a\u0646\u0629",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -39761,7 +39761,7 @@
   },
   {
     "packageName": "com.magneticchen.daijishou",
-    "displayName": "Daijishō",
+    "displayName": "Daijish\u014d",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -40517,7 +40517,7 @@
   },
   {
     "packageName": "com.mediatek.calendarimporter",
-    "displayName": "Useful in China where Google isn’t available, but not needed for Google users.",
+    "displayName": "Useful in China where Google isn\u2019t available, but not needed for Google users.",
     "category": "OEM",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -40615,7 +40615,7 @@
   },
   {
     "packageName": "com.mediatek.filemanager",
-    "displayName": "The com.mediatek.filemanager package is MediaTek’s proprietary file management app, designed to handle file browsing, organization, and management on devices with MediaTek chipsets. While it provides basic file management functions, there are many more advanced and feature-rich file manager apps available on Google Play.",
+    "displayName": "The com.mediatek.filemanager package is MediaTek\u2019s proprietary file management app, designed to handle file browsing, organization, and management on devices with MediaTek chipsets. While it provides basic file management functions, there are many more advanced and feature-rich file manager apps available on Google Play.",
     "category": "OEM",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -40629,7 +40629,7 @@
   },
   {
     "packageName": "com.mediatek.fwk.plugin",
-    "displayName": "The com.mediatek.fwk.plugin package is part of MediaTek’s framework for managing plugins and extensions specific to MediaTek’s hardware and software ecosystem. This package may handle integration and support for various MediaTek-specific features and enhancements. Removing this package could affect some advanced functionalities or custom features provided by MediaTek, but it generally should not disrupt basic system operations.",
+    "displayName": "The com.mediatek.fwk.plugin package is part of MediaTek\u2019s framework for managing plugins and extensions specific to MediaTek\u2019s hardware and software ecosystem. This package may handle integration and support for various MediaTek-specific features and enhancements. Removing this package could affect some advanced functionalities or custom features provided by MediaTek, but it generally should not disrupt basic system operations.",
     "category": "OEM",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -40643,7 +40643,7 @@
   },
   {
     "packageName": "com.mediatek.gbaservice",
-    "displayName": "Generic Bootstrapping Architecture. A ‘common ground’ of code used for many MediaTek apps.\nCan be removed if all other MediaTek apps are removed.",
+    "displayName": "Generic Bootstrapping Architecture. A \u2018common ground\u2019 of code used for many MediaTek apps.\nCan be removed if all other MediaTek apps are removed.",
     "category": "OEM",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -40692,7 +40692,7 @@
   },
   {
     "packageName": "com.mediatek.lbs.em2.ui",
-    "displayName": "LocationEM2\nAnother GPS status/testing app. Doesn’t stop GPS from working.",
+    "displayName": "LocationEM2\nAnother GPS status/testing app. Doesn\u2019t stop GPS from working.",
     "category": "OEM",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -40727,7 +40727,7 @@
   },
   {
     "packageName": "com.mediatek.mdmconfig",
-    "displayName": "Mobile Device Management (MDM) allows company’s IT department to reach inside your phone in the background, allowing them to ensure\nyour device is secure, know where it is, and remotely erase your data if the phone is stolen.\nIt's a way to ensure employees stay productive and do not breach corporate policies\nYou should NEVER have a MDM tool on your personal phone. Never.\nhttps://blog.cdemi.io/never-accept-an-mdm-policy-on-your-personal-phone/\nThis package probably isn't a MDM tool on its own but you definitively don't need it on your phone.\nCan someone share the apk?\n",
+    "displayName": "Mobile Device Management (MDM) allows company\u2019s IT department to reach inside your phone in the background, allowing them to ensure\nyour device is secure, know where it is, and remotely erase your data if the phone is stolen.\nIt's a way to ensure employees stay productive and do not breach corporate policies\nYou should NEVER have a MDM tool on your personal phone. Never.\nhttps://blog.cdemi.io/never-accept-an-mdm-policy-on-your-personal-phone/\nThis package probably isn't a MDM tool on its own but you definitively don't need it on your phone.\nCan someone share the apk?\n",
     "category": "OEM",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -40825,7 +40825,7 @@
   },
   {
     "packageName": "com.mediatek.providers.drm",
-    "displayName": "DRM provider (actually Beep Science is MediaTek’s default DRM vendor)\nProbably required for some forms of DRM; disabling might break things like Netflix streaming, which relies on DRM to function.\nhttps://en.wikipedia.org/wiki/Digital_rights_management",
+    "displayName": "DRM provider (actually Beep Science is MediaTek\u2019s default DRM vendor)\nProbably required for some forms of DRM; disabling might break things like Netflix streaming, which relies on DRM to function.\nhttps://en.wikipedia.org/wiki/Digital_rights_management",
     "category": "OEM",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -40839,7 +40839,7 @@
   },
   {
     "packageName": "com.mediatek.security",
-    "displayName": "The com.mediatek.security package is part of MediaTek’s security suite, providing features such as malware protection, privacy settings, and secure browsing options. While the package may offer added security features specific to MediaTek devices, there are alternative security solutions available on Google Play that can provide similar or enhanced protection. Removing this package might lead to a loss of MediaTek-specific security features, but it is generally not critical to the basic operation of the device.",
+    "displayName": "The com.mediatek.security package is part of MediaTek\u2019s security suite, providing features such as malware protection, privacy settings, and secure browsing options. While the package may offer added security features specific to MediaTek devices, there are alternative security solutions available on Google Play that can provide similar or enhanced protection. Removing this package might lead to a loss of MediaTek-specific security features, but it is generally not critical to the basic operation of the device.",
     "category": "OEM",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -40895,7 +40895,7 @@
   },
   {
     "packageName": "com.mediatek.videoplayer",
-    "displayName": "The com.mediatek.videoplayer package is MediaTek’s default video player app, designed to handle video playback and provide basic media management features. Since there are numerous alternative video player apps available on Google Play that offer advanced features and better performance, removing this package is generally recommended.",
+    "displayName": "The com.mediatek.videoplayer package is MediaTek\u2019s default video player app, designed to handle video playback and provide basic media management features. Since there are numerous alternative video player apps available on Google Play that offer advanced features and better performance, removing this package is generally recommended.",
     "category": "OEM",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -40916,7 +40916,7 @@
   },
   {
     "packageName": "com.mediatek.wfo.impl",
-    "displayName": "According to olorin (https://www.olorin.me/2019/09/08/debloating-the-umidigi-f1-play/) it's a MediaTek’s default fingerprint app (and he removed it).\nCan someone confirm what this package does?\nRemember that any pre-installed apps you don't actually need just increase the surface attack.\nVulnerability found in 2019: https://nvd.nist.gov/vuln/detail/CVE-2019-15368\nAny app co-located on the device could modify a system property through an exported interface without proper authorization.",
+    "displayName": "According to olorin (https://www.olorin.me/2019/09/08/debloating-the-umidigi-f1-play/) it's a MediaTek\u2019s default fingerprint app (and he removed it).\nCan someone confirm what this package does?\nRemember that any pre-installed apps you don't actually need just increase the surface attack.\nVulnerability found in 2019: https://nvd.nist.gov/vuln/detail/CVE-2019-15368\nAny app co-located on the device could modify a system property through an exported interface without proper authorization.",
     "category": "OEM",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -40944,7 +40944,7 @@
   },
   {
     "packageName": "com.medicalit.zachranka",
-    "displayName": "Záchranka",
+    "displayName": "Z\u00e1chranka",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -41490,7 +41490,7 @@
   },
   {
     "packageName": "com.mezhevikin.converter",
-    "displayName": "Valutaváltó",
+    "displayName": "Valutav\u00e1lt\u00f3",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -41504,7 +41504,7 @@
   },
   {
     "packageName": "com.mfcloudcalculate.networkdisk",
-    "displayName": "123云盘",
+    "displayName": "123\u4e91\u76d8",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -42295,7 +42295,7 @@
   },
   {
     "packageName": "com.mirfatif.noorulhuda",
-    "displayName": "نور الهدى",
+    "displayName": "\u0646\u0648\u0631 \u0627\u0644\u0647\u062f\u0649",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -42687,7 +42687,7 @@
   },
   {
     "packageName": "com.miui.mediafeature",
-    "displayName": "MediaFeature合集\nIs this something for media? Unused app, probably for China.",
+    "displayName": "MediaFeature\u5408\u96c6\nIs this something for media? Unused app, probably for China.",
     "category": "OEM",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -43541,7 +43541,7 @@
   },
   {
     "packageName": "com.mobilesuica.msb.android",
-    "displayName": "モバイルSuica",
+    "displayName": "\u30e2\u30d0\u30a4\u30ebSuica",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -43723,7 +43723,7 @@
   },
   {
     "packageName": "com.mojitec.mojidict",
-    "displayName": "MOJi辞書",
+    "displayName": "MOJi\u8f9e\u66f8",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -43940,14 +43940,14 @@
   },
   {
     "packageName": "com.mootwin.natixis",
-    "displayName": "Mon épargne",
+    "displayName": "Mon \u00e9pargne",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
   },
   {
     "packageName": "com.moqate3.moqate3",
-    "displayName": "Moqate3|انا مقاطع",
+    "displayName": "Moqate3|\u0627\u0646\u0627 \u0645\u0642\u0627\u0637\u0639",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -44157,7 +44157,7 @@
   },
   {
     "packageName": "com.motorola.android.overlay.qcom.common",
-    "displayName": "This package is part of Motorola’s custom overlay and is associated with Qualcomm (Qcom) related functionality or optimizations.",
+    "displayName": "This package is part of Motorola\u2019s custom overlay and is associated with Qualcomm (Qcom) related functionality or optimizations.",
     "category": "OEM",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -44185,7 +44185,7 @@
   },
   {
     "packageName": "com.motorola.android.providers.settings.auto_generated_rro_product__",
-    "displayName": "This package is part of Motorola’s custom settings provider, and it likely includes resources or settings related to Motorola-specific customizations.",
+    "displayName": "This package is part of Motorola\u2019s custom settings provider, and it likely includes resources or settings related to Motorola-specific customizations.",
     "category": "OEM",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -44248,14 +44248,14 @@
   },
   {
     "packageName": "com.motorola.android.settings.overlay.lra",
-    "displayName": "This package is part of Motorola’s custom settings overlay, likely related to specific regional or device configurations.",
+    "displayName": "This package is part of Motorola\u2019s custom settings overlay, likely related to specific regional or device configurations.",
     "category": "OEM",
     "sourceId": "bundled",
     "fetchedAt": 0
   },
   {
     "packageName": "com.motorola.android.settings.overlay.power.bottom",
-    "displayName": "This package is part of Motorola’s custom settings overlay, specifically related to power management settings.",
+    "displayName": "This package is part of Motorola\u2019s custom settings overlay, specifically related to power management settings.",
     "category": "OEM",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -44353,7 +44353,7 @@
   },
   {
     "packageName": "com.motorola.batterycare.overlay",
-    "displayName": "This package is part of Motorola’s custom battery care overlay and is likely responsible for providing Motorola-specific enhancements or visual elements related to battery management.",
+    "displayName": "This package is part of Motorola\u2019s custom battery care overlay and is likely responsible for providing Motorola-specific enhancements or visual elements related to battery management.",
     "category": "OEM",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -44437,7 +44437,7 @@
   },
   {
     "packageName": "com.motorola.ccc.devicemanagement",
-    "displayName": "Mobile Device Management (MDM) allows company’s IT department to reach inside your phone in the background, allowing them to ensure\nyour device is secure, know where it is, and remotely erase your data if the phone is stolen.\nYou should NEVER install a MDM tool on your phone. Never.\nhttps://onezero.medium.com/dont-put-your-work-email-on-your-personal-phone-ef7fef956c2f\nhttps://blog.cdemi.io/never-accept-an-mdm-policy-on-your-personal-phone/\n",
+    "displayName": "Mobile Device Management (MDM) allows company\u2019s IT department to reach inside your phone in the background, allowing them to ensure\nyour device is secure, know where it is, and remotely erase your data if the phone is stolen.\nYou should NEVER install a MDM tool on your phone. Never.\nhttps://onezero.medium.com/dont-put-your-work-email-on-your-personal-phone-ef7fef956c2f\nhttps://blog.cdemi.io/never-accept-an-mdm-policy-on-your-personal-phone/\n",
     "category": "OEM",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -44675,7 +44675,7 @@
   },
   {
     "packageName": "com.motorola.imagertuning_u",
-    "displayName": "This package is associated with Motorola’s image tuning features, specifically designed to enhance or adjust image quality settings on Motorola devices.",
+    "displayName": "This package is associated with Motorola\u2019s image tuning features, specifically designed to enhance or adjust image quality settings on Motorola devices.",
     "category": "OEM",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -44941,7 +44941,7 @@
   },
   {
     "packageName": "com.motorola.mykey",
-    "displayName": "This package is related to Motorola’s 'MyKey' feature, which is a tool designed to manage key settings and restrictions for device usage.",
+    "displayName": "This package is related to Motorola\u2019s 'MyKey' feature, which is a tool designed to manage key settings and restrictions for device usage.",
     "category": "OEM",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -45067,7 +45067,7 @@
   },
   {
     "packageName": "com.motorola.ptt.prip",
-    "displayName": "Prip (https://play.google.com/store/apps/details?id=com.motorola.ptt.prip)\nPush-To-Talk app. Allows to you send calls over any wireless carrier’s 3G or 4G networks or a WiFi connection.\nIt offers unlimited calling between other users and Nextel phone owners, rather than universal calling credit,\nand works on a monthly subscription basis.\nhttps://prip.me/#get\nNo longer in Android 10 image\n",
+    "displayName": "Prip (https://play.google.com/store/apps/details?id=com.motorola.ptt.prip)\nPush-To-Talk app. Allows to you send calls over any wireless carrier\u2019s 3G or 4G networks or a WiFi connection.\nIt offers unlimited calling between other users and Nextel phone owners, rather than universal calling credit,\nand works on a monthly subscription basis.\nhttps://prip.me/#get\nNo longer in Android 10 image\n",
     "category": "OEM",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -45116,7 +45116,7 @@
   },
   {
     "packageName": "com.motorola.securityhubext",
-    "displayName": "This package is related to Motorola's Security Hub, an extension or enhancement for the device’s security features.",
+    "displayName": "This package is related to Motorola's Security Hub, an extension or enhancement for the device\u2019s security features.",
     "category": "OEM",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -45606,7 +45606,7 @@
   },
   {
     "packageName": "com.muzekart.app",
-    "displayName": "MüzeKart",
+    "displayName": "M\u00fczeKart",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -45977,14 +45977,14 @@
   },
   {
     "packageName": "com.navitime.local.naviwalk.gl",
-    "displayName": "ナビウォーク",
+    "displayName": "\u30ca\u30d3\u30a6\u30a9\u30fc\u30af",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
   },
   {
     "packageName": "com.navitime.local.nttransfer",
-    "displayName": "乗換NAVITIME",
+    "displayName": "\u4e57\u63dbNAVITIME",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -45998,7 +45998,7 @@
   },
   {
     "packageName": "com.nbbird.hardwareinfo",
-    "displayName": "The com.nbbird.hardwareinfo package is likely associated with providing detailed information about the device’s hardware components, such as CPU, GPU, memory, and other system specifications. This app might be used for diagnostics or detailed hardware monitoring specific to the device. Removing it might disable access to this hardware information and could affect the ability to view detailed system diagnostics. However, it generally does not affect core system functionality and should not cause bootloop issues.",
+    "displayName": "The com.nbbird.hardwareinfo package is likely associated with providing detailed information about the device\u2019s hardware components, such as CPU, GPU, memory, and other system specifications. This app might be used for diagnostics or detailed hardware monitoring specific to the device. Removing it might disable access to this hardware information and could affect the ability to view detailed system diagnostics. However, it generally does not affect core system functionality and should not cause bootloop issues.",
     "category": "OEM",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -46229,7 +46229,7 @@
   },
   {
     "packageName": "com.netatmo.thermostat",
-    "displayName": "Énergie",
+    "displayName": "\u00c9nergie",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -46698,7 +46698,7 @@
   },
   {
     "packageName": "com.nifty.myhome.buy",
-    "displayName": "購入物件検索",
+    "displayName": "\u8cfc\u5165\u7269\u4ef6\u691c\u7d22",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -46943,7 +46943,7 @@
   },
   {
     "packageName": "com.nixesea.travelcardreader",
-    "displayName": "Баланс\nпроездного",
+    "displayName": "\u0411\u0430\u043b\u0430\u043d\u0441\n\u043f\u0440\u043e\u0435\u0437\u0434\u043d\u043e\u0433\u043e",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -47804,7 +47804,7 @@
   },
   {
     "packageName": "com.nuqayah.rawy",
-    "displayName": "راوي",
+    "displayName": "\u0631\u0627\u0648\u064a",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -48007,7 +48007,7 @@
   },
   {
     "packageName": "com.octopod.russianpost.client.android",
-    "displayName": "Почта России",
+    "displayName": "\u041f\u043e\u0447\u0442\u0430 \u0420\u043e\u0441\u0441\u0438\u0438",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -48161,7 +48161,7 @@
   },
   {
     "packageName": "com.olo.dairyqueen.production",
-    "displayName": "Dairy Queen®",
+    "displayName": "Dairy Queen\u00ae",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -48288,7 +48288,7 @@
   {
     "packageName": "com.onepassword.android",
     "displayName": "1Password",
-    "category": "USER_APP",
+    "category": "POPULAR",
     "sourceId": "bundled",
     "fetchedAt": 0
   },
@@ -48833,7 +48833,7 @@
   },
   {
     "packageName": "com.oneplus.ifaaservice",
-    "displayName": "IFAA = (China’s) Internet Finance Authentication Alliance\nProvides biometric authentication for Alipay. Safe to disable if you don't use it.",
+    "displayName": "IFAA = (China\u2019s) Internet Finance Authentication Alliance\nProvides biometric authentication for Alipay. Safe to disable if you don't use it.",
     "category": "OEM",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -49561,14 +49561,14 @@
   },
   {
     "packageName": "com.opera.max.oem",
-    "displayName": "Opera Max (discontinued)\nSystem-wide data-saving proxy that funnell all app data through Opera’s servers to compress images and videos",
+    "displayName": "Opera Max (discontinued)\nSystem-wide data-saving proxy that funnell all app data through Opera\u2019s servers to compress images and videos",
     "category": "OEM",
     "sourceId": "bundled",
     "fetchedAt": 0
   },
   {
     "packageName": "com.opera.max.preinstall",
-    "displayName": "Opera Max (discontinued)\nSystem-wide data-saving proxy that funnell all app data through Opera’s servers to compress images and videos\n",
+    "displayName": "Opera Max (discontinued)\nSystem-wide data-saving proxy that funnell all app data through Opera\u2019s servers to compress images and videos\n",
     "category": "OEM",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -50842,14 +50842,14 @@
   },
   {
     "packageName": "com.orange.phone",
-    "displayName": "Orange Téléphone",
+    "displayName": "Orange T\u00e9l\u00e9phone",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
   },
   {
     "packageName": "com.orange.tdd",
-    "displayName": "Transfert de données (https://play.google.com/store/apps/details?id=com.orange.tdd)\nLets you transfer wirelessly: contacts, SMS, call log, calendar, photos, videos, audio files, etc., all from your old Android\n",
+    "displayName": "Transfert de donn\u00e9es (https://play.google.com/store/apps/details?id=com.orange.tdd)\nLets you transfer wirelessly: contacts, SMS, call log, calendar, photos, videos, audio files, etc., all from your old Android\n",
     "category": "OEM",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -50884,7 +50884,7 @@
   },
   {
     "packageName": "com.orange.wifiorange",
-    "displayName": "Mon Réseau (https://play.google.com/store/apps/details?id=com.orange.wifiorange)\nLets you measure your speed connection and find better Orange wifi hotspots.\nInforms you also about near network incidents.\n",
+    "displayName": "Mon R\u00e9seau (https://play.google.com/store/apps/details?id=com.orange.wifiorange)\nLets you measure your speed connection and find better Orange wifi hotspots.\nInforms you also about near network incidents.\n",
     "category": "OEM",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -50919,7 +50919,7 @@
   },
   {
     "packageName": "com.oremus.catholic.bible.rosary.prayer",
-    "displayName": "  Oremus",
+    "displayName": "\u00a0\u00a0Oremus",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -50989,7 +50989,7 @@
   },
   {
     "packageName": "com.oslonokkel",
-    "displayName": "Oslonøkkelen",
+    "displayName": "Oslon\u00f8kkelen",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -51276,7 +51276,7 @@
   },
   {
     "packageName": "com.paris.velib",
-    "displayName": "Vélib' Métropole",
+    "displayName": "V\u00e9lib' M\u00e9tropole",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -52116,7 +52116,7 @@
   },
   {
     "packageName": "com.plantronics.headsetservice",
-    "displayName": "Poly Lens",
+    "displayName": "Poly\u00a0Lens",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -52529,7 +52529,7 @@
   },
   {
     "packageName": "com.pozitron.iscep",
-    "displayName": "İşCep",
+    "displayName": "\u0130\u015fCep",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -52564,7 +52564,7 @@
   },
   {
     "packageName": "com.pragonauts.globus",
-    "displayName": "Můj Globus",
+    "displayName": "M\u016fj Globus",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -52837,7 +52837,7 @@
   },
   {
     "packageName": "com.psa.mym.mycitroen",
-    "displayName": "My Citroën",
+    "displayName": "My Citro\u00ebn",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -52963,7 +52963,7 @@
   },
   {
     "packageName": "com.pyur.mypyur",
-    "displayName": "MEIN PŸUR",
+    "displayName": "MEIN P\u0178UR",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -54706,7 +54706,7 @@
   },
   {
     "packageName": "com.renfe.renfecercanias",
-    "displayName": "Renfe Cercanías",
+    "displayName": "Renfe Cercan\u00edas",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -55301,7 +55301,7 @@
   },
   {
     "packageName": "com.roozbehzarei.filester",
-    "displayName": "فایلستر",
+    "displayName": "\u0641\u0627\u06cc\u0644\u0633\u062a\u0631",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -55406,14 +55406,14 @@
   },
   {
     "packageName": "com.rsi.nba",
-    "displayName": "Ruralvía",
+    "displayName": "Ruralv\u00eda",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
   },
   {
     "packageName": "com.rsi.ruralviawallet2",
-    "displayName": "Ruralvía Pay",
+    "displayName": "Ruralv\u00eda Pay",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -55469,7 +55469,7 @@
   },
   {
     "packageName": "com.rte.eco2mix",
-    "displayName": "RTE-éCO₂mix",
+    "displayName": "RTE-\u00e9CO\u2082mix",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -55490,7 +55490,7 @@
   },
   {
     "packageName": "com.rubeacon.tashirpizza",
-    "displayName": "Ташир Пицца",
+    "displayName": "\u0422\u0430\u0448\u0438\u0440 \u041f\u0438\u0446\u0446\u0430",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -55595,7 +55595,7 @@
   },
   {
     "packageName": "com.rvappstudios.math.games.kids.addition.subtraction.multiplication.division",
-    "displayName": "Matematické hry",
+    "displayName": "Matematick\u00e9 hry",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -55714,7 +55714,7 @@
   },
   {
     "packageName": "com.saintetienne.mobilise",
-    "displayName": "MobiliSÉ",
+    "displayName": "MobiliS\u00c9",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -55840,7 +55840,7 @@
   },
   {
     "packageName": "com.samsung.accessory.budsunitemgr",
-    "displayName": "Provides the system component that manages Galaxy Buds features and configuration. It handles firmware updates, noise control modes (ANC / Ambient sound), touch controls, and all device‑specific settings.\nOn my device, uninstalling it removed the ability to update the Buds or use any of the features mentioned above.\nAccording to the Galaxy Store description, it also requires the Galaxy Wearable package (com.samsung.android.app.watchmanagerstub) to function.\nhttps://apps.samsung.com/appquery/appDetail.as?appId=com.samsung.accessory.budsunitemgr\nhttps://play.google.com/store/apps/details?id=com.samsung.accessory.budsunitemgr",
+    "displayName": "Provides the system component that manages Galaxy Buds features and configuration. It handles firmware updates, noise control modes (ANC / Ambient sound), touch controls, and all device\u2011specific settings.\nOn my device, uninstalling it removed the ability to update the Buds or use any of the features mentioned above.\nAccording to the Galaxy Store description, it also requires the Galaxy Wearable package (com.samsung.android.app.watchmanagerstub) to function.\nhttps://apps.samsung.com/appquery/appDetail.as?appId=com.samsung.accessory.budsunitemgr\nhttps://play.google.com/store/apps/details?id=com.samsung.accessory.budsunitemgr",
     "category": "OEM",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -56036,7 +56036,7 @@
   },
   {
     "packageName": "com.samsung.android.app.appsedge",
-    "displayName": "Samsung apps edge (https://www.samsung.com/global/galaxy/what-is/apps-edge/)\nDisplays your five most frequently used apps for you to access at a moment’s notice.\nBreaks Split-Screen/Multi-Window according to issue#124.",
+    "displayName": "Samsung apps edge (https://www.samsung.com/global/galaxy/what-is/apps-edge/)\nDisplays your five most frequently used apps for you to access at a moment\u2019s notice.\nBreaks Split-Screen/Multi-Window according to issue#124.",
     "category": "OEM",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -56911,7 +56911,7 @@
   },
   {
     "packageName": "com.samsung.android.dynamiclock",
-    "displayName": "Samsung Wallpaper services (Dynamic Lock)\nNOTE: Breaks LockStar customization.\nAutomatically changes your Lock screen’s wallpaper every time your Galaxy phone wakes up (wallpapers update every 2 weeks).\nhttps://www.samsung.com/us/support/answer/ANS10001593\n",
+    "displayName": "Samsung Wallpaper services (Dynamic Lock)\nNOTE: Breaks LockStar customization.\nAutomatically changes your Lock screen\u2019s wallpaper every time your Galaxy phone wakes up (wallpapers update every 2 weeks).\nhttps://www.samsung.com/us/support/answer/ANS10001593\n",
     "category": "OEM",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -57002,7 +57002,7 @@
   },
   {
     "packageName": "com.samsung.android.framework.res",
-    "displayName": "This package is part of Samsung’s custom system framework and manages various resources for Samsung-specific features and UI enhancements.",
+    "displayName": "This package is part of Samsung\u2019s custom system framework and manages various resources for Samsung-specific features and UI enhancements.",
     "category": "OEM",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -57184,7 +57184,7 @@
   },
   {
     "packageName": "com.samsung.android.ipsgeofence",
-    "displayName": "Samsung Visit In app\n\nIPSGeofence\nIPS = Indoor Positioning System.\nThe concept of Indoor Positioning System designates a network of connected devices within a building making it possible to trace the position of another device – and therefore potentially of a person – in environments where GPS systems are\nnot efficient .\nGeofencing is a technique which consists in activating preconfigured actions when a device enters a certain geographical area.\nFor example, a user can use it to automatically turn on Wi-Fi and home lights when their smartphone is detected nearby.\nIn short, if enabled, this app will track your location everywhere and all the time!\nhttps://www.comparitech.com/blog/vpn-privacy/what-is-geofencing-privacy/",
+    "displayName": "Samsung Visit In app\n\nIPSGeofence\nIPS = Indoor Positioning System.\nThe concept of Indoor Positioning System designates a network of connected devices within a building making it possible to trace the position of another device \u2013 and therefore potentially of a person \u2013 in environments where GPS systems are\nnot efficient .\nGeofencing is a technique which consists in activating preconfigured actions when a device enters a certain geographical area.\nFor example, a user can use it to automatically turn on Wi-Fi and home lights when their smartphone is detected nearby.\nIn short, if enabled, this app will track your location everywhere and all the time!\nhttps://www.comparitech.com/blog/vpn-privacy/what-is-geofencing-privacy/",
     "category": "OEM",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -57219,7 +57219,7 @@
   },
   {
     "packageName": "com.samsung.android.kmxservice",
-    "displayName": "KmxService\nKnox Matrix. Provides a feature to securely generate and store keys used for end-to-end encryption (E2EE).\nIt encrypts/decrypts data on the user’s device and transmits it to the server.\nThe user’s original data cannot be checked as decryption is impossible from the server, which only has encrypted data, and is safely protected from external attacks.\nhttps://www.apkmirror.com/apk/samsung-electronics-co-ltd/kmxservice/",
+    "displayName": "KmxService\nKnox Matrix. Provides a feature to securely generate and store keys used for end-to-end encryption (E2EE).\nIt encrypts/decrypts data on the user\u2019s device and transmits it to the server.\nThe user\u2019s original data cannot be checked as decryption is impossible from the server, which only has encrypted data, and is safely protected from external attacks.\nhttps://www.apkmirror.com/apk/samsung-electronics-co-ltd/kmxservice/",
     "category": "OEM",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -57793,7 +57793,7 @@
   },
   {
     "packageName": "com.samsung.android.sconnect",
-    "displayName": "Samsung Quick connect (discontinued?)\nIn theory, it lets you connect your phone to a variety of devices over Wifi that support multiple protocols — including Wifi Direct and Miracast — to display photos, video or audio.\nhttps://www.samsung.com/uk/support/tv-audio-video/what-is-screen-mirroring-and-how-do-i-use-it-with-my-samsung-tv-and-samsung-mobile-device/\n",
+    "displayName": "Samsung Quick connect (discontinued?)\nIn theory, it lets you connect your phone to a variety of devices over Wifi that support multiple protocols \u2014 including Wifi Direct and Miracast \u2014 to display photos, video or audio.\nhttps://www.samsung.com/uk/support/tv-audio-video/what-is-screen-mirroring-and-how-do-i-use-it-with-my-samsung-tv-and-samsung-mobile-device/\n",
     "category": "OEM",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -58941,7 +58941,7 @@
   },
   {
     "packageName": "com.samsung.app.newtrim",
-    "displayName": "Samsung Video trimmer (Editor Lite)\nLets you quickly trim video files (from the gallery “Edit -> Studio -> Video Trimmer”). This trimmer is both imprecise and inaccurate, ffmpeg is much better.",
+    "displayName": "Samsung Video trimmer (Editor Lite)\nLets you quickly trim video files (from the gallery \u201cEdit -> Studio -> Video Trimmer\u201d). This trimmer is both imprecise and inaccurate, ffmpeg is much better.",
     "category": "OEM",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -59109,7 +59109,7 @@
   },
   {
     "packageName": "com.samsung.faceservice",
-    "displayName": "Face service detection\nAnalyzes all the photos in the Samsung Gallery to detect human faces using Samsung’s built-in face detection technology. Once FaceService identifies that the photo contains a face, it shows a button that allows users to add name tags to the photo and create a People Album of similar photos by selecting the name tag.\n\nSame shared user id as com.samsung.ipservice, com.samsung.mlp, com.samsung.cmh\nNeeded for face recognition in the Gallery\nNOTE : Removing this package does not break face unlock\n",
+    "displayName": "Face service detection\nAnalyzes all the photos in the Samsung Gallery to detect human faces using Samsung\u2019s built-in face detection technology. Once FaceService identifies that the photo contains a face, it shows a button that allows users to add name tags to the photo and create a People Album of similar photos by selecting the name tag.\n\nSame shared user id as com.samsung.ipservice, com.samsung.mlp, com.samsung.cmh\nNeeded for face recognition in the Gallery\nNOTE : Removing this package does not break face unlock\n",
     "category": "OEM",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -60082,7 +60082,7 @@
   },
   {
     "packageName": "com.seamlink.gatewaybox.jcs",
-    "displayName": "Joaquim Chaves Saúde",
+    "displayName": "Joaquim Chaves Sa\u00fade",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -60929,7 +60929,7 @@
   },
   {
     "packageName": "com.sec.android.emergencymode.service",
-    "displayName": "Emergency mode enables you to extend your device’s standby time when in an emergency situation and want your device to conserve power for as long as possible. When activated, screen brightness will decrease, some of functionality will be limited and the home screen is changed to a black theme, all to reduce battery drain (OLED screens draw less power when showing black, cuz black = pixel off).\nNOT related to SOS messages/911.\nhttps://www.samsung.com/uk/support/mobile-devices/what-is-emergency-mode/",
+    "displayName": "Emergency mode enables you to extend your device\u2019s standby time when in an emergency situation and want your device to conserve power for as long as possible. When activated, screen brightness will decrease, some of functionality will be limited and the home screen is changed to a black theme, all to reduce battery drain (OLED screens draw less power when showing black, cuz black = pixel off).\nNOT related to SOS messages/911.\nhttps://www.samsung.com/uk/support/mobile-devices/what-is-emergency-mode/",
     "category": "OEM",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -61251,7 +61251,7 @@
   },
   {
     "packageName": "com.sec.android.usermanual",
-    "displayName": "Opens the device’s built‑in user manual PDF",
+    "displayName": "Opens the device\u2019s built\u2011in user manual PDF",
     "category": "OEM",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -62224,7 +62224,7 @@
   },
   {
     "packageName": "com.sfr.android.vvm",
-    "displayName": "SFR Répondeur + (https://play.google.com/store/apps/details?id=com.sfr.android.vvm)\nLets you use your voice mail and manage your inbox without dialing into your voicemail.\n",
+    "displayName": "SFR R\u00e9pondeur + (https://play.google.com/store/apps/details?id=com.sfr.android.vvm)\nLets you use your voice mail and manage your inbox without dialing into your voicemail.\n",
     "category": "OEM",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -62476,7 +62476,7 @@
   },
   {
     "packageName": "com.showself.ui",
-    "displayName": "秀色直播",
+    "displayName": "\u79c0\u8272\u76f4\u64ad",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -62714,7 +62714,7 @@
   },
   {
     "packageName": "com.simplemobiletools.thankyou",
-    "displayName": "Dankeschön",
+    "displayName": "Dankesch\u00f6n",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -62798,7 +62798,7 @@
   },
   {
     "packageName": "com.sirin.android",
-    "displayName": "Сирин",
+    "displayName": "\u0421\u0438\u0440\u0438\u043d",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -63120,14 +63120,14 @@
   },
   {
     "packageName": "com.smbc_card.vpass",
-    "displayName": "三井住友カード",
+    "displayName": "\u4e09\u4e95\u4f4f\u53cb\u30ab\u30fc\u30c9",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
   },
   {
     "packageName": "com.smbc_card.vpoint",
-    "displayName": "VポイントPay",
+    "displayName": "V\u30dd\u30a4\u30f3\u30c8Pay",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -63155,7 +63155,7 @@
   },
   {
     "packageName": "com.smocca",
-    "displayName": "賃貸スモッカ",
+    "displayName": "\u8cc3\u8cb8\u30b9\u30e2\u30c3\u30ab",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -63302,7 +63302,7 @@
   },
   {
     "packageName": "com.soberdigital.screentimetracker",
-    "displayName": "Temps d'écran",
+    "displayName": "Temps d'\u00e9cran",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -64114,7 +64114,7 @@
   },
   {
     "packageName": "com.sonymobile.android.addoncamera.dual",
-    "displayName": "Provides an addon to enable dual camera functionality, safe to remove if you don’t need camera add-ons",
+    "displayName": "Provides an addon to enable dual camera functionality, safe to remove if you don\u2019t need camera add-ons",
     "category": "OEM",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -64212,7 +64212,7 @@
   },
   {
     "packageName": "com.sonymobile.cameracommon",
-    "displayName": "Shared library for Sony’s camera app and add-ons. Removing breaks camera functionality",
+    "displayName": "Shared library for Sony\u2019s camera app and add-ons. Removing breaks camera functionality",
     "category": "OEM",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -64296,7 +64296,7 @@
   },
   {
     "packageName": "com.sonymobile.extmonitorapp",
-    "displayName": "Ulkoinen näyttö",
+    "displayName": "Ulkoinen n\u00e4ytt\u00f6",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -64562,7 +64562,7 @@
   },
   {
     "packageName": "com.sonymobile.xperialounge.services",
-    "displayName": "Xperia™ Lounge Pass service (discontinued)\nThe Xperia Lounge app was meant to provide loyal fans with various rewards for their Xperia smartphones,\nsuch as exclusive Xperia Themes and wallpapers, as well as competitions.\nhttps://www.phonearena.com/news/Sony-Xperia-Lounge-shutting-down_id118252\n",
+    "displayName": "Xperia\u2122 Lounge Pass service (discontinued)\nThe Xperia Lounge app was meant to provide loyal fans with various rewards for their Xperia smartphones,\nsuch as exclusive Xperia Themes and wallpapers, as well as competitions.\nhttps://www.phonearena.com/news/Sony-Xperia-Lounge-shutting-down_id118252\n",
     "category": "OEM",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -64793,7 +64793,7 @@
   },
   {
     "packageName": "com.splendapps.decibel",
-    "displayName": "Sonomètre",
+    "displayName": "Sonom\u00e8tre",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -65066,14 +65066,14 @@
   },
   {
     "packageName": "com.sprint.android.musicplus2033",
-    "displayName": "Sprint Music Plus (https://play.google.com/store/apps/details?id=com.sprint.android.musicplus2033)\nSprint’s official Music Store and player.",
+    "displayName": "Sprint Music Plus (https://play.google.com/store/apps/details?id=com.sprint.android.musicplus2033)\nSprint\u2019s official Music Store and player.",
     "category": "OEM",
     "sourceId": "bundled",
     "fetchedAt": 0
   },
   {
     "packageName": "com.sprint.android.musicplus2033.vpl",
-    "displayName": "Sprint Music Plus (https://play.google.com/store/apps/details?id=com.sprint.android.musicplus2033)\nSprint’s official Music Store and player\n",
+    "displayName": "Sprint Music Plus (https://play.google.com/store/apps/details?id=com.sprint.android.musicplus2033)\nSprint\u2019s official Music Store and player\n",
     "category": "OEM",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -65115,7 +65115,7 @@
   },
   {
     "packageName": "com.sprint.ms.cdm",
-    "displayName": "Sprint Device Manager\nMobile Device Management (MDM) allows company’s IT department to reach inside your phone in the background, allowing them to ensure\nyour device is secure, know where it is, and remotely erase your data if the phone is stolen.\nYou should NEVER install a MDM tool on your phone. Never.\nhttps://onezero.medium.com/dont-put-your-work-email-on-your-personal-phone-ef7fef956c2f\nhttps://blog.cdemi.io/never-accept-an-mdm-policy-on-your-personal-phone/\n",
+    "displayName": "Sprint Device Manager\nMobile Device Management (MDM) allows company\u2019s IT department to reach inside your phone in the background, allowing them to ensure\nyour device is secure, know where it is, and remotely erase your data if the phone is stolen.\nYou should NEVER install a MDM tool on your phone. Never.\nhttps://onezero.medium.com/dont-put-your-work-email-on-your-personal-phone-ef7fef956c2f\nhttps://blog.cdemi.io/never-accept-an-mdm-policy-on-your-personal-phone/\n",
     "category": "OEM",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -65640,7 +65640,7 @@
   },
   {
     "packageName": "com.subway.mobile.emea.FL",
-    "displayName": "SUBWAY®",
+    "displayName": "SUBWAY\u00ae",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -65857,7 +65857,7 @@
   },
   {
     "packageName": "com.svitlo.app",
-    "displayName": "Світло",
+    "displayName": "\u0421\u0432\u0456\u0442\u043b\u043e",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -66207,7 +66207,7 @@
   },
   {
     "packageName": "com.taboola.mip",
-    "displayName": "Intrusive background module (Taboola) that keeps pushing a lock-screen stories feed — spam-ads and irrelevant articles (often from foreign/hostile sources).\nRuns in background, uses data, nags user until it is enabled. No system function — safe to remove.\nhttps://techissuestoday.com/motorola-lock-screen-ads-articles/",
+    "displayName": "Intrusive background module (Taboola) that keeps pushing a lock-screen stories feed \u2014 spam-ads and irrelevant articles (often from foreign/hostile sources).\nRuns in background, uses data, nags user until it is enabled. No system function \u2014 safe to remove.\nhttps://techissuestoday.com/motorola-lock-screen-ads-articles/",
     "category": "OEM",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -66235,7 +66235,7 @@
   },
   {
     "packageName": "com.tacticgames.molkkyscoretracker",
-    "displayName": "Mölkky Game Tracker",
+    "displayName": "M\u00f6lkky Game Tracker",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -66319,14 +66319,14 @@
   },
   {
     "packageName": "com.taobao.idlefish",
-    "displayName": "闲鱼",
+    "displayName": "\u95f2\u9c7c",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
   },
   {
     "packageName": "com.taobao.taobao",
-    "displayName": "淘宝",
+    "displayName": "\u6dd8\u5b9d",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -66361,7 +66361,7 @@
   },
   {
     "packageName": "com.tara360.tara.production",
-    "displayName": "تارا",
+    "displayName": "\u062a\u0627\u0631\u0627",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -66417,7 +66417,7 @@
   },
   {
     "packageName": "com.taxsee.taxsee",
-    "displayName": "maxim 🚕",
+    "displayName": "maxim \ud83d\ude95",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -67922,7 +67922,7 @@
   },
   {
     "packageName": "com.thinkyeah.message",
-    "displayName": "SMS/MMS Kлассический",
+    "displayName": "SMS/MMS K\u043b\u0430\u0441\u0441\u0438\u0447\u0435\u0441\u043a\u0438\u0439",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -67964,7 +67964,7 @@
   },
   {
     "packageName": "com.ticketjam",
-    "displayName": "チケジャム",
+    "displayName": "\u30c1\u30b1\u30b8\u30e3\u30e0",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -68125,7 +68125,7 @@
   },
   {
     "packageName": "com.tizianhoesch.draeggwaegg",
-    "displayName": "DräggWägg",
+    "displayName": "Dr\u00e4ggW\u00e4gg",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -68139,7 +68139,7 @@
   },
   {
     "packageName": "com.tmob.AveaOIM",
-    "displayName": "Türk Telekom",
+    "displayName": "T\u00fcrk Telekom",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -68209,7 +68209,7 @@
   },
   {
     "packageName": "com.tms",
-    "displayName": "T 멤버십",
+    "displayName": "T \uba64\ubc84\uc2ed",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -68300,7 +68300,7 @@
   },
   {
     "packageName": "com.tokyometro",
-    "displayName": "東京メトロmy!",
+    "displayName": "\u6771\u4eac\u30e1\u30c8\u30edmy!",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -68447,7 +68447,7 @@
   },
   {
     "packageName": "com.toppan.shufoo.android",
-    "displayName": "シュフー",
+    "displayName": "\u30b7\u30e5\u30d5\u30fc",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -68615,7 +68615,7 @@
   },
   {
     "packageName": "com.tpvison.headphone",
-    "displayName": "Kopfhörer",
+    "displayName": "Kopfh\u00f6rer",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -68748,7 +68748,7 @@
   },
   {
     "packageName": "com.transermobile.recargasuma",
-    "displayName": "Recàrrega SUMA",
+    "displayName": "Rec\u00e0rrega SUMA",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -68825,7 +68825,7 @@
   },
   {
     "packageName": "com.transsion.audioshare",
-    "displayName": "Audio Share\nAllows you to share your device’s Bluetooth audio with wireless headphones or bluetooth speakers, allowing to listen to the same music with multiple people\nPithus analysis: https://beta.pithus.org/report/0f21ba3944663e53da1d37be3c4253c2e89c3685fbff841127fed2a98e0000ec",
+    "displayName": "Audio Share\nAllows you to share your device\u2019s Bluetooth audio with wireless headphones or bluetooth speakers, allowing to listen to the same music with multiple people\nPithus analysis: https://beta.pithus.org/report/0f21ba3944663e53da1d37be3c4253c2e89c3685fbff841127fed2a98e0000ec",
     "category": "OEM",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -70057,7 +70057,7 @@
   },
   {
     "packageName": "com.twitter.goldmod",
-    "displayName": "‏XGold",
+    "displayName": "\u200fXGold",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -70316,7 +70316,7 @@
   },
   {
     "packageName": "com.undabot.android.njuskalo",
-    "displayName": "Njuškalo",
+    "displayName": "Nju\u0161kalo",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -70743,7 +70743,7 @@
   },
   {
     "packageName": "com.uy.itau.appitauuypf",
-    "displayName": "Itaú Uruguay",
+    "displayName": "Ita\u00fa Uruguay",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -70764,7 +70764,7 @@
   },
   {
     "packageName": "com.vaesttrafik.vaesttrafik",
-    "displayName": "Västtrafik",
+    "displayName": "V\u00e4sttrafik",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -70778,7 +70778,7 @@
   },
   {
     "packageName": "com.valedesconto.clubejosemais",
-    "displayName": "Clube Super José Mais",
+    "displayName": "Clube Super Jos\u00e9 Mais",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -71044,7 +71044,7 @@
   },
   {
     "packageName": "com.verizon.obdm",
-    "displayName": "It's a set of metrics-related modules. Google Play uses the version of the Telemetry module to determine\nif updates are available for metrics-related modules and which security patch version to display to the end user.\nThis module doesn’t contain active code and has no functionality on its own.\nRemoving modules-related packages may not be safe since Android 11\nhttps://gitlab.com/W1nst0n/universal-android-debloater/-/issues/27#note_410012436\n",
+    "displayName": "It's a set of metrics-related modules. Google Play uses the version of the Telemetry module to determine\nif updates are available for metrics-related modules and which security patch version to display to the end user.\nThis module doesn\u2019t contain active code and has no functionality on its own.\nRemoving modules-related packages may not be safe since Android 11\nhttps://gitlab.com/W1nst0n/universal-android-debloater/-/issues/27#note_410012436\n",
     "category": "OEM",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -71107,7 +71107,7 @@
   },
   {
     "packageName": "com.vertaler.esen",
-    "displayName": "Traductor español inglés",
+    "displayName": "Traductor espa\u00f1ol ingl\u00e9s",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -71324,7 +71324,7 @@
   },
   {
     "packageName": "com.visma.topaz",
-    "displayName": "Lön Anställd",
+    "displayName": "L\u00f6n Anst\u00e4lld",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -71338,7 +71338,7 @@
   },
   {
     "packageName": "com.visuamobile.liberation",
-    "displayName": "Libération",
+    "displayName": "Lib\u00e9ration",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -72325,7 +72325,7 @@
   },
   {
     "packageName": "com.vizyoneks.KatilimEmeklilik",
-    "displayName": "Katılım Emeklilik",
+    "displayName": "Kat\u0131l\u0131m Emeklilik",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -72395,7 +72395,7 @@
   },
   {
     "packageName": "com.vodafone.selfservis",
-    "displayName": "Yanımda",
+    "displayName": "Yan\u0131mda",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -72829,7 +72829,7 @@
   },
   {
     "packageName": "com.wapi.wapicertmanage",
-    "displayName": "WAPI certificate manager\nWAPI = WLAN Authentication and Privacy Infrastructure.\nA Chinese national standard for Wireless LAN within a limited area such as a home. Not very useful if you don't live in China.\nhttps://en.wikipedia.org/wiki/WLAN_Authentication_and_Privacy_Infrastructure\nDigital certificates identify devices and apps for security. Just like your driver’s license shows that you can legally drive, a digital certificate identifies your device and confirms that it should be able to access something.\nhttps://security.stackexchange.com/questions/102550/what-are-wifi-certificates-used-for-what-are-they",
+    "displayName": "WAPI certificate manager\nWAPI = WLAN Authentication and Privacy Infrastructure.\nA Chinese national standard for Wireless LAN within a limited area such as a home. Not very useful if you don't live in China.\nhttps://en.wikipedia.org/wiki/WLAN_Authentication_and_Privacy_Infrastructure\nDigital certificates identify devices and apps for security. Just like your driver\u2019s license shows that you can legally drive, a digital certificate identifies your device and confirms that it should be able to access something.\nhttps://security.stackexchange.com/questions/102550/what-are-wifi-certificates-used-for-what-are-they",
     "category": "OEM",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -73130,14 +73130,14 @@
   },
   {
     "packageName": "com.whatsapp.w4b",
-    "displayName": "WhatsApp Business",
+    "displayName": "WhatsApp\u00a0Business",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
   },
   {
     "packageName": "com.when.coco",
-    "displayName": "365日历",
+    "displayName": "365\u65e5\u5386",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -73172,7 +73172,7 @@
   },
   {
     "packageName": "com.whos.teamdevcallingme",
-    "displayName": "هوية المتصل",
+    "displayName": "\u0647\u0648\u064a\u0629 \u0627\u0644\u0645\u062a\u0635\u0644",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -73614,7 +73614,7 @@
   {
     "packageName": "com.x8bit.bitwarden",
     "displayName": "Bitwarden",
-    "category": "USER_APP",
+    "category": "POPULAR",
     "sourceId": "bundled",
     "fetchedAt": 0
   },
@@ -74173,7 +74173,7 @@
   },
   {
     "packageName": "com.xiaomi.simactivate.service",
-    "displayName": "Xiaomi SIM Activation Service\nSIM authentication process to access exclusive features in certain MIUI applications.\nFor the activation to work you need to send a international SMS to China.\nYour carrier may block this by default and/or you'll probably need to pay extra for this.\nAfter SIM activation, you can send text messages (Mi Messages) to other Mi users using internet connection (like i-messages).\nYou will be able to synchronize your messages into Mi Cloud and this also enables the Mi Find Device feature which allows you to track your phone’s location from your online Mi account.\n\nNote: To enable/disable Mi Messages go to Settings -> System Apps -> Messaging and reboot",
+    "displayName": "Xiaomi SIM Activation Service\nSIM authentication process to access exclusive features in certain MIUI applications.\nFor the activation to work you need to send a international SMS to China.\nYour carrier may block this by default and/or you'll probably need to pay extra for this.\nAfter SIM activation, you can send text messages (Mi Messages) to other Mi users using internet connection (like i-messages).\nYou will be able to synchronize your messages into Mi Cloud and this also enables the Mi Find Device feature which allows you to track your phone\u2019s location from your online Mi account.\n\nNote: To enable/disable Mi Messages go to Settings -> System Apps -> Messaging and reboot",
     "category": "OEM",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -74208,7 +74208,7 @@
   },
   {
     "packageName": "com.xiaomi.upnp",
-    "displayName": "UpnpService\nUPnP = Universal Plug and Play\nIt’s a protocol that lets UPnP-enabled devices on your network automatically discover and communicate with each other\nFor example it works with the Xiaomi Network Speaker (and probably a lot more Xiaomi IoT stuff)\nUPnP has a lot of security issues and you proably should disable it on your router.\nhttps://nakedsecurity.sophos.com/2020/06/10/billions-of-devices-affected-by-upnp-vulnerability/\nThis package is the Xiaomi implementation on Android (no AOSP support)\n",
+    "displayName": "UpnpService\nUPnP = Universal Plug and Play\nIt\u2019s a protocol that lets UPnP-enabled devices on your network automatically discover and communicate with each other\nFor example it works with the Xiaomi Network Speaker (and probably a lot more Xiaomi IoT stuff)\nUPnP has a lot of security issues and you proably should disable it on your router.\nhttps://nakedsecurity.sophos.com/2020/06/10/billions-of-devices-affected-by-upnp-vulnerability/\nThis package is the Xiaomi implementation on Android (no AOSP support)\n",
     "category": "OEM",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -74355,7 +74355,7 @@
   },
   {
     "packageName": "com.xojot.vrplayer",
-    "displayName": "VR médialejátszó",
+    "displayName": "VR m\u00e9dialej\u00e1tsz\u00f3",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -74544,7 +74544,7 @@
   },
   {
     "packageName": "com.yahoo.mobile.client.android.mail",
-    "displayName": "Yahoo Mail",
+    "displayName": "Yahoo\u00a0Mail",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -74684,7 +74684,7 @@
   },
   {
     "packageName": "com.ykb.android",
-    "displayName": "Yapı Kredi Mobil",
+    "displayName": "Yap\u0131 Kredi Mobil",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -74824,7 +74824,7 @@
   },
   {
     "packageName": "com.yoyowallet.caffenero",
-    "displayName": "Caffè Nero",
+    "displayName": "Caff\u00e8 Nero",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -74929,7 +74929,7 @@
   },
   {
     "packageName": "com.zaehlerfreunde.app",
-    "displayName": "Zählerfreunde",
+    "displayName": "Z\u00e4hlerfreunde",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -75132,7 +75132,7 @@
   },
   {
     "packageName": "com.zfdang.touchhelper",
-    "displayName": "开屏跳过",
+    "displayName": "\u5f00\u5c4f\u8df3\u8fc7",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -75972,21 +75972,21 @@
   },
   {
     "packageName": "com.zyt.progress",
-    "displayName": "点滴进度",
+    "displayName": "\u70b9\u6ef4\u8fdb\u5ea6",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
   },
   {
     "packageName": "com.zytoona.uncrossed",
-    "displayName": "متقاطعة كراش",
+    "displayName": "\u0645\u062a\u0642\u0627\u0637\u0639\u0629 \u0643\u0631\u0627\u0634",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
   },
   {
     "packageName": "com.zytoona.wordscrush",
-    "displayName": "كلمات كراش",
+    "displayName": "\u0643\u0644\u0645\u0627\u062a \u0643\u0631\u0627\u0634",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -76140,7 +76140,7 @@
   },
   {
     "packageName": "cz.ackee.bazos",
-    "displayName": "Bazoš",
+    "displayName": "Bazo\u0161",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -76189,35 +76189,35 @@
   },
   {
     "packageName": "cz.bakalari.mobile",
-    "displayName": "Bakaláři OnLine",
+    "displayName": "Bakal\u00e1\u0159i OnLine",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
   },
   {
     "packageName": "cz.cd.mujvlak.an",
-    "displayName": "Můj vlak",
+    "displayName": "M\u016fj vlak",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
   },
   {
     "packageName": "cz.ceskaposta.balikovna",
-    "displayName": "Balíkovna",
+    "displayName": "Bal\u00edkovna",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
   },
   {
     "packageName": "cz.cez.cpr.mc",
-    "displayName": "Můj ČEZ",
+    "displayName": "M\u016fj \u010cEZ",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
   },
   {
     "packageName": "cz.chmu.pocasi",
-    "displayName": "Počasí ČHMÚ",
+    "displayName": "Po\u010das\u00ed \u010cHM\u00da",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -76238,14 +76238,14 @@
   },
   {
     "packageName": "cz.csob.smart",
-    "displayName": "ČSOB Smart",
+    "displayName": "\u010cSOB Smart",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
   },
   {
     "packageName": "cz.csob.smartklic",
-    "displayName": "ČSOB Smart klíč",
+    "displayName": "\u010cSOB Smart kl\u00ed\u010d",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -76273,7 +76273,7 @@
   },
   {
     "packageName": "cz.dpp.praguepublictransport",
-    "displayName": "pid lítačka",
+    "displayName": "pid l\u00edta\u010dka",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -76308,7 +76308,7 @@
   },
   {
     "packageName": "cz.gov.portal.v2.obcan",
-    "displayName": "Portál občana",
+    "displayName": "Port\u00e1l ob\u010dana",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -76364,7 +76364,7 @@
   },
   {
     "packageName": "cz.mojedatovaschranka.mobilniklic",
-    "displayName": "Mobilní klíč eGovernmentu",
+    "displayName": "Mobiln\u00ed kl\u00ed\u010d eGovernmentu",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -76385,7 +76385,7 @@
   },
   {
     "packageName": "cz.myup.customer",
-    "displayName": "Můj Up",
+    "displayName": "M\u016fj Up",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -76399,14 +76399,14 @@
   },
   {
     "packageName": "cz.nic.mojeid.key.android",
-    "displayName": "MojeID Klíč",
+    "displayName": "MojeID Kl\u00ed\u010d",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
   },
   {
     "packageName": "cz.o2.moje",
-    "displayName": "Moje O₂",
+    "displayName": "Moje O\u2082",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -76469,7 +76469,7 @@
   },
   {
     "packageName": "cz.skodaauto.myskoda",
-    "displayName": "MyŠkoda",
+    "displayName": "My\u0160koda",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -76490,7 +76490,7 @@
   },
   {
     "packageName": "cz.techsophia.mathtraining.mathstory",
-    "displayName": "Matemág",
+    "displayName": "Matem\u00e1g",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -76504,7 +76504,7 @@
   },
   {
     "packageName": "cz.uhk.fim.zvirevnouzi",
-    "displayName": "Zvíře v nouzi",
+    "displayName": "Zv\u00ed\u0159e v nouzi",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -76518,7 +76518,7 @@
   },
   {
     "packageName": "cz.vitskalicky.lepsirozvrh",
-    "displayName": "Lepší rozvrh",
+    "displayName": "Lep\u0161\u00ed rozvrh",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -76581,7 +76581,7 @@
   },
   {
     "packageName": "de.adac.Fuehrerschein",
-    "displayName": "Führerschein",
+    "displayName": "F\u00fchrerschein",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -76742,28 +76742,28 @@
   },
   {
     "packageName": "de.avm.android.fritzapptv",
-    "displayName": "FRITZ!⁠App TV",
+    "displayName": "FRITZ!\u2060App\u00a0TV",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
   },
   {
     "packageName": "de.avm.android.myfritz2",
-    "displayName": "MyFRITZ!⁠App",
+    "displayName": "MyFRITZ!\u2060App",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
   },
   {
     "packageName": "de.avm.android.smarthome",
-    "displayName": "FRITZ!⁠App Smart Home",
+    "displayName": "FRITZ!\u2060App Smart Home",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
   },
   {
     "packageName": "de.avm.android.wlanapp",
-    "displayName": "FRITZ!⁠App WLAN",
+    "displayName": "FRITZ!\u2060App\u00a0WLAN",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -76833,7 +76833,7 @@
   },
   {
     "packageName": "de.bbapplications.tankerkoenig",
-    "displayName": "Tankerkönig²",
+    "displayName": "Tankerk\u00f6nig\u00b2",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -77001,7 +77001,7 @@
   },
   {
     "packageName": "de.buecherhallen.app",
-    "displayName": "Bücherhallen",
+    "displayName": "B\u00fccherhallen",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -77113,7 +77113,7 @@
   },
   {
     "packageName": "de.cantamen.stattauto.muenchen",
-    "displayName": "STATTAUTO München App",
+    "displayName": "STATTAUTO M\u00fcnchen App",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -77309,7 +77309,7 @@
   },
   {
     "packageName": "de.dasoertliche.android",
-    "displayName": "Das Örtliche",
+    "displayName": "Das \u00d6rtliche",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -77344,7 +77344,7 @@
   },
   {
     "packageName": "de.dbregio.wohinduwillst",
-    "displayName": "Wohin·Du·Willst",
+    "displayName": "Wohin\u00b7Du\u00b7Willst",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -77841,7 +77841,7 @@
   },
   {
     "packageName": "de.funke.hoerzu",
-    "displayName": "HÖRZU",
+    "displayName": "H\u00d6RZU",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -77946,7 +77946,7 @@
   },
   {
     "packageName": "de.gruene.wkapp",
-    "displayName": "B90/DIE GRÜNEN",
+    "displayName": "B90/DIE GR\u00dcNEN",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -77981,7 +77981,7 @@
   },
   {
     "packageName": "de.hafas.android.gvh",
-    "displayName": "ÜSTRA",
+    "displayName": "\u00dcSTRA",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -78100,7 +78100,7 @@
   },
   {
     "packageName": "de.hbch.traewelling",
-    "displayName": "Träwelldroid",
+    "displayName": "Tr\u00e4welldroid",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -78303,14 +78303,14 @@
   },
   {
     "packageName": "de.jrpie.android.launcher",
-    "displayName": "μLauncher",
+    "displayName": "\u03bcLauncher",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
   },
   {
     "packageName": "de.jrpie.android.launcher.accrescent",
-    "displayName": "μLauncher",
+    "displayName": "\u03bcLauncher",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -78541,7 +78541,7 @@
   },
   {
     "packageName": "de.mainzer_mobilitaet.mainzer_mobilitaet",
-    "displayName": "Mainzer Mobilität",
+    "displayName": "Mainzer Mobilit\u00e4t",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -78744,7 +78744,7 @@
   },
   {
     "packageName": "de.moekadu.metronome",
-    "displayName": "Métronome",
+    "displayName": "M\u00e9tronome",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -78919,7 +78919,7 @@
   },
   {
     "packageName": "de.nuernbergmobil",
-    "displayName": "NüMO",
+    "displayName": "N\u00fcMO",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -79290,7 +79290,7 @@
   },
   {
     "packageName": "de.santawho.oeffi_ng",
-    "displayName": "Öffi NG",
+    "displayName": "\u00d6ffi NG",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -79304,14 +79304,14 @@
   },
   {
     "packageName": "de.scheisstool.roehrichsoundboardwerner",
-    "displayName": "Röhrich Werner Sounds",
+    "displayName": "R\u00f6hrich Werner Sounds",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
   },
   {
     "packageName": "de.schildbach.oeffi",
-    "displayName": "Öffi",
+    "displayName": "\u00d6ffi",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -79787,7 +79787,7 @@
   },
   {
     "packageName": "de.theorie24.fs.mofa",
-    "displayName": "Führerschein",
+    "displayName": "F\u00fchrerschein",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -79906,7 +79906,7 @@
   },
   {
     "packageName": "de.uba.luftqualitaet",
-    "displayName": "Luftqualität",
+    "displayName": "Luftqualit\u00e4t",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -79983,7 +79983,7 @@
   },
   {
     "packageName": "de.verbraucherzentralenrw.flugaerger",
-    "displayName": "Flugärger",
+    "displayName": "Flug\u00e4rger",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -80053,7 +80053,7 @@
   },
   {
     "packageName": "de.westnordost.streetcomplete",
-    "displayName": "Street­Complete",
+    "displayName": "Street\u00adComplete",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -80067,7 +80067,7 @@
   },
   {
     "packageName": "de.westnordost.streetmeasure",
-    "displayName": "Street­Measure",
+    "displayName": "Street\u00adMeasure",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -80830,7 +80830,7 @@
   },
   {
     "packageName": "dev.yasan.metro.fdroid",
-    "displayName": "تهرو",
+    "displayName": "\u062a\u0647\u0631\u0648",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -81439,7 +81439,7 @@
   },
   {
     "packageName": "es.emtvalencia.emt",
-    "displayName": "EMT València",
+    "displayName": "EMT Val\u00e8ncia",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -81453,7 +81453,7 @@
   },
   {
     "packageName": "es.gob.afirma",
-    "displayName": "Cliente móvil @firma",
+    "displayName": "Cliente m\u00f3vil @firma",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -81509,7 +81509,7 @@
   },
   {
     "packageName": "es.kfc.spain",
-    "displayName": "KFC España",
+    "displayName": "KFC Espa\u00f1a",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -81558,7 +81558,7 @@
   },
   {
     "packageName": "es.sergas.appbox",
-    "displayName": "Sergas Móbil",
+    "displayName": "Sergas M\u00f3bil",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -81649,7 +81649,7 @@
   },
   {
     "packageName": "eu.baroncelli.oraritrenitalia",
-    "displayName": "Trenìt!",
+    "displayName": "Tren\u00ect!",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -82013,7 +82013,7 @@
   },
   {
     "packageName": "eu.kanade.tachiyomi.extension.en.dankefurslesen",
-    "displayName": "Tachiyomi: Danke fürs Lesen",
+    "displayName": "Tachiyomi: Danke f\u00fcrs Lesen",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -82426,7 +82426,7 @@
   },
   {
     "packageName": "eu.zkkn.android.kaktus",
-    "displayName": "Kaktus Dobíječka",
+    "displayName": "Kaktus Dob\u00edje\u010dka",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -82580,7 +82580,7 @@
   },
   {
     "packageName": "fi.fmi.mobileweather",
-    "displayName": "Sää",
+    "displayName": "S\u00e4\u00e4",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -82629,7 +82629,7 @@
   },
   {
     "packageName": "fi.mehilainen.mobileapp",
-    "displayName": "OmaMehiläinen",
+    "displayName": "OmaMehil\u00e4inen",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -82685,7 +82685,7 @@
   },
   {
     "packageName": "fi.saastopankki",
-    "displayName": "Säästöpankki",
+    "displayName": "S\u00e4\u00e4st\u00f6pankki",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -82937,7 +82937,7 @@
   },
   {
     "packageName": "fr.actionpopulaire.twa",
-    "displayName": "Action Populaire, le réseau social",
+    "displayName": "Action Populaire, le r\u00e9seau social",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -82972,14 +82972,14 @@
   },
   {
     "packageName": "fr.ancv.beneficiaire",
-    "displayName": "Chèque-Vacances",
+    "displayName": "Ch\u00e8que-Vacances",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
   },
   {
     "packageName": "fr.artefrance.offline_player_android.mednum",
-    "displayName": "Médiathèque Numérique",
+    "displayName": "M\u00e9diath\u00e8que Num\u00e9rique",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -83000,7 +83000,7 @@
   },
   {
     "packageName": "fr.assurancemaladie.monespacesante",
-    "displayName": "Mon espace santé",
+    "displayName": "Mon espace sant\u00e9",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -83070,7 +83070,7 @@
   },
   {
     "packageName": "fr.cityway.android.st2n",
-    "displayName": "Lignes d’Azur",
+    "displayName": "Lignes d\u2019Azur",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -83084,7 +83084,7 @@
   },
   {
     "packageName": "fr.cityway.maas.oura",
-    "displayName": "Oùra",
+    "displayName": "O\u00f9ra",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -83182,7 +83182,7 @@
   },
   {
     "packageName": "fr.fdj.apps.fdj",
-    "displayName": "FDJ®",
+    "displayName": "FDJ\u00ae",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -83196,7 +83196,7 @@
   },
   {
     "packageName": "fr.francetv.pluzz",
-    "displayName": "France•tv",
+    "displayName": "France\u2022tv",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -83294,7 +83294,7 @@
   },
   {
     "packageName": "fr.gouv.franceidentite",
-    "displayName": "France identité",
+    "displayName": "France identit\u00e9",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -83329,7 +83329,7 @@
   },
   {
     "packageName": "fr.ign.canex",
-    "displayName": "Géodésie de poche",
+    "displayName": "G\u00e9od\u00e9sie de poche",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -83385,7 +83385,7 @@
   },
   {
     "packageName": "fr.labanquepostale.epargnesalariale",
-    "displayName": "Mon Épargne",
+    "displayName": "Mon \u00c9pargne",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -83406,14 +83406,14 @@
   },
   {
     "packageName": "fr.lameteoagricole.meteoagricoleapp",
-    "displayName": "MétéoAgricole",
+    "displayName": "M\u00e9t\u00e9oAgricole",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
   },
   {
     "packageName": "fr.laposte.idn",
-    "displayName": "L'Identité Numérique",
+    "displayName": "L'Identit\u00e9 Num\u00e9rique",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -83483,7 +83483,7 @@
   },
   {
     "packageName": "fr.meteo",
-    "displayName": "Météo France",
+    "displayName": "M\u00e9t\u00e9o France",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -83497,7 +83497,7 @@
   },
   {
     "packageName": "fr.monkeystudio.mybusgeneric",
-    "displayName": "NéMO",
+    "displayName": "N\u00e9MO",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -83630,7 +83630,7 @@
   },
   {
     "packageName": "fr.stime.mcommerce",
-    "displayName": "Intermarché",
+    "displayName": "Intermarch\u00e9",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -83651,7 +83651,7 @@
   },
   {
     "packageName": "fr.tisseo.android",
-    "displayName": "Tisséo",
+    "displayName": "Tiss\u00e9o",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -83672,7 +83672,7 @@
   },
   {
     "packageName": "fr.univnantes.univnantes",
-    "displayName": "Nantes Université",
+    "displayName": "Nantes Universit\u00e9",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -83714,7 +83714,7 @@
   },
   {
     "packageName": "ftc.com.findtaxisystem",
-    "displayName": "تاکسی 360",
+    "displayName": "\u062a\u0627\u06a9\u0633\u06cc 360",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -83987,7 +83987,7 @@
   },
   {
     "packageName": "gr.citybus.urbantransit.patra",
-    "displayName": "Αστικές Συγκοινωνίες Πατρών",
+    "displayName": "\u0391\u03c3\u03c4\u03b9\u03ba\u03ad\u03c2 \u03a3\u03c5\u03b3\u03ba\u03bf\u03b9\u03bd\u03c9\u03bd\u03af\u03b5\u03c2 \u03a0\u03b1\u03c4\u03c1\u03ce\u03bd",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -84190,7 +84190,7 @@
   },
   {
     "packageName": "hp.de.myapplication",
-    "displayName": "HP-Prüfer",
+    "displayName": "HP-Pr\u00fcfer",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -84267,7 +84267,7 @@
   },
   {
     "packageName": "hu.ekreta.student",
-    "displayName": "KRÉTA Tanulóknak",
+    "displayName": "KR\u00c9TA Tanul\u00f3knak",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -84281,7 +84281,7 @@
   },
   {
     "packageName": "hu.mavszk.vonatinfo",
-    "displayName": "MÁV",
+    "displayName": "M\u00c1V",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -84813,7 +84813,7 @@
   },
   {
     "packageName": "info.nullhouse.braintraining",
-    "displayName": "毎日脳トレ",
+    "displayName": "\u6bce\u65e5\u8133\u30c8\u30ec",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -84855,7 +84855,7 @@
   },
   {
     "packageName": "info.sunista.app",
-    "displayName": "سانیستا",
+    "displayName": "\u0633\u0627\u0646\u06cc\u0633\u062a\u0627",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -84988,7 +84988,7 @@
   },
   {
     "packageName": "io.birota.velivert",
-    "displayName": "Vélivert",
+    "displayName": "V\u00e9livert",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -86360,7 +86360,7 @@
   },
   {
     "packageName": "ir.behkhaan.app",
-    "displayName": "بهخوان",
+    "displayName": "\u0628\u0647\u062e\u0648\u0627\u0646",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -86395,21 +86395,21 @@
   },
   {
     "packageName": "ir.medu.shad",
-    "displayName": "شاد",
+    "displayName": "\u0634\u0627\u062f",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
   },
   {
     "packageName": "ir.mservices.market",
-    "displayName": "مایکت",
+    "displayName": "\u0645\u0627\u06cc\u06a9\u062a",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
   },
   {
     "packageName": "ir.mservices.mybook",
-    "displayName": "طاقچه",
+    "displayName": "\u0637\u0627\u0642\u0686\u0647",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -86430,7 +86430,7 @@
   },
   {
     "packageName": "ir.tejaratbank.totp.mobile.android",
-    "displayName": "همراز",
+    "displayName": "\u0647\u0645\u0631\u0627\u0632",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -86451,14 +86451,14 @@
   },
   {
     "packageName": "is.audkenni.app",
-    "displayName": "Auðkenni",
+    "displayName": "Au\u00f0kenni",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
   },
   {
     "packageName": "is.island.app",
-    "displayName": "Ísland.is",
+    "displayName": "\u00cdsland.is",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -86570,7 +86570,7 @@
   },
   {
     "packageName": "it.caitalia.apphub",
-    "displayName": "Crédit Agricole Italia",
+    "displayName": "Cr\u00e9dit Agricole Italia",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -87158,7 +87158,7 @@
   },
   {
     "packageName": "jp.bookwalker.kreader.android.epub",
-    "displayName": "BOOK☆WALKER",
+    "displayName": "BOOK\u2606WALKER",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -87172,14 +87172,14 @@
   },
   {
     "packageName": "jp.co.bandainamcoent.BNEI0242",
-    "displayName": "デレステ",
+    "displayName": "\u30c7\u30ec\u30b9\u30c6",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
   },
   {
     "packageName": "jp.co.bookoff.bookoffapp",
-    "displayName": "ブックオフ",
+    "displayName": "\u30d6\u30c3\u30af\u30aa\u30d5",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -87207,7 +87207,7 @@
   },
   {
     "packageName": "jp.co.cygames.umamusume",
-    "displayName": "ウマ娘",
+    "displayName": "\u30a6\u30de\u5a18",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -87228,14 +87228,14 @@
   },
   {
     "packageName": "jp.co.family.familymart_app",
-    "displayName": "ファミペイ",
+    "displayName": "\u30d5\u30a1\u30df\u30da\u30a4",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
   },
   {
     "packageName": "jp.co.firstlogic.atomicity",
-    "displayName": "楽待",
+    "displayName": "\u697d\u5f85",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -87256,7 +87256,7 @@
   },
   {
     "packageName": "jp.co.hardoff.renk.app.official.prd",
-    "displayName": "ハードオフ",
+    "displayName": "\u30cf\u30fc\u30c9\u30aa\u30d5",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -87277,7 +87277,7 @@
   },
   {
     "packageName": "jp.co.homes.android3",
-    "displayName": "HOME'S(ホームズ)",
+    "displayName": "HOME'S(\u30db\u30fc\u30e0\u30ba)",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -87298,7 +87298,7 @@
   },
   {
     "packageName": "jp.co.jreast",
-    "displayName": "JR東日本アプリ",
+    "displayName": "JR\u6771\u65e5\u672c\u30a2\u30d7\u30ea",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -87312,42 +87312,42 @@
   },
   {
     "packageName": "jp.co.kobebussan.android.gyomuca",
-    "displayName": "業務スーパー",
+    "displayName": "\u696d\u52d9\u30b9\u30fc\u30d1\u30fc",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
   },
   {
     "packageName": "jp.co.kodansha.palcy",
-    "displayName": "パルシィ",
+    "displayName": "\u30d1\u30eb\u30b7\u30a3",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
   },
   {
     "packageName": "jp.co.kuronekoyamato.KuronekoyamatoOfficialApp",
-    "displayName": "ヤマト運輸",
+    "displayName": "\u30e4\u30de\u30c8\u904b\u8f38",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
   },
   {
     "packageName": "jp.co.lifecard.Lifewebdeskapp",
-    "displayName": "ライフカード",
+    "displayName": "\u30e9\u30a4\u30d5\u30ab\u30fc\u30c9",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
   },
   {
     "packageName": "jp.co.matsukiyococokara.app",
-    "displayName": "マツココ公式",
+    "displayName": "\u30de\u30c4\u30b3\u30b3\u516c\u5f0f",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
   },
   {
     "packageName": "jp.co.melonbooks.bookshelfapp",
-    "displayName": "メロンブックス",
+    "displayName": "\u30e1\u30ed\u30f3\u30d6\u30c3\u30af\u30b9",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -87445,7 +87445,7 @@
   },
   {
     "packageName": "jp.co.rakuten.android",
-    "displayName": "楽天市場",
+    "displayName": "\u697d\u5929\u5e02\u5834",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -87480,14 +87480,14 @@
   },
   {
     "packageName": "jp.co.sagawa.SagawaOfficialApp",
-    "displayName": "佐川急便",
+    "displayName": "\u4f50\u5ddd\u6025\u4fbf",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
   },
   {
     "packageName": "jp.co.sej.app",
-    "displayName": "セブン-イレブン",
+    "displayName": "\u30bb\u30d6\u30f3-\u30a4\u30ec\u30d6\u30f3",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -87508,7 +87508,7 @@
   },
   {
     "packageName": "jp.co.smartbank.b43",
-    "displayName": "ワンバンク",
+    "displayName": "\u30ef\u30f3\u30d0\u30f3\u30af",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -87550,28 +87550,28 @@
   },
   {
     "packageName": "jp.co.val.expert.android.aio",
-    "displayName": "駅すぱあと for Android",
+    "displayName": "\u99c5\u3059\u3071\u3042\u3068 for Android",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
   },
   {
     "packageName": "jp.co.viewcard.viewcardapp.android",
-    "displayName": "ビューカード",
+    "displayName": "\u30d3\u30e5\u30fc\u30ab\u30fc\u30c9",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
   },
   {
     "packageName": "jp.co.yahoo.android.apps.map",
-    "displayName": "Y!マップ",
+    "displayName": "Y!\u30de\u30c3\u30d7",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
   },
   {
     "packageName": "jp.co.yahoo.android.apps.transit",
-    "displayName": "Y!乗換案内",
+    "displayName": "Y!\u4e57\u63db\u6848\u5185",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -87585,21 +87585,21 @@
   },
   {
     "packageName": "jp.co.yahoo.android.emg",
-    "displayName": "Y!防災速報",
+    "displayName": "Y!\u9632\u707d\u901f\u5831",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
   },
   {
     "packageName": "jp.co.yahoo.android.weather.type1",
-    "displayName": "Y!天気",
+    "displayName": "Y!\u5929\u6c17",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
   },
   {
     "packageName": "jp.co.yahoo.android.yshopping",
-    "displayName": "Y!ショッピング",
+    "displayName": "Y!\u30b7\u30e7\u30c3\u30d4\u30f3\u30b0",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -87613,7 +87613,7 @@
   },
   {
     "packageName": "jp.danball.panda",
-    "displayName": "マイクロパンダ",
+    "displayName": "\u30de\u30a4\u30af\u30ed\u30d1\u30f3\u30c0",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -87634,7 +87634,7 @@
   },
   {
     "packageName": "jp.dmapnavi.navi02",
-    "displayName": "地図アプリ",
+    "displayName": "\u5730\u56f3\u30a2\u30d7\u30ea",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -87690,14 +87690,14 @@
   },
   {
     "packageName": "jp.jmty.app2",
-    "displayName": "ジモティー",
+    "displayName": "\u30b8\u30e2\u30c6\u30a3\u30fc",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
   },
   {
     "packageName": "jp.kanmu.vandle.android",
-    "displayName": "バンドル",
+    "displayName": "\u30d0\u30f3\u30c9\u30eb",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -87711,14 +87711,14 @@
   },
   {
     "packageName": "jp.konami.pesam",
-    "displayName": "eFootball™",
+    "displayName": "eFootball\u2122",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
   },
   {
     "packageName": "jp.lg.tokyo.metro.app",
-    "displayName": "東京都公式アプリ",
+    "displayName": "\u6771\u4eac\u90fd\u516c\u5f0f\u30a2\u30d7\u30ea",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -87753,7 +87753,7 @@
   },
   {
     "packageName": "jp.ne.goo.house.rent.app.pro",
-    "displayName": "goo不動産",
+    "displayName": "goo\u4e0d\u52d5\u7523",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -87795,14 +87795,14 @@
   },
   {
     "packageName": "jp.nicovideo.android",
-    "displayName": "ニコニコ動画",
+    "displayName": "\u30cb\u30b3\u30cb\u30b3\u52d5\u753b",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
   },
   {
     "packageName": "jp.nicovideo.nicobox",
-    "displayName": "ボカコレ",
+    "displayName": "\u30dc\u30ab\u30b3\u30ec",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -87851,7 +87851,7 @@
   },
   {
     "packageName": "jp.point.android.dailystyling",
-    "displayName": "アンドエスティ",
+    "displayName": "\u30a2\u30f3\u30c9\u30a8\u30b9\u30c6\u30a3",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -87865,14 +87865,14 @@
   },
   {
     "packageName": "jp.pokemon.pokemontcgp",
-    "displayName": "Pokémon TCGP",
+    "displayName": "Pok\u00e9mon TCGP",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
   },
   {
     "packageName": "jp.pokemon.pokemonunite",
-    "displayName": "Pokémon UNITE",
+    "displayName": "Pok\u00e9mon UNITE",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -87893,7 +87893,7 @@
   },
   {
     "packageName": "jp.shizuoka.pref.bousai",
-    "displayName": "静岡県防災",
+    "displayName": "\u9759\u5ca1\u770c\u9632\u707d",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -88061,7 +88061,7 @@
   },
   {
     "packageName": "kr.sira.sound",
-    "displayName": "Sonómetro",
+    "displayName": "Son\u00f3metro",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -88159,14 +88159,14 @@
   },
   {
     "packageName": "li.yapp.app1C4ED986",
-    "displayName": "ワッツ",
+    "displayName": "\u30ef\u30c3\u30c4",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
   },
   {
     "packageName": "li.yapp.app5DBC18F2",
-    "displayName": "静岡新聞SBS",
+    "displayName": "\u9759\u5ca1\u65b0\u805eSBS",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -88208,7 +88208,7 @@
   },
   {
     "packageName": "livio.pack.lang.fr_FR",
-    "displayName": "Français",
+    "displayName": "Fran\u00e7ais",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -88677,7 +88677,7 @@
   },
   {
     "packageName": "me.liujia95.solitude",
-    "displayName": "时间日志",
+    "displayName": "\u65f6\u95f4\u65e5\u5fd7",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -89104,7 +89104,7 @@
   },
   {
     "packageName": "mk.liturgicky.kalendar",
-    "displayName": "Liturgický kalendár",
+    "displayName": "Liturgick\u00fd kalend\u00e1r",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -89524,7 +89524,7 @@
   },
   {
     "packageName": "net.alkafeel.mcb",
-    "displayName": "حقيبة المؤمن",
+    "displayName": "\u062d\u0642\u064a\u0628\u0629 \u0627\u0644\u0645\u0624\u0645\u0646",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -89538,7 +89538,7 @@
   },
   {
     "packageName": "net.arox.vakifemeklilik",
-    "displayName": "Türkiye Sigorta",
+    "displayName": "T\u00fcrkiye Sigorta",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -89608,7 +89608,7 @@
   },
   {
     "packageName": "net.blogest.shizuoka",
-    "displayName": "静岡News",
+    "displayName": "\u9759\u5ca1News",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -89783,7 +89783,7 @@
   },
   {
     "packageName": "net.fabiszewski.ulogger",
-    "displayName": "μlogger",
+    "displayName": "\u03bclogger",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -89832,7 +89832,7 @@
   },
   {
     "packageName": "net.froemling.bombsquad",
-    "displayName": "بمب‌اسکواد",
+    "displayName": "\u0628\u0645\u0628\u200c\u0627\u0633\u06a9\u0648\u0627\u062f",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -89895,7 +89895,7 @@
   },
   {
     "packageName": "net.hqdev.ortalion.zulionerzy",
-    "displayName": "Żulionerzy",
+    "displayName": "\u017bulionerzy",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -90084,7 +90084,7 @@
   },
   {
     "packageName": "net.mefox.etimesgut_kutuphane",
-    "displayName": "etiKÜTÜPHANE",
+    "displayName": "etiK\u00dcT\u00dcPHANE",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -90245,7 +90245,7 @@
   },
   {
     "packageName": "net.ogurano.ryoukai",
-    "displayName": "了解 ريوكاي",
+    "displayName": "\u4e86\u89e3 \u0631\u064a\u0648\u0643\u0627\u064a",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -90385,7 +90385,7 @@
   },
   {
     "packageName": "net.osmtracker",
-    "displayName": "OSMTracker pour Android™",
+    "displayName": "OSMTracker pour Android\u2122",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -90770,7 +90770,7 @@
   },
   {
     "packageName": "net.votepurchase.mygpt",
-    "displayName": "ガチ有能AI助手",
+    "displayName": "\u30ac\u30c1\u6709\u80fdAI\u52a9\u624b",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -90910,7 +90910,7 @@
   },
   {
     "packageName": "nhk.app.tep",
-    "displayName": "NHKプラス",
+    "displayName": "NHK\u30d7\u30e9\u30b9",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -91470,7 +91470,7 @@
   },
   {
     "packageName": "no.vegvesen.forerkort",
-    "displayName": "Førerkort",
+    "displayName": "F\u00f8rerkort",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -91687,7 +91687,7 @@
   },
   {
     "packageName": "okaa.ekatanalotis.gr",
-    "displayName": "e-Καταναλωτής",
+    "displayName": "e-\u039a\u03b1\u03c4\u03b1\u03bd\u03b1\u03bb\u03c9\u03c4\u03ae\u03c2",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -92198,7 +92198,7 @@
   },
   {
     "packageName": "org.blitzortung.android.app",
-    "displayName": "Blitzortung Moniteur d'activité orageuse",
+    "displayName": "Blitzortung Moniteur d'activit\u00e9 orageuse",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -92345,7 +92345,7 @@
   },
   {
     "packageName": "org.cdac.updatemkavach",
-    "displayName": "M-कवच 2",
+    "displayName": "M-\u0915\u0935\u091a 2",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -92842,7 +92842,7 @@
   },
   {
     "packageName": "org.familysearch.mobile",
-    "displayName": "ファミリーツリー",
+    "displayName": "\u30d5\u30a1\u30df\u30ea\u30fc\u30c4\u30ea\u30fc",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -92891,7 +92891,7 @@
   },
   {
     "packageName": "org.fdroid.fdroid.privileged",
-    "displayName": "Extensió Privilegiada F-Droid",
+    "displayName": "Extensi\u00f3 Privilegiada F-Droid",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -93010,7 +93010,7 @@
   },
   {
     "packageName": "org.fossify.filemanager",
-    "displayName": "Fájlkezelő",
+    "displayName": "F\u00e1jlkezel\u0151",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -93080,14 +93080,14 @@
   },
   {
     "packageName": "org.fossify.thankyou",
-    "displayName": "Dankeschön",
+    "displayName": "Dankesch\u00f6n",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
   },
   {
     "packageName": "org.fossify.voicerecorder",
-    "displayName": "Hangrögzítő",
+    "displayName": "Hangr\u00f6gz\u00edt\u0151",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -93150,7 +93150,7 @@
   },
   {
     "packageName": "org.freenetproject.mobile",
-    "displayName": "Freenet móvil",
+    "displayName": "Freenet m\u00f3vil",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -93171,7 +93171,7 @@
   },
   {
     "packageName": "org.fundaciobit.bitcitawebapp",
-    "displayName": "Cita prèvia",
+    "displayName": "Cita pr\u00e8via",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -93269,7 +93269,7 @@
   },
   {
     "packageName": "org.getlantern.lantern",
-    "displayName": "لنترن",
+    "displayName": "\u0644\u0646\u062a\u0631\u0646",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -93416,7 +93416,7 @@
   },
   {
     "packageName": "org.ifaa.aidl.manager",
-    "displayName": "IfaaManagerService\nIFAA = (China’s) Internet Finance Authentication Alliance\nProvides biometric authentication for Alipay. Probably safe to disable if you don't use it.",
+    "displayName": "IfaaManagerService\nIFAA = (China\u2019s) Internet Finance Authentication Alliance\nProvides biometric authentication for Alipay. Probably safe to disable if you don't use it.",
     "category": "OEM",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -93836,7 +93836,7 @@
   },
   {
     "packageName": "org.lds.ldstools",
-    "displayName": "会員ツール",
+    "displayName": "\u4f1a\u54e1\u30c4\u30fc\u30eb",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -93997,7 +93997,7 @@
   },
   {
     "packageName": "org.lineageos.updater",
-    "displayName": "Mises à jour",
+    "displayName": "Mises \u00e0 jour",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -94207,7 +94207,7 @@
   },
   {
     "packageName": "org.mistergroup.shouldianswer",
-    "displayName": "Dois-je Répondre?",
+    "displayName": "Dois-je R\u00e9pondre?",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -94921,7 +94921,7 @@
   },
   {
     "packageName": "org.secuso.privacyfriendlyactivitytracker",
-    "displayName": "Schrittzähler",
+    "displayName": "Schrittz\u00e4hler",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -94984,7 +94984,7 @@
   },
   {
     "packageName": "org.secuso.privacyfriendlyludo",
-    "displayName": "Ärgern lohnt nicht",
+    "displayName": "\u00c4rgern lohnt nicht",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -95005,7 +95005,7 @@
   },
   {
     "packageName": "org.secuso.privacyfriendlynotes",
-    "displayName": "Заметки",
+    "displayName": "\u0417\u0430\u043c\u0435\u0442\u043a\u0438",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -95089,7 +95089,7 @@
   },
   {
     "packageName": "org.secuso.privacyfriendlyyahtzeedicer",
-    "displayName": "Würfelspiel",
+    "displayName": "W\u00fcrfelspiel",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -95208,7 +95208,7 @@
   },
   {
     "packageName": "org.staacks.alpharemote",
-    "displayName": "α-Remote",
+    "displayName": "\u03b1-Remote",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -95306,7 +95306,7 @@
   },
   {
     "packageName": "org.taraz.app",
-    "displayName": "هم‌درس",
+    "displayName": "\u0647\u0645\u200c\u062f\u0631\u0633",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -95348,7 +95348,7 @@
   },
   {
     "packageName": "org.tengel.planisphere",
-    "displayName": "Planisphäre",
+    "displayName": "Planisph\u00e4re",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -95607,7 +95607,7 @@
   },
   {
     "packageName": "org.walleth",
-    "displayName": "WallΞTH",
+    "displayName": "Wall\u039eTH",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -96167,7 +96167,7 @@
   },
   {
     "packageName": "photoeditor.cutout.backgrounderaser",
-    "displayName": "Монтаж фото",
+    "displayName": "\u041c\u043e\u043d\u0442\u0430\u0436 \u0444\u043e\u0442\u043e",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -96181,7 +96181,7 @@
   },
   {
     "packageName": "pk.tappdesign.knizka",
-    "displayName": "Knižka",
+    "displayName": "Kni\u017eka",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -96244,7 +96244,7 @@
   },
   {
     "packageName": "pl.carrefour.carrefourmobile",
-    "displayName": "Mój Carrefour",
+    "displayName": "M\u00f3j Carrefour",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -96433,7 +96433,7 @@
   },
   {
     "packageName": "pl.orange.mojeorange",
-    "displayName": "Mój Orange",
+    "displayName": "M\u00f3j Orange",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -96545,7 +96545,7 @@
   },
   {
     "packageName": "pl.zabka.apb2c",
-    "displayName": "żappka",
+    "displayName": "\u017cappka",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -96818,7 +96818,7 @@
   },
   {
     "packageName": "pt.lusiadas.mais.app",
-    "displayName": "+Lusíadas",
+    "displayName": "+Lus\u00edadas",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -96832,7 +96832,7 @@
   },
   {
     "packageName": "pt.medis.androidApp",
-    "displayName": "Médis",
+    "displayName": "M\u00e9dis",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -96888,7 +96888,7 @@
   },
   {
     "packageName": "pt.segsocial.mobile.segurancasocial",
-    "displayName": "Segurança Social",
+    "displayName": "Seguran\u00e7a Social",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -96951,7 +96951,7 @@
   },
   {
     "packageName": "re.free.mobile.android.vvm",
-    "displayName": "Messagerie Free Réunion",
+    "displayName": "Messagerie Free R\u00e9union",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -97070,7 +97070,7 @@
   },
   {
     "packageName": "ro.iasi.ctp",
-    "displayName": "IA’ȘI BILET",
+    "displayName": "IA\u2019\u0218I BILET",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -97154,7 +97154,7 @@
   },
   {
     "packageName": "ru.alfabank.mobile.android",
-    "displayName": "Альфа-Банк",
+    "displayName": "\u0410\u043b\u044c\u0444\u0430-\u0411\u0430\u043d\u043a",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -97231,7 +97231,7 @@
   },
   {
     "packageName": "ru.europaplus.radioseven",
-    "displayName": "Радио 7",
+    "displayName": "\u0420\u0430\u0434\u0438\u043e 7",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -97371,7 +97371,7 @@
   },
   {
     "packageName": "ru.rostel",
-    "displayName": "Госуслуги",
+    "displayName": "\u0413\u043e\u0441\u0443\u0441\u043b\u0443\u0433\u0438",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -97385,7 +97385,7 @@
   },
   {
     "packageName": "ru.sberbankmobile",
-    "displayName": "СберБанк",
+    "displayName": "\u0421\u0431\u0435\u0440\u0411\u0430\u043d\u043a",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -97448,7 +97448,7 @@
   },
   {
     "packageName": "ru.vtb24.mobilebanking.android",
-    "displayName": "ВТБ",
+    "displayName": "\u0412\u0422\u0411",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -97490,7 +97490,7 @@
   },
   {
     "packageName": "ru.yandex.metro",
-    "displayName": "Яндекс Метро",
+    "displayName": "\u042f\u043d\u0434\u0435\u043a\u0441 \u041c\u0435\u0442\u0440\u043e",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -97504,7 +97504,7 @@
   },
   {
     "packageName": "ru.yandex.translate",
-    "displayName": "Çeviri",
+    "displayName": "\u00c7eviri",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -97518,7 +97518,7 @@
   },
   {
     "packageName": "ru.yandex.yandexnavi",
-    "displayName": "Yandex Navi",
+    "displayName": "Yandex\u00a0Navi",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -97602,7 +97602,7 @@
   },
   {
     "packageName": "sa.gov.nic.myid",
-    "displayName": "Nafath | نفاذ",
+    "displayName": "Nafath | \u0646\u0641\u0627\u0630",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -97728,7 +97728,7 @@
   },
   {
     "packageName": "se.infospread.android.mobitime.r.lts",
-    "displayName": "Sörmlandstrafiken",
+    "displayName": "S\u00f6rmlandstrafiken",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -97861,7 +97861,7 @@
   },
   {
     "packageName": "se.smhi.mobile.android",
-    "displayName": "SMHI väder",
+    "displayName": "SMHI v\u00e4der",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -97938,7 +97938,7 @@
   },
   {
     "packageName": "se.ultra.travelassistant",
-    "displayName": "Ultra - Umeås lokaltrafik",
+    "displayName": "Ultra - Ume\u00e5s lokaltrafik",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -97973,7 +97973,7 @@
   },
   {
     "packageName": "search.searx",
-    "displayName": "Búsqueda Searx",
+    "displayName": "B\u00fasqueda Searx",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -98148,14 +98148,14 @@
   },
   {
     "packageName": "sk.bouli.lc",
-    "displayName": "Liturgické čítania",
+    "displayName": "Liturgick\u00e9 \u010d\u00edtania",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
   },
   {
     "packageName": "sk.breviar.android",
-    "displayName": "Breviár",
+    "displayName": "Brevi\u00e1r",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -98190,7 +98190,7 @@
   },
   {
     "packageName": "sk.ksp.riso.svpismo",
-    "displayName": "Sv. Písmo",
+    "displayName": "Sv. P\u00edsmo",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -98211,7 +98211,7 @@
   },
   {
     "packageName": "sk.o2.radost",
-    "displayName": "Radosť",
+    "displayName": "Rados\u0165",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -98232,7 +98232,7 @@
   },
   {
     "packageName": "sk.tb.emv.mobile",
-    "displayName": "Čítačka",
+    "displayName": "\u010c\u00edta\u010dka",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -98645,7 +98645,7 @@
   },
   {
     "packageName": "teraburn.tapsariatismesogeiou",
-    "displayName": "Τα Ψάρια της Μεσογείου",
+    "displayName": "\u03a4\u03b1 \u03a8\u03ac\u03c1\u03b9\u03b1 \u03c4\u03b7\u03c2 \u039c\u03b5\u03c3\u03bf\u03b3\u03b5\u03af\u03bf\u03c5",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -98757,7 +98757,7 @@
   },
   {
     "packageName": "top.fumiama.copymanga",
-    "displayName": "拷贝漫画",
+    "displayName": "\u62f7\u8d1d\u6f2b\u753b",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -99114,7 +99114,7 @@
   },
   {
     "packageName": "ua.gov.diia.app",
-    "displayName": "Дія",
+    "displayName": "\u0414\u0456\u044f",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -99142,7 +99142,7 @@
   },
   {
     "packageName": "ua.novaposhtaa",
-    "displayName": "Нова пошта",
+    "displayName": "\u041d\u043e\u0432\u0430 \u043f\u043e\u0448\u0442\u0430",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -99184,7 +99184,7 @@
   },
   {
     "packageName": "udc.lenovo.com.udclient",
-    "displayName": "Lenovo Universal Device Client\nAnother Mobile Device Management (MDM) allows company’s IT department to reach inside your phone in the background, allowing them to ensure\nyour device is secure, know where it is, and remotely erase your data if the phone is stolen.\nIt's a way to ensure employees stay productive and do not breach corporate policies\nYou should NEVER have a MDM tool on your personal phone.",
+    "displayName": "Lenovo Universal Device Client\nAnother Mobile Device Management (MDM) allows company\u2019s IT department to reach inside your phone in the background, allowing them to ensure\nyour device is secure, know where it is, and remotely erase your data if the phone is stolen.\nIt's a way to ensure employees stay productive and do not breach corporate policies\nYou should NEVER have a MDM tool on your personal phone.",
     "category": "OEM",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -99415,7 +99415,7 @@
   },
   {
     "packageName": "up.coop.com.rsud",
-    "displayName": "e-PASS JEUNES Région Sud",
+    "displayName": "e-PASS JEUNES R\u00e9gion Sud",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -99765,7 +99765,7 @@
   },
   {
     "packageName": "vnpay.smartacccount",
-    "displayName": "Ví VNPAY",
+    "displayName": "V\u00ed VNPAY",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -99947,7 +99947,7 @@
   },
   {
     "packageName": "www.izus.cz",
-    "displayName": "iZUŠ",
+    "displayName": "iZU\u0160",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -100136,14 +100136,14 @@
   },
   {
     "packageName": "xyz.myachin.downloader",
-    "displayName": "Качалка",
+    "displayName": "\u041a\u0430\u0447\u0430\u043b\u043a\u0430",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
   },
   {
     "packageName": "xyz.myachin.saveto",
-    "displayName": "Save to…",
+    "displayName": "Save to\u2026",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -100199,7 +100199,7 @@
   },
   {
     "packageName": "xyz.sirphotch.kvaesitsoplugin.publictransport",
-    "displayName": "Kvaesitso ÖPNV Plugin",
+    "displayName": "Kvaesitso \u00d6PNV Plugin",
     "category": "USER_APP",
     "sourceId": "bundled",
     "fetchedAt": 0
@@ -100398,6 +100398,20 @@
     "displayName": "File Manager\nStock File Manager",
     "category": "OEM",
     "sourceId": "bundled",
+    "fetchedAt": 0
+  },
+  {
+    "packageName": "com.microsoft.scmx",
+    "displayName": "Microsoft Defender",
+    "category": "POPULAR",
+    "sourceId": "manual-popular",
+    "fetchedAt": 0
+  },
+  {
+    "packageName": "com.lastpass.lpandroid",
+    "displayName": "LastPass",
+    "category": "POPULAR",
+    "sourceId": "manual-trusted",
     "fetchedAt": 0
   }
 ]
