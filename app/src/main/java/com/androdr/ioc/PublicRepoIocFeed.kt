@@ -5,6 +5,8 @@ import android.util.Log
 import com.androdr.data.db.CertHashIocEntryDao
 import com.androdr.data.db.DomainIocEntryDao
 import com.androdr.data.db.IocEntryDao
+import com.androdr.data.db.KnownAppDbEntry
+import com.androdr.data.db.KnownAppEntryDao
 import com.androdr.data.model.CertHashIocEntry
 import com.androdr.data.model.DomainIocEntry
 import com.androdr.data.model.IocEntry
@@ -25,7 +27,8 @@ import javax.inject.Singleton
 class PublicRepoIocFeed @Inject constructor(
     private val iocEntryDao: IocEntryDao,
     private val domainIocEntryDao: DomainIocEntryDao,
-    private val certHashIocEntryDao: CertHashIocEntryDao
+    private val certHashIocEntryDao: CertHashIocEntryDao,
+    private val knownAppEntryDao: KnownAppEntryDao
 ) {
 
     @Suppress("TooGenericExceptionCaught")
@@ -37,6 +40,7 @@ class PublicRepoIocFeed @Inject constructor(
             total += fetchAndUpsertPackages(now)
             total += fetchAndUpsertDomains(now)
             total += fetchAndUpsertCertHashes(now)
+            total += fetchAndUpsertPopularApps(now)
             Log.i(TAG, "Public repo IOC feed: $total entries upserted")
         } catch (e: Exception) {
             Log.w(TAG, "Public repo IOC feed failed: ${e.message}")
@@ -117,6 +121,44 @@ class PublicRepoIocFeed @Inject constructor(
             certHashIocEntryDao.deleteStaleEntries(SOURCE_ID, fetchedAt - 1)
         }
         return certEntries.size
+    }
+
+    @Suppress("TooGenericExceptionCaught", "SwallowedException")
+    private suspend fun fetchAndUpsertPopularApps(fetchedAt: Long): Int {
+        val yaml = fetchUrl("${BASE_URL}ioc-data/popular-apps.yml") ?: return 0
+        val entries = parsePopularAppsYaml(yaml)
+
+        val knownAppEntries = entries.map { entry ->
+            KnownAppDbEntry(
+                packageName = entry["packageName"]?.toString() ?: return@map null,
+                displayName = entry["displayName"]?.toString() ?: "",
+                category = "POPULAR",
+                sourceId = SOURCE_ID,
+                fetchedAt = fetchedAt
+            )
+        }.filterNotNull()
+
+        if (knownAppEntries.isNotEmpty()) {
+            knownAppEntryDao.upsertAll(knownAppEntries)
+        }
+        return knownAppEntries.size
+    }
+
+    @Suppress("UNCHECKED_CAST", "TooGenericExceptionCaught", "SwallowedException")
+    internal fun parsePopularAppsYaml(yamlContent: String): List<Map<String, Any>> {
+        return try {
+            val settings = LoadSettings.builder()
+                .setAllowDuplicateKeys(false)
+                .setMaxAliasesForCollections(10)
+                .build()
+            val load = Load(settings)
+            val doc = load.loadFromString(yamlContent) as? Map<*, *> ?: return emptyList()
+            val entries = doc["entries"] as? List<*> ?: return emptyList()
+            entries.mapNotNull { it as? Map<String, Any> }
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to parse popular apps YAML: ${e.message}")
+            emptyList()
+        }
     }
 
     @Suppress("UNCHECKED_CAST", "TooGenericExceptionCaught", "SwallowedException")
