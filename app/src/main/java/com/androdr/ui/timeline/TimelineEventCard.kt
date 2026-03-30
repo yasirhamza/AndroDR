@@ -155,16 +155,24 @@ private fun TagChip(text: String, color: Color) {
 }
 
 @Composable
-fun CorrelationCluster(
-    events: List<ForensicTimelineEvent>,
+fun CorrelationClusterCard(
+    cluster: EventCluster,
     onEventTap: (ForensicTimelineEvent) -> Unit
 ) {
-    val maxSeverity = events.maxOf { severityOrdinal(it.severity) }
-    val clusterColor = when (maxSeverity) {
-        3 -> Color(0xFFCF6679)  // CRITICAL
-        2 -> Color(0xFFFF9800)  // HIGH
-        1 -> Color(0xFFFFD600)  // MEDIUM
-        else -> Color(0xFF00D4AA)
+    val clusterColor = when (cluster.pattern) {
+        CorrelationPattern.PERMISSION_THEN_C2,
+        CorrelationPattern.INSTALL_THEN_ADMIN -> Color(0xFFCF6679) // Red box
+        CorrelationPattern.MULTI_PERMISSION_BURST -> Color(0xFFFF9800) // Orange box
+        else -> {
+            // Severity-based for generic/pre-linked/install-then-permission
+            val maxSev = cluster.events.maxOf { severityOrdinal(it.severity) }
+            when (maxSev) {
+                3 -> Color(0xFFCF6679)
+                2 -> Color(0xFFFF9800)
+                1 -> Color(0xFFFFD600)
+                else -> Color(0xFF00D4AA)
+            }
+        }
     }
 
     Card(
@@ -181,12 +189,12 @@ fun CorrelationCluster(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    "Correlated events (${events.size})",
+                    "${cluster.label} (${cluster.events.size})",
                     style = MaterialTheme.typography.labelMedium,
                     fontWeight = FontWeight.Bold,
                     color = clusterColor
                 )
-                val timeRange = formatTimeRange(events)
+                val timeRange = formatTimeRange(cluster.events)
                 Text(
                     timeRange,
                     style = MaterialTheme.typography.labelSmall,
@@ -194,9 +202,9 @@ fun CorrelationCluster(
                 )
             }
             Spacer(modifier = Modifier.height(8.dp))
-            events.forEach { event ->
+            cluster.events.forEach { event ->
                 TimelineEventCard(event = event, onClick = { onEventTap(event) })
-                if (event != events.last()) {
+                if (event != cluster.events.last()) {
                     // Vertical connector line
                     Box(
                         modifier = Modifier
