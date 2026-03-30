@@ -74,6 +74,7 @@ fun TimelineScreen(
     viewModel: TimelineViewModel = hiltViewModel()
 ) {
     val events by viewModel.events.collectAsStateWithLifecycle()
+    val partitioned by viewModel.partitionedEvents.collectAsStateWithLifecycle()
     val severityFilter by viewModel.severityFilter.collectAsStateWithLifecycle()
     val shareUri by viewModel.shareUri.collectAsStateWithLifecycle()
     val exporting by viewModel.exporting.collectAsStateWithLifecycle()
@@ -241,10 +242,35 @@ fun TimelineScreen(
                 }
             }
         } else {
-            // Group events by date
-            val grouped = events.groupBy { event ->
-                if (event.timestamp > 0) dateGroupFmt.format(Date(event.timestamp))
-                else "Unknown Date"
+            val (clusters, standalone) = partitioned
+
+            // Build date-grouped structure: clusters keyed by first event date,
+            // standalone events keyed by their own date.
+            data class DateEntry(
+                val clusters: List<List<ForensicTimelineEvent>>,
+                val standaloneEvents: List<ForensicTimelineEvent>
+            )
+            val dateMap = mutableMapOf<String, DateEntry>()
+
+            fun dateKey(ts: Long) =
+                if (ts > 0) dateGroupFmt.format(Date(ts)) else "Unknown Date"
+
+            clusters.forEach { cluster ->
+                val key = dateKey(cluster.first().timestamp)
+                val entry = dateMap.getOrPut(key) { DateEntry(emptyList(), emptyList()) }
+                dateMap[key] = entry.copy(clusters = entry.clusters + listOf(cluster))
+            }
+            standalone.forEach { event ->
+                val key = dateKey(event.timestamp)
+                val entry = dateMap.getOrPut(key) { DateEntry(emptyList(), emptyList()) }
+                dateMap[key] = entry.copy(standaloneEvents = entry.standaloneEvents + event)
+            }
+
+            // Sort date keys descending (most recent first) using the original event list order
+            val sortedDateKeys = dateMap.keys.sortedByDescending { key ->
+                val allEvents = (dateMap[key]?.clusters?.flatten().orEmpty()) +
+                    (dateMap[key]?.standaloneEvents.orEmpty())
+                allEvents.maxOfOrNull { it.timestamp } ?: 0L
             }
 
             LazyColumn(
@@ -252,7 +278,8 @@ fun TimelineScreen(
                 contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                grouped.forEach { (dateLabel, dateEvents) ->
+                sortedDateKeys.forEach { dateLabel ->
+                    val entry = dateMap[dateLabel] ?: return@forEach
                     item(key = "header_$dateLabel") {
                         Text(
                             text = dateLabel,
@@ -261,8 +288,18 @@ fun TimelineScreen(
                             modifier = Modifier.padding(vertical = 4.dp)
                         )
                     }
+                    // Render clusters first
+                    entry.clusters.forEachIndexed { idx, cluster ->
+                        item(key = "cluster_${dateLabel}_$idx") {
+                            CorrelationCluster(
+                                events = cluster,
+                                onEventTap = { selectedEvent = it }
+                            )
+                        }
+                    }
+                    // Then standalone events
                     items(
-                        items = dateEvents,
+                        items = entry.standaloneEvents,
                         key = { it.id }
                     ) { event ->
                         TimelineEventCard(
