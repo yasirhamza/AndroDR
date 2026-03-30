@@ -16,10 +16,11 @@ android {
         applicationId = "com.androdr"
         minSdk = 26
         targetSdk = 34
-        versionCode = providers.exec {
+        val buildNumber = providers.exec {
             commandLine("git", "rev-list", "--count", "HEAD")
         }.standardOutput.asText.get().trim().toIntOrNull() ?: 1
-        versionName = "0.9.0"
+        versionCode = buildNumber
+        versionName = "0.9.0.$buildNumber"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
