@@ -83,4 +83,6 @@
     <string name="timeline_export_txt">Export Text</string>
     <string name="timeline_export_csv">Export CSV</string>
     <string name="timeline_filter_all">All</string>
+    <string name="timeline_group_date">By Date</string>
+    <string name="timeline_group_scan">By Scan</string>
 </resources>
