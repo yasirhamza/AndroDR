@@ -13,7 +13,7 @@ fun SeverityChip(level: String, active: Boolean = true) {
     val severityColor = when (level.lowercase()) {
         "critical" -> Color(0xFFCF6679)
         "high" -> Color(0xFFFF9800)
-        "medium" -> Color(0xFFFFD600)
+        "medium" -> Color(0xFFE6A800)
         else -> Color(0xFF00D4AA)
     }
     val color = if (active) severityColor else Color(0xFF888888)
@@ -36,6 +36,6 @@ fun SeverityChip(level: String, active: Boolean = true) {
 fun severityColor(level: String): Color = when (level.lowercase()) {
     "critical" -> Color(0xFFCF6679)
     "high" -> Color(0xFFFF9800)
-    "medium" -> Color(0xFFFFD600)
+    "medium" -> Color(0xFFE6A800)
     else -> Color(0xFF00D4AA)
 }

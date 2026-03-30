@@ -432,7 +432,7 @@ private fun TimelineEventCard(event: com.androdr.data.model.TimelineEvent) {
 private fun findingIconAndColor(severity: String): Pair<ImageVector, Color> = when (severity.uppercase()) {
     "CRITICAL" -> Pair(Icons.Filled.Error, Color(0xFFCF6679))
     "HIGH" -> Pair(Icons.Filled.Warning, Color(0xFFFF9800))
-    "MEDIUM" -> Pair(Icons.Filled.Warning, Color(0xFFFFD600))
+    "MEDIUM" -> Pair(Icons.Filled.Warning, Color(0xFFE6A800))
     "ERROR" -> Pair(Icons.Filled.Error, Color(0xFFCF6679))
     else -> Pair(Icons.Filled.Info, Color(0xFF00D4AA))
 }
