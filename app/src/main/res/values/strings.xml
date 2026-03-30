@@ -85,4 +85,5 @@
     <string name="timeline_filter_all">All</string>
     <string name="timeline_group_date">By Date</string>
     <string name="timeline_group_scan">By Scan</string>
+    <string name="timeline_scan_empty">No scan-grouped events</string>
 </resources>

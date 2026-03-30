@@ -89,8 +89,9 @@ class TimelineViewModel @Inject constructor(
             emptyList<EventCluster>() to emptyList()
         )
 
-    val scanGroupedEvents: StateFlow<List<ScanGroup>> = events.map { eventList ->
-        eventList.filter { it.scanResultId != -1L }
+    val scanGroupedEvents: StateFlow<List<ScanGroup>> = combine(events, _groupMode) { eventList, mode ->
+        if (mode != TimelineGroupMode.SCAN || eventList.isEmpty()) return@combine emptyList()
+        val groups = eventList.filter { it.scanResultId != -1L }
             .groupBy { it.scanResultId }
             .map { (scanId, scanEvents) ->
                 val (clusters, standalone) = correlationEngine.partition(scanEvents)
@@ -109,12 +110,25 @@ class TimelineViewModel @Inject constructor(
                 )
             }
             .sortedByDescending { it.timestamp }
+            .toMutableList()
+        val ungrouped = eventList.filter { it.scanResultId == -1L }
+        if (ungrouped.isNotEmpty()) {
+            val (ungroupedClusters, ungroupedStandalone) = correlationEngine.partition(ungrouped)
+            groups.add(ScanGroup(
+                scanId = -1,
+                timestamp = ungrouped.minOf { it.timestamp },
+                isFromBugreport = false,
+                eventCount = ungrouped.size,
+                maxSeverity = ungrouped.maxOf { severityOrdinal(it.severity) }.let {
+                    when (it) { 3 -> "CRITICAL"; 2 -> "HIGH"; 1 -> "MEDIUM"; else -> "INFO" }
+                },
+                clusters = ungroupedClusters,
+                standaloneEvents = ungroupedStandalone
+            ))
+        }
+        groups
     }.flowOn(Dispatchers.Default)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
-
-    private fun severityOrdinal(level: String): Int = when (level.uppercase()) {
-        "CRITICAL" -> 3; "HIGH" -> 2; "MEDIUM" -> 1; else -> 0
-    }
 
     private val _availableSources = MutableStateFlow<List<String>>(emptyList())
     val availableSources: StateFlow<List<String>> = _availableSources.asStateFlow()

@@ -43,20 +43,6 @@ interface ForensicTimelineEventDao {
     @Query("SELECT * FROM forensic_timeline ORDER BY timestamp ASC LIMIT 10000")
     suspend fun getAllForExport(): List<ForensicTimelineEvent>
 
-    @Query("""
-        SELECT DISTINCT scanResultId FROM forensic_timeline
-        WHERE scanResultId != -1
-        ORDER BY scanResultId DESC
-    """)
-    suspend fun getDistinctScanIds(): List<Long>
-
-    @Query("""
-        SELECT * FROM forensic_timeline
-        WHERE scanResultId = :scanId
-        ORDER BY timestamp ASC
-    """)
-    fun getEventsForScan(scanId: Long): Flow<List<ForensicTimelineEvent>>
-
     @Insert(onConflict = OnConflictStrategy.ABORT)
     suspend fun insertAll(events: List<ForensicTimelineEvent>)
 

@@ -223,7 +223,11 @@ fun CorrelationClusterCard(
 fun ScanGroupHeader(group: ScanGroup) {
     val fmt = SimpleDateFormat("MMM dd, yyyy HH:mm", Locale.US)
     val dateStr = if (group.timestamp > 0) fmt.format(Date(group.timestamp)) else "Unknown"
-    val typeLabel = if (group.isFromBugreport) "Bug Report Analysis" else "Runtime Scan"
+    val typeLabel = when {
+        group.scanId == -1L -> "Unassociated Events"
+        group.isFromBugreport -> "Bug Report Analysis"
+        else -> "Runtime Scan"
+    }
 
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -273,10 +277,6 @@ private fun formatTimeRange(events: List<ForensicTimelineEvent>): String {
     return if (first > 0 && last > 0) {
         "${fmt.format(Date(first))}\u2013${fmt.format(Date(last))}"
     } else ""
-}
-
-private fun severityOrdinal(level: String): Int = when (level.uppercase()) {
-    "CRITICAL" -> 3; "HIGH" -> 2; "MEDIUM" -> 1; else -> 0
 }
 
 private fun severityIconAndColor(severity: String) = when (severity.uppercase()) {

@@ -237,3 +237,8 @@ class CorrelationEngine @Inject constructor() {
         private const val WINDOW_1_HOUR = 60 * 60 * 1000L
     }
 }
+
+/** Shared severity ordinal for timeline components. */
+fun severityOrdinal(level: String): Int = when (level.uppercase()) {
+    "CRITICAL" -> 3; "HIGH" -> 2; "MEDIUM" -> 1; else -> 0
+}
