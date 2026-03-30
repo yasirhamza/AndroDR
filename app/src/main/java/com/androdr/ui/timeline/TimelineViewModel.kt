@@ -164,18 +164,21 @@ class TimelineViewModel @Inject constructor(
     fun setSeverityFilter(severity: String?) {
         _packageFilter.value = null
         _sourceFilter.value = null
+        _dateRange.value = null
         _severityFilter.value = severity
     }
 
     fun setSourceFilter(source: String?) {
         _packageFilter.value = null
         _severityFilter.value = null
+        _dateRange.value = null
         _sourceFilter.value = source
     }
 
     fun setPackageFilter(pkg: String?) {
         _severityFilter.value = null
         _sourceFilter.value = null
+        _dateRange.value = null
         _packageFilter.value = pkg
     }
 
