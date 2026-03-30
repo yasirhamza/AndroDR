@@ -20,6 +20,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.BugReport
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Error
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -112,6 +115,8 @@ fun DashboardScreen(
             }
 
             RiskLevelCard(latestScan = latestScan)
+
+            PostScanGuidance(riskLevel = latestScan?.overallRiskLevel)
 
             AnimatedVisibility(
                 visible = scanDiff != null && scanDiff!!.newFindings.isNotEmpty(),
@@ -229,11 +234,59 @@ fun DashboardScreen(
 }
 
 @Composable
+private fun PostScanGuidance(riskLevel: RiskLevel?) {
+    val (message, icon, color) = when (riskLevel) {
+        RiskLevel.CRITICAL -> Triple(
+            stringResource(R.string.guidance_critical),
+            Icons.Filled.Error,
+            Color(0xFFCF6679)
+        )
+        RiskLevel.HIGH -> Triple(
+            stringResource(R.string.guidance_high),
+            Icons.Filled.Warning,
+            Color(0xFFFF9800)
+        )
+        RiskLevel.MEDIUM -> Triple(
+            stringResource(R.string.guidance_medium),
+            Icons.Filled.Info,
+            Color(0xFFE6A800)
+        )
+        RiskLevel.LOW, null -> Triple(
+            stringResource(R.string.guidance_low),
+            Icons.Filled.CheckCircle,
+            Color(0xFF00D4AA)
+        )
+    }
+
+    if (riskLevel != null) {
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(
+                containerColor = color.copy(alpha = 0.08f)
+            )
+        ) {
+            Row(
+                modifier = Modifier.padding(16.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(icon, contentDescription = null, tint = color, modifier = Modifier.size(24.dp))
+                Text(
+                    text = message,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+            }
+        }
+    }
+}
+
+@Composable
 private fun RiskLevelCard(latestScan: ScanResult?) {
     val (riskColor, riskLabel) = when (latestScan?.overallRiskLevel) {
         RiskLevel.CRITICAL -> Pair(Color(0xFFCF6679), "CRITICAL")
         RiskLevel.HIGH     -> Pair(Color(0xFFFF9800), "HIGH")
-        RiskLevel.MEDIUM   -> Pair(Color(0xFFFFD600), "MEDIUM")
+        RiskLevel.MEDIUM   -> Pair(Color(0xFFE6A800), "MEDIUM")
         RiskLevel.LOW      -> Pair(Color(0xFF00D4AA), "LOW")
         null               -> Pair(Color(0xFF00D4AA), "\u2014")
     }
