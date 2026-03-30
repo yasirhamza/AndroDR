@@ -1,7 +1,10 @@
 package com.androdr.ui.timeline
 
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -11,6 +14,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Error
 import androidx.compose.material.icons.filled.Info
@@ -148,6 +152,77 @@ private fun TagChip(text: String, color: Color) {
         ),
         modifier = Modifier.height(24.dp)
     )
+}
+
+@Composable
+fun CorrelationCluster(
+    events: List<ForensicTimelineEvent>,
+    onEventTap: (ForensicTimelineEvent) -> Unit
+) {
+    val maxSeverity = events.maxOf { severityOrdinal(it.severity) }
+    val clusterColor = when (maxSeverity) {
+        3 -> Color(0xFFCF6679)  // CRITICAL
+        2 -> Color(0xFFFF9800)  // HIGH
+        1 -> Color(0xFFFFD600)  // MEDIUM
+        else -> Color(0xFF00D4AA)
+    }
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        border = BorderStroke(2.dp, clusterColor.copy(alpha = 0.5f)),
+        colors = CardDefaults.cardColors(
+            containerColor = clusterColor.copy(alpha = 0.04f)
+        )
+    ) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    "Correlated events (${events.size})",
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = clusterColor
+                )
+                val timeRange = formatTimeRange(events)
+                Text(
+                    timeRange,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+            events.forEach { event ->
+                TimelineEventCard(event = event, onClick = { onEventTap(event) })
+                if (event != events.last()) {
+                    // Vertical connector line
+                    Box(
+                        modifier = Modifier
+                            .padding(start = 10.dp)
+                            .width(2.dp)
+                            .height(4.dp)
+                            .background(clusterColor.copy(alpha = 0.3f))
+                    )
+                }
+            }
+        }
+    }
+}
+
+private fun formatTimeRange(events: List<ForensicTimelineEvent>): String {
+    if (events.isEmpty()) return ""
+    val fmt = SimpleDateFormat("HH:mm", Locale.US)
+    val first = events.minOf { it.timestamp }
+    val last = events.maxOf { it.timestamp }
+    return if (first > 0 && last > 0) {
+        "${fmt.format(Date(first))}\u2013${fmt.format(Date(last))}"
+    } else ""
+}
+
+private fun severityOrdinal(level: String): Int = when (level.uppercase()) {
+    "CRITICAL" -> 3; "HIGH" -> 2; "MEDIUM" -> 1; else -> 0
 }
 
 private fun severityIconAndColor(severity: String) = when (severity.uppercase()) {
