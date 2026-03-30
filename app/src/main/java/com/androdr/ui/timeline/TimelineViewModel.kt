@@ -18,6 +18,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -58,11 +59,12 @@ class TimelineViewModel @Inject constructor(
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
+    // StateFlow already guarantees distinctUntilChanged semantics, so no explicit call needed.
     val partitionedEvents: StateFlow<Pair<List<EventCluster>, List<ForensicTimelineEvent>>> =
         events.map { eventList ->
             if (eventList.isEmpty()) emptyList<EventCluster>() to emptyList()
             else correlationEngine.partition(eventList)
-        }.stateIn(
+        }.flowOn(Dispatchers.Default).stateIn(
             viewModelScope,
             SharingStarted.WhileSubscribed(5000),
             emptyList<EventCluster>() to emptyList()

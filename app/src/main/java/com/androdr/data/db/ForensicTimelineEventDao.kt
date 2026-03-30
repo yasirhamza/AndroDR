@@ -30,7 +30,7 @@ interface ForensicTimelineEventDao {
     @Query("""
         SELECT * FROM forensic_timeline
         WHERE packageName = :packageName
-        ORDER BY timestamp DESC
+        ORDER BY timestamp DESC LIMIT 500
     """)
     fun getEventsByPackage(packageName: String): Flow<List<ForensicTimelineEvent>>
 
