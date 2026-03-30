@@ -247,7 +247,7 @@ fun TimelineScreen(
             // Build date-grouped structure: clusters keyed by first event date,
             // standalone events keyed by their own date.
             data class DateEntry(
-                val clusters: List<List<ForensicTimelineEvent>>,
+                val clusters: List<EventCluster>,
                 val standaloneEvents: List<ForensicTimelineEvent>
             )
             val dateMap = mutableMapOf<String, DateEntry>()
@@ -256,7 +256,7 @@ fun TimelineScreen(
                 if (ts > 0) dateGroupFmt.format(Date(ts)) else "Unknown Date"
 
             clusters.forEach { cluster ->
-                val key = dateKey(cluster.first().timestamp)
+                val key = dateKey(cluster.events.first().timestamp)
                 val entry = dateMap.getOrPut(key) { DateEntry(emptyList(), emptyList()) }
                 dateMap[key] = entry.copy(clusters = entry.clusters + listOf(cluster))
             }
@@ -268,7 +268,7 @@ fun TimelineScreen(
 
             // Sort date keys descending (most recent first) using the original event list order
             val sortedDateKeys = dateMap.keys.sortedByDescending { key ->
-                val allEvents = (dateMap[key]?.clusters?.flatten().orEmpty()) +
+                val allEvents = (dateMap[key]?.clusters?.flatMap { it.events }.orEmpty()) +
                     (dateMap[key]?.standaloneEvents.orEmpty())
                 allEvents.maxOfOrNull { it.timestamp } ?: 0L
             }
@@ -291,8 +291,8 @@ fun TimelineScreen(
                     // Render clusters first
                     entry.clusters.forEachIndexed { idx, cluster ->
                         item(key = "cluster_${dateLabel}_$idx") {
-                            CorrelationCluster(
-                                events = cluster,
+                            CorrelationClusterCard(
+                                cluster = cluster,
                                 onEventTap = { selectedEvent = it }
                             )
                         }

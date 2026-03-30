@@ -58,14 +58,14 @@ class TimelineViewModel @Inject constructor(
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    val partitionedEvents: StateFlow<Pair<List<List<ForensicTimelineEvent>>, List<ForensicTimelineEvent>>> =
+    val partitionedEvents: StateFlow<Pair<List<EventCluster>, List<ForensicTimelineEvent>>> =
         events.map { eventList ->
-            if (eventList.isEmpty()) emptyList<List<ForensicTimelineEvent>>() to emptyList()
+            if (eventList.isEmpty()) emptyList<EventCluster>() to emptyList()
             else correlationEngine.partition(eventList)
         }.stateIn(
             viewModelScope,
             SharingStarted.WhileSubscribed(5000),
-            emptyList<List<ForensicTimelineEvent>>() to emptyList()
+            emptyList<EventCluster>() to emptyList()
         )
 
     private val _availableSources = MutableStateFlow<List<String>>(emptyList())
