@@ -79,7 +79,7 @@ fun BugReportScreen(
             val shareIntent = Intent(Intent.ACTION_SEND).apply {
                 type = "text/plain"
                 putExtra(Intent.EXTRA_STREAM, uri)
-                putExtra(Intent.EXTRA_SUBJECT, "AndroDR Bug Report Analysis")
+                putExtra(Intent.EXTRA_SUBJECT, "AndroDR Deep Device Scan")
                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             }
             context.startActivity(Intent.createChooser(shareIntent, "Share Analysis Report"))

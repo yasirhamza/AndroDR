@@ -52,14 +52,14 @@
     <string name="diff_resolved">Resolved</string>
     <string name="diff_no_changes">No changes since previous scan</string>
 
-    <!-- Bug Report -->
-    <string name="bugreport_instructions_title">How to generate a bug report</string>
-    <string name="bugreport_select_file">Select Bug Report File (.zip)</string>
-    <string name="bugreport_analyzing">Analyzing bug report…</string>
+    <!-- Bug Report / Deep Device Scan -->
+    <string name="bugreport_instructions_title">How to create a system diagnostic</string>
+    <string name="bugreport_select_file">Select Diagnostic File (.zip)</string>
+    <string name="bugreport_analyzing">Analyzing system diagnostic\u2026</string>
     <string name="bugreport_empty_state">No analysis yet</string>
-    <string name="bugreport_empty_hint">Select a bug report .zip file to start analysis</string>
-    <string name="dashboard_bugreport_title">Bug Report Analysis</string>
-    <string name="dashboard_bugreport_hint">Analyze a bug report .zip for spyware indicators</string>
+    <string name="bugreport_empty_hint">Select a system diagnostic .zip file to scan for threats</string>
+    <string name="dashboard_bugreport_title">Deep Device Scan</string>
+    <string name="dashboard_bugreport_hint">Analyze a system diagnostic for hidden threats</string>
 
     <!-- Report export -->
     <string name="report_export_label">Export Report</string>
@@ -148,7 +148,7 @@
     <string name="timeline_detail_rule">Rule</string>
     <string name="timeline_detail_mitre">MITRE ATT\&amp;CK</string>
     <string name="timeline_scan_unassociated">Unassociated Events</string>
-    <string name="timeline_scan_bugreport">Bug Report Analysis</string>
+    <string name="timeline_scan_bugreport">Deep Device Scan</string>
     <string name="timeline_scan_runtime">Runtime Scan</string>
     <string name="timeline_scan_unknown">Unknown</string>
     <!-- PluralsCandidate: shorthand for compact event count -->

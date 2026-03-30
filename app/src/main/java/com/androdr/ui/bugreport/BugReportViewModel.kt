@@ -54,7 +54,7 @@ class BugReportViewModel @Inject constructor(
      * Sourced from BugReportAnalyzer via the orchestrator.
      */
     val instructions: String = """
-        How to generate an Android Bug Report for AndroDR analysis:
+        How to create a system diagnostic for AndroDR to scan:
 
         1. Enable Developer Options (if not already enabled):
            • Open Settings → About Phone
@@ -64,19 +64,19 @@ class BugReportViewModel @Inject constructor(
            • Go to Settings → System → Developer Options
              (on some devices: Settings → Developer Options)
 
-        3. Generate the bug report:
+        3. Create the system diagnostic:
            • Scroll down to find "Take Bug Report"
-           • Tap it, then select "Full Report" for the most complete analysis
-           • Wait for the report to be compiled (this can take 1–3 minutes)
-           • When notified, tap the notification to share the report
+           • Tap it, then select "Full Report" for the most thorough scan
+           • Wait for the diagnostic to be created (this can take 1–3 minutes)
+           • When notified, tap the notification to share the file
 
         4. Import into AndroDR:
            • In the share sheet, choose "AndroDR" to import directly
-           • Or save the .zip file and use the "Analyze Bug Report" button in AndroDR
+           • Or save the .zip file and use the "Select Diagnostic File" button
 
-        Note: Bug reports contain extensive system information. Only share them
-        with applications you trust. AndroDR processes the report entirely on
-        your device — nothing is uploaded to external servers.
+        Note: System diagnostics contain detailed device information. Only share
+        them with applications you trust. AndroDR processes everything entirely
+        on your device — nothing is uploaded to external servers.
     """.trimIndent()
 
     /**
