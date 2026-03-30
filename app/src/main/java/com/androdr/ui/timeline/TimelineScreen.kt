@@ -237,36 +237,40 @@ fun TimelineScreen(
             }
         }
 
-        // Date range filter chips
+        // Date range filter chips — use stable labels, compute timestamps on click
         val dateRange by viewModel.dateRange.collectAsStateWithLifecycle()
-        val allLabel = stringResource(R.string.timeline_filter_all)
-        val label24h = stringResource(R.string.timeline_range_24h)
-        val label7d = stringResource(R.string.timeline_range_7d)
-        val label30d = stringResource(R.string.timeline_range_30d)
+
+        data class RangeOption(val hoursBack: Int?, val label: String)
+        val rangeOptions = listOf(
+            RangeOption(null, stringResource(R.string.timeline_filter_all)),
+            RangeOption(24, stringResource(R.string.timeline_range_24h)),
+            RangeOption(24 * 7, stringResource(R.string.timeline_range_7d)),
+            RangeOption(24 * 30, stringResource(R.string.timeline_range_30d))
+        )
+        // Track which range is active by hours, not by raw timestamp
+        var activeRangeHours by remember { mutableStateOf<Int?>(null) }
+
+        // Sync with ViewModel dateRange state
+        if (dateRange == null) activeRangeHours = null
 
         LazyRow(
             contentPadding = PaddingValues(horizontal = 16.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            val now = System.currentTimeMillis()
-            val ranges = listOf(
-                null to allLabel,
-                (now - 24 * 3600_000L) to label24h,
-                (now - 7 * 24 * 3600_000L) to label7d,
-                (now - 30 * 24 * 3600_000L) to label30d
-            )
-            items(ranges) { (startMs, label) ->
+            items(rangeOptions) { option ->
                 FilterChip(
-                    selected = when {
-                        startMs == null && dateRange == null -> true
-                        startMs != null && dateRange?.first == startMs -> true
-                        else -> false
-                    },
+                    selected = activeRangeHours == option.hoursBack,
                     onClick = {
-                        if (startMs == null) viewModel.clearDateRange()
-                        else viewModel.setDateRange(startMs, now)
+                        if (option.hoursBack == null) {
+                            activeRangeHours = null
+                            viewModel.clearDateRange()
+                        } else {
+                            activeRangeHours = option.hoursBack
+                            val now = System.currentTimeMillis()
+                            viewModel.setDateRange(now - option.hoursBack * 3600_000L, now)
+                        }
                     },
-                    label = { Text(label) }
+                    label = { Text(option.label) }
                 )
             }
         }
