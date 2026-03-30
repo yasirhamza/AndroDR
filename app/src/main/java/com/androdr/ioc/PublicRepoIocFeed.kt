@@ -65,9 +65,9 @@ class PublicRepoIocFeed @Inject constructor(
 
         if (iocEntries.isNotEmpty()) {
             iocEntryDao.upsertAll(iocEntries)
+            // Only clean stale entries when we have fresh data to replace them
+            iocEntryDao.deleteStaleEntries(SOURCE_ID, fetchedAt - 1)
         }
-        // Always clean stale entries — even if fetch returned empty, so stale data doesn't persist
-        iocEntryDao.deleteStaleEntries(SOURCE_ID, fetchedAt - 1)
         return iocEntries.size
     }
 
@@ -88,8 +88,9 @@ class PublicRepoIocFeed @Inject constructor(
 
         if (domainEntries.isNotEmpty()) {
             domainIocEntryDao.upsertAll(domainEntries)
+            // Only clean stale entries when we have fresh data to replace them
+            domainIocEntryDao.deleteStaleEntries(SOURCE_ID, fetchedAt - 1)
         }
-        domainIocEntryDao.deleteStaleEntries(SOURCE_ID, fetchedAt - 1)
         return domainEntries.size
     }
 
@@ -112,8 +113,9 @@ class PublicRepoIocFeed @Inject constructor(
 
         if (certEntries.isNotEmpty()) {
             certHashIocEntryDao.upsertAll(certEntries)
+            // Only clean stale entries when we have fresh data to replace them
+            certHashIocEntryDao.deleteStaleEntries(SOURCE_ID, fetchedAt - 1)
         }
-        certHashIocEntryDao.deleteStaleEntries(SOURCE_ID, fetchedAt - 1)
         return certEntries.size
     }
 

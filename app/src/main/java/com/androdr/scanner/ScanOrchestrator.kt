@@ -16,6 +16,8 @@ import com.androdr.sigma.SigmaRuleFeed
 import com.androdr.sigma.SigmaRuleEngine
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -46,10 +48,11 @@ class ScanOrchestrator @Inject constructor(
     private val knownAppResolver: com.androdr.ioc.KnownAppResolver
 ) {
 
+    private val initMutex = Mutex()
     private var ruleEngineInitialized = false
 
-    private suspend fun initRuleEngine() {
-        if (ruleEngineInitialized) return
+    private suspend fun initRuleEngine() = initMutex.withLock {
+        if (ruleEngineInitialized) return@withLock
         sigmaRuleEngine.setIocLookups(mapOf(
             "package_ioc_db" to { v -> iocResolver.isKnownBadPackage(v.toString()) != null },
             "cert_hash_ioc_db" to { v -> certHashIocResolver.isKnownBadCert(v.toString()) != null },

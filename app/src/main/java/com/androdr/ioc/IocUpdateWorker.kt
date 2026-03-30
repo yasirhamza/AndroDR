@@ -7,7 +7,9 @@ import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
+import com.androdr.data.db.ForensicTimelineEventDao
 import com.androdr.data.repo.CveRepository
+import com.androdr.data.repo.ScanRepository
 import com.androdr.sigma.SigmaRuleEngine
 import com.androdr.sigma.SigmaRuleFeed
 import kotlinx.coroutines.async
@@ -25,7 +27,9 @@ class IocUpdateWorker @AssistedInject constructor(
     private val oemPrefixResolver: OemPrefixResolver,
     private val sigmaRuleFeed: SigmaRuleFeed,
     private val sigmaRuleEngine: SigmaRuleEngine,
-    private val cveRepository: CveRepository
+    private val cveRepository: CveRepository,
+    private val scanRepository: ScanRepository,
+    private val forensicTimelineEventDao: ForensicTimelineEventDao
 ) : CoroutineWorker(context, params) {
 
     @Suppress("TooGenericExceptionCaught")
@@ -39,6 +43,10 @@ class IocUpdateWorker @AssistedInject constructor(
             // Refresh SIGMA rules independently — never blocks IOC update success
             refreshSigmaRules()
             refreshCveDatabase()
+            // Prune old data to prevent unbounded growth
+            val thirtyDaysAgo = System.currentTimeMillis() - (30L * 24 * 60 * 60 * 1000)
+            scanRepository.pruneOldDnsEvents(thirtyDaysAgo)
+            forensicTimelineEventDao.deleteOlderThan(thirtyDaysAgo)
             Log.i(TAG, "Worker finished — $fetched IOC entries, ${sigmaRuleEngine.ruleCount()} SIGMA rules")
             Result.success()
         } catch (e: Exception) {
