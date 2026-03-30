@@ -18,6 +18,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -30,7 +31,8 @@ import javax.inject.Inject
 @HiltViewModel
 class TimelineViewModel @Inject constructor(
     @ApplicationContext private val appContext: Context,
-    private val dao: ForensicTimelineEventDao
+    private val dao: ForensicTimelineEventDao,
+    private val correlationEngine: CorrelationEngine
 ) : ViewModel() {
 
     private val _severityFilter = MutableStateFlow<String?>(null)
@@ -55,6 +57,16 @@ class TimelineViewModel @Inject constructor(
             }
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val partitionedEvents: StateFlow<Pair<List<List<ForensicTimelineEvent>>, List<ForensicTimelineEvent>>> =
+        events.map { eventList ->
+            if (eventList.isEmpty()) emptyList<List<ForensicTimelineEvent>>() to emptyList()
+            else correlationEngine.partition(eventList)
+        }.stateIn(
+            viewModelScope,
+            SharingStarted.WhileSubscribed(5000),
+            emptyList<List<ForensicTimelineEvent>>() to emptyList()
+        )
 
     private val _availableSources = MutableStateFlow<List<String>>(emptyList())
     val availableSources: StateFlow<List<String>> = _availableSources.asStateFlow()
