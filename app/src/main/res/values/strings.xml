@@ -12,7 +12,7 @@
     <string name="scanning">Scanning…</string>
     <string name="summary_app_risks">App Risks</string>
     <string name="summary_device_flags">Device Flags</string>
-    <string name="summary_dns_matched">DNS Matched</string>
+    <string name="summary_dns_matched">Suspicious Connections</string>
     <string name="summary_last_scan">Last Scan</string>
     <string name="never">Never</string>
     <!-- PluralsCandidate: "risk(s)" is intentional shorthand for a single UI banner;
@@ -31,7 +31,7 @@
     <string name="section_checks_passed">Checks Passed</string>
 
     <!-- DNS Monitor -->
-    <string name="dns_vpn_title">DNS Monitor VPN</string>
+    <string name="dns_vpn_title">Network Monitor</string>
     <string name="vpn_status_running">Running — DNS traffic is being filtered</string>
     <string name="vpn_status_stopped">Stopped — enable to start filtering</string>
     <string name="domains_matched">domain(s) matched</string>
@@ -112,9 +112,9 @@
     <string name="device_issues_attention" tools:ignore="PluralsCandidate">%1$d issue(s) require attention</string>
 
     <!-- DNS Monitor — externalized -->
-    <string name="dns_policy_title">DNS Policy</string>
-    <string name="dns_blocklist_block">Blocklist: Block</string>
-    <string name="dns_ioc_domains_block">IOC Domains: Block</string>
+    <string name="dns_policy_title">Network Protection</string>
+    <string name="dns_blocklist_block">Block suspicious domains</string>
+    <string name="dns_ioc_domains_block">Block known threat domains</string>
 
     <!-- Bug Report — externalized -->
     <string name="bugreport_rule_findings">Rule-Based Findings</string>

@@ -80,7 +80,7 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
             HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
 
             Text(
-                text = "Threat Intelligence Domains (MVT / Pegasus / Predator)",
+                text = "Threat Intelligence Domains",
                 style = MaterialTheme.typography.titleMedium
             )
             PolicyToggleRow(
@@ -110,7 +110,7 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
                 style = MaterialTheme.typography.titleMedium
             )
             Text(
-                text = "SIGMA rule repository URLs (one per line). Each URL should point to a " +
+                text = "Detection rule sources (one per line). Each URL should point to a " +
                     "raw GitHub directory containing a rules.txt manifest.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -158,10 +158,10 @@ private fun ThreatDatabaseSection(
             modifier = Modifier.padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
-            StatRow(label = "SIGMA Rules", value = "$sigmaRuleCount loaded")
-            StatRow(label = "Domain IOCs", value = "$domainIocCount")
-            StatRow(label = "Package IOCs", value = "$packageIocCount")
-            StatRow(label = "Cert Hash IOCs", value = "$certHashIocCount")
+            StatRow(label = "Detection Rules", value = "$sigmaRuleCount loaded")
+            StatRow(label = "Threat Domains", value = "$domainIocCount")
+            StatRow(label = "Threat Apps", value = "$packageIocCount")
+            StatRow(label = "Threat Certificates", value = "$certHashIocCount")
             StatRow(label = "CVE Database", value = "$cveCount Android CVEs")
 
             HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))

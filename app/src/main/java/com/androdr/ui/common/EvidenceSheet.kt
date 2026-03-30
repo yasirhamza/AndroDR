@@ -96,7 +96,7 @@ fun EvidenceSheet(finding: Finding, onDismiss: () -> Unit) {
 @Composable
 private fun CveListContent(evidence: Evidence.CveList, remediation: List<String>) {
     Text(
-        text = "Unpatched CVEs (${evidence.cves.size})",
+        text = "Known Security Vulnerabilities (${evidence.cves.size})",
         style = MaterialTheme.typography.titleSmall,
         fontWeight = FontWeight.SemiBold
     )
@@ -224,7 +224,7 @@ private fun CveCard(cve: CveEvidence) {
 @Composable
 private fun IocMatchContent(evidence: Evidence.IocMatch) {
     Text(
-        text = "IOC Match Details",
+        text = "Threat Match Details",
         style = MaterialTheme.typography.titleSmall,
         fontWeight = FontWeight.SemiBold
     )
@@ -239,8 +239,8 @@ private fun IocMatchContent(evidence: Evidence.IocMatch) {
             modifier = Modifier.padding(12.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            DetailRow(label = "Matched indicator", value = evidence.matchedIndicator)
-            DetailRow(label = "IOC type", value = evidence.iocType)
+            DetailRow(label = "What was detected", value = evidence.matchedIndicator)
+            DetailRow(label = "Detection type", value = evidence.iocType)
             DetailRow(label = "Source", value = evidence.source)
         }
     }
