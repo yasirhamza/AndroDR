@@ -1,6 +1,6 @@
 package com.androdr.sigma
 
-import org.junit.Assert.*
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class KnownGoodFilterTest {
@@ -14,8 +14,13 @@ class KnownGoodFilterTest {
             detection = SigmaDetection(
                 selections = mapOf(
                     "selection" to SigmaSelection(listOf(
-                        SigmaFieldMatcher("operation", SigmaModifier.EQUALS, listOf("android:request_install_packages")),
-                        SigmaFieldMatcher("is_system_app", SigmaModifier.EQUALS, listOf(false))
+                        SigmaFieldMatcher(
+                            "operation", SigmaModifier.EQUALS,
+                            listOf("android:request_install_packages")
+                        ),
+                        SigmaFieldMatcher(
+                            "is_system_app", SigmaModifier.EQUALS, listOf(false)
+                        )
                     )),
                     "filter_known_good" to SigmaSelection(listOf(
                         SigmaFieldMatcher("package_name", SigmaModifier.IOC_LOOKUP, listOf("known_good_db"))
