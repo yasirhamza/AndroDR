@@ -280,7 +280,7 @@ fun TimelineScreen(
                             contentAlignment = Alignment.Center
                         ) {
                             Text(
-                                text = "No scan-grouped events",
+                                text = stringResource(R.string.timeline_scan_empty),
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
