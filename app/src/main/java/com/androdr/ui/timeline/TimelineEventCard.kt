@@ -193,7 +193,7 @@ fun CorrelationClusterCard(
             when (maxSev) {
                 3 -> Color(0xFFCF6679)
                 2 -> Color(0xFFFF9800)
-                1 -> Color(0xFFFFD600)
+                1 -> Color(0xFFE6A800)
                 else -> Color(0xFF00D4AA)
             }
         }
@@ -310,7 +310,7 @@ private fun formatTimeRange(events: List<ForensicTimelineEvent>): String {
 private fun severityIconAndColor(severity: String) = when (severity.uppercase()) {
     "CRITICAL" -> Icons.Filled.Error to Color(0xFFCF6679)
     "HIGH" -> Icons.Filled.Warning to Color(0xFFFF9800)
-    "MEDIUM" -> Icons.Filled.Warning to Color(0xFFFFD600)
+    "MEDIUM" -> Icons.Filled.Warning to Color(0xFFE6A800)
     else -> Icons.Filled.Info to Color(0xFF00D4AA)
 }
 
