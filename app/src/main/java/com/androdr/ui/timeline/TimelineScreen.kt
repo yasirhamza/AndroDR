@@ -108,7 +108,7 @@ fun TimelineScreen(
 
     Column(modifier = Modifier.fillMaxSize()) {
         TopAppBar(
-            title = { Text("Timeline") },
+            title = { Text(stringResource(R.string.timeline_title)) },
             actions = {
                 // View report
                 IconButton(
@@ -118,7 +118,7 @@ fun TimelineScreen(
                     },
                     enabled = events.isNotEmpty()
                 ) {
-                    Icon(Icons.Filled.Description, contentDescription = "View report")
+                    Icon(Icons.Filled.Description, contentDescription = stringResource(R.string.cd_view_report))
                 }
                 // Copy to clipboard
                 IconButton(
@@ -129,15 +129,15 @@ fun TimelineScreen(
                             clipboard.setPrimaryClip(
                                 ClipData.newPlainText("AndroDR Timeline", reportText)
                             )
-                            Toast.makeText(context, "Timeline copied to clipboard", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(context, context.getString(R.string.timeline_copied), Toast.LENGTH_SHORT).show()
                         } else {
                             viewModel.generateReport()
-                            Toast.makeText(context, "Generating report...", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(context, context.getString(R.string.timeline_generating), Toast.LENGTH_SHORT).show()
                         }
                     },
                     enabled = events.isNotEmpty()
                 ) {
-                    Icon(Icons.Filled.ContentCopy, contentDescription = "Copy report")
+                    Icon(Icons.Filled.ContentCopy, contentDescription = stringResource(R.string.cd_copy_report))
                 }
                 // Export menu
                 if (exporting) {
@@ -151,7 +151,7 @@ fun TimelineScreen(
                             onClick = { exportMenuExpanded = true },
                             enabled = events.isNotEmpty()
                         ) {
-                            Icon(Icons.Filled.Share, contentDescription = "Export")
+                            Icon(Icons.Filled.Share, contentDescription = stringResource(R.string.cd_export))
                         }
                         DropdownMenu(
                             expanded = exportMenuExpanded,
@@ -180,9 +180,9 @@ fun TimelineScreen(
         // Severity filter chips
         val filterOptions = listOf(
             null to stringResource(R.string.timeline_filter_all),
-            "CRITICAL" to "Critical",
-            "HIGH" to "High",
-            "MEDIUM" to "Medium"
+            "CRITICAL" to stringResource(R.string.timeline_filter_critical),
+            "HIGH" to stringResource(R.string.timeline_filter_high),
+            "MEDIUM" to stringResource(R.string.timeline_filter_medium)
         )
         LazyRow(
             contentPadding = PaddingValues(horizontal = 16.dp),
@@ -233,6 +233,40 @@ fun TimelineScreen(
                     selected = groupMode == TimelineGroupMode.SCAN,
                     onClick = { viewModel.setGroupMode(TimelineGroupMode.SCAN) },
                     label = { Text(stringResource(R.string.timeline_group_scan)) }
+                )
+            }
+        }
+
+        // Date range filter chips
+        val dateRange by viewModel.dateRange.collectAsStateWithLifecycle()
+        val allLabel = stringResource(R.string.timeline_filter_all)
+        val label24h = stringResource(R.string.timeline_range_24h)
+        val label7d = stringResource(R.string.timeline_range_7d)
+        val label30d = stringResource(R.string.timeline_range_30d)
+
+        LazyRow(
+            contentPadding = PaddingValues(horizontal = 16.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            val now = System.currentTimeMillis()
+            val ranges = listOf(
+                null to allLabel,
+                (now - 24 * 3600_000L) to label24h,
+                (now - 7 * 24 * 3600_000L) to label7d,
+                (now - 30 * 24 * 3600_000L) to label30d
+            )
+            items(ranges) { (startMs, label) ->
+                FilterChip(
+                    selected = when {
+                        startMs == null && dateRange == null -> true
+                        startMs != null && dateRange?.first == startMs -> true
+                        else -> false
+                    },
+                    onClick = {
+                        if (startMs == null) viewModel.clearDateRange()
+                        else viewModel.setDateRange(startMs, now)
+                    },
+                    label = { Text(label) }
                 )
             }
         }
@@ -407,7 +441,7 @@ fun TimelineScreen(
                 clipboard.setPrimaryClip(
                     ClipData.newPlainText("AndroDR Timeline", reportText)
                 )
-                Toast.makeText(context, "Timeline copied to clipboard", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, context.getString(R.string.timeline_copied), Toast.LENGTH_SHORT).show()
             },
             onShare = {
                 val intent = Intent(Intent.ACTION_SEND).apply {
@@ -439,7 +473,7 @@ private fun ReportViewSheet(
             modifier = Modifier.padding(horizontal = 24.dp, vertical = 16.dp)
         ) {
             Text(
-                text = "Forensic Timeline Report",
+                text = stringResource(R.string.timeline_report_title),
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold
             )
@@ -483,7 +517,7 @@ private fun ReportViewSheet(
                 ) {
                     Icon(Icons.Filled.ContentCopy, null, Modifier.size(18.dp))
                     Spacer(Modifier.width(8.dp))
-                    Text("Copy")
+                    Text(stringResource(R.string.timeline_copy))
                 }
                 Button(
                     onClick = onShare,
@@ -492,7 +526,7 @@ private fun ReportViewSheet(
                 ) {
                     Icon(Icons.Filled.Share, null, Modifier.size(18.dp))
                     Spacer(Modifier.width(8.dp))
-                    Text("Share")
+                    Text(stringResource(R.string.timeline_share))
                 }
             }
             Spacer(modifier = Modifier.height(16.dp))
