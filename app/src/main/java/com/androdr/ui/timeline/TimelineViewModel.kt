@@ -29,12 +29,31 @@ import java.util.Date
 import java.util.Locale
 import javax.inject.Inject
 
+enum class TimelineGroupMode { DATE, SCAN }
+
+data class ScanGroup(
+    val scanId: Long,
+    val timestamp: Long,
+    val isFromBugreport: Boolean,
+    val eventCount: Int,
+    val maxSeverity: String,
+    val clusters: List<EventCluster>,
+    val standaloneEvents: List<ForensicTimelineEvent>
+)
+
 @HiltViewModel
 class TimelineViewModel @Inject constructor(
     @ApplicationContext private val appContext: Context,
     private val dao: ForensicTimelineEventDao,
     private val correlationEngine: CorrelationEngine
 ) : ViewModel() {
+
+    private val _groupMode = MutableStateFlow(TimelineGroupMode.DATE)
+    val groupMode: StateFlow<TimelineGroupMode> = _groupMode.asStateFlow()
+
+    fun setGroupMode(mode: TimelineGroupMode) {
+        _groupMode.value = mode
+    }
 
     private val _severityFilter = MutableStateFlow<String?>(null)
     val severityFilter: StateFlow<String?> = _severityFilter.asStateFlow()
@@ -69,6 +88,33 @@ class TimelineViewModel @Inject constructor(
             SharingStarted.WhileSubscribed(5000),
             emptyList<EventCluster>() to emptyList()
         )
+
+    val scanGroupedEvents: StateFlow<List<ScanGroup>> = events.map { eventList ->
+        eventList.filter { it.scanResultId != -1L }
+            .groupBy { it.scanResultId }
+            .map { (scanId, scanEvents) ->
+                val (clusters, standalone) = correlationEngine.partition(scanEvents)
+                ScanGroup(
+                    scanId = scanId,
+                    timestamp = scanEvents.minOf { it.timestamp },
+                    isFromBugreport = scanEvents.any { it.isFromBugreport },
+                    eventCount = scanEvents.size,
+                    maxSeverity = scanEvents.maxOf { severityOrdinal(it.severity) }.let {
+                        when (it) {
+                            3 -> "CRITICAL"; 2 -> "HIGH"; 1 -> "MEDIUM"; else -> "INFO"
+                        }
+                    },
+                    clusters = clusters,
+                    standaloneEvents = standalone
+                )
+            }
+            .sortedByDescending { it.timestamp }
+    }.flowOn(Dispatchers.Default)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    private fun severityOrdinal(level: String): Int = when (level.uppercase()) {
+        "CRITICAL" -> 3; "HIGH" -> 2; "MEDIUM" -> 1; else -> 0
+    }
 
     private val _availableSources = MutableStateFlow<List<String>>(emptyList())
     val availableSources: StateFlow<List<String>> = _availableSources.asStateFlow()

@@ -219,6 +219,52 @@ fun CorrelationClusterCard(
     }
 }
 
+@Composable
+fun ScanGroupHeader(group: ScanGroup) {
+    val fmt = SimpleDateFormat("MMM dd, yyyy HH:mm", Locale.US)
+    val dateStr = if (group.timestamp > 0) fmt.format(Date(group.timestamp)) else "Unknown"
+    val typeLabel = if (group.isFromBugreport) "Bug Report Analysis" else "Runtime Scan"
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainer
+        )
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(12.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column {
+                Text(
+                    typeLabel,
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    dateStr,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    "${group.eventCount} events",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                SeverityChip(level = group.maxSeverity, active = true)
+            }
+        }
+    }
+}
+
 private fun formatTimeRange(events: List<ForensicTimelineEvent>): String {
     if (events.isEmpty()) return ""
     val fmt = SimpleDateFormat("HH:mm", Locale.US)

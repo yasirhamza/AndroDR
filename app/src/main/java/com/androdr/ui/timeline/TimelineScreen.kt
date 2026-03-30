@@ -81,6 +81,8 @@ fun TimelineScreen(
     val severityFilter by viewModel.severityFilter.collectAsStateWithLifecycle()
     val shareUri by viewModel.shareUri.collectAsStateWithLifecycle()
     val exporting by viewModel.exporting.collectAsStateWithLifecycle()
+    val groupMode by viewModel.groupMode.collectAsStateWithLifecycle()
+    val scanGroups by viewModel.scanGroupedEvents.collectAsStateWithLifecycle()
 
     val context = LocalContext.current
 
@@ -214,6 +216,27 @@ fun TimelineScreen(
             }
         }
 
+        // Group mode toggle
+        LazyRow(
+            contentPadding = PaddingValues(horizontal = 16.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            item {
+                FilterChip(
+                    selected = groupMode == TimelineGroupMode.DATE,
+                    onClick = { viewModel.setGroupMode(TimelineGroupMode.DATE) },
+                    label = { Text(stringResource(R.string.timeline_group_date)) }
+                )
+            }
+            item {
+                FilterChip(
+                    selected = groupMode == TimelineGroupMode.SCAN,
+                    onClick = { viewModel.setGroupMode(TimelineGroupMode.SCAN) },
+                    label = { Text(stringResource(R.string.timeline_group_scan)) }
+                )
+            }
+        }
+
         Spacer(modifier = Modifier.height(8.dp))
 
         if (events.isEmpty()) {
@@ -242,6 +265,52 @@ fun TimelineScreen(
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
                     )
+                }
+            }
+        } else if (groupMode == TimelineGroupMode.SCAN) {
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                if (scanGroups.isEmpty()) {
+                    item {
+                        Box(
+                            modifier = Modifier.fillParentMaxSize(),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = "No scan-grouped events",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                } else {
+                    scanGroups.forEach { group ->
+                        item(key = "scan_${group.scanId}") {
+                            ScanGroupHeader(group)
+                        }
+                        // Clusters
+                        group.clusters.forEachIndexed { idx, cluster ->
+                            item(key = "scan_${group.scanId}_cluster_$idx") {
+                                CorrelationClusterCard(
+                                    cluster = cluster,
+                                    onEventTap = { selectedEvent = it }
+                                )
+                            }
+                        }
+                        // Standalone events
+                        items(
+                            items = group.standaloneEvents,
+                            key = { it.id }
+                        ) { event ->
+                            TimelineEventCard(
+                                event = event,
+                                onClick = { selectedEvent = event }
+                            )
+                        }
+                    }
                 }
             }
         } else {
