@@ -155,9 +155,12 @@ class TimelineViewModel @Inject constructor(
     val exporting: StateFlow<Boolean> = _exporting.asStateFlow()
 
     init {
+        // Refresh available filter options whenever events change
         viewModelScope.launch {
-            _availableSources.value = dao.getDistinctSources()
-            _availablePackages.value = dao.getDistinctPackages()
+            events.collect {
+                _availableSources.value = dao.getDistinctSources()
+                _availablePackages.value = dao.getDistinctPackages()
+            }
         }
     }
 
