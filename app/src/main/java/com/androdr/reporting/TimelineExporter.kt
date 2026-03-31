@@ -76,6 +76,9 @@ object TimelineExporter {
             if (event.campaignName.isNotEmpty()) {
                 appendLine("             Campaign: ${event.campaignName}")
             }
+            if (event.apkHash.isNotEmpty()) {
+                appendLine("             APK SHA-256: ${event.apkHash}")
+            }
             if (event.details.isNotEmpty()) {
                 appendLine("             ${event.details}")
             }
@@ -90,7 +93,7 @@ object TimelineExporter {
     fun formatCsv(events: List<ForensicTimelineEvent>): String = buildString {
         appendLine(
             "timestamp,isodate,module,event,data,package,severity," +
-                "ioc_indicator,ioc_type,ioc_source,campaign,mitre_technique,details"
+                "ioc_indicator,ioc_type,ioc_source,campaign,mitre_technique,apk_hash,details"
         )
 
         val utcFmt = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US).apply {
@@ -110,8 +113,9 @@ object TimelineExporter {
             val iocSrc = csvEscape(event.iocSource)
             val campaign = csvEscape(event.campaignName)
             val mitre = csvEscape(event.attackTechniqueId)
+            val hash = csvEscape(event.apkHash)
             val details = csvEscape(event.details)
-            appendLine("$ts,$iso,$module,$eventType,$data,$pkg,$sev,$ioc,$iocType,$iocSrc,$campaign,$mitre,$details")
+            appendLine("$ts,$iso,$module,$eventType,$data,$pkg,$sev,$ioc,$iocType,$iocSrc,$campaign,$mitre,$hash,$details")
         }
     }
 

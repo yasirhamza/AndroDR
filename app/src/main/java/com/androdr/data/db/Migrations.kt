@@ -155,3 +155,11 @@ val MIGRATION_6_7 = object : Migration(6, 7) {
         indexes.forEach { database.execSQL(it) }
     }
 }
+
+val MIGRATION_7_8 = object : Migration(7, 8) {
+    override fun migrate(database: SupportSQLiteDatabase) {
+        database.execSQL(
+            "ALTER TABLE forensic_timeline ADD COLUMN apkHash TEXT NOT NULL DEFAULT ''"
+        )
+    }
+}

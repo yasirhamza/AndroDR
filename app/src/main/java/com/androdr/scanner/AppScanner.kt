@@ -103,6 +103,19 @@ class AppScanner @Inject constructor(
                 null
             }
 
+            // APK file hash for VirusTotal lookup
+            @Suppress("TooGenericExceptionCaught", "SwallowedException")
+            val apkHash = if (!isSystemApp) {
+                try {
+                    computeApkHash(appInfo)
+                } catch (e: Exception) {
+                    Log.w(TAG, "collectTelemetry: APK hash failed for $packageName: ${e.message}")
+                    null
+                }
+            } else {
+                null
+            }
+
             // Installer source
             val installerPackage = if (!isSystemApp) getInstallerPackageName(pm, packageName) else null
             val fromTrustedStore = installerPackage != null &&
@@ -138,6 +151,7 @@ class AppScanner @Inject constructor(
                     packageName = packageName,
                     appName = appName,
                     certHash = certHash,
+                    apkHash = apkHash,
                     isSystemApp = isSystemApp,
                     fromTrustedStore = fromTrustedStore,
                     installer = installerPackage,
@@ -153,6 +167,21 @@ class AppScanner @Inject constructor(
         }
 
         telemetryList
+    }
+
+    private fun computeApkHash(appInfo: ApplicationInfo): String? {
+        val sourceDir = appInfo.sourceDir ?: return null
+        val file = java.io.File(sourceDir)
+        if (!file.exists()) return null
+        val digest = MessageDigest.getInstance("SHA-256")
+        val buffer = ByteArray(8192)
+        file.inputStream().use { stream ->
+            var read: Int
+            while (stream.read(buffer).also { read = it } != -1) {
+                digest.update(buffer, 0, read)
+            }
+        }
+        return digest.digest().joinToString("") { "%02x".format(it) }
     }
 
     private fun extractCertHash(packageInfo: android.content.pm.PackageInfo): String? {

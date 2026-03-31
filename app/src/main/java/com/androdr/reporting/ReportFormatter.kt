@@ -209,6 +209,14 @@ object ReportFormatter {
         if (flags.isNotEmpty()) {
             appendLine("     Flags   : ${flags.joinToString(" \u00b7 ")}")
         }
+        val apkHash = highest.matchContext["apk_hash"]?.toString()
+        if (!apkHash.isNullOrEmpty()) {
+            appendLine("     APK SHA-256 : $apkHash")
+        }
+        val certHashVal = highest.matchContext["cert_hash"]?.toString()
+        if (!certHashVal.isNullOrEmpty()) {
+            appendLine("     Cert SHA-256: $certHashVal")
+        }
         val reasons = findings.map { it.title }.distinct()
         appendLine("     Reasons : ${reasons.joinToString("; ")}")
         val allRemediation = findings.flatMap { it.remediation }.distinct()
