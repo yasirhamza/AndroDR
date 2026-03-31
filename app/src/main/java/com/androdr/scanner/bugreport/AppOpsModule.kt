@@ -1,7 +1,7 @@
 package com.androdr.scanner.bugreport
 
 import com.androdr.data.model.TimelineEvent
-import com.androdr.ioc.IocResolver
+import com.androdr.ioc.IndicatorResolver
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -29,7 +29,7 @@ class AppOpsModule @Inject constructor() : BugreportModule {
     // Multi-step analysis with UID splitting, package iteration, op checking, and timeline
     // generation — splitting into sub-functions would fragment tightly coupled analysis logic.
     @Suppress("LongMethod")
-    override suspend fun analyze(sectionText: String, iocResolver: IocResolver): ModuleResult {
+    override suspend fun analyze(sectionText: String, iocResolver: IndicatorResolver): ModuleResult {
         val telemetry = mutableListOf<Map<String, Any?>>()
         val timeline = mutableListOf<TimelineEvent>()
 

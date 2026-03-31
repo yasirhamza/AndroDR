@@ -9,15 +9,16 @@ import com.androdr.data.model.IocEntry
 import com.androdr.data.model.CertHashIocEntry
 import com.androdr.data.model.CveEntity
 import com.androdr.data.model.ForensicTimelineEvent
+import com.androdr.data.model.Indicator
 import com.androdr.data.model.ScanResult
 
 @Database(
     entities = [
         ScanResult::class, DnsEvent::class, IocEntry::class,
         DomainIocEntry::class, KnownAppDbEntry::class, CertHashIocEntry::class,
-        CveEntity::class, ForensicTimelineEvent::class
+        CveEntity::class, ForensicTimelineEvent::class, Indicator::class
     ],
-    version = 8,
+    version = 9,
     exportSchema = false
 )
 @TypeConverters(Converters::class)
@@ -38,4 +39,6 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun cveDao(): CveDao
 
     abstract fun forensicTimelineEventDao(): ForensicTimelineEventDao
+
+    abstract fun indicatorDao(): IndicatorDao
 }

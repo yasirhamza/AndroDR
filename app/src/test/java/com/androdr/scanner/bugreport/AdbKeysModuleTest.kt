@@ -1,6 +1,6 @@
 package com.androdr.scanner.bugreport
 
-import com.androdr.ioc.IocResolver
+import com.androdr.ioc.IndicatorResolver
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.runBlocking
@@ -11,12 +11,12 @@ import org.junit.Test
 
 class AdbKeysModuleTest {
 
-    private val mockIocResolver: IocResolver = mockk()
+    private val mockIndicatorResolver: IndicatorResolver = mockk()
     private lateinit var module: AdbKeysModule
 
     @Before
     fun setUp() {
-        every { mockIocResolver.isKnownBadPackage(any()) } returns null
+        every { mockIndicatorResolver.isKnownBadPackage(any()) } returns null
         module = AdbKeysModule()
     }
 
@@ -33,7 +33,7 @@ class AdbKeysModuleTest {
               QUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFh user@workstation
         """.trimIndent()
 
-        val result = module.analyze(section, mockIocResolver)
+        val result = module.analyze(section, mockIndicatorResolver)
         assertTrue(result.telemetry.any {
             it["source"] == "adb_trusted_key" &&
                 it["host"] == "user@workstation"
@@ -52,7 +52,7 @@ class AdbKeysModuleTest {
               QUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFh
         """.trimIndent()
 
-        val result = module.analyze(section, mockIocResolver)
+        val result = module.analyze(section, mockIndicatorResolver)
         assertTrue(result.telemetry.any {
             it["source"] == "adb_trusted_key" &&
                 it["host"] == "unknown"
@@ -61,7 +61,7 @@ class AdbKeysModuleTest {
 
     @Test
     fun `empty section produces no telemetry`() = runBlocking {
-        val result = module.analyze("", mockIocResolver)
+        val result = module.analyze("", mockIndicatorResolver)
         assertTrue(result.telemetry.isEmpty())
         assertTrue(result.timeline.isEmpty())
     }

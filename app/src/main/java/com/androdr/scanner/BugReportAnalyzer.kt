@@ -4,7 +4,7 @@ import android.content.Context
 import android.net.Uri
 import android.util.Log
 import com.androdr.data.model.TimelineEvent
-import com.androdr.ioc.IocResolver
+import com.androdr.ioc.IndicatorResolver
 import com.androdr.scanner.bugreport.BugreportModule
 import com.androdr.scanner.bugreport.DumpsysSectionParser
 import com.androdr.sigma.Finding
@@ -20,7 +20,7 @@ import javax.inject.Singleton
 @Singleton
 class BugReportAnalyzer @Inject constructor(
     @ApplicationContext private val context: Context,
-    private val iocResolver: IocResolver,
+    private val iocResolver: IndicatorResolver,
     private val modules: Set<@JvmSuppressWildcards BugreportModule>,
     private val sigmaRuleEngine: SigmaRuleEngine
 ) {

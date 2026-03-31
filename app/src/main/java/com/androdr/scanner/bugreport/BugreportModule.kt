@@ -1,7 +1,7 @@
 package com.androdr.scanner.bugreport
 
 import com.androdr.data.model.TimelineEvent
-import com.androdr.ioc.IocResolver
+import com.androdr.ioc.IndicatorResolver
 import com.androdr.scanner.BugReportAnalyzer.BugReportFinding
 import java.io.InputStream
 
@@ -19,12 +19,12 @@ interface BugreportModule {
     /** Analyze a dumpsys section. Override for section-targeted modules. */
     suspend fun analyze(
         sectionText: String,
-        iocResolver: IocResolver
+        iocResolver: IndicatorResolver
     ): ModuleResult = ModuleResult()
 
     /** Analyze raw ZIP entries. Override for modules with targetSections == null. */
     suspend fun analyzeRaw(
         entries: Sequence<Pair<String, InputStream>>,
-        iocResolver: IocResolver
+        iocResolver: IndicatorResolver
     ): ModuleResult = ModuleResult()
 }

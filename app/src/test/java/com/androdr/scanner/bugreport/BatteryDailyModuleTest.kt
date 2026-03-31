@@ -1,7 +1,7 @@
 package com.androdr.scanner.bugreport
 
 import com.androdr.ioc.BadPackageInfo
-import com.androdr.ioc.IocResolver
+import com.androdr.ioc.IndicatorResolver
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.runBlocking
@@ -12,12 +12,12 @@ import org.junit.Test
 
 class BatteryDailyModuleTest {
 
-    private val mockIocResolver: IocResolver = mockk()
+    private val mockIndicatorResolver: IndicatorResolver = mockk()
     private lateinit var module: BatteryDailyModule
 
     @Before
     fun setUp() {
-        every { mockIocResolver.isKnownBadPackage(any()) } returns null
+        every { mockIndicatorResolver.isKnownBadPackage(any()) } returns null
         module = BatteryDailyModule()
     }
 
@@ -36,7 +36,7 @@ class BatteryDailyModuleTest {
                 -pkg=com.example.app vers=100
         """.trimIndent()
 
-        val result = module.analyze(section, mockIocResolver)
+        val result = module.analyze(section, mockIndicatorResolver)
         assertTrue(result.timeline.any {
             it.category == "package_update" && it.description.contains("com.example.app")
         })
@@ -53,7 +53,7 @@ class BatteryDailyModuleTest {
               +pkg=com.suspect.app vers=100
         """.trimIndent()
 
-        val result = module.analyze(section, mockIocResolver)
+        val result = module.analyze(section, mockIndicatorResolver)
         assertTrue(result.timeline.any {
             it.category == "package_downgrade" &&
                 it.description.contains("200") &&
@@ -63,7 +63,7 @@ class BatteryDailyModuleTest {
 
     @Test
     fun `flags IOC-matched uninstall as anti-forensics`() = runBlocking {
-        every { mockIocResolver.isKnownBadPackage("com.mspy.android") } returns BadPackageInfo(
+        every { mockIndicatorResolver.isKnownBadPackage("com.mspy.android") } returns BadPackageInfo(
             packageName = "com.mspy.android",
             name = "mSpy",
             category = "STALKERWARE",
@@ -76,7 +76,7 @@ class BatteryDailyModuleTest {
               -pkg=com.mspy.android vers=100
         """.trimIndent()
 
-        val result = module.analyze(section, mockIocResolver)
+        val result = module.analyze(section, mockIndicatorResolver)
         assertTrue(result.timeline.any {
             it.severity == "HIGH" && it.description.contains("anti-forensics")
         })
@@ -84,7 +84,7 @@ class BatteryDailyModuleTest {
 
     @Test
     fun `empty section produces no events`() = runBlocking {
-        val result = module.analyze("", mockIocResolver)
+        val result = module.analyze("", mockIndicatorResolver)
         assertTrue(result.timeline.isEmpty())
         assertTrue(result.telemetry.isEmpty())
     }
@@ -98,7 +98,7 @@ class BatteryDailyModuleTest {
               +pkg=com.example.app vers=100
         """.trimIndent()
 
-        val result = module.analyze(section, mockIocResolver)
+        val result = module.analyze(section, mockIndicatorResolver)
         val updateEvents = result.timeline.filter {
             it.category == "package_update" && it.description.contains("com.example.app")
         }

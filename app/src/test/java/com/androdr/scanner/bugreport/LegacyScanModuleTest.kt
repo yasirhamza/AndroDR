@@ -1,7 +1,7 @@
 package com.androdr.scanner.bugreport
 
 import com.androdr.ioc.BadPackageInfo
-import com.androdr.ioc.IocResolver
+import com.androdr.ioc.IndicatorResolver
 import io.mockk.every
 import io.mockk.mockk
 import org.junit.Assert.assertEquals
@@ -12,12 +12,12 @@ import java.io.ByteArrayInputStream
 
 class LegacyScanModuleTest {
 
-    private val mockIocResolver: IocResolver = mockk()
+    private val mockIndicatorResolver: IndicatorResolver = mockk()
     private lateinit var module: LegacyScanModule
 
     @Before
     fun setUp() {
-        every { mockIocResolver.isKnownBadPackage(any()) } returns null
+        every { mockIndicatorResolver.isKnownBadPackage(any()) } returns null
         module = LegacyScanModule()
     }
 
@@ -29,7 +29,7 @@ class LegacyScanModuleTest {
     @Test
     fun `spyware keyword triggers CRITICAL KnownMalware finding`() {
         val text = "I/ActivityManager: Start proc com.pegasus.spyservice for service"
-        val findings = module.analyzeTextEntry("logcat", streamOf(text), mockIocResolver)
+        val findings = module.analyzeTextEntry("logcat", streamOf(text), mockIndicatorResolver)
         assertTrue(findings.any { it.severity == "CRITICAL" && it.category == "KnownMalware" })
     }
 
@@ -37,7 +37,7 @@ class LegacyScanModuleTest {
     fun `each spyware family keyword is detected`() {
         val keywords = listOf("pegasus", "FlexiSPY", "mSpy", "cerberus", "droiddream", "spyware")
         keywords.forEach { keyword ->
-            val findings = module.analyzeTextEntry("logcat", streamOf("proc $keyword running"), mockIocResolver)
+            val findings = module.analyzeTextEntry("logcat", streamOf("proc $keyword running"), mockIndicatorResolver)
             assertTrue("Expected $keyword to be detected",
                 findings.any { it.category == "KnownMalware" })
         }
@@ -49,7 +49,7 @@ class LegacyScanModuleTest {
     fun `large base64 blob triggers HIGH SuspiciousData finding`() {
         val blob = "A".repeat(120)
         val text = "D/Upload: payload=$blob"
-        val findings = module.analyzeTextEntry("dumpstate", streamOf(text), mockIocResolver)
+        val findings = module.analyzeTextEntry("dumpstate", streamOf(text), mockIndicatorResolver)
         assertTrue(findings.any { it.severity == "HIGH" && it.category == "SuspiciousData" })
     }
 
@@ -58,7 +58,7 @@ class LegacyScanModuleTest {
     @Test
     fun `C2 beacon pattern triggers CRITICAL C2Beacon finding`() {
         val text = "D/Network: HTTP POST to c2.evil.com every 300 seconds"
-        val findings = module.analyzeTextEntry("bugreport", streamOf(text), mockIocResolver)
+        val findings = module.analyzeTextEntry("bugreport", streamOf(text), mockIndicatorResolver)
         assertTrue(findings.any { it.severity == "CRITICAL" && it.category == "C2Beacon" })
     }
 
@@ -71,7 +71,7 @@ class LegacyScanModuleTest {
             E/AndroidRuntime: FATAL EXCEPTION: com.evil.process
             E/AndroidRuntime: FATAL EXCEPTION: com.evil.process
         """.trimIndent()
-        val findings = module.analyzeTextEntry("logcat", streamOf(text), mockIocResolver)
+        val findings = module.analyzeTextEntry("logcat", streamOf(text), mockIndicatorResolver)
         assertTrue(findings.any { it.severity == "HIGH" && it.category == "CrashLoop" })
     }
 
@@ -86,10 +86,10 @@ class LegacyScanModuleTest {
             severity = "CRITICAL",
             description = "Commercial stalkerware."
         )
-        every { mockIocResolver.isKnownBadPackage("com.flexispy.android") } returns stalkerwareInfo
+        every { mockIndicatorResolver.isKnownBadPackage("com.flexispy.android") } returns stalkerwareInfo
 
         val text = "    package:com.flexispy.android"
-        val findings = module.analyzeTextEntry("dumpstate", streamOf(text), mockIocResolver)
+        val findings = module.analyzeTextEntry("dumpstate", streamOf(text), mockIndicatorResolver)
 
         assertEquals(1, findings.size)
         val finding = findings[0]
@@ -108,13 +108,13 @@ class LegacyScanModuleTest {
             D/PackageManager: Package com.google.android installed
             I/ActivityManager: Start proc com.android.phone
         """.trimIndent()
-        val findings = module.analyzeTextEntry("logcat", streamOf(text), mockIocResolver)
+        val findings = module.analyzeTextEntry("logcat", streamOf(text), mockIndicatorResolver)
         assertTrue(findings.isEmpty())
     }
 
     @Test
     fun `empty input produces no findings`() {
-        val findings = module.analyzeTextEntry("logcat", streamOf(""), mockIocResolver)
+        val findings = module.analyzeTextEntry("logcat", streamOf(""), mockIndicatorResolver)
         assertTrue(findings.isEmpty())
     }
 
@@ -123,14 +123,14 @@ class LegacyScanModuleTest {
     @Test
     fun `timeline is always empty`() {
         val text = "I/ActivityManager: Start proc com.pegasus.spyservice for service"
-        val findings = module.analyzeTextEntry("logcat", streamOf(text), mockIocResolver)
+        val findings = module.analyzeTextEntry("logcat", streamOf(text), mockIndicatorResolver)
         // Findings exist but module always returns empty timeline
         assertTrue(findings.isNotEmpty())
         // Verify via analyzeRaw that timeline is empty
         val result = kotlinx.coroutines.runBlocking {
             module.analyzeRaw(
                 sequenceOf("logcat" to streamOf(text) as java.io.InputStream),
-                mockIocResolver
+                mockIndicatorResolver
             )
         }
         assertTrue(result.timeline.isEmpty())

@@ -1,6 +1,6 @@
 package com.androdr.scanner.bugreport
 
-import com.androdr.ioc.IocResolver
+import com.androdr.ioc.IndicatorResolver
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -24,7 +24,7 @@ class AccessibilityModule @Inject constructor() : BugreportModule {
         RegexOption.MULTILINE
     )
 
-    override suspend fun analyze(sectionText: String, iocResolver: IocResolver): ModuleResult {
+    override suspend fun analyze(sectionText: String, iocResolver: IndicatorResolver): ModuleResult {
         val telemetry = mutableListOf<Map<String, Any?>>()
 
         enabledServiceRegex.findAll(sectionText).forEach { match ->
