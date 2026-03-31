@@ -27,9 +27,11 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Timeline
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -68,6 +70,7 @@ private val FILTER_LEVELS = listOf("critical", "high", "medium", "low")
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AppScanScreen(
+    onNavigateToTimeline: ((String) -> Unit)? = null,
     viewModel: AppScanViewModel = hiltViewModel()
 ) {
     val filteredGroups by viewModel.filteredGroupedApps.collectAsStateWithLifecycle()
@@ -140,7 +143,10 @@ fun AppScanScreen(
     selectedGroup?.let { group ->
         AppGroupDetailSheet(
             group = group,
-            onDismiss = { selectedGroup = null }
+            onDismiss = { selectedGroup = null },
+            onViewInTimeline = onNavigateToTimeline?.let { nav ->
+                { nav(group.packageName); selectedGroup = null }
+            }
         )
     }
 }
@@ -217,7 +223,11 @@ private fun AppGroupCard(group: AppGroup, onClick: () -> Unit) {
 @Suppress("LongMethod")
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
-private fun AppGroupDetailSheet(group: AppGroup, onDismiss: () -> Unit) {
+private fun AppGroupDetailSheet(
+    group: AppGroup,
+    onDismiss: () -> Unit,
+    onViewInTimeline: (() -> Unit)? = null
+) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val context = LocalContext.current
     val color = severityColor(group.highestLevel)
@@ -359,6 +369,22 @@ private fun AppGroupDetailSheet(group: AppGroup, onDismiss: () -> Unit) {
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 Text("Uninstall App")
+            }
+
+            // View in Timeline button
+            if (onViewInTimeline != null) {
+                OutlinedButton(
+                    onClick = onViewInTimeline,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.Timeline,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("View in Timeline")
+                }
             }
 
             // Dismiss button

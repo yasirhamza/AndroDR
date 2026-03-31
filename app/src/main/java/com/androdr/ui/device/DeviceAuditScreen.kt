@@ -39,6 +39,7 @@ import com.androdr.ui.common.FindingCard
 // device findings; co-location of triggered/clean sections avoids threading count state externally.
 @Composable
 fun DeviceAuditScreen(
+    onNavigateToTimeline: ((String) -> Unit)? = null,
     viewModel: DeviceAuditViewModel = hiltViewModel()
 ) {
     val deviceFindings by viewModel.deviceFindings.collectAsStateWithLifecycle()
