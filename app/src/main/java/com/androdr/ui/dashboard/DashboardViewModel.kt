@@ -2,11 +2,11 @@ package com.androdr.ui.dashboard
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.androdr.data.db.IocEntryDao
+import com.androdr.data.db.IndicatorDao
 import com.androdr.data.model.ScanResult
 import com.androdr.data.repo.ScanRepository
 import com.androdr.ioc.IocDatabase
-import com.androdr.ioc.RemoteIocUpdater
+import com.androdr.ioc.IndicatorUpdater
 import com.androdr.scanner.ScanOrchestrator
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -25,9 +25,9 @@ import javax.inject.Inject
 class DashboardViewModel @Inject constructor(
     private val orchestrator: ScanOrchestrator,
     private val repository: ScanRepository,
-    private val iocEntryDao: IocEntryDao,
+    private val indicatorDao: IndicatorDao,
     private val iocDatabase: IocDatabase,
-    private val remoteIocUpdater: RemoteIocUpdater
+    private val indicatorUpdater: IndicatorUpdater
 ) : ViewModel() {
 
     // Prefer the latest runtime scan (has device posture flags) over bugreport analysis
@@ -73,7 +73,7 @@ class DashboardViewModel @Inject constructor(
                     System.currentTimeMillis() - (_iocLastUpdated.value ?: 0L) > 24 * 60 * 60 * 1000L
                 val hasOnlyBundled = _iocEntryCount.value <= bundledCount
                 if (isStale || hasOnlyBundled) {
-                    doUpdate()   // emits iocErrorEvent on failure, same as manual update
+                    doUpdate()
                 }
                 orchestrator.runFullScan()
             } finally {
@@ -82,13 +82,10 @@ class DashboardViewModel @Inject constructor(
         }
     }
 
-    // ── Private helpers ────────────────────────────────────────────────────────
-
-    @Suppress("TooGenericExceptionCaught") // remoteIocUpdater.update() can throw IOException or
-    // SQLiteException; both are caught here to surface a user-visible error via the snackbar.
+    @Suppress("TooGenericExceptionCaught")
     private suspend fun doUpdate() {
         try {
-            val fetched = remoteIocUpdater.update()
+            val fetched = indicatorUpdater.update()
             if (fetched == 0) {
                 _iocErrorEvent.tryEmit("Failed to update threat database. Check your connection.")
             }
@@ -99,7 +96,7 @@ class DashboardViewModel @Inject constructor(
     }
 
     private suspend fun refreshIocState() {
-        _iocEntryCount.value = iocEntryDao.count() + bundledCount
-        _iocLastUpdated.value = iocEntryDao.mostRecentFetchTime()
+        _iocEntryCount.value = indicatorDao.count() + bundledCount
+        _iocLastUpdated.value = indicatorDao.lastFetchTime("stalkerware_indicators")
     }
 }
