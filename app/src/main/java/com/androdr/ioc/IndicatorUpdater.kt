@@ -86,7 +86,7 @@ internal fun IocEntry.toIndicator() = Indicator(
 )
 
 internal fun DomainIocEntry.toIndicator() = Indicator(
-    type = IndicatorResolver.TYPE_DOMAIN, value = domain,
+    type = IndicatorResolver.TYPE_DOMAIN, value = domain.lowercase(),
     name = "", campaign = campaignName, severity = severity,
     description = "", source = source, fetchedAt = fetchedAt
 )

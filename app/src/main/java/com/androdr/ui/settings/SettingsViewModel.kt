@@ -3,16 +3,13 @@ package com.androdr.ui.settings
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.androdr.data.db.CertHashIocEntryDao
-import com.androdr.data.db.DomainIocEntryDao
-import com.androdr.data.db.IocEntryDao
+import com.androdr.data.db.IndicatorDao
 import com.androdr.data.repo.CveRepository
 import com.androdr.data.repo.SettingsRepository
 import com.androdr.ioc.CertHashIocDatabase
-import com.androdr.ioc.CertHashIocUpdater
-import com.androdr.ioc.DomainIocUpdater
+import com.androdr.ioc.IndicatorResolver
+import com.androdr.ioc.IndicatorUpdater
 import com.androdr.ioc.KnownAppUpdater
-import com.androdr.ioc.RemoteIocUpdater
 import com.androdr.sigma.SigmaRuleEngine
 import com.androdr.sigma.SigmaRuleFeed
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -32,16 +29,12 @@ import javax.inject.Inject
 @HiltViewModel
 class SettingsViewModel @Inject constructor(
     private val settingsRepository: SettingsRepository,
-    private val iocEntryDao: IocEntryDao,
-    private val domainIocEntryDao: DomainIocEntryDao,
-    private val certHashIocEntryDao: CertHashIocEntryDao,
+    private val indicatorDao: IndicatorDao,
     private val certHashIocDatabase: CertHashIocDatabase,
     private val sigmaRuleEngine: SigmaRuleEngine,
     private val cveRepository: CveRepository,
-    private val remoteIocUpdater: RemoteIocUpdater,
-    private val domainIocUpdater: DomainIocUpdater,
+    private val indicatorUpdater: IndicatorUpdater,
     private val knownAppUpdater: KnownAppUpdater,
-    private val certHashIocUpdater: CertHashIocUpdater,
     private val sigmaRuleFeed: SigmaRuleFeed
 ) : ViewModel() {
 
@@ -76,8 +69,17 @@ class SettingsViewModel @Inject constructor(
     private val _updating = MutableStateFlow(false)
     val updating: StateFlow<Boolean> = _updating.asStateFlow()
 
+    private val _customRuleUrlsInput = MutableStateFlow("")
+
     init {
         refreshStats()
+        viewModelScope.launch {
+            _customRuleUrlsInput.value = settingsRepository.customRuleUrls.first()
+            @OptIn(kotlinx.coroutines.FlowPreview::class)
+            _customRuleUrlsInput
+                .debounce(DEBOUNCE_MS)
+                .collect { settingsRepository.setCustomRuleUrls(it) }
+        }
     }
 
     fun setBlocklistBlockMode(value: Boolean) {
@@ -86,19 +88,6 @@ class SettingsViewModel @Inject constructor(
 
     fun setDomainIocBlockMode(value: Boolean) {
         viewModelScope.launch { settingsRepository.setDomainIocBlockMode(value) }
-    }
-
-    private val _customRuleUrlsInput = MutableStateFlow("")
-
-    init {
-        @Suppress("OPT_IN_USAGE")
-        viewModelScope.launch {
-            _customRuleUrlsInput.value = settingsRepository.customRuleUrls.first()
-            @OptIn(kotlinx.coroutines.FlowPreview::class)
-            _customRuleUrlsInput
-                .debounce(DEBOUNCE_MS)
-                .collect { settingsRepository.setCustomRuleUrls(it) }
-        }
     }
 
     fun setCustomRuleUrls(value: String) {
@@ -112,15 +101,10 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch {
             _updating.value = true
             try {
-                // Run all IOC updaters in parallel
-                val iocJob = async { remoteIocUpdater.update() }
-                val domainJob = async { domainIocUpdater.update() }
+                val indicatorJob = async { indicatorUpdater.update() }
                 val knownAppJob = async { knownAppUpdater.update() }
-                val certJob = async { certHashIocUpdater.update() }
-                iocJob.await()
-                domainJob.await()
+                indicatorJob.await()
                 knownAppJob.await()
-                certJob.await()
 
                 // Refresh SIGMA rules
                 try {
@@ -151,20 +135,12 @@ class SettingsViewModel @Inject constructor(
     private fun refreshStats() {
         viewModelScope.launch {
             _sigmaRuleCount.value = sigmaRuleEngine.ruleCount()
-            _domainIocCount.value = domainIocEntryDao.count()
-            _packageIocCount.value = iocEntryDao.count()
-            // Thread-safe: getAllBadCerts() returns a lazily-initialized immutable list;
-            // refreshStats() runs on viewModelScope (single coroutine, sequential reads)
-            _certHashIocCount.value = certHashIocEntryDao.count() + certHashIocDatabase.getAllBadCerts().size
+            _domainIocCount.value = indicatorDao.countByType(IndicatorResolver.TYPE_DOMAIN)
+            _packageIocCount.value = indicatorDao.countByType(IndicatorResolver.TYPE_PACKAGE)
+            _certHashIocCount.value = indicatorDao.countByType(IndicatorResolver.TYPE_CERT_HASH) +
+                certHashIocDatabase.getAllBadCerts().size
             _cveCount.value = cveRepository.getActivelyExploitedCount()
-
-            // Determine most recent fetch time across all IOC tables
-            val times = listOfNotNull(
-                iocEntryDao.mostRecentFetchTime(),
-                domainIocEntryDao.mostRecentFetchTime(),
-                certHashIocEntryDao.mostRecentFetchTime()
-            )
-            _lastUpdated.value = times.maxOrNull()
+            _lastUpdated.value = indicatorDao.lastFetchTime("stalkerware_indicators")
         }
     }
 

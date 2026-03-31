@@ -1,7 +1,6 @@
 package com.androdr.data.model
 
 import androidx.room.Entity
-import androidx.room.Index
 
 /**
  * Unified threat indicator entity. Replaces the per-type IOC tables
@@ -13,8 +12,7 @@ import androidx.room.Index
  */
 @Entity(
     tableName = "indicators",
-    primaryKeys = ["type", "value"],
-    indices = [Index("type", "value")]
+    primaryKeys = ["type", "value"]
 )
 data class Indicator(
     val type: String,           // "package", "domain", "cert_hash", "apk_hash"
