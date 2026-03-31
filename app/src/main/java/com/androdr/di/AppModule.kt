@@ -18,12 +18,16 @@ import com.androdr.data.db.MIGRATION_4_5
 import com.androdr.data.db.MIGRATION_5_6
 import com.androdr.data.db.MIGRATION_6_7
 import com.androdr.data.db.MIGRATION_7_8
+import com.androdr.data.db.MIGRATION_8_9
 import com.androdr.data.db.CveDao
+import com.androdr.data.db.IndicatorDao
 import com.androdr.data.db.ForensicTimelineEventDao
 import com.androdr.data.db.ScanResultDao
 import com.androdr.ioc.CertHashIocFeed
 import com.androdr.ioc.DomainIocFeed
+import com.androdr.ioc.IocFeed
 import com.androdr.ioc.KnownAppFeed
+import com.androdr.ioc.feeds.StalkerwareIndicatorsFeed
 import com.androdr.ioc.feeds.MalwareBazaarCertFeed
 import com.androdr.ioc.feeds.HaGeZiTifFeed
 import com.androdr.ioc.feeds.MvtIndicatorsFeed
@@ -43,6 +47,7 @@ private val Context.settingsDataStore: DataStore<Preferences>
 
 @Module
 @InstallIn(SingletonComponent::class)
+@Suppress("TooManyFunctions") // DI module provides one function per DAO/feed binding
 object AppModule {
 
     @Provides
@@ -51,7 +56,7 @@ object AppModule {
         Room.databaseBuilder(ctx, AppDatabase::class.java, "androdr.db")
             .addMigrations(
                 MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5,
-                MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8
+                MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9
             )
             .build()
 
@@ -90,6 +95,9 @@ object AppModule {
         db.forensicTimelineEventDao()
 
     @Provides
+    fun provideIndicatorDao(db: AppDatabase): IndicatorDao = db.indicatorDao()
+
+    @Provides
     @Singleton
     fun provideKnownAppFeeds(): @JvmSuppressWildcards List<KnownAppFeed> =
         listOf(UadKnownAppFeed(), PlexusKnownAppFeed())
@@ -98,6 +106,11 @@ object AppModule {
     @Singleton
     fun provideCertHashIocFeeds(): @JvmSuppressWildcards List<CertHashIocFeed> =
         listOf(MalwareBazaarCertFeed())
+
+    @Provides
+    @Singleton
+    fun providePackageIocFeeds(): @JvmSuppressWildcards List<IocFeed> =
+        listOf(StalkerwareIndicatorsFeed())
 
     @Provides
     @Singleton

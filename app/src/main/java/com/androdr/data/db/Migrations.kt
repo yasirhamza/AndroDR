@@ -163,3 +163,41 @@ val MIGRATION_7_8 = object : Migration(7, 8) {
         )
     }
 }
+
+@Suppress("LongMethod") // Migration creates table and copies data from 3 legacy tables
+val MIGRATION_8_9 = object : Migration(8, 9) {
+    override fun migrate(database: SupportSQLiteDatabase) {
+        database.execSQL("""
+            CREATE TABLE IF NOT EXISTS indicators (
+                type        TEXT NOT NULL,
+                value       TEXT NOT NULL,
+                name        TEXT NOT NULL DEFAULT '',
+                campaign    TEXT NOT NULL DEFAULT '',
+                severity    TEXT NOT NULL DEFAULT 'HIGH',
+                description TEXT NOT NULL DEFAULT '',
+                source      TEXT NOT NULL,
+                fetchedAt   INTEGER NOT NULL,
+                PRIMARY KEY(type, value)
+            )
+        """.trimIndent())
+        database.execSQL(
+            "CREATE INDEX IF NOT EXISTS index_indicators_type_value ON indicators(type, value)"
+        )
+        // Migrate existing IOC data into the unified table
+        database.execSQL("""
+            INSERT OR REPLACE INTO indicators (type, value, name, campaign, severity, description, source, fetchedAt)
+            SELECT 'package', packageName, name, category, severity, description, source, fetchedAt
+            FROM ioc_entries
+        """.trimIndent())
+        database.execSQL("""
+            INSERT OR REPLACE INTO indicators (type, value, name, campaign, severity, description, source, fetchedAt)
+            SELECT 'domain', domain, '', campaignName, severity, '', source, fetchedAt
+            FROM domain_ioc_entries
+        """.trimIndent())
+        database.execSQL("""
+            INSERT OR REPLACE INTO indicators (type, value, name, campaign, severity, description, source, fetchedAt)
+            SELECT 'cert_hash', certHash, familyName, category, severity, description, source, fetchedAt
+            FROM cert_hash_ioc_entries
+        """.trimIndent())
+    }
+}

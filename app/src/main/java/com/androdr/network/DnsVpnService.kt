@@ -7,7 +7,7 @@ import android.util.Log
 import com.androdr.data.model.DnsEvent
 import com.androdr.data.repo.ScanRepository
 import com.androdr.data.repo.SettingsRepository
-import com.androdr.ioc.DomainIocResolver
+import com.androdr.ioc.IndicatorResolver
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -71,7 +71,7 @@ class DnsVpnService : VpnService() {
     @Suppress("LateinitUsage") // Hilt @Inject requires lateinit; null-safety is guaranteed by Hilt
     @Inject lateinit var scanRepository: ScanRepository
     @Suppress("LateinitUsage")
-    @Inject lateinit var domainIocResolver: DomainIocResolver
+    @Inject lateinit var indicatorResolver: IndicatorResolver
     @Suppress("LateinitUsage")
     @Inject lateinit var settingsRepository: SettingsRepository
 
@@ -138,7 +138,7 @@ class DnsVpnService : VpnService() {
         serviceScope.launch {
             settingsRepository.domainIocBlockMode.collect { domainIocBlockMode.value = it }
         }
-        serviceScope.launch { domainIocResolver.refreshCache() }
+        serviceScope.launch { indicatorResolver.refreshCache() }
 
         readLoopJob = serviceScope.launch {
             runPacketLoop(fd)
@@ -243,7 +243,7 @@ class DnsVpnService : VpnService() {
         val srcIpBytes = packet.copyOfRange(12, 16)
 
         val isBlocklisted = blocklistManager.isBlocked(hostname)
-        val iocHit = if (!isBlocklisted) domainIocResolver.isKnownBadDomain(hostname) else null
+        val iocHit = if (!isBlocklisted) indicatorResolver.isKnownBadDomain(hostname) else null
 
         when {
             isBlocklisted && blocklistBlockMode.value -> {
@@ -281,7 +281,7 @@ class DnsVpnService : VpnService() {
                         scanRepository.logDnsEvent(DnsEvent(
                             timestamp = System.currentTimeMillis(), domain = hostname,
                             appUid = -1, appName = null, isBlocked = true,
-                            reason = "IOC: ${iocHit.campaignName}"
+                            reason = "IOC: ${iocHit.campaign}"
                         ))
                     }
                 }
@@ -301,7 +301,7 @@ class DnsVpnService : VpnService() {
                         scanRepository.logDnsEvent(DnsEvent(
                             timestamp = System.currentTimeMillis(), domain = hostname,
                             appUid = -1, appName = null, isBlocked = false,
-                            reason = "IOC_detect: ${iocHit.campaignName}"
+                            reason = "IOC_detect: ${iocHit.campaign}"
                         ))
                     }
                 }

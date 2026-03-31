@@ -1,6 +1,6 @@
 package com.androdr.scanner.bugreport
 
-import com.androdr.ioc.IocResolver
+import com.androdr.ioc.IndicatorResolver
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.runBlocking
@@ -11,12 +11,12 @@ import org.junit.Test
 
 class PlatformCompatModuleTest {
 
-    private val mockIocResolver: IocResolver = mockk()
+    private val mockIndicatorResolver: IndicatorResolver = mockk()
     private lateinit var module: PlatformCompatModule
 
     @Before
     fun setUp() {
-        every { mockIocResolver.isKnownBadPackage(any()) } returns null
+        every { mockIndicatorResolver.isKnownBadPackage(any()) } returns null
         module = PlatformCompatModule()
     }
 
@@ -32,7 +32,7 @@ class PlatformCompatModuleTest {
               168419799, {packageName=com.suspicious.app, enabled=true}
         """.trimIndent()
 
-        val result = module.analyze(section, mockIocResolver)
+        val result = module.analyze(section, mockIndicatorResolver)
         assertTrue(result.telemetry.any {
             it["package_name"] == "com.suspicious.app" &&
                 it["is_downscaled"] == true
@@ -46,13 +46,13 @@ class PlatformCompatModuleTest {
               999999999, {packageName=com.normal.app, enabled=true}
         """.trimIndent()
 
-        val result = module.analyze(section, mockIocResolver)
+        val result = module.analyze(section, mockIndicatorResolver)
         assertTrue(result.telemetry.isEmpty())
     }
 
     @Test
     fun `empty section produces no telemetry`() = runBlocking {
-        val result = module.analyze("", mockIocResolver)
+        val result = module.analyze("", mockIndicatorResolver)
         assertTrue(result.telemetry.isEmpty())
     }
 }

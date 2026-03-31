@@ -1,6 +1,6 @@
 package com.androdr.scanner.bugreport
 
-import com.androdr.ioc.IocResolver
+import com.androdr.ioc.IndicatorResolver
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.runBlocking
@@ -11,12 +11,12 @@ import org.junit.Test
 
 class ActivityModuleTest {
 
-    private val mockIocResolver: IocResolver = mockk()
+    private val mockIndicatorResolver: IndicatorResolver = mockk()
     private lateinit var module: ActivityModule
 
     @Before
     fun setUp() {
-        every { mockIocResolver.isKnownBadPackage(any()) } returns null
+        every { mockIndicatorResolver.isKnownBadPackage(any()) } returns null
         module = ActivityModule()
     }
 
@@ -36,7 +36,7 @@ class ActivityModuleTest {
                       Category: "android.intent.category.BROWSABLE"
         """.trimIndent()
 
-        val result = module.analyze(section, mockIocResolver)
+        val result = module.analyze(section, mockIndicatorResolver)
         assertTrue(result.telemetry.any {
             it["package_name"] == "com.evil.browser" &&
                 it["handled_scheme"] == "http" &&
@@ -54,7 +54,7 @@ class ActivityModuleTest {
                       Action: "android.intent.action.VIEW"
         """.trimIndent()
 
-        val result = module.analyze(section, mockIocResolver)
+        val result = module.analyze(section, mockIndicatorResolver)
         assertTrue(result.telemetry.any {
             it["package_name"] == "com.spy.fileviewer" &&
                 it["handled_scheme"] == "content"
@@ -71,13 +71,13 @@ class ActivityModuleTest {
                       Action: "android.intent.action.VIEW"
         """.trimIndent()
 
-        val result = module.analyze(section, mockIocResolver)
+        val result = module.analyze(section, mockIndicatorResolver)
         assertTrue(result.telemetry.all { it["is_system_app"] == true })
     }
 
     @Test
     fun `empty section produces no telemetry`() = runBlocking {
-        val result = module.analyze("", mockIocResolver)
+        val result = module.analyze("", mockIndicatorResolver)
         assertTrue(result.telemetry.isEmpty())
     }
 
@@ -90,7 +90,7 @@ class ActivityModuleTest {
                     12345 com.example/.MainActivity filter abcdef
         """.trimIndent()
 
-        val result = module.analyze(section, mockIocResolver)
+        val result = module.analyze(section, mockIndicatorResolver)
         assertTrue(result.telemetry.isEmpty())
     }
 }

@@ -1,6 +1,6 @@
 package com.androdr.scanner.bugreport
 
-import com.androdr.ioc.IocResolver
+import com.androdr.ioc.IndicatorResolver
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.runBlocking
@@ -11,12 +11,12 @@ import org.junit.Test
 
 class ReceiverModuleTest {
 
-    private val mockIocResolver: IocResolver = mockk()
+    private val mockIndicatorResolver: IndicatorResolver = mockk()
     private lateinit var module: ReceiverModule
 
     @Before
     fun setUp() {
-        every { mockIocResolver.isKnownBadPackage(any()) } returns null
+        every { mockIndicatorResolver.isKnownBadPackage(any()) } returns null
         module = ReceiverModule()
     }
 
@@ -35,7 +35,7 @@ class ReceiverModuleTest {
                       Action: "android.provider.Telephony.SMS_RECEIVED"
         """.trimIndent()
 
-        val result = module.analyze(section, mockIocResolver)
+        val result = module.analyze(section, mockIndicatorResolver)
         assertTrue(result.telemetry.any {
             it["package_name"] == "com.evil.sms" &&
                 it["intent_action"] == "android.provider.Telephony.SMS_RECEIVED" &&
@@ -53,7 +53,7 @@ class ReceiverModuleTest {
                       Action: "android.intent.action.PHONE_STATE"
         """.trimIndent()
 
-        val result = module.analyze(section, mockIocResolver)
+        val result = module.analyze(section, mockIndicatorResolver)
         assertTrue(result.telemetry.any {
             it["package_name"] == "com.spy.calls" &&
                 it["intent_action"] == "android.intent.action.PHONE_STATE"
@@ -72,7 +72,7 @@ class ReceiverModuleTest {
                       Action: "android.provider.Telephony.SMS_RECEIVED"
         """.trimIndent()
 
-        val result = module.analyze(section, mockIocResolver)
+        val result = module.analyze(section, mockIndicatorResolver)
         assertTrue(result.telemetry.all { it["is_system_app"] == true })
     }
 
@@ -85,7 +85,7 @@ class ReceiverModuleTest {
             severity = "CRITICAL",
             description = "Known stalkerware"
         )
-        every { mockIocResolver.isKnownBadPackage("com.stalker.app") } returns iocInfo
+        every { mockIndicatorResolver.isKnownBadPackage("com.stalker.app") } returns iocInfo
 
         val section = """
             Receiver Resolver Table:
@@ -95,7 +95,7 @@ class ReceiverModuleTest {
                       Action: "android.provider.Telephony.SMS_RECEIVED"
         """.trimIndent()
 
-        val result = module.analyze(section, mockIocResolver)
+        val result = module.analyze(section, mockIndicatorResolver)
         assertTrue(result.telemetry.any {
             it["package_name"] == "com.stalker.app" &&
                 it["is_system_app"] == false
@@ -120,7 +120,7 @@ class ReceiverModuleTest {
                           Action: "$intent"
             """.trimIndent()
 
-            val result = module.analyze(section, mockIocResolver)
+            val result = module.analyze(section, mockIndicatorResolver)
             assertTrue("Expected detection for $intent",
                 result.telemetry.any { it["intent_action"] == intent })
         }
@@ -128,7 +128,7 @@ class ReceiverModuleTest {
 
     @Test
     fun `empty section produces no telemetry`() = runBlocking {
-        val result = module.analyze("", mockIocResolver)
+        val result = module.analyze("", mockIndicatorResolver)
         assertTrue(result.telemetry.isEmpty())
     }
 }

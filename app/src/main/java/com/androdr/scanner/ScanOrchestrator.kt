@@ -7,9 +7,7 @@ import com.androdr.data.db.ForensicTimelineEventDao
 import com.androdr.data.db.toForensicTimelineEvent
 import com.androdr.data.model.ScanResult
 import com.androdr.data.repo.ScanRepository
-import com.androdr.ioc.CertHashIocResolver
-import com.androdr.ioc.DomainIocResolver
-import com.androdr.ioc.IocResolver
+import com.androdr.ioc.IndicatorResolver
 import com.androdr.sigma.CveEvidenceProvider
 import com.androdr.sigma.Finding
 import com.androdr.sigma.FindingCategory
@@ -43,9 +41,7 @@ class ScanOrchestrator @Inject constructor(
     private val dnsEventDao: DnsEventDao,
     private val forensicTimelineEventDao: ForensicTimelineEventDao,
     private val sigmaRuleEngine: SigmaRuleEngine,
-    private val iocResolver: IocResolver,
-    private val certHashIocResolver: CertHashIocResolver,
-    private val domainIocResolver: DomainIocResolver,
+    private val indicatorResolver: IndicatorResolver,
     private val sigmaRuleFeed: SigmaRuleFeed,
     private val knownAppResolver: com.androdr.ioc.KnownAppResolver
 ) {
@@ -56,9 +52,10 @@ class ScanOrchestrator @Inject constructor(
     private suspend fun initRuleEngine() = initMutex.withLock {
         if (ruleEngineInitialized) return@withLock
         sigmaRuleEngine.setIocLookups(mapOf(
-            "package_ioc_db" to { v -> iocResolver.isKnownBadPackage(v.toString()) != null },
-            "cert_hash_ioc_db" to { v -> certHashIocResolver.isKnownBadCert(v.toString()) != null },
-            "domain_ioc_db" to { v -> domainIocResolver.isKnownBadDomain(v.toString()) != null },
+            "package_ioc_db" to { v -> indicatorResolver.isKnownBadPackage(v.toString()) != null },
+            "cert_hash_ioc_db" to { v -> indicatorResolver.isKnownBadCert(v.toString()) != null },
+            "domain_ioc_db" to { v -> indicatorResolver.isKnownBadDomain(v.toString()) != null },
+            "apk_hash_ioc_db" to { v -> indicatorResolver.isKnownBadApkHash(v.toString()) != null },
             "known_good_app_db" to { v ->
                 val entry = knownAppResolver.lookup(v.toString())
                 entry != null && entry.category in TRUSTED_CATEGORIES

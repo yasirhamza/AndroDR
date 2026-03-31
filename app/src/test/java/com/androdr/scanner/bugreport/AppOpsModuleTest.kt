@@ -1,6 +1,6 @@
 package com.androdr.scanner.bugreport
 
-import com.androdr.ioc.IocResolver
+import com.androdr.ioc.IndicatorResolver
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.runBlocking
@@ -11,12 +11,12 @@ import org.junit.Test
 
 class AppOpsModuleTest {
 
-    private val mockIocResolver: IocResolver = mockk()
+    private val mockIndicatorResolver: IndicatorResolver = mockk()
     private lateinit var module: AppOpsModule
 
     @Before
     fun setUp() {
-        every { mockIocResolver.isKnownBadPackage(any()) } returns null
+        every { mockIndicatorResolver.isKnownBadPackage(any()) } returns null
         module = AppOpsModule()
     }
 
@@ -34,7 +34,7 @@ class AppOpsModuleTest {
                   Access: [fg-s] 2026-03-27 14:30:00
         """.trimIndent()
 
-        val result = module.analyze(section, mockIocResolver)
+        val result = module.analyze(section, mockIndicatorResolver)
         assertTrue(result.telemetry.any {
             it["package_name"] == "com.suspicious.installer" &&
                 it["operation"] == "REQUEST_INSTALL_PACKAGES" &&
@@ -51,7 +51,7 @@ class AppOpsModuleTest {
                   Access: [fg-s] 2026-03-27 14:30:00
         """.trimIndent()
 
-        val result = module.analyze(section, mockIocResolver)
+        val result = module.analyze(section, mockIndicatorResolver)
         assertTrue(result.telemetry.any {
             it["package_name"] == "com.android.shell" &&
                 it["operation"] == "CAMERA"
@@ -67,7 +67,7 @@ class AppOpsModuleTest {
             severity = "CRITICAL",
             description = "Commercial stalkerware"
         )
-        every { mockIocResolver.isKnownBadPackage("com.flexispy.android") } returns iocInfo
+        every { mockIndicatorResolver.isKnownBadPackage("com.flexispy.android") } returns iocInfo
 
         val section = """
             Uid 10200:
@@ -76,7 +76,7 @@ class AppOpsModuleTest {
                   Access: [fg-s] 2026-03-27 14:30:00
         """.trimIndent()
 
-        val result = module.analyze(section, mockIocResolver)
+        val result = module.analyze(section, mockIndicatorResolver)
         assertTrue(result.telemetry.any {
             it["package_name"] == "com.flexispy.android" &&
                 it["operation"] == "CAMERA" &&
@@ -95,7 +95,7 @@ class AppOpsModuleTest {
                   Access: [fg-s] 2026-03-27 14:35:00
         """.trimIndent()
 
-        val result = module.analyze(section, mockIocResolver)
+        val result = module.analyze(section, mockIndicatorResolver)
         assertTrue(result.timeline.any { it.category == "permission_use" })
     }
 
@@ -108,14 +108,14 @@ class AppOpsModuleTest {
                   Access: [fg-s] 2026-03-27 14:30:00
         """.trimIndent()
 
-        val result = module.analyze(section, mockIocResolver)
+        val result = module.analyze(section, mockIndicatorResolver)
         // WAKE_LOCK is not a dangerous op so telemetry should be empty
         assertTrue(result.telemetry.isEmpty())
     }
 
     @Test
     fun `empty section produces no telemetry or timeline`() = runBlocking {
-        val result = module.analyze("", mockIocResolver)
+        val result = module.analyze("", mockIndicatorResolver)
         assertTrue(result.telemetry.isEmpty())
         assertTrue(result.timeline.isEmpty())
     }

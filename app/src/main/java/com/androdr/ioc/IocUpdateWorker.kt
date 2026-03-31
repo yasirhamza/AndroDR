@@ -20,10 +20,8 @@ import kotlinx.coroutines.coroutineScope
 class IocUpdateWorker @AssistedInject constructor(
     @Assisted context: Context,
     @Assisted params: WorkerParameters,
-    private val remoteIocUpdater: RemoteIocUpdater,
-    private val domainIocUpdater: DomainIocUpdater,
+    private val indicatorUpdater: IndicatorUpdater,
     private val knownAppUpdater: KnownAppUpdater,
-    private val certHashIocUpdater: CertHashIocUpdater,
     private val publicRepoIocFeed: PublicRepoIocFeed,
     private val knownAppResolver: KnownAppResolver,
     private val oemPrefixResolver: OemPrefixResolver,
@@ -37,25 +35,26 @@ class IocUpdateWorker @AssistedInject constructor(
     @Suppress("TooGenericExceptionCaught")
     override suspend fun doWork(): Result {
         return try {
-            val fetched = runAllUpdaters(remoteIocUpdater, domainIocUpdater, knownAppUpdater, certHashIocUpdater)
-            // Fetch IOC data from public rules repo
+            val fetched = runAllUpdaters()
             refreshPublicRepoIoc()
-            // Refresh OEM prefix / trusted installer lists
             refreshOemPrefixes()
-            // Refresh SIGMA rules independently — never blocks IOC update success
             refreshSigmaRules()
             refreshCveDatabase()
-            // Prune old data to prevent unbounded growth
             val thirtyDaysAgo = System.currentTimeMillis() - (30L * 24 * 60 * 60 * 1000)
             scanRepository.pruneOldDnsEvents(thirtyDaysAgo)
             forensicTimelineEventDao.deleteOlderThan(thirtyDaysAgo)
             Log.i(TAG, "Worker finished — $fetched IOC entries, ${sigmaRuleEngine.ruleCount()} SIGMA rules")
             Result.success()
         } catch (e: Exception) {
-            // Only IOC updater failures trigger retry — SIGMA failures are caught in refreshSigmaRules()
             Log.e(TAG, "IOC update failed: ${e.message}")
             Result.retry()
         }
+    }
+
+    private suspend fun runAllUpdaters(): Int = coroutineScope {
+        val indicators = async { indicatorUpdater.update() }
+        val knownApps = async { knownAppUpdater.update() }
+        indicators.await() + knownApps.await()
     }
 
     @Suppress("TooGenericExceptionCaught")
@@ -87,8 +86,6 @@ class IocUpdateWorker @AssistedInject constructor(
             val count = publicRepoIocFeed.update()
             if (count > 0) {
                 Log.i(TAG, "Public repo IOC feed: $count entries loaded")
-                // Popular apps are upserted into KnownAppEntry table by PublicRepoIocFeed,
-                // so refresh the KnownAppResolver cache to pick up the new entries.
                 knownAppResolver.refreshCache()
             }
         } catch (e: Exception) {
@@ -109,18 +106,4 @@ class IocUpdateWorker @AssistedInject constructor(
         private const val TAG = "IocUpdateWorker"
         const val WORK_NAME = "ioc_periodic_update"
     }
-}
-
-/** Runs all four updaters in parallel; returns combined entry count. Extracted for testability. */
-internal suspend fun runAllUpdaters(
-    remoteIoc: RemoteIocUpdater,
-    domainIoc: DomainIocUpdater,
-    knownApp: KnownAppUpdater,
-    certHashIoc: CertHashIocUpdater
-): Int = coroutineScope {
-    val a = async { remoteIoc.update() }
-    val b = async { domainIoc.update() }
-    val c = async { knownApp.update() }
-    val d = async { certHashIoc.update() }
-    a.await() + b.await() + c.await() + d.await()
 }

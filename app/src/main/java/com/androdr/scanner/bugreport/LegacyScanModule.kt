@@ -1,6 +1,6 @@
 package com.androdr.scanner.bugreport
 
-import com.androdr.ioc.IocResolver
+import com.androdr.ioc.IndicatorResolver
 import com.androdr.scanner.BugReportAnalyzer.BugReportFinding
 import java.io.BufferedReader
 import java.io.InputStream
@@ -64,7 +64,7 @@ class LegacyScanModule @Inject constructor() : BugreportModule {
 
     override suspend fun analyzeRaw(
         entries: Sequence<Pair<String, InputStream>>,
-        iocResolver: IocResolver
+        iocResolver: IndicatorResolver
     ): ModuleResult {
         val findings = mutableListOf<BugReportFinding>()
         entries.forEach { (entryName, stream) ->
@@ -88,7 +88,7 @@ class LegacyScanModule @Inject constructor() : BugreportModule {
     internal fun analyzeTextEntry(
         entryName: String,
         stream: InputStream,
-        iocResolver: IocResolver
+        iocResolver: IndicatorResolver
     ): List<BugReportFinding> {
         val findings = mutableListOf<BugReportFinding>()
 
