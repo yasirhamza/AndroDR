@@ -1,0 +1,53 @@
+package com.androdr.scanner.bugreport
+
+import com.androdr.ioc.IocResolver
+import io.mockk.every
+import io.mockk.mockk
+import kotlinx.coroutines.runBlocking
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
+import org.junit.Before
+import org.junit.Test
+
+class AdbKeysModuleTest {
+
+    private val mockIocResolver: IocResolver = mockk()
+    private lateinit var module: AdbKeysModule
+
+    @Before
+    fun setUp() {
+        every { mockIocResolver.isKnownBadPackage(any()) } returns null
+        module = AdbKeysModule()
+    }
+
+    @Test
+    fun `targetSections includes adb and platform_compat`() {
+        assertEquals(listOf("adb", "platform_compat"), module.targetSections)
+    }
+
+    @Test
+    fun `detects ADB trusted key with host`() = runBlocking {
+        val section = """
+            USB debugging: enabled
+            Trusted keys:
+              QUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFh user@workstation
+        """.trimIndent()
+
+        val result = module.analyze(section, mockIocResolver)
+        assertTrue(result.telemetry.any {
+            it["source"] == "adb_trusted_key" &&
+                it["host"] == "user@workstation"
+        })
+        assertTrue(result.timeline.any {
+            it.category == "adb_trusted_key" &&
+                it.description.contains("user@workstation")
+        })
+    }
+
+    @Test
+    fun `empty section produces no telemetry`() = runBlocking {
+        val result = module.analyze("", mockIocResolver)
+        assertTrue(result.telemetry.isEmpty())
+        assertTrue(result.timeline.isEmpty())
+    }
+}
