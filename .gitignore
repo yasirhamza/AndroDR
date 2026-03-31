@@ -45,3 +45,6 @@ test-adversary/fixtures/mercenary/*.jks
 test-adversary/fixtures/mercenary/local.properties
 test-adversary/fixtures/mercenary/**/build/
 test-adversary/fixtures/mercenary/.gradle/
+
+# UAT test output
+build/uat/
