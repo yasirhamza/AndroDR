@@ -19,6 +19,7 @@ object TimelineExporter {
         appendLine("  Generated: ${SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).format(Date())}")
         appendLine("  Android: ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT})")
         appendLine("  Device: ${Build.MANUFACTURER} ${Build.MODEL}")
+        appendLine("  Patch: ${Build.VERSION.SECURITY_PATCH}")
         appendLine("  Events: ${events.size}")
         appendLine(RULE)
         appendLine()

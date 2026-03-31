@@ -30,6 +30,7 @@ object TimelineFormatter {
         appendLine("  Generated: $generated")
         appendLine("  Android: ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT})")
         appendLine("  Device: ${Build.MANUFACTURER} ${Build.MODEL}")
+        appendLine("  Patch: ${Build.VERSION.SECURITY_PATCH}")
         appendLine(RULE)
         appendLine()
 
