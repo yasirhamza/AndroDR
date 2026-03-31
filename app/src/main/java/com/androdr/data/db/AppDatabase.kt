@@ -17,7 +17,7 @@ import com.androdr.data.model.ScanResult
         DomainIocEntry::class, KnownAppDbEntry::class, CertHashIocEntry::class,
         CveEntity::class, ForensicTimelineEvent::class
     ],
-    version = 7,
+    version = 8,
     exportSchema = false
 )
 @TypeConverters(Converters::class)

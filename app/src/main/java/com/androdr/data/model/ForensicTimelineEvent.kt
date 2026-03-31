@@ -30,6 +30,7 @@ data class ForensicTimelineEvent(
     val iocType: String = "",
     val iocSource: String = "",
     val campaignName: String = "",
+    val apkHash: String = "",
     val correlationId: String = "",
     val ruleId: String = "",
     val scanResultId: Long = -1,

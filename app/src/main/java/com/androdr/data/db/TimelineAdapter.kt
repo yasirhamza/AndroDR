@@ -34,6 +34,7 @@ fun Finding.toForensicTimelineEvent(scanResult: ScanResult): ForensicTimelineEve
         details = this.description,
         severity = this.level.uppercase(),
         packageName = this.matchContext["package_name"] ?: "",
+        apkHash = this.matchContext["apk_hash"] ?: "",
         ruleId = this.ruleId,
         scanResultId = scanResult.id,
         attackTechniqueId = this.tags.firstOrNull { it.startsWith("attack.t") }
