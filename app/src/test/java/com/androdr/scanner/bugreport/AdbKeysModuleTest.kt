@@ -21,8 +21,8 @@ class AdbKeysModuleTest {
     }
 
     @Test
-    fun `targetSections includes adb and platform_compat`() {
-        assertEquals(listOf("adb", "platform_compat"), module.targetSections)
+    fun `targetSections is adb only`() {
+        assertEquals(listOf("adb"), module.targetSections)
     }
 
     @Test
@@ -41,6 +41,21 @@ class AdbKeysModuleTest {
         assertTrue(result.timeline.any {
             it.category == "adb_trusted_key" &&
                 it.description.contains("user@workstation")
+        })
+    }
+
+    @Test
+    fun `detects key without host`() = runBlocking {
+        val section = """
+            USB debugging: enabled
+            Trusted keys:
+              QUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFh
+        """.trimIndent()
+
+        val result = module.analyze(section, mockIocResolver)
+        assertTrue(result.telemetry.any {
+            it["source"] == "adb_trusted_key" &&
+                it["host"] == "unknown"
         })
     }
 

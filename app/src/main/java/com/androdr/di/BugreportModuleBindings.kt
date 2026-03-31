@@ -8,6 +8,7 @@ import com.androdr.scanner.bugreport.BatteryDailyModule
 import com.androdr.scanner.bugreport.BugreportModule
 import com.androdr.scanner.bugreport.DbInfoModule
 import com.androdr.scanner.bugreport.LegacyScanModule
+import com.androdr.scanner.bugreport.PlatformCompatModule
 import com.androdr.scanner.bugreport.ReceiverModule
 import dagger.Binds
 import dagger.Module
@@ -25,5 +26,6 @@ abstract class BugreportModuleBindings {
     @Binds @IntoSet abstract fun batteryDaily(m: BatteryDailyModule): BugreportModule
     @Binds @IntoSet abstract fun activity(m: ActivityModule): BugreportModule
     @Binds @IntoSet abstract fun adbKeys(m: AdbKeysModule): BugreportModule
+    @Binds @IntoSet abstract fun platformCompat(m: PlatformCompatModule): BugreportModule
     @Binds @IntoSet abstract fun dbInfo(m: DbInfoModule): BugreportModule
 }
