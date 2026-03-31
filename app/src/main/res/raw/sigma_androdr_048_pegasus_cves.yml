@@ -28,4 +28,4 @@ display:
     summary_template: "Pegasus spyware exploits {count} unpatched CVEs on this device"
 level: critical
 remediation:
-    - "Update to the latest security patch immediately. These CVEs are exploited by Pegasus spyware."
+    - "Go to Settings > Software Update > Download and Install immediately. Your phone has vulnerabilities that have been used by Pegasus spyware to hack devices."

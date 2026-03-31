@@ -20,4 +20,4 @@ display:
     safe_title: "Unknown Sources Disabled"
     evidence_type: none
 remediation:
-    - "Disable installation from unknown sources to prevent sideloaded threats."
+    - "Go to Settings > Apps > Special access > Install unknown apps and turn off all entries. This prevents apps from installing other apps without your knowledge."

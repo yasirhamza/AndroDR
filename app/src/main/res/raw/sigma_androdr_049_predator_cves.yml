@@ -28,4 +28,4 @@ display:
     summary_template: "Predator spyware exploits {count} unpatched CVEs on this device"
 level: critical
 remediation:
-    - "Update to the latest security patch immediately. These CVEs are exploited by Predator spyware."
+    - "Go to Settings > Software Update > Download and Install immediately. Your phone has vulnerabilities that have been used by Predator spyware to hack devices."

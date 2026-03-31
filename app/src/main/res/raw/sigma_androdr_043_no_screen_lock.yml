@@ -18,4 +18,4 @@ display:
     safe_title: "Screen Lock Enabled"
     evidence_type: none
 remediation:
-    - "Set a PIN, password, pattern, or biometric lock to protect your device."
+    - "Go to Settings > Lock Screen > Screen lock type and set a PIN, password, or fingerprint. Without a lock, anyone can access your phone."

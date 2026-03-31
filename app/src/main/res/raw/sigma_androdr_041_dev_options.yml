@@ -18,4 +18,4 @@ display:
     safe_title: "Developer Options Disabled"
     evidence_type: none
 remediation:
-    - "Disable Developer Options unless actively needed."
+    - "Go to Settings > Developer Options > toggle OFF at the top. Developer Options gives apps and USB connections extra access to your phone. Turn it off unless you are actively developing apps."

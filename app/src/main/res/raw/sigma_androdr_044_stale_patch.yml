@@ -18,4 +18,4 @@ display:
     safe_title: "Security Patch Current"
     evidence_type: none
 remediation:
-    - "Update your device to the latest security patch level."
+    - "Go to Settings > Software Update > Download and Install. Security patches fix known vulnerabilities. Your patch is more than 90 days old."
