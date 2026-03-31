@@ -92,6 +92,7 @@
 
     <!-- Post-scan guidance -->
     <string name="guidance_critical">Immediate action needed. Tap \"App Risks\" below to see which apps should be removed.</string>
+    <string name="guidance_critical_device">Your device settings need immediate attention. Tap \"Device\" below to review.</string>
     <string name="guidance_high">Some issues found. Review the flagged items and follow the suggested actions.</string>
     <string name="guidance_medium">Minor items to review. Your phone is mostly secure.</string>
     <string name="guidance_low">Your phone looks secure. No urgent issues found.</string>

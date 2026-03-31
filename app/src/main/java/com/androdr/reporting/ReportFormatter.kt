@@ -39,6 +39,22 @@ object ReportFormatter {
         appendLine(RULE)
         appendLine()
         appendLine("  OVERALL RISK: ${scan.overallRiskLevel.name}")
+
+        appendLine()
+        val appRiskCount = scan.appRisks.count {
+            it.triggered && it.level.lowercase() != "informational"
+        }
+        val deviceIssueCount = scan.deviceFlags.count { it.triggered }
+        val verdict = when {
+            appRiskCount == 0 && deviceIssueCount == 0 ->
+                "No threats detected. Your phone appears secure."
+            appRiskCount == 0 && deviceIssueCount > 0 ->
+                "No suspicious apps found. $deviceIssueCount device setting(s) need attention."
+            else ->
+                "$appRiskCount app issue(s) and $deviceIssueCount device setting(s) found. " +
+                    "Review the details below."
+        }
+        appendLine("  $verdict")
         appendLine()
 
         // -- Device checks --------------------------------------------------------
