@@ -20,10 +20,12 @@ class AppScanViewModel @Inject constructor(
     private val repository: ScanRepository
 ) : ViewModel() {
 
-    /** All APP_RISK findings from the most recent scan. */
+    /** All APP_RISK findings from the latest runtime scan (matches dashboard). */
     val appFindings: StateFlow<List<Finding>> = repository.allScans
         .map { scans ->
-            scans.firstOrNull()?.findings
+            val scan = scans.firstOrNull { it.deviceFlags.isNotEmpty() }
+                ?: scans.firstOrNull()
+            scan?.findings
                 ?.filter { it.category == FindingCategory.APP_RISK }
                 ?: emptyList()
         }
