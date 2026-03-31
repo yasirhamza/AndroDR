@@ -330,7 +330,9 @@ private fun RiskLevelCard(latestScan: ScanResult?) {
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             } else {
-                val appRiskCount = latestScan.appRisks.count { it.triggered }
+                val appRiskCount = latestScan.appRisks.count {
+                    it.triggered && it.level.lowercase() != "informational"
+                }
                 val flagCount = latestScan.deviceFlags.count { it.triggered }
                 Text(
                     text = stringResource(R.string.dashboard_risk_summary, appRiskCount, flagCount),
