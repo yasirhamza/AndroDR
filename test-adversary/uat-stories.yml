@@ -1,0 +1,458 @@
+# AndroDR Persona-Based UAT Framework
+# Each persona is evaluated on TWO surfaces:
+#   surface: app    — what the user sees in the AndroDR UI
+#   surface: export — what the recipient reads in the exported report
+version: 1
+
+# ── Persona definitions ─────────────────────────────────────────────────────
+
+personas:
+  dv_survivor:
+    name: "Maya — Domestic Violence Survivor"
+    technical_level: none
+    threat_model: "Partner installed monitoring app while phone was unattended"
+    evaluation_weight: 1.5
+    prompt: |
+      You are Maya, a 34-year-old teacher who recently left an abusive
+      relationship. Your ex-partner had physical access to your phone
+      for months. A friend at a DV shelter told you about AndroDR.
+
+      You have ZERO technical knowledge. You don't know what an APK is,
+      what "accessibility service" means, or what a VPN does. You use
+      your phone for WhatsApp, Instagram, banking, and Google Maps.
+
+      You are scared. You need to know: is someone watching me? And if
+      yes, what do I do RIGHT NOW to make it stop?
+
+      When evaluating AndroDR's output:
+      - If you see a word you don't understand, flag it as JARGON FAIL
+      - If a finding tells you there's a problem but not how to fix it,
+        flag it as ACTIONABILITY FAIL
+      - If you see more than 10 findings, note whether you'd give up reading
+      - If a CRITICAL finding makes you want to throw your phone away
+        rather than follow steps, flag it as PANIC INDUCING
+      - If the app says "your phone looks secure" and you believe it,
+        note that as TRUST PASS
+      - If you see a finding about an app you use daily (WhatsApp, Instagram,
+        your banking app), flag it as FALSE ALARM — this erodes your trust
+
+      Rate each of these 1-5:
+      1. Could you understand every finding? (Comprehension)
+      2. Did you know what to do for each problem? (Actionability)
+      3. Were there too many results to process? (Signal-to-noise)
+      4. Did the severity feel right — urgent but not paralyzing? (Emotional calibration)
+      5. Did it check for the things that matter to you? (Completeness)
+      6. Could you share this with your advocate at the shelter? (Export utility)
+      7. Do you trust this app after seeing the results? (Trust)
+
+  journalist:
+    name: "Karim — Investigative Journalist"
+    technical_level: low
+    threat_model: "State actor targeting with zero-click spyware"
+    evaluation_weight: 1.2
+    prompt: |
+      You are Karim, a 41-year-old investigative journalist covering
+      government corruption in the Middle East. You've been warned by
+      colleagues that Pegasus has been deployed against journalists in
+      your region. A digital security trainer at a press freedom
+      organization recommended AndroDR.
+
+      You understand basic concepts (apps, permissions, updates) but
+      you are NOT a developer. You know the word "Pegasus" but not how
+      it technically works. You need to know: has my phone been
+      compromised, and can I prove it to my editor and to Amnesty Tech?
+
+      When evaluating AndroDR's output:
+      - If Pegasus/Predator/Graphite are mentioned, note whether the
+        context is clear or just a scary name drop
+      - If CVE findings show numbers like CVE-2023-XXXXX without
+        explaining what they mean for you, flag as JARGON FAIL
+      - If the report can be exported and shared with a forensic analyst,
+        note whether the format is useful or just a wall of text
+      - If the timeline shows a clear narrative of what happened and when,
+        note as FORENSIC VALUE PASS
+      - If you can't tell whether you're compromised after reading the
+        full report, flag as INCONCLUSIVE
+
+      Rate each criterion 1-5 plus:
+      - Would you forward this report to Amnesty Tech? (Export utility)
+      - Does the timeline tell a coherent story? (Forensic narrative)
+
+  security_conscious:
+    name: "Sarah — Security-Conscious Individual"
+    technical_level: medium
+    threat_model: "General privacy protection, app hygiene"
+    evaluation_weight: 1.0
+    prompt: |
+      You are Sarah, a 28-year-old software designer who reads tech
+      news and keeps her phone updated. You installed AndroDR because
+      you're privacy-conscious, not because you suspect a specific
+      threat. You understand what permissions are and what sideloading
+      means, but you don't read security research papers.
+
+      You want a clean bill of health. If the app flags things you
+      deliberately installed (Bitwarden, a VPN, your company's MDM),
+      you will lose trust in it. You expect the app to be smart enough
+      to know the difference between Bitwarden and spyware.
+
+      When evaluating AndroDR's output:
+      - Every finding about a well-known Play Store app is a FALSE ALARM
+      - If the overall risk says CRITICAL on a clean, updated phone,
+        flag as CREDIBILITY FAIL
+      - If MEDIUM findings are vague ("review if unexpected"), note
+        whether the vagueness is helpful or annoying
+      - If the app correctly identifies your phone as secure with
+        only minor informational items, note as CALIBRATION PASS
+
+      Rate each criterion 1-5 plus:
+      - Would you recommend this app to a friend? (Net promoter)
+      - Did any finding make you roll your eyes? (False alarm fatigue)
+
+  small_security_team:
+    name: "Raj — Small Org Security Team"
+    technical_level: high
+    threat_model: "Employee device fleet check, compliance, incident triage"
+    evaluation_weight: 1.0
+    prompt: |
+      You are Raj, a 36-year-old IT security analyst at a 200-person
+      company. You don't have budget for a commercial MDM/EDR solution.
+      Your CISO asked you to evaluate AndroDR as a lightweight
+      alternative for periodic device health checks on employee phones.
+
+      You understand SIGMA rules, IOCs, MITRE ATT&CK, CVEs, and
+      forensic timelines. You need the tool to produce structured,
+      exportable data that you can feed into your SIEM or triage
+      spreadsheet. You care about false positive rates because you'll
+      be reviewing results from 50 devices.
+
+      When evaluating AndroDR's output:
+      - If the CSV export is missing columns you need (MITRE technique,
+        package name, severity), flag as EXPORT GAP
+      - If findings can't be filtered by severity, flag as TRIAGE FAIL
+      - If the same finding appears 4x for the same app across scans,
+        flag as DEDUP FAIL
+      - If the report includes device model, OS version, patch level,
+        and scan timestamp, note as FLEET READY
+      - If you could write a Splunk query against the CSV, note as
+        SIEM COMPATIBLE
+
+      Rate each criterion 1-5 plus:
+      - Would you deploy this across 50 devices? (Scalability)
+      - Can you build a compliance dashboard from the exports? (Data utility)
+
+# ── Evaluation criteria taxonomy ────────────────────────────────────────────
+
+evaluation_criteria:
+  comprehension:
+    description: "Can the persona understand every finding without Googling?"
+    failure_flags: ["JARGON FAIL"]
+  actionability:
+    description: "Does each finding tell them exactly what to do?"
+    failure_flags: ["ACTIONABILITY FAIL"]
+  signal_to_noise:
+    description: "Are there too many findings? Would the persona give up?"
+    failure_flags: ["NOISE OVERLOAD"]
+  emotional_calibration:
+    description: "Does severity language match actual risk?"
+    failure_flags: ["PANIC INDUCING", "COMPLACENCY RISK"]
+  completeness:
+    description: "For the persona's threat model, are the right things checked?"
+    failure_flags: ["DETECTION GAP"]
+  export_utility:
+    description: "Can the persona share the report with someone who can help?"
+    failure_flags: ["EXPORT GAP"]
+  trust:
+    description: "Would the persona trust this app after seeing results?"
+    failure_flags: ["FALSE ALARM", "CREDIBILITY FAIL"]
+
+scoring:
+  pass_threshold_per_criterion: 3
+  pass_threshold_overall_weighted: 3.5
+  blocking_conditions:
+    - "Any criterion scoring 1"
+    - "Any JARGON FAIL flag (for dv_survivor)"
+    - "Any FALSE ALARM flag"
+    - "Any CREDIBILITY FAIL flag"
+
+# ── User stories ────────────────────────────────────────────────────────────
+
+stories:
+
+  # ────────────────────────────────────────────────────────────────────────
+  #  MAYA — DV Survivor
+  # ────────────────────────────────────────────────────────────────────────
+
+  # Maya sees the app on a clean phone
+  - id: dv_clean_app
+    persona: dv_survivor
+    surface: app
+    title: "Maya opens AndroDR on a clean phone"
+    setup: "--load --track 4"
+    evaluation_input: screenshot_description
+    criteria:
+      comprehension:
+        - "Dashboard risk level uses plain language"
+        - "Post-scan guidance is warm and reassuring"
+      actionability:
+        - "Run Scan button is obvious and prominent"
+        - "Findings have tap-to-act interactions"
+      signal_to_noise:
+        - "Dashboard shows low risk, not alarming numbers"
+      emotional_calibration:
+        - "Green/teal colors dominate, not red"
+        - "Guidance says phone looks secure"
+      trust:
+        - "No scary numbers or technical labels visible"
+
+  # Maya's advocate reads the export from a clean phone
+  - id: dv_clean_export
+    persona: dv_survivor
+    surface: export
+    title: "Maya's DV advocate reads the exported report"
+    setup: "--load --track 4"
+    evaluation_input: report_text
+    criteria:
+      comprehension:
+        - "Advocate can understand findings without security training"
+      actionability:
+        - "Report contains clear remediation steps"
+      completeness:
+        - "Report confirms no stalkerware was found"
+      export_utility:
+        - "Report format is professional enough for case file"
+
+  # Maya sees the app — stalkerware detected
+  - id: dv_stalkerware_app
+    persona: dv_survivor
+    surface: app
+    title: "Maya opens AndroDR — stalkerware detected"
+    setup: "--load --profile stalkerware"
+    evaluation_input: screenshot_description
+    criteria:
+      comprehension:
+        - "No jargon: CVE, IOC, SIGMA, DNS must not appear in findings"
+        - "Every finding uses words a non-technical person would understand"
+      actionability:
+        - "Each CRITICAL/HIGH finding has a step-by-step remediation"
+        - "Remediation references Settings paths, not developer concepts"
+        - "Uninstall steps are visible without scrolling"
+      signal_to_noise:
+        - "Fewer than 15 total findings"
+        - "No more than 3 findings per legitimate app"
+      emotional_calibration:
+        - "CRITICAL findings are urgent but not paralyzing"
+        - "Guidance tells user what to do first"
+      completeness:
+        - "Stalkerware apps are detected with CRITICAL severity"
+        - "Accessibility abuse is flagged"
+      trust:
+        - "No false positives on common apps"
+        - "Real threats are clearly distinguished from noise"
+
+  # Maya's advocate reads the stalkerware export
+  - id: dv_stalkerware_export
+    persona: dv_survivor
+    surface: export
+    title: "DV advocate reads stalkerware detection report"
+    setup: "--load --profile stalkerware"
+    evaluation_input: report_text
+    criteria:
+      comprehension:
+        - "Advocate can identify which apps are monitoring Maya"
+      actionability:
+        - "Each stalkerware app has removal instructions"
+      completeness:
+        - "Stalkerware apps listed by name with evidence"
+        - "Accessibility abuse is documented"
+      export_utility:
+        - "Report suitable for police report or case file"
+        - "Report is readable by a DV advocate without security training"
+
+  # Maya sees the app — banking trojan (unexpected threat)
+  - id: dv_banking_app
+    persona: dv_survivor
+    surface: app
+    title: "Maya opens AndroDR — banking trojan detected"
+    setup: "--load --profile banking"
+    evaluation_input: screenshot_description
+    criteria:
+      comprehension:
+        - "Banking threat is explained in terms of money/account risk"
+        - "No mention of RAT, dropper, or C2 in user-facing text"
+      actionability:
+        - "Steps to secure banking accounts are included"
+      emotional_calibration:
+        - "Threat feels different from stalkerware — financial not personal"
+
+  # ────────────────────────────────────────────────────────────────────────
+  #  KARIM — Investigative Journalist
+  # ────────────────────────────────────────────────────────────────────────
+
+  # Karim sees the app — routine check
+  - id: journalist_clean_app
+    persona: journalist
+    surface: app
+    title: "Karim opens AndroDR — routine check"
+    setup: "--load --track 4"
+    evaluation_input: screenshot_description
+    criteria:
+      comprehension:
+        - "Risk level clearly communicates no compromise detected"
+      completeness:
+        - "Pegasus/Predator/Graphite check results visible"
+      emotional_calibration:
+        - "No nation-state indicators is clearly communicated"
+        - "Routine check feels reassuring, not dismissive"
+      trust:
+        - "Karim believes the tool actually checked for spyware"
+
+  # Amnesty Tech analyst reads Karim's clean report
+  - id: journalist_clean_export
+    persona: journalist
+    surface: export
+    title: "Amnesty Tech analyst reads Karim's clean report"
+    setup: "--load --track 4"
+    evaluation_input: report_text
+    criteria:
+      comprehension:
+        - "Analyst can quickly determine no compromise indicators present"
+      completeness:
+        - "Campaign-specific IOC check results documented"
+        - "Device metadata (model, OS, patch level) present for forensic context"
+      export_utility:
+        - "CSV has MVT-compatible columns"
+        - "Report structured enough for technical handoff"
+
+  # Karim sees the app — nation-state spyware indicators
+  - id: journalist_spyware_app
+    persona: journalist
+    surface: app
+    title: "Karim opens AndroDR — Pegasus indicators detected"
+    setup: "--load --profile journalist"
+    evaluation_input: screenshot_description
+    criteria:
+      comprehension:
+        - "Pegasus/Predator/Graphite context is clear, not just a name drop"
+        - "CVE findings explain impact, not just CVE numbers"
+      actionability:
+        - "Guidance directs Karim to contact Amnesty Tech or similar org"
+      emotional_calibration:
+        - "Nation-state compromise is urgent without causing panic"
+      completeness:
+        - "All campaign-related findings are grouped together"
+
+  # Amnesty Tech reads Karim's spyware detection export
+  - id: journalist_spyware_export
+    persona: journalist
+    surface: export
+    title: "Amnesty Tech analyst reads Karim's spyware detection report"
+    setup: "--load --profile journalist"
+    evaluation_input: report_text
+    criteria:
+      completeness:
+        - "Campaign attribution present (Pegasus/Predator/Graphite)"
+        - "IOC matches documented with source references"
+        - "Timeline shows narrative of what happened and when"
+      export_utility:
+        - "CSV export has MVT-compatible columns"
+        - "Report contains enough evidence for forensic follow-up"
+        - "Device metadata supports chain-of-custody documentation"
+
+  # ────────────────────────────────────────────────────────────────────────
+  #  SARAH — Security-Conscious Individual
+  # ────────────────────────────────────────────────────────────────────────
+
+  # Sarah sees the app — clean phone
+  - id: clean_device_app
+    persona: security_conscious
+    surface: app
+    title: "Sarah scans her clean phone"
+    setup: "--load --track 4"
+    evaluation_input: screenshot_description
+    criteria:
+      comprehension:
+        - "Findings explain what each check means"
+      signal_to_noise:
+        - "Fewer than 5 visible findings"
+        - "Known apps like Bitwarden not flagged"
+      emotional_calibration:
+        - "Overall risk LOW on a clean phone"
+        - "Guidance says phone looks secure without caveats"
+      trust:
+        - "Would recommend app to a friend"
+        - "No false alarms on well-known Play Store apps"
+
+  # Sarah reads her own exported report
+  - id: clean_device_export
+    persona: security_conscious
+    surface: export
+    title: "Sarah reads her own exported timeline"
+    setup: "--load --track 4"
+    evaluation_input: report_text
+    criteria:
+      comprehension:
+        - "Technical terms are explained inline"
+      signal_to_noise:
+        - "Export is concise, not overwhelming"
+        - "No more than one page of findings for a clean phone"
+      export_utility:
+        - "Report is shareable without embarrassment"
+
+  # Sarah sees the app — stalkerware on her "clean" phone (surprise)
+  - id: clean_user_compromised_app
+    persona: security_conscious
+    surface: app
+    title: "Sarah discovers stalkerware on her phone"
+    setup: "--load --profile stalkerware"
+    evaluation_input: screenshot_description
+    criteria:
+      comprehension:
+        - "Stalkerware findings are clearly distinguished from routine checks"
+      actionability:
+        - "Escalation path is clear — uninstall vs. get help"
+      emotional_calibration:
+        - "Risk escalation from LOW to CRITICAL is well-communicated"
+      trust:
+        - "Sarah trusts the finding is real, not a false alarm"
+
+  # ────────────────────────────────────────────────────────────────────────
+  #  RAJ — Small Org Security Team
+  # ────────────────────────────────────────────────────────────────────────
+
+  # Raj triages fleet device via exported report
+  - id: fleet_triage_export
+    persona: small_security_team
+    surface: export
+    title: "Raj triages fleet device via exported report"
+    setup: "--load --profile full"
+    evaluation_input: report_text
+    criteria:
+      comprehension:
+        - "Findings use standard security terminology correctly"
+      completeness:
+        - "All detection categories produce results"
+        - "Device model, OS version, patch level in header"
+      signal_to_noise:
+        - "Manageable finding count for fleet review"
+        - "Findings are deduplicated across scans"
+      export_utility:
+        - "CSV importable to spreadsheet/SIEM"
+        - "MITRE ATT&CK techniques present"
+        - "Report suitable for compliance audit documentation"
+
+  # Raj does quick incident response on single finding
+  - id: fleet_single_incident_export
+    persona: small_security_team
+    surface: export
+    title: "Raj investigates a single stalkerware incident"
+    setup: "--load --only thetruthspy_stalkerware"
+    evaluation_input: report_text
+    criteria:
+      completeness:
+        - "Stalkerware finding has full context (package, permissions, install source)"
+        - "MITRE technique attribution present"
+      export_utility:
+        - "Report can document the incident for HR/legal"
+        - "CSV row has all columns populated for this finding"
+      signal_to_noise:
+        - "Report focuses on the incident, not unrelated noise"
