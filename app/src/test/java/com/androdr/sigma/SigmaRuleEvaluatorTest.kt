@@ -324,6 +324,43 @@ class SigmaRuleEvaluatorTest {
     }
 
     @Test
+    fun `operator precedence - AND binds tighter than OR`() {
+        // a or b and c → a or (b and c), NOT (a or b) and c
+        assertTrue(SigmaRuleEvaluator.evaluateConditionExpression(
+            "a or b and c", mapOf("a" to true, "b" to false, "c" to false)
+        ))
+        // Verify: a=false, b=true, c=true → false or (true and true) = true
+        assertTrue(SigmaRuleEvaluator.evaluateConditionExpression(
+            "a or b and c", mapOf("a" to false, "b" to true, "c" to true)
+        ))
+        // Verify: a=false, b=true, c=false → false or (true and false) = false
+        assertFalse(SigmaRuleEvaluator.evaluateConditionExpression(
+            "a or b and c", mapOf("a" to false, "b" to true, "c" to false)
+        ))
+    }
+
+    @Test
+    fun `operator precedence with leading not`() {
+        // not a or b and c → (not a) or (b and c)
+        assertTrue(SigmaRuleEvaluator.evaluateConditionExpression(
+            "not a or b and c", mapOf("a" to true, "b" to true, "c" to true)
+        ))
+        assertTrue(SigmaRuleEvaluator.evaluateConditionExpression(
+            "not a or b and c", mapOf("a" to false, "b" to false, "c" to false)
+        ))
+        assertFalse(SigmaRuleEvaluator.evaluateConditionExpression(
+            "not a or b and c", mapOf("a" to true, "b" to true, "c" to false)
+        ))
+    }
+
+    @Test
+    fun `empty or malformed condition defaults to false`() {
+        assertFalse(SigmaRuleEvaluator.evaluateConditionExpression(
+            "nonexistent", mapOf("a" to true)
+        ))
+    }
+
+    @Test
     fun `invalid regex pattern does not crash`() {
         val rule = makeRule(
             selections = mapOf("selection" to SigmaSelection(listOf(
