@@ -20,4 +20,4 @@ display:
     safe_title: "USB Debugging Disabled"
     evidence_type: none
 remediation:
-    - "Disable USB Debugging in Developer Options when not actively developing."
+    - "Go to Settings > Developer Options > turn off USB Debugging. This prevents other devices from controlling your phone over USB."

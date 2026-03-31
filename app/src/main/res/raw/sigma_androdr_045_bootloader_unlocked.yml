@@ -18,4 +18,4 @@ display:
     safe_title: "Bootloader Locked"
     evidence_type: none
 remediation:
-    - "Re-lock the bootloader unless you need it for custom ROM development."
+    - "Your bootloader is unlocked, which allows unsigned software to run. If you did not unlock it intentionally, this could indicate tampering. Contact your device manufacturer for relocking instructions."

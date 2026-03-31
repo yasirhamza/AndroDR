@@ -18,4 +18,4 @@ display:
     safe_title: "Wireless ADB Disabled"
     evidence_type: none
 remediation:
-    - "Disable Wireless ADB — any device on the same network can connect."
+    - "Go to Settings > Developer Options > turn off Wireless debugging. When enabled, any device on your Wi-Fi network can connect to your phone."
