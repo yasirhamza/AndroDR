@@ -79,6 +79,17 @@
                 android:value="GENERIC" />
         </service>
 
+        <!-- Package install/update/uninstall monitor for forensic timeline -->
+        <receiver
+            android:name=".scanner.PackageLifecycleReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.PACKAGE_ADDED" />
+                <action android:name="android.intent.action.PACKAGE_REMOVED" />
+                <data android:scheme="package" />
+            </intent-filter>
+        </receiver>
+
         <!-- FileProvider for sharing exported reports -->
         <provider
             android:name="androidx.core.content.FileProvider"
