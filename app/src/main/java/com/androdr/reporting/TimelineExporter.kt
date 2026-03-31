@@ -61,7 +61,9 @@ object TimelineExporter {
             } else "??:??:??"
             val sev = event.severity.uppercase().padEnd(8)
             appendLine("  [$sev] $time  ${event.description}")
-            if (event.packageName.isNotEmpty()) {
+            if (event.appName.isNotEmpty() && event.appName != event.packageName) {
+                appendLine("             App: ${event.appName} (${event.packageName})")
+            } else if (event.packageName.isNotEmpty()) {
                 appendLine("             Package: ${event.packageName}")
             }
             if (event.iocIndicator.isNotEmpty()) {

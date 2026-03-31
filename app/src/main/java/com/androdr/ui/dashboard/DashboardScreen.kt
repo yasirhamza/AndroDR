@@ -116,7 +116,7 @@ fun DashboardScreen(
 
             RiskLevelCard(latestScan = latestScan)
 
-            PostScanGuidance(riskLevel = latestScan?.overallRiskLevel)
+            PostScanGuidance(riskLevel = latestScan?.overallRiskLevel, latestScan = latestScan)
 
             AnimatedVisibility(
                 visible = scanDiff != null && scanDiff!!.newFindings.isNotEmpty(),
@@ -234,10 +234,18 @@ fun DashboardScreen(
 }
 
 @Composable
-private fun PostScanGuidance(riskLevel: RiskLevel?) {
+private fun PostScanGuidance(riskLevel: RiskLevel?, latestScan: ScanResult?) {
+    val hasCriticalAppRisks = latestScan?.appRisks?.any {
+        it.triggered && it.level.lowercase() == "critical"
+    } ?: false
+
     val (message, icon, color) = when (riskLevel) {
         RiskLevel.CRITICAL -> Triple(
-            stringResource(R.string.guidance_critical),
+            if (hasCriticalAppRisks) {
+                stringResource(R.string.guidance_critical)
+            } else {
+                stringResource(R.string.guidance_critical_device)
+            },
             Icons.Filled.Error,
             Color(0xFFCF6679)
         )
@@ -281,6 +289,7 @@ private fun PostScanGuidance(riskLevel: RiskLevel?) {
     }
 }
 
+@Suppress("LongMethod") // Compose UI layout with conditional risk display
 @Composable
 private fun RiskLevelCard(latestScan: ScanResult?) {
     val (riskColor, riskLabel) = when (latestScan?.overallRiskLevel) {
@@ -330,12 +339,12 @@ private fun RiskLevelCard(latestScan: ScanResult?) {
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             } else {
-                val appRiskCount = latestScan.appRisks.count {
-                    it.triggered && it.level.lowercase() != "informational"
-                }
-                val flagCount = latestScan.deviceFlags.count { it.triggered }
                 Text(
-                    text = stringResource(R.string.dashboard_risk_summary, appRiskCount, flagCount),
+                    text = stringResource(
+                        R.string.dashboard_risk_summary,
+                        latestScan.appRisks.count { it.triggered && it.level.lowercase() != "informational" },
+                        latestScan.deviceFlags.count { it.triggered }
+                    ),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
