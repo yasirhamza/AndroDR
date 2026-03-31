@@ -23,22 +23,25 @@ object TimelineExporter {
         appendLine(RULE)
         appendLine()
 
-        // Exclude informational events and deduplicate by description+package
+        // Deduplicate by description+package but include ALL severity levels
         val filtered = events
-            .filter { it.severity.uppercase() != "INFORMATIONAL" }
             .distinctBy { "${it.description}|${it.packageName}|${it.ruleId}" }
 
         if (filtered.isEmpty()) {
-            appendLine("  No significant timeline events recorded.")
-            appendLine("  (${events.size} informational events excluded)")
+            appendLine("  No timeline events recorded.")
             appendLine()
             appendLine(RULE)
             return@buildString
         }
 
-        appendLine("  Significant events: ${filtered.size}")
-        if (events.size > filtered.size) {
-            appendLine("  (${events.size - filtered.size} informational events excluded)")
+        val significantCount = filtered.count { it.severity.uppercase() != "INFORMATIONAL" }
+        val infoCount = filtered.size - significantCount
+        appendLine("  Total events: ${filtered.size}")
+        if (significantCount > 0) {
+            appendLine("  Significant: $significantCount")
+        }
+        if (infoCount > 0) {
+            appendLine("  Informational: $infoCount")
         }
         appendLine()
 

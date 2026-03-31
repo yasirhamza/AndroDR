@@ -120,14 +120,17 @@ fun TimelineScreen(
                 ) {
                     Icon(Icons.Filled.Description, contentDescription = stringResource(R.string.cd_view_report))
                 }
-                // Copy to clipboard
+                // Copy to clipboard — generate report first, then copy
                 IconButton(
                     onClick = {
-                        if (reportText.isNotEmpty()) {
+                        viewModel.generateReport()
+                        // Copy after a brief delay to let the report generate
+                        val text = viewModel.reportText.value
+                        if (text.isNotEmpty()) {
                             val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE)
                                 as ClipboardManager
                             clipboard.setPrimaryClip(
-                                ClipData.newPlainText("AndroDR Timeline", reportText)
+                                ClipData.newPlainText("AndroDR Timeline", text)
                             )
                             Toast.makeText(
                                 context,
@@ -135,7 +138,6 @@ fun TimelineScreen(
                                 Toast.LENGTH_SHORT
                             ).show()
                         } else {
-                            viewModel.generateReport()
                             Toast.makeText(
                                 context,
                                 context.getString(R.string.timeline_generating),
@@ -448,21 +450,25 @@ fun TimelineScreen(
             reportText = reportText,
             onDismiss = { showReportSheet = false; viewModel.clearReport() },
             onCopy = {
-                val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE)
-                    as ClipboardManager
-                clipboard.setPrimaryClip(
-                    ClipData.newPlainText("AndroDR Timeline", reportText)
-                )
-                Toast.makeText(
-                    context,
-                    context.getString(R.string.timeline_copied),
-                    Toast.LENGTH_SHORT
-                ).show()
+                val textToCopy = viewModel.reportText.value
+                if (textToCopy.isNotEmpty()) {
+                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE)
+                        as ClipboardManager
+                    clipboard.setPrimaryClip(
+                        ClipData.newPlainText("AndroDR Timeline", textToCopy)
+                    )
+                    Toast.makeText(
+                        context,
+                        context.getString(R.string.timeline_copied),
+                        Toast.LENGTH_SHORT
+                    ).show()
+                }
             },
             onShare = {
+                val textToShare = viewModel.reportText.value
                 val intent = Intent(Intent.ACTION_SEND).apply {
                     type = "text/plain"
-                    putExtra(Intent.EXTRA_TEXT, reportText)
+                    putExtra(Intent.EXTRA_TEXT, textToShare)
                     putExtra(Intent.EXTRA_SUBJECT, "AndroDR Forensic Timeline")
                 }
                 context.startActivity(Intent.createChooser(intent, "Share Timeline"))
