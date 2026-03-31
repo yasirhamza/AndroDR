@@ -15,11 +15,19 @@ import javax.inject.Singleton
 
 @Singleton
 class CveRepository @Inject constructor(
-    private val cveDao: CveDao
+    private val cveDao: CveDao,
+    private val settings: SettingsRepository
 ) {
     suspend fun refresh() = withContext(Dispatchers.IO) {
-        val cisaEntries = fetchCisaKev()
-        val osvEntries = fetchOsvAndroid()
+        val cisaResult = fetchCisaKev()
+        val osvResult = fetchOsvAndroid()
+        // On 304 (null), fall back to cached Room data so the merge preserves enrichment
+        val cisaEntries = cisaResult ?: cveDao.getActivelyExploited()
+        val osvEntries = osvResult ?: emptyList()
+        if (cisaResult == null && osvResult == null) {
+            Log.i(TAG, "CVE refresh: both feeds unchanged (ETag hit)")
+            return@withContext
+        }
         val merged = mergeEntries(cisaEntries, osvEntries)
         if (merged.isNotEmpty()) {
             cveDao.upsertAll(merged)
@@ -36,18 +44,26 @@ class CveRepository @Inject constructor(
     suspend fun getTotalCount(): Int =
         cveDao.getTotalCount()
 
+    /** Returns null on 304 Not Modified, emptyList on error, or the parsed entries on 200. */
     @Suppress("TooGenericExceptionCaught")
-    private fun fetchCisaKev(): List<CveEntity> {
+    private suspend fun fetchCisaKev(): List<CveEntity>? {
+        val conn = URL(CISA_KEV_URL).openConnection() as HttpURLConnection
         return try {
-            val conn = URL(CISA_KEV_URL).openConnection() as HttpURLConnection
             conn.connectTimeout = TIMEOUT_MS
             conn.readTimeout = TIMEOUT_MS
-            conn.instanceFollowRedirects = false
             conn.setRequestProperty("User-Agent", "AndroDR/1.0")
+            settings.getEtag(ETAG_CISA)?.let {
+                conn.setRequestProperty("If-None-Match", it)
+            }
+            if (conn.responseCode == HttpURLConnection.HTTP_NOT_MODIFIED) {
+                Log.i(TAG, "CISA KEV not modified (ETag hit)")
+                return null
+            }
             if (conn.responseCode != HttpURLConnection.HTTP_OK) {
                 Log.w(TAG, "CISA KEV fetch failed: HTTP ${conn.responseCode}")
                 return emptyList()
             }
+            conn.getHeaderField("ETag")?.let { settings.setEtag(ETAG_CISA, it) }
             val body = conn.inputStream.bufferedReader().use { it.readText() }
             val json = JSONObject(body)
             val vulnerabilities = json.getJSONArray("vulnerabilities")
@@ -76,37 +92,49 @@ class CveRepository @Inject constructor(
         } catch (e: Exception) {
             Log.w(TAG, "CISA KEV fetch failed: ${e.message}")
             emptyList()
+        } finally {
+            conn.disconnect()
         }
     }
 
+    /** Returns null on 304 Not Modified, emptyList on error, or the parsed entries on 200. */
     @Suppress("TooGenericExceptionCaught", "NestedBlockDepth")
-    private fun fetchOsvAndroid(): List<CveEntity> {
+    private suspend fun fetchOsvAndroid(): List<CveEntity>? {
+        val conn = URL(OSV_ANDROID_URL).openConnection() as HttpURLConnection
         return try {
-            val conn = URL(OSV_ANDROID_URL).openConnection() as HttpURLConnection
             conn.connectTimeout = TIMEOUT_MS
             conn.readTimeout = TIMEOUT_MS
-            conn.instanceFollowRedirects = false
             conn.setRequestProperty("User-Agent", "AndroDR/1.0")
+            settings.getEtag(ETAG_OSV)?.let {
+                conn.setRequestProperty("If-None-Match", it)
+            }
+            if (conn.responseCode == HttpURLConnection.HTTP_NOT_MODIFIED) {
+                Log.i(TAG, "OSV Android not modified (ETag hit)")
+                return null
+            }
             if (conn.responseCode != HttpURLConnection.HTTP_OK) {
                 Log.w(TAG, "OSV fetch failed: HTTP ${conn.responseCode}")
                 return emptyList()
             }
+            conn.getHeaderField("ETag")?.let { settings.setEtag(ETAG_OSV, it) }
             val now = System.currentTimeMillis()
             val entries = mutableListOf<CveEntity>()
-            val zis = ZipInputStream(BufferedInputStream(conn.inputStream))
-            var entry = zis.nextEntry
-            while (entry != null) {
-                if (entry.name.endsWith(".json")) {
-                    val content = zis.bufferedReader().use { it.readText() }
-                    parseOsvEntry(content, now)?.let { entries.add(it) }
+            ZipInputStream(BufferedInputStream(conn.inputStream)).use { zis ->
+                var entry = zis.nextEntry
+                while (entry != null) {
+                    if (entry.name.endsWith(".json")) {
+                        val content = zis.bufferedReader().use { it.readText() }
+                        parseOsvEntry(content, now)?.let { entries.add(it) }
+                    }
+                    entry = zis.nextEntry
                 }
-                entry = zis.nextEntry
             }
-            zis.close()
             entries
         } catch (e: Exception) {
             Log.w(TAG, "OSV Android fetch failed: ${e.message}")
             emptyList()
+        } finally {
+            conn.disconnect()
         }
     }
 
@@ -175,6 +203,8 @@ class CveRepository @Inject constructor(
         private const val OSV_ANDROID_URL =
             "https://osv-vulnerabilities.storage.googleapis.com/Android/all.zip"
         private const val TIMEOUT_MS = 30_000
+        private const val ETAG_CISA = "cve_cisa"
+        private const val ETAG_OSV = "cve_osv"
 
         fun mergeEntries(cisaEntries: List<CveEntity>, osvEntries: List<CveEntity>): List<CveEntity> {
             val now = System.currentTimeMillis()

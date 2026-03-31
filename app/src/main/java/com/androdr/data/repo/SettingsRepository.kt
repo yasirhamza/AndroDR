@@ -89,6 +89,16 @@ class SettingsRepository @Inject constructor(
         return false
     }
 
+    suspend fun getEtag(cacheKey: String): String? =
+        dataStore.data.first()[stringPreferencesKey("etag_$cacheKey")]
+
+    suspend fun setEtag(cacheKey: String, etag: String?) {
+        val key = stringPreferencesKey("etag_$cacheKey")
+        dataStore.edit { prefs ->
+            if (etag != null) prefs[key] = etag else prefs.remove(key)
+        }
+    }
+
     companion object {
         private val KEY_BLOCKLIST_BLOCK_MODE  = booleanPreferencesKey("blocklist_block_mode")
         private val KEY_DOMAIN_IOC_BLOCK_MODE = booleanPreferencesKey("domain_ioc_block_mode")
