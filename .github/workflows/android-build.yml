@@ -76,6 +76,17 @@ jobs:
           path: app/build/outputs/apk/debug/app-debug.apk
           retention-days: 14
 
+      - name: Publish APK to releases repo
+        if: github.ref == 'refs/heads/main' && success()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release upload latest \
+            app/build/outputs/apk/debug/app-debug.apk \
+            --repo yasirhamza/androdr-releases \
+            --clobber \
+            || echo "Release upload failed (token may lack cross-repo access)"
+
   instrumented-test:
     runs-on: ubuntu-latest
     needs: build
