@@ -236,37 +236,40 @@ object SigmaRuleEvaluator {
             return selectionResults[tokens[0]] ?: false
         }
 
-        // Handle leading "not"
-        var i = 0
-        var negate = false
-        if (tokens[0].lowercase() == "not") {
-            negate = true
-            i = 1
-        }
-        var result = selectionResults[tokens[i]] ?: false
-        if (negate) {
-            result = !result
-            negate = false
-        }
-        i++
-        while (i < tokens.size - 1) {
-            val operator = tokens[i].lowercase()
-            i++
-            // Handle "not" modifier before operand
-            val nextNegate = if (i < tokens.size && tokens[i].lowercase() == "not") {
-                i++
-                true
-            } else false
-            var operand = selectionResults[tokens.getOrNull(i) ?: ""] ?: false
-            if (nextNegate) operand = !operand
-            result = when (operator) {
-                "and" -> result && operand
-                "or" -> result || operand
-                else -> result
+        // Split into OR groups first so AND binds tighter (standard precedence)
+        val orGroups = mutableListOf<List<String>>()
+        var currentGroup = mutableListOf<String>()
+        for (token in tokens) {
+            if (token.lowercase() == "or") {
+                orGroups.add(currentGroup)
+                currentGroup = mutableListOf()
+            } else {
+                currentGroup.add(token)
             }
+        }
+        orGroups.add(currentGroup)
+
+        return orGroups.any { group -> evaluateAndGroup(group, selectionResults) }
+    }
+
+    private fun evaluateAndGroup(
+        tokens: List<String>,
+        selectionResults: Map<String, Boolean>
+    ): Boolean {
+        if (tokens.isEmpty()) return false
+        var result = true
+        var i = 0
+        while (i < tokens.size) {
+            val token = tokens[i]
+            if (token.lowercase() == "and") { i++; continue }
+            val negate = token.lowercase() == "not"
+            if (negate) i++
+            if (i >= tokens.size) break
+            var value = selectionResults[tokens[i]] ?: false
+            if (negate) value = !value
+            result = result && value
             i++
         }
-
         return result
     }
 }

@@ -81,6 +81,39 @@ object ReportFormatter {
             appendLine("  (Bug report analysis — device checks require a live scan)")
         }
 
+        // -- Campaign check -------------------------------------------------------
+        val campaignFindings = scan.deviceFlags.filter { f ->
+            f.tags.any { it.startsWith("campaign.") }
+        }
+        if (campaignFindings.isNotEmpty()) {
+            section("MERCENARY SPYWARE CHECK")
+            val clear = campaignFindings.filter { !it.triggered }
+            val detected = campaignFindings.filter { it.triggered }
+
+            clear.forEach { finding ->
+                appendLine("  [\u2713]  ${campaignLabel(finding)}: not detected")
+            }
+            detected.forEach { finding ->
+                appendLine("  [\u2717]  ${campaignLabel(finding)}: DETECTED \u2014 ${finding.title}")
+            }
+
+            // DNS-based campaign hits from IOC domain matches
+            val dnsCampaigns = dnsEvents
+                .mapNotNull { it.reason }
+                .filter { it.startsWith("IOC:") || it.startsWith("IOC_detect:") }
+                .map { it.removePrefix("IOC:").removePrefix("IOC_detect:").trim() }
+                .filter { it.isNotEmpty() }
+                .distinct()
+            if (dnsCampaigns.isNotEmpty()) {
+                appendLine()
+                appendLine("  DNS IOC matches linked to:")
+                dnsCampaigns.forEach { campaign ->
+                    appendLine("  [\u2717]  $campaign (domain indicator)")
+                }
+            }
+            appendLine()
+        }
+
         // -- App risks ------------------------------------------------------------
         section("APP RISKS")
         val appRisks = scan.appRisks.filter { it.triggered && it.level.lowercase() != "informational" }
@@ -184,6 +217,12 @@ object ReportFormatter {
         }
         appendLine()
     }
+
+    private fun campaignLabel(finding: Finding): String =
+        finding.tags.filter { it.startsWith("campaign.") }
+            .joinToString(" / ") { tag ->
+                tag.removePrefix("campaign.").replaceFirstChar { c -> c.uppercase() }
+            }
 
     private fun severityOrdinal(level: String): Int = when (level.lowercase()) {
         "critical" -> 3
