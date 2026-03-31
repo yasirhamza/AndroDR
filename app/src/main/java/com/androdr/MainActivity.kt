@@ -163,7 +163,7 @@ private fun AndroDRApp() {
                 AppScanScreen(onNavigateToTimeline = ::navigateToTimeline)
             }
             composable("device") {
-                DeviceAuditScreen(onNavigateToTimeline = ::navigateToTimeline)
+                DeviceAuditScreen()
             }
             composable("network") {
                 DnsMonitorScreen(

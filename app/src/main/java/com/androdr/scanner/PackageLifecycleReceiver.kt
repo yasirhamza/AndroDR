@@ -22,6 +22,7 @@ import javax.inject.Inject
 @AndroidEntryPoint
 class PackageLifecycleReceiver : BroadcastReceiver() {
 
+    @Suppress("LateinitUsage") // Hilt field injection requires lateinit for BroadcastReceiver
     @Inject lateinit var forensicTimelineEventDao: ForensicTimelineEventDao
 
     override fun onReceive(context: Context, intent: Intent) {
@@ -62,7 +63,7 @@ class PackageLifecycleReceiver : BroadcastReceiver() {
                     isFromRuntime = true
                 ))
                 Log.i(TAG, "Package $verb: $displayName")
-            } catch (e: Exception) {
+            } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
                 Log.w(TAG, "Failed to record package event: ${e.message}")
             } finally {
                 pending.finish()
