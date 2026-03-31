@@ -30,9 +30,8 @@ class DashboardViewModel @Inject constructor(
     private val remoteIocUpdater: RemoteIocUpdater
 ) : ViewModel() {
 
-    // Show the latest runtime scan (with device flags), not bugreport analysis results
     val latestScan: StateFlow<ScanResult?> = repository.allScans
-        .map { scans -> scans.firstOrNull { it.deviceFlags.isNotEmpty() } ?: scans.firstOrNull() }
+        .map { scans -> scans.firstOrNull() }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
     private val _isScanning = MutableStateFlow(false)
