@@ -115,6 +115,7 @@ object TimelineExporter {
             val mitre = csvEscape(event.attackTechniqueId)
             val hash = csvEscape(event.apkHash)
             val details = csvEscape(event.details)
+            @Suppress("MaxLineLength") // CSV row must be a single appendLine call
             appendLine("$ts,$iso,$module,$eventType,$data,$pkg,$sev,$ioc,$iocType,$iocSrc,$campaign,$mitre,$hash,$details")
         }
     }

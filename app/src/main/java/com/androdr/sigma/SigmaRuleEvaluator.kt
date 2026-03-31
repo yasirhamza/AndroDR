@@ -252,6 +252,7 @@ object SigmaRuleEvaluator {
         return orGroups.any { group -> evaluateAndGroup(group, selectionResults) }
     }
 
+    @Suppress("LoopWithTooManyJumpStatements") // Parsing loop handles "and", "not", and operands
     private fun evaluateAndGroup(
         tokens: List<String>,
         selectionResults: Map<String, Boolean>
