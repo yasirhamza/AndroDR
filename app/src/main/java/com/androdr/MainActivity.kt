@@ -22,9 +22,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.NavHost
+import androidx.navigation.NavType
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import androidx.navigation.navArgument
 import com.androdr.ui.apps.AppScanScreen
 import com.androdr.ui.bugreport.BugReportScreen
 import com.androdr.ui.dashboard.DashboardScreen
@@ -35,6 +37,7 @@ import com.androdr.ui.timeline.TimelineScreen
 import com.androdr.ui.settings.SettingsScreen
 import com.androdr.ui.theme.AndroDRTheme
 import android.app.Activity
+import android.net.Uri
 import dagger.hilt.android.AndroidEntryPoint
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -97,7 +100,17 @@ private fun AndroDRApp() {
     val currentRoute = navBackStackEntry?.destination?.route
 
     // Only show bottom bar on the main 5 destinations (not on bugreport)
-    val showBottomBar = bottomNavDestinations.any { it.route == currentRoute }
+    val showBottomBar = bottomNavDestinations.any {
+        currentRoute?.startsWith(it.route) == true
+    }
+
+    fun navigateToTimeline(packageName: String) {
+        val encoded = Uri.encode(packageName)
+        navController.navigate("timeline?pkg=$encoded") {
+            popUpTo(navController.graph.findStartDestination().id) { saveState = true }
+            launchSingleTop = true
+        }
+    }
 
     Scaffold(
         bottomBar = {
@@ -112,7 +125,7 @@ private fun AndroDRApp() {
                                 )
                             },
                             label = { Text(destination.label) },
-                            selected = currentRoute == destination.route,
+                            selected = currentRoute?.startsWith(destination.route) == true,
                             onClick = {
                                 navController.navigate(destination.route) {
                                     popUpTo(navController.graph.findStartDestination().id) {
@@ -147,10 +160,10 @@ private fun AndroDRApp() {
                 )
             }
             composable("apps") {
-                AppScanScreen()
+                AppScanScreen(onNavigateToTimeline = ::navigateToTimeline)
             }
             composable("device") {
-                DeviceAuditScreen()
+                DeviceAuditScreen(onNavigateToTimeline = ::navigateToTimeline)
             }
             composable("network") {
                 DnsMonitorScreen(
@@ -162,8 +175,13 @@ private fun AndroDRApp() {
             composable("history") {
                 HistoryScreen()
             }
-            composable("timeline") {
-                TimelineScreen()
+            composable(
+                "timeline?pkg={pkg}",
+                arguments = listOf(navArgument("pkg") {
+                    type = NavType.StringType; nullable = true; defaultValue = null
+                })
+            ) { entry ->
+                TimelineScreen(initialPackage = entry.arguments?.getString("pkg"))
             }
             composable("bugreport") {
                 BugReportScreen()

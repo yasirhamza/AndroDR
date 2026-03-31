@@ -74,8 +74,16 @@ private data class DateEntry(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TimelineScreen(
+    initialPackage: String? = null,
     viewModel: TimelineViewModel = hiltViewModel()
 ) {
+    // Apply deep-link filter once on first composition
+    LaunchedEffect(initialPackage) {
+        if (initialPackage != null) {
+            viewModel.setPackageFilter(initialPackage)
+        }
+    }
+
     val events by viewModel.events.collectAsStateWithLifecycle()
     val partitioned by viewModel.partitionedEvents.collectAsStateWithLifecycle()
     val severityFilter by viewModel.severityFilter.collectAsStateWithLifecycle()
