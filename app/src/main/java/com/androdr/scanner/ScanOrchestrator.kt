@@ -49,6 +49,10 @@ class ScanOrchestrator @Inject constructor(
     private val initMutex = Mutex()
     private var ruleEngineInitialized = false
 
+    /** Cached app telemetry from the most recent scan, for report export. */
+    @Volatile var lastAppTelemetry: List<com.androdr.data.model.AppTelemetry> = emptyList()
+        private set
+
     private suspend fun initRuleEngine() = initMutex.withLock {
         if (ruleEngineInitialized) return@withLock
         sigmaRuleEngine.setIocLookups(mapOf(
@@ -116,6 +120,7 @@ class ScanOrchestrator @Inject constructor(
         }
 
         val appTelemetry = appTelemetryDeferred.await()
+        lastAppTelemetry = appTelemetry // cache for report export
         val deviceTelemetry = deviceTelemetryDeferred.await()
         val processTelemetry = processTelemetryDeferred.await()
         val fileTelemetry = fileTelemetryDeferred.await()
