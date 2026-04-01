@@ -20,14 +20,15 @@ fun DnsEvent.toForensicTimelineEvent(): ForensicTimelineEvent = ForensicTimeline
     iocIndicator = if (this.reason != null) this.domain else "",
     iocType = if (this.reason != null) "domain" else "",
     iocSource = if (this.reason != null) extractDnsIocSource(this.reason) else "",
+    campaignName = if (this.reason != null) extractDnsCampaign(this.reason) else "",
     isFromRuntime = true
 )
 
 fun Finding.toForensicTimelineEvent(scanResult: ScanResult): ForensicTimelineEvent {
     val iocEvidence = this.evidence as? Evidence.IocMatch
-    val campaignTag = this.tags.firstOrNull { it.startsWith("campaign.") }
-        ?.removePrefix("campaign.")
-        ?.replaceFirstChar { c -> c.uppercase() }
+    val campaignTag = this.tags.filter { it.startsWith("campaign.") }
+        .joinToString(" / ") { it.removePrefix("campaign.").replaceFirstChar { c -> c.uppercase() } }
+        .ifEmpty { null }
 
     return ForensicTimelineEvent(
         timestamp = scanResult.timestamp,
@@ -62,9 +63,18 @@ fun TimelineEvent.toForensicTimelineEvent(scanResultId: Long = -1): ForensicTime
         category = this.category,
         description = this.description,
         severity = this.severity,
+        timestampPrecision = "estimated",
         scanResultId = scanResultId,
         isFromBugreport = true
     )
+
+/** Extracts the campaign name from DNS event reason strings like "IOC: Pegasus" */
+private fun extractDnsCampaign(reason: String?): String = when {
+    reason == null -> ""
+    reason.startsWith("IOC: ") -> reason.removePrefix("IOC: ")
+    reason.startsWith("IOC_detect: ") -> reason.removePrefix("IOC_detect: ")
+    else -> ""
+}
 
 /** Extracts the feed source from DNS event reason strings like "IOC: Pegasus" */
 private fun extractDnsIocSource(reason: String?): String = when {
