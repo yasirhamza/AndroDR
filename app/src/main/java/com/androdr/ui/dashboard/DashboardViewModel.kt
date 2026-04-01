@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.androdr.data.db.IndicatorDao
 import com.androdr.data.model.ScanResult
 import com.androdr.data.repo.ScanRepository
+import com.androdr.data.repo.ScanRepository.Companion.preferRuntimeScan
 import com.androdr.ioc.IocDatabase
 import com.androdr.ioc.IndicatorUpdater
 import com.androdr.scanner.ScanOrchestrator
@@ -32,9 +33,7 @@ class DashboardViewModel @Inject constructor(
 
     // Prefer the latest runtime scan (has device posture flags) over bugreport analysis
     val latestScan: StateFlow<ScanResult?> = repository.allScans
-        .map { scans ->
-            scans.firstOrNull { it.deviceFlags.isNotEmpty() } ?: scans.firstOrNull()
-        }
+        .map { scans -> scans.preferRuntimeScan() }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
     private val _isScanning = MutableStateFlow(false)

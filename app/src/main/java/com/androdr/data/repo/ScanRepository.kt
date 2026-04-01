@@ -22,6 +22,12 @@ class ScanRepository @Inject constructor(
     /** Emits the full scan history, newest first. */
     val allScans: Flow<List<ScanResult>> = scanResultDao.getAllScans()
 
+    companion object {
+        /** Selects the preferred scan: first with device flags (runtime), else latest. */
+        fun List<ScanResult>.preferRuntimeScan(): ScanResult? =
+            firstOrNull { it.deviceFlags.isNotEmpty() } ?: firstOrNull()
+    }
+
     /** Persists a completed [ScanResult] to the database. */
     suspend fun saveScan(scan: ScanResult) {
         scanResultDao.insert(scan)

@@ -3,6 +3,7 @@ package com.androdr.ui.device
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.androdr.data.repo.ScanRepository
+import com.androdr.data.repo.ScanRepository.Companion.preferRuntimeScan
 import com.androdr.sigma.Finding
 import com.androdr.sigma.FindingCategory
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -19,9 +20,7 @@ class DeviceAuditViewModel @Inject constructor(
 
     /** Prefer the latest runtime scan (has device flags) — same logic as Dashboard/Apps. */
     private val latestScan = repository.allScans
-        .map { scans ->
-            scans.firstOrNull { it.deviceFlags.isNotEmpty() } ?: scans.firstOrNull()
-        }
+        .map { scans -> scans.preferRuntimeScan() }
 
     val deviceFindings: StateFlow<List<Finding>> = latestScan
         .map { scan ->
