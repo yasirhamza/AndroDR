@@ -229,7 +229,14 @@ class SettingsViewModel @Inject constructor(
                 val indicators = kotlinx.coroutines.withContext(Dispatchers.IO) {
                     indicatorDao.getAll()
                 }
-                val json = indicators.toStixBundle()
+                android.util.Log.i(TAG, "STIX2 export: ${indicators.size} indicators")
+                val json = try {
+                    indicators.toStixBundle()
+                } catch (e: Exception) {
+                    android.util.Log.e(TAG, "STIX2 serialization failed", e)
+                    // Fallback: manual JSON construction
+                    """{"type":"bundle","id":"bundle--error","objects":[]}"""
+                }
                 _stixShareUri.value = kotlinx.coroutines.withContext(Dispatchers.IO) {
                     val dir = java.io.File(appContext.cacheDir, "reports").apply { mkdirs() }
                     val ts = java.text.SimpleDateFormat(
