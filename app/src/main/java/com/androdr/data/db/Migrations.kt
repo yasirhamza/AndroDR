@@ -164,7 +164,7 @@ val MIGRATION_7_8 = object : Migration(7, 8) {
     }
 }
 
-@Suppress("LongMethod") // Migration creates table and copies data from 3 legacy tables
+@Suppress("LongMethod", "MagicNumber") // Migration creates table and copies data from 3 legacy tables
 val MIGRATION_8_9 = object : Migration(8, 9) {
     override fun migrate(database: SupportSQLiteDatabase) {
         database.execSQL("""
@@ -199,5 +199,14 @@ val MIGRATION_8_9 = object : Migration(8, 9) {
             SELECT 'cert_hash', certHash, familyName, category, severity, description, source, fetchedAt
             FROM cert_hash_ioc_entries
         """.trimIndent())
+    }
+}
+
+@Suppress("MagicNumber")
+val MIGRATION_9_10 = object : Migration(9, 10) {
+    override fun migrate(database: SupportSQLiteDatabase) {
+        database.execSQL("DROP TABLE IF EXISTS ioc_entries")
+        database.execSQL("DROP TABLE IF EXISTS domain_ioc_entries")
+        database.execSQL("DROP TABLE IF EXISTS cert_hash_ioc_entries")
     }
 }

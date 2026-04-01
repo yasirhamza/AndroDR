@@ -6,10 +6,10 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.preferencesDataStore
 import androidx.room.Room
 import com.androdr.data.db.AppDatabase
-import com.androdr.data.db.CertHashIocEntryDao
+import com.androdr.data.db.CveDao
 import com.androdr.data.db.DnsEventDao
-import com.androdr.data.db.DomainIocEntryDao
-import com.androdr.data.db.IocEntryDao
+import com.androdr.data.db.ForensicTimelineEventDao
+import com.androdr.data.db.IndicatorDao
 import com.androdr.data.db.KnownAppEntryDao
 import com.androdr.data.db.MIGRATION_1_2
 import com.androdr.data.db.MIGRATION_2_3
@@ -19,22 +19,19 @@ import com.androdr.data.db.MIGRATION_5_6
 import com.androdr.data.db.MIGRATION_6_7
 import com.androdr.data.db.MIGRATION_7_8
 import com.androdr.data.db.MIGRATION_8_9
-import com.androdr.data.db.CveDao
-import com.androdr.data.db.IndicatorDao
-import com.androdr.data.db.ForensicTimelineEventDao
+import com.androdr.data.db.MIGRATION_9_10
 import com.androdr.data.db.ScanResultDao
 import com.androdr.ioc.CertHashIocFeed
 import com.androdr.ioc.DomainIocFeed
 import com.androdr.ioc.IocFeed
 import com.androdr.ioc.KnownAppFeed
-import com.androdr.ioc.feeds.StalkerwareIndicatorsFeed
-import com.androdr.ioc.feeds.MalwareBazaarCertFeed
 import com.androdr.ioc.feeds.HaGeZiTifFeed
+import com.androdr.ioc.feeds.MalwareBazaarCertFeed
 import com.androdr.ioc.feeds.MvtIndicatorsFeed
 import com.androdr.ioc.feeds.PlexusKnownAppFeed
+import com.androdr.ioc.feeds.StalkerwareIndicatorsFeed
 import com.androdr.ioc.feeds.ThreatFoxDomainFeed
 import com.androdr.ioc.feeds.UadKnownAppFeed
-import com.androdr.ioc.feeds.ZimperiumIocFeed
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -47,7 +44,6 @@ private val Context.settingsDataStore: DataStore<Preferences>
 
 @Module
 @InstallIn(SingletonComponent::class)
-@Suppress("TooManyFunctions") // DI module provides one function per DAO/feed binding
 object AppModule {
 
     @Provides
@@ -56,7 +52,8 @@ object AppModule {
         Room.databaseBuilder(ctx, AppDatabase::class.java, "androdr.db")
             .addMigrations(
                 MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5,
-                MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9
+                MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9,
+                MIGRATION_9_10
             )
             .build()
 
@@ -67,25 +64,7 @@ object AppModule {
     fun provideDnsEventDao(db: AppDatabase): DnsEventDao = db.dnsEventDao()
 
     @Provides
-    fun provideIocEntryDao(db: AppDatabase): IocEntryDao = db.iocEntryDao()
-
-    @Provides
-    fun provideDomainIocEntryDao(db: AppDatabase): DomainIocEntryDao = db.domainIocEntryDao()
-
-    @Provides
-    @Singleton
-    fun provideDomainIocFeeds(): @JvmSuppressWildcards List<DomainIocFeed> = listOf(
-        MvtIndicatorsFeed(),
-        // ZimperiumIocFeed() — disabled: repo files inaccessible via raw URLs (Git LFS)
-        ThreatFoxDomainFeed(),
-        HaGeZiTifFeed()
-    )
-
-    @Provides
     fun provideKnownAppEntryDao(db: AppDatabase): KnownAppEntryDao = db.knownAppEntryDao()
-
-    @Provides
-    fun provideCertHashIocEntryDao(db: AppDatabase): CertHashIocEntryDao = db.certHashIocEntryDao()
 
     @Provides
     fun provideCveDao(db: AppDatabase): CveDao = db.cveDao()
@@ -96,6 +75,14 @@ object AppModule {
 
     @Provides
     fun provideIndicatorDao(db: AppDatabase): IndicatorDao = db.indicatorDao()
+
+    @Provides
+    @Singleton
+    fun provideDomainIocFeeds(): @JvmSuppressWildcards List<DomainIocFeed> = listOf(
+        MvtIndicatorsFeed(),
+        ThreatFoxDomainFeed(),
+        HaGeZiTifFeed()
+    )
 
     @Provides
     @Singleton

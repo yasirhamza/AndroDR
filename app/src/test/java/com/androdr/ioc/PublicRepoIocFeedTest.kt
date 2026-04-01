@@ -8,10 +8,8 @@ import org.junit.Test
 class PublicRepoIocFeedTest {
 
     private val feed = PublicRepoIocFeed(
-        iocEntryDao = io.mockk.mockk(),
-        domainIocEntryDao = io.mockk.mockk(),
-        certHashIocEntryDao = io.mockk.mockk(),
-        knownAppEntryDao = io.mockk.mockk()
+        indicatorDao = io.mockk.mockk(relaxed = true),
+        knownAppEntryDao = io.mockk.mockk(relaxed = true)
     )
 
     @Test
