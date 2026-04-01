@@ -4,6 +4,7 @@ import com.androdr.data.model.DnsEvent
 import com.androdr.data.model.ForensicTimelineEvent
 import com.androdr.data.model.ScanResult
 import com.androdr.data.model.TimelineEvent
+import com.androdr.sigma.Evidence
 import com.androdr.sigma.Finding
 import com.androdr.sigma.FindingCategory
 
@@ -18,11 +19,17 @@ fun DnsEvent.toForensicTimelineEvent(): ForensicTimelineEvent = ForensicTimeline
     processUid = this.appUid,
     iocIndicator = if (this.reason != null) this.domain else "",
     iocType = if (this.reason != null) "domain" else "",
+    iocSource = if (this.reason != null) extractDnsIocSource(this.reason) else "",
     isFromRuntime = true
 )
 
-fun Finding.toForensicTimelineEvent(scanResult: ScanResult): ForensicTimelineEvent =
-    ForensicTimelineEvent(
+fun Finding.toForensicTimelineEvent(scanResult: ScanResult): ForensicTimelineEvent {
+    val iocEvidence = this.evidence as? Evidence.IocMatch
+    val campaignTag = this.tags.firstOrNull { it.startsWith("campaign.") }
+        ?.removePrefix("campaign.")
+        ?.replaceFirstChar { c -> c.uppercase() }
+
+    return ForensicTimelineEvent(
         timestamp = scanResult.timestamp,
         source = "app_scanner",
         category = when (this.category) {
@@ -34,13 +41,19 @@ fun Finding.toForensicTimelineEvent(scanResult: ScanResult): ForensicTimelineEve
         details = this.description,
         severity = this.level.uppercase(),
         packageName = this.matchContext["package_name"] ?: "",
+        appName = this.matchContext["app_name"] ?: "",
         apkHash = this.matchContext["apk_hash"] ?: "",
+        iocIndicator = iocEvidence?.matchedIndicator ?: "",
+        iocType = iocEvidence?.iocType ?: "",
+        iocSource = iocEvidence?.source ?: "",
+        campaignName = campaignTag ?: "",
         ruleId = this.ruleId,
         scanResultId = scanResult.id,
         attackTechniqueId = this.tags.firstOrNull { it.startsWith("attack.t") }
             ?.removePrefix("attack.") ?: "",
         isFromRuntime = true
     )
+}
 
 fun TimelineEvent.toForensicTimelineEvent(scanResultId: Long = -1): ForensicTimelineEvent =
     ForensicTimelineEvent(
@@ -52,3 +65,11 @@ fun TimelineEvent.toForensicTimelineEvent(scanResultId: Long = -1): ForensicTime
         scanResultId = scanResultId,
         isFromBugreport = true
     )
+
+/** Extracts the feed source from DNS event reason strings like "IOC: Pegasus" */
+private fun extractDnsIocSource(reason: String?): String = when {
+    reason == null -> ""
+    reason.startsWith("IOC:") || reason.startsWith("IOC_detect:") -> "domain_ioc_feed"
+    reason == "blocklist" || reason == "blocklist_detect" -> "blocklist"
+    else -> ""
+}
