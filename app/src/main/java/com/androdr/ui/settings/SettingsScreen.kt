@@ -11,12 +11,14 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import android.content.Intent
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
@@ -49,6 +51,21 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
     val cveCount by viewModel.cveCount.collectAsStateWithLifecycle()
     val lastUpdated by viewModel.lastUpdated.collectAsStateWithLifecycle()
     val updating by viewModel.updating.collectAsStateWithLifecycle()
+    val hashExporting by viewModel.hashExporting.collectAsStateWithLifecycle()
+    val hashShareUri by viewModel.hashShareUri.collectAsStateWithLifecycle()
+
+    val context = androidx.compose.ui.platform.LocalContext.current
+    androidx.compose.runtime.LaunchedEffect(hashShareUri) {
+        hashShareUri?.let { uri ->
+            val intent = Intent(Intent.ACTION_SEND).apply {
+                type = "text/csv"
+                putExtra(Intent.EXTRA_STREAM, uri)
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+            context.startActivity(Intent.createChooser(intent, "Share App Hashes"))
+            viewModel.onHashShareConsumed()
+        }
+    }
 
     Scaffold { innerPadding ->
         Column(
@@ -124,6 +141,35 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
                 minLines = 3,
                 maxLines = 6
             )
+
+            HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+
+            // App Hash Export section
+            Text(
+                text = "App Hash Export",
+                style = MaterialTheme.typography.titleMedium
+            )
+            Text(
+                text = "Export SHA-256 hashes of all installed apps as CSV. " +
+                    "Use these hashes to check apps on VirusTotal.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            OutlinedButton(
+                onClick = { viewModel.exportAppHashes() },
+                modifier = Modifier.fillMaxWidth(),
+                enabled = !hashExporting
+            ) {
+                if (hashExporting) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(18.dp),
+                        strokeWidth = 2.dp
+                    )
+                    Text("  Computing hashes...")
+                } else {
+                    Text("Export App Hashes (CSV)")
+                }
+            }
 
             Spacer(modifier = Modifier.height(16.dp))
         }

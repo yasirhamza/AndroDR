@@ -3,6 +3,9 @@ package com.androdr.ui.settings
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import android.content.Context
+import android.net.Uri
+import androidx.core.content.FileProvider
 import com.androdr.data.db.IndicatorDao
 import com.androdr.data.repo.CveRepository
 import com.androdr.data.repo.SettingsRepository
@@ -10,9 +13,12 @@ import com.androdr.ioc.CertHashIocDatabase
 import com.androdr.ioc.IndicatorResolver
 import com.androdr.ioc.IndicatorUpdater
 import com.androdr.ioc.KnownAppUpdater
+import com.androdr.scanner.AppScanner
 import com.androdr.sigma.SigmaRuleEngine
 import com.androdr.sigma.SigmaRuleFeed
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -28,6 +34,7 @@ import javax.inject.Inject
 // and engines to display threat database stats and trigger manual updates from one screen.
 @HiltViewModel
 class SettingsViewModel @Inject constructor(
+    @ApplicationContext private val appContext: Context,
     private val settingsRepository: SettingsRepository,
     private val indicatorDao: IndicatorDao,
     private val certHashIocDatabase: CertHashIocDatabase,
@@ -35,6 +42,7 @@ class SettingsViewModel @Inject constructor(
     private val cveRepository: CveRepository,
     private val indicatorUpdater: IndicatorUpdater,
     private val knownAppUpdater: KnownAppUpdater,
+    private val appScanner: AppScanner,
     private val sigmaRuleFeed: SigmaRuleFeed
 ) : ViewModel() {
 
@@ -143,6 +151,58 @@ class SettingsViewModel @Inject constructor(
             _lastUpdated.value = indicatorDao.lastFetchTime("stalkerware_indicators")
         }
     }
+
+    // -- App hash export --------------------------------------------------------
+
+    private val _hashExporting = MutableStateFlow(false)
+    val hashExporting: StateFlow<Boolean> = _hashExporting.asStateFlow()
+
+    private val _hashShareUri = MutableStateFlow<Uri?>(null)
+    val hashShareUri: StateFlow<Uri?> = _hashShareUri.asStateFlow()
+
+    @Suppress("TooGenericExceptionCaught")
+    fun exportAppHashes() {
+        if (_hashExporting.value) return
+        viewModelScope.launch {
+            _hashExporting.value = true
+            try {
+                val telemetry = kotlinx.coroutines.withContext(Dispatchers.IO) {
+                    appScanner.collectTelemetry()
+                }
+                val csv = buildString {
+                    appendLine("package_name,app_name,apk_sha256,cert_sha256,is_system,installer")
+                    telemetry.sortedBy { it.packageName }.forEach { app ->
+                        if (app.apkHash.isNullOrEmpty()) return@forEach
+                        val pkg = csvEsc(app.packageName)
+                        val name = csvEsc(app.appName)
+                        val apk = app.apkHash ?: ""
+                        val cert = app.certHash ?: ""
+                        val sys = app.isSystemApp
+                        val inst = csvEsc(app.installer ?: "")
+                        appendLine("$pkg,$name,$apk,$cert,$sys,$inst")
+                    }
+                }
+                _hashShareUri.value = kotlinx.coroutines.withContext(Dispatchers.IO) {
+                    val dir = java.io.File(appContext.cacheDir, "reports").apply { mkdirs() }
+                    val ts = java.text.SimpleDateFormat(
+                        "yyyyMMdd_HHmmss", java.util.Locale.US
+                    ).format(java.util.Date())
+                    val file = java.io.File(dir, "androdr_app_hashes_$ts.csv")
+                    file.writeText(csv, Charsets.UTF_8)
+                    FileProvider.getUriForFile(appContext, "${appContext.packageName}.fileprovider", file)
+                }
+            } catch (e: Exception) {
+                android.util.Log.e(TAG, "Hash export failed: ${e.message}", e)
+            } finally {
+                _hashExporting.value = false
+            }
+        }
+    }
+
+    fun onHashShareConsumed() { _hashShareUri.value = null }
+
+    private fun csvEsc(v: String): String =
+        if (v.contains(',') || v.contains('"')) "\"${v.replace("\"", "\"\"")}\"" else v
 
     companion object {
         private const val TAG = "SettingsViewModel"
