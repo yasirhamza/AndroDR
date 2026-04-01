@@ -12,6 +12,7 @@ import androidx.work.WorkManager
 import com.androdr.ioc.IndicatorResolver
 import com.androdr.ioc.IocUpdateWorker
 import com.androdr.ioc.KnownAppResolver
+import com.androdr.sigma.SigmaRuleEngine
 import dagger.hilt.android.HiltAndroidApp
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -28,6 +29,8 @@ class AndroDRApplication : Application(), Configuration.Provider {
     @Inject lateinit var indicatorResolver: IndicatorResolver
     @Suppress("LateinitUsage")
     @Inject lateinit var knownAppResolver: KnownAppResolver
+    @Suppress("LateinitUsage")
+    @Inject lateinit var sigmaRuleEngine: SigmaRuleEngine
 
     override val workManagerConfiguration: Configuration
         get() = Configuration.Builder()
@@ -39,6 +42,7 @@ class AndroDRApplication : Application(), Configuration.Provider {
         CoroutineScope(Dispatchers.IO).launch {
             indicatorResolver.refreshCache()
             knownAppResolver.refreshCache()
+            sigmaRuleEngine.loadBundledRules()
         }
         scheduleIocUpdates()
     }
