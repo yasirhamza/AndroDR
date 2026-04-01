@@ -506,7 +506,7 @@ if [ "$MODE" = "load" ] || [ "$MODE" = "guided" ]; then
     $ADB shell rm /sdcard/Android/data/com.androdr.debug/files/androdr_last_report.txt 2>/dev/null || true
     $ADB shell am broadcast -a com.androdr.ACTION_SCAN -n com.androdr.debug/com.androdr.debug.ScanBroadcastReceiver </dev/null >/dev/null 2>&1
     # Poll for report file instead of fixed sleep
-    local scan_waited=0
+    scan_waited=0
     while [ $scan_waited -lt 90 ]; do
         if $ADB shell "[ -f /sdcard/Android/data/com.androdr.debug/files/androdr_last_report.txt ]" 2>/dev/null; then
             sleep 2; break
