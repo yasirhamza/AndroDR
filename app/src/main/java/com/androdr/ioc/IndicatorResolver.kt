@@ -21,7 +21,8 @@ import javax.inject.Singleton
 class IndicatorResolver @Inject constructor(
     private val dao: IndicatorDao,
     private val bundledPackages: IocDatabase,
-    private val bundledCerts: CertHashIocDatabase
+    private val bundledCerts: CertHashIocDatabase,
+    private val bundledApkHashes: ApkHashIocDatabase
 ) {
     private val cache = AtomicReference<IndicatorCache?>(null)
     private val domainSet = AtomicReference<Set<String>>(emptySet())
@@ -86,8 +87,18 @@ class IndicatorResolver @Inject constructor(
         )
     }
 
-    fun isKnownBadApkHash(hash: String): Indicator? =
-        cache.get()?.lookup(TYPE_APK_HASH, hash.lowercase())
+    fun isKnownBadApkHash(hash: String): Indicator? {
+        val normalized = hash.lowercase()
+        val hit = cache.get()?.lookup(TYPE_APK_HASH, normalized)
+        if (hit != null) return hit
+        val bundledHit = bundledApkHashes.isKnownBadApkHash(normalized) ?: return null
+        return Indicator(
+            type = TYPE_APK_HASH, value = bundledHit.apkHash,
+            name = bundledHit.familyName, campaign = bundledHit.category,
+            severity = bundledHit.severity, description = bundledHit.description,
+            source = "bundled", fetchedAt = 0L
+        )
+    }
 
     suspend fun count(): Int = dao.count()
 
