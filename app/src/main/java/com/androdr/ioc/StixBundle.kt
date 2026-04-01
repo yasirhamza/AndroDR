@@ -14,7 +14,6 @@ private val stixJson = Json { ignoreUnknownKeys = true }
 data class StixBundle(
     val type: String = "bundle",
     val id: String = "bundle--${UUID.randomUUID()}",
-    @SerialName("spec_version") val specVersion: String = "2.1",
     val objects: List<StixObject>
 )
 
