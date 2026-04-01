@@ -12,6 +12,7 @@ import com.androdr.data.repo.SettingsRepository
 import com.androdr.ioc.CertHashIocDatabase
 import com.androdr.ioc.IndicatorResolver
 import com.androdr.ioc.IndicatorUpdater
+import com.androdr.ioc.toStixBundle
 import com.androdr.ioc.KnownAppUpdater
 import com.androdr.scanner.AppScanner
 import com.androdr.sigma.SigmaRuleEngine
@@ -210,6 +211,43 @@ class SettingsViewModel @Inject constructor(
             "\"${sanitized.replace("\"", "\"\"")}\""
         } else sanitized
     }
+
+    // -- STIX2 export -------------------------------------------------------------
+
+    private val _stixExporting = MutableStateFlow(false)
+    val stixExporting: StateFlow<Boolean> = _stixExporting.asStateFlow()
+
+    private val _stixShareUri = MutableStateFlow<Uri?>(null)
+    val stixShareUri: StateFlow<Uri?> = _stixShareUri.asStateFlow()
+
+    @Suppress("TooGenericExceptionCaught")
+    fun exportStix2() {
+        if (_stixExporting.value) return
+        viewModelScope.launch {
+            _stixExporting.value = true
+            try {
+                val indicators = kotlinx.coroutines.withContext(Dispatchers.IO) {
+                    indicatorDao.getAll()
+                }
+                val json = indicators.toStixBundle()
+                _stixShareUri.value = kotlinx.coroutines.withContext(Dispatchers.IO) {
+                    val dir = java.io.File(appContext.cacheDir, "reports").apply { mkdirs() }
+                    val ts = java.text.SimpleDateFormat(
+                        "yyyyMMdd_HHmmss", java.util.Locale.US
+                    ).format(java.util.Date())
+                    val file = java.io.File(dir, "androdr_indicators_$ts.stix2.json")
+                    file.writeText(json, Charsets.UTF_8)
+                    FileProvider.getUriForFile(appContext, "${appContext.packageName}.fileprovider", file)
+                }
+            } catch (e: Exception) {
+                android.util.Log.e(TAG, "STIX2 export failed: ${e.message}", e)
+            } finally {
+                _stixExporting.value = false
+            }
+        }
+    }
+
+    fun onStixShareConsumed() { _stixShareUri.value = null }
 
     companion object {
         private const val TAG = "SettingsViewModel"
