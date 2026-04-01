@@ -331,9 +331,9 @@ run_scenario() {
         if [ -n "$cert_hash" ]; then
             local db_path="/data/data/com.androdr.debug/databases/androdr.db"
             $ADB shell "run-as com.androdr.debug sqlite3 $db_path \
-                \"INSERT OR REPLACE INTO cert_hash_ioc_entries \
-                (certHash, familyName, category, severity, description, source, fetchedAt) \
-                VALUES ('$cert_hash', 'Test Fixture', 'TEST', 'CRITICAL', \
+                \"INSERT OR REPLACE INTO indicators \
+                (type, value, name, campaign, severity, description, source, fetchedAt) \
+                VALUES ('cert_hash', '$cert_hash', 'Test Fixture', 'TEST', 'CRITICAL', \
                 'Adversary simulation test cert', 'adversary-test', $(date +%s000));\"" 2>/dev/null || \
                 echo "  WARNING: Could not seed cert hash into DB"
         fi
@@ -342,7 +342,14 @@ run_scenario() {
     # Step 6: TRIGGER SCAN
     echo "  Triggering scan..."
     $ADB shell am broadcast -a com.androdr.ACTION_SCAN -p com.androdr.debug >/dev/null 2>&1
-    sleep 12
+    # Poll for report file instead of fixed sleep
+    local waited=0
+    while [ $waited -lt 60 ]; do
+        if $ADB shell "[ -f /sdcard/Android/data/com.androdr.debug/files/androdr_last_report.txt ]" 2>/dev/null; then
+            sleep 2; break  # small grace period after file appears
+        fi
+        sleep 2; waited=$((waited + 2))
+    done
 
     # Step 6: PULL REPORT
     local report="$WORKDIR/androdr-${id}.txt"
@@ -495,8 +502,17 @@ if [ "$MODE" = "load" ] || [ "$MODE" = "guided" ]; then
 
     echo ""
     echo "  Triggering scan..."
+    # Delete old report so we can detect the new one
+    $ADB shell rm /sdcard/Android/data/com.androdr.debug/files/androdr_last_report.txt 2>/dev/null || true
     $ADB shell am broadcast -a com.androdr.ACTION_SCAN -n com.androdr.debug/com.androdr.debug.ScanBroadcastReceiver </dev/null >/dev/null 2>&1
-    sleep 15
+    # Poll for report file instead of fixed sleep
+    local scan_waited=0
+    while [ $scan_waited -lt 90 ]; do
+        if $ADB shell "[ -f /sdcard/Android/data/com.androdr.debug/files/androdr_last_report.txt ]" 2>/dev/null; then
+            sleep 2; break
+        fi
+        sleep 2; scan_waited=$((scan_waited + 2))
+    done
 
     REPORT="$WORKDIR/androdr-loaded.txt"
     $ADB pull /sdcard/Android/data/com.androdr.debug/files/androdr_last_report.txt "$REPORT" 2>/dev/null || true
@@ -632,11 +648,17 @@ echo "  SUMMARY"
 echo "============================================================"
 printf "  %-30s  %s\n" "SCENARIO" "RESULT"
 printf "  %-30s  %s\n" "--------" "------"
+FAIL_COUNT=0
 for id in $SELECTED_IDS; do
     result="${RESULTS[$id]:-NOT RUN}"
     printf "  %-30s  %s\n" "$id" "$result"
+    [ "$result" = "FAIL" ] && ((FAIL_COUNT++)) || true
 done
 echo "============================================================"
+if [ "$FAIL_COUNT" -gt 0 ]; then
+    echo "  $FAIL_COUNT scenario(s) FAILED"
+    exit 1
+fi
 
 pass=$(echo "${RESULTS[@]}" | tr ' ' '\n' | grep -c "^PASS$" || true)
 fail=$(echo "${RESULTS[@]}" | tr ' ' '\n' | grep -c "^FAIL$" || true)

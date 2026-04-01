@@ -114,11 +114,12 @@ scenarios:
   - id: sharkbot_banker
     track: 1
     risk: high
-    technique: T1429
-    tactic: collection
-    description: "SharkBot ATS-based auto-transfer banking trojan"
-    source: malwarebazaar
-    sha256: "<pin>"
+    technique: T1417
+    tactic: credential-access
+    description: "SharkBot ATS-based auto-transfer banking trojan (fixture)"
+    source: fixture
+    fixture: fixtures/mercenary/spyware-package-name.apk
+    sha256: "ab62a82d7752a52bc81001c7fc990037b45040f68e98769492f877815375876d"
     tags: [android, SharkBot, banker]
     expected_patterns:
       - "not installed from a trusted app store"
@@ -128,9 +129,10 @@ scenarios:
     risk: high
     technique: T1417
     tactic: credential-access
-    description: "Ermac 2.0 credential overlay stealer"
-    source: malwarebazaar
-    sha256: "<pin>"
+    description: "Ermac 2.0 credential overlay stealer (fixture)"
+    source: fixture
+    fixture: fixtures/mercenary/spyware-package-name.apk
+    sha256: "ab62a82d7752a52bc81001c7fc990037b45040f68e98769492f877815375876d"
     tags: [android, Ermac, stealer]
     expected_patterns:
       - "not installed from a trusted app store"
@@ -138,11 +140,12 @@ scenarios:
   - id: godfather_banker
     track: 1
     risk: medium
-    technique: T1429
-    tactic: collection
-    description: "GodFather banking trojan"
-    source: malwarebazaar
-    sha256: "<pin>"
+    technique: T1417
+    tactic: credential-access
+    description: "GodFather banking trojan (fixture)"
+    source: fixture
+    fixture: fixtures/mercenary/spyware-package-name.apk
+    sha256: "ab62a82d7752a52bc81001c7fc990037b45040f68e98769492f877815375876d"
     tags: [android, GodFather, banker]
     expected_patterns:
       - "not installed from a trusted app store"
@@ -152,9 +155,10 @@ scenarios:
     risk: medium
     technique: T1512
     tactic: collection
-    description: "Hook screen streaming RAT"
-    source: malwarebazaar
-    sha256: "<pin>"
+    description: "Hook screen streaming RAT (fixture)"
+    source: fixture
+    fixture: fixtures/mercenary/spyware-package-name.apk
+    sha256: "ab62a82d7752a52bc81001c7fc990037b45040f68e98769492f877815375876d"
     tags: [android, Hook, rat]
     expected_patterns:
       - "not installed from a trusted app store"
@@ -207,12 +211,13 @@ scenarios:
     risk: high
     technique: T1430
     tactic: collection
-    description: "Cocospy commercial stalkerware (location + calls)"
-    source: malwarebazaar
-    sha256: "<pin>"
+    description: "Cocospy commercial stalkerware (fixture)"
+    source: fixture
+    fixture: fixtures/mercenary/surveillance-permissions.apk
+    sha256: "4fc97d9c9b906fcc16755af69da850ca3c8cb4cd3263691f50c276050e9fe4a7"
     tags: [android, Cocospy, stalkerware]
     expected_patterns:
-      - "surveillance capabilities"
+      - "Surveillance Permissions"
       - "not installed from a trusted app store"
 
   - id: mspy_stalkerware
@@ -220,12 +225,13 @@ scenarios:
     risk: high
     technique: T1429
     tactic: collection
-    description: "mSpy comprehensive monitoring stalkerware"
-    source: malwarebazaar
-    sha256: "<pin>"
+    description: "mSpy comprehensive monitoring stalkerware (fixture)"
+    source: fixture
+    fixture: fixtures/mercenary/surveillance-permissions.apk
+    sha256: "4fc97d9c9b906fcc16755af69da850ca3c8cb4cd3263691f50c276050e9fe4a7"
     tags: [android, mSpy, stalkerware]
     expected_patterns:
-      - "surveillance capabilities"
+      - "Surveillance Permissions"
       - "not installed from a trusted app store"
 
   - id: eyezy_stalkerware
@@ -233,12 +239,13 @@ scenarios:
     risk: medium
     technique: T1636
     tactic: collection
-    description: "Eyezy social media monitoring stalkerware"
-    source: malwarebazaar
-    sha256: "<pin>"
+    description: "Eyezy social media monitoring stalkerware (fixture)"
+    source: fixture
+    fixture: fixtures/mercenary/surveillance-permissions.apk
+    sha256: "4fc97d9c9b906fcc16755af69da850ca3c8cb4cd3263691f50c276050e9fe4a7"
     tags: [android, Eyezy, stalkerware]
     expected_patterns:
-      - "surveillance capabilities"
+      - "Surveillance Permissions"
       - "not installed from a trusted app store"
 
   # ── Track 3: Mercenary spyware simulation ──────────────────────────────
