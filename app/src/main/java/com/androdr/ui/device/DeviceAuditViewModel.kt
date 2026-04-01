@@ -17,19 +17,23 @@ class DeviceAuditViewModel @Inject constructor(
     private val repository: ScanRepository
 ) : ViewModel() {
 
-    /** All device posture findings from the most recent scan. */
-    val deviceFindings: StateFlow<List<Finding>> = repository.allScans
+    /** Prefer the latest runtime scan (has device flags) — same logic as Dashboard/Apps. */
+    private val latestScan = repository.allScans
         .map { scans ->
-            scans.firstOrNull()?.findings
+            scans.firstOrNull { it.deviceFlags.isNotEmpty() } ?: scans.firstOrNull()
+        }
+
+    val deviceFindings: StateFlow<List<Finding>> = latestScan
+        .map { scan ->
+            scan?.findings
                 ?.filter { it.category == FindingCategory.DEVICE_POSTURE }
                 ?: emptyList()
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
-    /** The number of device findings that are currently triggered. */
-    val triggeredCount: StateFlow<Int> = repository.allScans
-        .map { scans ->
-            scans.firstOrNull()?.findings
+    val triggeredCount: StateFlow<Int> = latestScan
+        .map { scan ->
+            scan?.findings
                 ?.count { it.category == FindingCategory.DEVICE_POSTURE && it.triggered }
                 ?: 0
         }
