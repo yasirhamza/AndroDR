@@ -44,7 +44,8 @@ class ScanBroadcastReceiver : BroadcastReceiver() {
                 } else {
                     val scan = scanOrchestrator.runFullScan()
                     val dns = dnsEventDao.getRecentSnapshot()
-                    val report = ReportFormatter.formatScanReport(scan, dns, emptyList())
+                    val inventory = scanOrchestrator.lastAppTelemetry
+                    val report = ReportFormatter.formatScanReport(scan, dns, emptyList(), inventory)
                     val outDir = context.getExternalFilesDir(null) ?: return@launch
                     File(outDir, "androdr_last_report.txt").writeText(report)
                     Log.i(TAG, "Scan complete, report written to ${outDir.absolutePath}")
