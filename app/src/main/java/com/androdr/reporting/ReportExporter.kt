@@ -6,6 +6,7 @@ import android.util.Log
 import androidx.core.content.FileProvider
 import com.androdr.data.db.DnsEventDao
 import com.androdr.data.model.ScanResult
+import com.androdr.scanner.AppScanner
 import com.androdr.scanner.ScanOrchestrator
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
@@ -21,14 +22,17 @@ import javax.inject.Singleton
 class ReportExporter @Inject constructor(
     @ApplicationContext private val context: Context,
     private val dnsEventDao: DnsEventDao,
-    private val scanOrchestrator: ScanOrchestrator
+    private val scanOrchestrator: ScanOrchestrator,
+    private val appScanner: AppScanner
 ) {
     private val filenameFmt = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US)
 
     suspend fun export(scan: ScanResult): Uri = withContext(Dispatchers.IO) {
         val dnsEvents = dnsEventDao.getRecentSnapshot()
         val logLines  = captureLogcat()
-        val inventory = scanOrchestrator.lastAppTelemetry
+        val inventory = scanOrchestrator.lastAppTelemetry.ifEmpty {
+            runCatching { appScanner.collectTelemetry() }.getOrDefault(emptyList())
+        }
         val text      = ReportFormatter.formatScanReport(scan, dnsEvents, logLines, inventory)
 
         val reportsDir = File(context.cacheDir, "reports").apply { mkdirs() }
