@@ -36,18 +36,17 @@ data class StixObject(
 
 fun List<Indicator>.toStixBundle(): String {
     val objects = map { ind ->
+        val ts = java.time.Instant.ofEpochMilli(ind.fetchedAt).toString()
         StixObject(
             type = "indicator",
             id = "indicator--${UUID.randomUUID()}",
+            created = ts,
+            modified = ts,
             name = ind.name.ifEmpty { "${ind.type}: ${ind.value}" },
             description = ind.description,
             pattern = ind.toStixPattern(),
             patternType = "stix",
-            validFrom = java.text.SimpleDateFormat(
-                "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", java.util.Locale.US
-            ).apply {
-                timeZone = java.util.TimeZone.getTimeZone("UTC")
-            }.format(java.util.Date(ind.fetchedAt)),
+            validFrom = ts,
             indicatorTypes = listOf("malicious-activity")
         )
     }

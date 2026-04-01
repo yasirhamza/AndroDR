@@ -6,10 +6,8 @@ import android.content.Intent
 import android.util.Log
 import com.androdr.data.db.DnsEventDao
 import com.androdr.data.repo.CveRepository
-import com.androdr.ioc.CertHashIocUpdater
-import com.androdr.ioc.DomainIocUpdater
+import com.androdr.ioc.IndicatorUpdater
 import com.androdr.ioc.KnownAppUpdater
-import com.androdr.ioc.RemoteIocUpdater
 import com.androdr.reporting.ReportFormatter
 import com.androdr.scanner.ScanOrchestrator
 import com.androdr.sigma.SigmaRuleEngine
@@ -29,10 +27,8 @@ class ScanBroadcastReceiver : BroadcastReceiver() {
     @Inject lateinit var scanOrchestrator: ScanOrchestrator
     @Inject lateinit var dnsEventDao: DnsEventDao
     @Inject lateinit var cveRepository: CveRepository
-    @Inject lateinit var remoteIocUpdater: RemoteIocUpdater
-    @Inject lateinit var domainIocUpdater: DomainIocUpdater
+    @Inject lateinit var indicatorUpdater: IndicatorUpdater
     @Inject lateinit var knownAppUpdater: KnownAppUpdater
-    @Inject lateinit var certHashIocUpdater: CertHashIocUpdater
     @Inject lateinit var sigmaRuleFeed: SigmaRuleFeed
     @Inject lateinit var sigmaRuleEngine: SigmaRuleEngine
 
@@ -63,11 +59,9 @@ class ScanBroadcastReceiver : BroadcastReceiver() {
 
     @Suppress("TooGenericExceptionCaught")
     private suspend fun doUpdate() = coroutineScope {
-        val a = async { remoteIocUpdater.update() }
-        val b = async { domainIocUpdater.update() }
-        val c = async { knownAppUpdater.update() }
-        val d = async { certHashIocUpdater.update() }
-        a.await(); b.await(); c.await(); d.await()
+        val a = async { indicatorUpdater.update() }
+        val b = async { knownAppUpdater.update() }
+        a.await(); b.await()
         try { sigmaRuleEngine.setRemoteRules(sigmaRuleFeed.fetch()) } catch (_: Exception) {}
         cveRepository.refresh()
         Log.i(TAG, "CVE DB: ${cveRepository.getActivelyExploitedCount()} actively exploited CVEs loaded")

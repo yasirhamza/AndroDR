@@ -1,11 +1,8 @@
 package com.androdr.data.model
 
-import androidx.room.Entity
-import androidx.room.PrimaryKey
-
-@Entity(tableName = "cert_hash_ioc_entries")
+/** Feed DTO for cert hash IOC entries. Converted to [Indicator] by IndicatorUpdater. */
 data class CertHashIocEntry(
-    @PrimaryKey val certHash: String,
+    val certHash: String,
     val familyName: String,
     val category: String,
     val severity: String,

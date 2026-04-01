@@ -1,15 +1,10 @@
-// app/src/main/java/com/androdr/ioc/PublicRepoIocFeed.kt
 package com.androdr.ioc
 
 import android.util.Log
-import com.androdr.data.db.CertHashIocEntryDao
-import com.androdr.data.db.DomainIocEntryDao
-import com.androdr.data.db.IocEntryDao
+import com.androdr.data.db.IndicatorDao
 import com.androdr.data.db.KnownAppDbEntry
 import com.androdr.data.db.KnownAppEntryDao
-import com.androdr.data.model.CertHashIocEntry
-import com.androdr.data.model.DomainIocEntry
-import com.androdr.data.model.IocEntry
+import com.androdr.data.model.Indicator
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.snakeyaml.engine.v2.api.Load
@@ -21,13 +16,11 @@ import javax.inject.Singleton
 
 /**
  * Fetches IOC data from the public android-sigma-rules repo's ioc-data/ directory.
- * Parses YAML entries and upserts into Room IOC tables alongside other feeds.
+ * Parses YAML entries and upserts into the unified indicators table.
  */
 @Singleton
 class PublicRepoIocFeed @Inject constructor(
-    private val iocEntryDao: IocEntryDao,
-    private val domainIocEntryDao: DomainIocEntryDao,
-    private val certHashIocEntryDao: CertHashIocEntryDao,
+    private val indicatorDao: IndicatorDao,
     private val knownAppEntryDao: KnownAppEntryDao
 ) {
 
@@ -49,30 +42,28 @@ class PublicRepoIocFeed @Inject constructor(
         total
     }
 
-    // Non-fatal: fetch failure returns 0, other feeds continue
     @Suppress("TooGenericExceptionCaught", "SwallowedException")
     private suspend fun fetchAndUpsertPackages(fetchedAt: Long): Int {
         val yaml = fetchUrl("${BASE_URL}ioc-data/package-names.yml") ?: return 0
         val entries = parseIocYaml(yaml)
 
-        val iocEntries = entries.map { entry ->
-            IocEntry(
-                packageName = entry["indicator"]?.toString() ?: return@map null,
+        val indicators = entries.mapNotNull { entry ->
+            val indicator = entry["indicator"]?.toString() ?: return@mapNotNull null
+            Indicator(
+                type = IndicatorResolver.TYPE_PACKAGE, value = indicator,
                 name = entry["family"]?.toString() ?: "",
-                category = entry["category"]?.toString() ?: "MALWARE",
+                campaign = entry["category"]?.toString() ?: "MALWARE",
                 severity = entry["severity"]?.toString() ?: "CRITICAL",
                 description = entry["description"]?.toString() ?: "",
-                source = SOURCE_ID,
-                fetchedAt = fetchedAt
+                source = SOURCE_ID, fetchedAt = fetchedAt
             )
-        }.filterNotNull()
-
-        if (iocEntries.isNotEmpty()) {
-            iocEntryDao.upsertAll(iocEntries)
-            // Only clean stale entries when we have fresh data to replace them
-            iocEntryDao.deleteStaleEntries(SOURCE_ID, fetchedAt - 1)
         }
-        return iocEntries.size
+
+        if (indicators.isNotEmpty()) {
+            indicatorDao.upsertAll(indicators)
+            indicatorDao.deleteStaleEntries(SOURCE_ID, fetchedAt - 1)
+        }
+        return indicators.size
     }
 
     @Suppress("TooGenericExceptionCaught", "SwallowedException")
@@ -80,22 +71,20 @@ class PublicRepoIocFeed @Inject constructor(
         val yaml = fetchUrl("${BASE_URL}ioc-data/c2-domains.yml") ?: return 0
         val entries = parseIocYaml(yaml)
 
-        val domainEntries = entries.map { entry ->
-            DomainIocEntry(
-                domain = entry["indicator"]?.toString()?.lowercase() ?: return@map null,
-                campaignName = entry["family"]?.toString() ?: "",
+        val indicators = entries.mapNotNull { entry ->
+            val domain = entry["indicator"]?.toString()?.lowercase() ?: return@mapNotNull null
+            Indicator(
+                type = IndicatorResolver.TYPE_DOMAIN, value = domain,
+                name = "", campaign = entry["family"]?.toString() ?: "",
                 severity = entry["severity"]?.toString() ?: "CRITICAL",
-                source = SOURCE_ID,
-                fetchedAt = fetchedAt
+                description = "", source = SOURCE_ID, fetchedAt = fetchedAt
             )
-        }.filterNotNull()
-
-        if (domainEntries.isNotEmpty()) {
-            domainIocEntryDao.upsertAll(domainEntries)
-            // Only clean stale entries when we have fresh data to replace them
-            domainIocEntryDao.deleteStaleEntries(SOURCE_ID, fetchedAt - 1)
         }
-        return domainEntries.size
+
+        if (indicators.isNotEmpty()) {
+            indicatorDao.upsertAll(indicators)
+        }
+        return indicators.size
     }
 
     @Suppress("TooGenericExceptionCaught", "SwallowedException")
@@ -103,24 +92,22 @@ class PublicRepoIocFeed @Inject constructor(
         val yaml = fetchUrl("${BASE_URL}ioc-data/cert-hashes.yml") ?: return 0
         val entries = parseIocYaml(yaml)
 
-        val certEntries = entries.map { entry ->
-            CertHashIocEntry(
-                certHash = entry["indicator"]?.toString()?.lowercase() ?: return@map null,
-                familyName = entry["family"]?.toString() ?: "",
-                category = entry["category"]?.toString() ?: "MALWARE",
+        val indicators = entries.mapNotNull { entry ->
+            val hash = entry["indicator"]?.toString()?.lowercase() ?: return@mapNotNull null
+            Indicator(
+                type = IndicatorResolver.TYPE_CERT_HASH, value = hash,
+                name = entry["family"]?.toString() ?: "",
+                campaign = entry["category"]?.toString() ?: "MALWARE",
                 severity = entry["severity"]?.toString() ?: "CRITICAL",
                 description = entry["description"]?.toString() ?: "",
-                source = SOURCE_ID,
-                fetchedAt = fetchedAt
+                source = SOURCE_ID, fetchedAt = fetchedAt
             )
-        }.filterNotNull()
-
-        if (certEntries.isNotEmpty()) {
-            certHashIocEntryDao.upsertAll(certEntries)
-            // Only clean stale entries when we have fresh data to replace them
-            certHashIocEntryDao.deleteStaleEntries(SOURCE_ID, fetchedAt - 1)
         }
-        return certEntries.size
+
+        if (indicators.isNotEmpty()) {
+            indicatorDao.upsertAll(indicators)
+        }
+        return indicators.size
     }
 
     @Suppress("TooGenericExceptionCaught", "SwallowedException")
@@ -128,15 +115,15 @@ class PublicRepoIocFeed @Inject constructor(
         val yaml = fetchUrl("${BASE_URL}ioc-data/popular-apps.yml") ?: return 0
         val entries = parsePopularAppsYaml(yaml)
 
-        val knownAppEntries = entries.map { entry ->
+        val knownAppEntries = entries.mapNotNull { entry ->
             KnownAppDbEntry(
-                packageName = entry["packageName"]?.toString() ?: return@map null,
+                packageName = entry["packageName"]?.toString() ?: return@mapNotNull null,
                 displayName = entry["displayName"]?.toString() ?: "",
                 category = "POPULAR",
                 sourceId = SOURCE_ID,
                 fetchedAt = fetchedAt
             )
-        }.filterNotNull()
+        }
 
         if (knownAppEntries.isNotEmpty()) {
             knownAppEntryDao.upsertAll(knownAppEntries)
