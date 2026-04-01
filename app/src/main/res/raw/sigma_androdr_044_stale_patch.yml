@@ -18,4 +18,4 @@ display:
     safe_title: "Security Patch Current"
     evidence_type: none
 remediation:
-    - "Go to Settings > Software Update > Download and Install. Security patches fix known vulnerabilities. Your patch is more than 90 days old."
+    - "Go to Settings > Software Update > Download and Install. Also check Play Store > Settings > About > Google Play system update. Your security patch is more than 90 days old."
