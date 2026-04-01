@@ -172,9 +172,18 @@ class ScanOrchestrator @Inject constructor(
         runCatching { scanRepository.saveScan(result) }
             .onFailure { Log.e(TAG, "Failed to save scan result", it) }
         runCatching {
+            // Build hash lookup from app telemetry for enrichment
+            val hashByPkg = appTelemetry.filter { !it.apkHash.isNullOrEmpty() }
+                .associateBy({ it.packageName }, { it.apkHash!! })
             val timelineEvents = allFindings
                 .filter { it.triggered }
-                .map { it.toForensicTimelineEvent(result) }
+                .map { finding ->
+                    val event = finding.toForensicTimelineEvent(result)
+                    // Enrich with APK hash from telemetry if not already set
+                    if (event.apkHash.isEmpty() && event.packageName.isNotEmpty()) {
+                        event.copy(apkHash = hashByPkg[event.packageName] ?: "")
+                    } else event
+                }
             if (timelineEvents.isNotEmpty()) {
                 forensicTimelineEventDao.insertAll(timelineEvents)
                 Log.i(TAG, "Persisted ${timelineEvents.size} timeline events for scan ${result.id}")
