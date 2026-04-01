@@ -1,6 +1,7 @@
 package com.androdr.reporting
 
 import android.os.Build
+import com.androdr.data.model.AppTelemetry
 import com.androdr.data.model.DnsEvent
 import com.androdr.data.model.ScanResult
 import com.androdr.sigma.Finding
@@ -20,7 +21,8 @@ object ReportFormatter {
     fun formatScanReport(
         scan: ScanResult,
         dnsEvents: List<DnsEvent>,
-        logLines: List<String>
+        logLines: List<String>,
+        appInventory: List<AppTelemetry> = emptyList()
     ): String = buildString {
         val timestampFmt = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US)
         val dnsFmt = SimpleDateFormat("HH:mm:ss", Locale.US)
@@ -160,6 +162,23 @@ object ReportFormatter {
             scan.bugReportFindings.forEach { finding -> appendLine("  \u2022 $finding") }
         }
 
+        // -- App hash inventory ---------------------------------------------------
+        if (appInventory.isNotEmpty()) {
+            val appsWithHashes = appInventory.filter { !it.apkHash.isNullOrEmpty() }
+            if (appsWithHashes.isNotEmpty()) {
+                section("APP HASH INVENTORY (${appsWithHashes.size} apps)")
+                appsWithHashes.sortedBy { it.packageName }.forEach { app ->
+                    appendLine("  ${app.appName}")
+                    appendLine("     Package    : ${app.packageName}")
+                    appendLine("     APK SHA-256: ${app.apkHash}")
+                    if (!app.certHash.isNullOrEmpty()) {
+                        appendLine("     Cert SHA-256: ${app.certHash}")
+                    }
+                    appendLine()
+                }
+            }
+        }
+
         // -- App log --------------------------------------------------------------
         section("APPLICATION LOG  (${logLines.size} lines)")
         if (logLines.isEmpty()) {
@@ -189,6 +208,11 @@ object ReportFormatter {
         appendLine("  $icon  $sev  ${finding.title}")
         if (finding.triggered && finding.description.isNotEmpty()) {
             appendLine("           ${finding.description}")
+        }
+        if (finding.triggered && finding.remediation.isNotEmpty()) {
+            finding.remediation.forEach { step ->
+                appendLine("           \u2192 $step")
+            }
         }
     }
 

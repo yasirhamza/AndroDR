@@ -6,6 +6,7 @@ import android.util.Log
 import androidx.core.content.FileProvider
 import com.androdr.data.db.DnsEventDao
 import com.androdr.data.model.ScanResult
+import com.androdr.scanner.AppScanner
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -19,7 +20,8 @@ import javax.inject.Singleton
 @Singleton
 class ReportExporter @Inject constructor(
     @ApplicationContext private val context: Context,
-    private val dnsEventDao: DnsEventDao
+    private val dnsEventDao: DnsEventDao,
+    private val appScanner: AppScanner
 ) {
     private val filenameFmt = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US)
 
@@ -31,7 +33,8 @@ class ReportExporter @Inject constructor(
     suspend fun export(scan: ScanResult): Uri = withContext(Dispatchers.IO) {
         val dnsEvents = dnsEventDao.getRecentSnapshot()
         val logLines  = captureLogcat()
-        val text      = ReportFormatter.formatScanReport(scan, dnsEvents, logLines)
+        val inventory = runCatching { appScanner.collectTelemetry() }.getOrDefault(emptyList())
+        val text      = ReportFormatter.formatScanReport(scan, dnsEvents, logLines, inventory)
 
         val reportsDir = File(context.cacheDir, "reports").apply { mkdirs() }
         val filename = "androdr_report_${filenameFmt.format(Date(scan.timestamp))}.txt"
