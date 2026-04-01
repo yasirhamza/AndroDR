@@ -173,7 +173,7 @@ class ScanOrchestrator @Inject constructor(
             .onFailure { Log.e(TAG, "Failed to save scan result", it) }
         runCatching {
             val timelineEvents = allFindings
-                .filter { it.triggered && it.level.lowercase() != "informational" }
+                .filter { it.triggered }
                 .map { it.toForensicTimelineEvent(result) }
             if (timelineEvents.isNotEmpty()) {
                 forensicTimelineEventDao.insertAll(timelineEvents)
