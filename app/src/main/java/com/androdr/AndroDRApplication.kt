@@ -9,6 +9,7 @@ import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.NetworkType
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
+import com.androdr.data.repo.CveRepository
 import com.androdr.ioc.IndicatorResolver
 import com.androdr.ioc.IocUpdateWorker
 import com.androdr.ioc.KnownAppResolver
@@ -31,6 +32,8 @@ class AndroDRApplication : Application(), Configuration.Provider {
     @Inject lateinit var knownAppResolver: KnownAppResolver
     @Suppress("LateinitUsage")
     @Inject lateinit var sigmaRuleEngine: SigmaRuleEngine
+    @Suppress("LateinitUsage")
+    @Inject lateinit var cveRepository: CveRepository
 
     override val workManagerConfiguration: Configuration
         get() = Configuration.Builder()
@@ -43,6 +46,7 @@ class AndroDRApplication : Application(), Configuration.Provider {
             indicatorResolver.refreshCache()
             knownAppResolver.refreshCache()
             sigmaRuleEngine.loadBundledRules()
+            cveRepository.loadBundledIfEmpty()
         }
         scheduleIocUpdates()
     }
