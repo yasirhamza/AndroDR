@@ -1,0 +1,25 @@
+title: APK file hash matches known malware
+id: androdr-004
+status: production
+description: >
+    The APK file hash (SHA-256) matches a known malware sample in
+    threat intelligence databases (MalwareBazaar).
+author: AndroDR
+date: 2026/04/01
+tags:
+    - attack.t1204
+logsource:
+    product: androdr
+    service: app_scanner
+detection:
+    selection:
+        apk_hash|ioc_lookup: apk_hash_ioc_db
+    condition: selection
+level: critical
+display:
+    category: app_risk
+    icon: warning
+    triggered_title: "Known Malware APK"
+    evidence_type: none
+remediation:
+    - "This app's file hash matches a known malware sample. Uninstall it immediately: go to Settings > Apps > find the app > Uninstall."
