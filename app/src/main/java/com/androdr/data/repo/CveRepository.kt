@@ -1,10 +1,14 @@
 package com.androdr.data.repo
 
+import android.content.Context
 import android.util.Log
+import com.androdr.R
 import com.androdr.data.db.CveDao
 import com.androdr.data.model.CveEntity
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import org.json.JSONArray
 import org.json.JSONObject
 import java.io.BufferedInputStream
 import java.net.HttpURLConnection
@@ -15,9 +19,40 @@ import javax.inject.Singleton
 
 @Singleton
 class CveRepository @Inject constructor(
+    @ApplicationContext private val context: Context,
     private val cveDao: CveDao,
     private val settings: SettingsRepository
 ) {
+    /** Loads bundled CVE snapshot into Room if DB is empty (offline/first-launch). */
+    @Suppress("TooGenericExceptionCaught")
+    suspend fun loadBundledIfEmpty() = withContext(Dispatchers.IO) {
+        if (cveDao.getTotalCount() > 0) return@withContext
+        try {
+            val raw = context.resources.openRawResource(R.raw.known_exploited_cves)
+                .bufferedReader().use { it.readText() }
+            val arr = JSONArray(raw)
+            val now = System.currentTimeMillis()
+            val entries = (0 until arr.length()).map { i ->
+                val obj = arr.getJSONObject(i)
+                CveEntity(
+                    cveId = obj.getString("cveId"),
+                    description = obj.optString("description", ""),
+                    severity = obj.optString("severity", "CRITICAL"),
+                    fixedInPatchLevel = obj.optString("fixedInPatchLevel", ""),
+                    cisaDateAdded = obj.optString("cisaDateAdded", ""),
+                    isActivelyExploited = obj.optBoolean("isActivelyExploited", true),
+                    vendorProject = obj.optString("vendorProject", ""),
+                    product = obj.optString("product", ""),
+                    lastUpdated = now
+                )
+            }
+            cveDao.upsertAll(entries)
+            Log.i(TAG, "Loaded ${entries.size} bundled CVEs")
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to load bundled CVEs: ${e.message}")
+        }
+    }
+
     suspend fun refresh() = withContext(Dispatchers.IO) {
         val cisaResult = fetchCisaKev()
         val osvResult = fetchOsvAndroid()
