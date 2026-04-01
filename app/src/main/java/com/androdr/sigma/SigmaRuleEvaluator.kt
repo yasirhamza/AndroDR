@@ -108,8 +108,12 @@ object SigmaRuleEvaluator {
         } else {
             rule.display.safeTitle.ifEmpty { rule.title }
         }
-        val titleVars = evidenceResult?.titleVars ?: emptyMap()
-        val remediationVars = evidenceResult?.remediationVars ?: emptyMap()
+        // Record fields provide fallback vars for templates (e.g., {file_path}),
+        // evidence provider vars take precedence when present
+        val recordVars = record.filterValues { it !is List<*> && it !is Map<*, *> }
+            .mapValues { (_, v) -> v?.toString() ?: "" }
+        val titleVars = recordVars + (evidenceResult?.titleVars ?: emptyMap())
+        val remediationVars = recordVars + (evidenceResult?.remediationVars ?: emptyMap())
         return Finding(
             ruleId = rule.id,
             title = TemplateResolver.resolve(titleTemplate, titleVars),
