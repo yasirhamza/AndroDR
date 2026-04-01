@@ -274,7 +274,8 @@ class ScanOrchestrator @Inject constructor(
             com.androdr.data.model.KnownAppCategory.AOSP,
             com.androdr.data.model.KnownAppCategory.GOOGLE,
             com.androdr.data.model.KnownAppCategory.OEM,
-            com.androdr.data.model.KnownAppCategory.POPULAR
+            com.androdr.data.model.KnownAppCategory.POPULAR,
+            com.androdr.data.model.KnownAppCategory.USER_APP
         )
     }
 }
