@@ -43,7 +43,8 @@ class ScanOrchestrator @Inject constructor(
     private val sigmaRuleEngine: SigmaRuleEngine,
     private val indicatorResolver: IndicatorResolver,
     private val sigmaRuleFeed: SigmaRuleFeed,
-    private val knownAppResolver: com.androdr.ioc.KnownAppResolver
+    private val knownAppResolver: com.androdr.ioc.KnownAppResolver,
+    private val oemPrefixResolver: com.androdr.ioc.OemPrefixResolver
 ) {
 
     private val initMutex = Mutex()
@@ -61,8 +62,10 @@ class ScanOrchestrator @Inject constructor(
             "domain_ioc_db" to { v -> indicatorResolver.isKnownBadDomain(v.toString()) != null },
             "apk_hash_ioc_db" to { v -> indicatorResolver.isKnownBadApkHash(v.toString()) != null },
             "known_good_app_db" to { v ->
-                val entry = knownAppResolver.lookup(v.toString())
-                entry != null && entry.category in TRUSTED_CATEGORIES
+                val pkg = v.toString()
+                val entry = knownAppResolver.lookup(pkg)
+                (entry != null && entry.category in TRUSTED_CATEGORIES) ||
+                    oemPrefixResolver.isOemPrefix(pkg)
             }
         ))
         sigmaRuleEngine.loadBundledRules()
