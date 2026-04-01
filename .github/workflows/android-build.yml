@@ -81,11 +81,15 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release upload latest \
+          VERSION=$(grep 'versionName' app/build.gradle.kts | head -1 | sed 's/.*"\(.*\)".*/\1/')
+          BUILD=$(git rev-list --count HEAD)
+          TAG="v${VERSION}-build${BUILD}"
+          gh release create "$TAG" \
             app/build/outputs/apk/debug/app-debug.apk \
             --repo yasirhamza/androdr-releases \
-            --clobber \
-            || echo "Release upload failed (token may lack cross-repo access)"
+            --title "AndroDR $TAG" \
+            --notes "Automated build from commit $(git rev-parse --short HEAD)" \
+            || echo "Release publish failed (token may lack cross-repo access)"
 
   instrumented-test:
     runs-on: ubuntu-latest
