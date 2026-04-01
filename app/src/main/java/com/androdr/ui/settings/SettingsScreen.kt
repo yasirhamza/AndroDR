@@ -188,12 +188,12 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
 
             // STIX2 Export section
             Text(
-                text = "Threat Intelligence Export",
+                text = "Scan Findings Export",
                 style = MaterialTheme.typography.titleMedium
             )
             Text(
-                text = "Export all threat indicators as a STIX 2.1 JSON bundle. " +
-                    "Compatible with MVT, MISP, and other TI platforms.",
+                text = "Export scan findings as a STIX 2.1 JSON bundle for sharing " +
+                    "with forensic analysts. Compatible with MVT, MISP, and SIEM platforms.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -209,7 +209,7 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
                     )
                     Text("  Exporting...")
                 } else {
-                    Text("Export Indicators (STIX2 JSON)")
+                    Text("Export Findings (STIX2 JSON)")
                 }
             }
 

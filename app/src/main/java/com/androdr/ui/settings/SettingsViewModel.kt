@@ -6,10 +6,12 @@ import androidx.lifecycle.viewModelScope
 import android.content.Context
 import android.net.Uri
 import androidx.core.content.FileProvider
+import com.androdr.data.db.ForensicTimelineEventDao
 import com.androdr.data.db.IndicatorDao
 import com.androdr.data.repo.CveRepository
 import com.androdr.data.repo.SettingsRepository
 import com.androdr.ioc.CertHashIocDatabase
+import com.androdr.data.model.Indicator
 import com.androdr.ioc.IndicatorResolver
 import com.androdr.ioc.IndicatorUpdater
 import com.androdr.ioc.toStixBundle
@@ -44,7 +46,8 @@ class SettingsViewModel @Inject constructor(
     private val indicatorUpdater: IndicatorUpdater,
     private val knownAppUpdater: KnownAppUpdater,
     private val appScanner: AppScanner,
-    private val sigmaRuleFeed: SigmaRuleFeed
+    private val sigmaRuleFeed: SigmaRuleFeed,
+    private val forensicTimelineEventDao: ForensicTimelineEventDao
 ) : ViewModel() {
 
     val blocklistBlockMode = settingsRepository.blocklistBlockMode
@@ -226,17 +229,38 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch {
             _stixExporting.value = true
             try {
-                val indicators = kotlinx.coroutines.withContext(Dispatchers.IO) {
-                    indicatorDao.getAll()
+                // Export device-specific findings as STIX2 indicators
+                val events = kotlinx.coroutines.withContext(Dispatchers.IO) {
+                    forensicTimelineEventDao.getAllForExport()
                 }
-                android.util.Log.i(TAG, "STIX2 export: ${indicators.size} indicators")
-                val json = try {
-                    indicators.toStixBundle()
-                } catch (e: Exception) {
-                    android.util.Log.e(TAG, "STIX2 serialization failed", e)
-                    // Fallback: manual JSON construction
-                    """{"type":"bundle","id":"bundle--error","objects":[]}"""
-                }
+                // Convert timeline events with IOC/package data to Indicator for STIX2
+                val indicators = events
+                    .filter { it.packageName.isNotEmpty() || it.iocIndicator.isNotEmpty() }
+                    .distinctBy { "${it.packageName}|${it.iocIndicator}|${it.apkHash}" }
+                    .map { event ->
+                        val type = when {
+                            event.apkHash.isNotEmpty() -> IndicatorResolver.TYPE_APK_HASH
+                            event.iocType == "domain" -> IndicatorResolver.TYPE_DOMAIN
+                            event.packageName.isNotEmpty() -> IndicatorResolver.TYPE_PACKAGE
+                            else -> IndicatorResolver.TYPE_PACKAGE
+                        }
+                        val value = when (type) {
+                            IndicatorResolver.TYPE_APK_HASH -> event.apkHash
+                            IndicatorResolver.TYPE_DOMAIN -> event.iocIndicator
+                            else -> event.packageName
+                        }
+                        Indicator(
+                            type = type, value = value,
+                            name = event.appName.ifEmpty { event.description },
+                            campaign = event.campaignName,
+                            severity = event.severity,
+                            description = event.details,
+                            source = "androdr_scan",
+                            fetchedAt = event.timestamp
+                        )
+                    }
+                android.util.Log.i(TAG, "STIX2 export: ${indicators.size} findings")
+                val json = indicators.toStixBundle()
                 _stixShareUri.value = kotlinx.coroutines.withContext(Dispatchers.IO) {
                     val dir = java.io.File(appContext.cacheDir, "reports").apply { mkdirs() }
                     val ts = java.text.SimpleDateFormat(
