@@ -18,6 +18,7 @@ object TimelineFormatter {
     private const val RULE = "============================================================"
     private const val THIN = "------------------------------------------------------------"
 
+    @Suppress("LongMethod") // Report formatting assembles header, grouped findings, legacy, and timeline
     fun formatTimeline(
         timeline: List<TimelineEvent>,
         legacyFindings: List<BugReportFinding>,
@@ -42,8 +43,24 @@ object TimelineFormatter {
         if (triggeredFindings.isEmpty()) {
             appendLine("  No SIGMA rule findings triggered.")
         } else {
-            triggeredFindings.sortedByDescending { severityOrdinal(it.level) }.forEach { f ->
+            // Group identical findings by title+level to reduce noise
+            val grouped = triggeredFindings
+                .sortedByDescending { severityOrdinal(it.level) }
+                .groupBy { "${it.level}|${it.title}" }
+            grouped.values.forEach { group ->
+                val f = group.first()
+                val packages = group.mapNotNull {
+                    it.matchContext["package_name"]?.takeIf { p -> p.isNotEmpty() }
+                }.distinct()
                 appendLine("  [${f.level.uppercase()}] ${f.title}")
+                if (packages.isNotEmpty()) {
+                    if (packages.size <= 3) {
+                        packages.forEach { pkg -> appendLine("    Package: $pkg") }
+                    } else {
+                        appendLine("    ${packages.size} apps: ${packages.take(5).joinToString(", ")}" +
+                            if (packages.size > 5) ", ..." else "")
+                    }
+                }
                 if (f.description.isNotEmpty()) {
                     appendLine("    ${f.description}")
                 }
