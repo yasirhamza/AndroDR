@@ -6,7 +6,7 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import java.util.UUID
 
-private val stixJson = Json { ignoreUnknownKeys = true }
+private val stixJson = Json { ignoreUnknownKeys = true; encodeDefaults = true }
 
 // -- STIX2 data classes (minimal subset for indicator bundles) --
 
