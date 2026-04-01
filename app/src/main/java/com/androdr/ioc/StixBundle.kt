@@ -80,6 +80,7 @@ fun parseStixBundle(json: String, source: String): List<Indicator> {
         .filter { it.type == "indicator" && it.pattern.isNotEmpty() }
         .mapNotNull { obj ->
             val (type, value) = extractIndicator(obj.pattern) ?: return@mapNotNull null
+            if (!isValidIndicatorValue(type, value)) return@mapNotNull null
             Indicator(
                 type = type, value = value,
                 name = obj.name, campaign = "",
@@ -87,6 +88,14 @@ fun parseStixBundle(json: String, source: String): List<Indicator> {
                 source = source, fetchedAt = now
             )
         }
+}
+
+private fun isValidIndicatorValue(type: String, value: String): Boolean = when (type) {
+    IndicatorResolver.TYPE_DOMAIN -> value.length >= 4 && value.contains('.')
+    IndicatorResolver.TYPE_CERT_HASH, IndicatorResolver.TYPE_APK_HASH ->
+        value.length == 64 && value.all { it in '0'..'9' || it in 'a'..'f' }
+    IndicatorResolver.TYPE_PACKAGE -> value.length >= 3 && value.contains('.')
+    else -> value.isNotEmpty()
 }
 
 private fun extractIndicator(pattern: String): Pair<String, String>? {

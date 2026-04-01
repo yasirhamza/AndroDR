@@ -201,8 +201,15 @@ class SettingsViewModel @Inject constructor(
 
     fun onHashShareConsumed() { _hashShareUri.value = null }
 
-    private fun csvEsc(v: String): String =
-        if (v.contains(',') || v.contains('"')) "\"${v.replace("\"", "\"\"")}\"" else v
+    private fun csvEsc(v: String): String {
+        // Prevent CSV formula injection (cells starting with =, +, -, @, \t, \r)
+        val sanitized = if (v.isNotEmpty() && v[0] in setOf('=', '+', '-', '@', '\t', '\r')) {
+            "'" + v
+        } else v
+        return if (sanitized.contains(',') || sanitized.contains('"') || sanitized.contains('\n')) {
+            "\"${sanitized.replace("\"", "\"\"")}\""
+        } else sanitized
+    }
 
     companion object {
         private const val TAG = "SettingsViewModel"
