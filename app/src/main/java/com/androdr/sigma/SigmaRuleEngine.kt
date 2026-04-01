@@ -128,6 +128,7 @@ class SigmaRuleEngine @Inject constructor(
             R.raw.sigma_androdr_015_firmware_implant,
             R.raw.sigma_androdr_016_system_name_disguise,
             R.raw.sigma_androdr_017_accessibility_surveillance_combo,
+            R.raw.sigma_androdr_020_spyware_artifact,
             R.raw.sigma_androdr_040_adb_enabled,
             R.raw.sigma_androdr_041_dev_options,
             R.raw.sigma_androdr_042_unknown_sources,
