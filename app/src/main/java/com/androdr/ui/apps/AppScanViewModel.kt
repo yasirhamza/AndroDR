@@ -3,6 +3,7 @@ package com.androdr.ui.apps
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.androdr.data.repo.ScanRepository
+import com.androdr.data.repo.ScanRepository.Companion.preferRuntimeScan
 import com.androdr.sigma.Finding
 import com.androdr.sigma.FindingCategory
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -23,9 +24,7 @@ class AppScanViewModel @Inject constructor(
     /** All APP_RISK findings from the latest runtime scan (matches dashboard). */
     val appFindings: StateFlow<List<Finding>> = repository.allScans
         .map { scans ->
-            val scan = scans.firstOrNull { it.deviceFlags.isNotEmpty() }
-                ?: scans.firstOrNull()
-            scan?.findings
+            scans.preferRuntimeScan()?.findings
                 ?.filter { it.category == FindingCategory.APP_RISK }
                 ?: emptyList()
         }
