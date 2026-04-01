@@ -27,4 +27,4 @@ display:
     summary_template: "Graphite/Paragon spyware exploits {count} unpatched CVEs on this device"
 level: critical
 remediation:
-    - "Update to the latest security patch immediately. These CVEs are exploited by Graphite spyware."
+    - "Go to Settings > Software Update > Download and Install immediately. Also check Play Store > Settings > About > Google Play system update. These CVEs are exploited by Graphite spyware."

@@ -85,11 +85,12 @@ class DashboardViewModel @Inject constructor(
     @Suppress("TooGenericExceptionCaught")
     private suspend fun doUpdate() {
         try {
-            val fetched = indicatorUpdater.update()
-            if (fetched == 0) {
+            indicatorUpdater.update()
+            refreshIocState()
+            // Only warn if DB is still empty after update attempt (not just zero new entries)
+            if (_iocEntryCount.value <= bundledCount) {
                 _iocErrorEvent.tryEmit("Failed to update threat database. Check your connection.")
             }
-            refreshIocState()
         } catch (e: Exception) {
             _iocErrorEvent.tryEmit("Threat database update failed: ${e.message}")
         }
