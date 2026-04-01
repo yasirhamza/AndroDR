@@ -74,7 +74,10 @@ class HistoryViewModel @Inject constructor(
         _sheetScan.value = scan
         viewModelScope.launch {
             val dnsEvents = dnsEventDao.getRecentSnapshot()
-            _sheetReportText.value = ReportFormatter.formatScanReport(scan, dnsEvents, emptyList())
+            val inventory = orchestrator.lastAppTelemetry
+            _sheetReportText.value = ReportFormatter.formatScanReport(
+                scan, dnsEvents, emptyList(), inventory
+            )
         }
     }
 
