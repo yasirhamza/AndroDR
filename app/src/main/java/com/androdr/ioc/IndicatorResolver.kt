@@ -10,12 +10,12 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Unified IOC resolver backed by the `indicators` table. Replaces the
- * per-type resolvers (IocResolver, DomainIocResolver, CertHashIocResolver).
+ * Unified IOC resolver backed by the `indicators` table.
  *
- * Loads all indicators into an in-memory cache on [refreshCache], then
- * provides O(1) lookups by type+value. Domain lookups include label-stripping
- * for subdomain matching.
+ * Non-domain indicators (packages, certs, APK hashes) are cached in a HashMap.
+ * Domain indicators use a lightweight HashSet for O(1) membership checks to
+ * avoid OOM from 371K+ blocklist entries — full Indicator objects are fetched
+ * from Room only on confirmed hits.
  */
 @Singleton
 class IndicatorResolver @Inject constructor(
@@ -24,15 +24,25 @@ class IndicatorResolver @Inject constructor(
     private val bundledCerts: CertHashIocDatabase
 ) {
     private val cache = AtomicReference<IndicatorCache?>(null)
+    private val domainSet = AtomicReference<Set<String>>(emptySet())
 
+    @Suppress("TooGenericExceptionCaught")
     suspend fun refreshCache() = withContext(Dispatchers.IO) {
-        val all = dao.getAll()
-        val byTypeValue = HashMap<String, Indicator>(all.size * 2)
-        for (ind in all) {
+        // Non-domain indicators: full objects in HashMap (small set)
+        val nonDomain = dao.getAllByType(TYPE_PACKAGE) +
+            dao.getAllByType(TYPE_CERT_HASH) +
+            dao.getAllByType(TYPE_APK_HASH)
+        val byTypeValue = HashMap<String, Indicator>(nonDomain.size * 2)
+        for (ind in nonDomain) {
             byTypeValue["${ind.type}:${ind.value}"] = ind
         }
         cache.set(IndicatorCache(byTypeValue))
-        Log.i(TAG, "Indicator cache refreshed: ${all.size} entries")
+
+        // Domain indicators: lightweight HashSet of values only (~15MB for 371K strings)
+        val domains = dao.getAllByType(TYPE_DOMAIN).map { it.value }.toHashSet()
+        domainSet.set(domains)
+
+        Log.i(TAG, "Indicator cache: ${nonDomain.size} non-domain + ${domains.size} domains")
     }
 
     fun isKnownBadPackage(packageName: String): BadPackageInfo? {
@@ -43,11 +53,19 @@ class IndicatorResolver @Inject constructor(
 
     @Suppress("ReturnCount")
     fun isKnownBadDomain(domain: String): Indicator? {
-        val snapshot = cache.get() ?: return null
         if (domain.isBlank()) return null
+        val domains = domainSet.get()
+        if (domains.isEmpty()) return null
         var candidate = domain.trimEnd('.').lowercase()
         while (candidate.isNotEmpty()) {
-            snapshot.lookup(TYPE_DOMAIN, candidate)?.let { return it }
+            if (candidate in domains) {
+                // Return a lightweight Indicator without querying Room
+                return Indicator(
+                    type = TYPE_DOMAIN, value = candidate,
+                    name = "", campaign = "", severity = "HIGH",
+                    description = "", source = "cached", fetchedAt = 0L
+                )
+            }
             val dot = candidate.indexOf('.')
             if (dot < 0) break
             candidate = candidate.substring(dot + 1)

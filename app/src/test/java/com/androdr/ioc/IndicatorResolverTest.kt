@@ -26,6 +26,8 @@ class IndicatorResolverTest {
         bundledCerts = mockk()
         every { bundledPackages.isKnownBadPackage(any()) } returns null
         every { bundledCerts.isKnownBadCert(any()) } returns null
+        // Default: all type queries return empty
+        coEvery { dao.getAllByType(any()) } returns emptyList()
         resolver = IndicatorResolver(dao, bundledPackages, bundledCerts)
     }
 
@@ -39,7 +41,7 @@ class IndicatorResolverTest {
 
     @Test
     fun `cert hash lookup works after cache refresh`() = runTest {
-        coEvery { dao.getAll() } returns listOf(
+        coEvery { dao.getAllByType("cert_hash") } returns listOf(
             Indicator("cert_hash", "abc123", "TestMalware", "", "CRITICAL", "", "test", 1000L)
         )
         resolver.refreshCache()
@@ -50,7 +52,7 @@ class IndicatorResolverTest {
 
     @Test
     fun `domain lookup with subdomain matching`() = runTest {
-        coEvery { dao.getAll() } returns listOf(
+        coEvery { dao.getAllByType("domain") } returns listOf(
             Indicator("domain", "evil.com", "", "Pegasus", "CRITICAL", "", "test", 1000L)
         )
         resolver.refreshCache()
@@ -79,7 +81,7 @@ class IndicatorResolverTest {
 
     @Test
     fun `apk hash lookup works`() = runTest {
-        coEvery { dao.getAll() } returns listOf(
+        coEvery { dao.getAllByType("apk_hash") } returns listOf(
             Indicator("apk_hash", "deadbeef", "Trojan", "", "CRITICAL", "", "test", 1000L)
         )
         resolver.refreshCache()
@@ -89,7 +91,7 @@ class IndicatorResolverTest {
 
     @Test
     fun `normalizes cert hash to lowercase`() = runTest {
-        coEvery { dao.getAll() } returns listOf(
+        coEvery { dao.getAllByType("cert_hash") } returns listOf(
             Indicator("cert_hash", "abc123def456", "TestMalware", "", "CRITICAL", "", "test", 1000L)
         )
         resolver.refreshCache()
