@@ -53,6 +53,8 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
     val updating by viewModel.updating.collectAsStateWithLifecycle()
     val hashExporting by viewModel.hashExporting.collectAsStateWithLifecycle()
     val hashShareUri by viewModel.hashShareUri.collectAsStateWithLifecycle()
+    val stixExporting by viewModel.stixExporting.collectAsStateWithLifecycle()
+    val stixShareUri by viewModel.stixShareUri.collectAsStateWithLifecycle()
 
     val context = androidx.compose.ui.platform.LocalContext.current
     androidx.compose.runtime.LaunchedEffect(hashShareUri) {
@@ -64,6 +66,17 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
             }
             context.startActivity(Intent.createChooser(intent, "Share App Hashes"))
             viewModel.onHashShareConsumed()
+        }
+    }
+    androidx.compose.runtime.LaunchedEffect(stixShareUri) {
+        stixShareUri?.let { uri ->
+            val intent = Intent(Intent.ACTION_SEND).apply {
+                type = "application/json"
+                putExtra(Intent.EXTRA_STREAM, uri)
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+            context.startActivity(Intent.createChooser(intent, "Share STIX2 Bundle"))
+            viewModel.onStixShareConsumed()
         }
     }
 
@@ -168,6 +181,35 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
                     Text("  Computing hashes...")
                 } else {
                     Text("Export App Hashes (CSV)")
+                }
+            }
+
+            HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+
+            // STIX2 Export section
+            Text(
+                text = "Threat Intelligence Export",
+                style = MaterialTheme.typography.titleMedium
+            )
+            Text(
+                text = "Export all threat indicators as a STIX 2.1 JSON bundle. " +
+                    "Compatible with MVT, MISP, and other TI platforms.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            OutlinedButton(
+                onClick = { viewModel.exportStix2() },
+                modifier = Modifier.fillMaxWidth(),
+                enabled = !stixExporting
+            ) {
+                if (stixExporting) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(18.dp),
+                        strokeWidth = 2.dp
+                    )
+                    Text("  Exporting...")
+                } else {
+                    Text("Export Indicators (STIX2 JSON)")
                 }
             }
 
