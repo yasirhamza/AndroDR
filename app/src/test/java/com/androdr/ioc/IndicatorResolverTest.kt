@@ -17,6 +17,7 @@ class IndicatorResolverTest {
     private lateinit var dao: IndicatorDao
     private lateinit var bundledPackages: IocDatabase
     private lateinit var bundledCerts: CertHashIocDatabase
+    private lateinit var bundledApkHashes: ApkHashIocDatabase
     private lateinit var resolver: IndicatorResolver
 
     @Before
@@ -24,11 +25,13 @@ class IndicatorResolverTest {
         dao = mockk()
         bundledPackages = mockk()
         bundledCerts = mockk()
+        bundledApkHashes = mockk()
         every { bundledPackages.isKnownBadPackage(any()) } returns null
         every { bundledCerts.isKnownBadCert(any()) } returns null
+        every { bundledApkHashes.isKnownBadApkHash(any()) } returns null
         // Default: all type queries return empty
         coEvery { dao.getAllByType(any()) } returns emptyList()
-        resolver = IndicatorResolver(dao, bundledPackages, bundledCerts)
+        resolver = IndicatorResolver(dao, bundledPackages, bundledCerts, bundledApkHashes)
     }
 
     @Test

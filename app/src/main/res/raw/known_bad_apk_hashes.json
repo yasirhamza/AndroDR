@@ -1,0 +1,11 @@
+[
+  {"apkHash":"8beae1f6b21cec17eed82fb7af25e1782d5b7bf10fd22369603313f1b1a5e5e4","familyName":"Cerberus","category":"BANKER","severity":"CRITICAL","description":"Cerberus Android banking trojan"},
+  {"apkHash":"17372844a0ecb548c70275a5e06f522a2445f2781410a246130757e0b7bc5396","familyName":"SpyNote","category":"RAT","severity":"CRITICAL","description":"SpyNote remote access trojan"},
+  {"apkHash":"392272ef515d2f60f2c058675d637bf63a265800b8e4613ed9f72eeb8ebb323d","familyName":"Anubis","category":"BANKER","severity":"CRITICAL","description":"Anubis banking trojan with SMS stealing"},
+  {"apkHash":"f690e30b6ee25c153effc5620fd7ec61481a449a127b54a67c7afc4c13d7917f","familyName":"BRATA","category":"RAT","severity":"CRITICAL","description":"BRATA Android remote access trojan"},
+  {"apkHash":"c565f4b9b3c6bb095c6ce62ab02c5cc8a84502231f4facdddb6f3d7af2321b5e","familyName":"Hydra","category":"DROPPER","severity":"CRITICAL","description":"Hydra Android banking trojan dropper"},
+  {"apkHash":"f4d7e9ec4eda034c29b8d73d479084658858f56e67909c2ffedf9223d7ca9bd2","familyName":"Vultur","category":"RAT","severity":"CRITICAL","description":"Vultur Android RAT with screen recording"},
+  {"apkHash":"92c3337b3d74f2aab8f0ca3a6f045719a3301519810d535856ff11dd743b523c","familyName":"TheTruthSpy","category":"STALKERWARE","severity":"CRITICAL","description":"TheTruthSpy commercial stalkerware"},
+  {"apkHash":"4b4c1064e3994b59904749fb706c8dfdcc6a50c203694bb45a6d1b4ce11795b3","familyName":"AndrMonitor","category":"STALKERWARE","severity":"CRITICAL","description":"AndrMonitor commercial stalkerware"},
+  {"apkHash":"4bcb6951c5f78c646c19771ff58c2ea749e734ae3fa916f130aeee8e083ca2e4","familyName":"TiSpy","category":"STALKERWARE","severity":"CRITICAL","description":"TiSpy commercial stalkerware"}
+]
