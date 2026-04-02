@@ -53,3 +53,4 @@ gradle.properties
 .claude/
 reports-from-device-tests/
 build/uat/
+.superpowers/
