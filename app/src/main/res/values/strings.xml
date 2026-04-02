@@ -132,7 +132,6 @@
     <string name="cd_copy_report">Copy report</string>
     <string name="cd_export">Export</string>
     <string name="timeline_copied">Timeline copied to clipboard</string>
-    <string name="timeline_generating">Generating report\u2026</string>
     <string name="timeline_report_title">Forensic Timeline Report</string>
     <string name="timeline_copy">Copy</string>
     <string name="timeline_share">Share</string>
