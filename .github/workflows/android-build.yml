@@ -76,7 +76,7 @@ jobs:
           path: app/build/outputs/apk/debug/app-debug.apk
           retention-days: 14
 
-      - name: Publish APK to releases repo
+      - name: Publish APK release
         if: github.ref == 'refs/heads/main' && success()
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -86,10 +86,9 @@ jobs:
           TAG="v${VERSION}-build${BUILD}"
           gh release create "$TAG" \
             app/build/outputs/apk/debug/app-debug.apk \
-            --repo yasirhamza/androdr-releases \
             --title "AndroDR $TAG" \
             --notes "Automated build from commit $(git rev-parse --short HEAD)" \
-            || echo "Release publish failed (token may lack cross-repo access)"
+            || echo "Release publish failed"
 
   instrumented-test:
     runs-on: ubuntu-latest

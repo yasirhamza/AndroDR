@@ -67,7 +67,7 @@ app/src/main/java/com/androdr/
 
 ## Download
 
-[Latest release](https://github.com/yasirhamza/androdr-releases/releases/latest)
+[Latest release](https://github.com/yasirhamza/AndroDR/releases/latest)
 
 ## Privacy
 
