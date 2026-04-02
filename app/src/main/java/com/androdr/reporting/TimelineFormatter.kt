@@ -22,7 +22,8 @@ object TimelineFormatter {
     fun formatTimeline(
         timeline: List<TimelineEvent>,
         legacyFindings: List<BugReportFinding>,
-        findings: List<Finding>
+        findings: List<Finding>,
+        hashByPkg: Map<String, String> = emptyMap()
     ): String = buildString {
         val generated = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).format(Date())
 
@@ -55,10 +56,14 @@ object TimelineFormatter {
                 appendLine("  [${f.level.uppercase()}] ${f.title}")
                 if (packages.isNotEmpty()) {
                     if (packages.size <= 3) {
-                        packages.forEach { pkg -> appendLine("    Package: $pkg") }
+                        packages.forEach { pkg ->
+                            appendLine("    Package: $pkg")
+                            hashByPkg[pkg]?.let { appendLine("    APK SHA-256: $it") }
+                        }
                     } else {
                         appendLine("    ${packages.size} apps: ${packages.take(5).joinToString(", ")}" +
                             if (packages.size > 5) ", ..." else "")
+                        // Show hashes for multi-package groups in inventory
                     }
                 }
                 if (f.description.isNotEmpty()) {
@@ -90,6 +95,18 @@ object TimelineFormatter {
             timeline.sortedBy { it.timestamp }.forEach { e ->
                 val sev = e.severity.uppercase().padEnd(8)
                 appendLine("  $sev  [${e.source}] ${e.description}")
+            }
+            appendLine()
+        }
+
+        // APP HASH INVENTORY
+        if (hashByPkg.isNotEmpty()) {
+            appendLine(THIN)
+            appendLine("  APP HASH INVENTORY (${hashByPkg.size} apps)")
+            appendLine(THIN)
+            hashByPkg.entries.sortedBy { it.key }.forEach { (pkg, hash) ->
+                appendLine("  $pkg")
+                appendLine("    SHA-256: $hash")
             }
             appendLine()
         }

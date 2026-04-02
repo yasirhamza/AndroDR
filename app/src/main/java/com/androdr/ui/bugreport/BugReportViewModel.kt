@@ -110,10 +110,14 @@ class BugReportViewModel @Inject constructor(
         viewModelScope.launch {
             _exporting.value = true
             try {
+                val hashByPkg = orchestrator.lastAppTelemetry
+                    .filter { !it.apkHash.isNullOrEmpty() }
+                    .associateBy({ it.packageName }, { it.apkHash!! })
                 val text = TimelineFormatter.formatTimeline(
                     _timeline.value,
                     _legacyFindings.value,
-                    _findings.value
+                    _findings.value,
+                    hashByPkg
                 )
                 _shareUri.value = withContext(Dispatchers.IO) {
                     val reportsDir = File(appContext.cacheDir, "reports").apply { mkdirs() }
