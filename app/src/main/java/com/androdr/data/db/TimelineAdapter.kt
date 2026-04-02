@@ -24,7 +24,10 @@ fun DnsEvent.toForensicTimelineEvent(): ForensicTimelineEvent = ForensicTimeline
     isFromRuntime = true
 )
 
-fun Finding.toForensicTimelineEvent(scanResult: ScanResult): ForensicTimelineEvent {
+fun Finding.toForensicTimelineEvent(
+    scanResult: ScanResult,
+    isBugreport: Boolean = false
+): ForensicTimelineEvent {
     val iocEvidence = this.evidence as? Evidence.IocMatch
     val campaignTag = this.tags.filter { it.startsWith("campaign.") }
         .joinToString(" / ") { it.removePrefix("campaign.").replaceFirstChar { c -> c.uppercase() } }
@@ -32,7 +35,7 @@ fun Finding.toForensicTimelineEvent(scanResult: ScanResult): ForensicTimelineEve
 
     return ForensicTimelineEvent(
         timestamp = scanResult.timestamp,
-        source = "app_scanner",
+        source = if (isBugreport) "bugreport_analysis" else "app_scanner",
         category = when (this.category) {
             FindingCategory.APP_RISK -> "app_risk"
             FindingCategory.DEVICE_POSTURE -> "device_posture"
@@ -52,7 +55,8 @@ fun Finding.toForensicTimelineEvent(scanResult: ScanResult): ForensicTimelineEve
         scanResultId = scanResult.id,
         attackTechniqueId = this.tags.firstOrNull { it.startsWith("attack.t") }
             ?.removePrefix("attack.") ?: "",
-        isFromRuntime = true
+        isFromBugreport = isBugreport,
+        isFromRuntime = !isBugreport
     )
 }
 

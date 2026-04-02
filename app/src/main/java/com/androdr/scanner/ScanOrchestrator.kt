@@ -235,7 +235,7 @@ class ScanOrchestrator @Inject constructor(
         runCatching {
             val timelineEvents = mutableListOf<com.androdr.data.model.ForensicTimelineEvent>()
             timelineEvents.addAll(result.findings.filter { it.triggered }
-                .map { it.toForensicTimelineEvent(scanResult) })
+                .map { it.toForensicTimelineEvent(scanResult, isBugreport = true) })
             timelineEvents.addAll(result.timeline.map { it.toForensicTimelineEvent(scanResult.id) })
             forensicTimelineEventDao.insertAll(timelineEvents)
         }
