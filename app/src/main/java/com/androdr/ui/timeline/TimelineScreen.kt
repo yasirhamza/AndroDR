@@ -97,6 +97,17 @@ fun TimelineScreen(
     val reportText by viewModel.reportText.collectAsStateWithLifecycle()
 
     var exportMenuExpanded by remember { mutableStateOf(false) }
+    var pendingCopy by remember { mutableStateOf(false) }
+
+    // Copy to clipboard once report text is ready
+    LaunchedEffect(reportText, pendingCopy) {
+        if (pendingCopy && reportText.isNotEmpty()) {
+            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+            clipboard.setPrimaryClip(ClipData.newPlainText("AndroDR Timeline", reportText))
+            Toast.makeText(context, context.getString(R.string.timeline_copied), Toast.LENGTH_SHORT).show()
+            pendingCopy = false
+        }
+    }
     var selectedEvent by remember { mutableStateOf<ForensicTimelineEvent?>(null) }
     var showReportSheet by remember { mutableStateOf(false) }
 
@@ -128,30 +139,11 @@ fun TimelineScreen(
                 ) {
                     Icon(Icons.Filled.Description, contentDescription = stringResource(R.string.cd_view_report))
                 }
-                // Copy to clipboard — generate report first, then copy
+                // Copy to clipboard — generate report, LaunchedEffect copies when ready
                 IconButton(
                     onClick = {
+                        pendingCopy = true
                         viewModel.generateReport()
-                        // Copy after a brief delay to let the report generate
-                        val text = viewModel.reportText.value
-                        if (text.isNotEmpty()) {
-                            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE)
-                                as ClipboardManager
-                            clipboard.setPrimaryClip(
-                                ClipData.newPlainText("AndroDR Timeline", text)
-                            )
-                            Toast.makeText(
-                                context,
-                                context.getString(R.string.timeline_copied),
-                                Toast.LENGTH_SHORT
-                            ).show()
-                        } else {
-                            Toast.makeText(
-                                context,
-                                context.getString(R.string.timeline_generating),
-                                Toast.LENGTH_SHORT
-                            ).show()
-                        }
                     },
                     enabled = events.isNotEmpty()
                 ) {
