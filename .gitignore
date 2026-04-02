@@ -50,3 +50,4 @@ test-adversary/fixtures/mercenary/.gradle/
 build/uat/
 release-keystore.jks
 gradle.properties
+.claude/

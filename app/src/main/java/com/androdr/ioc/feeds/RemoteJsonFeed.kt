@@ -82,6 +82,6 @@ class RemoteJsonFeed(
          */
         const val COMMUNITY_SOURCE_ID = "community_json"
         const val COMMUNITY_URL =
-            "https://raw.githubusercontent.com/yasirhamza/AndroDR/main/iocs/known_bad_packages.json"
+            "https://raw.githubusercontent.com/android-sigma-rules/rules/main/ioc-data/package-names.yml"
     }
 }
