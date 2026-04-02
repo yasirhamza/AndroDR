@@ -29,8 +29,9 @@ class IndicatorResolverTest {
         every { bundledPackages.isKnownBadPackage(any()) } returns null
         every { bundledCerts.isKnownBadCert(any()) } returns null
         every { bundledApkHashes.isKnownBadApkHash(any()) } returns null
-        // Default: all type queries return empty
+        // Default: all queries return empty/null
         coEvery { dao.getAllByType(any()) } returns emptyList()
+        coEvery { dao.lookup(any(), any()) } returns null
         resolver = IndicatorResolver(dao, bundledPackages, bundledCerts, bundledApkHashes)
     }
 
@@ -55,10 +56,9 @@ class IndicatorResolverTest {
 
     @Test
     fun `domain lookup with subdomain matching`() = runTest {
-        coEvery { dao.getAllByType("domain") } returns listOf(
-            Indicator("domain", "evil.com", "", "Pegasus", "CRITICAL", "", "test", 1000L)
-        )
-        resolver.refreshCache()
+        val evilIndicator = Indicator("domain", "evil.com", "", "Pegasus", "CRITICAL", "", "test", 1000L)
+        coEvery { dao.lookup("domain", "evil.com") } returns evilIndicator
+        // sub.evil.com → walks to evil.com → match
         assertNotNull(resolver.isKnownBadDomain("sub.evil.com"))
         assertNotNull(resolver.isKnownBadDomain("evil.com"))
         assertNull(resolver.isKnownBadDomain("safe.com"))
