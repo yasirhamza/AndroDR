@@ -217,6 +217,12 @@ class ScanOrchestrator @Inject constructor(
         initRuleEngine()
         val result = bugReportAnalyzer.analyze(uri)
 
+        // Collect app telemetry for hash enrichment — same device, same apps
+        val appTelemetry = runCatching { appScanner.collectTelemetry() }.getOrDefault(emptyList())
+        lastAppTelemetry = appTelemetry
+        val hashByPkg = appTelemetry.filter { !it.apkHash.isNullOrEmpty() }
+            .associateBy({ it.packageName }, { it.apkHash!! })
+
         // Persist as ScanResult so it shows in history
         val now = System.currentTimeMillis()
         val scanResult = ScanResult(
@@ -235,7 +241,12 @@ class ScanOrchestrator @Inject constructor(
         runCatching {
             val timelineEvents = mutableListOf<com.androdr.data.model.ForensicTimelineEvent>()
             timelineEvents.addAll(result.findings.filter { it.triggered }
-                .map { it.toForensicTimelineEvent(scanResult, isBugreport = true) })
+                .map { finding ->
+                    val event = finding.toForensicTimelineEvent(scanResult, isBugreport = true)
+                    if (event.apkHash.isEmpty() && event.packageName.isNotEmpty()) {
+                        event.copy(apkHash = hashByPkg[event.packageName] ?: "")
+                    } else event
+                })
             timelineEvents.addAll(result.timeline.map { it.toForensicTimelineEvent(scanResult.id) })
             forensicTimelineEventDao.insertAll(timelineEvents)
         }
