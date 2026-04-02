@@ -9,7 +9,10 @@ object SigmaRuleParser {
 
     private const val TAG = "SigmaRuleParser"
     internal const val MAX_REGEX_LENGTH = 500
-    private val settings = LoadSettings.builder().build()
+    private val settings = LoadSettings.builder()
+        .setMaxAliasesForCollections(10)
+        .setAllowDuplicateKeys(false)
+        .build()
 
     @Suppress("UNCHECKED_CAST", "TooGenericExceptionCaught")
     fun parse(yamlContent: String): SigmaRule? {

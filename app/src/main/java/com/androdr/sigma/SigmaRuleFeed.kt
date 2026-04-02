@@ -79,7 +79,11 @@ class SigmaRuleFeed @Inject constructor(
             conn.instanceFollowRedirects = false
             conn.setRequestProperty("User-Agent", "AndroDR/1.0")
             if (conn.responseCode == HttpURLConnection.HTTP_OK) {
-                conn.inputStream.bufferedReader().use { it.readText() }
+                val body = conn.inputStream.bufferedReader().use { it.readText() }
+                if (body.length > MAX_RESPONSE_SIZE) {
+                    Log.w(TAG, "Response too large: ${body.length} bytes, limit $MAX_RESPONSE_SIZE")
+                    null
+                } else body
             } else {
                 null
             }
@@ -96,6 +100,7 @@ class SigmaRuleFeed @Inject constructor(
         private const val DEFAULT_BASE_URL =
             "https://raw.githubusercontent.com/android-sigma-rules/rules/main/"
         private const val TIMEOUT_MS = 10_000
+        private const val MAX_RESPONSE_SIZE = 500_000 // 500 KB per rule file
 
         /** Parse a rules.txt manifest into a list of .yml file paths. */
         fun parseManifest(manifest: String): List<String> =
