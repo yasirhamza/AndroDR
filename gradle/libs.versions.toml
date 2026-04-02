@@ -23,7 +23,7 @@ hiltNavigationCompose = "1.2.0"
 room = "2.6.1"
 
 # Coroutines
-coroutines = "1.8.1"
+coroutines = "1.10.2"
 
 # Serialization
 kotlinxSerialization = "1.7.1"
