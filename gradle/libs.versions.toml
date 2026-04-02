@@ -16,7 +16,7 @@ composeBom = "2024.09.00"
 navigationCompose = "2.7.7"
 
 # Hilt
-hilt = "2.51.1"
+hilt = "2.59.2"
 hiltNavigationCompose = "1.2.0"
 
 # Room
