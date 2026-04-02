@@ -9,8 +9,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.snakeyaml.engine.v2.api.Load
 import org.snakeyaml.engine.v2.api.LoadSettings
-import java.net.HttpURLConnection
-import java.net.URL
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -165,31 +163,8 @@ class PublicRepoIocFeed @Inject constructor(
         }
     }
 
-    @Suppress("TooGenericExceptionCaught", "SwallowedException")
-    private fun fetchUrl(url: String): String? {
-        val conn = try {
-            URL(url).openConnection() as HttpURLConnection
-        } catch (e: Exception) {
-            Log.w(TAG, "HTTP connection failed for $url: ${e.message}")
-            return null
-        }
-        return try {
-            conn.connectTimeout = TIMEOUT_MS
-            conn.readTimeout = TIMEOUT_MS
-            conn.setRequestProperty("User-Agent", "AndroDR/1.0")
-            if (conn.responseCode == HttpURLConnection.HTTP_OK) {
-                conn.inputStream.bufferedReader().use { it.readText() }
-            } else {
-                Log.w(TAG, "HTTP ${conn.responseCode} from $url")
-                null
-            }
-        } catch (e: Exception) {
-            Log.w(TAG, "HTTP fetch failed for $url: ${e.message}")
-            null
-        } finally {
-            conn.disconnect()
-        }
-    }
+    private fun fetchUrl(url: String): String? =
+        SafeHttpFetch.fetch(url, maxBytes = 1_000_000, timeoutMs = TIMEOUT_MS)
 
     companion object {
         private const val TAG = "PublicRepoIocFeed"
