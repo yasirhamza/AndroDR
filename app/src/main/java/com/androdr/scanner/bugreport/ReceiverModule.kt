@@ -14,7 +14,9 @@ class ReceiverModule @Inject constructor() : BugreportModule {
         "android.provider.Telephony.NEW_OUTGOING_SMS",
         "android.intent.action.DATA_SMS_RECEIVED",
         "android.intent.action.PHONE_STATE",
-        "android.intent.action.NEW_OUTGOING_CALL"
+        "android.intent.action.NEW_OUTGOING_CALL",
+        "android.intent.action.BOOT_COMPLETED",
+        "android.intent.action.LOCKED_BOOT_COMPLETED"
     )
 
     private val systemPackagePrefixes = listOf(
