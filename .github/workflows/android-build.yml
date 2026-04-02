@@ -90,10 +90,19 @@ jobs:
           BUILD=$(git rev-list --count HEAD)
           VERSION="${BASE_VERSION}.${BUILD}"
           TAG="v${VERSION}"
+          # Build release notes from commits since last tag
+          PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+          if [ -n "$PREV_TAG" ]; then
+            CHANGES=$(git log "$PREV_TAG"..HEAD --pretty=format:"- %s" --no-merges)
+          else
+            CHANGES=$(git log -20 --pretty=format:"- %s" --no-merges)
+          fi
+          printf "## What's Changed\n\n%s\n\n**Full changelog**: https://github.com/${{ github.repository }}/compare/%s...%s\n" \
+            "$CHANGES" "${PREV_TAG:-v0.0.0}" "$TAG" > /tmp/release-notes.md
           gh release create "$TAG" \
             app/build/outputs/apk/debug/app-debug.apk \
             --title "AndroDR $TAG" \
-            --notes "Automated build from commit $(git rev-parse --short HEAD)" \
+            --notes-file /tmp/release-notes.md \
             || echo "Release publish failed"
 
   instrumented-test:
