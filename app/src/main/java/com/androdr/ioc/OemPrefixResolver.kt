@@ -120,7 +120,10 @@ class OemPrefixResolver @Inject constructor() {
 
             // Collect trusted installers
             val installerList = (doc["trusted_installers"] as? List<*>)
-                ?.filterIsInstance<String>()?.toSet() ?: emptySet()
+                ?.filterIsInstance<String>()
+                ?.filter { it.length >= 10 && it.contains('.') }
+                ?.take(MAX_INSTALLER_COUNT)
+                ?.toSet() ?: emptySet()
 
             ParsedOemData(strictPrefixes, partnershipPrefixes, installerList)
         } catch (e: Exception) {
@@ -156,6 +159,7 @@ class OemPrefixResolver @Inject constructor() {
             "https://raw.githubusercontent.com/android-sigma-rules/rules/main/ioc-data/known-oem-prefixes.yml"
         private const val TIMEOUT_MS = 10_000
         private const val MAX_RESPONSE_SIZE = 100_000
+        private const val MAX_INSTALLER_COUNT = 50
 
         // Bundled fallback — used before first remote fetch succeeds
         // Strict: always treated as OEM regardless of FLAG_SYSTEM
