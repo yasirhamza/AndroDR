@@ -20,13 +20,13 @@ object TimelineExporter {
         appendLine("  Android: ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT})")
         appendLine("  Device: ${Build.MANUFACTURER} ${Build.MODEL}")
         appendLine("  Patch: ${Build.VERSION.SECURITY_PATCH}")
-        appendLine("  Events: ${events.size}")
-        appendLine(RULE)
-        appendLine()
-
         // Deduplicate by description+package but include ALL severity levels
         val filtered = events
             .distinctBy { "${it.description}|${it.packageName}|${it.ruleId}" }
+
+        appendLine("  Events: ${filtered.size}")
+        appendLine(RULE)
+        appendLine()
 
         if (filtered.isEmpty()) {
             appendLine("  No timeline events recorded.")
