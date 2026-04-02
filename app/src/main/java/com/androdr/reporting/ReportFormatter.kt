@@ -205,7 +205,10 @@ object ReportFormatter {
     private fun StringBuilder.appendFinding(finding: Finding) {
         val icon = if (finding.triggered) "[\u2717]" else "[\u2713]"
         val sev = finding.level.uppercase().padEnd(8)
-        appendLine("  $icon  $sev  ${finding.title}")
+        val mitre = finding.tags.filter { it.startsWith("attack.t") }
+            .joinToString(", ") { it.removePrefix("attack.").uppercase() }
+        val mitreSuffix = if (mitre.isNotEmpty() && finding.triggered) "  ($mitre)" else ""
+        appendLine("  $icon  $sev  ${finding.title}$mitreSuffix")
         if (finding.triggered && finding.description.isNotEmpty()) {
             appendLine("           ${finding.description}")
         }
@@ -243,6 +246,13 @@ object ReportFormatter {
         }
         val reasons = findings.map { it.title }.distinct()
         appendLine("     Reasons : ${reasons.joinToString("; ")}")
+        val mitreTechniques = findings.flatMap { it.tags }
+            .filter { it.startsWith("attack.t") }
+            .map { it.removePrefix("attack.").uppercase() }
+            .distinct()
+        if (mitreTechniques.isNotEmpty()) {
+            appendLine("     MITRE   : ${mitreTechniques.joinToString(", ")}")
+        }
         val allRemediation = findings.flatMap { it.remediation }.distinct()
         if (allRemediation.isNotEmpty()) {
             appendLine("     Action  : ${allRemediation.first()}")
