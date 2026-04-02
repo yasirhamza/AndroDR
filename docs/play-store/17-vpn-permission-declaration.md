@@ -7,9 +7,9 @@
 AndroDR uses Android's VpnService API to create a **local-only DNS monitor** that intercepts DNS queries on the device. This is used to detect connections to known command-and-control (C2) servers, malware domains, and threat intelligence indicators.
 
 ## Key technical details
-- **No traffic leaves the device through AndroDR's VPN tunnel.** All DNS queries are resolved using the device's original DNS servers.
-- **No proxy or remote server is involved.** The VPN runs entirely on-device.
-- **No user traffic is modified, stored, or forwarded.** Only DNS query domain names are inspected.
+- **Only DNS packets pass through the VPN.** DNS queries are inspected locally for threat domains, then forwarded to an upstream DNS resolver (Google Public DNS, 8.8.8.8) for resolution.
+- **No proxy or remote server is involved for user traffic.** Only DNS resolution traffic is forwarded; all other network traffic bypasses the VPN entirely.
+- **No user data is added to DNS queries.** Only the standard DNS query payload (domain name) is forwarded — no device identifiers, app information, or tracking data.
 - **The VPN is optional.** Users must explicitly enable it and accept the Android VPN permission prompt. The app functions fully without the VPN enabled (app scanning, device audit, bugreport analysis all work without it).
 
 ## What the DNS monitor does
