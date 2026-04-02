@@ -48,3 +48,4 @@ test-adversary/fixtures/mercenary/.gradle/
 
 # UAT test output
 build/uat/
+release-keystore.jks
