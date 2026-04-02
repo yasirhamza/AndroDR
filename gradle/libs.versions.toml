@@ -43,7 +43,7 @@ owaspDepCheck = "9.2.0"
 
 # Testing
 junit = "4.13.2"
-junitExt = "1.2.1"
+junitExt = "1.3.0"
 espressoCore = "3.6.1"
 mockk = "1.13.12"
 orgJson = "20240303"
