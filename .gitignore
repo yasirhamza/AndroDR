@@ -49,7 +49,6 @@ test-adversary/fixtures/mercenary/.gradle/
 # UAT test output
 build/uat/
 release-keystore.jks
-gradle.properties
 .claude/
 reports-from-device-tests/
 build/uat/
