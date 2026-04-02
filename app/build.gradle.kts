@@ -32,9 +32,9 @@ android {
     signingConfigs {
         create("release") {
             storeFile = file("${rootProject.projectDir}/release-keystore.jks")
-            storePassword = "androdr-release-2026"
-            keyAlias = "androdr"
-            keyPassword = "androdr-release-2026"
+            storePassword = providers.gradleProperty("RELEASE_STORE_PASSWORD").getOrElse("")
+            keyAlias = providers.gradleProperty("RELEASE_KEY_ALIAS").getOrElse("androdr")
+            keyPassword = providers.gradleProperty("RELEASE_KEY_PASSWORD").getOrElse("")
         }
     }
 
