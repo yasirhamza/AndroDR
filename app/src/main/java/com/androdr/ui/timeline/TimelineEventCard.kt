@@ -17,6 +17,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Error
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Card
@@ -244,7 +246,12 @@ fun CorrelationClusterCard(
 }
 
 @Composable
-fun ScanGroupHeader(group: ScanGroup) {
+@Suppress("LongMethod") // Scan group header with expand/collapse renders type, date, count, severity, chevron
+fun ScanGroupHeader(
+    group: ScanGroup,
+    expanded: Boolean = false,
+    onToggle: (() -> Unit)? = null
+) {
     val dateStr = remember(group.timestamp) {
         if (group.timestamp > 0) SimpleDateFormat("MMM dd, yyyy HH:mm", Locale.US).format(Date(group.timestamp))
         else ""
@@ -258,7 +265,9 @@ fun ScanGroupHeader(group: ScanGroup) {
     }
 
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth().then(
+            if (onToggle != null) Modifier.clickable { onToggle() } else Modifier
+        ),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceContainer
         )
@@ -270,7 +279,7 @@ fun ScanGroupHeader(group: ScanGroup) {
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Column {
+            Column(modifier = Modifier.weight(1f)) {
                 Text(
                     typeLabel,
                     style = MaterialTheme.typography.titleSmall,
@@ -292,6 +301,14 @@ fun ScanGroupHeader(group: ScanGroup) {
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 SeverityChip(level = group.maxSeverity, active = true)
+                if (onToggle != null) {
+                    Icon(
+                        imageVector = if (expanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
+                        contentDescription = if (expanded) "Collapse" else "Expand",
+                        modifier = Modifier.size(20.dp),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
             }
         }
     }

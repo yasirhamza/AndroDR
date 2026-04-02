@@ -345,26 +345,28 @@ fun TimelineScreen(
                 } else {
                     scanGroups.forEach { group ->
                         item(key = "scan_${group.scanId}") {
-                            ScanGroupHeader(group)
-                        }
-                        // Clusters
-                        group.clusters.forEachIndexed { idx, cluster ->
-                            item(key = "scan_${group.scanId}_cluster_$idx") {
-                                CorrelationClusterCard(
-                                    cluster = cluster,
-                                    onEventTap = { selectedEvent = it }
+                            var expanded by remember { mutableStateOf(false) }
+                            Column {
+                                ScanGroupHeader(
+                                    group = group,
+                                    expanded = expanded,
+                                    onToggle = { expanded = !expanded }
                                 )
+                                if (expanded) {
+                                    group.clusters.forEach { cluster ->
+                                        CorrelationClusterCard(
+                                            cluster = cluster,
+                                            onEventTap = { selectedEvent = it }
+                                        )
+                                    }
+                                    group.standaloneEvents.forEach { event ->
+                                        TimelineEventCard(
+                                            event = event,
+                                            onClick = { selectedEvent = event }
+                                        )
+                                    }
+                                }
                             }
-                        }
-                        // Standalone events
-                        items(
-                            items = group.standaloneEvents,
-                            key = { it.id }
-                        ) { event ->
-                            TimelineEventCard(
-                                event = event,
-                                onClick = { selectedEvent = event }
-                            )
                         }
                     }
                 }
