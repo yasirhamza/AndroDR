@@ -60,3 +60,31 @@ privacy@androdr.dev
 ## Privacy Policy URL
 
 https://yasirhamza.github.io/androdr-site/#privacy
+
+---
+
+## Release Notes — v0.9.0 (Closed Testing)
+
+AndroDR v0.9.0 — First closed testing release.
+
+What's included:
+• Full device security scan — checks installed apps, device settings, and security patches
+• 29 detection rules covering stalkerware, banking trojans, and nation-state spyware (Pegasus, Predator, Graphite)
+• Forensic Timeline — chronological view of all security events with severity filtering, correlation clustering, and export
+• Deep Device Scan — analyze Android system diagnostics for hidden spyware indicators
+• DNS monitoring — detect connections to known command-and-control servers via local VPN
+• Runtime monitoring for accessibility service abuse, broadcast receiver interception, and permission usage
+• App install/uninstall tracking in real-time
+• Post-scan guidance with clear, risk-appropriate messaging
+• Export reports as plaintext or MVT-compatible CSV
+• Dynamic threat intelligence — detection databases update automatically from public feeds
+• Zero data collection — no accounts, no analytics, no cloud, fully on-device
+
+Known limitations:
+• DNS monitoring requires manual VPN permission grant
+• Some well-known apps may appear in informational-level findings
+• Deep Device Scan requires Developer Options enabled to generate a system diagnostic
+• Timeline correlation patterns may produce false clusters on devices with many apps
+
+We welcome feedback from testers — please report issues at:
+github.com/yasirhamza/AndroDR/issues
