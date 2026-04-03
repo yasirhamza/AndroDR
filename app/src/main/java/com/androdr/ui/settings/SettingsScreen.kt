@@ -293,11 +293,14 @@ private fun ThreatDatabaseSection(
             modifier = Modifier.padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
-            StatRow(label = "Detection Rules", value = "$sigmaRuleCount ($sigmaRuleSource)")
-            StatRow(label = "Threat Domains", value = "$domainIocCount (${iocSourceLabel["domain"] ?: "bundled"})")
-            StatRow(label = "Threat Apps", value = "$packageIocCount (${iocSourceLabel["package"] ?: "bundled"})")
-            StatRow(label = "Threat Certificates", value = "$certHashIocCount (${iocSourceLabel["cert_hash"] ?: "bundled"})")
-            StatRow(label = "CVE Database", value = "$cveCount Android CVEs")
+            val domainSrc = iocSourceLabel["domain"] ?: "bundled"
+            val pkgSrc = iocSourceLabel["package"] ?: "bundled"
+            val certSrc = iocSourceLabel["cert_hash"] ?: "bundled"
+            StatRow("Detection Rules", "$sigmaRuleCount ($sigmaRuleSource)")
+            StatRow("Threat Domains", "$domainIocCount ($domainSrc)")
+            StatRow("Threat Apps", "$packageIocCount ($pkgSrc)")
+            StatRow("Threat Certificates", "$certHashIocCount ($certSrc)")
+            StatRow("CVE Database", "$cveCount Android CVEs")
 
             HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
 
