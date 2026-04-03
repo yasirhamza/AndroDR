@@ -56,6 +56,8 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
     val hashShareUri by viewModel.hashShareUri.collectAsStateWithLifecycle()
     val stixExporting by viewModel.stixExporting.collectAsStateWithLifecycle()
     val stixShareUri by viewModel.stixShareUri.collectAsStateWithLifecycle()
+    val iocSourceLabel by viewModel.iocSourceLabel.collectAsStateWithLifecycle()
+    val sigmaRuleSource by viewModel.sigmaRuleSource.collectAsStateWithLifecycle()
 
     val context = androidx.compose.ui.platform.LocalContext.current
     androidx.compose.runtime.LaunchedEffect(hashShareUri) {
@@ -131,7 +133,9 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
                 cveCount = cveCount,
                 lastUpdated = lastUpdated,
                 updating = updating,
-                onUpdateClick = { viewModel.triggerUpdate() }
+                onUpdateClick = { viewModel.triggerUpdate() },
+                iocSourceLabel = iocSourceLabel,
+                sigmaRuleSource = sigmaRuleSource
             )
             HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
 
@@ -259,8 +263,8 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
     }
 }
 
-@Suppress("LongParameterList") // All 8 parameters are needed to render the complete threat
-// database stats card with update button and last-updated timestamp.
+@Suppress("LongParameterList") // All parameters are needed to render the complete threat
+// database stats card with update button, source labels, and last-updated timestamp.
 @Composable
 private fun ThreatDatabaseSection(
     sigmaRuleCount: Int,
@@ -270,7 +274,9 @@ private fun ThreatDatabaseSection(
     cveCount: Int,
     lastUpdated: Long?,
     updating: Boolean,
-    onUpdateClick: () -> Unit
+    onUpdateClick: () -> Unit,
+    iocSourceLabel: Map<String, String> = emptyMap(),
+    sigmaRuleSource: String = "bundled"
 ) {
     Text(
         text = "Threat Database",
@@ -287,10 +293,10 @@ private fun ThreatDatabaseSection(
             modifier = Modifier.padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
-            StatRow(label = "Detection Rules", value = "$sigmaRuleCount loaded")
-            StatRow(label = "Threat Domains", value = "$domainIocCount")
-            StatRow(label = "Threat Apps", value = "$packageIocCount")
-            StatRow(label = "Threat Certificates", value = "$certHashIocCount")
+            StatRow(label = "Detection Rules", value = "$sigmaRuleCount ($sigmaRuleSource)")
+            StatRow(label = "Threat Domains", value = "$domainIocCount (${iocSourceLabel["domain"] ?: "bundled"})")
+            StatRow(label = "Threat Apps", value = "$packageIocCount (${iocSourceLabel["package"] ?: "bundled"})")
+            StatRow(label = "Threat Certificates", value = "$certHashIocCount (${iocSourceLabel["cert_hash"] ?: "bundled"})")
             StatRow(label = "CVE Database", value = "$cveCount Android CVEs")
 
             HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))

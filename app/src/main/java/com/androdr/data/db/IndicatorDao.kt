@@ -32,4 +32,10 @@ interface IndicatorDao {
 
     @Query("SELECT MAX(fetchedAt) FROM indicators WHERE source = :source")
     suspend fun lastFetchTime(source: String): Long?
+
+    @Query("SELECT MAX(fetchedAt) FROM indicators")
+    suspend fun lastFetchTimeGlobal(): Long?
+
+    @Query("SELECT DISTINCT source FROM indicators ORDER BY source")
+    suspend fun allSources(): List<String>
 }

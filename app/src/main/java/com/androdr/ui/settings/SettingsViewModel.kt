@@ -81,6 +81,13 @@ class SettingsViewModel @Inject constructor(
     private val _updating = MutableStateFlow(false)
     val updating: StateFlow<Boolean> = _updating.asStateFlow()
 
+    /** "downloaded" or "bundled" per IOC type */
+    private val _iocSourceLabel = MutableStateFlow<Map<String, String>>(emptyMap())
+    val iocSourceLabel: StateFlow<Map<String, String>> = _iocSourceLabel.asStateFlow()
+
+    private val _sigmaRuleSource = MutableStateFlow("bundled")
+    val sigmaRuleSource: StateFlow<String> = _sigmaRuleSource.asStateFlow()
+
     private val _customRuleUrlsInput = MutableStateFlow("")
 
     init {
@@ -152,7 +159,22 @@ class SettingsViewModel @Inject constructor(
             _certHashIocCount.value = indicatorDao.countByType(IndicatorResolver.TYPE_CERT_HASH) +
                 certHashIocDatabase.getAllBadCerts().size
             _cveCount.value = cveRepository.getActivelyExploitedCount()
-            _lastUpdated.value = indicatorDao.lastFetchTime("stalkerware_indicators")
+            _lastUpdated.value = indicatorDao.lastFetchTimeGlobal()
+
+            // Determine downloaded vs bundled per type
+            val labels = mutableMapOf<String, String>()
+            for (type in listOf(
+                IndicatorResolver.TYPE_DOMAIN,
+                IndicatorResolver.TYPE_PACKAGE,
+                IndicatorResolver.TYPE_CERT_HASH,
+                IndicatorResolver.TYPE_APK_HASH
+            )) {
+                val count = indicatorDao.countByType(type)
+                labels[type] = if (count > 0) "downloaded" else "bundled"
+            }
+            _iocSourceLabel.value = labels
+
+            _sigmaRuleSource.value = if (sigmaRuleEngine.hasRemoteRules()) "downloaded" else "bundled"
         }
     }
 

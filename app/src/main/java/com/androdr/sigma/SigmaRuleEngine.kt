@@ -24,6 +24,7 @@ class SigmaRuleEngine @Inject constructor(
     @Volatile private var rules: List<SigmaRule> = emptyList()
     @Volatile private var iocLookups: Map<String, (Any) -> Boolean> = emptyMap()
     @Volatile private var evidenceProviders: Map<String, EvidenceProvider> = emptyMap()
+    @Volatile private var remoteRulesLoaded = false
 
     // Explicit manifest is inherently long but R8-safe;
     // catch-all prevents one bad rule from blocking all others
@@ -52,8 +53,11 @@ class SigmaRuleEngine @Inject constructor(
             }
         }
         rules = merged
+        remoteRulesLoaded = remoteRules.isNotEmpty()
         Log.i(TAG, "Total rules after merge: ${rules.size}")
     }
+
+    fun hasRemoteRules(): Boolean = remoteRulesLoaded
 
     fun setIocLookups(lookups: Map<String, (Any) -> Boolean>) {
         iocLookups = lookups
