@@ -10,12 +10,12 @@ plugins {
 
 android {
     namespace = "com.androdr"
-    compileSdk = 34
+    compileSdk = 35
 
     defaultConfig {
         applicationId = "com.androdr"
         minSdk = 26
-        targetSdk = 34
+        targetSdk = 35
         val buildNumber = providers.exec {
             commandLine("git", "rev-list", "--count", "HEAD")
         }.standardOutput.asText.get().trim().toIntOrNull() ?: 1
@@ -89,9 +89,7 @@ android {
         // ObsoleteSdkInt: the mipmap-anydpi-v26 folder is the Android Studio scaffold default;
         // renaming it would require manifest + AAPT reference updates with no functional benefit
         // since the adaptive icon is only drawn on API 26+ devices anyway.
-        // OldTargetApi: targetSdk=34 is intentional; bump to 35 requires behavioral regression
-        // testing against Android 15 changes before it can be safely promoted.
-        disable += setOf("GradleDependency", "AndroidGradlePluginVersion", "ObsoleteSdkInt", "OldTargetApi")
+        disable += setOf("GradleDependency", "AndroidGradlePluginVersion", "ObsoleteSdkInt")
     }
 }
 
