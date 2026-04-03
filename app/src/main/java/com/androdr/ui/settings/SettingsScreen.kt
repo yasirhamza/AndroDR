@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import android.content.Intent
+import android.os.Build
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -210,6 +211,46 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
                     Text("  Exporting...")
                 } else {
                     Text("Export Findings (STIX2 JSON)")
+                }
+            }
+
+            HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+
+            // About section
+            Text(
+                text = "About",
+                style = MaterialTheme.typography.titleMedium
+            )
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceContainer
+                )
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    StatRow(
+                        label = "Version",
+                        value = com.androdr.BuildConfig.VERSION_NAME
+                    )
+                    StatRow(
+                        label = "Build",
+                        value = com.androdr.BuildConfig.VERSION_CODE.toString()
+                    )
+                    StatRow(
+                        label = "Android",
+                        value = "${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT})"
+                    )
+                    StatRow(
+                        label = "Device",
+                        value = "${Build.MANUFACTURER} ${Build.MODEL}"
+                    )
+                    StatRow(
+                        label = "Security Patch",
+                        value = Build.VERSION.SECURITY_PATCH
+                    )
                 }
             }
 
