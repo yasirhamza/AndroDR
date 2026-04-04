@@ -120,10 +120,37 @@ class KnownAppResolverTest {
     fun `package that is only an RRO suffix pattern returns null`() {
         val suffix = ".auto_generated_rro_product___"
         every { mockBundled.lookup(suffix) } returns null
-        every { mockBundled.lookup("") } returns null
 
         val result = resolver.lookup(suffix)
 
         assertNull(result)
+    }
+
+    @Test
+    fun `RRO suffix with hyphen is stripped and resolves`() {
+        val base = "com.qualcomm.qtil"
+        val rro = "$base.auto_generated_rro_vendor-overlay___"
+        every { mockBundled.lookup(rro) } returns null
+        every { mockBundled.lookup(base) } returns oemEntry(base)
+
+        val result = resolver.lookup(rro)
+
+        assertEquals(base, result?.packageName)
+    }
+
+    @Test
+    fun `RRO suffix stripped and base resolves from cache`() = runTest {
+        val dbEntry = KnownAppDbEntry(
+            packageName = "com.samsung.settings", displayName = "Settings",
+            category = "OEM", sourceId = "bundled", fetchedAt = 0L
+        )
+        coEvery { mockDao.getAll() } returns listOf(dbEntry)
+        every { mockBundled.lookup(any()) } returns null
+
+        resolver.refreshCache()
+        val rro = "com.samsung.settings.auto_generated_rro_product___"
+        val result = resolver.lookup(rro)
+
+        assertEquals("com.samsung.settings", result?.packageName)
     }
 }

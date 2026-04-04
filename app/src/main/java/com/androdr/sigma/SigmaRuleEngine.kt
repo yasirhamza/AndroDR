@@ -21,6 +21,7 @@ import javax.inject.Singleton
 class SigmaRuleEngine @Inject constructor(
     @ApplicationContext private val context: Context
 ) {
+    private val ruleLock = Any()
     @Volatile private var rules: List<SigmaRule> = emptyList()
     @Volatile private var iocLookups: Map<String, (Any) -> Boolean> = emptyMap()
     @Volatile private var evidenceProviders: Map<String, EvidenceProvider> = emptyMap()
@@ -29,7 +30,7 @@ class SigmaRuleEngine @Inject constructor(
     // Explicit manifest is inherently long but R8-safe;
     // catch-all prevents one bad rule from blocking all others
     @Suppress("LongMethod", "TooGenericExceptionCaught")
-    fun loadBundledRules() {
+    fun loadBundledRules() = synchronized(ruleLock) {
         val loaded = mutableListOf<SigmaRule>()
         for (resId in BUNDLED_RULE_IDS) {
             try {
@@ -44,9 +45,12 @@ class SigmaRuleEngine @Inject constructor(
         Log.i(TAG, "Loaded ${rules.size} bundled SIGMA rules")
     }
 
-    fun setRemoteRules(remoteRules: List<SigmaRule>) {
+    fun setRemoteRules(remoteRules: List<SigmaRule>) = synchronized(ruleLock) {
         val remoteById = remoteRules.associateBy { it.id }
-        val merged = rules.map { remoteById[it.id] ?: it }.toMutableList()
+        val merged = rules.map { bundled ->
+            val remote = remoteById[bundled.id]
+            if (remote != null && bundled.id !in PROTECTED_RULE_IDS) remote else bundled
+        }.toMutableList()
         val existingIds = merged.map { it.id }.toSet()
         for (rule in remoteRules) {
             if (rule.id !in existingIds) merged.add(rule)
@@ -116,6 +120,15 @@ class SigmaRuleEngine @Inject constructor(
 
     companion object {
         private const val TAG = "SigmaRuleEngine"
+
+        /** Critical bundled rules that remote updates cannot replace. */
+        private val PROTECTED_RULE_IDS = setOf(
+            "androdr-001", // package IOC (malware package names)
+            "androdr-002", // cert hash IOC (malware signing certs)
+            "androdr-003", // domain IOC (C2 domains)
+            "androdr-004", // APK hash IOC (malware file hashes)
+            "androdr-005"  // Graphite/Paragon spyware
+        )
 
         /** Explicit manifest of bundled SIGMA rule resources — R8-safe (no reflection). */
         private val BUNDLED_RULE_IDS = listOf(

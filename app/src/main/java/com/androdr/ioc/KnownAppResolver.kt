@@ -25,7 +25,10 @@ class KnownAppResolver @Inject constructor(
         val direct = cache.get()?.get(packageName) ?: bundled.lookup(packageName)
         if (direct != null) return direct
         val basePkg = packageName.replaceFirst(RRO_SUFFIX_REGEX, "")
-        return if (basePkg != packageName) lookup(basePkg) else null
+        if (basePkg != packageName && basePkg.isNotEmpty()) {
+            return cache.get()?.get(basePkg) ?: bundled.lookup(basePkg)
+        }
+        return null
     }
 
     companion object {
