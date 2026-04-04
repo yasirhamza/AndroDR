@@ -56,9 +56,11 @@ class AppOpsModule @Inject constructor() : BugreportModule {
                         val accessMatch = accessLineRegex.find(opBlock)
                         val rejectMatch = rejectLineRegex.find(opBlock)
 
+                        // Normalize to "android:<op>" format to match SIGMA rule conventions
+                        val normalizedOp = "android:${opName.lowercase()}"
                         telemetry.add(mapOf(
                             "package_name" to packageName,
-                            "operation" to opName,
+                            "operation" to normalizedOp,
                             "last_access_time" to (accessMatch?.groupValues?.get(1) ?: ""),
                             "last_reject_time" to (rejectMatch?.groupValues?.get(1) ?: ""),
                             "access_count" to 1,
