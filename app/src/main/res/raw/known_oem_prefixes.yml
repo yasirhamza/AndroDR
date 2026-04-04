@@ -1,0 +1,112 @@
+version: "2026-03-29"
+description: "Known OEM, carrier, and chipset vendor package prefixes. Apps matching these prefixes are treated as OEM/system apps for detection purposes, reducing false positives on carrier-branded devices."
+sources:
+  - uad-list
+  - plexus-data
+  - manual-verification
+
+# AOSP / Google
+aosp_prefixes:
+  - "com.android."
+  - "com.google."
+  - "android."
+
+# Chipset vendors
+chipset_prefixes:
+  - "com.qualcomm."
+  - "com.qti."
+  - "vendor.qti."
+  - "com.mediatek."
+  - "com.mtk."
+
+# Board support / ODM
+odm_prefixes:
+  - "com.bsp."
+  - "com.wingtech."
+  - "com.longcheer."
+
+# Samsung / Knox
+samsung_prefixes:
+  - "com.samsung."
+  - "com.sec."
+  - "com.osp."
+  - "com.knox."
+  - "com.skms."
+  - "com.mygalaxy."
+  - "com.monotype."
+  - "com.hiya."
+  - "com.sem."
+  - "com.swiftkey."
+  - "com.shannon."
+  - "com.wsomacp"
+  - "com.wssyncmldm"
+
+# Samsung partnership pre-installs
+samsung_partner_prefixes:
+  - "com.microsoft."
+  - "com.touchtype."
+  - "com.facebook."
+
+# Xiaomi / MIUI / Redmi
+xiaomi_prefixes:
+  - "com.miui."
+  - "com.xiaomi."
+  - "com.mi."
+  - "com.duokan."
+  - "com.mipay."
+
+# US carriers
+us_carrier_prefixes:
+  - "com.tmobile."
+  - "com.sprint."
+  - "com.att."
+  - "com.vzw."
+  - "com.verizon."
+
+# Carrier pre-install platforms
+# NOTE: com.ironsrc.aura.* is intentionally EXCLUDED — IronSource Aura
+# silently installs sponsored apps and should be flagged as invasive bloatware.
+carrier_platform_prefixes:
+  - "com.dti."
+  - "com.digitalturbine."
+
+# Other OEMs
+other_oem_prefixes:
+  - "com.motorola."
+  - "com.oneplus."
+  - "com.lge."
+  - "com.htc."
+  - "com.sony."
+  - "com.huawei."
+  - "com.asus."
+  - "com.oppo."
+  - "com.realme."
+  - "com.vivo."
+  - "com.coloros."
+  - "com.heytap."
+  - "com.oplus."
+  - "com.amazon."
+
+# Custom ROMs
+custom_rom_prefixes:
+  - "org.lineageos."
+  - "com.cyanogenmod."
+
+# Trusted app store installer package names
+trusted_installers:
+  - "com.android.vending"             # Google Play Store
+  - "com.sec.android.app.samsungapps" # Samsung Galaxy Store
+  - "com.samsung.android.app.updatecenter" # Samsung Update Center
+  - "com.samsung.android.app.watchmanager" # Samsung Wearable Manager
+  - "com.samsung.android.scloud"      # Samsung Cloud restore
+  - "com.samsung.android.themestore"  # Samsung Theme Store
+  - "com.samsung.android.spay"        # Samsung Pay
+  - "com.sec.android.app.sbrowser"    # Samsung Internet (WebAPKs)
+  - "com.facebook.system"             # Meta/Facebook pre-install agent (Samsung partnership)
+  - "com.xiaomi.market"               # Xiaomi GetApps
+  - "com.xiaomi.mipicks"              # Xiaomi Mi Picks
+  - "com.miui.packageinstaller"       # MIUI Package Installer
+  - "com.heytap.market"               # OPPO/Realme App Market
+  - "com.coloros.safecenter"           # ColorOS Safe Center
+  - "com.huawei.appmarket"            # Huawei AppGallery
+  - "com.bbk.appstore"                # Vivo App Store

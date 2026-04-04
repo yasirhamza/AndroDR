@@ -1,6 +1,9 @@
 package com.androdr.ioc
 
+import android.content.Context
 import android.util.Log
+import com.androdr.R
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.snakeyaml.engine.v2.api.Load
@@ -12,11 +15,22 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 @Singleton
-class OemPrefixResolver @Inject constructor() {
+class OemPrefixResolver @Inject constructor(
+    @ApplicationContext private val context: Context
+) {
 
-    private val data = AtomicReference(
-        ParsedOemData(BUNDLED_STRICT_PREFIXES, BUNDLED_PARTNERSHIP_PREFIXES, BUNDLED_INSTALLERS)
-    )
+    private val data = AtomicReference<ParsedOemData>(loadBundledData())
+
+    private fun loadBundledData(): ParsedOemData {
+        return try {
+            val yaml = context.resources.openRawResource(R.raw.known_oem_prefixes)
+                .bufferedReader().use { it.readText() }
+            parseOemPrefixYaml(yaml)
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to load bundled OEM prefixes: ${e.message}")
+            ParsedOemData(emptySet(), emptySet(), emptySet())
+        }
+    }
 
     /** Returns true if the package matches a strict OEM prefix (always OEM regardless of FLAG_SYSTEM). */
     fun isOemPrefix(packageName: String): Boolean =
@@ -160,53 +174,5 @@ class OemPrefixResolver @Inject constructor() {
         private const val TIMEOUT_MS = 10_000
         private const val MAX_RESPONSE_SIZE = 100_000
         private const val MAX_INSTALLER_COUNT = 50
-
-        // Bundled fallback — used before first remote fetch succeeds
-        // Strict: always treated as OEM regardless of FLAG_SYSTEM
-        private val BUNDLED_STRICT_PREFIXES = setOf(
-            "com.android.", "com.google.", "android.",
-            "com.qualcomm.", "com.qti.", "vendor.qti.",
-            "com.mediatek.", "com.mtk.",
-            "com.bsp.", "com.wingtech.", "com.longcheer.",
-            "com.samsung.", "com.sec.", "com.osp.", "com.knox.",
-            "com.skms.", "com.mygalaxy.", "com.sem.", "com.swiftkey.",
-            "com.wsomacp", "com.wssyncmldm",
-            "com.miui.", "com.xiaomi.", "com.mi.",
-            "com.duokan.", "com.mipay.",
-            "com.tmobile.", "com.sprint.",
-            "com.att.", "com.vzw.", "com.verizon.",
-            "com.dti.", "com.digitalturbine.",
-            "com.amazon.",
-            "com.motorola.", "com.oneplus.", "com.lge.",
-            "com.htc.", "com.sony.", "com.huawei.", "com.asus.",
-            "com.oppo.", "com.realme.", "com.vivo.",
-            "com.coloros.", "com.heytap.", "com.oplus.",
-            "org.lineageos.", "com.cyanogenmod."
-        )
-
-        // Partnership: only treated as OEM when app has FLAG_SYSTEM
-        private val BUNDLED_PARTNERSHIP_PREFIXES = setOf(
-            "com.microsoft.", "com.touchtype.", "com.facebook.",
-            "com.monotype.", "com.hiya."
-        )
-
-        private val BUNDLED_INSTALLERS = setOf(
-            "com.android.vending",
-            "com.sec.android.app.samsungapps",
-            "com.samsung.android.app.updatecenter",
-            "com.samsung.android.app.watchmanager",
-            "com.samsung.android.scloud",
-            "com.samsung.android.themestore",
-            "com.samsung.android.spay",
-            "com.sec.android.app.sbrowser",
-            "com.facebook.system",
-            "com.xiaomi.market",
-            "com.xiaomi.mipicks",
-            "com.miui.packageinstaller",
-            "com.heytap.market",
-            "com.coloros.safecenter",
-            "com.huawei.appmarket",
-            "com.bbk.appstore"
-        )
     }
 }

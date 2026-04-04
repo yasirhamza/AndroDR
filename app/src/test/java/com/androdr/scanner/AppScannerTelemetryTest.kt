@@ -7,6 +7,8 @@ import android.content.pm.PackageInfo
 import android.content.pm.PackageManager
 import android.content.pm.ServiceInfo
 import android.content.pm.ActivityInfo
+import android.content.res.Resources
+import com.androdr.R
 import com.androdr.data.model.KnownAppCategory
 import com.androdr.data.model.KnownAppEntry
 import com.androdr.ioc.KnownAppResolver
@@ -33,7 +35,14 @@ class AppScannerTelemetryTest {
         context = mockk(relaxed = true)
         pm = mockk(relaxed = true)
         knownAppResolver = mockk(relaxed = true)
-        oemPrefixResolver = OemPrefixResolver()
+
+        val oemContext: Context = mockk(relaxed = true)
+        val resources: Resources = mockk(relaxed = true)
+        every { oemContext.resources } returns resources
+        val yamlStream = javaClass.classLoader!!
+            .getResourceAsStream("raw/known_oem_prefixes.yml")!!
+        every { resources.openRawResource(R.raw.known_oem_prefixes) } returns yamlStream
+        oemPrefixResolver = OemPrefixResolver(oemContext)
 
         every { context.packageManager } returns pm
         every { knownAppResolver.lookup(any()) } returns null
