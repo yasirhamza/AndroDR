@@ -41,6 +41,5 @@ private fun KnownAppDbEntry.toDomain() = KnownAppEntry(
     displayName = displayName,
     category    = KnownAppCategory.valueOf(category),
     sourceId    = sourceId,
-    fetchedAt   = fetchedAt,
-    certHash    = certHash
+    fetchedAt   = fetchedAt
 )

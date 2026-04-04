@@ -9,6 +9,5 @@ data class KnownAppDbEntry(
     val displayName: String,
     val category: String,   // KnownAppCategory.name
     val sourceId: String,
-    val fetchedAt: Long,
-    val certHash: String? = null
+    val fetchedAt: Long
 )

@@ -24,7 +24,7 @@ class SigmaRuleEngine @Inject constructor(
     private val ruleLock = Any()
     @Volatile private var rules: List<SigmaRule> = emptyList()
     @Volatile private var bundledRules: List<SigmaRule> = emptyList()
-    @Volatile private var iocLookups: Map<String, (Any, Map<String, Any?>) -> Boolean> = emptyMap()
+    @Volatile private var iocLookups: Map<String, (Any) -> Boolean> = emptyMap()
     @Volatile private var evidenceProviders: Map<String, EvidenceProvider> = emptyMap()
     @Volatile private var remoteRulesLoaded = false
 
@@ -67,7 +67,7 @@ class SigmaRuleEngine @Inject constructor(
 
     fun hasRemoteRules(): Boolean = remoteRulesLoaded
 
-    fun setIocLookups(lookups: Map<String, (Any, Map<String, Any?>) -> Boolean>) {
+    fun setIocLookups(lookups: Map<String, (Any) -> Boolean>) {
         iocLookups = lookups
     }
 

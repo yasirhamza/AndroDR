@@ -68,7 +68,7 @@ object SigmaRuleEvaluator {
         rules: List<SigmaRule>,
         records: List<Map<String, Any?>>,
         service: String,
-        iocLookups: Map<String, (Any, Map<String, Any?>) -> Boolean> = emptyMap(),
+        iocLookups: Map<String, (Any) -> Boolean> = emptyMap(),
         evidenceProviders: Map<String, EvidenceProvider> = emptyMap()
     ): List<Finding> {
         val matchingRules = rules.filter { it.service == service }
@@ -141,7 +141,7 @@ object SigmaRuleEvaluator {
     private fun evaluateCondition(
         detection: SigmaDetection,
         record: Map<String, Any?>,
-        iocLookups: Map<String, (Any, Map<String, Any?>) -> Boolean>
+        iocLookups: Map<String, (Any) -> Boolean>
     ): Boolean {
         val selectionResults = detection.selections.mapValues { (_, selection) ->
             evaluateSelection(selection, record, iocLookups)
@@ -152,7 +152,7 @@ object SigmaRuleEvaluator {
     private fun evaluateSelection(
         selection: SigmaSelection,
         record: Map<String, Any?>,
-        iocLookups: Map<String, (Any, Map<String, Any?>) -> Boolean>
+        iocLookups: Map<String, (Any) -> Boolean>
     ): Boolean {
         return selection.fieldMatchers.all { matcher ->
             evaluateFieldMatcher(matcher, record, iocLookups)
@@ -163,7 +163,7 @@ object SigmaRuleEvaluator {
     private fun evaluateFieldMatcher(
         matcher: SigmaFieldMatcher,
         record: Map<String, Any?>,
-        iocLookups: Map<String, (Any, Map<String, Any?>) -> Boolean>
+        iocLookups: Map<String, (Any) -> Boolean>
     ): Boolean {
         val fieldValue = record[matcher.fieldName]
 
@@ -216,7 +216,7 @@ object SigmaRuleEvaluator {
             SigmaModifier.IOC_LOOKUP -> {
                 val lookupName = matcher.values.firstOrNull()?.toString() ?: return false
                 val lookup = iocLookups[lookupName] ?: return false
-                fieldValue?.let { lookup(it, record) } ?: false
+                fieldValue?.let { lookup(it) } ?: false
             }
         }
     }

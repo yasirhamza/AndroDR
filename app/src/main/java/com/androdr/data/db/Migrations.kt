@@ -210,12 +210,3 @@ val MIGRATION_9_10 = object : Migration(9, 10) {
         database.execSQL("DROP TABLE IF EXISTS cert_hash_ioc_entries")
     }
 }
-
-@Suppress("MagicNumber")
-val MIGRATION_10_11 = object : Migration(10, 11) {
-    override fun migrate(database: SupportSQLiteDatabase) {
-        database.execSQL(
-            "ALTER TABLE known_app_entries ADD COLUMN certHash TEXT DEFAULT NULL"
-        )
-    }
-}

@@ -17,6 +17,5 @@ data class KnownAppEntry(
     val displayName: String,
     val category: KnownAppCategory,
     val sourceId: String,
-    val fetchedAt: Long,
-    val certHash: String? = null
+    val fetchedAt: Long
 )
