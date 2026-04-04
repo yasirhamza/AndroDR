@@ -13,6 +13,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import android.content.Intent
 import android.os.Build
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -24,6 +25,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -58,6 +60,7 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
     val stixShareUri by viewModel.stixShareUri.collectAsStateWithLifecycle()
     val iocSourceLabel by viewModel.iocSourceLabel.collectAsStateWithLifecycle()
     val sigmaRuleSource by viewModel.sigmaRuleSource.collectAsStateWithLifecycle()
+    val updateResult by viewModel.updateResult.collectAsStateWithLifecycle()
 
     val context = androidx.compose.ui.platform.LocalContext.current
     androidx.compose.runtime.LaunchedEffect(hashShareUri) {
@@ -81,6 +84,27 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
             context.startActivity(Intent.createChooser(intent, "Share STIX2 Bundle"))
             viewModel.onStixShareConsumed()
         }
+    }
+
+    updateResult?.let { result ->
+        AlertDialog(
+            onDismissRequest = { viewModel.dismissUpdateResult() },
+            confirmButton = {
+                TextButton(onClick = { viewModel.dismissUpdateResult() }) {
+                    Text("OK")
+                }
+            },
+            title = { Text("Update Complete") },
+            text = {
+                Column {
+                    UpdateStatusRow("IOC Indicators", result.indicators)
+                    UpdateStatusRow("Known Apps", result.knownApps)
+                    UpdateStatusRow("SIGMA Rules", result.sigmaRules)
+                    UpdateStatusRow("CVE Database", result.cveDatabase)
+                    UpdateStatusRow("OEM Prefixes", result.oemPrefixes)
+                }
+            }
+        )
     }
 
     Scaffold { innerPadding ->
@@ -383,5 +407,21 @@ private fun PolicyToggleRow(
             )
         }
         Switch(checked = checked, onCheckedChange = onCheckedChange)
+    }
+}
+
+@Composable
+private fun UpdateStatusRow(label: String, status: String) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Text(label, style = MaterialTheme.typography.bodyMedium)
+        Text(
+            status,
+            style = MaterialTheme.typography.bodyMedium,
+            color = if (status.startsWith("Failed")) MaterialTheme.colorScheme.error
+                    else MaterialTheme.colorScheme.primary
+        )
     }
 }

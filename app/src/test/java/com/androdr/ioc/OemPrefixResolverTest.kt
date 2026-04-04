@@ -1,12 +1,27 @@
 package com.androdr.ioc
 
+import android.content.Context
+import android.content.res.Resources
+import com.androdr.R
+import io.mockk.every
+import io.mockk.mockk
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class OemPrefixResolverTest {
 
-    private val resolver = OemPrefixResolver()
+    private val resolver: OemPrefixResolver
+
+    init {
+        val context: Context = mockk(relaxed = true)
+        val resources: Resources = mockk(relaxed = true)
+        every { context.resources } returns resources
+        val yamlStream = javaClass.classLoader!!
+            .getResourceAsStream("raw/known_oem_prefixes.yml")!!
+        every { resources.openRawResource(R.raw.known_oem_prefixes) } returns yamlStream
+        resolver = OemPrefixResolver(context)
+    }
 
     @Test
     fun `bundled prefixes match known OEM packages`() {
@@ -67,8 +82,13 @@ class OemPrefixResolverTest {
         // Partnership pre-installs (Facebook, Microsoft, etc.) should NOT match isOemPrefix
         assertFalse(resolver.isOemPrefix("com.facebook.katana"))
         assertFalse(resolver.isOemPrefix("com.microsoft.office.word"))
-        assertFalse(resolver.isOemPrefix("com.monotype.android.font"))
-        assertFalse(resolver.isOemPrefix("com.hiya.star"))
+    }
+
+    @Test
+    fun `monotype and hiya are strict OEM prefixes per YAML`() {
+        // These moved from partnership to samsung_prefixes (strict) in the bundled YAML
+        assertTrue(resolver.isOemPrefix("com.monotype.android.font"))
+        assertTrue(resolver.isOemPrefix("com.hiya.star"))
     }
 
     @Test
@@ -76,8 +96,6 @@ class OemPrefixResolverTest {
         assertTrue(resolver.isPartnershipPrefix("com.facebook.katana"))
         assertTrue(resolver.isPartnershipPrefix("com.microsoft.office.word"))
         assertTrue(resolver.isPartnershipPrefix("com.touchtype.swiftkey"))
-        assertTrue(resolver.isPartnershipPrefix("com.monotype.android.font"))
-        assertTrue(resolver.isPartnershipPrefix("com.hiya.star"))
     }
 
     @Test

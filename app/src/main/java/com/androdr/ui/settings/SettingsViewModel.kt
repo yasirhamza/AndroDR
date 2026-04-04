@@ -16,6 +16,7 @@ import com.androdr.ioc.IndicatorResolver
 import com.androdr.ioc.IndicatorUpdater
 import com.androdr.ioc.toStixBundle
 import com.androdr.ioc.KnownAppUpdater
+import com.androdr.ioc.OemPrefixResolver
 import com.androdr.scanner.AppScanner
 import com.androdr.sigma.SigmaRuleEngine
 import com.androdr.sigma.SigmaRuleFeed
@@ -33,6 +34,14 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
+data class UpdateResult(
+    val indicators: String = "",
+    val knownApps: String = "",
+    val sigmaRules: String = "",
+    val cveDatabase: String = "",
+    val oemPrefixes: String = ""
+)
+
 @Suppress("LongParameterList") // SettingsViewModel requires injection of all IOC DAOs, updaters,
 // and engines to display threat database stats and trigger manual updates from one screen.
 @HiltViewModel
@@ -47,7 +56,8 @@ class SettingsViewModel @Inject constructor(
     private val knownAppUpdater: KnownAppUpdater,
     private val appScanner: AppScanner,
     private val sigmaRuleFeed: SigmaRuleFeed,
-    private val forensicTimelineEventDao: ForensicTimelineEventDao
+    private val forensicTimelineEventDao: ForensicTimelineEventDao,
+    private val oemPrefixResolver: OemPrefixResolver
 ) : ViewModel() {
 
     val blocklistBlockMode = settingsRepository.blocklistBlockMode
@@ -80,6 +90,11 @@ class SettingsViewModel @Inject constructor(
 
     private val _updating = MutableStateFlow(false)
     val updating: StateFlow<Boolean> = _updating.asStateFlow()
+
+    private val _updateResult = MutableStateFlow<UpdateResult?>(null)
+    val updateResult: StateFlow<UpdateResult?> = _updateResult.asStateFlow()
+
+    fun dismissUpdateResult() { _updateResult.value = null }
 
     /** "downloaded" or "bundled" per IOC type */
     private val _iocSourceLabel = MutableStateFlow<Map<String, String>>(emptyMap())
@@ -114,38 +129,80 @@ class SettingsViewModel @Inject constructor(
     }
 
     /** Triggers all feed updates, SIGMA rule refresh, and CVE refresh. */
-    @Suppress("TooGenericExceptionCaught")
+    @Suppress("TooGenericExceptionCaught", "LongMethod") // Per-feed error handling is intentionally verbose
     fun triggerUpdate() {
         if (_updating.value) return
         viewModelScope.launch {
             _updating.value = true
+            var indicatorsStatus = ""
+            var knownAppsStatus = ""
+            var sigmaRulesStatus = ""
+            var cveDatabaseStatus = ""
+            var oemPrefixesStatus = ""
             try {
-                val indicatorJob = async { indicatorUpdater.update() }
-                val knownAppJob = async { knownAppUpdater.update() }
-                indicatorJob.await()
-                knownAppJob.await()
+                val indicatorJob = async {
+                    try {
+                        val count = indicatorUpdater.update()
+                        "$count indicators"
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Indicator update failed: ${e.message}")
+                        "Failed: ${e.message}"
+                    }
+                }
+                val knownAppJob = async {
+                    try {
+                        val count = knownAppUpdater.update()
+                        "$count apps"
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Known app update failed: ${e.message}")
+                        "Failed: ${e.message}"
+                    }
+                }
+                val oemPrefixJob = async {
+                    try {
+                        oemPrefixResolver.refresh()
+                        "Updated"
+                    } catch (e: Exception) {
+                        Log.w(TAG, "OEM prefix refresh failed: ${e.message}")
+                        "Failed: ${e.message}"
+                    }
+                }
+                indicatorsStatus = indicatorJob.await()
+                knownAppsStatus = knownAppJob.await()
+                oemPrefixesStatus = oemPrefixJob.await()
 
                 // Refresh SIGMA rules
-                try {
+                sigmaRulesStatus = try {
                     val remoteRules = sigmaRuleFeed.fetch()
                     if (remoteRules.isNotEmpty()) {
                         sigmaRuleEngine.setRemoteRules(remoteRules)
                     }
+                    "${sigmaRuleEngine.ruleCount()} rules"
                 } catch (e: Exception) {
                     Log.w(TAG, "SIGMA rule refresh failed: ${e.message}")
+                    "Failed: ${e.message}"
                 }
 
                 // Refresh CVE database
-                try {
+                cveDatabaseStatus = try {
                     cveRepository.refresh()
+                    "Updated"
                 } catch (e: Exception) {
                     Log.w(TAG, "CVE database refresh failed: ${e.message}")
+                    "Failed: ${e.message}"
                 }
 
                 refreshStats()
             } catch (e: Exception) {
                 Log.e(TAG, "Threat database update failed: ${e.message}")
             } finally {
+                _updateResult.value = UpdateResult(
+                    indicators = indicatorsStatus,
+                    knownApps = knownAppsStatus,
+                    sigmaRules = sigmaRulesStatus,
+                    cveDatabase = cveDatabaseStatus,
+                    oemPrefixes = oemPrefixesStatus
+                )
                 _updating.value = false
             }
         }
