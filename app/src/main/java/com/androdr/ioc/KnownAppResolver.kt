@@ -21,8 +21,16 @@ class KnownAppResolver @Inject constructor(
         cache.set(dao.getAll().associate { it.packageName to it.toDomain() })
     }
 
-    fun lookup(packageName: String): KnownAppEntry? =
-        cache.get()?.get(packageName) ?: bundled.lookup(packageName)
+    fun lookup(packageName: String): KnownAppEntry? {
+        val direct = cache.get()?.get(packageName) ?: bundled.lookup(packageName)
+        if (direct != null) return direct
+        val basePkg = packageName.replaceFirst(RRO_SUFFIX_REGEX, "")
+        return if (basePkg != packageName) lookup(basePkg) else null
+    }
+
+    companion object {
+        private val RRO_SUFFIX_REGEX = Regex("""\\.auto_generated_rro_[\w-]+___$""")
+    }
 }
 
 private fun KnownAppDbEntry.toDomain() = KnownAppEntry(

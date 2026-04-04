@@ -83,4 +83,47 @@ class KnownAppResolverTest {
 
         assertNull(result)
     }
+
+    @Test
+    fun `RRO suffix is stripped and base package resolves`() {
+        val base = "com.shannon.imsservice"
+        val rro = "$base.auto_generated_rro_product___"
+        every { mockBundled.lookup(rro) } returns null
+        every { mockBundled.lookup(base) } returns oemEntry(base)
+
+        val result = resolver.lookup(rro)
+
+        assertEquals(base, result?.packageName)
+    }
+
+    @Test
+    fun `non-RRO package passes through unmodified`() {
+        every { mockBundled.lookup("com.example.app") } returns null
+
+        val result = resolver.lookup("com.example.app")
+
+        assertNull(result)
+    }
+
+    @Test
+    fun `RRO suffix stripped but base package not in DB returns null`() {
+        val rro = "com.unknown.app.auto_generated_rro_vendor___"
+        every { mockBundled.lookup(rro) } returns null
+        every { mockBundled.lookup("com.unknown.app") } returns null
+
+        val result = resolver.lookup(rro)
+
+        assertNull(result)
+    }
+
+    @Test
+    fun `package that is only an RRO suffix pattern returns null`() {
+        val suffix = ".auto_generated_rro_product___"
+        every { mockBundled.lookup(suffix) } returns null
+        every { mockBundled.lookup("") } returns null
+
+        val result = resolver.lookup(suffix)
+
+        assertNull(result)
+    }
 }

@@ -45,16 +45,15 @@ class SigmaRuleEngine @Inject constructor(
     }
 
     fun setRemoteRules(remoteRules: List<SigmaRule>) {
-        val bundledIds = rules.filter { it.id.startsWith("androdr-") }.map { it.id }.toSet()
-        val merged = rules.toMutableList()
+        val remoteById = remoteRules.associateBy { it.id }
+        val merged = rules.map { remoteById[it.id] ?: it }.toMutableList()
+        val existingIds = merged.map { it.id }.toSet()
         for (rule in remoteRules) {
-            if (rule.id !in bundledIds) {
-                merged.add(rule)
-            }
+            if (rule.id !in existingIds) merged.add(rule)
         }
         rules = merged
         remoteRulesLoaded = remoteRules.isNotEmpty()
-        Log.i(TAG, "Total rules after merge: ${rules.size}")
+        Log.i(TAG, "Total rules after merge: ${rules.size} (${remoteById.size} remote)")
     }
 
     fun hasRemoteRules(): Boolean = remoteRulesLoaded
