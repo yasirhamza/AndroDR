@@ -167,7 +167,6 @@ class OemPrefixResolver @Inject constructor() {
             "com.android.", "com.google.", "android.",
             "com.qualcomm.", "com.qti.", "vendor.qti.",
             "com.mediatek.", "com.mtk.",
-            "com.shannon.",
             "com.bsp.", "com.wingtech.", "com.longcheer.",
             "com.samsung.", "com.sec.", "com.osp.", "com.knox.",
             "com.skms.", "com.mygalaxy.", "com.sem.", "com.swiftkey.",
