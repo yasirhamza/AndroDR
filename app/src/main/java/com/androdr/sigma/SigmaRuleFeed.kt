@@ -59,6 +59,7 @@ class SigmaRuleFeed @Inject constructor(
             val hashManifest = fetchUrl("${baseUrl}rules.sha256")
             val expectedHashes = if (hashManifest != null) parseHashManifest(hashManifest) else emptyMap()
 
+            @Suppress("LoopWithTooManyJumpStatements") // fetch null + integrity fail are distinct skip reasons
             for (file in ruleFiles) {
                 val yaml = fetchUrl("$baseUrl$file") ?: continue
                 if (expectedHashes.isNotEmpty()) {
