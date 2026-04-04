@@ -189,6 +189,7 @@ fun DashboardScreen(
                     modifier = Modifier.weight(1f),
                     title = stringResource(R.string.summary_last_scan),
                     value = lastScanTime,
+                    subtitle = if (latestScan != null) "Tap to manage" else null,
                     onClick = { onNavigate("history") }
                 )
             }
@@ -386,7 +387,8 @@ private fun SummaryCard(
     title: String,
     value: String,
     onClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    subtitle: String? = null
 ) {
     Card(
         modifier = modifier
@@ -413,6 +415,13 @@ private fun SummaryCard(
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.onSurface
             )
+            if (subtitle != null) {
+                Text(
+                    text = subtitle,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
         }
     }
 }

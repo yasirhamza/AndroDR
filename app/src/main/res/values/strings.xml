@@ -13,7 +13,7 @@
     <string name="summary_app_risks">App Risks</string>
     <string name="summary_device_flags">Device Flags</string>
     <string name="summary_dns_matched">Suspicious Connections</string>
-    <string name="summary_last_scan">Last Scan</string>
+    <string name="summary_last_scan">Scans</string>
     <string name="never">Never</string>
     <!-- PluralsCandidate: "risk(s)" is intentional shorthand for a single UI banner;
          a full plurals resource would add overhead with no real i18n benefit for this string. -->
