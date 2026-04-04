@@ -206,8 +206,15 @@ class AppScanner @Inject constructor(
         return try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
                 val info = pm.getInstallSourceInfo(packageName)
-                info.installingPackageName
-                    ?: info.initiatingPackageName
+                // initiatingPackageName is the app that started the install session,
+                // which may differ from installingPackageName on Samsung partnership
+                // pre-installs (e.g. com.facebook.system for WhatsApp).
+                val installer = info.installingPackageName
+                if (installer == null && info.initiatingPackageName != null) {
+                    Log.d(TAG, "installingPackageName null for $packageName, " +
+                        "using initiatingPackageName=${info.initiatingPackageName}")
+                }
+                installer ?: info.initiatingPackageName
             } else {
                 @Suppress("DEPRECATION")
                 pm.getInstallerPackageName(packageName)

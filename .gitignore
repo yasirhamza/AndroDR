@@ -35,6 +35,7 @@ node_modules/
 
 # Kotlin
 *.class
+.kotlin/
 
 # Virtual machine crash logs
 hs_err_pid*

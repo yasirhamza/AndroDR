@@ -33,20 +33,20 @@ class SigmaRuleEngine @Inject constructor(
     @Suppress("LongMethod", "TooGenericExceptionCaught")
     fun loadBundledRules() {
         synchronized(ruleLock) {
-        if (bundledRules.isNotEmpty()) return
-        val loaded = mutableListOf<SigmaRule>()
-        for (resId in BUNDLED_RULE_IDS) {
-            try {
-                val yaml = context.resources.openRawResource(resId)
-                    .bufferedReader().use { it.readText() }
-                SigmaRuleParser.parse(yaml)?.let { loaded.add(it) }
-            } catch (e: Exception) {
-                Log.w(TAG, "Failed to load rule resource: ${e.message}")
+            if (bundledRules.isNotEmpty()) return
+            val loaded = mutableListOf<SigmaRule>()
+            for (resId in BUNDLED_RULE_IDS) {
+                try {
+                    val yaml = context.resources.openRawResource(resId)
+                        .bufferedReader().use { it.readText() }
+                    SigmaRuleParser.parse(yaml)?.let { loaded.add(it) }
+                } catch (e: Exception) {
+                    Log.w(TAG, "Failed to load rule resource: ${e.message}")
+                }
             }
-        }
-        bundledRules = loaded
-        rules = loaded
-        Log.i(TAG, "Loaded ${rules.size} bundled SIGMA rules")
+            bundledRules = loaded
+            rules = loaded
+            Log.i(TAG, "Loaded ${rules.size} bundled SIGMA rules")
         }
     }
 
@@ -67,6 +67,8 @@ class SigmaRuleEngine @Inject constructor(
 
     fun hasRemoteRules(): Boolean = remoteRulesLoaded
 
+    // Signature is (fieldValue) -> Boolean. If a future lookup needs the full telemetry
+    // record for cross-field correlation, widen to (Any, Map<String, Any?>) -> Boolean.
     fun setIocLookups(lookups: Map<String, (Any) -> Boolean>) {
         iocLookups = lookups
     }
@@ -132,7 +134,10 @@ class SigmaRuleEngine @Inject constructor(
             "androdr-002", // cert hash IOC (malware signing certs)
             "androdr-003", // domain IOC (C2 domains)
             "androdr-004", // APK hash IOC (malware file hashes)
-            "androdr-005"  // Graphite/Paragon spyware
+            "androdr-005", // Graphite/Paragon spyware
+            "androdr-010", // sideloaded app detection
+            "androdr-015", // firmware implant detection
+            "androdr-020"  // spyware artifact detection
         )
 
         /** Explicit manifest of bundled SIGMA rule resources — R8-safe (no reflection). */
