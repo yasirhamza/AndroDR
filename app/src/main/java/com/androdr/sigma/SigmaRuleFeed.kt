@@ -6,6 +6,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.net.HttpURLConnection
 import java.net.URL
+import java.security.MessageDigest
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -55,8 +56,21 @@ class SigmaRuleFeed @Inject constructor(
             val manifest = fetchUrl("${baseUrl}rules.txt") ?: return emptyList()
             val ruleFiles = parseManifest(manifest)
 
+            val hashManifest = fetchUrl("${baseUrl}rules.sha256")
+            val expectedHashes = if (hashManifest != null) parseHashManifest(hashManifest) else emptyMap()
+
+            @Suppress("LoopWithTooManyJumpStatements") // fetch null + integrity fail are distinct skip reasons
             for (file in ruleFiles) {
                 val yaml = fetchUrl("$baseUrl$file") ?: continue
+                if (expectedHashes.isNotEmpty()) {
+                    val actual = sha256(yaml)
+                    val expected = expectedHashes[file]
+                    if (expected != null && !actual.equals(expected, ignoreCase = true)) {
+                        Log.e(TAG, "Integrity check FAILED for $file: " +
+                            "expected=$expected actual=$actual — skipping")
+                        continue
+                    }
+                }
                 SigmaRuleParser.parse(yaml)?.let { rules.add(it) }
             }
         } catch (e: Exception) {
@@ -107,5 +121,22 @@ class SigmaRuleFeed @Inject constructor(
             manifest.lines()
                 .map { it.trim() }
                 .filter { it.endsWith(".yml") && !it.startsWith("#") }
+
+        /** Parse a rules.sha256 manifest into a map of filename → expected hash. */
+        fun parseHashManifest(manifest: String): Map<String, String> =
+            manifest.lines()
+                .map { it.trim() }
+                .filter { it.isNotEmpty() && !it.startsWith("#") }
+                .mapNotNull { line ->
+                    // Format: sha256hash  filename (two-space separator per sha256sum convention)
+                    val parts = line.split("  ", limit = 2)
+                    if (parts.size == 2) parts[1] to parts[0] else null
+                }
+                .toMap()
+
+        private fun sha256(content: String): String {
+            val digest = MessageDigest.getInstance("SHA-256")
+            return digest.digest(content.toByteArray()).joinToString("") { "%02x".format(it) }
+        }
     }
 }

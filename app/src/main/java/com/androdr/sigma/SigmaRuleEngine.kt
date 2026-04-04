@@ -52,10 +52,7 @@ class SigmaRuleEngine @Inject constructor(
 
     fun setRemoteRules(remoteRules: List<SigmaRule>) = synchronized(ruleLock) {
         val remoteById = remoteRules.associateBy { it.id }
-        val merged = bundledRules.map { bundled ->
-            val remote = remoteById[bundled.id]
-            if (remote != null && bundled.id !in PROTECTED_RULE_IDS) remote else bundled
-        }.toMutableList()
+        val merged = bundledRules.map { remoteById[it.id] ?: it }.toMutableList()
         val existingIds = merged.map { it.id }.toSet()
         for (rule in remoteRules) {
             if (rule.id !in existingIds) merged.add(rule)
@@ -127,18 +124,6 @@ class SigmaRuleEngine @Inject constructor(
 
     companion object {
         private const val TAG = "SigmaRuleEngine"
-
-        /** Critical bundled rules that remote updates cannot replace. */
-        private val PROTECTED_RULE_IDS = setOf(
-            "androdr-001", // package IOC (malware package names)
-            "androdr-002", // cert hash IOC (malware signing certs)
-            "androdr-003", // domain IOC (C2 domains)
-            "androdr-004", // APK hash IOC (malware file hashes)
-            "androdr-005", // Graphite/Paragon spyware
-            "androdr-010", // sideloaded app detection
-            "androdr-015", // firmware implant detection
-            "androdr-020"  // spyware artifact detection
-        )
 
         /** Explicit manifest of bundled SIGMA rule resources — R8-safe (no reflection). */
         private val BUNDLED_RULE_IDS = listOf(
