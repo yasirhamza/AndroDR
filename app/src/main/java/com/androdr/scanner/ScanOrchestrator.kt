@@ -63,7 +63,11 @@ class ScanOrchestrator @Inject constructor(
             "apk_hash_ioc_db" to { v -> indicatorResolver.isKnownBadApkHash(v.toString()) != null },
             "known_good_app_db" to { v ->
                 val pkg = v.toString()
-                val entry = knownAppResolver.lookup(pkg)
+                // Strip Android RRO overlay suffix for lookup:
+                // com.foo.bar.auto_generated_rro_product___ → com.foo.bar
+                val basePkg = pkg.replace(RRO_SUFFIX_REGEX, "")
+                val entry = knownAppResolver.lookup(basePkg)
+                    ?: if (basePkg != pkg) knownAppResolver.lookup(pkg) else null
                 (entry != null && entry.category in TRUSTED_CATEGORIES) ||
                     oemPrefixResolver.isOemPrefix(pkg)
             }
@@ -296,6 +300,9 @@ class ScanOrchestrator @Inject constructor(
 
         /** Rule IDs that represent confirmed malware matches (IOC database hits). */
         private val KNOWN_MALWARE_RULE_IDS = setOf("androdr-001", "androdr-002")
+
+        /** Strips Android auto-generated RRO overlay suffix for UAD database lookup. */
+        private val RRO_SUFFIX_REGEX = Regex("""\\.auto_generated_rro_\w+___$""")
 
         /** App categories treated as trusted by the known_good_app_db IOC lookup. */
         private val TRUSTED_CATEGORIES = setOf(

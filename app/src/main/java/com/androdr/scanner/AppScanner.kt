@@ -121,13 +121,8 @@ class AppScanner @Inject constructor(
             val fromTrustedStore = installerPackage != null &&
                 oemPrefixResolver.isTrustedInstaller(installerPackage)
 
-            // Known-app resolver — strip Android RRO overlay suffix for lookup
-            // e.g. com.shannon.imsservice.auto_generated_rro_product___ → com.shannon.imsservice
-            val normalizedPkg = packageName.replace(
-                Regex("""\\.auto_generated_rro_\w+___$"""), ""
-            )
-            val knownApp = knownAppResolver.lookup(normalizedPkg)
-                ?: if (normalizedPkg != packageName) knownAppResolver.lookup(packageName) else null
+            // Known-app resolver
+            val knownApp = knownAppResolver.lookup(packageName)
             // Primary: known-good DB (Plexus/UAD feeds, 14k+ apps)
             // Fallback: OEM prefix matching (for apps not in DB yet)
             val isKnownOemApp = knownApp?.category in setOf(
