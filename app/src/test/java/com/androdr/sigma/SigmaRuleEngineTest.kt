@@ -27,24 +27,20 @@ class SigmaRuleEngineTest {
 
     @Test
     fun `remote rule replaces bundled rule with same ID`() {
-        // Simulate bundled rules by setting them via reflection-free approach
-        engine.setRemoteRules(emptyList()) // no-op, just init
-        // Load "bundled" rules directly
         val bundled = listOf(rule("androdr-010", "Bundled 010"), rule("androdr-011", "Bundled 011"))
-        setRulesDirectly(bundled)
+        setBundledRulesDirectly(bundled)
 
         val remote = listOf(rule("androdr-010", "Updated 010"))
         engine.setRemoteRules(remote)
 
         val rules = engine.getRules()
-        val rule010 = rules.first { it.id == "androdr-010" }
-        assertEquals("Updated 010", rule010.title)
+        assertEquals("Updated 010", rules.first { it.id == "androdr-010" }.title)
         assertEquals("Bundled 011", rules.first { it.id == "androdr-011" }.title)
     }
 
     @Test
     fun `remote rule adds new rules not in bundled set`() {
-        setRulesDirectly(listOf(rule("androdr-010")))
+        setBundledRulesDirectly(listOf(rule("androdr-010")))
 
         val remote = listOf(rule("androdr-070", "New remote rule"))
         engine.setRemoteRules(remote)
@@ -61,7 +57,7 @@ class SigmaRuleEngineTest {
             rule("androdr-002", "Bundled cert"),
             rule("androdr-010", "Bundled sideload")
         )
-        setRulesDirectly(bundled)
+        setBundledRulesDirectly(bundled)
 
         val remote = listOf(
             rule("androdr-001", "Neutered IOC"),
@@ -76,9 +72,40 @@ class SigmaRuleEngineTest {
         assertEquals("Updated sideload", rules.first { it.id == "androdr-010" }.title)
     }
 
-    private fun setRulesDirectly(rules: List<SigmaRule>) {
-        val field = SigmaRuleEngine::class.java.getDeclaredField("rules")
-        field.isAccessible = true
-        field.set(engine, rules)
+    @Test
+    fun `repeated setRemoteRules does not inflate rule list`() {
+        setBundledRulesDirectly(listOf(rule("androdr-010"), rule("androdr-011")))
+
+        val remote = listOf(rule("androdr-010", "Updated"), rule("androdr-070", "New"))
+        engine.setRemoteRules(remote)
+        val countAfterFirst = engine.getRules().size
+
+        engine.setRemoteRules(remote)
+        val countAfterSecond = engine.getRules().size
+
+        assertEquals(countAfterFirst, countAfterSecond)
+        assertEquals(3, countAfterSecond) // 2 bundled + 1 new remote
+    }
+
+    @Test
+    fun `loadBundledRules is idempotent`() {
+        val bundled = listOf(rule("androdr-010", "Bundled"))
+        setBundledRulesDirectly(bundled)
+
+        val remote = listOf(rule("androdr-010", "Updated"))
+        engine.setRemoteRules(remote)
+        assertEquals("Updated", engine.getRules().first { it.id == "androdr-010" }.title)
+
+        // Second loadBundledRules should be no-op, not wipe remote rules
+        engine.loadBundledRules()
+        assertEquals("Updated", engine.getRules().first { it.id == "androdr-010" }.title)
+    }
+
+    private fun setBundledRulesDirectly(rules: List<SigmaRule>) {
+        for (field in listOf("bundledRules", "rules")) {
+            val f = SigmaRuleEngine::class.java.getDeclaredField(field)
+            f.isAccessible = true
+            f.set(engine, rules)
+        }
     }
 }

@@ -23,6 +23,7 @@ class SigmaRuleEngine @Inject constructor(
 ) {
     private val ruleLock = Any()
     @Volatile private var rules: List<SigmaRule> = emptyList()
+    @Volatile private var bundledRules: List<SigmaRule> = emptyList()
     @Volatile private var iocLookups: Map<String, (Any) -> Boolean> = emptyMap()
     @Volatile private var evidenceProviders: Map<String, EvidenceProvider> = emptyMap()
     @Volatile private var remoteRulesLoaded = false
@@ -30,7 +31,9 @@ class SigmaRuleEngine @Inject constructor(
     // Explicit manifest is inherently long but R8-safe;
     // catch-all prevents one bad rule from blocking all others
     @Suppress("LongMethod", "TooGenericExceptionCaught")
-    fun loadBundledRules() = synchronized(ruleLock) {
+    fun loadBundledRules() {
+        synchronized(ruleLock) {
+        if (bundledRules.isNotEmpty()) return
         val loaded = mutableListOf<SigmaRule>()
         for (resId in BUNDLED_RULE_IDS) {
             try {
@@ -41,13 +44,15 @@ class SigmaRuleEngine @Inject constructor(
                 Log.w(TAG, "Failed to load rule resource: ${e.message}")
             }
         }
+        bundledRules = loaded
         rules = loaded
         Log.i(TAG, "Loaded ${rules.size} bundled SIGMA rules")
+        }
     }
 
     fun setRemoteRules(remoteRules: List<SigmaRule>) = synchronized(ruleLock) {
         val remoteById = remoteRules.associateBy { it.id }
-        val merged = rules.map { bundled ->
+        val merged = bundledRules.map { bundled ->
             val remote = remoteById[bundled.id]
             if (remote != null && bundled.id !in PROTECTED_RULE_IDS) remote else bundled
         }.toMutableList()
