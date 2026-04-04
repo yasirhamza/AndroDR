@@ -27,6 +27,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Description
+import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.MoreVert
@@ -80,6 +81,7 @@ private data class DateEntry(
 @Composable
 fun TimelineScreen(
     initialPackage: String? = null,
+    onNavigateToHistory: (() -> Unit)? = null,
     viewModel: TimelineViewModel = hiltViewModel()
 ) {
     // Apply deep-link filter once on first composition
@@ -135,6 +137,12 @@ fun TimelineScreen(
         TopAppBar(
             title = { Text(stringResource(R.string.timeline_title)) },
             actions = {
+                // Manage scan history
+                if (onNavigateToHistory != null) {
+                    IconButton(onClick = onNavigateToHistory) {
+                        Icon(Icons.Filled.History, contentDescription = "Manage scans")
+                    }
+                }
                 // View report
                 IconButton(
                     onClick = {
