@@ -165,7 +165,9 @@ object SigmaRuleEvaluator {
         }
     }
 
-    @Suppress("CyclomaticComplexMethod", "ReturnCount")
+    @Suppress("CyclomaticComplexMethod", "ReturnCount", "LongMethod")
+    // LongMethod: list-aware matching adds element-wise branches for each string modifier;
+    // splitting would fragment tightly coupled matching logic.
     private fun evaluateFieldMatcher(
         matcher: SigmaFieldMatcher,
         record: Map<String, Any?>,
