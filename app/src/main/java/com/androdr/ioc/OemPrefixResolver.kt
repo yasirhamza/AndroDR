@@ -193,6 +193,13 @@ class OemPrefixResolver @Inject constructor() {
         private val BUNDLED_INSTALLERS = setOf(
             "com.android.vending",
             "com.sec.android.app.samsungapps",
+            "com.samsung.android.app.updatecenter",
+            "com.samsung.android.app.watchmanager",
+            "com.samsung.android.scloud",
+            "com.samsung.android.themestore",
+            "com.samsung.android.spay",
+            "com.sec.android.app.sbrowser",
+            "com.facebook.system",
             "com.xiaomi.market",
             "com.xiaomi.mipicks",
             "com.miui.packageinstaller",
