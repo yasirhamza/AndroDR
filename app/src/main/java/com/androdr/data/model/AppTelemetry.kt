@@ -14,7 +14,11 @@ data class AppTelemetry(
     val surveillancePermissionCount: Int,
     val hasAccessibilityService: Boolean,
     val hasDeviceAdmin: Boolean,
-    val knownAppCategory: String?
+    val knownAppCategory: String?,
+    // Raw component lists — enable manifest-based detections as pure SIGMA rule updates
+    val servicePermissions: List<String> = emptyList(),
+    val receiverPermissions: List<String> = emptyList(),
+    val hasLauncherActivity: Boolean = true
 ) {
     fun toFieldMap(): Map<String, Any?> = mapOf(
         "package_name" to packageName,
@@ -30,6 +34,9 @@ data class AppTelemetry(
         "surveillance_permission_count" to surveillancePermissionCount,
         "has_accessibility_service" to hasAccessibilityService,
         "has_device_admin" to hasDeviceAdmin,
-        "known_app_category" to knownAppCategory
+        "known_app_category" to knownAppCategory,
+        "service_permissions" to servicePermissions,
+        "receiver_permissions" to receiverPermissions,
+        "has_launcher_activity" to hasLauncherActivity
     )
 }

@@ -62,6 +62,7 @@ class AppScanner @Inject constructor(
             pm.getInstalledPackages(
                 PackageManager.GET_PERMISSIONS or signingFlag
                     or PackageManager.GET_SERVICES or PackageManager.GET_RECEIVERS
+                    or PackageManager.GET_ACTIVITIES or PackageManager.GET_PROVIDERS
             )
         } catch (e: Exception) {
             Log.w(TAG, "collectTelemetry: getInstalledPackages extended flags failed: ${e.message}")
@@ -146,6 +147,18 @@ class AppScanner @Inject constructor(
                 recv.permission == "android.permission.BIND_DEVICE_ADMIN"
             } == true
 
+            // Raw component lists — enables manifest-based detections as pure rule updates
+            val servicePermissions = pkg.services
+                ?.mapNotNull { it.permission }
+                ?.distinct()
+                ?: emptyList()
+            val receiverPermissions = pkg.receivers
+                ?.mapNotNull { it.permission }
+                ?.distinct()
+                ?: emptyList()
+            // Launcher activity check (API call — not derivable from manifest alone)
+            val hasLauncherActivity = pm.getLaunchIntentForPackage(packageName) != null
+
             telemetryList.add(
                 AppTelemetry(
                     packageName = packageName,
@@ -161,7 +174,10 @@ class AppScanner @Inject constructor(
                     surveillancePermissionCount = matchedSurveillancePerms.size,
                     hasAccessibilityService = hasAccessibilityService,
                     hasDeviceAdmin = hasDeviceAdmin,
-                    knownAppCategory = knownApp?.category?.name
+                    knownAppCategory = knownApp?.category?.name,
+                    servicePermissions = servicePermissions,
+                    receiverPermissions = receiverPermissions,
+                    hasLauncherActivity = hasLauncherActivity
                 )
             )
         }
