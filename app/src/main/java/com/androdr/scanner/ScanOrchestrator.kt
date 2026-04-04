@@ -61,6 +61,10 @@ class ScanOrchestrator @Inject constructor(
             "cert_hash_ioc_db" to { v -> indicatorResolver.isKnownBadCert(v.toString()) != null },
             "domain_ioc_db" to { v -> indicatorResolver.isKnownBadDomain(v.toString()) != null },
             "apk_hash_ioc_db" to { v -> indicatorResolver.isKnownBadApkHash(v.toString()) != null },
+            // ADR: package-name-only lookup, no cert verification. The trusted installer
+            // (from_trusted_store) is the trust anchor — Android enforces signature consistency
+            // for same-package installs, so Play Store attestation guarantees authenticity.
+            // See issue #51 for full rationale.
             "known_good_app_db" to { v ->
                 val pkg = v.toString()
                 val entry = knownAppResolver.lookup(pkg)
