@@ -129,7 +129,7 @@ class SettingsViewModel @Inject constructor(
     }
 
     /** Triggers all feed updates, SIGMA rule refresh, and CVE refresh. */
-    @Suppress("TooGenericExceptionCaught")
+    @Suppress("TooGenericExceptionCaught", "LongMethod") // Per-feed error handling is intentionally verbose
     fun triggerUpdate() {
         if (_updating.value) return
         viewModelScope.launch {

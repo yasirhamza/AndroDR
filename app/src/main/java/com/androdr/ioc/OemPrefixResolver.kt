@@ -21,6 +21,7 @@ class OemPrefixResolver @Inject constructor(
 
     private val data = AtomicReference<ParsedOemData>(loadBundledData())
 
+    @Suppress("TooGenericExceptionCaught")
     private fun loadBundledData(): ParsedOemData {
         return try {
             val yaml = context.resources.openRawResource(R.raw.known_oem_prefixes)
