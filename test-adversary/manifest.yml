@@ -24,7 +24,7 @@ profiles:
 
   stalkerware:
     description: "Commercial surveillance / stalkerware"
-    scenarios: [thetruthspy_stalkerware, andrmonitor_stalkerware, tispy_stalkerware, cocospy_stalkerware, mspy_stalkerware, eyezy_stalkerware]
+    scenarios: [thetruthspy_stalkerware, andrmonitor_stalkerware, tispy_stalkerware, cocospy_stalkerware, mspy_stalkerware, eyezy_stalkerware, notification_listener_abuse]
 
   full:
     description: "All scenarios"
@@ -404,6 +404,21 @@ scenarios:
       - "surveillance capabilities"
       - "Accessibility Abuse"
       - "Device Admin Abuse"
+
+  - id: notification_listener_abuse
+    track: 3
+    risk: high
+    technique: T1629
+    tactic: defense-evasion
+    description: "Sideloaded app with NotificationListenerService to intercept notifications"
+    source: fixture
+    fixture: fixtures/mercenary/notification-listener-abuse.apk
+    sha256: "69ab48a8ed7aef60e4b821fa827ad569dfe8968b5a945d846b2be3d8da335b03"
+    tags: [android, notification-listener, stalkerware-pattern]
+    attack: [T1629]
+    expected_patterns:
+      - "Notification Listener"
+      - "Hidden App (No Launcher Icon)"
 
   - id: firmware_implant_sim
     track: 3

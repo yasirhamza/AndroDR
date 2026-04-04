@@ -147,12 +147,27 @@ class AppScanner @Inject constructor(
                 recv.permission == "android.permission.BIND_DEVICE_ADMIN"
             } == true
 
-            // Raw component lists — enables manifest-based detections as pure rule updates
-            val servicePermissions = pkg.services
+            // Raw component lists — enables manifest-based detections as pure rule updates.
+            // getInstalledPackages may truncate component arrays due to Binder size limits,
+            // so fall back to per-package getPackageInfo when services/receivers are null.
+            val pkgDetail = if (pkg.services == null || pkg.receivers == null) {
+                @Suppress("TooGenericExceptionCaught", "SwallowedException")
+                try {
+                    pm.getPackageInfo(
+                        packageName,
+                        PackageManager.GET_SERVICES or PackageManager.GET_RECEIVERS
+                    )
+                } catch (e: Exception) {
+                    null
+                }
+            } else {
+                null
+            }
+            val servicePermissions = (pkg.services ?: pkgDetail?.services)
                 ?.mapNotNull { it.permission }
                 ?.distinct()
                 ?: emptyList()
-            val receiverPermissions = pkg.receivers
+            val receiverPermissions = (pkg.receivers ?: pkgDetail?.receivers)
                 ?.mapNotNull { it.permission }
                 ?.distinct()
                 ?: emptyList()

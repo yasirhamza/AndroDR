@@ -45,6 +45,7 @@ MODULES=(
     "impersonation-play-store"
     "multi-abuse-combo"
     "firmware-implant-sim"
+    "notification-listener-abuse"
 )
 
 echo ""

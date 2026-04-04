@@ -20,5 +20,6 @@ include(
     ":system-name-disguise",
     ":impersonation-play-store",
     ":multi-abuse-combo",
-    ":firmware-implant-sim"
+    ":firmware-implant-sim",
+    ":notification-listener-abuse"
 )
