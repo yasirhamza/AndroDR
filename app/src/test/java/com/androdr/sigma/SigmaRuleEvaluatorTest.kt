@@ -384,4 +384,96 @@ class SigmaRuleEvaluatorTest {
         assertEquals(1, SigmaRuleEvaluator.evaluate(listOf(rule), listOf(match), "app_scanner").size)
         assertEquals(0, SigmaRuleEvaluator.evaluate(listOf(rule), listOf(noMatch), "app_scanner").size)
     }
+
+    // ── List-aware matching ─────────────────────────────────────────────
+
+    @Test
+    fun `contains modifier matches element in list field`() {
+        val rule = makeRule(selections = mapOf(
+            "selection" to SigmaSelection(listOf(
+                SigmaFieldMatcher(
+                    "service_permissions", SigmaModifier.CONTAINS,
+                    listOf("BIND_NOTIFICATION_LISTENER")
+                )
+            ))
+        ))
+        val match = mapOf<String, Any?>(
+            "service_permissions" to listOf(
+                "android.permission.BIND_ACCESSIBILITY_SERVICE",
+                "android.permission.BIND_NOTIFICATION_LISTENER_SERVICE"
+            )
+        )
+        val noMatch = mapOf<String, Any?>(
+            "service_permissions" to listOf(
+                "android.permission.BIND_ACCESSIBILITY_SERVICE"
+            )
+        )
+        val findings = SigmaRuleEvaluator.evaluate(listOf(rule), listOf(match), "app_scanner")
+        assertTrue("Should match list element containing substring", findings.any { it.triggered })
+
+        val noFindings = SigmaRuleEvaluator.evaluate(listOf(rule), listOf(noMatch), "app_scanner")
+        assertTrue("Should not match when no element contains substring", noFindings.none { it.triggered })
+    }
+
+    @Test
+    fun `equals modifier matches exact element in list field`() {
+        val rule = makeRule(selections = mapOf(
+            "selection" to SigmaSelection(listOf(
+                SigmaFieldMatcher(
+                    "permissions", SigmaModifier.EQUALS,
+                    listOf("android.permission.CAMERA")
+                )
+            ))
+        ))
+        val match = mapOf<String, Any?>(
+            "permissions" to listOf("android.permission.CAMERA", "android.permission.INTERNET")
+        )
+        val noMatch = mapOf<String, Any?>(
+            "permissions" to listOf("android.permission.INTERNET")
+        )
+        assertTrue(
+            SigmaRuleEvaluator.evaluate(listOf(rule), listOf(match), "app_scanner").any { it.triggered }
+        )
+        assertTrue(
+            SigmaRuleEvaluator.evaluate(listOf(rule), listOf(noMatch), "app_scanner").none { it.triggered }
+        )
+    }
+
+    @Test
+    fun `contains on list does not match across element boundaries`() {
+        // "audio" should NOT match because no single element equals "audio"
+        // It should only match if an element CONTAINS "audio" as a substring
+        val rule = makeRule(selections = mapOf(
+            "selection" to SigmaSelection(listOf(
+                SigmaFieldMatcher("perms", SigmaModifier.CONTAINS, listOf("audio"))
+            ))
+        ))
+        val record = mapOf<String, Any?>(
+            "perms" to listOf("RECORD_AUDIO", "CAMERA")
+        )
+        // "audio" IS a substring of "RECORD_AUDIO" so this should match
+        assertTrue(
+            SigmaRuleEvaluator.evaluate(listOf(rule), listOf(record), "app_scanner").any { it.triggered }
+        )
+
+        val noRecord = mapOf<String, Any?>(
+            "perms" to listOf("CAMERA", "INTERNET")
+        )
+        assertTrue(
+            SigmaRuleEvaluator.evaluate(listOf(rule), listOf(noRecord), "app_scanner").none { it.triggered }
+        )
+    }
+
+    @Test
+    fun `empty list field does not match any modifier`() {
+        val rule = makeRule(selections = mapOf(
+            "selection" to SigmaSelection(listOf(
+                SigmaFieldMatcher("services", SigmaModifier.CONTAINS, listOf("anything"))
+            ))
+        ))
+        val record = mapOf<String, Any?>("services" to emptyList<String>())
+        assertTrue(
+            SigmaRuleEvaluator.evaluate(listOf(rule), listOf(record), "app_scanner").none { it.triggered }
+        )
+    }
 }

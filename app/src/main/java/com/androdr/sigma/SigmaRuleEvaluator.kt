@@ -31,6 +31,12 @@ object SigmaRuleEvaluator {
     private const val MAX_REGEX_LENGTH = SigmaRuleParser.MAX_REGEX_LENGTH
     private const val MAX_REGEX_CACHE_SIZE = 256
 
+    /** Modifiers that operate on string values and support list-aware element-wise matching. */
+    private val STRING_MODIFIERS = setOf(
+        SigmaModifier.EQUALS, SigmaModifier.CONTAINS,
+        SigmaModifier.STARTSWITH, SigmaModifier.ENDSWITH, SigmaModifier.RE
+    )
+
     // Defensive regex matching with multiple bail-out points for safety
     @Suppress("ReturnCount", "TooGenericExceptionCaught", "SwallowedException")
     private fun safeRegexMatch(pattern: String, input: String): Boolean {
@@ -166,6 +172,33 @@ object SigmaRuleEvaluator {
         iocLookups: Map<String, (Any) -> Boolean>
     ): Boolean {
         val fieldValue = record[matcher.fieldName]
+
+        // List-aware matching: when fieldValue is a List, apply the modifier
+        // element-wise and return true if ANY element matches.
+        if (fieldValue is List<*> && matcher.modifier in STRING_MODIFIERS) {
+            val elements = fieldValue.filterNotNull().map { it.toString() }
+            return when (matcher.modifier) {
+                SigmaModifier.EQUALS -> matcher.values.any { expected ->
+                    elements.any { it.equals(expected.toString(), ignoreCase = true) }
+                }
+                SigmaModifier.CONTAINS -> matcher.values.any { expected ->
+                    val exp = expected.toString().lowercase()
+                    elements.any { it.lowercase().contains(exp) }
+                }
+                SigmaModifier.STARTSWITH -> matcher.values.any { expected ->
+                    val exp = expected.toString().lowercase()
+                    elements.any { it.lowercase().startsWith(exp) }
+                }
+                SigmaModifier.ENDSWITH -> matcher.values.any { expected ->
+                    val exp = expected.toString().lowercase()
+                    elements.any { it.lowercase().endsWith(exp) }
+                }
+                SigmaModifier.RE -> matcher.values.any { pattern ->
+                    elements.any { safeRegexMatch(pattern.toString(), it) }
+                }
+                else -> false
+            }
+        }
 
         return when (matcher.modifier) {
             SigmaModifier.EQUALS -> {
