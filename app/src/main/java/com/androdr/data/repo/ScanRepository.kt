@@ -63,4 +63,14 @@ class ScanRepository @Inject constructor(
     suspend fun pruneOldDnsEvents(cutoff: Long) {
         dnsEventDao.deleteOlderThan(cutoff)
     }
+
+    suspend fun deleteScan(scanId: Long) {
+        forensicTimelineEventDao.deleteByScanId(scanId)
+        scanResultDao.deleteById(scanId)
+    }
+
+    suspend fun deleteAllScans() {
+        forensicTimelineEventDao.deleteAll()
+        scanResultDao.deleteAll()
+    }
 }

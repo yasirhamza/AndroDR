@@ -62,4 +62,10 @@ interface ForensicTimelineEventDao {
 
     @Query("DELETE FROM forensic_timeline WHERE source = :source")
     suspend fun deleteBySource(source: String)
+
+    @Query("DELETE FROM forensic_timeline WHERE scanResultId = :scanResultId")
+    suspend fun deleteByScanId(scanResultId: Long)
+
+    @Query("DELETE FROM forensic_timeline")
+    suspend fun deleteAll()
 }

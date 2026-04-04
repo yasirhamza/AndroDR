@@ -17,4 +17,10 @@ interface ScanResultDao {
 
     @Insert
     suspend fun insert(scan: ScanResult)
+
+    @Query("DELETE FROM ScanResult WHERE id = :id")
+    suspend fun deleteById(id: Long)
+
+    @Query("DELETE FROM ScanResult")
+    suspend fun deleteAll()
 }

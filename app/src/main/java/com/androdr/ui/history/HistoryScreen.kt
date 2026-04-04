@@ -26,9 +26,12 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.DeleteSweep
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -43,6 +46,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.SuggestionChip
 import androidx.compose.material3.SuggestionChipDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -80,6 +84,8 @@ fun HistoryScreen(
     val shareUri   by viewModel.shareUri.collectAsStateWithLifecycle()
     val sheetScan  by viewModel.sheetScan.collectAsStateWithLifecycle()
     val sheetReportText by viewModel.sheetReportText.collectAsStateWithLifecycle()
+    val showDeleteConfirm by viewModel.showDeleteConfirm.collectAsStateWithLifecycle()
+    val showClearAllConfirm by viewModel.showClearAllConfirm.collectAsStateWithLifecycle()
 
     val context = LocalContext.current
 
@@ -131,6 +137,22 @@ fun HistoryScreen(
         contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
+        if (allScans.isNotEmpty()) {
+            item {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End
+                ) {
+                    IconButton(onClick = { viewModel.requestClearAll() }) {
+                        Icon(
+                            imageVector = Icons.Filled.DeleteSweep,
+                            contentDescription = "Clear all scan history",
+                            tint = MaterialTheme.colorScheme.error
+                        )
+                    }
+                }
+            }
+        }
         items(allScans) { scan ->
             val isSelected = selectedScan?.id == scan.id
             ScanHistoryItem(
@@ -141,7 +163,8 @@ fun HistoryScreen(
                 exporting = exporting,
                 onClick = { viewModel.selectScan(scan) },
                 onExport = { viewModel.exportReport(scan) },
-                onViewReport = { viewModel.openSheet(scan) }
+                onViewReport = { viewModel.openSheet(scan) },
+                onDelete = { viewModel.requestDeleteScan(scan.id) }
             )
         }
     }
@@ -152,6 +175,44 @@ fun HistoryScreen(
             scan = scan,
             reportText = sheetReportText,
             onDismiss = { viewModel.closeSheet() }
+        )
+    }
+
+    // Single delete confirmation
+    if (showDeleteConfirm != null) {
+        AlertDialog(
+            onDismissRequest = { viewModel.dismissDeleteConfirm() },
+            title = { Text("Delete Scan") },
+            text = { Text("Delete this scan and its timeline events?") },
+            confirmButton = {
+                TextButton(onClick = { viewModel.confirmDeleteScan() }) {
+                    Text("Delete", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { viewModel.dismissDeleteConfirm() }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+
+    // Clear all confirmation
+    if (showClearAllConfirm) {
+        AlertDialog(
+            onDismissRequest = { viewModel.dismissClearAll() },
+            title = { Text("Clear All History") },
+            text = { Text("Delete all scan history? This cannot be undone.") },
+            confirmButton = {
+                TextButton(onClick = { viewModel.confirmClearAll() }) {
+                    Text("Delete All", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { viewModel.dismissClearAll() }) {
+                    Text("Cancel")
+                }
+            }
         )
     }
 }
@@ -308,7 +369,8 @@ private fun ScanHistoryItem(
     exporting: Boolean,
     onClick: () -> Unit,
     onExport: () -> Unit,
-    onViewReport: () -> Unit
+    onViewReport: () -> Unit,
+    onDelete: () -> Unit
 ) {
     val dateFormatter = remember { SimpleDateFormat("MMM d, yyyy  HH:mm", Locale.getDefault()) }
     val dateString = dateFormatter.format(Date(scan.timestamp))
@@ -446,6 +508,14 @@ private fun ScanHistoryItem(
                             else
                                 MaterialTheme.colorScheme.primary
                         )
+
+                        IconButton(onClick = onDelete) {
+                            Icon(
+                                imageVector = Icons.Filled.Delete,
+                                contentDescription = "Delete scan",
+                                tint = MaterialTheme.colorScheme.error
+                            )
+                        }
                     }
                 }
             }
