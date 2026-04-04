@@ -158,6 +158,8 @@ class SigmaRuleEngine @Inject constructor(
             R.raw.sigma_androdr_063_appops_microphone,
             R.raw.sigma_androdr_064_appops_camera,
             R.raw.sigma_androdr_065_appops_install_packages,
+            R.raw.sigma_androdr_067_notification_listener,
+            R.raw.sigma_androdr_068_hidden_launcher,
         )
     }
 }

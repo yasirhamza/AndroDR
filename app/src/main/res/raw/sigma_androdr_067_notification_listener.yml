@@ -1,0 +1,30 @@
+title: Sideloaded app with notification listener
+id: androdr-067
+status: production
+description: >
+    A sideloaded app declares a NotificationListenerService, which lets it
+    read all notifications including OTP codes, banking alerts, and 2FA
+    messages. Banking trojans (Cerberus, Anubis, SharkBot) commonly use
+    this to steal one-time passwords.
+author: AndroDR
+date: 2026/04/04
+tags:
+    - attack.t1517
+logsource:
+    product: androdr
+    service: app_scanner
+detection:
+    selection:
+        service_permissions|contains: "BIND_NOTIFICATION_LISTENER_SERVICE"
+        is_sideloaded: true
+    condition: selection
+level: high
+display:
+    category: app_risk
+    icon: notifications
+    triggered_title: "Notification Listener (Sideloaded)"
+    evidence_type: none
+remediation:
+    - "This sideloaded app can read all your notifications, including banking codes and 2FA messages."
+    - "Go to Settings > Apps > Special access > Notification access and revoke this app's access."
+    - "If you did not install this app intentionally, uninstall it immediately."
