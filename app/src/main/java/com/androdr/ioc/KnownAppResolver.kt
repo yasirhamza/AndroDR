@@ -29,7 +29,7 @@ class KnownAppResolver @Inject constructor(
     }
 
     companion object {
-        private val RRO_SUFFIX_REGEX = Regex("""\\.auto_generated_rro_[\w-]+___$""")
+        private val RRO_SUFFIX_REGEX = Regex("""\.auto_generated_rro_[\w-]+___$""")
     }
 }
 
