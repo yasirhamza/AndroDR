@@ -11,10 +11,11 @@ import org.junit.Before
 import org.junit.Test
 
 /**
- * Integration test: feeds real AppOpsModule output through actual SIGMA rules
- * to catch telemetry-to-rule dialect mismatches (e.g., "CAMERA" vs "android:camera").
+ * Verifies that AppOpsModule telemetry format matches what SIGMA rules expect.
+ * Catches dialect mismatches (e.g., "CAMERA" vs "android:camera") at the
+ * module→rule boundary.
  */
-class AppOpsRuleIntegrationTest {
+class AppOpsRulePipelineTest {
 
     private val mockIndicatorResolver: IndicatorResolver = mockk()
     private lateinit var module: AppOpsModule
