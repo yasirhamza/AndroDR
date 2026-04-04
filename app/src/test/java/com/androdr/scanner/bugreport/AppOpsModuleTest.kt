@@ -37,7 +37,7 @@ class AppOpsModuleTest {
         val result = module.analyze(section, mockIndicatorResolver)
         assertTrue(result.telemetry.any {
             it["package_name"] == "com.suspicious.installer" &&
-                it["operation"] == "REQUEST_INSTALL_PACKAGES" &&
+                it["operation"] == "android:request_install_packages" &&
                 it["is_system_app"] == false
         })
     }
@@ -54,7 +54,7 @@ class AppOpsModuleTest {
         val result = module.analyze(section, mockIndicatorResolver)
         assertTrue(result.telemetry.any {
             it["package_name"] == "com.android.shell" &&
-                it["operation"] == "CAMERA"
+                it["operation"] == "android:camera"
         })
     }
 
@@ -79,7 +79,7 @@ class AppOpsModuleTest {
         val result = module.analyze(section, mockIndicatorResolver)
         assertTrue(result.telemetry.any {
             it["package_name"] == "com.flexispy.android" &&
-                it["operation"] == "CAMERA" &&
+                it["operation"] == "android:camera" &&
                 it["is_system_app"] == false
         })
     }
