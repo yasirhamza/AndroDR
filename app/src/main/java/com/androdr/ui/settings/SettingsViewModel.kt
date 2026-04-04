@@ -16,6 +16,7 @@ import com.androdr.ioc.IndicatorResolver
 import com.androdr.ioc.IndicatorUpdater
 import com.androdr.ioc.toStixBundle
 import com.androdr.ioc.KnownAppUpdater
+import com.androdr.ioc.OemPrefixResolver
 import com.androdr.scanner.AppScanner
 import com.androdr.sigma.SigmaRuleEngine
 import com.androdr.sigma.SigmaRuleFeed
@@ -47,7 +48,8 @@ class SettingsViewModel @Inject constructor(
     private val knownAppUpdater: KnownAppUpdater,
     private val appScanner: AppScanner,
     private val sigmaRuleFeed: SigmaRuleFeed,
-    private val forensicTimelineEventDao: ForensicTimelineEventDao
+    private val forensicTimelineEventDao: ForensicTimelineEventDao,
+    private val oemPrefixResolver: OemPrefixResolver
 ) : ViewModel() {
 
     val blocklistBlockMode = settingsRepository.blocklistBlockMode
@@ -122,8 +124,10 @@ class SettingsViewModel @Inject constructor(
             try {
                 val indicatorJob = async { indicatorUpdater.update() }
                 val knownAppJob = async { knownAppUpdater.update() }
+                val oemPrefixJob = async { oemPrefixResolver.refresh() }
                 indicatorJob.await()
                 knownAppJob.await()
+                oemPrefixJob.await()
 
                 // Refresh SIGMA rules
                 try {
