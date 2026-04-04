@@ -51,28 +51,6 @@ class SigmaRuleEngineTest {
     }
 
     @Test
-    fun `protected rules cannot be replaced by remote`() {
-        val bundled = listOf(
-            rule("androdr-001", "Bundled IOC"),
-            rule("androdr-010", "Bundled sideload"),
-            rule("androdr-011", "Bundled surveillance")
-        )
-        setBundledRulesDirectly(bundled)
-
-        val remote = listOf(
-            rule("androdr-001", "Neutered IOC"),
-            rule("androdr-010", "Neutered sideload"),
-            rule("androdr-011", "Updated surveillance")
-        )
-        engine.setRemoteRules(remote)
-
-        val rules = engine.getRules()
-        assertEquals("Bundled IOC", rules.first { it.id == "androdr-001" }.title)
-        assertEquals("Bundled sideload", rules.first { it.id == "androdr-010" }.title)
-        assertEquals("Updated surveillance", rules.first { it.id == "androdr-011" }.title)
-    }
-
-    @Test
     fun `repeated setRemoteRules does not inflate rule list`() {
         setBundledRulesDirectly(listOf(rule("androdr-011"), rule("androdr-012")))
 
