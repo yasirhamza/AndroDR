@@ -10,12 +10,12 @@ plugins {
 
 android {
     namespace = "com.androdr"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.androdr"
         minSdk = 26
-        targetSdk = 35
+        targetSdk = 36
         val buildNumber = providers.exec {
             commandLine("git", "rev-list", "--count", "HEAD")
         }.standardOutput.asText.get().trim().toIntOrNull() ?: 1
