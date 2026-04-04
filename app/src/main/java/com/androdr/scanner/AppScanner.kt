@@ -205,7 +205,9 @@ class AppScanner @Inject constructor(
         // throw SecurityException or NameNotFoundException on restricted packages; null = unknown.
         return try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                pm.getInstallSourceInfo(packageName).installingPackageName
+                val info = pm.getInstallSourceInfo(packageName)
+                info.installingPackageName
+                    ?: info.initiatingPackageName
             } else {
                 @Suppress("DEPRECATION")
                 pm.getInstallerPackageName(packageName)
