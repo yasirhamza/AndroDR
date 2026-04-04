@@ -206,6 +206,20 @@ get_pkg_name() {
     echo "$pkg"
 }
 
+# Install APK as sideloaded (no trusted installer).
+# ADB install sets initiatingPackageName=com.android.shell which is treated as
+# a trusted OEM installer. Push + pm install -i <real-pkg> uses a non-OEM
+# installer so AndroDR correctly marks the app as sideloaded.
+sideload_install() {
+    local apk="$1"
+    local remote="/data/local/tmp/$(basename "$apk")"
+    $ADB push "$apk" "$remote" </dev/null >/dev/null 2>&1 || return 1
+    $ADB shell pm install -t -i com.androdr.debug "$remote" </dev/null 2>&1 | tail -1 | grep -q "Success"
+    local rc=$?
+    $ADB shell rm -f "$remote" </dev/null 2>/dev/null
+    return $rc
+}
+
 # ── Per-scenario execution ────────────────────────────────────────────────────
 
 run_scenario() {
@@ -291,20 +305,11 @@ run_scenario() {
         echo "  Network isolated"
     fi
 
-    # Step 3: INSTALL
+    # Step 3: INSTALL (as sideloaded — no trusted installer)
     if [ -n "$apk_path" ]; then
         echo "  Installing $apk_path..."
-        if $ADB install -t "$apk_path" 2>&1 | tail -1 | grep -q "Success"; then
-            # Extract package name: use aapt2 if available, then grep pm list
-            pkg_name=$(aapt2 dump packagename "$apk_path" 2>/dev/null || true)
-            if [ -z "$pkg_name" ] && [ -n "${ANDROID_HOME:-}" ]; then
-                local aapt_bin="$ANDROID_HOME/build-tools/$(ls "$ANDROID_HOME/build-tools/" 2>/dev/null | sort -V | tail -1)/aapt2"
-                pkg_name=$("$aapt_bin" dump packagename "$apk_path" 2>/dev/null || true)
-            fi
-            if [ -z "$pkg_name" ]; then
-                # Last resort: diff pm list before/after install
-                pkg_name=$($ADB shell pm list packages 2>/dev/null | tail -1 | sed 's/package://' || true)
-            fi
+        if sideload_install "$apk_path"; then
+            pkg_name=$(get_pkg_name "$apk_path")
             if [ -n "$pkg_name" ]; then
                 INSTALLED_PACKAGES+=("$pkg_name")
             fi
@@ -466,7 +471,7 @@ if [ "$MODE" = "load" ] || [ "$MODE" = "guided" ]; then
 
         if [ -n "$apk_path" ]; then
             echo "  Installing $scenario_id..."
-            if $ADB install -t "$apk_path" </dev/null 2>&1 | tail -1 | grep -q "Success"; then
+            if sideload_install "$apk_path"; then
                 local_pkg=$(get_pkg_name "$apk_path")
                 [ -n "$local_pkg" ] && echo "$local_pkg" >> "$STATE_FILE"
                 INSTALLED_PACKAGES+=("${local_pkg:-unknown}")
