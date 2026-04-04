@@ -98,7 +98,9 @@ class SigmaRuleEvaluatorTest {
             ))
         ))
         val knownBad = setOf("abc123")
-        val lookups = mapOf<String, (Any) -> Boolean>("cert_hash_ioc_db" to { v -> v.toString() in knownBad })
+        val lookups = mapOf<String, (Any, Map<String, Any?>) -> Boolean>(
+            "cert_hash_ioc_db" to { v, _ -> v.toString() in knownBad }
+        )
 
         val match = mapOf<String, Any?>("cert_hash" to "abc123")
         val noMatch = mapOf<String, Any?>("cert_hash" to "def456")
@@ -187,8 +189,8 @@ class SigmaRuleEvaluatorTest {
             condition = "selection and not filter_known_good"
         )
 
-        val iocLookups = mapOf<String, (Any) -> Boolean>(
-            "known_good_db" to { pkg -> pkg.toString() in setOf("com.x8bit.bitwarden", "com.google.chrome") }
+        val iocLookups = mapOf<String, (Any, Map<String, Any?>) -> Boolean>(
+            "known_good_db" to { pkg, _ -> pkg.toString() in setOf("com.x8bit.bitwarden", "com.google.chrome") }
         )
 
         // Known good app — should NOT fire

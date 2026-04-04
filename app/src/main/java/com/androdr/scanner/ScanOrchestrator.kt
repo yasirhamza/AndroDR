@@ -57,15 +57,20 @@ class ScanOrchestrator @Inject constructor(
     private suspend fun initRuleEngine() = initMutex.withLock {
         if (ruleEngineInitialized) return@withLock
         sigmaRuleEngine.setIocLookups(mapOf(
-            "package_ioc_db" to { v -> indicatorResolver.isKnownBadPackage(v.toString()) != null },
-            "cert_hash_ioc_db" to { v -> indicatorResolver.isKnownBadCert(v.toString()) != null },
-            "domain_ioc_db" to { v -> indicatorResolver.isKnownBadDomain(v.toString()) != null },
-            "apk_hash_ioc_db" to { v -> indicatorResolver.isKnownBadApkHash(v.toString()) != null },
-            "known_good_app_db" to { v ->
+            "package_ioc_db" to { v, _ -> indicatorResolver.isKnownBadPackage(v.toString()) != null },
+            "cert_hash_ioc_db" to { v, _ -> indicatorResolver.isKnownBadCert(v.toString()) != null },
+            "domain_ioc_db" to { v, _ -> indicatorResolver.isKnownBadDomain(v.toString()) != null },
+            "apk_hash_ioc_db" to { v, _ -> indicatorResolver.isKnownBadApkHash(v.toString()) != null },
+            "known_good_app_db" to { v, record ->
                 val pkg = v.toString()
                 val entry = knownAppResolver.lookup(pkg)
-                (entry != null && entry.category in TRUSTED_CATEGORIES) ||
-                    oemPrefixResolver.isOemPrefix(pkg)
+                val knownGood = entry != null && entry.category in TRUSTED_CATEGORIES
+                if (knownGood && entry?.certHash != null) {
+                    val telemetryCert = record["cert_hash"]?.toString()
+                    entry.certHash.equals(telemetryCert, ignoreCase = true)
+                } else {
+                    knownGood || oemPrefixResolver.isOemPrefix(pkg)
+                }
             }
         ))
         sigmaRuleEngine.loadBundledRules()

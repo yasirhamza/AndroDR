@@ -63,5 +63,6 @@ private fun KnownAppEntry.toDbEntry() = KnownAppDbEntry(
     displayName = displayName,
     category    = category.name,
     sourceId    = sourceId,
-    fetchedAt   = fetchedAt
+    fetchedAt   = fetchedAt,
+    certHash    = certHash
 )

@@ -32,8 +32,8 @@ class KnownGoodFilterTest {
             display = SigmaDisplay(category = "app_risk")
         )
 
-        val iocLookups = mapOf<String, (Any) -> Boolean>(
-            "known_good_db" to { pkg ->
+        val iocLookups = mapOf<String, (Any, Map<String, Any?>) -> Boolean>(
+            "known_good_db" to { pkg, _ ->
                 pkg.toString() in setOf("com.google.android.apps.docs", "com.x8bit.bitwarden")
             }
         )
