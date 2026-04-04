@@ -181,7 +181,14 @@ private fun AndroDRApp() {
                     type = NavType.StringType; nullable = true; defaultValue = null
                 })
             ) { entry ->
-                TimelineScreen(initialPackage = entry.arguments?.getString("pkg"))
+                TimelineScreen(
+                    initialPackage = entry.arguments?.getString("pkg"),
+                    onNavigateToHistory = {
+                        navController.navigate("history") {
+                            launchSingleTop = true
+                        }
+                    }
+                )
             }
             composable("bugreport") {
                 BugReportScreen()
