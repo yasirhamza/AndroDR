@@ -5,6 +5,8 @@ import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.widget.Toast
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -25,6 +27,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Description
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Timeline
@@ -48,6 +52,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -96,6 +101,7 @@ fun TimelineScreen(
 
     val reportText by viewModel.reportText.collectAsStateWithLifecycle()
 
+    var filterPanelExpanded by rememberSaveable { mutableStateOf(true) }
     var exportMenuExpanded by remember { mutableStateOf(false) }
     var pendingCopy by remember { mutableStateOf(false) }
 
@@ -187,105 +193,135 @@ fun TimelineScreen(
             }
         )
 
-        // Severity filter chips
-        val filterOptions = listOf(
-            null to stringResource(R.string.timeline_filter_all),
-            "CRITICAL" to stringResource(R.string.timeline_filter_critical),
-            "HIGH" to stringResource(R.string.timeline_filter_high),
-            "MEDIUM" to stringResource(R.string.timeline_filter_medium)
-        )
-        LazyRow(
-            contentPadding = PaddingValues(horizontal = 16.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable { filterPanelExpanded = !filterPanelExpanded }
+                .padding(horizontal = 16.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            items(filterOptions) { (severity, label) ->
-                FilterChip(
-                    selected = severityFilter == severity,
-                    onClick = { viewModel.setSeverityFilter(severity) },
-                    label = { Text(label) }
-                )
-            }
+            Text(
+                text = "Filters",
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Icon(
+                imageVector = if (filterPanelExpanded) Icons.Filled.ExpandLess
+                    else Icons.Filled.ExpandMore,
+                contentDescription = if (filterPanelExpanded) "Collapse filters"
+                    else "Expand filters",
+                tint = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
 
-        // Package filter chips
-        val packages by viewModel.availablePackages.collectAsStateWithLifecycle()
-        val packageFilter by viewModel.packageFilter.collectAsStateWithLifecycle()
-
-        if (packages.isNotEmpty()) {
-            LazyRow(
-                contentPadding = PaddingValues(horizontal = 16.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                items(packages.take(10)) { pkg ->
-                    FilterChip(
-                        selected = packageFilter == pkg,
-                        onClick = { viewModel.setPackageFilter(if (packageFilter == pkg) null else pkg) },
-                        label = { Text(pkg.substringAfterLast("."), maxLines = 1) }
-                    )
+        AnimatedVisibility(visible = filterPanelExpanded) {
+            Column {
+                // Severity filter chips
+                val filterOptions = listOf(
+                    null to stringResource(R.string.timeline_filter_all),
+                    "CRITICAL" to stringResource(R.string.timeline_filter_critical),
+                    "HIGH" to stringResource(R.string.timeline_filter_high),
+                    "MEDIUM" to stringResource(R.string.timeline_filter_medium)
+                )
+                LazyRow(
+                    contentPadding = PaddingValues(horizontal = 16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    items(filterOptions) { (severity, label) ->
+                        FilterChip(
+                            selected = severityFilter == severity,
+                            onClick = { viewModel.setSeverityFilter(severity) },
+                            label = { Text(label) }
+                        )
+                    }
                 }
-            }
-        }
 
-        // Group mode toggle
-        LazyRow(
-            contentPadding = PaddingValues(horizontal = 16.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            item {
-                FilterChip(
-                    selected = groupMode == TimelineGroupMode.DATE,
-                    onClick = { viewModel.setGroupMode(TimelineGroupMode.DATE) },
-                    label = { Text(stringResource(R.string.timeline_group_date)) }
-                )
-            }
-            item {
-                FilterChip(
-                    selected = groupMode == TimelineGroupMode.SCAN,
-                    onClick = { viewModel.setGroupMode(TimelineGroupMode.SCAN) },
-                    label = { Text(stringResource(R.string.timeline_group_scan)) }
-                )
-            }
-        }
+                // Package filter chips
+                val packages by viewModel.availablePackages.collectAsStateWithLifecycle()
+                val packageFilter by viewModel.packageFilter.collectAsStateWithLifecycle()
 
-        // Date range filter chips — use stable labels, compute timestamps on click
-        val dateRange by viewModel.dateRange.collectAsStateWithLifecycle()
-
-        data class RangeOption(val hoursBack: Int?, val label: String)
-        val rangeOptions = listOf(
-            RangeOption(null, stringResource(R.string.timeline_filter_all)),
-            RangeOption(24, stringResource(R.string.timeline_range_24h)),
-            RangeOption(24 * 7, stringResource(R.string.timeline_range_7d)),
-            RangeOption(24 * 30, stringResource(R.string.timeline_range_30d))
-        )
-        // Track which range is active by hours, not by raw timestamp
-        var activeRangeHours by remember { mutableStateOf<Int?>(null) }
-
-        // Sync with ViewModel dateRange state
-        if (dateRange == null) activeRangeHours = null
-
-        LazyRow(
-            contentPadding = PaddingValues(horizontal = 16.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            items(rangeOptions) { option ->
-                FilterChip(
-                    selected = activeRangeHours == option.hoursBack,
-                    onClick = {
-                        if (option.hoursBack == null) {
-                            activeRangeHours = null
-                            viewModel.clearDateRange()
-                        } else {
-                            activeRangeHours = option.hoursBack
-                            val now = System.currentTimeMillis()
-                            viewModel.setDateRange(now - option.hoursBack * 3600_000L, now)
+                if (packages.isNotEmpty()) {
+                    LazyRow(
+                        contentPadding = PaddingValues(horizontal = 16.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        items(packages.take(10)) { pkg ->
+                            FilterChip(
+                                selected = packageFilter == pkg,
+                                onClick = {
+                                    viewModel.setPackageFilter(
+                                        if (packageFilter == pkg) null else pkg
+                                    )
+                                },
+                                label = { Text(pkg.substringAfterLast("."), maxLines = 1) }
+                            )
                         }
-                    },
-                    label = { Text(option.label) }
+                    }
+                }
+
+                // Group mode toggle
+                LazyRow(
+                    contentPadding = PaddingValues(horizontal = 16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    item {
+                        FilterChip(
+                            selected = groupMode == TimelineGroupMode.DATE,
+                            onClick = { viewModel.setGroupMode(TimelineGroupMode.DATE) },
+                            label = { Text(stringResource(R.string.timeline_group_date)) }
+                        )
+                    }
+                    item {
+                        FilterChip(
+                            selected = groupMode == TimelineGroupMode.SCAN,
+                            onClick = { viewModel.setGroupMode(TimelineGroupMode.SCAN) },
+                            label = { Text(stringResource(R.string.timeline_group_scan)) }
+                        )
+                    }
+                }
+
+                // Date range filter chips
+                val dateRange by viewModel.dateRange.collectAsStateWithLifecycle()
+
+                data class RangeOption(val hoursBack: Int?, val label: String)
+                val rangeOptions = listOf(
+                    RangeOption(null, stringResource(R.string.timeline_filter_all)),
+                    RangeOption(24, stringResource(R.string.timeline_range_24h)),
+                    RangeOption(24 * 7, stringResource(R.string.timeline_range_7d)),
+                    RangeOption(24 * 30, stringResource(R.string.timeline_range_30d))
                 )
+                var activeRangeHours by remember { mutableStateOf<Int?>(null) }
+
+                if (dateRange == null) activeRangeHours = null
+
+                LazyRow(
+                    contentPadding = PaddingValues(horizontal = 16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    items(rangeOptions) { option ->
+                        FilterChip(
+                            selected = activeRangeHours == option.hoursBack,
+                            onClick = {
+                                if (option.hoursBack == null) {
+                                    activeRangeHours = null
+                                    viewModel.clearDateRange()
+                                } else {
+                                    activeRangeHours = option.hoursBack
+                                    val now = System.currentTimeMillis()
+                                    viewModel.setDateRange(
+                                        now - option.hoursBack * 3600_000L, now
+                                    )
+                                }
+                            },
+                            label = { Text(option.label) }
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
             }
         }
-
-        Spacer(modifier = Modifier.height(8.dp))
 
         if (events.isEmpty()) {
             // Empty state

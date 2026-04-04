@@ -107,4 +107,28 @@ class HistoryViewModel @Inject constructor(
     fun onShareConsumed() {
         _shareUri.value = null
     }
+
+    private val _showDeleteConfirm = MutableStateFlow<Long?>(null)
+    val showDeleteConfirm: StateFlow<Long?> = _showDeleteConfirm.asStateFlow()
+
+    private val _showClearAllConfirm = MutableStateFlow(false)
+    val showClearAllConfirm: StateFlow<Boolean> = _showClearAllConfirm.asStateFlow()
+
+    fun requestDeleteScan(scanId: Long) { _showDeleteConfirm.value = scanId }
+    fun dismissDeleteConfirm() { _showDeleteConfirm.value = null }
+
+    fun confirmDeleteScan() {
+        val id = _showDeleteConfirm.value ?: return
+        _showDeleteConfirm.value = null
+        viewModelScope.launch { repository.deleteScan(id) }
+    }
+
+    fun requestClearAll() { _showClearAllConfirm.value = true }
+    fun dismissClearAll() { _showClearAllConfirm.value = false }
+
+    fun confirmClearAll() {
+        _showClearAllConfirm.value = false
+        _selectedScan.value = null
+        viewModelScope.launch { repository.deleteAllScans() }
+    }
 }
