@@ -120,7 +120,7 @@ class AppOpsModule @Inject constructor() : BugreportModule {
     private fun parseTimestamp(ts: String): Long = try {
         SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).parse(ts)?.time ?: -1L
     } catch (e: Exception) {
-        Log.w("AppOpsModule", "Failed to parse timestamp: $ts")
+        Log.w("AppOpsModule", "Failed to parse timestamp: $ts", e)
         -1L
     }
 }
