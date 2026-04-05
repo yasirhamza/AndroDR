@@ -42,6 +42,8 @@ data class ScanGroup(
     val standaloneEvents: List<ForensicTimelineEvent>
 )
 
+@Suppress("TooManyFunctions") // ViewModel exposes filter setters, export methods, and report
+// generation — splitting would fragment the timeline feature's cohesive state management.
 @HiltViewModel
 class TimelineViewModel @Inject constructor(
     @ApplicationContext private val appContext: Context,
