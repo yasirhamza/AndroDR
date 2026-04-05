@@ -10,7 +10,7 @@ detection:
     selection:
         wifi_adb_enabled: true
     condition: selection
-level: high
+level: medium
 display:
     category: device_posture
     icon: wifi

@@ -23,17 +23,23 @@ data class ScanResult(
     val riskySideloadCount: Int,
     val knownMalwareCount: Int
 ) {
+    // Overall risk driven by app threats. Device posture is a condition (not an incident)
+    // and caps at MEDIUM. NETWORK findings are included with APP_RISK since DNS IOC rules
+    // (androdr-003) use app_risk category; if future NETWORK-category rules are added,
+    // include them here.
     @get:Ignore
     @Transient
     val overallRiskLevel: RiskLevel
         get() {
-            val maxLevel = findings
-                .filter { it.triggered }
+            val appMax = findings
+                .filter { it.triggered && it.category != FindingCategory.DEVICE_POSTURE }
                 .maxOfOrNull { levelToScore(it.level) } ?: 0
+            val hasDeviceIssues = findings
+                .any { it.triggered && it.category == FindingCategory.DEVICE_POSTURE }
             return when {
-                maxLevel >= RiskLevel.CRITICAL.score -> RiskLevel.CRITICAL
-                maxLevel >= RiskLevel.HIGH.score -> RiskLevel.HIGH
-                maxLevel >= RiskLevel.MEDIUM.score -> RiskLevel.MEDIUM
+                appMax >= RiskLevel.CRITICAL.score -> RiskLevel.CRITICAL
+                appMax >= RiskLevel.HIGH.score -> RiskLevel.HIGH
+                appMax >= RiskLevel.MEDIUM.score || hasDeviceIssues -> RiskLevel.MEDIUM
                 else -> RiskLevel.LOW
             }
         }

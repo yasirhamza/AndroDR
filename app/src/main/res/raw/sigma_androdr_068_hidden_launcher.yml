@@ -19,7 +19,9 @@ detection:
         is_known_oem_app: false
     filter_known_good:
         package_name|ioc_lookup: known_good_app_db
-    condition: selection and not filter_known_good
+    filter_trusted_store:
+        from_trusted_store: true
+    condition: selection and not filter_known_good and not filter_trusted_store
 level: high
 display:
     category: app_risk

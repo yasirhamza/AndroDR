@@ -10,7 +10,7 @@ detection:
     selection:
         screen_lock_enabled: false
     condition: selection
-level: critical
+level: medium
 display:
     category: device_posture
     icon: lock_open

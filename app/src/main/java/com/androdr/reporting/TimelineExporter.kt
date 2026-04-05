@@ -18,7 +18,8 @@ object TimelineExporter {
     @Suppress("LongMethod") // Report formatting assembles header, assessment, date groups, and footer
     fun formatPlaintext(
         events: List<ForensicTimelineEvent>,
-        displayNames: Map<String, String> = emptyMap()
+        displayNames: Map<String, String> = emptyMap(),
+        ruleGuidance: Map<String, String> = emptyMap()
     ): String = buildString {
         appendLine(RULE)
         appendLine("  AndroDR Forensic Timeline")
@@ -52,14 +53,31 @@ object TimelineExporter {
             appendLine("  Informational: $infoCount")
         }
 
-        // Assessment
+        // Assessment derived from rule guidance — the rules define threat severity,
+        // not hardcoded category/severity checks in the formatter.
+        val maxGuidancePriority = filtered
+            .mapNotNull { ruleGuidance[it.ruleId].takeIf { g -> !g.isNullOrEmpty() } }
+            .maxOfOrNull { guidancePriority(it) } ?: 0
         val assessment = when {
-            filtered.any { it.severity.equals("CRITICAL", true) } -> "CRITICAL ACTIVITY DETECTED"
-            significantCount > 0 -> "REVIEW RECOMMENDED"
+            maxGuidancePriority >= 3 -> "CRITICAL ACTIVITY DETECTED"
+            maxGuidancePriority >= 1 || significantCount > 0 -> "REVIEW RECOMMENDED"
             else -> "NO CONCERNS"
         }
+        // Severity breakdown
+        val criticalCount = filtered.count { it.severity.equals("CRITICAL", true) }
+        val highCount = filtered.count { it.severity.equals("HIGH", true) }
+        val mediumCount = filtered.count { it.severity.equals("MEDIUM", true) }
+        val severityParts = buildList {
+            if (criticalCount > 0) add("$criticalCount critical")
+            if (highCount > 0) add("$highCount high")
+            if (mediumCount > 0) add("$mediumCount medium")
+        }
+
         appendLine()
         appendLine("  ASSESSMENT: $assessment")
+        if (severityParts.isNotEmpty()) {
+            appendLine("  Severity: ${severityParts.joinToString(", ")}")
+        }
         val pkgCount = filtered.map { it.packageName }.filter { it.isNotEmpty() }.distinct().size
         if (significantCount > 0) {
             appendLine("  $significantCount event(s) across $pkgCount package(s) require attention.")
@@ -144,6 +162,9 @@ object TimelineExporter {
             appendLine("$ts,$iso,$module,$eventType,$data,$pkg,$sev,$ioc,$iocType,$iocSrc,$campaign,$mitre,$hash,$details")
         }
     }
+
+    private fun guidancePriority(guidance: String): Int =
+        GuidanceUtils.guidancePriority(guidance)
 
     private fun csvEscape(value: String): String {
         // Prevent CSV formula injection (cells starting with =, +, -, @, \t, \r)

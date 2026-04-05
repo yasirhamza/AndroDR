@@ -121,11 +121,17 @@ object SigmaRuleEvaluator {
             .mapValues { (_, v) -> v?.toString() ?: "" }
         val titleVars = recordVars + (evidenceResult?.titleVars ?: emptyMap())
         val remediationVars = recordVars + (evidenceResult?.remediationVars ?: emptyMap())
+        // Device posture findings are conditions (not incidents) — cap at medium regardless
+        // of the rule's level field. This is the single structural chokepoint for the cap.
+        val effectiveLevel = if (category == FindingCategory.DEVICE_POSTURE &&
+            rule.level.lowercase() in listOf("high", "critical")
+        ) "medium" else rule.level
+
         return Finding(
             ruleId = rule.id,
             title = TemplateResolver.resolve(titleTemplate, titleVars),
             description = rule.description,
-            level = rule.level,
+            level = effectiveLevel,
             category = category,
             tags = rule.tags,
             remediation = TemplateResolver.resolveAll(rule.remediation, remediationVars),

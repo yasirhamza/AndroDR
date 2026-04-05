@@ -81,11 +81,21 @@ class TimelineExporterTest {
     }
 
     @Test
-    fun `assessment line present for significant events`() {
-        val text = TimelineExporter.formatPlaintext(events)
+    fun `assessment driven by rule guidance`() {
+        val guidance = mapOf("androdr-001" to "UNINSTALL IMMEDIATELY -- known malware")
+        val text = TimelineExporter.formatPlaintext(events, ruleGuidance = guidance)
         assertTrue("Should have assessment", text.contains("ASSESSMENT:"))
-        assertTrue("Critical events -> critical assessment",
+        assertTrue("Rule guidance drives critical assessment",
             text.contains("CRITICAL ACTIVITY DETECTED"))
+    }
+
+    @Test
+    fun `assessment without guidance caps at review`() {
+        // Same events but no rule guidance -> no CRITICAL, just REVIEW
+        val text = TimelineExporter.formatPlaintext(events)
+        assertTrue(text.contains("ASSESSMENT:"))
+        assertTrue("Without guidance, significant events -> REVIEW",
+            text.contains("REVIEW RECOMMENDED"))
     }
 
     @Test

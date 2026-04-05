@@ -42,12 +42,15 @@ data class ScanGroup(
     val standaloneEvents: List<ForensicTimelineEvent>
 )
 
+@Suppress("TooManyFunctions") // ViewModel exposes filter setters, export methods, and report
+// generation — splitting would fragment the timeline feature's cohesive state management.
 @HiltViewModel
 class TimelineViewModel @Inject constructor(
     @ApplicationContext private val appContext: Context,
     private val dao: ForensicTimelineEventDao,
     private val correlationEngine: CorrelationEngine,
-    private val knownAppResolver: KnownAppResolver
+    private val knownAppResolver: KnownAppResolver,
+    private val sigmaRuleEngine: com.androdr.sigma.SigmaRuleEngine
 ) : ViewModel() {
 
     private val _groupMode = MutableStateFlow(TimelineGroupMode.DATE)
@@ -219,14 +222,13 @@ class TimelineViewModel @Inject constructor(
         viewModelScope.launch {
             val allEvents = withContext(Dispatchers.IO) { dao.getAllForExport() }
             _reportText.value = withContext(Dispatchers.Default) {
-                val names = buildDisplayNames(allEvents)
-                TimelineExporter.formatPlaintext(allEvents, names)
+                TimelineExporter.formatPlaintext(allEvents, buildDisplayNames(allEvents), buildRuleGuidance())
             }
         }
     }
 
     fun exportPlaintext() = export("txt") {
-        TimelineExporter.formatPlaintext(it, buildDisplayNames(it))
+        TimelineExporter.formatPlaintext(it, buildDisplayNames(it), buildRuleGuidance())
     }
     fun exportCsv() = export("csv") { TimelineExporter.formatCsv(it) }
 
@@ -270,4 +272,9 @@ class TimelineViewModel @Inject constructor(
         }.toMap()
         return fromResolver + fromEvents
     }
+
+    private fun buildRuleGuidance(): Map<String, String> =
+        sigmaRuleEngine.getRules()
+            .filter { it.display.guidance.isNotEmpty() }
+            .associate { it.id to it.display.guidance }
 }
