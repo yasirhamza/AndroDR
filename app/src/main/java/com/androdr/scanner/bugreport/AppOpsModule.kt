@@ -34,6 +34,10 @@ class AppOpsModule @Inject constructor() : BugreportModule {
      * Parses the appops section line-by-line using a state machine.
      * Avoids holding the full section + regex copies in memory (previous approach OOM'd on 4MB+).
      */
+    // Line-by-line state machine with emit-on-transition logic — the method is a single
+    // sequential pass through UID→Package→Op→Access/Reject states; splitting would fragment
+    // the state transitions across functions without reducing real complexity.
+    @Suppress("LongMethod")
     override suspend fun analyze(sectionText: String, iocResolver: IndicatorResolver): ModuleResult {
         val telemetry = mutableListOf<Map<String, Any?>>()
         val timeline = mutableListOf<TimelineEvent>()
@@ -145,18 +149,19 @@ class AppOpsModule @Inject constructor() : BugreportModule {
      * Formats: "1000" (numeric), "u0a398" (app), "u0i5" (isolated),
      *          "u0ai3" (app-zygote isolated), "u0s1000" (shared/system).
      */
+    @Suppress("ReturnCount") // Early returns for invalid input keep the happy path readable
     private fun parseUidString(raw: String): Int {
         raw.toIntOrNull()?.let { return it }
-        val m = uidStringRegex.find(raw) ?: return 99999
-        val userId = m.groupValues[1].toIntOrNull() ?: return 99999
+        val m = uidStringRegex.find(raw) ?: return UNKNOWN_UID
+        val userId = m.groupValues[1].toIntOrNull() ?: return UNKNOWN_UID
         val type = m.groupValues[2]        // "a", "i", "ai", or "s"
-        val offset = m.groupValues[3].toIntOrNull() ?: return 99999
+        val offset = m.groupValues[3].toIntOrNull() ?: return UNKNOWN_UID
         val appId = when (type) {
             "a"  -> FIRST_APPLICATION_UID + offset
             "i"  -> FIRST_ISOLATED_UID + offset
             "ai" -> FIRST_APP_ZYGOTE_ISOLATED_UID + offset
             "s"  -> offset                 // shared/system — appId is literal
-            else -> return 99999
+            else -> return UNKNOWN_UID
         }
         return userId * PER_USER_RANGE + appId
     }
@@ -179,5 +184,6 @@ class AppOpsModule @Inject constructor() : BugreportModule {
         private const val FIRST_APPLICATION_UID = 10000
         private const val FIRST_ISOLATED_UID = 90000
         private const val FIRST_APP_ZYGOTE_ISOLATED_UID = 89000
+        private const val UNKNOWN_UID = 99999
     }
 }
