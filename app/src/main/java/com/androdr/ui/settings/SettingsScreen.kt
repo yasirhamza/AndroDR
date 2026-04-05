@@ -268,6 +268,10 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
                         value = com.androdr.BuildConfig.VERSION_CODE.toString()
                     )
                     StatRow(
+                        label = "What's New",
+                        value = com.androdr.BuildConfig.RELEASE_NOTE
+                    )
+                    StatRow(
                         label = "Android",
                         value = "${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT})"
                     )

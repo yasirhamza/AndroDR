@@ -11,19 +11,21 @@ import java.util.Locale
 /**
  * Formats bug report analysis results (SIGMA findings, legacy findings,
  * and timeline events) into a human-readable plaintext report suitable
- * for sharing.
+ * for sharing. Output is strictly ASCII.
  */
 object TimelineFormatter {
 
     private const val RULE = "============================================================"
     private const val THIN = "------------------------------------------------------------"
 
-    @Suppress("LongMethod") // Report formatting assembles header, grouped findings, legacy, and timeline
+    @Suppress("LongMethod") // Report formatting assembles header, verdict, grouped findings,
+    // legacy, timeline, and inventory in a specific order.
     fun formatTimeline(
         timeline: List<TimelineEvent>,
         legacyFindings: List<BugReportFinding>,
         findings: List<Finding>,
-        hashByPkg: Map<String, String> = emptyMap()
+        hashByPkg: Map<String, String> = emptyMap(),
+        displayNames: Map<String, String> = emptyMap()
     ): String = buildString {
         val generated = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).format(Date())
 
@@ -37,8 +39,26 @@ object TimelineFormatter {
         appendLine(RULE)
         appendLine()
 
-        // SIGMA findings section
+        // -- Verdict --------------------------------------------------------------
         val triggeredFindings = findings.filter { it.triggered }
+        val critical = triggeredFindings.count { it.level.equals("critical", true) }
+        val high = triggeredFindings.count { it.level.equals("high", true) }
+        val medium = triggeredFindings.count { it.level.equals("medium", true) }
+        val verdict = when {
+            critical > 0 -> "CRITICAL THREATS DETECTED"
+            high > 0 -> "ISSUES FOUND"
+            medium > 0 -> "ISSUES FOUND"
+            triggeredFindings.isNotEmpty() -> "INFORMATIONAL ONLY"
+            else -> "CLEAN"
+        }
+        appendLine("  ANALYSIS VERDICT: $verdict")
+        appendLine("  SIGMA findings: $critical critical, $high high, $medium medium")
+        if (legacyFindings.isNotEmpty()) {
+            appendLine("  Pattern scan: ${legacyFindings.size} findings")
+        }
+        appendLine()
+
+        // -- SIGMA findings section -----------------------------------------------
         appendLine(THIN)
         appendLine("  FINDINGS (${triggeredFindings.size})")
         appendLine(THIN)
@@ -58,13 +78,17 @@ object TimelineFormatter {
                 if (packages.isNotEmpty()) {
                     if (packages.size <= 3) {
                         packages.forEach { pkg ->
-                            appendLine("    Package: $pkg")
+                            val name = displayNames[pkg]
+                            if (name != null) {
+                                appendLine("    Package: $name ($pkg)")
+                            } else {
+                                appendLine("    Package: $pkg")
+                            }
                             hashByPkg[pkg]?.let { appendLine("    APK SHA-256: $it") }
                         }
                     } else {
                         appendLine("    ${packages.size} apps: ${packages.take(5).joinToString(", ")}" +
                             if (packages.size > 5) ", ..." else "")
-                        // Show hashes for multi-package groups in inventory
                     }
                 }
                 if (f.description.isNotEmpty()) {
@@ -106,7 +130,13 @@ object TimelineFormatter {
             appendLine("  APP HASH INVENTORY (${hashByPkg.size} apps)")
             appendLine(THIN)
             hashByPkg.entries.sortedBy { it.key }.forEach { (pkg, hash) ->
-                appendLine("  $pkg")
+                val name = displayNames[pkg]
+                if (name != null) {
+                    appendLine("  $name")
+                    appendLine("    Package: $pkg")
+                } else {
+                    appendLine("  $pkg")
+                }
                 appendLine("    SHA-256: $hash")
             }
             appendLine()

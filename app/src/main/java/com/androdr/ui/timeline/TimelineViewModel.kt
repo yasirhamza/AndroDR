@@ -27,6 +27,7 @@ import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import com.androdr.ioc.KnownAppResolver
 import javax.inject.Inject
 
 enum class TimelineGroupMode { DATE, SCAN }
@@ -45,7 +46,8 @@ data class ScanGroup(
 class TimelineViewModel @Inject constructor(
     @ApplicationContext private val appContext: Context,
     private val dao: ForensicTimelineEventDao,
-    private val correlationEngine: CorrelationEngine
+    private val correlationEngine: CorrelationEngine,
+    private val knownAppResolver: KnownAppResolver
 ) : ViewModel() {
 
     private val _groupMode = MutableStateFlow(TimelineGroupMode.DATE)
@@ -216,11 +218,16 @@ class TimelineViewModel @Inject constructor(
     fun generateReport() {
         viewModelScope.launch {
             val allEvents = withContext(Dispatchers.IO) { dao.getAllForExport() }
-            _reportText.value = TimelineExporter.formatPlaintext(allEvents)
+            _reportText.value = withContext(Dispatchers.Default) {
+                val names = buildDisplayNames(allEvents)
+                TimelineExporter.formatPlaintext(allEvents, names)
+            }
         }
     }
 
-    fun exportPlaintext() = export("txt") { TimelineExporter.formatPlaintext(it) }
+    fun exportPlaintext() = export("txt") {
+        TimelineExporter.formatPlaintext(it, buildDisplayNames(it))
+    }
     fun exportCsv() = export("csv") { TimelineExporter.formatCsv(it) }
 
     @Suppress("TooGenericExceptionCaught") // Export can throw IOException (disk full, no
@@ -232,7 +239,7 @@ class TimelineViewModel @Inject constructor(
             _exporting.value = true
             try {
                 val allEvents = withContext(Dispatchers.IO) { dao.getAllForExport() }
-                val text = formatter(allEvents)
+                val text = withContext(Dispatchers.Default) { formatter(allEvents) }
                 _shareUri.value = withContext(Dispatchers.IO) {
                     val reportsDir = File(appContext.cacheDir, "reports").apply { mkdirs() }
                     val ts = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
@@ -249,4 +256,18 @@ class TimelineViewModel @Inject constructor(
     }
 
     fun onShareConsumed() { _shareUri.value = null }
+
+    private fun buildDisplayNames(events: List<ForensicTimelineEvent>): Map<String, String> {
+        val fromEvents = events
+            .filter { it.appName.isNotEmpty() && it.appName != it.packageName }
+            .associateBy({ it.packageName }, { it.appName })
+        val needLookup = events
+            .map { it.packageName }
+            .filter { it.isNotEmpty() && it !in fromEvents }
+            .distinct()
+        val fromResolver = needLookup.mapNotNull { pkg ->
+            knownAppResolver.lookup(pkg)?.let { pkg to it.displayName }
+        }.toMap()
+        return fromResolver + fromEvents
+    }
 }

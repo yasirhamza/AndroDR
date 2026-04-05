@@ -23,5 +23,6 @@ display:
     icon: accessibility
     triggered_title: "Accessibility Abuse"
     evidence_type: none
+    guidance: "UNINSTALL -- accessibility service abuse indicates stalkerware"
 remediation:
     - "This app can read your screen content. Go to Settings > Accessibility and disable its service before uninstalling."

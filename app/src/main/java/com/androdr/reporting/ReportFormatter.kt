@@ -12,6 +12,7 @@ import java.util.Locale
 /**
  * Produces human-readable plaintext security reports from scan data.
  * All methods are pure (no I/O) so they can be unit-tested without a device.
+ * Output is strictly ASCII -- no Unicode characters.
  */
 object ReportFormatter {
 
@@ -22,7 +23,8 @@ object ReportFormatter {
         scan: ScanResult,
         dnsEvents: List<DnsEvent>,
         logLines: List<String>,
-        appInventory: List<AppTelemetry> = emptyList()
+        appInventory: List<AppTelemetry> = emptyList(),
+        displayNames: Map<String, String> = emptyMap()
     ): String = buildString {
         val timestampFmt = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US)
         val dnsFmt = SimpleDateFormat("HH:mm:ss", Locale.US)
@@ -41,23 +43,10 @@ object ReportFormatter {
         appendLine(RULE)
         appendLine()
         appendLine("  OVERALL RISK: ${scan.overallRiskLevel.name}")
+        appendLine()
 
-        appendLine()
-        val appRiskCount = scan.appRisks.count {
-            it.triggered && it.level.lowercase() != "informational"
-        }
-        val deviceIssueCount = scan.deviceFlags.count { it.triggered }
-        val verdict = when {
-            appRiskCount == 0 && deviceIssueCount == 0 ->
-                "No threats detected. Your phone appears secure."
-            appRiskCount == 0 && deviceIssueCount > 0 ->
-                "No suspicious apps found. $deviceIssueCount device setting(s) need attention."
-            else ->
-                "$appRiskCount app issue(s) and $deviceIssueCount device setting(s) found. " +
-                    "Review the details below."
-        }
-        appendLine("  $verdict")
-        appendLine()
+        // -- Verdict + Summary + Action Guidance ----------------------------------
+        appendVerdict(scan, dnsEvents, appInventory)
 
         // -- Device checks --------------------------------------------------------
         val allDeviceFlags = scan.deviceFlags
@@ -93,10 +82,10 @@ object ReportFormatter {
             val detected = campaignFindings.filter { it.triggered }
 
             clear.forEach { finding ->
-                appendLine("  [\u2713]  ${campaignLabel(finding)}: not detected")
+                appendLine("  [OK]  ${campaignLabel(finding)}: not detected")
             }
             detected.forEach { finding ->
-                appendLine("  [\u2717]  ${campaignLabel(finding)}: DETECTED \u2014 ${finding.title}")
+                appendLine("  [!!]  ${campaignLabel(finding)}: DETECTED -- ${finding.title}")
             }
 
             // DNS-based campaign hits from IOC domain matches
@@ -110,7 +99,7 @@ object ReportFormatter {
                 appendLine()
                 appendLine("  DNS IOC matches linked to:")
                 dnsCampaigns.forEach { campaign ->
-                    appendLine("  [\u2717]  $campaign (domain indicator)")
+                    appendLine("  [!!]  $campaign (domain indicator)")
                 }
             }
             appendLine()
@@ -127,12 +116,12 @@ object ReportFormatter {
                 it.matchContext["package_name"]?.toString() ?: "unknown"
             }
             appendLine("  ${byPackage.size} application(s) flagged")
-            appendLine("  ${scan.knownMalwareCount} known malware \u00b7 ${scan.riskySideloadCount} risky sideloads")
+            appendLine("  ${scan.knownMalwareCount} known malware / ${scan.riskySideloadCount} risky sideloads")
             appendLine()
             byPackage.entries
                 .sortedByDescending { (_, findings) -> findings.maxOf { severityOrdinal(it.level) } }
                 .forEach { (pkg, findings) ->
-                    appendGroupedAppFindings(pkg, findings)
+                    appendGroupedAppFindings(pkg, findings, displayNames)
                 }
         }
 
@@ -142,14 +131,14 @@ object ReportFormatter {
             appendLine("  No DNS events recorded.")
         } else {
             val matched = dnsEvents.count { it.reason != null }
-            appendLine("  ${dnsEvents.size} events \u00b7 $matched matched")
+            appendLine("  ${dnsEvents.size} events / $matched matched")
             appendLine()
             dnsEvents.take(500).forEach { event ->
                 val time = dnsFmt.format(Date(event.timestamp))
                 val state = if (event.reason != null) "[MATCHED]" else "[ALLOWED]"
                 val app = event.appName
                     ?: if (event.appUid == -1) "unknown" else "uid:${event.appUid}"
-                appendLine("  $state  $time  ${event.domain.padEnd(50)}  \u2190 $app")
+                appendLine("  $state  $time  ${event.domain.padEnd(50)}  <- $app")
                 if (event.reason != null) {
                     appendLine("           reason: ${event.reason}")
                 }
@@ -159,7 +148,7 @@ object ReportFormatter {
         // -- Bug-report findings --------------------------------------------------
         if (scan.bugReportFindings.isNotEmpty()) {
             section("BUG REPORT FINDINGS")
-            scan.bugReportFindings.forEach { finding -> appendLine("  \u2022 $finding") }
+            scan.bugReportFindings.forEach { finding -> appendLine("  * $finding") }
         }
 
         // -- App hash inventory ---------------------------------------------------
@@ -168,7 +157,10 @@ object ReportFormatter {
             if (appsWithHashes.isNotEmpty()) {
                 section("APP HASH INVENTORY (${appsWithHashes.size} apps)")
                 appsWithHashes.sortedBy { it.packageName }.forEach { app ->
-                    appendLine("  ${app.appName}")
+                    val name = app.appName.ifEmpty {
+                        displayNames[app.packageName] ?: app.packageName
+                    }
+                    appendLine("  $name")
                     appendLine("     Package    : ${app.packageName}")
                     appendLine("     APK SHA-256: ${app.apkHash}")
                     if (!app.certHash.isNullOrEmpty()) {
@@ -190,7 +182,7 @@ object ReportFormatter {
         // -- Footer ---------------------------------------------------------------
         appendLine()
         appendLine(RULE)
-        appendLine("  End of report \u00b7 AndroDR \u00b7 scan id ${scan.id}")
+        appendLine("  End of report / AndroDR / scan id ${scan.id}")
         appendLine(RULE)
     }
 
@@ -202,8 +194,97 @@ object ReportFormatter {
         appendLine(THIN)
     }
 
+    @Suppress("CyclomaticComplexMethod") // Verdict assembles summary, device posture, campaign,
+    // and action guidance in a structured block -- splitting would fragment the output logic.
+    private fun StringBuilder.appendVerdict(
+        scan: ScanResult,
+        dnsEvents: List<DnsEvent>,
+        appInventory: List<AppTelemetry>
+    ) {
+        val appRiskCount = scan.appRisks.count {
+            it.triggered && it.level.lowercase() != "informational"
+        }
+        val deviceIssueCount = scan.deviceFlags.count { it.triggered }
+
+        // One-liner verdict
+        val verdict = when {
+            appRiskCount == 0 && deviceIssueCount == 0 ->
+                "No threats detected. Your phone appears secure."
+            appRiskCount == 0 && deviceIssueCount > 0 ->
+                "No suspicious apps found. $deviceIssueCount device setting(s) need attention."
+            else ->
+                "$appRiskCount app issue(s) and $deviceIssueCount device setting(s) found."
+        }
+        appendLine("  $verdict")
+        appendLine()
+
+        // Summary block
+        appendLine("  SUMMARY:")
+        val totalApps = if (appInventory.isNotEmpty()) appInventory.size.toString() else "N/A"
+        appendLine("    Apps scanned: $totalApps -- Flagged: $appRiskCount")
+        if (scan.knownMalwareCount > 0) {
+            appendLine("    Known malware: ${scan.knownMalwareCount}")
+        }
+        if (scan.riskySideloadCount > 0) {
+            appendLine("    Risky sideloads: ${scan.riskySideloadCount}")
+        }
+
+        // Device posture issues
+        val triggeredDeviceFlags = scan.deviceFlags
+            .filter { it.triggered && it.level.lowercase() in listOf("high", "critical") }
+        if (triggeredDeviceFlags.isNotEmpty()) {
+            val titles = triggeredDeviceFlags.take(3).map { it.title }
+            val suffix = if (triggeredDeviceFlags.size > 3) ", ..." else ""
+            appendLine("    Device posture: ${titles.joinToString(", ")}$suffix")
+        }
+
+        // Campaign detections
+        val campaigns = scan.deviceFlags
+            .filter { f -> f.triggered && f.tags.any { it.startsWith("campaign.") } }
+        if (campaigns.isNotEmpty()) {
+            val labels = campaigns.map { campaignLabel(it) }.distinct()
+            appendLine("    Campaign detections: ${labels.joinToString(", ")}")
+        }
+
+        // DNS IOC
+        val dnsIocCount = dnsEvents.count { it.reason != null }
+        appendLine("    DNS IOC matches: $dnsIocCount")
+        appendLine()
+
+        // Action guidance (only if something actionable)
+        appendActionGuidance(scan)
+    }
+
+    // Collects action guidance from Finding.guidance (rule-driven) and device posture summary.
+    // Ordered: CRITICAL-prefixed first, then others, then device posture.
+    private fun StringBuilder.appendActionGuidance(scan: ScanResult) {
+        val actions = mutableListOf<String>()
+
+        // Collect rule-driven guidance from triggered app risk findings
+        val appGuidance = scan.appRisks
+            .filter { it.triggered && it.guidance.isNotEmpty() }
+            .map { it.guidance }
+            .distinct()
+        // Sort so CRITICAL-prefixed items come first
+        appGuidance.sortedByDescending { guidancePriority(it) }.forEach { actions.add(it) }
+
+        // Device posture issues (summarized, not per-rule)
+        val deviceIssues = scan.deviceFlags.filter { it.triggered }
+        if (deviceIssues.isNotEmpty()) {
+            val titles = deviceIssues.take(3).map { it.title }
+            val suffix = if (deviceIssues.size > 3) ", ..." else ""
+            actions.add("DEVICE: ${titles.joinToString(", ")}$suffix")
+        }
+
+        if (actions.isNotEmpty()) {
+            appendLine("  ACTION REQUIRED:")
+            actions.forEach { appendLine("    $it") }
+            appendLine()
+        }
+    }
+
     private fun StringBuilder.appendFinding(finding: Finding) {
-        val icon = if (finding.triggered) "[\u2717]" else "[\u2713]"
+        val icon = if (finding.triggered) "[!!]" else "[OK]"
         val sev = finding.level.uppercase().padEnd(8)
         val mitre = finding.tags.filter { it.startsWith("attack.t") }
             .joinToString(", ") { it.removePrefix("attack.").uppercase() }
@@ -214,27 +295,33 @@ object ReportFormatter {
         }
         if (finding.triggered && finding.remediation.isNotEmpty()) {
             finding.remediation.forEach { step ->
-                appendLine("           \u2192 $step")
+                appendLine("           -> $step")
             }
         }
     }
 
-    private fun StringBuilder.appendGroupedAppFindings(pkg: String, findings: List<Finding>) {
+    private fun StringBuilder.appendGroupedAppFindings(
+        pkg: String,
+        findings: List<Finding>,
+        displayNames: Map<String, String>
+    ) {
         val highest = findings.maxByOrNull { severityOrdinal(it.level) } ?: return
         val risk = highest.level.uppercase().padEnd(8)
-        val appName = highest.matchContext["app_name"]?.toString() ?: pkg
+        val appName = highest.matchContext["app_name"]?.toString()?.takeIf { it.isNotEmpty() }
+            ?: displayNames[pkg]
+            ?: pkg
         val isKnownMalware = findings.any { it.ruleId.startsWith("androdr-00") }
         val isSideloaded = findings.any { it.ruleId == "androdr-010" }
 
         val flags = buildList {
-            if (isKnownMalware) add("\u26a0 Known Malware")
+            if (isKnownMalware) add("[!] Known Malware")
             if (isSideloaded) add("Sideloaded")
         }
 
-        appendLine("  \u25cf  $risk  $appName")
+        appendLine("  *  $risk  $appName")
         appendLine("     Package : $pkg")
         if (flags.isNotEmpty()) {
-            appendLine("     Flags   : ${flags.joinToString(" \u00b7 ")}")
+            appendLine("     Flags   : ${flags.joinToString(" / ")}")
         }
         val apkHash = highest.matchContext["apk_hash"]?.toString()
         if (!apkHash.isNullOrEmpty()) {
@@ -257,6 +344,12 @@ object ReportFormatter {
         if (allRemediation.isNotEmpty()) {
             appendLine("     Action  : ${allRemediation.first()}")
         }
+
+        // Per-app guidance from rules
+        val guidance = findings.firstOrNull { it.guidance.isNotEmpty() }?.guidance
+        if (guidance != null) {
+            appendLine("     Guidance: $guidance")
+        }
         appendLine()
     }
 
@@ -265,6 +358,17 @@ object ReportFormatter {
             .joinToString(" / ") { tag ->
                 tag.removePrefix("campaign.").replaceFirstChar { c -> c.uppercase() }
             }
+
+    private fun guidancePriority(guidance: String): Int {
+        val upper = guidance.uppercase()
+        return when {
+            upper.startsWith("CRITICAL") -> 4
+            upper.startsWith("UNINSTALL IMMEDIATELY") -> 3
+            upper.startsWith("UNINSTALL") -> 2
+            upper.startsWith("INVESTIGATE") -> 1
+            else -> 0
+        }
+    }
 
     private fun severityOrdinal(level: String): Int = when (level.lowercase()) {
         "critical" -> 3

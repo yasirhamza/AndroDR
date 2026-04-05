@@ -21,5 +21,6 @@ display:
     icon: content_copy
     triggered_title: "App Impersonation"
     evidence_type: none
+    guidance: "UNINSTALL -- impersonates a legitimate app; likely malicious"
 remediation:
     - "This app impersonates a well-known app but was not installed from a trusted store."

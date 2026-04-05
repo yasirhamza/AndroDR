@@ -134,7 +134,8 @@ object SigmaRuleParser {
             triggeredTitle = displayMap["triggered_title"]?.toString() ?: "",
             safeTitle = displayMap["safe_title"]?.toString() ?: "",
             evidenceType = displayMap["evidence_type"]?.toString() ?: "none",
-            summaryTemplate = displayMap["summary_template"]?.toString() ?: ""
+            summaryTemplate = displayMap["summary_template"]?.toString() ?: "",
+            guidance = displayMap["guidance"]?.toString() ?: ""
         )
     }
 

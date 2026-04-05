@@ -20,5 +20,6 @@ display:
     icon: memory
     triggered_title: "Firmware Implant"
     evidence_type: none
+    guidance: "CRITICAL -- possible firmware-level implant; seek expert forensic assistance"
 remediation:
     - "This app has system privileges but does not match any known manufacturer package."

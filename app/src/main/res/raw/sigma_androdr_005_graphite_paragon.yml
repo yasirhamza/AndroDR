@@ -23,6 +23,7 @@ display:
     icon: warning
     triggered_title: "Graphite/Paragon Spyware"
     evidence_type: none
+    guidance: "CRITICAL -- nation-state spyware indicators; seek expert forensic assistance"
 falsepositives:
     - Domains may be repurposed after takedown
 remediation:
