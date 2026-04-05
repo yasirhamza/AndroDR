@@ -24,7 +24,7 @@ class AppOpsModule @Inject constructor() : BugreportModule {
     private val rejectLineRegex = Regex(
         """Reject:\s+\[\S+]\s+(\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2})"""
     )
-    private val uidLineRegex = Regex("""^Uid\s+(\d+):""", RegexOption.MULTILINE)
+    private val uidLineRegex = Regex("""^\s*Uid\s+(\d+):""", RegexOption.MULTILINE)
 
     // Multi-step analysis with UID splitting, package iteration, op checking, and timeline
     // generation — splitting into sub-functions would fragment tightly coupled analysis logic.
