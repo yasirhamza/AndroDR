@@ -240,9 +240,8 @@ object ReportFormatter {
             appendLine("    Risky sideloads: ${scan.riskySideloadCount}")
         }
 
-        // Device posture issues
-        val triggeredDeviceFlags = scan.deviceFlags
-            .filter { it.triggered && it.level.lowercase() in listOf("high", "critical") }
+        // Device posture issues (all severity levels — these are conditions, not incidents)
+        val triggeredDeviceFlags = scan.deviceFlags.filter { it.triggered }
         if (triggeredDeviceFlags.isNotEmpty()) {
             val titles = triggeredDeviceFlags.take(3).map { it.title }
             val suffix = if (triggeredDeviceFlags.size > 3) ", ..." else ""
