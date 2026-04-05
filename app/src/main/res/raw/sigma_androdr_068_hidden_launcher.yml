@@ -27,6 +27,6 @@ display:
     triggered_title: "Hidden App (No Launcher Icon)"
     evidence_type: none
 remediation:
-    - "This app is installed but hidden from your home screen — you cannot see or open it normally."
+    - "This app is installed but hidden from your home screen -- you cannot see or open it normally."
     - "Go to Settings > Apps > See all apps to find it, then tap Uninstall."
     - "Hidden apps are a common sign of stalkerware or monitoring software."

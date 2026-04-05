@@ -1,7 +1,10 @@
 package com.androdr.scanner.bugreport
 
+import android.util.Log
 import com.androdr.data.model.TimelineEvent
 import com.androdr.ioc.IndicatorResolver
+import java.text.SimpleDateFormat
+import java.util.Locale
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -67,14 +70,22 @@ class AppOpsModule @Inject constructor() : BugreportModule {
                             "is_system_app" to isSystemUid
                         ))
 
-                        timeline.add(TimelineEvent(
-                            timestamp = -1,
-                            source = "appops",
-                            category = "permission_use",
-                            description = "$packageName used $opName" +
-                                (accessMatch?.let { " at ${it.groupValues[1]}" } ?: ""),
-                            severity = if (opName == "REQUEST_INSTALL_PACKAGES") "HIGH" else "INFO"
-                        ))
+                        // Parse access timestamp to epoch millis
+                        val accessTimestamp = accessMatch?.groupValues?.get(1)?.let {
+                            parseTimestamp(it)
+                        } ?: -1L
+
+                        // Only add non-system apps to the timeline — system app ops are noise
+                        if (!isSystemUid) {
+                            timeline.add(TimelineEvent(
+                                timestamp = accessTimestamp,
+                                source = "appops",
+                                category = "permission_use",
+                                description = "$packageName used $opName" +
+                                    (accessMatch?.let { " at ${it.groupValues[1]}" } ?: ""),
+                                severity = if (opName == "REQUEST_INSTALL_PACKAGES") "HIGH" else "INFO"
+                            ))
+                        }
                     }
                 }
             }
@@ -102,5 +113,14 @@ class AppOpsModule @Inject constructor() : BugreportModule {
     private fun findNextPackageOrEnd(block: String, fromIndex: Int): Int {
         val next = packageLineRegex.find(block, fromIndex + 1)
         return next?.range?.first ?: block.length
+    }
+
+    /** Parses "2026-03-27 14:30:00" to epoch millis. Returns -1 on failure. */
+    @Suppress("TooGenericExceptionCaught")
+    private fun parseTimestamp(ts: String): Long = try {
+        SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).parse(ts)?.time ?: -1L
+    } catch (e: Exception) {
+        Log.w("AppOpsModule", "Failed to parse timestamp: $ts")
+        -1L
     }
 }

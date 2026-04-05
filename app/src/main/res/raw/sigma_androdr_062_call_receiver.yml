@@ -1,7 +1,7 @@
 title: App registered for phone call broadcasts
 id: androdr-062
 status: production
-description: A non-system app is registered for PHONE_STATE or NEW_OUTGOING_CALL broadcasts. Many legitimate apps register for these. Informational — only significant when combined with other indicators.
+description: A non-system app is registered for PHONE_STATE or NEW_OUTGOING_CALL broadcasts. Many legitimate apps register for these. Informational -- only significant when combined with other indicators.
 author: AndroDR
 date: 2026/03/28
 tags:

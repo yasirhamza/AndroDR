@@ -24,4 +24,4 @@ display:
     evidence_type: none
 remediation:
     - "A file associated with known spyware was found at {file_path}."
-    - "Do NOT delete it yet — it may be needed as evidence. Contact a security professional or digital safety organization for guidance."
+    - "Do NOT delete it yet -- it may be needed as evidence. Contact a security professional or digital safety organization for guidance."

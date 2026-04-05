@@ -1,7 +1,7 @@
 title: Package name matches threat database
 id: androdr-001
 status: production
-description: Package name found in known-bad package IOC database. System apps with dual-use package names (e.g., com.android.updater on Xiaomi) are excluded — real implants masquerading as system components are sideloaded, not pre-installed.
+description: Package name found in known-bad package IOC database. System apps with dual-use package names (e.g., com.android.updater on Xiaomi) are excluded -- real implants masquerading as system components are sideloaded, not pre-installed.
 author: AndroDR
 date: 2026/03/27
 tags:
