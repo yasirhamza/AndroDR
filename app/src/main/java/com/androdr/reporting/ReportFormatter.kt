@@ -42,7 +42,18 @@ object ReportFormatter {
         appendLine("  Patch     : ${Build.VERSION.SECURITY_PATCH}")
         appendLine(RULE)
         appendLine()
-        appendLine("  OVERALL RISK: ${scan.overallRiskLevel.name}")
+        // Overall risk driven by rule guidance: CRITICAL only for app threats with
+        // guidance, device posture caps at HIGH. Falls back to computed level otherwise.
+        val hasAppCriticalGuidance = scan.appRisks.any {
+            it.triggered && it.guidance.isNotEmpty() &&
+                it.guidance.uppercase().let { g ->
+                    g.startsWith("CRITICAL") || g.startsWith("UNINSTALL IMMEDIATELY")
+                }
+        }
+        val reportedRisk = if (!hasAppCriticalGuidance &&
+            scan.overallRiskLevel.name == "CRITICAL"
+        ) "HIGH" else scan.overallRiskLevel.name
+        appendLine("  OVERALL RISK: $reportedRisk")
         appendLine()
 
         // -- Verdict + Summary + Action Guidance ----------------------------------
