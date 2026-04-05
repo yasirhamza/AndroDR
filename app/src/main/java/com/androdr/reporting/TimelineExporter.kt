@@ -63,8 +63,21 @@ object TimelineExporter {
             maxGuidancePriority >= 1 || significantCount > 0 -> "REVIEW RECOMMENDED"
             else -> "NO CONCERNS"
         }
+        // Severity breakdown
+        val criticalCount = filtered.count { it.severity.equals("CRITICAL", true) }
+        val highCount = filtered.count { it.severity.equals("HIGH", true) }
+        val mediumCount = filtered.count { it.severity.equals("MEDIUM", true) }
+        val severityParts = buildList {
+            if (criticalCount > 0) add("$criticalCount critical")
+            if (highCount > 0) add("$highCount high")
+            if (mediumCount > 0) add("$mediumCount medium")
+        }
+
         appendLine()
         appendLine("  ASSESSMENT: $assessment")
+        if (severityParts.isNotEmpty()) {
+            appendLine("  Severity: ${severityParts.joinToString(", ")}")
+        }
         val pkgCount = filtered.map { it.packageName }.filter { it.isNotEmpty() }.distinct().size
         if (significantCount > 0) {
             appendLine("  $significantCount event(s) across $pkgCount package(s) require attention.")
