@@ -112,7 +112,7 @@ object TimelineFormatter {
         }
 
         appendLine(RULE)
-        appendLine("  End of analysis \u00b7 AndroDR")
+        appendLine("  End of analysis - AndroDR")
         appendLine(RULE)
     }
 

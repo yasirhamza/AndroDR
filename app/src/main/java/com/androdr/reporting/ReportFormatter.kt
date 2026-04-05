@@ -80,7 +80,7 @@ object ReportFormatter {
             }
         } else {
             section("DEVICE CHECKS")
-            appendLine("  (Bug report analysis — device checks require a live scan)")
+            appendLine("  (Bug report analysis -- device checks require a live scan)")
         }
 
         // -- Campaign check -------------------------------------------------------
