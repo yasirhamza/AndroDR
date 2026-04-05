@@ -25,6 +25,10 @@ class BugReportAnalyzer @Inject constructor(
     private val sigmaRuleEngine: SigmaRuleEngine
 ) {
 
+    private companion object {
+        private const val TAG = "BugReportAnalyzer"
+    }
+
     data class BugReportFinding(
         val severity: String,
         val category: String,
@@ -87,10 +91,13 @@ class BugReportAnalyzer @Inject constructor(
                                 entryFileName.endsWith(".txt")
                         )
                         if (isDumpstate) {
+                            Log.d(TAG, "Found dumpstate entry: ${entry.name}, needed sections: $neededSections")
                             val sections = sectionParser.extractSections(
                                 zip, // stream directly — no buffering into byte[]
                                 neededSections
                             )
+                            Log.d(TAG, "Extracted ${sections.size} sections: ${sections.keys}, " +
+                                "sizes: ${sections.mapValues { it.value.length }}")
 
                             // Only break if we actually found sections — otherwise
                             // try the next dumpstate-like entry.
@@ -98,7 +105,11 @@ class BugReportAnalyzer @Inject constructor(
                                 for (mod in sectionModules) {
                                     for (sectionName in mod.targetSections!!) {
                                         val sectionText = sections[sectionName] ?: continue
+                                        Log.d(TAG, "Dispatching section '$sectionName' " +
+                                            "(${sectionText.length} chars) to ${mod.javaClass.simpleName}")
                                         val result = mod.analyze(sectionText, iocResolver)
+                                        Log.d(TAG, "${mod.javaClass.simpleName} produced " +
+                                            "${result.telemetry.size} telemetry, ${result.timeline.size} timeline")
                                         processModuleResult(result, allFindings, allLegacyFindings, allTimelineEvents)
                                     }
                                 }
@@ -164,7 +175,7 @@ class BugReportAnalyzer @Inject constructor(
             }
         }
 
-        Log.d("BugReportAnalyzer", "Collected ${allTimelineEvents.size} timeline events, " +
+        Log.d(TAG, "Collected ${allTimelineEvents.size} timeline events, " +
             "${allFindings.size} SIGMA findings, ${allLegacyFindings.size} legacy findings")
         BugReportAnalysisResult(allFindings, allLegacyFindings, allTimelineEvents)
     }
