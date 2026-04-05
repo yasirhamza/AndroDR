@@ -33,7 +33,10 @@ class ReportExporter @Inject constructor(
         val inventory = scanOrchestrator.lastAppTelemetry.ifEmpty {
             runCatching { appScanner.collectTelemetry() }.getOrDefault(emptyList())
         }
-        val text      = ReportFormatter.formatScanReport(scan, dnsEvents, logLines, inventory)
+        val displayNames = inventory
+            .associate { it.packageName to it.appName }
+            .filterValues { it.isNotEmpty() }
+        val text      = ReportFormatter.formatScanReport(scan, dnsEvents, logLines, inventory, displayNames)
 
         val reportsDir = File(context.cacheDir, "reports").apply { mkdirs() }
         val filename = "androdr_report_${filenameFmt.format(Date(scan.timestamp))}.txt"

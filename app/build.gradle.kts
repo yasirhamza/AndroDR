@@ -22,6 +22,12 @@ android {
         versionCode = buildNumber
         versionName = "0.9.0.$buildNumber"
 
+        buildConfigField(
+            "String",
+            "RELEASE_NOTE",
+            "\"Report quality: forensic verdict, display names, action guidance\""
+        )
+
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
         vectorDrawables {

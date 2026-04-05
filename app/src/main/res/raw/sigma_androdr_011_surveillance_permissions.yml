@@ -26,5 +26,6 @@ display:
     icon: visibility
     triggered_title: "Surveillance Permissions"
     evidence_type: none
+    guidance: "REVIEW -- app has extensive surveillance capabilities"
 remediation:
     - "This app has extensive surveillance capabilities. If you did not install it intentionally, uninstall it."

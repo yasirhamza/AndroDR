@@ -19,5 +19,6 @@ display:
     icon: warning
     triggered_title: "Malicious Certificate"
     evidence_type: ioc_match
+    guidance: "UNINSTALL IMMEDIATELY -- signed by a known threat developer"
 remediation:
     - "This app is signed by a known threat developer. Uninstall it even if the name looks legitimate."

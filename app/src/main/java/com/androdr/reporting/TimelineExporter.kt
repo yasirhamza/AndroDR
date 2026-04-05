@@ -6,13 +6,20 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
+/**
+ * Exports forensic timeline events as plaintext or CSV.
+ * Output is strictly ASCII -- no Unicode characters.
+ */
 object TimelineExporter {
 
     private const val RULE = "============================================================"
     private const val THIN = "------------------------------------------------------------"
 
-    @Suppress("LongMethod") // Report formatting assembles header, filters, date groups, and footer
-    fun formatPlaintext(events: List<ForensicTimelineEvent>): String = buildString {
+    @Suppress("LongMethod") // Report formatting assembles header, assessment, date groups, and footer
+    fun formatPlaintext(
+        events: List<ForensicTimelineEvent>,
+        displayNames: Map<String, String> = emptyMap()
+    ): String = buildString {
         appendLine(RULE)
         appendLine("  AndroDR Forensic Timeline")
         appendLine("  Version: ${com.androdr.BuildConfig.VERSION_NAME}")
@@ -44,6 +51,19 @@ object TimelineExporter {
         if (infoCount > 0) {
             appendLine("  Informational: $infoCount")
         }
+
+        // Assessment
+        val assessment = when {
+            filtered.any { it.severity.equals("CRITICAL", true) } -> "CRITICAL ACTIVITY DETECTED"
+            significantCount > 0 -> "REVIEW RECOMMENDED"
+            else -> "NO CONCERNS"
+        }
+        appendLine()
+        appendLine("  ASSESSMENT: $assessment")
+        val pkgCount = filtered.map { it.packageName }.filter { it.isNotEmpty() }.distinct().size
+        if (significantCount > 0) {
+            appendLine("  $significantCount event(s) across $pkgCount package(s) require attention.")
+        }
         appendLine()
 
         val sorted = filtered.sortedByDescending { it.timestamp }
@@ -68,7 +88,12 @@ object TimelineExporter {
             if (event.appName.isNotEmpty() && event.appName != event.packageName) {
                 appendLine("             App: ${event.appName} (${event.packageName})")
             } else if (event.packageName.isNotEmpty()) {
-                appendLine("             Package: ${event.packageName}")
+                val resolved = displayNames[event.packageName]
+                if (resolved != null) {
+                    appendLine("             App: $resolved (${event.packageName})")
+                } else {
+                    appendLine("             Package: ${event.packageName}")
+                }
             }
             if (event.iocIndicator.isNotEmpty()) {
                 appendLine("             IOC: ${event.iocIndicator} (${event.iocType})")
@@ -86,7 +111,7 @@ object TimelineExporter {
 
         appendLine()
         appendLine(RULE)
-        appendLine("  End of timeline \u00b7 AndroDR")
+        appendLine("  End of timeline / AndroDR")
         appendLine(RULE)
     }
 

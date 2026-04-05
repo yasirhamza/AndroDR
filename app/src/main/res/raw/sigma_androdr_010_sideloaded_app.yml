@@ -23,5 +23,6 @@ display:
     icon: download
     triggered_title: "Sideloaded Application"
     evidence_type: none
+    guidance: "REVIEW -- sideloaded app with elevated permissions; verify intentional"
 remediation:
     - "This app was not installed from a trusted app store. Verify you intended to install it."

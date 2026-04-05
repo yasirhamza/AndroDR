@@ -37,6 +37,9 @@ node_modules/
 *.class
 .kotlin/
 
+# Exported reports (may contain real device data)
+docs/play-store/androdr_*.txt
+
 # Virtual machine crash logs
 hs_err_pid*
 

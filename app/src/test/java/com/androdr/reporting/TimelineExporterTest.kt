@@ -65,4 +65,46 @@ class TimelineExporterTest {
         val csv = TimelineExporter.formatCsv(emptyList())
         assertTrue(csv.lines().first().contains("timestamp"))
     }
+
+    @Test
+    fun `display names resolve when appName is empty`() {
+        val eventsNoName = listOf(
+            ForensicTimelineEvent(
+                id = 4, timestamp = 1711900800000, source = "appops",
+                category = "permission_use", description = "com.whatsapp used CAMERA",
+                severity = "INFO", packageName = "com.whatsapp"
+            )
+        )
+        val names = mapOf("com.whatsapp" to "WhatsApp")
+        val text = TimelineExporter.formatPlaintext(eventsNoName, names)
+        assertTrue("Should resolve display name", text.contains("App: WhatsApp (com.whatsapp)"))
+    }
+
+    @Test
+    fun `assessment line present for significant events`() {
+        val text = TimelineExporter.formatPlaintext(events)
+        assertTrue("Should have assessment", text.contains("ASSESSMENT:"))
+        assertTrue("Critical events -> critical assessment",
+            text.contains("CRITICAL ACTIVITY DETECTED"))
+    }
+
+    @Test
+    fun `assessment shows no concerns for informational events`() {
+        val infoEvents = listOf(
+            ForensicTimelineEvent(
+                id = 5, timestamp = 1711900800000, source = "appops",
+                category = "permission_use", description = "test",
+                severity = "INFORMATIONAL", packageName = "com.test"
+            )
+        )
+        val text = TimelineExporter.formatPlaintext(infoEvents)
+        assertTrue(text.contains("NO CONCERNS"))
+    }
+
+    @Test
+    fun `output is ASCII only`() {
+        val text = TimelineExporter.formatPlaintext(events)
+        val nonAscii = text.filter { it.code > 127 }
+        assertTrue("Non-ASCII characters found: $nonAscii", nonAscii.isEmpty())
+    }
 }

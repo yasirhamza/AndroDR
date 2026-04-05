@@ -21,5 +21,6 @@ display:
     icon: warning
     triggered_title: "Known Malware APK"
     evidence_type: none
+    guidance: "UNINSTALL IMMEDIATELY -- file hash matches known malware sample"
 remediation:
     - "This app's file hash matches a known malware sample. Uninstall it immediately: go to Settings > Apps > find the app > Uninstall."

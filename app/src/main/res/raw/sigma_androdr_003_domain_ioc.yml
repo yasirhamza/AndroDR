@@ -19,5 +19,6 @@ display:
     icon: warning
     triggered_title: "Malicious Domain"
     evidence_type: ioc_match
+    guidance: "INVESTIGATE -- device contacted a known C2 server"
 remediation:
     - "A connection to a known command-and-control server was blocked."

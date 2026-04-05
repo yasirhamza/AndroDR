@@ -21,5 +21,6 @@ display:
     icon: warning
     triggered_title: "Known Malicious Package"
     evidence_type: ioc_match
+    guidance: "UNINSTALL IMMEDIATELY -- matches known malware signatures"
 remediation:
     - "Uninstall this app immediately."

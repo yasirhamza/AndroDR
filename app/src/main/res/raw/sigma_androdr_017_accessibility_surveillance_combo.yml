@@ -26,6 +26,7 @@ display:
     icon: visibility
     triggered_title: "Stalkerware Pattern"
     evidence_type: none
+    guidance: "UNINSTALL IMMEDIATELY -- stalkerware pattern (accessibility + surveillance)"
 remediation:
     - "This app combines screen reading with surveillance permissions."
     - "Disable its accessibility service in Settings, then uninstall."

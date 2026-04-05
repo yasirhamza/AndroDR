@@ -12,6 +12,7 @@ data class Finding(
     val remediation: List<String> = emptyList(),
     val iconHint: String = "",
     val safeTitle: String = "",
+    val guidance: String = "",
     val triggered: Boolean = true,
     val evidence: Evidence = Evidence.None,
     val matchContext: Map<String, String> = emptyMap()
@@ -130,6 +131,7 @@ object SigmaRuleEvaluator {
             remediation = TemplateResolver.resolveAll(rule.remediation, remediationVars),
             iconHint = rule.display.icon,
             safeTitle = TemplateResolver.resolve(rule.display.safeTitle, titleVars),
+            guidance = if (triggered) rule.display.guidance else "",
             triggered = triggered,
             evidence = evidenceResult?.evidence ?: Evidence.None,
             matchContext = record.filterValues { it !is List<*> && it !is Map<*, *> }

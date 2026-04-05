@@ -50,5 +50,6 @@ data class SigmaDisplay(
     val triggeredTitle: String = "",
     val safeTitle: String = "",
     val evidenceType: String = "none",
-    val summaryTemplate: String = ""
+    val summaryTemplate: String = "",
+    val guidance: String = ""
 )
