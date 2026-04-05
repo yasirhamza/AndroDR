@@ -18,7 +18,8 @@ object TimelineExporter {
     @Suppress("LongMethod") // Report formatting assembles header, assessment, date groups, and footer
     fun formatPlaintext(
         events: List<ForensicTimelineEvent>,
-        displayNames: Map<String, String> = emptyMap()
+        displayNames: Map<String, String> = emptyMap(),
+        ruleGuidance: Map<String, String> = emptyMap()
     ): String = buildString {
         appendLine(RULE)
         appendLine("  AndroDR Forensic Timeline")
@@ -52,10 +53,14 @@ object TimelineExporter {
             appendLine("  Informational: $infoCount")
         }
 
-        // Assessment
+        // Assessment derived from rule guidance — the rules define threat severity,
+        // not hardcoded category/severity checks in the formatter.
+        val maxGuidancePriority = filtered
+            .mapNotNull { ruleGuidance[it.ruleId].takeIf { g -> !g.isNullOrEmpty() } }
+            .maxOfOrNull { guidancePriority(it) } ?: 0
         val assessment = when {
-            filtered.any { it.severity.equals("CRITICAL", true) } -> "CRITICAL ACTIVITY DETECTED"
-            significantCount > 0 -> "REVIEW RECOMMENDED"
+            maxGuidancePriority >= 3 -> "CRITICAL ACTIVITY DETECTED"
+            maxGuidancePriority >= 1 || significantCount > 0 -> "REVIEW RECOMMENDED"
             else -> "NO CONCERNS"
         }
         appendLine()
@@ -142,6 +147,18 @@ object TimelineExporter {
             val details = csvEscape(event.details)
             @Suppress("MaxLineLength") // CSV row must be a single appendLine call
             appendLine("$ts,$iso,$module,$eventType,$data,$pkg,$sev,$ioc,$iocType,$iocSrc,$campaign,$mitre,$hash,$details")
+        }
+    }
+
+    private fun guidancePriority(guidance: String): Int {
+        val upper = guidance.uppercase()
+        return when {
+            upper.startsWith("CRITICAL") -> 4
+            upper.startsWith("UNINSTALL IMMEDIATELY") -> 3
+            upper.startsWith("UNINSTALL") -> 2
+            upper.startsWith("INVESTIGATE") -> 1
+            upper.startsWith("REVIEW") -> 1
+            else -> 0
         }
     }
 
