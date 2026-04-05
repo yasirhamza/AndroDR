@@ -163,17 +163,8 @@ object TimelineExporter {
         }
     }
 
-    private fun guidancePriority(guidance: String): Int {
-        val upper = guidance.uppercase()
-        return when {
-            upper.startsWith("CRITICAL") -> 4
-            upper.startsWith("UNINSTALL IMMEDIATELY") -> 3
-            upper.startsWith("UNINSTALL") -> 2
-            upper.startsWith("INVESTIGATE") -> 1
-            upper.startsWith("REVIEW") -> 1
-            else -> 0
-        }
-    }
+    private fun guidancePriority(guidance: String): Int =
+        GuidanceUtils.guidancePriority(guidance)
 
     private fun csvEscape(value: String): String {
         // Prevent CSV formula injection (cells starting with =, +, -, @, \t, \r)

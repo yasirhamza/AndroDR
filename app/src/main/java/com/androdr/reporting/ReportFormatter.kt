@@ -369,16 +369,8 @@ object ReportFormatter {
                 tag.removePrefix("campaign.").replaceFirstChar { c -> c.uppercase() }
             }
 
-    private fun guidancePriority(guidance: String): Int {
-        val upper = guidance.uppercase()
-        return when {
-            upper.startsWith("CRITICAL") -> 4
-            upper.startsWith("UNINSTALL IMMEDIATELY") -> 3
-            upper.startsWith("UNINSTALL") -> 2
-            upper.startsWith("INVESTIGATE") -> 1
-            else -> 0
-        }
-    }
+    private fun guidancePriority(guidance: String): Int =
+        GuidanceUtils.guidancePriority(guidance)
 
     private fun severityOrdinal(level: String): Int = when (level.lowercase()) {
         "critical" -> 3
