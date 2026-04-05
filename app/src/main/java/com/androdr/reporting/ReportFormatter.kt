@@ -253,15 +253,12 @@ object ReportFormatter {
         appendLine()
 
         // Action guidance (only if something actionable)
-        appendActionGuidance(scan, displayNames)
+        appendActionGuidance(scan)
     }
 
     // Collects action guidance from Finding.guidance (rule-driven) and device posture summary.
     // Ordered: CRITICAL-prefixed first, then others, then device posture.
-    private fun StringBuilder.appendActionGuidance(
-        scan: ScanResult,
-        displayNames: Map<String, String>
-    ) {
+    private fun StringBuilder.appendActionGuidance(scan: ScanResult) {
         val actions = mutableListOf<String>()
 
         // Collect rule-driven guidance from triggered app risk findings
