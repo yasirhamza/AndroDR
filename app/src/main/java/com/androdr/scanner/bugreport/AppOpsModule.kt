@@ -19,77 +19,119 @@ class AppOpsModule @Inject constructor() : BugreportModule {
         "READ_EXTERNAL_STORAGE", "REQUEST_INSTALL_PACKAGES"
     )
 
-    private val packageLineRegex = Regex("""^\s+Package\s+(\S+):""", RegexOption.MULTILINE)
-    private val opLineRegex = Regex("""^\s+(\w+)\s+\((\w+)\):""", RegexOption.MULTILINE)
+    // Line-level patterns — only applied to individual lines, not the full section
+    private val uidLineRegex = Regex("""^\s*Uid\s+(u\d+(?:ai|[ais])\d+|\d+):""")
+    private val packageLineRegex = Regex("""^\s+Package\s+(\S+):""")
+    private val opLineRegex = Regex("""^\s+(\w+)\s+\(\w+\):""")
     private val accessLineRegex = Regex(
         """Access:\s+\[\S+]\s+(\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2})"""
     )
     private val rejectLineRegex = Regex(
         """Reject:\s+\[\S+]\s+(\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2})"""
     )
-    private val uidLineRegex = Regex("""^\s*Uid\s+(\d+):""", RegexOption.MULTILINE)
 
-    // Multi-step analysis with UID splitting, package iteration, op checking, and timeline
-    // generation — splitting into sub-functions would fragment tightly coupled analysis logic.
-    @Suppress("LongMethod")
+    /**
+     * Parses the appops section line-by-line using a state machine.
+     * Avoids holding the full section + regex copies in memory (previous approach OOM'd on 4MB+).
+     */
     override suspend fun analyze(sectionText: String, iocResolver: IndicatorResolver): ModuleResult {
         val telemetry = mutableListOf<Map<String, Any?>>()
         val timeline = mutableListOf<TimelineEvent>()
 
-        val uidBlocks = splitByUid(sectionText)
+        var currentUid = -1
+        var isSystemUid = true
+        var currentPackage: String? = null
+        var currentOp: String? = null
+        var isDangerousOp = false
+        var lastAccessTime: String? = null
+        var lastRejectTime: String? = null
 
-        for ((uid, block) in uidBlocks) {
-            val isSystemUid = uid < 10000
+        fun emitCurrentOp() {
+            val pkg = currentPackage ?: return
+            val op = currentOp ?: return
+            if (!isDangerousOp) return
 
-            packageLineRegex.findAll(block).forEach pkgLoop@{ pkgMatch ->
-                val packageName = pkgMatch.groupValues[1]
-                val pkgStart = pkgMatch.range.last
-                val pkgEnd = findNextPackageOrEnd(block, pkgStart)
-                val pkgBlock = block.substring(pkgStart, pkgEnd)
+            val normalizedOp = "android:${op.lowercase()}"
+            telemetry.add(mapOf(
+                "package_name" to pkg,
+                "operation" to normalizedOp,
+                "last_access_time" to (lastAccessTime ?: ""),
+                "last_reject_time" to (lastRejectTime ?: ""),
+                "access_count" to 1,
+                "is_system_app" to isSystemUid
+            ))
 
-                opLineRegex.findAll(pkgBlock).forEach { opMatch ->
-                    val opName = opMatch.groupValues[1]
+            if (!isSystemUid) {
+                val accessTimestamp = lastAccessTime?.let { parseTimestamp(it) } ?: -1L
+                timeline.add(TimelineEvent(
+                    timestamp = accessTimestamp,
+                    source = "appops",
+                    category = "permission_use",
+                    description = "$pkg used $op" +
+                        (lastAccessTime?.let { " at $it" } ?: ""),
+                    severity = if (op == "REQUEST_INSTALL_PACKAGES") "HIGH" else "INFO"
+                ))
+            }
+        }
 
-                    if (opName in dangerousOps) {
-                        val opStart = opMatch.range.last
-                        val nextOp = opLineRegex.find(pkgBlock, opStart + 1)
-                        val opEnd = nextOp?.range?.first ?: pkgBlock.length
-                        val opBlock = pkgBlock.substring(opStart, opEnd)
+        var lineCount = 0
+        sectionText.lineSequence().forEach { line ->
+            lineCount++
 
-                        val accessMatch = accessLineRegex.find(opBlock)
-                        val rejectMatch = rejectLineRegex.find(opBlock)
+            // Check for UID line
+            val uidMatch = uidLineRegex.find(line)
+            if (uidMatch != null) {
+                emitCurrentOp()
+                currentUid = parseUidString(uidMatch.groupValues[1])
+                isSystemUid = currentUid < FIRST_APPLICATION_UID
+                currentPackage = null
+                currentOp = null
+                isDangerousOp = false
+                lastAccessTime = null
+                lastRejectTime = null
+                return@forEach
+            }
 
-                        // Normalize to "android:<op>" format to match SIGMA rule conventions
-                        val normalizedOp = "android:${opName.lowercase()}"
-                        telemetry.add(mapOf(
-                            "package_name" to packageName,
-                            "operation" to normalizedOp,
-                            "last_access_time" to (accessMatch?.groupValues?.get(1) ?: ""),
-                            "last_reject_time" to (rejectMatch?.groupValues?.get(1) ?: ""),
-                            "access_count" to 1,
-                            "is_system_app" to isSystemUid
-                        ))
+            // Check for Package line
+            val pkgMatch = packageLineRegex.find(line)
+            if (pkgMatch != null) {
+                emitCurrentOp()
+                currentPackage = pkgMatch.groupValues[1]
+                currentOp = null
+                isDangerousOp = false
+                lastAccessTime = null
+                lastRejectTime = null
+                return@forEach
+            }
 
-                        // Parse access timestamp to epoch millis
-                        val accessTimestamp = accessMatch?.groupValues?.get(1)?.let {
-                            parseTimestamp(it)
-                        } ?: -1L
+            // Check for Op line (only if we have a package)
+            if (currentPackage != null) {
+                val opMatch = opLineRegex.find(line)
+                if (opMatch != null) {
+                    emitCurrentOp()
+                    currentOp = opMatch.groupValues[1]
+                    isDangerousOp = currentOp in dangerousOps
+                    lastAccessTime = null
+                    lastRejectTime = null
+                    return@forEach
+                }
+            }
 
-                        // Only add non-system apps to the timeline — system app ops are noise
-                        if (!isSystemUid) {
-                            timeline.add(TimelineEvent(
-                                timestamp = accessTimestamp,
-                                source = "appops",
-                                category = "permission_use",
-                                description = "$packageName used $opName" +
-                                    (accessMatch?.let { " at ${it.groupValues[1]}" } ?: ""),
-                                severity = if (opName == "REQUEST_INSTALL_PACKAGES") "HIGH" else "INFO"
-                            ))
-                        }
-                    }
+            // Check for Access/Reject lines (only if we're tracking a dangerous op)
+            if (isDangerousOp) {
+                if (lastAccessTime == null && line.contains("Access:")) {
+                    lastAccessTime = accessLineRegex.find(line)?.groupValues?.get(1)
+                }
+                if (lastRejectTime == null && line.contains("Reject:")) {
+                    lastRejectTime = rejectLineRegex.find(line)?.groupValues?.get(1)
                 }
             }
         }
+        // Emit the last op if any
+        emitCurrentOp()
+
+        Log.d(TAG, "AppOps: $lineCount lines, ${telemetry.size} telemetry, " +
+            "${timeline.size} timeline events")
 
         return ModuleResult(
             telemetry = telemetry,
@@ -98,29 +140,44 @@ class AppOpsModule @Inject constructor() : BugreportModule {
         )
     }
 
-    private fun splitByUid(text: String): List<Pair<Int, String>> {
-        val matches = uidLineRegex.findAll(text).toList()
-        if (matches.isEmpty()) return emptyList()
-
-        return matches.mapIndexed { index, match ->
-            val uid = match.groupValues[1].toIntOrNull() ?: 99999
-            val start = match.range.first
-            val end = if (index + 1 < matches.size) matches[index + 1].range.first else text.length
-            uid to text.substring(start, end)
+    /**
+     * Parses AOSP UID strings to numeric UIDs. Mirrors [android.os.UserHandle.formatUid] inverse.
+     * Formats: "1000" (numeric), "u0a398" (app), "u0i5" (isolated),
+     *          "u0ai3" (app-zygote isolated), "u0s1000" (shared/system).
+     */
+    private fun parseUidString(raw: String): Int {
+        raw.toIntOrNull()?.let { return it }
+        val m = uidStringRegex.find(raw) ?: return 99999
+        val userId = m.groupValues[1].toIntOrNull() ?: return 99999
+        val type = m.groupValues[2]        // "a", "i", "ai", or "s"
+        val offset = m.groupValues[3].toIntOrNull() ?: return 99999
+        val appId = when (type) {
+            "a"  -> FIRST_APPLICATION_UID + offset
+            "i"  -> FIRST_ISOLATED_UID + offset
+            "ai" -> FIRST_APP_ZYGOTE_ISOLATED_UID + offset
+            "s"  -> offset                 // shared/system — appId is literal
+            else -> return 99999
         }
+        return userId * PER_USER_RANGE + appId
     }
 
-    private fun findNextPackageOrEnd(block: String, fromIndex: Int): Int {
-        val next = packageLineRegex.find(block, fromIndex + 1)
-        return next?.range?.first ?: block.length
-    }
+    private val uidStringRegex = Regex("""u(\d+)(ai|[ais])(\d+)""")
 
     /** Parses "2026-03-27 14:30:00" to epoch millis. Returns -1 on failure. */
     @Suppress("TooGenericExceptionCaught")
     private fun parseTimestamp(ts: String): Long = try {
         SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).parse(ts)?.time ?: -1L
     } catch (e: Exception) {
-        Log.w("AppOpsModule", "Failed to parse timestamp: $ts", e)
+        Log.w(TAG, "Failed to parse timestamp: $ts", e)
         -1L
+    }
+
+    // AOSP constants from android.os.Process / android.os.UserHandle
+    private companion object {
+        private const val TAG = "AppOpsModule"
+        private const val PER_USER_RANGE = 100000
+        private const val FIRST_APPLICATION_UID = 10000
+        private const val FIRST_ISOLATED_UID = 90000
+        private const val FIRST_APP_ZYGOTE_ISOLATED_UID = 89000
     }
 }

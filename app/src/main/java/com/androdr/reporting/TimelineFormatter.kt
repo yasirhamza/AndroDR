@@ -29,10 +29,11 @@ object TimelineFormatter {
 
         appendLine(RULE)
         appendLine("  AndroDR Bug Report Analysis Timeline")
-        appendLine("  Generated: $generated")
-        appendLine("  Android: ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT})")
-        appendLine("  Device: ${Build.MANUFACTURER} ${Build.MODEL}")
-        appendLine("  Patch: ${Build.VERSION.SECURITY_PATCH}")
+        appendLine("  Version   : ${com.androdr.BuildConfig.VERSION_NAME}")
+        appendLine("  Generated : $generated")
+        appendLine("  Android   : ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT})")
+        appendLine("  Device    : ${Build.MANUFACTURER} ${Build.MODEL}")
+        appendLine("  Patch     : ${Build.VERSION.SECURITY_PATCH}")
         appendLine(RULE)
         appendLine()
 
