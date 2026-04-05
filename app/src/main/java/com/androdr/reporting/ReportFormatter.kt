@@ -46,7 +46,7 @@ object ReportFormatter {
         appendLine()
 
         // -- Verdict + Summary + Action Guidance ----------------------------------
-        appendVerdict(scan, dnsEvents, appInventory, displayNames)
+        appendVerdict(scan, dnsEvents, appInventory)
 
         // -- Device checks --------------------------------------------------------
         val allDeviceFlags = scan.deviceFlags
@@ -199,8 +199,7 @@ object ReportFormatter {
     private fun StringBuilder.appendVerdict(
         scan: ScanResult,
         dnsEvents: List<DnsEvent>,
-        appInventory: List<AppTelemetry>,
-        displayNames: Map<String, String>
+        appInventory: List<AppTelemetry>
     ) {
         val appRiskCount = scan.appRisks.count {
             it.triggered && it.level.lowercase() != "informational"
