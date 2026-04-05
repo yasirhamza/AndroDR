@@ -24,10 +24,10 @@ class AppOpsModule @Inject constructor() : BugreportModule {
     private val packageLineRegex = Regex("""^\s+Package\s+(\S+):""")
     private val opLineRegex = Regex("""^\s+(\w+)\s+\(\w+\):""")
     private val accessLineRegex = Regex(
-        """Access:\s+\[\S+]\s+(\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2})"""
+        """Access:\s+\[\S+]\s+(\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}(?:\.\d+)?)"""
     )
     private val rejectLineRegex = Regex(
-        """Reject:\s+\[\S+]\s+(\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2})"""
+        """Reject:\s+\[\S+]\s+(\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}(?:\.\d+)?)"""
     )
 
     /**
@@ -168,10 +168,19 @@ class AppOpsModule @Inject constructor() : BugreportModule {
 
     private val uidStringRegex = Regex("""u(\d+)(ai|[ais])(\d+)""")
 
-    /** Parses "2026-03-27 14:30:00" to epoch millis. Returns -1 on failure. */
+    /** Parses "2026-03-27 14:30:00" or "2026-03-27 14:30:00.692" to epoch millis. */
     @Suppress("TooGenericExceptionCaught")
     private fun parseTimestamp(ts: String): Long = try {
-        SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).parse(ts)?.time ?: -1L
+        val normalized = ts.substringBefore(".")
+        val base = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).parse(normalized)?.time
+        when {
+            base == null || base < 0 -> -1L
+            ts.contains(".") -> {
+                val frac = ts.substringAfter(".")
+                base + frac.take(3).padEnd(3, '0').toLong()
+            }
+            else -> base
+        }
     } catch (e: Exception) {
         Log.w(TAG, "Failed to parse timestamp: $ts", e)
         -1L

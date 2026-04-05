@@ -33,8 +33,13 @@ fun Finding.toForensicTimelineEvent(
         .joinToString(" / ") { it.removePrefix("campaign.").replaceFirstChar { c -> c.uppercase() } }
         .ifEmpty { null }
 
+    // Runtime scan findings use the scan timestamp; bugreport findings use 0
+    // (unknown time) since the finding doesn't carry an event timestamp -- the
+    // actual timestamps come from module-produced TimelineEvents (e.g., AppOps).
+    val eventTimestamp = if (isBugreport) 0L else scanResult.timestamp
+
     return ForensicTimelineEvent(
-        timestamp = scanResult.timestamp,
+        timestamp = eventTimestamp,
         source = if (isBugreport) "bugreport_analysis" else "app_scanner",
         category = when (this.category) {
             FindingCategory.APP_RISK -> "app_risk"
