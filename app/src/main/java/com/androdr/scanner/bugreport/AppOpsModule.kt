@@ -191,8 +191,8 @@ class AppOpsModule @Inject constructor() : BugreportModule {
         private const val TAG = "AppOpsModule"
         private const val PER_USER_RANGE = 100000
         private const val FIRST_APPLICATION_UID = 10000
-        private const val FIRST_ISOLATED_UID = 90000
-        private const val FIRST_APP_ZYGOTE_ISOLATED_UID = 89000
+        private const val FIRST_ISOLATED_UID = 99000
+        private const val FIRST_APP_ZYGOTE_ISOLATED_UID = 90000
         private const val UNKNOWN_UID = 99999
     }
 }
