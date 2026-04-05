@@ -23,17 +23,21 @@ data class ScanResult(
     val riskySideloadCount: Int,
     val knownMalwareCount: Int
 ) {
+    // Overall risk driven by app threats with guidance. Device posture is a condition
+    // (not an incident) and caps at MEDIUM regardless of the rule's level field.
     @get:Ignore
     @Transient
     val overallRiskLevel: RiskLevel
         get() {
-            val maxLevel = findings
-                .filter { it.triggered }
+            val appMax = findings
+                .filter { it.triggered && it.category == FindingCategory.APP_RISK }
                 .maxOfOrNull { levelToScore(it.level) } ?: 0
+            val hasDeviceIssues = findings
+                .any { it.triggered && it.category == FindingCategory.DEVICE_POSTURE }
             return when {
-                maxLevel >= RiskLevel.CRITICAL.score -> RiskLevel.CRITICAL
-                maxLevel >= RiskLevel.HIGH.score -> RiskLevel.HIGH
-                maxLevel >= RiskLevel.MEDIUM.score -> RiskLevel.MEDIUM
+                appMax >= RiskLevel.CRITICAL.score -> RiskLevel.CRITICAL
+                appMax >= RiskLevel.HIGH.score -> RiskLevel.HIGH
+                appMax >= RiskLevel.MEDIUM.score || hasDeviceIssues -> RiskLevel.MEDIUM
                 else -> RiskLevel.LOW
             }
         }
