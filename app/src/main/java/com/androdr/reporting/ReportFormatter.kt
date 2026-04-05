@@ -240,9 +240,8 @@ object ReportFormatter {
             appendLine("    Risky sideloads: ${scan.riskySideloadCount}")
         }
 
-        // Device posture issues
-        val triggeredDeviceFlags = scan.deviceFlags
-            .filter { it.triggered && it.level.lowercase() in listOf("high", "critical") }
+        // Device posture issues (all severity levels — these are conditions, not incidents)
+        val triggeredDeviceFlags = scan.deviceFlags.filter { it.triggered }
         if (triggeredDeviceFlags.isNotEmpty()) {
             val titles = triggeredDeviceFlags.take(3).map { it.title }
             val suffix = if (triggeredDeviceFlags.size > 3) ", ..." else ""
@@ -370,16 +369,8 @@ object ReportFormatter {
                 tag.removePrefix("campaign.").replaceFirstChar { c -> c.uppercase() }
             }
 
-    private fun guidancePriority(guidance: String): Int {
-        val upper = guidance.uppercase()
-        return when {
-            upper.startsWith("CRITICAL") -> 4
-            upper.startsWith("UNINSTALL IMMEDIATELY") -> 3
-            upper.startsWith("UNINSTALL") -> 2
-            upper.startsWith("INVESTIGATE") -> 1
-            else -> 0
-        }
-    }
+    private fun guidancePriority(guidance: String): Int =
+        GuidanceUtils.guidancePriority(guidance)
 
     private fun severityOrdinal(level: String): Int = when (level.lowercase()) {
         "critical" -> 3

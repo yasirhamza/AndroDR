@@ -25,6 +25,6 @@ display:
     safe_title: "No Graphite-linked CVEs"
     evidence_type: cve_list
     summary_template: "Graphite/Paragon spyware exploits {count} unpatched CVEs on this device"
-level: critical
+level: medium
 remediation:
     - "Go to Settings > Software Update > Download and Install immediately. Also check Play Store > Settings > About > Google Play system update. These CVEs are exploited by Graphite spyware."
