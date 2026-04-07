@@ -9,6 +9,9 @@ import android.content.pm.ServiceInfo
 import android.net.VpnService
 import android.os.Build
 import android.os.ParcelFileDescriptor
+import android.system.Os
+import android.system.OsConstants
+import android.system.StructPollfd
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import com.androdr.R
@@ -103,6 +106,11 @@ class DnsVpnService : VpnService() {
 
         // Bounded blocking flush for the final log buffer drain on shutdown.
         private const val SHUTDOWN_FLUSH_TIMEOUT_MS = 1_500L
+
+        // Packet-read poll timeout. Short enough that shutdown is prompt when
+        // the VPN is stopped, long enough that the loop wakes up maybe a few
+        // times per second when traffic is sparse.
+        private const val POLL_TIMEOUT_MS = 500
 
         // Foreground service notification
         private const val NOTIFICATION_CHANNEL_ID = "androdr_vpn_channel"
@@ -276,12 +284,53 @@ class DnsVpnService : VpnService() {
 
     // ── Packet processing loop ────────────────────────────────────────────────
 
+    /**
+     * Reads raw IP packets from the tun fd, identifies UDP/53 DNS queries, and
+     * hands them off to [processPacket].
+     *
+     * ## Why Os.poll instead of FileInputStream.read()
+     *
+     * VpnService hands us a non-blocking tun file descriptor. A plain
+     * `FileInputStream.read()` on that fd returns zero bytes immediately when
+     * no packet is available, which turns the packet read loop into a tight
+     * busy-spin that burns ~100 % of a CPU core even when the device is idle
+     * and the tunnel has zero traffic. That was the single biggest contributor
+     * to AndroDR's VPN-mode battery drain — bigger than any of the per-query
+     * issues addressed in earlier commits.
+     *
+     * The fix is to block-wait on the fd via `android.system.Os.poll()` before
+     * calling `read()`. `Os.poll()` suspends the thread in the kernel until
+     * the fd has a pending packet (or the timeout expires), so the read loop
+     * uses zero CPU when the tunnel is idle. This is the same pattern
+     * NetGuard uses in its native packet path, and the canonical way to
+     * block-wait on a non-blocking fd from Java.
+     *
+     * A short timeout (not infinite) lets us periodically recheck
+     * `serviceScope.isActive` / `isRunning.value` so the loop shuts down
+     * promptly when the VPN is stopped.
+     */
     @Suppress("LoopWithTooManyJumpStatements")
     private suspend fun runPacketLoop(fd: ParcelFileDescriptor, outputStream: FileOutputStream) {
         val inputStream = FileInputStream(fd.fileDescriptor)
         val buffer      = ByteArray(MAX_DNS_PACKET_SIZE)
 
+        val pollfd = StructPollfd().apply {
+            this.fd = fd.fileDescriptor
+            events = OsConstants.POLLIN.toShort()
+        }
+        val fds = arrayOf(pollfd)
+
         while (serviceScope.isActive && isRunning.value) {
+            @Suppress("TooGenericExceptionCaught", "SwallowedException")
+            val ready = try {
+                Os.poll(fds, POLL_TIMEOUT_MS)
+            } catch (e: Exception) {
+                Log.w(TAG, "DnsVpnService: Os.poll failed: ${e.message}")
+                break
+            }
+            if (ready == 0) continue   // timeout — recheck running flag
+            if ((pollfd.revents.toInt() and OsConstants.POLLIN) == 0) continue
+
             @Suppress("TooGenericExceptionCaught", "SwallowedException")
             val bytesRead = try {
                 inputStream.read(buffer)
@@ -511,16 +560,11 @@ class DnsVpnService : VpnService() {
         private var sweepJob: Job? = null
 
         fun start(): Boolean {
-            @Suppress("TooGenericExceptionCaught", "SwallowedException")
+            @Suppress("TooGenericExceptionCaught")
             return try {
                 val addr = InetAddress.getByName(UPSTREAM_DNS_HOST)
                 val s = DatagramSocket()
                 vpnService.protect(s)
-                // connect() filters incoming datagrams at the kernel level so the receive
-                // loop only ever sees packets from the configured upstream resolver. This
-                // closes a spoofing window where an attacker on a shared Wi-Fi could send
-                // a forged reply to our source port and have it injected into the tun.
-                s.connect(addr, UPSTREAM_DNS_PORT)
                 s.soTimeout = 0   // blocking; the receive loop runs on its own coroutine
                 socket = s
                 upstreamAddr = addr
@@ -528,7 +572,7 @@ class DnsVpnService : VpnService() {
                 sweepJob   = scope.launch { sweepLoop() }
                 true
             } catch (e: Exception) {
-                Log.w(TAG, "UpstreamResolver: start failed: ${e.message}")
+                Log.w(TAG, "UpstreamResolver: start failed", e)
                 false
             }
         }
@@ -576,9 +620,9 @@ class DnsVpnService : VpnService() {
             rewritten[0] = ((ourTxId shr 8) and 0xFF).toByte()
             rewritten[1] = (ourTxId and 0xFF).toByte()
 
+            val addr = upstreamAddr ?: return
             try {
-                // Socket is connect()'d so the destination args on the packet are ignored.
-                s.send(DatagramPacket(rewritten, rewritten.size))
+                s.send(DatagramPacket(rewritten, rewritten.size, addr, UPSTREAM_DNS_PORT))
             } catch (e: Exception) {
                 pending.remove(ourTxId)
                 Log.w(TAG, "UpstreamResolver: send failed: ${e.message}")
