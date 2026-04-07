@@ -160,6 +160,14 @@ class SigmaRuleEngine @Inject constructor(
             R.raw.sigma_androdr_065_appops_install_packages,
             R.raw.sigma_androdr_067_notification_listener,
             R.raw.sigma_androdr_068_hidden_launcher,
+            // Atom rules — pass-through matchers for raw timeline event categories.
+            // Referenced by sprint-75 correlation rules (Task 9); tagged
+            // level: informational so they are filtered out of the user-facing
+            // findings UI (see ReportFormatter / DashboardScreen / BugReportScreen).
+            R.raw.sigma_androdr_atom_package_install,
+            R.raw.sigma_androdr_atom_device_admin_grant,
+            R.raw.sigma_androdr_atom_permission_grant,
+            R.raw.sigma_androdr_atom_dns_lookup,
         )
     }
 }

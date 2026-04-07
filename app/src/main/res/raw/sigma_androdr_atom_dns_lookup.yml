@@ -1,0 +1,16 @@
+title: Atom — suspicious DNS lookup
+id: androdr-atom-dns-lookup
+status: production
+description: Internal atom rule. Matches DNS lookup events that were flagged by the VPN layer (reason != null).
+author: AndroDR
+date: 2026-04-08
+logsource:
+    product: androdr
+    service: timeline
+detection:
+    selection:
+        category: dns_match
+    condition: selection
+level: informational
+display:
+    suppress_finding: true
