@@ -3,7 +3,6 @@ package com.androdr.scanner
 import android.net.Uri
 import android.util.Log
 import com.androdr.data.db.DnsEventDao
-import com.androdr.data.db.ForensicTimelineEventDao
 import com.androdr.data.db.toForensicTimelineEvent
 import com.androdr.data.model.ScanResult
 import com.androdr.data.model.ScannerFailure
@@ -48,7 +47,6 @@ class ScanOrchestrator @Inject constructor(
     private val bugReportAnalyzer: BugReportAnalyzer,
     private val scanRepository: ScanRepository,
     private val dnsEventDao: DnsEventDao,
-    private val forensicTimelineEventDao: ForensicTimelineEventDao,
     private val sigmaRuleEngine: SigmaRuleEngine,
     private val indicatorResolver: IndicatorResolver,
     private val sigmaRuleFeed: SigmaRuleFeed,
@@ -311,38 +309,35 @@ class ScanOrchestrator @Inject constructor(
                 snapshottedErrors.joinToString { "${it.scanner}(${it.exception})" })
         }
 
-        runCatching { scanRepository.saveScan(result) }
-            .onFailure { Log.e(TAG, "Failed to save scan result", it) }
-        runCatching {
-            // Build hash lookup from app telemetry for enrichment
-            val hashByPkg = appTelemetry.filter { !it.apkHash.isNullOrEmpty() }
-                .associateBy({ it.packageName }, { it.apkHash!! })
-            val timelineEvents = allFindings
-                .filter { it.triggered }
-                .map { finding ->
-                    val event = finding.toForensicTimelineEvent(result)
-                    // Enrich with APK hash from telemetry if not already set
-                    if (event.apkHash.isEmpty() && event.packageName.isNotEmpty()) {
-                        event.copy(apkHash = hashByPkg[event.packageName] ?: "")
-                    } else event
-                }
-            if (timelineEvents.isNotEmpty()) {
-                forensicTimelineEventDao.insertAll(timelineEvents)
-                Log.i(TAG, "Persisted ${timelineEvents.size} timeline events for scan ${result.id}")
+        // Build hash lookup from app telemetry for enrichment
+        val hashByPkg = appTelemetry.filter { !it.apkHash.isNullOrEmpty() }
+            .associateBy({ it.packageName }, { it.apkHash!! })
+        val findingTimelineEvents = allFindings
+            .filter { it.triggered }
+            .map { finding ->
+                val event = finding.toForensicTimelineEvent(result)
+                // Enrich with APK hash from telemetry if not already set
+                if (event.apkHash.isEmpty() && event.packageName.isNotEmpty()) {
+                    event.copy(apkHash = hashByPkg[event.packageName] ?: "")
+                } else event
             }
-        }.onFailure { Log.e(TAG, "Failed to persist timeline events", it) }
-
-        // Usage stats produce timeline events directly (observational data, not SIGMA telemetry)
+        // Usage stats produce timeline events directly (observational data,
+        // not SIGMA telemetry). Await the deferred before entering the save
+        // transaction so the whole save + finding events + usage event
+        // replacement is one atomic Room write — giving Flow observers a
+        // single invalidation per scan instead of three.
         val usageEvents = usageEventsDeferred.await()
-        if (usageEvents.isNotEmpty()) {
-            val tagged = usageEvents.map { it.copy(scanResultId = result.id) }
-            // Remove stale usage_stats events before inserting fresh ones
-            runCatching {
-                forensicTimelineEventDao.deleteBySource("usage_stats")
-            }.onFailure { Log.e(TAG, "Failed to delete stale usage events", it) }
-            runCatching { forensicTimelineEventDao.insertAll(tagged) }
-                .onFailure { Log.e(TAG, "Failed to persist usage events", it) }
-        }
+        val taggedUsageEvents = usageEvents.map { it.copy(scanResultId = result.id) }
+
+        runCatching {
+            scanRepository.saveScanResults(
+                scan = result,
+                findingTimelineEvents = findingTimelineEvents,
+                replaceUsageStatsEvents = taggedUsageEvents
+            )
+            Log.i(TAG, "Persisted scan ${result.id} with ${findingTimelineEvents.size} " +
+                "finding events and ${taggedUsageEvents.size} usage events (single transaction)")
+        }.onFailure { Log.e(TAG, "Failed to persist scan results", it) }
 
         // Progress is reset to Idle by the outer runFullScan() in its
         // `finally` block, which also handles the exception path.
@@ -423,47 +418,51 @@ class ScanOrchestrator @Inject constructor(
             },
             scannerErrors = bugReportScannerErrors
         )
-        runCatching { scanRepository.saveScan(scanResult) }
+        // Phase 1: finding-derived events. Each triggered finding becomes
+        // one ForensicTimelineEvent. Bug-report findings may inherit a
+        // real `event_time_ms` from their underlying telemetry record
+        // (see TimelineAdapter.Finding.toForensicTimelineEvent) — so a
+        // "Camera Access" finding now shows up at the actual time the
+        // AppOps access was recorded, not at 0L / "Unknown".
+        val findingEvents = result.findings.filter { it.triggered }
+            .map { finding ->
+                val event = finding.toForensicTimelineEvent(scanResult, isBugreport = true)
+                if (event.apkHash.isEmpty() && event.packageName.isNotEmpty()) {
+                    event.copy(apkHash = hashByPkg[event.packageName] ?: "")
+                } else event
+            }
+
+        // Phase 2: raw module-produced timeline events, **deduplicated**
+        // against finding-derived events that inherited the same
+        // (packageName, timestamp) tuple. Without this filter the
+        // Timeline would show a "Camera Access" finding row right next
+        // to a raw "com.X used CAMERA at ..." row with the identical
+        // time — two rows describing the same underlying evidence,
+        // which reads as a duplicate to the user. Raw events for
+        // unmatched AppOps records (packages whose dangerous-op usage
+        // didn't trigger any SIGMA rule) still appear as before.
+        val coveredByFinding = findingEvents
+            .filter { it.timestamp > 0L && it.packageName.isNotEmpty() }
+            .mapTo(HashSet()) { it.packageName to it.timestamp }
+        val rawEvents = result.timeline
+            .filterNot { raw ->
+                raw.packageName != null &&
+                    (raw.packageName to raw.timestamp) in coveredByFinding
+            }
+            .map { it.toForensicTimelineEvent(scanResult.id) }
+        val allBugReportTimelineEvents = findingEvents + rawEvents
+
+        // Single transaction: persist scan row + all timeline events in one
+        // write. Bug-report analysis does not produce usage_stats rows, so
+        // replaceUsageStatsEvents = null (leaves existing usage_stats rows
+        // untouched). See ScanRepository.saveScanResults docs.
         runCatching {
-            val timelineEvents = mutableListOf<com.androdr.data.model.ForensicTimelineEvent>()
-
-            // Phase 1: finding-derived events. Each triggered finding becomes
-            // one ForensicTimelineEvent. Bug-report findings may inherit a
-            // real `event_time_ms` from their underlying telemetry record
-            // (see TimelineAdapter.Finding.toForensicTimelineEvent) — so a
-            // "Camera Access" finding now shows up at the actual time the
-            // AppOps access was recorded, not at 0L / "Unknown".
-            val findingEvents = result.findings.filter { it.triggered }
-                .map { finding ->
-                    val event = finding.toForensicTimelineEvent(scanResult, isBugreport = true)
-                    if (event.apkHash.isEmpty() && event.packageName.isNotEmpty()) {
-                        event.copy(apkHash = hashByPkg[event.packageName] ?: "")
-                    } else event
-                }
-            timelineEvents.addAll(findingEvents)
-
-            // Phase 2: raw module-produced timeline events, **deduplicated**
-            // against finding-derived events that inherited the same
-            // (packageName, timestamp) tuple. Without this filter the
-            // Timeline would show a "Camera Access" finding row right next
-            // to a raw "com.X used CAMERA at ..." row with the identical
-            // time — two rows describing the same underlying evidence,
-            // which reads as a duplicate to the user. Raw events for
-            // unmatched AppOps records (packages whose dangerous-op usage
-            // didn't trigger any SIGMA rule) still appear as before.
-            val coveredByFinding = findingEvents
-                .filter { it.timestamp > 0L && it.packageName.isNotEmpty() }
-                .mapTo(HashSet()) { it.packageName to it.timestamp }
-            val rawEvents = result.timeline
-                .filterNot { raw ->
-                    raw.packageName != null &&
-                        (raw.packageName to raw.timestamp) in coveredByFinding
-                }
-                .map { it.toForensicTimelineEvent(scanResult.id) }
-            timelineEvents.addAll(rawEvents)
-
-            forensicTimelineEventDao.insertAll(timelineEvents)
-        }
+            scanRepository.saveScanResults(
+                scan = scanResult,
+                findingTimelineEvents = allBugReportTimelineEvents,
+                replaceUsageStatsEvents = null
+            )
+        }.onFailure { Log.e(TAG, "Failed to persist bug-report scan results", it) }
 
         return result
     }
