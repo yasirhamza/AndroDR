@@ -51,28 +51,37 @@ internal class DomainBloomIndex private constructor(
 ) {
 
     /** `true` iff [domain] is present in the indexed IOC set. */
-    @Suppress("ReturnCount") // dual-hash walk uses early returns at each collision-adjacent probe
     fun contains(domain: String): Boolean {
         if (!bloom.mightContain(domain)) return false        // ~99% of negatives exit here
-        val p = fnv64(domain)
-        val idx = primaryHashes.binarySearch(p)
+        return containsHashes(fnv64(domain), murmur64(domain))
+    }
+
+    /**
+     * Low-level dual-hash lookup. Exposed `internal` so unit tests can drive
+     * the adjacent-walk and secondary-rejection paths directly — constructing
+     * two strings with a real FNV-1a primary collision is computationally
+     * infeasible, and we want these paths covered.
+     *
+     * A query is a hit iff there exists an indexed entry whose primary AND
+     * secondary hashes match the arguments. When the primary has duplicates
+     * in the sorted array (which requires two IOC entries to collide on FNV-1a,
+     * ~10⁻⁹ at 371k entries), we walk adjacent entries with the same primary
+     * and probe their secondaries — bounded by the expected number of primary
+     * duplicates, which is effectively always zero.
+     */
+    @Suppress("ReturnCount") // dual-hash walk uses early returns at each collision-adjacent probe
+    internal fun containsHashes(primary: Long, secondary: Long): Boolean {
+        val idx = primaryHashes.binarySearch(primary)
         if (idx < 0) return false
-        val s = murmur64(domain)
-        // Dual-hash check: require matching secondary at the same index. If
-        // primary hash collisions ever occur between two distinct IOC entries
-        // (~10⁻⁹ at 371k entries), `binarySearch` returns *some* matching
-        // index; walk adjacent entries whose primary matches and test their
-        // secondary too. This loop terminates in O(1) under normal conditions
-        // and is bounded by the (tiny) expected number of primary duplicates.
-        if (secondaryHashes[idx] == s) return true
+        if (secondaryHashes[idx] == secondary) return true
         var left = idx - 1
-        while (left >= 0 && primaryHashes[left] == p) {
-            if (secondaryHashes[left] == s) return true
+        while (left >= 0 && primaryHashes[left] == primary) {
+            if (secondaryHashes[left] == secondary) return true
             left--
         }
         var right = idx + 1
-        while (right < primaryHashes.size && primaryHashes[right] == p) {
-            if (secondaryHashes[right] == s) return true
+        while (right < primaryHashes.size && primaryHashes[right] == primary) {
+            if (secondaryHashes[right] == secondary) return true
             right++
         }
         return false
@@ -131,6 +140,23 @@ internal class DomainBloomIndex private constructor(
 
         /** Empty index — used before the first refresh completes. */
         fun empty(): DomainBloomIndex = build(emptyList())
+
+        /**
+         * Test-only factory that constructs an index with hand-crafted parallel
+         * hash arrays, bypassing the normal `build()` path. Used by unit tests
+         * to simulate primary-hash collisions (which are infeasible to
+         * construct via real strings) and verify the adjacent-walk logic.
+         *
+         * `primary` must already be sorted ascending; this is the invariant
+         * that [containsHashes] relies on.
+         */
+        internal fun forTestingOnly(primary: LongArray, secondary: LongArray): DomainBloomIndex {
+            require(primary.size == secondary.size) { "parallel arrays must have equal length" }
+            // Use a minimal bloom so tests can still call contains(String) if they want,
+            // though they shouldn't — the hashes here don't correspond to any real strings.
+            val bloom = BloomFilter.create(primary.size.coerceAtLeast(1), TARGET_FP_RATE)
+            return DomainBloomIndex(bloom, primary, secondary)
+        }
 
         /**
          * Primary hash: 64-bit FNV-1a. Byte-at-a-time multiply-xor.

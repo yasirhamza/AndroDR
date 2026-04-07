@@ -106,40 +106,79 @@ class DomainBloomIndexTest {
     }
 
     @Test
+    fun `containsHashes accepts exact primary+secondary match`() {
+        val index = DomainBloomIndex.build(listOf("evil.com"))
+        val p = DomainBloomIndex.fnv64("evil.com")
+        val s = DomainBloomIndex.murmur64("evil.com")
+        assertTrue(index.containsHashes(p, s))
+    }
+
+    @Test
+    fun `containsHashes rejects a matching primary with a non-matching secondary`() {
+        // This is the test that would fail if the implementation ignored
+        // the secondary hash (i.e. regressed to single-hash behavior).
+        val index = DomainBloomIndex.build(listOf("evil.com"))
+        val evilPrimary = DomainBloomIndex.fnv64("evil.com")
+        val wrongSecondary = DomainBloomIndex.murmur64("totally-different-string.example")
+
+        // Sanity: the primary hash *does* exist in the index.
+        assertTrue(
+            "sanity: evil.com's primary hash must be in the index",
+            index.containsHashes(evilPrimary, DomainBloomIndex.murmur64("evil.com"))
+        )
+        // Actual test: same primary, wrong secondary → must be rejected.
+        assertFalse(
+            "secondary hash must be checked; primary-only match must not be a hit",
+            index.containsHashes(evilPrimary, wrongSecondary)
+        )
+    }
+
+    @Test
+    fun `containsHashes rejects a non-matching primary regardless of secondary`() {
+        val index = DomainBloomIndex.build(listOf("evil.com"))
+        val otherPrimary   = DomainBloomIndex.fnv64("other.net")
+        val evilSecondary  = DomainBloomIndex.murmur64("evil.com")
+        assertFalse(index.containsHashes(otherPrimary, evilSecondary))
+    }
+
+    @Test
+    fun `adjacent-walk path handles simulated primary-hash collisions`() {
+        // Hand-craft an index with two entries sharing the same primary hash
+        // but distinct secondaries. Real FNV-1a primary collisions are
+        // infeasible to construct, so we use the test-only factory to
+        // directly exercise the collision-walk logic in containsHashes.
+        val primaries   = longArrayOf(100L, 100L, 100L, 200L, 300L)
+        val secondaries = longArrayOf(11L,  22L,  33L,  44L,  55L)
+        val index = DomainBloomIndex.forTestingOnly(primaries, secondaries)
+
+        // All three colliding entries must be findable via the adjacent walk.
+        assertTrue("walk must reach first collision entry",  index.containsHashes(100L, 11L))
+        assertTrue("walk must reach middle collision entry", index.containsHashes(100L, 22L))
+        assertTrue("walk must reach last collision entry",   index.containsHashes(100L, 33L))
+        // Non-colliding entries still work.
+        assertTrue(index.containsHashes(200L, 44L))
+        assertTrue(index.containsHashes(300L, 55L))
+        // A query with matching primary but secondary not in the collision
+        // group must be rejected even after walking.
+        assertFalse(
+            "walk must reject when no adjacent entry matches secondary",
+            index.containsHashes(100L, 99L)
+        )
+        // A query with no matching primary at all must be rejected.
+        assertFalse(index.containsHashes(999L, 11L))
+    }
+
+    @Test
     fun `murmur64 is deterministic and differs from fnv64 on same input`() {
         val s = "evil.com"
         val a = DomainBloomIndex.murmur64(s)
         val b = DomainBloomIndex.murmur64(s)
         assertEquals(a, b)
-        // Structural independence check: at least one input must hash to
-        // different values under the two mixers. If this ever fires it means
-        // the dual-hash scheme has degenerated to a single-hash scheme.
+        // Structural independence check: the two mixers must not degenerate
+        // to the same hash on this input.
         assertFalse(
-            "FNV and Murmur should not produce identical hashes for all inputs",
+            "FNV and Murmur should not produce identical hashes for evil.com",
             DomainBloomIndex.fnv64(s) == a
         )
-    }
-
-    @Test
-    fun `dual-hash blocks a collision on primary alone`() {
-        // We can't easily construct a real FNV collision, so simulate the
-        // scenario by checking that an unrelated string (whose primary hash
-        // almost certainly doesn't match any IOC) is rejected even after
-        // passing the bloom filter. Tighten the FP budget to near-zero to
-        // demonstrate the secondary hash is doing work.
-        val known = (0 until 5000).map { "known-$it.example" }
-        val index = DomainBloomIndex.build(known)
-        // Probe 100k random non-members. With the previous single-hash
-        // design, at 5000 entries and 100k probes the expected false-hit
-        // rate was ~2.7×10⁻¹¹ (essentially zero), so this test wouldn't
-        // have distinguished the two designs at this scale. The point of
-        // this test is instead to confirm that the dual-hash path *never*
-        // returns true for a clean probe — if it ever does, something is
-        // structurally wrong (e.g. secondary hash ignored).
-        var hits = 0
-        for (i in 0 until 100_000) {
-            if (index.contains("probe-$i.unrelated.net")) hits++
-        }
-        assertEquals("dual-hash must produce zero false hits at this scale", 0, hits)
     }
 }
