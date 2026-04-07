@@ -36,7 +36,7 @@ Shipping #1 alone gives a clean rule engine firing on nothing real. Shipping #2 
 2. **Upstream SIGMA correlation grammar** — full compliance, subset implementation. Rule files using supported types are valid upstream SIGMA and could in principle be authored by the community.
 3. **Three correlation types supported:** `temporal_ordered`, `event_count`, `temporal`. Unsupported types (`value_count`, nested correlations) fail at parse time with a clear "unsupported correlation type" error.
 4. **Atom rules** — thin pass-through SIGMA rules that match raw event types (`package_install`, `permission_grant`, `device_admin_grant`, `dns_lookup`) with no extra filtering. Tagged `level: informational` so they don't render as standalone findings. Correlations reference atoms by ID, not filtered detection rules like `androdr-013`.
-5. **Per-rule windowed DB queries** — for each correlation rule, query exactly its `timespan` window from `forensic_timeline`. Individual `timespan` capped at 30 days at parse time.
+5. **Per-rule windowed DB queries** — for each correlation rule, query exactly its `timespan` window from `forensic_timeline`. Individual `timespan` capped at 90 days at parse time.
 6. **SIEM-aligned event model** — `ForensicTimelineEvent` gains `startTimestamp` (rename of `timestamp`), `endTimestamp: Long?`, and `kind: String` discriminator (`event` for raw, `signal` for correlation results).
 7. **Install events emitted once per package** — first scan emits all installed packages; subsequent scans only emit *newly installed* packages. True install monitoring, not re-emission noise.
 
@@ -203,7 +203,7 @@ correlation:
 - Recognizes `correlation:` as a sibling of `detection:` at the rule top level.
 - A rule has either `detection:` OR `correlation:`, never both.
 - Validates `type` is one of the three supported values; otherwise raises `UnsupportedCorrelationTypeException` with the rule ID and the unsupported type.
-- Validates `timespan` parses as a duration (`s`, `m`, `h`, `d` suffixes) and is ≤ 30 days; otherwise raises `CorrelationTimespanExceededException`.
+- Validates `timespan` parses as a duration (`s`, `m`, `h`, `d` suffixes) and is ≤ 90 days; otherwise raises `CorrelationTimespanExceededException`.
 - Validates every ID in `rules:` resolves to a loaded atom rule; otherwise raises `UnresolvedCorrelationRuleException`.
 
 ---
@@ -295,7 +295,7 @@ These are documented here so future-you doesn't re-derive the gap:
 - **Nested correlations** (correlation referencing another correlation) — same reasoning.
 - **Multi-field `group-by`** — current migrations only need single-field grouping. Parser supports `group-by:` as a list but only uses the first element.
 - **`condition.lt` and `condition.eq`** — `event_count` migration only needs `gte`. Other operators rejected at parse time.
-- **Cross-scan correlation lookback beyond 30 days** — capped intentionally; correlations beyond a month are likely the wrong feature shape.
+- **Cross-scan correlation lookback beyond 90 days** — capped intentionally; correlations beyond a month are likely the wrong feature shape.
 
 ---
 
@@ -331,7 +331,7 @@ These are documented here so future-you doesn't re-derive the gap:
 |---|---|
 | Migration of `forensic_timeline` schema breaks existing user data | Additive columns + Room `RENAME COLUMN` is well-tested. Migration test required. |
 | Behavioral equivalence between Kotlin and YAML versions of correlations might drift | Per-rule equivalence tests on shared fixtures pin behavior at migration time. |
-| Per-rule timeline queries multiply DB load on scan completion | Index on `(category, startTimestamp)` already exists; queries are O(log N) per rule. Worst case at 30 rules × 30-day window = 30 indexed range scans, all under 50 ms total on a typical device. |
+| Per-rule timeline queries multiply DB load on scan completion | Index on `(category, startTimestamp)` already exists; queries are O(log N) per rule. Worst case at 30 rules × 90-day window = 30 indexed range scans. Re-measure on-device once the engine is wired up; if total exceeds ~150 ms, batch into a single union query. |
 | Atom rules show up in the findings UI by accident | `level: informational` is already filtered out by `findingsViewModel`. Verified during implementation. |
 | Install-event delta detection misses packages installed *during* a scan | Acceptable — they show up on the next scan. The race window is seconds. |
 | Cluster signals duplicate on re-scan if the same correlation fires again | Dedup by `(rule_id, member_event_ids)` in `InstallEventEmitter`-equivalent for correlations: skip insert if a signal with the same rule + identical member set already exists. |
