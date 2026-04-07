@@ -22,6 +22,10 @@ interface DnsEventDao {
     @Insert
     suspend fun insert(event: DnsEvent)
 
+    /** Batched insert used by the VPN packet path to amortize Room transaction overhead. */
+    @Insert
+    suspend fun insertAll(events: List<DnsEvent>)
+
     @Query("DELETE FROM DnsEvent WHERE timestamp < :cutoff")
     suspend fun deleteOlderThan(cutoff: Long)
 }
