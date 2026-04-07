@@ -1,9 +1,10 @@
 package com.androdr.scanner.bugreport
 
 import com.androdr.data.model.ForensicTimelineEvent
-import java.text.SimpleDateFormat
+import java.time.LocalDateTime
+import java.time.ZoneOffset
+import java.time.format.DateTimeFormatter
 import java.util.Locale
-import java.util.TimeZone
 
 /**
  * Parses the `package` section of a bug report (`dumpsys package`) to emit
@@ -25,9 +26,16 @@ class InstallTimeModule {
     private val packageHeaderRegex = Regex("""^Package \[([^\]]+)\]""", RegexOption.MULTILINE)
     private val firstInstallRegex = Regex("""firstInstallTime=([\d\- :]+)""")
 
-    private val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).apply {
-        timeZone = TimeZone.getDefault()
-    }
+    // DateTimeFormatter is immutable and thread-safe; SimpleDateFormat is not.
+    // Timestamps are interpreted as UTC for determinism: bug reports do not
+    // carry a zone offset on dumpsys timestamps, and parsing them in the
+    // analyzing device's local zone made cross-zone analyses non-reproducible.
+    // The trade-off is a fixed offset error bounded by ±12h that is the same
+    // for every analyzer of the same report. A future task should plumb the
+    // device timezone from `SYSTEM PROPERTIES` (persist.sys.timezone) into
+    // this module for an exact fix.
+    private val dateFormatter: DateTimeFormatter =
+        DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss", Locale.US)
 
     fun parseSection(text: String): List<ForensicTimelineEvent> {
         val packageStarts = packageHeaderRegex.findAll(text).toList()
@@ -44,7 +52,14 @@ class InstallTimeModule {
 
             val firstInstallMs = firstInstallRegex.find(packageBlock)
                 ?.groupValues?.get(1)?.trim()
-                ?.let { runCatching { dateFormat.parse(it)?.time }.getOrNull() }
+                ?.let { raw ->
+                    runCatching {
+                        LocalDateTime.parse(raw, dateFormatter).toInstant(ZoneOffset.UTC).toEpochMilli()
+                    }.getOrElse {
+                        android.util.Log.w("InstallTimeModule", "Failed to parse firstInstallTime='$raw'", it)
+                        null
+                    }
+                }
                 ?: return@mapIndexedNotNull null
 
             ForensicTimelineEvent(
