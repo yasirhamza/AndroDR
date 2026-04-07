@@ -18,7 +18,9 @@ data class AppTelemetry(
     // Raw component lists — enable manifest-based detections as pure SIGMA rule updates
     val servicePermissions: List<String> = emptyList(),
     val receiverPermissions: List<String> = emptyList(),
-    val hasLauncherActivity: Boolean = true
+    val hasLauncherActivity: Boolean = true,
+    val firstInstallTime: Long = 0L,
+    val lastUpdateTime: Long = 0L
 ) {
     fun toFieldMap(): Map<String, Any?> = mapOf(
         "package_name" to packageName,
@@ -37,6 +39,8 @@ data class AppTelemetry(
         "known_app_category" to knownAppCategory,
         "service_permissions" to servicePermissions,
         "receiver_permissions" to receiverPermissions,
-        "has_launcher_activity" to hasLauncherActivity
+        "has_launcher_activity" to hasLauncherActivity,
+        "first_install_time" to firstInstallTime,
+        "last_update_time" to lastUpdateTime
     )
 }
