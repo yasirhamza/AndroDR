@@ -130,7 +130,6 @@ class ScanOrchestratorErrorHandlingTest {
             bugReportAnalyzer = bugReportAnalyzer,
             scanRepository = scanRepository,
             dnsEventDao = dnsEventDao,
-            forensicTimelineEventDao = forensicTimelineEventDao,
             sigmaRuleEngine = sigmaRuleEngine,
             indicatorResolver = indicatorResolver,
             sigmaRuleFeed = sigmaRuleFeed,
