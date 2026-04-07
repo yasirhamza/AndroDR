@@ -6,6 +6,7 @@ import com.androdr.data.db.DnsEventDao
 import com.androdr.data.db.ForensicTimelineEventDao
 import com.androdr.data.db.toForensicTimelineEvent
 import com.androdr.data.model.ScanResult
+import com.androdr.data.model.ScannerFailure
 import com.androdr.data.repo.ScanRepository
 import com.androdr.ioc.IndicatorResolver
 import com.androdr.sigma.CveEvidenceProvider
@@ -13,10 +14,18 @@ import com.androdr.sigma.Finding
 import com.androdr.sigma.FindingCategory
 import com.androdr.sigma.SigmaRuleFeed
 import com.androdr.sigma.SigmaRuleEngine
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Deferred
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import java.util.Collections
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -53,6 +62,74 @@ class ScanOrchestrator @Inject constructor(
     /** Cached app telemetry from the most recent scan, for report export. */
     @Volatile var lastAppTelemetry: List<com.androdr.data.model.AppTelemetry> = emptyList()
         private set
+
+    /**
+     * Live progress for the currently-running scan (or [ScanProgress.Idle]
+     * when no scan is active). The Dashboard UI observes this to render the
+     * per-phase progress indicator and stage counter.
+     */
+    private val _scanProgress = MutableStateFlow<ScanProgress>(ScanProgress.Idle)
+    val scanProgress: StateFlow<ScanProgress> = _scanProgress.asStateFlow()
+
+    /**
+     * Wraps a single scanner's telemetry-collection call with:
+     *   1. **Per-scanner error isolation.** Any exception (other than
+     *      [CancellationException]) is caught, logged, and recorded in
+     *      [errors] so the final [ScanResult] can tell the UI which scanners
+     *      failed. The other scanners continue running — one failure does not
+     *      zero out the whole scan.
+     *   2. **Cancellation pass-through.** [CancellationException] is
+     *      re-thrown so coroutine cancellation still works end-to-end.
+     *   3. **Progress counter increment.** On completion (success or
+     *      failure) the scan-progress StateFlow is advanced by one. We count
+     *      failed scanners as "completed" from the progress perspective
+     *      because the user cares about wall-clock progress, not success
+     *      rate — the failures are surfaced separately in the scan result.
+     *
+     * Silently swallowing scanner exceptions (the previous behavior) was a
+     * detection-evasion hazard: a malware sample that crashed any one scanner
+     * would cause that scanner's category of findings to disappear, yielding
+     * an apparently-clean scan result indistinguishable from a real clean.
+     */
+    @Suppress("TooGenericExceptionCaught")
+    private suspend fun <T> trackScanner(
+        name: String,
+        errors: MutableList<ScannerFailure>,
+        default: T,
+        block: suspend () -> T
+    ): T {
+        return try {
+            block()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.e(TAG, "$name failed", e)
+            errors.add(
+                ScannerFailure(
+                    scanner = name,
+                    exception = e::class.simpleName ?: "Exception",
+                    message = e.message
+                )
+            )
+            default
+        } finally {
+            _scanProgress.update { current ->
+                if (current is ScanProgress.Running) {
+                    current.copy(completedScanners = current.completedScanners + 1)
+                } else {
+                    current
+                }
+            }
+        }
+    }
+
+    /** Launches a tracked scanner call inside the enclosing coroutineScope. */
+    private fun <T> CoroutineScope.trackedAsync(
+        name: String,
+        errors: MutableList<ScannerFailure>,
+        default: T,
+        block: suspend () -> T
+    ): Deferred<T> = async { trackScanner(name, errors, default, block) }
 
     private suspend fun initRuleEngine() = initMutex.withLock {
         if (ruleEngineInitialized) return@withLock
@@ -96,34 +173,59 @@ class ScanOrchestrator @Inject constructor(
      * (each is already wrapped with [kotlinx.coroutines.withContext]).  The results are combined
      * into a [ScanResult], saved to the database, and returned.
      */
-    @Suppress("LongMethod") // Two-phase scan: telemetry collection + SIGMA rule evaluation
-    suspend fun runFullScan(): ScanResult = coroutineScope {
+    @Suppress("LongMethod", "TooGenericExceptionCaught")
+    // Two-phase scan: telemetry collection + SIGMA rule evaluation. Wrapped
+    // in try/finally so progress is always reset even if something above the
+    // scanner-tracker level throws (e.g. SIGMA rule engine init failure).
+    suspend fun runFullScan(): ScanResult = try {
+        runFullScanInner()
+    } finally {
+        _scanProgress.value = ScanProgress.Idle
+    }
+
+    @Suppress("LongMethod") // Linear two-phase scan body kept intact for readability
+    private suspend fun runFullScanInner(): ScanResult = coroutineScope {
         initRuleEngine()
 
+        // scannerErrors is written from inside parallel async blocks, so it
+        // needs a synchronized wrapper. Using the Collections.synchronizedList
+        // wrapper gives us mutex semantics with no extra boilerplate.
+        val scannerErrors: MutableList<ScannerFailure> =
+            Collections.synchronizedList(mutableListOf())
+
+        // Initialize progress for phase 1 — 8 parallel scanners to track.
+        _scanProgress.value = ScanProgress.Running(
+            phase = ScanProgress.Running.Phase.COLLECTING_TELEMETRY,
+            completedScanners = 0,
+            totalScanners = SCANNER_COUNT
+        )
+
         // Phase 1: Collect telemetry (no detection logic)
-        val appTelemetryDeferred = async {
-            runCatching { appScanner.collectTelemetry() }.getOrDefault(emptyList())
+        val appTelemetryDeferred = trackedAsync("appScanner", scannerErrors, emptyList()) {
+            appScanner.collectTelemetry()
         }
-        val deviceTelemetryDeferred = async {
-            runCatching { deviceAuditor.collectTelemetry() }.getOrDefault(emptyList())
+        val deviceTelemetryDeferred = trackedAsync("deviceAuditor", scannerErrors, emptyList()) {
+            deviceAuditor.collectTelemetry()
         }
-        val processTelemetryDeferred = async {
-            runCatching { processScanner.collectTelemetry() }.getOrDefault(emptyList())
+        val processTelemetryDeferred = trackedAsync("processScanner", scannerErrors, emptyList()) {
+            processScanner.collectTelemetry()
         }
-        val fileTelemetryDeferred = async {
-            runCatching { fileArtifactScanner.collectTelemetry() }.getOrDefault(emptyList())
+        val fileTelemetryDeferred = trackedAsync("fileArtifactScanner", scannerErrors, emptyList()) {
+            fileArtifactScanner.collectTelemetry()
         }
-        val accessibilityTelemetryDeferred = async {
-            runCatching { accessibilityAuditScanner.collectTelemetry() }.getOrDefault(emptyList())
+        val accessibilityTelemetryDeferred =
+            trackedAsync("accessibilityAuditScanner", scannerErrors, emptyList()) {
+                accessibilityAuditScanner.collectTelemetry()
+            }
+        val receiverTelemetryDeferred =
+            trackedAsync("receiverAuditScanner", scannerErrors, emptyList()) {
+                receiverAuditScanner.collectTelemetry()
+            }
+        val appOpsTelemetryDeferred = trackedAsync("appOpsScanner", scannerErrors, emptyList()) {
+            appOpsScanner.collectTelemetry()
         }
-        val receiverTelemetryDeferred = async {
-            runCatching { receiverAuditScanner.collectTelemetry() }.getOrDefault(emptyList())
-        }
-        val appOpsTelemetryDeferred = async {
-            runCatching { appOpsScanner.collectTelemetry() }.getOrDefault(emptyList())
-        }
-        val usageEventsDeferred = async {
-            runCatching { usageStatsScanner.collectTimelineEvents() }.getOrDefault(emptyList())
+        val usageEventsDeferred = trackedAsync("usageStatsScanner", scannerErrors, emptyList()) {
+            usageStatsScanner.collectTimelineEvents()
         }
 
         val appTelemetry = appTelemetryDeferred.await()
@@ -136,6 +238,11 @@ class ScanOrchestrator @Inject constructor(
         val appOpsTelemetry = appOpsTelemetryDeferred.await()
 
         // Phase 2: SIGMA rule evaluation — all detection via rules
+        _scanProgress.value = ScanProgress.Running(
+            phase = ScanProgress.Running.Phase.EVALUATING_RULES,
+            completedScanners = SCANNER_COUNT,
+            totalScanners = SCANNER_COUNT
+        )
         val allFindings = mutableListOf<Finding>()
         allFindings.addAll(sigmaRuleEngine.evaluateApps(appTelemetry))
         allFindings.addAll(sigmaRuleEngine.evaluateDevice(deviceTelemetry))
@@ -163,6 +270,17 @@ class ScanOrchestrator @Inject constructor(
         Log.i(TAG, "Scan complete — SIGMA: ${allFindings.size} findings from " +
             "${sigmaRuleEngine.ruleCount()} rules")
 
+        // Snapshot scanner errors before building the result — after this point
+        // no more scanner-phase work can add to the list.
+        val snapshottedErrors: List<ScannerFailure> =
+            synchronized(scannerErrors) { scannerErrors.toList() }
+
+        _scanProgress.value = ScanProgress.Running(
+            phase = ScanProgress.Running.Phase.SAVING_RESULTS,
+            completedScanners = SCANNER_COUNT,
+            totalScanners = SCANNER_COUNT
+        )
+
         val now = System.currentTimeMillis()
         val result = ScanResult(
             id                 = now,
@@ -170,8 +288,14 @@ class ScanOrchestrator @Inject constructor(
             findings           = allFindings,
             bugReportFindings  = emptyList(),
             riskySideloadCount = sideloadedCount,
-            knownMalwareCount  = malwareCount
+            knownMalwareCount  = malwareCount,
+            scannerErrors      = snapshottedErrors
         )
+
+        if (snapshottedErrors.isNotEmpty()) {
+            Log.w(TAG, "Scan completed with ${snapshottedErrors.size} scanner failures: " +
+                snapshottedErrors.joinToString { "${it.scanner}(${it.exception})" })
+        }
 
         runCatching { scanRepository.saveScan(result) }
             .onFailure { Log.e(TAG, "Failed to save scan result", it) }
@@ -206,6 +330,8 @@ class ScanOrchestrator @Inject constructor(
                 .onFailure { Log.e(TAG, "Failed to persist usage events", it) }
         }
 
+        // Progress is reset to Idle by the outer runFullScan() in its
+        // `finally` block, which also handles the exception path.
         result
     }
 
@@ -217,12 +343,31 @@ class ScanOrchestrator @Inject constructor(
      * @return [BugReportAnalyzer.BugReportAnalysisResult] with SIGMA findings,
      *         legacy findings, and timeline events.
      */
+    @Suppress("TooGenericExceptionCaught")
     suspend fun analyzeBugReport(uri: Uri): BugReportAnalyzer.BugReportAnalysisResult {
         initRuleEngine()
         val result = bugReportAnalyzer.analyze(uri)
 
-        // Collect app telemetry for hash enrichment — same device, same apps
-        val appTelemetry = runCatching { appScanner.collectTelemetry() }.getOrDefault(emptyList())
+        // Collect app telemetry for hash enrichment — same device, same apps.
+        // A failure here is recorded as a scanner error on the persisted
+        // ScanResult so the UI can still show the user that enrichment was
+        // incomplete; it does not block the bug-report findings themselves.
+        val bugReportScannerErrors = mutableListOf<ScannerFailure>()
+        val appTelemetry = try {
+            appScanner.collectTelemetry()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.e(TAG, "appScanner failed during bug-report enrichment", e)
+            bugReportScannerErrors.add(
+                ScannerFailure(
+                    scanner = "appScanner",
+                    exception = e::class.simpleName ?: "Exception",
+                    message = e.message
+                )
+            )
+            emptyList()
+        }
         lastAppTelemetry = appTelemetry
         val hashByPkg = appTelemetry.filter { !it.apkHash.isNullOrEmpty() }
             .associateBy({ it.packageName }, { it.apkHash!! })
@@ -239,7 +384,8 @@ class ScanOrchestrator @Inject constructor(
             riskySideloadCount = 0,
             knownMalwareCount = result.findings.count {
                 it.level == "critical" && it.ruleId in KNOWN_MALWARE_RULE_IDS
-            }
+            },
+            scannerErrors = bugReportScannerErrors
         )
         runCatching { scanRepository.saveScan(scanResult) }
         runCatching {
@@ -297,6 +443,14 @@ class ScanOrchestrator @Inject constructor(
 
     companion object {
         private const val TAG = "ScanOrchestrator"
+
+        /**
+         * Number of parallel scanners tracked by the progress indicator.
+         * Keep in sync with the scanners launched in [runFullScanInner] —
+         * adding or removing a scanner requires updating this constant so
+         * the progress bar fills to 100%.
+         */
+        private const val SCANNER_COUNT = 8
 
         /** Rule IDs that represent confirmed malware matches (IOC database hits). */
         private val KNOWN_MALWARE_RULE_IDS = setOf("androdr-001", "androdr-002")

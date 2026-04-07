@@ -10,6 +10,7 @@ import com.androdr.data.repo.ScanRepository.Companion.preferRuntimeScan
 import com.androdr.ioc.IocDatabase
 import com.androdr.ioc.IndicatorUpdater
 import com.androdr.scanner.ScanOrchestrator
+import com.androdr.scanner.ScanProgress
 import com.androdr.ui.permissions.UsageStatsPermission
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -42,6 +43,13 @@ class DashboardViewModel @Inject constructor(
 
     private val _isScanning = MutableStateFlow(false)
     val isScanning: StateFlow<Boolean> = _isScanning.asStateFlow()
+
+    /**
+     * Live scan progress published by the orchestrator. The Dashboard UI
+     * observes this to render a progress bar + stage text instead of the
+     * bare spinning button the app used to show.
+     */
+    val scanProgress: StateFlow<ScanProgress> = orchestrator.scanProgress
 
     /**
      * Whether the app currently has the PACKAGE_USAGE_STATS permission, which
