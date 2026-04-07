@@ -10,6 +10,12 @@
     <!-- Dashboard -->
     <string name="run_scan">Run Scan</string>
     <string name="scanning">Scanning…</string>
+
+    <!-- Usage Access permission banner — shown when forensic timeline data is unavailable -->
+    <string name="usage_access_banner_title">Enable Usage Access</string>
+    <string name="usage_access_banner_body">AndroDR uses the system Usage Access permission to build a forensic timeline of app opens and closes. Without it, the 24-hour activity history on the Timeline screen will be empty. Grant it once from Android settings — AndroDR cannot request this permission via the normal prompt.</string>
+    <string name="usage_access_banner_cta">Open Usage Access settings</string>
+
     <string name="summary_app_risks">App Risks</string>
     <string name="summary_device_flags">Device Flags</string>
     <string name="summary_dns_matched">Suspicious Connections</string>
