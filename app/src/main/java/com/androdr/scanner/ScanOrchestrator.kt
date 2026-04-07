@@ -450,7 +450,14 @@ class ScanOrchestrator @Inject constructor(
                     (raw.packageName to raw.timestamp) in coveredByFinding
             }
             .map { it.toForensicTimelineEvent(scanResult.id) }
-        val allBugReportTimelineEvents = findingEvents + rawEvents
+        // Phase 3: bug-report module-produced ForensicTimelineEvents (e.g.
+        // InstallTimeModule's package_install rows). These already carry
+        // isFromBugreport = true and scan-independent shape; stamp them
+        // with the scanResultId for history association.
+        val moduleForensicEvents = result.forensicEvents.map {
+            it.copy(scanResultId = scanResult.id)
+        }
+        val allBugReportTimelineEvents = findingEvents + rawEvents + moduleForensicEvents
 
         // Single transaction: persist scan row + all timeline events in one
         // write. Bug-report analysis does not produce usage_stats rows, so
