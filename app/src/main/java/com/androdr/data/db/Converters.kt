@@ -2,6 +2,7 @@ package com.androdr.data.db
 
 import android.util.Log
 import androidx.room.TypeConverter
+import com.androdr.data.model.ScannerFailure
 import com.androdr.sigma.Evidence
 import com.androdr.sigma.Finding
 import kotlinx.serialization.builtins.ListSerializer
@@ -46,4 +47,17 @@ object Converters {
     @TypeConverter @JvmStatic
     fun toStringList(value: String): List<String> =
         json.decodeFromString(ListSerializer(String.serializer()), value)
+
+    @TypeConverter @JvmStatic
+    fun fromScannerFailureList(value: List<ScannerFailure>): String =
+        json.encodeToString(ListSerializer(ScannerFailure.serializer()), value)
+
+    @Suppress("TooGenericExceptionCaught")
+    @TypeConverter @JvmStatic
+    fun toScannerFailureList(value: String): List<ScannerFailure> = try {
+        json.decodeFromString(ListSerializer(ScannerFailure.serializer()), value)
+    } catch (e: Exception) {
+        Log.w("Converters", "Failed to deserialize scannerErrors: ${e.message}")
+        emptyList()
+    }
 }

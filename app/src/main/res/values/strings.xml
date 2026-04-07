@@ -16,6 +16,18 @@
     <string name="usage_access_banner_body">AndroDR uses the system Usage Access permission to build a forensic timeline of app opens and closes. Without it, the 24-hour activity history on the Timeline screen will be empty. Grant it once from Android settings — AndroDR cannot request this permission via the normal prompt.</string>
     <string name="usage_access_banner_cta">Open Usage Access settings</string>
 
+    <!-- Scan progress phases -->
+    <string name="scan_phase_collecting">Collecting telemetry…</string>
+    <string name="scan_phase_evaluating">Evaluating detection rules…</string>
+    <string name="scan_phase_saving">Saving scan results…</string>
+    <!-- PluralsCandidate: compact progress counter used on the Dashboard progress card -->
+    <string name="scan_progress_counter" tools:ignore="PluralsCandidate">%1$d of %2$d checks complete</string>
+
+    <!-- Partial-scan warning banner — shown when scannerErrors is non-empty -->
+    <string name="partial_scan_banner_title">Scan incomplete</string>
+    <!-- PluralsCandidate: compact failure counter -->
+    <string name="partial_scan_banner_body" tools:ignore="PluralsCandidate">%1$d check(s) failed — results may be inaccurate. Retry the scan to get a complete picture.</string>
+
     <string name="summary_app_risks">App Risks</string>
     <string name="summary_device_flags">Device Flags</string>
     <string name="summary_dns_matched">Suspicious Connections</string>

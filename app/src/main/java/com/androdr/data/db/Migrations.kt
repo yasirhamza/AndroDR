@@ -210,3 +210,19 @@ val MIGRATION_9_10 = object : Migration(9, 10) {
         database.execSQL("DROP TABLE IF EXISTS cert_hash_ioc_entries")
     }
 }
+
+/**
+ * Adds the scannerErrors column to ScanResult. Old rows are backfilled with
+ * an empty JSON list so historical scans are treated as "fully succeeded"
+ * (no failures recorded). New scans starting from this version onward will
+ * populate this column with any per-scanner exceptions recorded during the
+ * telemetry-collection phase; see ScanOrchestrator.trackScanner().
+ */
+@Suppress("MagicNumber")
+val MIGRATION_10_11 = object : Migration(10, 11) {
+    override fun migrate(database: SupportSQLiteDatabase) {
+        database.execSQL(
+            "ALTER TABLE ScanResult ADD COLUMN scannerErrors TEXT NOT NULL DEFAULT '[]'"
+        )
+    }
+}
