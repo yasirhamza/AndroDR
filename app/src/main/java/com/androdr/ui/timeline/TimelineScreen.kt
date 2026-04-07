@@ -420,11 +420,11 @@ fun TimelineScreen(
                 val clusterBuilder = mutableMapOf<String, MutableList<EventCluster>>()
                 val standaloneBuilder = mutableMapOf<String, MutableList<ForensicTimelineEvent>>()
                 clusters.forEach { cluster ->
-                    val key = dateKey(cluster.events.first().timestamp)
+                    val key = dateKey(cluster.events.first().startTimestamp)
                     clusterBuilder.getOrPut(key) { mutableListOf() }.add(cluster)
                 }
                 standalone.forEach { event ->
-                    val key = dateKey(event.timestamp)
+                    val key = dateKey(event.startTimestamp)
                     standaloneBuilder.getOrPut(key) { mutableListOf() }.add(event)
                 }
                 val allKeys = (clusterBuilder.keys + standaloneBuilder.keys).toSet()
@@ -439,17 +439,17 @@ fun TimelineScreen(
                     DateEntry(
                         clusters = clusterBuilder[key].orEmpty()
                             .sortedByDescending { c ->
-                                c.events.maxOfOrNull { it.timestamp } ?: 0L
+                                c.events.maxOfOrNull { it.startTimestamp } ?: 0L
                             },
                         standaloneEvents = standaloneBuilder[key].orEmpty()
-                            .sortedByDescending { it.timestamp }
+                            .sortedByDescending { it.startTimestamp }
                     )
                 }
                 val sorted = immutableMap.keys.sortedByDescending { key ->
                     val allEvents =
                         (immutableMap[key]?.clusters?.flatMap { it.events }.orEmpty()) +
                             (immutableMap[key]?.standaloneEvents.orEmpty())
-                    allEvents.maxOfOrNull { it.timestamp } ?: 0L
+                    allEvents.maxOfOrNull { it.startTimestamp } ?: 0L
                 }
                 immutableMap to sorted
             }

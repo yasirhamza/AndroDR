@@ -154,8 +154,8 @@ class TimelineViewModel @Inject constructor(
             groups.add(ScanGroup(
                 scanId = -1,
                 // Same invalid-timestamp filter as the per-scan groups above.
-                timestamp = ungrouped.filter { it.timestamp > 0L }
-                    .minOfOrNull { it.timestamp }
+                timestamp = ungrouped.filter { it.startTimestamp > 0L }
+                    .minOfOrNull { it.startTimestamp }
                     ?: 0L,
                 isFromBugreport = false,
                 eventCount = ungrouped.size,

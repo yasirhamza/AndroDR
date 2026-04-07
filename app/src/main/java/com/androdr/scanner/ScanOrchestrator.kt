@@ -442,8 +442,8 @@ class ScanOrchestrator @Inject constructor(
         // unmatched AppOps records (packages whose dangerous-op usage
         // didn't trigger any SIGMA rule) still appear as before.
         val coveredByFinding = findingEvents
-            .filter { it.timestamp > 0L && it.packageName.isNotEmpty() }
-            .mapTo(HashSet()) { it.packageName to it.timestamp }
+            .filter { it.startTimestamp > 0L && it.packageName.isNotEmpty() }
+            .mapTo(HashSet()) { it.packageName to it.startTimestamp }
         val rawEvents = result.timeline
             .filterNot { raw ->
                 raw.packageName != null &&

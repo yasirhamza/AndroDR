@@ -9,7 +9,7 @@ import com.androdr.sigma.Finding
 import com.androdr.sigma.FindingCategory
 
 fun DnsEvent.toForensicTimelineEvent(): ForensicTimelineEvent = ForensicTimelineEvent(
-    timestamp = this.timestamp,
+    startTimestamp = this.timestamp,
     source = "dns_monitor",
     category = if (this.reason != null) "ioc_match" else "dns_query",
     description = "DNS: ${this.domain}" +
@@ -59,7 +59,7 @@ fun Finding.toForensicTimelineEvent(
     }
 
     return ForensicTimelineEvent(
-        timestamp = eventTimestamp,
+        startTimestamp = eventTimestamp,
         source = if (isBugreport) "bugreport_analysis" else "app_scanner",
         category = when (this.category) {
             FindingCategory.APP_RISK -> "app_risk"
@@ -87,7 +87,7 @@ fun Finding.toForensicTimelineEvent(
 
 fun TimelineEvent.toForensicTimelineEvent(scanResultId: Long = -1): ForensicTimelineEvent =
     ForensicTimelineEvent(
-        timestamp = this.timestamp,
+        startTimestamp = this.timestamp,
         source = this.source,
         category = this.category,
         description = this.description,

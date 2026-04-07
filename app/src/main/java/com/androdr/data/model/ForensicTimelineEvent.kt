@@ -7,16 +7,19 @@ import androidx.room.PrimaryKey
 @Entity(
     tableName = "forensic_timeline",
     indices = [
-        Index("timestamp"),
+        Index("startTimestamp"),
         Index("severity"),
         Index("packageName"),
-        Index("source")
+        Index("source"),
+        Index("kind")
     ]
 )
 data class ForensicTimelineEvent(
     @PrimaryKey(autoGenerate = true)
     val id: Long = 0,
-    val timestamp: Long,
+    val startTimestamp: Long,
+    val endTimestamp: Long? = null,
+    val kind: String = "event",
     val timestampPrecision: String = "exact",
     val source: String,
     val category: String,

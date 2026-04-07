@@ -226,3 +226,32 @@ val MIGRATION_10_11 = object : Migration(10, 11) {
         )
     }
 }
+
+/**
+ * Sprint 75: ForensicTimelineEvent gains range semantics + a kind discriminator
+ * so correlation signals (derived from SIGMA rules operating over time windows)
+ * can live in the same table as raw events. Existing rows are backfilled via
+ * SQL column defaults (`endTimestamp = NULL`, `kind = 'event'`), and the legacy
+ * `timestamp` column is renamed to `startTimestamp`.
+ */
+@Suppress("MagicNumber")
+val MIGRATION_11_12 = object : Migration(11, 12) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        // Additive: new nullable column for range end
+        db.execSQL("ALTER TABLE forensic_timeline ADD COLUMN endTimestamp INTEGER DEFAULT NULL")
+        // Additive: discriminator distinguishing raw events from correlation signals
+        db.execSQL("ALTER TABLE forensic_timeline ADD COLUMN kind TEXT NOT NULL DEFAULT 'event'")
+        // Rename timestamp -> startTimestamp (Room 2.4+ / SQLite 3.25+ supports RENAME COLUMN)
+        db.execSQL("ALTER TABLE forensic_timeline RENAME COLUMN timestamp TO startTimestamp")
+        // Drop the old index and recreate it against the renamed column, plus a new kind index.
+        db.execSQL("DROP INDEX IF EXISTS index_forensic_timeline_timestamp")
+        db.execSQL(
+            "CREATE INDEX IF NOT EXISTS index_forensic_timeline_startTimestamp " +
+                "ON forensic_timeline(startTimestamp)"
+        )
+        db.execSQL(
+            "CREATE INDEX IF NOT EXISTS index_forensic_timeline_kind " +
+                "ON forensic_timeline(kind)"
+        )
+    }
+}

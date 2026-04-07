@@ -57,7 +57,7 @@ class CorrelationEngine @Inject constructor() {
             .filter { it.size >= 2 }
             .forEach { group ->
                 clusters.add(EventCluster(
-                    events = group.sortedBy { it.timestamp },
+                    events = group.sortedBy { it.startTimestamp },
                     pattern = CorrelationPattern.PRE_LINKED,
                     label = "Linked events"
                 ))
@@ -70,7 +70,7 @@ class CorrelationEngine @Inject constructor() {
 
         for ((pkg, pkgEvents) in byPackage) {
             if (pkgEvents.size < 2) continue
-            val sorted = pkgEvents.sortedBy { it.timestamp }
+            val sorted = pkgEvents.sortedBy { it.startTimestamp }
 
             // Pattern: Install-from-unknown-then-admin (unbounded time window)
             detectInstallThenAdmin(sorted, pkg, clusters, used)
@@ -90,7 +90,7 @@ class CorrelationEngine @Inject constructor() {
         val byPkg2 = stillRemaining.groupBy { it.packageName }
         for ((_, pkgEvents) in byPkg2) {
             if (pkgEvents.size < 2) continue
-            val sorted = pkgEvents.sortedBy { it.timestamp }
+            val sorted = pkgEvents.sortedBy { it.startTimestamp }
             detectGenericTemporal(sorted, clusters, used)
         }
 
@@ -116,7 +116,7 @@ class CorrelationEngine @Inject constructor() {
         for (install in installs) {
             val matchingAdmin = admins.firstOrNull { it.id !in used }
             if (matchingAdmin != null) {
-                val group = listOf(install, matchingAdmin).sortedBy { it.timestamp }
+                val group = listOf(install, matchingAdmin).sortedBy { it.startTimestamp }
                 clusters.add(EventCluster(group, CorrelationPattern.INSTALL_THEN_ADMIN,
                     "Sideloaded app registered device admin"))
                 used.addAll(group.map { it.id })
@@ -138,10 +138,10 @@ class CorrelationEngine @Inject constructor() {
 
         for (perm in permEvents) {
             val matchingC2 = c2Events.firstOrNull {
-                it.id !in used && kotlin.math.abs(it.timestamp - perm.timestamp) <= WINDOW_30_MIN
+                it.id !in used && kotlin.math.abs(it.startTimestamp - perm.startTimestamp) <= WINDOW_30_MIN
             }
             if (matchingC2 != null) {
-                val group = listOf(perm, matchingC2).sortedBy { it.timestamp }
+                val group = listOf(perm, matchingC2).sortedBy { it.startTimestamp }
                 clusters.add(EventCluster(group, CorrelationPattern.PERMISSION_THEN_C2,
                     "Permission use followed by C2 communication"))
                 used.addAll(group.map { it.id })
@@ -161,7 +161,7 @@ class CorrelationEngine @Inject constructor() {
         // Sliding window: find groups of 3+ permission events within 5 min
         var windowStart = 0
         for (i in permEvents.indices) {
-            while (permEvents[i].timestamp - permEvents[windowStart].timestamp > WINDOW_5_MIN) {
+            while (permEvents[i].startTimestamp - permEvents[windowStart].startTimestamp > WINDOW_5_MIN) {
                 windowStart++
             }
             if (i - windowStart + 1 >= 3) {
@@ -190,11 +190,11 @@ class CorrelationEngine @Inject constructor() {
 
         for (install in installs) {
             val matchingPerms = perms.filter {
-                it.id !in used && it.timestamp > install.timestamp &&
-                    it.timestamp - install.timestamp <= WINDOW_1_HOUR
+                it.id !in used && it.startTimestamp > install.startTimestamp &&
+                    it.startTimestamp - install.startTimestamp <= WINDOW_1_HOUR
             }
             if (matchingPerms.isNotEmpty()) {
-                val group = (listOf(install) + matchingPerms).sortedBy { it.timestamp }
+                val group = (listOf(install) + matchingPerms).sortedBy { it.startTimestamp }
                 clusters.add(EventCluster(group, CorrelationPattern.INSTALL_THEN_PERMISSION,
                     "App installed then accessed permissions"))
                 used.addAll(group.map { it.id })
@@ -208,7 +208,7 @@ class CorrelationEngine @Inject constructor() {
     ) {
         var clusterStart = 0
         for (i in 1 until sorted.size) {
-            val gap = sorted[i].timestamp - sorted[i - 1].timestamp
+            val gap = sorted[i].startTimestamp - sorted[i - 1].startTimestamp
             if (gap > WINDOW_30_MIN || gap < 0) {
                 emitGenericCluster(sorted, clusterStart, i, clusters, used)
                 clusterStart = i

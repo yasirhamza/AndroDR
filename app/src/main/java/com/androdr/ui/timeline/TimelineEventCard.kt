@@ -78,7 +78,7 @@ fun TimelineEventCard(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = formatTime(event.timestamp),
+                        text = formatTime(event.startTimestamp),
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -122,7 +122,7 @@ fun TimelineEventDetailSheet(
                 SeverityChip(level = event.severity, active = true)
             }
             Text(
-                text = "${formatTime(event.timestamp)}  ${formatDate(event.timestamp)}",
+                text = "${formatTime(event.startTimestamp)}  ${formatDate(event.startTimestamp)}",
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -329,8 +329,8 @@ fun ScanGroupHeader(
 private fun formatTimeRange(events: List<ForensicTimelineEvent>): String {
     if (events.isEmpty()) return ""
     val fmt = SimpleDateFormat("HH:mm", Locale.US)
-    val first = events.minOf { it.timestamp }
-    val last = events.maxOf { it.timestamp }
+    val first = events.minOf { it.startTimestamp }
+    val last = events.maxOf { it.startTimestamp }
     return if (first > 0 && last > 0) {
         "${fmt.format(Date(first))}\u2013${fmt.format(Date(last))}"
     } else ""

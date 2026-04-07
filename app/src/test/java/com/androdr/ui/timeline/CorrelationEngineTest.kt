@@ -14,7 +14,7 @@ class CorrelationEngineTest {
         category: String, description: String = "test",
         correlationId: String = "", iocIndicator: String = ""
     ) = ForensicTimelineEvent(
-        id = id, timestamp = timestamp, source = "test",
+        id = id, startTimestamp = timestamp, source = "test",
         category = category, description = description,
         severity = "HIGH", packageName = packageName,
         correlationId = correlationId, iocIndicator = iocIndicator

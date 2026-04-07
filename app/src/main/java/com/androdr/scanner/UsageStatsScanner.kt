@@ -75,7 +75,7 @@ class UsageStatsScanner @Inject constructor(
 
         // Deduplicate rapid transitions of same app+category within same minute
         val deduped = result.distinctBy {
-            "${it.packageName}|${it.category}|${it.timestamp / 60000}"
+            "${it.packageName}|${it.category}|${it.startTimestamp / 60000}"
         }
 
         Log.d(TAG, "Collected ${deduped.size} usage events (from ${result.size} raw)")
@@ -119,7 +119,7 @@ class UsageStatsScanner @Inject constructor(
         }
 
         result.add(ForensicTimelineEvent(
-            timestamp = event.timeStamp,
+            startTimestamp = event.timeStamp,
             source = "usage_stats",
             category = category,
             description = "App $verb: $appLabel",
