@@ -429,9 +429,20 @@ fun TimelineScreen(
                 }
                 val allKeys = (clusterBuilder.keys + standaloneBuilder.keys).toSet()
                 val immutableMap: Map<String, DateEntry> = allKeys.associateWith { key ->
+                    // Sort bucket contents chronologically (newest first within
+                    // the day) before rendering. The CorrelationEngine returns
+                    // clusters grouped by package — its output is NOT in
+                    // chronological order — and naively appending to per-day
+                    // builders preserved that package-order, scrambling the
+                    // events visually within each day. Re-sorting by event
+                    // timestamp here restores the chronology the user expects.
                     DateEntry(
-                        clusters = clusterBuilder[key].orEmpty(),
+                        clusters = clusterBuilder[key].orEmpty()
+                            .sortedByDescending { c ->
+                                c.events.maxOfOrNull { it.timestamp } ?: 0L
+                            },
                         standaloneEvents = standaloneBuilder[key].orEmpty()
+                            .sortedByDescending { it.timestamp }
                     )
                 }
                 val sorted = immutableMap.keys.sortedByDescending { key ->

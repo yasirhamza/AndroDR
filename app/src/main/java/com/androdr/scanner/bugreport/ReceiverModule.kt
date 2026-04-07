@@ -33,6 +33,18 @@ class ReceiverModule @Inject constructor() : BugreportModule {
         RegexOption.MULTILINE
     )
 
+    /**
+     * Safety cap on how much text we read past the LAST sensitive intent's
+     * header when building its per-intent block. Intermediate intents are
+     * naturally bounded by the next intent's start position, so this cap
+     * only applies to the final one in the list. Chosen large enough to
+     * hold thousands of receiver entries (the biggest realistic intent
+     * block is ~tens of KB on any device), small enough to prevent a
+     * degenerate bug report from making us substring most of a 16+ MB
+     * package section.
+     */
+    private val lastIntentBlockCap = 256 * 1024
+
     override suspend fun analyze(sectionText: String, iocResolver: IndicatorResolver): ModuleResult {
         val telemetry = mutableListOf<Map<String, Any?>>()
         val seen = mutableSetOf<Pair<String, String>>() // (packageName, intentAction)
@@ -43,13 +55,48 @@ class ReceiverModule @Inject constructor() : BugreportModule {
         val nonDataStart = sectionText.indexOf("Non-Data Actions:", receiverTableStart)
         if (nonDataStart < 0) return ModuleResult(telemetryService = "receiver_audit")
 
-        for (intent in sensitiveIntents) {
-            val intentStart = sectionText.indexOf("$intent:", nonDataStart)
-            if (intentStart < 0) continue
+        // Pre-compute the position of every sensitive intent header in ONE
+        // pass, then walk the sorted list in linear order. Each intent's
+        // block is naturally bounded by the next intent's start position,
+        // so no regex scans over the full 16+ MB package section are
+        // needed at all.
+        //
+        // Why this matters: the previous implementation called
+        // `nextHeaderRegex.find(sectionText, intentStart + ...)` inside
+        // the per-intent loop. That `.find()` linearly scans from
+        // `intentStart` to the end of the whole section (or until a
+        // match). For 7 intents on a 16 MB package section, that was
+        // roughly 7 × 16 MB = ~110 MB of MULTILINE regex scanning and
+        // ~31 seconds of wall time on a real Galaxy S25 Ultra bug report.
+        //
+        // An earlier version of this fix tried to slice a bounded
+        // "Non-Data Actions" block up-front and do all the per-intent
+        // work inside it, but the chosen delimiter was wrong (it matched
+        // intent headers themselves) AND the 512 KB cap truncated the
+        // block on real devices, causing a correctness regression from
+        // 545 telemetry records down to 63 — silently dropping ~88% of
+        // the data. See commit history for detail. The intent-positions
+        // approach below avoids that class of bug entirely: each intent's
+        // block ends at a position that is ALREADY known to be another
+        // intent's start, so we can never accidentally cut off receiver
+        // entries that belong to the current intent.
+        val intentPositions: List<Pair<String, Int>> = sensitiveIntents
+            .mapNotNull { intent ->
+                val idx = sectionText.indexOf("$intent:", nonDataStart)
+                if (idx >= 0) intent to idx else null
+            }
+            .sortedBy { it.second }
 
-            val nextHeaderRegex = Regex("""^\s{18,}\S+.*:$""", RegexOption.MULTILINE)
-            val nextHeader = nextHeaderRegex.find(sectionText, intentStart + intent.length + 1)
-            val blockEnd = nextHeader?.range?.first ?: sectionText.length
+        for ((i, pair) in intentPositions.withIndex()) {
+            val (intent, intentStart) = pair
+            // The block for this intent extends from its header up to the
+            // next intent's header (or a bounded safety cap for the last
+            // intent in the list).
+            val blockEnd = if (i + 1 < intentPositions.size) {
+                intentPositions[i + 1].second
+            } else {
+                minOf(intentStart + lastIntentBlockCap, sectionText.length)
+            }
             val block = sectionText.substring(intentStart, blockEnd)
 
             receiverEntryRegex.findAll(block).forEach { match ->

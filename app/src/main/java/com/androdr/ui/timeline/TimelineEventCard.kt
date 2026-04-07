@@ -180,6 +180,7 @@ private fun TagChip(text: String, color: Color) {
     )
 }
 
+@Suppress("LongMethod") // Compose card renders header row, time range, and per-event children with connectors
 @Composable
 fun CorrelationClusterCard(
     cluster: EventCluster,
@@ -211,20 +212,31 @@ fun CorrelationClusterCard(
         Column(modifier = Modifier.padding(12.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
+                // Cluster label can be long (e.g. "Multiple surveillance
+                // permissions accessed rapidly (3)") so give it the weighted
+                // flex slot and allow a second line with ellipsis overflow.
+                // Previously this was an unweighted Text next to a
+                // SpaceBetween sibling, which let the label push the time
+                // range off-screen or forced mid-word single-line cutoff.
                 Text(
                     "${cluster.label} (${cluster.events.size})",
                     style = MaterialTheme.typography.labelMedium,
                     fontWeight = FontWeight.Bold,
-                    color = clusterColor
+                    color = clusterColor,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f)
                 )
                 val timeRange = formatTimeRange(cluster.events)
                 Text(
                     timeRange,
                     style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
             }
             Spacer(modifier = Modifier.height(8.dp))

@@ -64,6 +64,15 @@ class ScanOrchestrator @Inject constructor(
         private set
 
     /**
+     * Wall-clock timestamp of the last successful [AppScanner.collectTelemetry]
+     * call, used by [analyzeBugReport] to decide whether the cached
+     * [lastAppTelemetry] is fresh enough to reuse for APK-hash enrichment.
+     * Initialized to 0 so a brand-new process always does a fresh scan on
+     * first bug report analysis.
+     */
+    @Volatile private var lastAppTelemetryTimestamp: Long = 0L
+
+    /**
      * Live progress for the currently-running scan (or [ScanProgress.Idle]
      * when no scan is active). The Dashboard UI observes this to render the
      * per-phase progress indicator and stage counter.
@@ -230,6 +239,11 @@ class ScanOrchestrator @Inject constructor(
 
         val appTelemetry = appTelemetryDeferred.await()
         lastAppTelemetry = appTelemetry // cache for report export
+        // Stamp the cache freshness so analyzeBugReport() can decide
+        // whether to reuse this telemetry or do its own fresh scan.
+        if (appTelemetry.isNotEmpty()) {
+            lastAppTelemetryTimestamp = System.currentTimeMillis()
+        }
         val deviceTelemetry = deviceTelemetryDeferred.await()
         val processTelemetry = processTelemetryDeferred.await()
         val fileTelemetry = fileTelemetryDeferred.await()
@@ -343,32 +357,54 @@ class ScanOrchestrator @Inject constructor(
      * @return [BugReportAnalyzer.BugReportAnalysisResult] with SIGMA findings,
      *         legacy findings, and timeline events.
      */
-    @Suppress("TooGenericExceptionCaught")
+    @Suppress("TooGenericExceptionCaught", "LongMethod")
     suspend fun analyzeBugReport(uri: Uri): BugReportAnalyzer.BugReportAnalysisResult {
         initRuleEngine()
         val result = bugReportAnalyzer.analyze(uri)
 
         // Collect app telemetry for hash enrichment — same device, same apps.
-        // A failure here is recorded as a scanner error on the persisted
-        // ScanResult so the UI can still show the user that enrichment was
-        // incomplete; it does not block the bug-report findings themselves.
+        //
+        // Two things combined here:
+        //  1. AppTelemetry cache reuse: if a recent runtime scan populated
+        //     `lastAppTelemetry` within the freshness window, reuse it
+        //     instead of re-running AppScanner (which takes ~14s on a real
+        //     device with ~500 installed packages).
+        //  2. Proper error handling: on cache miss, a cancellation must
+        //     still propagate, and any other exception from collectTelemetry
+        //     is recorded as a scanner failure on the persisted ScanResult
+        //     so the Dashboard partial-scan banner fires.
         val bugReportScannerErrors = mutableListOf<ScannerFailure>()
-        val appTelemetry = try {
-            appScanner.collectTelemetry()
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            Log.e(TAG, "appScanner failed during bug-report enrichment", e)
-            bugReportScannerErrors.add(
-                ScannerFailure(
-                    scanner = "appScanner",
-                    exception = e::class.simpleName ?: "Exception",
-                    message = e.message
-                )
-            )
-            emptyList()
-        }
-        lastAppTelemetry = appTelemetry
+        val cacheAgeMs = System.currentTimeMillis() - lastAppTelemetryTimestamp
+        val appTelemetry: List<com.androdr.data.model.AppTelemetry> =
+            if (lastAppTelemetryTimestamp > 0L &&
+                cacheAgeMs <= APP_TELEMETRY_CACHE_MAX_AGE_MS &&
+                lastAppTelemetry.isNotEmpty()
+            ) {
+                Log.i(TAG, "analyzeBugReport: reusing cached app telemetry " +
+                    "(${lastAppTelemetry.size} entries, ${cacheAgeMs}ms old)")
+                lastAppTelemetry
+            } else {
+                try {
+                    appScanner.collectTelemetry().also { fresh ->
+                        if (fresh.isNotEmpty()) {
+                            lastAppTelemetry = fresh
+                            lastAppTelemetryTimestamp = System.currentTimeMillis()
+                        }
+                    }
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    Log.e(TAG, "appScanner failed during bug-report enrichment", e)
+                    bugReportScannerErrors.add(
+                        ScannerFailure(
+                            scanner = "appScanner",
+                            exception = e::class.simpleName ?: "Exception",
+                            message = e.message
+                        )
+                    )
+                    emptyList()
+                }
+            }
         val hashByPkg = appTelemetry.filter { !it.apkHash.isNullOrEmpty() }
             .associateBy({ it.packageName }, { it.apkHash!! })
 
@@ -390,14 +426,42 @@ class ScanOrchestrator @Inject constructor(
         runCatching { scanRepository.saveScan(scanResult) }
         runCatching {
             val timelineEvents = mutableListOf<com.androdr.data.model.ForensicTimelineEvent>()
-            timelineEvents.addAll(result.findings.filter { it.triggered }
+
+            // Phase 1: finding-derived events. Each triggered finding becomes
+            // one ForensicTimelineEvent. Bug-report findings may inherit a
+            // real `event_time_ms` from their underlying telemetry record
+            // (see TimelineAdapter.Finding.toForensicTimelineEvent) — so a
+            // "Camera Access" finding now shows up at the actual time the
+            // AppOps access was recorded, not at 0L / "Unknown".
+            val findingEvents = result.findings.filter { it.triggered }
                 .map { finding ->
                     val event = finding.toForensicTimelineEvent(scanResult, isBugreport = true)
                     if (event.apkHash.isEmpty() && event.packageName.isNotEmpty()) {
                         event.copy(apkHash = hashByPkg[event.packageName] ?: "")
                     } else event
-                })
-            timelineEvents.addAll(result.timeline.map { it.toForensicTimelineEvent(scanResult.id) })
+                }
+            timelineEvents.addAll(findingEvents)
+
+            // Phase 2: raw module-produced timeline events, **deduplicated**
+            // against finding-derived events that inherited the same
+            // (packageName, timestamp) tuple. Without this filter the
+            // Timeline would show a "Camera Access" finding row right next
+            // to a raw "com.X used CAMERA at ..." row with the identical
+            // time — two rows describing the same underlying evidence,
+            // which reads as a duplicate to the user. Raw events for
+            // unmatched AppOps records (packages whose dangerous-op usage
+            // didn't trigger any SIGMA rule) still appear as before.
+            val coveredByFinding = findingEvents
+                .filter { it.timestamp > 0L && it.packageName.isNotEmpty() }
+                .mapTo(HashSet()) { it.packageName to it.timestamp }
+            val rawEvents = result.timeline
+                .filterNot { raw ->
+                    raw.packageName != null &&
+                        (raw.packageName to raw.timestamp) in coveredByFinding
+                }
+                .map { it.toForensicTimelineEvent(scanResult.id) }
+            timelineEvents.addAll(rawEvents)
+
             forensicTimelineEventDao.insertAll(timelineEvents)
         }
 
@@ -454,6 +518,17 @@ class ScanOrchestrator @Inject constructor(
 
         /** Rule IDs that represent confirmed malware matches (IOC database hits). */
         private val KNOWN_MALWARE_RULE_IDS = setOf("androdr-001", "androdr-002")
+
+        /**
+         * Maximum age of the cached app telemetry that [analyzeBugReport]
+         * will reuse for bug-report APK-hash enrichment instead of running
+         * a fresh [AppScanner.collectTelemetry] call. Chosen to cover the
+         * typical "Run Scan → immediately analyze a bug report" flow
+         * without paying the ~14s AppScanner cost twice on real devices,
+         * but short enough that stale caches don't mask recent app
+         * installations or updates.
+         */
+        private const val APP_TELEMETRY_CACHE_MAX_AGE_MS = 5L * 60_000L // 5 minutes
 
         /** App categories treated as trusted by the known_good_app_db IOC lookup. */
         private val TRUSTED_CATEGORIES = setOf(
