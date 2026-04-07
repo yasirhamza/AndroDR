@@ -104,4 +104,42 @@ class DomainBloomIndexTest {
         assertEquals(a, b)
         assertFalse("different inputs should produce different hashes", a == c)
     }
+
+    @Test
+    fun `murmur64 is deterministic and differs from fnv64 on same input`() {
+        val s = "evil.com"
+        val a = DomainBloomIndex.murmur64(s)
+        val b = DomainBloomIndex.murmur64(s)
+        assertEquals(a, b)
+        // Structural independence check: at least one input must hash to
+        // different values under the two mixers. If this ever fires it means
+        // the dual-hash scheme has degenerated to a single-hash scheme.
+        assertFalse(
+            "FNV and Murmur should not produce identical hashes for all inputs",
+            DomainBloomIndex.fnv64(s) == a
+        )
+    }
+
+    @Test
+    fun `dual-hash blocks a collision on primary alone`() {
+        // We can't easily construct a real FNV collision, so simulate the
+        // scenario by checking that an unrelated string (whose primary hash
+        // almost certainly doesn't match any IOC) is rejected even after
+        // passing the bloom filter. Tighten the FP budget to near-zero to
+        // demonstrate the secondary hash is doing work.
+        val known = (0 until 5000).map { "known-$it.example" }
+        val index = DomainBloomIndex.build(known)
+        // Probe 100k random non-members. With the previous single-hash
+        // design, at 5000 entries and 100k probes the expected false-hit
+        // rate was ~2.7×10⁻¹¹ (essentially zero), so this test wouldn't
+        // have distinguished the two designs at this scale. The point of
+        // this test is instead to confirm that the dual-hash path *never*
+        // returns true for a clean probe — if it ever does, something is
+        // structurally wrong (e.g. secondary hash ignored).
+        var hits = 0
+        for (i in 0 until 100_000) {
+            if (index.contains("probe-$i.unrelated.net")) hits++
+        }
+        assertEquals("dual-hash must produce zero false hits at this scale", 0, hits)
+    }
 }

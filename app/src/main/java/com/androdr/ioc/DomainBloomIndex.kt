@@ -25,15 +25,16 @@ import java.util.Locale
  *     At ~3 MB for 371k entries it fits in a single `LongArray` and answers
  *     bloom-positive queries in ~1 µs via `Arrays.binarySearch`.
  *
- * False negatives are impossible by bloom invariant. False positives in stage 1
- * are almost always resolved by stage 2, with one accepted residual risk: if a
- * *non-IOC* domain's 64-bit FNV-1a hash happens to collide with the hash of a
- * real IOC entry, the non-IOC will be reported as a hit (because stage 2's
- * binary search matches on hash, not string). At 371k entries over 2^64 slots,
- * the birthday probability of any such collision is ~3.7 × 10⁻⁹ — accepted at
- * this scale. If the IOC set ever exceeds a few million entries, switch to a
- * stronger mixer (xxHash64 or Murmur3-128 truncated) and/or store `(hash,
- * secondaryHash)` pairs so equality requires both to match.
+ * False negatives are impossible by bloom invariant. Stage 2 uses **two
+ * independent 64-bit hash functions** (FNV-1a and Murmur2-64A) stored in
+ * co-sorted parallel arrays, and a query is only considered a hit if both
+ * hashes match. This drops the collision probability from ~10⁻⁹ (single
+ * 64-bit hash at 371k entries, the birthday bound) to ~10⁻¹⁸ — effectively
+ * zero, and crucially independent of any clustering bias in either hash
+ * function individually. The two hashes are structurally distinct (FNV is
+ * a byte-at-a-time multiply-xor, Murmur2 is an 8-byte-at-a-time
+ * multiply-shift-xor), so a collision would require a simultaneous
+ * preimage-hit in two unrelated mixers on the same input pair.
  *
  * ## Thread-safety
  *
@@ -43,18 +44,42 @@ import java.util.Locale
  */
 internal class DomainBloomIndex private constructor(
     private val bloom: BloomFilter,
-    private val sortedHashes: LongArray
+    // Co-sorted parallel arrays: primaryHashes[i] and secondaryHashes[i] always
+    // refer to the same indexed domain. A query is a hit iff both hashes match.
+    private val primaryHashes: LongArray,
+    private val secondaryHashes: LongArray
 ) {
 
     /** `true` iff [domain] is present in the indexed IOC set. */
+    @Suppress("ReturnCount") // dual-hash walk uses early returns at each collision-adjacent probe
     fun contains(domain: String): Boolean {
         if (!bloom.mightContain(domain)) return false        // ~99% of negatives exit here
-        val h = fnv64(domain)
-        return sortedHashes.binarySearch(h) >= 0
+        val p = fnv64(domain)
+        val idx = primaryHashes.binarySearch(p)
+        if (idx < 0) return false
+        val s = murmur64(domain)
+        // Dual-hash check: require matching secondary at the same index. If
+        // primary hash collisions ever occur between two distinct IOC entries
+        // (~10⁻⁹ at 371k entries), `binarySearch` returns *some* matching
+        // index; walk adjacent entries whose primary matches and test their
+        // secondary too. This loop terminates in O(1) under normal conditions
+        // and is bounded by the (tiny) expected number of primary duplicates.
+        if (secondaryHashes[idx] == s) return true
+        var left = idx - 1
+        while (left >= 0 && primaryHashes[left] == p) {
+            if (secondaryHashes[left] == s) return true
+            left--
+        }
+        var right = idx + 1
+        while (right < primaryHashes.size && primaryHashes[right] == p) {
+            if (secondaryHashes[right] == s) return true
+            right++
+        }
+        return false
     }
 
     /** Number of distinct domains indexed. */
-    val size: Int get() = sortedHashes.size
+    val size: Int get() = primaryHashes.size
 
     companion object {
         /** Expected false-positive rate for the bloom filter stage (post-build). */
@@ -82,22 +107,33 @@ internal class DomainBloomIndex private constructor(
                 expectedInsertions = normalized.size.coerceAtLeast(1),
                 fpRate = TARGET_FP_RATE
             )
-            val hashes = LongArray(normalized.size)
+            val n = normalized.size
+            val rawPrimary   = LongArray(n)
+            val rawSecondary = LongArray(n)
             var i = 0
             for (d in normalized) {
                 bloom.put(d)
-                hashes[i++] = fnv64(d)
+                rawPrimary[i]   = fnv64(d)
+                rawSecondary[i] = murmur64(d)
+                i++
             }
-            hashes.sort()
-            return DomainBloomIndex(bloom, hashes)
+            // Co-sort the two parallel arrays by primary hash. We sort an
+            // Integer[] of indices and then materialize both output arrays
+            // from the permutation. The transient boxed-Integer array is
+            // allocated once per 12 h refresh — negligible for the memory
+            // safety win this buys.
+            val order = Array(n) { it }
+            java.util.Arrays.sort(order) { a, b -> rawPrimary[a].compareTo(rawPrimary[b]) }
+            val primary   = LongArray(n) { rawPrimary[order[it]] }
+            val secondary = LongArray(n) { rawSecondary[order[it]] }
+            return DomainBloomIndex(bloom, primary, secondary)
         }
 
         /** Empty index — used before the first refresh completes. */
         fun empty(): DomainBloomIndex = build(emptyList())
 
         /**
-         * 64-bit FNV-1a hash. Chosen for simplicity and zero dependencies; the
-         * collision risk at our set size is negligible (see class KDoc).
+         * Primary hash: 64-bit FNV-1a. Byte-at-a-time multiply-xor.
          */
         internal fun fnv64(s: String): Long {
             var h = FNV_OFFSET_64
@@ -108,8 +144,57 @@ internal class DomainBloomIndex private constructor(
             return h
         }
 
+        /**
+         * Secondary hash: Murmur2-64A. 8-byte-at-a-time multiply-shift-xor.
+         * Structurally distinct from FNV-1a, so a collision in both hashes on
+         * the same input pair requires two unrelated mixers to agree, which is
+         * cryptographically negligible. Used as the exact-match confirmation
+         * stage alongside [fnv64].
+         */
+        internal fun murmur64(s: String): Long {
+            var h = MURMUR_SEED xor (s.length.toLong() * MURMUR_M)
+            var i = 0
+            // Process 8 characters at a time, treating each char's low byte as
+            // one byte of the input. (Domain names are ASCII; no UTF-16
+            // surrogate handling needed.)
+            while (i + CHUNK_BYTES <= s.length) {
+                var k = 0L
+                for (j in 0 until CHUNK_BYTES) {
+                    k = k or ((s[i + j].code.toLong() and 0xFFL) shl (j * BITS_PER_BYTE))
+                }
+                k *= MURMUR_M
+                k = k xor (k ushr MURMUR_R)
+                k *= MURMUR_M
+                h = h xor k
+                h *= MURMUR_M
+                i += CHUNK_BYTES
+            }
+            // Tail
+            val tailLen = s.length - i
+            if (tailLen > 0) {
+                var tail = 0L
+                for (j in 0 until tailLen) {
+                    tail = tail or ((s[i + j].code.toLong() and 0xFFL) shl (j * BITS_PER_BYTE))
+                }
+                h = h xor tail
+                h *= MURMUR_M
+            }
+            // Finalization mix — avalanche
+            h = h xor (h ushr MURMUR_R)
+            h *= MURMUR_M
+            h = h xor (h ushr MURMUR_R)
+            return h
+        }
+
         private const val FNV_OFFSET_64: Long = -3750763034362895579L  // 0xcbf29ce484222325
         private const val FNV_PRIME_64: Long  = 1099511628211L          // 0x100000001b3
+
+        // Murmur2-64A constants (Austin Appleby, public domain).
+        private const val MURMUR_SEED: Long = -0x3c5a1b2c4d6e7f01L       // arbitrary non-zero seed
+        private const val MURMUR_M:    Long = -0x395b586ca42e166bL       // 0xc6a4a7935bd1e995
+        private const val MURMUR_R:    Int  = 47
+        private const val CHUNK_BYTES:    Int = 8
+        private const val BITS_PER_BYTE:  Int = 8
     }
 }
 
