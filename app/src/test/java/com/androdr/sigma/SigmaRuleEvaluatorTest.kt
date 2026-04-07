@@ -213,6 +213,48 @@ class SigmaRuleEvaluatorTest {
     }
 
     @Test
+    fun `rule 011 pattern - sideloaded impersonator is not exempted by package-name allowlist`() {
+        // Regression: rule 011 used `package_name|ioc_lookup: known_good_app_db` alone in
+        // filter_known_good. A sideloaded impersonator (e.g. com.android.chrome installed from
+        // an untrusted source) could be silently exempted because the allowlist match was
+        // package-name-only. Fix: require `from_trusted_store: true` in the filter clause so
+        // sideloaded apps can never reach the exemption.
+        val rule = makeRule(
+            selections = mapOf(
+                "selection" to SigmaSelection(listOf(
+                    SigmaFieldMatcher("is_system_app", SigmaModifier.EQUALS, listOf(false)),
+                    SigmaFieldMatcher("from_trusted_store", SigmaModifier.EQUALS, listOf(false)),
+                    SigmaFieldMatcher("surveillance_permission_count", SigmaModifier.GTE, listOf(2))
+                )),
+                "filter_known_good" to SigmaSelection(listOf(
+                    SigmaFieldMatcher("package_name", SigmaModifier.IOC_LOOKUP, listOf("known_good_db")),
+                    SigmaFieldMatcher("from_trusted_store", SigmaModifier.EQUALS, listOf(true))
+                ))
+            ),
+            condition = "selection and not filter_known_good"
+        )
+        val iocLookups = mapOf<String, (Any) -> Boolean>(
+            "known_good_db" to { pkg -> pkg.toString() == "com.android.chrome" }
+        )
+
+        // Sideloaded impersonator: package matches allowlist BUT not from trusted store →
+        // filter must NOT exempt → rule SHOULD fire.
+        val impersonator = mapOf<String, Any?>(
+            "is_system_app" to false,
+            "from_trusted_store" to false,
+            "surveillance_permission_count" to 3,
+            "package_name" to "com.android.chrome"
+        )
+        val impersonatorFindings = SigmaRuleEvaluator.evaluate(
+            listOf(rule), listOf(impersonator), "app_scanner", iocLookups
+        )
+        assertTrue(
+            "Sideloaded impersonator must not be exempted by package-name allowlist",
+            impersonatorFindings.any { it.triggered }
+        )
+    }
+
+    @Test
     fun `device posture rule emits safe finding when not matched`() {
         val rule = makeRule(
             service = "device_auditor",
