@@ -354,16 +354,19 @@ class DnsVpnService : VpnService() {
                 resolver?.send(dnsPayload, srcIpBytes, srcPort)
             }
             iocHit != null && domainIocBlockMode.value -> {
+                // Since IndicatorResolver switched to a bloom index, iocHit.campaign
+                // is no longer populated on the hot path; the matched label (a parent
+                // of `hostname`) is the most useful signal to record here.
                 logBuffer?.add(DnsEvent(
                     timestamp = now, domain = hostname, appUid = -1, appName = null,
-                    isBlocked = true, reason = "IOC: ${iocHit.campaign}"
+                    isBlocked = true, reason = "IOC: ${iocHit.value}"
                 ))
                 writeNxdomain(dnsPayload, txId, srcIpBytes, srcPort, outputStream)
             }
             iocHit != null -> {
                 logBuffer?.add(DnsEvent(
                     timestamp = now, domain = hostname, appUid = -1, appName = null,
-                    isBlocked = false, reason = "IOC_detect: ${iocHit.campaign}"
+                    isBlocked = false, reason = "IOC_detect: ${iocHit.value}"
                 ))
                 resolver?.send(dnsPayload, srcIpBytes, srcPort)
             }
