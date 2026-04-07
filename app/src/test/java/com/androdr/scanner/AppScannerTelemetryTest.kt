@@ -61,7 +61,9 @@ class AppScannerTelemetryTest {
         installerPkg: String? = null,
         permissions: Array<String>? = null,
         services: Array<ServiceInfo>? = null,
-        receivers: Array<ActivityInfo>? = null
+        receivers: Array<ActivityInfo>? = null,
+        firstInstallTime: Long = 0L,
+        lastUpdateTime: Long = 0L
     ): PackageInfo {
         val appInfo = ApplicationInfo().apply {
             packageName = pkgName
@@ -73,6 +75,8 @@ class AppScannerTelemetryTest {
             requestedPermissions = permissions
             this.services = services
             this.receivers = receivers
+            this.firstInstallTime = firstInstallTime
+            this.lastUpdateTime = lastUpdateTime
         }
 
         every { pm.getApplicationLabel(appInfo) } returns appLabel
@@ -220,5 +224,31 @@ class AppScannerTelemetryTest {
 
         assertEquals(1, result.size)
         assertTrue("Expected hasDeviceAdmin = true", result[0].hasDeviceAdmin)
+    }
+
+    // ── 8. Install-time fields propagate to telemetry and field map ─────────
+
+    @Test
+    fun `firstInstallTime and lastUpdateTime propagate to telemetry and field map`() = runTest {
+        val firstInstall = 1_700_000_000_000L
+        val lastUpdate = 1_710_000_000_000L
+        val pkg = buildPackageInfo(
+            pkgName = "com.example.installtime",
+            installerPkg = "com.android.vending",
+            firstInstallTime = firstInstall,
+            lastUpdateTime = lastUpdate
+        )
+        installPackages(pkg)
+
+        val result = scanner.collectTelemetry()
+
+        assertEquals(1, result.size)
+        val telemetry = result[0]
+        assertEquals(firstInstall, telemetry.firstInstallTime)
+        assertEquals(lastUpdate, telemetry.lastUpdateTime)
+
+        val fieldMap = telemetry.toFieldMap()
+        assertEquals(firstInstall, fieldMap["first_install_time"])
+        assertEquals(lastUpdate, fieldMap["last_update_time"])
     }
 }

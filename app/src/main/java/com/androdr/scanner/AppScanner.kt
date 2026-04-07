@@ -6,7 +6,6 @@ import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
 import android.os.Build
 import android.util.Log
-import androidx.annotation.VisibleForTesting
 import com.androdr.data.model.AppTelemetry
 import com.androdr.data.model.KnownAppCategory
 import com.androdr.ioc.KnownAppResolver
@@ -141,8 +140,7 @@ class AppScanner @Inject constructor(
      * anything the caller can observe beyond its return value.
      */
     @Suppress("LongMethod", "CyclomaticComplexMethod", "ReturnCount")
-    @VisibleForTesting
-    internal fun buildTelemetryForPackage(
+    private fun buildTelemetryForPackage(
         pm: PackageManager,
         pkg: PackageInfo
     ): AppTelemetry? {
