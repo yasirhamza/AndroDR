@@ -3,6 +3,9 @@ package com.androdr.network
 import android.content.Intent
 import android.net.VpnService
 import android.os.ParcelFileDescriptor
+import android.system.Os
+import android.system.OsConstants
+import android.system.StructPollfd
 import android.util.Log
 import com.androdr.data.model.DnsEvent
 import com.androdr.data.repo.ScanRepository
@@ -64,6 +67,11 @@ class DnsVpnService : VpnService() {
 
         // Maximum DNS UDP payload (RFC 1035 §2.3.4: 512 bytes; EDNS0 can be larger but 4 KB is safe)
         private const val MAX_DNS_PACKET_SIZE = 4096
+
+        // Poll timeout for the packet-read loop. Short enough that shutdown is
+        // responsive when the VPN is stopped, long enough that the loop only
+        // wakes up a handful of times per second on an idle tunnel.
+        private const val POLL_TIMEOUT_MS = 500
     }
 
     @Suppress("LateinitUsage") // Hilt @Inject requires lateinit; null-safety is guaranteed by Hilt
@@ -162,15 +170,48 @@ class DnsVpnService : VpnService() {
      *
      * Because only [DNS_SERVER_IP]/32 is routed through the tun, only DNS packets
      * arrive here; other IP traffic goes directly to the network and is unaffected.
+     *
+     * ## Why Os.poll
+     *
+     * VpnService hands out a **non-blocking** tun file descriptor. A plain
+     * `FileInputStream.read()` on that fd returns zero bytes immediately when no
+     * packet is available, so the previous `if (bytesRead <= 0) continue` guard
+     * (and its comment claiming the pattern was "idiomatic for non-blocking tun
+     * fd polling") turned the read loop into a tight busy-spin that burned
+     * ~100 % of a CPU core even when the device was idle and the tunnel had
+     * zero traffic. On-device measurement on a locked-screen emulator showed
+     * AndroDR sitting at 109 % of a core constantly — the single biggest
+     * contributor to VPN-mode battery drain.
+     *
+     * The fix is to block-wait on the fd with `android.system.Os.poll()`, which
+     * suspends the thread in the kernel until the fd has a pending packet (or
+     * the short timeout expires so we can recheck the shutdown flag). This is
+     * the same pattern NetGuard uses in its native packet path and the
+     * canonical way to block-wait on a non-blocking fd from Java.
      */
-    @Suppress("LoopWithTooManyJumpStatements") // Packet read loop uses break on IOException (VPN
-    // revoke) and continue on zero-byte reads; both are idiomatic for non-blocking tun fd polling.
+    @Suppress("LoopWithTooManyJumpStatements")
     private suspend fun runPacketLoop(fd: ParcelFileDescriptor) {
         val inputStream  = FileInputStream(fd.fileDescriptor)
         val outputStream = FileOutputStream(fd.fileDescriptor)
         val buffer       = ByteArray(MAX_DNS_PACKET_SIZE)
 
+        val pollfd = StructPollfd().apply {
+            this.fd = fd.fileDescriptor
+            events  = OsConstants.POLLIN.toShort()
+        }
+        val fds = arrayOf(pollfd)
+
         while (serviceScope.isActive && isRunning.value) {
+            @Suppress("TooGenericExceptionCaught", "SwallowedException")
+            val ready = try {
+                Os.poll(fds, POLL_TIMEOUT_MS)
+            } catch (e: Exception) {
+                Log.w(TAG, "DnsVpnService: Os.poll failed: ${e.message}")
+                break
+            }
+            if (ready == 0) continue   // timeout — recheck running flag
+            if ((pollfd.revents.toInt() and OsConstants.POLLIN) == 0) continue
+
             @Suppress("TooGenericExceptionCaught", "SwallowedException") // FileInputStream.read
             // on the tun fd throws IOException when the VPN is revoked; breaking the loop is correct.
             val bytesRead = try {
