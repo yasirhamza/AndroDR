@@ -28,6 +28,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -37,10 +38,14 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
@@ -66,6 +71,7 @@ fun DashboardScreen(
     val isScanning by viewModel.isScanning.collectAsStateWithLifecycle()
     val scanDiff by viewModel.scanDiff.collectAsStateWithLifecycle()
     val matchedDnsCount by viewModel.matchedDnsCount.collectAsStateWithLifecycle()
+    val hasUsageStatsPermission by viewModel.hasUsageStatsPermission.collectAsStateWithLifecycle()
 
     val snackbarHostState = remember { SnackbarHostState() }
 
@@ -73,6 +79,21 @@ fun DashboardScreen(
         viewModel.iocErrorEvent.collect { message ->
             snackbarHostState.showSnackbar(message)
         }
+    }
+
+    // Re-check Usage Access permission on every lifecycle resume — this is
+    // how the banner disappears the moment the user returns from the system
+    // Settings screen after granting the permission. Without this hook the
+    // banner would stay stale until the next recomposition trigger.
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                viewModel.refreshUsageStatsPermission()
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
     Scaffold(
@@ -115,6 +136,21 @@ fun DashboardScreen(
             }
 
             RiskLevelCard(latestScan = latestScan)
+
+            // Usage Access permission banner — shown when PACKAGE_USAGE_STATS
+            // hasn't been granted, which silently disables the forensic
+            // timeline feature. Previously the app just returned empty
+            // timeline data with no user-visible feedback; this banner is
+            // the only way to let the user know they need to opt in once
+            // in system Settings (PACKAGE_USAGE_STATS cannot be requested
+            // via the normal runtime permission dialog).
+            AnimatedVisibility(
+                visible = !hasUsageStatsPermission,
+                enter = fadeIn(),
+                exit = fadeOut()
+            ) {
+                UsageAccessBanner(onOpenSettings = { viewModel.openUsageStatsSettings() })
+            }
 
             PostScanGuidance(riskLevel = latestScan?.overallRiskLevel, latestScan = latestScan)
 
@@ -378,6 +414,63 @@ private fun DiffBanner(newCount: Int) {
                 fontWeight = FontWeight.SemiBold,
                 color = Color(0xFFFF9800)
             )
+        }
+    }
+}
+
+/**
+ * Informational banner shown on the Dashboard when the app does not have
+ * the `PACKAGE_USAGE_STATS` permission. Explains what the permission is
+ * used for (forensic timeline) and provides a one-tap button to open the
+ * system Usage Access settings screen where the user can grant it.
+ *
+ * We use explanatory body text rather than a one-line warning because
+ * PACKAGE_USAGE_STATS is a special-access permission the user has likely
+ * never heard of, and the consent model for a stalkerware-detection tool
+ * demands that users understand what they are enabling before they enable
+ * it. One line saying "tap to grant" is not enough consent context here.
+ */
+@Composable
+private fun UsageAccessBanner(onOpenSettings: () -> Unit) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+        )
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.Info,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(22.dp)
+                )
+                Text(
+                    text = stringResource(R.string.usage_access_banner_title),
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
+            Text(
+                text = stringResource(R.string.usage_access_banner_body),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            FilledTonalButton(
+                onClick = onOpenSettings,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(stringResource(R.string.usage_access_banner_cta))
+            }
         }
     }
 }

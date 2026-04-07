@@ -32,7 +32,7 @@ class UsageStatsScanner @Inject constructor(
      * Filters out OEM/system apps to reduce noise. Returns events
      * suitable for direct insertion into the forensic timeline.
      */
-    @Suppress("TooGenericExceptionCaught")
+    @Suppress("TooGenericExceptionCaught", "SwallowedException")
     suspend fun collectTimelineEvents(
         hoursBack: Int = 24
     ): List<ForensicTimelineEvent> = withContext(Dispatchers.IO) {
@@ -47,8 +47,16 @@ class UsageStatsScanner @Inject constructor(
         val events = try {
             usm.queryEvents(startTime, endTime)
         } catch (e: SecurityException) {
-            // PACKAGE_USAGE_STATS not granted — fail silently; permission absence is expected
-            Log.d(TAG, "Usage stats permission not granted: ${e.message}")
+            // PACKAGE_USAGE_STATS not granted. Previously this was logged at
+            // DEBUG with a comment calling the absence "expected" — which
+            // meant the forensic-timeline feature was silently disabled with
+            // no signal to anyone that the user needed to grant Usage Access
+            // in Settings. Promoting to WARN so the degraded state is at
+            // least visible in logcat, and the Dashboard banner (see
+            // UsageStatsPermission + DashboardScreen) prompts the user
+            // to grant the permission via the system settings page.
+            Log.w(TAG, "UsageStats permission not granted — forensic timeline " +
+                "will be empty until the user enables Usage Access in Settings")
             return@withContext emptyList()
         } catch (e: Exception) {
             Log.w(TAG, "Usage stats query failed: ${e.message}")
