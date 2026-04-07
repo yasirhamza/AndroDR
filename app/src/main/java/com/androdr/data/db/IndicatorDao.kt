@@ -7,6 +7,8 @@ import androidx.room.Query
 import com.androdr.data.model.Indicator
 
 @Dao
+@Suppress("TooManyFunctions") // Each query method is a distinct, narrowly-scoped DAO access;
+// splitting into multiple DAOs would fragment the single `indicators` table with no benefit.
 interface IndicatorDao {
 
     @Query("SELECT * FROM indicators WHERE type = :type AND value = :value LIMIT 1")
@@ -14,6 +16,15 @@ interface IndicatorDao {
 
     @Query("SELECT * FROM indicators WHERE type = :type")
     suspend fun getAllByType(type: String): List<Indicator>
+
+    /**
+     * Lightweight projection returning only the `value` column. Used by
+     * `DomainBloomIndex` to build the in-memory domain lookup index without
+     * materializing ~371k full Indicator rows (and their string columns) on
+     * every refresh.
+     */
+    @Query("SELECT value FROM indicators WHERE type = :type")
+    suspend fun getValuesByType(type: String): List<String>
 
     @Query("SELECT * FROM indicators")
     suspend fun getAll(): List<Indicator>

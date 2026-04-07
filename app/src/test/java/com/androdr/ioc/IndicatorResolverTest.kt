@@ -31,6 +31,7 @@ class IndicatorResolverTest {
         every { bundledApkHashes.isKnownBadApkHash(any()) } returns null
         // Default: all queries return empty/null
         coEvery { dao.getAllByType(any()) } returns emptyList()
+        coEvery { dao.getValuesByType(any()) } returns emptyList()
         coEvery { dao.lookup(any(), any()) } returns null
         resolver = IndicatorResolver(dao, bundledPackages, bundledCerts, bundledApkHashes)
     }
@@ -55,13 +56,27 @@ class IndicatorResolverTest {
     }
 
     @Test
-    fun `domain lookup with subdomain matching`() = runTest {
-        val evilIndicator = Indicator("domain", "evil.com", "", "Pegasus", "CRITICAL", "", "test", 1000L)
-        coEvery { dao.lookup("domain", "evil.com") } returns evilIndicator
-        // sub.evil.com → walks to evil.com → match
+    fun `domain lookup with subdomain matching via bloom index`() = runTest {
+        coEvery { dao.getValuesByType("domain") } returns listOf("evil.com")
+        resolver.refreshCache()
+        // sub.evil.com → label-strip walks to evil.com → bloom hit → exact hit
         assertNotNull(resolver.isKnownBadDomain("sub.evil.com"))
         assertNotNull(resolver.isKnownBadDomain("evil.com"))
         assertNull(resolver.isKnownBadDomain("safe.com"))
+    }
+
+    @Test
+    fun `domain lookup returns null before first refresh`() {
+        // Empty index returned by DomainBloomIndex.empty() — every query misses.
+        assertNull(resolver.isKnownBadDomain("evil.com"))
+    }
+
+    @Test
+    fun `domain lookup handles trailing dot and case`() = runTest {
+        coEvery { dao.getValuesByType("domain") } returns listOf("Evil.Com")
+        resolver.refreshCache()
+        assertNotNull(resolver.isKnownBadDomain("evil.com."))
+        assertNotNull(resolver.isKnownBadDomain("EVIL.COM"))
     }
 
     @Test

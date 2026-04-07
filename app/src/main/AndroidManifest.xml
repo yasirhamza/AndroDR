@@ -66,14 +66,23 @@
             </intent-filter>
         </activity>
 
-        <!-- DNS VPN Service -->
+        <!-- DNS VPN Service.
+             foregroundServiceType=specialUse: AndroDR is sideload-/MDM-distributed and
+             not Play-Store-reviewed; specialUse is the correct type for a long-running
+             on-device security tunnel that does not fit any of the predefined categories.
+             systemExempted would also work conceptually but lint requires extra exact-alarm
+             permissions on targetSdk 34+ that we do not need. -->
         <service
             android:name=".network.DnsVpnService"
             android:exported="true"
+            android:foregroundServiceType="specialUse"
             android:permission="android.permission.BIND_VPN_SERVICE">
             <intent-filter>
                 <action android:name="android.net.VpnService" />
             </intent-filter>
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="On-device DNS security filter for stalkerware/IOC detection" />
             <property
                 android:name="android.service.VPN_SERVICE_TYPE"
                 android:value="GENERIC" />

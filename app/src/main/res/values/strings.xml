@@ -30,6 +30,12 @@
     <string name="section_issues_found">Issues Found</string>
     <string name="section_checks_passed">Checks Passed</string>
 
+    <!-- DNS VPN foreground service notification -->
+    <string name="vpn_notification_channel_name">Network Monitor</string>
+    <string name="vpn_notification_channel_desc">Persistent notification while AndroDR is filtering DNS traffic.</string>
+    <string name="vpn_notification_title">AndroDR network monitor active</string>
+    <string name="vpn_notification_text">Filtering DNS traffic for known threats.</string>
+
     <!-- DNS Monitor -->
     <string name="dns_vpn_title">Network Monitor</string>
     <string name="vpn_status_running">Running — DNS traffic is being filtered</string>

@@ -57,6 +57,22 @@ class ScanRepository @Inject constructor(
     }
 
     /**
+     * Batched DNS event insert. Used by the VPN packet path to amortize Room transaction
+     * overhead — at typical browsing rates the per-query insert was the dominant battery
+     * drain source. Matched events are also batched into the forensic timeline.
+     */
+    suspend fun logDnsEventsBatch(events: List<DnsEvent>) {
+        if (events.isEmpty()) return
+        dnsEventDao.insertAll(events)
+        val matched = events.filter { it.reason != null }
+        if (matched.isNotEmpty()) {
+            runCatching {
+                forensicTimelineEventDao.insertAll(matched.map { it.toForensicTimelineEvent() })
+            }
+        }
+    }
+
+    /**
      * Deletes DNS events with a [DnsEvent.timestamp] older than [cutoff].
      * Call periodically (e.g. from WorkManager) to keep the database lean.
      */

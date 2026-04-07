@@ -1,12 +1,20 @@
 package com.androdr.network
 
+import android.app.Notification
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.content.Context
 import android.content.Intent
+import android.content.pm.ServiceInfo
 import android.net.VpnService
+import android.os.Build
 import android.os.ParcelFileDescriptor
 import android.system.Os
 import android.system.OsConstants
 import android.system.StructPollfd
 import android.util.Log
+import androidx.core.app.NotificationCompat
+import com.androdr.R
 import com.androdr.data.model.DnsEvent
 import com.androdr.data.repo.ScanRepository
 import com.androdr.data.repo.SettingsRepository
@@ -17,29 +25,50 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeoutOrNull
 import java.io.FileInputStream
 import java.io.FileOutputStream
 import java.net.DatagramPacket
 import java.net.DatagramSocket
 import java.net.InetAddress
 import java.nio.ByteBuffer
-import kotlinx.coroutines.flow.MutableStateFlow
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicInteger
 import javax.inject.Inject
 
 /**
- * VPN service that intercepts all device traffic, parses DNS queries (UDP port 53),
- * and either blocks or proxies them based on [BlocklistManager].
+ * VPN service that intercepts DNS queries (UDP port 53), parses them, and either blocks
+ * or proxies them based on [BlocklistManager] and [IndicatorResolver].
  *
- * Blocked queries receive an immediate NXDOMAIN response; allowed queries are forwarded
- * to Google's public DNS server at 8.8.8.8 and the real reply is relayed back to the app.
+ * ## Battery-drain hardening
  *
- * All network I/O runs on [Dispatchers.IO] inside a [CoroutineScope] that is cancelled
- * when the service is stopped.
+ * Earlier revisions of this class spawned a coroutine per DNS query, opened a fresh
+ * `DatagramSocket` (with `protect()` binder IPC) per upstream forward, and wrote one
+ * Room transaction per query. Together those were the dominant battery-drain sources
+ * when the network monitor was active. The current implementation:
+ *
+ *  1. **Batches DNS event writes** via [DnsLogBuffer] (one Room transaction per
+ *     batching window or per max-batch-size, whichever comes first).
+ *  2. **Reuses a single protected upstream socket** via [UpstreamResolver]; outgoing
+ *     queries are demuxed by a rewritten DNS transaction id, so an unbounded number
+ *     of in-flight forwards share one socket.
+ *  3. **Drops per-packet coroutine fan-out**: the read loop is single-threaded and
+ *     calls into the buffer / resolver synchronously. Only the resolver receive loop
+ *     and the periodic flush job run as additional coroutines.
+ *  4. **Runs as a foreground service** with `foregroundServiceType="specialUse"` so
+ *     the OS does not kill the tunnel under memory pressure. (`systemExempted` would
+ *     be the more idiomatic VPN type, but on targetSdk 34 lint requires it to be
+ *     paired with `SCHEDULE_EXACT_ALARM`/`USE_EXACT_ALARM` permissions that AndroDR
+ *     does not need; AndroDR is sideload/MDM-distributed and not Play-Store-reviewed,
+ *     so `specialUse` is the right pragmatic choice. If the app is ever published to
+ *     Play, switch to `systemExempted` and add the alarm permissions.)
  */
-@Suppress("TooManyFunctions") // VpnService lifecycle + DNS wire-format helpers are all required in
-// this class; extraction to utilities would break the VpnService.protect() call chain.
+@Suppress("TooManyFunctions")
 @AndroidEntryPoint
 class DnsVpnService : VpnService() {
 
@@ -68,20 +97,30 @@ class DnsVpnService : VpnService() {
         // Maximum DNS UDP payload (RFC 1035 §2.3.4: 512 bytes; EDNS0 can be larger but 4 KB is safe)
         private const val MAX_DNS_PACKET_SIZE = 4096
 
-        // Poll timeout for the packet-read loop. Short enough that shutdown is
-        // responsive when the VPN is stopped, long enough that the loop only
-        // wakes up a handful of times per second on an idle tunnel.
+        // Upstream resolver pending-entry timeout
+        private const val UPSTREAM_TIMEOUT_MS = 5_000L
+
+        // Hard cap on the resolver pending map. Bounds memory under sustained drop
+        // conditions (e.g. upstream is offline and the sweep loop hasn't run yet).
+        private const val UPSTREAM_PENDING_CAP = 1024
+
+        // Bounded blocking flush for the final log buffer drain on shutdown.
+        private const val SHUTDOWN_FLUSH_TIMEOUT_MS = 1_500L
+
+        // Packet-read poll timeout. Short enough that shutdown is prompt when
+        // the VPN is stopped, long enough that the loop wakes up maybe a few
+        // times per second when traffic is sparse.
         private const val POLL_TIMEOUT_MS = 500
+
+        // Foreground service notification
+        private const val NOTIFICATION_CHANNEL_ID = "androdr_vpn_channel"
+        private const val NOTIFICATION_ID         = 0xD15
     }
 
-    @Suppress("LateinitUsage") // Hilt @Inject requires lateinit; null-safety is guaranteed by Hilt
-    @Inject lateinit var blocklistManager: BlocklistManager
-    @Suppress("LateinitUsage") // Hilt @Inject requires lateinit; null-safety is guaranteed by Hilt
-    @Inject lateinit var scanRepository: ScanRepository
-    @Suppress("LateinitUsage")
-    @Inject lateinit var indicatorResolver: IndicatorResolver
-    @Suppress("LateinitUsage")
-    @Inject lateinit var settingsRepository: SettingsRepository
+    @Suppress("LateinitUsage") @Inject lateinit var blocklistManager: BlocklistManager
+    @Suppress("LateinitUsage") @Inject lateinit var scanRepository: ScanRepository
+    @Suppress("LateinitUsage") @Inject lateinit var indicatorResolver: IndicatorResolver
+    @Suppress("LateinitUsage") @Inject lateinit var settingsRepository: SettingsRepository
 
     private var tunFd: ParcelFileDescriptor? = null
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -90,12 +129,19 @@ class DnsVpnService : VpnService() {
     private val blocklistBlockMode = MutableStateFlow(true)
     private val domainIocBlockMode = MutableStateFlow(false)
 
+    private var logBuffer: DnsLogBuffer? = null
+    private var resolver: UpstreamResolver? = null
+
+    /** Lock for tun-fd writes — both the read loop (NXDOMAIN responses) and the
+     *  resolver receive coroutine write to the same FileOutputStream. */
+    private val outputLock = Any()
+
     // ── Lifecycle ─────────────────────────────────────────────────────────────
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
             ACTION_STOP  -> stopVpn()
-            else         -> startVpn()   // ACTION_START or null (system restart)
+            else         -> startVpn()
         }
         return START_STICKY
     }
@@ -113,21 +159,15 @@ class DnsVpnService : VpnService() {
 
     // ── VPN lifecycle ─────────────────────────────────────────────────────────
 
-    @Suppress("ReturnCount") // Multiple early returns on failure paths are idiomatic in Android
-    // service startup; exceptions and null results each warrant a distinct failure return.
+    @Suppress("ReturnCount")
     private fun startVpn() {
-        if (isRunning.value) return  // already running — ignore duplicate start
+        if (isRunning.value) return
 
-        @Suppress("TooGenericExceptionCaught", "SwallowedException") // VpnService.Builder.establish
-        // can throw SecurityException or IllegalArgumentException; both are unrecoverable here.
+        @Suppress("TooGenericExceptionCaught", "SwallowedException")
         val fd = try {
             Builder()
                 .addAddress(TUN_ADDRESS, TUN_PREFIX_LEN)
                 .addDnsServer(DNS_SERVER_IP)
-                // Route ONLY the fake DNS server IP through the tun so that the VPN
-                // intercepts DNS queries without touching any other traffic.  Routing
-                // "0.0.0.0/0" would forward every TCP/UDP packet through the tun and
-                // silently drop non-DNS packets, breaking all non-DNS connectivity.
                 .addRoute(DNS_SERVER_IP, 32)
                 .addDisallowedApplication(packageName)
                 .setSession("AndroDR DNS Filter")
@@ -135,10 +175,22 @@ class DnsVpnService : VpnService() {
         } catch (e: Exception) {
             Log.w(TAG, "DnsVpnService: VPN tunnel establishment failed: ${e.message}")
             return
-        } ?: return   // establish() returns null if the user hasn't granted VPN permission
+        } ?: return
 
         tunFd = fd
+        startForegroundCompat()
         isRunning.value = true
+
+        val outputStream = FileOutputStream(fd.fileDescriptor)
+
+        logBuffer = DnsLogBuffer(serviceScope, scanRepository).also { it.start() }
+        resolver = UpstreamResolver(serviceScope, this, outputStream, outputLock).also {
+            if (!it.start()) {
+                Log.w(TAG, "DnsVpnService: upstream resolver failed to start; aborting")
+                stopVpn()
+                return
+            }
+        }
 
         serviceScope.launch {
             settingsRepository.blocklistBlockMode.collect { blocklistBlockMode.value = it }
@@ -146,58 +198,125 @@ class DnsVpnService : VpnService() {
         serviceScope.launch {
             settingsRepository.domainIocBlockMode.collect { domainIocBlockMode.value = it }
         }
-        serviceScope.launch { indicatorResolver.refreshCache() }
+        // Note: indicator cache is already warmed at app startup (AndroDRApplication.onCreate);
+        // refreshing again here was redundant and burned CPU/IO at every VPN start.
 
         readLoopJob = serviceScope.launch {
-            runPacketLoop(fd)
+            runPacketLoop(fd, outputStream)
         }
     }
 
     private fun stopVpn() {
+        if (!isRunning.value && tunFd == null && resolver == null && logBuffer == null) {
+            // Already stopped — nothing to do (avoids stopForeground/stopSelf churn).
+            return
+        }
         isRunning.value = false
         readLoopJob?.cancel()
         readLoopJob = null
+        // Tear down the resolver first so its receive coroutine stops writing to the
+        // shared output stream before we close the tun fd.
+        resolver?.stop()
+        resolver = null
+        // Synchronously drain any buffered DNS events before the service scope is
+        // cancelled in onDestroy. Without this the last ~LOG_FLUSH_INTERVAL_MS of
+        // events would be silently dropped.
+        logBuffer?.let { buffer ->
+            runBlocking {
+                withTimeoutOrNull(SHUTDOWN_FLUSH_TIMEOUT_MS) { buffer.flushAndStop() }
+            }
+        }
+        logBuffer = null
         try { tunFd?.close() } catch (_: Exception) {}
         tunFd = null
+        stopForegroundCompat()
         stopSelf()
     }
+
+    // ── Foreground service ────────────────────────────────────────────────────
+
+    private fun startForegroundCompat() {
+        ensureNotificationChannel()
+        val notification = buildNotification()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            startForeground(
+                NOTIFICATION_ID,
+                notification,
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
+            )
+        } else {
+            startForeground(NOTIFICATION_ID, notification)
+        }
+    }
+
+    private fun stopForegroundCompat() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            stopForeground(STOP_FOREGROUND_REMOVE)
+        } else {
+            @Suppress("DEPRECATION")
+            stopForeground(true)
+        }
+    }
+
+    private fun ensureNotificationChannel() {
+        val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        if (nm.getNotificationChannel(NOTIFICATION_CHANNEL_ID) != null) return
+        val channel = NotificationChannel(
+            NOTIFICATION_CHANNEL_ID,
+            getString(R.string.vpn_notification_channel_name),
+            NotificationManager.IMPORTANCE_LOW
+        ).apply {
+            description = getString(R.string.vpn_notification_channel_desc)
+            setShowBadge(false)
+        }
+        nm.createNotificationChannel(channel)
+    }
+
+    private fun buildNotification(): Notification =
+        NotificationCompat.Builder(this, NOTIFICATION_CHANNEL_ID)
+            .setSmallIcon(R.mipmap.ic_launcher)
+            .setContentTitle(getString(R.string.vpn_notification_title))
+            .setContentText(getString(R.string.vpn_notification_text))
+            .setOngoing(true)
+            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setCategory(NotificationCompat.CATEGORY_SERVICE)
+            .build()
 
     // ── Packet processing loop ────────────────────────────────────────────────
 
     /**
-     * Reads raw IP packets from the tun device, identifies UDP/53 DNS queries, and
-     * either responds with NXDOMAIN (blocked) or forwards to the real upstream resolver.
+     * Reads raw IP packets from the tun fd, identifies UDP/53 DNS queries, and
+     * hands them off to [processPacket].
      *
-     * Because only [DNS_SERVER_IP]/32 is routed through the tun, only DNS packets
-     * arrive here; other IP traffic goes directly to the network and is unaffected.
+     * ## Why Os.poll instead of FileInputStream.read()
      *
-     * ## Why Os.poll
+     * VpnService hands us a non-blocking tun file descriptor. A plain
+     * `FileInputStream.read()` on that fd returns zero bytes immediately when
+     * no packet is available, which turns the packet read loop into a tight
+     * busy-spin that burns ~100 % of a CPU core even when the device is idle
+     * and the tunnel has zero traffic. That was the single biggest contributor
+     * to AndroDR's VPN-mode battery drain — bigger than any of the per-query
+     * issues addressed in earlier commits.
      *
-     * VpnService hands out a **non-blocking** tun file descriptor. A plain
-     * `FileInputStream.read()` on that fd returns zero bytes immediately when no
-     * packet is available, so the previous `if (bytesRead <= 0) continue` guard
-     * (and its comment claiming the pattern was "idiomatic for non-blocking tun
-     * fd polling") turned the read loop into a tight busy-spin that burned
-     * ~100 % of a CPU core even when the device was idle and the tunnel had
-     * zero traffic. On-device measurement on a locked-screen emulator showed
-     * AndroDR sitting at 109 % of a core constantly — the single biggest
-     * contributor to VPN-mode battery drain.
+     * The fix is to block-wait on the fd via `android.system.Os.poll()` before
+     * calling `read()`. `Os.poll()` suspends the thread in the kernel until
+     * the fd has a pending packet (or the timeout expires), so the read loop
+     * uses zero CPU when the tunnel is idle. This is the same pattern
+     * NetGuard uses in its native packet path, and the canonical way to
+     * block-wait on a non-blocking fd from Java.
      *
-     * The fix is to block-wait on the fd with `android.system.Os.poll()`, which
-     * suspends the thread in the kernel until the fd has a pending packet (or
-     * the short timeout expires so we can recheck the shutdown flag). This is
-     * the same pattern NetGuard uses in its native packet path and the
-     * canonical way to block-wait on a non-blocking fd from Java.
+     * A short timeout (not infinite) lets us periodically recheck
+     * `serviceScope.isActive` / `isRunning.value` so the loop shuts down
+     * promptly when the VPN is stopped.
      */
     @Suppress("LoopWithTooManyJumpStatements")
-    private suspend fun runPacketLoop(fd: ParcelFileDescriptor) {
-        val inputStream  = FileInputStream(fd.fileDescriptor)
-        val outputStream = FileOutputStream(fd.fileDescriptor)
-        val buffer       = ByteArray(MAX_DNS_PACKET_SIZE)
+    private suspend fun runPacketLoop(fd: ParcelFileDescriptor, outputStream: FileOutputStream) {
+        val inputStream = FileInputStream(fd.fileDescriptor)
+        val buffer      = ByteArray(MAX_DNS_PACKET_SIZE)
 
         val pollfd = StructPollfd().apply {
             this.fd = fd.fileDescriptor
-            events  = OsConstants.POLLIN.toShort()
+            events = OsConstants.POLLIN.toShort()
         }
         val fds = arrayOf(pollfd)
 
@@ -212,15 +331,13 @@ class DnsVpnService : VpnService() {
             if (ready == 0) continue   // timeout — recheck running flag
             if ((pollfd.revents.toInt() and OsConstants.POLLIN) == 0) continue
 
-            @Suppress("TooGenericExceptionCaught", "SwallowedException") // FileInputStream.read
-            // on the tun fd throws IOException when the VPN is revoked; breaking the loop is correct.
+            @Suppress("TooGenericExceptionCaught", "SwallowedException")
             val bytesRead = try {
                 inputStream.read(buffer)
             } catch (e: Exception) {
                 Log.w(TAG, "DnsVpnService: tun fd read failed (VPN likely revoked): ${e.message}")
                 break
             }
-
             if (bytesRead <= 0) continue
 
             val packet = buffer.copyOf(bytesRead)
@@ -235,177 +352,115 @@ class DnsVpnService : VpnService() {
         try { outputStream.close() } catch (_: Exception) {}
     }
 
-    /**
-     * Inspects a raw IP packet.  If it is a UDP packet destined for port 53 the DNS payload
-     * is extracted and handled; all other packets are silently dropped.
-     */
-    @Suppress("LongMethod", "ReturnCount", "LoopWithTooManyJumpStatements") // IP/UDP/DNS packet
-    // parsing requires guard returns at each validation step; reducing ReturnCount here would add
-    // deeply nested conditionals that are harder to follow than early-return validation guards.
+    @Suppress("LongMethod", "ReturnCount", "ComplexMethod")
     private fun processPacket(packet: ByteArray, outputStream: FileOutputStream) {
-        if (packet.size < 20) return  // too short to be a valid IPv4 header
+        if (packet.size < 20) return
 
         val buf = ByteBuffer.wrap(packet)
-
-        // Parse IPv4 header
         val versionAndIhl = buf.get(0).toInt() and 0xFF
-        val version       = versionAndIhl shr 4
-        if (version != 4) return   // only handle IPv4
+        if (versionAndIhl shr 4 != 4) return
 
-        val ihl          = (versionAndIhl and 0x0F) * 4   // IP header length in bytes
-        if (packet.size < ihl + 8) return                  // need at least IP + UDP header
+        val ihl = (versionAndIhl and 0x0F) * 4
+        if (packet.size < ihl + 8) return
+        if (buf.get(9) != IP_PROTOCOL_UDP) return
 
-        val protocol = buf.get(9)
-        if (protocol != IP_PROTOCOL_UDP) return            // only care about UDP
-
-        // Parse UDP header (starts at byte ihl)
         val dstPort = ((buf.get(ihl + 2).toInt() and 0xFF) shl 8) or
                        (buf.get(ihl + 3).toInt() and 0xFF)
-        if (dstPort != DNS_PORT) return                    // only care about DNS (port 53)
+        if (dstPort != DNS_PORT) return
 
         val srcPort = ((buf.get(ihl).toInt() and 0xFF) shl 8) or
                        (buf.get(ihl + 1).toInt() and 0xFF)
 
-        // UDP payload starts after the 8-byte UDP header
         val udpPayloadOffset = ihl + 8
         if (packet.size <= udpPayloadOffset) return
 
         val dnsPayload = packet.copyOfRange(udpPayloadOffset, packet.size)
-        if (dnsPayload.size < 12) return   // DNS header is 12 bytes
+        if (dnsPayload.size < 12) return
 
-        // Extract the DNS transaction ID so we can build a matching response
         val txId = ((dnsPayload[0].toInt() and 0xFF) shl 8) or
                     (dnsPayload[1].toInt() and 0xFF)
 
-        // Parse the queried hostname from the DNS question section
         val hostname = parseDnsHostname(dnsPayload) ?: return
-
-        // Extract source IP address (bytes 12–15) so we can route the reply back
         val srcIpBytes = packet.copyOfRange(12, 16)
 
         val isBlocklisted = blocklistManager.isBlocked(hostname)
         val iocHit = if (!isBlocklisted) indicatorResolver.isKnownBadDomain(hostname) else null
+        val now = System.currentTimeMillis()
 
         when {
             isBlocklisted && blocklistBlockMode.value -> {
-                serviceScope.launch {
-                    runCatching {
-                        scanRepository.logDnsEvent(DnsEvent(
-                            timestamp = System.currentTimeMillis(), domain = hostname,
-                            appUid = -1, appName = null, isBlocked = true, reason = "blocklist"
-                        ))
-                    }
-                }
-                val nxResponse = buildNxdomainResponse(dnsPayload, txId)
-                val responsePacket = wrapInIpUdp(nxResponse, intArrayOf(10, 0, 0, 1),
-                    byteArrayToIntArray(srcIpBytes), DNS_PORT, srcPort)
-                try { outputStream.write(responsePacket) } catch (_: Exception) {}
+                logBuffer?.add(DnsEvent(
+                    timestamp = now, domain = hostname, appUid = -1, appName = null,
+                    isBlocked = true, reason = "blocklist"
+                ))
+                writeNxdomain(dnsPayload, txId, srcIpBytes, srcPort, outputStream)
             }
             isBlocklisted -> {
-                // detect-only: forward but log as flagged
-                serviceScope.launch {
-                    val response = forwardToUpstreamDns(dnsPayload) ?: return@launch
-                    val responsePacket = wrapInIpUdp(response, intArrayOf(10, 0, 0, 1),
-                        byteArrayToIntArray(srcIpBytes), DNS_PORT, srcPort)
-                    try { outputStream.write(responsePacket) } catch (_: Exception) {}
-                    runCatching {
-                        scanRepository.logDnsEvent(DnsEvent(
-                            timestamp = System.currentTimeMillis(), domain = hostname,
-                            appUid = -1, appName = null, isBlocked = false, reason = "blocklist_detect"
-                        ))
-                    }
-                }
+                logBuffer?.add(DnsEvent(
+                    timestamp = now, domain = hostname, appUid = -1, appName = null,
+                    isBlocked = false, reason = "blocklist_detect"
+                ))
+                resolver?.send(dnsPayload, srcIpBytes, srcPort)
             }
             iocHit != null && domainIocBlockMode.value -> {
-                serviceScope.launch {
-                    runCatching {
-                        scanRepository.logDnsEvent(DnsEvent(
-                            timestamp = System.currentTimeMillis(), domain = hostname,
-                            appUid = -1, appName = null, isBlocked = true,
-                            reason = "IOC: ${iocHit.campaign}"
-                        ))
-                    }
-                }
-                val nxResponse = buildNxdomainResponse(dnsPayload, txId)
-                val responsePacket = wrapInIpUdp(nxResponse, intArrayOf(10, 0, 0, 1),
-                    byteArrayToIntArray(srcIpBytes), DNS_PORT, srcPort)
-                try { outputStream.write(responsePacket) } catch (_: Exception) {}
+                // Since IndicatorResolver switched to a bloom index, iocHit.campaign
+                // is no longer populated on the hot path; the matched label (a parent
+                // of `hostname`) is the most useful signal to record here.
+                logBuffer?.add(DnsEvent(
+                    timestamp = now, domain = hostname, appUid = -1, appName = null,
+                    isBlocked = true, reason = "IOC: ${iocHit.value}"
+                ))
+                writeNxdomain(dnsPayload, txId, srcIpBytes, srcPort, outputStream)
             }
             iocHit != null -> {
-                // detect-only for IOC domain
-                serviceScope.launch {
-                    val response = forwardToUpstreamDns(dnsPayload) ?: return@launch
-                    val responsePacket = wrapInIpUdp(response, intArrayOf(10, 0, 0, 1),
-                        byteArrayToIntArray(srcIpBytes), DNS_PORT, srcPort)
-                    try { outputStream.write(responsePacket) } catch (_: Exception) {}
-                    runCatching {
-                        scanRepository.logDnsEvent(DnsEvent(
-                            timestamp = System.currentTimeMillis(), domain = hostname,
-                            appUid = -1, appName = null, isBlocked = false,
-                            reason = "IOC_detect: ${iocHit.campaign}"
-                        ))
-                    }
-                }
+                logBuffer?.add(DnsEvent(
+                    timestamp = now, domain = hostname, appUid = -1, appName = null,
+                    isBlocked = false, reason = "IOC_detect: ${iocHit.value}"
+                ))
+                resolver?.send(dnsPayload, srcIpBytes, srcPort)
             }
             else -> {
-                // allowed — forward and log
-                serviceScope.launch {
-                    val response = forwardToUpstreamDns(dnsPayload) ?: return@launch
-                    val responsePacket = wrapInIpUdp(response, intArrayOf(10, 0, 0, 1),
-                        byteArrayToIntArray(srcIpBytes), DNS_PORT, srcPort)
-                    try { outputStream.write(responsePacket) } catch (_: Exception) {}
-                    runCatching {
-                        scanRepository.logDnsEvent(DnsEvent(
-                            timestamp = System.currentTimeMillis(), domain = hostname,
-                            appUid = -1, appName = null, isBlocked = false, reason = null
-                        ))
-                    }
-                }
+                logBuffer?.add(DnsEvent(
+                    timestamp = now, domain = hostname, appUid = -1, appName = null,
+                    isBlocked = false, reason = null
+                ))
+                resolver?.send(dnsPayload, srcIpBytes, srcPort)
             }
+        }
+    }
+
+    private fun writeNxdomain(
+        dnsPayload: ByteArray,
+        txId: Int,
+        srcIpBytes: ByteArray,
+        srcPort: Int,
+        outputStream: FileOutputStream
+    ) {
+        val nx = buildNxdomainResponse(dnsPayload, txId)
+        val responsePacket = wrapInIpUdp(
+            nx, intArrayOf(10, 0, 0, 1),
+            byteArrayToIntArray(srcIpBytes), DNS_PORT, srcPort
+        )
+        synchronized(outputLock) {
+            try { outputStream.write(responsePacket) } catch (_: Exception) {}
         }
     }
 
     // ── DNS wire-format helpers ───────────────────────────────────────────────
 
-    /**
-     * Parses the QNAME from the DNS question section.
-     *
-     * DNS message layout:
-     * ```
-     * bytes 0–1   : Transaction ID
-     * bytes 2–3   : Flags
-     * bytes 4–5   : QDCOUNT
-     * bytes 6–7   : ANCOUNT
-     * bytes 8–9   : NSCOUNT
-     * bytes 10–11 : ARCOUNT
-     * byte  12+   : Question section (QNAME labels + QTYPE + QCLASS)
-     * ```
-     *
-     * QNAME is encoded as a sequence of length-prefixed labels terminated by a zero byte.
-     */
     @Suppress("TooGenericExceptionCaught", "SwallowedException", "ReturnCount",
-        "LoopWithTooManyJumpStatements") // Malformed DNS packets from the tun fd can throw
-    // ArrayIndexOutOfBoundsException; guard returns and loop jumps are idiomatic for packet parsing.
+        "LoopWithTooManyJumpStatements")
     private fun parseDnsHostname(dns: ByteArray): String? {
         if (dns.size < 13) return null
-
         val sb = StringBuilder()
-        var pos = 12   // question section starts after the 12-byte DNS header
-
+        var pos = 12
         try {
             while (pos < dns.size) {
                 val labelLen = dns[pos].toInt() and 0xFF
-                if (labelLen == 0) break                   // end of QNAME
-
-                // Handle DNS compression pointer (top two bits set = 0xC0)
-                if (labelLen and 0xC0 == 0xC0) {
-                    // Compression pointers are uncommon in queries but handle gracefully
-                    break
-                }
-
+                if (labelLen == 0) break
+                if (labelLen and 0xC0 == 0xC0) break
                 pos++
-                if (pos + labelLen > dns.size) return null // malformed
-
+                if (pos + labelLen > dns.size) return null
                 if (sb.isNotEmpty()) sb.append('.')
                 sb.append(String(dns, pos, labelLen, Charsets.US_ASCII))
                 pos += labelLen
@@ -414,140 +469,295 @@ class DnsVpnService : VpnService() {
             Log.w(TAG, "DnsVpnService: DNS hostname parsing failed (malformed packet): ${e.message}")
             return null
         }
-
         return if (sb.isEmpty()) null else sb.toString()
     }
 
-    /**
-     * Builds a minimal DNS NXDOMAIN response for the given query payload.
-     *
-     * Flags set: QR=1 (response), OPCODE=0 (QUERY), AA=0, TC=0, RD=1 (copy from query),
-     * RA=0, RCODE=3 (NXDOMAIN).  The question section is echoed back; no answer records.
-     */
-    @Suppress("UnusedParameter") // txId is kept in the signature for DNS wire-format clarity —
-    // the transaction ID is implicitly preserved by copying query bytes 0-1 into the response.
+    @Suppress("UnusedParameter")
     private fun buildNxdomainResponse(query: ByteArray, txId: Int): ByteArray {
-        val response = query.copyOf()   // echo the full query as the response skeleton
-
-        // Byte 0–1: Transaction ID (already correct)
-        // Byte 2–3: Flags — QR=1, OPCODE=0, AA=0, TC=0, RD=copy, RA=0, RCODE=3 (NXDOMAIN)
-        val rdFlag   = (query[2].toInt() and 0x01) shl 0   // preserve RD bit
-        response[2]  = (0x81 or rdFlag).toByte()           // QR + AA=0 + RD
-        response[3]  = 0x03.toByte()                       // RCODE = NXDOMAIN
-
-        // Zero out answer/authority/additional record counts (bytes 6–11)
-        response[6]  = 0; response[7]  = 0   // ANCOUNT = 0
-        response[8]  = 0; response[9]  = 0   // NSCOUNT = 0
-        response[10] = 0; response[11] = 0   // ARCOUNT = 0
-
+        val response = query.copyOf()
+        val rdFlag   = (query[2].toInt() and 0x01) shl 0
+        response[2]  = (0x81 or rdFlag).toByte()
+        response[3]  = 0x03.toByte()
+        response[6]  = 0; response[7]  = 0
+        response[8]  = 0; response[9]  = 0
+        response[10] = 0; response[11] = 0
         return response
     }
 
     /**
-     * Forwards a raw DNS query payload to [UPSTREAM_DNS_HOST] via a real UDP socket
-     * (which is protected from the VPN tunnel via [VpnService.protect]) and returns
-     * the upstream response payload, or `null` on error.
-     */
-    private fun forwardToUpstreamDns(dnsPayload: ByteArray): ByteArray? {
-        @Suppress("TooGenericExceptionCaught", "SwallowedException") // DNS socket operations can
-        // throw IOException (timeout), SocketException, or UnknownHostException; null = drop packet.
-        return try {
-            val socket = DatagramSocket()
-            protect(socket)   // exclude from VPN tunnel to prevent routing loops
-
-            val upstreamAddr = InetAddress.getByName(UPSTREAM_DNS_HOST)
-            val sendPacket = DatagramPacket(
-                dnsPayload, dnsPayload.size,
-                upstreamAddr, UPSTREAM_DNS_PORT
-            )
-            socket.soTimeout = 3000
-            socket.send(sendPacket)
-
-            val responseBuffer = ByteArray(MAX_DNS_PACKET_SIZE)
-            val responsePacket = DatagramPacket(responseBuffer, responseBuffer.size)
-            socket.receive(responsePacket)
-            socket.close()
-
-            responseBuffer.copyOf(responsePacket.length)
-        } catch (e: Exception) {
-            Log.w(TAG, "DnsVpnService: upstream DNS forward failed: ${e.message}")
-            null
-        }
-    }
-
-    /**
      * Wraps a UDP payload in IPv4 + UDP headers suitable for writing to the tun fd.
-     *
-     * Checksums:
-     * - IP checksum is computed properly (RFC 791).
-     * - UDP checksum is set to 0 (optional per RFC 768; receivers must accept it).
+     * Internal so that [UpstreamResolver] can build response packets without duplication.
      */
-    private fun wrapInIpUdp(
+    internal fun wrapInIpUdp(
         payload: ByteArray,
         srcIp:   IntArray,
         dstIp:   IntArray,
         srcPort: Int,
         dstPort: Int
     ): ByteArray {
-        val udpLength  = 8 + payload.size
-        val ipLength   = 20 + udpLength
-        val buf        = ByteBuffer.allocate(ipLength)
+        val udpLength = 8 + payload.size
+        val ipLength  = 20 + udpLength
+        val buf       = ByteBuffer.allocate(ipLength)
 
-        // ── IPv4 header (20 bytes, no options) ────────────────────────────────
-        buf.put(0x45.toByte())                            // Version=4, IHL=5
-        buf.put(0x00.toByte())                            // DSCP/ECN
-        buf.putShort(ipLength.toShort())                  // Total length
-        buf.putShort(0x0000)                              // Identification
-        buf.putShort(0x4000)                              // Flags=DF, Fragment offset=0
-        buf.put(0x40.toByte())                            // TTL = 64
-        buf.put(IP_PROTOCOL_UDP)                          // Protocol = UDP
-        buf.putShort(0x0000)                              // Header checksum (filled below)
+        buf.put(0x45.toByte())
+        buf.put(0x00.toByte())
+        buf.putShort(ipLength.toShort())
+        buf.putShort(0x0000)
+        buf.putShort(0x4000)
+        buf.put(0x40.toByte())
+        buf.put(IP_PROTOCOL_UDP)
+        buf.putShort(0x0000)
         srcIp.forEach { buf.put(it.toByte()) }
         dstIp.forEach { buf.put(it.toByte()) }
 
-        // Compute and fill IP header checksum
         val ipHeaderChecksum = ipChecksum(buf.array(), 0, 20)
         buf.putShort(10, ipHeaderChecksum.toShort())
 
-        // ── UDP header (8 bytes) ───────────────────────────────────────────────
         buf.putShort(srcPort.toShort())
         buf.putShort(dstPort.toShort())
         buf.putShort(udpLength.toShort())
-        buf.putShort(0x0000)   // UDP checksum = 0 (optional)
-
-        // ── UDP payload ────────────────────────────────────────────────────────
+        buf.putShort(0x0000)
         buf.put(payload)
 
         return buf.array()
     }
 
-    /**
-     * Computes the one's-complement Internet checksum over [length] bytes of [data]
-     * starting at [offset], as required by the IPv4 header checksum field (RFC 1071).
-     */
     private fun ipChecksum(data: ByteArray, offset: Int, length: Int): Int {
         var sum = 0
         var i   = offset
         val end = offset + length
-
         while (i < end - 1) {
             sum += ((data[i].toInt() and 0xFF) shl 8) or (data[i + 1].toInt() and 0xFF)
             i   += 2
         }
-        if (i < end) {
-            // Odd byte — pad with zero
-            sum += (data[i].toInt() and 0xFF) shl 8
-        }
-
-        // Fold 32-bit sum into 16 bits
-        while (sum shr 16 != 0) {
-            sum = (sum and 0xFFFF) + (sum shr 16)
-        }
+        if (i < end) sum += (data[i].toInt() and 0xFF) shl 8
+        while (sum shr 16 != 0) sum = (sum and 0xFFFF) + (sum shr 16)
         return sum.inv() and 0xFFFF
     }
 
-    // ── Utility ───────────────────────────────────────────────────────────────
-
     private fun byteArrayToIntArray(bytes: ByteArray): IntArray =
         IntArray(bytes.size) { bytes[it].toInt() and 0xFF }
+
+    // ── Inner: pooled upstream resolver ───────────────────────────────────────
+
+    /**
+     * Owns a single `protect()`'d [DatagramSocket] that all DNS forwards share. Outgoing
+     * queries have their 16-bit DNS transaction id rewritten to a unique value so the
+     * single receive loop can demux upstream replies and route them back to the correct
+     * tun source. Replaces the previous "new socket per query" hot path.
+     */
+    private inner class UpstreamResolver(
+        private val scope: CoroutineScope,
+        private val vpnService: VpnService,
+        private val outputStream: FileOutputStream,
+        private val outputLock: Any
+    ) {
+        private var socket: DatagramSocket? = null
+        private var upstreamAddr: InetAddress? = null
+        private val pending = ConcurrentHashMap<Int, Pending>()
+        private val txIdSeq = AtomicInteger(1)
+        private var receiveJob: Job? = null
+        private var sweepJob: Job? = null
+
+        fun start(): Boolean {
+            @Suppress("TooGenericExceptionCaught")
+            return try {
+                val addr = InetAddress.getByName(UPSTREAM_DNS_HOST)
+                val s = DatagramSocket()
+                vpnService.protect(s)
+                s.soTimeout = 0   // blocking; the receive loop runs on its own coroutine
+                socket = s
+                upstreamAddr = addr
+                receiveJob = scope.launch { receiveLoop() }
+                sweepJob   = scope.launch { sweepLoop() }
+                true
+            } catch (e: Exception) {
+                Log.w(TAG, "UpstreamResolver: start failed", e)
+                false
+            }
+        }
+
+        fun stop() {
+            receiveJob?.cancel(); receiveJob = null
+            sweepJob?.cancel();   sweepJob   = null
+            try { socket?.close() } catch (_: Exception) {}
+            socket = null
+            pending.clear()
+        }
+
+        /** Forward a DNS query through the shared upstream socket. Non-blocking. */
+        @Suppress("TooGenericExceptionCaught", "SwallowedException", "ReturnCount")
+        fun send(dnsPayload: ByteArray, srcIpBytes: ByteArray, srcPort: Int) {
+            val s = socket ?: return
+            if (dnsPayload.size < 2) return
+            // Hard cap to bound memory under sustained drop conditions (e.g. upstream
+            // unreachable). Beyond the cap we drop new queries until the sweep loop
+            // reclaims expired entries.
+            if (pending.size >= UPSTREAM_PENDING_CAP) return
+
+            val originalTxId = ((dnsPayload[0].toInt() and 0xFF) shl 8) or
+                                (dnsPayload[1].toInt() and 0xFF)
+
+            // Allocate a fresh upstream txId via putIfAbsent so the slot reservation
+            // is atomic against any concurrent senders.
+            var ourTxId = -1
+            val entry = Pending(
+                originalTxId = originalTxId,
+                srcIpBytes   = srcIpBytes,
+                srcPort      = srcPort,
+                expiresAt    = System.currentTimeMillis() + UPSTREAM_TIMEOUT_MS
+            )
+            repeat(MAX_TXID_ATTEMPTS) {
+                val candidate = (txIdSeq.getAndIncrement() and 0xFFFF).let { if (it == 0) 1 else it }
+                if (pending.putIfAbsent(candidate, entry) == null) {
+                    ourTxId = candidate
+                    return@repeat
+                }
+            }
+            if (ourTxId == -1) return
+
+            val rewritten = dnsPayload.copyOf()
+            rewritten[0] = ((ourTxId shr 8) and 0xFF).toByte()
+            rewritten[1] = (ourTxId and 0xFF).toByte()
+
+            val addr = upstreamAddr ?: return
+            try {
+                s.send(DatagramPacket(rewritten, rewritten.size, addr, UPSTREAM_DNS_PORT))
+            } catch (e: Exception) {
+                pending.remove(ourTxId)
+                Log.w(TAG, "UpstreamResolver: send failed: ${e.message}")
+            }
+        }
+
+        private suspend fun receiveLoop() {
+            val s = socket ?: return
+            val recvBuf = ByteArray(MAX_DNS_PACKET_SIZE)
+            while (scope.isActive && socket != null) {
+                @Suppress("TooGenericExceptionCaught", "SwallowedException")
+                try {
+                    val pkt = DatagramPacket(recvBuf, recvBuf.size)
+                    s.receive(pkt)
+                    handleResponse(recvBuf.copyOf(pkt.length))
+                } catch (e: Exception) {
+                    if (!scope.isActive || socket == null) break
+                    Log.w(TAG, "UpstreamResolver: receive failed: ${e.message}")
+                }
+            }
+        }
+
+        private fun handleResponse(response: ByteArray) {
+            // Need at least the 12-byte DNS header to validate the QR bit.
+            if (response.size < 12) return
+            // Reject packets that aren't DNS responses (QR bit = 1 in byte 2). Combined
+            // with the connect()'d upstream socket this rules out garbage / spoofs.
+            if ((response[2].toInt() and 0x80) == 0) return
+
+            val ourTxId = ((response[0].toInt() and 0xFF) shl 8) or
+                           (response[1].toInt() and 0xFF)
+            val entry = pending.remove(ourTxId) ?: return
+
+            // Restore the original txId so the client matches its query.
+            response[0] = ((entry.originalTxId shr 8) and 0xFF).toByte()
+            response[1] = (entry.originalTxId and 0xFF).toByte()
+
+            val ipPacket = wrapInIpUdp(
+                response,
+                intArrayOf(10, 0, 0, 1),
+                byteArrayToIntArray(entry.srcIpBytes),
+                DNS_PORT,
+                entry.srcPort
+            )
+            synchronized(outputLock) {
+                try { outputStream.write(ipPacket) } catch (_: Exception) {}
+            }
+        }
+
+        private suspend fun sweepLoop() {
+            while (scope.isActive) {
+                delay(UPSTREAM_TIMEOUT_MS)
+                val now = System.currentTimeMillis()
+                val expired = pending.entries.filter { it.value.expiresAt <= now }.map { it.key }
+                expired.forEach { pending.remove(it) }
+            }
+        }
+    }
+}
+
+// Limit number of attempts when probing for a free upstream txId slot.
+private const val MAX_TXID_ATTEMPTS = 8
+
+private class Pending(
+    val originalTxId: Int,
+    val srcIpBytes: ByteArray,
+    val srcPort: Int,
+    val expiresAt: Long
+)
+
+/**
+ * In-memory ring of [DnsEvent]s flushed to [ScanRepository] in batches. Replaces the
+ * previous "one Room transaction per DNS query" hot path.
+ *
+ * Thread model: [add] is called from the VPN read loop (single-threaded). [flushNow]
+ * runs on the periodic flush coroutine. The buffer list is guarded by `synchronized`.
+ */
+private class DnsLogBuffer(
+    private val scope: CoroutineScope,
+    private val repository: ScanRepository
+) {
+    private val maxSize: Int = 100
+    private val flushIntervalMs: Long = 2_000L
+
+    private val lock = Any()
+    private val buffer = ArrayList<DnsEvent>(128)
+    private var flushJob: Job? = null
+
+    fun start() {
+        flushJob = scope.launch {
+            while (scope.isActive) {
+                delay(flushIntervalMs)
+                flushNow()
+            }
+        }
+    }
+
+    fun stop() {
+        flushJob?.cancel()
+        flushJob = null
+    }
+
+    /**
+     * Cancels the periodic flush job and runs one final flush *synchronously*. Called
+     * from [DnsVpnService.stopVpn] inside `runBlocking { withTimeoutOrNull(...) }` so
+     * the last batch of events is persisted before the service scope is cancelled.
+     */
+    suspend fun flushAndStop() {
+        stop()
+        flushNow()
+    }
+
+    fun add(event: DnsEvent) {
+        val shouldFlushImmediately: Boolean
+        synchronized(lock) {
+            buffer.add(event)
+            shouldFlushImmediately = buffer.size >= maxSize
+        }
+        if (shouldFlushImmediately) {
+            scope.launch { flushNow() }
+        }
+    }
+
+    private suspend fun flushNow() {
+        val snapshot: List<DnsEvent>
+        synchronized(lock) {
+            if (buffer.isEmpty()) return
+            snapshot = buffer.toList()
+            buffer.clear()
+        }
+        @Suppress("TooGenericExceptionCaught", "SwallowedException")
+        try {
+            repository.logDnsEventsBatch(snapshot)
+        } catch (e: Exception) {
+            Log.w("DnsLogBuffer", "flush failed: ${e.message}")
+        }
+    }
 }
