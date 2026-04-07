@@ -114,7 +114,27 @@ class TimelineViewModel @Inject constructor(
                 val (clusters, standalone) = correlationEngine.partition(scanEvents)
                 ScanGroup(
                     scanId = scanId,
-                    timestamp = scanEvents.minOf { it.timestamp },
+                    // The group header must show when the SCAN was RUN, not
+                    // the earliest event's time. For bug-report scans the
+                    // events include AppOps records with real last-access
+                    // timestamps from the bug-report content (potentially
+                    // weeks old), so the previous
+                    // `scanEvents.minOf { it.timestamp }` labelled the
+                    // group with that ancient time instead of when the
+                    // user actually ran the analysis. The History list
+                    // already shows the correct time because it reads
+                    // `scanResult.timestamp` directly.
+                    //
+                    // Crucial invariant we exploit: ScanOrchestrator sets
+                    // BOTH `ScanResult.id = now` and `ScanResult.timestamp
+                    // = now` to the same `System.currentTimeMillis()` at
+                    // scan creation (see runFullScan:180 and
+                    // analyzeBugReport:278), and ForensicTimelineEvent
+                    // rows are persisted with `scanResultId = scanResult.id`.
+                    // So the `scanId` we already have in this lambda IS
+                    // the scan run time in milliseconds — we can use it
+                    // directly without going back to the ScanResult table.
+                    timestamp = scanId,
                     isFromBugreport = scanEvents.any { it.isFromBugreport },
                     eventCount = scanEvents.size,
                     maxSeverity = scanEvents.maxOf { severityOrdinal(it.severity) }.let {
@@ -133,7 +153,10 @@ class TimelineViewModel @Inject constructor(
             val (ungroupedClusters, ungroupedStandalone) = correlationEngine.partition(ungrouped)
             groups.add(ScanGroup(
                 scanId = -1,
-                timestamp = ungrouped.minOf { it.timestamp },
+                // Same invalid-timestamp filter as the per-scan groups above.
+                timestamp = ungrouped.filter { it.timestamp > 0L }
+                    .minOfOrNull { it.timestamp }
+                    ?: 0L,
                 isFromBugreport = false,
                 eventCount = ungrouped.size,
                 maxSeverity = ungrouped.maxOf { severityOrdinal(it.severity) }.let {

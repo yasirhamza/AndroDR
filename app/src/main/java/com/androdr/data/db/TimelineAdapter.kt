@@ -33,10 +33,30 @@ fun Finding.toForensicTimelineEvent(
         .joinToString(" / ") { it.removePrefix("campaign.").replaceFirstChar { c -> c.uppercase() } }
         .ifEmpty { null }
 
-    // Runtime scan findings use the scan timestamp; bugreport findings use 0
-    // (unknown time) since the finding doesn't carry an event timestamp -- the
-    // actual timestamps come from module-produced TimelineEvents (e.g., AppOps).
-    val eventTimestamp = if (isBugreport) 0L else scanResult.timestamp
+    // Runtime-scan findings use the scan timestamp. Bug-report findings try
+    // to inherit a real per-event timestamp from their evidence:
+    //
+    //   * Modules that know a real event time (e.g. `AppOpsModule` knows
+    //     `last_access_time` for each dangerous-op record) publish it under
+    //     the telemetry map key `event_time_ms` (epoch ms Long).
+    //   * `SigmaRuleEvaluator.buildFinding` copies scalar record fields
+    //     into `matchContext` as strings, so the Finding inherits the
+    //     `event_time_ms` string automatically.
+    //   * Here we parse it back to a Long and use it as the persisted
+    //     event's `timestamp`. If it's missing or unparseable, we fall
+    //     back to 0L, which the Timeline UI renders as "Unknown" — the
+    //     honest answer for SIGMA rules that fire on stateful data
+    //     without a meaningful event time (e.g. receiver registrations).
+    //
+    // This is strictly better than the previous unconditional 0L for bug
+    // reports: AppOps-derived findings (Camera Access, Microphone Access,
+    // etc.) now show the real time the dangerous op was last invoked,
+    // instead of "Unknown".
+    val eventTimestamp = if (isBugreport) {
+        this.matchContext["event_time_ms"]?.toLongOrNull()?.takeIf { it > 0L } ?: 0L
+    } else {
+        scanResult.timestamp
+    }
 
     return ForensicTimelineEvent(
         timestamp = eventTimestamp,
@@ -72,6 +92,7 @@ fun TimelineEvent.toForensicTimelineEvent(scanResultId: Long = -1): ForensicTime
         category = this.category,
         description = this.description,
         severity = this.severity,
+        packageName = this.packageName ?: "",
         timestampPrecision = "estimated",
         scanResultId = scanResultId,
         isFromBugreport = true

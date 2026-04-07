@@ -56,24 +56,44 @@ class AppOpsModule @Inject constructor() : BugreportModule {
             if (!isDangerousOp) return
 
             val normalizedOp = "android:${op.lowercase()}"
+            // Parse the last-access time once so we can share it between the
+            // telemetry record (as `event_time_ms`, for SIGMA findings to
+            // inherit into their Timeline event) and the timeline event
+            // emitted below.
+            val accessTimestamp = lastAccessTime?.let { parseTimestamp(it) }
+                ?.takeIf { it > 0L }
+
             telemetry.add(mapOf(
                 "package_name" to pkg,
                 "operation" to normalizedOp,
                 "last_access_time" to (lastAccessTime ?: ""),
                 "last_reject_time" to (lastRejectTime ?: ""),
                 "access_count" to 1,
-                "is_system_app" to isSystemUid
+                "is_system_app" to isSystemUid,
+                // Convention: any bug-report telemetry record that knows a
+                // real per-event timestamp publishes it under `event_time_ms`
+                // (epoch ms). SIGMA findings derived from this record
+                // inherit it via matchContext, and TimelineAdapter uses it
+                // as the persisted event's timestamp — giving the finding a
+                // real time in the Timeline instead of the old 0L → "Unknown"
+                // fallback. Value is 0L when no parseable time is available;
+                // TimelineAdapter treats 0L as "unknown" the same way.
+                "event_time_ms" to (accessTimestamp ?: 0L)
             ))
 
-            if (!isSystemUid) {
-                val accessTimestamp = lastAccessTime?.let { parseTimestamp(it) } ?: -1L
+            if (!isSystemUid && accessTimestamp != null) {
                 timeline.add(TimelineEvent(
                     timestamp = accessTimestamp,
                     source = "appops",
                     category = "permission_use",
                     description = "$pkg used $op" +
                         (lastAccessTime?.let { " at $it" } ?: ""),
-                    severity = if (op == "REQUEST_INSTALL_PACKAGES") "HIGH" else "INFO"
+                    severity = if (op == "REQUEST_INSTALL_PACKAGES") "HIGH" else "INFO",
+                    // Carried so the ScanOrchestrator dedup pass can match
+                    // this raw event against any SIGMA finding that fired
+                    // on the same (package, timestamp) tuple and drop the
+                    // raw row before persisting. See analyzeBugReport().
+                    packageName = pkg
                 ))
             }
         }
