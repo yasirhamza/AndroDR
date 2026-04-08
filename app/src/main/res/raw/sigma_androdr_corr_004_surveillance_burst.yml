@@ -1,0 +1,25 @@
+title: Surveillance permission burst
+id: androdr-corr-004
+status: production
+description: |
+  Three or more AppOps permission use events within five minutes on the same
+  package. Indicates a permission accept/use burst common to surveillanceware
+  first-run flows.
+author: AndroDR
+date: 2026-04-08
+tags:
+    - attack.t1429
+    - attack.t1430
+correlation:
+    type: event_count
+    rules:
+        - androdr-atom-permission-use
+    timespan: 5m
+    group-by:
+        - package_name
+    condition:
+        gte: 3
+display:
+    category: correlation
+    severity: high
+    label: "Multiple permissions accessed rapidly"

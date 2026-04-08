@@ -1,0 +1,22 @@
+title: Permission use followed by suspicious DNS lookup
+id: androdr-corr-003
+status: production
+description: |
+  Detects an AppOps permission use followed within 30 minutes by a DNS lookup
+  that matched an IOC indicator. Possible C2 activation right after data access.
+author: AndroDR
+date: 2026-04-08
+tags:
+    - attack.t1071.004
+correlation:
+    type: temporal_ordered
+    rules:
+        - androdr-atom-permission-use
+        - androdr-atom-dns-lookup
+    timespan: 30m
+    group-by:
+        - package_name
+display:
+    category: correlation
+    severity: high
+    label: "Permission use then suspicious DNS"
