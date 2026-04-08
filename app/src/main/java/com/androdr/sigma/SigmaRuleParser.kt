@@ -86,6 +86,7 @@ object SigmaRuleParser {
         )
     }
 
+    @Suppress("ThrowsCount") // each throw reports a distinct grammar error for rule authors
     private fun parseTimespan(ruleId: String, raw: String): Long {
         val m = TIMESPAN_REGEX.matchEntire(raw.trim())
             ?: throw CorrelationParseException.InvalidGrammar(ruleId, "invalid timespan '$raw'")

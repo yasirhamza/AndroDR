@@ -80,7 +80,9 @@ class BugReportAnalyzer @Inject constructor(
         // not the entire ZIP contents.
         if (sectionModules.isNotEmpty() && neededSections.isNotEmpty()) {
             val stream1 = openBugReportStream(bugReportUri, allLegacyFindings)
-                ?: return@withContext BugReportAnalysisResult(allFindings, allLegacyFindings, allTimelineEvents, allForensicEvents)
+                ?: return@withContext BugReportAnalysisResult(
+                    allFindings, allLegacyFindings, allTimelineEvents, allForensicEvents
+                )
 
             try {
                 ZipInputStream(stream1.buffered()).use { zip ->
@@ -144,7 +146,9 @@ class BugReportAnalyzer @Inject constructor(
                         description = "Failed to read zip contents (pass 1): ${e.message}"
                     )
                 )
-                return@withContext BugReportAnalysisResult(allFindings, allLegacyFindings, allTimelineEvents, allForensicEvents)
+                return@withContext BugReportAnalysisResult(
+                    allFindings, allLegacyFindings, allTimelineEvents, allForensicEvents
+                )
             }
         }
 
@@ -152,7 +156,9 @@ class BugReportAnalyzer @Inject constructor(
         // Each entry is streamed directly to modules without buffering into memory.
         if (rawModules.isNotEmpty()) {
             val stream2 = openBugReportStream(bugReportUri, allLegacyFindings)
-                ?: return@withContext BugReportAnalysisResult(allFindings, allLegacyFindings, allTimelineEvents, allForensicEvents)
+                ?: return@withContext BugReportAnalysisResult(
+                    allFindings, allLegacyFindings, allTimelineEvents, allForensicEvents
+                )
 
             try {
                 ZipInputStream(stream2.buffered()).use { zip ->

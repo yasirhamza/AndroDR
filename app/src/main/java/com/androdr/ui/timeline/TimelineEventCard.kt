@@ -1,3 +1,9 @@
+@file:Suppress("TooManyFunctions")
+// Compose file hosts both public card composables (event card, detail sheet,
+// cluster card) and private helpers (LinkedEvidenceRow, DetailSection, etc.)
+// that are tightly coupled to the timeline screen and would only fragment if
+// split across files.
+
 package com.androdr.ui.timeline
 
 import androidx.compose.foundation.BorderStroke
@@ -99,6 +105,7 @@ fun TimelineEventCard(
     }
 }
 
+@Suppress("LongMethod") // Compose detail sheet renders header + all metadata sections + linked evidence
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TimelineEventDetailSheet(

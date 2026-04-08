@@ -75,8 +75,10 @@ private data class DateEntry(
     val standaloneEvents: List<ForensicTimelineEvent> = emptyList()
 )
 
-@Suppress("LongMethod") // Timeline screen combines top bar, filter chips, grouped event list,
-// empty state, and export menu — inherently a longer composable.
+@Suppress("LongMethod", "CyclomaticComplexMethod")
+// Timeline screen combines top bar, filter chips, grouped event list,
+// empty state, export menu, detail sheet, and correlation-aware jump
+// handler — inherently a longer composable with more branches.
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TimelineScreen(

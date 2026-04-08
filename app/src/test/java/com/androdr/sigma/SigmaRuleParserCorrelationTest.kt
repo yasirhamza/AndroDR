@@ -1,6 +1,9 @@
 package com.androdr.sigma
 
-import org.junit.Assert.*
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertTrue
+import org.junit.Assert.assertFalse
 import org.junit.Test
 
 class SigmaRuleParserCorrelationTest {

@@ -79,7 +79,6 @@ fun Finding.toForensicTimelineEvent(
     // and multiple matches on the same scan rendered as indistinguishable
     // duplicate cards. Pull matchContext.domain as a last-resort IOC.
     val dnsMatchedDomain = this.matchContext["domain"]?.takeIf { it.isNotBlank() }
-    val dnsMatchedReason = this.matchContext["reason"]?.takeIf { it.isNotBlank() }
     val dnsIndicator = iocEvidence?.matchedIndicator ?: dnsMatchedDomain ?: ""
     val dnsIocType = iocEvidence?.iocType ?: (if (dnsMatchedDomain != null) "domain" else "")
     val dnsIocSource = iocEvidence?.source ?: (if (dnsMatchedDomain != null) "dns_monitor" else "")

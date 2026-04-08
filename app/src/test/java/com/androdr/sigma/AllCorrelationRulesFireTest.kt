@@ -41,6 +41,7 @@ class AllCorrelationRulesFireTest {
     )
 
     @Test
+    @Suppress("LongMethod") // end-to-end demo: all 4 rules + fixture + signal output
     fun `all four migrated correlation rules fire on a single synthetic timeline`() {
         // 1. Load + parse every rule.
         val rules = ruleFiles.map { SigmaRuleParser.parseCorrelation(loadYaml(it)) }
@@ -160,7 +161,7 @@ class AllCorrelationRulesFireTest {
             File("/home/yasir/AndroDR/app/src/main/res/raw/$filename")
         )
         return candidates.firstOrNull { it.exists() }?.readText()
-            ?: throw IllegalStateException(
+            ?: error(
                 "Could not locate $filename; tried: ${candidates.map { it.absolutePath }}"
             )
     }

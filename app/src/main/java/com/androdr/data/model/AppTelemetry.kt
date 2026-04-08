@@ -19,9 +19,15 @@ data class AppTelemetry(
     val servicePermissions: List<String> = emptyList(),
     val receiverPermissions: List<String> = emptyList(),
     val hasLauncherActivity: Boolean = true,
-    /** Epoch ms of first install. `0L` means unknown / not populated; consumers MUST treat as missing, not as the actual epoch. */
+    /**
+     * Epoch ms of first install. `0L` means unknown / not populated;
+     * consumers MUST treat as missing, not as the actual epoch.
+     */
     val firstInstallTime: Long = 0L,
-    /** Epoch ms of last update. `0L` means unknown / not populated; consumers MUST treat as missing, not as the actual epoch. */
+    /**
+     * Epoch ms of last update. `0L` means unknown / not populated;
+     * consumers MUST treat as missing, not as the actual epoch.
+     */
     val lastUpdateTime: Long = 0L
 ) {
     fun toFieldMap(): Map<String, Any?> = mapOf(

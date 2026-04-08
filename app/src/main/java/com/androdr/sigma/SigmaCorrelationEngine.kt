@@ -41,6 +41,7 @@ class SigmaCorrelationEngine @Inject constructor() {
         return signals
     }
 
+    @Suppress("LoopWithTooManyJumpStatements") // chain-matching loop legitimately uses break/continue
     private fun evaluateTemporalOrdered(
         rule: CorrelationRule,
         events: List<ForensicTimelineEvent>,
@@ -100,6 +101,7 @@ class SigmaCorrelationEngine @Inject constructor() {
         return results
     }
 
+    @Suppress("LoopWithTooManyJumpStatements") // unordered-all-fire uses break to short-circuit on match
     private fun evaluateTemporalUnordered(
         rule: CorrelationRule,
         events: List<ForensicTimelineEvent>,
@@ -139,7 +141,8 @@ class SigmaCorrelationEngine @Inject constructor() {
         val first = members.first()
         val last = members.last()
         val memberIds = members.joinToString(",") { it.id.toString() }
-        val detailsJson = """{"correlation_type":"${rule.type.name.lowercase()}","rule_id":"${rule.id}","member_event_ids":"$memberIds"}"""
+        val detailsJson = """{"correlation_type":"${rule.type.name.lowercase()}",""" +
+            """"rule_id":"${rule.id}","member_event_ids":"$memberIds"}"""
         return ForensicTimelineEvent(
             scanResultId = first.scanResultId,
             startTimestamp = first.startTimestamp,
