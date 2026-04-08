@@ -19,6 +19,7 @@ detection:
         surveillance_permission_count|gte: 2
     filter_known_good:
         package_name|ioc_lookup: known_good_app_db
+        from_trusted_store: true
     condition: selection and not filter_known_good
 level: high
 display:

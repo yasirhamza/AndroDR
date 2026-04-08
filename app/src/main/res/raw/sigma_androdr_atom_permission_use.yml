@@ -1,0 +1,16 @@
+title: Atom — permission used (AppOps)
+id: androdr-atom-permission-use
+status: production
+description: Internal atom rule. Matches permission usage events recorded by AppOpsModule (forensic_timeline category=permission_use).
+author: AndroDR
+date: 2026-04-08
+logsource:
+    product: androdr
+    service: timeline
+detection:
+    selection:
+        category: permission_use
+    condition: selection
+level: informational
+display:
+    suppress_finding: true

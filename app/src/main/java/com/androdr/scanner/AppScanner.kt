@@ -258,7 +258,9 @@ class AppScanner @Inject constructor(
             knownAppCategory = knownApp?.category?.name,
             servicePermissions = servicePermissions,
             receiverPermissions = receiverPermissions,
-            hasLauncherActivity = hasLauncherActivity
+            hasLauncherActivity = hasLauncherActivity,
+            firstInstallTime = pkg.firstInstallTime,
+            lastUpdateTime = pkg.lastUpdateTime
         )
     }
 

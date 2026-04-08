@@ -8,7 +8,7 @@ class TimelineExporterTest {
 
     private val events = listOf(
         ForensicTimelineEvent(
-            id = 1, timestamp = 1711900800000, source = "app_scanner",
+            id = 1, startTimestamp = 1711900800000, source = "app_scanner",
             category = "ioc_match", description = "IOC: com.evil.spy",
             severity = "CRITICAL", packageName = "com.evil.spy",
             iocIndicator = "com.evil.spy", iocType = "package_name",
@@ -16,7 +16,7 @@ class TimelineExporterTest {
             isFromRuntime = true
         ),
         ForensicTimelineEvent(
-            id = 2, timestamp = 1711900860000, source = "appops",
+            id = 2, startTimestamp = 1711900860000, source = "appops",
             category = "permission_use", description = "com.evil.spy used CAMERA",
             severity = "MEDIUM", packageName = "com.evil.spy",
             isFromBugreport = true
@@ -49,7 +49,7 @@ class TimelineExporterTest {
     fun `CSV export escapes commas in descriptions`() {
         val eventsWithComma = listOf(
             ForensicTimelineEvent(
-                id = 3, timestamp = 1000L, source = "test",
+                id = 3, startTimestamp = 1000L, source = "test",
                 category = "test", description = "value with, comma",
                 severity = "INFO"
             )
@@ -70,7 +70,7 @@ class TimelineExporterTest {
     fun `display names resolve when appName is empty`() {
         val eventsNoName = listOf(
             ForensicTimelineEvent(
-                id = 4, timestamp = 1711900800000, source = "appops",
+                id = 4, startTimestamp = 1711900800000, source = "appops",
                 category = "permission_use", description = "com.whatsapp used CAMERA",
                 severity = "INFO", packageName = "com.whatsapp"
             )
@@ -102,7 +102,7 @@ class TimelineExporterTest {
     fun `assessment shows no concerns for informational events`() {
         val infoEvents = listOf(
             ForensicTimelineEvent(
-                id = 5, timestamp = 1711900800000, source = "appops",
+                id = 5, startTimestamp = 1711900800000, source = "appops",
                 category = "permission_use", description = "test",
                 severity = "INFORMATIONAL", packageName = "com.test"
             )

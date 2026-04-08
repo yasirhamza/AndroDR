@@ -335,7 +335,7 @@ class SettingsViewModel @Inject constructor(
                             severity = event.severity,
                             description = event.details,
                             source = "androdr_scan",
-                            fetchedAt = event.timestamp
+                            fetchedAt = event.startTimestamp
                         )
                     }
                 android.util.Log.i(TAG, "STIX2 export: ${indicators.size} findings")

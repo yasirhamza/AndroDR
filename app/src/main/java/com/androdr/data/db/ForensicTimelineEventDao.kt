@@ -11,34 +11,34 @@ import kotlinx.coroutines.flow.Flow
 @Suppress("TooManyFunctions") // Room DAO with filtered queries for timeline
 interface ForensicTimelineEventDao {
 
-    @Query("SELECT * FROM forensic_timeline ORDER BY timestamp DESC LIMIT :limit")
+    @Query("SELECT * FROM forensic_timeline ORDER BY startTimestamp DESC LIMIT :limit")
     fun getRecentEvents(limit: Int = 500): Flow<List<ForensicTimelineEvent>>
 
     @Query("""
         SELECT * FROM forensic_timeline
         WHERE severity IN (:severities)
-        ORDER BY timestamp DESC LIMIT :limit
+        ORDER BY startTimestamp DESC LIMIT :limit
     """)
     fun getEventsBySeverity(severities: List<String>, limit: Int = 500): Flow<List<ForensicTimelineEvent>>
 
     @Query("""
         SELECT * FROM forensic_timeline
         WHERE source = :source
-        ORDER BY timestamp DESC LIMIT :limit
+        ORDER BY startTimestamp DESC LIMIT :limit
     """)
     fun getEventsBySource(source: String, limit: Int = 500): Flow<List<ForensicTimelineEvent>>
 
     @Query("""
         SELECT * FROM forensic_timeline
         WHERE packageName = :packageName
-        ORDER BY timestamp DESC LIMIT 500
+        ORDER BY startTimestamp DESC LIMIT 500
     """)
     fun getEventsByPackage(packageName: String): Flow<List<ForensicTimelineEvent>>
 
     @Query("""
         SELECT * FROM forensic_timeline
-        WHERE timestamp BETWEEN :startMs AND :endMs
-        ORDER BY timestamp DESC LIMIT 500
+        WHERE startTimestamp BETWEEN :startMs AND :endMs
+        ORDER BY startTimestamp DESC LIMIT 500
     """)
     fun getEventsInRange(startMs: Long, endMs: Long): Flow<List<ForensicTimelineEvent>>
 
@@ -48,14 +48,28 @@ interface ForensicTimelineEventDao {
     @Query("SELECT DISTINCT packageName FROM forensic_timeline WHERE packageName != '' ORDER BY packageName")
     suspend fun getDistinctPackages(): List<String>
 
-    @Query("SELECT * FROM forensic_timeline ORDER BY timestamp ASC LIMIT 10000")
+    @Query("SELECT DISTINCT packageName FROM forensic_timeline WHERE category = 'package_install'")
+    suspend fun getInstalledPackagesAlreadyEmitted(): List<String>
+
+    @Query("SELECT * FROM forensic_timeline ORDER BY startTimestamp ASC LIMIT 10000")
     suspend fun getAllForExport(): List<ForensicTimelineEvent>
 
+    @Query("SELECT * FROM forensic_timeline WHERE startTimestamp >= :sinceMs ORDER BY startTimestamp ASC")
+    suspend fun getEventsSince(sinceMs: Long): List<ForensicTimelineEvent>
+
+    /**
+     * Bulk insert returning the Room-assigned autoincrement IDs, in the same
+     * order as the input list. The correlation engine needs these IDs so that
+     * `matchContext.member_event_ids` can reference real rows (otherwise every
+     * member would be serialized as `id = 0` from the default value).
+     *
+     * Rows that were skipped by `OnConflictStrategy.IGNORE` get a `-1` entry.
+     */
     @Insert(onConflict = OnConflictStrategy.IGNORE)
-    suspend fun insertAll(events: List<ForensicTimelineEvent>)
+    suspend fun insertAll(events: List<ForensicTimelineEvent>): List<Long>
 
     @Insert(onConflict = OnConflictStrategy.IGNORE)
-    suspend fun insert(event: ForensicTimelineEvent)
+    suspend fun insert(event: ForensicTimelineEvent): Long
 
     @Query("DELETE FROM forensic_timeline WHERE createdAt < :cutoff")
     suspend fun deleteOlderThan(cutoff: Long)

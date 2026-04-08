@@ -1,0 +1,23 @@
+title: Sideloaded install followed by permission use
+id: androdr-corr-002
+status: production
+description: |
+  Detects an install event followed by an AppOps permission use on the same
+  package within one hour. Captures sideloaded surveillanceware that immediately
+  exercises sensitive permissions after install.
+author: AndroDR
+date: 2026-04-08
+tags:
+    - attack.t1626
+correlation:
+    type: temporal_ordered
+    rules:
+        - androdr-atom-package-install
+        - androdr-atom-permission-use
+    timespan: 1h
+    group-by:
+        - package_name
+display:
+    category: correlation
+    severity: high
+    label: "Install then permission use"

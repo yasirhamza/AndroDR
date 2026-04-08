@@ -3,6 +3,7 @@ package com.androdr.scanner
 import android.net.Uri
 import android.util.Log
 import com.androdr.data.db.DnsEventDao
+import com.androdr.data.db.ForensicTimelineEventDao
 import com.androdr.data.db.toForensicTimelineEvent
 import com.androdr.data.model.ScanResult
 import com.androdr.data.model.ScannerFailure
@@ -11,6 +12,7 @@ import com.androdr.ioc.IndicatorResolver
 import com.androdr.sigma.CveEvidenceProvider
 import com.androdr.sigma.Finding
 import com.androdr.sigma.FindingCategory
+import com.androdr.sigma.SigmaCorrelationEngine
 import com.androdr.sigma.SigmaRuleFeed
 import com.androdr.sigma.SigmaRuleEngine
 import kotlinx.coroutines.CancellationException
@@ -47,7 +49,10 @@ class ScanOrchestrator @Inject constructor(
     private val bugReportAnalyzer: BugReportAnalyzer,
     private val scanRepository: ScanRepository,
     private val dnsEventDao: DnsEventDao,
+    private val forensicTimelineEventDao: ForensicTimelineEventDao,
+    private val installEventEmitter: InstallEventEmitter,
     private val sigmaRuleEngine: SigmaRuleEngine,
+    private val sigmaCorrelationEngine: SigmaCorrelationEngine,
     private val indicatorResolver: IndicatorResolver,
     private val sigmaRuleFeed: SigmaRuleFeed,
     private val knownAppResolver: com.androdr.ioc.KnownAppResolver,
@@ -329,14 +334,45 @@ class ScanOrchestrator @Inject constructor(
         val usageEvents = usageEventsDeferred.await()
         val taggedUsageEvents = usageEvents.map { it.copy(scanResultId = result.id) }
 
+        // Correlation engine — emit install events for new packages, query a
+        // lookback window of existing events, then run the correlation pass
+        // INSIDE the repository's transaction once the new events have been
+        // assigned real Room IDs. Running the engine on pre-insert events
+        // produced signals with member_event_ids = "0,0,0" because every
+        // event's default id = 0L hadn't been replaced with the autoincrement
+        // value yet; the Timeline UI's expand-cluster path could not look up
+        // such members. Fixed in `saveScanWithCorrelation`.
+        val installEvents = runCatching {
+            installEventEmitter.emitNew(result.id, appTelemetry)
+        }.getOrDefault(emptyList())
+        val correlationRules = sigmaRuleEngine.getCorrelationRules()
+        val maxRuleWindowMs = correlationRules.maxOfOrNull { it.timespanMs } ?: 0L
+        val lookbackEvents = if (maxRuleWindowMs > 0) {
+            runCatching {
+                forensicTimelineEventDao.getEventsSince(System.currentTimeMillis() - maxRuleWindowMs)
+            }.getOrDefault(emptyList())
+        } else emptyList()
+
+        var correlationSignalCount = 0
         runCatching {
-            scanRepository.saveScanResults(
+            scanRepository.saveScanWithCorrelation(
                 scan = result,
-                findingTimelineEvents = findingTimelineEvents,
-                replaceUsageStatsEvents = taggedUsageEvents
-            )
-            Log.i(TAG, "Persisted scan ${result.id} with ${findingTimelineEvents.size} " +
-                "finding events and ${taggedUsageEvents.size} usage events (single transaction)")
+                findingTimelineEvents = installEvents + findingTimelineEvents,
+                replaceUsageStatsEvents = taggedUsageEvents,
+                lookbackEvents = lookbackEvents
+            ) { eventsWithIds ->
+                if (correlationRules.isEmpty() || eventsWithIds.isEmpty()) emptyList()
+                else {
+                    val bindings = sigmaRuleEngine.computeAtomBindings(eventsWithIds)
+                    val signals = sigmaCorrelationEngine.evaluate(correlationRules, eventsWithIds, bindings)
+                        .map { it.copy(scanResultId = result.id) }
+                    correlationSignalCount = signals.size
+                    signals
+                }
+            }
+            Log.i(TAG, "Persisted scan ${result.id} with ${findingTimelineEvents.size} finding, " +
+                "${installEvents.size} install, $correlationSignalCount signal, " +
+                "${taggedUsageEvents.size} usage events (single transaction)")
         }.onFailure { Log.e(TAG, "Failed to persist scan results", it) }
 
         // Progress is reset to Idle by the outer runFullScan() in its
@@ -442,26 +478,44 @@ class ScanOrchestrator @Inject constructor(
         // unmatched AppOps records (packages whose dangerous-op usage
         // didn't trigger any SIGMA rule) still appear as before.
         val coveredByFinding = findingEvents
-            .filter { it.timestamp > 0L && it.packageName.isNotEmpty() }
-            .mapTo(HashSet()) { it.packageName to it.timestamp }
+            .filter { it.startTimestamp > 0L && it.packageName.isNotEmpty() }
+            .mapTo(HashSet()) { it.packageName to it.startTimestamp }
         val rawEvents = result.timeline
             .filterNot { raw ->
                 raw.packageName != null &&
                     (raw.packageName to raw.timestamp) in coveredByFinding
             }
             .map { it.toForensicTimelineEvent(scanResult.id) }
-        val allBugReportTimelineEvents = findingEvents + rawEvents
+        // Phase 3: bug-report module-produced ForensicTimelineEvents (e.g.
+        // InstallTimeModule's package_install rows). These already carry
+        // isFromBugreport = true and scan-independent shape; stamp them
+        // with the scanResultId for history association.
+        val moduleForensicEvents = result.forensicEvents.map {
+            it.copy(scanResultId = scanResult.id)
+        }
+        val baseBugReportEvents = findingEvents + rawEvents + moduleForensicEvents
 
-        // Single transaction: persist scan row + all timeline events in one
-        // write. Bug-report analysis does not produce usage_stats rows, so
-        // replaceUsageStatsEvents = null (leaves existing usage_stats rows
-        // untouched). See ScanRepository.saveScanResults docs.
+        // Correlation engine runs inside the repository transaction AFTER the
+        // raw events get their Room autoincrement IDs. Before this change, the
+        // bug-report path evaluated correlation on pre-insert events whose
+        // `id` was still the default 0L, so every signal's member_event_ids
+        // serialized as "0,0,0" and the Timeline UI couldn't expand clusters.
+        // Bug reports are snapshots — no historical lookback query.
+        val brCorrelationRules = sigmaRuleEngine.getCorrelationRules()
         runCatching {
-            scanRepository.saveScanResults(
+            scanRepository.saveScanWithCorrelation(
                 scan = scanResult,
-                findingTimelineEvents = allBugReportTimelineEvents,
-                replaceUsageStatsEvents = null
-            )
+                findingTimelineEvents = baseBugReportEvents,
+                replaceUsageStatsEvents = null,
+                lookbackEvents = emptyList()
+            ) { eventsWithIds ->
+                if (brCorrelationRules.isEmpty() || eventsWithIds.isEmpty()) emptyList()
+                else {
+                    val bindings = sigmaRuleEngine.computeAtomBindings(eventsWithIds)
+                    sigmaCorrelationEngine.evaluate(brCorrelationRules, eventsWithIds, bindings)
+                        .map { it.copy(scanResultId = scanResult.id) }
+                }
+            }
         }.onFailure { Log.e(TAG, "Failed to persist bug-report scan results", it) }
 
         return result

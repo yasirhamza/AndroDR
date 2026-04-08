@@ -1,6 +1,31 @@
 version: 2
+# Dependabot replaces the OWASP dependency-check CI job (which kept timing
+# out on the NVD feed). GitHub's advisory database is the source of truth
+# and PRs only fire on real CVEs, not on every release.
+#
+# To keep the inbox quiet:
+#   - Quarterly cadence (not weekly).
+#   - Grouped updates so a single PR covers many packages.
+#   - GitHub repo notification settings: Watch -> Custom -> uncheck
+#     "Pull requests" so Dependabot PRs don't email you. Security alerts
+#     still surface in the Security tab without inbox spam.
 updates:
   - package-ecosystem: "gradle"
     directory: "/"
     schedule:
-      interval: "weekly"
+      interval: "monthly"
+    open-pull-requests-limit: 5
+    groups:
+      gradle-deps:
+        patterns:
+          - "*"
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "monthly"
+    open-pull-requests-limit: 3
+    groups:
+      gh-actions:
+        patterns:
+          - "*"

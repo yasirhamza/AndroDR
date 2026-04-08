@@ -84,13 +84,13 @@ object TimelineExporter {
         }
         appendLine()
 
-        val sorted = filtered.sortedByDescending { it.timestamp }
+        val sorted = filtered.sortedByDescending { it.startTimestamp }
         val dateFmt = SimpleDateFormat("yyyy-MM-dd", Locale.US)
         val timeFmt = SimpleDateFormat("HH:mm:ss", Locale.US)
         var currentDate = ""
         for (event in sorted) {
-            val date = if (event.timestamp > 0)
-                dateFmt.format(Date(event.timestamp))
+            val date = if (event.startTimestamp > 0)
+                dateFmt.format(Date(event.startTimestamp))
             else "Unknown"
             if (date != currentDate) {
                 currentDate = date
@@ -98,8 +98,8 @@ object TimelineExporter {
                 appendLine("  $date")
                 appendLine(THIN)
             }
-            val time = if (event.timestamp > 0) {
-                timeFmt.format(Date(event.timestamp))
+            val time = if (event.startTimestamp > 0) {
+                timeFmt.format(Date(event.startTimestamp))
             } else "??:??:??"
             val sev = event.severity.uppercase().padEnd(8)
             appendLine("  [$sev] $time  ${event.description}")
@@ -143,9 +143,9 @@ object TimelineExporter {
             timeZone = java.util.TimeZone.getTimeZone("UTC")
         }
 
-        for (event in events.sortedBy { it.timestamp }) {
-            val ts = event.timestamp.toString()
-            val iso = if (event.timestamp > 0) utcFmt.format(Date(event.timestamp)) else ""
+        for (event in events.sortedBy { it.startTimestamp }) {
+            val ts = event.startTimestamp.toString()
+            val iso = if (event.startTimestamp > 0) utcFmt.format(Date(event.startTimestamp)) else ""
             val module = csvEscape(event.source)
             val eventType = csvEscape(event.category)
             val data = csvEscape(event.description)

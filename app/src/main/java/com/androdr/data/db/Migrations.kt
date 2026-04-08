@@ -226,3 +226,62 @@ val MIGRATION_10_11 = object : Migration(10, 11) {
         )
     }
 }
+
+/**
+ * Sprint 75: ForensicTimelineEvent gains range semantics + a kind discriminator
+ * so correlation signals (derived from SIGMA rules operating over time windows)
+ * can live in the same table as raw events. Existing rows are backfilled via
+ * SQL column defaults (`endTimestamp = NULL`, `kind = 'event'`), and the legacy
+ * `timestamp` column is renamed to `startTimestamp`.
+ */
+@Suppress("MagicNumber")
+val MIGRATION_11_12 = object : Migration(11, 12) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        // Additive: new nullable column for range end
+        db.execSQL("ALTER TABLE forensic_timeline ADD COLUMN endTimestamp INTEGER DEFAULT NULL")
+        // Additive: discriminator distinguishing raw events from correlation signals
+        db.execSQL("ALTER TABLE forensic_timeline ADD COLUMN kind TEXT NOT NULL DEFAULT 'event'")
+        // Rename timestamp -> startTimestamp (Room 2.4+ / SQLite 3.25+ supports RENAME COLUMN)
+        db.execSQL("ALTER TABLE forensic_timeline RENAME COLUMN timestamp TO startTimestamp")
+        // Drop the old index and recreate it against the renamed column, plus a new kind index.
+        db.execSQL("DROP INDEX IF EXISTS index_forensic_timeline_timestamp")
+        db.execSQL(
+            "CREATE INDEX IF NOT EXISTS index_forensic_timeline_startTimestamp " +
+                "ON forensic_timeline(startTimestamp)"
+        )
+        db.execSQL(
+            "CREATE INDEX IF NOT EXISTS index_forensic_timeline_kind " +
+                "ON forensic_timeline(kind)"
+        )
+    }
+}
+
+/**
+ * Sprint 75 follow-up: backfill `correlationId = 'dns:<iocIndicator>'` on
+ * existing DNS-sourced rows so historical Graphite/Paragon-style findings can
+ * be linked to their triggering ioc_match rows by the Timeline UI. Without
+ * this backfill, every pre-fix scan leaves orphaned findings on the timeline
+ * that render as generic, indistinguishable cards with no jump-to-evidence
+ * path.
+ *
+ * Two row classes get the update:
+ *  - rows with `iocType = 'domain'` (the post-fix Finding.toForensicTimelineEvent
+ *    convention) or `category = 'ioc_match'` (raw DnsEvent-derived rows), and
+ *  - only rows where correlationId is currently empty/null (so re-running
+ *    the migration is idempotent by construction).
+ */
+@Suppress("MagicNumber")
+val MIGRATION_12_13 = object : Migration(12, 13) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            """
+            UPDATE forensic_timeline
+            SET correlationId = 'dns:' || iocIndicator
+            WHERE (correlationId IS NULL OR correlationId = '')
+              AND iocIndicator IS NOT NULL
+              AND iocIndicator != ''
+              AND (iocType = 'domain' OR category = 'ioc_match')
+            """.trimIndent()
+        )
+    }
+}

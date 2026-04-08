@@ -7,10 +7,7 @@ plugins {
     alias(libs.plugins.hilt) apply false
     alias(libs.plugins.ksp) apply false
     alias(libs.plugins.detekt) apply false
-    alias(libs.plugins.owasp.dependency.check)
 }
 
-dependencyCheck {
-    failBuildOnCVSS = 7.0f
-    formats = listOf("HTML", "JSON")
-}
+// OWASP dependency-check plugin removed -- replaced by Dependabot in
+// .github/dependabot.yml. The plugin kept timing out on the NVD feed.

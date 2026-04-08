@@ -84,10 +84,15 @@ fun TimelineScreen(
     onNavigateToHistory: (() -> Unit)? = null,
     viewModel: TimelineViewModel = hiltViewModel()
 ) {
-    // Apply deep-link filter once on first composition
+    // Apply deep-link filter once on first composition. Treat an empty
+    // `initialPackage` as "no filter" — the Apps screen uses empty to mean
+    // "this group has no real package (it's DNS-sourced), just show the
+    // timeline so the user can browse the underlying evidence".
     LaunchedEffect(initialPackage) {
-        if (initialPackage != null) {
-            viewModel.setPackageFilter(initialPackage)
+        when {
+            initialPackage == null -> Unit
+            initialPackage.isBlank() -> viewModel.setPackageFilter(null)
+            else -> viewModel.setPackageFilter(initialPackage)
         }
     }
 
@@ -420,11 +425,11 @@ fun TimelineScreen(
                 val clusterBuilder = mutableMapOf<String, MutableList<EventCluster>>()
                 val standaloneBuilder = mutableMapOf<String, MutableList<ForensicTimelineEvent>>()
                 clusters.forEach { cluster ->
-                    val key = dateKey(cluster.events.first().timestamp)
+                    val key = dateKey(cluster.events.first().startTimestamp)
                     clusterBuilder.getOrPut(key) { mutableListOf() }.add(cluster)
                 }
                 standalone.forEach { event ->
-                    val key = dateKey(event.timestamp)
+                    val key = dateKey(event.startTimestamp)
                     standaloneBuilder.getOrPut(key) { mutableListOf() }.add(event)
                 }
                 val allKeys = (clusterBuilder.keys + standaloneBuilder.keys).toSet()
@@ -439,17 +444,17 @@ fun TimelineScreen(
                     DateEntry(
                         clusters = clusterBuilder[key].orEmpty()
                             .sortedByDescending { c ->
-                                c.events.maxOfOrNull { it.timestamp } ?: 0L
+                                c.events.maxOfOrNull { it.startTimestamp } ?: 0L
                             },
                         standaloneEvents = standaloneBuilder[key].orEmpty()
-                            .sortedByDescending { it.timestamp }
+                            .sortedByDescending { it.startTimestamp }
                     )
                 }
                 val sorted = immutableMap.keys.sortedByDescending { key ->
                     val allEvents =
                         (immutableMap[key]?.clusters?.flatMap { it.events }.orEmpty()) +
                             (immutableMap[key]?.standaloneEvents.orEmpty())
-                    allEvents.maxOfOrNull { it.timestamp } ?: 0L
+                    allEvents.maxOfOrNull { it.startTimestamp } ?: 0L
                 }
                 immutableMap to sorted
             }
@@ -495,9 +500,21 @@ fun TimelineScreen(
 
     // Detail bottom sheet
     selectedEvent?.let { event ->
+        // Linked Evidence: other events that share this row's effective
+        // correlation key. Covers two link shapes:
+        //   * DNS-sourced findings + ioc_match rows → "dns:<domain>"
+        //   * Package-scoped activity (install, lifecycle, permission_use,
+        //     findings) → "pkg:<packageName>"
+        // See TimelineClusters.effectiveCorrelationId for precedence.
+        val key = event.effectiveCorrelationId()
+        val related = if (key.isNotEmpty()) {
+            events.filter { it.effectiveCorrelationId() == key && it.id != event.id }
+        } else emptyList()
         TimelineEventDetailSheet(
             event = event,
-            onDismiss = { selectedEvent = null }
+            onDismiss = { selectedEvent = null },
+            relatedEvents = related,
+            onJumpToRelated = { selectedEvent = it }
         )
     }
 

@@ -3,10 +3,12 @@ package com.androdr.scanner
 import android.content.Context
 import android.net.Uri
 import android.util.Log
+import com.androdr.data.model.ForensicTimelineEvent
 import com.androdr.data.model.TimelineEvent
 import com.androdr.ioc.IndicatorResolver
 import com.androdr.scanner.bugreport.BugreportModule
 import com.androdr.scanner.bugreport.DumpsysSectionParser
+import com.androdr.scanner.bugreport.InstallTimeModule
 import com.androdr.sigma.Finding
 import com.androdr.sigma.SigmaRuleEngine
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -38,10 +40,12 @@ class BugReportAnalyzer @Inject constructor(
     data class BugReportAnalysisResult(
         val findings: List<Finding>,
         val legacyFindings: List<BugReportFinding>,
-        val timeline: List<TimelineEvent>
+        val timeline: List<TimelineEvent>,
+        val forensicEvents: List<ForensicTimelineEvent> = emptyList()
     )
 
     private val sectionParser = DumpsysSectionParser()
+    private val installTimeModule = InstallTimeModule()
 
     /**
      * Analyzes a bug report zip identified by [bugReportUri].
@@ -62,6 +66,7 @@ class BugReportAnalyzer @Inject constructor(
         val allFindings = mutableListOf<Finding>()
         val allLegacyFindings = mutableListOf<BugReportFinding>()
         val allTimelineEvents = mutableListOf<TimelineEvent>()
+        val allForensicEvents = mutableListOf<ForensicTimelineEvent>()
 
         // Separate modules into section-targeted vs raw-entry
         val sectionModules = modules.filter { it.targetSections != null }
@@ -75,7 +80,7 @@ class BugReportAnalyzer @Inject constructor(
         // not the entire ZIP contents.
         if (sectionModules.isNotEmpty() && neededSections.isNotEmpty()) {
             val stream1 = openBugReportStream(bugReportUri, allLegacyFindings)
-                ?: return@withContext BugReportAnalysisResult(allFindings, allLegacyFindings, allTimelineEvents)
+                ?: return@withContext BugReportAnalysisResult(allFindings, allLegacyFindings, allTimelineEvents, allForensicEvents)
 
             try {
                 ZipInputStream(stream1.buffered()).use { zip ->
@@ -102,6 +107,15 @@ class BugReportAnalyzer @Inject constructor(
                             // Only break if we actually found sections — otherwise
                             // try the next dumpstate-like entry.
                             if (sections.isNotEmpty()) {
+                                // InstallTimeModule: parse the `package` section
+                                // to emit package_install ForensicTimelineEvents.
+                                // Interchangeable with runtime InstallEventEmitter
+                                // output — same shape, isFromBugreport = true.
+                                sections["package"]?.let { packageSection ->
+                                    allForensicEvents.addAll(
+                                        installTimeModule.parseSection(packageSection)
+                                    )
+                                }
                                 for (mod in sectionModules) {
                                     for (sectionName in mod.targetSections!!) {
                                         val sectionText = sections[sectionName] ?: continue
@@ -130,7 +144,7 @@ class BugReportAnalyzer @Inject constructor(
                         description = "Failed to read zip contents (pass 1): ${e.message}"
                     )
                 )
-                return@withContext BugReportAnalysisResult(allFindings, allLegacyFindings, allTimelineEvents)
+                return@withContext BugReportAnalysisResult(allFindings, allLegacyFindings, allTimelineEvents, allForensicEvents)
             }
         }
 
@@ -138,7 +152,7 @@ class BugReportAnalyzer @Inject constructor(
         // Each entry is streamed directly to modules without buffering into memory.
         if (rawModules.isNotEmpty()) {
             val stream2 = openBugReportStream(bugReportUri, allLegacyFindings)
-                ?: return@withContext BugReportAnalysisResult(allFindings, allLegacyFindings, allTimelineEvents)
+                ?: return@withContext BugReportAnalysisResult(allFindings, allLegacyFindings, allTimelineEvents, allForensicEvents)
 
             try {
                 ZipInputStream(stream2.buffered()).use { zip ->
@@ -177,7 +191,7 @@ class BugReportAnalyzer @Inject constructor(
 
         Log.d(TAG, "Collected ${allTimelineEvents.size} timeline events, " +
             "${allFindings.size} SIGMA findings, ${allLegacyFindings.size} legacy findings")
-        BugReportAnalysisResult(allFindings, allLegacyFindings, allTimelineEvents)
+        BugReportAnalysisResult(allFindings, allLegacyFindings, allTimelineEvents, allForensicEvents)
     }
 
     /**
