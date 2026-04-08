@@ -27,6 +27,29 @@ class SigmaRuleEngine @Inject constructor(
     @Volatile private var iocLookups: Map<String, (Any) -> Boolean> = emptyMap()
     @Volatile private var evidenceProviders: Map<String, EvidenceProvider> = emptyMap()
     @Volatile private var remoteRulesLoaded = false
+    @Volatile private var correlationRules: List<CorrelationRule> = emptyList()
+
+    fun getCorrelationRules(): List<CorrelationRule> = correlationRules
+
+    /**
+     * Validate that every referenced rule ID in [parsedRules] corresponds to a
+     * detection rule that has already been loaded, then store the correlation rules.
+     * Must be called after detection rules are loaded (bundled and/or remote).
+     */
+    fun loadCorrelationRules(parsedRules: List<CorrelationRule>) {
+        synchronized(ruleLock) {
+            val knownIds = rules.map { it.id }.toSet()
+            parsedRules.forEach { rule ->
+                rule.referencedRuleIds.forEach { ref ->
+                    if (ref !in knownIds) {
+                        throw CorrelationParseException.UnresolvedRule(rule.id, ref)
+                    }
+                }
+            }
+            correlationRules = parsedRules
+            Log.i(TAG, "Loaded ${correlationRules.size} correlation rules")
+        }
+    }
 
     // Explicit manifest is inherently long but R8-safe;
     // catch-all prevents one bad rule from blocking all others
