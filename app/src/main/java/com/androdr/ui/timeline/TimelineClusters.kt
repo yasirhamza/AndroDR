@@ -54,6 +54,8 @@ fun partitionSignals(
     val clusters = mutableListOf<EventCluster>()
     val clusteredIds = mutableSetOf<Long>()
 
+    // Pass 1 — explicit correlation signals produced by SigmaCorrelationEngine.
+    // Each signal row carries a JSON payload listing its member event IDs.
     allEvents.asSequence()
         .filter { it.kind == "signal" }
         .forEach { sig ->
@@ -64,8 +66,47 @@ fun partitionSignals(
             clusteredIds.add(sig.id)
         }
 
+    // Pass 2 — implicit pre-linkage via correlationId. DNS-sourced findings
+    // (androdr-005 Graphite/Paragon, Malicious Domain, etc.) and their
+    // underlying `ioc_match` rows all share `correlationId = "dns:<domain>"`
+    // but don't go through SigmaCorrelationEngine because the linkage is
+    // computed at row-write time (see TimelineAdapter). Collapse any
+    // unclustered events that share a non-empty correlationId into one
+    // EventCluster so the Timeline shows "one thing that happened" instead
+    // of 6+ indistinguishable rows per DNS hit.
+    allEvents.asSequence()
+        .filter { it.kind != "signal" && it.id !in clusteredIds && it.correlationId.isNotBlank() }
+        .groupBy { it.correlationId }
+        .filter { (_, members) -> members.size >= PRE_LINKED_MIN_MEMBERS }
+        .forEach { (_, members) ->
+            val sorted = members.sortedBy { it.startTimestamp }
+            clusters.add(
+                EventCluster(
+                    events = sorted,
+                    pattern = CorrelationPattern.PRE_LINKED,
+                    label = prelinkedLabel(sorted)
+                )
+            )
+            clusteredIds.addAll(sorted.map { it.id })
+        }
+
     val standalone = allEvents.filter { it.kind != "signal" && it.id !in clusteredIds }
     return clusters to standalone
+}
+
+private const val PRE_LINKED_MIN_MEMBERS = 2
+
+/**
+ * Picks a human-readable label for a pre-linked cluster. Prefers the highest
+ * severity app_risk row's description (e.g. "Graphite/Paragon Spyware:
+ * 0-38.com"), falling back to the first member if none of the rows are
+ * findings.
+ */
+private fun prelinkedLabel(members: List<ForensicTimelineEvent>): String {
+    val bestFinding = members
+        .filter { it.category == "app_risk" || it.category == "device_posture" }
+        .maxByOrNull { severityOrdinal(it.severity) }
+    return bestFinding?.description ?: members.first().description
 }
 
 private fun buildCluster(
