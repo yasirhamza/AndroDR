@@ -103,7 +103,9 @@ fun TimelineEventCard(
 @Composable
 fun TimelineEventDetailSheet(
     event: ForensicTimelineEvent,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    relatedEvents: List<ForensicTimelineEvent> = emptyList(),
+    onJumpToRelated: (ForensicTimelineEvent) -> Unit = {}
 ) {
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -155,7 +157,73 @@ fun TimelineEventDetailSheet(
                     event.attackTechniqueId
                 )
             }
+
+            // Linked Evidence: other timeline rows that share this event's
+            // correlationId. For DNS-sourced findings (e.g. androdr-005
+            // Graphite/Paragon) this lets the user jump from a finding card
+            // to the underlying ioc_match row that triggered it, and vice
+            // versa — closes the "unlinked alerts" gap surfaced during
+            // Sprint #75 real-device validation.
+            if (relatedEvents.isNotEmpty()) {
+                HorizontalDivider()
+                Text(
+                    text = "Linked Evidence (${relatedEvents.size})",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    relatedEvents.take(8).forEach { related ->
+                        LinkedEvidenceRow(related = related, onTap = { onJumpToRelated(related) })
+                    }
+                    if (relatedEvents.size > 8) {
+                        Text(
+                            text = "+${relatedEvents.size - 8} more",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+
             Spacer(modifier = Modifier.height(32.dp))
+        }
+    }
+}
+
+@Composable
+private fun LinkedEvidenceRow(
+    related: ForensicTimelineEvent,
+    onTap: () -> Unit
+) {
+    val (icon, color) = severityIconAndColor(related.severity)
+    Card(
+        modifier = Modifier.fillMaxWidth().clickable(onClick = onTap),
+        colors = CardDefaults.cardColors(containerColor = color.copy(alpha = 0.06f))
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = related.severity,
+                tint = color,
+                modifier = Modifier.size(16.dp)
+            )
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = related.description,
+                    style = MaterialTheme.typography.bodySmall,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = "${formatTime(related.startTimestamp)}  ${related.category}",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
         }
     }
 }

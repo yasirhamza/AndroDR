@@ -84,10 +84,15 @@ fun TimelineScreen(
     onNavigateToHistory: (() -> Unit)? = null,
     viewModel: TimelineViewModel = hiltViewModel()
 ) {
-    // Apply deep-link filter once on first composition
+    // Apply deep-link filter once on first composition. Treat an empty
+    // `initialPackage` as "no filter" — the Apps screen uses empty to mean
+    // "this group has no real package (it's DNS-sourced), just show the
+    // timeline so the user can browse the underlying evidence".
     LaunchedEffect(initialPackage) {
-        if (initialPackage != null) {
-            viewModel.setPackageFilter(initialPackage)
+        when {
+            initialPackage == null -> Unit
+            initialPackage.isBlank() -> viewModel.setPackageFilter(null)
+            else -> viewModel.setPackageFilter(initialPackage)
         }
     }
 
@@ -495,9 +500,19 @@ fun TimelineScreen(
 
     // Detail bottom sheet
     selectedEvent?.let { event ->
+        // Linked Evidence: other events that share the current event's
+        // correlationId. For Sprint 75 we use this to join DNS-sourced
+        // findings (androdr-005 "Graphite/Paragon Spyware: 0-38.com") to
+        // the raw ioc_match row ("DNS: 0-38.com [HaGeZi TIF]"). Both sides
+        // stamp `correlationId = "dns:<matched_domain>"`.
+        val related = if (event.correlationId.isNotEmpty()) {
+            events.filter { it.correlationId == event.correlationId && it.id != event.id }
+        } else emptyList()
         TimelineEventDetailSheet(
             event = event,
-            onDismiss = { selectedEvent = null }
+            onDismiss = { selectedEvent = null },
+            relatedEvents = related,
+            onJumpToRelated = { selectedEvent = it }
         )
     }
 

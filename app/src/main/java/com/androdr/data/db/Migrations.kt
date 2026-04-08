@@ -255,3 +255,33 @@ val MIGRATION_11_12 = object : Migration(11, 12) {
         )
     }
 }
+
+/**
+ * Sprint 75 follow-up: backfill `correlationId = 'dns:<iocIndicator>'` on
+ * existing DNS-sourced rows so historical Graphite/Paragon-style findings can
+ * be linked to their triggering ioc_match rows by the Timeline UI. Without
+ * this backfill, every pre-fix scan leaves orphaned findings on the timeline
+ * that render as generic, indistinguishable cards with no jump-to-evidence
+ * path.
+ *
+ * Two row classes get the update:
+ *  - rows with `iocType = 'domain'` (the post-fix Finding.toForensicTimelineEvent
+ *    convention) or `category = 'ioc_match'` (raw DnsEvent-derived rows), and
+ *  - only rows where correlationId is currently empty/null (so re-running
+ *    the migration is idempotent by construction).
+ */
+@Suppress("MagicNumber")
+val MIGRATION_12_13 = object : Migration(12, 13) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            """
+            UPDATE forensic_timeline
+            SET correlationId = 'dns:' || iocIndicator
+            WHERE (correlationId IS NULL OR correlationId = '')
+              AND iocIndicator IS NOT NULL
+              AND iocIndicator != ''
+              AND (iocType = 'domain' OR category = 'ioc_match')
+            """.trimIndent()
+        )
+    }
+}

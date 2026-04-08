@@ -145,7 +145,22 @@ fun AppScanScreen(
             group = group,
             onDismiss = { selectedGroup = null },
             onViewInTimeline = onNavigateToTimeline?.let { nav ->
-                { nav(group.packageName); selectedGroup = null }
+                {
+                    // For unknown/DNS-only groups, don't pass the bogus
+                    // "unknown" package as a filter — it filters out every
+                    // event. Pass empty so the Timeline opens with no
+                    // package filter and the user can scroll through all
+                    // DNS evidence (the Graphite/Paragon findings and the
+                    // linked ioc_match rows).
+                    val target = if (group.packageName.isBlank() ||
+                        group.packageName == "unknown") {
+                        ""
+                    } else {
+                        group.packageName
+                    }
+                    nav(target)
+                    selectedGroup = null
+                }
             }
         )
     }
@@ -349,7 +364,14 @@ private fun AppGroupDetailSheet(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Uninstall button (pinned at bottom)
+            // Uninstall button (pinned at bottom). Disabled when the group
+            // has no real package — happens for DNS-sourced findings like
+            // androdr-005 Graphite/Paragon that land in the "unknown" bucket
+            // because Finding.matchContext carries a `domain` key but no
+            // `package_name`. There is nothing to uninstall for a DNS C2
+            // match, and showing a live red button for it is misleading.
+            val hasRealPackage = group.packageName.isNotBlank() &&
+                group.packageName != "unknown"
             Button(
                 onClick = {
                     val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
@@ -357,6 +379,7 @@ private fun AppGroupDetailSheet(
                     }
                     context.startActivity(intent)
                 },
+                enabled = hasRealPackage,
                 modifier = Modifier.fillMaxWidth(),
                 colors = ButtonDefaults.buttonColors(
                     containerColor = MaterialTheme.colorScheme.error
@@ -368,7 +391,7 @@ private fun AppGroupDetailSheet(
                     modifier = Modifier.size(18.dp)
                 )
                 Spacer(modifier = Modifier.width(8.dp))
-                Text("Uninstall App")
+                Text(if (hasRealPackage) "Uninstall App" else "No Package to Uninstall")
             }
 
             // View in Timeline button
