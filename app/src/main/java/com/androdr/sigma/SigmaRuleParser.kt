@@ -16,9 +16,6 @@ object SigmaRuleParser {
         .setAllowDuplicateKeys(false)
         .build()
 
-    /** Allow `SigmaRuleParser()` call syntax for test ergonomics; returns the singleton. */
-    operator fun invoke(): SigmaRuleParser = this
-
     @Suppress("UNCHECKED_CAST", "CyclomaticComplexMethod", "LongMethod", "ThrowsCount")
     fun parseCorrelation(yaml: String): CorrelationRule {
         val load = Load(settings)

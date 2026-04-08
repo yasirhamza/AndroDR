@@ -5,8 +5,6 @@ import org.junit.Test
 
 class SigmaRuleParserCorrelationTest {
 
-    private fun parser() = SigmaRuleParser()
-
     @Test
     fun `parses temporal_ordered rule`() {
         val yaml = """
@@ -25,7 +23,7 @@ class SigmaRuleParserCorrelationTest {
                 severity: high
                 label: "Install then admin"
         """.trimIndent()
-        val rule = parser().parseCorrelation(yaml)
+        val rule = SigmaRuleParser.parseCorrelation(yaml)
         assertEquals("androdr-corr-001", rule.id)
         assertEquals(CorrelationType.TEMPORAL_ORDERED, rule.type)
         assertEquals(2, rule.referencedRuleIds.size)
@@ -50,7 +48,7 @@ class SigmaRuleParserCorrelationTest {
                 severity: high
                 label: "Burst"
         """.trimIndent()
-        val rule = parser().parseCorrelation(yaml)
+        val rule = SigmaRuleParser.parseCorrelation(yaml)
         assertEquals(CorrelationType.EVENT_COUNT, rule.type)
         assertEquals(3, rule.minEvents)
         assertEquals(300_000L, rule.timespanMs)
@@ -58,7 +56,7 @@ class SigmaRuleParserCorrelationTest {
 
     @Test(expected = CorrelationParseException.UnsupportedType::class)
     fun `value_count rejected at parse time`() {
-        parser().parseCorrelation("""
+        SigmaRuleParser.parseCorrelation("""
             title: T
             id: x
             correlation:
@@ -71,7 +69,7 @@ class SigmaRuleParserCorrelationTest {
 
     @Test(expected = CorrelationParseException.TimespanExceeded::class)
     fun `timespan exceeding 90 days rejected`() {
-        parser().parseCorrelation("""
+        SigmaRuleParser.parseCorrelation("""
             title: T
             id: x
             correlation:
@@ -83,7 +81,7 @@ class SigmaRuleParserCorrelationTest {
 
     @Test(expected = CorrelationParseException.InvalidGrammar::class)
     fun `missing rules list rejected`() {
-        parser().parseCorrelation("""
+        SigmaRuleParser.parseCorrelation("""
             title: T
             id: x
             correlation:
@@ -94,7 +92,7 @@ class SigmaRuleParserCorrelationTest {
 
     @Test
     fun `parses timespan in seconds, minutes, hours, days`() {
-        fun span(s: String): Long = parser().parseCorrelation("""
+        fun span(s: String): Long = SigmaRuleParser.parseCorrelation("""
             title: T
             id: x
             correlation:
