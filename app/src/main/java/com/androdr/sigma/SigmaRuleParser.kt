@@ -16,17 +16,17 @@ object SigmaRuleParser {
         .setAllowDuplicateKeys(false)
         .build()
 
-    @Suppress("UNCHECKED_CAST", "CyclomaticComplexMethod", "LongMethod", "ThrowsCount")
+    @Suppress("CyclomaticComplexMethod", "LongMethod", "ThrowsCount")
     fun parseCorrelation(yaml: String): CorrelationRule {
         val load = Load(settings)
+        @Suppress("UNCHECKED_CAST")
         val root = load.loadFromString(yaml) as? Map<String, Any?>
             ?: throw CorrelationParseException.InvalidGrammar("<unknown>", "top-level YAML is not a map")
         val id = root["id"] as? String
             ?: throw CorrelationParseException.InvalidGrammar("<unknown>", "missing id")
         val title = root["title"] as? String ?: id
 
-        val corr = root["correlation"] as? Map<String, Any?>
-            ?: throw CorrelationParseException.InvalidGrammar(id, "missing correlation block")
+        val corr = root["correlation"].asStringMap(id, "correlation")
 
         val typeStr = corr["type"] as? String
             ?: throw CorrelationParseException.InvalidGrammar(id, "missing correlation.type")
@@ -37,12 +37,7 @@ object SigmaRuleParser {
             else -> throw CorrelationParseException.UnsupportedType(id, typeStr)
         }
 
-        val rulesRaw = corr["rules"] as? List<*>
-            ?: throw CorrelationParseException.InvalidGrammar(id, "missing or invalid rules list")
-        val rules = rulesRaw.map {
-            it as? String
-                ?: throw CorrelationParseException.InvalidGrammar(id, "rules list entries must be strings")
-        }
+        val rules = corr["rules"].asStringList(id, "rules")
         if (rules.isEmpty()) {
             throw CorrelationParseException.InvalidGrammar(id, "rules list is empty")
         }
@@ -51,18 +46,28 @@ object SigmaRuleParser {
             ?: throw CorrelationParseException.InvalidGrammar(id, "missing timespan")
         val timespanMs = parseTimespan(id, timespanStr)
 
-        val groupBy = (corr["group-by"] as? List<*>)?.mapNotNull { it as? String } ?: emptyList()
+        val groupBy = if (corr.containsKey("group-by")) {
+            corr["group-by"].asStringList(id, "group-by")
+        } else {
+            emptyList()
+        }
 
         val minEvents = if (type == CorrelationType.EVENT_COUNT) {
-            val cond = corr["condition"] as? Map<String, Any?>
-                ?: throw CorrelationParseException.InvalidGrammar(id, "event_count requires condition.gte")
+            val cond = corr["condition"].asStringMap(id, "condition")
             (cond["gte"] as? Number)?.toInt()
-                ?: throw CorrelationParseException.InvalidGrammar(id, "event_count requires condition.gte (int)")
+                ?: throw CorrelationParseException.InvalidGrammar(
+                    id,
+                    "event_count requires condition.gte (Int), got ${cond["gte"]}"
+                )
         } else {
             1
         }
 
-        val display = (root["display"] as? Map<String, Any?>) ?: emptyMap()
+        val display = if (root.containsKey("display")) {
+            root["display"].asStringMap(id, "display")
+        } else {
+            emptyMap()
+        }
         val severity = display["severity"] as? String ?: "medium"
         val label = display["label"] as? String ?: title
         val category = display["category"] as? String ?: "correlation"
@@ -222,6 +227,27 @@ object SigmaRuleParser {
             summaryTemplate = displayMap["summary_template"]?.toString() ?: "",
             guidance = displayMap["guidance"]?.toString() ?: ""
         )
+    }
+
+    private fun Any?.asStringMap(ruleId: String, field: String): Map<String, Any?> {
+        @Suppress("UNCHECKED_CAST")
+        return (this as? Map<String, Any?>)
+            ?: throw CorrelationParseException.InvalidGrammar(
+                ruleId,
+                "$field: expected mapping, got ${this?.javaClass?.simpleName ?: "null"}"
+            )
+    }
+
+    private fun Any?.asStringList(ruleId: String, field: String): List<String> {
+        val list = (this as? List<*>)
+            ?: throw CorrelationParseException.InvalidGrammar(
+                ruleId,
+                "$field: expected list, got ${this?.javaClass?.simpleName ?: "null"}"
+            )
+        return list.mapIndexed { idx, item ->
+            item as? String
+                ?: throw CorrelationParseException.InvalidGrammar(ruleId, "$field[$idx] must be a string")
+        }
     }
 
     private fun parseFieldAndModifier(key: String): Pair<String, SigmaModifier> {
