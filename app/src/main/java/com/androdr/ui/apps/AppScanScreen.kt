@@ -152,13 +152,10 @@ fun AppScanScreen(
                     // package filter and the user can scroll through all
                     // DNS evidence (the Graphite/Paragon findings and the
                     // linked ioc_match rows).
-                    val target = if (group.packageName.isBlank() ||
-                        group.packageName == "unknown") {
-                        ""
-                    } else {
-                        group.packageName
-                    }
-                    nav(target)
+                    // Empty packageName = Network Detections bucket
+                    // (findings without a package_name). Navigate to the
+                    // Timeline unfiltered so the DNS evidence is visible.
+                    nav(if (group.packageName.isBlank()) "" else group.packageName)
                     selectedGroup = null
                 }
             }
@@ -212,11 +209,13 @@ private fun AppGroupCard(group: AppGroup, onClick: () -> Unit) {
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.SemiBold
                 )
-                Text(
-                    text = group.packageName,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                if (group.packageName.isNotBlank()) {
+                    Text(
+                        text = group.packageName,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
                 if (group.findings.size > 1) {
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
@@ -295,11 +294,13 @@ private fun AppGroupDetailSheet(
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.SemiBold
                         )
-                        Text(
-                            text = group.packageName,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+                        if (group.packageName.isNotBlank()) {
+                            Text(
+                                text = group.packageName,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
                     }
 
                     RiskChip(level = group.highestLevel)
@@ -365,13 +366,12 @@ private fun AppGroupDetailSheet(
             Spacer(modifier = Modifier.height(16.dp))
 
             // Uninstall button (pinned at bottom). Disabled when the group
-            // has no real package — happens for DNS-sourced findings like
-            // androdr-005 Graphite/Paragon that land in the "unknown" bucket
+            // has no real package — the Network Detections bucket, where
+            // DNS-sourced findings like androdr-005 Graphite/Paragon land
             // because Finding.matchContext carries a `domain` key but no
             // `package_name`. There is nothing to uninstall for a DNS C2
             // match, and showing a live red button for it is misleading.
-            val hasRealPackage = group.packageName.isNotBlank() &&
-                group.packageName != "unknown"
+            val hasRealPackage = group.packageName.isNotBlank()
             Button(
                 onClick = {
                     val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {

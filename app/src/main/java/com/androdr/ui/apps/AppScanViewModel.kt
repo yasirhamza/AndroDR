@@ -45,16 +45,32 @@ class AppScanViewModel @Inject constructor(
             else findings.filter { it.level.equals(level, ignoreCase = true) }
 
             filtered
-                .groupBy { it.matchContext["package_name"] ?: "unknown" }
+                // Findings without a package_name (e.g. DNS-sourced rules
+                // like androdr-005 Graphite/Paragon that match on `domain`)
+                // are collected into a synthetic "network" bucket. Before
+                // this change they landed in a "unknown" group with
+                // "unknown" as both app name and package, which read as a
+                // broken label to the user. The synthetic bucket renders
+                // as "Network Detections" with an empty package line, so
+                // the Apps screen no longer claims the group is an app.
+                .groupBy {
+                    it.matchContext["package_name"]?.takeIf { p -> p.isNotBlank() }
+                        ?: NETWORK_BUCKET_KEY
+                }
                 .map { (pkg, pkgFindings) ->
-                    val appName = pkgFindings.firstNotNullOfOrNull {
-                        it.matchContext["app_name"]
-                    } ?: pkg
+                    val isNetworkBucket = pkg == NETWORK_BUCKET_KEY
+                    val displayPackage = if (isNetworkBucket) "" else pkg
+                    val displayName = when {
+                        isNetworkBucket -> "Network Detections"
+                        else -> pkgFindings.firstNotNullOfOrNull {
+                            it.matchContext["app_name"]
+                        } ?: pkg
+                    }
                     val highestLevel = pkgFindings.maxOfOrNull { levelScore(it.level) } ?: 0
                     val highestLevelStr = pkgFindings.maxByOrNull { levelScore(it.level) }?.level ?: "low"
                     AppGroup(
-                        packageName = pkg,
-                        appName = appName,
+                        packageName = displayPackage,
+                        appName = displayName,
                         highestLevel = highestLevelStr,
                         highestScore = highestLevel,
                         findings = pkgFindings.sortedByDescending { levelScore(it.level) }
@@ -66,6 +82,11 @@ class AppScanViewModel @Inject constructor(
     /** Updates the active filter. Pass null to show all risk levels. */
     fun setFilter(level: String?) {
         _filterLevel.value = level
+    }
+
+    companion object {
+        /** Synthetic grouping key for findings without a package_name. */
+        private const val NETWORK_BUCKET_KEY = "__network_bucket__"
     }
 }
 
