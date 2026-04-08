@@ -35,7 +35,7 @@ Shipping #1 alone gives a clean rule engine firing on nothing real. Shipping #2 
 1. **Scan-time evaluation** — `ScanOrchestrator` invokes the correlation engine after SIGMA detection, results persisted as `ForensicTimelineEvent` rows. View-time was rejected because rule-evaluation cost grows silently with rule count, has no durability, and pushes work onto the Timeline screen's open path.
 2. **Upstream SIGMA correlation grammar** — full compliance, subset implementation. Rule files using supported types are valid upstream SIGMA and could in principle be authored by the community.
 3. **Three correlation types supported:** `temporal_ordered`, `event_count`, `temporal`. Unsupported types (`value_count`, nested correlations) fail at parse time with a clear "unsupported correlation type" error.
-4. **Atom rules** — thin pass-through SIGMA rules that match raw event types (`package_install`, `permission_grant`, `device_admin_grant`, `dns_lookup`) with no extra filtering. Tagged `level: informational` so they don't render as standalone findings. Correlations reference atoms by ID, not filtered detection rules like `androdr-013`.
+4. **Atom rules** — thin pass-through SIGMA rules that match raw event categories (`package_install`, `permission_use`, `device_admin_grant`, `ioc_match`) with no extra filtering. Tagged `level: informational` so they don't render as standalone findings. Correlations reference atoms by ID, not filtered detection rules like `androdr-013`.
 5. **Per-rule windowed DB queries** — for each correlation rule, query exactly its `timespan` window from `forensic_timeline`. Individual `timespan` capped at 90 days at parse time.
 6. **SIEM-aligned event model** — `ForensicTimelineEvent` gains `startTimestamp` (rename of `timestamp`), `endTimestamp: Long?`, and `kind: String` discriminator (`event` for raw, `signal` for correlation results).
 7. **Install events emitted once per package** — first scan emits all installed packages; subsequent scans only emit *newly installed* packages. True install monitoring, not re-emission noise.
@@ -170,7 +170,7 @@ status: production
 correlation:
     type: event_count
     rules:
-        - androdr-atom-permission-grant
+        - androdr-atom-permission-use
     timespan: 5m
     group-by:
         - package_name
@@ -212,10 +212,10 @@ correlation:
 
 Authored as thin SIGMA detection rules in `app/src/main/res/raw/`:
 
-- `sigma_androdr_atom_package_install.yml` — matches `event_type: package_install`
-- `sigma_androdr_atom_device_admin_grant.yml` — matches `event_type: device_admin_grant`
-- `sigma_androdr_atom_permission_grant.yml` — matches `event_type: permission_grant`
-- `sigma_androdr_atom_dns_lookup.yml` — matches `event_type: dns_lookup` with `reason != null` (suspicious DNS)
+- `sigma_androdr_atom_package_install.yml` — matches `category: package_install`
+- `sigma_androdr_atom_device_admin_grant.yml` — matches `category: device_admin_grant` (no current emitter; see Deferred items)
+- `sigma_androdr_atom_permission_use.yml` — matches `category: permission_use` (AppOps usage events)
+- `sigma_androdr_atom_dns_lookup.yml` — matches `category: ioc_match` (DNS IOC hits recorded by TimelineAdapter)
 
 Example:
 
@@ -296,6 +296,10 @@ These are documented here so future-you doesn't re-derive the gap:
 - **Multi-field `group-by`** — current migrations only need single-field grouping. Parser supports `group-by:` as a list but only uses the first element.
 - **`condition.lt` and `condition.eq`** — `event_count` migration only needs `gte`. Other operators rejected at parse time.
 - **Cross-scan correlation lookback beyond 90 days** — capped intentionally; correlations beyond a month are likely the wrong feature shape.
+
+### Open issues
+
+- **`device_admin_grant` atom has no current emitter** — The atom rule parses and loads, but no code writes `forensic_timeline` rows with `category = "device_admin_grant"`. As a result, `androdr-corr-001` (install-then-admin) will not fire on real events until an emitter is added. Tracked in [issue #79](https://github.com/yasirhamza/AndroDR/issues/79).
 
 ---
 

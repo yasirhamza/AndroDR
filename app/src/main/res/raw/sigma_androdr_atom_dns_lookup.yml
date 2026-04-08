@@ -1,7 +1,7 @@
-title: Atom — suspicious DNS lookup
+title: Atom — DNS IOC match
 id: androdr-atom-dns-lookup
 status: production
-description: Internal atom rule. Matches DNS lookup events that were flagged by the VPN layer (reason != null).
+description: Internal atom rule. Matches DNS lookups whose domain matched an IOC indicator (recorded in forensic_timeline with category=ioc_match).
 author: AndroDR
 date: 2026-04-08
 logsource:

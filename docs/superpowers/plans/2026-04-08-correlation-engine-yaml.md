@@ -23,7 +23,7 @@
 - `app/src/main/java/com/androdr/sigma/CorrelationParseException.kt` — sealed exception hierarchy
 - `app/src/main/res/raw/sigma_androdr_atom_package_install.yml`
 - `app/src/main/res/raw/sigma_androdr_atom_device_admin_grant.yml`
-- `app/src/main/res/raw/sigma_androdr_atom_permission_grant.yml`
+- `app/src/main/res/raw/sigma_androdr_atom_permission_use.yml`
 - `app/src/main/res/raw/sigma_androdr_atom_dns_lookup.yml`
 - `app/src/main/res/raw/sigma_androdr_corr_001_install_then_admin.yml`
 - `app/src/main/res/raw/sigma_androdr_corr_002_install_then_permission.yml`
@@ -715,6 +715,8 @@ display:
 
 - [ ] **Step 5.2: Create `sigma_androdr_atom_device_admin_grant.yml`**
 
+> NOTE: No code currently emits `category: device_admin_grant` to `forensic_timeline`. The atom parses and loads, but `corr-001` (install-then-admin) will not fire on real events until an emitter is added. Tracked in issue #79; see spec § Open issues.
+
 ```yaml
 title: Atom — device admin granted
 id: androdr-atom-device-admin-grant
@@ -734,13 +736,13 @@ display:
     suppress_finding: true
 ```
 
-- [ ] **Step 5.3: Create `sigma_androdr_atom_permission_grant.yml`**
+- [ ] **Step 5.3: Create `sigma_androdr_atom_permission_use.yml`**
 
 ```yaml
-title: Atom — permission granted
-id: androdr-atom-permission-grant
+title: Atom — permission used (AppOps)
+id: androdr-atom-permission-use
 status: production
-description: Internal atom rule. Matches raw permission grant events for use by correlation rules.
+description: Internal atom rule. Matches permission usage events recorded by AppOpsModule (forensic_timeline category=permission_use).
 author: AndroDR
 date: 2026-04-08
 logsource:
@@ -748,7 +750,7 @@ logsource:
     service: timeline
 detection:
     selection:
-        category: permission_grant
+        category: permission_use
     condition: selection
 level: informational
 display:
@@ -758,10 +760,10 @@ display:
 - [ ] **Step 5.4: Create `sigma_androdr_atom_dns_lookup.yml`**
 
 ```yaml
-title: Atom — suspicious DNS lookup
+title: Atom — DNS IOC match
 id: androdr-atom-dns-lookup
 status: production
-description: Internal atom rule. Matches DNS lookup events that were flagged by the VPN layer (reason != null).
+description: Internal atom rule. Matches DNS lookups whose domain matched an IOC indicator (recorded in forensic_timeline with category=ioc_match).
 author: AndroDR
 date: 2026-04-08
 logsource:
@@ -769,7 +771,7 @@ logsource:
     service: timeline
 detection:
     selection:
-        category: dns_match
+        category: ioc_match
     condition: selection
 level: informational
 display:
@@ -902,7 +904,7 @@ class SigmaRuleParserCorrelationTest {
             id: androdr-corr-004
             correlation:
                 type: event_count
-                rules: [androdr-atom-permission-grant]
+                rules: [androdr-atom-permission-use]
                 timespan: 5m
                 group-by: [package_name]
                 condition:
@@ -1204,9 +1206,9 @@ class SigmaCorrelationEngineTest {
     @Test
     fun `event_count fires when threshold met within window`() {
         val events = listOf(
-            event(1, 1000, "permission_grant"),
-            event(2, 2000, "permission_grant"),
-            event(3, 3000, "permission_grant")
+            event(1, 1000, "permission_use"),
+            event(2, 2000, "permission_use"),
+            event(3, 3000, "permission_use")
         )
         val binds = bindings(
             1L to setOf("atom-perm"),
@@ -1221,8 +1223,8 @@ class SigmaCorrelationEngineTest {
     @Test
     fun `event_count does not fire when below threshold`() {
         val events = listOf(
-            event(1, 1000, "permission_grant"),
-            event(2, 2000, "permission_grant")
+            event(1, 1000, "permission_use"),
+            event(2, 2000, "permission_use")
         )
         val binds = bindings(1L to setOf("atom-perm"), 2L to setOf("atom-perm"))
         val signals = SigmaCorrelationEngine().evaluate(listOf(burstRule), events, binds)
@@ -1446,6 +1448,8 @@ git commit -m "feat(sigma): SigmaCorrelationEngine evaluator for 3 correlation t
 
 - [ ] **Step 9.1: Create `sigma_androdr_corr_001_install_then_admin.yml`**
 
+> NOTE: This rule depends on `androdr-atom-device-admin-grant`, which has no current event producer. The correlation will parse and load but will not fire on real events until a `device_admin_grant` emitter is added. See spec § Open issues and issue #79.
+
 ```yaml
 title: Sideloaded install followed by device admin grant
 id: androdr-corr-001
@@ -1485,7 +1489,7 @@ correlation:
     type: temporal_ordered
     rules:
         - androdr-atom-package-install
-        - androdr-atom-permission-grant
+        - androdr-atom-permission-use
     timespan: 1h
     group-by:
         - package_name
@@ -1509,7 +1513,7 @@ tags:
 correlation:
     type: temporal_ordered
     rules:
-        - androdr-atom-permission-grant
+        - androdr-atom-permission-use
         - androdr-atom-dns-lookup
     timespan: 30m
     group-by:
@@ -1535,7 +1539,7 @@ tags:
 correlation:
     type: event_count
     rules:
-        - androdr-atom-permission-grant
+        - androdr-atom-permission-use
     timespan: 5m
     group-by:
         - package_name

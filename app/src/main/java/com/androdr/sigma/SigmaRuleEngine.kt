@@ -166,7 +166,7 @@ class SigmaRuleEngine @Inject constructor(
             // findings UI (see ReportFormatter / DashboardScreen / BugReportScreen).
             R.raw.sigma_androdr_atom_package_install,
             R.raw.sigma_androdr_atom_device_admin_grant,
-            R.raw.sigma_androdr_atom_permission_grant,
+            R.raw.sigma_androdr_atom_permission_use,
             R.raw.sigma_androdr_atom_dns_lookup,
         )
     }
