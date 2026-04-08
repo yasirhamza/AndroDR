@@ -51,6 +51,11 @@ fun DnsEvent.toForensicTimelineEvent(indicator: com.androdr.data.model.Indicator
             realCampaign != null -> realCampaign
             else -> extractDnsCampaign(this.reason)
         },
+        // Linkage key for the Timeline UI to associate this DNS event with
+        // any SIGMA finding fired by the DNS-scan path on the same domain.
+        // Matches the correlationId stamped on Finding rows in
+        // Finding.toForensicTimelineEvent when matchContext["domain"] is set.
+        correlationId = if (isMatched) "dns:${this.domain}" else "",
         isFromRuntime = true
     )
 }
@@ -63,6 +68,21 @@ fun Finding.toForensicTimelineEvent(
     val campaignTag = this.tags.filter { it.startsWith("campaign.") }
         .joinToString(" / ") { it.removePrefix("campaign.").replaceFirstChar { c -> c.uppercase() } }
         .ifEmpty { null }
+
+    // DNS-sourced findings (rules with logsource.service = dns_monitor and
+    // selection `domain|ioc_lookup: domain_ioc_db`) don't produce an
+    // Evidence.IocMatch instance — they match via the ioc_lookup modifier
+    // which only sets matchContext["domain"] to the queried hostname.
+    // Without this fallback, the persisted row lost the matched domain
+    // entirely: iocIndicator was blank, there was no way for the Timeline
+    // UI to show "which domain triggered the Graphite/Paragon finding",
+    // and multiple matches on the same scan rendered as indistinguishable
+    // duplicate cards. Pull matchContext.domain as a last-resort IOC.
+    val dnsMatchedDomain = this.matchContext["domain"]?.takeIf { it.isNotBlank() }
+    val dnsMatchedReason = this.matchContext["reason"]?.takeIf { it.isNotBlank() }
+    val dnsIndicator = iocEvidence?.matchedIndicator ?: dnsMatchedDomain ?: ""
+    val dnsIocType = iocEvidence?.iocType ?: (if (dnsMatchedDomain != null) "domain" else "")
+    val dnsIocSource = iocEvidence?.source ?: (if (dnsMatchedDomain != null) "dns_monitor" else "")
 
     // Runtime-scan findings use the scan timestamp. Bug-report findings try
     // to inherit a real per-event timestamp from their evidence:
@@ -97,16 +117,24 @@ fun Finding.toForensicTimelineEvent(
             FindingCategory.DEVICE_POSTURE -> "device_posture"
             FindingCategory.NETWORK -> "network_anomaly"
         },
-        description = this.title,
+        // For DNS findings, append the matched domain to the title so the
+        // Timeline card shows "Graphite/Paragon Spyware: 0-38.com" instead
+        // of 3 indistinguishable "Graphite/Paragon Spyware" rows.
+        description = if (dnsMatchedDomain != null) "${this.title}: $dnsMatchedDomain" else this.title,
         details = this.description,
         severity = this.level.uppercase(),
         packageName = this.matchContext["package_name"] ?: "",
         appName = this.matchContext["app_name"] ?: "",
         apkHash = this.matchContext["apk_hash"] ?: "",
-        iocIndicator = iocEvidence?.matchedIndicator ?: "",
-        iocType = iocEvidence?.iocType ?: "",
-        iocSource = iocEvidence?.source ?: "",
+        iocIndicator = dnsIndicator,
+        iocType = dnsIocType,
+        iocSource = dnsIocSource,
         campaignName = campaignTag ?: "",
+        // For DNS findings, use the matched domain as a linkage key. The
+        // Timeline UI can join on correlationId to find the underlying
+        // ioc_match row (which has iocIndicator = same domain). This gives
+        // users a jump-to-evidence path without a schema change.
+        correlationId = if (dnsMatchedDomain != null) "dns:$dnsMatchedDomain" else "",
         ruleId = this.ruleId,
         scanResultId = scanResult.id,
         attackTechniqueId = this.tags.firstOrNull { it.startsWith("attack.t") }
