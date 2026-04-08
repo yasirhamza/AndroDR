@@ -251,6 +251,7 @@ class SigmaRuleEngine @Inject constructor(
             R.raw.sigma_androdr_atom_device_admin_grant,
             R.raw.sigma_androdr_atom_permission_use,
             R.raw.sigma_androdr_atom_dns_lookup,
+            R.raw.sigma_androdr_atom_app_launch,
             // Correlation rules — parsed via SigmaRuleParser.parseCorrelation
             // (wired in Task 10). The detection parser silently skips these
             // files today because they have no `detection:` block.

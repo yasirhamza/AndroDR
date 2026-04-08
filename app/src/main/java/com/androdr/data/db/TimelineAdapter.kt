@@ -8,21 +8,52 @@ import com.androdr.sigma.Evidence
 import com.androdr.sigma.Finding
 import com.androdr.sigma.FindingCategory
 
-fun DnsEvent.toForensicTimelineEvent(): ForensicTimelineEvent = ForensicTimelineEvent(
-    startTimestamp = this.timestamp,
-    source = "dns_monitor",
-    category = if (this.reason != null) "ioc_match" else "dns_query",
-    description = "DNS: ${this.domain}" +
-        (this.reason?.let { " [MATCHED: $it]" } ?: ""),
-    severity = if (this.reason != null) "HIGH" else "INFO",
-    packageName = this.appName ?: "",
-    processUid = this.appUid,
-    iocIndicator = if (this.reason != null) this.domain else "",
-    iocType = if (this.reason != null) "domain" else "",
-    iocSource = if (this.reason != null) extractDnsIocSource(this.reason) else "",
-    campaignName = if (this.reason != null) extractDnsCampaign(this.reason) else "",
-    isFromRuntime = true
-)
+fun DnsEvent.toForensicTimelineEvent(): ForensicTimelineEvent =
+    toForensicTimelineEvent(indicator = null)
+
+/**
+ * Overload that takes the enriched [Indicator] row looked up by
+ * `ScanRepository.logDnsEventsBatch` off the VPN hot path. When the indicator
+ * carries a real campaign name (as opposed to the VPN bloom filter's empty
+ * stub), the timeline row's `campaignName`, `severity`, and `iocSource` are
+ * populated from the indicator metadata instead of the raw reason string.
+ */
+fun DnsEvent.toForensicTimelineEvent(indicator: com.androdr.data.model.Indicator?): ForensicTimelineEvent {
+    val isMatched = this.reason != null
+    val realCampaign = indicator?.campaign?.takeIf { it.isNotBlank() }
+    val realSeverity = indicator?.severity?.takeIf { it.isNotBlank() && it.uppercase() != "UNKNOWN" }
+    val realSource = indicator?.source?.takeIf { it.isNotBlank() }
+    val realDescription = indicator?.description?.takeIf { it.isNotBlank() }
+    return ForensicTimelineEvent(
+        startTimestamp = this.timestamp,
+        source = "dns_monitor",
+        category = if (isMatched) "ioc_match" else "dns_query",
+        description = "DNS: ${this.domain}" +
+            (if (isMatched && realCampaign != null) " [$realCampaign]"
+             else this.reason?.let { " [MATCHED: $it]" } ?: ""),
+        details = realDescription ?: "",
+        severity = when {
+            !isMatched -> "INFO"
+            realSeverity != null -> realSeverity.uppercase()
+            else -> "HIGH"
+        },
+        packageName = this.appName ?: "",
+        processUid = this.appUid,
+        iocIndicator = if (isMatched) this.domain else "",
+        iocType = if (isMatched) "domain" else "",
+        iocSource = when {
+            !isMatched -> ""
+            realSource != null -> realSource
+            else -> extractDnsIocSource(this.reason)
+        },
+        campaignName = when {
+            !isMatched -> ""
+            realCampaign != null -> realCampaign
+            else -> extractDnsCampaign(this.reason)
+        },
+        isFromRuntime = true
+    )
+}
 
 fun Finding.toForensicTimelineEvent(
     scanResult: ScanResult,

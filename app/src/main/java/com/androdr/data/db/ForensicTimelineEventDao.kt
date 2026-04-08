@@ -57,11 +57,19 @@ interface ForensicTimelineEventDao {
     @Query("SELECT * FROM forensic_timeline WHERE startTimestamp >= :sinceMs ORDER BY startTimestamp ASC")
     suspend fun getEventsSince(sinceMs: Long): List<ForensicTimelineEvent>
 
+    /**
+     * Bulk insert returning the Room-assigned autoincrement IDs, in the same
+     * order as the input list. The correlation engine needs these IDs so that
+     * `matchContext.member_event_ids` can reference real rows (otherwise every
+     * member would be serialized as `id = 0` from the default value).
+     *
+     * Rows that were skipped by `OnConflictStrategy.IGNORE` get a `-1` entry.
+     */
     @Insert(onConflict = OnConflictStrategy.IGNORE)
-    suspend fun insertAll(events: List<ForensicTimelineEvent>)
+    suspend fun insertAll(events: List<ForensicTimelineEvent>): List<Long>
 
     @Insert(onConflict = OnConflictStrategy.IGNORE)
-    suspend fun insert(event: ForensicTimelineEvent)
+    suspend fun insert(event: ForensicTimelineEvent): Long
 
     @Query("DELETE FROM forensic_timeline WHERE createdAt < :cutoff")
     suspend fun deleteOlderThan(cutoff: Long)

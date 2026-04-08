@@ -334,9 +334,14 @@ class ScanOrchestrator @Inject constructor(
         val usageEvents = usageEventsDeferred.await()
         val taggedUsageEvents = usageEvents.map { it.copy(scanResultId = result.id) }
 
-        // Correlation engine — emit install events for new packages, build a
-        // candidate event set (lookback + new install + new findings), run
-        // the engine, and collect signals to persist alongside findings.
+        // Correlation engine — emit install events for new packages, query a
+        // lookback window of existing events, then run the correlation pass
+        // INSIDE the repository's transaction once the new events have been
+        // assigned real Room IDs. Running the engine on pre-insert events
+        // produced signals with member_event_ids = "0,0,0" because every
+        // event's default id = 0L hadn't been replaced with the autoincrement
+        // value yet; the Timeline UI's expand-cluster path could not look up
+        // such members. Fixed in `saveScanWithCorrelation`.
         val installEvents = runCatching {
             installEventEmitter.emitNew(result.id, appTelemetry)
         }.getOrDefault(emptyList())
@@ -347,24 +352,26 @@ class ScanOrchestrator @Inject constructor(
                 forensicTimelineEventDao.getEventsSince(System.currentTimeMillis() - maxRuleWindowMs)
             }.getOrDefault(emptyList())
         } else emptyList()
-        val candidateEvents = lookbackEvents + installEvents + findingTimelineEvents
-        val correlationSignals = if (correlationRules.isNotEmpty() && candidateEvents.isNotEmpty()) {
-            runCatching {
-                val bindings = sigmaRuleEngine.computeAtomBindings(candidateEvents)
-                sigmaCorrelationEngine.evaluate(correlationRules, candidateEvents, bindings)
-                    .map { it.copy(scanResultId = result.id) }
-            }.getOrDefault(emptyList())
-        } else emptyList()
-        val allTimelineEvents = installEvents + findingTimelineEvents + correlationSignals
 
+        var correlationSignalCount = 0
         runCatching {
-            scanRepository.saveScanResults(
+            scanRepository.saveScanWithCorrelation(
                 scan = result,
-                findingTimelineEvents = allTimelineEvents,
-                replaceUsageStatsEvents = taggedUsageEvents
-            )
+                findingTimelineEvents = installEvents + findingTimelineEvents,
+                replaceUsageStatsEvents = taggedUsageEvents,
+                lookbackEvents = lookbackEvents
+            ) { eventsWithIds ->
+                if (correlationRules.isEmpty() || eventsWithIds.isEmpty()) emptyList()
+                else {
+                    val bindings = sigmaRuleEngine.computeAtomBindings(eventsWithIds)
+                    val signals = sigmaCorrelationEngine.evaluate(correlationRules, eventsWithIds, bindings)
+                        .map { it.copy(scanResultId = result.id) }
+                    correlationSignalCount = signals.size
+                    signals
+                }
+            }
             Log.i(TAG, "Persisted scan ${result.id} with ${findingTimelineEvents.size} finding, " +
-                "${installEvents.size} install, ${correlationSignals.size} signal, " +
+                "${installEvents.size} install, $correlationSignalCount signal, " +
                 "${taggedUsageEvents.size} usage events (single transaction)")
         }.onFailure { Log.e(TAG, "Failed to persist scan results", it) }
 
@@ -488,28 +495,27 @@ class ScanOrchestrator @Inject constructor(
         }
         val baseBugReportEvents = findingEvents + rawEvents + moduleForensicEvents
 
-        // Correlation engine over the self-contained bug-report event set.
+        // Correlation engine runs inside the repository transaction AFTER the
+        // raw events get their Room autoincrement IDs. Before this change, the
+        // bug-report path evaluated correlation on pre-insert events whose
+        // `id` was still the default 0L, so every signal's member_event_ids
+        // serialized as "0,0,0" and the Timeline UI couldn't expand clusters.
         // Bug reports are snapshots — no historical lookback query.
         val brCorrelationRules = sigmaRuleEngine.getCorrelationRules()
-        val brSignals = if (brCorrelationRules.isNotEmpty() && baseBugReportEvents.isNotEmpty()) {
-            runCatching {
-                val bindings = sigmaRuleEngine.computeAtomBindings(baseBugReportEvents)
-                sigmaCorrelationEngine.evaluate(brCorrelationRules, baseBugReportEvents, bindings)
-                    .map { it.copy(scanResultId = scanResult.id) }
-            }.getOrDefault(emptyList())
-        } else emptyList()
-        val allBugReportTimelineEvents = baseBugReportEvents + brSignals
-
-        // Single transaction: persist scan row + all timeline events in one
-        // write. Bug-report analysis does not produce usage_stats rows, so
-        // replaceUsageStatsEvents = null (leaves existing usage_stats rows
-        // untouched). See ScanRepository.saveScanResults docs.
         runCatching {
-            scanRepository.saveScanResults(
+            scanRepository.saveScanWithCorrelation(
                 scan = scanResult,
-                findingTimelineEvents = allBugReportTimelineEvents,
-                replaceUsageStatsEvents = null
-            )
+                findingTimelineEvents = baseBugReportEvents,
+                replaceUsageStatsEvents = null,
+                lookbackEvents = emptyList()
+            ) { eventsWithIds ->
+                if (brCorrelationRules.isEmpty() || eventsWithIds.isEmpty()) emptyList()
+                else {
+                    val bindings = sigmaRuleEngine.computeAtomBindings(eventsWithIds)
+                    sigmaCorrelationEngine.evaluate(brCorrelationRules, eventsWithIds, bindings)
+                        .map { it.copy(scanResultId = scanResult.id) }
+                }
+            }
         }.onFailure { Log.e(TAG, "Failed to persist bug-report scan results", it) }
 
         return result
