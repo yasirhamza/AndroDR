@@ -134,8 +134,16 @@ object TimelineExporter {
     }
 
     fun formatCsv(events: List<ForensicTimelineEvent>): String = buildString {
+        // Column set mirrors the on-screen Timeline detail sheet plus the
+        // clustering/correlation fields the UI uses to render cluster cards
+        // and the Linked Evidence section. Without rule_id + correlation_id
+        // + kind, a CSV consumer can't tell whether a row is a raw event
+        // or a correlation signal, which rule produced it, or which other
+        // rows share its cluster — the same information the Timeline UI
+        // shows but previously dropped on export.
         appendLine(
-            "timestamp,isodate,module,event,data,package,severity," +
+            "timestamp,isodate,end_timestamp,end_isodate,kind,module,event,data,package," +
+                "severity,rule_id,correlation_id,scan_result_id," +
                 "ioc_indicator,ioc_type,ioc_source,campaign,mitre_technique,apk_hash,details"
         )
 
@@ -146,11 +154,17 @@ object TimelineExporter {
         for (event in events.sortedBy { it.startTimestamp }) {
             val ts = event.startTimestamp.toString()
             val iso = if (event.startTimestamp > 0) utcFmt.format(Date(event.startTimestamp)) else ""
+            val endTs = event.endTimestamp?.toString() ?: ""
+            val endIso = event.endTimestamp?.let { if (it > 0) utcFmt.format(Date(it)) else "" } ?: ""
+            val kind = csvEscape(event.kind)
             val module = csvEscape(event.source)
             val eventType = csvEscape(event.category)
             val data = csvEscape(event.description)
             val pkg = csvEscape(event.packageName)
             val sev = event.severity
+            val ruleId = csvEscape(event.ruleId)
+            val correlationId = csvEscape(event.correlationId)
+            val scanId = event.scanResultId.toString()
             val ioc = csvEscape(event.iocIndicator)
             val iocType = csvEscape(event.iocType)
             val iocSrc = csvEscape(event.iocSource)
@@ -159,7 +173,7 @@ object TimelineExporter {
             val hash = csvEscape(event.apkHash)
             val details = csvEscape(event.details)
             @Suppress("MaxLineLength") // CSV row must be a single appendLine call
-            appendLine("$ts,$iso,$module,$eventType,$data,$pkg,$sev,$ioc,$iocType,$iocSrc,$campaign,$mitre,$hash,$details")
+            appendLine("$ts,$iso,$endTs,$endIso,$kind,$module,$eventType,$data,$pkg,$sev,$ruleId,$correlationId,$scanId,$ioc,$iocType,$iocSrc,$campaign,$mitre,$hash,$details")
         }
     }
 

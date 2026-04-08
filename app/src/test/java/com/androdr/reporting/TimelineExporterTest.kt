@@ -42,7 +42,61 @@ class TimelineExporterTest {
         assertTrue(lines[0].contains("ioc_source"))
         assertTrue(lines[0].contains("mitre_technique"))
         assertTrue(lines[0].contains("details"))
+        // Sprint 75 follow-up — correlation + clustering fields must be
+        // present so a CSV consumer can reconstruct what the Timeline UI
+        // renders (cluster membership, rule linkage, kind, scan scoping).
+        assertTrue(lines[0].contains("end_timestamp"))
+        assertTrue(lines[0].contains("kind"))
+        assertTrue(lines[0].contains("rule_id"))
+        assertTrue(lines[0].contains("correlation_id"))
+        assertTrue(lines[0].contains("scan_result_id"))
         assertTrue(lines.size >= 3)
+    }
+
+    @Test
+    fun `CSV export emits correlation fields from signal rows`() {
+        val signalEvent = ForensicTimelineEvent(
+            id = 100L,
+            startTimestamp = 1_700_000_000_000L,
+            endTimestamp = 1_700_000_300_000L,
+            kind = "signal",
+            category = "correlation",
+            source = "sigma_correlation_engine",
+            description = "Install then device admin grant",
+            severity = "high",
+            packageName = "com.test",
+            ruleId = "androdr-corr-001",
+            correlationId = "androdr-corr-001:1,2",
+            scanResultId = 42L,
+            details = """{"correlation_type":"temporal_ordered","member_event_ids":"1,2"}"""
+        )
+        val csv = TimelineExporter.formatCsv(listOf(signalEvent))
+        val dataRow = csv.lines().drop(1).first { it.isNotBlank() }
+        assertTrue("kind column populated", dataRow.contains("signal"))
+        assertTrue("rule_id column populated", dataRow.contains("androdr-corr-001"))
+        assertTrue("correlation_id column populated", dataRow.contains("androdr-corr-001:1,2"))
+        assertTrue("scan_result_id column populated", dataRow.contains(",42,"))
+        // endTimestamp is epoch ms for signals
+        assertTrue("end_timestamp populated", dataRow.contains("1700000300000"))
+    }
+
+    @Test
+    fun `CSV export emits pkg correlation id stamped at write time`() {
+        val pkgLinked = ForensicTimelineEvent(
+            id = 200L,
+            startTimestamp = 1_700_000_100_000L,
+            kind = "event",
+            category = "package_install",
+            source = "app_scanner",
+            description = "Package installed: Test App",
+            severity = "info",
+            packageName = "com.test.app",
+            correlationId = "pkg:com.test.app"
+        )
+        val csv = TimelineExporter.formatCsv(listOf(pkgLinked))
+        val dataRow = csv.lines().drop(1).first { it.isNotBlank() }
+        assertTrue(dataRow.contains("pkg:com.test.app"))
+        assertTrue(dataRow.contains("package_install"))
     }
 
     @Test
