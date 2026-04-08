@@ -285,3 +285,55 @@ val MIGRATION_12_13 = object : Migration(12, 13) {
         )
     }
 }
+
+/**
+ * Sprint 75 second follow-up: backfill packageName + correlationId on
+ * historical bug-report `permission_use` rows. Before commit 2a6e3071
+ * (2026-04-08 PR #76), `AppOpsModule` emitted TimelineEvents without
+ * `packageName`, so those rows persisted with empty package and had no
+ * way to synthesize a `pkg:<packageName>` correlationId in the UI or
+ * the CSV export. The description field is structured — "<pkg> used
+ * <op> at <time>" — so the package prefix can be recovered with a
+ * substring extract.
+ *
+ * Also stamps `pkg:<packageName>` on ANY row that has a non-blank
+ * packageName but an empty correlationId, so historical package_install
+ * rows, lifecycle events, and findings all join their app's cluster
+ * when exported. The Timeline UI was already doing this at read time
+ * via `effectiveCorrelationId()`, but that computation never reached
+ * the CSV export — this migration closes the gap for old data once
+ * and for all.
+ *
+ * Idempotent: both UPDATEs filter on `= ''`, so re-running the
+ * migration on already-backfilled rows is a no-op.
+ */
+@Suppress("MagicNumber")
+val MIGRATION_13_14 = object : Migration(13, 14) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        // Step 1: extract package name from "<pkg> used <op>" descriptions
+        // on permission_use rows that lost their packageName field.
+        db.execSQL(
+            """
+            UPDATE forensic_timeline
+            SET packageName = substr(description, 1, instr(description, ' used ') - 1)
+            WHERE category = 'permission_use'
+              AND (packageName IS NULL OR packageName = '')
+              AND instr(description, ' used ') > 0
+            """.trimIndent()
+        )
+
+        // Step 2: backfill pkg:<packageName> correlationId on every row
+        // whose correlationId is blank and packageName is now populated.
+        // Skip rows where a dns:... correlationId was already stamped in
+        // MIGRATION_12_13 — that's the DNS cluster key and takes precedence.
+        db.execSQL(
+            """
+            UPDATE forensic_timeline
+            SET correlationId = 'pkg:' || packageName
+            WHERE (correlationId IS NULL OR correlationId = '')
+              AND packageName IS NOT NULL
+              AND packageName != ''
+            """.trimIndent()
+        )
+    }
+}

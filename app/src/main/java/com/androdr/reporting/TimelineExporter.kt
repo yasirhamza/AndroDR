@@ -163,7 +163,15 @@ object TimelineExporter {
             val pkg = csvEscape(event.packageName)
             val sev = event.severity
             val ruleId = csvEscape(event.ruleId)
-            val correlationId = csvEscape(event.correlationId)
+            // Prefer the stamped correlationId; fall back to the same
+            // read-time key the Timeline UI uses for clustering so CSV
+            // consumers see pkg:<package> on rows that join an app-story
+            // cluster even if the write-time path left the field blank.
+            val correlationId = csvEscape(
+                event.correlationId.ifBlank {
+                    if (event.packageName.isNotBlank()) "pkg:${event.packageName}" else ""
+                }
+            )
             val scanId = event.scanResultId.toString()
             val ioc = csvEscape(event.iocIndicator)
             val iocType = csvEscape(event.iocType)
