@@ -16,17 +16,50 @@ android {
         applicationId = "com.androdr"
         minSdk = 26
         targetSdk = 36
-        val buildNumber = providers.exec {
-            commandLine("git", "rev-list", "--count", "HEAD")
-        }.standardOutput.asText.get().trim().toIntOrNull() ?: 1
-        versionCode = buildNumber
-        versionName = "0.9.0.$buildNumber"
 
-        buildConfigField(
-            "String",
-            "RELEASE_NOTE",
-            "\"Report quality: forensic verdict, display names, action guidance\""
-        )
+        // Version code is the commit count on origin/main, NOT on the
+        // current HEAD. Building a feature branch used to produce a larger
+        // versionCode than the release AAB (because feature branches have
+        // extra commits), which surfaced as "wrong version in About" vs
+        // the Play Store install. Pinning to origin/main keeps debug and
+        // release versions consistent.
+        //
+        // Floor at 439 for Play Store acceptance — earlier uploads consumed
+        // the 1..438 range. Once the commit count naturally overtakes 439
+        // the floor becomes dead weight.
+        val mainBuildNumber = providers.exec {
+            isIgnoreExitValue = true
+            commandLine("git", "rev-list", "--count", "origin/main")
+        }.standardOutput.asText.get().trim().toIntOrNull()
+            ?: providers.exec {
+                commandLine("git", "rev-list", "--count", "HEAD")
+            }.standardOutput.asText.get().trim().toIntOrNull() ?: 1
+        versionCode = maxOf(mainBuildNumber, 439)
+        versionName = "0.9.0.$versionCode"
+
+        // Release note: pick the most recent "headline" commit on HEAD.
+        // Prefers `feat:` commits (new features — the actual reason for a
+        // release), falls back to `fix:` only if no feat exists. Conventional
+        // `chore:`, `ci:`, `docs:`, `refactor:`, `test:` commits are
+        // skipped because they don't tell users anything about the release.
+        fun gitSubjectMatching(pattern: String): String? = runCatching {
+            providers.exec {
+                isIgnoreExitValue = true
+                commandLine(
+                    "git", "log", "-1", "--pretty=%s", "--extended-regexp", "--grep", pattern
+                )
+            }.standardOutput.asText.get().trim().takeIf { it.isNotBlank() }
+        }.getOrNull()
+
+        val releaseNoteRaw = gitSubjectMatching("^feat(\\(|:)")
+            ?: gitSubjectMatching("^fix(\\(|:)")
+            ?: "See CHANGELOG for details"
+        // Strip the conventional-commit prefix (feat:, fix(scope):, etc.)
+        // so the About screen reads naturally.
+        val releaseNote = releaseNoteRaw.replace(Regex("""^(feat|fix)(\([^)]*\))?:\s*"""), "")
+            .replace("\"", "\\\"")
+
+        buildConfigField("String", "RELEASE_NOTE", "\"$releaseNote\"")
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
