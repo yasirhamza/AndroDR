@@ -31,6 +31,28 @@ fun severityOrdinal(level: String): Int = when (level.uppercase()) {
     "CRITICAL" -> 3; "HIGH" -> 2; "MEDIUM" -> 1; else -> 0
 }
 
+/**
+ * Read-time correlationId resolution. Prefers any value already stamped on
+ * the row (currently only `dns:<matched_domain>` set by TimelineAdapter), and
+ * falls back to `pkg:<packageName>` for rows tied to an installed package.
+ *
+ * Computing here instead of at write time means no migrations and no write
+ * fan-out to every module that builds a ForensicTimelineEvent. The key is
+ * idempotent and stable across reads, so Timeline clustering and detail
+ * sheet Linked Evidence both see the same grouping.
+ *
+ * Note on precedence: DNS-stamped ids win because they carry cross-source
+ * semantics (a finding + its underlying ioc_match row share the key even
+ * when they have different packageName values — typically empty for the
+ * DNS row and empty for the finding too). Mixing dns: and pkg: in the same
+ * fallback order would fragment existing DNS clusters.
+ */
+fun ForensicTimelineEvent.effectiveCorrelationId(): String = when {
+    correlationId.isNotBlank() -> correlationId
+    packageName.isNotBlank() -> "pkg:$packageName"
+    else -> ""
+}
+
 private val signalJson = Json { ignoreUnknownKeys = true; isLenient = true }
 
 /**
@@ -66,18 +88,20 @@ fun partitionSignals(
             clusteredIds.add(sig.id)
         }
 
-    // Pass 2 — implicit pre-linkage via correlationId. DNS-sourced findings
-    // (androdr-005 Graphite/Paragon, Malicious Domain, etc.) and their
-    // underlying `ioc_match` rows all share `correlationId = "dns:<domain>"`
-    // but don't go through SigmaCorrelationEngine because the linkage is
-    // computed at row-write time (see TimelineAdapter). Collapse any
-    // unclustered events that share a non-empty correlationId into one
-    // EventCluster so the Timeline shows "one thing that happened" instead
-    // of 6+ indistinguishable rows per DNS hit.
+    // Pass 2 — implicit pre-linkage via effective correlationId. Two sources
+    // feed this pass:
+    //   * DNS-sourced findings + ioc_match rows share "dns:<domain>" stamped
+    //     by TimelineAdapter at write time (cross-category, cross-source).
+    //   * Every row tied to an installed package gets a synthetic
+    //     "pkg:<packageName>" computed at read time, so a package's install
+    //     row, foreground/background events, permission_use records, and
+    //     any finding collapse into one card per app.
+    // Cluster membership requires at least two members so unique packages
+    // still render as standalone rows.
     allEvents.asSequence()
-        .filter { it.kind != "signal" && it.id !in clusteredIds && it.correlationId.isNotBlank() }
-        .groupBy { it.correlationId }
-        .filter { (_, members) -> members.size >= PRE_LINKED_MIN_MEMBERS }
+        .filter { it.kind != "signal" && it.id !in clusteredIds }
+        .groupBy { it.effectiveCorrelationId() }
+        .filter { (key, members) -> key.isNotBlank() && members.size >= PRE_LINKED_MIN_MEMBERS }
         .forEach { (_, members) ->
             val sorted = members.sortedBy { it.startTimestamp }
             clusters.add(
@@ -97,16 +121,33 @@ fun partitionSignals(
 private const val PRE_LINKED_MIN_MEMBERS = 2
 
 /**
- * Picks a human-readable label for a pre-linked cluster. Prefers the highest
- * severity app_risk row's description (e.g. "Graphite/Paragon Spyware:
- * 0-38.com"), falling back to the first member if none of the rows are
- * findings.
+ * Picks a human-readable label for a pre-linked cluster. Order of preference:
+ *   1. Highest-severity finding (`app_risk` / `device_posture`) — anchors
+ *      clusters with a genuine detection on the most actionable text.
+ *   2. Package display name if the cluster is a pkg: group — this dominates
+ *      app-level clusters, which are usually lifecycle + install + permission
+ *      use events without an actual finding. Reading "com.whatsapp (29)"
+ *      is more useful than reading "App opened: WhatsApp (29)".
+ *   3. The first member's description — last-ditch fallback for DNS
+ *      clusters that somehow lack a finding (shouldn't happen, but cheap).
  */
 private fun prelinkedLabel(members: List<ForensicTimelineEvent>): String {
     val bestFinding = members
         .filter { it.category == "app_risk" || it.category == "device_posture" }
         .maxByOrNull { severityOrdinal(it.severity) }
-    return bestFinding?.description ?: members.first().description
+    if (bestFinding != null) return bestFinding.description
+
+    val firstPackageName = members.firstNotNullOfOrNull { it.packageName.takeIf { p -> p.isNotBlank() } }
+    val firstAppName = members.firstNotNullOfOrNull { it.appName.takeIf { n -> n.isNotBlank() } }
+    if (firstPackageName != null) {
+        return if (firstAppName != null && firstAppName != firstPackageName) {
+            "$firstAppName ($firstPackageName)"
+        } else {
+            firstPackageName
+        }
+    }
+
+    return members.first().description
 }
 
 private fun buildCluster(

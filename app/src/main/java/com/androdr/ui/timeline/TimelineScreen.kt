@@ -500,13 +500,15 @@ fun TimelineScreen(
 
     // Detail bottom sheet
     selectedEvent?.let { event ->
-        // Linked Evidence: other events that share the current event's
-        // correlationId. For Sprint 75 we use this to join DNS-sourced
-        // findings (androdr-005 "Graphite/Paragon Spyware: 0-38.com") to
-        // the raw ioc_match row ("DNS: 0-38.com [HaGeZi TIF]"). Both sides
-        // stamp `correlationId = "dns:<matched_domain>"`.
-        val related = if (event.correlationId.isNotEmpty()) {
-            events.filter { it.correlationId == event.correlationId && it.id != event.id }
+        // Linked Evidence: other events that share this row's effective
+        // correlation key. Covers two link shapes:
+        //   * DNS-sourced findings + ioc_match rows → "dns:<domain>"
+        //   * Package-scoped activity (install, lifecycle, permission_use,
+        //     findings) → "pkg:<packageName>"
+        // See TimelineClusters.effectiveCorrelationId for precedence.
+        val key = event.effectiveCorrelationId()
+        val related = if (key.isNotEmpty()) {
+            events.filter { it.effectiveCorrelationId() == key && it.id != event.id }
         } else emptyList()
         TimelineEventDetailSheet(
             event = event,
