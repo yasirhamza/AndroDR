@@ -9,6 +9,7 @@ import com.androdr.data.model.AppTelemetry
 import com.androdr.data.model.DeviceTelemetry
 import com.androdr.data.model.DnsEvent
 import com.androdr.data.model.FileArtifactTelemetry
+import com.androdr.data.model.ForensicTimelineEvent
 import com.androdr.data.model.ProcessTelemetry
 import com.androdr.data.model.ReceiverTelemetry
 import com.androdr.R
@@ -58,11 +59,21 @@ class SigmaRuleEngine @Inject constructor(
         synchronized(ruleLock) {
             if (bundledRules.isNotEmpty()) return
             val loaded = mutableListOf<SigmaRule>()
+            val parsedCorrelations = mutableListOf<CorrelationRule>()
             for (resId in BUNDLED_RULE_IDS) {
                 try {
                     val yaml = context.resources.openRawResource(resId)
                         .bufferedReader().use { it.readText() }
-                    SigmaRuleParser.parse(yaml)?.let { loaded.add(it) }
+                    val detRule = SigmaRuleParser.parse(yaml)
+                    if (detRule != null) {
+                        loaded.add(detRule)
+                    } else if (yaml.contains("correlation:")) {
+                        try {
+                            parsedCorrelations.add(SigmaRuleParser.parseCorrelation(yaml))
+                        } catch (e: Exception) {
+                            Log.w(TAG, "Failed to parse correlation rule: ${e.message}")
+                        }
+                    }
                 } catch (e: Exception) {
                     Log.w(TAG, "Failed to load rule resource: ${e.message}")
                 }
@@ -70,7 +81,56 @@ class SigmaRuleEngine @Inject constructor(
             bundledRules = loaded
             rules = loaded
             Log.i(TAG, "Loaded ${rules.size} bundled SIGMA rules")
+            if (parsedCorrelations.isNotEmpty()) {
+                try {
+                    val knownIds = rules.map { it.id }.toSet()
+                    parsedCorrelations.forEach { rule ->
+                        rule.referencedRuleIds.forEach { ref ->
+                            if (ref !in knownIds) {
+                                throw CorrelationParseException.UnresolvedRule(rule.id, ref)
+                            }
+                        }
+                    }
+                    correlationRules = parsedCorrelations
+                    Log.i(TAG, "Loaded ${correlationRules.size} correlation rules")
+                } catch (e: Exception) {
+                    Log.w(TAG, "Failed to register correlation rules: ${e.message}")
+                }
+            }
         }
+    }
+
+    /**
+     * For each event, compute the set of atom rule IDs whose selection.category
+     * matches the event's category. Atom rules are detection rules with
+     * level == "informational" that have a single `selection` with a `category`
+     * equals matcher. Used by [SigmaCorrelationEngine] to bind raw timeline
+     * events to the atom rule IDs referenced by correlation rules.
+     */
+    fun computeAtomBindings(events: List<ForensicTimelineEvent>): Map<Long, Set<String>> {
+        val atomCategoryByRuleId: Map<String, String> = rules
+            .asSequence()
+            .filter { it.level == "informational" }
+            .mapNotNull { rule ->
+                val cat = extractAtomCategory(rule) ?: return@mapNotNull null
+                rule.id to cat
+            }
+            .toMap()
+        if (atomCategoryByRuleId.isEmpty() || events.isEmpty()) return emptyMap()
+        return events.associate { event ->
+            event.id to atomCategoryByRuleId
+                .asSequence()
+                .filter { (_, cat) -> cat == event.category }
+                .map { it.key }
+                .toSet()
+        }
+    }
+
+    private fun extractAtomCategory(rule: SigmaRule): String? {
+        // Atom rules use a single `selection` with a `category` equals matcher.
+        val selection = rule.detection.selections["selection"] ?: return null
+        val matcher = selection.fieldMatchers.firstOrNull { it.fieldName == "category" } ?: return null
+        return matcher.values.firstOrNull()?.toString()
     }
 
     fun setRemoteRules(remoteRules: List<SigmaRule>) = synchronized(ruleLock) {

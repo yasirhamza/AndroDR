@@ -3,6 +3,7 @@ package com.androdr.scanner
 import android.net.Uri
 import android.util.Log
 import com.androdr.data.db.DnsEventDao
+import com.androdr.data.db.ForensicTimelineEventDao
 import com.androdr.data.db.toForensicTimelineEvent
 import com.androdr.data.model.ScanResult
 import com.androdr.data.model.ScannerFailure
@@ -11,6 +12,7 @@ import com.androdr.ioc.IndicatorResolver
 import com.androdr.sigma.CveEvidenceProvider
 import com.androdr.sigma.Finding
 import com.androdr.sigma.FindingCategory
+import com.androdr.sigma.SigmaCorrelationEngine
 import com.androdr.sigma.SigmaRuleFeed
 import com.androdr.sigma.SigmaRuleEngine
 import kotlinx.coroutines.CancellationException
@@ -47,7 +49,10 @@ class ScanOrchestrator @Inject constructor(
     private val bugReportAnalyzer: BugReportAnalyzer,
     private val scanRepository: ScanRepository,
     private val dnsEventDao: DnsEventDao,
+    private val forensicTimelineEventDao: ForensicTimelineEventDao,
+    private val installEventEmitter: InstallEventEmitter,
     private val sigmaRuleEngine: SigmaRuleEngine,
+    private val sigmaCorrelationEngine: SigmaCorrelationEngine,
     private val indicatorResolver: IndicatorResolver,
     private val sigmaRuleFeed: SigmaRuleFeed,
     private val knownAppResolver: com.androdr.ioc.KnownAppResolver,
@@ -329,14 +334,38 @@ class ScanOrchestrator @Inject constructor(
         val usageEvents = usageEventsDeferred.await()
         val taggedUsageEvents = usageEvents.map { it.copy(scanResultId = result.id) }
 
+        // Correlation engine — emit install events for new packages, build a
+        // candidate event set (lookback + new install + new findings), run
+        // the engine, and collect signals to persist alongside findings.
+        val installEvents = runCatching {
+            installEventEmitter.emitNew(result.id, appTelemetry)
+        }.getOrDefault(emptyList())
+        val correlationRules = sigmaRuleEngine.getCorrelationRules()
+        val maxRuleWindowMs = correlationRules.maxOfOrNull { it.timespanMs } ?: 0L
+        val lookbackEvents = if (maxRuleWindowMs > 0) {
+            runCatching {
+                forensicTimelineEventDao.getEventsSince(System.currentTimeMillis() - maxRuleWindowMs)
+            }.getOrDefault(emptyList())
+        } else emptyList()
+        val candidateEvents = lookbackEvents + installEvents + findingTimelineEvents
+        val correlationSignals = if (correlationRules.isNotEmpty() && candidateEvents.isNotEmpty()) {
+            runCatching {
+                val bindings = sigmaRuleEngine.computeAtomBindings(candidateEvents)
+                sigmaCorrelationEngine.evaluate(correlationRules, candidateEvents, bindings)
+                    .map { it.copy(scanResultId = result.id) }
+            }.getOrDefault(emptyList())
+        } else emptyList()
+        val allTimelineEvents = installEvents + findingTimelineEvents + correlationSignals
+
         runCatching {
             scanRepository.saveScanResults(
                 scan = result,
-                findingTimelineEvents = findingTimelineEvents,
+                findingTimelineEvents = allTimelineEvents,
                 replaceUsageStatsEvents = taggedUsageEvents
             )
-            Log.i(TAG, "Persisted scan ${result.id} with ${findingTimelineEvents.size} " +
-                "finding events and ${taggedUsageEvents.size} usage events (single transaction)")
+            Log.i(TAG, "Persisted scan ${result.id} with ${findingTimelineEvents.size} finding, " +
+                "${installEvents.size} install, ${correlationSignals.size} signal, " +
+                "${taggedUsageEvents.size} usage events (single transaction)")
         }.onFailure { Log.e(TAG, "Failed to persist scan results", it) }
 
         // Progress is reset to Idle by the outer runFullScan() in its
@@ -457,7 +486,19 @@ class ScanOrchestrator @Inject constructor(
         val moduleForensicEvents = result.forensicEvents.map {
             it.copy(scanResultId = scanResult.id)
         }
-        val allBugReportTimelineEvents = findingEvents + rawEvents + moduleForensicEvents
+        val baseBugReportEvents = findingEvents + rawEvents + moduleForensicEvents
+
+        // Correlation engine over the self-contained bug-report event set.
+        // Bug reports are snapshots — no historical lookback query.
+        val brCorrelationRules = sigmaRuleEngine.getCorrelationRules()
+        val brSignals = if (brCorrelationRules.isNotEmpty() && baseBugReportEvents.isNotEmpty()) {
+            runCatching {
+                val bindings = sigmaRuleEngine.computeAtomBindings(baseBugReportEvents)
+                sigmaCorrelationEngine.evaluate(brCorrelationRules, baseBugReportEvents, bindings)
+                    .map { it.copy(scanResultId = scanResult.id) }
+            }.getOrDefault(emptyList())
+        } else emptyList()
+        val allBugReportTimelineEvents = baseBugReportEvents + brSignals
 
         // Single transaction: persist scan row + all timeline events in one
         // write. Bug-report analysis does not produce usage_stats rows, so
