@@ -48,7 +48,6 @@ data class ScanGroup(
 class TimelineViewModel @Inject constructor(
     @ApplicationContext private val appContext: Context,
     private val dao: ForensicTimelineEventDao,
-    private val correlationEngine: CorrelationEngine,
     private val knownAppResolver: KnownAppResolver,
     private val sigmaRuleEngine: com.androdr.sigma.SigmaRuleEngine
 ) : ViewModel() {
@@ -98,7 +97,7 @@ class TimelineViewModel @Inject constructor(
             if (mode != TimelineGroupMode.DATE || eventList.isEmpty()) {
                 emptyList<EventCluster>() to emptyList<ForensicTimelineEvent>()
             } else {
-                correlationEngine.partition(eventList)
+                partitionSignals(eventList)
             }
         }.flowOn(Dispatchers.Default).stateIn(
             viewModelScope,
@@ -111,7 +110,7 @@ class TimelineViewModel @Inject constructor(
         val groups = eventList.filter { it.scanResultId != -1L }
             .groupBy { it.scanResultId }
             .map { (scanId, scanEvents) ->
-                val (clusters, standalone) = correlationEngine.partition(scanEvents)
+                val (clusters, standalone) = partitionSignals(scanEvents)
                 ScanGroup(
                     scanId = scanId,
                     // The group header must show when the SCAN was RUN, not
@@ -150,7 +149,7 @@ class TimelineViewModel @Inject constructor(
             .toMutableList()
         val ungrouped = eventList.filter { it.scanResultId == -1L }
         if (ungrouped.isNotEmpty()) {
-            val (ungroupedClusters, ungroupedStandalone) = correlationEngine.partition(ungrouped)
+            val (ungroupedClusters, ungroupedStandalone) = partitionSignals(ungrouped)
             groups.add(ScanGroup(
                 scanId = -1,
                 // Same invalid-timestamp filter as the per-scan groups above.
