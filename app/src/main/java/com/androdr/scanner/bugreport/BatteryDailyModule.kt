@@ -61,7 +61,8 @@ class BatteryDailyModule @Inject constructor() : BugreportModule {
                                 category = "package_uninstall",
                                 description = "Known ${iocHit.category} package '$packageName' " +
                                     "(${iocHit.name}) was uninstalled — possible anti-forensics",
-                                severity = "HIGH"
+                                // Severity is assigned by SIGMA rules downstream (plan 6), not here.
+                                severity = "INFO"
                             ))
                         }
                     }
@@ -73,7 +74,8 @@ class BatteryDailyModule @Inject constructor() : BugreportModule {
                                 "package_name" to packageName,
                                 "version" to version,
                                 "event_type" to "package_install",
-                                "is_system_app" to false
+                                "is_system_app" to false,
+                                "source" to "bugreport_import"
                             ))
                         }
 
@@ -102,7 +104,8 @@ class BatteryDailyModule @Inject constructor() : BugreportModule {
                             description = "Version downgrade: $pkg " +
                                 "(${nonZero[i - 1]} → ${nonZero[i]}) — " +
                                 "possible exploit re-application",
-                            severity = "HIGH"
+                            // Severity is assigned by SIGMA rules downstream (plan 6), not here.
+                                severity = "INFO"
                         ))
                     }
                 }

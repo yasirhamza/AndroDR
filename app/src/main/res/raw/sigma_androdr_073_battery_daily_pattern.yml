@@ -1,0 +1,27 @@
+title: Battery daily event pattern requires further rules
+id: androdr-073
+status: experimental
+description: >
+    Placeholder: BatteryDailyEvent telemetry reaches the rule engine via
+    evaluateBatteryDaily(). Detection logic TBD by #87 follow-ups.
+author: AndroDR
+date: 2026-04-09
+tags:
+    - attack.t1437
+logsource:
+    product: androdr
+    service: battery_daily
+detection:
+    selection:
+        source|contains: "BUGREPORT"
+    condition: selection
+enabled: false
+category: incident
+level: low
+display:
+    category: device_posture
+    icon: battery_alert
+    triggered_title: "Battery daily event observed"
+    evidence_type: none
+remediation:
+    - "Placeholder rule; no remediation defined."

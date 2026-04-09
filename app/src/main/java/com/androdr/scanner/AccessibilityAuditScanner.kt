@@ -6,6 +6,7 @@ import android.content.pm.ApplicationInfo
 import android.util.Log
 import android.view.accessibility.AccessibilityManager
 import com.androdr.data.model.AccessibilityTelemetry
+import com.androdr.data.model.TelemetrySource
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -31,7 +32,8 @@ class AccessibilityAuditScanner @Inject constructor(
                 packageName = serviceInfo.packageName,
                 serviceName = serviceInfo.name,
                 isSystemApp = isSystem,
-                isEnabled = true
+                isEnabled = true,
+                source = TelemetrySource.LIVE_SCAN,
             )
         }.also {
             Log.d(TAG, "Collected ${it.size} enabled accessibility services")

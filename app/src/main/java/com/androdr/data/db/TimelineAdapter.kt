@@ -21,7 +21,6 @@ fun DnsEvent.toForensicTimelineEvent(): ForensicTimelineEvent =
 fun DnsEvent.toForensicTimelineEvent(indicator: com.androdr.data.model.Indicator?): ForensicTimelineEvent {
     val isMatched = this.reason != null
     val realCampaign = indicator?.campaign?.takeIf { it.isNotBlank() }
-    val realSeverity = indicator?.severity?.takeIf { it.isNotBlank() && it.uppercase() != "UNKNOWN" }
     val realSource = indicator?.source?.takeIf { it.isNotBlank() }
     val realDescription = indicator?.description?.takeIf { it.isNotBlank() }
     return ForensicTimelineEvent(
@@ -32,11 +31,6 @@ fun DnsEvent.toForensicTimelineEvent(indicator: com.androdr.data.model.Indicator
             (if (isMatched && realCampaign != null) " [$realCampaign]"
              else this.reason?.let { " [MATCHED: $it]" } ?: ""),
         details = realDescription ?: "",
-        severity = when {
-            !isMatched -> "INFO"
-            realSeverity != null -> realSeverity.uppercase()
-            else -> "HIGH"
-        },
         packageName = this.appName ?: "",
         processUid = this.appUid,
         iocIndicator = if (isMatched) this.domain else "",
@@ -56,7 +50,7 @@ fun DnsEvent.toForensicTimelineEvent(indicator: com.androdr.data.model.Indicator
         // Matches the correlationId stamped on Finding rows in
         // Finding.toForensicTimelineEvent when matchContext["domain"] is set.
         correlationId = if (isMatched) "dns:${this.domain}" else "",
-        isFromRuntime = true
+        telemetrySource = com.androdr.data.model.TelemetrySource.LIVE_SCAN
     )
 }
 
@@ -121,7 +115,6 @@ fun Finding.toForensicTimelineEvent(
         // of 3 indistinguishable "Graphite/Paragon Spyware" rows.
         description = if (dnsMatchedDomain != null) "${this.title}: $dnsMatchedDomain" else this.title,
         details = this.description,
-        severity = this.level.uppercase(),
         packageName = this.matchContext["package_name"] ?: "",
         appName = this.matchContext["app_name"] ?: "",
         apkHash = this.matchContext["apk_hash"] ?: "",
@@ -138,8 +131,11 @@ fun Finding.toForensicTimelineEvent(
         scanResultId = scanResult.id,
         attackTechniqueId = this.tags.firstOrNull { it.startsWith("attack.t") }
             ?.removePrefix("attack.") ?: "",
-        isFromBugreport = isBugreport,
-        isFromRuntime = !isBugreport
+        telemetrySource = if (isBugreport) {
+            com.androdr.data.model.TelemetrySource.BUGREPORT_IMPORT
+        } else {
+            com.androdr.data.model.TelemetrySource.LIVE_SCAN
+        }
     )
 }
 
@@ -149,11 +145,10 @@ fun TimelineEvent.toForensicTimelineEvent(scanResultId: Long = -1): ForensicTime
         source = this.source,
         category = this.category,
         description = this.description,
-        severity = this.severity,
         packageName = this.packageName ?: "",
         timestampPrecision = "estimated",
         scanResultId = scanResultId,
-        isFromBugreport = true
+        telemetrySource = com.androdr.data.model.TelemetrySource.BUGREPORT_IMPORT
     )
 
 /** Extracts the campaign name from DNS event reason strings like "IOC: Pegasus" */

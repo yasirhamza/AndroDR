@@ -1,0 +1,40 @@
+# Known spyware file artifacts.
+#
+# Paths associated with mercenary spyware, stalkerware, and forensic tools.
+# Evaluated by sigma_androdr_020_spyware_artifact.yml against FileArtifactTelemetry.
+#
+# Path templates:
+# - {ext_storage} resolves at runtime to Environment.getExternalStorageDirectory().absolutePath
+#
+# Sources:
+# - mvt: Amnesty International's Mobile Verification Toolkit
+# - citizen-lab: The Citizen Lab (University of Toronto)
+# - androdr-research: AndroDR's own threat research
+#
+# See docs/superpowers/specs/2026-04-09-unified-telemetry-findings-refactor-design.md §9
+# for the migration from hardcoded Kotlin constants to this YAML resource.
+
+version: "2026-04-09"
+last_reviewed: "2026-04-09"
+
+artifacts:
+  - path: "/data/local/tmp/.raptor"
+    family: "pegasus"
+    source: "citizen-lab"
+    first_observed: "2021-07-18"
+
+  - path: "/data/local/tmp/.stat"
+    family: "pegasus"
+    source: "mvt"
+
+  - path: "/data/local/tmp/.mobilesoftwareupdate"
+    family: "pegasus"
+    source: "mvt"
+
+  - path: "{ext_storage}/.hidden_config"
+    family: "generic_stalkerware"
+    source: "androdr-research"
+
+  - path: "{ext_storage}/Android/data/.system_update"
+    family: "generic_stalkerware"
+    source: "androdr-research"

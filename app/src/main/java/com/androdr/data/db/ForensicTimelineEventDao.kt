@@ -16,13 +16,6 @@ interface ForensicTimelineEventDao {
 
     @Query("""
         SELECT * FROM forensic_timeline
-        WHERE severity IN (:severities)
-        ORDER BY startTimestamp DESC LIMIT :limit
-    """)
-    fun getEventsBySeverity(severities: List<String>, limit: Int = 500): Flow<List<ForensicTimelineEvent>>
-
-    @Query("""
-        SELECT * FROM forensic_timeline
         WHERE source = :source
         ORDER BY startTimestamp DESC LIMIT :limit
     """)

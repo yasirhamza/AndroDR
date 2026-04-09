@@ -9,11 +9,13 @@ data class SigmaRule(
     val product: String,
     val service: String,
     val level: String,
+    val category: RuleCategory,
     val tags: List<String>,
     val detection: SigmaDetection,
     val falsepositives: List<String>,
     val remediation: List<String>,
-    val display: SigmaDisplay = SigmaDisplay()
+    val display: SigmaDisplay = SigmaDisplay(),
+    val enabled: Boolean = true
 )
 
 data class SigmaDetection(

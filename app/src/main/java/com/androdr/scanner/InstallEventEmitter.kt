@@ -30,10 +30,9 @@ class InstallEventEmitter @Inject constructor(
                     category = "package_install",
                     source = "app_scanner",
                     description = "Package installed: ${t.appName}",
-                    severity = "info",
                     packageName = t.packageName,
                     appName = t.appName,
-                    isFromRuntime = true
+                    telemetrySource = com.androdr.data.model.TelemetrySource.LIVE_SCAN
                 )
             }
     }

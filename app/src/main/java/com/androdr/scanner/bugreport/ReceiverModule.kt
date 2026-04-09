@@ -1,15 +1,22 @@
 package com.androdr.scanner.bugreport
 
 import com.androdr.ioc.IndicatorResolver
+import com.androdr.ioc.OemPrefixResolver
 import javax.inject.Inject
 import javax.inject.Singleton
 
 @Singleton
-class ReceiverModule @Inject constructor() : BugreportModule {
+class ReceiverModule @Inject constructor(
+    private val oemPrefixResolver: OemPrefixResolver,
+) : BugreportModule {
 
     override val targetSections: List<String> = listOf("package")
 
-    private val sensitiveIntents = setOf(
+    // Rule-driven filter: the set of intents considered "sensitive" lives in
+    // the SIGMA rule YAML (plan 6), not here. Plan 5 tracks a minimal set of
+    // broadcast actions worth enumerating from dumpsys; rules downstream
+    // decide which of those warrant a finding. No severity/filter constants.
+    private val enumeratedIntents = setOf(
         "android.provider.Telephony.SMS_RECEIVED",
         "android.provider.Telephony.NEW_OUTGOING_SMS",
         "android.intent.action.DATA_SMS_RECEIVED",
@@ -17,15 +24,6 @@ class ReceiverModule @Inject constructor() : BugreportModule {
         "android.intent.action.NEW_OUTGOING_CALL",
         "android.intent.action.BOOT_COMPLETED",
         "android.intent.action.LOCKED_BOOT_COMPLETED"
-    )
-
-    private val systemPackagePrefixes = listOf(
-        "com.android.",
-        "com.google.android.",
-        "com.samsung.android.",
-        "com.sec.android.",
-        "com.qualcomm.",
-        "com.mediatek."
     )
 
     private val receiverEntryRegex = Regex(
@@ -80,7 +78,7 @@ class ReceiverModule @Inject constructor() : BugreportModule {
         // block ends at a position that is ALREADY known to be another
         // intent's start, so we can never accidentally cut off receiver
         // entries that belong to the current intent.
-        val intentPositions: List<Pair<String, Int>> = sensitiveIntents
+        val intentPositions: List<Pair<String, Int>> = enumeratedIntents
             .mapNotNull { intent ->
                 val idx = sectionText.indexOf("$intent:", nonDataStart)
                 if (idx >= 0) intent to idx else null
@@ -103,13 +101,14 @@ class ReceiverModule @Inject constructor() : BugreportModule {
                 val packageName = match.groupValues[1]
                 val componentName = match.groupValues[2]
                 if (!seen.add(packageName to intent)) return@forEach
-                val isSystemApp = systemPackagePrefixes.any { packageName.startsWith(it) }
+                val isSystemApp = oemPrefixResolver.isOemPrefix(packageName)
 
                 telemetry.add(mapOf(
                     "package_name" to packageName,
                     "intent_action" to intent,
                     "component_name" to componentName,
-                    "is_system_app" to isSystemApp
+                    "is_system_app" to isSystemApp,
+                    "source" to "bugreport_import"
                 ))
             }
         }

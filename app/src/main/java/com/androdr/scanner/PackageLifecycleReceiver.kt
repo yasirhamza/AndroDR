@@ -57,10 +57,9 @@ class PackageLifecycleReceiver : BroadcastReceiver() {
                     source = "package_lifecycle",
                     category = category,
                     description = "App $verb: $displayName",
-                    severity = "INFO",
                     packageName = pkg,
                     appName = appLabel,
-                    isFromRuntime = true
+                    telemetrySource = com.androdr.data.model.TelemetrySource.LIVE_SCAN
                 ))
                 Log.i(TAG, "Package $verb: $displayName")
             } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {

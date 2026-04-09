@@ -16,6 +16,7 @@ detection:
         apk_hash|ioc_lookup: apk_hash_ioc_db
     condition: selection
 level: critical
+category: incident
 display:
     category: app_risk
     icon: warning

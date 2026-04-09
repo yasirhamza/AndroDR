@@ -6,12 +6,18 @@ import android.util.Log
 import com.androdr.data.model.AccessibilityTelemetry
 import com.androdr.data.model.AppOpsTelemetry
 import com.androdr.data.model.AppTelemetry
+import com.androdr.data.model.BatteryDailyEvent
+import com.androdr.data.model.DatabasePathObservation
 import com.androdr.data.model.DeviceTelemetry
 import com.androdr.data.model.DnsEvent
 import com.androdr.data.model.FileArtifactTelemetry
 import com.androdr.data.model.ForensicTimelineEvent
+import com.androdr.data.model.PackageInstallHistoryEntry
+import com.androdr.data.model.PlatformCompatChange
 import com.androdr.data.model.ProcessTelemetry
 import com.androdr.data.model.ReceiverTelemetry
+import com.androdr.data.model.TombstoneEvent
+import com.androdr.data.model.WakelockAcquisition
 import com.androdr.R
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
@@ -110,6 +116,7 @@ class SigmaRuleEngine @Inject constructor(
     fun computeAtomBindings(events: List<ForensicTimelineEvent>): Map<Long, Set<String>> {
         val atomCategoryByRuleId: Map<String, String> = rules
             .asSequence()
+            .filter { it.enabled }
             .filter { it.level == "informational" }
             .mapNotNull { rule ->
                 val cat = extractAtomCategory(rule) ?: return@mapNotNull null
@@ -157,52 +164,135 @@ class SigmaRuleEngine @Inject constructor(
         evidenceProviders = providers
     }
 
+    /**
+     * Returns ALL rules, including rules with `enabled: false`.
+     *
+     * Prefer [getEnabledRules] when iterating for evaluation. This method
+     * is intended for diagnostics, UI displays that show "X of Y rules
+     * active", and any code path that must account for disabled rules.
+     *
+     * Callers that iterate this list to produce findings or correlation
+     * bindings must filter by `enabled` themselves or use [getEnabledRules].
+     */
     fun getRules(): List<SigmaRule> = rules
+
+    /**
+     * Returns all rules with `enabled: true`. Use this for evaluation-path
+     * code that must not include disabled rules (e.g. correlation lookups,
+     * rule-count displays for "active rules").
+     *
+     * [getRules] returns ALL rules including disabled ones for diagnostic
+     * and UI purposes. If a caller cannot tolerate disabled rules in its
+     * iteration, it must use this method instead of [getRules].
+     *
+     * This is a thin public wrapper over the internal [effectiveRules];
+     * it exists to give external callers a discoverable API for the
+     * enabled-only rule set.
+     */
+    fun getEnabledRules(): List<SigmaRule> = effectiveRules()
+
+    /** Returns only rules that are enabled. Used internally by all evaluate* methods. */
+    private fun effectiveRules(): List<SigmaRule> = getRules().filter { it.enabled }
 
     fun evaluateApps(telemetry: List<AppTelemetry>): List<Finding> {
         val records = telemetry.map { it.toFieldMap() }
-        return SigmaRuleEvaluator.evaluate(rules, records, "app_scanner", iocLookups, evidenceProviders)
+        return SigmaRuleEvaluator.evaluate(effectiveRules(), records, "app_scanner", iocLookups, evidenceProviders)
     }
 
     fun evaluateDevice(telemetry: List<DeviceTelemetry>): List<Finding> {
         val records = telemetry.map { it.toFieldMap() }
-        return SigmaRuleEvaluator.evaluate(rules, records, "device_auditor", iocLookups, evidenceProviders)
+        return SigmaRuleEvaluator.evaluate(effectiveRules(), records, "device_auditor", iocLookups, evidenceProviders)
     }
 
     fun evaluateProcesses(telemetry: List<ProcessTelemetry>): List<Finding> {
         val records = telemetry.map { it.toFieldMap() }
-        return SigmaRuleEvaluator.evaluate(rules, records, "process_monitor", iocLookups, evidenceProviders)
+        return SigmaRuleEvaluator.evaluate(effectiveRules(), records, "process_monitor", iocLookups, evidenceProviders)
     }
 
     fun evaluateDns(events: List<DnsEvent>): List<Finding> {
         val records = events.map { it.toFieldMap() }
-        return SigmaRuleEvaluator.evaluate(rules, records, "dns_monitor", iocLookups, evidenceProviders)
+        return SigmaRuleEvaluator.evaluate(effectiveRules(), records, "dns_monitor", iocLookups, evidenceProviders)
     }
 
     fun evaluateFiles(telemetry: List<FileArtifactTelemetry>): List<Finding> {
         val records = telemetry.map { it.toFieldMap() }
-        return SigmaRuleEvaluator.evaluate(rules, records, "file_scanner", iocLookups, evidenceProviders)
+        return SigmaRuleEvaluator.evaluate(effectiveRules(), records, "file_scanner", iocLookups, evidenceProviders)
     }
 
     fun evaluateAccessibility(telemetry: List<AccessibilityTelemetry>): List<Finding> {
         val records = telemetry.map { it.toFieldMap() }
-        return SigmaRuleEvaluator.evaluate(rules, records, "accessibility_audit", iocLookups, evidenceProviders)
+        return SigmaRuleEvaluator.evaluate(
+            effectiveRules(), records, "accessibility_audit", iocLookups, evidenceProviders
+        )
     }
 
     fun evaluateReceivers(telemetry: List<ReceiverTelemetry>): List<Finding> {
         val records = telemetry.map { it.toFieldMap() }
-        return SigmaRuleEvaluator.evaluate(rules, records, "receiver_audit", iocLookups, evidenceProviders)
+        return SigmaRuleEvaluator.evaluate(effectiveRules(), records, "receiver_audit", iocLookups, evidenceProviders)
     }
 
     fun evaluateAppOps(telemetry: List<AppOpsTelemetry>): List<Finding> {
         val records = telemetry.map { it.toFieldMap() }
-        return SigmaRuleEvaluator.evaluate(rules, records, "appops_audit", iocLookups, evidenceProviders)
+        return SigmaRuleEvaluator.evaluate(effectiveRules(), records, "appops_audit", iocLookups, evidenceProviders)
+    }
+
+    fun evaluateTombstones(telemetry: List<TombstoneEvent>): List<Finding> {
+        val records = telemetry.map { it.toFieldMap() }
+        return SigmaRuleEvaluator.evaluate(
+            effectiveRules(), records, "tombstone_parser", iocLookups, evidenceProviders
+        )
+    }
+
+    fun evaluateWakelocks(telemetry: List<WakelockAcquisition>): List<Finding> {
+        val records = telemetry.map { it.toFieldMap() }
+        return SigmaRuleEvaluator.evaluate(
+            effectiveRules(), records, "wakelock_parser", iocLookups, evidenceProviders
+        )
+    }
+
+    fun evaluateBatteryDaily(telemetry: List<BatteryDailyEvent>): List<Finding> {
+        val records = telemetry.map { it.toFieldMap() }
+        return SigmaRuleEvaluator.evaluate(
+            effectiveRules(), records, "battery_daily", iocLookups, evidenceProviders
+        )
+    }
+
+    fun evaluatePackageInstallHistory(telemetry: List<PackageInstallHistoryEntry>): List<Finding> {
+        val records = telemetry.map { it.toFieldMap() }
+        return SigmaRuleEvaluator.evaluate(
+            effectiveRules(), records, "package_install_history", iocLookups, evidenceProviders
+        )
+    }
+
+    fun evaluatePlatformCompat(telemetry: List<PlatformCompatChange>): List<Finding> {
+        val records = telemetry.map { it.toFieldMap() }
+        return SigmaRuleEvaluator.evaluate(
+            effectiveRules(), records, "platform_compat", iocLookups, evidenceProviders
+        )
+    }
+
+    fun evaluateDatabasePathObservations(telemetry: List<DatabasePathObservation>): List<Finding> {
+        val records = telemetry.map { it.toFieldMap() }
+        return SigmaRuleEvaluator.evaluate(
+            effectiveRules(), records, "db_info", iocLookups, evidenceProviders
+        )
     }
 
     fun evaluateGeneric(records: List<Map<String, Any?>>, service: String): List<Finding> {
-        return SigmaRuleEvaluator.evaluate(rules, records, service, iocLookups, evidenceProviders)
+        return SigmaRuleEvaluator.evaluate(effectiveRules(), records, service, iocLookups, evidenceProviders)
     }
 
+    /**
+     * Returns the total number of loaded rules, **including rules with
+     * `enabled: false`**. Callers wanting the count of active (evaluable)
+     * rules should filter separately:
+     *
+     *     getRules().count { it.enabled }
+     *
+     * This method does NOT use [effectiveRules] because UI and debug paths
+     * may want to show "X total, Y disabled" — the distinction is the
+     * caller's responsibility.
+     */
     fun ruleCount(): Int = rules.size
 
     companion object {
@@ -243,6 +333,12 @@ class SigmaRuleEngine @Inject constructor(
             R.raw.sigma_androdr_065_appops_install_packages,
             R.raw.sigma_androdr_067_notification_listener,
             R.raw.sigma_androdr_068_hidden_launcher,
+            R.raw.sigma_androdr_071_crash_loop_anti_forensics,
+            R.raw.sigma_androdr_072_persistent_wakelock,
+            R.raw.sigma_androdr_073_battery_daily_pattern,
+            R.raw.sigma_androdr_074_package_install_history_pattern,
+            R.raw.sigma_androdr_075_platform_compat_override,
+            R.raw.sigma_androdr_076_database_path_access,
             // Atom rules — pass-through matchers for raw timeline event categories.
             // Referenced by sprint-75 correlation rules (Task 9); tagged
             // level: informational so they are filtered out of the user-facing

@@ -1,5 +1,20 @@
 # MVT-Parity Forensic Analysis — Design Spec
 
+> ## ⚠️ SUPERSEDED — HISTORICAL RECORD ONLY
+>
+> This spec describes a `ModuleResult` shape with a `findings: List<BugReportFinding>` field and bugreport modules producing findings directly with inline severity. That architecture has been **superseded** by the unified telemetry/findings refactor (tracking issue **#84**).
+>
+> **Do not use this spec's architecture diagram or `ModuleResult` interface for new work.** Post-refactor:
+> - Bugreport modules emit canonical telemetry types only — no findings, no severity
+> - Telemetry types are source-agnostic (shared with runtime scanners via a `source: TelemetrySource` field)
+> - Findings are produced exclusively by `SigmaRuleEngine` / `SigmaCorrelationEngine` from telemetry, with severity sourced from rule `level:` and `category:` metadata
+> - `BugReportFinding` as a type no longer exists
+> - Device posture findings are capped at MEDIUM by the engine
+>
+> **Authoritative architecture:** `docs/superpowers/specs/2026-04-09-unified-telemetry-findings-refactor-design.md`
+>
+> This document is retained for historical context (it describes what was actually shipped in late March 2026) and is scheduled for archival to `docs/superpowers/archive/` once #84 merges (see **#85**).
+
 ## Goal
 
 Port MVT's (Mobile Verification Toolkit) 13 structured bugreport analysis modules to Kotlin, and implement runtime API equivalents for the highest-value checks. This gives AndroDR MVT-grade forensic analysis entirely on-device.

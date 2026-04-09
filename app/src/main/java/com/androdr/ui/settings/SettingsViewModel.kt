@@ -332,7 +332,6 @@ class SettingsViewModel @Inject constructor(
                             type = type, value = value,
                             name = event.appName.ifEmpty { event.description },
                             campaign = event.campaignName,
-                            severity = event.severity,
                             description = event.details,
                             source = "androdr_scan",
                             fetchedAt = event.startTimestamp

@@ -13,7 +13,7 @@ class SigmaCorrelationEngineTest {
         id: Long, ts: Long, category: String, pkg: String = "com.test"
     ) = ForensicTimelineEvent(
         id = id, startTimestamp = ts, kind = "event", category = category,
-        source = "test", description = "evt", severity = "info", packageName = pkg
+        source = "test", description = "evt", packageName = pkg
     )
 
     private val installRule = CorrelationRule(

@@ -12,5 +12,6 @@ detection:
         category: device_admin_grant
     condition: selection
 level: informational
+category: incident
 display:
     suppress_finding: true

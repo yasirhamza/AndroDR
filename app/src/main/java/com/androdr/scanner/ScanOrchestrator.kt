@@ -364,7 +364,12 @@ class ScanOrchestrator @Inject constructor(
                 if (correlationRules.isEmpty() || eventsWithIds.isEmpty()) emptyList()
                 else {
                     val bindings = sigmaRuleEngine.computeAtomBindings(eventsWithIds)
-                    val signals = sigmaCorrelationEngine.evaluate(correlationRules, eventsWithIds, bindings)
+                    // Only enabled rules contribute to correlation category propagation.
+                    // Including disabled rules here would let their category influence
+                    // correlation classifications even though they produce no bindings.
+                    val atomRulesById = sigmaRuleEngine.getEnabledRules().associateBy { it.id }
+                    val signals = sigmaCorrelationEngine
+                        .evaluate(correlationRules, eventsWithIds, bindings, atomRulesById)
                         .map { it.copy(scanResultId = result.id) }
                     correlationSignalCount = signals.size
                     signals
@@ -445,9 +450,7 @@ class ScanOrchestrator @Inject constructor(
             id = now,
             timestamp = now,
             findings = result.findings,
-            bugReportFindings = result.legacyFindings.map {
-                "${it.severity} | ${it.category} | ${it.description}"
-            },
+            bugReportFindings = emptyList(),
             riskySideloadCount = 0,
             knownMalwareCount = result.findings.count {
                 it.level == "critical" && it.ruleId in KNOWN_MALWARE_RULE_IDS
@@ -512,7 +515,8 @@ class ScanOrchestrator @Inject constructor(
                 if (brCorrelationRules.isEmpty() || eventsWithIds.isEmpty()) emptyList()
                 else {
                     val bindings = sigmaRuleEngine.computeAtomBindings(eventsWithIds)
-                    sigmaCorrelationEngine.evaluate(brCorrelationRules, eventsWithIds, bindings)
+                    val atomRulesById = sigmaRuleEngine.getEnabledRules().associateBy { it.id }
+                    sigmaCorrelationEngine.evaluate(brCorrelationRules, eventsWithIds, bindings, atomRulesById)
                         .map { it.copy(scanResultId = scanResult.id) }
                 }
             }

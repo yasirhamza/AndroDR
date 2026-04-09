@@ -112,9 +112,12 @@ private const val PRE_LINKED_MIN_MEMBERS = 2
  *      clusters that somehow lack a finding (shouldn't happen, but cheap).
  */
 private fun prelinkedLabel(members: List<ForensicTimelineEvent>): String {
+    // Prefer the first finding-category member as the label anchor.
+    // Severity ranking now lives on the [TimelineRow.FindingRow] variant
+    // rendered by `TimelineScreen`; cluster labels are derived only from
+    // the telemetry members available here.
     val bestFinding = members
-        .filter { it.category == "app_risk" || it.category == "device_posture" }
-        .maxByOrNull { severityOrdinal(it.severity) }
+        .firstOrNull { it.category == "app_risk" || it.category == "device_posture" }
     if (bestFinding != null) return bestFinding.description
 
     val firstPackageName = members.firstNotNullOfOrNull { it.packageName.takeIf { p -> p.isNotBlank() } }

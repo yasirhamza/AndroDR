@@ -1,42 +1,35 @@
 package com.androdr.scanner
 
-import android.os.Environment
+import com.androdr.ioc.KnownSpywareArtifactsResolver
 import io.mockk.every
-import io.mockk.mockkStatic
-import io.mockk.unmockkStatic
+import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
-import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Before
 import org.junit.Test
-import java.io.File
 
 class FileArtifactScannerTest {
 
     private lateinit var scanner: FileArtifactScanner
 
-    // The number of IOC paths declared in FileArtifactScanner.knownArtifactPaths
-    // ("/data/local/tmp/.raptor", "/data/local/tmp/.stat",
-    //  "/data/local/tmp/.mobilesoftwareupdate",
-    //  "$extStorage/.hidden_config", "$extStorage/Android/data/.system_update")
-    private val knownPathCount = 5
+    // Mirrors the 5 paths historically hardcoded in FileArtifactScanner.kt before the
+    // migration to known_spyware_artifacts.yml. The scanner no longer owns this list —
+    // it delegates to KnownSpywareArtifactsResolver, which we mock here.
+    private val fakePaths = listOf(
+        "/data/local/tmp/.raptor",
+        "/data/local/tmp/.stat",
+        "/data/local/tmp/.mobilesoftwareupdate",
+        "/sdcard/.hidden_config",
+        "/sdcard/Android/data/.system_update",
+    )
 
     @Before
     fun setUp() {
-        // Environment.getExternalStorageDirectory() is a static Android API that
-        // returns null on the test JVM; mock it to return a predictable path so
-        // the lazy knownArtifactPaths list initialises cleanly.
-        mockkStatic(Environment::class)
-        every { Environment.getExternalStorageDirectory() } returns File("/sdcard")
-
-        scanner = FileArtifactScanner()
-    }
-
-    @After
-    fun tearDown() {
-        unmockkStatic(Environment::class)
+        val resolver = mockk<KnownSpywareArtifactsResolver>()
+        every { resolver.paths } returns fakePaths
+        scanner = FileArtifactScanner(resolver)
     }
 
     // ── 1. Returns entries for all known paths ───────────────────────────────
@@ -46,8 +39,8 @@ class FileArtifactScannerTest {
         val result = scanner.collectTelemetry()
 
         assertEquals(
-            "Expected one entry per known artifact path",
-            knownPathCount,
+            "Expected one entry per resolver path",
+            fakePaths.size,
             result.size
         )
     }

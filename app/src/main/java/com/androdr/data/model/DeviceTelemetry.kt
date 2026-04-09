@@ -14,7 +14,8 @@ data class DeviceTelemetry(
     val bootloaderUnlocked: Boolean = false,
     val wifiAdbEnabled: Boolean = false,
     val unpatchedCveCount: Int = 0,
-    val unpatchedCves: List<Any> = emptyList()
+    val unpatchedCves: List<Any> = emptyList(),
+    val source: TelemetrySource,
 ) {
     fun toFieldMap(): Map<String, Any?> {
         // Build comma-joined CVE ID string for campaign rule matching via |contains

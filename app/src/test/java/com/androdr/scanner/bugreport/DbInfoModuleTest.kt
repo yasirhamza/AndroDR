@@ -43,7 +43,9 @@ class DbInfoModuleTest {
     }
 
     @Test
-    fun `flags sensitive db paths`() = runBlocking {
+    fun `emits telemetry for sensitive db path without hardcoded filter`() = runBlocking {
+        // is_sensitive_db field removed — hardcoded path list deleted. SIGMA
+        // rules (plan 6) match on db_path themselves.
         val section = """
             Connection pool for /data/user/0/com.android.providers.contacts/databases/contacts2.db:
               Pool size: 1
@@ -51,8 +53,7 @@ class DbInfoModuleTest {
 
         val result = module.analyze(section, mockIndicatorResolver)
         assertTrue(result.telemetry.any {
-            it["is_sensitive_db"] == true &&
-                (it["db_path"] as String).endsWith("contacts2.db")
+            (it["db_path"] as String).endsWith("contacts2.db")
         })
     }
 

@@ -26,10 +26,10 @@ class DbInfoModule @Inject constructor() : BugreportModule {
         RegexOption.MULTILINE
     )
 
-    private val sensitiveDbPaths = listOf(
-        "contacts2.db", "mmssms.db", "telephony.db", "calllog.db",
-        "external.db", "calendar.db"
-    )
+    // The list of "sensitive" database filenames (contacts2.db, mmssms.db, etc.)
+    // used to live in this module as a hardcoded Kotlin constant. It has been
+    // removed: SIGMA rules in plan 6 match on `db_path` via their own
+    // rule-driven pattern list. Telemetry emits every observed pool.
 
     override suspend fun analyze(sectionText: String, iocResolver: IndicatorResolver): ModuleResult {
         val telemetry = mutableListOf<Map<String, Any?>>()
@@ -50,7 +50,6 @@ class DbInfoModule @Inject constructor() : BugreportModule {
             val dbPath = match.groupValues[1]
             val packageName = match.groupValues[2]
             val isIoc = iocResolver.isKnownBadPackage(packageName)
-            val isSensitiveDb = sensitiveDbPaths.any { dbPath.endsWith(it) }
 
             // Bounded block from end-of-this-header to start-of-next-header
             // (or EOF if this is the last pool).
@@ -66,9 +65,9 @@ class DbInfoModule @Inject constructor() : BugreportModule {
             telemetry.add(mapOf(
                 "package_name" to packageName,
                 "db_path" to dbPath,
-                "is_sensitive_db" to isSensitiveDb,
                 "recent_query_count" to queryCount,
-                "is_ioc" to (isIoc != null)
+                "is_ioc" to (isIoc != null),
+                "source" to "bugreport_import"
             ))
         }
 

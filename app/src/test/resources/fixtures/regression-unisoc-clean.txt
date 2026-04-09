@@ -1,0 +1,801 @@
+============================================================
+  AndroDR Bug Report Analysis Timeline
+  Version   : 10.0.0.1
+  Generated : 2026-04-09 16:24:09
+  Android   : 15 (API 35)
+  Device    : Redacted Device
+  Patch     : 2026-02-01
+============================================================
+
+  ANALYSIS VERDICT: ISSUES FOUND
+  SIGMA findings: 0 critical, 0 high, 5 medium
+  Pattern scan: 457 findings
+
+------------------------------------------------------------
+  FINDINGS (14)
+------------------------------------------------------------
+  [MEDIUM] Camera Access
+    Package: PayLater (com.redacted.app6802)
+    APK SHA-256: 072ab0b0b1f0a09b2ca127b87e398b71e7fc4fd30de5696e85edb12d4a949409
+    Package: imo (com.redacted.app3378)
+    APK SHA-256: 0e5d9bab590de05455c45116e67d98547fdaeca3bde91c5c9e87a18dbaa12fbd
+    Package: Ooredoo Money (qa.ooredoo.omm)
+    APK SHA-256: 0e49b5d3ce16fc96035ab9c43f2b4c4f5606154e8e0d2745868563b73af8dcb3
+    A non-system app has used the camera. Expected for camera, messaging, and social media apps. Review if the app is unexpected.
+    Action: This app has accessed your camera. Review whether this is expected behavior.
+
+  [MEDIUM] Microphone Access
+    Package: Fluently (app.getfluently.app)
+    APK SHA-256: 2a69e4c62207dbc659e01a6b177716b4d7a47bdb898603e1d052e67d01731e8b
+    Package: imo (com.redacted.app3378)
+    APK SHA-256: 0e5d9bab590de05455c45116e67d98547fdaeca3bde91c5c9e87a18dbaa12fbd
+    A non-system app has used the microphone (RECORD_AUDIO). Expected for phone, messaging, and voice assistant apps. Review if the app is unexpected.
+    Action: This app has accessed your microphone. Review whether this is expected behavior.
+
+  [INFORMATIONAL] Phone Call Broadcast Receiver
+    6 apps: com.redacted.app3378, org.coursera.android, com.unisoc.silent.reboot, app.getfluently.app, com.redacted.app8270, ...
+    A non-system app is registered for PHONE_STATE or NEW_OUTGOING_CALL broadcasts. Many legitimate apps register for these. Informational — only significant when combined with other indicators.
+    Action: This app is registered for phone call broadcasts. Review if you expect this behavior from this app.
+
+  [INFORMATIONAL] SMS Broadcast Receiver
+    Package: My Vodafone (qa.vodafone.myvodafone)
+    APK SHA-256: 834b0fb207b95954ee2c9c240e566103b56c0291251575813497e381a1585b95
+    Package: RTQ Tickets (com.redacted.app4806)
+    APK SHA-256: 973f614d7e48d2c2294ae9822d4775f41399ff8b5bee933740d4beb54128027e
+    A non-system app is registered to receive SMS broadcasts. Many legitimate apps register for this via SDKs (Firebase Auth, Braze) for OTP verification. Informational — only significant when combined with other indicators.
+    Action: This app is registered to receive SMS broadcasts. This is common for apps using OTP verification.
+
+------------------------------------------------------------
+  PATTERN SCAN (457)
+------------------------------------------------------------
+  [CRITICAL] KnownMalware: Known spyware/stalkerware keyword 'graphite' detected in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 705: graphite_renderengine: false
+  [CRITICAL] KnownMalware: Known spyware/stalkerware keyword 'graphite' detected in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 714: force_compile_graphite_renderengine: false
+  [HIGH] SuspiciousData: Suspicious large base64 blob (250 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 10277 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (122 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 10297 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (251 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 10315 — possible exfiltration payload
+  [CRITICAL] KnownMalware: Known spyware/stalkerware keyword 'graphite' detected in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 127289: core_graphics/com.android.graphics.surfaceflinger.flags.force_compile_graphite_renderengine: READ_ONLY + DISABLED (system), DISABLED (device_config)
+  [CRITICAL] KnownMalware: Known spyware/stalkerware keyword 'graphite' detected in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 127292: core_graphics/com.android.graphics.surfaceflinger.flags.graphite_renderengine: READ_ONLY + DISABLED (system), DISABLED (device_config)
+  [HIGH] SuspiciousData: Suspicious large base64 blob (110 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 144295 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (106 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 144532 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (110 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 144547 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (108 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 339558 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (14064 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 340309 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (316680 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 342757 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (1136 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 343068 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (3316 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 343558 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (228 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 343668 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (320 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 343690 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (472 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 343705 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (188 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 343761 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (208 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 343917 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (264 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 343943 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (108 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 344235 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (7160 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 344414 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (100 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 344895 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (100 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 344898 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (109 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 344902 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (107 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 344905 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (100 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 344908 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (114 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 344911 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (107 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 344914 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (112 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 344917 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (107 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 344920 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (107 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 344923 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (108 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 344926 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (105 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 344929 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (107 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 344932 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (106 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 344935 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (101 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 344938 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (114 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 344941 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (104 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 344944 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (104 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 344947 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (108 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 344950 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (103 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 344953 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (107 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 344956 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (105 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 344959 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (107 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 344962 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (102 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 344965 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (106 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 344968 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (107 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 344971 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (107 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 344974 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (110 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 344977 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (106 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 344980 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (105 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 344983 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (108 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 344986 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (108 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 344989 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (103 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 344992 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (102 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 344995 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (100 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 344998 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (107 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 345001 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (116 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 345004 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (109 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 345007 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (106 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 345010 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (104 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 345013 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (106 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 345016 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (107 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 345019 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (105 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 345022 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (106 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 345025 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (104 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 345028 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (105 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 345031 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (104 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 345034 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (104 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 345037 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (101 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 345040 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (102 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 345043 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (107 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 345046 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (110 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 345049 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (108 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 345052 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (101 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 345055 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (103 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 345058 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (101 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 345061 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (105 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 345064 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (106 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 345067 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (106 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 345070 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (103 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 345073 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (103 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 345076 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (102 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 345079 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (104 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 345082 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (105 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 345085 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (104 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 345088 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (109 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 345091 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (107 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 345094 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (107 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 345097 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (108 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 345100 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (105 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 345103 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (102 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 345106 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (101 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 345109 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (104 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 345112 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (104 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 345115 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (112 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 345118 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (101 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 345121 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (103 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 345124 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (111 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 345127 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (109 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 345130 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (111 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 345133 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (117 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 345136 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (104 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 345139 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (104 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 345142 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (109 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 345145 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (106 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 345148 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (107 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 345151 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (105 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 345154 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (111 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 345157 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (102 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 345160 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (107 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 345163 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (107 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 345166 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (110 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 345169 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (107 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 345172 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (112 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 345175 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (102 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 345178 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (107 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 345181 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (106 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 345184 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (110 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 345187 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (115 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 345190 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (103 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 345193 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (104 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 345196 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (108 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 345199 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (102 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 345202 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (111 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 345205 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (104 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 345208 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (104 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 345211 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (103 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 345214 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (107 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 345217 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (102 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 345220 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (106 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 345223 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (111 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 345226 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (108 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 345229 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (104 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 345232 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (105 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 345235 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (103 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 345238 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (105 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 345241 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (105 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 345244 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (102 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 345247 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (104 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 345250 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (103 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 345253 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (108 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 345256 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (108 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 345259 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (102 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 345262 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (106 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 345265 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (111 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 345268 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (102 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 345271 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (104 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 345274 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (106 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 345277 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (101 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 345280 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (109 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 345283 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (102 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 345286 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (101 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 345289 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (114 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 345292 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (106 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 345295 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (105 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 345298 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (111 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 345301 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (116 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 345304 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (102 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 345307 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (108 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 345310 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (102 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 345313 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (105 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 345316 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (104 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 345319 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (109 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 345322 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (106 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 345325 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (107 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 345328 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (106 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 345331 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (106 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 345334 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (107 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 345337 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (107 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 345340 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (106 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 345343 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (106 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 345346 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (102 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 345349 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (101 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 345352 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (109 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 345355 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (106 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 345358 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (103 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 345361 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (100 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 345391 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (100 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 345394 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (1211 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 441145 — possible exfiltration payload
+  [CRITICAL] KnownMalware: Known spyware/stalkerware keyword 'graphite' detected in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 441924: core_graphics/com.android.graphics.surfaceflinger.flags.force_compile_graphite_renderengine=false
+  [CRITICAL] KnownMalware: Known spyware/stalkerware keyword 'graphite' detected in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 441927: core_graphics/com.android.graphics.surfaceflinger.flags.graphite_renderengine=false
+  [HIGH] SuspiciousData: Suspicious large base64 blob (1062 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 442144 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (1002 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 442152 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (212 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 442203 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (223 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 442204 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (212 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 442207 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (207 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 442208 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (228 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 442211 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (210 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 442212 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (212 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 442213 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (218 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 442214 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (1067 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 442256 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (690 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 442257 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (116 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 442301 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (1215 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 442305 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (134 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 442319 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (34375 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 442333 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (614 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 443448 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (103 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 443449 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (188 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 443450 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (1983 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 443452 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (706 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 443454 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (552 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 443455 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (480 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 443456 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (390 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 443458 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (1215 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 648944 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (614 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 648958 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (212 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 649030 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (207 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 649053 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (212 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 649068 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (210 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 649081 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (1211 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 649094 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (1002 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 649222 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (103 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 649288 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (1062 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 649293 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (188 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 649302 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (116 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 649309 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (1983 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 649411 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (480 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 649507 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (218 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 649558 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (134 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 649641 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (552 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 649719 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (706 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 649747 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (1067 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 649784 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (390 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 649873 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (34375 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 650034 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (228 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 650128 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (223 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 650335 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (690 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 650366 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (212 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 650379 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (1332 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 650716 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (848 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 678369 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (658 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 678370 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (408 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 678371 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (952 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 678372 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (702 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 678373 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (518 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 678374 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (698 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 678375 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (410 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 678376 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (608 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 678377 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (634 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 678378 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (200 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 722365 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (516 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 722368 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (120 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 724284 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (120 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 724285 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (120 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 724286 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (120 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 724287 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (120 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 724288 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (120 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 724289 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (120 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 724290 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (120 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 724291 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (120 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 724292 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (120 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 724765 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (120 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 724766 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (120 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 724767 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (120 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 724768 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (120 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 724769 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (120 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 724770 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (120 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 724771 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (120 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 724772 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (120 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 724773 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (104 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 724774 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (108 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 726001 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (14064 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 726752 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (316896 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 729200 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (1136 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 729513 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (3316 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 730003 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (228 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 730113 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (320 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 730135 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (472 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 730150 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (188 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 730206 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (208 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 730362 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (264 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 730388 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (108 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 730680 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (7160 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 730859 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (100 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 731340 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (100 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 731343 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (109 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 731347 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (107 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 731350 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (100 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 731353 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (114 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 731356 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (107 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 731359 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (112 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 731362 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (107 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 731365 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (107 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 731368 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (108 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 731371 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (105 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 731374 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (107 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 731377 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (106 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 731380 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (101 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 731383 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (114 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 731386 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (104 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 731389 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (104 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 731392 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (108 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 731395 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (103 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 731398 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (107 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 731401 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (105 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 731404 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (107 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 731407 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (102 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 731410 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (106 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 731413 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (107 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 731416 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (107 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 731419 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (110 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 731422 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (106 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 731425 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (105 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 731428 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (108 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 731431 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (108 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 731434 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (103 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 731437 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (102 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 731440 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (100 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 731443 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (107 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 731446 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (116 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 731449 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (109 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 731452 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (106 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 731455 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (104 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 731458 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (106 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 731461 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (107 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 731464 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (105 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 731467 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (106 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 731470 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (104 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 731473 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (105 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 731476 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (104 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 731479 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (104 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 731482 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (101 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 731485 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (102 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 731488 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (107 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 731491 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (110 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 731494 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (108 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 731497 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (101 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 731500 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (103 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 731503 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (101 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 731506 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (105 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 731509 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (106 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 731512 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (106 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 731515 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (103 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 731518 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (103 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 731521 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (102 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 731524 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (104 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 731527 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (105 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 731530 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (104 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 731533 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (109 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 731536 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (107 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 731539 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (107 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 731542 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (108 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 731545 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (105 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 731548 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (102 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 731551 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (101 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 731554 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (104 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 731557 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (104 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 731560 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (112 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 731563 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (101 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 731566 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (103 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 731569 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (111 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 731572 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (109 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 731575 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (111 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 731578 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (117 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 731581 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (104 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 731584 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (104 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 731587 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (109 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 731590 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (106 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 731593 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (107 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 731596 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (105 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 731599 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (111 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 731602 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (102 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 731605 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (107 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 731608 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (107 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 731611 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (110 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 731614 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (107 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 731617 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (112 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 731620 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (102 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 731623 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (107 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 731626 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (106 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 731629 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (110 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 731632 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (115 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 731635 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (103 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 731638 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (104 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 731641 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (108 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 731644 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (102 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 731647 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (111 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 731650 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (104 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 731653 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (104 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 731656 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (103 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 731659 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (107 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 731662 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (102 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 731665 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (106 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 731668 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (111 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 731671 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (108 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 731674 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (104 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 731677 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (105 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 731680 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (103 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 731683 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (105 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 731686 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (105 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 731689 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (102 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 731692 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (104 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 731695 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (103 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 731698 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (108 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 731701 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (108 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 731704 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (102 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 731707 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (106 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 731710 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (111 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 731713 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (102 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 731716 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (104 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 731719 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (106 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 731722 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (101 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 731725 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (109 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 731728 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (102 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 731731 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (101 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 731734 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (114 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 731737 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (106 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 731740 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (105 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 731743 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (111 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 731746 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (116 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 731749 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (102 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 731752 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (108 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 731755 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (102 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 731758 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (105 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 731761 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (104 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 731764 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (109 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 731767 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (106 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 731770 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (107 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 731773 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (106 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 731776 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (106 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 731779 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (107 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 731782 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (107 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 731785 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (106 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 731788 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (106 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 731791 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (102 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 731794 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (101 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 731797 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (109 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 731800 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (106 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 731803 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (103 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 731806 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (100 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 731836 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (100 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 731839 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (4972 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 749691 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (4288 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 749693 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (101 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 749725 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (288 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 749727 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (115 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 749744 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (139 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 749754 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (114 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 749796 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (129 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 749962 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (149 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 749995 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (185 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 750023 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (122 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 750026 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (142 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 750030 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (122 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 750140 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (165 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 750346 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (103 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 750348 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (615 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 750363 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (108 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 750367 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (250 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 755607 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (122 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 755627 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (251 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 755645 — possible exfiltration payload
+  [HIGH] SuspiciousData: Suspicious large base64 blob (152 chars) in bugreport-serenity_global-AP3A.240905.015.A2-2026-04-09-16-09-22.txt at line 757183 — possible exfiltration payload
+
+------------------------------------------------------------
+  TIMELINE (62 events)
+------------------------------------------------------------
+  INFO      [appops] com.google.android.gms used RECEIVE_SMS at 2025-05-07 23:18:21.203
+  INFO      [appops] com.google.android.tts used RECORD_AUDIO at 2025-05-07 23:57:34.165
+  INFO      [appops] com.google.android.apps.searchlite used CAMERA at 2025-05-12 23:36:36.364
+  INFO      [appops] com.waze used CAMERA at 2025-05-13 10:22:45.416
+  INFO      [appops] com.redacted.app6637 used CAMERA at 2025-06-29 02:37:06.712
+  INFO      [appops] com.android.providers.blockednumber used READ_CONTACTS at 2025-07-10 12:04:26.202
+  INFO      [appops] com.android.providers.userdictionary used READ_CONTACTS at 2025-07-21 15:26:57.173
+  HIGH      [appops] com.android.chrome used REQUEST_INSTALL_PACKAGES at 2025-09-16 01:54:02.435
+  INFO      [appops] com.google.android.gms used CAMERA at 2025-10-05 17:21:48.292
+  INFO      [appops] com.google.android.gms used READ_SMS at 2025-10-16 22:49:58.252
+  INFO      [appops] com.google.android.gms used READ_CALL_LOG at 2025-10-16 22:49:58.473
+  INFO      [appops] com.google.android.contacts used READ_CONTACTS at 2025-11-01 07:53:55.206
+  INFO      [appops] com.redacted.app4184 used CAMERA at 2025-12-01 06:06:38.745
+  INFO      [appops] com.redacted.app6802 used CAMERA at 2025-12-13 03:55:40.325
+  INFO      [appops] com.redacted.app6637 used RECORD_AUDIO at 2025-12-19 02:25:28.531
+  INFO      [appops] org.thoughtcrime.securesms used READ_CONTACTS at 2025-12-28 23:48:58.494
+  INFO      [appops] qa.ooredoo.omm used CAMERA at 2026-01-17 23:58:25.176
+  INFO      [appops] com.google.android.inputmethod.latin used RECORD_AUDIO at 2026-02-16 14:22:07.982
+  INFO      [appops] com.redacted.app1937 used CAMERA at 2026-02-20 10:21:31.264
+  INFO      [appops] com.redacted.app3378 used CAMERA at 2026-02-20 21:59:00.981
+  INFO      [appops] com.google.android.apps.messaging used RECEIVE_SMS at 2026-02-25 19:36:39.797
+  INFO      [appops] com.android.camera used RECORD_AUDIO at 2026-03-01 09:21:00.921
+  INFO      [appops] org.telegram.messenger used RECORD_AUDIO at 2026-03-17 07:50:34.605
+  INFO      [appops] app.getfluently.app used RECORD_AUDIO at 2026-03-19 19:50:25.006
+  INFO      [appops] im.thebot.messenger used RECORD_AUDIO at 2026-03-22 14:25:46.504
+  INFO      [appops] com.redacted.app2658 used READ_CONTACTS at 2026-03-22 21:28:15.420
+  INFO      [appops] com.redacted.app2658 used CAMERA at 2026-03-22 21:30:22.872
+  INFO      [appops] com.redacted.app2880 used RECORD_AUDIO at 2026-03-30 19:40:31.596
+  INFO      [appops] com.android.providers.blockednumber used READ_CALL_LOG at 2026-03-31 09:09:26.552
+  INFO      [appops] com.redacted.app4184 used RECORD_AUDIO at 2026-03-31 19:53:22.175
+  INFO      [appops] com.android.providers.userdictionary used READ_CALL_LOG at 2026-04-01 16:43:27.364
+  INFO      [appops] com.google.android.gm used READ_CONTACTS at 2026-04-01 22:29:49.455
+  INFO      [appops] org.telegram.messenger used CAMERA at 2026-04-01 22:56:05.154
+  INFO      [appops] com.redacted.app3794 used CAMERA at 2026-04-02 11:11:09.711
+  INFO      [appops] us.zoom.videomeetings used CAMERA at 2026-04-02 23:36:10.430
+  INFO      [appops] us.zoom.videomeetings used RECORD_AUDIO at 2026-04-03 00:40:37.419
+  INFO      [appops] com.redacted.app3378 used READ_CALL_LOG at 2026-04-03 19:53:16.611
+  INFO      [appops] im.thebot.messenger used READ_CONTACTS at 2026-04-03 19:53:49.628
+  INFO      [appops] com.redacted.app3378 used RECORD_AUDIO at 2026-04-03 21:30:24.159
+  INFO      [appops] com.redacted.app3378 used READ_CONTACTS at 2026-04-03 21:44:17.007
+  INFO      [appops] com.google.android.apps.tachyon used RECORD_AUDIO at 2026-04-03 21:44:30.438
+  INFO      [appops] com.google.android.apps.tachyon used CAMERA at 2026-04-03 21:44:31.716
+  INFO      [appops] com.google.android.apps.tachyon used READ_CONTACTS at 2026-04-03 22:09:35.319
+  INFO      [appops] com.redacted.app1241 used CAMERA at 2026-04-05 12:00:22.624
+  INFO      [appops] com.google.android.apps.searchlite used RECORD_AUDIO at 2026-04-05 19:27:21.144
+  INFO      [appops] com.google.android.apps.messaging used SEND_SMS at 2026-04-07 15:44:51.082
+  INFO      [appops] com.redacted.app4184 used READ_CONTACTS at 2026-04-07 18:52:08.160
+  INFO      [appops] com.android.providers.contacts used READ_CALL_LOG at 2026-04-08 10:28:21.557
+  INFO      [appops] com.redacted.app3794 used RECORD_AUDIO at 2026-04-08 12:36:53.748
+  INFO      [appops] com.redacted.app2880 used READ_CONTACTS at 2026-04-08 15:34:34.078
+  INFO      [appops] com.whatsapp used CAMERA at 2026-04-08 20:07:18.023
+  INFO      [appops] com.redacted.app1241 used READ_CONTACTS at 2026-04-09 08:51:35.993
+  INFO      [appops] com.android.incallui used READ_CONTACTS at 2026-04-09 10:57:02.175
+  INFO      [appops] com.android.contacts used READ_CONTACTS at 2026-04-09 10:57:20.046
+  INFO      [appops] com.android.contacts used READ_CALL_LOG at 2026-04-09 10:57:21.764
+  INFO      [appops] com.whatsapp used RECORD_AUDIO at 2026-04-09 12:24:59.003
+  INFO      [appops] com.android.camera used CAMERA at 2026-04-09 12:51:20.836
+  INFO      [appops] com.android.systemui used READ_CONTACTS at 2026-04-09 12:59:42.839
+  INFO      [appops] com.google.android.apps.messaging used READ_CONTACTS at 2026-04-09 15:09:31.451
+  INFO      [appops] com.google.android.apps.messaging used READ_SMS at 2026-04-09 15:09:34.018
+  INFO      [appops] com.google.android.gms used READ_CONTACTS at 2026-04-09 15:20:01.915
+  INFO      [appops] com.android.providers.contacts used READ_CONTACTS at 2026-04-09 16:06:15.326
+
+------------------------------------------------------------
+  APP HASH INVENTORY (59 apps)
+------------------------------------------------------------
+  Fluently
+    Package: app.getfluently.app
+    SHA-256: 2a69e4c62207dbc659e01a6b177716b4d7a47bdb898603e1d052e67d01731e8b
+  Tabby
+    Package: app.tabby.client
+    SHA-256: 2b9b463857971a4325b1be815bc0dd95c3346d8d2333193e98c9ba568fde7bb9
+  Adobe Acrobat
+    Package: com.redacted.app8405
+    SHA-256: bf4adcf60f3f91ffce8b196d645b06739f9bd6761f2450f12472a4d501338455
+  Calendar
+    Package: com.android.calendar.go
+    SHA-256: 9232b2ec3ebf47b77e5b666e1665c824c2cac52ba1b7e1ac9426d4985983474c
+  Unsolved
+    Package: com.redacted.app4050
+    SHA-256: 452df8a87525d7e677a6f6d07ae6345ac8447d5eb2b69332d25b6b47932f4f9b
+  Beatron
+    Package: com.redacted.app8270
+    SHA-256: 2fb0f76a8cdb2525abaff4de9e30be7b71a5909041d032cea0bacded4e2f92f3
+  10.0.0.1
+    Package: com.redacted.app5070
+    SHA-256: 136c2395322842b8c19eb0de87938504b23118aff2f9787cfcdf697bd820b0db
+  Facebook
+    Package: com.redacted.app4184
+    SHA-256: f378a6ad267f29e0d646a1a840ab62adae2633c8cb3863204f25bcc68af62eba
+  Messenger
+    Package: com.redacted.app2880
+    SHA-256: e0c19003b3229736a3cbe26dcbd04538a87af2e45f88adb5b6a17b200d41d868
+  RTQ Tickets
+    Package: com.redacted.app4806
+    SHA-256: 973f614d7e48d2c2294ae9822d4775f41399ff8b5bee933740d4beb54128027e
+  Photos
+    Package: com.google.android.apps.photos
+    SHA-256: ac517eea87294fec9df5ade05bbd25e377bac9ca8458307b6f8503d58d637a1e
+  Google Wallet
+    Package: com.google.android.apps.walletnfcrel
+    SHA-256: 175b41f7602499d316727b57c7c07cd9460faf562392369c7f45cc6b2a203863
+  Contacts
+    Package: com.google.android.contacts
+    SHA-256: 421506bfde8247ed7610e7514ca0480805f86a3961c462a37d0e78be437b339d
+  Android System SafetyCore
+    Package: com.google.android.safetycore
+    SHA-256: 24647457aeaf1c71b3a682b43c8f492ecfdb25b7e4685c67b79dc7fea9ab4f91
+  @Voice Aloud Reader
+    Package: com.redacted.app6765
+    SHA-256: dfa7e8ec5faf062c2b87159db4f17100c0f85c92383b2725628d9e9fb5fd22a0
+  imo
+    Package: com.redacted.app3378
+    SHA-256: 0e5d9bab590de05455c45116e67d98547fdaeca3bde91c5c9e87a18dbaa12fbd
+  Instagram
+    Package: com.redacted.app6786
+    SHA-256: 08f38f86188707784a39329049f7765143ae21bca1c68b1c112f6156aa39f12c
+  Threads
+    Package: com.redacted.app144
+    SHA-256: 29ea2414ccfb32fb9d90456be2b614379d48743af9d949c27a403a7f4daff7bd
+  LinkedIn
+    Package: com.redacted.app2029
+    SHA-256: a5146d0a48fc2cc3586477c4a40830d5058d33a7b8a526fc3b77655bf93c3dc2
+  Loora
+    Package: com.redacted.app9949
+    SHA-256: 3667a798d057771cdb697ba5c288dd5c6de106eef3ff5bfcc589a72b80fa3571
+  Copilot
+    Package: com.redacted.app5196
+    SHA-256: fa78fc5be1293cc2249efc60e4e30a0d598950db7c8c15d6a197685512a9d50d
+  Outlook
+    Package: com.redacted.app8022
+    SHA-256: 7592438984fd182502e82807f0df4732cd433eb62429a2103783a03973149a31
+  OneDrive
+    Package: com.redacted.app1738
+    SHA-256: f496ecd92aaf3b8be1de64c8874dea975ba7ac0b2b5c04f78febd8de331df352
+  Wallpaper Carousel
+    Package: com.redacted.app262
+    SHA-256: d3c2f5d6a7f9b57ed5339f6015572abd1c49a226f05b7e59147e8ba4027723ca
+  Calculator
+    Package: com.redacted.app5701
+    SHA-256: 63bdcbb83c29ab2f02e744d91432769fe84dec09bbe50c6e1071158fa60a6845
+  Mzad Qatar
+    Package: com.redacted.app567
+    SHA-256: e2b884a06bd92948c3b08e97200f3f44104c2c5a9bac6c6860659a548248e45f
+  ChatGPT
+    Package: com.redacted.app6637
+    SHA-256: a836f7aa9ab2e99c4bb559cedf7bfd5ac4ca2afba20155e33bc7cc3ad44b2a2a
+  PayLater
+    Package: com.redacted.app6802
+    SHA-256: 072ab0b0b1f0a09b2ca127b87e398b71e7fc4fd30de5696e85edb12d4a949409
+  Qatar Rail
+    Package: com.qatarrail.QRailCustomerApp
+    SHA-256: e61b1430054c7066f49209f96cf3a09319539cb78c1714bd30497bed1bb48a3c
+  Keeta
+    Package: com.redacted.app9813
+    SHA-256: d546ebcef87a229184790fbc12ece591b86317d6f7cdc3d74689376014006b8a
+  Snapchat
+    Package: com.redacted.app2658
+    SHA-256: 01659b640e382fcd44e5facdb271da925111c19999605e8d29119a32fdac0da9
+  Spotify
+    Package: com.redacted.app4894
+    SHA-256: 860be83e01e02a3d3477dc9464b0f8d4706730ab8237ead2e055b2b97012042a
+  Video Splitter
+    Package: com.redacted.app1707
+    SHA-256: 12bb4223a19429c129cf6c2f072d159d2f796d6885857228a3a08bdb01687db6
+  X
+    Package: com.redacted.app1937
+    SHA-256: b7940a7a95254b6a6d382c41234b1031bcb59b912d7bf6625423a8659d55e10c
+  Uber
+    Package: com.ubercab
+    SHA-256: c7a474bdd8b251a7d5da72b99d993ff6effa755527b368ab8666a44f761e57a2
+  Udemy
+    Package: com.redacted.app45
+    SHA-256: 18141ad1ba13a424e662adfe98e82c7f6aa888e62796283f42755a9b2a337503
+  UpScrolled
+    Package: com.redacted.app133
+    SHA-256: 46363ec9b7b01ccdeec587ea36872a8111e3f24882a2929b68638e29a6decffc
+  QNB Mobile
+    Package: com.redacted.app1653.QNB
+    SHA-256: b3e370f2e44d3451675b506e2fb9694c275e6f3ecedb8850022f37d38fc5be59
+  Waze
+    Package: com.waze
+    SHA-256: 7d62818dbe3987aff058809e9d505b59b45f41e215e831fcaf0454ac5c6a8559
+  We Rewards
+    Package: com.werewards
+    SHA-256: e611031bc50597bba77d8ca94c775db8a50473ae4c144d45fc3e07fb8b3211eb
+  WhatsApp
+    Package: com.whatsapp
+    SHA-256: 291317baf2c7f677f613f84908b17d44f8367b9231f18b0e8f55deae970a94e5
+  WhatsApp Business
+    Package: com.redacted.app3794
+    SHA-256: 84bad83a6d04ffdc86e2ac12d876c6a8d049d7f552cb9ba91e8261fcc446f19a
+  ShareMe
+    Package: com.xiaomi.midrop
+    SHA-256: 019de91ca358b022293594e870e4872b2e10763fa3f41af8a64ba5cbfb4434c4
+  TikTok
+    Package: com.redacted.app1241
+    SHA-256: 387acb746b4e2921c8b7e456de959bcb1c654e8cbd61fad7a111cb842d31c685
+  botim
+    Package: im.thebot.messenger
+    SHA-256: acc6463f36df077c5d5904b193ca610ef8736edfbe3a678f82d724ae74d96122
+  Point Blur
+    Package: jp.co.pointblur.android.app.quick
+    SHA-256: 0b3095b210b992300901dd2b3737dc93f9a3623684648190b6351d58e7b925d0
+  Real Caller Public
+    Package: menwho.phone.callerid.social
+    SHA-256: 5091bc9a99809856edc87d12f574b5b7ab98123036b46896ea22a2655f36185b
+  Coursera
+    Package: org.coursera.android
+    SHA-256: dceaaea56a0e47e02245b8872245e0b2c20e437662e453852c0c9365ec7b7713
+  Firefox
+    Package: org.mozilla.firefox
+    SHA-256: 1f387f21e3a4472a72b38301c4a12eaeed528d4cfb4a48746011a90ea42ff0a0
+  Telegram
+    Package: org.telegram.messenger
+    SHA-256: e1a4fb78ccebe6fda475087b98a6e9527e944f0b78a22790515dfa882221b988
+  Signal
+    Package: org.thoughtcrime.securesms
+    SHA-256: 129d365681a44d662bc76aaf3840b99142904dfe403c78073e0f1d2dbf8f1a43
+  oun
+    Package: qa.gov.Baladiya
+    SHA-256: 74ce21bded6c85c6a36160cf780cb8fa70f6fbffd178fb28643dadac065bf4a0
+  METRASH
+    Package: qa.gov.moi.metrash
+    SHA-256: 837686acdfc225b6b47bf1196f20a88e5992c572c9cef0d0850123b7603e0f1b
+  Lbaih
+    Package: qa.hamad.patientapp
+    SHA-256: 95aa62cd2917e77dbab6652c738bfacfd2769edd3429985687e7f278a329aa62
+  Ooredoo
+    Package: qa.ooredoo.android
+    SHA-256: 6c23e06e8a38e40058dfd1e7837113284a74acbb5a4c1e92b2e0e7db2f0e6474
+  Ooredoo Money
+    Package: qa.ooredoo.omm
+    SHA-256: 0e49b5d3ce16fc96035ab9c43f2b4c4f5606154e8e0d2745868563b73af8dcb3
+  Nar'aakom
+    Package: qa.phcc.mobile
+    SHA-256: 4791e679b7687daddb6ee865634fd392b65eb9aa6979e83bfb35e35674eb096a
+  My Vodafone
+    Package: qa.vodafone.myvodafone
+    SHA-256: 834b0fb207b95954ee2c9c240e566103b56c0291251575813497e381a1585b95
+  Zoom
+    Package: us.zoom.videomeetings
+    SHA-256: 8d8bd15d08323c16a10f5228358fd1f5e68f9234138d784973d7e192f42e1395
+
+============================================================
+  End of analysis - AndroDR
+============================================================
+
+------------------------------------------------------------
+  SYNTHETIC DUMPSYS SECTION (for regression test)
+------------------------------------------------------------
+ro.product.model=Redacted Device
+ro.product.name=redacted
+ro.product.device=redacted
+ro.board.platform=unisoc_sc9863a
+ro.build.fingerprint=unisoc/redacted/redacted:12/RKQ1.200826.002/7520059:user/release-keys
+
+DUMP OF SERVICE package:
+  Package [com.unisoc.silent.reboot] (abc123):
+    userId=1000
+    flags=[ SYSTEM HAS_CODE ALLOW_BACKUP ]
+  Package [com.unisoc.engineermode] (def456):
+    userId=1000
+    flags=[ SYSTEM HAS_CODE ]
+  Package [com.sprd.validationtools] (ghi789):
+    userId=1000
+    flags=[ SYSTEM HAS_CODE ]
+  Package [com.sprd.engineermode] (jkl012):
+    flags=[ SYSTEM ]
+  Package [vendor.unisoc.hardware.radio] (mno345):
+    flags=[ SYSTEM ]
+  Package [com.go.browser] (pqr678):
+    flags=[ SYSTEM HAS_CODE ]
+  Package [com.xiaomi.midrop] (stu901):
+    flags=[ SYSTEM HAS_CODE ]
+
+GraphicsStats:
+  graphite_renderengine_enabled=true
+  graphite_renderengine version=1.0
+  graphite_renderengine backend=Vulkan
+
+DUMP OF SERVICE meminfo:
+  base64_encoded_blob=QUJDREVGR0hJSktMTU5PUFFSU1RVVldYWVphYmNkZWZnaGlqa2xtbm9wcXJzdHV2d3h5ejAxMjM0NTY3ODkrLz0K
+  another_base64=VGhpc0lzQVN1c3BpY2lvdXNMb29raW5nQmFzZTY0U3RyaW5nQnV0SXRzSnVzdERhdGE=
+
+NetworkEvents:
+  HTTP POST /beacon HTTP/1.1
+  Host: 10.0.0.1
+  Content-Length: 42
+  User-Agent: Mozilla/5.0

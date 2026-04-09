@@ -1,5 +1,15 @@
 # MVT-Parity Forensic Analysis Implementation Plan
 
+> ## ⚠️ SUPERSEDED — HISTORICAL RECORD ONLY
+>
+> This plan describes bugreport modules producing `BugReportFinding` objects with inline severity — an architecture that has been **superseded** by the unified telemetry/findings refactor (tracking issue **#84**).
+>
+> **Do not follow this plan's code samples for new work.** Post-refactor, bugreport modules emit canonical telemetry types (source-agnostic, shared with runtime scanners) and all findings are produced by `SigmaRuleEngine` / `SigmaCorrelationEngine` with severity sourced from rule metadata. `BugReportFinding` as a type no longer exists.
+>
+> **Authoritative architecture:** `docs/superpowers/specs/2026-04-09-unified-telemetry-findings-refactor-design.md`
+>
+> This document is retained for historical context (it describes what was actually shipped in late March 2026) and is scheduled for archival to `docs/superpowers/archive/` once #84 merges (see **#85**).
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Port MVT's structured bugreport analysis modules to Kotlin and add runtime scanner equivalents for AppOps, Receivers, and Accessibility — covering Tier 1 (#31, #32) and Tier 2 (#33, #34, #35).

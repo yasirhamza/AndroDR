@@ -27,20 +27,20 @@ class PlatformCompatModule @Inject constructor() : BugreportModule {
             ?: sectionText.indexOf("ChangeId").takeIf { it >= 0 }
             ?: return ModuleResult(telemetryService = SERVICE)
 
+        // Emit every compat override observed. SIGMA rules (plan 6) decide
+        // which ChangeIds matter (e.g. DOWNSCALED=168419799 for anti-analysis).
+        // No hardcoded ChangeId filter in this module.
         compatOverrideRegex.findAll(sectionText, compatStart).forEach { match ->
             val changeId = match.groupValues[1]
             val packageName = match.groupValues[2]
-
-            if (changeId == CHANGE_ID_DOWNSCALED) {
-                val isIoc = iocResolver.isKnownBadPackage(packageName)
-                telemetry.add(mapOf(
-                    "source" to "platform_compat",
-                    "package_name" to packageName,
-                    "change_id" to changeId,
-                    "is_downscaled" to true,
-                    "is_ioc" to (isIoc != null)
-                ))
-            }
+            val isIoc = iocResolver.isKnownBadPackage(packageName)
+            telemetry.add(mapOf(
+                "source" to "bugreport_import",
+                "service" to "platform_compat",
+                "package_name" to packageName,
+                "change_id" to changeId,
+                "is_ioc" to (isIoc != null)
+            ))
         }
 
         return ModuleResult(telemetry = telemetry, telemetryService = SERVICE)
@@ -48,6 +48,5 @@ class PlatformCompatModule @Inject constructor() : BugreportModule {
 
     companion object {
         private const val SERVICE = "platform_compat_audit"
-        private const val CHANGE_ID_DOWNSCALED = "168419799"
     }
 }

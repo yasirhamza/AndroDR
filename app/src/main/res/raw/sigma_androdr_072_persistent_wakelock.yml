@@ -1,0 +1,31 @@
+title: Persistent wakelock indicating always-on surveillance
+id: androdr-072
+status: experimental
+description: >
+    An app holding wakelocks persistently can indicate stalkerware behavior.
+    This rule ships disabled by default pending UAT threshold calibration
+    because the heuristic tends to false-positive on fitness apps, navigation,
+    and legitimate background services. See issue #87 for calibration tracking.
+author: AndroDR
+date: 2026-04-09
+tags:
+    - attack.t1437
+logsource:
+    product: androdr
+    service: wakelock_parser
+detection:
+    selection:
+        source|contains: "BUGREPORT"
+    condition: selection
+enabled: false
+category: incident
+level: low
+display:
+    category: device_posture
+    icon: battery_alert
+    triggered_title: "Persistent wakelock activity"
+    safe_title: "No persistent wakelock patterns"
+    evidence_type: none
+remediation:
+    - "Review the package holding persistent wakelocks for legitimate background-service behavior."
+    - "If not recognized, uninstall and investigate."

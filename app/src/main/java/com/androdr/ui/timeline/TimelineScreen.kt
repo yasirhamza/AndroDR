@@ -101,7 +101,8 @@ fun TimelineScreen(
 
     val events by viewModel.events.collectAsStateWithLifecycle()
     val partitioned by viewModel.partitionedEvents.collectAsStateWithLifecycle()
-    val severityFilter by viewModel.severityFilter.collectAsStateWithLifecycle()
+    val rows by viewModel.rows.collectAsStateWithLifecycle()
+    val hideInformational by viewModel.hideInformationalTelemetry.collectAsStateWithLifecycle()
     val shareUri by viewModel.shareUri.collectAsStateWithLifecycle()
     val exporting by viewModel.exporting.collectAsStateWithLifecycle()
     val groupMode by viewModel.groupMode.collectAsStateWithLifecycle()
@@ -233,24 +234,24 @@ fun TimelineScreen(
 
         AnimatedVisibility(visible = filterPanelExpanded) {
             Column {
-                // Severity filter chips
-                val filterOptions = listOf(
-                    null to stringResource(R.string.timeline_filter_all),
-                    "CRITICAL" to stringResource(R.string.timeline_filter_critical),
-                    "HIGH" to stringResource(R.string.timeline_filter_high),
-                    "MEDIUM" to stringResource(R.string.timeline_filter_medium)
-                )
-                LazyRow(
-                    contentPadding = PaddingValues(horizontal = 16.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                // Hide informational telemetry toggle — when ON, telemetry
+                // rows not referenced by any finding are hidden. Finding
+                // rows and their anchor telemetry events remain visible.
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    items(filterOptions) { (severity, label) ->
-                        FilterChip(
-                            selected = severityFilter == severity,
-                            onClick = { viewModel.setSeverityFilter(severity) },
-                            label = { Text(label) }
-                        )
-                    }
+                    androidx.compose.material3.Switch(
+                        checked = hideInformational,
+                        onCheckedChange = viewModel::setHideInformationalTelemetry
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        text = "Hide informational telemetry",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
                 }
 
                 // Package filter chips
@@ -462,11 +463,48 @@ fun TimelineScreen(
                 immutableMap to sorted
             }
 
+            // Pre-compute referenced event IDs for the hideInformational filter.
+            val referencedEventIds = remember(rows) {
+                rows.asSequence()
+                    .filterIsInstance<TimelineRow.TelemetryRow>()
+                    .filter { it.referencedByFindingIds.isNotEmpty() }
+                    .map { it.event.id }
+                    .toSet()
+            }
+            val findingRows = remember(rows) {
+                rows.filterIsInstance<TimelineRow.FindingRow>()
+            }
+
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
                 contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
+                // Render pinned findings section first so severity-bearing
+                // rows cannot visually disappear into the telemetry stream.
+                if (findingRows.isNotEmpty()) {
+                    item(key = "findings_header") {
+                        Text(
+                            text = "Findings (${findingRows.size})",
+                            style = MaterialTheme.typography.titleSmall,
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.padding(vertical = 4.dp)
+                        )
+                    }
+                    items(
+                        items = findingRows as List<TimelineRow>,
+                        key = { row -> "row_${row.timestamp}_${row.hashCode()}" }
+                    ) { row ->
+                        // Exhaustive `when` enforces that every TimelineRow
+                        // variant has a concrete visual treatment — adding
+                        // a new variant will fail to compile until this
+                        // branch is updated.
+                        when (row) {
+                            is TimelineRow.FindingRow -> FindingCard(row)
+                            is TimelineRow.TelemetryRow -> TelemetryCard(row, onClick = { selectedEvent = row.event })
+                        }
+                    }
+                }
                 sortedDateKeys.forEach { dateLabel ->
                     val entry = dateGrouped[dateLabel] ?: return@forEach
                     item(key = "header_$dateLabel") {
@@ -486,9 +524,16 @@ fun TimelineScreen(
                             )
                         }
                     }
-                    // Then standalone events
+                    // Then standalone events. Apply the hideInformational
+                    // filter: only telemetry events referenced by a finding
+                    // remain visible when the toggle is ON.
+                    val visibleStandalones = if (hideInformational) {
+                        entry.standaloneEvents.filter { it.id in referencedEventIds }
+                    } else {
+                        entry.standaloneEvents
+                    }
                     items(
-                        items = entry.standaloneEvents,
+                        items = visibleStandalones,
                         key = { it.id }
                     ) { event ->
                         TimelineEventCard(

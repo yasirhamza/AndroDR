@@ -14,6 +14,7 @@ class SigmaRuleParserTest {
             title: Test rule
             id: test-001
             status: production
+            category: incident
             logsource:
                 product: androdr
                 service: app_scanner
@@ -41,6 +42,7 @@ class SigmaRuleParserTest {
         val yaml = """
             title: Name contains System
             id: test-002
+            category: incident
             logsource:
                 product: androdr
                 service: app_scanner
@@ -66,6 +68,7 @@ class SigmaRuleParserTest {
         val yaml = """
             title: Compound test
             id: test-003
+            category: incident
             logsource:
                 product: androdr
                 service: app_scanner
@@ -95,6 +98,7 @@ class SigmaRuleParserTest {
         val yaml = """
             title: USB Debugging enabled
             id: test-display
+            category: device_posture
             logsource:
                 product: androdr
                 service: device_auditor
@@ -128,6 +132,7 @@ class SigmaRuleParserTest {
         val yaml = """
             title: No display
             id: test-no-display
+            category: incident
             logsource:
                 product: androdr
                 service: app_scanner
@@ -150,6 +155,7 @@ class SigmaRuleParserTest {
         val yaml = """
             title: Campaign rule
             id: test-campaign
+            category: device_posture
             logsource:
                 product: androdr
                 service: device_auditor
@@ -176,6 +182,7 @@ class SigmaRuleParserTest {
         val yaml = """
             title: Tagged rule
             id: test-004
+            category: incident
             logsource:
                 product: androdr
                 service: app_scanner

@@ -98,7 +98,6 @@ class AllCorrelationRulesFireTest {
         signals.forEachIndexed { i, sig ->
             println("[${i + 1}] ruleId=${sig.ruleId}")
             println("    package=${sig.packageName}")
-            println("    severity=${sig.severity}")
             println("    description=${sig.description}")
             println("    startTimestamp=${sig.startTimestamp}")
             println("    endTimestamp=${sig.endTimestamp}")
@@ -150,7 +149,6 @@ class AllCorrelationRulesFireTest {
             category = category,
             source = "test",
             description = "evt",
-            severity = "info",
             packageName = pkg
         )
 

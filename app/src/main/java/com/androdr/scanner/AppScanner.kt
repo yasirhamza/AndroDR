@@ -7,6 +7,7 @@ import android.content.pm.PackageManager
 import android.os.Build
 import android.util.Log
 import com.androdr.data.model.AppTelemetry
+import com.androdr.data.model.TelemetrySource
 import com.androdr.data.model.KnownAppCategory
 import com.androdr.ioc.KnownAppResolver
 import com.androdr.ioc.OemPrefixResolver
@@ -260,7 +261,8 @@ class AppScanner @Inject constructor(
             receiverPermissions = receiverPermissions,
             hasLauncherActivity = hasLauncherActivity,
             firstInstallTime = pkg.firstInstallTime,
-            lastUpdateTime = pkg.lastUpdateTime
+            lastUpdateTime = pkg.lastUpdateTime,
+            source = TelemetrySource.LIVE_SCAN,
         )
     }
 

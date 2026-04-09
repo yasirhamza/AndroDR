@@ -12,5 +12,6 @@ detection:
         category: permission_use
     condition: selection
 level: informational
+category: incident
 display:
     suppress_finding: true

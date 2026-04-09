@@ -1,0 +1,35 @@
+title: Process crash loop indicating anti-forensics or failed exploitation
+id: androdr-071
+status: experimental
+description: >
+    Tombstone events observed in the bugreport. Multiple crashes for the same
+    package within a short window can indicate anti-forensics behavior
+    (deliberate crashes to corrupt state) or failed exploit attempts that
+    consistently crash the target process. Legitimate crash loops do happen
+    during development or OOM conditions — this rule fires at MEDIUM severity
+    to prompt review, not automatic escalation.
+    TODO(plan 7+): add count/time-window correlation; today the rule fires
+    whenever any tombstone telemetry is present, which is acceptable because
+    tombstones are already rare on clean devices.
+author: AndroDR
+date: 2026-04-09
+tags:
+    - attack.t1562
+logsource:
+    product: androdr
+    service: tombstone_parser
+detection:
+    selection:
+        source|contains: "BUGREPORT"
+    condition: selection
+category: incident
+level: medium
+display:
+    category: device_posture
+    icon: bug_report
+    triggered_title: "Repeated crash pattern detected"
+    safe_title: "No crash patterns"
+    evidence_type: none
+remediation:
+    - "Review the repeatedly crashing package for legitimate bugs vs exploit attempts."
+    - "If the package is suspect, uninstall it and scan for related artifacts."

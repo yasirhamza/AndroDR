@@ -4,6 +4,7 @@ import android.app.ActivityManager
 import android.content.Context
 import android.util.Log
 import com.androdr.data.model.ProcessTelemetry
+import com.androdr.data.model.TelemetrySource
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -37,7 +38,8 @@ class ProcessScanner @Inject constructor(
                 processUid = proc.uid,
                 packageName = proc.pkgList?.firstOrNull(),
                 isForeground = proc.importance ==
-                    ActivityManager.RunningAppProcessInfo.IMPORTANCE_FOREGROUND
+                    ActivityManager.RunningAppProcessInfo.IMPORTANCE_FOREGROUND,
+                source = TelemetrySource.LIVE_SCAN,
             )
         }.also {
             Log.d(TAG, "Collected ${it.size} running process records")

@@ -7,6 +7,7 @@ import android.os.Build
 import android.provider.Settings
 import android.util.Log
 import com.androdr.data.model.DeviceTelemetry
+import com.androdr.data.model.TelemetrySource
 import com.androdr.data.repo.CveRepository
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
@@ -118,7 +119,8 @@ class DeviceAuditor @Inject constructor(
             bootloaderUnlocked = bootloaderUnlocked,
             wifiAdbEnabled = wifiAdbEnabled,
             unpatchedCveCount = unpatchedCves.size,
-            unpatchedCves = unpatchedCves
+            unpatchedCves = unpatchedCves,
+            source = TelemetrySource.LIVE_SCAN,
         ))
     }
 

@@ -52,7 +52,6 @@ class CorrelationMigrationFixturesTest {
         category = category,
         source = "test",
         description = "evt",
-        severity = "info",
         packageName = pkg
     )
 
@@ -87,7 +86,6 @@ class CorrelationMigrationFixturesTest {
         assertEquals("androdr-corr-001", sig.ruleId)
         assertEquals(t0, sig.startTimestamp)
         assertEquals(t0 + 30 * 60_000L, sig.endTimestamp)
-        assertEquals("high", sig.severity)
     }
 
     // ---------- corr-002: install -> permission use (1h, temporal_ordered) ----------

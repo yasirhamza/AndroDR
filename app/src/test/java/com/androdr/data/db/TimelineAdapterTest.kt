@@ -2,6 +2,7 @@ package com.androdr.data.db
 
 import com.androdr.data.model.DnsEvent
 import com.androdr.data.model.ScanResult
+import com.androdr.data.model.TelemetrySource
 import com.androdr.sigma.Finding
 import com.androdr.sigma.FindingCategory
 import org.junit.Assert.assertEquals
@@ -20,10 +21,9 @@ class TimelineAdapterTest {
         val event = dns.toForensicTimelineEvent()
         assertEquals("dns_monitor", event.source)
         assertEquals("ioc_match", event.category)
-        assertEquals("HIGH", event.severity)
         assertEquals("evil.com", event.iocIndicator)
         assertEquals("domain", event.iocType)
-        assertTrue(event.isFromRuntime)
+        assertTrue(event.telemetrySource == TelemetrySource.LIVE_SCAN)
     }
 
     @Test
@@ -34,7 +34,6 @@ class TimelineAdapterTest {
             isBlocked = false, reason = null
         )
         val event = dns.toForensicTimelineEvent()
-        assertEquals("INFO", event.severity)
         assertEquals("", event.iocIndicator)
     }
 
@@ -58,12 +57,11 @@ class TimelineAdapterTest {
         val event = finding.toForensicTimelineEvent(scanResult)
         assertEquals("app_scanner", event.source)
         assertEquals("app_risk", event.category)
-        assertEquals("HIGH", event.severity)
         assertEquals("androdr-060", event.ruleId)
         assertEquals(5000L, event.scanResultId)
         assertEquals("com.evil.spy", event.packageName)
         assertEquals("t1626", event.attackTechniqueId)
-        assertTrue(event.isFromRuntime)
+        assertTrue(event.telemetrySource == TelemetrySource.LIVE_SCAN)
     }
 
     @Test
@@ -78,6 +76,6 @@ class TimelineAdapterTest {
         assertEquals("appops", event.source)
         assertEquals("permission_use", event.category)
         assertEquals(9000L, event.scanResultId)
-        assertTrue(event.isFromBugreport)
+        assertTrue(event.telemetrySource == TelemetrySource.BUGREPORT_IMPORT)
     }
 }

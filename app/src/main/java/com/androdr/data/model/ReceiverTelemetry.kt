@@ -4,7 +4,8 @@ data class ReceiverTelemetry(
     val packageName: String,
     val intentAction: String,
     val componentName: String,
-    val isSystemApp: Boolean
+    val isSystemApp: Boolean,
+    val source: TelemetrySource,
 ) {
     fun toFieldMap(): Map<String, Any?> = mapOf(
         "package_name" to packageName,

@@ -7,7 +7,6 @@ import com.androdr.scanner.bugreport.AppOpsModule
 import com.androdr.scanner.bugreport.BatteryDailyModule
 import com.androdr.scanner.bugreport.BugreportModule
 import com.androdr.scanner.bugreport.DbInfoModule
-import com.androdr.scanner.bugreport.LegacyScanModule
 import com.androdr.scanner.bugreport.PlatformCompatModule
 import com.androdr.scanner.bugreport.ReceiverModule
 import dagger.Binds
@@ -19,7 +18,6 @@ import dagger.multibindings.IntoSet
 @Module
 @InstallIn(SingletonComponent::class)
 abstract class BugreportModuleBindings {
-    @Binds @IntoSet abstract fun legacy(m: LegacyScanModule): BugreportModule
     @Binds @IntoSet abstract fun accessibility(m: AccessibilityModule): BugreportModule
     @Binds @IntoSet abstract fun receivers(m: ReceiverModule): BugreportModule
     @Binds @IntoSet abstract fun appOps(m: AppOpsModule): BugreportModule

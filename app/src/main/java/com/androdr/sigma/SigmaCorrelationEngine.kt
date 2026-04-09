@@ -28,17 +28,50 @@ class SigmaCorrelationEngine @Inject constructor() {
     fun evaluate(
         rules: List<CorrelationRule>,
         events: List<ForensicTimelineEvent>,
-        bindings: Map<Long, Set<String>>
+        bindings: Map<Long, Set<String>>,
+        atomRulesById: Map<String, SigmaRule> = emptyMap(),
     ): List<ForensicTimelineEvent> {
         val signals = mutableListOf<ForensicTimelineEvent>()
         rules.forEach { rule ->
+            val effectiveCategory = computeEffectiveCategory(rule.referencedRuleIds, atomRulesById)
+            val effectiveSeverity = SeverityCapPolicy.applyCap(effectiveCategory, rule.severity)
+            val effectiveRule = rule.copy(
+                severity = effectiveSeverity,
+            )
             signals += when (rule.type) {
-                CorrelationType.TEMPORAL_ORDERED -> evaluateTemporalOrdered(rule, events, bindings)
-                CorrelationType.EVENT_COUNT      -> evaluateEventCount(rule, events, bindings)
-                CorrelationType.TEMPORAL         -> evaluateTemporalUnordered(rule, events, bindings)
+                CorrelationType.TEMPORAL_ORDERED -> evaluateTemporalOrdered(effectiveRule, events, bindings)
+                CorrelationType.EVENT_COUNT      -> evaluateEventCount(effectiveRule, events, bindings)
+                CorrelationType.TEMPORAL         -> evaluateTemporalUnordered(effectiveRule, events, bindings)
             }
         }
         return signals
+    }
+
+    /**
+     * Determines the effective rule category for a correlation rule by inspecting
+     * its member (referenced) rule categories.
+     *
+     * Propagation rule (spec §6):
+     * - If ANY referenced rule is [RuleCategory.INCIDENT] → result is INCIDENT.
+     * - If ALL referenced rules are [RuleCategory.DEVICE_POSTURE] → result is DEVICE_POSTURE.
+     * - If NO referenced rules are known (e.g. misconfiguration) → safe default: INCIDENT (uncapped).
+     *
+     * Unknown rule IDs are skipped — they don't contribute to the decision.
+     *
+     * This is called at evaluation time to determine the effective category
+     * before the cap policy is applied to the resulting correlation finding.
+     */
+    fun computeEffectiveCategory(
+        referencedRuleIds: List<String>,
+        atomRulesById: Map<String, SigmaRule>,
+    ): RuleCategory {
+        val knownCategories = referencedRuleIds.mapNotNull { atomRulesById[it]?.category }
+        if (knownCategories.isEmpty()) return RuleCategory.INCIDENT
+        return if (knownCategories.any { it == RuleCategory.INCIDENT }) {
+            RuleCategory.INCIDENT
+        } else {
+            RuleCategory.DEVICE_POSTURE
+        }
     }
 
     @Suppress("LoopWithTooManyJumpStatements") // chain-matching loop legitimately uses break/continue
@@ -152,7 +185,6 @@ class SigmaCorrelationEngine @Inject constructor() {
             source = "sigma_correlation_engine",
             description = rule.displayLabel,
             details = detailsJson,
-            severity = rule.severity,
             packageName = first.packageName,
             ruleId = rule.id,
             correlationId = "${rule.id}:$memberIds"

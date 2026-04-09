@@ -8,10 +8,10 @@ import androidx.room.PrimaryKey
     tableName = "forensic_timeline",
     indices = [
         Index("startTimestamp"),
-        Index("severity"),
         Index("packageName"),
         Index("source"),
-        Index("kind")
+        Index("kind"),
+        Index("telemetrySource")
     ]
 )
 data class ForensicTimelineEvent(
@@ -25,7 +25,6 @@ data class ForensicTimelineEvent(
     val category: String,
     val description: String,
     val details: String = "",
-    val severity: String,
     val packageName: String = "",
     val appName: String = "",
     val processUid: Int = -1,
@@ -38,7 +37,6 @@ data class ForensicTimelineEvent(
     val ruleId: String = "",
     val scanResultId: Long = -1,
     val attackTechniqueId: String = "",
-    val isFromBugreport: Boolean = false,
-    val isFromRuntime: Boolean = false,
+    val telemetrySource: TelemetrySource = TelemetrySource.LIVE_SCAN,
     val createdAt: Long = System.currentTimeMillis()
 )

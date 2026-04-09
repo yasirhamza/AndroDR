@@ -14,6 +14,26 @@ and threat intel research but have no GitHub issue yet.
 
 ---
 
+## Rule categories and severity caps
+
+Every rule declares a required `category:` field. The category determines the maximum severity a finding from that rule can carry, enforced by `SigmaRuleEngine` at evaluation time. This is a load-bearing architectural decision — see refactor issue **#84** and spec `docs/superpowers/specs/2026-04-09-unified-telemetry-findings-refactor-design.md`.
+
+**Two categories:**
+
+- **`incident`** — evidence that *something happened* or is actively happening: an IOC matched, an app with surveillance permissions is installed, a spyware file artifact exists, an app is impersonating another. Attribution to a specific app/event/actor. **Uncapped** — may be LOW, MEDIUM, HIGH, or CRITICAL depending on rule-declared `severity:`.
+
+- **`device_posture`** — a *condition* that enables future compromise but is not itself an incident: bootloader unlocked, no screen lock, ADB enabled, outdated security patch, exploitable CVE present. Not attributable to an active actor. **Capped at MEDIUM** regardless of declared severity. The engine clamps `finding.level = min(declared, MEDIUM)` for any rule in this category.
+
+**Why the cap:** if every weak configuration is red, nothing is. Posture issues must not out-shout actual intrusions in the UI or report summary. A bootloader-unlocked device with no active threats is a MEDIUM risk. A bootloader-unlocked device *and* a Pegasus IOC match is CRITICAL — the incident leg promotes the combined finding via correlation rules (see below).
+
+**Correlation rule propagation:** correlation rules inherit their category from their member rules. If *any* member is `incident`, the correlation is `incident` and uncapped. If *all* members are `device_posture`, the correlation is `device_posture` and capped. This means "bootloader unlocked + known-bad domain contacted within 24h" goes to HIGH/CRITICAL because the domain IOC leg is incident-category, even though the bootloader leg alone would be MEDIUM.
+
+**Categorization principle:** category reflects the *nature* of the event (something happened vs. a condition exists), not the severity. A low-severity incident is still an incident. A CVE being exploitable is still posture even if the CVE is critical.
+
+**Build-time enforcement:** a unit test enumerates all bundled rules, finds every `category: device_posture` rule, and asserts that even with worst-case evidence the rule cannot produce a finding above MEDIUM. Rule authors who try to ship a CRITICAL device_posture rule will fail CI.
+
+---
+
 ## Category: IOC Matching
 
 ### ANDRODR-001: Package name IOC match [IMPLEMENTED]
@@ -22,6 +42,7 @@ id: androdr-001
 title: Package name matches known malware database
 status: production
 tags: [attack.t1418]
+category: incident
 severity: CRITICAL
 type: ioc_lookup
 detection:
@@ -37,6 +58,7 @@ id: androdr-002
 title: APK signed with known malicious certificate
 status: production
 tags: [attack.t1628]
+category: incident
 severity: CRITICAL
 type: ioc_lookup
 detection:
@@ -52,6 +74,7 @@ id: androdr-003
 title: DNS query to known C2 domain
 status: production
 tags: [attack.t1437]
+category: incident
 severity: CRITICAL
 type: ioc_lookup
 detection:
@@ -68,6 +91,7 @@ id: androdr-004
 title: Outbound connection to known C2 IP address
 status: experimental
 tags: [attack.t1437.001]
+category: incident
 severity: CRITICAL
 type: ioc_lookup
 detection:
@@ -84,6 +108,7 @@ id: androdr-005
 title: DNS query to known Graphite/Paragon C2 domain
 status: experimental
 tags: [attack.t1437]
+category: incident
 severity: CRITICAL
 type: ioc_lookup
 detection:
@@ -103,6 +128,7 @@ id: androdr-010
 title: App installed from untrusted source
 status: production
 tags: [attack.t1476]
+category: incident
 severity: MEDIUM
 detection:
   all:
@@ -122,6 +148,7 @@ id: androdr-011
 title: Sideloaded app with multiple surveillance permissions
 status: production
 tags: [attack.t1429, attack.t1430, attack.t1512, attack.t1636]
+category: incident
 severity: HIGH
 severity_escalation:
   condition: permission_count >= 4
@@ -144,6 +171,7 @@ id: androdr-012
 title: Sideloaded app with accessibility service
 status: production
 tags: [attack.t1626]
+category: incident
 severity: HIGH
 severity_escalation:
   condition: is_sideloaded == true
@@ -166,6 +194,7 @@ id: androdr-013
 title: Sideloaded app with device administrator
 status: production
 tags: [attack.t1401]
+category: incident
 severity: HIGH
 severity_escalation:
   condition: is_sideloaded == true
@@ -188,6 +217,7 @@ id: androdr-014
 title: Sideloaded app impersonating a well-known app
 status: production
 tags: [attack.t1036.005]
+category: incident
 severity: HIGH
 detection:
   all:
@@ -207,6 +237,7 @@ id: androdr-015
 title: System app with unknown origin
 status: production
 tags: [attack.t1398]
+category: incident
 severity: HIGH
 detection:
   all:
@@ -224,6 +255,7 @@ id: androdr-016
 title: Sideloaded app with system-impersonating name
 status: experimental
 tags: [attack.t1036.005]
+category: incident
 severity: HIGH
 severity_escalation:
   condition: has_surveillance_permissions == true
@@ -257,6 +289,7 @@ id: androdr-017
 title: Sideloaded app with accessibility service AND surveillance permissions
 status: experimental
 tags: [attack.t1626, attack.t1429, attack.t1430]
+category: incident
 severity: CRITICAL
 detection:
   all:
@@ -279,6 +312,7 @@ id: androdr-018
 title: App uses known packing or obfuscation tool
 status: experimental
 tags: [attack.t1027]
+category: incident
 severity: MEDIUM
 severity_escalation:
   condition: is_sideloaded == true
@@ -302,6 +336,7 @@ id: androdr-020
 title: File artifact associated with known spyware
 status: experimental
 tags: [attack.t1533]
+category: incident
 severity: CRITICAL
 type: ioc_lookup
 detection:
@@ -326,6 +361,7 @@ id: androdr-030
 title: Running process matches known spyware daemon
 status: experimental
 tags: [attack.t1629]
+category: incident
 severity: CRITICAL
 type: ioc_lookup
 detection:
@@ -346,7 +382,8 @@ id: androdr-040
 title: USB Debugging enabled
 status: production
 tags: [attack.t1404]
-severity: HIGH
+category: device_posture
+severity: MEDIUM
 detection:
   field: adb_enabled
   equals: true
@@ -359,6 +396,7 @@ remediation:
 id: androdr-041
 title: Developer Options enabled
 status: production
+category: device_posture
 severity: MEDIUM
 detection:
   field: dev_options_enabled
@@ -373,7 +411,8 @@ id: androdr-042
 title: Install from Unknown Sources allowed
 status: production
 tags: [attack.t1476]
-severity: HIGH
+category: device_posture
+severity: MEDIUM
 detection:
   field: unknown_sources_enabled
   equals: true
@@ -386,7 +425,8 @@ remediation:
 id: androdr-043
 title: No screen lock configured
 status: production
-severity: CRITICAL
+category: device_posture
+severity: MEDIUM
 detection:
   field: screen_lock_enabled
   equals: false
@@ -399,7 +439,8 @@ remediation:
 id: androdr-044
 title: Security patch more than 90 days old
 status: production
-severity: HIGH
+category: device_posture
+severity: MEDIUM
 detection:
   field: patch_age_days
   gte: 90
@@ -412,7 +453,8 @@ remediation:
 id: androdr-045
 title: Bootloader unlocked
 status: production
-severity: CRITICAL
+category: device_posture
+severity: MEDIUM
 detection:
   field: bootloader_unlocked
   equals: true
@@ -425,7 +467,8 @@ remediation:
 id: androdr-046
 title: Wireless ADB enabled
 status: production
-severity: HIGH
+category: device_posture
+severity: MEDIUM
 detection:
   field: wifi_adb_enabled
   equals: true
@@ -439,7 +482,8 @@ id: androdr-047
 title: Device vulnerable to known spyware exploit
 status: experimental
 tags: [attack.t1404]
-severity: CRITICAL
+category: device_posture
+severity: MEDIUM
 detection:
   field: patch_level
   lookup: cve_exploit_db

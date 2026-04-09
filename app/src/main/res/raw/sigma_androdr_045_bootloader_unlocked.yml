@@ -11,6 +11,7 @@ detection:
         bootloader_unlocked: true
     condition: selection
 level: medium
+category: device_posture
 display:
     category: device_posture
     icon: lock_open

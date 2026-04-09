@@ -28,6 +28,7 @@ class AppOpsRulePipelineTest {
         description: test
         author: test
         date: 2026/01/01
+        category: incident
         tags:
             - attack.t1429
         logsource:
@@ -50,6 +51,7 @@ class AppOpsRulePipelineTest {
         description: test
         author: test
         date: 2026/01/01
+        category: incident
         tags:
             - attack.t1429
         logsource:
@@ -72,6 +74,7 @@ class AppOpsRulePipelineTest {
         description: test
         author: test
         date: 2026/01/01
+        category: incident
         tags:
             - attack.t1407
         logsource:
