@@ -34,7 +34,7 @@ class AppOpsModuleTest {
                   Access: [fg-s] 2026-03-27 14:30:00
         """.trimIndent()
 
-        val result = module.analyze(section, mockIndicatorResolver)
+        val result = module.analyze(section, mockIndicatorResolver, com.androdr.ioc.DeviceIdentity.UNKNOWN)
         assertTrue(result.telemetry.any {
             it["package_name"] == "com.suspicious.installer" &&
                 it["operation"] == "android:request_install_packages" &&
@@ -51,7 +51,7 @@ class AppOpsModuleTest {
                   Access: [fg-s] 2026-03-27 14:30:00
         """.trimIndent()
 
-        val result = module.analyze(section, mockIndicatorResolver)
+        val result = module.analyze(section, mockIndicatorResolver, com.androdr.ioc.DeviceIdentity.UNKNOWN)
         assertTrue(result.telemetry.any {
             it["package_name"] == "com.android.shell" &&
                 it["operation"] == "android:camera"
@@ -76,7 +76,7 @@ class AppOpsModuleTest {
                   Access: [fg-s] 2026-03-27 14:30:00
         """.trimIndent()
 
-        val result = module.analyze(section, mockIndicatorResolver)
+        val result = module.analyze(section, mockIndicatorResolver, com.androdr.ioc.DeviceIdentity.UNKNOWN)
         assertTrue(result.telemetry.any {
             it["package_name"] == "com.flexispy.android" &&
                 it["operation"] == "android:camera" &&
@@ -95,7 +95,7 @@ class AppOpsModuleTest {
                   Access: [fg-s] 2026-03-27 14:35:00
         """.trimIndent()
 
-        val result = module.analyze(section, mockIndicatorResolver)
+        val result = module.analyze(section, mockIndicatorResolver, com.androdr.ioc.DeviceIdentity.UNKNOWN)
         assertTrue(result.timeline.any { it.category == "permission_use" })
     }
 
@@ -108,14 +108,14 @@ class AppOpsModuleTest {
                   Access: [fg-s] 2026-03-27 14:30:00
         """.trimIndent()
 
-        val result = module.analyze(section, mockIndicatorResolver)
+        val result = module.analyze(section, mockIndicatorResolver, com.androdr.ioc.DeviceIdentity.UNKNOWN)
         // WAKE_LOCK is not a dangerous op so telemetry should be empty
         assertTrue(result.telemetry.isEmpty())
     }
 
     @Test
     fun `empty section produces no telemetry or timeline`() = runBlocking {
-        val result = module.analyze("", mockIndicatorResolver)
+        val result = module.analyze("", mockIndicatorResolver, com.androdr.ioc.DeviceIdentity.UNKNOWN)
         assertTrue(result.telemetry.isEmpty())
         assertTrue(result.timeline.isEmpty())
     }
@@ -136,7 +136,7 @@ class AppOpsModuleTest {
           Access: [top-s] 2026-03-20 10:15:00.000
         """.trimIndent()
 
-        val result = module.analyze(section, mockIndicatorResolver)
+        val result = module.analyze(section, mockIndicatorResolver, com.androdr.ioc.DeviceIdentity.UNKNOWN)
         // u0a398 = user 0, app 398 = UID 10398 (not system)
         assertTrue("Should have telemetry for user app", result.telemetry.isNotEmpty())
         assertTrue("Should have timeline for non-system app", result.timeline.isNotEmpty())
@@ -155,7 +155,7 @@ class AppOpsModuleTest {
           Access: [fg-s] 2026-03-27 14:30:00
         """.trimIndent()
 
-        val result = module.analyze(section, mockIndicatorResolver)
+        val result = module.analyze(section, mockIndicatorResolver, com.androdr.ioc.DeviceIdentity.UNKNOWN)
         // u0s1000 = user 0, shared system UID 1000 (is system)
         assertTrue("Should have telemetry", result.telemetry.isNotEmpty())
         assertTrue("System app should have no timeline", result.timeline.isEmpty())
@@ -179,7 +179,7 @@ class AppOpsModuleTest {
           Access: [top-s] 2026-03-20 21:34:00.000
         """.trimIndent()
 
-        val result = module.analyze(section, mockIndicatorResolver)
+        val result = module.analyze(section, mockIndicatorResolver, com.androdr.ioc.DeviceIdentity.UNKNOWN)
         val systemEntries = result.telemetry.filter { it["is_system_app"] == true }
         val userEntries = result.telemetry.filter { it["is_system_app"] == false }
         assertTrue("Should have system entries", systemEntries.isNotEmpty())

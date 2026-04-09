@@ -12,9 +12,11 @@ import com.androdr.data.model.SystemPropertySnapshot
 import com.androdr.data.model.TimelineEvent
 import com.androdr.data.model.TombstoneEvent
 import com.androdr.data.model.WakelockAcquisition
+import com.androdr.ioc.DeviceIdentity
 import com.androdr.ioc.IndicatorResolver
 import com.androdr.scanner.bugreport.BugreportModule
 import com.androdr.scanner.bugreport.DumpsysSectionParser
+import com.androdr.scanner.bugreport.GetpropParser
 import com.androdr.scanner.bugreport.InstallTimeModule
 import com.androdr.scanner.bugreport.TombstoneParser
 import com.androdr.scanner.bugreport.WakelockParser
@@ -35,7 +37,8 @@ class BugReportAnalyzer @Inject constructor(
     private val modules: Set<@JvmSuppressWildcards BugreportModule>,
     private val sigmaRuleEngine: SigmaRuleEngine,
     private val tombstoneParser: TombstoneParser,
-    private val wakelockParser: WakelockParser
+    private val wakelockParser: WakelockParser,
+    private val getpropParser: GetpropParser,
 ) {
 
     private companion object {
@@ -77,13 +80,58 @@ class BugReportAnalyzer @Inject constructor(
      * pattern-scan path and now routes tombstone / wakelock telemetry
      * through SigmaRuleEngine as well.
      */
-    @Suppress("LongMethod", "TooGenericExceptionCaught")
+    @Suppress("LongMethod", "TooGenericExceptionCaught", "CyclomaticComplexMethod")
     suspend fun analyze(bugReportUri: Uri): BugReportAnalysisResult = withContext(Dispatchers.IO) {
         val allFindings = mutableListOf<Finding>()
         val allTimelineEvents = mutableListOf<TimelineEvent>()
         val allForensicEvents = mutableListOf<ForensicTimelineEvent>()
         var tombstoneEvents: List<TombstoneEvent> = emptyList()
         var wakelockEvents: List<WakelockAcquisition> = emptyList()
+        var systemPropertySnapshots: List<SystemPropertySnapshot> = emptyList()
+        var sourceDevice: DeviceIdentity = DeviceIdentity.UNKNOWN
+
+        // Pre-pass: extract SYSTEM PROPERTIES section from dumpstate to derive
+        // the source device identity (#90). Without this, bugreport modules
+        // evaluate conditional OEM prefixes against DeviceIdentity.UNKNOWN and
+        // only unconditional prefixes apply, which silently under-suppresses
+        // legitimate Samsung/Xiaomi system apps on imported Samsung/Xiaomi scans.
+        try {
+            openBugReportStream(bugReportUri)?.use { stream0 ->
+                ZipInputStream(stream0.buffered()).use { zip ->
+                    var entry = zip.nextEntry
+                    while (entry != null) {
+                        val name = entry.name.substringAfterLast("/").lowercase()
+                        val isDumpstate = !entry.isDirectory && (
+                            name == "dumpstate.txt" ||
+                                (name.startsWith("bugreport-") && name.endsWith(".txt"))
+                        )
+                        if (isDumpstate) {
+                            val sysPropsText = sectionParser.extractSystemProperties(zip)
+                            if (sysPropsText != null) {
+                                val now = System.currentTimeMillis()
+                                systemPropertySnapshots = getpropParser.parse(
+                                    sysPropsText.lineSequence(), capturedAt = now
+                                )
+                                val (mfgRaw, brandRaw) = getpropParser.extractManufacturerAndBrand(
+                                    sysPropsText.lineSequence()
+                                )
+                                sourceDevice = DeviceIdentity(
+                                    manufacturer = mfgRaw.trim().lowercase(),
+                                    brand = brandRaw.trim().lowercase(),
+                                )
+                                Log.d(TAG, "Source device from bugreport: $sourceDevice, " +
+                                    "${systemPropertySnapshots.size} system properties")
+                            }
+                            break
+                        }
+                        try { zip.closeEntry() } catch (_: Exception) { /* ignore */ }
+                        entry = try { zip.nextEntry } catch (_: Exception) { null }
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to extract source device identity: ${e.message}")
+        }
 
         val sectionModules = modules.filter { it.targetSections != null }
         val rawModules = modules.filter { it.targetSections == null }
@@ -123,7 +171,7 @@ class BugReportAnalyzer @Inject constructor(
                                 for (mod in sectionModules) {
                                     for (sectionName in mod.targetSections!!) {
                                         val sectionText = sections[sectionName] ?: continue
-                                        val result = mod.analyze(sectionText, iocResolver)
+                                        val result = mod.analyze(sectionText, iocResolver, sourceDevice)
                                         processModuleResult(result, allFindings, allTimelineEvents)
                                     }
                                 }
@@ -177,7 +225,7 @@ class BugReportAnalyzer @Inject constructor(
                         }
                     }
                     for (mod in rawModules) {
-                        val result = mod.analyzeRaw(entrySequence, iocResolver)
+                        val result = mod.analyzeRaw(entrySequence, iocResolver, sourceDevice)
                         processModuleResult(result, allFindings, allTimelineEvents)
                     }
                 }
@@ -190,6 +238,7 @@ class BugReportAnalyzer @Inject constructor(
         val bundle = TelemetryBundle(
             tombstoneEvents = tombstoneEvents,
             wakelockAcquisitions = wakelockEvents,
+            systemPropertySnapshots = systemPropertySnapshots,
         )
         allFindings.addAll(sigmaRuleEngine.evaluateTombstones(bundle.tombstoneEvents))
         allFindings.addAll(sigmaRuleEngine.evaluateWakelocks(bundle.wakelockAcquisitions))

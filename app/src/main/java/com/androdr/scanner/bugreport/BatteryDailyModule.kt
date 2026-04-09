@@ -16,7 +16,11 @@ class BatteryDailyModule @Inject constructor() : BugreportModule {
     )
 
     @Suppress("LongMethod") // Multi-phase analysis: parse changes, detect downgrades, IOC check, dedup
-    override suspend fun analyze(sectionText: String, iocResolver: IndicatorResolver): ModuleResult {
+    override suspend fun analyze(
+        sectionText: String,
+        iocResolver: IndicatorResolver,
+        device: com.androdr.ioc.DeviceIdentity,
+    ): ModuleResult {
         val telemetry = mutableListOf<Map<String, Any?>>()
         val timeline = mutableListOf<TimelineEvent>()
 

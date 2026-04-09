@@ -35,7 +35,7 @@ class DbInfoModuleTest {
                 1: SELECT * FROM sms
         """.trimIndent()
 
-        val result = module.analyze(section, mockIndicatorResolver)
+        val result = module.analyze(section, mockIndicatorResolver, com.androdr.ioc.DeviceIdentity.UNKNOWN)
         assertTrue(result.telemetry.any {
             it["package_name"] == "com.evil.spy" &&
                 it["recent_query_count"] == 2
@@ -51,7 +51,7 @@ class DbInfoModuleTest {
               Pool size: 1
         """.trimIndent()
 
-        val result = module.analyze(section, mockIndicatorResolver)
+        val result = module.analyze(section, mockIndicatorResolver, com.androdr.ioc.DeviceIdentity.UNKNOWN)
         assertTrue(result.telemetry.any {
             (it["db_path"] as String).endsWith("contacts2.db")
         })
@@ -59,7 +59,7 @@ class DbInfoModuleTest {
 
     @Test
     fun `empty section produces no telemetry`() = runBlocking {
-        val result = module.analyze("", mockIndicatorResolver)
+        val result = module.analyze("", mockIndicatorResolver, com.androdr.ioc.DeviceIdentity.UNKNOWN)
         assertTrue(result.telemetry.isEmpty())
     }
 }

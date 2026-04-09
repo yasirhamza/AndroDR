@@ -31,7 +31,11 @@ class DbInfoModule @Inject constructor() : BugreportModule {
     // removed: SIGMA rules in plan 6 match on `db_path` via their own
     // rule-driven pattern list. Telemetry emits every observed pool.
 
-    override suspend fun analyze(sectionText: String, iocResolver: IndicatorResolver): ModuleResult {
+    override suspend fun analyze(
+        sectionText: String,
+        iocResolver: IndicatorResolver,
+        device: com.androdr.ioc.DeviceIdentity,
+    ): ModuleResult {
         val telemetry = mutableListOf<Map<String, Any?>>()
 
         // Materialize all pool-header matches once so adjacent-pair boundary

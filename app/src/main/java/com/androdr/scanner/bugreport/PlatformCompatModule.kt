@@ -19,7 +19,11 @@ class PlatformCompatModule @Inject constructor() : BugreportModule {
         RegexOption.MULTILINE
     )
 
-    override suspend fun analyze(sectionText: String, iocResolver: IndicatorResolver): ModuleResult {
+    override suspend fun analyze(
+        sectionText: String,
+        iocResolver: IndicatorResolver,
+        device: com.androdr.ioc.DeviceIdentity,
+    ): ModuleResult {
         val telemetry = mutableListOf<Map<String, Any?>>()
 
         val compatStart = sectionText.indexOf("Compat overrides:")

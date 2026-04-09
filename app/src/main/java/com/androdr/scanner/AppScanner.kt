@@ -9,6 +9,7 @@ import android.util.Log
 import com.androdr.data.model.AppTelemetry
 import com.androdr.data.model.TelemetrySource
 import com.androdr.data.model.KnownAppCategory
+import com.androdr.ioc.DeviceIdentity
 import com.androdr.ioc.KnownAppResolver
 import com.androdr.ioc.OemPrefixResolver
 import java.security.MessageDigest
@@ -28,6 +29,8 @@ class AppScanner @Inject constructor(
     private val knownAppResolver: KnownAppResolver,
     private val oemPrefixResolver: OemPrefixResolver
 ) {
+
+    private val localDevice = DeviceIdentity.local()
 
     private companion object {
         private const val TAG = "AppScanner"
@@ -188,7 +191,7 @@ class AppScanner @Inject constructor(
         // Installer source
         val installerPackage = if (!isSystemApp) getInstallerPackageName(pm, packageName) else null
         val fromTrustedStore = installerPackage != null &&
-            oemPrefixResolver.isTrustedInstaller(installerPackage)
+            oemPrefixResolver.isTrustedInstaller(installerPackage, localDevice)
 
         // Known-app resolver
         val knownApp = knownAppResolver.lookup(packageName)
@@ -196,8 +199,8 @@ class AppScanner @Inject constructor(
         // Fallback: OEM prefix matching (for apps not in DB yet)
         val isKnownOemApp = knownApp?.category in setOf(
             KnownAppCategory.OEM, KnownAppCategory.AOSP, KnownAppCategory.GOOGLE
-        ) || oemPrefixResolver.isOemPrefix(packageName)
-            || (isSystemApp && oemPrefixResolver.isPartnershipPrefix(packageName))
+        ) || oemPrefixResolver.isOemPrefix(packageName, localDevice)
+            || (isSystemApp && oemPrefixResolver.isPartnershipPrefix(packageName, localDevice))
 
         val isSideloaded = !isSystemApp && !fromTrustedStore && !isKnownOemApp
 

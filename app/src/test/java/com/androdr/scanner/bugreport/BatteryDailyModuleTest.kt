@@ -36,7 +36,7 @@ class BatteryDailyModuleTest {
                 -pkg=com.example.app vers=100
         """.trimIndent()
 
-        val result = module.analyze(section, mockIndicatorResolver)
+        val result = module.analyze(section, mockIndicatorResolver, com.androdr.ioc.DeviceIdentity.UNKNOWN)
         assertTrue(result.timeline.any {
             it.category == "package_update" && it.description.contains("com.example.app")
         })
@@ -53,7 +53,7 @@ class BatteryDailyModuleTest {
               +pkg=com.suspect.app vers=100
         """.trimIndent()
 
-        val result = module.analyze(section, mockIndicatorResolver)
+        val result = module.analyze(section, mockIndicatorResolver, com.androdr.ioc.DeviceIdentity.UNKNOWN)
         assertTrue(result.timeline.any {
             it.category == "package_downgrade" &&
                 it.description.contains("200") &&
@@ -76,7 +76,7 @@ class BatteryDailyModuleTest {
               -pkg=com.mspy.android vers=100
         """.trimIndent()
 
-        val result = module.analyze(section, mockIndicatorResolver)
+        val result = module.analyze(section, mockIndicatorResolver, com.androdr.ioc.DeviceIdentity.UNKNOWN)
         // Severity no longer hardcoded; rule engine assigns it via SIGMA YAML (plan 6).
         assertTrue(result.timeline.any {
             it.description.contains("anti-forensics")
@@ -85,7 +85,7 @@ class BatteryDailyModuleTest {
 
     @Test
     fun `empty section produces no events`() = runBlocking {
-        val result = module.analyze("", mockIndicatorResolver)
+        val result = module.analyze("", mockIndicatorResolver, com.androdr.ioc.DeviceIdentity.UNKNOWN)
         assertTrue(result.timeline.isEmpty())
         assertTrue(result.telemetry.isEmpty())
     }
@@ -99,7 +99,7 @@ class BatteryDailyModuleTest {
               +pkg=com.example.app vers=100
         """.trimIndent()
 
-        val result = module.analyze(section, mockIndicatorResolver)
+        val result = module.analyze(section, mockIndicatorResolver, com.androdr.ioc.DeviceIdentity.UNKNOWN)
         val updateEvents = result.timeline.filter {
             it.category == "package_update" && it.description.contains("com.example.app")
         }

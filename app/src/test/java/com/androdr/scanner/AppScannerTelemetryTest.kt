@@ -145,12 +145,17 @@ class AppScannerTelemetryTest {
         assertTrue("Expected isSystemApp = true", result[0].isSystemApp)
     }
 
-    // ── 4. Samsung OEM prefix treated as known OEM ──────────────────────────
+    // ── 4. Unconditional (AOSP) OEM prefix treated as known OEM ─────────────
+    // NOTE: Samsung-specific prefixes were previously tested here, but
+    // under #90 (device-conditional allowlist) the Samsung block only
+    // applies when Build.MANUFACTURER matches "samsung". In a unit test
+    // JVM that field is "unknown", so this now exercises an unconditional
+    // AOSP prefix, which is the correct cross-device behavior.
 
     @Test
-    fun `Samsung OEM package prefix is treated as known OEM app`() = runTest {
+    fun `AOSP package prefix is treated as known OEM app`() = runTest {
         val pkg = buildPackageInfo(
-            pkgName = "com.samsung.android.tvplus",
+            pkgName = "com.android.chrome",
             installerPkg = null
         )
         installPackages(pkg)
@@ -160,7 +165,7 @@ class AppScannerTelemetryTest {
         assertEquals(1, result.size)
         val telemetry = result[0]
         assertTrue("Expected isKnownOemApp = true", telemetry.isKnownOemApp)
-        assertFalse("Expected isSideloaded = false for Samsung OEM app", telemetry.isSideloaded)
+        assertFalse("Expected isSideloaded = false for AOSP OEM app", telemetry.isSideloaded)
     }
 
     // ── 5. Surveillance permission counting ─────────────────────────────────

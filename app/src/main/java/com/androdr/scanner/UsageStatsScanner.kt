@@ -6,6 +6,7 @@ import android.content.Context
 import android.content.pm.PackageManager
 import android.util.Log
 import com.androdr.data.model.ForensicTimelineEvent
+import com.androdr.ioc.DeviceIdentity
 import com.androdr.ioc.OemPrefixResolver
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
@@ -26,6 +27,8 @@ class UsageStatsScanner @Inject constructor(
     @ApplicationContext private val context: Context,
     private val oemPrefixResolver: OemPrefixResolver
 ) {
+
+    private val localDevice = DeviceIdentity.local()
 
     /**
      * Collects app usage events from the last [hoursBack] hours.
@@ -102,8 +105,8 @@ class UsageStatsScanner @Inject constructor(
         val packageName = event.packageName ?: return
 
         // Skip OEM/system apps — only track user-installed app activity
-        if (oemPrefixResolver.isOemPrefix(packageName) ||
-            oemPrefixResolver.isPartnershipPrefix(packageName)) return
+        if (oemPrefixResolver.isOemPrefix(packageName, localDevice) ||
+            oemPrefixResolver.isPartnershipPrefix(packageName, localDevice)) return
 
         // Resolve app label (cached to avoid repeated PM lookups)
         val appLabel = labelCache.getOrPut(packageName) {

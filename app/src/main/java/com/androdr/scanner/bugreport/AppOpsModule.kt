@@ -43,7 +43,11 @@ class AppOpsModule @Inject constructor() : BugreportModule {
     // sequential pass through UID→Package→Op→Access/Reject states; splitting would fragment
     // the state transitions across functions without reducing real complexity.
     @Suppress("LongMethod")
-    override suspend fun analyze(sectionText: String, iocResolver: IndicatorResolver): ModuleResult {
+    override suspend fun analyze(
+        sectionText: String,
+        iocResolver: IndicatorResolver,
+        device: com.androdr.ioc.DeviceIdentity,
+    ): ModuleResult {
         val telemetry = mutableListOf<Map<String, Any?>>()
         val timeline = mutableListOf<TimelineEvent>()
 

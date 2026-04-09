@@ -145,6 +145,7 @@ class ScanOrchestrator @Inject constructor(
 
     private suspend fun initRuleEngine() = initMutex.withLock {
         if (ruleEngineInitialized) return@withLock
+        val localDevice = com.androdr.ioc.DeviceIdentity.local()
         sigmaRuleEngine.setIocLookups(mapOf(
             "package_ioc_db" to { v -> indicatorResolver.isKnownBadPackage(v.toString()) != null },
             "cert_hash_ioc_db" to { v -> indicatorResolver.isKnownBadCert(v.toString()) != null },
@@ -158,7 +159,7 @@ class ScanOrchestrator @Inject constructor(
                 val pkg = v.toString()
                 val entry = knownAppResolver.lookup(pkg)
                 (entry != null && entry.category in TRUSTED_CATEGORIES) ||
-                    oemPrefixResolver.isOemPrefix(pkg)
+                    oemPrefixResolver.isOemPrefix(pkg, localDevice)
             }
         ))
         sigmaRuleEngine.loadBundledRules()
