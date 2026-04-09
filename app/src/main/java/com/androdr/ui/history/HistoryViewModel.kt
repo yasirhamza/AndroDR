@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.androdr.data.db.DnsEventDao
 import com.androdr.data.model.ScanResult
 import com.androdr.data.repo.ScanRepository
+import com.androdr.reporting.ExportMode
 import com.androdr.reporting.ReportExporter
 import com.androdr.reporting.ReportFormatter
 import com.androdr.scanner.ScanOrchestrator
@@ -91,12 +92,12 @@ class HistoryViewModel @Inject constructor(
      * Exports [scan] to a cached text file and emits its [FileProvider] URI via
      * [shareUri]. The Composable observes [shareUri] and fires the share intent.
      */
-    fun exportReport(scan: ScanResult) {
+    fun exportReport(scan: ScanResult, mode: ExportMode = ExportMode.BOTH) {
         if (_exporting.value) return
         viewModelScope.launch {
             _exporting.value = true
             try {
-                _shareUri.value = reportExporter.export(scan)
+                _shareUri.value = reportExporter.export(scan, mode)
             } finally {
                 _exporting.value = false
             }

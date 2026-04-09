@@ -125,4 +125,57 @@ class ReportFormatterTest {
         val text = ReportFormatter.formatScanReport(cleanScan, emptyList(), emptyList())
         assertFalse(text.contains("ACTION REQUIRED:"))
     }
+
+    // -- ExportMode tests -----------------------------------------------------
+
+    private fun richScan() = buildScan(
+        appRisks = listOf(malwareFinding),
+        deviceFlags = listOf(deviceFinding)
+    )
+
+    @Test
+    fun `BOTH mode contains both section markers`() {
+        val text = ReportFormatter.formatScanReport(
+            richScan(), emptyList(), listOf("log line"),
+            mode = ExportMode.BOTH
+        )
+        assertTrue(text.contains("FINDINGS SECTION"))
+        assertTrue(text.contains("TELEMETRY SECTION"))
+        assertTrue(text.contains("DNS ACTIVITY"))
+        assertTrue(text.contains("DEVICE CHECKS"))
+    }
+
+    @Test
+    fun `TELEMETRY_ONLY writes only telemetry section`() {
+        val text = ReportFormatter.formatScanReport(
+            richScan(), emptyList(), listOf("log line"),
+            mode = ExportMode.TELEMETRY_ONLY
+        )
+        assertTrue(text.contains("TELEMETRY SECTION"))
+        assertTrue(text.contains("DNS ACTIVITY"))
+        assertFalse(text.contains("FINDINGS SECTION"))
+        assertFalse(text.contains("DEVICE CHECKS"))
+        assertFalse(text.contains("APP RISKS"))
+        assertFalse(text.contains("OVERALL RISK:"))
+    }
+
+    @Test
+    fun `FINDINGS_ONLY writes only findings section`() {
+        val text = ReportFormatter.formatScanReport(
+            richScan(), emptyList(), listOf("log line"),
+            mode = ExportMode.FINDINGS_ONLY
+        )
+        assertTrue(text.contains("FINDINGS SECTION"))
+        assertTrue(text.contains("DEVICE CHECKS"))
+        assertTrue(text.contains("OVERALL RISK:"))
+        assertFalse(text.contains("TELEMETRY SECTION"))
+        assertFalse(text.contains("DNS ACTIVITY"))
+        assertFalse(text.contains("APPLICATION LOG"))
+    }
+
+    @Test
+    fun `format version line is present`() {
+        val text = ReportFormatter.formatScanReport(cleanScan, emptyList(), emptyList())
+        assertTrue(text.contains("Format    : v${ReportExporter.EXPORT_FORMAT_VERSION}"))
+    }
 }

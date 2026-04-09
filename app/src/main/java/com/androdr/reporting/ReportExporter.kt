@@ -18,6 +18,24 @@ import java.util.Locale
 import javax.inject.Inject
 import javax.inject.Singleton
 
+/**
+ * Three-way export mode selector per plan 3 (timeline UI refactor) spec Sec. 10.
+ *
+ * - [TELEMETRY_ONLY] writes only the telemetry section (DNS activity, app
+ *   hash inventory, application log). Intended for analyst handoff: the
+ *   recipient can run their own rules against the raw telemetry without
+ *   being biased by the device's current ruleset.
+ * - [FINDINGS_ONLY] writes only the findings section (verdict, device
+ *   checks, campaign, app risks, bug report findings). Useful for sharing
+ *   "what the app found" without exposing the raw telemetry.
+ * - [BOTH] writes the full report. Default, preserves existing behaviour.
+ */
+enum class ExportMode {
+    TELEMETRY_ONLY,
+    FINDINGS_ONLY,
+    BOTH,
+}
+
 @Singleton
 class ReportExporter @Inject constructor(
     @ApplicationContext private val context: Context,
@@ -27,7 +45,10 @@ class ReportExporter @Inject constructor(
 ) {
     private val filenameFmt = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US)
 
-    suspend fun export(scan: ScanResult): Uri = withContext(Dispatchers.IO) {
+    suspend fun export(
+        scan: ScanResult,
+        mode: ExportMode = ExportMode.BOTH,
+    ): Uri = withContext(Dispatchers.IO) {
         val dnsEvents = dnsEventDao.getRecentSnapshot()
         val logLines  = captureLogcat()
         val inventory = scanOrchestrator.lastAppTelemetry.ifEmpty {
@@ -36,7 +57,9 @@ class ReportExporter @Inject constructor(
         val displayNames = inventory
             .associate { it.packageName to it.appName }
             .filterValues { it.isNotEmpty() }
-        val text      = ReportFormatter.formatScanReport(scan, dnsEvents, logLines, inventory, displayNames)
+        val text = ReportFormatter.formatScanReport(
+            scan, dnsEvents, logLines, inventory, displayNames, mode
+        )
 
         val reportsDir = File(context.cacheDir, "reports").apply { mkdirs() }
         val filename = "androdr_report_${filenameFmt.format(Date(scan.timestamp))}.txt"
@@ -65,5 +88,9 @@ class ReportExporter @Inject constructor(
 
     companion object {
         private const val TAG = "ReportExporter"
+
+        // plan 3 refactor: explicit TELEMETRY / FINDINGS sections,
+        // severity removed from telemetry rows. Bumped from 1 to 2.
+        const val EXPORT_FORMAT_VERSION = 2
     }
 }

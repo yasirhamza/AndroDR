@@ -24,16 +24,19 @@ object ReportFormatter {
         dnsEvents: List<DnsEvent>,
         logLines: List<String>,
         appInventory: List<AppTelemetry> = emptyList(),
-        displayNames: Map<String, String> = emptyMap()
+        displayNames: Map<String, String> = emptyMap(),
+        mode: ExportMode = ExportMode.BOTH
     ): String = buildString {
+        val includeFindings = mode != ExportMode.TELEMETRY_ONLY
+        val includeTelemetry = mode != ExportMode.FINDINGS_ONLY
         val timestampFmt = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US)
-        val dnsFmt = SimpleDateFormat("HH:mm:ss", Locale.US)
         val generated = timestampFmt.format(Date())
         val scanDate = timestampFmt.format(Date(scan.timestamp))
 
         // -- Header ---------------------------------------------------------------
         appendLine(RULE)
         appendLine("  AndroDR Security Report")
+        appendLine("  Format    : v${ReportExporter.EXPORT_FORMAT_VERSION} (mode=${mode.name})")
         appendLine("  Version   : ${com.androdr.BuildConfig.VERSION_NAME}")
         appendLine("  Generated : $generated")
         appendLine("  Scan time : $scanDate")
@@ -53,9 +56,35 @@ object ReportFormatter {
             scan.deviceFlags.any { it.triggered } -> "MEDIUM"
             else -> "LOW"
         }
-        appendLine("  OVERALL RISK: $reportedRisk")
-        appendLine()
+        if (includeFindings) {
+            appendLine("  OVERALL RISK: $reportedRisk")
+            appendLine()
+            section("FINDINGS SECTION")
+            appendFindingsSections(scan, dnsEvents, appInventory, displayNames)
+        }
 
+        if (includeTelemetry) {
+            section("TELEMETRY SECTION")
+            appendTelemetrySections(dnsEvents, logLines, appInventory, displayNames)
+        }
+
+        // -- Footer ---------------------------------------------------------------
+        appendLine()
+        appendLine(RULE)
+        appendLine("  End of report / AndroDR / scan id ${scan.id}")
+        appendLine(RULE)
+    }
+
+    // Legacy inline body replaced by section helpers below. Original code is
+    // retained as private helpers so BOTH mode output is byte-identical to
+    // the pre-refactor report (minus the section header markers).
+    @Suppress("LongMethod", "CyclomaticComplexMethod")
+    private fun StringBuilder.appendFindingsSections(
+        scan: ScanResult,
+        dnsEvents: List<DnsEvent>,
+        appInventory: List<AppTelemetry>,
+        displayNames: Map<String, String>
+    ) {
         // -- Verdict + Summary + Action Guidance ----------------------------------
         appendVerdict(scan, dnsEvents, appInventory)
 
@@ -136,6 +165,22 @@ object ReportFormatter {
                 }
         }
 
+        // -- Bug-report findings --------------------------------------------------
+        if (scan.bugReportFindings.isNotEmpty()) {
+            section("BUG REPORT FINDINGS")
+            scan.bugReportFindings.forEach { finding -> appendLine("  * $finding") }
+        }
+    }
+
+    @Suppress("LongParameterList")
+    private fun StringBuilder.appendTelemetrySections(
+        dnsEvents: List<DnsEvent>,
+        logLines: List<String>,
+        appInventory: List<AppTelemetry>,
+        displayNames: Map<String, String>
+    ) {
+        val dnsFmt = SimpleDateFormat("HH:mm:ss", Locale.US)
+
         // -- DNS activity ---------------------------------------------------------
         section("DNS ACTIVITY")
         if (dnsEvents.isEmpty()) {
@@ -154,12 +199,6 @@ object ReportFormatter {
                     appendLine("           reason: ${event.reason}")
                 }
             }
-        }
-
-        // -- Bug-report findings --------------------------------------------------
-        if (scan.bugReportFindings.isNotEmpty()) {
-            section("BUG REPORT FINDINGS")
-            scan.bugReportFindings.forEach { finding -> appendLine("  * $finding") }
         }
 
         // -- App hash inventory ---------------------------------------------------
@@ -189,12 +228,6 @@ object ReportFormatter {
         } else {
             logLines.forEach { line -> appendLine("  $line") }
         }
-
-        // -- Footer ---------------------------------------------------------------
-        appendLine()
-        appendLine(RULE)
-        appendLine("  End of report / AndroDR / scan id ${scan.id}")
-        appendLine(RULE)
     }
 
     // -- Private helpers ----------------------------------------------------------
