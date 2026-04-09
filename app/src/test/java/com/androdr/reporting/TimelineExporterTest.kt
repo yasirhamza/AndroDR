@@ -81,6 +81,37 @@ class TimelineExporterTest {
     }
 
     @Test
+    fun `CSV export recovers package and pkg correlation id from description for legacy rows`() {
+        // Simulates a pre-PR #76 bug-report permission_use row where
+        // AppOpsModule never stamped packageName and the scan never
+        // stamped a correlationId. The CSV export should parse the
+        // package prefix out of the description and synthesize a
+        // `pkg:` correlation id so legacy data isn't dead on export.
+        val legacyRow = ForensicTimelineEvent(
+            id = 999L,
+            startTimestamp = 1_700_000_000_000L,
+            kind = "event",
+            category = "permission_use",
+            source = "appops",
+            description = "com.microsoft.appmanager used READ_CONTACTS at 2026-04-05 08:51:50.313",
+            severity = "INFO",
+            // Critical: packageName is empty (legacy row)
+            packageName = "",
+            correlationId = ""
+        )
+        val csv = TimelineExporter.formatCsv(listOf(legacyRow))
+        val dataRow = csv.lines().drop(1).first { it.isNotBlank() }
+        assertTrue(
+            "package column should recover com.microsoft.appmanager from description",
+            dataRow.contains("com.microsoft.appmanager")
+        )
+        assertTrue(
+            "correlation_id should synthesize pkg:com.microsoft.appmanager",
+            dataRow.contains("pkg:com.microsoft.appmanager")
+        )
+    }
+
+    @Test
     fun `CSV export emits pkg correlation id stamped at write time`() {
         val pkgLinked = ForensicTimelineEvent(
             id = 200L,

@@ -66,6 +66,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.androdr.R
 import com.androdr.data.model.ForensicTimelineEvent
+import com.androdr.data.model.effectiveCorrelationId
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale

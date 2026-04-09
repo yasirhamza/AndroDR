@@ -1,6 +1,7 @@
 package com.androdr.ui.timeline
 
 import com.androdr.data.model.ForensicTimelineEvent
+import com.androdr.data.model.effectiveCorrelationId
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -31,27 +32,6 @@ fun severityOrdinal(level: String): Int = when (level.uppercase()) {
     "CRITICAL" -> 3; "HIGH" -> 2; "MEDIUM" -> 1; else -> 0
 }
 
-/**
- * Read-time correlationId resolution. Prefers any value already stamped on
- * the row (currently only `dns:<matched_domain>` set by TimelineAdapter), and
- * falls back to `pkg:<packageName>` for rows tied to an installed package.
- *
- * Computing here instead of at write time means no migrations and no write
- * fan-out to every module that builds a ForensicTimelineEvent. The key is
- * idempotent and stable across reads, so Timeline clustering and detail
- * sheet Linked Evidence both see the same grouping.
- *
- * Note on precedence: DNS-stamped ids win because they carry cross-source
- * semantics (a finding + its underlying ioc_match row share the key even
- * when they have different packageName values — typically empty for the
- * DNS row and empty for the finding too). Mixing dns: and pkg: in the same
- * fallback order would fragment existing DNS clusters.
- */
-fun ForensicTimelineEvent.effectiveCorrelationId(): String = when {
-    correlationId.isNotBlank() -> correlationId
-    packageName.isNotBlank() -> "pkg:$packageName"
-    else -> ""
-}
 
 private val signalJson = Json { ignoreUnknownKeys = true; isLenient = true }
 

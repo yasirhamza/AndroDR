@@ -2,6 +2,8 @@ package com.androdr.reporting
 
 import android.os.Build
 import com.androdr.data.model.ForensicTimelineEvent
+import com.androdr.data.model.effectiveCorrelationId
+import com.androdr.data.model.effectivePackageFromDescription
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -160,18 +162,23 @@ object TimelineExporter {
             val module = csvEscape(event.source)
             val eventType = csvEscape(event.category)
             val data = csvEscape(event.description)
-            val pkg = csvEscape(event.packageName)
+            // Same recovery for the package column: fall back to the
+            // description-parsed package so legacy rows are not blank
+            // in the export even before MIGRATION_13_14 has run.
+            val pkg = csvEscape(
+                event.packageName.takeIf { it.isNotBlank() }
+                    ?: event.effectivePackageFromDescription().orEmpty()
+            )
             val sev = event.severity
             val ruleId = csvEscape(event.ruleId)
             // Prefer the stamped correlationId; fall back to the same
-            // read-time key the Timeline UI uses for clustering so CSV
-            // consumers see pkg:<package> on rows that join an app-story
-            // cluster even if the write-time path left the field blank.
-            val correlationId = csvEscape(
-                event.correlationId.ifBlank {
-                    if (event.packageName.isNotBlank()) "pkg:${event.packageName}" else ""
-                }
-            )
+            // read-time key the Timeline UI uses for clustering. The
+            // `effectiveCorrelationId()` helper also parses legacy rows
+            // whose packageName field is empty but whose description
+            // begins with a dotted package like "com.x.y used READ_...".
+            // This keeps the CSV consistent with what the app renders on
+            // screen, even for rows that predate the migration.
+            val correlationId = csvEscape(event.effectiveCorrelationId())
             val scanId = event.scanResultId.toString()
             val ioc = csvEscape(event.iocIndicator)
             val iocType = csvEscape(event.iocType)
