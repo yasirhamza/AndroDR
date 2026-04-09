@@ -217,13 +217,21 @@ Update this table as execution progresses.
 
 | Plan | Written | Executed | Notes |
 |---|---|---|---|
-| 1 | ✅ `7635631` | ⏳ pending | ~12 tasks, 85 steps, 1505 lines |
+| 1 | ✅ `7635631` | ✅ `fd96d54..3aa3bef` (14 commits) | Approved for plan 2. See "Items flagged" below. |
 | 2 | ⏳ | — | — |
 | 3 | ⏳ | — | — |
 | 4 | ⏳ | — | — |
 | 5 | ⏳ | — | — |
 | 6 | ⏳ | — | — |
 | 7 | ⏳ | — | — |
+
+## Items flagged during plan 1 execution (for plan 2 attention)
+
+1. **`atomRulesById` lookup uses `getRules()` not `effectiveRules()`** — `ScanOrchestrator.kt:367,517` build the lookup from all rules including disabled ones. A disabled atom rule still contributes its category to correlation propagation (though it produces no actual bindings, so correlations can't fire via it). Minor asymmetry; resolve when touching ScanOrchestrator in a later plan.
+2. **`SigmaRuleEngine.getRules()` is still public** — consider reducing visibility or adding a `getEnabledRules()` alias as call sites multiply.
+3. **`CorrelationRule` lacks "category is derived, never stored" KDoc** — add when next touching the file.
+4. **`Finding()` constructor can bypass `SeverityCapPolicy`** — only convention enforces routing through `SigmaRuleEvaluator.buildFinding()`. Consider a factory pattern.
+5. **`SigmaRuleEngine.ruleCount()` is undocumented** — returns total including disabled. Add KDoc.
 
 ---
 
