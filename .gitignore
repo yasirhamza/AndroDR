@@ -62,4 +62,4 @@ build/uat/
 docs/linkedin-*/
 
 # Local scratch: user-provided export samples, not for the repo
-data/
+/data/
