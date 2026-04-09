@@ -14,7 +14,7 @@ import com.androdr.data.model.ScanResult
         ScanResult::class, DnsEvent::class, KnownAppDbEntry::class,
         CveEntity::class, ForensicTimelineEvent::class, Indicator::class
     ],
-    version = 14,
+    version = 15,
     exportSchema = false
 )
 @TypeConverters(Converters::class)

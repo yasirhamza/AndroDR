@@ -56,7 +56,7 @@ fun DnsEvent.toForensicTimelineEvent(indicator: com.androdr.data.model.Indicator
         // Matches the correlationId stamped on Finding rows in
         // Finding.toForensicTimelineEvent when matchContext["domain"] is set.
         correlationId = if (isMatched) "dns:${this.domain}" else "",
-        isFromRuntime = true
+        telemetrySource = com.androdr.data.model.TelemetrySource.LIVE_SCAN
     )
 }
 
@@ -138,8 +138,11 @@ fun Finding.toForensicTimelineEvent(
         scanResultId = scanResult.id,
         attackTechniqueId = this.tags.firstOrNull { it.startsWith("attack.t") }
             ?.removePrefix("attack.") ?: "",
-        isFromBugreport = isBugreport,
-        isFromRuntime = !isBugreport
+        telemetrySource = if (isBugreport) {
+            com.androdr.data.model.TelemetrySource.BUGREPORT_IMPORT
+        } else {
+            com.androdr.data.model.TelemetrySource.LIVE_SCAN
+        }
     )
 }
 
@@ -153,7 +156,7 @@ fun TimelineEvent.toForensicTimelineEvent(scanResultId: Long = -1): ForensicTime
         packageName = this.packageName ?: "",
         timestampPrecision = "estimated",
         scanResultId = scanResultId,
-        isFromBugreport = true
+        telemetrySource = com.androdr.data.model.TelemetrySource.BUGREPORT_IMPORT
     )
 
 /** Extracts the campaign name from DNS event reason strings like "IOC: Pegasus" */

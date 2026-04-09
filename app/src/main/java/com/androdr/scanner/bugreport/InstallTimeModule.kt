@@ -71,7 +71,7 @@ class InstallTimeModule {
                 severity = "info",
                 packageName = pkg,
                 appName = pkg,
-                isFromBugreport = true
+                telemetrySource = com.androdr.data.model.TelemetrySource.BUGREPORT_IMPORT
             )
         }
     }

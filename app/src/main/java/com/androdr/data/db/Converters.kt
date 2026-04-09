@@ -3,6 +3,7 @@ package com.androdr.data.db
 import android.util.Log
 import androidx.room.TypeConverter
 import com.androdr.data.model.ScannerFailure
+import com.androdr.data.model.TelemetrySource
 import com.androdr.sigma.Evidence
 import com.androdr.sigma.Finding
 import kotlinx.serialization.builtins.ListSerializer
@@ -59,5 +60,15 @@ object Converters {
     } catch (e: Exception) {
         Log.w("Converters", "Failed to deserialize scannerErrors: ${e.message}")
         emptyList()
+    }
+
+    @TypeConverter @JvmStatic
+    fun telemetrySourceToString(source: TelemetrySource): String = source.name
+
+    @TypeConverter @JvmStatic
+    fun stringToTelemetrySource(value: String): TelemetrySource = try {
+        TelemetrySource.valueOf(value)
+    } catch (_: IllegalArgumentException) {
+        TelemetrySource.LIVE_SCAN
     }
 }

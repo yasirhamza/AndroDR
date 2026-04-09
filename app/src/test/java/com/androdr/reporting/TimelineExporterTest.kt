@@ -1,6 +1,7 @@
 package com.androdr.reporting
 
 import com.androdr.data.model.ForensicTimelineEvent
+import com.androdr.data.model.TelemetrySource
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -13,13 +14,13 @@ class TimelineExporterTest {
             severity = "CRITICAL", packageName = "com.evil.spy",
             iocIndicator = "com.evil.spy", iocType = "package_name",
             campaignName = "Pegasus", ruleId = "androdr-001",
-            isFromRuntime = true
+            telemetrySource = TelemetrySource.LIVE_SCAN
         ),
         ForensicTimelineEvent(
             id = 2, startTimestamp = 1711900860000, source = "appops",
             category = "permission_use", description = "com.evil.spy used CAMERA",
             severity = "MEDIUM", packageName = "com.evil.spy",
-            isFromBugreport = true
+            telemetrySource = TelemetrySource.BUGREPORT_IMPORT
         )
     )
 

@@ -126,7 +126,7 @@ class UsageStatsScanner @Inject constructor(
             severity = "INFO",
             packageName = packageName,
             appName = appLabel,
-            isFromRuntime = true
+            telemetrySource = com.androdr.data.model.TelemetrySource.LIVE_SCAN
         ))
     }
 

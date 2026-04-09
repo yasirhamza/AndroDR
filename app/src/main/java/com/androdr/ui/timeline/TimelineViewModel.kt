@@ -134,7 +134,9 @@ class TimelineViewModel @Inject constructor(
                     // the scan run time in milliseconds — we can use it
                     // directly without going back to the ScanResult table.
                     timestamp = scanId,
-                    isFromBugreport = scanEvents.any { it.isFromBugreport },
+                    isFromBugreport = scanEvents.any {
+                        it.telemetrySource == com.androdr.data.model.TelemetrySource.BUGREPORT_IMPORT
+                    },
                     eventCount = scanEvents.size,
                     maxSeverity = scanEvents.maxOf { severityOrdinal(it.severity) }.let {
                         when (it) {
