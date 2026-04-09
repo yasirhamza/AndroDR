@@ -29,6 +29,7 @@ class DnsEvaluationTest {
             id: androdr-055
             status: experimental
             description: Test
+            category: incident
             logsource:
                 product: androdr
                 service: dns_monitor
@@ -71,6 +72,7 @@ class DnsEvaluationTest {
             id: androdr-055
             status: experimental
             description: Test
+            category: incident
             logsource:
                 product: androdr
                 service: dns_monitor
