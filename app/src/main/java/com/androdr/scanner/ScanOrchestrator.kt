@@ -365,7 +365,8 @@ class ScanOrchestrator @Inject constructor(
                 else {
                     val bindings = sigmaRuleEngine.computeAtomBindings(eventsWithIds)
                     val atomRulesById = sigmaRuleEngine.getRules().associateBy { it.id }
-                    val signals = sigmaCorrelationEngine.evaluate(correlationRules, eventsWithIds, bindings, atomRulesById)
+                    val signals = sigmaCorrelationEngine
+                        .evaluate(correlationRules, eventsWithIds, bindings, atomRulesById)
                         .map { it.copy(scanResultId = result.id) }
                     correlationSignalCount = signals.size
                     signals

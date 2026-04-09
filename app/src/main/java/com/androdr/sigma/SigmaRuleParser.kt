@@ -143,7 +143,7 @@ object SigmaRuleParser {
         }
     }
 
-    @Suppress("TooGenericExceptionCaught", "ReturnCount")
+    @Suppress("TooGenericExceptionCaught", "ReturnCount", "ThrowsCount")
     private fun parseDocument(doc: Map<String, Any>): SigmaRule? {
         return try {
             val logsource = doc["logsource"] as? Map<*, *> ?: return null

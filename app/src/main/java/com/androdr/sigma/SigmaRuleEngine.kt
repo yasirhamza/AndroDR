@@ -190,7 +190,9 @@ class SigmaRuleEngine @Inject constructor(
 
     fun evaluateAccessibility(telemetry: List<AccessibilityTelemetry>): List<Finding> {
         val records = telemetry.map { it.toFieldMap() }
-        return SigmaRuleEvaluator.evaluate(effectiveRules(), records, "accessibility_audit", iocLookups, evidenceProviders)
+        return SigmaRuleEvaluator.evaluate(
+            effectiveRules(), records, "accessibility_audit", iocLookups, evidenceProviders
+        )
     }
 
     fun evaluateReceivers(telemetry: List<ReceiverTelemetry>): List<Finding> {
