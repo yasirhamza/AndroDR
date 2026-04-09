@@ -37,7 +37,6 @@ class SigmaCorrelationEngine @Inject constructor() {
             val effectiveSeverity = SeverityCapPolicy.applyCap(effectiveCategory, rule.severity)
             val effectiveRule = rule.copy(
                 severity = effectiveSeverity,
-                effectiveCategory = effectiveCategory,
             )
             signals += when (rule.type) {
                 CorrelationType.TEMPORAL_ORDERED -> evaluateTemporalOrdered(effectiveRule, events, bindings)
@@ -59,7 +58,7 @@ class SigmaCorrelationEngine @Inject constructor() {
      *
      * Unknown rule IDs are skipped — they don't contribute to the decision.
      *
-     * This is called at evaluation time to populate [CorrelationRule.effectiveCategory]
+     * This is called at evaluation time to determine the effective category
      * before the cap policy is applied to the resulting correlation finding.
      */
     fun computeEffectiveCategory(
