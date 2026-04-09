@@ -23,11 +23,6 @@ class LegacyScanModule @Inject constructor() : BugreportModule {
 
     // ── IOC regex patterns ────────────────────────────────────────────────────
 
-    /** Matches a suspicious base64 blob of 100+ characters appearing on a single log line. */
-    private val base64BlobRegex = Regex(
-        """[A-Za-z0-9+/]{100,}={0,2}"""
-    )
-
     /** Matches log lines that suggest a periodic C2 beacon (HTTP POST loop pattern). */
     private val c2BeaconRegex = Regex(
         """HTTP.*POST.*every\s+[0-9]+""",
@@ -123,19 +118,6 @@ class LegacyScanModule @Inject constructor() : BugreportModule {
 
                 @Suppress("UNUSED_VARIABLE")
                 val iocHitOnLineRetained = iocHitOnLine
-
-                // ── Suspicious base64 blobs ──────────────────────────────
-                val b64Match = base64BlobRegex.find(line)
-                if (b64Match != null) {
-                    findings.add(
-                        BugReportFinding(
-                            severity = "HIGH",
-                            category = "SuspiciousData",
-                            description = "Suspicious large base64 blob (${b64Match.value.length} chars) " +
-                                "in $entryName at line $lineNumber — possible exfiltration payload"
-                        )
-                    )
-                }
 
                 // ── C2 beacon patterns ───────────────────────────────────
                 if (c2BeaconRegex.containsMatchIn(line)) {
