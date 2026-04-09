@@ -223,7 +223,7 @@ Update this table as execution progresses.
 | 4 | ✅ `a27ff19` | ✅ `f1304a9..a7e27d6` (3 commits) | Unisoc/SPRD added. FileArtifactScanner IOCs migrated to YAML. Ready for plan 5. |
 | 5 | ✅ `f145432` | ✅ `31fcae5..37f8e51` (9 commits) | 7 modules ported, hardcoded constants deleted, TombstoneParser/WakelockParser created. Ready for plan 6. |
 | 6 | ✅ `223cd34` | ✅ `4a111e5..4365d75` (7 commits) | LegacyScanModule deleted, BugReportFinding removed, 6 new rules + typed evaluate methods. Ready for plan 7. |
-| 7 | ⏳ | — | — |
+| 7 | ✅ `8956092` | ✅ `1346676..a8ecd0a` (2 commits) | Fixture + regression test + **PR #89 opened against main**. Refactor complete. |
 
 ## Items flagged during plan 1 execution (for plan 2 attention)
 
