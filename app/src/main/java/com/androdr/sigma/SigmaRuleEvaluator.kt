@@ -121,11 +121,7 @@ object SigmaRuleEvaluator {
             .mapValues { (_, v) -> v?.toString() ?: "" }
         val titleVars = recordVars + (evidenceResult?.titleVars ?: emptyMap())
         val remediationVars = recordVars + (evidenceResult?.remediationVars ?: emptyMap())
-        // Device posture findings are conditions (not incidents) — cap at medium regardless
-        // of the rule's level field. This is the single structural chokepoint for the cap.
-        val effectiveLevel = if (category == FindingCategory.DEVICE_POSTURE &&
-            rule.level.lowercase() in listOf("high", "critical")
-        ) "medium" else rule.level
+        val effectiveLevel = SeverityCapPolicy.applyCap(rule.category, rule.level)
 
         return Finding(
             ruleId = rule.id,
