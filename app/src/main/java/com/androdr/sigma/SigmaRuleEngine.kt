@@ -6,12 +6,18 @@ import android.util.Log
 import com.androdr.data.model.AccessibilityTelemetry
 import com.androdr.data.model.AppOpsTelemetry
 import com.androdr.data.model.AppTelemetry
+import com.androdr.data.model.BatteryDailyEvent
+import com.androdr.data.model.DatabasePathObservation
 import com.androdr.data.model.DeviceTelemetry
 import com.androdr.data.model.DnsEvent
 import com.androdr.data.model.FileArtifactTelemetry
 import com.androdr.data.model.ForensicTimelineEvent
+import com.androdr.data.model.PackageInstallHistoryEntry
+import com.androdr.data.model.PlatformCompatChange
 import com.androdr.data.model.ProcessTelemetry
 import com.androdr.data.model.ReceiverTelemetry
+import com.androdr.data.model.TombstoneEvent
+import com.androdr.data.model.WakelockAcquisition
 import com.androdr.R
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
@@ -228,6 +234,48 @@ class SigmaRuleEngine @Inject constructor(
     fun evaluateAppOps(telemetry: List<AppOpsTelemetry>): List<Finding> {
         val records = telemetry.map { it.toFieldMap() }
         return SigmaRuleEvaluator.evaluate(effectiveRules(), records, "appops_audit", iocLookups, evidenceProviders)
+    }
+
+    fun evaluateTombstones(telemetry: List<TombstoneEvent>): List<Finding> {
+        val records = telemetry.map { it.toFieldMap() }
+        return SigmaRuleEvaluator.evaluate(
+            effectiveRules(), records, "tombstone_parser", iocLookups, evidenceProviders
+        )
+    }
+
+    fun evaluateWakelocks(telemetry: List<WakelockAcquisition>): List<Finding> {
+        val records = telemetry.map { it.toFieldMap() }
+        return SigmaRuleEvaluator.evaluate(
+            effectiveRules(), records, "wakelock_parser", iocLookups, evidenceProviders
+        )
+    }
+
+    fun evaluateBatteryDaily(telemetry: List<BatteryDailyEvent>): List<Finding> {
+        val records = telemetry.map { it.toFieldMap() }
+        return SigmaRuleEvaluator.evaluate(
+            effectiveRules(), records, "battery_daily", iocLookups, evidenceProviders
+        )
+    }
+
+    fun evaluatePackageInstallHistory(telemetry: List<PackageInstallHistoryEntry>): List<Finding> {
+        val records = telemetry.map { it.toFieldMap() }
+        return SigmaRuleEvaluator.evaluate(
+            effectiveRules(), records, "package_install_history", iocLookups, evidenceProviders
+        )
+    }
+
+    fun evaluatePlatformCompat(telemetry: List<PlatformCompatChange>): List<Finding> {
+        val records = telemetry.map { it.toFieldMap() }
+        return SigmaRuleEvaluator.evaluate(
+            effectiveRules(), records, "platform_compat", iocLookups, evidenceProviders
+        )
+    }
+
+    fun evaluateDatabasePathObservations(telemetry: List<DatabasePathObservation>): List<Finding> {
+        val records = telemetry.map { it.toFieldMap() }
+        return SigmaRuleEvaluator.evaluate(
+            effectiveRules(), records, "db_info", iocLookups, evidenceProviders
+        )
     }
 
     fun evaluateGeneric(records: List<Map<String, Any?>>, service: String): List<Finding> {
