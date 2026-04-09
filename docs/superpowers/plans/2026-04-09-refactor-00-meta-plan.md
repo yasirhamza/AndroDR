@@ -220,7 +220,7 @@ Update this table as execution progresses.
 | 1 | ✅ `7635631` | ✅ `fd96d54..3aa3bef` (14 commits) | Approved for plan 2. Items 1-5 addressed in plan 2. |
 | 2 | ✅ `10dcd6e` | ✅ `25a509e..a6f9f42` (11 commits) | All 5 plan 1 follow-ups addressed. Ready for plan 3. |
 | 3 | ✅ `4c97116` | ✅ `06df9bc..04655ac` (4 commits) | Timeline UI refactor + severity removal + export modes. Ready for plan 4. |
-| 4 | ⏳ | — | — |
+| 4 | ✅ `a27ff19` | ✅ `f1304a9..a7e27d6` (3 commits) | Unisoc/SPRD added. FileArtifactScanner IOCs migrated to YAML. Ready for plan 5. |
 | 5 | ⏳ | — | — |
 | 6 | ⏳ | — | — |
 | 7 | ⏳ | — | — |
