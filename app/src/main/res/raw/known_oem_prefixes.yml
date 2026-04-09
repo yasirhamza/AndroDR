@@ -18,6 +18,10 @@ chipset_prefixes:
   - "vendor.qti."
   - "com.mediatek."
   - "com.mtk."
+  - "com.unisoc."
+  - "com.sprd."
+  - "vendor.unisoc."
+  - "vendor.sprd."
 
 # Board support / ODM
 odm_prefixes:
