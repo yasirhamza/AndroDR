@@ -20,11 +20,31 @@ if [[ ! -x "$EMULATOR" ]]; then
   exit 1
 fi
 
-# ── Start AVD headlessly ──────────────────────────────────────────────────────
-echo "Starting AVD: $AVD_NAME"
-"$EMULATOR" -avd "$AVD_NAME" -no-window -no-audio -no-snapshot &
-EMULATOR_PID=$!
-trap '"$ADB" -e emu kill 2>/dev/null; wait $EMULATOR_PID 2>/dev/null' EXIT
+# ── Emulator: reuse existing or start fresh ──────────────────────────────────
+# Check whether an emulator is already booted. If so, reuse it and leave it
+# running on exit. If not, boot a fresh one and kill it on exit.
+#
+# Reusing avoids the "Running multiple emulators with the same AVD is an
+# experimental feature" failure when a developer already has the target AVD
+# open during interactive work.
+REUSED_EMULATOR=false
+EMULATOR_PID=""
+if "$ADB" devices 2>/dev/null | awk 'NR>1 && /emulator-[0-9]+\tdevice/' | grep -q .; then
+  echo "Reusing running emulator."
+  REUSED_EMULATOR=true
+else
+  echo "Starting AVD: $AVD_NAME"
+  "$EMULATOR" -avd "$AVD_NAME" -no-window -no-audio -no-snapshot &
+  EMULATOR_PID=$!
+fi
+
+cleanup() {
+  if ! $REUSED_EMULATOR && [[ -n "$EMULATOR_PID" ]]; then
+    "$ADB" -e emu kill 2>/dev/null || true
+    wait "$EMULATOR_PID" 2>/dev/null || true
+  fi
+}
+trap cleanup EXIT
 
 # ── Wait for boot ─────────────────────────────────────────────────────────────
 echo "Waiting for device..."
