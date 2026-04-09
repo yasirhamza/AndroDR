@@ -159,9 +159,6 @@
     <string name="timeline_report_title">Forensic Timeline Report</string>
     <string name="timeline_copy">Copy</string>
     <string name="timeline_share">Share</string>
-    <string name="timeline_filter_critical">Critical</string>
-    <string name="timeline_filter_high">High</string>
-    <string name="timeline_filter_medium">Medium</string>
 
     <!-- Timeline Event Card — externalized -->
     <string name="timeline_detail_description">Description</string>

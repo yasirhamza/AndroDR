@@ -45,11 +45,13 @@ object TimelineExporter {
             return@buildString
         }
 
-        // Phase A: telemetry events no longer carry severity. The exporter
-        // reports totals only; phase B will partition by TelemetryRow vs.
-        // FindingRow and report finding severity from the Finding itself.
         appendLine("  Total events: ${filtered.size}")
-        val significantCount = 0
+        // Significant == events whose rule guidance is non-empty. Rule
+        // guidance is present only on rules that produce findings, so
+        // this counts telemetry rows tied to a rule-produced signal.
+        val significantCount = filtered.count {
+            it.ruleId.isNotEmpty() && !ruleGuidance[it.ruleId].isNullOrEmpty()
+        }
 
         // Assessment derived from rule guidance — the rules define threat severity,
         // not hardcoded category/severity checks in the formatter.
@@ -61,8 +63,9 @@ object TimelineExporter {
             maxGuidancePriority >= 1 || significantCount > 0 -> "REVIEW RECOMMENDED"
             else -> "NO CONCERNS"
         }
-        // Phase A: no per-event severity. Severity rollup returns in phase B
-        // once findings become a distinct TimelineRow variant.
+        // Telemetry rows carry no severity — severity lives on findings.
+        // The exporter does not cross the reporting/scan boundary, so no
+        // per-severity rollup is computed here.
         val severityParts = emptyList<String>()
 
         appendLine()
@@ -158,8 +161,9 @@ object TimelineExporter {
                 event.packageName.takeIf { it.isNotBlank() }
                     ?: event.effectivePackageFromDescription().orEmpty()
             )
-            // Phase A: severity column kept in CSV header for backward
-            // compatibility; always empty since telemetry has no severity.
+            // Severity column kept in CSV header for backward compatibility
+            // with consumers; always empty since telemetry rows have no
+            // severity (severity lives on Finding only).
             val sev = ""
             val ruleId = csvEscape(event.ruleId)
             // Prefer the stamped correlationId; fall back to the same

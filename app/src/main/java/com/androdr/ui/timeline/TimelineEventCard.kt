@@ -47,8 +47,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Surface
 import com.androdr.R
 import com.androdr.data.model.ForensicTimelineEvent
+import com.androdr.sigma.FindingCategory
 import com.androdr.ui.common.SeverityChip
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -60,39 +63,34 @@ fun TimelineEventCard(
     event: ForensicTimelineEvent,
     onClick: () -> Unit
 ) {
-    // Phase A: telemetry events no longer carry severity — render neutral.
-    // Phase B splits timeline rows into TelemetryRow (no badge) vs FindingRow.
-    val neutralSeverity = "INFO"
-    val (icon, color) = severityIconAndColor(neutralSeverity)
-
+    // Neutral telemetry card — no severity badge. Severity lives on
+    // Finding rows only; telemetry is pure observation per spec §3.
+    val neutralColor = Color(0xFF00D4AA)
     Card(
         modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
-        colors = CardDefaults.cardColors(containerColor = color.copy(alpha = 0.08f))
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+        )
     ) {
         Row(
             modifier = Modifier.padding(12.dp),
             horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             Icon(
-                imageVector = icon, contentDescription = neutralSeverity,
-                tint = color, modifier = Modifier.size(20.dp)
+                imageVector = Icons.Filled.Info,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(20.dp)
             )
             Column(
                 modifier = Modifier.weight(1f),
                 verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = formatTime(event.startTimestamp),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    SeverityChip(level = neutralSeverity, active = true)
-                }
+                Text(
+                    text = formatTime(event.startTimestamp),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
                 Text(
                     text = event.description,
                     style = MaterialTheme.typography.bodySmall,
@@ -100,12 +98,89 @@ fun TimelineEventCard(
                 )
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                     if (event.campaignName.isNotEmpty()) TagChip(event.campaignName, Color(0xFFCF6679))
-                    if (event.iocType.isNotEmpty()) TagChip(event.iocType, Color(0xFFFF9800))
+                    if (event.iocType.isNotEmpty()) TagChip(event.iocType, neutralColor)
                     TagChip(event.source, MaterialTheme.colorScheme.primary)
                 }
             }
         }
     }
+}
+
+/**
+ * Neutral telemetry row renderer — thin wrapper over [TimelineEventCard]
+ * used by the flat `TimelineRow` rendering path.
+ */
+@Composable
+fun TelemetryCard(row: TimelineRow.TelemetryRow, modifier: Modifier = Modifier) {
+    Box(modifier = modifier) {
+        TimelineEventCard(event = row.event, onClick = {})
+    }
+}
+
+/**
+ * Finding row renderer — distinct visual treatment with a severity badge,
+ * category chip, rule id, title, and description.
+ */
+@Composable
+fun FindingCard(row: TimelineRow.FindingRow, modifier: Modifier = Modifier) {
+    val finding = row.finding
+    Card(
+        modifier = modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = severityBackgroundFor(finding.level)
+        )
+    ) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                SeverityChip(level = finding.level, active = true)
+                Spacer(Modifier.width(8.dp))
+                CategoryChip(finding.category)
+                Spacer(Modifier.weight(1f))
+                Text(
+                    text = finding.ruleId,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Spacer(Modifier.height(8.dp))
+            Text(
+                text = finding.title,
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.Bold
+            )
+            if (finding.description.isNotBlank()) {
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    text = finding.description,
+                    style = MaterialTheme.typography.bodySmall
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun CategoryChip(category: FindingCategory) {
+    Surface(
+        color = MaterialTheme.colorScheme.secondaryContainer,
+        contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+        shape = RoundedCornerShape(4.dp)
+    ) {
+        Text(
+            text = category.name.lowercase().replace('_', ' '),
+            style = MaterialTheme.typography.labelSmall,
+            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+        )
+    }
+}
+
+@Composable
+private fun severityBackgroundFor(level: String): Color = when (level.uppercase()) {
+    "CRITICAL" -> Color(0xFFFFEBEE)
+    "HIGH" -> Color(0xFFFBE9E7)
+    "MEDIUM" -> Color(0xFFFFF8E1)
+    "LOW" -> Color(0xFFE3F2FD)
+    else -> MaterialTheme.colorScheme.surface
 }
 
 @Suppress("LongMethod") // Compose detail sheet renders header + all metadata sections + linked evidence
@@ -131,7 +206,6 @@ fun TimelineEventDetailSheet(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(event.category, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                SeverityChip(level = "INFO", active = true)
             }
             Text(
                 text = "${formatTime(event.startTimestamp)}  ${formatDate(event.startTimestamp)}",
@@ -205,10 +279,11 @@ private fun LinkedEvidenceRow(
     related: ForensicTimelineEvent,
     onTap: () -> Unit
 ) {
-    val (icon, color) = severityIconAndColor("INFO")
     Card(
         modifier = Modifier.fillMaxWidth().clickable(onClick = onTap),
-        colors = CardDefaults.cardColors(containerColor = color.copy(alpha = 0.06f))
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
+        )
     ) {
         Row(
             modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
@@ -216,9 +291,9 @@ private fun LinkedEvidenceRow(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Icon(
-                imageVector = icon,
-                contentDescription = "INFO",
-                tint = color,
+                imageVector = Icons.Filled.Info,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.size(16.dp)
             )
             Column(modifier = Modifier.weight(1f)) {
@@ -268,10 +343,7 @@ fun CorrelationClusterCard(
         CorrelationPattern.PERMISSION_THEN_C2,
         CorrelationPattern.INSTALL_THEN_ADMIN -> Color(0xFFCF6679) // Red box
         CorrelationPattern.MULTI_PERMISSION_BURST -> Color(0xFFFF9800) // Orange box
-        else -> {
-            // Phase A: telemetry events have no severity. Default neutral color.
-            Color(0xFF00D4AA)
-        }
+        else -> Color(0xFF00D4AA) // neutral
     }
 
     Card(
@@ -406,13 +478,6 @@ private fun formatTimeRange(events: List<ForensicTimelineEvent>): String {
     return if (first > 0 && last > 0) {
         "${fmt.format(Date(first))}\u2013${fmt.format(Date(last))}"
     } else ""
-}
-
-private fun severityIconAndColor(severity: String) = when (severity.uppercase()) {
-    "CRITICAL" -> Icons.Filled.Error to Color(0xFFCF6679)
-    "HIGH" -> Icons.Filled.Warning to Color(0xFFFF9800)
-    "MEDIUM" -> Icons.Filled.Warning to Color(0xFFE6A800)
-    else -> Icons.Filled.Info to Color(0xFF00D4AA)
 }
 
 private fun formatTime(ts: Long) =
