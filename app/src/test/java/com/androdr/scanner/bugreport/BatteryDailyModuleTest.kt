@@ -77,8 +77,9 @@ class BatteryDailyModuleTest {
         """.trimIndent()
 
         val result = module.analyze(section, mockIndicatorResolver)
+        // Severity no longer hardcoded; rule engine assigns it via SIGMA YAML (plan 6).
         assertTrue(result.timeline.any {
-            it.severity == "HIGH" && it.description.contains("anti-forensics")
+            it.description.contains("anti-forensics")
         })
     }
 
