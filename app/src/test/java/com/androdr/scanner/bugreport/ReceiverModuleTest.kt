@@ -1,6 +1,7 @@
 package com.androdr.scanner.bugreport
 
 import com.androdr.ioc.IndicatorResolver
+import com.androdr.ioc.OemPrefixResolver
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.runBlocking
@@ -17,7 +18,17 @@ class ReceiverModuleTest {
     @Before
     fun setUp() {
         every { mockIndicatorResolver.isKnownBadPackage(any()) } returns null
-        module = ReceiverModule()
+        val oemPrefixResolver: OemPrefixResolver = mockk()
+        every { oemPrefixResolver.isOemPrefix(any()) } answers {
+            val pkg = firstArg<String>()
+            pkg.startsWith("com.android.") ||
+                pkg.startsWith("com.google.android.") ||
+                pkg.startsWith("com.samsung.android.") ||
+                pkg.startsWith("com.sec.android.") ||
+                pkg.startsWith("com.qualcomm.") ||
+                pkg.startsWith("com.mediatek.")
+        }
+        module = ReceiverModule(oemPrefixResolver)
     }
 
     @Test
