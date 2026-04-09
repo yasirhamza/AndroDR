@@ -1,9 +1,9 @@
 package com.androdr.scanner
 
-import android.os.Environment
 import android.util.Log
 import com.androdr.data.model.FileArtifactTelemetry
 import com.androdr.data.model.TelemetrySource
+import com.androdr.ioc.KnownSpywareArtifactsResolver
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -16,28 +16,15 @@ import javax.inject.Singleton
  *
  * Most paths require root to read; without root, [File.exists] returns false for
  * inaccessible paths, which is the expected baseline on a clean device.
+ *
+ * The path list is sourced from [KnownSpywareArtifactsResolver], which loads
+ * `res/raw/known_spyware_artifacts.yml`. The scanner itself stays simple: for each
+ * resolved path, probe the filesystem and emit telemetry.
  */
 @Singleton
-class FileArtifactScanner @Inject constructor() {
-
-    /**
-     * Known artifact paths associated with commercial spyware (Pegasus, Predator, etc.).
-     * Sources: MVT indicators, Citizen Lab forensic reports.
-     *
-     * Paths under external storage use [Environment.getExternalStorageDirectory] to resolve
-     * the correct mount point rather than hardcoding "/sdcard".
-     */
-    @Suppress("DEPRECATION") // getExternalStorageDirectory is deprecated but needed for IOC paths
-    private val knownArtifactPaths: List<String> by lazy {
-        val extStorage = Environment.getExternalStorageDirectory().absolutePath
-        listOf(
-            "/data/local/tmp/.raptor",
-            "/data/local/tmp/.stat",
-            "/data/local/tmp/.mobilesoftwareupdate",
-            "$extStorage/.hidden_config",
-            "$extStorage/Android/data/.system_update"
-        )
-    }
+class FileArtifactScanner @Inject constructor(
+    private val knownSpywareArtifactsResolver: KnownSpywareArtifactsResolver,
+) {
 
     /**
      * Checks each known artifact path and returns telemetry about whether the file exists
@@ -45,7 +32,7 @@ class FileArtifactScanner @Inject constructor() {
      */
     @Suppress("TooGenericExceptionCaught")
     suspend fun collectTelemetry(): List<FileArtifactTelemetry> = withContext(Dispatchers.IO) {
-        knownArtifactPaths.map { path ->
+        knownSpywareArtifactsResolver.paths.map { path ->
             try {
                 val file = File(path)
                 val exists = file.exists()
