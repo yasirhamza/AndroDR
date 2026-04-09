@@ -45,15 +45,11 @@ object TimelineExporter {
             return@buildString
         }
 
-        val significantCount = filtered.count { it.severity.uppercase() != "INFORMATIONAL" }
-        val infoCount = filtered.size - significantCount
+        // Phase A: telemetry events no longer carry severity. The exporter
+        // reports totals only; phase B will partition by TelemetryRow vs.
+        // FindingRow and report finding severity from the Finding itself.
         appendLine("  Total events: ${filtered.size}")
-        if (significantCount > 0) {
-            appendLine("  Significant: $significantCount")
-        }
-        if (infoCount > 0) {
-            appendLine("  Informational: $infoCount")
-        }
+        val significantCount = 0
 
         // Assessment derived from rule guidance — the rules define threat severity,
         // not hardcoded category/severity checks in the formatter.
@@ -65,15 +61,9 @@ object TimelineExporter {
             maxGuidancePriority >= 1 || significantCount > 0 -> "REVIEW RECOMMENDED"
             else -> "NO CONCERNS"
         }
-        // Severity breakdown
-        val criticalCount = filtered.count { it.severity.equals("CRITICAL", true) }
-        val highCount = filtered.count { it.severity.equals("HIGH", true) }
-        val mediumCount = filtered.count { it.severity.equals("MEDIUM", true) }
-        val severityParts = buildList {
-            if (criticalCount > 0) add("$criticalCount critical")
-            if (highCount > 0) add("$highCount high")
-            if (mediumCount > 0) add("$mediumCount medium")
-        }
+        // Phase A: no per-event severity. Severity rollup returns in phase B
+        // once findings become a distinct TimelineRow variant.
+        val severityParts = emptyList<String>()
 
         appendLine()
         appendLine("  ASSESSMENT: $assessment")
@@ -103,8 +93,7 @@ object TimelineExporter {
             val time = if (event.startTimestamp > 0) {
                 timeFmt.format(Date(event.startTimestamp))
             } else "??:??:??"
-            val sev = event.severity.uppercase().padEnd(8)
-            appendLine("  [$sev] $time  ${event.description}")
+            appendLine("  $time  ${event.description}")
             if (event.appName.isNotEmpty() && event.appName != event.packageName) {
                 appendLine("             App: ${event.appName} (${event.packageName})")
             } else if (event.packageName.isNotEmpty()) {
@@ -169,7 +158,9 @@ object TimelineExporter {
                 event.packageName.takeIf { it.isNotBlank() }
                     ?: event.effectivePackageFromDescription().orEmpty()
             )
-            val sev = event.severity
+            // Phase A: severity column kept in CSV header for backward
+            // compatibility; always empty since telemetry has no severity.
+            val sev = ""
             val ruleId = csvEscape(event.ruleId)
             // Prefer the stamped correlationId; fall back to the same
             // read-time key the Timeline UI uses for clustering. The

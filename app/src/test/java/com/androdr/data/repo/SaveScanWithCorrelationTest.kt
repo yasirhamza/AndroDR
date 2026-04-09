@@ -137,7 +137,6 @@ class SaveScanWithCorrelationTest {
                     category = "correlation",
                     source = "test",
                     description = "test cluster",
-                    severity = "high",
                     packageName = "com.test",
                     ruleId = "test-rule",
                     details = """{"member_event_ids":"$ids"}""",
@@ -203,7 +202,6 @@ class SaveScanWithCorrelationTest {
         category = cat,
         source = "test",
         description = "evt",
-        severity = "info",
         packageName = pkg
     )
 }

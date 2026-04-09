@@ -143,7 +143,6 @@ class SigmaRuleEngineDisabledRuleTest {
             source = "test",
             category = "test_category",
             description = "test event",
-            severity = "informational",
         )
         @Suppress("UNCHECKED_CAST")
         val bindings = method.invoke(engine, listOf(event)) as Map<Long, Set<String>>

@@ -68,7 +68,6 @@ class InstallTimeModule {
                 category = "package_install",
                 source = "bugreport",
                 description = "Package installed: $pkg",
-                severity = "info",
                 packageName = pkg,
                 appName = pkg,
                 telemetrySource = com.androdr.data.model.TelemetrySource.BUGREPORT_IMPORT

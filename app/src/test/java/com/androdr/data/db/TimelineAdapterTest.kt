@@ -21,7 +21,6 @@ class TimelineAdapterTest {
         val event = dns.toForensicTimelineEvent()
         assertEquals("dns_monitor", event.source)
         assertEquals("ioc_match", event.category)
-        assertEquals("HIGH", event.severity)
         assertEquals("evil.com", event.iocIndicator)
         assertEquals("domain", event.iocType)
         assertTrue(event.telemetrySource == TelemetrySource.LIVE_SCAN)
@@ -35,7 +34,6 @@ class TimelineAdapterTest {
             isBlocked = false, reason = null
         )
         val event = dns.toForensicTimelineEvent()
-        assertEquals("INFO", event.severity)
         assertEquals("", event.iocIndicator)
     }
 
@@ -59,7 +57,6 @@ class TimelineAdapterTest {
         val event = finding.toForensicTimelineEvent(scanResult)
         assertEquals("app_scanner", event.source)
         assertEquals("app_risk", event.category)
-        assertEquals("HIGH", event.severity)
         assertEquals("androdr-060", event.ruleId)
         assertEquals(5000L, event.scanResultId)
         assertEquals("com.evil.spy", event.packageName)

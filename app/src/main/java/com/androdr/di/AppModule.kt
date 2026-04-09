@@ -25,6 +25,7 @@ import com.androdr.data.db.MIGRATION_11_12
 import com.androdr.data.db.MIGRATION_12_13
 import com.androdr.data.db.MIGRATION_13_14
 import com.androdr.data.db.MIGRATION_14_15
+import com.androdr.data.db.MIGRATION_15_16
 import com.androdr.data.db.ScanResultDao
 import com.androdr.ioc.CertHashIocFeed
 import com.androdr.ioc.DomainIocFeed
@@ -59,7 +60,8 @@ object AppModule {
                 MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5,
                 MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9,
                 MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12,
-                MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15
+                MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15,
+                MIGRATION_15_16
             )
             .fallbackToDestructiveMigrationOnDowngrade()
             .build()

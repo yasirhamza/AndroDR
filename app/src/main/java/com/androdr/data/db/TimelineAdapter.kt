@@ -21,7 +21,6 @@ fun DnsEvent.toForensicTimelineEvent(): ForensicTimelineEvent =
 fun DnsEvent.toForensicTimelineEvent(indicator: com.androdr.data.model.Indicator?): ForensicTimelineEvent {
     val isMatched = this.reason != null
     val realCampaign = indicator?.campaign?.takeIf { it.isNotBlank() }
-    val realSeverity = indicator?.severity?.takeIf { it.isNotBlank() && it.uppercase() != "UNKNOWN" }
     val realSource = indicator?.source?.takeIf { it.isNotBlank() }
     val realDescription = indicator?.description?.takeIf { it.isNotBlank() }
     return ForensicTimelineEvent(
@@ -32,11 +31,6 @@ fun DnsEvent.toForensicTimelineEvent(indicator: com.androdr.data.model.Indicator
             (if (isMatched && realCampaign != null) " [$realCampaign]"
              else this.reason?.let { " [MATCHED: $it]" } ?: ""),
         details = realDescription ?: "",
-        severity = when {
-            !isMatched -> "INFO"
-            realSeverity != null -> realSeverity.uppercase()
-            else -> "HIGH"
-        },
         packageName = this.appName ?: "",
         processUid = this.appUid,
         iocIndicator = if (isMatched) this.domain else "",
@@ -121,7 +115,6 @@ fun Finding.toForensicTimelineEvent(
         // of 3 indistinguishable "Graphite/Paragon Spyware" rows.
         description = if (dnsMatchedDomain != null) "${this.title}: $dnsMatchedDomain" else this.title,
         details = this.description,
-        severity = this.level.uppercase(),
         packageName = this.matchContext["package_name"] ?: "",
         appName = this.matchContext["app_name"] ?: "",
         apkHash = this.matchContext["apk_hash"] ?: "",
@@ -152,7 +145,6 @@ fun TimelineEvent.toForensicTimelineEvent(scanResultId: Long = -1): ForensicTime
         source = this.source,
         category = this.category,
         description = this.description,
-        severity = this.severity,
         packageName = this.packageName ?: "",
         timestampPrecision = "estimated",
         scanResultId = scanResultId,

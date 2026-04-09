@@ -84,7 +84,9 @@ class TimelineViewModel @Inject constructor(
                 filter.dateRange != null -> dao.getEventsInRange(filter.dateRange.first, filter.dateRange.second)
                 filter.pkg != null -> dao.getEventsByPackage(filter.pkg)
                 filter.src != null -> dao.getEventsBySource(filter.src)
-                filter.sev != null -> dao.getEventsBySeverity(listOf(filter.sev))
+                // Severity filter is a no-op in phase A: telemetry events no longer carry
+                // severity. Phase B replaces this filter with a TimelineRow-aware version
+                // that filters on Finding.level for finding rows only.
                 else -> dao.getRecentEvents()
             }
         }
@@ -138,11 +140,10 @@ class TimelineViewModel @Inject constructor(
                         it.telemetrySource == com.androdr.data.model.TelemetrySource.BUGREPORT_IMPORT
                     },
                     eventCount = scanEvents.size,
-                    maxSeverity = scanEvents.maxOf { severityOrdinal(it.severity) }.let {
-                        when (it) {
-                            3 -> "CRITICAL"; 2 -> "HIGH"; 1 -> "MEDIUM"; else -> "INFO"
-                        }
-                    },
+                    // Phase A: telemetry events no longer carry severity. Scan group
+                    // max-severity rollup is deferred to phase B, where finding rows
+                    // provide severity. For now, render as INFO (neutral).
+                    maxSeverity = "INFO",
                     clusters = clusters,
                     standaloneEvents = standalone
                 )
@@ -160,9 +161,7 @@ class TimelineViewModel @Inject constructor(
                     ?: 0L,
                 isFromBugreport = false,
                 eventCount = ungrouped.size,
-                maxSeverity = ungrouped.maxOf { severityOrdinal(it.severity) }.let {
-                    when (it) { 3 -> "CRITICAL"; 2 -> "HIGH"; 1 -> "MEDIUM"; else -> "INFO" }
-                },
+                maxSeverity = "INFO",
                 clusters = ungroupedClusters,
                 standaloneEvents = ungroupedStandalone
             ))

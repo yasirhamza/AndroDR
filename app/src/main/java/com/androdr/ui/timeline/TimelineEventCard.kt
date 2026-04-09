@@ -60,7 +60,10 @@ fun TimelineEventCard(
     event: ForensicTimelineEvent,
     onClick: () -> Unit
 ) {
-    val (icon, color) = severityIconAndColor(event.severity)
+    // Phase A: telemetry events no longer carry severity — render neutral.
+    // Phase B splits timeline rows into TelemetryRow (no badge) vs FindingRow.
+    val neutralSeverity = "INFO"
+    val (icon, color) = severityIconAndColor(neutralSeverity)
 
     Card(
         modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
@@ -71,7 +74,7 @@ fun TimelineEventCard(
             horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             Icon(
-                imageVector = icon, contentDescription = event.severity,
+                imageVector = icon, contentDescription = neutralSeverity,
                 tint = color, modifier = Modifier.size(20.dp)
             )
             Column(
@@ -88,7 +91,7 @@ fun TimelineEventCard(
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
-                    SeverityChip(level = event.severity, active = true)
+                    SeverityChip(level = neutralSeverity, active = true)
                 }
                 Text(
                     text = event.description,
@@ -128,7 +131,7 @@ fun TimelineEventDetailSheet(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(event.category, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                SeverityChip(level = event.severity, active = true)
+                SeverityChip(level = "INFO", active = true)
             }
             Text(
                 text = "${formatTime(event.startTimestamp)}  ${formatDate(event.startTimestamp)}",
@@ -202,7 +205,7 @@ private fun LinkedEvidenceRow(
     related: ForensicTimelineEvent,
     onTap: () -> Unit
 ) {
-    val (icon, color) = severityIconAndColor(related.severity)
+    val (icon, color) = severityIconAndColor("INFO")
     Card(
         modifier = Modifier.fillMaxWidth().clickable(onClick = onTap),
         colors = CardDefaults.cardColors(containerColor = color.copy(alpha = 0.06f))
@@ -214,7 +217,7 @@ private fun LinkedEvidenceRow(
         ) {
             Icon(
                 imageVector = icon,
-                contentDescription = related.severity,
+                contentDescription = "INFO",
                 tint = color,
                 modifier = Modifier.size(16.dp)
             )
@@ -266,14 +269,8 @@ fun CorrelationClusterCard(
         CorrelationPattern.INSTALL_THEN_ADMIN -> Color(0xFFCF6679) // Red box
         CorrelationPattern.MULTI_PERMISSION_BURST -> Color(0xFFFF9800) // Orange box
         else -> {
-            // Severity-based for generic/pre-linked/install-then-permission
-            val maxSev = cluster.events.maxOf { severityOrdinal(it.severity) }
-            when (maxSev) {
-                3 -> Color(0xFFCF6679)
-                2 -> Color(0xFFFF9800)
-                1 -> Color(0xFFE6A800)
-                else -> Color(0xFF00D4AA)
-            }
+            // Phase A: telemetry events have no severity. Default neutral color.
+            Color(0xFF00D4AA)
         }
     }
 

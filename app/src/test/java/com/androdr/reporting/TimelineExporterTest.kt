@@ -11,7 +11,7 @@ class TimelineExporterTest {
         ForensicTimelineEvent(
             id = 1, startTimestamp = 1711900800000, source = "app_scanner",
             category = "ioc_match", description = "IOC: com.evil.spy",
-            severity = "CRITICAL", packageName = "com.evil.spy",
+            packageName = "com.evil.spy",
             iocIndicator = "com.evil.spy", iocType = "package_name",
             campaignName = "Pegasus", ruleId = "androdr-001",
             telemetrySource = TelemetrySource.LIVE_SCAN
@@ -19,7 +19,7 @@ class TimelineExporterTest {
         ForensicTimelineEvent(
             id = 2, startTimestamp = 1711900860000, source = "appops",
             category = "permission_use", description = "com.evil.spy used CAMERA",
-            severity = "MEDIUM", packageName = "com.evil.spy",
+            packageName = "com.evil.spy",
             telemetrySource = TelemetrySource.BUGREPORT_IMPORT
         )
     )
@@ -29,7 +29,6 @@ class TimelineExporterTest {
         val text = TimelineExporter.formatPlaintext(events)
         assertTrue(text.contains("AndroDR Forensic Timeline"))
         assertTrue(text.contains("IOC: com.evil.spy"))
-        assertTrue(text.contains("CRITICAL"))
         assertTrue(text.contains("com.evil.spy used CAMERA"))
     }
 
@@ -64,7 +63,6 @@ class TimelineExporterTest {
             category = "correlation",
             source = "sigma_correlation_engine",
             description = "Install then device admin grant",
-            severity = "high",
             packageName = "com.test",
             ruleId = "androdr-corr-001",
             correlationId = "androdr-corr-001:1,2",
@@ -95,7 +93,6 @@ class TimelineExporterTest {
             category = "permission_use",
             source = "appops",
             description = "com.microsoft.appmanager used READ_CONTACTS at 2026-04-05 08:51:50.313",
-            severity = "INFO",
             // Critical: packageName is empty (legacy row)
             packageName = "",
             correlationId = ""
@@ -121,7 +118,6 @@ class TimelineExporterTest {
             category = "package_install",
             source = "app_scanner",
             description = "Package installed: Test App",
-            severity = "info",
             packageName = "com.test.app",
             correlationId = "pkg:com.test.app"
         )
@@ -136,8 +132,7 @@ class TimelineExporterTest {
         val eventsWithComma = listOf(
             ForensicTimelineEvent(
                 id = 3, startTimestamp = 1000L, source = "test",
-                category = "test", description = "value with, comma",
-                severity = "INFO"
+                category = "test", description = "value with, comma"
             )
         )
         val csv = TimelineExporter.formatCsv(eventsWithComma)
@@ -158,7 +153,7 @@ class TimelineExporterTest {
             ForensicTimelineEvent(
                 id = 4, startTimestamp = 1711900800000, source = "appops",
                 category = "permission_use", description = "com.whatsapp used CAMERA",
-                severity = "INFO", packageName = "com.whatsapp"
+                packageName = "com.whatsapp"
             )
         )
         val names = mapOf("com.whatsapp" to "WhatsApp")
@@ -177,11 +172,12 @@ class TimelineExporterTest {
 
     @Test
     fun `assessment without guidance caps at review`() {
-        // Same events but no rule guidance -> no CRITICAL, just REVIEW
+        // Phase A: telemetry events no longer carry severity. Without rule
+        // guidance, assessment falls through to NO CONCERNS. Phase B will
+        // reintroduce finding-driven REVIEW/CRITICAL assessments via the
+        // Finding-row variant.
         val text = TimelineExporter.formatPlaintext(events)
         assertTrue(text.contains("ASSESSMENT:"))
-        assertTrue("Without guidance, significant events -> REVIEW",
-            text.contains("REVIEW RECOMMENDED"))
     }
 
     @Test
@@ -190,7 +186,7 @@ class TimelineExporterTest {
             ForensicTimelineEvent(
                 id = 5, startTimestamp = 1711900800000, source = "appops",
                 category = "permission_use", description = "test",
-                severity = "INFORMATIONAL", packageName = "com.test"
+                packageName = "com.test"
             )
         )
         val text = TimelineExporter.formatPlaintext(infoEvents)

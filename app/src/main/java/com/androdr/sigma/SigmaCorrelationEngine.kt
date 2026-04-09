@@ -185,7 +185,6 @@ class SigmaCorrelationEngine @Inject constructor() {
             source = "sigma_correlation_engine",
             description = rule.displayLabel,
             details = detailsJson,
-            severity = rule.severity,
             packageName = first.packageName,
             ruleId = rule.id,
             correlationId = "${rule.id}:$memberIds"

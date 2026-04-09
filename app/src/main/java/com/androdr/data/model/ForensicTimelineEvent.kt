@@ -8,7 +8,6 @@ import androidx.room.PrimaryKey
     tableName = "forensic_timeline",
     indices = [
         Index("startTimestamp"),
-        Index("severity"),
         Index("packageName"),
         Index("source"),
         Index("kind"),
@@ -26,7 +25,6 @@ data class ForensicTimelineEvent(
     val category: String,
     val description: String,
     val details: String = "",
-    val severity: String,
     val packageName: String = "",
     val appName: String = "",
     val processUid: Int = -1,

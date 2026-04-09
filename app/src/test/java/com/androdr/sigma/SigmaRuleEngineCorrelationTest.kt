@@ -106,7 +106,6 @@ class SigmaRuleEngineCorrelationTest {
             kind = "event",
             category = category,
             source = "test",
-            description = "test",
-            severity = "info"
+            description = "test"
         )
 }

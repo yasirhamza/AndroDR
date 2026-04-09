@@ -57,7 +57,6 @@ class PackageLifecycleReceiver : BroadcastReceiver() {
                     source = "package_lifecycle",
                     category = category,
                     description = "App $verb: $displayName",
-                    severity = "INFO",
                     packageName = pkg,
                     appName = appLabel,
                     telemetrySource = com.androdr.data.model.TelemetrySource.LIVE_SCAN

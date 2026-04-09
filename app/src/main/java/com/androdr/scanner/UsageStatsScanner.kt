@@ -123,7 +123,6 @@ class UsageStatsScanner @Inject constructor(
             source = "usage_stats",
             category = category,
             description = "App $verb: $appLabel",
-            severity = "INFO",
             packageName = packageName,
             appName = appLabel,
             telemetrySource = com.androdr.data.model.TelemetrySource.LIVE_SCAN
