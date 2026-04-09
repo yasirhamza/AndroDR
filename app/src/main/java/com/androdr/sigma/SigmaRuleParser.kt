@@ -5,6 +5,15 @@ import org.snakeyaml.engine.v2.api.Load
 import org.snakeyaml.engine.v2.api.LoadSettings
 import android.util.Log
 
+/**
+ * Thrown when a SIGMA rule document contains a required-field violation that must
+ * surface loudly to the developer (e.g. missing or invalid 'category').  Unlike a
+ * generic parse failure, this exception is NOT swallowed by the outer try/catch
+ * in [SigmaRuleParser.parse] / [SigmaRuleParser.parseAll] — it propagates to the
+ * caller so that bundled rules with bad metadata are impossible to ship silently.
+ */
+class SigmaRuleParseException(message: String) : RuntimeException(message)
+
 object SigmaRuleParser {
 
     private const val TAG = "SigmaRuleParser"
@@ -111,6 +120,8 @@ object SigmaRuleParser {
             val load = Load(settings)
             val doc = load.loadFromString(yamlContent) as? Map<String, Any> ?: return null
             parseDocument(doc)
+        } catch (e: SigmaRuleParseException) {
+            throw e
         } catch (e: Exception) {
             Log.w(TAG, "Failed to parse SIGMA rule: ${e.message}")
             null
@@ -124,6 +135,8 @@ object SigmaRuleParser {
             load.loadAllFromString(yamlContent)
                 .filterIsInstance<Map<String, Any>>()
                 .mapNotNull { parseDocument(it) }
+        } catch (e: SigmaRuleParseException) {
+            throw e
         } catch (e: Exception) {
             Log.w(TAG, "Failed to parse SIGMA rules: ${e.message}")
             emptyList()
@@ -140,15 +153,19 @@ object SigmaRuleParser {
             val level = doc["level"]?.toString() ?: "medium"
 
             val categoryString = doc["category"] as? String
-                ?: error("Rule $ruleId is missing required 'category' field. " +
-                         "Must declare 'category: incident' or 'category: device_posture'. " +
-                         "See docs/detection-rules-catalog.md for the categorization principle.")
+                ?: throw SigmaRuleParseException(
+                    "Rule $ruleId is missing required 'category' field. " +
+                    "Must declare 'category: incident' or 'category: device_posture'. " +
+                    "See docs/detection-rules-catalog.md for the categorization principle."
+                )
 
             val category = when (categoryString.lowercase()) {
                 "incident" -> RuleCategory.INCIDENT
                 "device_posture" -> RuleCategory.DEVICE_POSTURE
-                else -> error("Rule $ruleId has invalid category '$categoryString'. " +
-                              "Must be 'incident' or 'device_posture'.")
+                else -> throw SigmaRuleParseException(
+                    "Rule $ruleId has invalid category '$categoryString'. " +
+                    "Must be 'incident' or 'device_posture'."
+                )
             }
 
             val enabled = (doc["enabled"] as? Boolean) ?: true
@@ -169,6 +186,8 @@ object SigmaRuleParser {
                 display = parseDisplay(doc["display"] as? Map<*, *>),
                 enabled = enabled
             )
+        } catch (e: SigmaRuleParseException) {
+            throw e
         } catch (e: Exception) {
             Log.w(TAG, "Failed to parse SIGMA document: ${e.message}")
             null
