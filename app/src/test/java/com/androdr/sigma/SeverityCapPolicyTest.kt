@@ -55,4 +55,21 @@ class SeverityCapPolicyTest {
         assertEquals("medium", SeverityCapPolicy.applyCap(RuleCategory.DEVICE_POSTURE, "CRITICAL"))
         assertEquals("medium", SeverityCapPolicy.applyCap(RuleCategory.DEVICE_POSTURE, "High"))
     }
+
+    @Test
+    fun `unknown severity value passes through unchanged`() {
+        assertEquals("bogus", SeverityCapPolicy.applyCap(RuleCategory.DEVICE_POSTURE, "bogus"))
+        assertEquals("bogus", SeverityCapPolicy.applyCap(RuleCategory.INCIDENT, "bogus"))
+    }
+
+    @Test
+    fun `empty severity string passes through unchanged`() {
+        assertEquals("", SeverityCapPolicy.applyCap(RuleCategory.DEVICE_POSTURE, ""))
+    }
+
+    @Test
+    fun `incident category lowercases input`() {
+        assertEquals("critical", SeverityCapPolicy.applyCap(RuleCategory.INCIDENT, "CRITICAL"))
+        assertEquals("high", SeverityCapPolicy.applyCap(RuleCategory.INCIDENT, "High"))
+    }
 }
