@@ -13,10 +13,12 @@ class SigmaRuleEvaluatorTest {
         service: String = "app_scanner",
         selections: Map<String, SigmaSelection>,
         condition: String = "selection",
-        level: String = "high"
+        level: String = "high",
+        category: RuleCategory = RuleCategory.INCIDENT,
     ) = SigmaRule(
         id = id, title = "Test", status = "production", description = "",
         product = "androdr", service = service, level = level,
+        category = category,
         tags = emptyList(), detection = SigmaDetection(selections, condition),
         falsepositives = emptyList(), remediation = listOf("Fix it"),
         display = SigmaDisplay(category = if (service == "device_auditor") "device_posture" else "app_risk")

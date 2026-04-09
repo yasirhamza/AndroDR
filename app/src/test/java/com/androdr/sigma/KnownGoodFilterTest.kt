@@ -10,7 +10,7 @@ class KnownGoodFilterTest {
         val rule = SigmaRule(
             id = "test-065", title = "Test", status = "production",
             description = "", product = "androdr", service = "appops_audit",
-            level = "medium", tags = emptyList(),
+            level = "medium", category = RuleCategory.INCIDENT, tags = emptyList(),
             detection = SigmaDetection(
                 selections = mapOf(
                     "selection" to SigmaSelection(listOf(

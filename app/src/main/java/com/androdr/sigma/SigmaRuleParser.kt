@@ -136,19 +136,38 @@ object SigmaRuleParser {
             val logsource = doc["logsource"] as? Map<*, *> ?: return null
             val detectionMap = doc["detection"] as? Map<*, *> ?: return null
 
+            val ruleId = doc["id"]?.toString() ?: return null
+            val level = doc["level"]?.toString() ?: "medium"
+
+            val categoryString = doc["category"] as? String
+                ?: error("Rule $ruleId is missing required 'category' field. " +
+                         "Must declare 'category: incident' or 'category: device_posture'. " +
+                         "See docs/detection-rules-catalog.md for the categorization principle.")
+
+            val category = when (categoryString.lowercase()) {
+                "incident" -> RuleCategory.INCIDENT
+                "device_posture" -> RuleCategory.DEVICE_POSTURE
+                else -> error("Rule $ruleId has invalid category '$categoryString'. " +
+                              "Must be 'incident' or 'device_posture'.")
+            }
+
+            val enabled = (doc["enabled"] as? Boolean) ?: true
+
             SigmaRule(
-                id = doc["id"]?.toString() ?: return null,
+                id = ruleId,
                 title = doc["title"]?.toString() ?: "",
                 status = doc["status"]?.toString() ?: "experimental",
                 description = doc["description"]?.toString() ?: "",
                 product = logsource["product"]?.toString() ?: "",
                 service = logsource["service"]?.toString() ?: "",
-                level = doc["level"]?.toString() ?: "medium",
+                level = level,
+                category = category,
                 tags = (doc["tags"] as? List<*>)?.map { it.toString() } ?: emptyList(),
                 detection = parseDetection(detectionMap),
                 falsepositives = (doc["falsepositives"] as? List<*>)?.map { it.toString() } ?: emptyList(),
                 remediation = (doc["remediation"] as? List<*>)?.map { it.toString() } ?: emptyList(),
-                display = parseDisplay(doc["display"] as? Map<*, *>)
+                display = parseDisplay(doc["display"] as? Map<*, *>),
+                enabled = enabled
             )
         } catch (e: Exception) {
             Log.w(TAG, "Failed to parse SIGMA document: ${e.message}")

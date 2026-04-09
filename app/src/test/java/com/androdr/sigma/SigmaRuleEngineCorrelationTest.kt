@@ -66,7 +66,11 @@ class SigmaRuleEngineCorrelationTest {
         assertEquals(emptySet<String>(), bindings[3])
     }
 
-    private fun atomRule(id: String, category: String): SigmaRule = SigmaRule(
+    private fun atomRule(
+        id: String,
+        category: String,
+        ruleCategory: RuleCategory = RuleCategory.INCIDENT,
+    ): SigmaRule = SigmaRule(
         id = id,
         title = id,
         status = "production",
@@ -74,6 +78,7 @@ class SigmaRuleEngineCorrelationTest {
         product = "androdr",
         service = "timeline",
         level = "informational",
+        category = ruleCategory,
         tags = emptyList(),
         detection = SigmaDetection(
             selections = mapOf(
