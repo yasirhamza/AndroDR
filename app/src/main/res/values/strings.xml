@@ -143,7 +143,6 @@
 
     <!-- Bug Report — externalized -->
     <string name="bugreport_rule_findings">Rule-Based Findings</string>
-    <string name="bugreport_pattern_findings">Pattern Scan Findings</string>
     <!-- PluralsCandidate: shorthand for finding count display -->
     <string name="bugreport_finding_count" tools:ignore="PluralsCandidate">%1$d finding(s)</string>
     <string name="bugreport_timeline_count" tools:ignore="PluralsCandidate">Timeline (%1$d events)</string>
