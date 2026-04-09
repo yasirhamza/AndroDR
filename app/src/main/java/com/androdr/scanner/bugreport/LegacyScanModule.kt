@@ -23,12 +23,6 @@ class LegacyScanModule @Inject constructor() : BugreportModule {
 
     // ── IOC regex patterns ────────────────────────────────────────────────────
 
-    /** Matches log lines that suggest a periodic C2 beacon (HTTP POST loop pattern). */
-    private val c2BeaconRegex = Regex(
-        """HTTP.*POST.*every\s+[0-9]+""",
-        RegexOption.IGNORE_CASE
-    )
-
     /** Matches a fatal crash exception line in logcat output. */
     private val fatalExceptionRegex = Regex(
         """FATAL EXCEPTION:\s*(\S+)""",
@@ -118,18 +112,6 @@ class LegacyScanModule @Inject constructor() : BugreportModule {
 
                 @Suppress("UNUSED_VARIABLE")
                 val iocHitOnLineRetained = iocHitOnLine
-
-                // ── C2 beacon patterns ───────────────────────────────────
-                if (c2BeaconRegex.containsMatchIn(line)) {
-                    findings.add(
-                        BugReportFinding(
-                            severity = "CRITICAL",
-                            category = "C2Beacon",
-                            description = "Potential C2 beacon pattern in $entryName at line $lineNumber: " +
-                                line.take(200).trim()
-                        )
-                    )
-                }
 
                 // ── Crash loops ──────────────────────────────────────────
                 val crashMatch = fatalExceptionRegex.find(line)
