@@ -3,8 +3,15 @@ package com.androdr.scanner
 import android.content.Context
 import android.net.Uri
 import android.util.Log
+import com.androdr.data.model.BatteryDailyEvent
+import com.androdr.data.model.DatabasePathObservation
 import com.androdr.data.model.ForensicTimelineEvent
+import com.androdr.data.model.PackageInstallHistoryEntry
+import com.androdr.data.model.PlatformCompatChange
+import com.androdr.data.model.SystemPropertySnapshot
 import com.androdr.data.model.TimelineEvent
+import com.androdr.data.model.TombstoneEvent
+import com.androdr.data.model.WakelockAcquisition
 import com.androdr.ioc.IndicatorResolver
 import com.androdr.scanner.bugreport.BugreportModule
 import com.androdr.scanner.bugreport.DumpsysSectionParser
@@ -37,11 +44,33 @@ class BugReportAnalyzer @Inject constructor(
         val description: String
     )
 
+    /**
+     * Telemetry collected from bugreport modules that does not yet have a
+     * SIGMA rule to evaluate it. Plan 6 adds the rules and wires the
+     * corresponding `SigmaRuleEngine.evaluate*` calls on these fields.
+     *
+     * Plan 5 populates this bundle lazily — for now the lists are empty
+     * because no module in plan 5 produces typed telemetry of these
+     * shapes. The field exists so plan 6 can wire parsers
+     * (TombstoneParser, WakelockParser, BatteryDailyParser, etc.) into
+     * the analyzer without another data class change.
+     */
+    data class TelemetryBundle(
+        val tombstoneEvents: List<TombstoneEvent> = emptyList(),
+        val wakelockAcquisitions: List<WakelockAcquisition> = emptyList(),
+        val batteryDailyEvents: List<BatteryDailyEvent> = emptyList(),
+        val packageInstallHistory: List<PackageInstallHistoryEntry> = emptyList(),
+        val platformCompatChanges: List<PlatformCompatChange> = emptyList(),
+        val databasePathObservations: List<DatabasePathObservation> = emptyList(),
+        val systemPropertySnapshots: List<SystemPropertySnapshot> = emptyList(),
+    )
+
     data class BugReportAnalysisResult(
         val findings: List<Finding>,
         val legacyFindings: List<BugReportFinding>,
         val timeline: List<TimelineEvent>,
-        val forensicEvents: List<ForensicTimelineEvent> = emptyList()
+        val forensicEvents: List<ForensicTimelineEvent> = emptyList(),
+        val telemetryBundle: TelemetryBundle = TelemetryBundle(),
     )
 
     private val sectionParser = DumpsysSectionParser()
