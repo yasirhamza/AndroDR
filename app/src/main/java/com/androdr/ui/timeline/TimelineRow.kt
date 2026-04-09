@@ -73,7 +73,13 @@ sealed interface TimelineRow {
         val finding: Finding,
         val anchorEvent: ForensicTimelineEvent? = null,
     ) : TimelineRow {
+        /**
+         * Timestamp sourced from the anchor event when one exists; otherwise
+         * [Long.MAX_VALUE] so anchorless findings sort to the end of the
+         * timeline (most recent) deterministically. Use an anchor event when
+         * possible for better chronological placement.
+         */
         override val timestamp: Long
-            get() = anchorEvent?.startTimestamp ?: System.currentTimeMillis()
+            get() = anchorEvent?.startTimestamp ?: Long.MAX_VALUE
     }
 }

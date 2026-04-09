@@ -111,9 +111,13 @@ fun TimelineEventCard(
  * used by the flat `TimelineRow` rendering path.
  */
 @Composable
-fun TelemetryCard(row: TimelineRow.TelemetryRow, modifier: Modifier = Modifier) {
+fun TelemetryCard(
+    row: TimelineRow.TelemetryRow,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit = {},
+) {
     Box(modifier = modifier) {
-        TimelineEventCard(event = row.event, onClick = {})
+        TimelineEventCard(event = row.event, onClick = onClick)
     }
 }
 

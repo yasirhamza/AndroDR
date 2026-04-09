@@ -501,7 +501,7 @@ fun TimelineScreen(
                         // branch is updated.
                         when (row) {
                             is TimelineRow.FindingRow -> FindingCard(row)
-                            is TimelineRow.TelemetryRow -> TelemetryCard(row)
+                            is TimelineRow.TelemetryRow -> TelemetryCard(row, onClick = { selectedEvent = row.event })
                         }
                     }
                 }
