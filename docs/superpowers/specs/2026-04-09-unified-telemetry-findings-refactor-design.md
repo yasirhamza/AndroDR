@@ -240,22 +240,15 @@ After the refactor: a telemetry producer. It parses the bugreport file into tele
 
 ### Finding type field list
 
-`Finding` gets no new fields in this refactor. Its current shape is sufficient:
+`Finding` keeps its existing shape. Its `FindingCategory` (`DEVICE_POSTURE` / `APP_RISK` / `NETWORK`) stays as-is — it drives **UI display and scoring** (which screen shows the finding, how `ScanResult` buckets it for the risk score) and must not be confused with the new policy-level rule category introduced in §6.
 
-```kotlin
-data class Finding(
-    val ruleId: String,
-    val level: Severity,
-    val category: FindingCategory,     // NEW: populated from rule category:
-    val title: String,
-    val description: String,
-    val evidence: Evidence,
-    val remediation: List<String>,
-    val createdAt: Long,
-)
-```
+### Finding category vs. rule category — a critical distinction
 
-The one change: `category` becomes a typed enum (`FindingCategory.INCIDENT` / `FindingCategory.DEVICE_POSTURE`) sourced from the rule's `category:` field, rather than a free-form string from `display.category`. See §6 for enforcement.
+**`FindingCategory`** (existing enum, unchanged): `DEVICE_POSTURE`, `APP_RISK`, `NETWORK`. Populated from each rule's `display.category:` YAML field. Used only for UI display and scoring logic in `ScanResult.kt`, `AppScanViewModel`, `DeviceAuditViewModel`, and `TimelineAdapter`. **Not touched by this refactor.**
+
+**`RuleCategory`** (new enum, introduced by §6): `INCIDENT`, `DEVICE_POSTURE`. Populated from each rule's new top-level `category:` YAML field. Used only for policy enforcement (severity cap, correlation propagation) in `SeverityCapPolicy` and `SigmaCorrelationEngine`.
+
+**The two are orthogonal.** An `APP_RISK` finding produced by an `incident`-class rule is perfectly normal — it's shown on the Apps screen (FindingCategory) and is uncapped (RuleCategory). A `DEVICE_POSTURE` finding produced by a `device_posture`-class rule is likewise normal — shown on the Device screen and capped at MEDIUM. The naming overlap (`DEVICE_POSTURE` exists in both enums) is unfortunate but harmless because the two enums live in different namespaces and are used in different call paths.
 
 ### No `source` field on Finding
 
@@ -263,9 +256,11 @@ The telemetry layer carries `source: TelemetrySource`. Findings do not. Rational
 
 ---
 
-## 6. Severity Caps by Finding Category
+## 6. Severity Caps by Rule Category
 
 This is the section most important to prevent future erosion. It gets its own load-bearing treatment.
+
+**Terminology reminder (see §5):** this section concerns `RuleCategory` — the new policy-level enum introduced by this refactor — not `FindingCategory` (the existing UI/scoring enum). Rules declare `category:` in their YAML. The engine uses that declaration to cap severity and propagate correlation classification. `FindingCategory` is untouched.
 
 ### The policy
 
@@ -304,28 +299,36 @@ In `SigmaRuleEngine`:
 
 ```kotlin
 object SeverityCapPolicy {
-    // Map of category → maximum permitted finding level.
+    // Map of rule category → maximum permitted finding severity.
     // See docs/superpowers/specs/2026-04-09-unified-telemetry-findings-refactor-design.md §6
-    // for why device_posture is capped at MEDIUM.
-    val CATEGORY_CAPS: Map<FindingCategory, Severity> = mapOf(
-        FindingCategory.DEVICE_POSTURE to Severity.MEDIUM,
+    // for why device_posture is capped at medium.
+    private val caps: Map<RuleCategory, String> = mapOf(
+        RuleCategory.DEVICE_POSTURE to "medium",
     )
 
-    fun applyCap(category: FindingCategory, declared: Severity): Severity =
-        CATEGORY_CAPS[category]?.let { cap -> minOf(declared, cap) } ?: declared
+    fun applyCap(category: RuleCategory, declared: String): String {
+        // see plan 1 for the full implementation with severity ordering
+        // and case-insensitive handling
+    }
 }
 ```
 
-Every `Finding` produced by the engine passes through `SeverityCapPolicy.applyCap()`. The cap is applied at construction time — downstream code never sees a device_posture finding above MEDIUM.
+Every `Finding` produced by the engine passes through `SeverityCapPolicy.applyCap(rule.category, rule.level)`. The cap is applied at `buildFinding()` time — downstream code never sees a device_posture finding above `medium`. Note that the cap reads `rule.category` (the new `RuleCategory` field), not `finding.category` (the existing `FindingCategory` used for UI display).
 
-For correlation findings, `SigmaCorrelationEngine` computes the effective category via the propagation rule before applying the cap:
+For correlation findings, `SigmaCorrelationEngine` computes the effective rule category via the propagation rule before applying the cap:
 
 ```kotlin
-fun effectiveCategory(memberRules: List<SigmaRule>): FindingCategory =
-    if (memberRules.any { it.category == FindingCategory.INCIDENT }) {
-        FindingCategory.INCIDENT
+fun computeEffectiveCategory(
+    referencedRuleIds: List<String>,
+    atomRulesById: Map<String, SigmaRule>,
+): RuleCategory {
+    val knownCategories = referencedRuleIds
+        .mapNotNull { atomRulesById[it]?.category }
+    if (knownCategories.isEmpty()) return RuleCategory.INCIDENT  // safe default
+    return if (knownCategories.any { it == RuleCategory.INCIDENT }) {
+        RuleCategory.INCIDENT
     } else {
-        FindingCategory.DEVICE_POSTURE
+        RuleCategory.DEVICE_POSTURE
     }
 ```
 
@@ -348,27 +351,20 @@ The SIGMA rule parser (`SigmaRuleParser`) is updated to:
 
 ### Migration of existing rules
 
-All 24 rules bundled in `app/src/main/res/raw/sigma_androdr_*.yml` need a `category:` field added. The authoritative mapping is:
+All bundled rules in `app/src/main/res/raw/sigma_androdr_*.yml` need a top-level `category:` field added. A full audit (post-spec) identified the actual bundled rule count:
 
-**`incident` (16 rules):** 001, 002, 003, 004, 005, 010, 011, 012, 013, 014, 015, 016, 017, 018, 020, 030.
+- **Detection rules (34):** 001, 002, 003, 004, 005, 010, 011, 012, 013, 014, 015, 016, 017, 018, 020, 040, 041, 042, 043, 044, 045, 046, 047, 048, 049, 050, 060, 061, 062, 063, 064, 065, 067, 068.
+- **Atom rules (5):** atom_app_launch, atom_device_admin_grant, atom_dns_lookup, atom_package_install, atom_permission_use.
+- **Correlation rules (4):** corr_001, corr_002, corr_003, corr_004 — do **not** get a top-level `category:` field (their effective category is computed at evaluation time from member rule categories).
 
-**`device_posture` (8 rules, all severity → MEDIUM):** 040, 041, 042, 043, 044, 045, 046, 047.
+**Authoritative category assignment:**
 
-Seven of the eight posture rules currently declare severity HIGH or CRITICAL and must be downgraded to MEDIUM in their YAML files as part of this refactor:
+- **`incident` (23 detection + 5 atom = 28 rules):** 001–005 (IOC), 010–018 (app behavior), 020 (spyware artifact), 060, 061, 062, 063, 064, 065, 067, 068 (receivers, appops, notification listener, hidden launcher), plus all 5 atom rules.
+- **`device_posture` (11 rules, all severity clamped to `medium` or below):** 040, 041, 042, 043, 044, 045, 046, 047, 048, 049, 050.
 
-| Rule | Current | New |
-|---|---|---|
-| 040 USB debugging enabled | HIGH | MEDIUM |
-| 042 Unknown sources enabled | HIGH | MEDIUM |
-| 043 No screen lock | CRITICAL | MEDIUM |
-| 044 Stale security patch | HIGH | MEDIUM |
-| 045 Bootloader unlocked | CRITICAL | MEDIUM |
-| 046 Wireless ADB enabled | HIGH | MEDIUM |
-| 047 CVE exploit vulnerability | CRITICAL | MEDIUM |
+Any posture rule currently declaring `level: high` or `level: critical` is downgraded to `level: medium` as part of this refactor. The exact list depends on the current YAML state, inspected per-file during plan 1 execution.
 
-Rule 041 (Developer Options) already declares MEDIUM.
-
-The catalog doc (`docs/detection-rules-catalog.md`) already reflects these values — it was updated in the pre-refactor cleanup commit `bb7d149`. The YAML files themselves must be updated in this refactor PR.
+The catalog doc (`docs/detection-rules-catalog.md`) was updated in the pre-refactor cleanup commit `bb7d149` with the category assignments and severity downgrades. The YAML files themselves are updated in plan 1 (see `docs/superpowers/plans/2026-04-09-refactor-01-rule-engine-foundation.md`, phase C).
 
 ---
 
