@@ -217,8 +217,8 @@ Update this table as execution progresses.
 
 | Plan | Written | Executed | Notes |
 |---|---|---|---|
-| 1 | ✅ `7635631` | ✅ `fd96d54..3aa3bef` (14 commits) | Approved for plan 2. See "Items flagged" below. |
-| 2 | ⏳ | — | — |
+| 1 | ✅ `7635631` | ✅ `fd96d54..3aa3bef` (14 commits) | Approved for plan 2. Items 1-5 addressed in plan 2. |
+| 2 | ✅ `10dcd6e` | ✅ `25a509e..a6f9f42` (11 commits) | All 5 plan 1 follow-ups addressed. Ready for plan 3. |
 | 3 | ⏳ | — | — |
 | 4 | ⏳ | — | — |
 | 5 | ⏳ | — | — |
