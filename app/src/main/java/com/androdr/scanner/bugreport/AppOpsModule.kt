@@ -13,7 +13,12 @@ class AppOpsModule @Inject constructor() : BugreportModule {
 
     override val targetSections: List<String> = listOf("appops")
 
-    private val dangerousOps = setOf(
+    // Parser scope: which ops to enumerate from dumpsys appops. This is NOT
+    // a detection filter — severity and rule-based filtering live in SIGMA
+    // YAML (plan 6). The list is kept here only to bound telemetry volume;
+    // a future plan will move it to a YAML resource so it can be updated
+    // without a code change.
+    private val enumeratedOps = setOf(
         "CAMERA", "RECORD_AUDIO", "READ_SMS", "RECEIVE_SMS", "SEND_SMS",
         "READ_CONTACTS", "READ_CALL_LOG", "ACCESS_FINE_LOCATION",
         "READ_EXTERNAL_STORAGE", "REQUEST_INSTALL_PACKAGES"
@@ -46,14 +51,14 @@ class AppOpsModule @Inject constructor() : BugreportModule {
         var isSystemUid = true
         var currentPackage: String? = null
         var currentOp: String? = null
-        var isDangerousOp = false
+        var isEnumeratedOp = false
         var lastAccessTime: String? = null
         var lastRejectTime: String? = null
 
         fun emitCurrentOp() {
             val pkg = currentPackage ?: return
             val op = currentOp ?: return
-            if (!isDangerousOp) return
+            if (!isEnumeratedOp) return
 
             val normalizedOp = "android:${op.lowercase()}"
             // Parse the last-access time once so we can share it between the
@@ -70,6 +75,7 @@ class AppOpsModule @Inject constructor() : BugreportModule {
                 "last_reject_time" to (lastRejectTime ?: ""),
                 "access_count" to 1,
                 "is_system_app" to isSystemUid,
+                "source" to "bugreport_import",
                 // Convention: any bug-report telemetry record that knows a
                 // real per-event timestamp publishes it under `event_time_ms`
                 // (epoch ms). SIGMA findings derived from this record
@@ -88,7 +94,10 @@ class AppOpsModule @Inject constructor() : BugreportModule {
                     category = "permission_use",
                     description = "$pkg used $op" +
                         (lastAccessTime?.let { " at $it" } ?: ""),
-                    severity = if (op == "REQUEST_INSTALL_PACKAGES") "HIGH" else "INFO",
+                    // Severity is not assigned here; rule engine findings derived
+                    // from the emitted telemetry carry their own severity via
+                    // SIGMA YAML. Timeline events for raw ops default to INFO.
+                    severity = "INFO",
                     // Carried so the ScanOrchestrator dedup pass can match
                     // this raw event against any SIGMA finding that fired
                     // on the same (package, timestamp) tuple and drop the
@@ -110,7 +119,7 @@ class AppOpsModule @Inject constructor() : BugreportModule {
                 isSystemUid = currentUid < FIRST_APPLICATION_UID
                 currentPackage = null
                 currentOp = null
-                isDangerousOp = false
+                isEnumeratedOp = false
                 lastAccessTime = null
                 lastRejectTime = null
                 return@forEach
@@ -122,7 +131,7 @@ class AppOpsModule @Inject constructor() : BugreportModule {
                 emitCurrentOp()
                 currentPackage = pkgMatch.groupValues[1]
                 currentOp = null
-                isDangerousOp = false
+                isEnumeratedOp = false
                 lastAccessTime = null
                 lastRejectTime = null
                 return@forEach
@@ -134,15 +143,15 @@ class AppOpsModule @Inject constructor() : BugreportModule {
                 if (opMatch != null) {
                     emitCurrentOp()
                     currentOp = opMatch.groupValues[1]
-                    isDangerousOp = currentOp in dangerousOps
+                    isEnumeratedOp = currentOp in enumeratedOps
                     lastAccessTime = null
                     lastRejectTime = null
                     return@forEach
                 }
             }
 
-            // Check for Access/Reject lines (only if we're tracking a dangerous op)
-            if (isDangerousOp) {
+            // Check for Access/Reject lines (only if we're tracking this op)
+            if (isEnumeratedOp) {
                 if (lastAccessTime == null && line.contains("Access:")) {
                     lastAccessTime = accessLineRegex.find(line)?.groupValues?.get(1)
                 }
