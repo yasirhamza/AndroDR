@@ -4,7 +4,8 @@ data class ProcessTelemetry(
     val processName: String,
     val processUid: Int,
     val packageName: String?,
-    val isForeground: Boolean
+    val isForeground: Boolean,
+    val source: TelemetrySource,
 ) {
     fun toFieldMap(): Map<String, Any?> = mapOf(
         "process_name" to processName,
