@@ -333,6 +333,12 @@ class SigmaRuleEngine @Inject constructor(
             R.raw.sigma_androdr_065_appops_install_packages,
             R.raw.sigma_androdr_067_notification_listener,
             R.raw.sigma_androdr_068_hidden_launcher,
+            R.raw.sigma_androdr_071_crash_loop_anti_forensics,
+            R.raw.sigma_androdr_072_persistent_wakelock,
+            R.raw.sigma_androdr_073_battery_daily_pattern,
+            R.raw.sigma_androdr_074_package_install_history_pattern,
+            R.raw.sigma_androdr_075_platform_compat_override,
+            R.raw.sigma_androdr_076_database_path_access,
             // Atom rules — pass-through matchers for raw timeline event categories.
             // Referenced by sprint-75 correlation rules (Task 9); tagged
             // level: informational so they are filtered out of the user-facing

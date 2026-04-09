@@ -1,0 +1,27 @@
+title: Platform compat override pattern requires further rules
+id: androdr-075
+status: experimental
+description: >
+    Placeholder: PlatformCompatChange telemetry reaches the rule engine via
+    evaluatePlatformCompat(). Detection logic TBD by #87 follow-ups.
+author: AndroDR
+date: 2026-04-09
+tags:
+    - attack.t1562
+logsource:
+    product: androdr
+    service: platform_compat
+detection:
+    selection:
+        source|contains: "BUGREPORT"
+    condition: selection
+enabled: false
+category: incident
+level: low
+display:
+    category: device_posture
+    icon: bug_report
+    triggered_title: "Platform compat change observed"
+    evidence_type: none
+remediation:
+    - "Placeholder rule; no remediation defined."
