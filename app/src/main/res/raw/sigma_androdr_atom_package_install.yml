@@ -12,5 +12,6 @@ detection:
         category: package_install
     condition: selection
 level: informational
+category: incident
 display:
     suppress_finding: true

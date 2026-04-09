@@ -19,6 +19,7 @@ detection:
         is_sideloaded: true
     condition: selection
 level: high
+category: incident
 display:
     category: app_risk
     icon: notifications

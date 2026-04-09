@@ -23,6 +23,7 @@ detection:
             - Settings
     condition: selection_untrusted and selection_name
 level: high
+category: incident
 display:
     category: app_risk
     icon: masks

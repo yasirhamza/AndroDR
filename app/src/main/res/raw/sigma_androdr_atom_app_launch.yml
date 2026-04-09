@@ -12,5 +12,6 @@ detection:
         category: app_foreground
     condition: selection
 level: informational
+category: incident
 display:
     suppress_finding: true

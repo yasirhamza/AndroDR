@@ -16,6 +16,7 @@ detection:
         is_system_app: true
     condition: selection and not filter_system_app
 level: critical
+category: incident
 display:
     category: app_risk
     icon: warning

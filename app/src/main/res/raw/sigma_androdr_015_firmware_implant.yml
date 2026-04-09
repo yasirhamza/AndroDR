@@ -15,6 +15,7 @@ detection:
         is_known_oem_app: false
     condition: selection
 level: high
+category: incident
 display:
     category: app_risk
     icon: memory

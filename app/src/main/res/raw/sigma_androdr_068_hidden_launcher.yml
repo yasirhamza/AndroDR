@@ -23,6 +23,7 @@ detection:
         from_trusted_store: true
     condition: selection and not filter_known_good and not filter_trusted_store
 level: high
+category: incident
 display:
     category: app_risk
     icon: visibility_off
