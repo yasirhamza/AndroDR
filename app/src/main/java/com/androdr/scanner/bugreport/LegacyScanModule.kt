@@ -23,12 +23,6 @@ class LegacyScanModule @Inject constructor() : BugreportModule {
 
     // ── IOC regex patterns ────────────────────────────────────────────────────
 
-    /** Matches process names associated with known spyware / stalkerware families. */
-    private val spywareProcessRegex = Regex(
-        """pegasus|spyware|flexispy|mspy|cerberus|droiddream|BIGPRETZEL|graphite""",
-        RegexOption.IGNORE_CASE
-    )
-
     /** Matches a suspicious base64 blob of 100+ characters appearing on a single log line. */
     private val base64BlobRegex = Regex(
         """[A-Za-z0-9+/]{100,}={0,2}"""
@@ -127,21 +121,8 @@ class LegacyScanModule @Inject constructor() : BugreportModule {
                     }
                 }
 
-                if (!iocHitOnLine) {
-                    // ── Spyware/stalkerware process names ────────────────────
-                    val spyMatch = spywareProcessRegex.find(line)
-                    if (spyMatch != null) {
-                        findings.add(
-                            BugReportFinding(
-                                severity = "CRITICAL",
-                                category = "KnownMalware",
-                                description = "Known spyware/stalkerware keyword '${spyMatch.value}' " +
-                                    "detected in $entryName at line $lineNumber: " +
-                                    line.take(200).trim()
-                            )
-                        )
-                    }
-                }
+                @Suppress("UNUSED_VARIABLE")
+                val iocHitOnLineRetained = iocHitOnLine
 
                 // ── Suspicious base64 blobs ──────────────────────────────
                 val b64Match = base64BlobRegex.find(line)
