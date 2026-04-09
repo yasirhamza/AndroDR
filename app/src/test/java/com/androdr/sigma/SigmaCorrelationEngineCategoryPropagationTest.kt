@@ -56,7 +56,7 @@ class SigmaCorrelationEngineCategoryPropagationTest {
     }
 
     @Test
-    fun `correlation referencing unknown rule defaults safely to INCIDENT`() {
+    fun `correlation with one known and one unknown member uses category from known`() {
         val atoms = mapOf(
             "atom-1" to makeAtomRule("atom-1", RuleCategory.DEVICE_POSTURE),
         )
