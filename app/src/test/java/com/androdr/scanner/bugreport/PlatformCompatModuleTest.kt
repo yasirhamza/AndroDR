@@ -26,7 +26,9 @@ class PlatformCompatModuleTest {
     }
 
     @Test
-    fun `detects DOWNSCALED compat override`() = runBlocking {
+    fun `emits compat override telemetry regardless of ChangeId`() = runBlocking {
+        // Hardcoded CHANGE_ID_DOWNSCALED filter removed. SIGMA rules in plan 6
+        // match the ChangeId themselves and decide severity.
         val section = """
             Compat overrides:
               168419799, {packageName=com.suspicious.app, enabled=true}
@@ -34,20 +36,19 @@ class PlatformCompatModuleTest {
 
         val result = module.analyze(section, mockIndicatorResolver)
         assertTrue(result.telemetry.any {
-            it["package_name"] == "com.suspicious.app" &&
-                it["is_downscaled"] == true
+            it["package_name"] == "com.suspicious.app" && it["change_id"] == "168419799"
         })
     }
 
     @Test
-    fun `ignores non-DOWNSCALED overrides`() = runBlocking {
+    fun `emits telemetry for arbitrary ChangeIds`() = runBlocking {
         val section = """
             Compat overrides:
               999999999, {packageName=com.normal.app, enabled=true}
         """.trimIndent()
 
         val result = module.analyze(section, mockIndicatorResolver)
-        assertTrue(result.telemetry.isEmpty())
+        assertTrue(result.telemetry.any { it["change_id"] == "999999999" })
     }
 
     @Test
