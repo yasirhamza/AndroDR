@@ -450,9 +450,7 @@ class ScanOrchestrator @Inject constructor(
             id = now,
             timestamp = now,
             findings = result.findings,
-            bugReportFindings = result.legacyFindings.map {
-                "${it.severity} | ${it.category} | ${it.description}"
-            },
+            bugReportFindings = emptyList(),
             riskySideloadCount = 0,
             knownMalwareCount = result.findings.count {
                 it.level == "critical" && it.ruleId in KNOWN_MALWARE_RULE_IDS

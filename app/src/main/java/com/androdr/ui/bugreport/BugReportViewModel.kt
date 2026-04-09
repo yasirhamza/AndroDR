@@ -7,7 +7,6 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.androdr.data.model.TimelineEvent
 import com.androdr.reporting.TimelineFormatter
-import com.androdr.scanner.BugReportAnalyzer
 import com.androdr.scanner.ScanOrchestrator
 import com.androdr.sigma.Finding
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -32,9 +31,6 @@ class BugReportViewModel @Inject constructor(
 
     private val _findings = MutableStateFlow<List<Finding>>(emptyList())
     val findings: StateFlow<List<Finding>> = _findings.asStateFlow()
-
-    private val _legacyFindings = MutableStateFlow<List<BugReportAnalyzer.BugReportFinding>>(emptyList())
-    val legacyFindings: StateFlow<List<BugReportAnalyzer.BugReportFinding>> = _legacyFindings.asStateFlow()
 
     private val _timeline = MutableStateFlow<List<TimelineEvent>>(emptyList())
     val timeline: StateFlow<List<TimelineEvent>> = _timeline.asStateFlow()
@@ -81,18 +77,16 @@ class BugReportViewModel @Inject constructor(
 
     /**
      * Analyzes the bug report zip at the given [uri].
-     * Updates [isAnalyzing], [findings], [legacyFindings], and [timeline] reactively.
+     * Updates [isAnalyzing], [findings], and [timeline] reactively.
      */
     fun analyzeUri(uri: Uri) {
         viewModelScope.launch {
             _isAnalyzing.value = true
             _findings.value = emptyList()
-            _legacyFindings.value = emptyList()
             _timeline.value = emptyList()
             try {
                 val result = orchestrator.analyzeBugReport(uri)
                 _findings.value = result.findings
-                _legacyFindings.value = result.legacyFindings
                 _timeline.value = result.timeline
             } finally {
                 _isAnalyzing.value = false
@@ -119,7 +113,6 @@ class BugReportViewModel @Inject constructor(
                     .filterValues { it.isNotEmpty() }
                 val text = TimelineFormatter.formatTimeline(
                     _timeline.value,
-                    _legacyFindings.value,
                     _findings.value,
                     hashByPkg,
                     displayNames

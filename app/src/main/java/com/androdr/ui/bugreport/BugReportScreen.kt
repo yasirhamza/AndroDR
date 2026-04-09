@@ -53,7 +53,6 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.androdr.R
-import com.androdr.scanner.BugReportAnalyzer
 import com.androdr.ui.common.FindingCard
 
 @Suppress("LongMethod") // Bug report screen combines file-picker launch, progress state,
@@ -63,7 +62,6 @@ fun BugReportScreen(
     viewModel: BugReportViewModel = hiltViewModel()
 ) {
     val findings by viewModel.findings.collectAsStateWithLifecycle()
-    val legacyFindings by viewModel.legacyFindings.collectAsStateWithLifecycle()
     val timeline by viewModel.timeline.collectAsStateWithLifecycle()
     val isAnalyzing by viewModel.isAnalyzing.collectAsStateWithLifecycle()
     val exporting by viewModel.exporting.collectAsStateWithLifecycle()
@@ -94,7 +92,7 @@ fun BugReportScreen(
         uri?.let { viewModel.analyzeUri(it) }
     }
 
-    val hasResults = findings.isNotEmpty() || legacyFindings.isNotEmpty()
+    val hasResults = findings.isNotEmpty()
 
     Column(modifier = Modifier.fillMaxSize()) {
         LazyColumn(
@@ -250,7 +248,7 @@ fun BugReportScreen(
                     ) {
                         val totalCount = findings.count {
                             it.triggered && it.level.lowercase() != "informational"
-                        } + legacyFindings.size
+                        }
                         Text(
                             text = stringResource(R.string.bugreport_finding_count, totalCount),
                             style = MaterialTheme.typography.labelLarge,
@@ -291,21 +289,6 @@ fun BugReportScreen(
                     }
                 }
 
-                // Legacy findings (from pattern scanning)
-                if (legacyFindings.isNotEmpty()) {
-                    item {
-                        Text(
-                            text = stringResource(R.string.bugreport_pattern_findings),
-                            style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.SemiBold,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                    }
-                    items(legacyFindings) { finding ->
-                        BugReportFindingCard(finding = finding)
-                    }
-                }
-
                 // Timeline events
                 if (timeline.isNotEmpty()) {
                     item {
@@ -320,59 +303,6 @@ fun BugReportScreen(
                         TimelineEventCard(event = event)
                     }
                 }
-            }
-        }
-    }
-}
-
-@Suppress("LongMethod") // Finding card shows icon, severity badge, category, and description
-// with per-severity color theming; all content is needed together for visual context.
-@Composable
-private fun BugReportFindingCard(finding: BugReportAnalyzer.BugReportFinding) {
-    val (icon, color) = findingIconAndColor(finding.severity)
-
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = color.copy(alpha = 0.08f)
-        )
-    ) {
-        Row(
-            modifier = Modifier.padding(16.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = finding.severity,
-                tint = color,
-                modifier = Modifier.size(24.dp)
-            )
-            Column(
-                modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(4.dp)
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = finding.category,
-                        style = MaterialTheme.typography.labelMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = color
-                    )
-                    Text(
-                        text = finding.severity,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = color
-                    )
-                }
-                Text(
-                    text = finding.description,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
             }
         }
     }
