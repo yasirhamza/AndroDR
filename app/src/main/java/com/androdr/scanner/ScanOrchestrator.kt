@@ -364,7 +364,10 @@ class ScanOrchestrator @Inject constructor(
                 if (correlationRules.isEmpty() || eventsWithIds.isEmpty()) emptyList()
                 else {
                     val bindings = sigmaRuleEngine.computeAtomBindings(eventsWithIds)
-                    val atomRulesById = sigmaRuleEngine.getRules().associateBy { it.id }
+                    // Only enabled rules contribute to correlation category propagation.
+                    // Including disabled rules here would let their category influence
+                    // correlation classifications even though they produce no bindings.
+                    val atomRulesById = sigmaRuleEngine.getEnabledRules().associateBy { it.id }
                     val signals = sigmaCorrelationEngine
                         .evaluate(correlationRules, eventsWithIds, bindings, atomRulesById)
                         .map { it.copy(scanResultId = result.id) }
@@ -514,7 +517,7 @@ class ScanOrchestrator @Inject constructor(
                 if (brCorrelationRules.isEmpty() || eventsWithIds.isEmpty()) emptyList()
                 else {
                     val bindings = sigmaRuleEngine.computeAtomBindings(eventsWithIds)
-                    val atomRulesById = sigmaRuleEngine.getRules().associateBy { it.id }
+                    val atomRulesById = sigmaRuleEngine.getEnabledRules().associateBy { it.id }
                     sigmaCorrelationEngine.evaluate(brCorrelationRules, eventsWithIds, bindings, atomRulesById)
                         .map { it.copy(scanResultId = scanResult.id) }
                 }

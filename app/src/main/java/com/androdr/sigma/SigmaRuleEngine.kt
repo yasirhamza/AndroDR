@@ -158,7 +158,32 @@ class SigmaRuleEngine @Inject constructor(
         evidenceProviders = providers
     }
 
+    /**
+     * Returns ALL rules, including rules with `enabled: false`.
+     *
+     * Prefer [getEnabledRules] when iterating for evaluation. This method
+     * is intended for diagnostics, UI displays that show "X of Y rules
+     * active", and any code path that must account for disabled rules.
+     *
+     * Callers that iterate this list to produce findings or correlation
+     * bindings must filter by `enabled` themselves or use [getEnabledRules].
+     */
     fun getRules(): List<SigmaRule> = rules
+
+    /**
+     * Returns all rules with `enabled: true`. Use this for evaluation-path
+     * code that must not include disabled rules (e.g. correlation lookups,
+     * rule-count displays for "active rules").
+     *
+     * [getRules] returns ALL rules including disabled ones for diagnostic
+     * and UI purposes. If a caller cannot tolerate disabled rules in its
+     * iteration, it must use this method instead of [getRules].
+     *
+     * This is a thin public wrapper over the internal [effectiveRules];
+     * it exists to give external callers a discoverable API for the
+     * enabled-only rule set.
+     */
+    fun getEnabledRules(): List<SigmaRule> = effectiveRules()
 
     /** Returns only rules that are enabled. Used internally by all evaluate* methods. */
     private fun effectiveRules(): List<SigmaRule> = getRules().filter { it.enabled }
@@ -209,6 +234,17 @@ class SigmaRuleEngine @Inject constructor(
         return SigmaRuleEvaluator.evaluate(effectiveRules(), records, service, iocLookups, evidenceProviders)
     }
 
+    /**
+     * Returns the total number of loaded rules, **including rules with
+     * `enabled: false`**. Callers wanting the count of active (evaluable)
+     * rules should filter separately:
+     *
+     *     getRules().count { it.enabled }
+     *
+     * This method does NOT use [effectiveRules] because UI and debug paths
+     * may want to show "X total, Y disabled" — the distinction is the
+     * caller's responsibility.
+     */
     fun ruleCount(): Int = rules.size
 
     companion object {

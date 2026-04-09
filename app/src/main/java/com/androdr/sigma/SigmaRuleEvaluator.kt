@@ -1,6 +1,24 @@
 // app/src/main/java/com/androdr/sigma/SigmaRuleEvaluator.kt
 package com.androdr.sigma
 
+/**
+ * A rule-produced finding with a rule-sourced severity.
+ *
+ * **Construction policy:** production code should never construct `Finding`
+ * directly. The [SigmaRuleEvaluator.buildFinding] method is the only
+ * sanctioned factory: it applies [SeverityCapPolicy.applyCap] automatically
+ * and ensures the finding's [level] respects the rule's category cap.
+ *
+ * Bypassing `buildFinding` risks shipping a finding whose severity exceeds
+ * the cap for its category (e.g. a device_posture finding at CRITICAL),
+ * which violates the spec §6 invariant.
+ *
+ * Test code may construct [Finding] directly with any [level], but such
+ * tests must NOT be used to exercise the cap policy (the cap is in
+ * `buildFinding`, not in the data class).
+ *
+ * See spec §6 and [SeverityCapPolicy] for the full rationale.
+ */
 @kotlinx.serialization.Serializable
 data class Finding(
     val ruleId: String,
