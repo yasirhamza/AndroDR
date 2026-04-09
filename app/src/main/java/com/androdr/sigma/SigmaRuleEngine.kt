@@ -110,6 +110,7 @@ class SigmaRuleEngine @Inject constructor(
     fun computeAtomBindings(events: List<ForensicTimelineEvent>): Map<Long, Set<String>> {
         val atomCategoryByRuleId: Map<String, String> = rules
             .asSequence()
+            .filter { it.enabled }
             .filter { it.level == "informational" }
             .mapNotNull { rule ->
                 val cat = extractAtomCategory(rule) ?: return@mapNotNull null
