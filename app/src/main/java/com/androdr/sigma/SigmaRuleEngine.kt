@@ -159,48 +159,51 @@ class SigmaRuleEngine @Inject constructor(
 
     fun getRules(): List<SigmaRule> = rules
 
+    /** Returns only rules that are enabled. Used internally by all evaluate* methods. */
+    private fun effectiveRules(): List<SigmaRule> = getRules().filter { it.enabled }
+
     fun evaluateApps(telemetry: List<AppTelemetry>): List<Finding> {
         val records = telemetry.map { it.toFieldMap() }
-        return SigmaRuleEvaluator.evaluate(rules, records, "app_scanner", iocLookups, evidenceProviders)
+        return SigmaRuleEvaluator.evaluate(effectiveRules(), records, "app_scanner", iocLookups, evidenceProviders)
     }
 
     fun evaluateDevice(telemetry: List<DeviceTelemetry>): List<Finding> {
         val records = telemetry.map { it.toFieldMap() }
-        return SigmaRuleEvaluator.evaluate(rules, records, "device_auditor", iocLookups, evidenceProviders)
+        return SigmaRuleEvaluator.evaluate(effectiveRules(), records, "device_auditor", iocLookups, evidenceProviders)
     }
 
     fun evaluateProcesses(telemetry: List<ProcessTelemetry>): List<Finding> {
         val records = telemetry.map { it.toFieldMap() }
-        return SigmaRuleEvaluator.evaluate(rules, records, "process_monitor", iocLookups, evidenceProviders)
+        return SigmaRuleEvaluator.evaluate(effectiveRules(), records, "process_monitor", iocLookups, evidenceProviders)
     }
 
     fun evaluateDns(events: List<DnsEvent>): List<Finding> {
         val records = events.map { it.toFieldMap() }
-        return SigmaRuleEvaluator.evaluate(rules, records, "dns_monitor", iocLookups, evidenceProviders)
+        return SigmaRuleEvaluator.evaluate(effectiveRules(), records, "dns_monitor", iocLookups, evidenceProviders)
     }
 
     fun evaluateFiles(telemetry: List<FileArtifactTelemetry>): List<Finding> {
         val records = telemetry.map { it.toFieldMap() }
-        return SigmaRuleEvaluator.evaluate(rules, records, "file_scanner", iocLookups, evidenceProviders)
+        return SigmaRuleEvaluator.evaluate(effectiveRules(), records, "file_scanner", iocLookups, evidenceProviders)
     }
 
     fun evaluateAccessibility(telemetry: List<AccessibilityTelemetry>): List<Finding> {
         val records = telemetry.map { it.toFieldMap() }
-        return SigmaRuleEvaluator.evaluate(rules, records, "accessibility_audit", iocLookups, evidenceProviders)
+        return SigmaRuleEvaluator.evaluate(effectiveRules(), records, "accessibility_audit", iocLookups, evidenceProviders)
     }
 
     fun evaluateReceivers(telemetry: List<ReceiverTelemetry>): List<Finding> {
         val records = telemetry.map { it.toFieldMap() }
-        return SigmaRuleEvaluator.evaluate(rules, records, "receiver_audit", iocLookups, evidenceProviders)
+        return SigmaRuleEvaluator.evaluate(effectiveRules(), records, "receiver_audit", iocLookups, evidenceProviders)
     }
 
     fun evaluateAppOps(telemetry: List<AppOpsTelemetry>): List<Finding> {
         val records = telemetry.map { it.toFieldMap() }
-        return SigmaRuleEvaluator.evaluate(rules, records, "appops_audit", iocLookups, evidenceProviders)
+        return SigmaRuleEvaluator.evaluate(effectiveRules(), records, "appops_audit", iocLookups, evidenceProviders)
     }
 
     fun evaluateGeneric(records: List<Map<String, Any?>>, service: String): List<Finding> {
-        return SigmaRuleEvaluator.evaluate(rules, records, service, iocLookups, evidenceProviders)
+        return SigmaRuleEvaluator.evaluate(effectiveRules(), records, service, iocLookups, evidenceProviders)
     }
 
     fun ruleCount(): Int = rules.size
