@@ -9,7 +9,7 @@
 
 ## 1. Motivation
 
-A tester on a Redmi A5 (Unisoc T7250 SoC) received an AndroDR report that was alarming for the wrong reasons. Findings included:
+A tester on a Unisoc-based Android device received an AndroDR report that was alarming for the wrong reasons. Findings included:
 
 - **CRITICAL** alerts for the keyword "graphite" — matched against Android's Skia `graphite_renderengine` feature flag, a stock AOSP graphics config, not the Paragon/Graphite spyware.
 - **Hundreds of HIGH** "SuspiciousData: possible exfiltration payload" alerts — matched against any base64 string ≥100 characters, which bugreports contain by design (protobuf, keys, dumpsys output).
@@ -430,7 +430,7 @@ This gives us three benefits:
 
 ### Removal of hardcoded allowlists
 
-Three separate `systemPackagePrefixes` lists exist in `ReceiverModule.kt`, `ActivityModule.kt`, and `AccessibilityModule.kt`. All three are deleted. The canonical source becomes `app/src/main/res/raw/known_oem_prefixes.yml`, read via the existing `OemPrefixResolver`. **The refactor adds Unisoc, Spreadtrum (SPRD), and related ODM prefixes** to that YAML file to fix the Redmi A5 false-positive that motivated this entire refactor:
+Three separate `systemPackagePrefixes` lists exist in `ReceiverModule.kt`, `ActivityModule.kt`, and `AccessibilityModule.kt`. All three are deleted. The canonical source becomes `app/src/main/res/raw/known_oem_prefixes.yml`, read via the existing `OemPrefixResolver`. **The refactor adds Unisoc, Spreadtrum (SPRD), and related ODM prefixes** to that YAML file to fix the Unisoc-device false-positive that motivated this entire refactor:
 
 ```yaml
 chipset_prefixes:
@@ -719,7 +719,7 @@ This is a real problem but it's a **separate architectural decision** — it req
 
 ### Regression tests
 
-- **Tester's Redmi A5 bugreport as acceptance criterion.** The bugreport file the tester provided (`/home/yasir/Desktop/report/androdr_bugreport_20260409_162409.txt` or its source) is checked into the test fixtures as a redacted version. A regression test runs the full pipeline (parse → telemetry → rule engine → findings) against this fixture and asserts:
+- **Tester-provided bugreport as acceptance criterion.** The bugreport file the tester provided is checked into the test fixtures as a redacted version (see R7 for redaction strategy). A regression test runs the full pipeline (parse → telemetry → rule engine → findings) against this fixture and asserts:
   - Zero findings for the graphite keyword (the heuristic is deleted).
   - Zero findings for base64 blobs (the heuristic is deleted).
   - Zero findings for the C2 beacon regex (the heuristic is deleted).
@@ -732,8 +732,8 @@ This is a real problem but it's a **separate architectural decision** — it req
 
 Before merging:
 
-1. Install debug build on a clean test device (not the Redmi A5). Run a full scan. Compare pre/post refactor findings — should produce an equivalent (or cleaner) set of findings with the same severity distribution for non-posture rules and strictly lower severities for posture rules.
-2. Import the tester's Redmi A5 bugreport via the import flow. Compare pre/post refactor results — should show dramatic reduction in CRITICAL/HIGH noise, zero findings on the OEM system packages, and any remaining findings traceable to actual SIGMA rules.
+1. Install debug build on a clean test device (not the tester's device). Run a full scan. Compare pre/post refactor findings — should produce an equivalent (or cleaner) set of findings with the same severity distribution for non-posture rules and strictly lower severities for posture rules.
+2. Import the tester-provided bugreport via the import flow. Compare pre/post refactor results — should show dramatic reduction in CRITICAL/HIGH noise, zero findings on the OEM system packages, and any remaining findings traceable to actual SIGMA rules.
 3. Run the export flow on both devices and verify the CSV / plaintext reports are well-formed and contain the two sections (Telemetry, Findings) clearly separated.
 
 ---
@@ -768,7 +768,7 @@ The following items were identified during the audit but are explicitly deferred
 
 **Mitigation:**
 - Commit structure within the branch: even though the PR is atomic, commits on the branch follow a logical progression (telemetry types first, then rule engine changes, then bugreport module ports, then LegacyScanModule deletion, then test additions) so reviewers can walk the history.
-- Pre-merge manual verification on both a clean device and the tester's Redmi A5 bugreport (§11).
+- Pre-merge manual verification on both a clean device and the tester-provided bugreport (§11).
 - The spec is committed first so reviewers can validate the design before reading implementation.
 
 ### R2. Downstream consumer migration
@@ -820,7 +820,7 @@ The following items were identified during the audit but are explicitly deferred
 
 ### R7. Test fixture bugreport redaction
 
-**Risk:** the tester's Redmi A5 bugreport becomes a test fixture. If not properly redacted, it leaks device-identifying information (IMEI, phone number, installed apps) into the public repository.
+**Risk:** the tester-provided bugreport becomes a test fixture. If not properly redacted, it leaks device-identifying information (IMEI, phone number, installed apps, device model, SoC details, vendor build fingerprints) into the public repository.
 
 **Mitigation:**
 - Before committing the fixture, run it through a redaction pass: replace IMEI/IMSI/phone number / account email / serial numbers / IP addresses / MAC addresses with placeholder values. Preserve structural elements (line counts, section boundaries, parse-relevant tokens) so the fixture still exercises the parser.
