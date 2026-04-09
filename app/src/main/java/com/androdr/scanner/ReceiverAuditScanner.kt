@@ -6,6 +6,7 @@ import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
 import android.util.Log
 import com.androdr.data.model.ReceiverTelemetry
+import com.androdr.data.model.TelemetrySource
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -48,7 +49,8 @@ class ReceiverAuditScanner @Inject constructor(
                     packageName = ai.packageName,
                     intentAction = action,
                     componentName = ai.name,
-                    isSystemApp = isSystem
+                    isSystemApp = isSystem,
+                    source = TelemetrySource.LIVE_SCAN,
                 ))
             }
         }
