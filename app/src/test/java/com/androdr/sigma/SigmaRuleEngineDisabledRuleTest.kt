@@ -2,6 +2,7 @@ package com.androdr.sigma
 
 import android.content.Context
 import com.androdr.data.model.AppTelemetry
+import com.androdr.data.model.TelemetrySource
 import io.mockk.mockk
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -51,6 +52,7 @@ class SigmaRuleEngineDisabledRuleTest {
         hasAccessibilityService = false,
         hasDeviceAdmin = false,
         knownAppCategory = null,
+        source = TelemetrySource.LIVE_SCAN,
     )
 
     @Before

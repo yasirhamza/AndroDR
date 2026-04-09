@@ -28,7 +28,8 @@ data class AppTelemetry(
      * Epoch ms of last update. `0L` means unknown / not populated;
      * consumers MUST treat as missing, not as the actual epoch.
      */
-    val lastUpdateTime: Long = 0L
+    val lastUpdateTime: Long = 0L,
+    val source: TelemetrySource,
 ) {
     fun toFieldMap(): Map<String, Any?> = mapOf(
         "package_name" to packageName,
