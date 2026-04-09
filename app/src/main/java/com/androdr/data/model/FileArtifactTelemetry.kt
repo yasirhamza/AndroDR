@@ -4,7 +4,8 @@ data class FileArtifactTelemetry(
     val filePath: String,
     val fileExists: Boolean,
     val fileSize: Long?,
-    val fileModified: Long?
+    val fileModified: Long?,
+    val source: TelemetrySource,
 ) {
     fun toFieldMap(): Map<String, Any?> = mapOf(
         "file_path" to filePath,
