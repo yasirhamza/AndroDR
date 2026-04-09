@@ -7,6 +7,7 @@ import android.content.pm.PackageManager
 import android.os.Build
 import android.util.Log
 import com.androdr.data.model.AppOpsTelemetry
+import com.androdr.data.model.TelemetrySource
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -81,7 +82,8 @@ class AppOpsScanner @Inject constructor(
                             lastAccessTime = 0L, // not available via public API
                             lastRejectTime = 0L,
                             accessCount = 0,
-                            isSystemApp = isSystem
+                            isSystemApp = isSystem,
+                            source = TelemetrySource.LIVE_SCAN,
                         ))
                     }
                 }
