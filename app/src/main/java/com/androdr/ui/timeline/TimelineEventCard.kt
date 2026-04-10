@@ -139,6 +139,19 @@ fun FindingCard(row: TimelineRow.FindingRow, modifier: Modifier = Modifier) {
                 SeverityChip(level = finding.level, active = true)
                 Spacer(Modifier.width(8.dp))
                 CategoryChip(finding.category)
+                if (row.duplicateCount > 1) {
+                    Spacer(Modifier.width(4.dp))
+                    Surface(
+                        color = MaterialTheme.colorScheme.tertiaryContainer,
+                        shape = RoundedCornerShape(4.dp),
+                    ) {
+                        Text(
+                            text = "\u00d7${row.duplicateCount}",
+                            style = MaterialTheme.typography.labelSmall,
+                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp),
+                        )
+                    }
+                }
                 Spacer(Modifier.weight(1f))
                 Text(
                     text = finding.ruleId,

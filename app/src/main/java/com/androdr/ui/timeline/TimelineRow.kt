@@ -44,8 +44,7 @@ fun mergeTimelineRows(
         val anchor = events.firstOrNull { it.ruleId == finding.ruleId }
         TimelineRow.FindingRow(finding = finding, anchorEvent = anchor)
     }
-    val combined: List<TimelineRow> = (telemetryRows + findingRows)
-        .sortedByDescending { it.timestamp }
+    val combined: List<TimelineRow> = rollUpFindings(telemetryRows + findingRows)
     return if (hideInformationalTelemetry) {
         combined.filter { row ->
             when (row) {
@@ -56,6 +55,31 @@ fun mergeTimelineRows(
     } else {
         combined
     }
+}
+
+/**
+ * Groups duplicate [TimelineRow.FindingRow] entries by (ruleId, packageName)
+ * and keeps only the most recent occurrence per group with a `duplicateCount`
+ * badge. [TimelineRow.TelemetryRow] entries pass through unchanged.
+ *
+ * This is a display-only rollup — raw events in the database are untouched.
+ */
+internal fun rollUpFindings(rows: List<TimelineRow>): List<TimelineRow> {
+    val telemetryRows = rows.filterIsInstance<TimelineRow.TelemetryRow>()
+    val findingRows = rows.filterIsInstance<TimelineRow.FindingRow>()
+
+    val rolledUp = findingRows
+        .groupBy { it.finding.ruleId to (it.finding.matchContext["package_name"] ?: "") }
+        .map { (_, group) ->
+            val mostRecent = group.maxBy { it.timestamp }
+            val earliest = group.minBy { it.timestamp }
+            mostRecent.copy(
+                duplicateCount = group.size,
+                firstSeenTimestamp = earliest.timestamp,
+            )
+        }
+
+    return (telemetryRows + rolledUp).sortedByDescending { it.timestamp }
 }
 
 sealed interface TimelineRow {
@@ -72,6 +96,8 @@ sealed interface TimelineRow {
     data class FindingRow(
         val finding: Finding,
         val anchorEvent: ForensicTimelineEvent? = null,
+        val duplicateCount: Int = 1,
+        val firstSeenTimestamp: Long? = null,
     ) : TimelineRow {
         /**
          * Timestamp sourced from the anchor event when one exists; otherwise
