@@ -114,6 +114,7 @@ fun TimelineScreen(
 
     var filterPanelExpanded by rememberSaveable { mutableStateOf(true) }
     var exportMenuExpanded by remember { mutableStateOf(false) }
+    var showExportModeDialog by remember { mutableStateOf(false) }
     var pendingCopy by remember { mutableStateOf(false) }
 
     // Copy to clipboard once report text is ready
@@ -202,6 +203,13 @@ fun TimelineScreen(
                                 onClick = {
                                     exportMenuExpanded = false
                                     viewModel.exportCsv()
+                                }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Full Report\u2026") },
+                                onClick = {
+                                    exportMenuExpanded = false
+                                    showExportModeDialog = true
                                 }
                             )
                         }
@@ -594,6 +602,17 @@ fun TimelineScreen(
                     putExtra(Intent.EXTRA_SUBJECT, "AndroDR Forensic Timeline")
                 }
                 context.startActivity(Intent.createChooser(intent, "Share Timeline"))
+            }
+        )
+    }
+
+    // Full Report export mode dialog (telemetry/findings/both)
+    if (showExportModeDialog) {
+        com.androdr.ui.common.ExportModeDialog(
+            onDismiss = { showExportModeDialog = false },
+            onConfirm = { mode ->
+                showExportModeDialog = false
+                viewModel.exportFullReport(mode)
             }
         )
     }

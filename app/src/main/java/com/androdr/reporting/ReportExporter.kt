@@ -54,11 +54,23 @@ class ReportExporter @Inject constructor(
         val inventory = scanOrchestrator.lastAppTelemetry.ifEmpty {
             runCatching { appScanner.collectTelemetry() }.getOrDefault(emptyList())
         }
+        val deviceTelemetry = scanOrchestrator.lastDeviceTelemetry
+        val processTelemetry = scanOrchestrator.lastProcessTelemetry
+        val fileTelemetry = scanOrchestrator.lastFileArtifactTelemetry
+        val accessibilityTelemetry = scanOrchestrator.lastAccessibilityTelemetry
+        val receiverTelemetry = scanOrchestrator.lastReceiverTelemetry
+        val appOpsTelemetry = scanOrchestrator.lastAppOpsTelemetry
         val displayNames = inventory
             .associate { it.packageName to it.appName }
             .filterValues { it.isNotEmpty() }
         val text = ReportFormatter.formatScanReport(
-            scan, dnsEvents, logLines, inventory, displayNames, mode
+            scan, dnsEvents, logLines, inventory, displayNames, mode,
+            deviceTelemetry = deviceTelemetry,
+            processTelemetry = processTelemetry,
+            fileTelemetry = fileTelemetry,
+            accessibilityTelemetry = accessibilityTelemetry,
+            receiverTelemetry = receiverTelemetry,
+            appOpsTelemetry = appOpsTelemetry,
         )
 
         val reportsDir = File(context.cacheDir, "reports").apply { mkdirs() }

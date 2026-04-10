@@ -70,6 +70,7 @@ import com.androdr.R
 import com.androdr.data.model.ScanResult
 import com.androdr.reporting.ExportMode
 import com.androdr.scanner.ScanOrchestrator
+import com.androdr.ui.common.ExportModeDialog
 import com.androdr.ui.common.severityColor
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -542,56 +543,7 @@ private fun ScanHistoryItem(
     }
 }
 
-@Composable
-private fun ExportModeDialog(
-    onDismiss: () -> Unit,
-    onConfirm: (ExportMode) -> Unit,
-) {
-    var selectedMode by remember { mutableStateOf(ExportMode.BOTH) }
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Export report") },
-        text = {
-            Column {
-                ExportMode.values().forEach { mode ->
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .selectable(
-                                selected = selectedMode == mode,
-                                onClick = { selectedMode = mode },
-                            )
-                            .padding(vertical = 8.dp),
-                    ) {
-                        RadioButton(
-                            selected = selectedMode == mode,
-                            onClick = { selectedMode = mode },
-                        )
-                        Spacer(Modifier.width(8.dp))
-                        Text(exportModeLabel(mode))
-                    }
-                }
-            }
-        },
-        confirmButton = {
-            TextButton(onClick = { onConfirm(selectedMode) }) {
-                Text("Export")
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Cancel")
-            }
-        },
-    )
-}
-
-private fun exportModeLabel(mode: ExportMode): String = when (mode) {
-    ExportMode.TELEMETRY_ONLY -> "Telemetry only (for analyst handoff)"
-    ExportMode.FINDINGS_ONLY -> "Findings only"
-    ExportMode.BOTH -> "Both (full report)"
-}
+// ExportModeDialog extracted to com.androdr.ui.common.ExportModeDialog
 
 @Suppress("LongMethod") // DiffSection renders new/resolved findings with conditional
 // sub-sections; all branches are needed in one composable to maintain visual cohesion.

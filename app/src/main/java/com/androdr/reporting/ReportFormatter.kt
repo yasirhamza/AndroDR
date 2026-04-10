@@ -1,8 +1,14 @@
 package com.androdr.reporting
 
 import android.os.Build
+import com.androdr.data.model.AccessibilityTelemetry
+import com.androdr.data.model.AppOpsTelemetry
 import com.androdr.data.model.AppTelemetry
+import com.androdr.data.model.DeviceTelemetry
 import com.androdr.data.model.DnsEvent
+import com.androdr.data.model.FileArtifactTelemetry
+import com.androdr.data.model.ProcessTelemetry
+import com.androdr.data.model.ReceiverTelemetry
 import com.androdr.data.model.ScanResult
 import com.androdr.sigma.Finding
 import java.text.SimpleDateFormat
@@ -16,16 +22,22 @@ import java.util.Locale
  */
 object ReportFormatter {
 
-    @Suppress("LongMethod", "CyclomaticComplexMethod") // Report formatting requires assembling all
-    // sections (header, device flags, app risks, DNS events, logs) in a specific order; the
-    // branching reflects the conditional severity/status display logic per section.
+    @Suppress("LongMethod", "CyclomaticComplexMethod", "LongParameterList") // Report formatting
+    // requires assembling all sections in a specific order; the branching reflects the conditional
+    // severity/status display logic per section. All telemetry types needed for complete rendering.
     fun formatScanReport(
         scan: ScanResult,
         dnsEvents: List<DnsEvent>,
         logLines: List<String>,
         appInventory: List<AppTelemetry> = emptyList(),
         displayNames: Map<String, String> = emptyMap(),
-        mode: ExportMode = ExportMode.BOTH
+        mode: ExportMode = ExportMode.BOTH,
+        deviceTelemetry: List<DeviceTelemetry> = emptyList(),
+        processTelemetry: List<ProcessTelemetry> = emptyList(),
+        fileTelemetry: List<FileArtifactTelemetry> = emptyList(),
+        accessibilityTelemetry: List<AccessibilityTelemetry> = emptyList(),
+        receiverTelemetry: List<ReceiverTelemetry> = emptyList(),
+        appOpsTelemetry: List<AppOpsTelemetry> = emptyList(),
     ): String = buildString {
         val includeFindings = mode != ExportMode.TELEMETRY_ONLY
         val includeTelemetry = mode != ExportMode.FINDINGS_ONLY
@@ -65,7 +77,11 @@ object ReportFormatter {
 
         if (includeTelemetry) {
             section("TELEMETRY SECTION")
-            appendTelemetrySections(dnsEvents, logLines, appInventory, displayNames)
+            appendTelemetrySections(
+                dnsEvents, logLines, appInventory, displayNames,
+                deviceTelemetry, processTelemetry, fileTelemetry,
+                accessibilityTelemetry, receiverTelemetry, appOpsTelemetry
+            )
         }
 
         // -- Footer ---------------------------------------------------------------
@@ -177,7 +193,13 @@ object ReportFormatter {
         dnsEvents: List<DnsEvent>,
         logLines: List<String>,
         appInventory: List<AppTelemetry>,
-        displayNames: Map<String, String>
+        displayNames: Map<String, String>,
+        deviceTelemetry: List<DeviceTelemetry> = emptyList(),
+        processTelemetry: List<ProcessTelemetry> = emptyList(),
+        fileTelemetry: List<FileArtifactTelemetry> = emptyList(),
+        accessibilityTelemetry: List<AccessibilityTelemetry> = emptyList(),
+        receiverTelemetry: List<ReceiverTelemetry> = emptyList(),
+        appOpsTelemetry: List<AppOpsTelemetry> = emptyList(),
     ) {
         val dnsFmt = SimpleDateFormat("HH:mm:ss", Locale.US)
 
@@ -221,12 +243,114 @@ object ReportFormatter {
             }
         }
 
+        // -- Extended telemetry sections -----------------------------------------
+        appendExtendedTelemetry(
+            deviceTelemetry, processTelemetry, fileTelemetry,
+            accessibilityTelemetry, receiverTelemetry, appOpsTelemetry
+        )
+
         // -- App log --------------------------------------------------------------
         section("APPLICATION LOG  (${logLines.size} lines)")
         if (logLines.isEmpty()) {
             appendLine("  (no log lines captured)")
         } else {
             logLines.forEach { line -> appendLine("  $line") }
+        }
+    }
+
+    @Suppress("LongMethod", "LongParameterList") // Renders 6 telemetry sub-sections sequentially;
+    // splitting further would scatter related rendering logic across many tiny methods.
+    private fun StringBuilder.appendExtendedTelemetry(
+        deviceTelemetry: List<DeviceTelemetry>,
+        processTelemetry: List<ProcessTelemetry>,
+        fileTelemetry: List<FileArtifactTelemetry>,
+        accessibilityTelemetry: List<AccessibilityTelemetry>,
+        receiverTelemetry: List<ReceiverTelemetry>,
+        appOpsTelemetry: List<AppOpsTelemetry>,
+    ) {
+        // -- Device posture telemetry ---------------------------------------------
+        if (deviceTelemetry.isNotEmpty()) {
+            section("DEVICE POSTURE TELEMETRY")
+            deviceTelemetry.forEach { d ->
+                appendLine("  ADB Enabled       : ${d.adbEnabled}")
+                appendLine("  Dev Options        : ${d.devOptionsEnabled}")
+                appendLine("  Unknown Sources    : ${d.unknownSourcesEnabled}")
+                appendLine("  Screen Lock        : ${d.screenLockEnabled}")
+                appendLine("  Patch Level        : ${d.patchLevel.ifEmpty { "unknown" }}")
+                appendLine("  Patch Age (days)   : ${d.patchAgeDays}")
+                appendLine("  Bootloader Unlocked: ${d.bootloaderUnlocked}")
+                appendLine("  WiFi ADB           : ${d.wifiAdbEnabled}")
+                appendLine("  Unpatched CVEs     : ${d.unpatchedCveCount}")
+                appendLine()
+            }
+        }
+
+        // -- Accessibility services ----------------------------------------------
+        if (accessibilityTelemetry.isNotEmpty()) {
+            section("ACCESSIBILITY SERVICES (${accessibilityTelemetry.size})")
+            accessibilityTelemetry.forEach { a ->
+                val sysFlag = if (a.isSystemApp) "system" else "non-system"
+                appendLine("  ${a.packageName} / ${a.serviceName} ($sysFlag)")
+            }
+            appendLine()
+        }
+
+        // -- Broadcast receivers -------------------------------------------------
+        if (receiverTelemetry.isNotEmpty()) {
+            section("BROADCAST RECEIVERS (${receiverTelemetry.size})")
+            receiverTelemetry.forEach { r ->
+                appendLine("  ${r.packageName} / ${r.intentAction} (system: ${r.isSystemApp})")
+            }
+            appendLine()
+        }
+
+        // -- App operations ------------------------------------------------------
+        if (appOpsTelemetry.isNotEmpty()) {
+            val timeFmt = SimpleDateFormat("HH:mm", Locale.US)
+            section("APP OPERATIONS (${appOpsTelemetry.size})")
+            appOpsTelemetry.forEach { op ->
+                val lastAccess = if (op.lastAccessTime > 0)
+                    timeFmt.format(Date(op.lastAccessTime)) else "never"
+                appendLine("  ${op.packageName} / ${op.operation} / last access: $lastAccess")
+            }
+            appendLine()
+        }
+
+        // -- Running processes ---------------------------------------------------
+        if (processTelemetry.isNotEmpty()) {
+            section("RUNNING PROCESSES (${processTelemetry.size})")
+            processTelemetry.forEach { p ->
+                val state = if (p.isForeground) "foreground" else "background"
+                val pkg = p.packageName ?: p.processName
+                appendLine("  $pkg ($state)")
+            }
+            appendLine()
+        }
+
+        // -- File artifact checks ------------------------------------------------
+        if (fileTelemetry.isNotEmpty()) {
+            val checked = fileTelemetry.filter { it.accessible }
+            val skipped = fileTelemetry.filter { !it.accessible }
+            section("FILE ARTIFACT CHECKS")
+            if (checked.isNotEmpty()) {
+                checked.forEach { f ->
+                    val status = if (f.fileExists) {
+                        "FOUND (${f.fileSize ?: 0} bytes) — investigate immediately"
+                    } else {
+                        "clear"
+                    }
+                    appendLine("  ${f.filePath} : $status")
+                }
+            }
+            if (skipped.isNotEmpty()) {
+                appendLine()
+                appendLine("  ${skipped.size} path(s) could not be checked (requires root/ADB access):")
+                skipped.forEach { f ->
+                    appendLine("    ${f.filePath}")
+                }
+                appendLine("  For a complete check: adb shell ls -la <path>")
+            }
+            appendLine()
         }
     }
 

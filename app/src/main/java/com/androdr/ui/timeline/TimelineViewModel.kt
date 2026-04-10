@@ -19,6 +19,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
@@ -52,7 +53,8 @@ class TimelineViewModel @Inject constructor(
     private val dao: ForensicTimelineEventDao,
     private val knownAppResolver: KnownAppResolver,
     private val sigmaRuleEngine: com.androdr.sigma.SigmaRuleEngine,
-    private val scanRepository: ScanRepository
+    private val scanRepository: ScanRepository,
+    private val reportExporter: com.androdr.reporting.ReportExporter,
 ) : ViewModel() {
 
     private val _groupMode = MutableStateFlow(TimelineGroupMode.DATE)
@@ -331,6 +333,27 @@ class TimelineViewModel @Inject constructor(
     }
 
     fun onShareConsumed() { _shareUri.value = null }
+
+    /**
+     * Exports the latest scan as a full report (with telemetry/findings/both
+     * mode). Uses [reportExporter] for the same format as the History screen
+     * export, not the timeline-specific TXT/CSV.
+     */
+    fun exportFullReport(mode: com.androdr.reporting.ExportMode) {
+        viewModelScope.launch {
+            _exporting.value = true
+            try {
+                val scans = scanRepository.allScans.first()
+                val scan = scans.firstOrNull() ?: return@launch
+                val uri = reportExporter.export(scan, mode)
+                _shareUri.value = uri
+            } catch (e: Exception) {
+                android.util.Log.e("TimelineViewModel", "Full report export failed: ${e.message}", e)
+            } finally {
+                _exporting.value = false
+            }
+        }
+    }
 
     private fun buildDisplayNames(events: List<ForensicTimelineEvent>): Map<String, String> {
         val fromEvents = events
