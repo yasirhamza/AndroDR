@@ -109,3 +109,68 @@ sealed interface TimelineRow {
             get() = anchorEvent?.startTimestamp ?: Long.MAX_VALUE
     }
 }
+
+/**
+ * Groups a filtered list of [TimelineRow] into date-bucketed [DateGroup]s
+ * ready for rendering. Telemetry rows are partitioned into correlation
+ * clusters and standalone events via [partitionSignals].
+ *
+ * Pure function — no Android dependencies — so it can be unit-tested.
+ */
+fun buildDateGroups(rows: List<TimelineRow>): List<DateGroup> {
+    if (rows.isEmpty()) return emptyList()
+
+    val telemetryEvents = rows
+        .filterIsInstance<TimelineRow.TelemetryRow>()
+        .map { it.event }
+    val (clusters, standaloneEvents) = if (telemetryEvents.isNotEmpty()) {
+        partitionSignals(telemetryEvents)
+    } else {
+        emptyList<EventCluster>() to emptyList<ForensicTimelineEvent>()
+    }
+
+    val telemetryByEventId = rows
+        .filterIsInstance<TimelineRow.TelemetryRow>()
+        .associateBy { it.event.id }
+    val standaloneRows = standaloneEvents.mapNotNull { telemetryByEventId[it.id] }
+    val findingRows = rows.filterIsInstance<TimelineRow.FindingRow>()
+
+    val fmt = java.text.SimpleDateFormat("MMM dd, yyyy", java.util.Locale.US)
+    fun dateKey(ts: Long) = if (ts > 0) fmt.format(java.util.Date(ts)) else "Unknown Date"
+
+    data class Bucket(
+        val findings: MutableList<TimelineRow.FindingRow> = mutableListOf(),
+        val clusters: MutableList<EventCluster> = mutableListOf(),
+        val standalone: MutableList<TimelineRow.TelemetryRow> = mutableListOf(),
+    )
+    val buckets = mutableMapOf<String, Bucket>()
+
+    findingRows.forEach { row ->
+        buckets.getOrPut(dateKey(row.timestamp)) { Bucket() }.findings.add(row)
+    }
+    clusters.forEach { cluster ->
+        buckets.getOrPut(dateKey(cluster.events.first().startTimestamp)) { Bucket() }
+            .clusters.add(cluster)
+    }
+    standaloneRows.forEach { row ->
+        buckets.getOrPut(dateKey(row.timestamp)) { Bucket() }.standalone.add(row)
+    }
+
+    return buckets.map { (label, bucket) ->
+        DateGroup(
+            label = label,
+            findingRows = bucket.findings.sortedByDescending { it.timestamp },
+            clusters = bucket.clusters.sortedByDescending { c ->
+                c.events.maxOfOrNull { it.startTimestamp } ?: 0L
+            },
+            standaloneRows = bucket.standalone.sortedByDescending { it.timestamp },
+        )
+    }.sortedByDescending { group ->
+        val maxFinding = group.findingRows.maxOfOrNull { it.timestamp } ?: 0L
+        val maxCluster = group.clusters.maxOfOrNull { c ->
+            c.events.maxOfOrNull { it.startTimestamp } ?: 0L
+        } ?: 0L
+        val maxStandalone = group.standaloneRows.maxOfOrNull { it.timestamp } ?: 0L
+        maxOf(maxFinding, maxCluster, maxStandalone)
+    }
+}
