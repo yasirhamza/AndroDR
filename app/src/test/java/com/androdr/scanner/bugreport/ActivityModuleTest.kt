@@ -1,5 +1,6 @@
 package com.androdr.scanner.bugreport
 
+import com.androdr.ioc.DeviceIdentity
 import com.androdr.ioc.IndicatorResolver
 import com.androdr.ioc.OemPrefixResolver
 import io.mockk.every
@@ -19,7 +20,7 @@ class ActivityModuleTest {
     fun setUp() {
         every { mockIndicatorResolver.isKnownBadPackage(any()) } returns null
         val oemPrefixResolver: OemPrefixResolver = mockk()
-        every { oemPrefixResolver.isOemPrefix(any()) } answers {
+        every { oemPrefixResolver.isOemPrefix(any(), any()) } answers {
             val pkg = firstArg<String>()
             pkg.startsWith("com.android.") ||
                 pkg.startsWith("com.google.android.") ||
@@ -47,7 +48,7 @@ class ActivityModuleTest {
                       Category: "android.intent.category.BROWSABLE"
         """.trimIndent()
 
-        val result = module.analyze(section, mockIndicatorResolver)
+        val result = module.analyze(section, mockIndicatorResolver, DeviceIdentity.UNKNOWN)
         assertTrue(result.telemetry.any {
             it["package_name"] == "com.evil.browser" &&
                 it["handled_scheme"] == "http" &&
@@ -65,7 +66,7 @@ class ActivityModuleTest {
                       Action: "android.intent.action.VIEW"
         """.trimIndent()
 
-        val result = module.analyze(section, mockIndicatorResolver)
+        val result = module.analyze(section, mockIndicatorResolver, DeviceIdentity.UNKNOWN)
         assertTrue(result.telemetry.any {
             it["package_name"] == "com.spy.fileviewer" &&
                 it["handled_scheme"] == "content"
@@ -82,13 +83,13 @@ class ActivityModuleTest {
                       Action: "android.intent.action.VIEW"
         """.trimIndent()
 
-        val result = module.analyze(section, mockIndicatorResolver)
+        val result = module.analyze(section, mockIndicatorResolver, DeviceIdentity.UNKNOWN)
         assertTrue(result.telemetry.all { it["is_system_app"] == true })
     }
 
     @Test
     fun `empty section produces no telemetry`() = runBlocking {
-        val result = module.analyze("", mockIndicatorResolver)
+        val result = module.analyze("", mockIndicatorResolver, com.androdr.ioc.DeviceIdentity.UNKNOWN)
         assertTrue(result.telemetry.isEmpty())
     }
 
@@ -101,7 +102,7 @@ class ActivityModuleTest {
                     12345 com.example/.MainActivity filter abcdef
         """.trimIndent()
 
-        val result = module.analyze(section, mockIndicatorResolver)
+        val result = module.analyze(section, mockIndicatorResolver, DeviceIdentity.UNKNOWN)
         assertTrue(result.telemetry.isEmpty())
     }
 }

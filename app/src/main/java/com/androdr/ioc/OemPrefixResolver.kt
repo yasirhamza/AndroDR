@@ -10,16 +10,40 @@ import org.snakeyaml.engine.v2.api.Load
 import org.snakeyaml.engine.v2.api.LoadSettings
 import java.net.HttpURLConnection
 import java.net.URL
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicReference
 import javax.inject.Inject
 import javax.inject.Singleton
 
+/**
+ * Resolves whether a package name belongs to the OEM/system allowlist for
+ * a given device identity. See [DeviceIdentity] for the manufacturer/brand
+ * model and #90 for the prefix-spoofing attack this prevents.
+ *
+ * The allowlist YAML (`res/raw/known_oem_prefixes.yml`) has two top-level
+ * sections:
+ * - `unconditional:` — prefixes that apply to every device (AOSP, chipset,
+ *   trusted installers, Android Go, custom ROMs).
+ * - `conditional:` — per-vendor blocks keyed by `manufacturer_match` and
+ *   `brand_match`. Only blocks whose match list contains the current
+ *   device's manufacturer or brand contribute prefixes.
+ *
+ * Every public query method takes a [DeviceIdentity]. Runtime callers pass
+ * [DeviceIdentity.local]; bugreport callers pass
+ * [DeviceIdentity.fromSystemProperties].
+ *
+ * The applicable prefix set for each unique [DeviceIdentity] is cached
+ * in [perDeviceCache] to avoid recomputing on every call.
+ */
 @Singleton
 class OemPrefixResolver @Inject constructor(
-    @ApplicationContext private val context: Context
+    @ApplicationContext private val context: Context,
 ) {
 
     private val data = AtomicReference<ParsedOemData>(loadBundledData())
+
+    /** Per-(manufacturer,brand) cache of applicable prefix sets. */
+    private val perDeviceCache = ConcurrentHashMap<DeviceIdentity, ApplicablePrefixes>()
 
     @Suppress("TooGenericExceptionCaught")
     private fun loadBundledData(): ParsedOemData {
@@ -29,71 +53,102 @@ class OemPrefixResolver @Inject constructor(
             parseOemPrefixYaml(yaml)
         } catch (e: Exception) {
             Log.w(TAG, "Failed to load bundled OEM prefixes: ${e.message}")
-            ParsedOemData(emptySet(), emptySet(), emptySet())
+            ParsedOemData.empty()
         }
     }
 
-    /** Returns true if the package matches a strict OEM prefix (always OEM regardless of FLAG_SYSTEM). */
-    fun isOemPrefix(packageName: String): Boolean =
-        data.get().strictPrefixes.any { packageName.startsWith(it) }
+    /**
+     * Returns true iff [packageName] is a strict OEM prefix in the applicable
+     * set for [device]. A strict prefix classifies the app as OEM regardless
+     * of its FLAG_SYSTEM status.
+     */
+    fun isOemPrefix(packageName: String, device: DeviceIdentity): Boolean =
+        applicablePrefixesFor(device).strict.any { packageName.startsWith(it) }
 
-    /** Returns true if the package matches a strict OEM prefix. Alias for [isOemPrefix]. */
-    fun isStrictOemPrefix(packageName: String): Boolean =
-        data.get().strictPrefixes.any { packageName.startsWith(it) }
+    /** Alias for [isOemPrefix], preserved for readability. */
+    fun isStrictOemPrefix(packageName: String, device: DeviceIdentity): Boolean =
+        isOemPrefix(packageName, device)
 
-    /** Returns true if the package matches a partnership prefix (only OEM when app has FLAG_SYSTEM). */
-    fun isPartnershipPrefix(packageName: String): Boolean =
-        data.get().partnershipPrefixes.any { packageName.startsWith(it) }
+    /**
+     * Returns true iff [packageName] is a partnership prefix in the applicable
+     * set for [device]. Partnership prefixes only classify as OEM when the
+     * app also has FLAG_SYSTEM (pre-installed). See spec §9 and #90.
+     */
+    fun isPartnershipPrefix(packageName: String, device: DeviceIdentity): Boolean =
+        applicablePrefixesFor(device).partnership.any { packageName.startsWith(it) }
 
-    fun isTrustedInstaller(installer: String): Boolean =
-        installer in data.get().installers || isOemPrefix(installer)
+    /**
+     * Returns true iff [installer] is a trusted app store. Trusted installers
+     * are unconditional (every device), so [device] is accepted but only used
+     * for the fallback `isOemPrefix` call.
+     */
+    fun isTrustedInstaller(installer: String, device: DeviceIdentity): Boolean {
+        val d = data.get()
+        return installer in d.trustedInstallers ||
+            isOemPrefix(installer, device)
+    }
+
+    /**
+     * Returns the applicable prefix set for [device]: unconditional prefixes
+     * plus any conditional blocks whose `manufacturer_match` / `brand_match`
+     * contains [device]'s manufacturer or brand.
+     */
+    fun applicablePrefixesFor(device: DeviceIdentity): ApplicablePrefixes =
+        perDeviceCache.getOrPut(device) {
+            val d = data.get()
+            val strict = mutableSetOf<String>()
+            val partnership = mutableSetOf<String>()
+
+            // Unconditional always applies
+            strict.addAll(d.unconditionalStrict)
+
+            // Conditional blocks apply iff manufacturer OR brand matches
+            for (block in d.conditional) {
+                if (block.matches(device)) {
+                    strict.addAll(block.strictPrefixes)
+                    partnership.addAll(block.partnershipPrefixes)
+                }
+            }
+
+            ApplicablePrefixes(
+                strict = strict.toSet(),
+                partnership = partnership.toSet(),
+            )
+        }
 
     /**
      * Fetches the latest OEM prefix list from the public rules repo.
-     * On success, replaces the in-memory cache. On failure, keeps existing data.
+     * On success, replaces the in-memory cache AND invalidates [perDeviceCache]
+     * so subsequent queries re-derive the applicable set.
      */
-    @Suppress("TooGenericExceptionCaught")
+    @Suppress("TooGenericExceptionCaught", "ReturnCount")
     suspend fun refresh() = withContext(Dispatchers.IO) {
         try {
             val yaml = fetchUrl(PREFIXES_URL) ?: return@withContext
             val parsed = parseOemPrefixYaml(yaml)
 
             // Sanity checks — reject obviously malicious remote data
-            val allPrefixes = parsed.strictPrefixes + parsed.partnershipPrefixes
+            val allStrict = parsed.unconditionalStrict +
+                parsed.conditional.flatMap { it.strictPrefixes }
+            val allPartnership = parsed.conditional.flatMap { it.partnershipPrefixes }
+            val allPrefixes = allStrict + allPartnership
             if (allPrefixes.any { it.length < 4 }) {
-                Log.w(TAG, "Remote OEM prefix feed rejected: prefix too short (possible wildcard attack)")
+                Log.w(TAG, "Remote OEM prefix feed rejected: prefix too short")
                 return@withContext
             }
-            if (allPrefixes.size > 500) {
+            if (allPrefixes.size > MAX_PREFIX_COUNT) {
                 Log.w(TAG, "Remote OEM prefix feed rejected: too many prefixes (${allPrefixes.size})")
                 return@withContext
             }
 
-            if (allPrefixes.isNotEmpty() || parsed.installers.isNotEmpty()) {
-                val current = data.get()
-                data.set(ParsedOemData(
-                    strictPrefixes = if (parsed.strictPrefixes.isNotEmpty()) {
-                        parsed.strictPrefixes
-                    } else {
-                        current.strictPrefixes
-                    },
-                    partnershipPrefixes = if (parsed.partnershipPrefixes.isNotEmpty()) {
-                        parsed.partnershipPrefixes
-                    } else {
-                        current.partnershipPrefixes
-                    },
-                    installers = if (parsed.installers.isNotEmpty()) {
-                        parsed.installers
-                    } else {
-                        current.installers
-                    }
-                ))
-                val updated = data.get()
+            if (allPrefixes.isNotEmpty() || parsed.trustedInstallers.isNotEmpty()) {
+                data.set(parsed)
+                perDeviceCache.clear()
                 Log.i(
                     TAG,
-                    "OEM data refreshed: ${updated.strictPrefixes.size} strict + " +
-                        "${updated.partnershipPrefixes.size} partnership prefixes, " +
-                        "${updated.installers.size} installers"
+                    "OEM data refreshed: ${parsed.unconditionalStrict.size} unconditional + " +
+                        "${parsed.conditional.size} conditional blocks, " +
+                        "${parsed.trustedInstallers.size} installers",
                 )
             }
         } catch (e: Exception) {
@@ -101,13 +156,47 @@ class OemPrefixResolver @Inject constructor(
         }
     }
 
+    // ─── Data classes ──────────────────────────────────────────────────────
+
+    /** Raw parsed YAML data. */
     internal data class ParsedOemData(
+        val unconditionalStrict: Set<String>,
+        val conditional: List<ConditionalBlock>,
+        val trustedInstallers: Set<String>,
+    ) {
+        companion object {
+            fun empty() = ParsedOemData(emptySet(), emptyList(), emptySet())
+        }
+    }
+
+    /** A single conditional block from the YAML. */
+    internal data class ConditionalBlock(
+        val id: String,
+        val manufacturerMatch: Set<String>,
+        val brandMatch: Set<String>,
         val strictPrefixes: Set<String>,
         val partnershipPrefixes: Set<String>,
-        val installers: Set<String>
+    ) {
+        /**
+         * A block matches a device iff the device's manufacturer is in
+         * [manufacturerMatch] OR the device's brand is in [brandMatch].
+         * Either condition is sufficient — allows carrier-branded builds
+         * to match on brand even if manufacturer is generic.
+         */
+        fun matches(device: DeviceIdentity): Boolean =
+            device.manufacturer in manufacturerMatch ||
+                device.brand in brandMatch
+    }
+
+    /** The effective allowlist for a specific device identity. */
+    data class ApplicablePrefixes(
+        val strict: Set<String>,
+        val partnership: Set<String>,
     )
 
-    @Suppress("UNCHECKED_CAST", "TooGenericExceptionCaught")
+    // ─── YAML parsing ──────────────────────────────────────────────────────
+
+    @Suppress("UNCHECKED_CAST", "TooGenericExceptionCaught", "LongMethod", "NestedBlockDepth")
     internal fun parseOemPrefixYaml(yamlContent: String): ParsedOemData {
         return try {
             val settings = LoadSettings.builder()
@@ -116,36 +205,108 @@ class OemPrefixResolver @Inject constructor(
                 .build()
             val load = Load(settings)
             val doc = load.loadFromString(yamlContent) as? Map<*, *>
-                ?: return ParsedOemData(emptySet(), emptySet(), emptySet())
+                ?: return ParsedOemData.empty()
 
-            // Collect prefix lists: keys containing "partner" go to partnership, others to strict
-            val strictPrefixes = mutableSetOf<String>()
-            val partnershipPrefixes = mutableSetOf<String>()
-            for ((key, value) in doc) {
+            // Parse unconditional section; fall back to legacy flat structure
+            // if the new key is absent (forward-compat for remote feeds).
+            val unconditionalMap = doc["unconditional"] as? Map<*, *>
+                ?: return parseLegacyFlat(doc)
+            val unconditionalStrict = mutableSetOf<String>()
+            for ((key, value) in unconditionalMap) {
                 val keyStr = key.toString()
-                if (keyStr.endsWith("_prefixes") && value is List<*>) {
-                    val prefixes = value.filterIsInstance<String>()
-                    if (keyStr.contains("partner")) {
-                        partnershipPrefixes.addAll(prefixes)
-                    } else {
-                        strictPrefixes.addAll(prefixes)
-                    }
+                if (keyStr == "trusted_installers") continue
+                if (value is List<*>) {
+                    unconditionalStrict.addAll(value.filterIsInstance<String>())
                 }
             }
 
-            // Collect trusted installers
-            val installerList = (doc["trusted_installers"] as? List<*>)
+            // Parse trusted installers
+            val installers = (unconditionalMap["trusted_installers"] as? List<*>)
                 ?.filterIsInstance<String>()
-                ?.filter { it.length >= 10 && it.contains('.') }
+                ?.filter { it.length >= MIN_INSTALLER_LEN && it.contains('.') }
                 ?.take(MAX_INSTALLER_COUNT)
                 ?.toSet() ?: emptySet()
 
-            ParsedOemData(strictPrefixes, partnershipPrefixes, installerList)
+            // Parse conditional blocks
+            val conditionalMap = doc["conditional"] as? Map<*, *> ?: emptyMap<Any, Any>()
+            val conditionalBlocks = mutableListOf<ConditionalBlock>()
+            for ((blockKey, blockValue) in conditionalMap) {
+                val blockId = blockKey.toString()
+                val block = blockValue as? Map<*, *> ?: continue
+                val manufacturerMatch = (block["manufacturer_match"] as? List<*>)
+                    ?.filterIsInstance<String>()
+                    ?.map { it.lowercase() }
+                    ?.toSet() ?: emptySet()
+                val brandMatch = (block["brand_match"] as? List<*>)
+                    ?.filterIsInstance<String>()
+                    ?.map { it.lowercase() }
+                    ?.toSet() ?: emptySet()
+                val strictPrefixes = (block["strict_prefixes"] as? List<*>)
+                    ?.filterIsInstance<String>()
+                    ?.toSet() ?: emptySet()
+                val partnershipPrefixes = (block["partnership_prefixes"] as? List<*>)
+                    ?.filterIsInstance<String>()
+                    ?.toSet() ?: emptySet()
+
+                if (strictPrefixes.isNotEmpty() || partnershipPrefixes.isNotEmpty()) {
+                    conditionalBlocks += ConditionalBlock(
+                        id = blockId,
+                        manufacturerMatch = manufacturerMatch,
+                        brandMatch = brandMatch,
+                        strictPrefixes = strictPrefixes,
+                        partnershipPrefixes = partnershipPrefixes,
+                    )
+                }
+            }
+
+            ParsedOemData(
+                unconditionalStrict = unconditionalStrict,
+                conditional = conditionalBlocks,
+                trustedInstallers = installers,
+            )
         } catch (e: Exception) {
             Log.w(TAG, "Failed to parse OEM prefix YAML: ${e.message}")
-            ParsedOemData(emptySet(), emptySet(), emptySet())
+            ParsedOemData.empty()
         }
     }
+
+    /**
+     * Fallback parser for the legacy flat YAML structure (pre-#90).
+     * Every prefix becomes unconditional. Used when a remote feed hasn't
+     * been updated to the new structure yet — maintains forward-compat.
+     */
+    @Suppress("UNCHECKED_CAST")
+    private fun parseLegacyFlat(doc: Map<*, *>): ParsedOemData {
+        val strictPrefixes = mutableSetOf<String>()
+        val partnershipPrefixes = mutableSetOf<String>()
+        for ((key, value) in doc) {
+            val keyStr = key.toString()
+            if (keyStr.endsWith("_prefixes") && value is List<*>) {
+                val prefixes = value.filterIsInstance<String>()
+                if (keyStr.contains("partner")) {
+                    partnershipPrefixes.addAll(prefixes)
+                } else {
+                    strictPrefixes.addAll(prefixes)
+                }
+            }
+        }
+        val installers = (doc["trusted_installers"] as? List<*>)
+            ?.filterIsInstance<String>()
+            ?.filter { it.length >= MIN_INSTALLER_LEN && it.contains('.') }
+            ?.take(MAX_INSTALLER_COUNT)
+            ?.toSet() ?: emptySet()
+
+        // Legacy: all prefixes become unconditional. Partnership prefixes
+        // are dropped on the legacy fallback path — this is acceptable
+        // because the production YAML ships with the new structure.
+        return ParsedOemData(
+            unconditionalStrict = strictPrefixes + partnershipPrefixes,
+            conditional = emptyList(),
+            trustedInstallers = installers,
+        )
+    }
+
+    // ─── HTTP fetch (unchanged) ────────────────────────────────────────────
 
     @Suppress("TooGenericExceptionCaught", "SwallowedException")
     private fun fetchUrl(url: String): String? {
@@ -175,5 +336,7 @@ class OemPrefixResolver @Inject constructor(
         private const val TIMEOUT_MS = 10_000
         private const val MAX_RESPONSE_SIZE = 100_000
         private const val MAX_INSTALLER_COUNT = 50
+        private const val MAX_PREFIX_COUNT = 500
+        private const val MIN_INSTALLER_LEN = 10
     }
 }

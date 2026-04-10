@@ -1,112 +1,210 @@
-version: "2026-03-29"
-description: "Known OEM, carrier, and chipset vendor package prefixes. Apps matching these prefixes are treated as OEM/system apps for detection purposes, reducing false positives on carrier-branded devices."
+version: "2026-04-10"
+description: "Known OEM, carrier, and chipset vendor package prefixes. Split into unconditional and device-conditional sections: conditional blocks only apply when the assessed device's manufacturer/brand matches the block's manufacturer_match / brand_match lists. This closes the prefix-spoofing attack from #90 where an attacker could hide malware under a foreign vendor's package namespace on a device that doesn't actually use that vendor."
 sources:
   - uad-list
   - plexus-data
   - manual-verification
+  - androdr-research
 
-# AOSP / Google
-aosp_prefixes:
-  - "com.android."
-  - "com.google."
-  - "android."
+# ============================================================
+# UNCONDITIONAL PREFIXES — apply to every device regardless of manufacturer.
+# These represent packages that legitimately ship cross-vendor and cannot be
+# meaningfully spoofed (either they're signed by Google, or they're chipset
+# firmware components that only load if the chipset is present).
+# ============================================================
+unconditional:
+  aosp_prefixes:
+    - "com.android."
+    - "com.google."
+    - "android."
 
-# Chipset vendors
-chipset_prefixes:
-  - "com.qualcomm."
-  - "com.qti."
-  - "vendor.qti."
-  - "com.mediatek."
-  - "com.mtk."
+  chipset_prefixes:
+    - "com.qualcomm."
+    - "com.qti."
+    - "vendor.qti."
+    - "com.mediatek."
+    - "com.mtk."
+    - "com.unisoc."
+    - "com.sprd."
+    - "vendor.unisoc."
+    - "vendor.sprd."
 
-# Board support / ODM
-odm_prefixes:
-  - "com.bsp."
-  - "com.wingtech."
-  - "com.longcheer."
+  odm_prefixes:
+    - "com.bsp."
+    - "com.wingtech."
+    - "com.longcheer."
 
-# Samsung / Knox
-samsung_prefixes:
-  - "com.samsung."
-  - "com.sec."
-  - "com.osp."
-  - "com.knox."
-  - "com.skms."
-  - "com.mygalaxy."
-  - "com.monotype."
-  - "com.hiya."
-  - "com.sem."
-  - "com.swiftkey."
-  - "com.shannon."
-  - "com.wsomacp"
-  - "com.wssyncmldm"
+  android_go_prefixes:
+    - "com.go."
 
-# Samsung partnership pre-installs
-samsung_partner_prefixes:
-  - "com.microsoft."
-  - "com.touchtype."
-  - "com.facebook."
+  custom_rom_prefixes:
+    - "org.lineageos."
+    - "com.cyanogenmod."
 
-# Xiaomi / MIUI / Redmi
-xiaomi_prefixes:
-  - "com.miui."
-  - "com.xiaomi."
-  - "com.mi."
-  - "com.duokan."
-  - "com.mipay."
+  # Trusted app store installer package names. These are compared against
+  # installer identity, not against arbitrary package names, so they are
+  # safe to keep unconditional.
+  trusted_installers:
+    - "com.android.vending"             # Google Play Store
+    - "com.sec.android.app.samsungapps" # Samsung Galaxy Store
+    - "com.samsung.android.app.updatecenter"
+    - "com.samsung.android.app.watchmanager"
+    - "com.samsung.android.scloud"
+    - "com.samsung.android.themestore"
+    - "com.samsung.android.spay"
+    - "com.sec.android.app.sbrowser"
+    - "com.facebook.system"
+    - "com.xiaomi.market"
+    - "com.xiaomi.mipicks"
+    - "com.miui.packageinstaller"
+    - "com.heytap.market"
+    - "com.coloros.safecenter"
+    - "com.huawei.appmarket"
+    - "com.bbk.appstore"
 
-# US carriers
-us_carrier_prefixes:
-  - "com.tmobile."
-  - "com.sprint."
-  - "com.att."
-  - "com.vzw."
-  - "com.verizon."
+# ============================================================
+# DEVICE-CONDITIONAL PREFIXES — apply only when the assessed device's
+# manufacturer or brand matches the block's manufacturer_match /
+# brand_match list. On a device that doesn't match, these prefixes are
+# NOT in the applicable set, which means an app using them will be
+# classified on its own merits (potentially flagged as sideloaded,
+# firmware implant, or system name disguise).
+# ============================================================
+conditional:
 
-# Carrier pre-install platforms
-# NOTE: com.ironsrc.aura.* is intentionally EXCLUDED — IronSource Aura
-# silently installs sponsored apps and should be flagged as invasive bloatware.
-carrier_platform_prefixes:
-  - "com.dti."
-  - "com.digitalturbine."
+  samsung:
+    manufacturer_match: ["samsung"]
+    brand_match: ["samsung"]
+    strict_prefixes:
+      - "com.samsung."
+      - "com.sec."
+      - "com.osp."
+      - "com.knox."
+      - "com.skms."
+      - "com.mygalaxy."
+      - "com.monotype."
+      - "com.hiya."
+      - "com.sem."
+      - "com.swiftkey."
+      - "com.shannon."
+      - "com.wsomacp"
+      - "com.wssyncmldm"
+    # Apps pre-installed via Samsung partnerships — counts as OEM only
+    # when the app has FLAG_SYSTEM (pre-installed) AND the device is Samsung.
+    partnership_prefixes:
+      - "com.microsoft."
+      - "com.touchtype."
+      - "com.facebook."
 
-# Other OEMs
-other_oem_prefixes:
-  - "com.motorola."
-  - "com.oneplus."
-  - "com.lge."
-  - "com.htc."
-  - "com.sony."
-  - "com.huawei."
-  - "com.asus."
-  - "com.oppo."
-  - "com.realme."
-  - "com.vivo."
-  - "com.coloros."
-  - "com.heytap."
-  - "com.oplus."
-  - "com.amazon."
+  xiaomi:
+    manufacturer_match: ["xiaomi"]
+    brand_match: ["xiaomi", "redmi", "poco"]
+    strict_prefixes:
+      - "com.miui."
+      - "com.xiaomi."
+      - "com.mi."
+      - "com.duokan."
+      - "com.mipay."
 
-# Custom ROMs
-custom_rom_prefixes:
-  - "org.lineageos."
-  - "com.cyanogenmod."
+  motorola:
+    manufacturer_match: ["motorola"]
+    brand_match: ["motorola", "lenovo"]
+    strict_prefixes:
+      - "com.motorola."
 
-# Trusted app store installer package names
-trusted_installers:
-  - "com.android.vending"             # Google Play Store
-  - "com.sec.android.app.samsungapps" # Samsung Galaxy Store
-  - "com.samsung.android.app.updatecenter" # Samsung Update Center
-  - "com.samsung.android.app.watchmanager" # Samsung Wearable Manager
-  - "com.samsung.android.scloud"      # Samsung Cloud restore
-  - "com.samsung.android.themestore"  # Samsung Theme Store
-  - "com.samsung.android.spay"        # Samsung Pay
-  - "com.sec.android.app.sbrowser"    # Samsung Internet (WebAPKs)
-  - "com.facebook.system"             # Meta/Facebook pre-install agent (Samsung partnership)
-  - "com.xiaomi.market"               # Xiaomi GetApps
-  - "com.xiaomi.mipicks"              # Xiaomi Mi Picks
-  - "com.miui.packageinstaller"       # MIUI Package Installer
-  - "com.heytap.market"               # OPPO/Realme App Market
-  - "com.coloros.safecenter"           # ColorOS Safe Center
-  - "com.huawei.appmarket"            # Huawei AppGallery
-  - "com.bbk.appstore"                # Vivo App Store
+  oneplus:
+    manufacturer_match: ["oneplus"]
+    brand_match: ["oneplus"]
+    strict_prefixes:
+      - "com.oneplus."
+
+  lg:
+    manufacturer_match: ["lge"]
+    brand_match: ["lge"]
+    strict_prefixes:
+      - "com.lge."
+
+  htc:
+    manufacturer_match: ["htc"]
+    brand_match: ["htc"]
+    strict_prefixes:
+      - "com.htc."
+
+  sony:
+    manufacturer_match: ["sony"]
+    brand_match: ["sony"]
+    strict_prefixes:
+      - "com.sony."
+
+  huawei:
+    manufacturer_match: ["huawei", "honor"]
+    brand_match: ["huawei", "honor"]
+    strict_prefixes:
+      - "com.huawei."
+      - "com.honor."
+
+  asus:
+    manufacturer_match: ["asus"]
+    brand_match: ["asus"]
+    strict_prefixes:
+      - "com.asus."
+
+  oppo:
+    manufacturer_match: ["oppo", "oplus"]
+    brand_match: ["oppo"]
+    strict_prefixes:
+      - "com.oppo."
+      - "com.coloros."
+      - "com.heytap."
+      - "com.oplus."
+
+  realme:
+    manufacturer_match: ["realme"]
+    brand_match: ["realme"]
+    strict_prefixes:
+      - "com.realme."
+
+  vivo:
+    manufacturer_match: ["vivo"]
+    brand_match: ["vivo"]
+    strict_prefixes:
+      - "com.vivo."
+      - "com.bbk."
+
+  amazon:
+    manufacturer_match: ["amazon"]
+    brand_match: ["amazon"]
+    strict_prefixes:
+      - "com.amazon."
+
+  # US carrier-branded builds: these prefixes apply only when the build
+  # brand matches the carrier, typically on carrier-branded phones.
+  # NOTE: com.ironsrc.aura.* is intentionally EXCLUDED — IronSource Aura
+  # silently installs sponsored apps and should be flagged as invasive
+  # bloatware regardless of carrier build.
+  us_carrier_tmobile:
+    manufacturer_match: []
+    brand_match: ["tmobile"]
+    strict_prefixes:
+      - "com.tmobile."
+      - "com.dti."
+      - "com.digitalturbine."
+
+  us_carrier_sprint:
+    manufacturer_match: []
+    brand_match: ["sprint"]
+    strict_prefixes:
+      - "com.sprint."
+
+  us_carrier_att:
+    manufacturer_match: []
+    brand_match: ["att"]
+    strict_prefixes:
+      - "com.att."
+
+  us_carrier_verizon:
+    manufacturer_match: []
+    brand_match: ["vzw", "verizon"]
+    strict_prefixes:
+      - "com.vzw."
+      - "com.verizon."

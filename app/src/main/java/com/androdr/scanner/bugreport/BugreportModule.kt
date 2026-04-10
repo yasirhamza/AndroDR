@@ -1,6 +1,7 @@
 package com.androdr.scanner.bugreport
 
 import com.androdr.data.model.TimelineEvent
+import com.androdr.ioc.DeviceIdentity
 import com.androdr.ioc.IndicatorResolver
 import java.io.InputStream
 
@@ -21,15 +22,25 @@ interface BugreportModule {
     /** Dumpsys service names this module needs, or null for raw ZIP entries. */
     val targetSections: List<String>?
 
-    /** Analyze a dumpsys section. Override for section-targeted modules. */
+    /**
+     * Analyze a dumpsys section. Override for section-targeted modules.
+     *
+     * [device] is the identity of the source device (extracted from the
+     * bugreport's getprop section). Modules that classify packages via
+     * [com.androdr.ioc.OemPrefixResolver] must pass this through so the
+     * device-conditional allowlist (#90) evaluates against the source
+     * device, not the device running AndroDR.
+     */
     suspend fun analyze(
         sectionText: String,
-        iocResolver: IndicatorResolver
+        iocResolver: IndicatorResolver,
+        device: DeviceIdentity = DeviceIdentity.UNKNOWN,
     ): ModuleResult = ModuleResult()
 
     /** Analyze raw ZIP entries. Override for modules with targetSections == null. */
     suspend fun analyzeRaw(
         entries: Sequence<Pair<String, InputStream>>,
-        iocResolver: IndicatorResolver
+        iocResolver: IndicatorResolver,
+        device: DeviceIdentity = DeviceIdentity.UNKNOWN,
     ): ModuleResult = ModuleResult()
 }

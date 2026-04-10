@@ -19,7 +19,11 @@ class AdbKeysModule @Inject constructor() : BugreportModule {
         RegexOption.MULTILINE
     )
 
-    override suspend fun analyze(sectionText: String, iocResolver: IndicatorResolver): ModuleResult {
+    override suspend fun analyze(
+        sectionText: String,
+        iocResolver: IndicatorResolver,
+        device: com.androdr.ioc.DeviceIdentity,
+    ): ModuleResult {
         val telemetry = mutableListOf<Map<String, Any?>>()
         val timeline = mutableListOf<TimelineEvent>()
 

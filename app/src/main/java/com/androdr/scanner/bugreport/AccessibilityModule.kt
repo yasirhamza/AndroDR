@@ -1,5 +1,6 @@
 package com.androdr.scanner.bugreport
 
+import com.androdr.ioc.DeviceIdentity
 import com.androdr.ioc.IndicatorResolver
 import com.androdr.ioc.OemPrefixResolver
 import javax.inject.Inject
@@ -22,13 +23,17 @@ class AccessibilityModule @Inject constructor(
         RegexOption.MULTILINE
     )
 
-    override suspend fun analyze(sectionText: String, iocResolver: IndicatorResolver): ModuleResult {
+    override suspend fun analyze(
+        sectionText: String,
+        iocResolver: IndicatorResolver,
+        device: DeviceIdentity,
+    ): ModuleResult {
         val telemetry = mutableListOf<Map<String, Any?>>()
 
         enabledServiceRegex.findAll(sectionText).forEach { match ->
             val packageName = match.groupValues[1]
             val serviceName = match.groupValues[2]
-            val isSystemApp = oemPrefixResolver.isOemPrefix(packageName)
+            val isSystemApp = oemPrefixResolver.isOemPrefix(packageName, device)
 
             telemetry.add(mapOf(
                 "package_name" to packageName,

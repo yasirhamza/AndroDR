@@ -1,5 +1,6 @@
 package com.androdr.scanner.bugreport
 
+import com.androdr.ioc.DeviceIdentity
 import com.androdr.ioc.IndicatorResolver
 import com.androdr.ioc.OemPrefixResolver
 import javax.inject.Inject
@@ -43,7 +44,11 @@ class ReceiverModule @Inject constructor(
      */
     private val lastIntentBlockCap = 256 * 1024
 
-    override suspend fun analyze(sectionText: String, iocResolver: IndicatorResolver): ModuleResult {
+    override suspend fun analyze(
+        sectionText: String,
+        iocResolver: IndicatorResolver,
+        device: DeviceIdentity,
+    ): ModuleResult {
         val telemetry = mutableListOf<Map<String, Any?>>()
         val seen = mutableSetOf<Pair<String, String>>() // (packageName, intentAction)
 
@@ -101,7 +106,7 @@ class ReceiverModule @Inject constructor(
                 val packageName = match.groupValues[1]
                 val componentName = match.groupValues[2]
                 if (!seen.add(packageName to intent)) return@forEach
-                val isSystemApp = oemPrefixResolver.isOemPrefix(packageName)
+                val isSystemApp = oemPrefixResolver.isOemPrefix(packageName, device)
 
                 telemetry.add(mapOf(
                     "package_name" to packageName,
