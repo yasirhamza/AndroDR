@@ -15,7 +15,7 @@ import com.androdr.data.model.ScanResult
         CveEntity::class, ForensicTimelineEvent::class, Indicator::class
     ],
     version = 16,
-    exportSchema = false
+    exportSchema = true
 )
 @TypeConverters(Converters::class)
 abstract class AppDatabase : RoomDatabase() {
