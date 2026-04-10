@@ -32,9 +32,16 @@ class FileArtifactScanner @Inject constructor(
      */
     @Suppress("TooGenericExceptionCaught")
     suspend fun collectTelemetry(): List<FileArtifactTelemetry> = withContext(Dispatchers.IO) {
-        knownSpywareArtifactsResolver.paths.map { path ->
+        var skipped = 0
+        val results = knownSpywareArtifactsResolver.paths.mapNotNull { path ->
             try {
                 val file = File(path)
+                val parentReadable = file.parentFile?.canRead() ?: false
+                if (!parentReadable) {
+                    Log.d(TAG, "Skipping inaccessible path: $path")
+                    skipped++
+                    return@mapNotNull null
+                }
                 val exists = file.exists()
                 FileArtifactTelemetry(
                     filePath = path,
@@ -42,22 +49,18 @@ class FileArtifactScanner @Inject constructor(
                     fileSize = if (exists) file.length() else null,
                     fileModified = if (exists) file.lastModified() else null,
                     source = TelemetrySource.LIVE_SCAN,
+                    accessible = true,
                 )
             } catch (e: Exception) {
-                // SecurityException or other access errors — treat as non-existent
+                // SecurityException or other access errors — skip entirely
                 Log.d(TAG, "Cannot access $path: ${e.message}")
-                FileArtifactTelemetry(
-                    filePath = path,
-                    fileExists = false,
-                    fileSize = null,
-                    fileModified = null,
-                    source = TelemetrySource.LIVE_SCAN,
-                )
+                skipped++
+                null
             }
-        }.also {
-            Log.d(TAG, "Checked ${it.size} artifact paths, " +
-                "${it.count { t -> t.fileExists }} found")
         }
+        Log.d(TAG, "Checked ${results.size} accessible paths, " +
+            "${results.count { t -> t.fileExists }} found, $skipped skipped (inaccessible)")
+        results
     }
 
     companion object {

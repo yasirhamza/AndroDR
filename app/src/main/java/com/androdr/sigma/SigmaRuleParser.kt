@@ -169,6 +169,7 @@ object SigmaRuleParser {
             }
 
             val enabled = (doc["enabled"] as? Boolean) ?: true
+            val reportSafeState = (doc["report_safe_state"] as? Boolean) ?: false
 
             SigmaRule(
                 id = ruleId,
@@ -184,7 +185,8 @@ object SigmaRuleParser {
                 falsepositives = (doc["falsepositives"] as? List<*>)?.map { it.toString() } ?: emptyList(),
                 remediation = (doc["remediation"] as? List<*>)?.map { it.toString() } ?: emptyList(),
                 display = parseDisplay(doc["display"] as? Map<*, *>),
-                enabled = enabled
+                enabled = enabled,
+                reportSafeState = reportSafeState
             )
         } catch (e: SigmaRuleParseException) {
             throw e

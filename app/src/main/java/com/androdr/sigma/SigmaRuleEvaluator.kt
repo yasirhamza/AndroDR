@@ -116,7 +116,7 @@ object SigmaRuleEvaluator {
                     } else {
                         findings.add(buildFinding(rule, category, true, record, null))
                     }
-                } else if (category == FindingCategory.DEVICE_POSTURE) {
+                } else if (rule.reportSafeState) {
                     findings.add(buildFinding(rule, category, false, record, null))
                 }
             }

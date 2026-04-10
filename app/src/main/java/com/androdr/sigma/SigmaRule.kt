@@ -15,7 +15,8 @@ data class SigmaRule(
     val falsepositives: List<String>,
     val remediation: List<String>,
     val display: SigmaDisplay = SigmaDisplay(),
-    val enabled: Boolean = true
+    val enabled: Boolean = true,
+    val reportSafeState: Boolean = false
 )
 
 data class SigmaDetection(

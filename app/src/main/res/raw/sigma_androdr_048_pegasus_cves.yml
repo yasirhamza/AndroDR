@@ -28,5 +28,6 @@ display:
     summary_template: "Pegasus spyware exploits {count} unpatched CVEs on this device"
 level: medium
 category: device_posture
+report_safe_state: true
 remediation:
     - "Go to Settings > Software Update > Download and Install immediately. Also check Play Store > Settings > About > Google Play system update. Your phone has vulnerabilities used by Pegasus spyware."

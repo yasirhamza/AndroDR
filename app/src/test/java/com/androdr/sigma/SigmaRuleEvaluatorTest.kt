@@ -15,13 +15,15 @@ class SigmaRuleEvaluatorTest {
         condition: String = "selection",
         level: String = "high",
         category: RuleCategory = RuleCategory.INCIDENT,
+        reportSafeState: Boolean = false,
     ) = SigmaRule(
         id = id, title = "Test", status = "production", description = "",
         product = "androdr", service = service, level = level,
         category = category,
         tags = emptyList(), detection = SigmaDetection(selections, condition),
         falsepositives = emptyList(), remediation = listOf("Fix it"),
-        display = SigmaDisplay(category = if (service == "device_auditor") "device_posture" else "app_risk")
+        display = SigmaDisplay(category = if (service == "device_auditor") "device_posture" else "app_risk"),
+        reportSafeState = reportSafeState
     )
 
     @Test
@@ -257,9 +259,10 @@ class SigmaRuleEvaluatorTest {
     }
 
     @Test
-    fun `device posture rule emits safe finding when not matched`() {
+    fun `device posture rule emits safe finding when not matched and reportSafeState is true`() {
         val rule = makeRule(
             service = "device_auditor",
+            reportSafeState = true,
             selections = mapOf("selection" to SigmaSelection(listOf(
                 SigmaFieldMatcher("adb_enabled", SigmaModifier.EQUALS, listOf(true))
             )))
@@ -278,9 +281,29 @@ class SigmaRuleEvaluatorTest {
     }
 
     @Test
+    fun `device posture rule without reportSafeState does not emit when not matched`() {
+        val rule = makeRule(
+            service = "device_auditor",
+            reportSafeState = false,
+            selections = mapOf("selection" to SigmaSelection(listOf(
+                SigmaFieldMatcher("adb_enabled", SigmaModifier.EQUALS, listOf(true))
+            )))
+        ).copy(display = SigmaDisplay(
+            category = "device_posture",
+            triggeredTitle = "ADB Enabled",
+            safeTitle = "ADB Disabled",
+            evidenceType = "none"
+        ))
+        val record = mapOf<String, Any?>("adb_enabled" to false)
+        val findings = SigmaRuleEvaluator.evaluate(listOf(rule), listOf(record), "device_auditor")
+        assertEquals(0, findings.size)
+    }
+
+    @Test
     fun `device posture rule emits triggered finding with display title`() {
         val rule = makeRule(
             service = "device_auditor",
+            reportSafeState = true,
             selections = mapOf("selection" to SigmaSelection(listOf(
                 SigmaFieldMatcher("adb_enabled", SigmaModifier.EQUALS, listOf(true))
             )))
@@ -311,6 +334,7 @@ class SigmaRuleEvaluatorTest {
     fun `evidence provider called when evidence_type is set`() {
         val rule = makeRule(
             service = "device_auditor",
+            reportSafeState = true,
             selections = mapOf("selection" to SigmaSelection(listOf(
                 SigmaFieldMatcher("unpatched_cve_count", SigmaModifier.GTE, listOf(1))
             ))), level = "critical"
