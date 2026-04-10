@@ -24,6 +24,7 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -34,6 +35,13 @@ import com.androdr.ioc.KnownAppResolver
 import javax.inject.Inject
 
 enum class TimelineGroupMode { DATE, SCAN }
+
+data class DateGroup(
+    val label: String,
+    val findingRows: List<TimelineRow.FindingRow>,
+    val clusters: List<EventCluster>,
+    val standaloneRows: List<TimelineRow.TelemetryRow>,
+)
 
 data class ScanGroup(
     val scanId: Long,
@@ -79,6 +87,15 @@ class TimelineViewModel @Inject constructor(
 
     private val _dateRange = MutableStateFlow<Pair<Long, Long>?>(null)
     val dateRange: StateFlow<Pair<Long, Long>?> = _dateRange.asStateFlow()
+
+    private val _severityFilter = MutableStateFlow<Set<String>>(emptySet())
+    val severityFilter: StateFlow<Set<String>> = _severityFilter.asStateFlow()
+
+    fun toggleSeverity(level: String) {
+        _severityFilter.update { current ->
+            if (level in current) current - level else current + level
+        }
+    }
 
     private data class FilterState(
         val src: String?, val pkg: String?, val dateRange: Pair<Long, Long>?
@@ -133,6 +150,24 @@ class TimelineViewModel @Inject constructor(
         events, latestFindings, _hideInformationalTelemetry
     ) { eventList, findings, hideInformational ->
         mergeTimelineRows(eventList, findings, hideInformational)
+    }.flowOn(Dispatchers.Default)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val dateGroupedRows: StateFlow<List<DateGroup>> = combine(
+        rows, _severityFilter, _groupMode
+    ) { rowList, severitySet, mode ->
+        if (mode != TimelineGroupMode.DATE || rowList.isEmpty()) return@combine emptyList()
+
+        val filtered = if (severitySet.isEmpty()) {
+            rowList
+        } else {
+            rowList.filter { row ->
+                row is TimelineRow.FindingRow &&
+                    row.finding.level.uppercase() in severitySet
+            }
+        }
+
+        buildDateGroups(filtered)
     }.flowOn(Dispatchers.Default)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
