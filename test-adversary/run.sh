@@ -48,14 +48,25 @@ WORKDIR=$(mktemp -d /tmp/androdr-adversary-XXXXXX)
 # Track results for summary
 declare -A RESULTS
 
-# Cleanup trap — always restore network and uninstall test APKs
+# Cleanup trap — always restore network, uninstall test APKs, and remove
+# injected artifacts (files, properties, etc.) that adb_inject scenarios created.
 INSTALLED_PACKAGES=()
+INJECTED_SCENARIOS=()
 
 cleanup() {
     echo ""
     echo ">>> Cleaning up..."
     for pkg in "${INSTALLED_PACKAGES[@]+"${INSTALLED_PACKAGES[@]}"}"; do
         $ADB uninstall "$pkg" 2>/dev/null || true
+    done
+    # Reverse every adb_inject scenario's cleanup commands from the manifest.
+    # Without this, files like /data/local/tmp/.raptor persist across runs
+    # and trip the spyware artifact rule on the next scan.
+    for scenario_id in "${INJECTED_SCENARIOS[@]+"${INJECTED_SCENARIOS[@]}"}"; do
+        while IFS= read -r cmd; do
+            [ -z "$cmd" ] && continue
+            $ADB $cmd </dev/null 2>/dev/null || true
+        done < <(get_cleanup_cmds "$scenario_id")
     done
     # Restore network inside emulator
     if ! ${SKIP_ISOLATION:-true}; then
@@ -321,6 +332,7 @@ run_scenario() {
 
     # Step 4: INJECT (adb_inject scenarios)
     if [ "$source" = "adb_inject" ]; then
+        INJECTED_SCENARIOS+=("$id")
         while IFS= read -r cmd; do
             [ -z "$cmd" ] && continue
             echo "  Injecting: adb $cmd"
@@ -482,6 +494,7 @@ if [ "$MODE" = "load" ] || [ "$MODE" = "guided" ]; then
         fi
 
         if [ "$source" = "adb_inject" ]; then
+            INJECTED_SCENARIOS+=("$scenario_id")
             while IFS= read -r cmd; do
                 [ -z "$cmd" ] && continue
                 echo "  Injecting ($scenario_id): adb $cmd"
