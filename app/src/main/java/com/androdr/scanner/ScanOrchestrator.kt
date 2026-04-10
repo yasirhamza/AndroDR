@@ -66,6 +66,20 @@ class ScanOrchestrator @Inject constructor(
     @Volatile var lastAppTelemetry: List<com.androdr.data.model.AppTelemetry> = emptyList()
         private set
 
+    /** Cached telemetry from the most recent scan, for report export. */
+    @Volatile var lastDeviceTelemetry: List<com.androdr.data.model.DeviceTelemetry> = emptyList()
+        private set
+    @Volatile var lastProcessTelemetry: List<com.androdr.data.model.ProcessTelemetry> = emptyList()
+        private set
+    @Volatile var lastFileArtifactTelemetry: List<com.androdr.data.model.FileArtifactTelemetry> = emptyList()
+        private set
+    @Volatile var lastAccessibilityTelemetry: List<com.androdr.data.model.AccessibilityTelemetry> = emptyList()
+        private set
+    @Volatile var lastReceiverTelemetry: List<com.androdr.data.model.ReceiverTelemetry> = emptyList()
+        private set
+    @Volatile var lastAppOpsTelemetry: List<com.androdr.data.model.AppOpsTelemetry> = emptyList()
+        private set
+
     /**
      * Wall-clock timestamp of the last successful [AppScanner.collectTelemetry]
      * call, used by [analyzeBugReport] to decide whether the cached
@@ -254,6 +268,12 @@ class ScanOrchestrator @Inject constructor(
         val accessibilityTelemetry = accessibilityTelemetryDeferred.await()
         val receiverTelemetry = receiverTelemetryDeferred.await()
         val appOpsTelemetry = appOpsTelemetryDeferred.await()
+        lastDeviceTelemetry = deviceTelemetry
+        lastProcessTelemetry = processTelemetry
+        lastFileArtifactTelemetry = fileTelemetry
+        lastAccessibilityTelemetry = accessibilityTelemetry
+        lastReceiverTelemetry = receiverTelemetry
+        lastAppOpsTelemetry = appOpsTelemetry
 
         // Phase 2: SIGMA rule evaluation — all detection via rules
         _scanProgress.value = ScanProgress.Running(
