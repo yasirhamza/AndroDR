@@ -262,6 +262,23 @@ fun TimelineScreen(
                     )
                 }
 
+                // Severity filter chips
+                val severityFilter by viewModel.severityFilter.collectAsStateWithLifecycle()
+                val severityLevels = listOf("CRITICAL", "HIGH", "MEDIUM", "LOW")
+
+                LazyRow(
+                    contentPadding = PaddingValues(horizontal = 16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    items(severityLevels) { level ->
+                        FilterChip(
+                            selected = level in severityFilter,
+                            onClick = { viewModel.toggleSeverity(level) },
+                            label = { Text(level) }
+                        )
+                    }
+                }
+
                 // Package filter chips
                 val packages by viewModel.availablePackages.collectAsStateWithLifecycle()
                 val packageFilter by viewModel.packageFilter.collectAsStateWithLifecycle()
