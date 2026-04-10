@@ -88,9 +88,21 @@ class ReportExporter @Inject constructor(
     @Suppress("TooGenericExceptionCaught")
     private fun captureLogcat(): List<String> = try {
         val pid = android.os.Process.myPid().toString()
-        val proc = Runtime.getRuntime().exec(
-            arrayOf("logcat", "-d", "-t", "300", "--pid=$pid", "*:D")
+        // Filter to AndroDR-specific tags. The previous filter (--pid + *:D)
+        // captured 300+ lines of Android framework noise (ViewRootImpl,
+        // InsetsController, InputMethodManager) with zero useful content.
+        val tags = listOf(
+            "AndroDR:D", "ScanOrchestrator:D", "AppScanner:D",
+            "DeviceAuditor:D", "SigmaRuleEngine:D", "SigmaRuleEvaluator:D",
+            "SigmaRuleFeed:D", "SigmaCorrelationEngine:D",
+            "BugReportAnalyzer:D", "FileArtifactScanner:D",
+            "OemPrefixResolver:D", "KnownSpywareArtifactsResolver:D",
+            "LocalVpnService:D", "DnsInterceptor:D", "ReportExporter:D",
+            "PeriodicScanWorker:D", "IocUpdateWorker:D",
+            "*:W",
         )
+        val cmd = listOf("logcat", "-d", "-t", "500", "--pid=$pid") + tags
+        val proc = Runtime.getRuntime().exec(cmd.toTypedArray())
         proc.inputStream.bufferedReader().readLines()
             .also { proc.destroy() }
     } catch (e: Exception) {

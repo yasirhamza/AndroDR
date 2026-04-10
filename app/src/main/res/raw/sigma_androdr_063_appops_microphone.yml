@@ -21,7 +21,7 @@ category: incident
 display:
     category: app_risk
     icon: mic
-    triggered_title: "Microphone Access"
+    triggered_title: "Microphone Access: {package_name}"
     evidence_type: none
 remediation:
     - "This app has accessed your microphone. Review whether this is expected behavior."

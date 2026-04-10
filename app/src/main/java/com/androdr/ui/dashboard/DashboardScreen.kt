@@ -343,10 +343,10 @@ private fun PostScanGuidance(riskLevel: RiskLevel?, latestScan: ScanResult?) {
 @Composable
 private fun RiskLevelCard(latestScan: ScanResult?) {
     val (riskColor, riskLabel) = when (latestScan?.overallRiskLevel) {
-        RiskLevel.CRITICAL -> Pair(Color(0xFFCF6679), "CRITICAL")
-        RiskLevel.HIGH     -> Pair(Color(0xFFFF9800), "HIGH")
-        RiskLevel.MEDIUM   -> Pair(Color(0xFFE6A800), "MEDIUM")
-        RiskLevel.LOW      -> Pair(Color(0xFF00D4AA), "LOW")
+        RiskLevel.CRITICAL -> Pair(Color(0xFFFF1744), "CRITICAL")  // bold red — unmistakable danger
+        RiskLevel.HIGH     -> Pair(Color(0xFFFF6E40), "HIGH")     // deep orange
+        RiskLevel.MEDIUM   -> Pair(Color(0xFFFFD54F), "MEDIUM")   // amber
+        RiskLevel.LOW      -> Pair(Color(0xFF00D4AA), "LOW")      // brand teal — all clear
         null               -> Pair(Color(0xFF00D4AA), "\u2014")
     }
 

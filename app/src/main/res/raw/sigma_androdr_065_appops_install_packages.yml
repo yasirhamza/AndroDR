@@ -21,7 +21,7 @@ category: incident
 display:
     category: app_risk
     icon: download
-    triggered_title: "Can Install APKs"
+    triggered_title: "Can Install APKs: {package_name}"
     evidence_type: none
 remediation:
     - "This app can install other apps. Go to Settings > Apps > Special access > Install unknown apps to review."

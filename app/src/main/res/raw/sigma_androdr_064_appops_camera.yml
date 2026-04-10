@@ -21,7 +21,7 @@ category: incident
 display:
     category: app_risk
     icon: camera
-    triggered_title: "Camera Access"
+    triggered_title: "Camera Access: {package_name}"
     evidence_type: none
 remediation:
-    - "This app has accessed your camera. Review whether this is expected behavior."
+    - "{package_name} has accessed your camera. Review whether this is expected behavior."

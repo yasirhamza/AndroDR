@@ -339,6 +339,7 @@ class TimelineViewModel @Inject constructor(
      * mode). Uses [reportExporter] for the same format as the History screen
      * export, not the timeline-specific TXT/CSV.
      */
+    @Suppress("TooGenericExceptionCaught") // export can fail for IO, permissions, or serialization
     fun exportFullReport(mode: com.androdr.reporting.ExportMode) {
         viewModelScope.launch {
             _exporting.value = true
