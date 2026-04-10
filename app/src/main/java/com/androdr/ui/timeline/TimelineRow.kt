@@ -2,6 +2,14 @@ package com.androdr.ui.timeline
 
 import com.androdr.data.model.ForensicTimelineEvent
 import com.androdr.sigma.Finding
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+
+/** Thread-local date formatter for date-group labels (SimpleDateFormat is not thread-safe). */
+private val DATE_GROUP_FORMAT = ThreadLocal.withInitial {
+    SimpleDateFormat("MMM dd, yyyy", Locale.US)
+}
 
 /**
  * A single row in the timeline UI. Sealed type with two variants that
@@ -107,5 +115,70 @@ sealed interface TimelineRow {
          */
         override val timestamp: Long
             get() = anchorEvent?.startTimestamp ?: Long.MAX_VALUE
+    }
+}
+
+/**
+ * Groups a filtered list of [TimelineRow] into date-bucketed [DateGroup]s
+ * ready for rendering. Telemetry rows are partitioned into correlation
+ * clusters and standalone events via [partitionSignals].
+ *
+ * Pure function — no Android dependencies — so it can be unit-tested.
+ */
+fun buildDateGroups(rows: List<TimelineRow>): List<DateGroup> {
+    if (rows.isEmpty()) return emptyList()
+
+    val telemetryEvents = rows
+        .filterIsInstance<TimelineRow.TelemetryRow>()
+        .map { it.event }
+    val (clusters, standaloneEvents) = if (telemetryEvents.isNotEmpty()) {
+        partitionSignals(telemetryEvents)
+    } else {
+        emptyList<EventCluster>() to emptyList<ForensicTimelineEvent>()
+    }
+
+    val telemetryByEventId = rows
+        .filterIsInstance<TimelineRow.TelemetryRow>()
+        .associateBy { it.event.id }
+    val standaloneRows = standaloneEvents.mapNotNull { telemetryByEventId[it.id] }
+    val findingRows = rows.filterIsInstance<TimelineRow.FindingRow>()
+
+    val fmt = DATE_GROUP_FORMAT.get()!!
+    fun dateKey(ts: Long) = if (ts > 0) fmt.format(Date(ts)) else "Unknown Date"
+
+    data class Bucket(
+        val findings: MutableList<TimelineRow.FindingRow> = mutableListOf(),
+        val clusters: MutableList<EventCluster> = mutableListOf(),
+        val standalone: MutableList<TimelineRow.TelemetryRow> = mutableListOf(),
+    )
+    val buckets = mutableMapOf<String, Bucket>()
+
+    findingRows.forEach { row ->
+        buckets.getOrPut(dateKey(row.timestamp)) { Bucket() }.findings.add(row)
+    }
+    clusters.forEach { cluster ->
+        buckets.getOrPut(dateKey(cluster.events.first().startTimestamp)) { Bucket() }
+            .clusters.add(cluster)
+    }
+    standaloneRows.forEach { row ->
+        buckets.getOrPut(dateKey(row.timestamp)) { Bucket() }.standalone.add(row)
+    }
+
+    return buckets.map { (label, bucket) ->
+        DateGroup(
+            label = label,
+            findingRows = bucket.findings.sortedByDescending { it.timestamp },
+            clusters = bucket.clusters.sortedByDescending { c ->
+                c.events.maxOfOrNull { it.startTimestamp } ?: 0L
+            },
+            standaloneRows = bucket.standalone.sortedByDescending { it.timestamp },
+        )
+    }.sortedByDescending { group ->
+        val maxFinding = group.findingRows.maxOfOrNull { it.timestamp } ?: 0L
+        val maxCluster = group.clusters.maxOfOrNull { c ->
+            c.events.maxOfOrNull { it.startTimestamp } ?: 0L
+        } ?: 0L
+        val maxStandalone = group.standaloneRows.maxOfOrNull { it.timestamp } ?: 0L
+        maxOf(maxFinding, maxCluster, maxStandalone)
     }
 }
