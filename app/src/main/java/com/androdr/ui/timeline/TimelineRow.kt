@@ -2,6 +2,14 @@ package com.androdr.ui.timeline
 
 import com.androdr.data.model.ForensicTimelineEvent
 import com.androdr.sigma.Finding
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+
+/** Thread-local date formatter for date-group labels (SimpleDateFormat is not thread-safe). */
+private val DATE_GROUP_FORMAT = ThreadLocal.withInitial {
+    SimpleDateFormat("MMM dd, yyyy", Locale.US)
+}
 
 /**
  * A single row in the timeline UI. Sealed type with two variants that
@@ -135,8 +143,8 @@ fun buildDateGroups(rows: List<TimelineRow>): List<DateGroup> {
     val standaloneRows = standaloneEvents.mapNotNull { telemetryByEventId[it.id] }
     val findingRows = rows.filterIsInstance<TimelineRow.FindingRow>()
 
-    val fmt = java.text.SimpleDateFormat("MMM dd, yyyy", java.util.Locale.US)
-    fun dateKey(ts: Long) = if (ts > 0) fmt.format(java.util.Date(ts)) else "Unknown Date"
+    val fmt = DATE_GROUP_FORMAT.get()!!
+    fun dateKey(ts: Long) = if (ts > 0) fmt.format(Date(ts)) else "Unknown Date"
 
     data class Bucket(
         val findings: MutableList<TimelineRow.FindingRow> = mutableListOf(),
