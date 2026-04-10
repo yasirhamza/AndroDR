@@ -121,6 +121,12 @@ android {
         }
     }
 
+    sourceSets {
+        getByName("androidTest") {
+            assets.srcDirs("schemas")
+        }
+    }
+
     lint {
         warningsAsErrors = true
         abortOnError = true
