@@ -126,10 +126,16 @@ fun TelemetryCard(
  * category chip, rule id, title, and description.
  */
 @Composable
-fun FindingCard(row: TimelineRow.FindingRow, modifier: Modifier = Modifier) {
+fun FindingCard(
+    row: TimelineRow.FindingRow,
+    modifier: Modifier = Modifier,
+    onClick: (() -> Unit)? = null,
+) {
     val finding = row.finding
     Card(
-        modifier = modifier.fillMaxWidth(),
+        modifier = modifier.fillMaxWidth().let { m ->
+            if (onClick != null) m.clickable(onClick = onClick) else m
+        },
         colors = CardDefaults.cardColors(
             containerColor = severityBackgroundFor(finding.level)
         )
