@@ -67,15 +67,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.androdr.R
 import com.androdr.data.model.ForensicTimelineEvent
 import com.androdr.data.model.effectiveCorrelationId
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
-
-private data class DateEntry(
-    val clusters: List<EventCluster> = emptyList(),
-    val standaloneEvents: List<ForensicTimelineEvent> = emptyList()
-)
-
 @Suppress("LongMethod", "CyclomaticComplexMethod")
 // Timeline screen combines top bar, filter chips, grouped event list,
 // empty state, export menu, detail sheet, and correlation-aware jump
@@ -100,8 +91,7 @@ fun TimelineScreen(
     }
 
     val events by viewModel.events.collectAsStateWithLifecycle()
-    val partitioned by viewModel.partitionedEvents.collectAsStateWithLifecycle()
-    val rows by viewModel.rows.collectAsStateWithLifecycle()
+    val dateGroups by viewModel.dateGroupedRows.collectAsStateWithLifecycle()
     val hideInformational by viewModel.hideInformationalTelemetry.collectAsStateWithLifecycle()
     val shareUri by viewModel.shareUri.collectAsStateWithLifecycle()
     val exporting by viewModel.exporting.collectAsStateWithLifecycle()
@@ -365,7 +355,8 @@ fun TimelineScreen(
             }
         }
 
-        if (events.isEmpty()) {
+        val isEmpty = if (groupMode == TimelineGroupMode.SCAN) events.isEmpty() else dateGroups.isEmpty()
+        if (isEmpty) {
             // Empty state
             Box(
                 modifier = Modifier.fillMaxSize(),
@@ -442,129 +433,44 @@ fun TimelineScreen(
                 }
             }
         } else {
-            val (clusters, standalone) = partitioned
-
-            // Build date-grouped structure using mutable builders then convert to immutable DateEntry.
-            val (dateGrouped, sortedDateKeys) = remember(partitioned) {
-                val fmt = SimpleDateFormat("MMM dd, yyyy", Locale.US)
-                fun dateKey(ts: Long) =
-                    if (ts > 0) fmt.format(Date(ts)) else "Unknown Date"
-
-                // Use mutable accumulators during construction to avoid O(n^2) list concatenation.
-                val clusterBuilder = mutableMapOf<String, MutableList<EventCluster>>()
-                val standaloneBuilder = mutableMapOf<String, MutableList<ForensicTimelineEvent>>()
-                clusters.forEach { cluster ->
-                    val key = dateKey(cluster.events.first().startTimestamp)
-                    clusterBuilder.getOrPut(key) { mutableListOf() }.add(cluster)
-                }
-                standalone.forEach { event ->
-                    val key = dateKey(event.startTimestamp)
-                    standaloneBuilder.getOrPut(key) { mutableListOf() }.add(event)
-                }
-                val allKeys = (clusterBuilder.keys + standaloneBuilder.keys).toSet()
-                val immutableMap: Map<String, DateEntry> = allKeys.associateWith { key ->
-                    // Sort bucket contents chronologically (newest first within
-                    // the day) before rendering. The CorrelationEngine returns
-                    // clusters grouped by package — its output is NOT in
-                    // chronological order — and naively appending to per-day
-                    // builders preserved that package-order, scrambling the
-                    // events visually within each day. Re-sorting by event
-                    // timestamp here restores the chronology the user expects.
-                    DateEntry(
-                        clusters = clusterBuilder[key].orEmpty()
-                            .sortedByDescending { c ->
-                                c.events.maxOfOrNull { it.startTimestamp } ?: 0L
-                            },
-                        standaloneEvents = standaloneBuilder[key].orEmpty()
-                            .sortedByDescending { it.startTimestamp }
-                    )
-                }
-                val sorted = immutableMap.keys.sortedByDescending { key ->
-                    val allEvents =
-                        (immutableMap[key]?.clusters?.flatMap { it.events }.orEmpty()) +
-                            (immutableMap[key]?.standaloneEvents.orEmpty())
-                    allEvents.maxOfOrNull { it.startTimestamp } ?: 0L
-                }
-                immutableMap to sorted
-            }
-
-            // Pre-compute referenced event IDs for the hideInformational filter.
-            val referencedEventIds = remember(rows) {
-                rows.asSequence()
-                    .filterIsInstance<TimelineRow.TelemetryRow>()
-                    .filter { it.referencedByFindingIds.isNotEmpty() }
-                    .map { it.event.id }
-                    .toSet()
-            }
-            val findingRows = remember(rows) {
-                rows.filterIsInstance<TimelineRow.FindingRow>()
-            }
-
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
                 contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                // Render pinned findings section first so severity-bearing
-                // rows cannot visually disappear into the telemetry stream.
-                if (findingRows.isNotEmpty()) {
-                    item(key = "findings_header") {
+                dateGroups.forEach { group ->
+                    item(key = "header_${group.label}") {
                         Text(
-                            text = "Findings (${findingRows.size})",
+                            text = group.label,
                             style = MaterialTheme.typography.titleSmall,
                             color = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.padding(vertical = 4.dp)
                         )
                     }
                     items(
-                        items = findingRows as List<TimelineRow>,
-                        key = { row -> "row_${row.timestamp}_${row.hashCode()}" }
+                        items = group.findingRows,
+                        key = { "finding_${it.finding.ruleId}_${it.timestamp}" }
                     ) { row ->
-                        // Exhaustive `when` enforces that every TimelineRow
-                        // variant has a concrete visual treatment — adding
-                        // a new variant will fail to compile until this
-                        // branch is updated.
-                        when (row) {
-                            is TimelineRow.FindingRow -> FindingCard(row)
-                            is TimelineRow.TelemetryRow -> TelemetryCard(row, onClick = { selectedEvent = row.event })
-                        }
-                    }
-                }
-                sortedDateKeys.forEach { dateLabel ->
-                    val entry = dateGrouped[dateLabel] ?: return@forEach
-                    item(key = "header_$dateLabel") {
-                        Text(
-                            text = dateLabel,
-                            style = MaterialTheme.typography.titleSmall,
-                            color = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.padding(vertical = 4.dp)
+                        FindingCard(
+                            row = row,
+                            onClick = row.anchorEvent?.let { anchor ->
+                                { selectedEvent = anchor }
+                            }
                         )
                     }
-                    // Render clusters first
-                    entry.clusters.forEachIndexed { idx, cluster ->
-                        item(key = "cluster_${dateLabel}_$idx") {
+                    group.clusters.forEachIndexed { idx, cluster ->
+                        item(key = "cluster_${group.label}_$idx") {
                             CorrelationClusterCard(
                                 cluster = cluster,
                                 onEventTap = { selectedEvent = it }
                             )
                         }
                     }
-                    // Then standalone events. Apply the hideInformational
-                    // filter: only telemetry events referenced by a finding
-                    // remain visible when the toggle is ON.
-                    val visibleStandalones = if (hideInformational) {
-                        entry.standaloneEvents.filter { it.id in referencedEventIds }
-                    } else {
-                        entry.standaloneEvents
-                    }
                     items(
-                        items = visibleStandalones,
-                        key = { it.id }
-                    ) { event ->
-                        TimelineEventCard(
-                            event = event,
-                            onClick = { selectedEvent = event }
-                        )
+                        items = group.standaloneRows,
+                        key = { it.event.id }
+                    ) { row ->
+                        TelemetryCard(row, onClick = { selectedEvent = row.event })
                     }
                 }
             }
