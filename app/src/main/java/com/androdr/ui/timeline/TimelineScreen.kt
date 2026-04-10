@@ -449,7 +449,7 @@ fun TimelineScreen(
                     }
                     items(
                         items = group.findingRows,
-                        key = { "finding_${it.finding.ruleId}_${it.timestamp}" }
+                        key = { "finding_${it.finding.ruleId}_${it.finding.matchContext["package_name"].orEmpty()}_${it.timestamp}" }
                     ) { row ->
                         FindingCard(
                             row = row,
@@ -458,8 +458,8 @@ fun TimelineScreen(
                             }
                         )
                     }
-                    group.clusters.forEachIndexed { idx, cluster ->
-                        item(key = "cluster_${group.label}_$idx") {
+                    group.clusters.forEach { cluster ->
+                        item(key = "cluster_${group.label}_${cluster.events.minOf { it.id }}") {
                             CorrelationClusterCard(
                                 cluster = cluster,
                                 onEventTap = { selectedEvent = it }
