@@ -192,12 +192,18 @@ private fun CategoryChip(category: FindingCategory) {
 }
 
 @Composable
-private fun severityBackgroundFor(level: String): Color = when (level.uppercase()) {
-    "CRITICAL" -> Color(0xFFFFEBEE)
-    "HIGH" -> Color(0xFFFBE9E7)
-    "MEDIUM" -> Color(0xFFFFF8E1)
-    "LOW" -> Color(0xFFE3F2FD)
-    else -> MaterialTheme.colorScheme.surface
+private fun severityBackgroundFor(level: String): Color {
+    // Dark-theme-appropriate severity tints: a faint wash of the severity color
+    // over the dark surface. The previous light-theme pastels (0xFFFFF8E1 etc.)
+    // produced bright backgrounds that made text unreadable on dark screens.
+    val tint = when (level.uppercase()) {
+        "CRITICAL" -> Color(0xFFCF6679) // Material dark error
+        "HIGH" -> Color(0xFFFF8A65)     // deep orange 300
+        "MEDIUM" -> Color(0xFFFFD54F)   // amber 300
+        "LOW" -> Color(0xFF64B5F6)      // blue 300
+        else -> return MaterialTheme.colorScheme.surface
+    }
+    return tint.copy(alpha = 0.10f) // 10% opacity over dark surface = subtle, readable
 }
 
 @Suppress("LongMethod") // Compose detail sheet renders header + all metadata sections + linked evidence

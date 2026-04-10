@@ -7,8 +7,10 @@ import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
+import java.io.File
 
 class FileArtifactScannerTest {
 
@@ -32,17 +34,30 @@ class FileArtifactScannerTest {
         scanner = FileArtifactScanner(resolver)
     }
 
-    // ── 1. Returns entries for all known paths ───────────────────────────────
+    // ── 1. Only accessible paths produce telemetry ──────────────────────────
 
     @Test
-    fun `returns entries for all known paths`() = runTest {
+    fun `only accessible paths produce telemetry`() = runTest {
         val result = scanner.collectTelemetry()
 
+        // Count how many fake paths have a readable parent directory on this JVM
+        val accessibleCount = fakePaths.count { path ->
+            File(path).parentFile?.canRead() ?: false
+        }
+
         assertEquals(
-            "Expected one entry per resolver path",
-            fakePaths.size,
+            "Expected one entry per accessible resolver path",
+            accessibleCount,
             result.size
         )
+
+        // Every returned entry must have accessible = true
+        result.forEach { telemetry ->
+            assertTrue(
+                "Returned telemetry must have accessible = true",
+                telemetry.accessible
+            )
+        }
     }
 
     // ── 2. Non-existent path returns fileExists false ────────────────────────
@@ -88,6 +103,22 @@ class FileArtifactScannerTest {
                     telemetry.fileModified
                 )
             }
+        }
+    }
+
+    // ── 4. Inaccessible paths are skipped entirely ──────────────────────────
+
+    @Test
+    fun `inaccessible paths are skipped entirely`() = runTest {
+        val result = scanner.collectTelemetry()
+
+        // Verify that no returned path has an unreadable parent
+        result.forEach { telemetry ->
+            val parentReadable = File(telemetry.filePath).parentFile?.canRead() ?: false
+            assertTrue(
+                "Returned path ${telemetry.filePath} should have a readable parent",
+                parentReadable
+            )
         }
     }
 }

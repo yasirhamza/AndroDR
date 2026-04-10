@@ -102,7 +102,12 @@ class TimelineViewModel @Inject constructor(
      * [rows] stream so the UI can render them distinctly from telemetry.
      */
     private val latestFindings: StateFlow<List<Finding>> = scanRepository.allScans
-        .map { scans -> scans.firstOrNull()?.findings.orEmpty() }
+        .map { scans ->
+            // Only triggered findings belong in the timeline. Non-triggered
+            // "safe state" findings (e.g. "Unknown Sources Disabled") are for
+            // the Device Audit screen and report, not the timeline.
+            scans.firstOrNull()?.findings.orEmpty().filter { it.triggered }
+        }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     /**
