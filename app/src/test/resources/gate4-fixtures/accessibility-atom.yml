@@ -1,0 +1,20 @@
+# Fixture for androdr-060: active accessibility service detection
+rule_file: sigma_androdr_060_active_accessibility.yml
+service: accessibility_audit
+ioc_stubs:
+  known_good_app_db:
+    - "com.lastpass.lpandroid"
+true_positives:
+  - package_name: "com.shady.keylogger"
+    is_system_app: false
+    is_enabled: true
+true_negatives:
+  - package_name: "com.lastpass.lpandroid"
+    is_system_app: false
+    is_enabled: true
+  - package_name: "com.android.talkback"
+    is_system_app: true
+    is_enabled: true
+  - package_name: "com.shady.keylogger"
+    is_system_app: false
+    is_enabled: false
