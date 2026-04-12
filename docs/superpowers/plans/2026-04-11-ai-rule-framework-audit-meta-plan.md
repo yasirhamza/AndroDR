@@ -73,15 +73,16 @@ Numbered per the original audit report (reproduced here for self-containment):
 **Entry state:** main branch current. `android-sigma-rules/validation/rule-schema.json` missing `category` in required fields. `validate-rule.py:63` whitelist is `{app_scanner, device_auditor, dns_monitor, process_monitor, file_scanner}` (stale). No build-time rule validation in Gradle. Staging rules untouched.
 
 **Exit state:**
-- `rule-schema.json` updated: top-level `category` added to required fields with enum matching `RuleCategory` values
+- `android-sigma-rules` added to AndroDR as a git submodule at `third-party/android-sigma-rules/`
+- `rule-schema.json` updated: top-level `category` added to required fields with enum matching `RuleCategory` values; `additionalProperties` left permissive (true)
 - `valid_services` whitelist in `validate-rule.py` synced with actual telemetry model classes — add `receiver_audit`, `tombstone_parser`, `accessibility`, `appops`, `network_monitor`
-- Validator recognizes correlation rule type (`selection_atoms`, `timespan`, `ordered`, `group_by`) and skips fields that don't apply
-- New Gradle task `validateBundledRules` runs on every build; parses all `sigma_androdr_*.yml` via `SigmaRuleParser` AND invokes `validate-rule.py` if Python is on PATH; fails build on any violation
-- Task wired into `check` task so CI catches drift automatically
-- All 48 current bundled rules pass the new gate
-- New `AllBundledRulesPassValidatorTest.kt` enforces the gate in unit tests as well (redundancy for defense in depth)
+- Correlation rule schema support deferred to Bundle 3 (#109) — only detection/atom rules are cross-checked
+- New `BundledRulesSchemaCrossCheckTest.kt` unit test validates all 44 detection/atom rules against both `SigmaRuleParser.parse()` (Kotlin runtime) AND the JSON schema from the submodule (via `com.networknt:json-schema-validator:2.0.1`); fails build on any disagreement
+- CI workflow updated with `git submodule update --init`
+- All 44 current detection/atom bundled rules pass the new gate
+- Developer workflow documented in CLAUDE.md (submodule init, two-PR dance for schema changes)
 
-**What 1b can assume:** Validator is trustworthy; schema matches runtime; build fails on drift; both write paths are structurally synced.
+**What 1b can assume:** Validator is trustworthy; schema matches runtime; build fails on drift; both write paths are structurally synced via the submodule.
 
 ---
 

@@ -33,6 +33,8 @@ Make `android-sigma-rules` the single authoritative source of the rule schema. B
 | D2 | Build-time gate mechanism? | Kotlin parser + JSON schema cross-check using `com.networknt:json-schema-validator:2.0.1` (Option B with library) | Catches drift in both directions: parser rejects what schema accepts → build fails; schema rejects what parser accepts → build fails. No Python dependency in the build. The library is pure JVM, supports JSON Schema draft 2020-12. |
 | D3 | Scope: correlation rules included? | No — detection/atom rules only (Option B1) | Correlation rules have a different structure (`correlation.type`, `timespan`, etc.) that would require a new schema definition. Deferred to Bundle 3 (#109) alongside F8 (correlation rule integration tests). Existing `SigmaRuleParser.parseCorrelation()` continues as the only validator for correlation rules. |
 | D4 | Submodule path? | `third-party/android-sigma-rules/` | Self-documenting convention for external content; sets a precedent for future external repos. |
+| D5 | `additionalProperties` posture? | `true` (permissive — the default) | The cross-check catches required-field and enum drift (the actual problems). Unknown-field drift is benign — the Kotlin parser simply ignores fields it doesn't recognize. Setting `false` would force a schema change every time a new optional field is added, creating churn without safety benefit. |
+| D6 | `category` enum case sensitivity? | Schema uses lowercase enum `["incident", "device_posture"]`; bundled rules MUST use lowercase | All 44 current detection/atom rules already use lowercase. The Kotlin parser does `.lowercase()` before matching (permissive), but JSON Schema enum is case-sensitive. Convention: bundled rules always use lowercase `category` values. |
 
 ---
 
@@ -54,7 +56,7 @@ AndroDR/                                          (main repo)
 │   ├── src/main/java/com/androdr/sigma/
 │   │   └── SigmaRuleParser.kt                   (unchanged)
 │   ├── src/main/res/raw/
-│   │   └── sigma_androdr_*.yml                   (48 bundled rules, unchanged)
+│   │   └── sigma_androdr_*.yml                   (44 detection/atom + 4 correlation, unchanged)
 │   └── src/test/java/com/androdr/sigma/
 │       ├── AllRulesHaveCategoryTest.kt           (existing, unchanged)
 │       ├── AllCorrelationRulesFireTest.kt        (existing, unchanged)
@@ -80,7 +82,7 @@ android-sigma-rules/                              (canonical upstream, separate 
         │   (fails with clear error if submodule not initialized)
         │
         ├── iterates app/src/main/res/raw/sigma_androdr_*.yml
-        │   (excludes sigma_androdr_corr_*.yml — correlation rules deferred)
+        │   (includes all detection + atom rules; excludes only sigma_androdr_corr_*.yml)
         │
         └── for each rule file:
               ├── SigmaRuleParser.parse(yaml) — must succeed
@@ -135,7 +137,9 @@ Updated:
 }
 ```
 
-This matches `SigmaRuleParser.kt:162-168` which accepts exactly these two values (case-insensitive, mapped to `RuleCategory.INCIDENT` and `RuleCategory.DEVICE_POSTURE`).
+This matches `SigmaRuleParser.kt:162-168` which accepts exactly these two values (case-insensitive via `.lowercase()`, mapped to `RuleCategory.INCIDENT` and `RuleCategory.DEVICE_POSTURE`).
+
+**Convention:** Bundled rules MUST use lowercase `category` values. The Kotlin parser is permissive (it lowercases before matching), but JSON Schema `enum` is case-sensitive. All 44 current detection/atom rules already use lowercase — this convention just makes it explicit.
 
 **3. Expand `logsource.service` enum:**
 
@@ -175,7 +179,15 @@ And inside the `display` object:
 "guidance": { "type": "string" }
 ```
 
-These fields are consumed by `SigmaRuleParser.kt:171-172` (`enabled`, `reportSafeState`) and `SigmaRuleParser.kt:269` (`display.guidance`). Making them schema-known prevents the JSON schema validator from rejecting rules that use them (JSON Schema's `additionalProperties` default is permissive, but documenting them is correct practice).
+These fields are consumed by `SigmaRuleParser.kt:171-172` (`enabled`, `reportSafeState`) and `SigmaRuleParser.kt:269` (`display.guidance`). Making them schema-known documents the contract.
+
+**5. `additionalProperties` stays unset (defaults to `true` — permissive):**
+
+The schema deliberately does NOT set `additionalProperties: false`. This means:
+- Unknown fields are silently accepted by the schema (rules can carry extra metadata without a schema change)
+- The cross-check catches **required-field and enum drift** (the actual problem) but not "unknown field added to a rule"
+- The Kotlin parser already ignores fields it doesn't recognize, so unknown-field drift is benign
+- Setting `false` would force a schema update every time any optional field is added — creating churn without safety benefit
 
 ### validate-rule.py changes
 
@@ -220,6 +232,8 @@ testImplementation("com.networknt:json-schema-validator:2.0.1")
 
 This library is pure JVM, has no Android-specific dependencies, and supports JSON Schema draft 2020-12 (which `rule-schema.json` declares via `"$schema": "https://json-schema.org/draft/2020-12/schema"`). [Maven Central](https://mvnrepository.com/artifact/com.networknt/json-schema-validator), [GitHub](https://github.com/networknt/json-schema-validator).
 
+**Transitive dependency note:** `json-schema-validator:2.0.1` pulls in Jackson 2.17.x. AndroDR uses `kotlinx.serialization` for production JSON (no Jackson in production code). Jackson will only appear in the `testImplementation` classpath — no conflict with production dependencies. If a future dependency introduces a Jackson version pin, the test-only scope prevents classpath issues at runtime.
+
 ### 3. New test: `BundledRulesSchemaCrossCheckTest.kt`
 
 Location: `app/src/test/java/com/androdr/sigma/BundledRulesSchemaCrossCheckTest.kt`
@@ -243,9 +257,20 @@ class BundledRulesSchemaCrossCheckTest {
     //   convert the resulting Map to a Jackson JsonNode (networknt 
     //   uses Jackson internally). snakeyaml-engine is already a 
     //   project dependency.
+    //
+    //   Implementation notes:
+    //   - YAML pipe-keys like "field|endswith" become literal JSON 
+    //     object keys — no special handling needed, snakeyaml-engine 
+    //     parses them as plain strings
+    //   - Bundled rules do not use YAML anchors, merge keys, or 
+    //     multi-doc; only simple maps and lists
+    //   - Conversion is Map<String,Any?> → ObjectMapper.valueToTree()
     
-    // detectionAndAtomRuleFiles(): same filter as AllRulesHaveCategoryTest
-    //   — includes sigma_androdr_*.yml, excludes sigma_androdr_corr_*.yml
+    // detectionAndAtomRuleFiles(): includes ALL sigma_androdr_*.yml 
+    //   files EXCEPT sigma_androdr_corr_*.yml. This explicitly includes 
+    //   sigma_androdr_atom_*.yml (atom rules are structurally identical 
+    //   to detection rules — they have detection/condition blocks and 
+    //   are parsed by the same SigmaRuleParser.parse() path)
     
     // --- Test methods ---
     
@@ -312,7 +337,7 @@ Contents:
 - Add `com.networknt:json-schema-validator:2.0.1` test dependency
 - Add `BundledRulesSchemaCrossCheckTest.kt`
 - Add `git submodule update --init` to CI workflow
-- Run `./gradlew testDebugUnitTest` — all 48 rules must pass both Kotlin parser and JSON schema
+- Run `./gradlew testDebugUnitTest` — all 44 detection/atom rules must pass both Kotlin parser and JSON schema
 - Merge
 
 ### Step 3: Verification (during PR review, not shipped)
@@ -340,6 +365,7 @@ Add to CLAUDE.md under a new "Submodule: android-sigma-rules" section:
 - After cloning AndroDR, run `git submodule update --init` once
 - When adding a new field or logsource service to `SigmaRuleParser.kt`: first update `rule-schema.json` in the sigma-rules repo (open a PR there), merge it, then bump the submodule in AndroDR in the same PR as the Kotlin change
 - The build-time cross-check test (`BundledRulesSchemaCrossCheckTest`) will fail if the schema and parser disagree
+- **Submodule update direction (AI pipeline → AndroDR):** When the AI pipeline adds new rules to `android-sigma-rules` (via `/update-rules`), the submodule pointer in AndroDR stays pinned until the next release cycle. The cross-check only validates rules bundled in `app/src/main/res/raw/` — new upstream rules don't affect the build until they're bundled. Bumping the submodule to pick up upstream schema changes (e.g., after the AI pipeline reveals a schema gap) follows the same two-PR dance: update sigma-rules first, then bump the submodule in AndroDR.
 
 ---
 
@@ -370,7 +396,7 @@ Add to CLAUDE.md under a new "Submodule: android-sigma-rules" section:
 
 After both PRs merge:
 
-1. `./gradlew testDebugUnitTest` passes with all 48 detection/atom rules validated against both the Kotlin parser and the JSON schema from the submodule
+1. `./gradlew testDebugUnitTest` passes with all 44 detection/atom rules validated against both the Kotlin parser and the JSON schema from the submodule
 2. CI passes with the submodule initialized automatically
 3. `python validate-rule.py <any-bundled-rule.yml>` passes in the sigma-rules repo (using the same schema)
 4. It is mechanically impossible to ship a bundled rule that the Kotlin parser accepts but the JSON schema rejects (or vice versa) without a build failure
