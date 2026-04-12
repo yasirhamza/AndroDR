@@ -206,6 +206,7 @@ dependencies {
     testImplementation(libs.mockk)
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.org.json) // provides org.json.JSONObject for JVM unit tests
+    testImplementation("com.networknt:json-schema-validator:2.0.1")
 
     // Instrumented tests
     androidTestImplementation(libs.androidx.junit)
