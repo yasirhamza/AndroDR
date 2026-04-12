@@ -100,3 +100,30 @@ for crashes:
 
 AVD: `Medium_Phone_API_36.1` (API 36). Requires `ANDROID_HOME` set.
 Debug package ID: `com.androdr.debug` (applicationIdSuffix = ".debug").
+
+### Submodule: android-sigma-rules
+
+The sigma-rules repo is the authoritative source for the rule schema
+(`rule-schema.json`). It lives at `third-party/android-sigma-rules/` as a
+git submodule.
+
+    # After cloning AndroDR (one-time setup):
+    git submodule update --init
+
+    # When you need to update the submodule to pick up upstream changes:
+    cd third-party/android-sigma-rules && git pull origin main && cd ../..
+    git add third-party/android-sigma-rules
+    git commit -m "build: bump android-sigma-rules submodule"
+
+**Adding a new field or logsource service to `SigmaRuleParser.kt`:**
+
+1. Open a PR in `android-sigma-rules` updating `validation/rule-schema.json`
+2. Merge that PR
+3. In your AndroDR PR: bump the submodule pointer AND make the Kotlin change
+4. `BundledRulesSchemaCrossCheckTest` will fail if the schema and parser disagree
+
+**Submodule update direction (AI pipeline → AndroDR):** The submodule
+pointer stays pinned until explicitly bumped. New rules added upstream by
+`/update-rules` don't affect the build until they're bundled into
+`app/src/main/res/raw/`. Bump the submodule when you need upstream schema
+changes (e.g., after the AI pipeline reveals a schema gap).
