@@ -1,53 +1,53 @@
 [versions]
 # Build tools
-agp = "8.7.3"
-kotlin = "2.0.0"
-ksp = "2.0.0-1.0.21"
+agp = "9.1.0"
+kotlin = "2.3.20"
+ksp = "2.3.6"
 
 # AndroidX core
-coreKtx = "1.13.1"
-lifecycleRuntimeKtx = "2.8.4"
-activityCompose = "1.9.1"
+coreKtx = "1.18.0"
+lifecycleRuntimeKtx = "2.10.0"
+activityCompose = "1.13.0"
 
 # Compose
-composeBom = "2024.09.00"
+composeBom = "2026.03.01"
 
 # Navigation
-navigationCompose = "2.7.7"
+navigationCompose = "2.9.7"
 
 # Hilt
-hilt = "2.51.1"
-hiltNavigationCompose = "1.2.0"
+hilt = "2.59.2"
+hiltNavigationCompose = "1.3.0"
 
 # Room
-room = "2.6.1"
+room = "2.8.4"
 
 # Coroutines
-coroutines = "1.8.1"
+coroutines = "1.10.2"
 
 # Serialization
-kotlinxSerialization = "1.7.1"
+kotlinxSerialization = "1.11.0"
 
 # WorkManager
-workManager = "2.9.1"
+workManager = "2.11.2"
 
 # DataStore
-datastore = "1.1.1"
+datastore = "1.2.1"
 
 # YAML parsing
-snakeyamlEngine = "2.7"
+snakeyamlEngine = "3.0.1"
 
 # Code quality & security
-detekt = "1.23.7"
+detekt = "1.23.8"
 # owaspDepCheck removed -- replaced by Dependabot (.github/dependabot.yml)
 
 # Testing
 junit = "4.13.2"
-junitExt = "1.2.1"
-espressoCore = "3.6.1"
-mockk = "1.13.12"
-orgJson = "20240303"
-jsonSchemaValidator = "2.0.1"
+junitExt = "1.3.0"
+espressoCore = "3.7.0"
+mockk = "1.14.9"
+orgJson = "20251224"
+jsonSchemaValidator = "3.0.1"
 
 [libraries]
 # AndroidX Core
