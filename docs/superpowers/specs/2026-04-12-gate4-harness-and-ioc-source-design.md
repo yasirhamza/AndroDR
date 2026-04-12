@@ -26,7 +26,7 @@ or test-origin data cannot reach production IOC files.
 - `app/src/test/java/com/androdr/sigma/GateFourFixtureTest.kt`
 - `app/src/test/resources/gate4-fixtures/sideloaded-app.yml`
 - `app/src/test/resources/gate4-fixtures/package-ioc.yml`
-- `app/src/test/resources/gate4-fixtures/correlation-atom.yml`
+- `app/src/test/resources/gate4-fixtures/accessibility-atom.yml`
 
 ### API
 
@@ -60,6 +60,8 @@ data class Gate4Result(
    produced zero findings. `pass` = tpFired && tnClean.
 5. Collect error strings for any failures (which record failed, what was
    expected vs actual).
+6. Warn (include in errors) if any `iocStubs` key is not referenced by the
+   rule's detection (catches fixture authoring typos).
 
 ### IOC Lookup Handling
 
@@ -106,8 +108,9 @@ fixture file becomes one test case. The test:
 1. Reads the rule YAML from `app/src/main/res/raw/{rule_file}`
 2. Parses it with `SigmaRuleParser.parse()`
 3. Parses fixture YAML for TP/TN records and IOC stubs
-4. Calls `GateFourTestHarness.runGate4()`
-5. Asserts `result.pass == true`
+4. Asserts `rule.service == fixture.service` (catches fixture/rule mismatch)
+5. Calls `GateFourTestHarness.runGate4()`
+6. Asserts `result.pass == true`
 
 ### Representative Fixtures
 
@@ -115,7 +118,7 @@ fixture file becomes one test case. The test:
 |---------|------|-------|
 | `sideloaded-app.yml` | androdr-010 | Simple selection with boolean + field match |
 | `package-ioc.yml` | androdr-001 | `ioc_lookup` modifier with stubbed package DB |
-| `correlation-atom.yml` | androdr-060 | Atom rule (accessibility service detection) |
+| `accessibility-atom.yml` | androdr-060 | Atom rule (accessibility service detection) |
 
 ---
 
