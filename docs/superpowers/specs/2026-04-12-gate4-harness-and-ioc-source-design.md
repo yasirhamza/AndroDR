@@ -146,7 +146,7 @@ fixture file becomes one test case. The test:
     "url": "https://threatfox.abuse.ch"
   },
   {
-    "id": "amnesty-investigations",
+    "id": "amnesty-tech",
     "name": "Amnesty International Security Lab",
     "url": "https://github.com/AmnestyTech/investigations"
   },
@@ -187,7 +187,8 @@ fixture file becomes one test case. The test:
 4. **Blocked family patterns** — reject entries where family/familyName contains
    "test", "fixture", "simulation", "sample", "example" (case-insensitive)
 5. **Cert hash format** — if entry has `indicator` that looks like a hash (in
-   `cert-hashes.yml`), must be exactly 64 lowercase hex chars
+   `cert-hashes.yml`), must be 64 lowercase hex chars (SHA-256) or 40
+   lowercase hex chars (SHA-1)
 6. **No duplicates** — no repeated `indicator` values within the same file
 
 **Exit codes:** 0 = valid, 1 = validation errors, 2 = file not found / parse error

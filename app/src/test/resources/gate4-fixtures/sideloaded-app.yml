@@ -1,0 +1,20 @@
+# Fixture for androdr-010: sideloaded app detection
+rule_file: sigma_androdr_010_sideloaded_app.yml
+service: app_scanner
+ioc_stubs:
+  known_good_app_db:
+    - "com.google.android.gm"
+true_positives:
+  - package_name: "com.shady.sideload"
+    is_system_app: false
+    from_trusted_store: false
+    is_known_oem_app: false
+true_negatives:
+  - package_name: "com.google.android.gm"
+    is_system_app: false
+    from_trusted_store: false
+    is_known_oem_app: false
+  - package_name: "com.example.legitimate"
+    is_system_app: false
+    from_trusted_store: true
+    is_known_oem_app: false
