@@ -66,11 +66,17 @@ source), but both flow through to the Rule Author identically.
 - IOCs from feed ingesters (any source in `allowed-sources.json`) are
   **structured** — `confidence: "high"`, flow through normally.
 - IOCs from web-searched blog posts are **unstructured** — if corroborated by a
-  second source, `confidence: "high"`; if single-source, tagged
-  `requires_verification: true` in the SIR output.
-- The SIR indicator object gains a `requires_verification` boolean field.
-- The skill's "Rules" section gets a hard rule: *"Single unstructured-source IOCs
-  MUST be tagged `requires_verification: true`."*
+  second source, `confidence: "high"`; if single-source, the **SIR itself** is
+  tagged `requires_verification: true`.
+- The `requires_verification` flag lives at SIR level, not per-indicator. This is
+  a deliberate design choice: the current SIR schema (`sir-schema.json`) stores
+  indicators as flat string arrays (`package_names: string[]`, `domains: string[]`),
+  so per-indicator metadata would require a breaking schema change to all ingesters.
+  In practice, a single unstructured source (blog post) produces one SIR, and all
+  IOCs within it share the same evidence basis — SIR-level granularity is sufficient.
+- The SIR schema gains an optional top-level `requires_verification` boolean field.
+- The skill's "Rules" section gets a hard rule: *"If a SIR is built from a single
+  unstructured source, set `requires_verification: true` at the SIR level."*
 
 **Downstream effect:** The Rule Author sees the flag and records a decision
 manifest entry with a new `type` field set to `ioc_confidence` — either "include
@@ -90,82 +96,114 @@ every field available per logsource service.
 
 **Structure:**
 
-All 14 runtime services are included, using their exact runtime string names
-from `SigmaRuleEngine.kt`:
+All 15 services with `toFieldMap()` implementations are included, using their
+exact runtime string names from `SigmaRuleEngine.kt`. Each service has a
+`status` field indicating whether it is wired into the rule engine:
 
 ```yaml
 product: androdr
 services:
   # --- Member-function toFieldMap() (data model classes) ---
   app_scanner:
-    model_class: AppTelemetry          # 20 fields
+    model_class: AppTelemetry
     field_map: member                   # toFieldMap() is a member function
+    status: active                      # has evaluateApps() in SigmaRuleEngine
   device_auditor:
-    model_class: DeviceTelemetry       # 13 fields
+    model_class: DeviceTelemetry
     field_map: member
+    status: active
   dns_monitor:
-    model_class: DnsEvent              # 5 fields
+    model_class: DnsEvent
     field_map: member
+    status: active
   process_monitor:
-    model_class: ProcessTelemetry      # 4 fields
+    model_class: ProcessTelemetry
     field_map: member
+    status: active
   file_scanner:
-    model_class: FileArtifactTelemetry # 4 fields
+    model_class: FileArtifactTelemetry
     field_map: member
+    status: active
   receiver_audit:
-    model_class: ReceiverTelemetry     # 4 fields
+    model_class: ReceiverTelemetry
     field_map: member
+    status: active
   accessibility_audit:
-    model_class: AccessibilityTelemetry # 4 fields
+    model_class: AccessibilityTelemetry
     field_map: member
+    status: active
   appops_audit:
-    model_class: AppOpsTelemetry       # 6 fields
+    model_class: AppOpsTelemetry
     field_map: member
+    status: active
   network_monitor:
-    model_class: NetworkTelemetry      # 6 fields
+    model_class: NetworkTelemetry
     field_map: member
+    status: unwired                     # toFieldMap() exists but NO evaluate
+                                        # method in SigmaRuleEngine — rules
+                                        # targeting this service cannot fire
 
   # --- Extension-function toFieldMap() (TelemetryFieldMaps.kt) ---
   tombstone_parser:
     model_class: TombstoneEvent
-    field_map: extension               # internal fun TombstoneEvent.toFieldMap()
+    field_map: extension                # internal fun TombstoneEvent.toFieldMap()
+    status: active
   wakelock_parser:
     model_class: WakelockAcquisition
     field_map: extension
+    status: active
   battery_daily:
     model_class: BatteryDailyEvent
     field_map: extension
+    status: active
   package_install_history:
     model_class: PackageInstallHistoryEntry
     field_map: extension
+    status: active
   platform_compat:
     model_class: PlatformCompatChange
     field_map: extension
+    status: active
   db_info:
     model_class: DatabasePathObservation
     field_map: extension
+    status: active
 ```
 
 Each service entry will also contain a `fields:` block with `{ type, description }`
 per field. The full field lists are derived from the corresponding `toFieldMap()`
 implementations during plan execution.
 
-**Cross-check test:** New `LogsourceTaxonomyCrossCheckTest.kt` in
-`app/src/test/`. The test handles two patterns:
+**Implementation notes for the taxonomy YAML:**
 
-- **Member functions** (9 services): instantiate the model class, call
-  `toFieldMap()`, assert field names match the taxonomy.
-- **Extension functions** (5 services): import from `com.androdr.sigma`
-  (same module, so `internal` visibility is accessible), call the extension
-  `toFieldMap()`, assert field names match.
+- Field names come from `toFieldMap()` map keys, NOT from Kotlin property names.
+  Some keys differ from properties (e.g., `DnsEvent.appName` → key `source_package`).
+- Derived fields that appear in `toFieldMap()` output but not in the constructor
+  must be included (e.g., `DeviceTelemetry.unpatched_cve_id` is computed from
+  `unpatchedCves` at runtime).
+- Room `@Entity` fields like `DnsEvent.id` and `DnsEvent.timestamp` that are NOT
+  in `toFieldMap()` output are NOT in the taxonomy.
+- The `status: unwired` annotation tells the Rule Author: "this service has a
+  data model but rules targeting it cannot fire — record a `telemetry_gap`
+  decision instead of writing a rule."
+
+**Cross-check test:** New `LogsourceTaxonomyCrossCheckTest.kt` in
+`app/src/test/java/com/androdr/sigma/` (must be in `com.androdr.sigma` package
+for `internal` extension function visibility). The test handles two patterns:
+
+- **Member functions** (9 services): instantiate the model class with test values,
+  call `toFieldMap()`, assert field names match the taxonomy.
+- **Extension functions** (6 services): import from `com.androdr.sigma`, call the
+  extension `toFieldMap()`, assert field names match.
 
 For both patterns: no extra fields in Kotlin that aren't in the taxonomy, no
 taxonomy fields that don't exist in Kotlin. Same fail-the-build pattern as
 `BundledRulesSchemaCrossCheckTest`.
 
 **`validate-rule.py` update:** The `valid_services` whitelist (line 63) is
-updated to match the taxonomy's 14 services. This ensures the Python validator
-and the Kotlin cross-check test agree on the service list.
+updated to match the taxonomy's 15 services (including `network_monitor` — the
+validator accepts it because the data model exists; the Rule Author's `status:
+unwired` annotation prevents dead rules, not the validator).
 
 ### 3. Rule Author — `telemetry_gap` Decision Type and Taxonomy Consumption
 
@@ -175,9 +213,17 @@ Two additions to `update-rules-author.md`:
 
 > "Before writing any `detection:` block, read
 > `android-sigma-rules/validation/logsource-taxonomy.yml` for the target
-> service. Only use field names listed there. If the SIR describes a behavior
-> that requires a field not in the taxonomy, do NOT invent the field — record a
-> `telemetry_gap` decision instead."
+> service. Only use field names listed there. Services with `status: unwired`
+> have a data model but no rule engine wiring — do NOT write rules for them;
+> record a `telemetry_gap` decision instead. If a field you need isn't in the
+> taxonomy for an `active` service, also record a `telemetry_gap` decision."
+
+**Prompt engineering note:** Relying on the LLM to self-read a file mid-generation
+is fragile. The `/update-rules` orchestrator should pre-read the taxonomy for the
+relevant services and inject the field list into the Rule Author's input alongside
+the SIRs. The skill instruction above is the fallback; the orchestrator injection
+is the primary mechanism. The orchestrator change is a one-line addition to
+`/update-rules` (read the taxonomy, append to the Rule Author prompt context).
 
 **New `telemetry_gap` decision type** (added to Decision Flagging section):
 
@@ -234,16 +280,17 @@ observable quality improvement in pipeline output.
 
 | File | Change |
 |------|--------|
-| `.claude/commands/update-rules-research-threat.md` | Add `requires_verification` gate, structured vs unstructured source definition |
-| `.claude/commands/update-rules-author.md` | Add taxonomy reference instruction, `telemetry_gap` decision type |
-| `third-party/android-sigma-rules/validation/logsource-taxonomy.yml` | **New** — field taxonomy for all 14 logsource services |
+| `.claude/commands/update-rules-research-threat.md` | Add SIR-level `requires_verification` gate, structured vs unstructured source definition |
+| `.claude/commands/update-rules-author.md` | Add taxonomy reference instruction, `telemetry_gap` decision type, `ioc_confidence` decision type |
+| `.claude/commands/update-rules.md` | Add taxonomy injection — orchestrator pre-reads taxonomy for target services and includes field lists in Rule Author prompt context |
+| `third-party/android-sigma-rules/validation/logsource-taxonomy.yml` | **New** — field taxonomy for all 15 logsource services with `status: active/unwired` |
 | `third-party/android-sigma-rules/validation/allowed-sources.json` | Fix `amnesty-tech` → `amnesty-investigations` |
-| `third-party/android-sigma-rules/validation/validate-rule.py` | Update `valid_services` whitelist to all 14 services; fix `accessibility` → `accessibility_audit`, `appops` → `appops_audit` |
-| `third-party/android-sigma-rules/validation/sir-schema.json` | Add optional `requires_verification` boolean to indicator object |
+| `third-party/android-sigma-rules/validation/validate-rule.py` | Update `valid_services` whitelist to all 15 services; fix `accessibility` → `accessibility_audit`, `appops` → `appops_audit` |
+| `third-party/android-sigma-rules/validation/sir-schema.json` | Add optional top-level `requires_verification` boolean (SIR-level, not per-indicator) |
 | `third-party/android-sigma-rules/ioc-data/package-names.yml` | Fix `amnesty-tech` → `amnesty-investigations` (4 entries) |
 | `third-party/android-sigma-rules/ioc-data/c2-domains.yml` | Fix `amnesty-tech` → `amnesty-investigations` (22 entries) |
 | `third-party/android-sigma-rules/ioc-data/cert-hashes.yml` | Fix `amnesty-tech` → `amnesty-investigations` (sources header + 3 entries) |
-| `app/src/test/.../LogsourceTaxonomyCrossCheckTest.kt` | **New** — validates taxonomy matches `toFieldMap()` for all 14 services (member + extension function patterns) |
+| `app/src/test/java/com/androdr/sigma/LogsourceTaxonomyCrossCheckTest.kt` | **New** — validates taxonomy matches `toFieldMap()` for all 15 services (member + extension function patterns) |
 
 **Note:** The amnesty rename touches files in the `android-sigma-rules` submodule.
 These changes are committed in the submodule first, then the submodule pointer is
