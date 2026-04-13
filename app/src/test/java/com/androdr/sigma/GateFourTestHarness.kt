@@ -55,6 +55,12 @@ object GateFourTestHarness {
             }
         }
 
+        // Guard: at least one TP record is required to prevent vacuous pass
+        if (truePositives.isEmpty()) {
+            errors.add("No true-positive records provided — fixture must include at least one TP")
+            return Gate4Result(pass = false, tpFired = false, tnClean = true, errors = errors)
+        }
+
         // Evaluate true positives — each must produce >= 1 finding.
         var allTpFired = true
         truePositives.forEachIndexed { index, record ->

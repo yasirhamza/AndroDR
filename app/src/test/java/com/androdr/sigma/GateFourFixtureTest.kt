@@ -35,7 +35,6 @@ class GateFourFixtureTest(
             val candidates = listOf(
                 File("app/src/test/resources/gate4-fixtures"),
                 File("src/test/resources/gate4-fixtures"),
-                File("/home/yasir/AndroDR/app/src/test/resources/gate4-fixtures")
             )
             return candidates.firstOrNull { it.isDirectory }
                 ?: error(
@@ -48,7 +47,6 @@ class GateFourFixtureTest(
             val candidates = listOf(
                 File("app/src/main/res/raw"),
                 File("src/main/res/raw"),
-                File("/home/yasir/AndroDR/app/src/main/res/raw")
             )
             return candidates.firstOrNull { it.isDirectory }
                 ?: error(
