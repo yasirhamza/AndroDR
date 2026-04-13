@@ -22,11 +22,23 @@ remain in the authoring stage:
    using field names that don't exist in the corresponding `toFieldMap()`
    implementation, and there's no way to catch this until a human reads the rule.
 
-Additionally, a source name inconsistency exists: `allowed-sources.json` uses
-`amnesty-tech` while the Rule Author skill and bundled IOC data use
-`amnesty-investigations`. The upstream repo is
-[AmnestyTech/investigations](https://github.com/AmnestyTech/investigations);
-the canonical name should be `amnesty-investigations`.
+Additionally, two naming inconsistencies need fixing:
+
+- **Source name:** `allowed-sources.json` and the submodule IOC data files
+  (`package-names.yml`, `c2-domains.yml`, `cert-hashes.yml`) use `amnesty-tech`,
+  while the Rule Author skill uses `amnesty-investigations`. The upstream repo is
+  [AmnestyTech/investigations](https://github.com/AmnestyTech/investigations);
+  the canonical name should be `amnesty-investigations`. The rename must be
+  atomic across `allowed-sources.json` and all IOC data files to avoid breaking
+  `validate-ioc-data.py`.
+
+- **Service names in `validate-rule.py`:** The `valid_services` whitelist uses
+  `accessibility` and `appops`, but the runtime (`SigmaRuleEngine.kt`) uses
+  `accessibility_audit` and `appops_audit`. It also omits 5 services added via
+  `TelemetryFieldMaps.kt`: `wakelock_parser`, `battery_daily`,
+  `package_install_history`, `platform_compat`, `db_info`. This is updated as
+  part of the taxonomy work (the cross-check test validates the taxonomy, and
+  `validate-rule.py` should derive its whitelist from the same taxonomy).
 
 ---
 
@@ -61,9 +73,15 @@ source), but both flow through to the Rule Author identically.
   MUST be tagged `requires_verification: true`."*
 
 **Downstream effect:** The Rule Author sees the flag and records a decision
-manifest entry of type `ioc_confidence` — either "include despite single-source
-(reasoning: ...)" or "skip (insufficient evidence)". The human reviewer sees
-this in the decision manifest and can override.
+manifest entry with a new `type` field set to `ioc_confidence` — either "include
+despite single-source (reasoning: ...)" or "skip (insufficient evidence)". The
+human reviewer sees this in the decision manifest and can override.
+
+**Decision manifest schema extension:** The existing decision manifest format has
+`field`, `chosen`, `alternative`, `reasoning`. This sub-plan adds an optional
+`type` field (values: `ioc_confidence`, `telemetry_gap`, or omitted for existing
+decision types). This is forward-compatible with the `decisions-schema.json`
+planned in Bundle 3 (#109, F6).
 
 ### 2. Logsource Field Taxonomy
 
@@ -72,36 +90,82 @@ every field available per logsource service.
 
 **Structure:**
 
+All 14 runtime services are included, using their exact runtime string names
+from `SigmaRuleEngine.kt`:
+
 ```yaml
 product: androdr
 services:
+  # --- Member-function toFieldMap() (data model classes) ---
   app_scanner:
-    model_class: AppTelemetry
-    fields:
-      package_name: { type: string, description: "Android package name" }
-      app_name: { type: string, description: "User-visible app label" }
-      cert_hash: { type: string, description: "SHA-256 of signing certificate" }
-      # ... all 20 fields from AppTelemetry.toFieldMap()
+    model_class: AppTelemetry          # 20 fields
+    field_map: member                   # toFieldMap() is a member function
   device_auditor:
-    model_class: DeviceTelemetry
-    fields:
-      check_id: { type: string }
-      # ... all 13 fields
+    model_class: DeviceTelemetry       # 13 fields
+    field_map: member
   dns_monitor:
-    model_class: DnsEvent
-    fields:
-      domain: { type: string }
-      # ... all 5 fields
-  # ... remaining 6 services (process_monitor, file_scanner,
-  #     receiver_audit, accessibility, appops, network_monitor)
+    model_class: DnsEvent              # 5 fields
+    field_map: member
+  process_monitor:
+    model_class: ProcessTelemetry      # 4 fields
+    field_map: member
+  file_scanner:
+    model_class: FileArtifactTelemetry # 4 fields
+    field_map: member
+  receiver_audit:
+    model_class: ReceiverTelemetry     # 4 fields
+    field_map: member
+  accessibility_audit:
+    model_class: AccessibilityTelemetry # 4 fields
+    field_map: member
+  appops_audit:
+    model_class: AppOpsTelemetry       # 6 fields
+    field_map: member
+  network_monitor:
+    model_class: NetworkTelemetry      # 6 fields
+    field_map: member
+
+  # --- Extension-function toFieldMap() (TelemetryFieldMaps.kt) ---
+  tombstone_parser:
+    model_class: TombstoneEvent
+    field_map: extension               # internal fun TombstoneEvent.toFieldMap()
+  wakelock_parser:
+    model_class: WakelockAcquisition
+    field_map: extension
+  battery_daily:
+    model_class: BatteryDailyEvent
+    field_map: extension
+  package_install_history:
+    model_class: PackageInstallHistoryEntry
+    field_map: extension
+  platform_compat:
+    model_class: PlatformCompatChange
+    field_map: extension
+  db_info:
+    model_class: DatabasePathObservation
+    field_map: extension
 ```
 
+Each service entry will also contain a `fields:` block with `{ type, description }`
+per field. The full field lists are derived from the corresponding `toFieldMap()`
+implementations during plan execution.
+
 **Cross-check test:** New `LogsourceTaxonomyCrossCheckTest.kt` in
-`app/src/test/`. For each service in the taxonomy, it instantiates the
-corresponding telemetry model, calls `toFieldMap()`, and asserts the field
-names match exactly — no extra fields in Kotlin that aren't in the taxonomy,
-no taxonomy fields that don't exist in Kotlin. Same fail-the-build pattern as
+`app/src/test/`. The test handles two patterns:
+
+- **Member functions** (9 services): instantiate the model class, call
+  `toFieldMap()`, assert field names match the taxonomy.
+- **Extension functions** (5 services): import from `com.androdr.sigma`
+  (same module, so `internal` visibility is accessible), call the extension
+  `toFieldMap()`, assert field names match.
+
+For both patterns: no extra fields in Kotlin that aren't in the taxonomy, no
+taxonomy fields that don't exist in Kotlin. Same fail-the-build pattern as
 `BundledRulesSchemaCrossCheckTest`.
+
+**`validate-rule.py` update:** The `valid_services` whitelist (line 63) is
+updated to match the taxonomy's 14 services. This ensures the Python validator
+and the Kotlin cross-check test agree on the service list.
 
 ### 3. Rule Author — `telemetry_gap` Decision Type and Taxonomy Consumption
 
@@ -139,21 +203,30 @@ telemetry but we don't collect it yet."
 
 ### 4. Validation Re-run and Measurable Improvement
 
-After skill edits land, re-run `/update-rules source stalkerware` and compare
-against Bundle 1c output on three dimensions:
+After skill edits land, two re-runs validate the changes:
 
-| Dimension | Expected in 1c | Expected after this sub-plan |
-|-----------|----------------|------------------------------|
-| Field accuracy | Unchecked — may use out-of-taxonomy fields | Zero out-of-taxonomy fields; any gaps recorded as `telemetry_gap` decisions |
-| IOC confidence | Single-source IOCs flow through silently | Single-source IOCs flagged `requires_verification`; Rule Author records `ioc_confidence` decision |
-| Decision manifest | No `telemetry_gap` or `ioc_confidence` entries | New decision types present where appropriate |
+**Re-run A — feed ingester path:** `/update-rules source stalkerware` (same
+threat as Bundle 1c). Stalkerware-indicators is a structured feed, so this
+exercises dimensions 1 and 3 but NOT dimension 2 (no single-source unstructured
+IOCs will appear).
 
-"Measurably improved" is qualitative but structured — the three dimensions above
-are the checklist. If the re-run shows the same issues as 1c, the skill edits
-need revision.
+**Re-run B — threat research path:** `/update-rules research <threat>` using a
+web-search-based threat (e.g., a recently reported banking trojan). This
+exercises dimension 2 — the researcher must web-search blog posts, producing
+single-source IOCs that trigger the `requires_verification` gate.
 
-No new rules are required from the re-run. The goal is demonstrating observable
-quality improvement in pipeline output.
+| Dimension | Exercised by | Expected in 1c | Expected after this sub-plan |
+|-----------|-------------|----------------|------------------------------|
+| Field accuracy | Re-run A + B | Unchecked — may use out-of-taxonomy fields | Zero out-of-taxonomy fields; any gaps recorded as `telemetry_gap` decisions |
+| IOC confidence | Re-run B only | Single-source IOCs flow through silently | Single-source IOCs flagged `requires_verification`; Rule Author records `ioc_confidence` decision |
+| Decision manifest | Re-run A + B | No `telemetry_gap` or `ioc_confidence` entries | New decision types present where appropriate |
+
+"Measurably improved" means all three dimensions show the expected behavior in
+their respective re-runs. If a re-run shows the same issues as 1c, the skill
+edits need revision.
+
+No new rules are required from either re-run. The goal is demonstrating
+observable quality improvement in pipeline output.
 
 ---
 
@@ -162,11 +235,19 @@ quality improvement in pipeline output.
 | File | Change |
 |------|--------|
 | `.claude/commands/update-rules-research-threat.md` | Add `requires_verification` gate, structured vs unstructured source definition |
-| `.claude/commands/update-rules-author.md` | Add taxonomy reference instruction, `telemetry_gap` decision type, fix source names |
-| `third-party/android-sigma-rules/validation/logsource-taxonomy.yml` | **New** — field taxonomy per logsource service |
+| `.claude/commands/update-rules-author.md` | Add taxonomy reference instruction, `telemetry_gap` decision type |
+| `third-party/android-sigma-rules/validation/logsource-taxonomy.yml` | **New** — field taxonomy for all 14 logsource services |
 | `third-party/android-sigma-rules/validation/allowed-sources.json` | Fix `amnesty-tech` → `amnesty-investigations` |
-| `app/src/test/.../LogsourceTaxonomyCrossCheckTest.kt` | **New** — validates taxonomy matches `toFieldMap()` |
-| `app/src/main/res/raw/known_bad_packages.json` | Fix any `amnesty-tech` source entries to `amnesty-investigations` |
+| `third-party/android-sigma-rules/validation/validate-rule.py` | Update `valid_services` whitelist to all 14 services; fix `accessibility` → `accessibility_audit`, `appops` → `appops_audit` |
+| `third-party/android-sigma-rules/validation/sir-schema.json` | Add optional `requires_verification` boolean to indicator object |
+| `third-party/android-sigma-rules/ioc-data/package-names.yml` | Fix `amnesty-tech` → `amnesty-investigations` (4 entries) |
+| `third-party/android-sigma-rules/ioc-data/c2-domains.yml` | Fix `amnesty-tech` → `amnesty-investigations` (22 entries) |
+| `third-party/android-sigma-rules/ioc-data/cert-hashes.yml` | Fix `amnesty-tech` → `amnesty-investigations` (sources header + 3 entries) |
+| `app/src/test/.../LogsourceTaxonomyCrossCheckTest.kt` | **New** — validates taxonomy matches `toFieldMap()` for all 14 services (member + extension function patterns) |
+
+**Note:** The amnesty rename touches files in the `android-sigma-rules` submodule.
+These changes are committed in the submodule first, then the submodule pointer is
+bumped in AndroDR — same two-step pattern used in Bundle 1.
 
 ## Out of Scope
 
