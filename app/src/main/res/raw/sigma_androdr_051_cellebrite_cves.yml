@@ -31,6 +31,6 @@ display:
     safe_title: "No Cellebrite-linked CVEs"
     evidence_type: cve_list
     summary_template: "Cellebrite UFED exploits {count} unpatched CVEs on this device"
-level: critical
+level: medium
 remediation:
     - "Go to Settings > Software Update > Download and Install immediately. Also check Play Store > Settings > About > Google Play system update. Your phone has vulnerabilities used by Cellebrite forensic tools to extract data from locked devices."
