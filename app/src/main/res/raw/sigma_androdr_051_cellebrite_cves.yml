@@ -1,0 +1,36 @@
+title: CVE exploited by Cellebrite UFED
+id: androdr-051
+status: experimental
+category: device_posture
+description: >
+    Device has unpatched CVEs known to be exploited by Cellebrite's UFED
+    forensic extraction tool. These vulnerabilities were used to unlock and
+    extract data from phones belonging to Serbian journalists and activists,
+    as documented by Amnesty International in December 2024.
+author: AndroDR (AI-generated)
+date: 2026/04/02
+references:
+    - https://www.amnesty.org/en/latest/research/2024/12/serbia-smartphone-cellebrite-exploit/
+tags:
+    - attack.t1404
+    - campaign.cellebrite
+logsource:
+    product: androdr
+    service: device_auditor
+detection:
+    selection:
+        unpatched_cve_id|contains:
+            - "CVE-2024-53104"
+            - "CVE-2024-53197"
+            - "CVE-2024-50302"
+    condition: selection
+display:
+    category: device_posture
+    icon: shield_alert
+    triggered_title: "{count} CVEs linked to Cellebrite"
+    safe_title: "No Cellebrite-linked CVEs"
+    evidence_type: cve_list
+    summary_template: "Cellebrite UFED exploits {count} unpatched CVEs on this device"
+level: critical
+remediation:
+    - "Go to Settings > Software Update > Download and Install immediately. Also check Play Store > Settings > About > Google Play system update. Your phone has vulnerabilities used by Cellebrite forensic tools to extract data from locked devices."

@@ -1,0 +1,52 @@
+title: DNS query to dynamic DNS provider
+id: androdr-070
+status: experimental
+category: incident
+description: >
+    A DNS query was made to a known dynamic DNS (DDNS) provider. Mobile
+    malware families including FluBot, Anubis, and Cerberus use DDNS
+    domains for command-and-control infrastructure because they are free,
+    anonymous, and easily rotated. Legitimate use is uncommon on mobile devices.
+author: AndroDR (AI-generated)
+date: 2026/04/02
+references:
+    - https://attack.mitre.org/techniques/T1481/
+tags:
+    - attack.t1481
+logsource:
+    product: androdr
+    service: dns_monitor
+detection:
+    selection:
+        domain|endswith:
+            - ".duckdns.org"
+            - ".no-ip.com"
+            - ".no-ip.org"
+            - ".no-ip.biz"
+            - ".dynu.com"
+            - ".dynu.net"
+            - ".ddns.net"
+            - ".hopto.org"
+            - ".zapto.org"
+            - ".sytes.net"
+            - ".serveftp.com"
+            - ".servegame.com"
+            - ".servehttp.com"
+            - ".redirectme.net"
+            - ".bounceme.net"
+            - ".myftp.biz"
+            - ".myftp.org"
+            - ".myvnc.com"
+            - ".freedns.org"
+            - ".afraid.org"
+            - ".chickenkiller.com"
+            - ".mooo.com"
+    condition: selection
+level: medium
+display:
+    category: app_risk
+    icon: dns
+    triggered_title: "Dynamic DNS Domain"
+    evidence_type: none
+remediation:
+    - "A connection to a dynamic DNS service was detected. These services are commonly used by malware for command-and-control. If you do not use IoT devices or home servers, this may indicate a malicious app."

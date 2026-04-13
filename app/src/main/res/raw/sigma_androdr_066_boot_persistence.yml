@@ -1,0 +1,35 @@
+title: App registered for boot-completed broadcast
+id: androdr-066
+status: experimental
+category: incident
+description: >
+    A non-system app is registered to start automatically when the device
+    boots. While many legitimate apps use this (messaging apps, security
+    software), malware and stalkerware commonly register for BOOT_COMPLETED
+    to maintain persistence across reboots.
+author: AndroDR (AI-generated)
+date: 2026/04/02
+references:
+    - https://attack.mitre.org/techniques/T1624/
+tags:
+    - attack.t1624
+logsource:
+    product: androdr
+    service: receiver_audit
+detection:
+    selection:
+        intent_action:
+            - "android.intent.action.BOOT_COMPLETED"
+            - "android.intent.action.LOCKED_BOOT_COMPLETED"
+        is_system_app: false
+    filter_known_good:
+        package_name|ioc_lookup: known_good_app_db
+    condition: selection and not filter_known_good
+level: low
+display:
+    category: app_risk
+    icon: restart_alt
+    triggered_title: "Boot Persistence"
+    evidence_type: none
+remediation:
+    - "This app starts automatically when your phone boots. If you did not install it intentionally, consider uninstalling it from Settings > Apps."
