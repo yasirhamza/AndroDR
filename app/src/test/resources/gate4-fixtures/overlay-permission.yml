@@ -1,0 +1,41 @@
+# Fixture for androdr-069: sideloaded app with screen overlay permission
+rule_file: sigma_androdr_069_overlay_permission.yml
+service: app_scanner
+ioc_stubs:
+  known_good_app_db:
+    - "com.google.android.gm"
+
+true_positives:
+  - package_name: "com.shady.bankingoverlay"
+    is_system_app: false
+    from_trusted_store: false
+    permissions:
+      - "android.permission.INTERNET"
+      - "android.permission.SYSTEM_ALERT_WINDOW"
+
+true_negatives:
+  # System app with the permission — filtered by is_system_app
+  - package_name: "com.android.systemui"
+    is_system_app: true
+    from_trusted_store: false
+    permissions:
+      - "android.permission.SYSTEM_ALERT_WINDOW"
+  # Trusted-store app with the permission — filtered by from_trusted_store
+  - package_name: "com.example.legitimate"
+    is_system_app: false
+    from_trusted_store: true
+    permissions:
+      - "android.permission.SYSTEM_ALERT_WINDOW"
+  # Known-good sideloaded app — filtered by known_good_app_db
+  - package_name: "com.google.android.gm"
+    is_system_app: false
+    from_trusted_store: false
+    permissions:
+      - "android.permission.SYSTEM_ALERT_WINDOW"
+  # Sideloaded app without the overlay permission
+  - package_name: "com.shady.nooverlay"
+    is_system_app: false
+    from_trusted_store: false
+    permissions:
+      - "android.permission.INTERNET"
+      - "android.permission.CAMERA"

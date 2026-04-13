@@ -1,0 +1,47 @@
+title: Sideloaded app impersonating popular application
+id: androdr-077
+status: experimental
+category: incident
+description: >
+    A sideloaded app uses a package name prefix belonging to a well-known
+    application (WhatsApp, Snapchat, Instagram, etc.) but was not installed
+    from a trusted app store. Stalkerware and trojans commonly disguise
+    themselves using package names similar to popular apps to avoid suspicion.
+author: AndroDR (AI-generated)
+date: 2026/04/02
+references:
+    - https://attack.mitre.org/techniques/T1036/005/
+    - https://stopstalkerware.org/
+tags:
+    - attack.t1036.005
+logsource:
+    product: androdr
+    service: app_scanner
+detection:
+    selection:
+        is_sideloaded: true
+        package_name|startswith:
+            - "com.whatsapp."
+            - "com.snapchat."
+            - "com.instagram."
+            - "com.facebook."
+            - "org.telegram."
+            - "com.tiktok."
+            - "com.twitter."
+            - "com.spotify."
+            - "com.netflix."
+            - "com.amazon."
+            - "com.paypal."
+            - "com.ebay."
+            - "com.uber."
+    filter_known_good:
+        package_name|ioc_lookup: known_good_app_db
+    condition: selection and not filter_known_good
+level: high
+display:
+    category: app_risk
+    icon: content_copy
+    triggered_title: "Fake Popular App (Sideloaded)"
+    evidence_type: none
+remediation:
+    - "This sideloaded app uses a package name that imitates a well-known app. It is likely a fake or trojanized version. Uninstall it from Settings > Apps and install the legitimate version from Google Play Store."

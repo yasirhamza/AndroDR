@@ -1,0 +1,14 @@
+# Fixture for androdr-051: CVEs exploited by Cellebrite UFED
+rule_file: sigma_androdr_051_cellebrite_cves.yml
+service: device_auditor
+
+true_positives:
+  - unpatched_cve_id: "CVE-2024-53104"
+  - unpatched_cve_id: "CVE-2024-53197"
+  - unpatched_cve_id: "CVE-2024-50302"
+  - unpatched_cve_id: "CVE-2024-53104 CVE-2024-53197"
+
+true_negatives:
+  - unpatched_cve_id: "CVE-2023-12345"
+  - unpatched_cve_id: ""
+  - unpatched_cve_id: "CVE-2024-99999"

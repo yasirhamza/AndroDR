@@ -1,0 +1,18 @@
+# Fixture for androdr-070: DNS query to dynamic DNS provider (DDNS C2)
+rule_file: sigma_androdr_070_ddns_c2.yml
+service: dns_monitor
+
+true_positives:
+  - domain: "malware.duckdns.org"
+  - domain: "c2server.no-ip.com"
+  - domain: "botnet.ddns.net"
+  - domain: "rat.hopto.org"
+  - domain: "spy.zapto.org"
+  - domain: "tracker.chickenkiller.com"
+  - domain: "cmd.mooo.com"
+
+true_negatives:
+  - domain: "google.com"
+  - domain: "example.org"
+  - domain: "api.github.com"
+  - domain: "static.cloudflare.com"

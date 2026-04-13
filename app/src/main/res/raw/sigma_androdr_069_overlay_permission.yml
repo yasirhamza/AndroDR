@@ -1,0 +1,34 @@
+title: Sideloaded app with screen overlay permission
+id: androdr-069
+status: experimental
+category: incident
+description: >
+    A sideloaded app requests SYSTEM_ALERT_WINDOW permission, which allows
+    it to draw overlays on top of other apps. Banking trojans use this to
+    display fake login screens over legitimate banking apps to steal
+    credentials (credential overlay attacks).
+author: AndroDR (AI-generated)
+date: 2026/04/02
+references:
+    - https://attack.mitre.org/techniques/T1634/001/
+tags:
+    - attack.t1634.001
+logsource:
+    product: androdr
+    service: app_scanner
+detection:
+    selection:
+        is_system_app: false
+        from_trusted_store: false
+        permissions|contains: "android.permission.SYSTEM_ALERT_WINDOW"
+    filter_known_good:
+        package_name|ioc_lookup: known_good_app_db
+    condition: selection and not filter_known_good
+level: medium
+display:
+    category: app_risk
+    icon: layers
+    triggered_title: "Screen Overlay (Sideloaded)"
+    evidence_type: none
+remediation:
+    - "This sideloaded app can draw over other apps, which is used by banking trojans to steal passwords. Go to Settings > Apps > Special access > Display over other apps and revoke its permission, then uninstall the app."

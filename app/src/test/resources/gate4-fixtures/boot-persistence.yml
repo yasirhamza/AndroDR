@@ -1,0 +1,35 @@
+# Fixture for androdr-066: non-system app registered for boot-completed broadcast
+rule_file: sigma_androdr_066_boot_persistence.yml
+service: receiver_audit
+ioc_stubs:
+  known_good_app_db:
+    - "com.whatsapp"
+    - "com.google.android.gms"
+
+true_positives:
+  # BOOT_COMPLETED selection
+  - package_name: "com.shady.stalkerware"
+    intent_action: "android.intent.action.BOOT_COMPLETED"
+    is_system_app: false
+  # LOCKED_BOOT_COMPLETED selection
+  - package_name: "com.shady.persistence"
+    intent_action: "android.intent.action.LOCKED_BOOT_COMPLETED"
+    is_system_app: false
+
+true_negatives:
+  # System app — filtered by is_system_app
+  - package_name: "com.android.phone"
+    intent_action: "android.intent.action.BOOT_COMPLETED"
+    is_system_app: true
+  # System app with LOCKED_BOOT_COMPLETED
+  - package_name: "com.android.settings"
+    intent_action: "android.intent.action.LOCKED_BOOT_COMPLETED"
+    is_system_app: true
+  # Known-good non-system app — filtered by known_good_app_db
+  - package_name: "com.whatsapp"
+    intent_action: "android.intent.action.BOOT_COMPLETED"
+    is_system_app: false
+  # Non-system app with unrelated broadcast action
+  - package_name: "com.shady.otheraction"
+    intent_action: "android.intent.action.ACTION_POWER_CONNECTED"
+    is_system_app: false
