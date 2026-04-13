@@ -1,0 +1,32 @@
+# Fixture for androdr-077: sideloaded app impersonating popular application
+rule_file: sigma_androdr_077_popular_app_impersonation.yml
+service: app_scanner
+ioc_stubs:
+  known_good_app_db:
+    - "com.whatsapp.w4b"
+
+true_positives:
+  - package_name: "com.whatsapp.spymod"
+    is_sideloaded: true
+  - package_name: "com.snapchat.tracker"
+    is_sideloaded: true
+  - package_name: "com.instagram.fake"
+    is_sideloaded: true
+  - package_name: "org.telegram.rat"
+    is_sideloaded: true
+  - package_name: "com.uber.trojan"
+    is_sideloaded: true
+
+true_negatives:
+  # Not sideloaded — from trusted store
+  - package_name: "com.whatsapp.mainapp"
+    is_sideloaded: false
+  # Package name does not match any monitored prefix
+  - package_name: "com.example.randomapp"
+    is_sideloaded: true
+  # Known-good sideloaded app (e.g. WhatsApp Business from enterprise MDM)
+  - package_name: "com.whatsapp.w4b"
+    is_sideloaded: true
+  # Legit prefix but not sideloaded
+  - package_name: "com.facebook.katana"
+    is_sideloaded: false
