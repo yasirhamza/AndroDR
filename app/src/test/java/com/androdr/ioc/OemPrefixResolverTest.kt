@@ -9,9 +9,20 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
+/**
+ * Legacy behavior tests for OemPrefixResolver. These verify that when the
+ * device identity matches the conditional block (e.g., assessing a Samsung
+ * device), the appropriate prefixes are classified as OEM. The new
+ * device-conditional behavior (Samsung prefix on a Pixel is NOT OEM) is
+ * covered by [OemPrefixResolverConditionalTest].
+ */
 class OemPrefixResolverTest {
 
     private val resolver: OemPrefixResolver
+    private val samsung = DeviceIdentity(manufacturer = "samsung", brand = "samsung")
+    private val xiaomi = DeviceIdentity(manufacturer = "xiaomi", brand = "xiaomi")
+    private val tmobile = DeviceIdentity(manufacturer = "samsung", brand = "tmobile")
+    private val generic = DeviceIdentity(manufacturer = "google", brand = "google")
 
     init {
         val context: Context = mockk(relaxed = true)
@@ -24,93 +35,78 @@ class OemPrefixResolverTest {
     }
 
     @Test
-    fun `bundled prefixes match known OEM packages`() {
-        assertTrue(resolver.isOemPrefix("com.samsung.accessory.zenithmgr"))
-        assertTrue(resolver.isOemPrefix("com.google.android.gms"))
-        assertTrue(resolver.isOemPrefix("com.miui.notes"))
-        assertTrue(resolver.isOemPrefix("com.tmobile.m1"))
-        assertTrue(resolver.isOemPrefix("com.mediatek.op01.phone.plugin"))
+    fun `Samsung packages are OEM on a Samsung device`() {
+        assertTrue(resolver.isOemPrefix("com.samsung.accessory.zenithmgr", samsung))
+        assertTrue(resolver.isOemPrefix("com.sec.android.app.launcher", samsung))
     }
 
     @Test
-    fun `bundled prefixes do not match user apps`() {
-        assertFalse(resolver.isOemPrefix("com.instagram.android"))
-        assertFalse(resolver.isOemPrefix("com.callapp.contacts"))
-        assertFalse(resolver.isOemPrefix("com.evil.spy"))
+    fun `AOSP and Google packages are OEM on any device`() {
+        assertTrue(resolver.isOemPrefix("com.google.android.gms", samsung))
+        assertTrue(resolver.isOemPrefix("com.google.android.gms", xiaomi))
+        assertTrue(resolver.isOemPrefix("com.google.android.gms", generic))
+    }
+
+    @Test
+    fun `chipset prefixes are OEM on any device`() {
+        assertTrue(resolver.isOemPrefix("com.mediatek.op01.phone.plugin", generic))
+        assertTrue(resolver.isOemPrefix("com.unisoc.android.wifi", generic))
+        assertTrue(resolver.isOemPrefix("com.qualcomm.qti.telephonyservice", samsung))
+    }
+
+    @Test
+    fun `Xiaomi packages are OEM on a Xiaomi device`() {
+        assertTrue(resolver.isOemPrefix("com.miui.notes", xiaomi))
+        assertTrue(resolver.isOemPrefix("com.xiaomi.account", xiaomi))
+    }
+
+    @Test
+    fun `US carrier packages are OEM on carrier-branded builds`() {
+        assertTrue(resolver.isOemPrefix("com.tmobile.m1", tmobile))
+    }
+
+    @Test
+    fun `user apps are not OEM on any device`() {
+        assertFalse(resolver.isOemPrefix("com.instagram.android", samsung))
+        assertFalse(resolver.isOemPrefix("com.instagram.android", generic))
+        assertFalse(resolver.isOemPrefix("com.callapp.contacts", generic))
+        assertFalse(resolver.isOemPrefix("com.evil.spy", generic))
     }
 
     @Test
     fun `bundled installers are trusted`() {
-        assertTrue(resolver.isTrustedInstaller("com.android.vending"))
-        assertTrue(resolver.isTrustedInstaller("com.sec.android.app.samsungapps"))
-        assertTrue(resolver.isTrustedInstaller("com.xiaomi.market"))
+        assertTrue(resolver.isTrustedInstaller("com.android.vending", generic))
+        assertTrue(resolver.isTrustedInstaller("com.sec.android.app.samsungapps", samsung))
+        assertTrue(resolver.isTrustedInstaller("com.xiaomi.market", xiaomi))
     }
 
     @Test
-    fun `OEM-prefix installers are trusted`() {
-        assertTrue(resolver.isTrustedInstaller("com.samsung.android.app.omcagent"))
-        assertTrue(resolver.isTrustedInstaller("com.tmobile.pr.adapt"))
+    fun `OEM-prefix installers are trusted on matching device`() {
+        assertTrue(resolver.isTrustedInstaller("com.samsung.android.app.omcagent", samsung))
+        assertTrue(resolver.isTrustedInstaller("com.tmobile.pr.adapt", tmobile))
     }
 
     @Test
     fun `unknown installers are not trusted`() {
-        assertFalse(resolver.isTrustedInstaller("com.unknown.installer"))
-    }
-
-    @Test
-    fun `parseOemPrefixYaml separates strict and partnership prefixes`() {
-        val yaml = """
-            version: "2026-03-29"
-            oem_prefixes:
-              - "com.test."
-              - "com.example."
-            partnership_prefixes:
-              - "com.partner."
-            trusted_installers:
-              - "com.test.market"
-        """.trimIndent()
-        val result = resolver.parseOemPrefixYaml(yaml)
-        assertTrue(result.strictPrefixes.contains("com.test."))
-        assertTrue(result.strictPrefixes.contains("com.example."))
-        assertFalse(result.strictPrefixes.contains("com.partner."))
-        assertTrue(result.partnershipPrefixes.contains("com.partner."))
-        assertTrue(result.installers.contains("com.test.market"))
+        assertFalse(resolver.isTrustedInstaller("com.unknown.installer", generic))
     }
 
     @Test
     fun `partnership prefixes are not strict OEM prefixes`() {
-        // Partnership pre-installs (Facebook, Microsoft, etc.) should NOT match isOemPrefix
-        assertFalse(resolver.isOemPrefix("com.facebook.katana"))
-        assertFalse(resolver.isOemPrefix("com.microsoft.office.word"))
+        assertFalse(resolver.isOemPrefix("com.facebook.katana", samsung))
+        assertFalse(resolver.isOemPrefix("com.microsoft.office.word", samsung))
     }
 
     @Test
-    fun `monotype and hiya are strict OEM prefixes per YAML`() {
-        // These moved from partnership to samsung_prefixes (strict) in the bundled YAML
-        assertTrue(resolver.isOemPrefix("com.monotype.android.font"))
-        assertTrue(resolver.isOemPrefix("com.hiya.star"))
-    }
-
-    @Test
-    fun `partnership prefixes match isPartnershipPrefix`() {
-        assertTrue(resolver.isPartnershipPrefix("com.facebook.katana"))
-        assertTrue(resolver.isPartnershipPrefix("com.microsoft.office.word"))
-        assertTrue(resolver.isPartnershipPrefix("com.touchtype.swiftkey"))
-    }
-
-    @Test
-    fun `digitalturbine is a strict OEM prefix`() {
-        assertTrue(resolver.isOemPrefix("com.digitalturbine.ultraman"))
-    }
-
-    @Test
-    fun `IronSource Aura is NOT an OEM prefix`() {
-        assertFalse(resolver.isOemPrefix("com.ironsrc.aura.tmo"))
+    fun `partnership prefixes match isPartnershipPrefix on Samsung device`() {
+        assertTrue(resolver.isPartnershipPrefix("com.facebook.katana", samsung))
+        assertTrue(resolver.isPartnershipPrefix("com.microsoft.office.word", samsung))
+        assertTrue(resolver.isPartnershipPrefix("com.touchtype.swiftkey", samsung))
     }
 
     @Test
     fun `android prefix does not match androidmalware packages`() {
-        assertFalse(resolver.isOemPrefix("androidmalware.evil.spy"))
-        assertTrue(resolver.isOemPrefix("android.provider.contacts"))
+        assertFalse(resolver.isOemPrefix("androidmalware.evil.spy", generic))
+        assertTrue(resolver.isOemPrefix("android.provider.contacts", generic))
     }
 }

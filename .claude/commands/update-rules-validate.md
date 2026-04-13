@@ -61,24 +61,38 @@ Record: `{ pass: bool, duplicates: string[], overlaps: string[] }`
 
 ## Gate 4: Dry-Run Evaluation
 
-Construct synthetic telemetry and test the rule:
+Use the programmatic Gate 4 test harness to verify rule logic.
 
-1. **True positive test**: Build a telemetry record from the SIR's indicators that SHOULD trigger the rule. For example, if the rule matches `package_name|ioc_lookup: package_ioc_db`, create a record with a package name from the SIR.
+1. **Create a fixture YAML** file with this format:
 
-2. **True negative test**: Use the benign fixtures from `{sigma_repo_path}/validation/test-fixtures/`. Pick the fixture matching the rule's service (benign-app.json for app_scanner, benign-device.json for device_auditor).
+```yaml
+rule_file: sigma_androdr_NNN_rule_name.yml
+service: <logsource.service from the rule>
+ioc_stubs:
+  <lookup_db_name>:
+    - "<indicator_from_SIR>"
+true_positives:
+  - <field_name>: <value_from_SIR_that_should_trigger>
+true_negatives:
+  - <field_name>: <benign_value>
+```
 
-3. To run the dry-run, use AndroDR's unit test infrastructure. Write a temporary JUnit test that:
-   - Parses the candidate YAML with `SigmaRuleParser.parse()`
-   - Creates the synthetic telemetry as a `Map<String, Any?>`
-   - Calls `SigmaRuleEvaluator.evaluate()` with the rule and telemetry
-   - Asserts the rule fires on the TP record and does NOT fire on the TN record
+2. **Copy the fixture** to `app/src/test/resources/gate4-fixtures/`
 
-   Run: `./gradlew testDebugUnitTest --tests "com.androdr.sigma.SigmaRuleEvaluatorTest"`
+3. **Run the harness:**
+```bash
+./gradlew testDebugUnitTest --tests "com.androdr.sigma.GateFourFixtureTest"
+```
 
-   If writing a temp test is not practical, manually trace the evaluation logic:
-   - Parse the YAML and check that detection field names match telemetry field names
-   - Verify that modifier logic would match the TP values
-   - Verify that TN values would NOT match
+4. **Record results:**
+   - If the test passes: `tp_fired: true`, `tn_clean: true`
+   - If it fails: record which records failed and why from the test output
+
+**Fixture tips:**
+- For `ioc_lookup` rules: stub the DB name with indicators from the SIR
+- For simple selection rules: set fields to matching values for TP, non-matching for TN
+- The harness uses stubbed IOC lookups (not real data) — this tests rule wiring only
+- Use `benign-app.json` / `benign-device.json` from `validation/test-fixtures/` as TN templates
 
 Record: `{ pass: bool, tp_fired: bool, tn_clean: bool, errors: string[] }`
 
@@ -108,56 +122,30 @@ Return a JSON ValidationResult:
 
 ## IOC Data Validation
 
-When the pipeline produces IOC data entries (for `ioc-data/*.yml` or bundled `known_bad_*.json`), validate each entry before committing:
+When the pipeline produces IOC data entries (for `ioc-data/*.yml`), validate with:
 
-### Required fields
-
-**Package IOC entries:**
-```json
-{
-  "packageName": "com.example.malware",  // required
-  "name": "MalwareName",                 // required
-  "category": "STALKERWARE",             // required, from allowed set
-  "severity": "CRITICAL",                // required
-  "description": "...",                   // required
-  "source": "stalkerware-indicators"     // REQUIRED — provenance
-}
+```bash
+python3 third-party/android-sigma-rules/validation/validate-ioc-data.py <ioc-data-file.yml>
 ```
 
-**Cert hash IOC entries:**
-```json
-{
-  "certHash": "abc123...",               // required, 64-char hex SHA-256
-  "familyName": "MalwareName",           // required
-  "category": "TROJAN",                  // required, from allowed set
-  "severity": "CRITICAL",               // required
-  "description": "...",                  // required
-  "source": "malwarebazaar"             // REQUIRED — provenance
-}
-```
+The script enforces:
+- `source` field present and in `allowed-sources.json`
+- No blocked categories (TEST, FIXTURE, SIMULATION, DEBUG)
+- No blocked family patterns (test/fixture/simulation/sample/example)
+- Cert hashes: 64 lowercase hex (SHA-256) or 40 lowercase hex (SHA-1)
+- No duplicate indicators within the file
 
-### Rejection rules (HARD FAIL)
+Exit 0 = valid, exit 1 = errors printed to stderr, exit 2 = file not found.
 
-1. **Missing `source` field** — every IOC entry must trace to a verified feed
-2. **Blocked category values**: `TEST`, `FIXTURE`, `SIMULATION`, `DEBUG` — test data must never enter production IOC files
-3. **Blocked familyName patterns**: entries containing "test", "fixture", "simulation", "sample", "example" (case-insensitive) are rejected
-4. **Invalid cert hash format**: must be exactly 64 lowercase hex characters (SHA-256)
-5. **Duplicate entry**: same packageName or certHash already exists
+### Allowed sources
 
-### Allowed `source` values
+See `third-party/android-sigma-rules/validation/allowed-sources.json` for the canonical list with URLs.
 
-| Source | Description |
-|--------|-------------|
-| `stalkerware-indicators` | AssoEchap stalkerware-indicators GitHub repo |
-| `malwarebazaar` | abuse.ch MalwareBazaar |
-| `threatfox` | abuse.ch ThreatFox |
-| `amnesty-investigations` | Amnesty International Security Lab |
-| `citizenlab-indicators` | Citizen Lab malware indicators |
-| `mvt-indicators` | MVT project STIX2 indicators |
-| `virustotal` | VirusTotal intelligence |
-| `android-security-bulletin` | Google Android Security Bulletins |
+### Required fields per entry type
 
-Entries with `source` values not in this list are flagged for manual review.
+**Package IOC:** indicator, family, category, severity, source
+**Cert hash IOC:** indicator, familyName, category, severity, source
+**Domain IOC:** indicator, family, category, severity, source
 
 ## Rules
 

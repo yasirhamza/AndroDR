@@ -14,8 +14,8 @@ import com.androdr.data.model.ScanResult
         ScanResult::class, DnsEvent::class, KnownAppDbEntry::class,
         CveEntity::class, ForensicTimelineEvent::class, Indicator::class
     ],
-    version = 10,
-    exportSchema = false
+    version = 16,
+    exportSchema = true
 )
 @TypeConverters(Converters::class)
 abstract class AppDatabase : RoomDatabase() {

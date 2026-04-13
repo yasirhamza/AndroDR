@@ -33,7 +33,7 @@ class AdbKeysModuleTest {
               QUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFh user@workstation
         """.trimIndent()
 
-        val result = module.analyze(section, mockIndicatorResolver)
+        val result = module.analyze(section, mockIndicatorResolver, com.androdr.ioc.DeviceIdentity.UNKNOWN)
         assertTrue(result.telemetry.any {
             it["source"] == "adb_trusted_key" &&
                 it["host"] == "user@workstation"
@@ -52,7 +52,7 @@ class AdbKeysModuleTest {
               QUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFh
         """.trimIndent()
 
-        val result = module.analyze(section, mockIndicatorResolver)
+        val result = module.analyze(section, mockIndicatorResolver, com.androdr.ioc.DeviceIdentity.UNKNOWN)
         assertTrue(result.telemetry.any {
             it["source"] == "adb_trusted_key" &&
                 it["host"] == "unknown"
@@ -61,7 +61,7 @@ class AdbKeysModuleTest {
 
     @Test
     fun `empty section produces no telemetry`() = runBlocking {
-        val result = module.analyze("", mockIndicatorResolver)
+        val result = module.analyze("", mockIndicatorResolver, com.androdr.ioc.DeviceIdentity.UNKNOWN)
         assertTrue(result.telemetry.isEmpty())
         assertTrue(result.timeline.isEmpty())
     }

@@ -4,7 +4,8 @@ data class AccessibilityTelemetry(
     val packageName: String,
     val serviceName: String,
     val isSystemApp: Boolean,
-    val isEnabled: Boolean
+    val isEnabled: Boolean,
+    val source: TelemetrySource,
 ) {
     fun toFieldMap(): Map<String, Any?> = mapOf(
         "package_name" to packageName,

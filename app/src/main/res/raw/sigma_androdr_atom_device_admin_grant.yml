@@ -1,0 +1,17 @@
+title: Atom — device admin granted
+id: androdr-atom-device-admin-grant
+status: production
+description: Internal atom rule. Matches raw device admin grant events for use by correlation rules.
+author: AndroDR
+date: 2026-04-08
+logsource:
+    product: androdr
+    service: timeline
+detection:
+    selection:
+        category: device_admin_grant
+    condition: selection
+level: informational
+category: incident
+display:
+    suppress_finding: true

@@ -20,6 +20,7 @@ detection:
         package_name|ioc_lookup: known_good_app_db
     condition: selection_phone_state and not filter_known_good or selection_outgoing_call and not filter_known_good
 level: informational
+category: incident
 display:
     category: app_risk
     icon: phone

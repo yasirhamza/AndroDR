@@ -2,7 +2,6 @@ package com.androdr.reporting
 
 import android.os.Build
 import com.androdr.data.model.TimelineEvent
-import com.androdr.scanner.BugReportAnalyzer.BugReportFinding
 import com.androdr.sigma.Finding
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -19,10 +18,9 @@ object TimelineFormatter {
     private const val THIN = "------------------------------------------------------------"
 
     @Suppress("LongMethod") // Report formatting assembles header, verdict, grouped findings,
-    // legacy, timeline, and inventory in a specific order.
+    // timeline, and inventory in a specific order.
     fun formatTimeline(
         timeline: List<TimelineEvent>,
-        legacyFindings: List<BugReportFinding>,
         findings: List<Finding>,
         hashByPkg: Map<String, String> = emptyMap(),
         displayNames: Map<String, String> = emptyMap()
@@ -53,9 +51,6 @@ object TimelineFormatter {
         }
         appendLine("  ANALYSIS VERDICT: $verdict")
         appendLine("  SIGMA findings: $critical critical, $high high, $medium medium")
-        if (legacyFindings.isNotEmpty()) {
-            appendLine("  Pattern scan: ${legacyFindings.size} findings")
-        }
         appendLine()
 
         // -- SIGMA findings section -----------------------------------------------
@@ -99,17 +94,6 @@ object TimelineFormatter {
                 }
                 appendLine()
             }
-        }
-
-        // Legacy findings section (from regex scanning)
-        if (legacyFindings.isNotEmpty()) {
-            appendLine(THIN)
-            appendLine("  PATTERN SCAN (${legacyFindings.size})")
-            appendLine(THIN)
-            legacyFindings.forEach { f ->
-                appendLine("  [${f.severity}] ${f.category}: ${f.description}")
-            }
-            appendLine()
         }
 
         // Timeline section

@@ -6,20 +6,28 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class EvidenceProviderTest {
-    private fun makeRule(tags: List<String> = emptyList(), evidenceType: String = "cve_list") = SigmaRule(
+    private fun makeRule(
+        tags: List<String> = emptyList(),
+        evidenceType: String = "cve_list",
+        category: RuleCategory = RuleCategory.INCIDENT,
+    ) = SigmaRule(
         id = "androdr-047", title = "CVE test", status = "production",
         description = "Test", product = "androdr", service = "device_auditor",
-        level = "critical", tags = tags,
+        level = "critical", category = category, tags = tags,
         detection = SigmaDetection(emptyMap(), "selection"),
         falsepositives = emptyList(),
         remediation = listOf("Update to {target_patch_level} or later."),
         display = SigmaDisplay(evidenceType = evidenceType)
     )
 
-    private fun makeCampaignRule(campaignTag: String, cveIds: List<String>) = SigmaRule(
+    private fun makeCampaignRule(
+        campaignTag: String,
+        cveIds: List<String>,
+        category: RuleCategory = RuleCategory.INCIDENT,
+    ) = SigmaRule(
         id = "androdr-048", title = "Campaign", status = "production",
         description = "", product = "androdr", service = "device_auditor",
-        level = "critical", tags = listOf(campaignTag),
+        level = "critical", category = category, tags = listOf(campaignTag),
         detection = SigmaDetection(
             mapOf("selection" to SigmaSelection(
                 listOf(SigmaFieldMatcher("unpatched_cve_id", SigmaModifier.CONTAINS, cveIds))

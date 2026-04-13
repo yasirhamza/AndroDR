@@ -16,6 +16,7 @@ detection:
         file_exists: true
     condition: selection
 level: critical
+category: incident
 display:
     category: device_posture
     icon: shield_alert

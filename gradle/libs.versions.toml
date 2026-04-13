@@ -39,7 +39,7 @@ snakeyamlEngine = "2.7"
 
 # Code quality & security
 detekt = "1.23.7"
-owaspDepCheck = "9.2.0"
+# owaspDepCheck removed -- replaced by Dependabot (.github/dependabot.yml)
 
 # Testing
 junit = "4.13.2"
@@ -47,6 +47,7 @@ junitExt = "1.2.1"
 espressoCore = "3.6.1"
 mockk = "1.13.12"
 orgJson = "20240303"
+jsonSchemaValidator = "2.0.1"
 
 [libraries]
 # AndroidX Core
@@ -78,6 +79,7 @@ androidx-hilt-navigation-compose = { group = "androidx.hilt", name = "hilt-navig
 androidx-room-runtime = { group = "androidx.room", name = "room-runtime", version.ref = "room" }
 androidx-room-ktx = { group = "androidx.room", name = "room-ktx", version.ref = "room" }
 androidx-room-compiler = { group = "androidx.room", name = "room-compiler", version.ref = "room" }
+androidx-room-testing = { group = "androidx.room", name = "room-testing", version.ref = "room" }
 
 # Coroutines
 kotlinx-coroutines-android = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-android", version.ref = "coroutines" }
@@ -93,6 +95,7 @@ androidx-espresso-core = { group = "androidx.test.espresso", name = "espresso-co
 mockk = { group = "io.mockk", name = "mockk", version.ref = "mockk" }
 kotlinx-coroutines-test = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-test", version.ref = "coroutines" }
 org-json = { group = "org.json", name = "json", version.ref = "orgJson" }
+json-schema-validator = { group = "com.networknt", name = "json-schema-validator", version.ref = "jsonSchemaValidator" }
 
 # WorkManager
 androidx-work-runtime-ktx = { group = "androidx.work", name = "work-runtime-ktx", version.ref = "workManager" }
@@ -113,4 +116,3 @@ kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", versi
 hilt = { id = "com.google.dagger.hilt.android", version.ref = "hilt" }
 ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
 detekt = { id = "io.gitlab.arturbosch.detekt", version.ref = "detekt" }
-owasp-dependency-check = { id = "org.owasp.dependencycheck", version.ref = "owaspDepCheck" }

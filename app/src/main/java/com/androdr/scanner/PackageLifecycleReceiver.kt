@@ -53,14 +53,13 @@ class PackageLifecycleReceiver : BroadcastReceiver() {
                 val displayName = if (appLabel != pkg) "$appLabel ($pkg)" else pkg
 
                 forensicTimelineEventDao.insert(ForensicTimelineEvent(
-                    timestamp = System.currentTimeMillis(),
+                    startTimestamp = System.currentTimeMillis(),
                     source = "package_lifecycle",
                     category = category,
                     description = "App $verb: $displayName",
-                    severity = "INFO",
                     packageName = pkg,
                     appName = appLabel,
-                    isFromRuntime = true
+                    telemetrySource = com.androdr.data.model.TelemetrySource.LIVE_SCAN
                 ))
                 Log.i(TAG, "Package $verb: $displayName")
             } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {

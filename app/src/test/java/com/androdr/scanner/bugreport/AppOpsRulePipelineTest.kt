@@ -28,6 +28,7 @@ class AppOpsRulePipelineTest {
         description: test
         author: test
         date: 2026/01/01
+        category: incident
         tags:
             - attack.t1429
         logsource:
@@ -50,6 +51,7 @@ class AppOpsRulePipelineTest {
         description: test
         author: test
         date: 2026/01/01
+        category: incident
         tags:
             - attack.t1429
         logsource:
@@ -72,6 +74,7 @@ class AppOpsRulePipelineTest {
         description: test
         author: test
         date: 2026/01/01
+        category: incident
         tags:
             - attack.t1407
         logsource:
@@ -102,7 +105,7 @@ class AppOpsRulePipelineTest {
                   Access: [fg-s] 2026-03-27 14:30:00
         """.trimIndent()
 
-        val result = module.analyze(section, mockIndicatorResolver)
+        val result = module.analyze(section, mockIndicatorResolver, com.androdr.ioc.DeviceIdentity.UNKNOWN)
         val rule = SigmaRuleParser.parse(cameraRuleYaml)!!
         val findings = SigmaRuleEvaluator.evaluate(
             listOf(rule), result.telemetry, "appops_audit"
@@ -123,7 +126,7 @@ class AppOpsRulePipelineTest {
                   Access: [fg-s] 2026-03-27 14:35:00
         """.trimIndent()
 
-        val result = module.analyze(section, mockIndicatorResolver)
+        val result = module.analyze(section, mockIndicatorResolver, com.androdr.ioc.DeviceIdentity.UNKNOWN)
         val rule = SigmaRuleParser.parse(micRuleYaml)!!
         val findings = SigmaRuleEvaluator.evaluate(
             listOf(rule), result.telemetry, "appops_audit"
@@ -144,7 +147,7 @@ class AppOpsRulePipelineTest {
                   Access: [fg-s] 2026-03-27 14:40:00
         """.trimIndent()
 
-        val result = module.analyze(section, mockIndicatorResolver)
+        val result = module.analyze(section, mockIndicatorResolver, com.androdr.ioc.DeviceIdentity.UNKNOWN)
         val rule = SigmaRuleParser.parse(installRuleYaml)!!
         val findings = SigmaRuleEvaluator.evaluate(
             listOf(rule), result.telemetry, "appops_audit"
@@ -165,7 +168,7 @@ class AppOpsRulePipelineTest {
                   Access: [fg-s] 2026-03-27 14:30:00
         """.trimIndent()
 
-        val result = module.analyze(section, mockIndicatorResolver)
+        val result = module.analyze(section, mockIndicatorResolver, com.androdr.ioc.DeviceIdentity.UNKNOWN)
         val rule = SigmaRuleParser.parse(cameraRuleYaml)!!
         val findings = SigmaRuleEvaluator.evaluate(
             listOf(rule), result.telemetry, "appops_audit"
@@ -192,7 +195,7 @@ class AppOpsRulePipelineTest {
                       Access: [fg-s] 2026-03-27 14:30:00
             """.trimIndent()
 
-            val result = module.analyze(section, mockIndicatorResolver)
+            val result = module.analyze(section, mockIndicatorResolver, com.androdr.ioc.DeviceIdentity.UNKNOWN)
             val telemetry = result.telemetry.first()
             val operation = telemetry["operation"] as String
 

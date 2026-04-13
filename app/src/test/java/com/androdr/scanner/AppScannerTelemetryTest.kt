@@ -61,7 +61,9 @@ class AppScannerTelemetryTest {
         installerPkg: String? = null,
         permissions: Array<String>? = null,
         services: Array<ServiceInfo>? = null,
-        receivers: Array<ActivityInfo>? = null
+        receivers: Array<ActivityInfo>? = null,
+        firstInstallTime: Long = 0L,
+        lastUpdateTime: Long = 0L
     ): PackageInfo {
         val appInfo = ApplicationInfo().apply {
             packageName = pkgName
@@ -73,6 +75,8 @@ class AppScannerTelemetryTest {
             requestedPermissions = permissions
             this.services = services
             this.receivers = receivers
+            this.firstInstallTime = firstInstallTime
+            this.lastUpdateTime = lastUpdateTime
         }
 
         every { pm.getApplicationLabel(appInfo) } returns appLabel
@@ -141,12 +145,17 @@ class AppScannerTelemetryTest {
         assertTrue("Expected isSystemApp = true", result[0].isSystemApp)
     }
 
-    // ── 4. Samsung OEM prefix treated as known OEM ──────────────────────────
+    // ── 4. Unconditional (AOSP) OEM prefix treated as known OEM ─────────────
+    // NOTE: Samsung-specific prefixes were previously tested here, but
+    // under #90 (device-conditional allowlist) the Samsung block only
+    // applies when Build.MANUFACTURER matches "samsung". In a unit test
+    // JVM that field is "unknown", so this now exercises an unconditional
+    // AOSP prefix, which is the correct cross-device behavior.
 
     @Test
-    fun `Samsung OEM package prefix is treated as known OEM app`() = runTest {
+    fun `AOSP package prefix is treated as known OEM app`() = runTest {
         val pkg = buildPackageInfo(
-            pkgName = "com.samsung.android.tvplus",
+            pkgName = "com.android.chrome",
             installerPkg = null
         )
         installPackages(pkg)
@@ -156,7 +165,7 @@ class AppScannerTelemetryTest {
         assertEquals(1, result.size)
         val telemetry = result[0]
         assertTrue("Expected isKnownOemApp = true", telemetry.isKnownOemApp)
-        assertFalse("Expected isSideloaded = false for Samsung OEM app", telemetry.isSideloaded)
+        assertFalse("Expected isSideloaded = false for AOSP OEM app", telemetry.isSideloaded)
     }
 
     // ── 5. Surveillance permission counting ─────────────────────────────────
@@ -220,5 +229,31 @@ class AppScannerTelemetryTest {
 
         assertEquals(1, result.size)
         assertTrue("Expected hasDeviceAdmin = true", result[0].hasDeviceAdmin)
+    }
+
+    // ── 8. Install-time fields propagate to telemetry and field map ─────────
+
+    @Test
+    fun `firstInstallTime and lastUpdateTime propagate to telemetry and field map`() = runTest {
+        val firstInstall = 1_700_000_000_000L
+        val lastUpdate = 1_710_000_000_000L
+        val pkg = buildPackageInfo(
+            pkgName = "com.example.installtime",
+            installerPkg = "com.android.vending",
+            firstInstallTime = firstInstall,
+            lastUpdateTime = lastUpdate
+        )
+        installPackages(pkg)
+
+        val result = scanner.collectTelemetry()
+
+        assertEquals(1, result.size)
+        val telemetry = result[0]
+        assertEquals(firstInstall, telemetry.firstInstallTime)
+        assertEquals(lastUpdate, telemetry.lastUpdateTime)
+
+        val fieldMap = telemetry.toFieldMap()
+        assertEquals(firstInstall, fieldMap["first_install_time"])
+        assertEquals(lastUpdate, fieldMap["last_update_time"])
     }
 }

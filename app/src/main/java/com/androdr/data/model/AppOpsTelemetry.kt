@@ -6,7 +6,8 @@ data class AppOpsTelemetry(
     val lastAccessTime: Long,
     val lastRejectTime: Long,
     val accessCount: Int,
-    val isSystemApp: Boolean
+    val isSystemApp: Boolean,
+    val source: TelemetrySource,
 ) {
     fun toFieldMap(): Map<String, Any?> = mapOf(
         "package_name" to packageName,

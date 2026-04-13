@@ -57,3 +57,9 @@ release-keystore.jks
 reports-from-device-tests/
 build/uat/
 .superpowers/
+
+# Local-only: LinkedIn post drafts + screenshots, not for the repo
+docs/linkedin-*/
+
+# Local scratch: user-provided export samples, not for the repo
+/data/

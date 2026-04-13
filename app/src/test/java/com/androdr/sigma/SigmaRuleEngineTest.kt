@@ -12,9 +12,14 @@ class SigmaRuleEngineTest {
     private val mockContext = mockk<Context>(relaxed = true)
     private lateinit var engine: SigmaRuleEngine
 
-    private fun rule(id: String, title: String = "Rule $id") = SigmaRule(
+    private fun rule(
+        id: String,
+        title: String = "Rule $id",
+        category: RuleCategory = RuleCategory.INCIDENT,
+    ) = SigmaRule(
         id = id, title = title, status = "production", description = "",
         product = "androdr", service = "app_scanner", level = "high",
+        category = category,
         tags = emptyList(),
         detection = SigmaDetection(emptyMap(), "selection"),
         falsepositives = emptyList(), remediation = emptyList()

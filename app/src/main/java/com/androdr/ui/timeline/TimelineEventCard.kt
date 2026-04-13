@@ -1,3 +1,9 @@
+@file:Suppress("TooManyFunctions")
+// Compose file hosts both public card composables (event card, detail sheet,
+// cluster card) and private helpers (LinkedEvidenceRow, DetailSection, etc.)
+// that are tightly coupled to the timeline screen and would only fragment if
+// split across files.
+
 package com.androdr.ui.timeline
 
 import androidx.compose.foundation.BorderStroke
@@ -41,8 +47,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Surface
 import com.androdr.R
 import com.androdr.data.model.ForensicTimelineEvent
+import com.androdr.sigma.FindingCategory
 import com.androdr.ui.common.SeverityChip
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -54,36 +63,34 @@ fun TimelineEventCard(
     event: ForensicTimelineEvent,
     onClick: () -> Unit
 ) {
-    val (icon, color) = severityIconAndColor(event.severity)
-
+    // Neutral telemetry card — no severity badge. Severity lives on
+    // Finding rows only; telemetry is pure observation per spec §3.
+    val neutralColor = Color(0xFF00D4AA)
     Card(
         modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
-        colors = CardDefaults.cardColors(containerColor = color.copy(alpha = 0.08f))
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+        )
     ) {
         Row(
             modifier = Modifier.padding(12.dp),
             horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             Icon(
-                imageVector = icon, contentDescription = event.severity,
-                tint = color, modifier = Modifier.size(20.dp)
+                imageVector = Icons.Filled.Info,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(20.dp)
             )
             Column(
                 modifier = Modifier.weight(1f),
                 verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = formatTime(event.timestamp),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    SeverityChip(level = event.severity, active = true)
-                }
+                Text(
+                    text = formatTime(event.startTimestamp),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
                 Text(
                     text = event.description,
                     style = MaterialTheme.typography.bodySmall,
@@ -91,7 +98,7 @@ fun TimelineEventCard(
                 )
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                     if (event.campaignName.isNotEmpty()) TagChip(event.campaignName, Color(0xFFCF6679))
-                    if (event.iocType.isNotEmpty()) TagChip(event.iocType, Color(0xFFFF9800))
+                    if (event.iocType.isNotEmpty()) TagChip(event.iocType, neutralColor)
                     TagChip(event.source, MaterialTheme.colorScheme.primary)
                 }
             }
@@ -99,11 +106,120 @@ fun TimelineEventCard(
     }
 }
 
+/**
+ * Neutral telemetry row renderer — thin wrapper over [TimelineEventCard]
+ * used by the flat `TimelineRow` rendering path.
+ */
+@Composable
+fun TelemetryCard(
+    row: TimelineRow.TelemetryRow,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit = {},
+) {
+    Box(modifier = modifier) {
+        TimelineEventCard(event = row.event, onClick = onClick)
+    }
+}
+
+/**
+ * Finding row renderer — distinct visual treatment with a severity badge,
+ * category chip, rule id, title, and description.
+ */
+@Composable
+fun FindingCard(
+    row: TimelineRow.FindingRow,
+    modifier: Modifier = Modifier,
+    onClick: (() -> Unit)? = null,
+) {
+    val finding = row.finding
+    Card(
+        modifier = modifier.fillMaxWidth().let { m ->
+            if (onClick != null) m.clickable(onClick = onClick) else m
+        },
+        colors = CardDefaults.cardColors(
+            containerColor = severityBackgroundFor(finding.level)
+        )
+    ) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                SeverityChip(level = finding.level, active = true)
+                Spacer(Modifier.width(8.dp))
+                CategoryChip(finding.category)
+                if (row.duplicateCount > 1) {
+                    Spacer(Modifier.width(4.dp))
+                    Surface(
+                        color = MaterialTheme.colorScheme.tertiaryContainer,
+                        shape = RoundedCornerShape(4.dp),
+                    ) {
+                        Text(
+                            text = "\u00d7${row.duplicateCount}",
+                            style = MaterialTheme.typography.labelSmall,
+                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp),
+                        )
+                    }
+                }
+                Spacer(Modifier.weight(1f))
+                Text(
+                    text = finding.ruleId,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Spacer(Modifier.height(8.dp))
+            Text(
+                text = finding.title,
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.Bold
+            )
+            if (finding.description.isNotBlank()) {
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    text = finding.description,
+                    style = MaterialTheme.typography.bodySmall
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun CategoryChip(category: FindingCategory) {
+    Surface(
+        color = MaterialTheme.colorScheme.secondaryContainer,
+        contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+        shape = RoundedCornerShape(4.dp)
+    ) {
+        Text(
+            text = category.name.lowercase().replace('_', ' '),
+            style = MaterialTheme.typography.labelSmall,
+            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+        )
+    }
+}
+
+@Composable
+private fun severityBackgroundFor(level: String): Color {
+    // Dark-theme-appropriate severity tints: a faint wash of the severity color
+    // over the dark surface. The previous light-theme pastels (0xFFFFF8E1 etc.)
+    // produced bright backgrounds that made text unreadable on dark screens.
+    val tint = when (level.uppercase()) {
+        "CRITICAL" -> Color(0xFFCF6679) // Material dark error
+        "HIGH" -> Color(0xFFFF8A65)     // deep orange 300
+        "MEDIUM" -> Color(0xFFFFD54F)   // amber 300
+        "LOW" -> Color(0xFF64B5F6)      // blue 300
+        else -> return MaterialTheme.colorScheme.surface
+    }
+    return tint.copy(alpha = 0.10f) // 10% opacity over dark surface = subtle, readable
+}
+
+@Suppress("LongMethod") // Compose detail sheet renders header + all metadata sections + linked evidence
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TimelineEventDetailSheet(
     event: ForensicTimelineEvent,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    relatedEvents: List<ForensicTimelineEvent> = emptyList(),
+    onJumpToRelated: (ForensicTimelineEvent) -> Unit = {}
 ) {
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -119,10 +235,9 @@ fun TimelineEventDetailSheet(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(event.category, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                SeverityChip(level = event.severity, active = true)
             }
             Text(
-                text = "${formatTime(event.timestamp)}  ${formatDate(event.timestamp)}",
+                text = "${formatTime(event.startTimestamp)}  ${formatDate(event.startTimestamp)}",
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -155,7 +270,74 @@ fun TimelineEventDetailSheet(
                     event.attackTechniqueId
                 )
             }
+
+            // Linked Evidence: other timeline rows that share this event's
+            // correlationId. For DNS-sourced findings (e.g. androdr-005
+            // Graphite/Paragon) this lets the user jump from a finding card
+            // to the underlying ioc_match row that triggered it, and vice
+            // versa — closes the "unlinked alerts" gap surfaced during
+            // Sprint #75 real-device validation.
+            if (relatedEvents.isNotEmpty()) {
+                HorizontalDivider()
+                Text(
+                    text = "Linked Evidence (${relatedEvents.size})",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    relatedEvents.take(8).forEach { related ->
+                        LinkedEvidenceRow(related = related, onTap = { onJumpToRelated(related) })
+                    }
+                    if (relatedEvents.size > 8) {
+                        Text(
+                            text = "+${relatedEvents.size - 8} more",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+
             Spacer(modifier = Modifier.height(32.dp))
+        }
+    }
+}
+
+@Composable
+private fun LinkedEvidenceRow(
+    related: ForensicTimelineEvent,
+    onTap: () -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth().clickable(onClick = onTap),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
+        )
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = Icons.Filled.Info,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(16.dp)
+            )
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = related.description,
+                    style = MaterialTheme.typography.bodySmall,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = "${formatTime(related.startTimestamp)}  ${related.category}",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
         }
     }
 }
@@ -180,6 +362,7 @@ private fun TagChip(text: String, color: Color) {
     )
 }
 
+@Suppress("LongMethod") // Compose card renders header row, time range, and per-event children with connectors
 @Composable
 fun CorrelationClusterCard(
     cluster: EventCluster,
@@ -189,16 +372,7 @@ fun CorrelationClusterCard(
         CorrelationPattern.PERMISSION_THEN_C2,
         CorrelationPattern.INSTALL_THEN_ADMIN -> Color(0xFFCF6679) // Red box
         CorrelationPattern.MULTI_PERMISSION_BURST -> Color(0xFFFF9800) // Orange box
-        else -> {
-            // Severity-based for generic/pre-linked/install-then-permission
-            val maxSev = cluster.events.maxOf { severityOrdinal(it.severity) }
-            when (maxSev) {
-                3 -> Color(0xFFCF6679)
-                2 -> Color(0xFFFF9800)
-                1 -> Color(0xFFE6A800)
-                else -> Color(0xFF00D4AA)
-            }
-        }
+        else -> Color(0xFF00D4AA) // neutral
     }
 
     Card(
@@ -211,20 +385,31 @@ fun CorrelationClusterCard(
         Column(modifier = Modifier.padding(12.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
+                // Cluster label can be long (e.g. "Multiple surveillance
+                // permissions accessed rapidly (3)") so give it the weighted
+                // flex slot and allow a second line with ellipsis overflow.
+                // Previously this was an unweighted Text next to a
+                // SpaceBetween sibling, which let the label push the time
+                // range off-screen or forced mid-word single-line cutoff.
                 Text(
                     "${cluster.label} (${cluster.events.size})",
                     style = MaterialTheme.typography.labelMedium,
                     fontWeight = FontWeight.Bold,
-                    color = clusterColor
+                    color = clusterColor,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f)
                 )
                 val timeRange = formatTimeRange(cluster.events)
                 Text(
                     timeRange,
                     style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
             }
             Spacer(modifier = Modifier.height(8.dp))
@@ -317,18 +502,11 @@ fun ScanGroupHeader(
 private fun formatTimeRange(events: List<ForensicTimelineEvent>): String {
     if (events.isEmpty()) return ""
     val fmt = SimpleDateFormat("HH:mm", Locale.US)
-    val first = events.minOf { it.timestamp }
-    val last = events.maxOf { it.timestamp }
+    val first = events.minOf { it.startTimestamp }
+    val last = events.maxOf { it.startTimestamp }
     return if (first > 0 && last > 0) {
         "${fmt.format(Date(first))}\u2013${fmt.format(Date(last))}"
     } else ""
-}
-
-private fun severityIconAndColor(severity: String) = when (severity.uppercase()) {
-    "CRITICAL" -> Icons.Filled.Error to Color(0xFFCF6679)
-    "HIGH" -> Icons.Filled.Warning to Color(0xFFFF9800)
-    "MEDIUM" -> Icons.Filled.Warning to Color(0xFFE6A800)
-    else -> Icons.Filled.Info to Color(0xFF00D4AA)
 }
 
 private fun formatTime(ts: Long) =

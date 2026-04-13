@@ -1,6 +1,8 @@
 package com.androdr.scanner.bugreport
 
+import com.androdr.ioc.DeviceIdentity
 import com.androdr.ioc.IndicatorResolver
+import com.androdr.ioc.OemPrefixResolver
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.runBlocking
@@ -17,7 +19,14 @@ class AccessibilityModuleTest {
     @Before
     fun setUp() {
         every { mockIndicatorResolver.isKnownBadPackage(any()) } returns null
-        module = AccessibilityModule()
+        val oemPrefixResolver: OemPrefixResolver = mockk()
+        every { oemPrefixResolver.isOemPrefix(any(), any()) } answers {
+            val pkg = firstArg<String>()
+            pkg.startsWith("com.google.android.") ||
+                pkg.startsWith("com.samsung.") ||
+                pkg.startsWith("com.android.")
+        }
+        module = AccessibilityModule(oemPrefixResolver)
     }
 
     @Test
@@ -35,7 +44,7 @@ class AccessibilityModuleTest {
                 com.google.android.marvin.talkback/.TalkBackService
         """.trimIndent()
 
-        val result = module.analyze(section, mockIndicatorResolver)
+        val result = module.analyze(section, mockIndicatorResolver, DeviceIdentity.UNKNOWN)
         assertTrue(result.telemetry.any {
             it["package_name"] == "com.evil.spy" &&
                 it["is_system_app"] == false &&
@@ -54,7 +63,7 @@ class AccessibilityModuleTest {
                 com.android.talkback/.TalkBackService
         """.trimIndent()
 
-        val result = module.analyze(section, mockIndicatorResolver)
+        val result = module.analyze(section, mockIndicatorResolver, DeviceIdentity.UNKNOWN)
         assertTrue(result.telemetry.all { it["is_system_app"] == true })
     }
 
@@ -74,7 +83,7 @@ class AccessibilityModuleTest {
                 com.flexispy.android/.AccessibilityHelper
         """.trimIndent()
 
-        val result = module.analyze(section, mockIndicatorResolver)
+        val result = module.analyze(section, mockIndicatorResolver, DeviceIdentity.UNKNOWN)
         assertTrue(result.telemetry.any {
             it["package_name"] == "com.flexispy.android" &&
                 it["is_system_app"] == false
@@ -83,7 +92,7 @@ class AccessibilityModuleTest {
 
     @Test
     fun `empty section produces no telemetry`() = runBlocking {
-        val result = module.analyze("", mockIndicatorResolver)
+        val result = module.analyze("", mockIndicatorResolver, com.androdr.ioc.DeviceIdentity.UNKNOWN)
         assertTrue(result.telemetry.isEmpty())
     }
 
@@ -94,7 +103,7 @@ class AccessibilityModuleTest {
               isEnabled=0
         """.trimIndent()
 
-        val result = module.analyze(section, mockIndicatorResolver)
+        val result = module.analyze(section, mockIndicatorResolver, DeviceIdentity.UNKNOWN)
         assertTrue(result.telemetry.isEmpty())
     }
 }

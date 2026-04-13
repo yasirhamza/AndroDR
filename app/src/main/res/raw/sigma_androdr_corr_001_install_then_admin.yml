@@ -1,0 +1,25 @@
+title: Sideloaded install followed by device admin grant
+id: androdr-corr-001
+status: experimental
+description: |
+  Detects an install event followed by a device admin grant on the same package
+  within one hour. Strong indicator of a sideloaded surveillance app gaining
+  persistence. NOTE: requires a device_admin_grant emitter to be added; until
+  then this rule will load and parse but not fire on real events. See issue #79.
+author: AndroDR
+date: 2026-04-08
+tags:
+    - attack.t1626
+    - attack.t1098
+correlation:
+    type: temporal_ordered
+    rules:
+        - androdr-atom-package-install
+        - androdr-atom-device-admin-grant
+    timespan: 1h
+    group-by:
+        - package_name
+display:
+    category: correlation
+    severity: high
+    label: "Install then device admin grant"

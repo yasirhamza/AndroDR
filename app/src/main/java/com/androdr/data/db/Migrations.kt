@@ -210,3 +210,313 @@ val MIGRATION_9_10 = object : Migration(9, 10) {
         database.execSQL("DROP TABLE IF EXISTS cert_hash_ioc_entries")
     }
 }
+
+/**
+ * Adds the scannerErrors column to ScanResult. Old rows are backfilled with
+ * an empty JSON list so historical scans are treated as "fully succeeded"
+ * (no failures recorded). New scans starting from this version onward will
+ * populate this column with any per-scanner exceptions recorded during the
+ * telemetry-collection phase; see ScanOrchestrator.trackScanner().
+ */
+@Suppress("MagicNumber")
+val MIGRATION_10_11 = object : Migration(10, 11) {
+    override fun migrate(database: SupportSQLiteDatabase) {
+        database.execSQL(
+            "ALTER TABLE ScanResult ADD COLUMN scannerErrors TEXT NOT NULL DEFAULT '[]'"
+        )
+    }
+}
+
+/**
+ * Sprint 75: ForensicTimelineEvent gains range semantics + a kind discriminator
+ * so correlation signals (derived from SIGMA rules operating over time windows)
+ * can live in the same table as raw events. Existing rows are backfilled via
+ * SQL column defaults (`endTimestamp = NULL`, `kind = 'event'`), and the legacy
+ * `timestamp` column is renamed to `startTimestamp`.
+ */
+@Suppress("MagicNumber")
+val MIGRATION_11_12 = object : Migration(11, 12) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        // Additive: new nullable column for range end
+        db.execSQL("ALTER TABLE forensic_timeline ADD COLUMN endTimestamp INTEGER DEFAULT NULL")
+        // Additive: discriminator distinguishing raw events from correlation signals
+        db.execSQL("ALTER TABLE forensic_timeline ADD COLUMN kind TEXT NOT NULL DEFAULT 'event'")
+        // Rename timestamp -> startTimestamp (Room 2.4+ / SQLite 3.25+ supports RENAME COLUMN)
+        db.execSQL("ALTER TABLE forensic_timeline RENAME COLUMN timestamp TO startTimestamp")
+        // Drop the old index and recreate it against the renamed column, plus a new kind index.
+        db.execSQL("DROP INDEX IF EXISTS index_forensic_timeline_timestamp")
+        db.execSQL(
+            "CREATE INDEX IF NOT EXISTS index_forensic_timeline_startTimestamp " +
+                "ON forensic_timeline(startTimestamp)"
+        )
+        db.execSQL(
+            "CREATE INDEX IF NOT EXISTS index_forensic_timeline_kind " +
+                "ON forensic_timeline(kind)"
+        )
+    }
+}
+
+/**
+ * Sprint 75 follow-up: backfill `correlationId = 'dns:<iocIndicator>'` on
+ * existing DNS-sourced rows so historical Graphite/Paragon-style findings can
+ * be linked to their triggering ioc_match rows by the Timeline UI. Without
+ * this backfill, every pre-fix scan leaves orphaned findings on the timeline
+ * that render as generic, indistinguishable cards with no jump-to-evidence
+ * path.
+ *
+ * Two row classes get the update:
+ *  - rows with `iocType = 'domain'` (the post-fix Finding.toForensicTimelineEvent
+ *    convention) or `category = 'ioc_match'` (raw DnsEvent-derived rows), and
+ *  - only rows where correlationId is currently empty/null (so re-running
+ *    the migration is idempotent by construction).
+ */
+@Suppress("MagicNumber")
+val MIGRATION_12_13 = object : Migration(12, 13) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            """
+            UPDATE forensic_timeline
+            SET correlationId = 'dns:' || iocIndicator
+            WHERE (correlationId IS NULL OR correlationId = '')
+              AND iocIndicator IS NOT NULL
+              AND iocIndicator != ''
+              AND (iocType = 'domain' OR category = 'ioc_match')
+            """.trimIndent()
+        )
+    }
+}
+
+/**
+ * Sprint 75 second follow-up: backfill packageName + correlationId on
+ * historical bug-report `permission_use` rows. Before commit 2a6e3071
+ * (2026-04-08 PR #76), `AppOpsModule` emitted TimelineEvents without
+ * `packageName`, so those rows persisted with empty package and had no
+ * way to synthesize a `pkg:<packageName>` correlationId in the UI or
+ * the CSV export. The description field is structured — "<pkg> used
+ * <op> at <time>" — so the package prefix can be recovered with a
+ * substring extract.
+ *
+ * Also stamps `pkg:<packageName>` on ANY row that has a non-blank
+ * packageName but an empty correlationId, so historical package_install
+ * rows, lifecycle events, and findings all join their app's cluster
+ * when exported. The Timeline UI was already doing this at read time
+ * via `effectiveCorrelationId()`, but that computation never reached
+ * the CSV export — this migration closes the gap for old data once
+ * and for all.
+ *
+ * Idempotent: both UPDATEs filter on `= ''`, so re-running the
+ * migration on already-backfilled rows is a no-op.
+ */
+@Suppress("MagicNumber")
+val MIGRATION_13_14 = object : Migration(13, 14) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        // Step 1: extract package name from "<pkg> used <op>" descriptions
+        // on permission_use rows that lost their packageName field.
+        db.execSQL(
+            """
+            UPDATE forensic_timeline
+            SET packageName = substr(description, 1, instr(description, ' used ') - 1)
+            WHERE category = 'permission_use'
+              AND (packageName IS NULL OR packageName = '')
+              AND instr(description, ' used ') > 0
+            """.trimIndent()
+        )
+
+        // Step 2: backfill pkg:<packageName> correlationId on every row
+        // whose correlationId is blank and packageName is now populated.
+        // Skip rows where a dns:... correlationId was already stamped in
+        // MIGRATION_12_13 — that's the DNS cluster key and takes precedence.
+        db.execSQL(
+            """
+            UPDATE forensic_timeline
+            SET correlationId = 'pkg:' || packageName
+            WHERE (correlationId IS NULL OR correlationId = '')
+              AND packageName IS NOT NULL
+              AND packageName != ''
+            """.trimIndent()
+        )
+    }
+}
+
+/**
+ * Unified telemetry/findings refactor (plan 2, phase C): consolidate
+ * `isFromBugreport` / `isFromRuntime` booleans on `forensic_timeline`
+ * into a single `telemetrySource` TEXT column holding the
+ * `TelemetrySource` enum name (LIVE_SCAN | BUGREPORT_IMPORT).
+ *
+ * Strategy: recreate the table without the legacy booleans and
+ * populate `telemetrySource` from the old values via CASE. Table
+ * recreation keeps us compatible with SQLite versions that lack
+ * DROP COLUMN (API < 34).
+ *
+ * See docs/superpowers/specs/2026-04-09-unified-telemetry-findings-refactor-design.md §4.
+ */
+@Suppress("MagicNumber", "LongMethod")
+val MIGRATION_14_15 = object : Migration(14, 15) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("""
+            CREATE TABLE forensic_timeline_new (
+                id                  INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                startTimestamp      INTEGER NOT NULL,
+                endTimestamp        INTEGER DEFAULT NULL,
+                kind                TEXT NOT NULL DEFAULT 'event',
+                timestampPrecision  TEXT NOT NULL DEFAULT 'exact',
+                source              TEXT NOT NULL,
+                category            TEXT NOT NULL,
+                description         TEXT NOT NULL,
+                details             TEXT NOT NULL DEFAULT '',
+                severity            TEXT NOT NULL,
+                packageName         TEXT NOT NULL DEFAULT '',
+                appName             TEXT NOT NULL DEFAULT '',
+                processUid          INTEGER NOT NULL DEFAULT -1,
+                iocIndicator        TEXT NOT NULL DEFAULT '',
+                iocType             TEXT NOT NULL DEFAULT '',
+                iocSource           TEXT NOT NULL DEFAULT '',
+                campaignName        TEXT NOT NULL DEFAULT '',
+                apkHash             TEXT NOT NULL DEFAULT '',
+                correlationId       TEXT NOT NULL DEFAULT '',
+                ruleId              TEXT NOT NULL DEFAULT '',
+                scanResultId        INTEGER NOT NULL DEFAULT -1,
+                attackTechniqueId   TEXT NOT NULL DEFAULT '',
+                telemetrySource     TEXT NOT NULL DEFAULT 'LIVE_SCAN',
+                createdAt           INTEGER NOT NULL
+            )
+        """.trimIndent())
+
+        db.execSQL("""
+            INSERT INTO forensic_timeline_new (
+                id, startTimestamp, endTimestamp, kind, timestampPrecision,
+                source, category, description, details, severity,
+                packageName, appName, processUid, iocIndicator, iocType,
+                iocSource, campaignName, apkHash, correlationId, ruleId,
+                scanResultId, attackTechniqueId, telemetrySource, createdAt
+            )
+            SELECT
+                id, startTimestamp, endTimestamp, kind, timestampPrecision,
+                source, category, description, details, severity,
+                packageName, appName, processUid, iocIndicator, iocType,
+                iocSource, campaignName, apkHash, correlationId, ruleId,
+                scanResultId, attackTechniqueId,
+                CASE
+                    WHEN isFromBugreport = 1 THEN 'BUGREPORT_IMPORT'
+                    ELSE 'LIVE_SCAN'
+                END,
+                createdAt
+            FROM forensic_timeline
+        """.trimIndent())
+
+        db.execSQL("DROP TABLE forensic_timeline")
+        db.execSQL("ALTER TABLE forensic_timeline_new RENAME TO forensic_timeline")
+
+        db.execSQL(
+            "CREATE INDEX IF NOT EXISTS index_forensic_timeline_startTimestamp " +
+                "ON forensic_timeline(startTimestamp)"
+        )
+        db.execSQL(
+            "CREATE INDEX IF NOT EXISTS index_forensic_timeline_severity " +
+                "ON forensic_timeline(severity)"
+        )
+        db.execSQL(
+            "CREATE INDEX IF NOT EXISTS index_forensic_timeline_packageName " +
+                "ON forensic_timeline(packageName)"
+        )
+        db.execSQL(
+            "CREATE INDEX IF NOT EXISTS index_forensic_timeline_source " +
+                "ON forensic_timeline(source)"
+        )
+        db.execSQL(
+            "CREATE INDEX IF NOT EXISTS index_forensic_timeline_kind " +
+                "ON forensic_timeline(kind)"
+        )
+        db.execSQL(
+            "CREATE INDEX IF NOT EXISTS index_forensic_timeline_telemetrySource " +
+                "ON forensic_timeline(telemetrySource)"
+        )
+    }
+}
+
+/**
+ * Plan 3 phase A: remove `severity` column from `forensic_timeline`.
+ *
+ * Timeline events are telemetry — pure observation, no severity. Severity
+ * lives only on findings produced by the rule engine. This migration drops
+ * the column and its index, completing the Layer 1 / Layer 2 separation
+ * from spec §3.
+ *
+ * SQLite supports DROP COLUMN only from 3.35 / API 34; the portable
+ * pattern is table recreation. See MIGRATION_14_15 for the same technique.
+ */
+@Suppress("MagicNumber", "LongMethod")
+val MIGRATION_15_16 = object : Migration(15, 16) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("""
+            CREATE TABLE forensic_timeline_new (
+                id                  INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                startTimestamp      INTEGER NOT NULL,
+                endTimestamp        INTEGER DEFAULT NULL,
+                kind                TEXT NOT NULL DEFAULT 'event',
+                timestampPrecision  TEXT NOT NULL DEFAULT 'exact',
+                source              TEXT NOT NULL,
+                category            TEXT NOT NULL,
+                description         TEXT NOT NULL,
+                details             TEXT NOT NULL DEFAULT '',
+                packageName         TEXT NOT NULL DEFAULT '',
+                appName             TEXT NOT NULL DEFAULT '',
+                processUid          INTEGER NOT NULL DEFAULT -1,
+                iocIndicator        TEXT NOT NULL DEFAULT '',
+                iocType             TEXT NOT NULL DEFAULT '',
+                iocSource           TEXT NOT NULL DEFAULT '',
+                campaignName        TEXT NOT NULL DEFAULT '',
+                apkHash             TEXT NOT NULL DEFAULT '',
+                correlationId       TEXT NOT NULL DEFAULT '',
+                ruleId              TEXT NOT NULL DEFAULT '',
+                scanResultId        INTEGER NOT NULL DEFAULT -1,
+                attackTechniqueId   TEXT NOT NULL DEFAULT '',
+                telemetrySource     TEXT NOT NULL DEFAULT 'LIVE_SCAN',
+                createdAt           INTEGER NOT NULL
+            )
+        """.trimIndent())
+
+        db.execSQL("""
+            INSERT INTO forensic_timeline_new (
+                id, startTimestamp, endTimestamp, kind, timestampPrecision,
+                source, category, description, details,
+                packageName, appName, processUid, iocIndicator, iocType,
+                iocSource, campaignName, apkHash, correlationId, ruleId,
+                scanResultId, attackTechniqueId, telemetrySource, createdAt
+            )
+            SELECT
+                id, startTimestamp, endTimestamp, kind, timestampPrecision,
+                source, category, description, details,
+                packageName, appName, processUid, iocIndicator, iocType,
+                iocSource, campaignName, apkHash, correlationId, ruleId,
+                scanResultId, attackTechniqueId, telemetrySource, createdAt
+            FROM forensic_timeline
+        """.trimIndent())
+
+        db.execSQL("DROP TABLE forensic_timeline")
+        db.execSQL("ALTER TABLE forensic_timeline_new RENAME TO forensic_timeline")
+
+        db.execSQL(
+            "CREATE INDEX IF NOT EXISTS index_forensic_timeline_startTimestamp " +
+                "ON forensic_timeline(startTimestamp)"
+        )
+        db.execSQL(
+            "CREATE INDEX IF NOT EXISTS index_forensic_timeline_packageName " +
+                "ON forensic_timeline(packageName)"
+        )
+        db.execSQL(
+            "CREATE INDEX IF NOT EXISTS index_forensic_timeline_source " +
+                "ON forensic_timeline(source)"
+        )
+        db.execSQL(
+            "CREATE INDEX IF NOT EXISTS index_forensic_timeline_kind " +
+                "ON forensic_timeline(kind)"
+        )
+        db.execSQL(
+            "CREATE INDEX IF NOT EXISTS index_forensic_timeline_telemetrySource " +
+                "ON forensic_timeline(telemetrySource)"
+        )
+        // Note: no severity index — the column no longer exists.
+    }
+}

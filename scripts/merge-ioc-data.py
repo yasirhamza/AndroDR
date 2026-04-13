@@ -18,6 +18,11 @@ import yaml
 
 
 REPO_URL = "https://github.com/android-sigma-rules/rules.git"
+
+ALLOWED_SOURCES_PATH = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), "..",
+    "third-party", "android-sigma-rules", "validation", "allowed-sources.json"
+)
 DEFAULT_CLONE_DIR = "/tmp/androdr-rules-merge"
 
 BUNDLED_PACKAGES = "app/src/main/res/raw/known_bad_packages.json"
@@ -29,6 +34,31 @@ def load_yaml(path):
     with open(path) as f:
         data = yaml.safe_load(f)
     return data.get("entries", []) if data else []
+
+
+def load_allowed_sources():
+    """Load allowed source IDs from the submodule registry."""
+    if not os.path.exists(ALLOWED_SOURCES_PATH):
+        print(f"WARNING: allowed-sources.json not found at {ALLOWED_SOURCES_PATH}", file=sys.stderr)
+        print("  Skipping source validation (submodule may not be initialized)", file=sys.stderr)
+        return None
+    with open(ALLOWED_SOURCES_PATH) as f:
+        entries = json.load(f)
+    return {entry["id"] for entry in entries}
+
+
+def validate_sources(entries, allowed_sources):
+    """Validate source field on all entries. Return list of errors."""
+    if allowed_sources is None:
+        return []
+    errors = []
+    for i, entry in enumerate(entries):
+        source = entry.get("source")
+        if not source:
+            errors.append(f"Entry {i}: missing 'source' field (indicator: {entry.get('indicator', '?')})")
+        elif source not in allowed_sources:
+            errors.append(f"Entry {i}: unknown source '{source}' (indicator: {entry.get('indicator', '?')})")
+    return errors
 
 
 def merge_packages(entries, bundled_path):
@@ -129,14 +159,32 @@ def main():
     print("Merging IOC data from public repo into bundled files...")
 
     pkg_path = os.path.join(repo_dir, "ioc-data", "package-names.yml")
+    cert_path = os.path.join(repo_dir, "ioc-data", "cert-hashes.yml")
+    domain_path = os.path.join(repo_dir, "ioc-data", "c2-domains.yml")
+
+    allowed_sources = load_allowed_sources()
+
+    # Validate all source entries before merging
+    all_errors = []
+    for label, ioc_file in [("packages", pkg_path), ("certs", cert_path), ("domains", domain_path)]:
+        if os.path.exists(ioc_file):
+            entries = load_yaml(ioc_file)
+            errs = validate_sources(entries, allowed_sources)
+            if errs:
+                all_errors.extend([f"[{label}] {e}" for e in errs])
+
+    if all_errors:
+        print(f"ERROR: Source validation failed ({len(all_errors)} error(s)):", file=sys.stderr)
+        for err in all_errors:
+            print(f"  - {err}", file=sys.stderr)
+        sys.exit(1)
+
     if os.path.exists(pkg_path):
         merge_packages(load_yaml(pkg_path), BUNDLED_PACKAGES)
 
-    cert_path = os.path.join(repo_dir, "ioc-data", "cert-hashes.yml")
     if os.path.exists(cert_path):
         merge_certs(load_yaml(cert_path), BUNDLED_CERTS)
 
-    domain_path = os.path.join(repo_dir, "ioc-data", "c2-domains.yml")
     if os.path.exists(domain_path):
         merge_domains(load_yaml(domain_path), BUNDLED_DOMAINS)
 

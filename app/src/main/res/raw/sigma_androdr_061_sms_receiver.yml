@@ -17,6 +17,7 @@ detection:
         package_name|ioc_lookup: known_good_app_db
     condition: selection and not filter_known_good
 level: informational
+category: incident
 display:
     category: app_risk
     icon: sms

@@ -6,11 +6,18 @@ import android.util.Log
 import com.androdr.data.model.AccessibilityTelemetry
 import com.androdr.data.model.AppOpsTelemetry
 import com.androdr.data.model.AppTelemetry
+import com.androdr.data.model.BatteryDailyEvent
+import com.androdr.data.model.DatabasePathObservation
 import com.androdr.data.model.DeviceTelemetry
 import com.androdr.data.model.DnsEvent
 import com.androdr.data.model.FileArtifactTelemetry
+import com.androdr.data.model.ForensicTimelineEvent
+import com.androdr.data.model.PackageInstallHistoryEntry
+import com.androdr.data.model.PlatformCompatChange
 import com.androdr.data.model.ProcessTelemetry
 import com.androdr.data.model.ReceiverTelemetry
+import com.androdr.data.model.TombstoneEvent
+import com.androdr.data.model.WakelockAcquisition
 import com.androdr.R
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
@@ -27,6 +34,29 @@ class SigmaRuleEngine @Inject constructor(
     @Volatile private var iocLookups: Map<String, (Any) -> Boolean> = emptyMap()
     @Volatile private var evidenceProviders: Map<String, EvidenceProvider> = emptyMap()
     @Volatile private var remoteRulesLoaded = false
+    @Volatile private var correlationRules: List<CorrelationRule> = emptyList()
+
+    fun getCorrelationRules(): List<CorrelationRule> = correlationRules
+
+    /**
+     * Validate that every referenced rule ID in [parsedRules] corresponds to a
+     * detection rule that has already been loaded, then store the correlation rules.
+     * Must be called after detection rules are loaded (bundled and/or remote).
+     */
+    fun loadCorrelationRules(parsedRules: List<CorrelationRule>) {
+        synchronized(ruleLock) {
+            val knownIds = rules.map { it.id }.toSet()
+            parsedRules.forEach { rule ->
+                rule.referencedRuleIds.forEach { ref ->
+                    if (ref !in knownIds) {
+                        throw CorrelationParseException.UnresolvedRule(rule.id, ref)
+                    }
+                }
+            }
+            correlationRules = parsedRules
+            Log.i(TAG, "Loaded ${correlationRules.size} correlation rules")
+        }
+    }
 
     // Explicit manifest is inherently long but R8-safe;
     // catch-all prevents one bad rule from blocking all others
@@ -35,11 +65,21 @@ class SigmaRuleEngine @Inject constructor(
         synchronized(ruleLock) {
             if (bundledRules.isNotEmpty()) return
             val loaded = mutableListOf<SigmaRule>()
+            val parsedCorrelations = mutableListOf<CorrelationRule>()
             for (resId in BUNDLED_RULE_IDS) {
                 try {
                     val yaml = context.resources.openRawResource(resId)
                         .bufferedReader().use { it.readText() }
-                    SigmaRuleParser.parse(yaml)?.let { loaded.add(it) }
+                    val detRule = SigmaRuleParser.parse(yaml)
+                    if (detRule != null) {
+                        loaded.add(detRule)
+                    } else if (yaml.contains("correlation:")) {
+                        try {
+                            parsedCorrelations.add(SigmaRuleParser.parseCorrelation(yaml))
+                        } catch (e: Exception) {
+                            Log.w(TAG, "Failed to parse correlation rule: ${e.message}")
+                        }
+                    }
                 } catch (e: Exception) {
                     Log.w(TAG, "Failed to load rule resource: ${e.message}")
                 }
@@ -47,7 +87,57 @@ class SigmaRuleEngine @Inject constructor(
             bundledRules = loaded
             rules = loaded
             Log.i(TAG, "Loaded ${rules.size} bundled SIGMA rules")
+            if (parsedCorrelations.isNotEmpty()) {
+                try {
+                    val knownIds = rules.map { it.id }.toSet()
+                    parsedCorrelations.forEach { rule ->
+                        rule.referencedRuleIds.forEach { ref ->
+                            if (ref !in knownIds) {
+                                throw CorrelationParseException.UnresolvedRule(rule.id, ref)
+                            }
+                        }
+                    }
+                    correlationRules = parsedCorrelations
+                    Log.i(TAG, "Loaded ${correlationRules.size} correlation rules")
+                } catch (e: Exception) {
+                    Log.w(TAG, "Failed to register correlation rules: ${e.message}")
+                }
+            }
         }
+    }
+
+    /**
+     * For each event, compute the set of atom rule IDs whose selection.category
+     * matches the event's category. Atom rules are detection rules with
+     * level == "informational" that have a single `selection` with a `category`
+     * equals matcher. Used by [SigmaCorrelationEngine] to bind raw timeline
+     * events to the atom rule IDs referenced by correlation rules.
+     */
+    fun computeAtomBindings(events: List<ForensicTimelineEvent>): Map<Long, Set<String>> {
+        val atomCategoryByRuleId: Map<String, String> = rules
+            .asSequence()
+            .filter { it.enabled }
+            .filter { it.level == "informational" }
+            .mapNotNull { rule ->
+                val cat = extractAtomCategory(rule) ?: return@mapNotNull null
+                rule.id to cat
+            }
+            .toMap()
+        if (atomCategoryByRuleId.isEmpty() || events.isEmpty()) return emptyMap()
+        return events.associate { event ->
+            event.id to atomCategoryByRuleId
+                .asSequence()
+                .filter { (_, cat) -> cat == event.category }
+                .map { it.key }
+                .toSet()
+        }
+    }
+
+    private fun extractAtomCategory(rule: SigmaRule): String? {
+        // Atom rules use a single `selection` with a `category` equals matcher.
+        val selection = rule.detection.selections["selection"] ?: return null
+        val matcher = selection.fieldMatchers.firstOrNull { it.fieldName == "category" } ?: return null
+        return matcher.values.firstOrNull()?.toString()
     }
 
     fun setRemoteRules(remoteRules: List<SigmaRule>) = synchronized(ruleLock) {
@@ -74,52 +164,135 @@ class SigmaRuleEngine @Inject constructor(
         evidenceProviders = providers
     }
 
+    /**
+     * Returns ALL rules, including rules with `enabled: false`.
+     *
+     * Prefer [getEnabledRules] when iterating for evaluation. This method
+     * is intended for diagnostics, UI displays that show "X of Y rules
+     * active", and any code path that must account for disabled rules.
+     *
+     * Callers that iterate this list to produce findings or correlation
+     * bindings must filter by `enabled` themselves or use [getEnabledRules].
+     */
     fun getRules(): List<SigmaRule> = rules
+
+    /**
+     * Returns all rules with `enabled: true`. Use this for evaluation-path
+     * code that must not include disabled rules (e.g. correlation lookups,
+     * rule-count displays for "active rules").
+     *
+     * [getRules] returns ALL rules including disabled ones for diagnostic
+     * and UI purposes. If a caller cannot tolerate disabled rules in its
+     * iteration, it must use this method instead of [getRules].
+     *
+     * This is a thin public wrapper over the internal [effectiveRules];
+     * it exists to give external callers a discoverable API for the
+     * enabled-only rule set.
+     */
+    fun getEnabledRules(): List<SigmaRule> = effectiveRules()
+
+    /** Returns only rules that are enabled. Used internally by all evaluate* methods. */
+    private fun effectiveRules(): List<SigmaRule> = getRules().filter { it.enabled }
 
     fun evaluateApps(telemetry: List<AppTelemetry>): List<Finding> {
         val records = telemetry.map { it.toFieldMap() }
-        return SigmaRuleEvaluator.evaluate(rules, records, "app_scanner", iocLookups, evidenceProviders)
+        return SigmaRuleEvaluator.evaluate(effectiveRules(), records, "app_scanner", iocLookups, evidenceProviders)
     }
 
     fun evaluateDevice(telemetry: List<DeviceTelemetry>): List<Finding> {
         val records = telemetry.map { it.toFieldMap() }
-        return SigmaRuleEvaluator.evaluate(rules, records, "device_auditor", iocLookups, evidenceProviders)
+        return SigmaRuleEvaluator.evaluate(effectiveRules(), records, "device_auditor", iocLookups, evidenceProviders)
     }
 
     fun evaluateProcesses(telemetry: List<ProcessTelemetry>): List<Finding> {
         val records = telemetry.map { it.toFieldMap() }
-        return SigmaRuleEvaluator.evaluate(rules, records, "process_monitor", iocLookups, evidenceProviders)
+        return SigmaRuleEvaluator.evaluate(effectiveRules(), records, "process_monitor", iocLookups, evidenceProviders)
     }
 
     fun evaluateDns(events: List<DnsEvent>): List<Finding> {
         val records = events.map { it.toFieldMap() }
-        return SigmaRuleEvaluator.evaluate(rules, records, "dns_monitor", iocLookups, evidenceProviders)
+        return SigmaRuleEvaluator.evaluate(effectiveRules(), records, "dns_monitor", iocLookups, evidenceProviders)
     }
 
     fun evaluateFiles(telemetry: List<FileArtifactTelemetry>): List<Finding> {
         val records = telemetry.map { it.toFieldMap() }
-        return SigmaRuleEvaluator.evaluate(rules, records, "file_scanner", iocLookups, evidenceProviders)
+        return SigmaRuleEvaluator.evaluate(effectiveRules(), records, "file_scanner", iocLookups, evidenceProviders)
     }
 
     fun evaluateAccessibility(telemetry: List<AccessibilityTelemetry>): List<Finding> {
         val records = telemetry.map { it.toFieldMap() }
-        return SigmaRuleEvaluator.evaluate(rules, records, "accessibility_audit", iocLookups, evidenceProviders)
+        return SigmaRuleEvaluator.evaluate(
+            effectiveRules(), records, "accessibility_audit", iocLookups, evidenceProviders
+        )
     }
 
     fun evaluateReceivers(telemetry: List<ReceiverTelemetry>): List<Finding> {
         val records = telemetry.map { it.toFieldMap() }
-        return SigmaRuleEvaluator.evaluate(rules, records, "receiver_audit", iocLookups, evidenceProviders)
+        return SigmaRuleEvaluator.evaluate(effectiveRules(), records, "receiver_audit", iocLookups, evidenceProviders)
     }
 
     fun evaluateAppOps(telemetry: List<AppOpsTelemetry>): List<Finding> {
         val records = telemetry.map { it.toFieldMap() }
-        return SigmaRuleEvaluator.evaluate(rules, records, "appops_audit", iocLookups, evidenceProviders)
+        return SigmaRuleEvaluator.evaluate(effectiveRules(), records, "appops_audit", iocLookups, evidenceProviders)
+    }
+
+    fun evaluateTombstones(telemetry: List<TombstoneEvent>): List<Finding> {
+        val records = telemetry.map { it.toFieldMap() }
+        return SigmaRuleEvaluator.evaluate(
+            effectiveRules(), records, "tombstone_parser", iocLookups, evidenceProviders
+        )
+    }
+
+    fun evaluateWakelocks(telemetry: List<WakelockAcquisition>): List<Finding> {
+        val records = telemetry.map { it.toFieldMap() }
+        return SigmaRuleEvaluator.evaluate(
+            effectiveRules(), records, "wakelock_parser", iocLookups, evidenceProviders
+        )
+    }
+
+    fun evaluateBatteryDaily(telemetry: List<BatteryDailyEvent>): List<Finding> {
+        val records = telemetry.map { it.toFieldMap() }
+        return SigmaRuleEvaluator.evaluate(
+            effectiveRules(), records, "battery_daily", iocLookups, evidenceProviders
+        )
+    }
+
+    fun evaluatePackageInstallHistory(telemetry: List<PackageInstallHistoryEntry>): List<Finding> {
+        val records = telemetry.map { it.toFieldMap() }
+        return SigmaRuleEvaluator.evaluate(
+            effectiveRules(), records, "package_install_history", iocLookups, evidenceProviders
+        )
+    }
+
+    fun evaluatePlatformCompat(telemetry: List<PlatformCompatChange>): List<Finding> {
+        val records = telemetry.map { it.toFieldMap() }
+        return SigmaRuleEvaluator.evaluate(
+            effectiveRules(), records, "platform_compat", iocLookups, evidenceProviders
+        )
+    }
+
+    fun evaluateDatabasePathObservations(telemetry: List<DatabasePathObservation>): List<Finding> {
+        val records = telemetry.map { it.toFieldMap() }
+        return SigmaRuleEvaluator.evaluate(
+            effectiveRules(), records, "db_info", iocLookups, evidenceProviders
+        )
     }
 
     fun evaluateGeneric(records: List<Map<String, Any?>>, service: String): List<Finding> {
-        return SigmaRuleEvaluator.evaluate(rules, records, service, iocLookups, evidenceProviders)
+        return SigmaRuleEvaluator.evaluate(effectiveRules(), records, service, iocLookups, evidenceProviders)
     }
 
+    /**
+     * Returns the total number of loaded rules, **including rules with
+     * `enabled: false`**. Callers wanting the count of active (evaluable)
+     * rules should filter separately:
+     *
+     *     getRules().count { it.enabled }
+     *
+     * This method does NOT use [effectiveRules] because UI and debug paths
+     * may want to show "X total, Y disabled" — the distinction is the
+     * caller's responsibility.
+     */
     fun ruleCount(): Int = rules.size
 
     companion object {
@@ -160,6 +333,28 @@ class SigmaRuleEngine @Inject constructor(
             R.raw.sigma_androdr_065_appops_install_packages,
             R.raw.sigma_androdr_067_notification_listener,
             R.raw.sigma_androdr_068_hidden_launcher,
+            R.raw.sigma_androdr_071_crash_loop_anti_forensics,
+            R.raw.sigma_androdr_072_persistent_wakelock,
+            R.raw.sigma_androdr_073_battery_daily_pattern,
+            R.raw.sigma_androdr_074_package_install_history_pattern,
+            R.raw.sigma_androdr_075_platform_compat_override,
+            R.raw.sigma_androdr_076_database_path_access,
+            // Atom rules — pass-through matchers for raw timeline event categories.
+            // Referenced by sprint-75 correlation rules (Task 9); tagged
+            // level: informational so they are filtered out of the user-facing
+            // findings UI (see ReportFormatter / DashboardScreen / BugReportScreen).
+            R.raw.sigma_androdr_atom_package_install,
+            R.raw.sigma_androdr_atom_device_admin_grant,
+            R.raw.sigma_androdr_atom_permission_use,
+            R.raw.sigma_androdr_atom_dns_lookup,
+            R.raw.sigma_androdr_atom_app_launch,
+            // Correlation rules — parsed via SigmaRuleParser.parseCorrelation
+            // (wired in Task 10). The detection parser silently skips these
+            // files today because they have no `detection:` block.
+            R.raw.sigma_androdr_corr_001_install_then_admin,
+            R.raw.sigma_androdr_corr_002_install_then_permission,
+            R.raw.sigma_androdr_corr_003_permission_then_c2,
+            R.raw.sigma_androdr_corr_004_surveillance_burst,
         )
     }
 }

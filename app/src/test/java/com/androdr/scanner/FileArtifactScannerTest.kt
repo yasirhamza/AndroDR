@@ -1,14 +1,13 @@
 package com.androdr.scanner
 
-import android.os.Environment
+import com.androdr.ioc.KnownSpywareArtifactsResolver
 import io.mockk.every
-import io.mockk.mockkStatic
-import io.mockk.unmockkStatic
+import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
-import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import java.io.File
@@ -17,39 +16,48 @@ class FileArtifactScannerTest {
 
     private lateinit var scanner: FileArtifactScanner
 
-    // The number of IOC paths declared in FileArtifactScanner.knownArtifactPaths
-    // ("/data/local/tmp/.raptor", "/data/local/tmp/.stat",
-    //  "/data/local/tmp/.mobilesoftwareupdate",
-    //  "$extStorage/.hidden_config", "$extStorage/Android/data/.system_update")
-    private val knownPathCount = 5
+    // Mirrors the 5 paths historically hardcoded in FileArtifactScanner.kt before the
+    // migration to known_spyware_artifacts.yml. The scanner no longer owns this list —
+    // it delegates to KnownSpywareArtifactsResolver, which we mock here.
+    private val fakePaths = listOf(
+        "/data/local/tmp/.raptor",
+        "/data/local/tmp/.stat",
+        "/data/local/tmp/.mobilesoftwareupdate",
+        "/sdcard/.hidden_config",
+        "/sdcard/Android/data/.system_update",
+    )
 
     @Before
     fun setUp() {
-        // Environment.getExternalStorageDirectory() is a static Android API that
-        // returns null on the test JVM; mock it to return a predictable path so
-        // the lazy knownArtifactPaths list initialises cleanly.
-        mockkStatic(Environment::class)
-        every { Environment.getExternalStorageDirectory() } returns File("/sdcard")
-
-        scanner = FileArtifactScanner()
+        val resolver = mockk<KnownSpywareArtifactsResolver>()
+        every { resolver.paths } returns fakePaths
+        scanner = FileArtifactScanner(resolver)
     }
 
-    @After
-    fun tearDown() {
-        unmockkStatic(Environment::class)
-    }
-
-    // ── 1. Returns entries for all known paths ───────────────────────────────
+    // ── 1. Only accessible paths produce telemetry ──────────────────────────
 
     @Test
-    fun `returns entries for all known paths`() = runTest {
+    fun `only accessible paths produce telemetry`() = runTest {
         val result = scanner.collectTelemetry()
 
+        // Count how many fake paths have a readable parent directory on this JVM
+        val accessibleCount = fakePaths.count { path ->
+            File(path).parentFile?.canRead() ?: false
+        }
+
         assertEquals(
-            "Expected one entry per known artifact path",
-            knownPathCount,
+            "Expected one entry per accessible resolver path",
+            accessibleCount,
             result.size
         )
+
+        // Every returned entry must have accessible = true
+        result.forEach { telemetry ->
+            assertTrue(
+                "Returned telemetry must have accessible = true",
+                telemetry.accessible
+            )
+        }
     }
 
     // ── 2. Non-existent path returns fileExists false ────────────────────────
@@ -95,6 +103,22 @@ class FileArtifactScannerTest {
                     telemetry.fileModified
                 )
             }
+        }
+    }
+
+    // ── 4. Inaccessible paths are skipped entirely ──────────────────────────
+
+    @Test
+    fun `inaccessible paths are skipped entirely`() = runTest {
+        val result = scanner.collectTelemetry()
+
+        // Verify that no returned path has an unreadable parent
+        result.forEach { telemetry ->
+            val parentReadable = File(telemetry.filePath).parentFile?.canRead() ?: false
+            assertTrue(
+                "Returned path ${telemetry.filePath} should have a readable parent",
+                parentReadable
+            )
         }
     }
 }

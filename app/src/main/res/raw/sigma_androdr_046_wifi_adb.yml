@@ -11,6 +11,8 @@ detection:
         wifi_adb_enabled: true
     condition: selection
 level: medium
+category: device_posture
+report_safe_state: true
 display:
     category: device_posture
     icon: wifi

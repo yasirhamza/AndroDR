@@ -1,0 +1,17 @@
+title: Atom — DNS IOC match
+id: androdr-atom-dns-lookup
+status: production
+description: Internal atom rule. Matches DNS lookups whose domain matched an IOC indicator (recorded in forensic_timeline with category=ioc_match).
+author: AndroDR
+date: 2026-04-08
+logsource:
+    product: androdr
+    service: timeline
+detection:
+    selection:
+        category: dns_match
+    condition: selection
+level: informational
+category: incident
+display:
+    suppress_finding: true

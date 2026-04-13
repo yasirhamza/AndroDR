@@ -66,17 +66,11 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.androdr.R
 import com.androdr.data.model.ForensicTimelineEvent
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
-
-private data class DateEntry(
-    val clusters: List<EventCluster> = emptyList(),
-    val standaloneEvents: List<ForensicTimelineEvent> = emptyList()
-)
-
-@Suppress("LongMethod") // Timeline screen combines top bar, filter chips, grouped event list,
-// empty state, and export menu — inherently a longer composable.
+import com.androdr.data.model.effectiveCorrelationId
+@Suppress("LongMethod", "CyclomaticComplexMethod")
+// Timeline screen combines top bar, filter chips, grouped event list,
+// empty state, export menu, detail sheet, and correlation-aware jump
+// handler — inherently a longer composable with more branches.
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TimelineScreen(
@@ -84,16 +78,21 @@ fun TimelineScreen(
     onNavigateToHistory: (() -> Unit)? = null,
     viewModel: TimelineViewModel = hiltViewModel()
 ) {
-    // Apply deep-link filter once on first composition
+    // Apply deep-link filter once on first composition. Treat an empty
+    // `initialPackage` as "no filter" — the Apps screen uses empty to mean
+    // "this group has no real package (it's DNS-sourced), just show the
+    // timeline so the user can browse the underlying evidence".
     LaunchedEffect(initialPackage) {
-        if (initialPackage != null) {
-            viewModel.setPackageFilter(initialPackage)
+        when {
+            initialPackage == null -> Unit
+            initialPackage.isBlank() -> viewModel.setPackageFilter(null)
+            else -> viewModel.setPackageFilter(initialPackage)
         }
     }
 
     val events by viewModel.events.collectAsStateWithLifecycle()
-    val partitioned by viewModel.partitionedEvents.collectAsStateWithLifecycle()
-    val severityFilter by viewModel.severityFilter.collectAsStateWithLifecycle()
+    val dateGroups by viewModel.dateGroupedRows.collectAsStateWithLifecycle()
+    val hideInformational by viewModel.hideInformationalTelemetry.collectAsStateWithLifecycle()
     val shareUri by viewModel.shareUri.collectAsStateWithLifecycle()
     val exporting by viewModel.exporting.collectAsStateWithLifecycle()
     val groupMode by viewModel.groupMode.collectAsStateWithLifecycle()
@@ -105,6 +104,7 @@ fun TimelineScreen(
 
     var filterPanelExpanded by rememberSaveable { mutableStateOf(true) }
     var exportMenuExpanded by remember { mutableStateOf(false) }
+    var showExportModeDialog by remember { mutableStateOf(false) }
     var pendingCopy by remember { mutableStateOf(false) }
 
     // Copy to clipboard once report text is ready
@@ -195,6 +195,13 @@ fun TimelineScreen(
                                     viewModel.exportCsv()
                                 }
                             )
+                            DropdownMenuItem(
+                                text = { Text("Full Report\u2026") },
+                                onClick = {
+                                    exportMenuExpanded = false
+                                    showExportModeDialog = true
+                                }
+                            )
                         }
                     }
                 }
@@ -225,22 +232,39 @@ fun TimelineScreen(
 
         AnimatedVisibility(visible = filterPanelExpanded) {
             Column {
+                // Hide informational telemetry toggle — when ON, telemetry
+                // rows not referenced by any finding are hidden. Finding
+                // rows and their anchor telemetry events remain visible.
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    androidx.compose.material3.Switch(
+                        checked = hideInformational,
+                        onCheckedChange = viewModel::setHideInformationalTelemetry
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        text = "Hide informational telemetry",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                }
+
                 // Severity filter chips
-                val filterOptions = listOf(
-                    null to stringResource(R.string.timeline_filter_all),
-                    "CRITICAL" to stringResource(R.string.timeline_filter_critical),
-                    "HIGH" to stringResource(R.string.timeline_filter_high),
-                    "MEDIUM" to stringResource(R.string.timeline_filter_medium)
-                )
+                val severityFilter by viewModel.severityFilter.collectAsStateWithLifecycle()
+                val severityLevels = listOf("CRITICAL", "HIGH", "MEDIUM", "LOW")
+
                 LazyRow(
                     contentPadding = PaddingValues(horizontal = 16.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    items(filterOptions) { (severity, label) ->
+                    items(severityLevels) { level ->
                         FilterChip(
-                            selected = severityFilter == severity,
-                            onClick = { viewModel.setSeverityFilter(severity) },
-                            label = { Text(label) }
+                            selected = level in severityFilter,
+                            onClick = { viewModel.toggleSeverity(level) },
+                            label = { Text(level) }
                         )
                     }
                 }
@@ -331,7 +355,8 @@ fun TimelineScreen(
             }
         }
 
-        if (events.isEmpty()) {
+        val isEmpty = if (groupMode == TimelineGroupMode.SCAN) events.isEmpty() else dateGroups.isEmpty()
+        if (isEmpty) {
             // Empty state
             Box(
                 modifier = Modifier.fillMaxSize(),
@@ -408,74 +433,44 @@ fun TimelineScreen(
                 }
             }
         } else {
-            val (clusters, standalone) = partitioned
-
-            // Build date-grouped structure using mutable builders then convert to immutable DateEntry.
-            val (dateGrouped, sortedDateKeys) = remember(partitioned) {
-                val fmt = SimpleDateFormat("MMM dd, yyyy", Locale.US)
-                fun dateKey(ts: Long) =
-                    if (ts > 0) fmt.format(Date(ts)) else "Unknown Date"
-
-                // Use mutable accumulators during construction to avoid O(n^2) list concatenation.
-                val clusterBuilder = mutableMapOf<String, MutableList<EventCluster>>()
-                val standaloneBuilder = mutableMapOf<String, MutableList<ForensicTimelineEvent>>()
-                clusters.forEach { cluster ->
-                    val key = dateKey(cluster.events.first().timestamp)
-                    clusterBuilder.getOrPut(key) { mutableListOf() }.add(cluster)
-                }
-                standalone.forEach { event ->
-                    val key = dateKey(event.timestamp)
-                    standaloneBuilder.getOrPut(key) { mutableListOf() }.add(event)
-                }
-                val allKeys = (clusterBuilder.keys + standaloneBuilder.keys).toSet()
-                val immutableMap: Map<String, DateEntry> = allKeys.associateWith { key ->
-                    DateEntry(
-                        clusters = clusterBuilder[key].orEmpty(),
-                        standaloneEvents = standaloneBuilder[key].orEmpty()
-                    )
-                }
-                val sorted = immutableMap.keys.sortedByDescending { key ->
-                    val allEvents =
-                        (immutableMap[key]?.clusters?.flatMap { it.events }.orEmpty()) +
-                            (immutableMap[key]?.standaloneEvents.orEmpty())
-                    allEvents.maxOfOrNull { it.timestamp } ?: 0L
-                }
-                immutableMap to sorted
-            }
-
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
                 contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                sortedDateKeys.forEach { dateLabel ->
-                    val entry = dateGrouped[dateLabel] ?: return@forEach
-                    item(key = "header_$dateLabel") {
+                dateGroups.forEach { group ->
+                    item(key = "header_${group.label}") {
                         Text(
-                            text = dateLabel,
+                            text = group.label,
                             style = MaterialTheme.typography.titleSmall,
                             color = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.padding(vertical = 4.dp)
                         )
                     }
-                    // Render clusters first
-                    entry.clusters.forEachIndexed { idx, cluster ->
-                        item(key = "cluster_${dateLabel}_$idx") {
+                    items(
+                        items = group.findingRows,
+                        key = { "finding_${it.finding.ruleId}_${it.finding.matchContext["package_name"].orEmpty()}_${it.timestamp}" }
+                    ) { row ->
+                        FindingCard(
+                            row = row,
+                            onClick = row.anchorEvent?.let { anchor ->
+                                { selectedEvent = anchor }
+                            }
+                        )
+                    }
+                    group.clusters.forEach { cluster ->
+                        item(key = "cluster_${group.label}_${cluster.events.minOf { it.id }}") {
                             CorrelationClusterCard(
                                 cluster = cluster,
                                 onEventTap = { selectedEvent = it }
                             )
                         }
                     }
-                    // Then standalone events
                     items(
-                        items = entry.standaloneEvents,
-                        key = { it.id }
-                    ) { event ->
-                        TimelineEventCard(
-                            event = event,
-                            onClick = { selectedEvent = event }
-                        )
+                        items = group.standaloneRows,
+                        key = { it.event.id }
+                    ) { row ->
+                        TelemetryCard(row, onClick = { selectedEvent = row.event })
                     }
                 }
             }
@@ -484,9 +479,21 @@ fun TimelineScreen(
 
     // Detail bottom sheet
     selectedEvent?.let { event ->
+        // Linked Evidence: other events that share this row's effective
+        // correlation key. Covers two link shapes:
+        //   * DNS-sourced findings + ioc_match rows → "dns:<domain>"
+        //   * Package-scoped activity (install, lifecycle, permission_use,
+        //     findings) → "pkg:<packageName>"
+        // See TimelineClusters.effectiveCorrelationId for precedence.
+        val key = event.effectiveCorrelationId()
+        val related = if (key.isNotEmpty()) {
+            events.filter { it.effectiveCorrelationId() == key && it.id != event.id }
+        } else emptyList()
         TimelineEventDetailSheet(
             event = event,
-            onDismiss = { selectedEvent = null }
+            onDismiss = { selectedEvent = null },
+            relatedEvents = related,
+            onJumpToRelated = { selectedEvent = it }
         )
     }
 
@@ -518,6 +525,17 @@ fun TimelineScreen(
                     putExtra(Intent.EXTRA_SUBJECT, "AndroDR Forensic Timeline")
                 }
                 context.startActivity(Intent.createChooser(intent, "Share Timeline"))
+            }
+        )
+    }
+
+    // Full Report export mode dialog (telemetry/findings/both)
+    if (showExportModeDialog) {
+        com.androdr.ui.common.ExportModeDialog(
+            onDismiss = { showExportModeDialog = false },
+            onConfirm = { mode ->
+                showExportModeDialog = false
+                viewModel.exportFullReport(mode)
             }
         )
     }

@@ -1,6 +1,8 @@
 package com.androdr.scanner.bugreport
 
+import com.androdr.ioc.DeviceIdentity
 import com.androdr.ioc.IndicatorResolver
+import com.androdr.ioc.OemPrefixResolver
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -10,17 +12,16 @@ import javax.inject.Singleton
  * URLs, file opens, or other sensitive intents.
  */
 @Singleton
-class ActivityModule @Inject constructor() : BugreportModule {
+class ActivityModule @Inject constructor(
+    private val oemPrefixResolver: OemPrefixResolver,
+) : BugreportModule {
 
     override val targetSections: List<String> = listOf("package")
 
-    private val sensitiveSchemes = setOf(
+    // Parser scope: which scheme headers to enumerate from the Activity
+    // Resolver Table. Severity/filtering lives in SIGMA rule YAML (plan 6).
+    private val enumeratedSchemes = setOf(
         "http:", "https:", "content:", "file:", "tel:", "sms:", "mailto:"
-    )
-
-    private val systemPackagePrefixes = listOf(
-        "com.android.", "com.google.android.", "com.samsung.android.",
-        "com.sec.android.", "com.qualcomm.", "com.mediatek."
     )
 
     private val activityEntryRegex = Regex(
@@ -28,7 +29,11 @@ class ActivityModule @Inject constructor() : BugreportModule {
         RegexOption.MULTILINE
     )
 
-    override suspend fun analyze(sectionText: String, iocResolver: IndicatorResolver): ModuleResult {
+    override suspend fun analyze(
+        sectionText: String,
+        iocResolver: IndicatorResolver,
+        device: DeviceIdentity,
+    ): ModuleResult {
         val telemetry = mutableListOf<Map<String, Any?>>()
         val seen = mutableSetOf<Pair<String, String>>()
 
@@ -44,7 +49,7 @@ class ActivityModule @Inject constructor() : BugreportModule {
         val schemesEnd = nextSection?.range?.first ?: sectionText.length
         val schemesBlock = sectionText.substring(schemeStart, schemesEnd)
 
-        for (scheme in sensitiveSchemes) {
+        for (scheme in enumeratedSchemes) {
             val schemeIdx = schemesBlock.indexOf("$scheme\n")
                 .takeIf { it >= 0 } ?: schemesBlock.indexOf("$scheme\r")
                     .takeIf { it >= 0 } ?: continue
@@ -59,7 +64,7 @@ class ActivityModule @Inject constructor() : BugreportModule {
                 val packageName = match.groupValues[1]
                 val componentName = match.groupValues[2]
                 if (!seen.add(packageName to scheme)) return@forEach
-                val isSystemApp = systemPackagePrefixes.any { packageName.startsWith(it) }
+                val isSystemApp = oemPrefixResolver.isOemPrefix(packageName, device)
                 val isIoc = iocResolver.isKnownBadPackage(packageName)
 
                 telemetry.add(mapOf(
@@ -67,7 +72,8 @@ class ActivityModule @Inject constructor() : BugreportModule {
                     "handled_scheme" to scheme.removeSuffix(":"),
                     "component_name" to componentName,
                     "is_system_app" to isSystemApp,
-                    "is_ioc" to (isIoc != null)
+                    "is_ioc" to (isIoc != null),
+                    "source" to "bugreport_import"
                 ))
             }
         }

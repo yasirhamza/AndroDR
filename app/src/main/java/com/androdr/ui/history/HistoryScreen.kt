@@ -47,11 +47,15 @@ import androidx.compose.material3.SuggestionChip
 import androidx.compose.material3.SuggestionChipDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -64,7 +68,9 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.androdr.R
 import com.androdr.data.model.ScanResult
+import com.androdr.reporting.ExportMode
 import com.androdr.scanner.ScanOrchestrator
+import com.androdr.ui.common.ExportModeDialog
 import com.androdr.ui.common.severityColor
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -88,6 +94,9 @@ fun HistoryScreen(
     val showClearAllConfirm by viewModel.showClearAllConfirm.collectAsStateWithLifecycle()
 
     val context = LocalContext.current
+
+    // Pending scan awaiting export-mode selection (null = dialog closed).
+    var exportModeDialogScan by remember { mutableStateOf<ScanResult?>(null) }
 
     // Fire the system share sheet as soon as the URI is ready
     LaunchedEffect(shareUri) {
@@ -162,7 +171,7 @@ fun HistoryScreen(
                 isFirstScan = allScans.last().id == scan.id,
                 exporting = exporting,
                 onClick = { viewModel.selectScan(scan) },
-                onExport = { viewModel.exportReport(scan) },
+                onExport = { exportModeDialogScan = scan },
                 onViewReport = { viewModel.openSheet(scan) },
                 onDelete = { viewModel.requestDeleteScan(scan.id) }
             )
@@ -193,6 +202,17 @@ fun HistoryScreen(
                 TextButton(onClick = { viewModel.dismissDeleteConfirm() }) {
                     Text("Cancel")
                 }
+            }
+        )
+    }
+
+    // Export mode selector
+    exportModeDialogScan?.let { scan ->
+        ExportModeDialog(
+            onDismiss = { exportModeDialogScan = null },
+            onConfirm = { mode ->
+                exportModeDialogScan = null
+                viewModel.exportReport(scan, mode)
             }
         )
     }
@@ -522,6 +542,8 @@ private fun ScanHistoryItem(
         }
     }
 }
+
+// ExportModeDialog extracted to com.androdr.ui.common.ExportModeDialog
 
 @Suppress("LongMethod") // DiffSection renders new/resolved findings with conditional
 // sub-sections; all branches are needed in one composable to maintain visual cohesion.

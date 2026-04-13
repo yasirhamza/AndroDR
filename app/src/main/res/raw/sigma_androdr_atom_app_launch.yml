@@ -1,0 +1,17 @@
+title: Atom — app launch event
+id: androdr-atom-app-launch
+status: production
+description: Internal atom rule. Matches app_foreground timeline events (from UsageStatsScanner) for use by correlation rules. Not rendered as a standalone finding.
+author: AndroDR
+date: 2026-04-08
+logsource:
+    product: androdr
+    service: timeline
+detection:
+    selection:
+        category: app_foreground
+    condition: selection
+level: informational
+category: incident
+display:
+    suppress_finding: true

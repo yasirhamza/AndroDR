@@ -16,6 +16,7 @@ detection:
         known_app_category: USER_APP
     condition: selection
 level: high
+category: incident
 display:
     category: app_risk
     icon: content_copy

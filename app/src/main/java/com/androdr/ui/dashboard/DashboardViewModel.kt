@@ -1,5 +1,6 @@
 package com.androdr.ui.dashboard
 
+import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.androdr.data.db.IndicatorDao
@@ -9,7 +10,10 @@ import com.androdr.data.repo.ScanRepository.Companion.preferRuntimeScan
 import com.androdr.ioc.IocDatabase
 import com.androdr.ioc.IndicatorUpdater
 import com.androdr.scanner.ScanOrchestrator
+import com.androdr.scanner.ScanProgress
+import com.androdr.ui.permissions.UsageStatsPermission
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -28,7 +32,8 @@ class DashboardViewModel @Inject constructor(
     private val repository: ScanRepository,
     private val indicatorDao: IndicatorDao,
     private val iocDatabase: IocDatabase,
-    private val indicatorUpdater: IndicatorUpdater
+    private val indicatorUpdater: IndicatorUpdater,
+    @ApplicationContext private val context: Context
 ) : ViewModel() {
 
     // Prefer the latest runtime scan (has device posture flags) over bugreport analysis
@@ -38,6 +43,38 @@ class DashboardViewModel @Inject constructor(
 
     private val _isScanning = MutableStateFlow(false)
     val isScanning: StateFlow<Boolean> = _isScanning.asStateFlow()
+
+    /**
+     * Live scan progress published by the orchestrator. The Dashboard UI
+     * observes this to render a progress bar + stage text instead of the
+     * bare spinning button the app used to show.
+     */
+    val scanProgress: StateFlow<ScanProgress> = orchestrator.scanProgress
+
+    /**
+     * Whether the app currently has the PACKAGE_USAGE_STATS permission, which
+     * the forensic timeline (via [com.androdr.scanner.UsageStatsScanner])
+     * needs to populate "app opened / closed" history. Checked imperatively
+     * via [UsageStatsPermission.isGranted] because the OS doesn't expose
+     * this as an observable flow — instead the UI calls
+     * [refreshUsageStatsPermission] from a lifecycle ON_RESUME hook so the
+     * banner state updates the moment the user grants access and returns
+     * from Settings.
+     */
+    private val _hasUsageStatsPermission = MutableStateFlow(
+        UsageStatsPermission.isGranted(context)
+    )
+    val hasUsageStatsPermission: StateFlow<Boolean> = _hasUsageStatsPermission.asStateFlow()
+
+    /** Re-checks Usage Access permission. Called from the Dashboard on ON_RESUME. */
+    fun refreshUsageStatsPermission() {
+        _hasUsageStatsPermission.value = UsageStatsPermission.isGranted(context)
+    }
+
+    /** Opens the system Usage Access settings screen. */
+    fun openUsageStatsSettings() {
+        UsageStatsPermission.openSettings(context)
+    }
 
     val scanDiff: StateFlow<ScanOrchestrator.ScanDiff?> = repository.allScans
         .map { scans ->

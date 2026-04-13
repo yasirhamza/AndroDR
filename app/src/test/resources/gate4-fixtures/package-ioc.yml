@@ -1,0 +1,15 @@
+# Fixture for androdr-001: package name IOC lookup
+rule_file: sigma_androdr_001_package_ioc.yml
+service: app_scanner
+ioc_stubs:
+  package_ioc_db:
+    - "com.thetruthspy"
+    - "com.flexispy.app"
+true_positives:
+  - package_name: "com.thetruthspy"
+    is_system_app: false
+true_negatives:
+  - package_name: "com.thetruthspy"
+    is_system_app: true
+  - package_name: "com.google.android.gm"
+    is_system_app: false

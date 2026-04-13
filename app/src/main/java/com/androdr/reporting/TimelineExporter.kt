@@ -2,6 +2,8 @@ package com.androdr.reporting
 
 import android.os.Build
 import com.androdr.data.model.ForensicTimelineEvent
+import com.androdr.data.model.effectiveCorrelationId
+import com.androdr.data.model.effectivePackageFromDescription
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -43,14 +45,12 @@ object TimelineExporter {
             return@buildString
         }
 
-        val significantCount = filtered.count { it.severity.uppercase() != "INFORMATIONAL" }
-        val infoCount = filtered.size - significantCount
         appendLine("  Total events: ${filtered.size}")
-        if (significantCount > 0) {
-            appendLine("  Significant: $significantCount")
-        }
-        if (infoCount > 0) {
-            appendLine("  Informational: $infoCount")
+        // Significant == events whose rule guidance is non-empty. Rule
+        // guidance is present only on rules that produce findings, so
+        // this counts telemetry rows tied to a rule-produced signal.
+        val significantCount = filtered.count {
+            it.ruleId.isNotEmpty() && !ruleGuidance[it.ruleId].isNullOrEmpty()
         }
 
         // Assessment derived from rule guidance — the rules define threat severity,
@@ -63,15 +63,10 @@ object TimelineExporter {
             maxGuidancePriority >= 1 || significantCount > 0 -> "REVIEW RECOMMENDED"
             else -> "NO CONCERNS"
         }
-        // Severity breakdown
-        val criticalCount = filtered.count { it.severity.equals("CRITICAL", true) }
-        val highCount = filtered.count { it.severity.equals("HIGH", true) }
-        val mediumCount = filtered.count { it.severity.equals("MEDIUM", true) }
-        val severityParts = buildList {
-            if (criticalCount > 0) add("$criticalCount critical")
-            if (highCount > 0) add("$highCount high")
-            if (mediumCount > 0) add("$mediumCount medium")
-        }
+        // Telemetry rows carry no severity — severity lives on findings.
+        // The exporter does not cross the reporting/scan boundary, so no
+        // per-severity rollup is computed here.
+        val severityParts = emptyList<String>()
 
         appendLine()
         appendLine("  ASSESSMENT: $assessment")
@@ -84,13 +79,13 @@ object TimelineExporter {
         }
         appendLine()
 
-        val sorted = filtered.sortedByDescending { it.timestamp }
+        val sorted = filtered.sortedByDescending { it.startTimestamp }
         val dateFmt = SimpleDateFormat("yyyy-MM-dd", Locale.US)
         val timeFmt = SimpleDateFormat("HH:mm:ss", Locale.US)
         var currentDate = ""
         for (event in sorted) {
-            val date = if (event.timestamp > 0)
-                dateFmt.format(Date(event.timestamp))
+            val date = if (event.startTimestamp > 0)
+                dateFmt.format(Date(event.startTimestamp))
             else "Unknown"
             if (date != currentDate) {
                 currentDate = date
@@ -98,11 +93,10 @@ object TimelineExporter {
                 appendLine("  $date")
                 appendLine(THIN)
             }
-            val time = if (event.timestamp > 0) {
-                timeFmt.format(Date(event.timestamp))
+            val time = if (event.startTimestamp > 0) {
+                timeFmt.format(Date(event.startTimestamp))
             } else "??:??:??"
-            val sev = event.severity.uppercase().padEnd(8)
-            appendLine("  [$sev] $time  ${event.description}")
+            appendLine("  $time  ${event.description}")
             if (event.appName.isNotEmpty() && event.appName != event.packageName) {
                 appendLine("             App: ${event.appName} (${event.packageName})")
             } else if (event.packageName.isNotEmpty()) {
@@ -134,8 +128,16 @@ object TimelineExporter {
     }
 
     fun formatCsv(events: List<ForensicTimelineEvent>): String = buildString {
+        // Column set mirrors the on-screen Timeline detail sheet plus the
+        // clustering/correlation fields the UI uses to render cluster cards
+        // and the Linked Evidence section. Without rule_id + correlation_id
+        // + kind, a CSV consumer can't tell whether a row is a raw event
+        // or a correlation signal, which rule produced it, or which other
+        // rows share its cluster — the same information the Timeline UI
+        // shows but previously dropped on export.
         appendLine(
-            "timestamp,isodate,module,event,data,package,severity," +
+            "timestamp,isodate,end_timestamp,end_isodate,kind,module,event,data,package," +
+                "severity,rule_id,correlation_id,scan_result_id," +
                 "ioc_indicator,ioc_type,ioc_source,campaign,mitre_technique,apk_hash,details"
         )
 
@@ -143,14 +145,36 @@ object TimelineExporter {
             timeZone = java.util.TimeZone.getTimeZone("UTC")
         }
 
-        for (event in events.sortedBy { it.timestamp }) {
-            val ts = event.timestamp.toString()
-            val iso = if (event.timestamp > 0) utcFmt.format(Date(event.timestamp)) else ""
+        for (event in events.sortedBy { it.startTimestamp }) {
+            val ts = event.startTimestamp.toString()
+            val iso = if (event.startTimestamp > 0) utcFmt.format(Date(event.startTimestamp)) else ""
+            val endTs = event.endTimestamp?.toString() ?: ""
+            val endIso = event.endTimestamp?.let { if (it > 0) utcFmt.format(Date(it)) else "" } ?: ""
+            val kind = csvEscape(event.kind)
             val module = csvEscape(event.source)
             val eventType = csvEscape(event.category)
             val data = csvEscape(event.description)
-            val pkg = csvEscape(event.packageName)
-            val sev = event.severity
+            // Same recovery for the package column: fall back to the
+            // description-parsed package so legacy rows are not blank
+            // in the export even before MIGRATION_13_14 has run.
+            val pkg = csvEscape(
+                event.packageName.takeIf { it.isNotBlank() }
+                    ?: event.effectivePackageFromDescription().orEmpty()
+            )
+            // Severity column kept in CSV header for backward compatibility
+            // with consumers; always empty since telemetry rows have no
+            // severity (severity lives on Finding only).
+            val sev = ""
+            val ruleId = csvEscape(event.ruleId)
+            // Prefer the stamped correlationId; fall back to the same
+            // read-time key the Timeline UI uses for clustering. The
+            // `effectiveCorrelationId()` helper also parses legacy rows
+            // whose packageName field is empty but whose description
+            // begins with a dotted package like "com.x.y used READ_...".
+            // This keeps the CSV consistent with what the app renders on
+            // screen, even for rows that predate the migration.
+            val correlationId = csvEscape(event.effectiveCorrelationId())
+            val scanId = event.scanResultId.toString()
             val ioc = csvEscape(event.iocIndicator)
             val iocType = csvEscape(event.iocType)
             val iocSrc = csvEscape(event.iocSource)
@@ -159,7 +183,7 @@ object TimelineExporter {
             val hash = csvEscape(event.apkHash)
             val details = csvEscape(event.details)
             @Suppress("MaxLineLength") // CSV row must be a single appendLine call
-            appendLine("$ts,$iso,$module,$eventType,$data,$pkg,$sev,$ioc,$iocType,$iocSrc,$campaign,$mitre,$hash,$details")
+            appendLine("$ts,$iso,$endTs,$endIso,$kind,$module,$eventType,$data,$pkg,$sev,$ruleId,$correlationId,$scanId,$ioc,$iocType,$iocSrc,$campaign,$mitre,$hash,$details")
         }
     }
 

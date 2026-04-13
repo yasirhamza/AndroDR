@@ -6,6 +6,7 @@ import android.content.Context
 import android.content.pm.PackageManager
 import android.util.Log
 import com.androdr.data.model.ForensicTimelineEvent
+import com.androdr.ioc.DeviceIdentity
 import com.androdr.ioc.OemPrefixResolver
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
@@ -27,12 +28,14 @@ class UsageStatsScanner @Inject constructor(
     private val oemPrefixResolver: OemPrefixResolver
 ) {
 
+    private val localDevice = DeviceIdentity.local()
+
     /**
      * Collects app usage events from the last [hoursBack] hours.
      * Filters out OEM/system apps to reduce noise. Returns events
      * suitable for direct insertion into the forensic timeline.
      */
-    @Suppress("TooGenericExceptionCaught")
+    @Suppress("TooGenericExceptionCaught", "SwallowedException")
     suspend fun collectTimelineEvents(
         hoursBack: Int = 24
     ): List<ForensicTimelineEvent> = withContext(Dispatchers.IO) {
@@ -47,8 +50,16 @@ class UsageStatsScanner @Inject constructor(
         val events = try {
             usm.queryEvents(startTime, endTime)
         } catch (e: SecurityException) {
-            // PACKAGE_USAGE_STATS not granted — fail silently; permission absence is expected
-            Log.d(TAG, "Usage stats permission not granted: ${e.message}")
+            // PACKAGE_USAGE_STATS not granted. Previously this was logged at
+            // DEBUG with a comment calling the absence "expected" — which
+            // meant the forensic-timeline feature was silently disabled with
+            // no signal to anyone that the user needed to grant Usage Access
+            // in Settings. Promoting to WARN so the degraded state is at
+            // least visible in logcat, and the Dashboard banner (see
+            // UsageStatsPermission + DashboardScreen) prompts the user
+            // to grant the permission via the system settings page.
+            Log.w(TAG, "UsageStats permission not granted — forensic timeline " +
+                "will be empty until the user enables Usage Access in Settings")
             return@withContext emptyList()
         } catch (e: Exception) {
             Log.w(TAG, "Usage stats query failed: ${e.message}")
@@ -67,7 +78,7 @@ class UsageStatsScanner @Inject constructor(
 
         // Deduplicate rapid transitions of same app+category within same minute
         val deduped = result.distinctBy {
-            "${it.packageName}|${it.category}|${it.timestamp / 60000}"
+            "${it.packageName}|${it.category}|${it.startTimestamp / 60000}"
         }
 
         Log.d(TAG, "Collected ${deduped.size} usage events (from ${result.size} raw)")
@@ -94,8 +105,8 @@ class UsageStatsScanner @Inject constructor(
         val packageName = event.packageName ?: return
 
         // Skip OEM/system apps — only track user-installed app activity
-        if (oemPrefixResolver.isOemPrefix(packageName) ||
-            oemPrefixResolver.isPartnershipPrefix(packageName)) return
+        if (oemPrefixResolver.isOemPrefix(packageName, localDevice) ||
+            oemPrefixResolver.isPartnershipPrefix(packageName, localDevice)) return
 
         // Resolve app label (cached to avoid repeated PM lookups)
         val appLabel = labelCache.getOrPut(packageName) {
@@ -111,14 +122,13 @@ class UsageStatsScanner @Inject constructor(
         }
 
         result.add(ForensicTimelineEvent(
-            timestamp = event.timeStamp,
+            startTimestamp = event.timeStamp,
             source = "usage_stats",
             category = category,
             description = "App $verb: $appLabel",
-            severity = "INFO",
             packageName = packageName,
             appName = appLabel,
-            isFromRuntime = true
+            telemetrySource = com.androdr.data.model.TelemetrySource.LIVE_SCAN
         ))
     }
 
