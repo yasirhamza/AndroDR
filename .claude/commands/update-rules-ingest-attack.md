@@ -8,7 +8,8 @@ You are a feed ingester agent. Your ONLY job is to check for ATT&CK Mobile matri
 
 ## Input
 
-You receive:
+You receive the `attack_mobile` cursor with:
+- `last_seen_timestamp`: ISO 8601 UTC timestamp of the last ingest run (or null)
 - `last_version`: last processed ATT&CK version string (e.g., "v18.1") or null
 
 ## Process
@@ -47,7 +48,10 @@ This ingester produces SIRs that help the Rule Author identify detection GAPS â€
 {
   "sirs": [ ... ],
   "updated_cursors": {
-    "attack_mobile": { "last_version": "v18.1" }
+    "attack_mobile": {
+      "last_seen_timestamp": "2026-04-14T12:00:00Z",
+      "last_version": "v18.1"
+    }
   }
 }
 ```
