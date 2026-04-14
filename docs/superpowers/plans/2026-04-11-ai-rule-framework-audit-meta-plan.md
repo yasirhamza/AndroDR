@@ -147,7 +147,20 @@ Numbered per the original audit report (reproduced here for self-containment):
 - `SigmaCorrelationRuleIntegrationTest.kt` added to `app/src/test/`; exercises each bundled correlation rule against synthetic timeline events; verifies expected signals fire; fails build on regression
 - All new hardening work passes the build-time gate from sub-plan 1a
 
-**What's next (out of this meta-plan):** Public rules repo release (Tier 1 project per `project_rule_engine_priority`), coverage metrics, SIGMA-HQ upstream contribution.
+**Scope changes during execution (recorded 2026-04-14):**
+- **F5 (scheduled automation) — DEFERRED.** Automating a WIP pipeline without a
+  production track record bakes in risk. Revisit in a later sprint once the
+  authoring pipeline has run unsupervised for several cycles without hallucination
+  or drift. The "feed state drifts between runs" concern is mitigated by the
+  unified cursor schema from F4 (at least the staleness is auditable now).
+- **F8 (correlation integration tests) — ALREADY SATISFIED.** Pre-existing
+  tests cover the stated requirement: `AllCorrelationRulesFireTest.kt` runs all
+  4 correlation rules end-to-end on a single synthetic timeline, and
+  `CorrelationMigrationFixturesTest.kt` has 6 per-rule tests including 2 negative
+  cases (outside-window, insufficient-count). A new
+  `SigmaCorrelationRuleIntegrationTest.kt` would duplicate these.
+
+**What's next (out of this meta-plan):** Public rules repo release (Tier 1 project per `project_rule_engine_priority`), coverage metrics, SIGMA-HQ upstream contribution. Separately, #117 tracks routing all runtime IOC/CVE fetches through the rule repo (client bypass artifact from early prototyping).
 
 ---
 
