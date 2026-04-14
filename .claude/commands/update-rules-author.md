@@ -49,6 +49,15 @@ For each SIR that PASSES the Decision Gate (behavioral/TTP patterns only):
 | Unique behavioral patterns | TTP rule | `app_scanner` |
 | Mixed indicators + behaviors | IOC data + behavioral rule(s) | Mixed |
 
+### Taxonomy Reference (MANDATORY)
+
+Before writing any `detection:` block, consult the logsource field taxonomy at
+`android-sigma-rules/validation/logsource-taxonomy.yml` for the target service.
+
+- **Only use field names listed in the taxonomy.** If a field you need isn't there, record a `telemetry_gap` decision (see below) instead of guessing.
+- **Services with `status: unwired`** have a data model but no rule engine wiring — rules targeting them cannot fire. Record a `telemetry_gap` decision instead of writing a rule.
+- The orchestrator injects the relevant taxonomy fields into your context. If you don't see them, read the file directly as a fallback.
+
 A single SIR can produce IOC data entries AND/OR rules. Most SIRs will produce ONLY IOC data.
 
 ## Rule Template
@@ -112,6 +121,50 @@ decisions:
     alternative: "[the other option]"
     reasoning: "[why this is ambiguous]"
 ```
+
+### IOC Confidence Decisions
+
+When a SIR has `requires_verification: true`, you MUST record a decision for each IOC you choose to include or skip:
+
+```yaml
+decisions:
+  - rule_id: "androdr-NNN"
+    field: "ioc_data"
+    type: "ioc_confidence"
+    chosen: "include"
+    alternative: "skip — single unstructured source"
+    reasoning: "Domain appears in blog post with detailed C2 analysis; behavioral context is strong"
+```
+
+Or to skip:
+
+```yaml
+decisions:
+  - rule_id: null
+    field: "ioc_data"
+    type: "ioc_confidence"
+    chosen: "skip"
+    alternative: "include domain example.com from single blog post"
+    reasoning: "Only mentioned in passing, no technical analysis confirming C2 role"
+```
+
+### Telemetry Gap Decisions
+
+When the taxonomy lacks a field needed to detect a threat, or the target service has `status: unwired`:
+
+```yaml
+decisions:
+  - rule_id: null
+    field: "rule_creation"
+    type: "telemetry_gap"
+    chosen: "skip"
+    alternative: "create rule using field 'battery_drain_rate'"
+    reasoning: "SIR describes rapid battery drain detection but app_scanner has no battery_drain_rate field in taxonomy"
+    missing_field: "battery_drain_rate"
+    suggested_service: "app_scanner"
+```
+
+These decisions feed back into AndroDR's development roadmap — a structured signal for telemetry the AI pipeline wanted but doesn't exist yet.
 
 ## Skip Decisions
 
