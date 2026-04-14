@@ -67,8 +67,10 @@ app/src/main/java/com/androdr/
 - **ReportExporter** is a `@Singleton`; it fetches DNS events and captures
   the app's own logcat (`logcat --pid`) before writing a plaintext report
 
-## Development branch
-Active feature work lives on **`claude/android-edr-setup-rl68Y`**.
+## Development workflow
+All pull requests target **`main`**. Feature work lives on topic branches
+(e.g. `feat/<issue-number>-<short-name>`, `fix/<topic>`, `docs/<topic>`)
+branched from `main`, then merged back via PR.
 
 ## Lint / code style
 The project uses the default Android Lint configuration.  Run
