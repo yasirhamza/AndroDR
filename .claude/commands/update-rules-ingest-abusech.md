@@ -1,5 +1,5 @@
 ---
-description: "Feed ingester for abuse.ch (ThreatFox, MalwareBazaar, URLhaus) — returns SIRs"
+description: "Feed ingester for abuse.ch (ThreatFox, MalwareBazaar) — returns SIRs"
 ---
 
 # abuse.ch Feed Ingester
@@ -9,10 +9,8 @@ You are a feed ingester agent. Your ONLY job is to fetch new Android-related thr
 ## Input
 
 You receive:
-- `last_seen_timestamp` (threatfox): ISO 8601 UTC timestamp of last ThreatFox query (or null for first run)
-- `last_id`: last ThreatFox IOC ID processed (or null)
-- `last_seen_timestamp` (malwarebazaar): ISO 8601 UTC timestamp (or null)
-- `urlhaus_last_query_time`: ISO timestamp (or null)
+- `last_seen_timestamp` (threatfox): ISO 8601 UTC timestamp of last ThreatFox query
+- `last_seen_timestamp` (malwarebazaar): ISO 8601 UTC timestamp
 
 ## Process
 
@@ -48,14 +46,6 @@ You receive:
 4. Extract file hashes and family names
 5. Merge into existing SIRs (same family) or create new ones
 
-### URLhaus
-
-1. Use WebFetch to GET `https://urlhaus-api.abuse.ch/v1/urls/recent/` (returns last 1000)
-2. Filter entries where `tags` contain "android" or "apk"
-3. Filter to entries after `urlhaus_last_query_time`
-4. Extract malware distribution URLs
-5. Merge into existing SIRs or create new SIRs with `rule_hint: "network"`
-
 ## Output
 
 Return a JSON object with:
@@ -63,12 +53,16 @@ Return a JSON object with:
 {
   "sirs": [ ... array of SIR objects ... ],
   "updated_cursors": {
-    "threatfox": { "last_seen_timestamp": "2026-04-14T12:00:00Z", "last_id": ... },
-    "malwarebazaar": { "last_seen_timestamp": "2026-04-14T12:00:00Z" },
-    "urlhaus": { "last_query_time": "..." }
+    "threatfox": { "last_seen_timestamp": "2026-04-14T12:00:00Z" },
+    "malwarebazaar": { "last_seen_timestamp": "2026-04-14T12:00:00Z" }
   }
 }
 ```
+
+Note: URLhaus ingestion and a ThreatFox `last_id` secondary cursor are out of
+scope — both were removed during the #109 F4 schema migration. If a future
+dedup bug surfaces that `last_seen_timestamp` alone can't address, add the
+extra key to `feed-state-schema.json` first, then re-enable it here.
 
 ## Rules
 

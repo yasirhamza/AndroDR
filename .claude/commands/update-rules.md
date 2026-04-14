@@ -134,7 +134,8 @@ For each passing candidate, ask the user to:
 - **Reject** — discard, log reason
 
 After all decisions:
-- Update `feed-state.json` with new cursors from ingesters
+- Update `feed-state.json` with new cursors from ingesters. Strip any extra keys that aren't declared in `third-party/android-sigma-rules/validation/feed-state-schema.json` — the schema uses `additionalProperties: false`.
+- **Validate the updated feed-state.json before committing:** run `python3 third-party/android-sigma-rules/validation/validate-feed-state.py`. If it exits non-zero, abort the run and report the errors. Do not commit a state that fails validation.
 - Update `ioc-data/*.yml` files if ingesters found new indicators
 - Commit all changes to the sigma repo with descriptive messages
 
