@@ -449,7 +449,10 @@ fun TimelineScreen(
                     }
                     items(
                         items = group.findingRows,
-                        key = { "finding_${it.finding.ruleId}_${it.finding.matchContext["package_name"].orEmpty()}_${it.timestamp}" }
+                        key = {
+                            val pkg = it.finding.matchContext["package_name"].orEmpty()
+                            "finding_${it.finding.ruleId}_${pkg}_${it.timestamp}"
+                        }
                     ) { row ->
                         FindingCard(
                             row = row,
