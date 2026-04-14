@@ -61,41 +61,22 @@ object GateFourTestHarness {
             return Gate4Result(pass = false, tpFired = false, tnClean = true, errors = errors)
         }
 
-        // Evaluate true positives — each must produce >= 1 finding.
-        var allTpFired = true
-        truePositives.forEachIndexed { index, record ->
-            val findings = SigmaRuleEvaluator.evaluate(
-                rules = listOf(rule),
-                records = listOf(record),
-                service = rule.service,
-                iocLookups = iocLookups
-            )
-            if (findings.isEmpty()) {
-                allTpFired = false
-                errors.add(
-                    "TP[$index] FAILED: expected >= 1 finding but got 0 for rule \"${rule.id}\". " +
-                        "Record: $record"
-                )
-            }
-        }
-
-        // Evaluate true negatives — each must produce 0 findings.
-        var allTnClean = true
-        trueNegatives.forEachIndexed { index, record ->
-            val findings = SigmaRuleEvaluator.evaluate(
-                rules = listOf(rule),
-                records = listOf(record),
-                service = rule.service,
-                iocLookups = iocLookups
-            )
-            if (findings.isNotEmpty()) {
-                allTnClean = false
-                errors.add(
-                    "TN[$index] FAILED: expected 0 findings but got ${findings.size} " +
-                        "for rule \"${rule.id}\". Record: $record"
-                )
-            }
-        }
+        val allTpFired = evaluateFixtures(
+            rule = rule,
+            records = truePositives,
+            iocLookups = iocLookups,
+            errors = errors,
+            label = "TP",
+            shouldFire = true,
+        )
+        val allTnClean = evaluateFixtures(
+            rule = rule,
+            records = trueNegatives,
+            iocLookups = iocLookups,
+            errors = errors,
+            label = "TN",
+            shouldFire = false,
+        )
 
         return Gate4Result(
             pass = allTpFired && allTnClean,
@@ -103,5 +84,46 @@ object GateFourTestHarness {
             tnClean = allTnClean,
             errors = errors
         )
+    }
+
+    /**
+     * Evaluates [records] against [rule]. When [shouldFire] is true, each record
+     * must produce >= 1 finding (true-positive semantics); when false, each must
+     * produce 0 findings (true-negative semantics). Records that violate the
+     * expectation are reported in [errors] with the given [label]. Returns true
+     * if every record behaved as expected.
+     */
+    @Suppress("LongParameterList")
+    private fun evaluateFixtures(
+        rule: SigmaRule,
+        records: List<Map<String, Any?>>,
+        iocLookups: Map<String, (Any) -> Boolean>,
+        errors: MutableList<String>,
+        label: String,
+        shouldFire: Boolean,
+    ): Boolean {
+        var allPassed = true
+        records.forEachIndexed { index, record ->
+            val findings = SigmaRuleEvaluator.evaluate(
+                rules = listOf(rule),
+                records = listOf(record),
+                service = rule.service,
+                iocLookups = iocLookups
+            )
+            val fired = findings.isNotEmpty()
+            if (fired != shouldFire) {
+                allPassed = false
+                errors.add(
+                    if (shouldFire) {
+                        "$label[$index] FAILED: expected >= 1 finding but got 0 for " +
+                            "rule \"${rule.id}\". Record: $record"
+                    } else {
+                        "$label[$index] FAILED: expected 0 findings but got ${findings.size} " +
+                            "for rule \"${rule.id}\". Record: $record"
+                    }
+                )
+            }
+        }
+        return allPassed
     }
 }
