@@ -58,9 +58,10 @@ For each SIR:
    - `ioc_lookup` → `app_scanner` (package names), `dns_monitor` (domains)
    - `behavioral` → `app_scanner`, `accessibility_audit`, `appops_audit`, `receiver_audit`
    - `device_posture` → `device_auditor`
-   - `network` → `dns_monitor`, `network_monitor`
+   - `network` → `dns_monitor` (skip `network_monitor` — `status: unwired` per taxonomy)
    - `hybrid` → include all of the above
-3. Extract the `fields:` blocks for the relevant services
+3. **Filter out services with `status: unwired`** before extracting fields — rules targeting them cannot fire. The Rule Author will record a `telemetry_gap` decision if the SIR requires such a service.
+4. Extract the `fields:` blocks for the remaining services
 
 Pass all valid SIRs to the Rule Author agent (`update-rules-author`) along with:
 - The next available rule ID

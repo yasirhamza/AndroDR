@@ -13,6 +13,7 @@ You receive:
 - `next_id`: next available rule ID number (e.g., 060)
 - `example_rules`: 5-10 existing rules as style reference
 - `existing_rule_index`: list of existing rule IDs, titles, and IOC references
+- `taxonomy_fields`: (optional) logsource field lists for services relevant to the SIRs' `rule_hint`, pre-extracted by the orchestrator. When present, use this instead of reading `logsource-taxonomy.yml` directly.
 
 ## CRITICAL: IOC Data vs Rules — Know the Difference
 
@@ -166,9 +167,9 @@ decisions:
 
 These decisions feed back into AndroDR's development roadmap — a structured signal for telemetry the AI pipeline wanted but doesn't exist yet.
 
-## Skip Decisions
+## Skip Decisions (non-taxonomy reasons)
 
-If a SIR describes a threat that CAN'T be detected with AndroDR's current telemetry fields (see logsource taxonomy), flag it as a skip:
+Prefer `telemetry_gap` (above) when the reason for skipping is a missing taxonomy field or an `unwired` service. Use the plain skip format below only when the reason is something else — e.g., the SIR has no actionable indicators at all, the threat is already covered by another rule, or the indicator type isn't monitored by AndroDR (IP-only IOCs).
 
 ```yaml
 decisions:
@@ -176,10 +177,8 @@ decisions:
     field: "rule_creation"
     chosen: "skip"
     alternative: "create rule for [description]"
-    reasoning: "Requires telemetry field [X] which is not in AndroDR's [service] schema"
+    reasoning: "[reason unrelated to taxonomy — e.g., 'IP-only IOC, AndroDR doesn't monitor raw IP connections']"
 ```
-
-This feeds back into AndroDR's development roadmap.
 
 ## IOC Data Integrity Rules
 
