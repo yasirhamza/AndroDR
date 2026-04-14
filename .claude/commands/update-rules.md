@@ -52,10 +52,22 @@ For each SIR:
 
 ## Step 4: Generate Rules
 
+**Before dispatching the Rule Author**, read the logsource field taxonomy:
+1. Read `android-sigma-rules/validation/logsource-taxonomy.yml`
+2. Identify which services are relevant based on the SIRs' `rule_hint` values:
+   - `ioc_lookup` → `app_scanner` (package names), `dns_monitor` (domains)
+   - `behavioral` → `app_scanner`, `accessibility_audit`, `appops_audit`, `receiver_audit`
+   - `device_posture` → `device_auditor`
+   - `network` → `dns_monitor` (skip `network_monitor` — `status: unwired` per taxonomy)
+   - `hybrid` → include all of the above
+3. **Filter out services with `status: unwired`** before extracting fields — rules targeting them cannot fire. The Rule Author will record a `telemetry_gap` decision if the SIR requires such a service.
+4. Extract the `fields:` blocks for the remaining services
+
 Pass all valid SIRs to the Rule Author agent (`update-rules-author`) along with:
 - The next available rule ID
 - 5 existing production rules as style examples (pick diverse services/types)
 - The existing rule index (for dedup awareness)
+- **The extracted taxonomy field lists for relevant services** (injected into the prompt context so the Rule Author doesn't need to read the file itself)
 
 The Rule Author returns a list of CandidateRule objects (YAML + decision manifest).
 

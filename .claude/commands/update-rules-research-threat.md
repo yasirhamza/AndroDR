@@ -28,10 +28,18 @@ You receive:
    - TTPs: MITRE ATT&CK technique IDs and descriptions
    - Behavioral patterns: permission clusters, accessibility abuse, overlay attacks, etc.
 
-3. **Cross-reference** IOCs across sources. For each IOC:
-   - Found in 2+ sources: `confidence: "high"`
-   - Found in 1 structured source (abuse.ch, NVD): `confidence: "high"`
-   - Found in 1 unstructured source only (blog post): `confidence: "medium"`
+3. **Cross-reference** IOCs across sources and classify source type:
+
+   **Structured sources** (machine-parseable feeds from `allowed-sources.json`):
+   `stalkerware-indicators`, `malwarebazaar`, `threatfox`, `amnesty-investigations`,
+   `citizenlab-indicators`, `mvt-indicators`, `virustotal`, `android-security-bulletin`
+
+   **Unstructured sources**: blog posts, vendor reports, news articles found via web search
+
+   For each IOC:
+   - Found in 2+ sources (any type): `confidence: "high"`
+   - Found in 1 structured source: `confidence: "high"`
+   - Found in 1 unstructured source only: `confidence: "medium"`
    - Mentioned vaguely without exact value: DO NOT include, set note in description
 
 4. **Build SIRs** — typically one primary SIR, but split into multiple if the threat has distinct components (e.g., a dropper + payload, or infrastructure + malware)
@@ -66,3 +74,4 @@ You receive:
 - Tag every IOC with the source URL it came from (in the SIR description or a source_urls field)
 - If you find no concrete IOCs, still return a SIR with behavioral_signals and a note explaining the gap
 - Cross-referenced IOCs (2+ sources) are more valuable than single-source IOCs
+- **MANDATORY:** If a SIR is built entirely from a single unstructured source (one blog post, one vendor report with no corroborating feed data), set `"requires_verification": true` at the SIR top level. This signals the Rule Author to record an `ioc_confidence` decision for human review. Do NOT set this flag for SIRs built from structured feeds or corroborated by 2+ sources.

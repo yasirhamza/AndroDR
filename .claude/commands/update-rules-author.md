@@ -13,6 +13,7 @@ You receive:
 - `next_id`: next available rule ID number (e.g., 060)
 - `example_rules`: 5-10 existing rules as style reference
 - `existing_rule_index`: list of existing rule IDs, titles, and IOC references
+- `taxonomy_fields`: (optional) logsource field lists for services relevant to the SIRs' `rule_hint`, pre-extracted by the orchestrator. When present, use this instead of reading `logsource-taxonomy.yml` directly.
 
 ## CRITICAL: IOC Data vs Rules — Know the Difference
 
@@ -48,6 +49,15 @@ For each SIR that PASSES the Decision Gate (behavioral/TTP patterns only):
 | CVEs with patch levels | Device posture rule | `device_auditor` |
 | Unique behavioral patterns | TTP rule | `app_scanner` |
 | Mixed indicators + behaviors | IOC data + behavioral rule(s) | Mixed |
+
+### Taxonomy Reference (MANDATORY)
+
+Before writing any `detection:` block, consult the logsource field taxonomy at
+`android-sigma-rules/validation/logsource-taxonomy.yml` for the target service.
+
+- **Only use field names listed in the taxonomy.** If a field you need isn't there, record a `telemetry_gap` decision (see below) instead of guessing.
+- **Services with `status: unwired`** have a data model but no rule engine wiring — rules targeting them cannot fire. Record a `telemetry_gap` decision instead of writing a rule.
+- The orchestrator injects the relevant taxonomy fields into your context. If you don't see them, read the file directly as a fallback.
 
 A single SIR can produce IOC data entries AND/OR rules. Most SIRs will produce ONLY IOC data.
 
@@ -113,9 +123,53 @@ decisions:
     reasoning: "[why this is ambiguous]"
 ```
 
-## Skip Decisions
+### IOC Confidence Decisions
 
-If a SIR describes a threat that CAN'T be detected with AndroDR's current telemetry fields (see logsource taxonomy), flag it as a skip:
+When a SIR has `requires_verification: true`, you MUST record a decision for each IOC you choose to include or skip:
+
+```yaml
+decisions:
+  - rule_id: "androdr-NNN"
+    field: "ioc_data"
+    type: "ioc_confidence"
+    chosen: "include"
+    alternative: "skip — single unstructured source"
+    reasoning: "Domain appears in blog post with detailed C2 analysis; behavioral context is strong"
+```
+
+Or to skip:
+
+```yaml
+decisions:
+  - rule_id: null
+    field: "ioc_data"
+    type: "ioc_confidence"
+    chosen: "skip"
+    alternative: "include domain example.com from single blog post"
+    reasoning: "Only mentioned in passing, no technical analysis confirming C2 role"
+```
+
+### Telemetry Gap Decisions
+
+When the taxonomy lacks a field needed to detect a threat, or the target service has `status: unwired`:
+
+```yaml
+decisions:
+  - rule_id: null
+    field: "rule_creation"
+    type: "telemetry_gap"
+    chosen: "skip"
+    alternative: "create rule using field 'battery_drain_rate'"
+    reasoning: "SIR describes rapid battery drain detection but app_scanner has no battery_drain_rate field in taxonomy"
+    missing_field: "battery_drain_rate"
+    suggested_service: "app_scanner"
+```
+
+These decisions feed back into AndroDR's development roadmap — a structured signal for telemetry the AI pipeline wanted but doesn't exist yet.
+
+## Skip Decisions (non-taxonomy reasons)
+
+Prefer `telemetry_gap` (above) when the reason for skipping is a missing taxonomy field or an `unwired` service. Use the plain skip format below only when the reason is something else — e.g., the SIR has no actionable indicators at all, the threat is already covered by another rule, or the indicator type isn't monitored by AndroDR (IP-only IOCs).
 
 ```yaml
 decisions:
@@ -123,10 +177,8 @@ decisions:
     field: "rule_creation"
     chosen: "skip"
     alternative: "create rule for [description]"
-    reasoning: "Requires telemetry field [X] which is not in AndroDR's [service] schema"
+    reasoning: "[reason unrelated to taxonomy — e.g., 'IP-only IOC, AndroDR doesn't monitor raw IP connections']"
 ```
-
-This feeds back into AndroDR's development roadmap.
 
 ## IOC Data Integrity Rules
 
