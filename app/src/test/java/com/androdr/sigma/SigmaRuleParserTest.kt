@@ -4,6 +4,8 @@ package com.androdr.sigma
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertThrows
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class SigmaRuleParserTest {
@@ -175,6 +177,33 @@ class SigmaRuleParserTest {
         val campaigns = rule!!.tags.filter { it.startsWith("campaign.") }
         assertEquals(2, campaigns.size)
         assertEquals("campaign.pegasus", campaigns[0])
+    }
+
+    @Test
+    fun `unknown modifier throws SigmaRuleParseException, not silent EQUALS fallback`() {
+        val yaml = """
+            title: Unknown modifier rule
+            id: test-unknown-modifier
+            category: incident
+            logsource:
+                product: androdr
+                service: app_scanner
+            detection:
+                selection:
+                    permissions|contains_all:
+                        - android.permission.READ_SMS
+                        - android.permission.SEND_SMS
+                condition: selection
+            level: medium
+        """.trimIndent()
+
+        val ex = assertThrows(SigmaRuleParseException::class.java) {
+            SigmaRuleParser.parse(yaml)
+        }
+        assertTrue(
+            "Exception message should name the unknown modifier. Got: ${ex.message}",
+            ex.message!!.contains("Unknown modifier") && ex.message!!.contains("contains_all")
+        )
     }
 
     @Test
