@@ -15,6 +15,21 @@ The user invokes one of three modes:
 
 If no argument is given, ask which mode to use.
 
+## Required environment
+
+Runs from a terminal shell; subagents inherit the parent session's environment via WebFetch. Before dispatching any ingester, verify the required vars are present:
+
+| Feed | Env var | Requirement |
+|---|---|---|
+| abusech (ThreatFox + MalwareBazaar) | `MALWAREBAZAAR_API_KEY` | **Required** — the single abuse.ch Auth-Key covers both endpoints. HTTP 401 without it. |
+| asb (Android Security Bulletin) | — | None (public HTML) |
+| nvd | `NVD_API_KEY` | **Optional** — raises anon rate limit from 5 req/30s to 50 req/30s. Weekly cadence works anonymously. |
+| amnesty, stalkerware, citizenlab, attack (GitHub-based) | `GITHUB_TOKEN` | **Optional** — raises anon GitHub API limit from 60/hr to 5000/hr. Weekly cadence works anonymously. |
+
+**Abort the full-sweep run** if `MALWAREBAZAAR_API_KEY` is missing when `abusech` is in the dispatch set. A single-feed invocation (`/update-rules source asb`, `/update-rules source amnesty`, etc.) that doesn't need abusech should proceed regardless.
+
+Note: `virustotal` is listed in `allowed-sources.json` as a valid provenance label but no ingester currently calls the VT API. `VIRUSTOTAL_API_KEY` is not needed today.
+
 ## Step 1: Read State
 
 1. Read `feed-state.json` from the public sigma repo to get feed cursors

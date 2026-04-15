@@ -12,6 +12,14 @@ You receive:
 - `last_seen_timestamp` (threatfox): ISO 8601 UTC timestamp of last ThreatFox query
 - `last_seen_timestamp` (malwarebazaar): ISO 8601 UTC timestamp
 
+## Required environment
+
+- `MALWAREBAZAAR_API_KEY` — single abuse.ch Auth-Key covering both ThreatFox and MalwareBazaar. **Both endpoints return HTTP 401 without it.**
+
+**Fail fast if unset.** Before any WebFetch call, verify the env var is available. If it is missing or empty, abort the run immediately with an explicit error (`"MALWAREBAZAAR_API_KEY env var not set — abusech ingester cannot authenticate"`) and return `{"sirs": [], "updated_cursors": {}, "error": "..."}`. Do NOT silently return empty SIRs — that looks like "no new threats" and masks the auth failure from the orchestrator.
+
+Every WebFetch call below must include the header `Auth-Key: $MALWAREBAZAAR_API_KEY`.
+
 ## Process
 
 ### ThreatFox
@@ -68,6 +76,7 @@ extra key to `feed-state-schema.json` first, then re-enable it here.
 
 - NEVER generate SIGMA rules — only SIRs
 - NEVER invent or extrapolate IOCs — only include what the API returns
-- If an API call fails, log the error and continue with other sub-feeds
+- If a single sub-feed's API call fails (network error, non-401 HTTP error), log and continue with the other sub-feed — don't fail the whole ingester
+- If HTTP 401 is returned, treat it as an auth failure and abort with an error (the key is likely expired or revoked — this is NOT "no new data")
 - If a sub-feed returns nothing new, that's fine — return empty SIR list for it
 - Tag IOCs from each sub-feed with the sub-feed name in `source.feed` detail
