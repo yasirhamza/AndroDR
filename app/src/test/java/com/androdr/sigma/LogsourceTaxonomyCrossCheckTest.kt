@@ -1,6 +1,22 @@
 package com.androdr.sigma
 
-import com.androdr.data.model.*
+import com.androdr.data.model.AccessibilityTelemetry
+import com.androdr.data.model.AppOpsTelemetry
+import com.androdr.data.model.AppTelemetry
+import com.androdr.data.model.BatteryDailyEvent
+import com.androdr.data.model.DatabasePathObservation
+import com.androdr.data.model.DeviceTelemetry
+import com.androdr.data.model.DnsEvent
+import com.androdr.data.model.FileArtifactTelemetry
+import com.androdr.data.model.NetworkTelemetry
+import com.androdr.data.model.PackageHistoryEventType
+import com.androdr.data.model.PackageInstallHistoryEntry
+import com.androdr.data.model.PlatformCompatChange
+import com.androdr.data.model.ProcessTelemetry
+import com.androdr.data.model.ReceiverTelemetry
+import com.androdr.data.model.TelemetrySource
+import com.androdr.data.model.TombstoneEvent
+import com.androdr.data.model.WakelockAcquisition
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
@@ -46,7 +62,11 @@ class LogsourceTaxonomyCrossCheckTest {
      * Member functions are called on dummy instances; extension functions are
      * called via imports from com.androdr.sigma (this package).
      */
-    private fun actualFieldMaps(): Map<String, Set<String>> = mapOf(
+    private fun actualFieldMaps(): Map<String, Set<String>> =
+        memberFunctionFieldMaps() + extensionFunctionFieldMaps()
+
+    /** Services whose toFieldMap() is a member function on the data class. */
+    private fun memberFunctionFieldMaps(): Map<String, Set<String>> = mapOf(
         "app_scanner" to AppTelemetry(
             packageName = "x", appName = "x", certHash = null, apkHash = null,
             isSystemApp = false, fromTrustedStore = false, installer = null,
@@ -96,8 +116,10 @@ class LogsourceTaxonomyCrossCheckTest {
             destinationIp = "x", destinationPort = 0, protocol = "TCP",
             appUid = 0, appName = null, timestamp = 0L,
         ).toFieldMap().keys,
+    )
 
-        // Extension functions (internal, visible because we're in com.androdr.sigma)
+    /** Services whose toFieldMap() is an internal extension fn in com.androdr.sigma. */
+    private fun extensionFunctionFieldMaps(): Map<String, Set<String>> = mapOf(
         "tombstone_parser" to TombstoneEvent(
             processName = "x", packageName = null, signalNumber = null,
             abortMessage = null, crashTimestamp = 0L,

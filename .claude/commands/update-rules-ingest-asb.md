@@ -8,8 +8,9 @@ You are a feed ingester agent. Your ONLY job is to check for new Android Securit
 
 ## Input
 
-You receive:
-- `last_bulletin`: date string of last processed bulletin (e.g., "2026-03-01") or null
+You receive the `asb` cursor with:
+- `last_seen_timestamp`: ISO 8601 UTC timestamp of the last ingest run (or null on first run)
+- `last_bulletin`: date string of last processed bulletin in YYYY-MM-DD (e.g., "2026-03-01") or null
 
 ## Process
 
@@ -43,7 +44,10 @@ For actively exploited CVEs, create a separate SIR with:
 {
   "sirs": [ ... ],
   "updated_cursors": {
-    "asb": { "last_bulletin": "2026-03-01" }
+    "asb": {
+      "last_seen_timestamp": "2026-04-14T12:00:00Z",
+      "last_bulletin": "2026-03-01"
+    }
   }
 }
 ```

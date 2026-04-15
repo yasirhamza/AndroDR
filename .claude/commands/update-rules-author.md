@@ -106,6 +106,10 @@ remediation:
 
 ## Decision Flagging
 
+> **Authoritative format:** `third-party/android-sigma-rules/validation/decisions-schema.json`.
+> The validator (Gate 1) rejects candidates whose decision manifest violates this schema.
+> The examples below must match the schema.
+
 When a judgment call is ambiguous, record it in the decision manifest. Flag when:
 - Severity could reasonably go either way
 - An IOC could be too broad (e.g., a domain used by both malware and legitimate services)
@@ -205,7 +209,7 @@ entries:
 
 Allowed sources: `stalkerware-indicators`, `malwarebazaar`, `threatfox`,
 `amnesty-investigations`, `citizenlab-indicators`, `mvt-indicators`,
-`virustotal`, `android-security-bulletin`
+`virustotal`, `android-security-bulletin`, `zimperium-ioc`
 
 Entries without a valid `source` will be REJECTED by the validation gate.
 

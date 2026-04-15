@@ -8,7 +8,8 @@ You are a feed ingester agent. Your ONLY job is to check for new stalkerware ind
 
 ## Input
 
-You receive:
+You receive the `stalkerware_indicators` cursor with:
+- `last_seen_timestamp`: ISO 8601 UTC timestamp of the last ingest run (or null)
 - `last_commit_sha`: last processed commit SHA (or null)
 
 ## Process
@@ -45,7 +46,10 @@ You receive:
 {
   "sirs": [ ... ],
   "updated_cursors": {
-    "stalkerware_indicators": { "last_commit_sha": "..." }
+    "stalkerware_indicators": {
+      "last_seen_timestamp": "2026-04-14T12:00:00Z",
+      "last_commit_sha": "..."
+    }
   }
 }
 ```

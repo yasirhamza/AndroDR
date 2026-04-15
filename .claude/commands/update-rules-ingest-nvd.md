@@ -8,8 +8,9 @@ You are a feed ingester agent. Your ONLY job is to fetch new Android-related CVE
 
 ## Input
 
-You receive:
-- `last_modified`: ISO timestamp of last NVD query (or null for first run)
+You receive the `nvd` cursor with:
+- `last_seen_timestamp`: ISO 8601 UTC timestamp of the last ingest run (always set — the cursor is seeded to `2026-04-02T00:00:00Z` on first initialization)
+- `last_modified`: ISO timestamp passed to NVD's API as `lastModStartDate` (always set — seeded at initialization)
 
 ## Process
 
@@ -17,7 +18,7 @@ You receive:
    ```
    https://services.nvd.nist.gov/rest/json/cves/2.0?keywordSearch=android&lastModStartDate={last_modified}&lastModEndDate={now}
    ```
-   If `last_modified` is null, query the last 7 days only (avoid overwhelming first run).
+   The cursor is always initialized, so there is no first-run special case.
 
 2. Parse the JSON response. Each CVE has:
    - `cve.id`: CVE ID
@@ -47,11 +48,17 @@ You receive:
 
 ## Output
 
+On success, set `last_modified` to the `lastModEndDate` value returned by the
+NVD API response, and set `last_seen_timestamp` to now (ISO 8601 UTC).
+
 ```json
 {
   "sirs": [ ... ],
   "updated_cursors": {
-    "nvd": { "last_modified": "2026-03-27T00:00:00Z" }
+    "nvd": {
+      "last_seen_timestamp": "2026-04-14T12:00:00Z",
+      "last_modified": "2026-03-27T00:00:00Z"
+    }
   }
 }
 ```

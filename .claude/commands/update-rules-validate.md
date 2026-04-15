@@ -33,6 +33,18 @@ Also check manually:
 
 Record: `{ pass: bool, errors: string[] }`
 
+### Gate 1.2: Decision Manifest Structure
+
+If the candidate includes a non-empty `decisions` array, validate its structure
+by invoking `validate-decisions.py`:
+
+1. Write the decisions array (with a `decisions:` wrapper) to a temporary YAML file.
+2. Run: `python3 third-party/android-sigma-rules/validation/validate-decisions.py <tmp>`
+3. If exit code is non-zero, the candidate FAILS Gate 1.
+4. The failure message MUST include the validator's stderr output so the Rule Author can fix it on retry.
+
+Empty decision arrays are valid (not every rule has ambiguities).
+
 ## Gate 2: IOC Verification
 
 Compare every concrete indicator in the rule against the source SIR:

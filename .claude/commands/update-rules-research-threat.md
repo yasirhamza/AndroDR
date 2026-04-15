@@ -32,7 +32,7 @@ You receive:
 
    **Structured sources** (machine-parseable feeds from `allowed-sources.json`):
    `stalkerware-indicators`, `malwarebazaar`, `threatfox`, `amnesty-investigations`,
-   `citizenlab-indicators`, `mvt-indicators`, `virustotal`, `android-security-bulletin`
+   `citizenlab-indicators`, `mvt-indicators`, `virustotal`, `android-security-bulletin`, `zimperium-ioc`
 
    **Unstructured sources**: blog posts, vendor reports, news articles found via web search
 

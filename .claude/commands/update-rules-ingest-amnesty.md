@@ -10,6 +10,8 @@ You are a feed ingester agent. Your ONLY job is to check for new Amnesty Tech in
 
 You receive:
 - `existing_rule_sources`: list of source URLs already referenced by existing rules
+- The `amnesty` cursor from `feed-state.json` with:
+  - `last_seen_timestamp`: ISO 8601 UTC timestamp of the last ingest run (or null)
 
 ## Process
 
@@ -36,14 +38,18 @@ You receive:
 
 ## Output
 
+On successful ingest, set `last_seen_timestamp` to now (ISO 8601 UTC).
+
 ```json
 {
   "sirs": [ ... ],
-  "updated_cursors": {}
+  "updated_cursors": {
+    "amnesty": { "last_seen_timestamp": "2026-04-14T12:00:00Z" }
+  }
 }
 ```
 
-Note: No cursor update needed — tracking is git-based (existing_rule_sources).
+Note: per-investigation tracking is still git-based (existing_rule_sources); `last_seen_timestamp` records when this ingester last ran against the repo.
 
 ## Rules
 
