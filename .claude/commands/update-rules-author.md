@@ -209,7 +209,7 @@ entries:
 
 Allowed sources: `stalkerware-indicators`, `malwarebazaar`, `threatfox`,
 `amnesty-investigations`, `citizenlab-indicators`, `mvt-indicators`,
-`virustotal`, `android-security-bulletin`
+`virustotal`, `android-security-bulletin`, `zimperium-ioc`
 
 Entries without a valid `source` will be REJECTED by the validation gate.
 
