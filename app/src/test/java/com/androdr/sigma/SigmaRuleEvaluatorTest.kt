@@ -544,4 +544,84 @@ class SigmaRuleEvaluatorTest {
             SigmaRuleEvaluator.evaluate(listOf(rule), listOf(record), "app_scanner").none { it.triggered }
         )
     }
+
+    @Test
+    fun `contains plus all requires every value to match`() {
+        val yaml = """
+            title: Contains + all combining
+            id: test-contains-all
+            category: incident
+            logsource:
+                product: androdr
+                service: app_scanner
+            detection:
+                selection:
+                    permissions|contains|all:
+                        - READ_SMS
+                        - SEND_SMS
+                condition: selection
+            level: medium
+        """.trimIndent()
+
+        val rule = SigmaRuleParser.parse(yaml)!!
+
+        val matching = mapOf(
+            "permissions" to listOf(
+                "android.permission.READ_SMS",
+                "android.permission.SEND_SMS",
+                "android.permission.INTERNET"
+            )
+        )
+        val findingsMatching = SigmaRuleEvaluator.evaluate(
+            listOf(rule), listOf(matching), service = "app_scanner"
+        )
+        assertEquals(1, findingsMatching.size)
+
+        val partial = mapOf(
+            "permissions" to listOf("android.permission.READ_SMS")
+        )
+        val findingsPartial = SigmaRuleEvaluator.evaluate(
+            listOf(rule), listOf(partial), service = "app_scanner"
+        )
+        assertTrue(findingsPartial.isEmpty())
+    }
+
+    @Test
+    fun `standalone all modifier requires every value present in list field`() {
+        val yaml = """
+            title: Standalone all modifier
+            id: test-standalone-all
+            category: incident
+            logsource:
+                product: androdr
+                service: app_scanner
+            detection:
+                selection:
+                    permissions|all:
+                        - android.permission.READ_SMS
+                        - android.permission.SEND_SMS
+                condition: selection
+            level: medium
+        """.trimIndent()
+
+        val rule = SigmaRuleParser.parse(yaml)!!
+
+        val matching = mapOf(
+            "permissions" to listOf(
+                "android.permission.READ_SMS",
+                "android.permission.SEND_SMS",
+                "android.permission.INTERNET"
+            )
+        )
+        assertEquals(1, SigmaRuleEvaluator.evaluate(
+            listOf(rule), listOf(matching), service = "app_scanner"
+        ).size)
+
+        val partial = mapOf(
+            "permissions" to listOf("android.permission.READ_SMS")
+        )
+        assertTrue(SigmaRuleEvaluator.evaluate(
+            listOf(rule), listOf(partial), service = "app_scanner"
+        ).isEmpty())
+    }
 }
