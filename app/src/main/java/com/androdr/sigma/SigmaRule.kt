@@ -31,7 +31,8 @@ data class SigmaSelection(
 data class SigmaFieldMatcher(
     val fieldName: String,
     val modifier: SigmaModifier,
-    val values: List<Any>
+    val values: List<Any>,
+    val allRequired: Boolean = false
 )
 
 enum class SigmaModifier {
@@ -44,7 +45,15 @@ enum class SigmaModifier {
     LTE,
     GT,
     LT,
-    IOC_LOOKUP
+    IOC_LOOKUP,
+
+    /**
+     * Standalone `|all` quantifier. The record field (a list) must contain every
+     * value in the matcher's values list. When paired with another modifier via
+     * the combining form `field|contains|all`, the `allRequired` flag on
+     * [SigmaFieldMatcher] is used instead and this enum value is NOT set.
+     */
+    ALL
 }
 
 data class SigmaDisplay(

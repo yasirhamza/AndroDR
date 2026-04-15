@@ -275,6 +275,7 @@ object SigmaRuleEvaluator {
                 val lookup = iocLookups[lookupName] ?: return false
                 fieldValue?.let { lookup(it) } ?: false
             }
+            SigmaModifier.ALL -> false // TODO(#120): implement ALL semantics
         }
     }
 
