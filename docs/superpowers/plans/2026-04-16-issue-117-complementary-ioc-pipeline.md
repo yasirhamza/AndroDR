@@ -58,12 +58,76 @@ Working directory: `third-party/android-sigma-rules/`
 
 Branch off `main` in the submodule: `feat/117-foundations`.
 
-## Task 1: Create IOC entry JSON Schema
+## Task 1a: Audit existing ioc-data field set
+
+**Files:** read-only inspection of `third-party/android-sigma-rules/ioc-data/*.yml`
+
+- [ ] **Step 1: Enumerate every field name that appears in any entry across all existing files**
+
+Run:
+```bash
+cd third-party/android-sigma-rules
+python3 -c "
+import yaml, pathlib
+keys = set()
+for f in sorted(pathlib.Path('ioc-data').glob('*.yml')):
+    doc = yaml.safe_load(open(f)) or {}
+    for entry in doc.get('entries', []) or []:
+        keys.update(entry.keys())
+print('Field names across all ioc-data entries:')
+for k in sorted(keys):
+    print(f'  - {k}')
+"
+```
+
+Expected output: a list of field names. Record this list. The Task 1b schema's `properties` block MUST include every field in this list (either intentionally, or the data must be fixed before the schema lands).
+
+- [ ] **Step 2: Enumerate every category value actually used**
+
+```bash
+cd third-party/android-sigma-rules
+python3 -c "
+import yaml, pathlib
+cats = set()
+for f in sorted(pathlib.Path('ioc-data').glob('*.yml')):
+    doc = yaml.safe_load(open(f)) or {}
+    for entry in doc.get('entries', []) or []:
+        if 'category' in entry:
+            cats.add(entry['category'])
+print('Category values in use:', sorted(cats))
+"
+```
+
+Record the set. If a category appears that isn't in Task 1b's enum draft ({STALKERWARE, SPYWARE, MALWARE, NATION_STATE_SPYWARE, FORENSIC_TOOL, MONITORING, POPULAR, KNOWN_GOOD_OEM}), EITHER add it intentionally to the schema enum, OR fix the data before Task 1b. Do not silently pad the enum.
+
+- [ ] **Step 3: Enumerate every severity value actually used**
+
+```bash
+cd third-party/android-sigma-rules
+python3 -c "
+import yaml, pathlib
+sevs = set()
+for f in sorted(pathlib.Path('ioc-data').glob('*.yml')):
+    doc = yaml.safe_load(open(f)) or {}
+    for entry in doc.get('entries', []) or []:
+        if 'severity' in entry:
+            sevs.add(entry['severity'])
+print('Severity values in use:', sorted(sevs))
+"
+```
+
+Same rule as Step 2 — the enum MUST match actual data.
+
+This audit is pure read-only; nothing to commit here. Results feed Task 1b.
+
+## Task 1b: Create IOC entry JSON Schema
 
 **Files:**
 - Create: `third-party/android-sigma-rules/validation/ioc-entry-schema.json`
 
 - [ ] **Step 1: Write the schema file**
+
+**Use the audit output from Task 1a to shape the schema.** The draft below reflects the fields and enum values that existed in the ioc-data as of the plan's writing date. If Task 1a reveals additional fields / categories / severities, EITHER add them to the schema AND note the addition in the Task 1b commit message, OR fix the data and omit them. Do NOT silently pad the schema to make validation pass.
 
 Create `third-party/android-sigma-rules/validation/ioc-entry-schema.json` with:
 
@@ -78,7 +142,7 @@ Create `third-party/android-sigma-rules/validation/ioc-entry-schema.json` with:
   "properties": {
     "indicator":   { "type": "string", "minLength": 1 },
     "family":      { "type": "string" },
-    "familyName":  { "type": "string", "description": "Alias for 'family' used by cert-hash entries (kept for back-compat with existing files)." },
+    "familyName":  { "type": "string", "description": "Alias for 'family'; include ONLY if Task 1a confirms it's used in the data (validate-ioc-data.py accepts both)." },
     "category":    {
       "type": "string",
       "enum": [
@@ -156,7 +220,14 @@ python3 validation/validate-ioc-data.py ioc-data/malware-hashes.yml
 python3 validation/validate-ioc-data.py ioc-data/known-oem-prefixes.yml
 ```
 
-Expected: every file prints `PASS: <filename>`. If any file fails schema, the schema needs adjustment (likely the `category` enum or the `additionalProperties: false` — if an existing file uses a field not in the schema, add it to `properties`).
+Expected: every file prints `PASS: <filename>`.
+
+If any file fails schema, do NOT reflexively loosen the schema to make it pass. Investigate each failure:
+- If it's a field name in the data that isn't in the schema: Task 1a should have surfaced this. Either the audit missed it (bug — re-audit), or the schema was written without Task 1a's output (out-of-order — fix Task 1b).
+- If it's a category/severity enum mismatch: Task 1a Step 2/3 enumerated these. Same logic.
+- If it's a genuine data error (e.g., typo in category): fix the data in a separate commit.
+
+Only after pinpointing the cause should the schema OR the data change. Loosening the schema to suppress a real data error is the anti-pattern this plan explicitly avoids.
 
 - [ ] **Step 3: Commit**
 
@@ -203,7 +274,7 @@ lookups:
 
   apk_hash_ioc_db:
     type: APK_HASH
-    files: [ioc-data/apk-hashes.yml]
+    files: [ioc-data/malware-hashes.yml]
     description: "Known-malicious APK file SHA-256 hashes"
 
   known_good_app_db:
@@ -300,31 +371,29 @@ git commit -m "feat(validation): add kotlin-mirror-feeds.yml (#117)"
 **Files:**
 - Modify: `third-party/android-sigma-rules/validation/feed-state-schema.json`
 
-- [ ] **Step 1: Add the optional field to each FeedCursor $def**
+- [ ] **Step 1: Add the optional `ioc_data_last_write` property to each of the five cursor definitions**
 
-Open `third-party/android-sigma-rules/validation/feed-state-schema.json`. For each of the five cursor definitions (`FeedCursor`, `FeedCursorWithBulletin`, `FeedCursorWithModified`, `FeedCursorWithCommit`, `FeedCursorWithVersion`), add the `ioc_data_last_write` property. Example for `FeedCursor`:
+Open `third-party/android-sigma-rules/validation/feed-state-schema.json`. Make five near-identical edits — one per `$def`. The field is **optional** (not added to `required`) so existing `feed-state.json` remains valid.
+
+**Edit 1/5 — `FeedCursor` $def:** append to `properties`:
 
 ```json
-"FeedCursor": {
-  "type": "object",
-  "required": ["last_seen_timestamp"],
-  "additionalProperties": false,
-  "properties": {
-    "last_seen_timestamp": {
-      "type": "string",
-      "format": "date-time",
-      "description": "ISO 8601 UTC timestamp of the most recent successful ingest."
-    },
-    "ioc_data_last_write": {
-      "type": "string",
-      "format": "date-time",
-      "description": "ISO 8601 UTC timestamp of the most recent commit to ioc-data/*.yml driven by this ingester."
-    }
-  }
+"ioc_data_last_write": {
+  "type": "string",
+  "format": "date-time",
+  "description": "ISO 8601 UTC timestamp of the most recent commit to ioc-data/*.yml driven by this ingester."
 }
 ```
 
-Apply the same additive `ioc_data_last_write` property to `FeedCursorWithBulletin`, `FeedCursorWithModified`, `FeedCursorWithCommit`, and `FeedCursorWithVersion`. The field is **optional** (not added to `required`) so existing `feed-state.json` files remain valid without modification.
+**Edit 2/5 — `FeedCursorWithBulletin` $def:** append the exact same `ioc_data_last_write` block to its `properties`.
+
+**Edit 3/5 — `FeedCursorWithModified` $def:** append the exact same block.
+
+**Edit 4/5 — `FeedCursorWithCommit` $def:** append the exact same block.
+
+**Edit 5/5 — `FeedCursorWithVersion` $def:** append the exact same block.
+
+All five edits are additive to `properties` only; do not touch `required` or `additionalProperties: false`.
 
 - [ ] **Step 2: Verify existing feed-state.json still validates**
 
@@ -813,7 +882,7 @@ IOC_TYPE_BY_FILENAME = {
     "c2-domains.yml":       "C2_DOMAIN",
     "cert-hashes.yml":      "CERT_HASH",
     "malware-hashes.yml":   "APK_HASH",
-    "apk-hashes.yml":       "APK_HASH",
+    "malware-hashes.yml":       "APK_HASH",
     "popular-apps.yml":     "PACKAGE_NAME",
     "known-oem-prefixes.yml": "PACKAGE_NAME",
 }
@@ -905,15 +974,11 @@ git add validation/validate-ioc-complementarity.py validation/test_validate_ioc_
 git commit -m "feat(validation): add validate-ioc-complementarity.py with strict/advisory modes (#117)"
 ```
 
-## Task 11: Run complementarity validator against current ioc-data and prune
+## Task 11a: Inventory violations (advisory mode, no mutation)
 
-**Files:**
-- Modify: `third-party/android-sigma-rules/ioc-data/package-names.yml` (remove entries)
-- Modify: `third-party/android-sigma-rules/ioc-data/c2-domains.yml` (remove entries)
-- Modify: `third-party/android-sigma-rules/ioc-data/cert-hashes.yml` (remove entries)
-- Modify: `third-party/android-sigma-rules/ioc-data/malware-hashes.yml` (remove entries)
+**Files:** read-only — `third-party/android-sigma-rules/ioc-data/*.yml`
 
-- [ ] **Step 1: Run validator in advisory mode to inventory violations**
+- [ ] **Step 1: Run validator in advisory mode**
 
 ```bash
 cd third-party/android-sigma-rules
@@ -921,24 +986,186 @@ python3 validation/validate-ioc-complementarity.py --all --mode advisory 2> /tmp
 cat /tmp/117-advisory.txt
 ```
 
-Expected: a list of violating entries per file. These are the entries Phase 3 will prune. If the fetch fails for any feed, re-run with `--allow-upstream-unreachable` and note which feed is missing from the snapshot.
+Expected: a list of violating entries per file (or empty if no violations). If the fetch fails for any feed, re-run with `--allow-upstream-unreachable` and note which feed is missing from the snapshot — the prune will be partial.
 
-- [ ] **Step 2: For each violating entry, remove it from the corresponding ioc-data file**
+- [ ] **Step 2: Review the advisory output manually**
 
-**Safety filter:** only prune an entry if its `source` field corresponds to a feed listed in `kotlin-mirror-feeds.yml`. For example: entries sourced from `stalkerware-indicators`, `mvt-indicators`, `threatfox`, or `malwarebazaar` that also appear in the upstream snapshot are safe to prune. Entries sourced from `amnesty-investigations`, `citizenlab-indicators`, `android-security-bulletin`, `virustotal`, or `zimperium-ioc` **must not be pruned** even if they happen to appear in an upstream snapshot (no Kotlin Track A mirrors them, so pruning would cause on-device detection loss — see spec Phase 3 Migration safety section).
+Open `/tmp/117-advisory.txt` and scan the violating entries. Verify they are mostly (or entirely) entries whose `source` field matches a `kotlin-mirror-feeds.yml` id. If you see many violations whose source is `amnesty-investigations`, `citizenlab-indicators`, `android-security-bulletin`, `virustotal`, or `zimperium-ioc`, STOP and investigate — that would indicate a normalization bug in the validator (these sources are not Kotlin-mirrored, so duplicates with them shouldn't exist). Fix the bug before proceeding to Task 11b.
 
-For each file (`ioc-data/package-names.yml`, `c2-domains.yml`, `cert-hashes.yml`, `malware-hashes.yml`): delete the YAML list item for every prune-eligible violating entry. Keep the file's header (`version`, `description`, `sources`) intact.
+## Task 11b: Write scripted prune helper
 
-- [ ] **Step 3: Re-run validator in strict mode to confirm all remaining entries are complementary**
+**Files:**
+- Create: `third-party/android-sigma-rules/validation/prune-ioc-complementarity.py`
+
+- [ ] **Step 1: Write the prune helper script**
+
+Create `third-party/android-sigma-rules/validation/prune-ioc-complementarity.py` with:
+
+```python
+#!/usr/bin/env python3
+"""One-shot prune helper for Phase 3 of AndroDR issue #117.
+
+Removes entries from ioc-data/*.yml whose (type, normalized_value) is present
+in any upstream listed in kotlin-mirror-feeds.yml AND whose `source` field
+matches a kotlin-mirror-feeds.yml feed id.
+
+Safety filter: entries sourced from upstreams NOT in kotlin-mirror-feeds.yml
+(amnesty-investigations, citizenlab-indicators, android-security-bulletin,
+virustotal, zimperium-ioc) are NEVER pruned, even if their (type, value)
+happens to collide with a Kotlin-mirrored upstream (which would indicate a
+normalization or ingest bug to investigate separately).
+
+Preserves file headers (version, description, sources). In-place edits each
+ioc-data/*.yml; run from a clean working tree and commit the diff.
+
+Usage:
+  python3 validation/prune-ioc-complementarity.py --dry-run
+  python3 validation/prune-ioc-complementarity.py
+"""
+
+import argparse
+import pathlib
+import sys
+
+# Import the validate module to reuse snapshot logic
+import importlib.util
+
+SCRIPT_DIR = pathlib.Path(__file__).parent
+VALIDATOR_PATH = SCRIPT_DIR / "validate-ioc-complementarity.py"
+
+# Load as module despite hyphenated filename
+spec = importlib.util.spec_from_file_location("validate_ioc_complementarity", VALIDATOR_PATH)
+validator = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(validator)
+
+try:
+    import yaml
+except ImportError:
+    sys.exit("pyyaml required: pip install pyyaml")
+
+
+def kotlin_mirror_feed_ids() -> set[str]:
+    feeds = validator.load_mirror_feeds(SCRIPT_DIR / "kotlin-mirror-feeds.yml")
+    return {f["id"] for f in feeds}
+
+
+def prune_file(ioc_file: pathlib.Path, upstream_union: set[tuple[str, str]],
+               mirror_ids: set[str], dry_run: bool) -> tuple[int, list[str]]:
+    ioc_type = validator.IOC_TYPE_BY_FILENAME.get(ioc_file.name)
+    if ioc_type is None:
+        return 0, [f"skip {ioc_file.name}: unknown type"]
+
+    with open(ioc_file) as f:
+        raw = f.read()
+    data = yaml.safe_load(raw) or {}
+    entries = data.get("entries") or []
+
+    kept: list[dict] = []
+    dropped: list[tuple[int, dict]] = []
+    for idx, entry in enumerate(entries):
+        indicator = entry.get("indicator")
+        source = entry.get("source", "")
+        if not indicator:
+            kept.append(entry)
+            continue
+        normalized = validator.normalize_value(str(indicator), ioc_type)
+        is_dup = (ioc_type, normalized) in upstream_union
+        is_safe_to_prune = source in mirror_ids
+        if is_dup and is_safe_to_prune:
+            dropped.append((idx, entry))
+        else:
+            kept.append(entry)
+
+    if not dropped:
+        return 0, [f"{ioc_file.name}: 0 pruned"]
+
+    data["entries"] = kept
+    log = [f"{ioc_file.name}: pruning {len(dropped)} entries:"]
+    for idx, e in dropped:
+        log.append(f"  - entries[{idx}] '{e.get('indicator')}' (source={e.get('source','?')})")
+
+    if not dry_run:
+        # Preserve the file header/comments by rebuilding with yaml.safe_dump,
+        # then re-inserting the header block (everything above `entries:`) verbatim.
+        header_lines = []
+        for line in raw.splitlines():
+            if line.startswith("entries:"):
+                break
+            header_lines.append(line)
+        # Dump only the entries list
+        body = yaml.safe_dump(
+            {"entries": kept}, sort_keys=False, allow_unicode=True, default_flow_style=False
+        )
+        new_content = "\n".join(header_lines).rstrip() + "\n" + body
+        ioc_file.write_text(new_content)
+
+    return len(dropped), log
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--dry-run", action="store_true")
+    args = ap.parse_args()
+
+    mirror_feeds = validator.load_mirror_feeds(SCRIPT_DIR / "kotlin-mirror-feeds.yml")
+    print(f"Fetching {len(mirror_feeds)} upstream mirror feeds...", file=sys.stderr)
+    upstream_union, warnings = validator.build_union_snapshot(mirror_feeds, allow_unreachable=False)
+    print(f"Union size: {len(upstream_union)} unique (type, value) tuples", file=sys.stderr)
+
+    mirror_ids = kotlin_mirror_feed_ids()
+    ioc_data_dir = SCRIPT_DIR.parent / "ioc-data"
+
+    total = 0
+    for f in sorted(ioc_data_dir.glob("*.yml")):
+        pruned, log = prune_file(f, upstream_union, mirror_ids, args.dry_run)
+        total += pruned
+        for line in log:
+            print(line)
+
+    mode = "DRY-RUN: would prune" if args.dry_run else "Pruned"
+    print(f"\n{mode} {total} entries total.", file=sys.stderr)
+
+
+if __name__ == "__main__":
+    main()
+```
+
+- [ ] **Step 2: Dry-run to preview changes**
+
+```bash
+cd third-party/android-sigma-rules
+chmod +x validation/prune-ioc-complementarity.py
+python3 validation/prune-ioc-complementarity.py --dry-run
+```
+
+Expected: per-file report of entries that would be pruned. Compare the total count against Task 11a's advisory-mode output. The scripted prune's count should be LESS THAN OR EQUAL to the advisory count (because the script only prunes entries whose source matches a Kotlin-mirror-feed id).
+
+If the dry-run count is unexpectedly small (zero, or far less than advisory), investigate — likely the `source` field values in `ioc-data/*.yml` use different strings than the IDs in `kotlin-mirror-feeds.yml` (e.g., `stalkerware_indicators` vs `stalkerware-indicators`). Fix either the YAML IDs or the data to align, then re-run dry-run.
+
+## Task 11c: Execute prune, verify, commit
+
+**Files:**
+- Modify: `third-party/android-sigma-rules/ioc-data/*.yml` (entries removed in place)
+
+- [ ] **Step 1: Run the prune in wet mode**
+
+```bash
+cd third-party/android-sigma-rules
+python3 validation/prune-ioc-complementarity.py
+```
+
+Expected: same counts as the dry-run; files modified in place.
+
+- [ ] **Step 2: Re-run complementarity validator in strict mode**
 
 ```bash
 cd third-party/android-sigma-rules
 python3 validation/validate-ioc-complementarity.py --all --mode strict
 ```
 
-Expected: exit 0, no violations remaining.
+Expected: exit 0. If it fails, some entries were missed by the prune (normalization mismatch or source-field mismatch). Investigate and re-run.
 
-- [ ] **Step 4: Re-run validate-ioc-data.py to confirm schema is still satisfied after pruning**
+- [ ] **Step 3: Re-run schema validation**
 
 ```bash
 cd third-party/android-sigma-rules
@@ -947,7 +1174,7 @@ for f in ioc-data/*.yml; do python3 validation/validate-ioc-data.py "$f"; done
 
 Expected: every file PASS.
 
-- [ ] **Step 5: Capture pruned-entry count for PR description**
+- [ ] **Step 4: Diff summary for PR description**
 
 ```bash
 cd third-party/android-sigma-rules
@@ -955,15 +1182,90 @@ git diff --stat ioc-data/
 git diff ioc-data/ > /tmp/117-prune-diff.txt
 ```
 
-Record the total lines removed per file; this goes into the PR description as evidence that the prune happened correctly.
-
-- [ ] **Step 6: Commit**
+- [ ] **Step 5: Commit the prune (validator script and the pruned files separately)**
 
 ```bash
 cd third-party/android-sigma-rules
+git add validation/prune-ioc-complementarity.py
+git commit -m "chore(validation): add one-shot prune helper for #117 (#117)"
+
 git add ioc-data/
 git commit -m "chore(ioc-data): prune entries already in kotlin-mirrored upstreams (#117)"
 ```
+
+## Task 11d: Pre-merge migration-safety verification on a test device
+
+This is the spec's Phase 3 Migration safety section realized as an execution step. It verifies that pruning does NOT cause on-device detection regression: the `(type, value)` of every pruned entry must be re-upserted by the corresponding Kotlin Track A feed on the next `IocUpdateWorker` cycle.
+
+**Files:** read-only — `third-party/android-sigma-rules/ioc-data/*.yml` (post-prune state on this branch) + AndroDR debug APK on emulator
+
+- [ ] **Step 1: Build AndroDR debug APK against current main (BEFORE the Phase 3 submodule bump)**
+
+```bash
+cd /home/yasir/AndroDR
+git checkout main
+git submodule update --init --recursive
+./gradlew assembleDebug
+```
+
+This produces an APK pointing at the PRE-prune rule-repo state.
+
+- [ ] **Step 2: Start emulator, install APK, trigger IocUpdateWorker, snapshot indicators table**
+
+```bash
+export ANDROID_HOME=~/Android/Sdk
+export PATH=$PATH:$ANDROID_HOME/platform-tools:$ANDROID_HOME/emulator
+./scripts/smoke-test.sh
+# Wait until app launch completes; trigger IOC update via settings or force worker
+sleep 60
+adb shell run-as com.androdr.debug sqlite3 /data/data/com.androdr.debug/databases/androdr.db \
+  "SELECT type, value, source FROM indicators ORDER BY type, value" > /tmp/117-indicators-before.txt
+wc -l /tmp/117-indicators-before.txt
+```
+
+Record the row count; each line is one `(type, value, source)` tuple.
+
+- [ ] **Step 3: Point the submodule to the Phase 3 prune branch and rebuild**
+
+```bash
+cd /home/yasir/AndroDR/third-party/android-sigma-rules
+git fetch origin
+git checkout feat/117-complementarity   # the Phase 3 branch with pruned files
+cd ../..
+./gradlew assembleDebug
+adb install -r app/build/outputs/apk/debug/app-debug.apk
+```
+
+- [ ] **Step 4: Trigger another IocUpdateWorker cycle and re-snapshot**
+
+```bash
+adb shell am force-stop com.androdr.debug
+adb shell am start -n com.androdr.debug/com.androdr.MainActivity
+sleep 60
+adb shell run-as com.androdr.debug sqlite3 /data/data/com.androdr.debug/databases/androdr.db \
+  "SELECT type, value, source FROM indicators ORDER BY type, value" > /tmp/117-indicators-after.txt
+wc -l /tmp/117-indicators-after.txt
+```
+
+- [ ] **Step 5: Diff and verify the invariant holds**
+
+```bash
+# Per-(type, value) diff ignoring source — every (type, value) present before must still be present after
+comm -23 <(cut -f1,2 /tmp/117-indicators-before.txt | sort -u) \
+         <(cut -f1,2 /tmp/117-indicators-after.txt | sort -u) > /tmp/117-missing.txt
+wc -l /tmp/117-missing.txt
+cat /tmp/117-missing.txt
+```
+
+Expected: `/tmp/117-missing.txt` is EMPTY (zero lines). Every `(type, value)` that existed pre-prune still exists post-prune. The `source` column may have changed from `androdr_public_repo` to e.g. `stalkerware_indicators` for pruned entries — that's expected and the invariant is `(type, value)`-scoped, not source-scoped.
+
+If `/tmp/117-missing.txt` is non-empty, the prune regressed on-device detection. For each missing `(type, value)`:
+- Is its source in `kotlin-mirror-feeds.yml`? If yes but Kotlin didn't re-upsert, check whether the Kotlin feed actually covers that indicator today (the `source` in ioc-data might lie — it could claim `stalkerware-indicators` but Kotlin's StalkerwareIndicatorsFeed might not fetch that specific entry).
+- Revert the prune for those entries and re-commit before merging Phase 3.
+
+- [ ] **Step 6: Record the result in the Phase 3 PR description as verification evidence**
+
+Paste the `wc -l` outputs from Steps 2 and 4 and confirm `/tmp/117-missing.txt` was empty. This is the go/no-go gate for Phase 3 merge.
 
 ## Task 12: Wire complementarity validator into CI
 
@@ -1085,6 +1387,8 @@ cd third-party/android-sigma-rules
 git pull origin main
 cd ../..
 ```
+
+Note on `git pull origin main` vs `git submodule update --remote`: both fetch the submodule's current main tip. `git pull origin main` is used here because it's deterministic regardless of what `.gitmodules` declares for `branch`, and it matches the submodule-bump incantation in `CLAUDE.md`. `--remote` reads `.gitmodules`'s `branch` setting, which can produce surprises if `.gitmodules` is out of date. When in doubt, `git pull origin main` is the safe default for this project.
 
 - [ ] **Step 2: Verify the bump picks up Phase 1 and Phase 3 artifacts**
 
@@ -1531,7 +1835,7 @@ Branch off `main`: `feat/117-pipeline-writes`.
 > - `PACKAGE_NAME`       → `ioc-data/package-names.yml`
 > - `C2_DOMAIN`          → `ioc-data/c2-domains.yml`
 > - `CERT_HASH`          → `ioc-data/cert-hashes.yml`
-> - `APK_HASH`           → `ioc-data/apk-hashes.yml` (create file on first write if absent)
+> - `APK_HASH`           → `ioc-data/malware-hashes.yml` (existing file — not created)
 > - `KNOWN_GOOD` entries → not emitted (known-good flows through a separate path; out of scope for #117)
 >
 > ### upstream_snapshot_hash_set
@@ -1781,7 +2085,7 @@ Emit a JSON object extending the existing SIR array:
       }
     },
     {
-      "file": "ioc-data/apk-hashes.yml",
+      "file": "ioc-data/malware-hashes.yml",
       "entry": {
         "indicator": "abc123...sha256",
         "family": "ExampleApk",
@@ -1802,7 +2106,7 @@ Emit a JSON object extending the existing SIR array:
 ### candidate_ioc_entries
 
 - ThreatFox domain entries → `ioc-data/c2-domains.yml`, source `threatfox`.
-- MalwareBazaar APK-hash entries → `ioc-data/apk-hashes.yml`, source
+- MalwareBazaar APK-hash entries → `ioc-data/malware-hashes.yml`, source
   `malwarebazaar`.
 
 ### upstream_snapshot_hash_set
@@ -1870,7 +2174,7 @@ Open `.claude/commands/update-rules-ingest-amnesty.md`. At the end of the file, 
 - Use `source: "amnesty-investigations"` (matches `allowed-sources.json`).
 - Target file depends on indicator type: packages → `package-names.yml`;
   domains → `c2-domains.yml`; cert hashes → `cert-hashes.yml`;
-  APK hashes → `apk-hashes.yml`.
+  APK hashes → `malware-hashes.yml`.
 
 Cross-dedup across concurrent ingesters is the dispatcher's job.
 ```
@@ -2072,14 +2376,23 @@ git commit -m "feat(pipeline): attack ingester emits empty ioc candidates by des
 
 - [ ] **Step 1: Smoke-test the dispatcher changes by dry-running `/update-rules`**
 
-Run `/update-rules full` (or `/update-rules source stalkerware` for a smaller run). Verify in the session transcript that:
-- Each ingester emits the new 3-field JSON output (sirs + candidate_ioc_entries + upstream_snapshot_hash_set)
+Run `/update-rules source stalkerware` first (smallest blast radius). Verify in the session transcript that:
+- The ingester emits the new 3-field JSON output (sirs + candidate_ioc_entries + upstream_snapshot_hash_set)
 - Step 6.5 runs and reports per-ingester snapshot sizes
 - Step 7 displays IOC-only candidates alongside rule candidates
 - Step 8 refuses to commit if `validate-ioc-complementarity.py` rejects any candidate
 - A successful approval produces a commit touching `ioc-data/*.yml` AND `feed-state.json`'s `ioc_data_last_write`
 
-If the dispatcher or an ingester doesn't behave as specified, the skill markdown's `## IOC data output` section is likely ambiguous; clarify it and retry. (This is a dogfood test, not a unit test — the skills are executed by Claude, not by a Python test runner.)
+Expect **multiple iterations**. Skill markdown is executed by Claude, not a Python test runner, so ambiguities in the new `## IOC data output` sections surface as wrong behavior on the first run. Typical fix-iterate cycles for this phase:
+- Round 1: ingester returns the wrong JSON shape (missing a field, wrong key name) → tighten the skill's output contract language
+- Round 2: dispatcher's Step 6.5 fetches a feed with a parse error → fix the parser in `validate-ioc-complementarity.py`'s `PARSERS` dict (which Step 6.5 reuses)
+- Round 3: approved candidate writes to wrong file (e.g., `apk-hashes.yml` instead of `malware-hashes.yml`) → fix the target-file mapping in the relevant ingester skill
+
+The spec's scope estimate (~2d for Phase 4 normalizer tuning) reflects this iteration. Budget accordingly; do not try to make it work on a single run.
+
+- [ ] **Step 1b: Once `source stalkerware` works end-to-end, run `/update-rules full`**
+
+Verifies cross-ingester interactions: does the dispatcher correctly union snapshots from ThreatFox, stalkerware, amnesty, etc., and dedup candidates against the full union? If a candidate from the amnesty ingester gets dropped because its `(type, value)` collides with ThreatFox, that's actually correct behavior under the complementary model — the indicator is in a Kotlin-mirrored upstream, so it flows through Track A, not Track B.
 
 - [ ] **Step 2: Push branch and open PR**
 
@@ -2228,20 +2541,32 @@ Brief comment summarizing the verification results, file+hash counts, and any an
 ## Self-review checklist (for the plan author — already completed)
 
 **Spec coverage:**
-- ✅ Rule-repo deliverables (schema, lookup-definitions, mirror-feeds, validator, validator-v2) — Tasks 1, 2, 3, 4, 9-10
+- ✅ Rule-repo deliverables (schema, lookup-definitions, mirror-feeds, validator, prune helper) — Tasks 1a/1b, 2, 3, 4, 9-10, 11b
 - ✅ Drift handling (strict/advisory mode) — Task 10 (script) + Task 12 (CI)
-- ✅ Pipeline ingester extensions — Tasks 19 (dispatcher) + 20-26 (7 ingesters)
+- ✅ Pipeline ingester extensions — Task 19 (dispatcher) + Tasks 20-26 (7 ingesters)
 - ✅ Step 6.5 centralized cross-dedup — Task 19
 - ✅ Step 7 IOC-only approval path — Task 19
 - ✅ Step 8 write + validate + commit — Task 19
-- ✅ Phase 3 migration safety (source-filter on prune) — Task 11 Step 2 safety filter
+- ✅ Phase 3 migration safety — Task 11d (pre-merge on-device verification)
+- ✅ Phase 1 schema pre-audit — Task 1a (prevents loosening-to-pass)
+- ✅ Scripted prune with safety filter — Task 11b (`prune-ioc-complementarity.py`)
 - ✅ Three Kotlin cross-check tests — Tasks 15, 16, 17
-- ✅ feed-state-schema.json `ioc_data_last_write` — Task 5
+- ✅ feed-state-schema.json `ioc_data_last_write` — Task 5 (five explicit edits)
 - ✅ CI workflow for validators — Task 6 + Task 12
 - ✅ End-to-end smoke — Tasks 28, 29, 30
 
 **Placeholder scan:** no TBD/TODO/FIXME in the plan. Every code block is complete. Every shell command has an expected output.
 
-**Type consistency:** ingester output shape `{sirs, candidate_ioc_entries, upstream_snapshot_hash_set}` used identically across Tasks 20-26. Step 6.5's `U_ingesters` / `U_authoritative` notation used only within Task 19. `ioc_data_last_write` field name consistent across Task 5 and Task 19 Step 3.
+**Type consistency:** ingester output shape `{sirs, candidate_ioc_entries, upstream_snapshot_hash_set}` used identically across Tasks 20-26. Step 6.5's `U_ingesters` / `U_authoritative` notation used only within Task 19. `ioc_data_last_write` field name consistent across Task 5 and Task 19 Step 3. Target-file `ioc-data/malware-hashes.yml` (NOT `apk-hashes.yml`) used consistently across Tasks 3, 10, 19, 21, 22, 25.
+
+**Addressed from independent plan review:**
+- CRITICAL — Phase 3 migration-safety verification → Task 11d (new).
+- CRITICAL — `apk-hashes.yml` / `malware-hashes.yml` naming drift → all references now use `malware-hashes.yml`.
+- CRITICAL — Phase 1 schema loosening-to-pass → Task 1a (new pre-audit); Task 2 Step 2 guidance rewritten.
+- MAJOR — Scripted prune with safety filter → Task 11b (new).
+- MAJOR — Task 11 split into inventory/prune/verify → Tasks 11a/b/c/d.
+- MINOR — Task 5 Step 1 five explicit edits → updated.
+- MINOR — Task 14 Step 1 git pull vs --remote explanation → added.
+- MINOR — Task 27 dispatcher iteration realism → added Round 1/2/3 notes + Step 1b.
 
 ---
