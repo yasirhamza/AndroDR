@@ -57,3 +57,40 @@ Note: per-investigation tracking is still git-based (existing_rule_sources); `la
 - NEVER invent IOCs — only include what the repo files contain
 - If an investigation has no Android-relevant IOCs (iOS only), skip it
 - Preserve the investigation directory name as provenance in the SIR source URL
+
+## IOC data output (added for #117)
+
+```json
+{
+  "sirs": [ ... ],
+  "candidate_ioc_entries": [
+    {
+      "file": "ioc-data/package-names.yml",
+      "entry": {
+        "indicator": "com.example.nationstate",
+        "family": "ExampleSpy",
+        "category": "NATION_STATE_SPYWARE",
+        "severity": "CRITICAL",
+        "source": "amnesty-investigations",
+        "description": "..."
+      }
+    }
+  ],
+  "upstream_snapshot_hash_set": [
+    ["PACKAGE_NAME", "com.example.nationstate"]
+  ]
+}
+```
+
+### Notes
+
+- AmnestyTech is NOT in `kotlin-mirror-feeds.yml`, so the cross-dedup
+  filter in Step 6.5 of update-rules.md will almost never remove entries
+  sourced here. This is by design: AmnestyTech is the pipeline's unique
+  contribution.
+- Use `source: "amnesty-investigations"` (matches `allowed-sources.json`).
+- Target file depends on indicator type: packages → `package-names.yml`;
+  domains → `c2-domains.yml`; cert hashes → `cert-hashes.yml`;
+  APK hashes → `malware-hashes.yml`.
+
+Cross-dedup across concurrent ingesters is the dispatcher's job.

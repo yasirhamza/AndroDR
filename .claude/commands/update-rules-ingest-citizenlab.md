@@ -41,3 +41,37 @@ You receive:
 - Skip investigations with no Android-relevant indicators
 - CSV is the primary format — prefer it over STIX XML or OpenIOC
 - Set `confidence: "high"` — Citizen Lab data is peer-reviewed
+
+## IOC data output (added for #117)
+
+```json
+{
+  "sirs": [ ... ],
+  "candidate_ioc_entries": [
+    {
+      "file": "ioc-data/package-names.yml",
+      "entry": {
+        "indicator": "com.citizenlab.flagged",
+        "family": "<malware-family>",
+        "category": "NATION_STATE_SPYWARE",
+        "severity": "CRITICAL",
+        "source": "citizenlab-indicators",
+        "description": "..."
+      }
+    }
+  ],
+  "upstream_snapshot_hash_set": [
+    ["PACKAGE_NAME", "com.citizenlab.flagged"]
+  ]
+}
+```
+
+### Notes
+
+- Citizen Lab is NOT in `kotlin-mirror-feeds.yml`. Same rationale as
+  AmnestyTech: pipeline's unique contribution, rarely filtered.
+- Use `source: "citizenlab-indicators"`.
+- Repo is dormant since 2020 per README; emit candidates only when new
+  content is actually detected (no time-based triggers).
+
+Cross-dedup across concurrent ingesters is the dispatcher's job.

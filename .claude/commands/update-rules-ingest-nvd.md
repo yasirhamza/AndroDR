@@ -69,3 +69,23 @@ NVD API response, and set `last_seen_timestamp` to now (ISO 8601 UTC).
 - Respect NVD rate limits: max 5 requests per 30 seconds without API key, 50 with key
 - If the NVD API returns an error or rate limit, log it and return empty SIRs
 - Only include CVEs that genuinely affect Android (CPE-verified), not just keyword matches
+
+## IOC data output (added for #117)
+
+Same situation as ASB: NVD entries are primarily CVEs (device-posture
+rules, handled by `CveRepository`), not `ioc_lookup` IOCs. Most NVD runs
+emit `candidate_ioc_entries: []`.
+
+If an NVD entry references a concrete IOC (e.g., CVE references a
+malicious package name in its description), emit it as a candidate,
+same pattern:
+
+```json
+{
+  "sirs": [ ... ],
+  "candidate_ioc_entries": [],
+  "upstream_snapshot_hash_set": []
+}
+```
+
+Cross-dedup across concurrent ingesters is the dispatcher's job.
