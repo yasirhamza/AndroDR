@@ -198,26 +198,29 @@ object SigmaRuleEvaluator {
         val fieldValue = record[matcher.fieldName]
 
         // List-aware matching: when fieldValue is a List, apply the modifier
-        // element-wise and return true if ANY element matches.
+        // element-wise. Default quantifier over `matcher.values` is ANY (default
+        // SIGMA semantics). When `allRequired` is set, flip to ALL (|all combiner).
         if (fieldValue is List<*> && matcher.modifier in STRING_MODIFIERS) {
             val elements = fieldValue.filterNotNull().map { it.toString() }
+            val valueQuantifier: (List<Any>, (Any) -> Boolean) -> Boolean =
+                if (matcher.allRequired) { vs, pred -> vs.all(pred) } else { vs, pred -> vs.any(pred) }
             return when (matcher.modifier) {
-                SigmaModifier.EQUALS -> matcher.values.any { expected ->
+                SigmaModifier.EQUALS -> valueQuantifier(matcher.values) { expected ->
                     elements.any { it.equals(expected.toString(), ignoreCase = true) }
                 }
-                SigmaModifier.CONTAINS -> matcher.values.any { expected ->
+                SigmaModifier.CONTAINS -> valueQuantifier(matcher.values) { expected ->
                     val exp = expected.toString().lowercase()
                     elements.any { it.lowercase().contains(exp) }
                 }
-                SigmaModifier.STARTSWITH -> matcher.values.any { expected ->
+                SigmaModifier.STARTSWITH -> valueQuantifier(matcher.values) { expected ->
                     val exp = expected.toString().lowercase()
                     elements.any { it.lowercase().startsWith(exp) }
                 }
-                SigmaModifier.ENDSWITH -> matcher.values.any { expected ->
+                SigmaModifier.ENDSWITH -> valueQuantifier(matcher.values) { expected ->
                     val exp = expected.toString().lowercase()
                     elements.any { it.lowercase().endsWith(exp) }
                 }
-                SigmaModifier.RE -> matcher.values.any { pattern ->
+                SigmaModifier.RE -> valueQuantifier(matcher.values) { pattern ->
                     elements.any { safeRegexMatch(pattern.toString(), it) }
                 }
                 else -> false
@@ -274,6 +277,15 @@ object SigmaRuleEvaluator {
                 val lookupName = matcher.values.firstOrNull()?.toString() ?: return false
                 val lookup = iocLookups[lookupName] ?: return false
                 fieldValue?.let { lookup(it) } ?: false
+            }
+            SigmaModifier.ALL -> {
+                // Standalone |all: record field must be a list whose elements cover
+                // every required value (case-insensitive equality per value).
+                val list = fieldValue as? List<*> ?: return false
+                val elements = list.filterNotNull().map { it.toString().lowercase() }
+                matcher.values.all { expected ->
+                    elements.contains(expected.toString().lowercase())
+                }
             }
         }
     }

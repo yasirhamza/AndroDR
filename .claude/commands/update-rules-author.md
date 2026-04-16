@@ -77,7 +77,7 @@ logsource:
     service: [service from table above]
 detection:
     selection:
-        [field_name|modifier: value]
+        [field_name|modifier: value]    # see "Supported modifiers" below
     condition: selection
 level: [critical/high/medium/low]
 tags:
@@ -94,6 +94,22 @@ falsepositives:
 remediation:
     - "[Actionable step for the user]"
 ```
+
+### Supported modifiers
+
+Use ONLY these modifiers. Any other modifier name will be rejected by the parser (Gate 1) and fail the build.
+
+- `|contains` — substring match (case-insensitive)
+- `|startswith` — prefix match (case-insensitive)
+- `|endswith` — suffix match (case-insensitive)
+- `|re` — regex match (max 500 chars; use sparingly)
+- `|gte`, `|lte`, `|gt`, `|lt` — numeric comparison
+- `|all` — combiner; "every value in the list must match" (e.g. `permissions|contains|all: [A, B, C]` requires the record's permissions to contain ALL of A, B, and C, not just ANY)
+- `|ioc_lookup` — AndroDR extension; reference a named IOC database
+
+**Do NOT use** upstream SIGMA HQ modifiers not listed above (e.g. `base64`, `base64offset`, `utf16`, `utf16le`, `utf16be`, `wide`, `cidr`, `windash`, `expand`, `fieldref`, `contains_all`). If a rule needs one, record a `telemetry_gap` decision instead of inventing syntax.
+
+**List-field defaults (no `|all` suffix):** `field|contains: [A, B, C]` on a list-valued field matches if ANY element of the field contains ANY of `[A, B, C]`. Add `|all` to require every listed value.
 
 ## Severity Assignment
 

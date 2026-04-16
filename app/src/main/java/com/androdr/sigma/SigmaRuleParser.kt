@@ -216,7 +216,7 @@ object SigmaRuleParser {
 
         for ((key, value) in selectionMap) {
             val keyStr = key.toString()
-            val (fieldName, modifier) = parseFieldAndModifier(keyStr)
+            val (fieldName, modifier, allRequired) = parseFieldAndModifier(keyStr)
 
             val values: List<Any> = when (value) {
                 is List<*> -> value.filterNotNull()
@@ -243,13 +243,15 @@ object SigmaRuleParser {
                 matchers.add(SigmaFieldMatcher(
                     fieldName = fieldName,
                     modifier = modifier,
-                    values = validValues
+                    values = validValues,
+                    allRequired = allRequired
                 ))
             } else {
                 matchers.add(SigmaFieldMatcher(
                     fieldName = fieldName,
                     modifier = modifier,
-                    values = values
+                    values = values,
+                    allRequired = allRequired
                 ))
             }
         }
@@ -291,25 +293,42 @@ object SigmaRuleParser {
         }
     }
 
-    private fun parseFieldAndModifier(key: String): Pair<String, SigmaModifier> {
+    private fun parseFieldAndModifier(key: String): Triple<String, SigmaModifier, Boolean> {
         val parts = key.split("|")
         val fieldName = parts[0]
-        val modifier = if (parts.size > 1) {
-            when (parts[1].lowercase()) {
-                "contains" -> SigmaModifier.CONTAINS
-                "startswith" -> SigmaModifier.STARTSWITH
-                "endswith" -> SigmaModifier.ENDSWITH
-                "re" -> SigmaModifier.RE
-                "gte" -> SigmaModifier.GTE
-                "lte" -> SigmaModifier.LTE
-                "gt" -> SigmaModifier.GT
-                "lt" -> SigmaModifier.LT
-                "ioc_lookup" -> SigmaModifier.IOC_LOOKUP
-                else -> SigmaModifier.EQUALS
-            }
-        } else {
-            SigmaModifier.EQUALS
+        if (parts.size == 1) {
+            return Triple(fieldName, SigmaModifier.EQUALS, false)
         }
-        return fieldName to modifier
+
+        // Peel off a trailing "all" combiner; the preceding tokens carry the base modifier.
+        val modifierTokens = parts.drop(1)
+        val allRequired = modifierTokens.lastOrNull()?.lowercase() == "all"
+        val baseTokens = if (allRequired) modifierTokens.dropLast(1) else modifierTokens
+
+        val baseModifier = when {
+            baseTokens.isEmpty() -> SigmaModifier.ALL  // standalone |all form
+            baseTokens.size == 1 -> modifierFromToken(baseTokens[0], key)
+            else -> throw SigmaRuleParseException(
+                "Too many modifiers in field '$key': expected at most one modifier " +
+                "(optionally followed by |all). Got chain: ${modifierTokens.joinToString("|")}"
+            )
+        }
+        return Triple(fieldName, baseModifier, allRequired)
+    }
+
+    private fun modifierFromToken(token: String, originalKey: String): SigmaModifier = when (token.lowercase()) {
+        "contains" -> SigmaModifier.CONTAINS
+        "startswith" -> SigmaModifier.STARTSWITH
+        "endswith" -> SigmaModifier.ENDSWITH
+        "re" -> SigmaModifier.RE
+        "gte" -> SigmaModifier.GTE
+        "lte" -> SigmaModifier.LTE
+        "gt" -> SigmaModifier.GT
+        "lt" -> SigmaModifier.LT
+        "ioc_lookup" -> SigmaModifier.IOC_LOOKUP
+        else -> throw SigmaRuleParseException(
+            "Unknown modifier '$token' in field '$originalKey'. " +
+            "Supported: contains, startswith, endswith, re, gte, lte, gt, lt, ioc_lookup, all."
+        )
     }
 }
