@@ -30,22 +30,30 @@ Prerequisites for this work (both merged 2026-04-16):
 ## Decision summary
 
 Add a new `/update-rules discover` invocation that produces a work list of
-threat names by scraping 5 vendor RSS feeds; dispatches the existing
-`update-rules-research-threat` skill in parallel for up to `--top N`
-discovered threats (N default 5); SIRs flow through the existing pipeline
-unchanged from Step 3 onwards.
+threat names via **hybrid RSS-Python + Web-LLM extraction** across 5 vendor
+sources; dispatches the existing `update-rules-research-threat` skill in
+parallel for up to `--top N` discovered threats (N default 5); SIRs flow
+through the existing pipeline unchanged from Step 3 onwards.
 
 Key design choices (each selected from 2–3 considered alternatives during
 brainstorming):
 
 - **Cursor granularity:** per-source (each source advances independently;
   robust to partial failures)
-- **Source list:** 5 vendor-original RSS sources only (securelist,
-  welivesecurity, blog.zimperium, lookout threat-intel, blog.google/TAG).
-  Aggregators (BleepingComputer, HackerNews) and HTML-only sources (Dr.Web)
-  deferred
-- **Extraction:** balanced regex (CVE + category-suffix + camelcase) +
-  static denylist + rule-index cross-reference
+- **Source list:** 5 vendor sources via hybrid paths:
+  - **3 RSS sources** (deterministic Python extraction): securelist,
+    welivesecurity, blog.google/TAG
+  - **2 Web sources** (LLM extraction via WebFetch): zimperium (RSS feed
+    no longer exists), lookout (Cloudflare-fronted; WebFetch's browser
+    path handles it where direct HTTP 403s)
+  - Aggregators (BleepingComputer, HackerNews) and low-volume Russian-
+    language sources (Dr.Web) deferred
+- **Extraction:** hybrid approach with common rule set:
+  - **RSS path:** `scripts/discover_extract.py` (deterministic, unit-tested)
+    — regex (CVE + category-suffix + camelcase + two-word-with-context) +
+    static denylist + rule-index cross-reference
+  - **Web path:** LLM via WebFetch, instructed to apply the same rule set
+    when parsing HTML blog indices
 - **Research fan-out:** parallel (up to N=5 concurrent subagents)
 - **Dropped from v1:** `full-with-discover` composite mode (YAGNI; users
   can run `full` then `discover` back-to-back)
@@ -61,10 +69,33 @@ brainstorming):
 ┌─────────────────────────────────────────────────────────┐
 │ update-rules-discover skill (NEW)                       │
 │ • Reads feed-state.json's per-source discover cursors   │
-│ • Fetches RSS for 5 vendor blogs in parallel            │
-│ • Filters each RSS to posts newer than per-source cursor│
-│ • Extracts threat names from titles+intros              │
-│ • Returns {threat_names[up to top-N], updated_cursors}  │
+│ • Dispatches hybrid extraction across 5 sources:        │
+│                                                         │
+│   RSS path (Python, deterministic):                     │
+│   ┌─────────────────────────────────────────────────┐   │
+│   │ scripts/discover_extract.py <source.xml>        │   │
+│   │   • RSS/Atom parser (feedparser or stdlib)      │   │
+│   │   • Apply patterns (CVE, suffix, camelcase,     │   │
+│   │     two-word-with-context)                      │   │
+│   │   • Apply denylist                              │   │
+│   │   • Cross-ref against existing rule index       │   │
+│   │   • Return JSON candidate list                  │   │
+│   │ Sources: securelist, welivesecurity, google-tag │   │
+│   └─────────────────────────────────────────────────┘   │
+│                                                         │
+│   Web path (LLM via WebFetch):                          │
+│   ┌─────────────────────────────────────────────────┐   │
+│   │ WebFetch <blog-index-url>                       │   │
+│   │   • LLM parses HTML, extracts recent posts      │   │
+│   │   • Applies SAME regex rules as documented in   │   │
+│   │     the skill markdown                          │   │
+│   │   • Returns same JSON candidate list shape      │   │
+│   │ Sources: zimperium, lookout                     │   │
+│   └─────────────────────────────────────────────────┘   │
+│                                                         │
+│ • Merges candidates from both paths                     │
+│ • Ranks, picks top-N                                    │
+│ • Returns {threat_names[], updated_cursors, log[]}      │
 └────────────────────┬────────────────────────────────────┘
                      │ threat_names: e.g., ["SparkKitty", "CVE-2026-0049"]
                      ▼
@@ -118,12 +149,26 @@ Per-source cursors in `feed-state.json`:
   republishes an older post with a backdated timestamp (editorial
   corrections). If the newest URL doesn't match the cursor, re-scrape
   regardless of timestamp.
-- **Bootstrap:** missing source cursor → scrape last 30 days of RSS, take
-  top-N via normal extraction path. Only time a run might produce many
-  candidates; steady state is 0–2 per source per week.
-- **Partial-failure semantics:** sources that succeed this run advance their
-  cursor; sources that failed (fetch error, robots.txt block, parse error)
-  don't. Next run picks them up.
+- **Bootstrap:** missing source cursor → scrape whatever the current RSS
+  feed holds (typically 10–100 most recent posts depending on source; not a
+  fixed 30-day window since feeds may roll off faster or slower). Only time
+  a run might produce many candidates; steady state is 0–2 per source per
+  week.
+- **Partial-failure semantics (precise):**
+  - **fetch succeeded + parse succeeded + ≥1 item returned** → advance
+    cursor to newest-item timestamp + URL
+  - **fetch failed** (network error, DNS fail, 4xx/5xx) → skip, do NOT
+    advance cursor, log as `fetch_error`
+  - **fetch succeeded but parse failed** (malformed RSS, HTML-error-page
+    disguised as XML, Cloudflare interstitial HTML) → skip, do NOT advance
+    cursor, log as `parse_error` for operator diagnosis
+  - **robots.txt disallows path** → skip, do NOT advance, log once per run
+- **`last_post_url` CMS-migration recovery:** if `last_post_url` is not
+  found in the current feed AND `last_seen_timestamp` is more than 90 days
+  old, assume the source's URL scheme changed, fall back to
+  timestamp-only comparison for cursor advancement. Log as
+  `cms_migration_detected` so an operator can update the source config if
+  needed.
 
 ### Schema update
 
@@ -168,47 +213,75 @@ matches project convention of explicit allow-lists at trust boundaries.
 
 ## Source list (v1)
 
-5 vendor-original RSS sources:
+5 sources via hybrid paths. URLs verified by live probe 2026-04-17:
 
-| Source ID | RSS URL | Notes |
-|---|---|---|
-| `securelist` | `https://securelist.com/feed/` | Kaspersky; high-signal Android research |
-| `welivesecurity` | `https://www.welivesecurity.com/en/feed/` | ESET; frequent Android analyses |
-| `zimperium` | `https://blog.zimperium.com/feed/` | Mobile-focused; MalwareBazaar data partner |
-| `lookout` | `https://www.lookout.com/threat-intelligence/feed` | Mobile-focused; nation-state coverage |
-| `google-tag` | `https://blog.google/threat-analysis-group/rss/` | Google TAG; Android-relevant campaigns |
+| Source ID | Type | URL | Notes |
+|---|---|---|---|
+| `securelist` | rss | `https://securelist.com/feed/` | Kaspersky; 200 OK, full bodies via `content:encoded`. ~10 items/month |
+| `welivesecurity` | rss | `https://www.welivesecurity.com/en/feed/` | ESET; 200 OK, **description-only** (no full body). ~100 items (high volume) |
+| `google-tag` | rss | `https://blog.google/threat-analysis-group/rss/` | Google TAG; 200 OK, description-only |
+| `zimperium` | web | `https://www.zimperium.com/blog/` | Mobile-focused; no working RSS (blog.zimperium.com moved); WebFetch'd HTML index |
+| `lookout` | web | `https://www.lookout.com/threat-intelligence/blog` | Mobile-focused; Cloudflare-fronted (403 on direct fetch); WebFetch'd HTML index |
+
+**Note on description-only RSS:** welivesecurity and google-tag expose only
+a ~50–200 char summary per post, not the full body. Extraction operates on
+title + summary. This is enough for category-suffix / camelcase / two-word
+pattern hits that appear in titles (most threat-name disclosures do lead
+with the name), but weaker for titles that bury the name in the body.
+Acceptable; the manual `/update-rules threat "<name>"` path remains as
+fallback for threats not surfaced via title/summary.
+
+**Note on web-path sources:** when RSS doesn't exist or is blocked, WebFetch
+the HTML blog index page. LLM parses the rendered page, extracts post
+titles + meta descriptions or excerpt snippets, and returns the same
+candidate shape as the Python RSS path. Browser-UA path in WebFetch
+typically bypasses Cloudflare challenges where our User-Agent header does
+not.
 
 **Excluded from v1** (listed in issue body):
 - `bleepingcomputer.com/tag/android`, `thehackernews.com/search/label/Android` — aggregators; derived from vendor posts. If we scrape vendors directly, we capture ~every story the aggregators cite, earlier.
-- `news.drweb.com/list` — lower volume; format unclear (likely HTML-only). Defer until proven needed.
+- `news.drweb.com/list` — lower volume; Russian-language content majority; format unclear. Defer until proven needed.
 
-Exact RSS URLs may need fixup during implementation; the skill should handle
-minor URL adjustments without schema changes (URLs live in the skill markdown,
-only the source IDs are in the schema).
+URLs live in the skill markdown + the Python helper's source-config table.
+Only source IDs are encoded in the schema. Adding a new source ID to the
+schema requires a submodule PR (intentional friction at the allow-list).
 
 ## Extraction pipeline
 
 ### Input
 
-Per post: title + first 200 characters of body (intro paragraph).
+Per post: title + available summary/description + body-when-available.
+Varies by source (see Source list table).
 
 ### Regex patterns (applied in order, most precise first)
 
-1. **CVE IDs:** `\bCVE-\d{4}-\d{4,7}\b` — trivial, high precision, always a real
-   candidate worth researching.
-2. **Category-suffix matches:** `\b[A-Z][a-zA-Z0-9]{2,}(?:Kit|RAT|Stealer|Trojan|Spy|Bot|Banker|Loader|Dropper|Miner|Ransomware|Worm)\b`
-   — catches `MalwareKit`, `XLoader`, etc. Low false-positive rate.
-3. **CamelCase-novel-tokens:** `\b(?:[A-Z][a-z]+){2,}\b` — catches `SparkKitty`,
-   `GriftHorse`, `RatsnakeRAT`. False-positive prone without filters.
+1. **CVE IDs:** `\bCVE-\d{4}-\d{4,7}\b` — trivial, high precision, always a
+   real candidate worth researching.
+2. **Category-suffix matches:**
+   `\b[A-Z][a-zA-Z0-9]{2,}(?:Kit|RAT|Stealer|Trojan|Spy|Bot|Banker|Loader|Dropper|Miner|Ransomware|Worm)\b`
+   — catches `MalwareKit`, `XLoader`, `ClayRat`, etc. Low false-positive rate.
+3. **CamelCase-novel-tokens:** `\b(?:[A-Z][a-z]+){2,}\b` — catches
+   `SparkKitty`, `GriftHorse`, `RatsnakeRAT`. False-positive prone without
+   filters.
+4. **Two-word threat names with strict context:**
+   `\b([A-Z][a-z]+) ([A-Z][a-z]+)\b` — catches `Silver Fox`, `Lazarus Group`,
+   `Cozy Bear`, `Sandworm Team`. High false-positive rate WITHOUT context
+   (matches `Good Morning`, `Happy Birthday`, `United States`); therefore
+   **match is only accepted when within 5 words of a malware context
+   keyword** (see post-filter 1 below). This asymmetric strict-context
+   requirement is specific to pattern 4.
 
 ### Post-filters (applied in order)
 
-1. **Category-context boost.** CamelCase tokens appearing within 5 words of a
-   malware keyword (`trojan`, `spyware`, `malware`, `banker`, `stealer`,
-   `campaign`, `spy`, `backdoor`, `surveillance`, `APT`, `botnet`) are promoted
-   to high-confidence. Isolated camelcase → low-confidence, deprioritized for
-   top-N selection.
-2. **Static denylist** (~50 tokens) shipped with the skill. Includes:
+1. **Category-context gate + boost.** Malware keyword set:
+   `trojan, spyware, malware, banker, stealer, campaign, spy, backdoor,
+   surveillance, APT, botnet, ransomware, loader, dropper, rootkit, rat,
+   cryptojacker, infostealer`.
+   - Pattern 1 (CVE) + Pattern 2 (suffix): context-independent, high-conf
+   - Pattern 3 (camelcase): context → high-conf; no context → low-conf
+     (still kept, but ranked behind high-conf for top-N selection)
+   - **Pattern 4 (two-word): context is REQUIRED. No context → dropped.**
+2. **Static denylist** (~50 tokens) shipped alongside the skill. Includes:
    - Platform/brand: `AppStore`, `GooglePlay`, `PlayStore`, `PlayProtect`,
      `AndroidAuto`, `iCloud`, `FaceTime`, `BlueTooth`, `WiFi`
    - Vendor names: `Google`, `Apple`, `Amazon`, `Samsung`, `Huawei`, `Xiaomi`,
@@ -217,36 +290,63 @@ Per post: title + first 200 characters of body (intro paragraph).
      `MachineLearning`, `DeepLearning`
    - Common compounds: `JavaScript`, `TypeScript`, `PowerShell`, `OpenSource`,
      `FullStack`
-3. **Rule-index cross-reference.** For each surviving candidate, check against
-   existing rule titles + family metadata. Already-tracked candidates skipped
-   with log note `already covered by androdr-NNN` (saves research subagent
-   budget).
-4. **Cursor filter.** Candidate survives only if the source post's `pub_date`
-   is newer than the per-source cursor's `last_seen_timestamp`.
+3. **Rule-index cross-reference.** For each surviving candidate, check
+   against existing rule titles + family metadata. Already-tracked
+   candidates skipped with log note `already covered by androdr-NNN`
+   (saves research subagent budget).
+4. **Cursor filter.** Candidate survives only if the source post's
+   `pub_date` is newer than the per-source cursor's `last_seen_timestamp`
+   (or, under CMS-migration fallback, just the timestamp check).
 
 ### Top-N ranking
 
-1. High-confidence candidates (CVE / category-suffix / boosted camelcase) first
+1. High-confidence candidates (CVE / suffix / context-boosted camelcase /
+   context-required two-word) first
 2. Within tier, most-recent post first
-3. Across sources, no single source gets more than `ceil(N*0.4)` slots (source
-   diversity — prevents one chatty blog from drowning others)
+3. Simple first-N slice — no source-diversity distribution math for v1
+   (reviewer flagged `ceil(N*0.4)` as over-engineered for N=5; can add if
+   analysts report one source drowning others)
 
 ### Logging (stderr)
 
 Every run writes a per-source log block. Example:
 
 ```
-[discover] securelist: 12 posts since cursor, 4 candidates extracted, 1 kept after filter
+[discover] securelist (rss): 12 posts since cursor, 4 candidates extracted, 1 kept after filter
 [discover]   kept: SparkKitty (2026-04-14, https://securelist.com/sparkkitty-ios-android-malware/...)
 [discover]   dropped (denylist): "AppStore" (title: "...spyware found in the App Store...")
 [discover]   dropped (already-tracked): "Anatsa" (androdr-078)
 [discover]   dropped (cursor): "OlderCampaign" (pub_date 2026-03-15 < cursor 2026-04-10)
-[discover] welivesecurity: 8 posts, 2 candidates, 2 kept
-...
+[discover]   dropped (pattern-4 no-context): "Good Morning" (title: "Good Morning Vietnam: A retrospective")
+[discover] welivesecurity (rss): 8 posts, 2 candidates, 2 kept
+[discover] zimperium (web): HTML parsed via WebFetch, 15 posts extracted, 1 candidate kept
+[discover] lookout (web): HTML parsed via WebFetch, 12 posts extracted, 0 candidates
+[discover] google-tag (rss): 20 posts since cursor, 3 candidates, 2 kept
 ```
 
 Log is the tuning surface: denylist edits + extraction pattern adjustments
 are analyst-driven from this output.
+
+### Python helper (`scripts/discover_extract.py`)
+
+Lives under `.claude/commands/scripts/discover_extract.py` (same repo as
+the skill that invokes it).
+
+**Responsibilities (RSS path only):**
+- Parse RSS/Atom XML (use stdlib `xml.etree.ElementTree` or the existing
+  project's YAML/JSON patterns for consistency — no new deps if avoidable)
+- Apply patterns 1–4 + post-filters 1–4 deterministically
+- Return JSON to stdout: `{candidates: [...], log: [...],
+  cursor_update: {last_seen_timestamp, last_post_url}}` or
+  `{error: "...", log: [...]}` on fetch/parse failure
+
+**Web path does NOT use this helper.** The discover skill invokes WebFetch
+directly for zimperium / lookout, and the skill's markdown instructs the
+LLM to apply the same rule set (patterns + denylist + rule-index check)
+when extracting from HTML. Rule-set documentation in the skill markdown
+MUST match the Python helper's behavior — drift between the two is caught
+by eyeballing the log output during dogfood runs and by the extraction
+fixture tests (see Testing section).
 
 ## Dispatcher wiring (`update-rules.md`)
 
@@ -327,35 +427,63 @@ User-Agent: AndroDR-AI-Rule-Pipeline/1.0 (+https://github.com/yasirhamza/AndroDR
 
 ## Testing
 
-### Unit-testable pieces
+### Unit tests (Python path)
 
-The skill markdown itself is LLM-executed, not Python. Three testable components:
+Because the RSS path lives in deterministic Python, extraction quality IS
+unit-testable via golden fixtures. This is the main drift-detection gain
+over LLM-only extraction.
 
-1. **Denylist lint test.** Python+pytest. Loads denylist YAML; asserts:
+1. **Denylist lint test** (`test_discover_denylist.py`). Loads denylist
+   YAML; asserts:
    - No duplicates
    - All entries match `^[A-Z][a-zA-Z0-9]{2,}$`
-   - Does NOT include known real malware family names (SparkKitty, Anatsa,
-     TrickMo, Pegasus, Predator, Graphite, ClayRat) — guards against future
-     edit accidentally muting a real threat
-2. **Cross-check test (Kotlin, mirrors `BundledRulesSchemaCrossCheckTest`
-   pattern).** Asserts the 5 source IDs in the skill match the 5 source IDs
-   in `feed-state-schema.json`'s `discover.sources.properties`. Locks the
-   drift loop.
-3. **RSS-snapshot fixtures** under `.claude/commands/fixtures/discover/`.
-   5 representative RSS feed XML files (one per source) with known-expected
-   extraction output. Not automated CI (skill markdown isn't Python);
-   reproducible via manual dogfood replay.
+   - Does NOT contain any entry from an explicit **known-malware-name guard
+     list**: `SparkKitty, SparkCat, Anatsa, TrickMo, Pegasus, Predator,
+     Graphite, ClayRat, BlackRock, Joker, FluBot, Brata, Hook, Anubis,
+     Silver, Fox, Cozy, Lazarus, Sandworm` — guards against a future edit
+     accidentally muting a real threat family or APT name. Tokens that
+     ARE valid English words when standalone (`Silver`, `Fox`, `Cozy`,
+     `Predator`) carry extra risk of well-meaning denylist additions.
+2. **Extraction golden-fixture tests** (`test_discover_extract.py`).
+   Committed fixture inputs under
+   `.claude/commands/fixtures/discover/*.xml` (3 RSS feeds frozen in time,
+   one per RSS source: securelist, welivesecurity, google-tag). Paired
+   with expected-output JSON files. Test harness invokes
+   `discover_extract.py` on each fixture and asserts byte-identical output.
+   - Catches regex drift (someone edits pattern 3's regex → fixture output
+     changes → test fails)
+   - Catches denylist accidental additions (Silver Fox survives → test
+     fails because expected-output didn't include it)
+   - Catches rule-index logic drift
+3. **Source-ID cross-check test** (Kotlin, mirrors
+   `BundledRulesSchemaCrossCheckTest`). Asserts the 5 source IDs
+   referenced by the skill match the 5 source IDs in
+   `feed-state-schema.json`'s `discover.sources.properties`. Locks
+   schema↔skill drift.
+4. **Source-URL binding lint** (Python, in
+   `test_discover_source_urls.py`). Asserts each source ID's configured
+   URL has a hostname containing the source ID stem (e.g., `lookout` →
+   must be on `*.lookout.com`). Guards against a skill-markdown edit
+   silently re-pointing a source at `attacker.com`.
 
-### End-to-end smoke (post-merge)
+### Dogfood replay (Web path + end-to-end)
 
-Run `/update-rules discover --top 3` in a fresh session against live vendor
-RSS. Expected:
-- Each of 5 sources emits a posts-scanned count
-- 0–3 candidates survive to research-threat dispatch
-- Each research-threat returns a SIR (often `requires_verification: true`)
-- SIRs flow through Rule Author + Validator
-- Step 6.5 cross-dedup correctly filters any Kotlin-mirror overlaps
-- Step 7 presents for approve/modify/reject
+Web path (zimperium, lookout) extraction is LLM-interpreted and varies
+session-to-session; not meaningfully unit-testable. Covered by:
+
+- **Committed HTML fixtures** under
+  `.claude/commands/fixtures/discover/*.html` (blog-index snapshots). These
+  are NOT used by automated tests — only by manual dogfood replays.
+  Reproducible: "extract candidates from this fixture" produces comparable
+  output across runs even if not byte-identical.
+- **End-to-end smoke (post-merge):** run `/update-rules discover --top 3`
+  against live sources. Expected:
+  - Each of 5 sources emits a posts-scanned count + path indicator (rss/web)
+  - 0–3 candidates survive to research-threat dispatch
+  - Each research-threat returns a SIR (often `requires_verification: true`)
+  - SIRs flow through Rule Author + Validator
+  - Step 6.5 cross-dedup correctly filters any Kotlin-mirror overlaps
+  - Step 7 presents for approve/modify/reject
 
 Same dogfood pattern as #117 Phase 5.
 
@@ -380,16 +508,25 @@ Same dogfood pattern as #117 Phase 5.
 
 Likely phase breakdown:
 
-1. **Submodule schema PR** — add `discover` block to `feed-state-schema.json`
+1. **Submodule schema PR** — add `discover` top-level block + 5 source-ID
+   properties to `feed-state-schema.json`; matching `DiscoverSourceCursor`
+   $def. Small PR, same pattern as #117 Phase 1's schema changes.
 2. **AndroDR PR** — the main work:
-   - New `.claude/commands/update-rules-discover.md` skill
-   - Denylist YAML (shipped alongside skill)
-   - Extraction regex documentation
-   - Cross-check Kotlin test for source-ID drift
-   - Dispatcher changes to `.claude/commands/update-rules.md`
-     (new Step 2 discover branch + safety rules)
-   - Unit test for denylist lint
-   - RSS fixture files + dogfood replay documentation
+   - New `.claude/commands/update-rules-discover.md` skill (dispatches
+     Python helper for RSS sources, WebFetch for web sources, merges
+     candidates)
+   - New `.claude/commands/scripts/discover_extract.py` (deterministic
+     RSS-path extraction)
+   - Denylist YAML (shipped alongside the skill and helper)
+   - Fixture XML + expected-JSON pairs under
+     `.claude/commands/fixtures/discover/` (3 RSS + 2 HTML)
+   - Python unit tests: denylist lint, extraction goldens, source-URL
+     binding
+   - Kotlin cross-check test for source-ID drift (mirrors
+     `BundledRulesSchemaCrossCheckTest`)
+   - Dispatcher changes to `.claude/commands/update-rules.md` (new Step 2
+     discover branch + safety rules)
+   - Submodule bump to pick up Phase 1
 
 ## Related
 
