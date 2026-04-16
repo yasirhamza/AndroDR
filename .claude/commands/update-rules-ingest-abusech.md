@@ -80,3 +80,61 @@ extra key to `feed-state-schema.json` first, then re-enable it here.
 - If HTTP 401 is returned, treat it as an auth failure and abort with an error (the key is likely expired or revoked — this is NOT "no new data")
 - If a sub-feed returns nothing new, that's fine — return empty SIR list for it
 - Tag IOCs from each sub-feed with the sub-feed name in `source.feed` detail
+
+## IOC data output (added for #117)
+
+Emit a JSON object extending the existing SIR array:
+
+```json
+{
+  "sirs": [ ... existing SIR array ... ],
+  "candidate_ioc_entries": [
+    {
+      "file": "ioc-data/c2-domains.yml",
+      "entry": {
+        "indicator": "c2.example.com",
+        "family": "ExampleMalware",
+        "category": "MALWARE",
+        "severity": "CRITICAL",
+        "source": "threatfox",
+        "description": "..."
+      }
+    },
+    {
+      "file": "ioc-data/malware-hashes.yml",
+      "entry": {
+        "indicator": "abc123...sha256",
+        "family": "ExampleApk",
+        "category": "MALWARE",
+        "severity": "HIGH",
+        "source": "malwarebazaar",
+        "description": "..."
+      }
+    }
+  ],
+  "upstream_snapshot_hash_set": [
+    ["C2_DOMAIN", "c2.example.com"],
+    ["APK_HASH", "abc123...sha256"]
+  ]
+}
+```
+
+### candidate_ioc_entries
+
+- ThreatFox domain entries → `ioc-data/c2-domains.yml`, source `threatfox`.
+- MalwareBazaar APK-hash entries → `ioc-data/malware-hashes.yml`, source
+  `malwarebazaar`.
+
+### upstream_snapshot_hash_set
+
+The full `(type, normalized_value)` set from both ThreatFox recent JSON
+and MalwareBazaar recent CSV. Normalize domains to lowercase, strip
+protocol and trailing `.`. Normalize hashes to lowercase hex.
+
+### Self-dedup
+
+As with stalkerware: emit a `candidate_ioc_entry` only for entries that
+are net-new since the last cursor. The `last_seen_timestamp` cursor in
+`feed-state.json` is the source of truth for "new."
+
+Cross-dedup across concurrent ingesters is the dispatcher's job.

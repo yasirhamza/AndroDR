@@ -58,3 +58,42 @@ For actively exploited CVEs, create a separate SIR with:
 - NEVER invent CVE IDs — only include what the bulletin lists
 - If the bulletin page can't be parsed, return empty SIRs with an error note
 - Include the bulletin URL as a reference in every SIR
+
+## IOC data output (added for #117)
+
+The ASB ingester primarily produces CVE-ID SIRs, which feed
+**device-posture rules** (patch-level-relative checks), not
+`ioc_lookup`-style equality matching. CVE data flow stays in
+`CveRepository` per the spec's out-of-scope section; this ingester does
+NOT write CVE entries to `ioc-data/*.yml`.
+
+If the bulletin discloses concrete IOCs (e.g., a malicious package name
+tied to a specific CVE), emit them as candidate entries targeting the
+appropriate file, same pattern as other ingesters:
+
+```json
+{
+  "sirs": [ ... ],
+  "candidate_ioc_entries": [
+    {
+      "file": "ioc-data/package-names.yml",
+      "entry": {
+        "indicator": "com.asb.disclosed",
+        "family": "CVE-YYYY-NNNN-related",
+        "category": "MALWARE",
+        "severity": "HIGH",
+        "source": "android-security-bulletin",
+        "description": "..."
+      }
+    }
+  ],
+  "upstream_snapshot_hash_set": [
+    ["PACKAGE_NAME", "com.asb.disclosed"]
+  ]
+}
+```
+
+Most ASB runs will emit `candidate_ioc_entries: []` since bulletins
+typically disclose CVE-IDs without concrete IOCs.
+
+Cross-dedup across concurrent ingesters is the dispatcher's job.

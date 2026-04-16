@@ -61,3 +61,24 @@ This ingester produces SIRs that help the Rule Author identify detection GAPS â€
 - NEVER generate SIGMA rules â€” only SIRs
 - Focus on techniques with Android platform applicability
 - Note when a technique maps to something AndroDR can detect vs. a gap
+
+## IOC data output (added for #117)
+
+ATT&CK Mobile produces technique-level intel (attack.tNNNN IDs), not
+concrete IOCs. `candidate_ioc_entries: []` is the expected output for
+this ingester.
+
+Do NOT manufacture IOC entries from technique descriptions; that risks
+high-FP entries (technique descriptions reference packages as examples,
+not as indicators). ATT&CK's contribution is TAG-level metadata for
+rules, not indicator-level data.
+
+```json
+{
+  "sirs": [ ... ],
+  "candidate_ioc_entries": [],
+  "upstream_snapshot_hash_set": []
+}
+```
+
+Cross-dedup across concurrent ingesters is the dispatcher's job.

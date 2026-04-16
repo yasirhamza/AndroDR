@@ -59,3 +59,55 @@ You receive the `stalkerware_indicators` cursor with:
 - NEVER generate SIGMA rules — only SIRs
 - Include ALL indicator types from the YAML (package names, certs, domains, hashes)
 - Stalkerware rules should include standard ATT&CK techniques for surveillance
+
+## IOC data output (added for #117)
+
+In addition to SIRs, emit a JSON object with two new fields:
+
+```json
+{
+  "sirs": [ ... existing SIR array ... ],
+  "candidate_ioc_entries": [
+    {
+      "file": "ioc-data/package-names.yml",
+      "entry": {
+        "indicator": "com.example.spy",
+        "family": "ExampleSpyware",
+        "category": "STALKERWARE",
+        "severity": "CRITICAL",
+        "source": "stalkerware-indicators",
+        "description": "..."
+      }
+    }
+  ],
+  "upstream_snapshot_hash_set": [
+    ["PACKAGE_NAME", "com.example.spy"]
+  ]
+}
+```
+
+### candidate_ioc_entries
+
+For each newly-discovered package name in the upstream (the ones that
+produce SIRs), emit one candidate entry targeting
+`ioc-data/package-names.yml`. `source: "stalkerware-indicators"` for every
+entry. Set `category` from the AssoEchap `type` field (`stalkerware` →
+`STALKERWARE`, `spyware` → `SPYWARE`, `monitor` → `MONITORING`).
+
+### upstream_snapshot_hash_set
+
+The full `(type, normalized_value)` set fetched from `ioc.yaml`. For this
+ingester, type is always `PACKAGE_NAME`; normalize by trimming whitespace
+(Android package names are case-sensitive; do NOT lowercase).
+
+### Self-dedup
+
+A package already present in the upstream as of this run is by definition
+not net-new for this ingester. Since every `candidate_ioc_entry` here IS
+derived from the upstream pull, self-dedup produces an empty
+`candidate_ioc_entries` for stalkerware unless the upstream has ADDED new
+entries since the last run. That is correct and expected — the delta for
+this ingester comes from new upstream additions between cursor runs.
+
+Cross-dedup across concurrent ingesters is the dispatcher's job
+(Step 6.5 of update-rules.md). Do NOT attempt cross-ingester dedup here.

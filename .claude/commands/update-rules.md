@@ -106,6 +106,42 @@ For any rule that failed validation:
 3. Run the Validator again on the updated candidate
 4. If it fails a second time, mark it as a failed candidate
 
+## Step 6.5: Centralized cross-dedup for IOC candidates (added for #117)
+
+Before surfacing candidates in Step 7, filter `candidate_ioc_entries`
+against the **authoritative upstream coverage set** for this run.
+
+### 6.5.1 Collect per-ingester snapshots
+
+Every completed ingester returns `upstream_snapshot_hash_set` alongside its
+SIRs and `candidate_ioc_entries` (see individual ingester skills). Take
+the union of every snapshot as `U_ingesters`.
+
+### 6.5.2 Fetch any missing mirror feeds
+
+Read `third-party/android-sigma-rules/validation/kotlin-mirror-feeds.yml`.
+For every feed listed there whose `id` does NOT appear in any completed
+ingester (e.g., only the stalkerware ingester ran but ThreatFox is still
+a Kotlin-mirrored upstream that candidates must be checked against), fetch
+the feed into a `(type, normalized_value)` set using the parser identified
+by the `parser` field. Take the union with `U_ingesters` → `U_authoritative`.
+
+### 6.5.3 Filter candidates
+
+For each candidate across all ingesters, drop it if
+`(type, normalized_value)` is in `U_authoritative`. The survivors form the
+**approved delta** that proceeds to Step 7.
+
+### 6.5.4 Safety checks before Step 7
+
+- If `U_authoritative` is empty (all upstreams failed to fetch), abort the
+  run with a clear error. Do NOT proceed with unfiltered candidates — that
+  would inject duplicates into ioc-data/*.yml.
+- If any candidate's `source` field corresponds to a feed listed in
+  `kotlin-mirror-feeds.yml` but the candidate survives the filter, log a
+  WARN — this is typically a normalization mismatch worth investigating
+  (the entry is in upstream under a different normalization).
+
 ## Step 7: Present Results
 
 Format the output as follows:
@@ -141,6 +177,28 @@ Feeds checked: N | New SIRs: N | Rules generated: N
 Passed: N | Failed: N | IOC updates: +N entries
 ```
 
+### 7.1 IOC-only candidates (added for #117)
+
+Some candidates from Step 6.5 have no accompanying rule — they're pure IOC
+data targeting the generic `sigma_androdr_001_package_ioc`,
+`_002_cert_hash_ioc`, `_003_domain_ioc`, or `_004_apk_hash_ioc` rules,
+which match anything in their lookup DB. Present these as first-class
+approval candidates:
+
+```
+IOC-ONLY CANDIDATE — via androdr-NNN generic ioc_lookup rule
+Target file:  ioc-data/<file>.yml
+Type:         <type>
+Source:       <source-id>
+Indicator(s): <count>
+  - <indicator 1>  (<family>, <severity>)
+  - <indicator 2>  ...
+  [...]
+```
+
+User actions for an IOC-only candidate: same as for a rule candidate —
+**Approve**, **Modify** (edit entries), or **Reject**.
+
 ## Step 8: Process User Decisions
 
 For each passing candidate, ask the user to:
@@ -154,6 +212,43 @@ After all decisions:
 - Update `ioc-data/*.yml` files if ingesters found new indicators
 - Commit all changes to the sigma repo with descriptive messages
 
+### 8.1 Commit IOC candidates (added for #117)
+
+For each approved candidate (rule OR IOC-only):
+
+1. Append approved IOC entries to the target `ioc-data/<file>.yml` file.
+   Preserve the file's header; append entries under the existing
+   `entries:` list.
+
+2. Run validators on every touched file. Abort the commit on any failure:
+   ```bash
+   cd third-party/android-sigma-rules
+   python3 validation/validate-ioc-data.py ioc-data/<file>.yml
+   python3 validation/validate-ioc-complementarity.py --file ioc-data/<file>.yml --mode strict
+   ```
+   If either validator exits non-zero, revert the append and report to the
+   user. Do NOT commit.
+
+3. Update `feed-state.json`: for each ingester that contributed approved
+   candidates, set its `ioc_data_last_write` to the current ISO 8601
+   timestamp (the schema supports this as an optional field per cursor).
+
+4. Commit the ioc-data change(s) + rule change(s) + feed-state update as
+   a single atomic commit. Commit message format:
+   ```
+   feat(rules+ioc): add <threat-name> (source: <source-id>) [Phase 4 of #117]
+   ```
+
+### 8.2 Safety rules
+
+- NEVER commit an ioc-data write that validate-ioc-complementarity.py
+  rejects in strict mode.
+- NEVER pass --allow-upstream-unreachable in automated
+  (non-interactive) pipeline runs; it's for operator-controlled retry
+  only.
+- NEVER modify `kotlin-mirror-feeds.yml` in the same commit as an
+  ioc-data write.
+
 ## Safety Rules
 
 - NEVER write rules directly to `rules/production/` — staging only
@@ -161,3 +256,6 @@ After all decisions:
 - NEVER modify AndroDR application code (Kotlin sources)
 - NEVER commit API keys or credentials to any file
 - Report feed failures separately from "no new data" results
+- NEVER commit an ioc-data/*.yml write that validate-ioc-complementarity.py rejects
+- NEVER pass --allow-upstream-unreachable in automated pipeline runs
+- NEVER modify kotlin-mirror-feeds.yml in the same commit as an ioc-data write
