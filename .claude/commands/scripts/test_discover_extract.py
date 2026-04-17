@@ -34,7 +34,7 @@ def _run(fixture_xml, source_id, rule_index=None):
     return json.loads(result.stdout)
 
 
-@pytest.mark.parametrize("source_id", ["securelist"])
+@pytest.mark.parametrize("source_id", ["securelist", "welivesecurity"])
 def test_golden_extraction(source_id):
     fixture = FIXTURES / f"{source_id}.xml"
     expected_path = FIXTURES / f"{source_id}-expected.json"
