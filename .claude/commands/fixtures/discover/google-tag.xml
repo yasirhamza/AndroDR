@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <channel>
+    <title>Google TAG</title>
+    <link>https://blog.google/threat-analysis-group/</link>
+    <description>Google Threat Analysis Group (test fixture)</description>
+    <item>
+      <title>GriftHorse returns: renewed premium SMS scam campaign on Android</title>
+      <link>https://blog.google/threat-analysis-group/grifthorse-2026-return/</link>
+      <pubDate>Mon, 07 Apr 2026 11:00:00 +0000</pubDate>
+      <description>TAG has observed a renewed GriftHorse premium SMS scam campaign using malware-laden applications.</description>
+    </item>
+    <item>
+      <title>Q1 2026 threat landscape: a retrospective</title>
+      <link>https://blog.google/threat-analysis-group/q1-2026-retrospective/</link>
+      <pubDate>Tue, 08 Apr 2026 16:00:00 +0000</pubDate>
+      <description>Overview of Q1 2026 threat activity across platforms. No specific named campaigns highlighted.</description>
+    </item>
+  </channel>
+</rss>

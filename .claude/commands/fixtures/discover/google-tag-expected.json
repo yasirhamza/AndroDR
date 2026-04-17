@@ -1,0 +1,23 @@
+{
+  "candidates": [
+    {
+      "confidence": "high",
+      "pattern": "known_family",
+      "pub_date": "2026-04-07T11:00:00Z",
+      "source_url": "https://blog.google/threat-analysis-group/grifthorse-2026-return/",
+      "threat_name": "GriftHorse"
+    }
+  ],
+  "cursor_update": {
+    "last_post_url": "https://blog.google/threat-analysis-group/q1-2026-retrospective/",
+    "last_seen_timestamp": "2026-04-08T16:00:00Z"
+  },
+  "cms_migration_detected": false,
+  "error": null,
+  "path": "rss",
+  "posts_processed": [
+    {"candidate_count": 1, "pub_date": "2026-04-07T11:00:00Z", "url": "https://blog.google/threat-analysis-group/grifthorse-2026-return/"},
+    {"candidate_count": 0, "pub_date": "2026-04-08T16:00:00Z", "url": "https://blog.google/threat-analysis-group/q1-2026-retrospective/"}
+  ],
+  "source_id": "google-tag"
+}
