@@ -1,0 +1,120 @@
+# Denylist for update-rules-discover extraction.
+# Tokens here are dropped by all extraction paths (regex + LLM fallback).
+# DO NOT add real malware-family or APT names — the lint test has a guard
+# list and will fail if any leak in.
+
+version: 1
+denylist:
+  # Platform / brand
+  - AppStore
+  - GooglePlay
+  - PlayStore
+  - PlayProtect
+  - AndroidAuto
+  - ICloud
+  - FaceTime
+  - BlueTooth
+  - WiFi
+  # Vendor names
+  - Google
+  - Apple
+  - Amazon
+  - Samsung
+  - Huawei
+  - Xiaomi
+  - OnePlus
+  - Motorola
+  - Nokia
+  # Generic security
+  - AndroidSecurity
+  - CyberSecurity
+  - ThreatIntel
+  - MachineLearning
+  - DeepLearning
+  - OpenSource
+  - CloudSecurity
+  # Tech stack
+  - JavaScript
+  - TypeScript
+  - PowerShell
+  - FullStack
+  - BackEnd
+  - FrontEnd
+  # Category/taxonomy words the LLM fallback may misinterpret as names
+  - Ransomware
+  - Spyware
+  - Malware
+  - Trojan
+  - Banker
+  - Stealer
+  # Generic taxonomy that Pattern 6 would falsely emit in "Lazarus Group
+  # APT", "threat Actor", "banking trojan Family", "malware Campaign",
+  # "Operation <noun>" constructions. Not real threat names.
+  - Group
+  - Family
+  - Actor
+  - Campaign
+  - Operation
+  # Common English two-word phrases
+  - Good Morning
+  - Happy Birthday
+  - United States
+  - United Kingdom
+  - New York
+  - San Francisco
+  # Country names (Pattern 6 single-word + context can falsely fire on
+  # geographic attributions like "China-aligned APT" — bucket them here)
+  - China
+  - Russia
+  - Iran
+  - Japan
+  - Vietnam
+  - India
+  - Pakistan
+  - Ukraine
+  - Belarus
+  - Israel
+  - Korea
+  - Afghanistan
+  # Regional/ethnic descriptors that often appear with APT context
+  - Chinese
+  - Russian
+  - Iranian
+  - Japanese
+  - Korean
+  - Indian
+  - Pakistani
+  - Ukrainian
+  - Belarusian
+  - Asian
+  - African
+  - European
+  - American
+  - Latin
+  # Compass points + derivatives (Pattern 6 matches "targets South Asian
+  # diplomats" — "South" with "hack-for-hire" context would otherwise
+  # fire)
+  - South
+  - North
+  - East
+  - West
+  - Eastern
+  - Western
+  - Northern
+  - Southern
+  # Platform names / common tech context
+  - Android
+  - Windows
+  - Linux
+  - MacOS
+  - Desktop
+  - Mobile
+  - Cloud
+  # Common two-word false positives observed in blog titles
+  - App Store
+  - Google Play
+  - South Asian
+  - North Korean
+  - Middle East
+  - Southeast Asia
+  - Far East

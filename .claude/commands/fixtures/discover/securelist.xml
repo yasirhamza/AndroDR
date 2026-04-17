@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:content="http://purl.org/rss/1.0/modules/content/">
+  <channel>
+    <title>Securelist</title>
+    <link>https://securelist.com/</link>
+    <description>Kaspersky threat research (test fixture)</description>
+    <item>
+      <title>SparkKitty, SparkCat's little brother: A new Trojan spy found in the App Store and Google Play</title>
+      <link>https://securelist.com/sparkkitty-ios-android-malware/116793/</link>
+      <pubDate>Mon, 14 Apr 2026 12:00:00 +0000</pubDate>
+      <description>A new Android/iOS trojan-spy campaign targeting crypto wallet seed phrases via OCR-based photo exfiltration.</description>
+      <content:encoded><![CDATA[<p>SparkKitty is an Android and iOS trojan-spy campaign. SparkCat is its predecessor…</p>]]></content:encoded>
+    </item>
+    <item>
+      <title>CVE-2026-0049 exploited in the wild as Android 16 critical DoS</title>
+      <link>https://securelist.com/cve-2026-0049-android-dos/116800/</link>
+      <pubDate>Tue, 15 Apr 2026 09:30:00 +0000</pubDate>
+      <description>Active exploitation of Android 16 Framework DoS vulnerability observed in targeted campaigns.</description>
+      <content:encoded><![CDATA[<p>CVE-2026-0049 is a critical Framework DoS vulnerability…</p>]]></content:encoded>
+    </item>
+    <item>
+      <title>A cunning predator: How Silver Fox preys on Japanese firms this tax season</title>
+      <link>https://securelist.com/silver-fox-apt-japan/116801/</link>
+      <pubDate>Wed, 16 Apr 2026 14:15:00 +0000</pubDate>
+      <description>Silver Fox APT group targets Japanese financial institutions during tax season.</description>
+      <content:encoded><![CDATA[<p>Silver Fox is a China-aligned APT group…</p>]]></content:encoded>
+    </item>
+    <item>
+      <title>Bitter hack-for-hire campaign targets South Asian diplomats</title>
+      <link>https://securelist.com/bitter-hack-for-hire-2026/</link>
+      <pubDate>Thu, 17 Apr 2026 10:00:00 +0000</pubDate>
+      <description>The Bitter APT group has launched a new hack-for-hire operation against South Asian diplomatic targets.</description>
+      <content:encoded><![CDATA[<p>Bitter is an APT group with suspected links to South Asian state actors…</p>]]></content:encoded>
+    </item>
+    <item>
+      <title>Good Morning Vietnam: A retrospective on 2020 APAC threats</title>
+      <link>https://securelist.com/apac-2020-retrospective/116802/</link>
+      <pubDate>Fri, 18 Apr 2026 08:00:00 +0000</pubDate>
+      <description>A look back at APAC threat activity from 2020 — non-malware retrospective.</description>
+      <content:encoded><![CDATA[<p>This retrospective article discusses APAC threat trends…</p>]]></content:encoded>
+    </item>
+  </channel>
+</rss>

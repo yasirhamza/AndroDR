@@ -8,10 +8,11 @@ You are the dispatcher for the AndroDR AI-powered SIGMA rule update pipeline. Yo
 
 ## Parse Invocation
 
-The user invokes one of three modes:
+The user invokes one of four modes:
 - `/update-rules full` — check all feeds for new threat intel
 - `/update-rules source <id>` — check one feed (valid IDs: `abusech`, `asb`, `nvd`, `amnesty`, `citizenlab`, `stalkerware`, `attack`)
 - `/update-rules threat "<name>"` — research a specific threat by name
+- `/update-rules discover [--top N]` — autonomously discover up to N (default 5) emerging threats from configured discovery sources and fan out to research subagents
 
 If no argument is given, ask which mode to use.
 
@@ -54,6 +55,24 @@ Based on the invocation mode:
 **Source-focused:** Spawn only the named ingester agent.
 
 **Threat-focused:** Spawn `update-rules-research-threat` with the threat name.
+
+**Discover-focused** (`/update-rules discover [--top N]`, default N=5):
+1. Spawn ONE subagent: `update-rules-discover` with `top_n=N`,
+   `rule_index` from the existing rule glob, and `cursor_per_source` from
+   `feed-state.json`'s `discover.sources` block.
+2. Parse the skill's JSON output.
+3. If `threat_names` is empty, write the run summary (posts-scanned per
+   source + log) and STOP — no Step 3 onwards.
+4. Otherwise fan out: for each threat_name (up to top_n), spawn a
+   **parallel** `update-rules-research-threat` subagent via the Agent
+   tool (single message with multiple tool uses for true parallelism).
+   Pass threat_name + source_url from the discover output.
+5. Collect SIRs from successful subagents. Log subagent failures
+   (Cloudflare 429, network errors) but never abort the whole run for a
+   single subagent failure.
+6. Proceed to Step 3 (Triage SIRs) with the collected union. SIRs flow
+   through Rule Author → Validator → Step 6.5 cross-dedup → Step 7
+   approval → Step 8.1 write unchanged.
 
 Each ingester returns a JSON array of SIR objects (or an empty array if nothing new).
 
@@ -259,3 +278,16 @@ For each approved candidate (rule OR IOC-only):
 - NEVER commit an ioc-data/*.yml write that validate-ioc-complementarity.py rejects
 - NEVER pass --allow-upstream-unreachable in automated pipeline runs
 - NEVER modify kotlin-mirror-feeds.yml in the same commit as an ioc-data write
+- NEVER dispatch `/update-rules discover` without a top-N bound. The
+  default (5) IS the cap. Prevents a pathologically noisy extraction run
+  from spawning dozens of research subagents.
+- NEVER retry a failed discover subagent inside the same run. Sources
+  that 503 or 429 this run are picked up next run.
+- NEVER advance a per-source cursor when that source's fetch or parse
+  failed. The `updated_cursors` block from the discover skill already
+  excludes failed sources.
+- NEVER include `full-with-discover` as a composite mode. Users wanting
+  both should run `/update-rules full` then `/update-rules discover`
+  back-to-back.
+- NEVER skip the token-shape validator on LLM fallback output in the
+  discover skill — it's the structural XPIA defense.
