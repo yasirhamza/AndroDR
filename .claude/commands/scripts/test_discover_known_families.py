@@ -5,12 +5,12 @@ import re
 import pytest
 import yaml
 
-PATH = pathlib.Path(__file__).resolve().parent.parent / "fixtures" / "discover" / "known-families.yml"
+FAMILIES_PATH = pathlib.Path(__file__).resolve().parent.parent / "fixtures" / "discover" / "known-families.yml"
 
 
 @pytest.fixture(scope="module")
 def families():
-    data = yaml.safe_load(PATH.read_text())
+    data = yaml.safe_load(FAMILIES_PATH.read_text())
     assert data["version"] == 1
     return data["families"]
 
@@ -28,4 +28,4 @@ def test_each_entry_well_formed(families):
 
 
 def test_minimum_size(families):
-    assert len(families) >= 30, f"known-families list should have ≥30 entries; got {len(families)}"
+    assert len(families) >= 33, f"known-families list should have ≥33 entries; got {len(families)}"
