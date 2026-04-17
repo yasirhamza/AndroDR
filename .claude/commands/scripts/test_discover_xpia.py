@@ -1,121 +1,27 @@
-"""XPIA (cross-prompt injection) resistance test (AndroDR #119).
+"""XPIA (cross-prompt injection) resistance tests (AndroDR #119).
 
-The fixture is an adversarial RSS post containing 5 classes of prompt-
-injection payloads. The test asserts extraction output:
-1. Is valid JSON (no embedded commands)
-2. Does NOT contain adversary-chosen strings
-3. Does NOT contain shell metacharacters or URLs
-4. Token-shape validator rejects malformed candidates regardless of
-   what the LLM returns
+Since extraction moved fully to the LLM (regex patterns 1-6 removed), the
+test surface is the `--validate-tokens` pipe: given any JSON list of
+candidate strings (simulating LLM output, adversarial or benign), the
+script's structural filter must
 
-This is the non-LLM-dependent defense layer — token-shape validator in
-discover_extract.py filters the LLM's output before emission.
+- Reject shell metacharacters, URLs, template placeholders, over-long
+  strings, wrong-shape tokens.
+- Permit plausibly-shaped novel names — those are caught by the research
+  subagent's web-search + the human approval gate at Step 7, not here.
+- Cap flood-attack LLM output at 20 items.
+
+These tests exercise the structural defense directly; the end-to-end
+extraction flow (parser → per-post LLM → validator) lives in the skill
+orchestration and is covered by dogfood runs, not unit tests.
 """
 import json
 import pathlib
-import re
 import subprocess
 import sys
 
 FIXTURES = pathlib.Path(__file__).resolve().parent.parent / "fixtures" / "discover"
 SCRIPT = pathlib.Path(__file__).resolve().parent / "discover_extract.py"
-
-# Adversary-chosen strings that MUST NOT appear in extraction output.
-# Limited to STRUCTURAL payloads: shell metacharacters, URLs, filenames
-# with dots, template variables. Plausible-shape novel threat names
-# (YasirHamzaTrojan, MaliciousFamily) are NOT in this list — per the
-# threat-model boundary documented in
-# test_validate_tokens_permits_plausible_novel_names, such names pass
-# the structural validator by design; the human-in-the-loop approval
-# gate at dispatcher Step 7 is the defense against SEO-seeded attacks.
-FORBIDDEN_SUBSTRINGS = [
-    "{{FLAG}}",
-    "install.sh",
-    "trojan.apk",
-    "attacker.com",
-    "attacker.example.com",
-    "evil.invalid",
-    "$(",
-    "$USER",
-    " | ",
-    "curl ",
-    "wget ",
-    "http://",
-    "https://",
-    "ftp://",
-]
-
-# Shell metacharacters that MUST NOT appear in ANY emitted token
-SHELL_METACHARACTERS = set("$|;`&><")
-
-
-def test_xpia_fixture_extraction_rejects_injection_payloads():
-    """Run extraction on the XPIA fixture and assert no adversary strings survive."""
-    fixture = FIXTURES / "xpia-blog-post.xml"
-    assert fixture.exists(), f"XPIA fixture missing: {fixture}"
-
-    result = subprocess.run(
-        [sys.executable, str(SCRIPT),
-         "--source-id", "xpia-test",
-         "--rss-file", str(fixture),
-         "--denylist", str(FIXTURES / "denylist.yml"),
-         "--known-families", str(FIXTURES / "known-families.yml")],
-        capture_output=True, text=True, check=False,
-    )
-    assert result.returncode == 0, f"extraction failed: {result.stderr}"
-
-    # Valid JSON requirement
-    try:
-        output = json.loads(result.stdout)
-    except json.JSONDecodeError as e:
-        raise AssertionError(f"extraction output not valid JSON: {e}\n{result.stdout}")
-
-    # Serialize all emitted threat names for substring check
-    candidates = output.get("candidates", [])
-    names = [c["threat_name"] for c in candidates]
-    names_joined = " ".join(names)
-
-    # Forbidden substring check
-    for forbidden in FORBIDDEN_SUBSTRINGS:
-        assert forbidden not in names_joined, (
-            f"XPIA payload leaked into extraction output: {forbidden!r} "
-            f"found in {names_joined!r}"
-        )
-
-    # Per-token shell-metacharacter check
-    for name in names:
-        for char in name:
-            assert char not in SHELL_METACHARACTERS, (
-                f"extraction emitted token with shell metacharacter: "
-                f"{name!r} (forbidden char {char!r})"
-            )
-
-    # Structural: at most 20 candidates (matches skill's max-items contract)
-    assert len(candidates) <= 20, (
-        f"extraction emitted {len(candidates)} candidates — possible flood "
-        f"attack output; should be capped at 20"
-    )
-
-
-def test_xpia_fixture_still_extracts_real_threat():
-    """The fixture DOES mention Bitter (a known-family APT name). Real
-    extraction SHOULD succeed alongside the injection rejection — partial
-    success is the realistic bar."""
-    fixture = FIXTURES / "xpia-blog-post.xml"
-    result = subprocess.run(
-        [sys.executable, str(SCRIPT),
-         "--source-id", "xpia-test",
-         "--rss-file", str(fixture),
-         "--denylist", str(FIXTURES / "denylist.yml"),
-         "--known-families", str(FIXTURES / "known-families.yml")],
-        capture_output=True, text=True, check=False,
-    )
-    output = json.loads(result.stdout)
-    names = [c["threat_name"] for c in output.get("candidates", [])]
-    assert "Bitter" in names, (
-        f"real threat name 'Bitter' should still be extracted from XPIA "
-        f"fixture (pattern 5 known-families). Got names: {names}"
-    )
 
 
 def test_validate_tokens_rejects_structural_injection_payloads():
@@ -130,8 +36,7 @@ def test_validate_tokens_rejects_structural_injection_payloads():
     novel threat name (e.g., "YasirHamzaTrojan") — such names would
     pass the validator, reach the dispatcher, and trigger a research-
     threat subagent doing web search, which THEN faces the human-in-
-    the-loop approval gate at Step 7. See threat-model boundary note
-    at the top of xpia-blog-post.xml fixture.
+    the-loop approval gate at Step 7.
     """
     structural_payloads = [
         "{{FLAG}}",  # Template variable injection

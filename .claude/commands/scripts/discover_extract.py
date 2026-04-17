@@ -1,31 +1,33 @@
 #!/usr/bin/env python3
-"""Regex-enhanced extraction for /update-rules discover (AndroDR #119).
+"""Post-parser + structural validator for /update-rules discover (AndroDR #119).
 
-Implements patterns 1-6 + post-filters + token-shape validator.
-LLM fallback is NOT invoked by this helper — the skill orchestrates
-LLM calls and pipes results back through --validate-tokens mode.
+The prior revision of this script carried six regex patterns that tried to
+extract threat names directly from post text. Dogfooding showed the regex
+stack produced mostly grammatical noise ("Interestingly", "Additionally",
+"Leveraging", ...) while missing single-hump names like "Massistant" — and
+the top-N ranking was dominated by false positives. The fix is architectural:
+the LLM is the only extractor. This script is a supporting helper, not an
+extractor itself.
 
-Modes:
-  (default)         — read RSS file, emit candidates JSON
-  --validate-tokens — read JSON list of names from stdin, filter via
-                      denylist + rule-index + token-shape, emit filtered JSON
-  --check-robots    — fetch <origin>/robots.txt, emit {allowed: bool} for path
+Responsibilities retained
+-------------------------
+1. **Parse mode** (default): read an RSS file, emit the post list
+   (url / pub_date / title / description / body) for the skill orchestrator
+   to loop over with per-post LLM prompts. Applies the cursor filter and
+   emits cursor-advance metadata.
+2. **Validate-tokens mode** (`--validate-tokens`): accept a JSON list of
+   candidate strings from stdin and apply the structural post-filter —
+   denylist, rule-index, token shape. This is the XPIA defense line; every
+   LLM-extracted name passes through it before emission.
+3. **Robots-check mode** (`--check-robots`): fetch `<origin>/robots.txt`
+   and report whether the given URL is allowed.
 
-Output (default mode, stdout):
-    {
-      "source_id": "...",
-      "path": "rss",
-      "candidates": [{threat_name, source_url, pub_date, confidence, pattern}, ...],
-      "posts_processed": [{url, pub_date, candidate_count}, ...],
-      "cursor_update": {"last_seen_timestamp": "...", "last_post_url": "..."},
-      "error": null | {"kind": "fetch_error" | "parse_error", "message": "..."}
-    }
-
-`posts_processed` lets the skill identify zero-regex-hit posts (for LLM
-fallback) without re-parsing the RSS itself.
-
-`error.kind` distinguishes fetch vs parse failure per spec §cursor semantics
-(partial-failure: both skip cursor advance, but operator diagnosis differs).
+Responsibilities removed
+------------------------
+- Regex patterns 1-6 and their keyword/stopword sets.
+- `--known-families` argument and the reverse-match loop it fed.
+- `Candidate` emission from default mode. Default mode now emits `posts`
+  only; candidate naming is the skill's job.
 """
 from __future__ import annotations
 
@@ -39,7 +41,7 @@ try:
     import defusedxml.ElementTree as ET
 except ImportError:
     sys.exit("defusedxml required: pip install defusedxml")
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -49,79 +51,15 @@ except ImportError:
     sys.exit("pyyaml required: pip install pyyaml")
 
 
-# ---- Regex patterns ---------------------------------------------------------
-
-RE_CVE = re.compile(r"\bCVE-\d{4}-\d{4,7}\b")
-RE_CATEGORY_SUFFIX = re.compile(
-    r"\b[A-Z][a-zA-Z0-9]{2,}"
-    r"(?:Kit|RAT|Stealer|Trojan|Spy|Bot|Banker|Loader|Dropper|Miner|Ransomware|Worm)\b"
-)
-RE_CAMELCASE = re.compile(r"\b(?:[A-Z][a-z]+){2,}\b")
-RE_TWO_WORD = re.compile(r"\b([A-Z][a-z]+) ([A-Z][a-z]+)\b")
-# Pattern 6: single-word capitalized with strict 3-word context gate.
-# Requires 3+ lowercase letters, so minimum token length is 4 chars:
-# "Good"/"This"/"Bitter" match; "The"/"New" don't. A trailing lookahead
-# rejects hyphen-compounds ("China-aligned" would otherwise let "China"
-# leak through as a threat candidate).
-RE_SINGLE_WORD = re.compile(r"\b([A-Z][a-z]{3,})\b(?!-[a-z])")
-
-# General malware context keywords (patterns 3, 4)
-MALWARE_CONTEXT_KEYWORDS = {
-    "trojan", "spyware", "malware", "banker", "stealer", "campaign",
-    "spy", "backdoor", "surveillance", "apt", "botnet", "ransomware",
-    "loader", "dropper", "rootkit", "rat", "cryptojacker", "infostealer",
-    "mercenary", "hack-for-hire",
-    "preys", "targets", "attacks", "exfiltrates", "hijacks",
-}
-
-# Strong-signal context keywords (pattern 6 — single-word requires these)
-STRONG_SIGNAL_KEYWORDS = {
-    "apt", "group", "actor", "trojan", "spyware", "malware", "campaign",
-    "threat", "hack-for-hire", "mercenary", "ransomware", "banker",
-    "stealer", "backdoor", "surveillance", "rat", "botnet",
-}
-
-# Grammatical-opener words that Pattern 4 must reject as word1 in a
-# two-word match. "How Silver preys..." would otherwise emit "How Silver"
-# as a threat name. These are sentence-initial capitalization artifacts,
-# not parts of threat names.
-TWO_WORD_STOPWORDS = {
-    "The", "How", "New", "This", "That", "These", "Those",
-    "A", "An", "In", "Of", "For", "With", "From", "Is", "Are",
-    "Our", "Their", "Its", "Your", "My", "Some", "Any",
-    "What", "Which", "When", "Where", "Why", "Who",
-    "All", "Both", "Each", "Every", "Many", "Most",
-    "But", "Or", "And", "So", "Yet", "If", "Because",
-    "While", "Although", "Though", "After", "Before", "During",
-}
-
-# Token-shape validator (post-filter; applies to ALL extraction paths
-# including LLM fallback — defends against shell metacharacters, URLs,
-# pathologically long strings regardless of source).
+# Token-shape validator — the structural XPIA defense.
+# Applies to every LLM-extracted candidate before emission, regardless of
+# how plausible the LLM's prose response was.
 RE_VALID_TOKEN = re.compile(r"^[A-Z][a-zA-Z0-9\- ]{2,40}$")
 
 RSS_PUBDATE_FORMATS = [
     "%a, %d %b %Y %H:%M:%S %z",
     "%a, %d %b %Y %H:%M:%S %Z",
 ]
-
-
-@dataclass
-class Candidate:
-    threat_name: str
-    source_url: str
-    pub_date: str
-    confidence: str
-    pattern: str
-
-    def as_dict(self):
-        return {
-            "threat_name": self.threat_name,
-            "source_url": self.source_url,
-            "pub_date": self.pub_date,
-            "confidence": self.confidence,
-            "pattern": self.pattern,
-        }
 
 
 @dataclass
@@ -180,124 +118,7 @@ def parse_rss(xml_bytes: bytes) -> list[Post]:
     return posts
 
 
-# ---- Context helpers --------------------------------------------------------
-
-def _has_keyword_near(text: str, match_span: tuple[int, int], keywords: set[str], window_words: int) -> bool:
-    start, end = match_span
-    left_tokens = re.findall(r"[\w-]+", text[:start])[-window_words:]
-    right_tokens = re.findall(r"[\w-]+", text[end:])[:window_words]
-    context = [t.lower() for t in left_tokens + right_tokens]
-    return any(kw in context for kw in keywords)
-
-
-# ---- Extraction -------------------------------------------------------------
-
-def extract_from_text(text: str, known_families: set[str]) -> list[tuple[str, str, bool]]:
-    """Return list of (token, pattern_label, has_context) candidates.
-
-    Dedup strategy:
-    - `emitted_tokens` tracks exact-string tokens already emitted (all patterns)
-    - `emitted_subwords` tracks constituent words of multi-word emissions
-      (Pattern 5 "Silver Fox" → adds "Silver", "Fox"; Pattern 4 emission
-      similarly). Prevents Pattern 6 from re-emitting a subword already
-      covered by a more-specific match.
-
-    Order is deliberate: Pattern 5 (known-families) first so known tokens
-    claim the "known_family" label before Pattern 3 (camelcase) could
-    reclassify them. Multi-word patterns (4, 5) run before single-word
-    (6) so subwords are registered.
-
-    Does not apply denylist or rule-index filter — caller's job.
-    """
-    out: list[tuple[str, str, bool]] = []
-    emitted_tokens: set[str] = set()
-    emitted_subwords: set[str] = set()
-
-    def _register(token: str) -> None:
-        emitted_tokens.add(token)
-        # Split on whitespace to record constituent words
-        for w in token.split():
-            emitted_subwords.add(w)
-
-    # Pattern 5: known-families reverse match (case-insensitive whole-word).
-    # Longest matches first so "Silver Fox" wins over "Silver" if both exist
-    # in the known-families list. Shorter families whose words are already
-    # subwords of a prior (longer) family emission are skipped — same
-    # mechanism Patterns 4 and 6 use for dedup.
-    text_lower = text.lower()
-    for family in sorted(known_families, key=len, reverse=True):
-        family_lower = family.lower()
-        pat = re.compile(r"\b" + re.escape(family_lower) + r"\b")
-        if not pat.search(text_lower):
-            continue
-        if family in emitted_tokens:
-            continue
-        # Skip if any word of this family is already a subword of a prior
-        # (longer) multi-word family emission. Word-boundary dedup replaces
-        # the earlier plain-substring guard.
-        family_words = family.split()
-        if any(w in emitted_subwords for w in family_words):
-            continue
-        out.append((family, "known_family", True))
-        _register(family)
-
-    # Pattern 1: CVE (distinct shape, no subword concerns)
-    for m in RE_CVE.finditer(text):
-        token = m.group(0)
-        if token in emitted_tokens:
-            continue
-        out.append((token, "cve", True))
-        _register(token)
-
-    # Pattern 2: category-suffix
-    for m in RE_CATEGORY_SUFFIX.finditer(text):
-        token = m.group(0)
-        if token in emitted_tokens:
-            continue
-        out.append((token, "category_suffix", True))
-        _register(token)
-
-    # Pattern 3: camelcase-novel
-    for m in RE_CAMELCASE.finditer(text):
-        token = m.group(0)
-        if token in emitted_tokens:
-            continue
-        ctx = _has_keyword_near(text, m.span(), MALWARE_CONTEXT_KEYWORDS, window_words=5)
-        label = "camelcase_with_context" if ctx else "camelcase_no_context"
-        out.append((token, label, ctx))
-        _register(token)
-
-    # Pattern 4: two-word with context (context required).
-    # Reject if word1 is a grammatical opener (stopword) OR if either
-    # word is already a subword of a prior multi-word emission.
-    for m in RE_TWO_WORD.finditer(text):
-        word1, word2 = m.group(1), m.group(2)
-        token = m.group(0)
-        if token in emitted_tokens:
-            continue
-        if word1 in TWO_WORD_STOPWORDS:
-            continue
-        if word1 in emitted_subwords or word2 in emitted_subwords:
-            continue  # already covered by a longer multi-word match
-        if _has_keyword_near(text, m.span(), MALWARE_CONTEXT_KEYWORDS, window_words=5):
-            out.append((token, "two_word_with_context", True))
-            _register(token)
-
-    # Pattern 6: single-word with STRONG context (strict 3-word gate).
-    # Skip if the token is already a subword of an earlier emission
-    # (e.g., "Silver" after "Silver Fox" was emitted).
-    for m in RE_SINGLE_WORD.finditer(text):
-        token = m.group(0)
-        if token in emitted_tokens or token in emitted_subwords:
-            continue
-        if _has_keyword_near(text, m.span(), STRONG_SIGNAL_KEYWORDS, window_words=3):
-            out.append((token, "single_word_with_context", True))
-            _register(token)
-
-    return out
-
-
-# ---- Token-shape validator (post-filter, applies to LLM output too) --------
+# ---- Token-shape validator (post-filter, applies to ALL LLM output) --------
 
 def is_valid_token_shape(token: str) -> bool:
     """Reject shell metacharacters, URLs, over-length strings."""
@@ -312,23 +133,8 @@ def is_valid_token_shape(token: str) -> bool:
 
 # ---- Cursor handling (CMS-migration fallback) -------------------------------
 
-def _should_skip_via_cursor(post: Post, last_seen: datetime | None,
-                            last_url: str | None, all_urls: set[str]) -> bool:
-    """Apply cursor filter.
-
-    Logic:
-    - No cursor (bootstrap): pass everything.
-    - Have cursor: skip posts with pub_date <= last_seen.
-      The last_url field is a diagnostic belt-and-suspenders — if it's
-      present but NOT in the current feed AND the cursor is >90 days
-      old, we log `cms_migration_detected` in the caller (for operator
-      visibility) but the filter decision is the same: timestamp-only.
-
-    CMS-migration detection is diagnostic, not a different filter — the
-    spec's intent is for operators to KNOW when a CMS migration may have
-    happened (via log), but the cursor-advance behavior is identical to
-    the normal case. Consolidated here so no dead branches.
-    """
+def _should_skip_via_cursor(post: Post, last_seen: datetime | None) -> bool:
+    """Skip posts already seen on a prior run. Bootstrap (no cursor) passes all."""
     if last_seen is None:
         return False
     return post.pub_date <= last_seen
@@ -336,8 +142,9 @@ def _should_skip_via_cursor(post: Post, last_seen: datetime | None,
 
 def _detect_cms_migration(last_seen: datetime | None, last_url: str | None,
                           all_urls: set[str]) -> bool:
-    """Diagnostic: has the source's CMS likely migrated to a new URL
-    scheme? Used for log-only notification; does not change filter.
+    """Diagnostic: a cursor URL that disappeared from a >90-day-old feed
+    suggests a CMS migration to a new URL scheme. Log-only; the cursor
+    filter decision itself is unchanged (timestamp-only).
     """
     if last_seen is None or last_url is None:
         return False
@@ -347,16 +154,33 @@ def _detect_cms_migration(last_seen: datetime | None, last_url: str | None,
     return age_days > 90
 
 
-# ---- Main -------------------------------------------------------------------
+# ---- Main modes -------------------------------------------------------------
 
-def run_extract(args) -> int:
-    """Default mode: parse RSS, extract, emit candidates."""
+def run_parse_posts(args) -> int:
+    """Default mode: parse RSS, emit posts for LLM extraction downstream.
+
+    Output shape (stdout, pretty-printed JSON):
+        {
+          "source_id": "...",
+          "path": "rss",
+          "posts": [
+            {"url": ..., "pub_date": ..., "title": ..., "description": ..., "body": ...},
+            ...
+          ],
+          "cursor_update": {"last_seen_timestamp": ..., "last_post_url": ...} | absent,
+          "cms_migration_detected": bool,
+          "error": null | {"kind": "fetch_error" | "parse_error", "message": "..."}
+        }
+
+    `posts` is ordered newest-last (ascending pub_date) — the skill picks
+    which to feed to its LLM prompt based on rank/slice rules.
+    """
     try:
         xml_bytes = Path(args.rss_file).read_bytes()
     except OSError as e:
         print(json.dumps({
             "source_id": args.source_id, "path": "rss",
-            "candidates": [], "posts_processed": [],
+            "posts": [],
             "error": {"kind": "fetch_error", "message": str(e)},
         }))
         return 2
@@ -365,16 +189,11 @@ def run_extract(args) -> int:
     except ET.ParseError as e:
         print(json.dumps({
             "source_id": args.source_id, "path": "rss",
-            "candidates": [], "posts_processed": [],
+            "posts": [],
             "error": {"kind": "parse_error", "message": str(e)},
         }))
         return 2
 
-    denylist = set(yaml.safe_load(Path(args.denylist).read_text())["denylist"])
-    known_families = set(yaml.safe_load(Path(args.known_families).read_text())["families"])
-    rule_index = set(args.rule_index.split(",")) if args.rule_index else set()
-
-    # Parse optional cursor inputs (spec §cursor CMS-migration fallback)
     cursor_last_seen: datetime | None = None
     if args.cursor_last_seen_timestamp:
         cursor_last_seen = datetime.fromisoformat(
@@ -382,59 +201,34 @@ def run_extract(args) -> int:
         ).astimezone(timezone.utc)
     cursor_last_url: str | None = args.cursor_last_url or None
 
-    candidates: list[Candidate] = []
-    posts_processed: list[dict] = []
+    emitted: list[dict] = []
     new_cursor_last_seen: datetime | None = None
     new_cursor_last_url: str | None = None
-    seen_dedup: set[tuple[str, str]] = set()
     all_urls = {p.url for p in posts}
 
+    # `body` is emitted untruncated. Callers with a prompt-token budget (the
+    # skill orchestrator's per-post LLM call is the main one) apply their own
+    # truncation. Leaving it untruncated here keeps future consumers — e.g.,
+    # a future auditor that wants full post text — unconstrained.
     for post in posts:
-        if _should_skip_via_cursor(post, cursor_last_seen, cursor_last_url, all_urls):
+        if _should_skip_via_cursor(post, cursor_last_seen):
             continue
-
-        text = " \n ".join([post.title, post.description, post.body])
-        raw_hits = extract_from_text(text, known_families)
-
-        # Cursor advances to newest SURVIVING post (post-cursor-filter)
         new_cursor_last_seen = post.pub_date
         new_cursor_last_url = post.url
-
-        post_candidate_count = 0
-        for token, pattern_label, has_ctx in raw_hits:
-            if token in denylist:
-                continue
-            if token in rule_index:
-                continue
-            if not is_valid_token_shape(token):
-                continue
-            key = (token, post.url)
-            if key in seen_dedup:
-                continue
-            seen_dedup.add(key)
-            confidence = "high" if has_ctx or pattern_label in {"cve", "category_suffix", "known_family"} else "low"
-            candidates.append(Candidate(
-                threat_name=token,
-                source_url=post.url,
-                pub_date=post.pub_date.strftime("%Y-%m-%dT%H:%M:%SZ"),
-                confidence=confidence,
-                pattern=pattern_label,
-            ))
-            post_candidate_count += 1
-
-        posts_processed.append({
+        emitted.append({
             "url": post.url,
             "pub_date": post.pub_date.strftime("%Y-%m-%dT%H:%M:%SZ"),
-            "candidate_count": post_candidate_count,
+            "title": post.title,
+            "description": post.description,
+            "body": post.body,
         })
 
     cms_migration = _detect_cms_migration(cursor_last_seen, cursor_last_url, all_urls)
 
-    output = {
+    output: dict = {
         "source_id": args.source_id,
         "path": "rss",
-        "candidates": [c.as_dict() for c in candidates],
-        "posts_processed": posts_processed,
+        "posts": emitted,
         "cms_migration_detected": cms_migration,
         "error": None,
     }
@@ -448,9 +242,9 @@ def run_extract(args) -> int:
 
 
 def run_validate_tokens(args) -> int:
-    """Filter a JSON list of candidate names via token-shape + denylist +
-    rule-index. Intended as the post-filter for LLM-fallback output.
-    Also the structural XPIA defense line — see test_discover_xpia.py.
+    """Filter a JSON list of candidate names from stdin via token-shape +
+    denylist + rule-index. The structural XPIA defense line — see
+    test_discover_xpia.py.
     """
     raw = sys.stdin.read()
     try:
@@ -461,8 +255,13 @@ def run_validate_tokens(args) -> int:
         print(json.dumps({"error": f"invalid input: {e}"}))
         return 2
 
+    if not args.denylist:
+        print(json.dumps({"error": "--validate-tokens requires --denylist"}))
+        return 2
     denylist = set(yaml.safe_load(Path(args.denylist).read_text())["denylist"])
-    rule_index = set(args.rule_index.split(",")) if args.rule_index else set()
+    # Drop empty strings from a trailing/double comma so '"foo,,bar"' doesn't
+    # produce a '' entry that spuriously matches an empty LLM response.
+    rule_index = {s for s in args.rule_index.split(",") if s} if args.rule_index else set()
 
     filtered: list[str] = []
     for name in candidates[:20]:  # Cap at 20 — guards against flood-attack LLM output
@@ -499,14 +298,11 @@ def run_check_robots(args) -> int:
         print(json.dumps({"allowed": True, "reason": "robots_fetch_failed"}))
         return 0
 
-    # Parse: look for User-Agent: * block, collect Disallow: prefixes
     current_agent: str | None = None
     disallows: list[str] = []
     for line in body.splitlines():
         line = line.split("#", 1)[0].strip()
-        if not line:
-            continue
-        if ":" not in line:
+        if not line or ":" not in line:
             continue
         key, val = [p.strip() for p in line.split(":", 1)]
         key_lower = key.lower()
@@ -524,8 +320,9 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--source-id")
     ap.add_argument("--rss-file")
-    ap.add_argument("--denylist", required=True)
-    ap.add_argument("--known-families")
+    # --denylist is only needed by --validate-tokens mode; parse and robots
+    # modes don't consult it. Enforcement is per-mode (see run_validate_tokens).
+    ap.add_argument("--denylist")
     ap.add_argument("--rule-index", default="")
     ap.add_argument("--cursor-last-seen-timestamp", default="")
     ap.add_argument("--cursor-last-url", default="")
@@ -539,9 +336,9 @@ def main():
         sys.exit(run_validate_tokens(args))
     if args.check_robots:
         sys.exit(run_check_robots(args))
-    if not args.rss_file or not args.source_id or not args.known_families:
-        ap.error("default mode requires --source-id, --rss-file, --known-families")
-    sys.exit(run_extract(args))
+    if not args.rss_file or not args.source_id:
+        ap.error("default (parse) mode requires --source-id and --rss-file")
+    sys.exit(run_parse_posts(args))
 
 
 if __name__ == "__main__":
