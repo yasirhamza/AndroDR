@@ -1,0 +1,57 @@
+# Known malware families and APT groups — Pattern 5 (known-families
+# reverse match) in update-rules-discover extraction.
+#
+# Hand-curated, organic expansion. When a new real threat surfaces in
+# dogfood (via LLM fallback or manual /update-rules threat path), append
+# to this list via a small PR. Name-matching is case-insensitive whole-
+# word against title+summary+body.
+#
+# Entries here are verified-real threats. DO NOT add speculative names.
+
+version: 1
+families:
+  # Android banker / stealer / trojan families
+  - Anatsa
+  - BlackRock
+  - Brata
+  - Cerberus
+  - ClayRat
+  - FluBot
+  - GriftHorse
+  - Hook
+  - Joker
+  - Mandrake
+  - SharkBot
+  - TianySpy
+  - TrickMo
+  - Vultur
+  - XLoader
+
+  # Android spyware / commercial surveillance
+  - FinSpy
+  - Graphite
+  - Hermit
+  - NoviSpy
+  - Pegasus
+  - Predator
+  - ResidentBat
+  - SparkCat
+  - SparkKitty
+
+  # APT groups (Android-relevant; names as commonly used in public reports)
+  # Rule of thumb: use single-word form ONLY when the single word is NOT
+  # a common English noun (Bitter and Silver ARE common English — those
+  # use the two-word "Silver Fox" / "Bitter" disambiguated by context).
+  - Anubis
+  - Lazarus
+  - Sandworm
+  - Bitter
+  # Two-word APT names — use these when the single word is a common
+  # English word that would false-positive
+  - Silver Fox
+  - Cozy Bear
+  - Fancy Bear
+
+  # Cross-platform with Android payloads
+  - Scattered Spider
+  - Cellebrite
