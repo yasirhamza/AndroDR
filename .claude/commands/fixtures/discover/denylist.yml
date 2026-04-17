@@ -47,6 +47,14 @@ denylist:
   - Trojan
   - Banker
   - Stealer
+  # Generic taxonomy that Pattern 6 would falsely emit in "Lazarus Group
+  # APT", "threat Actor", "banking trojan Family", "malware Campaign",
+  # "Operation <noun>" constructions. Not real threat names.
+  - Group
+  - Family
+  - Actor
+  - Campaign
+  - Operation
   # Common English two-word phrases
   - Good Morning
   - Happy Birthday
