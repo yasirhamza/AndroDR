@@ -15,7 +15,7 @@ import json
 import pathlib
 import subprocess
 import sys
-import tempfile
+from xml.sax.saxutils import escape as xml_escape
 
 FIXTURES = pathlib.Path(__file__).resolve().parent.parent / "fixtures" / "discover"
 SCRIPT = pathlib.Path(__file__).resolve().parent / "discover_extract.py"
@@ -51,9 +51,13 @@ def _write_rss(tmp_path, items):
         '<title>test</title><link>https://example.test</link><description>t</description>',
     ]
     for t, u, p, d in items:
+        # XML-escape interpolated values — prevents a future test with an
+        # ampersand/lt/gt in a fixture value from silently producing
+        # malformed XML.
+        et, eu, ep, ed = (xml_escape(s) for s in (t, u, p, d))
         lines.append(
-            f"<item><title>{t}</title><link>{u}</link>"
-            f"<pubDate>{p}</pubDate><description>{d}</description></item>"
+            f"<item><title>{et}</title><link>{eu}</link>"
+            f"<pubDate>{ep}</pubDate><description>{ed}</description></item>"
         )
     lines.append('</channel></rss>')
     rss = tmp_path / "feed.xml"

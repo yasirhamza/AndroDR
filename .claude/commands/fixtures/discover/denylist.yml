@@ -1,5 +1,6 @@
 # Denylist for update-rules-discover extraction.
-# Tokens here are dropped by all extraction paths (regex + LLM fallback).
+# Tokens here are dropped by the structural post-filter (--validate-tokens
+# mode) when the skill pipes LLM-extracted candidates through it.
 # DO NOT add real malware-family or APT names — the lint test has a guard
 # list and will fail if any leak in.
 

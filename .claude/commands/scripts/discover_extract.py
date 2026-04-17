@@ -206,6 +206,10 @@ def run_parse_posts(args) -> int:
     new_cursor_last_url: str | None = None
     all_urls = {p.url for p in posts}
 
+    # `body` is emitted untruncated. Callers with a prompt-token budget (the
+    # skill orchestrator's per-post LLM call is the main one) apply their own
+    # truncation. Leaving it untruncated here keeps future consumers — e.g.,
+    # a future auditor that wants full post text — unconstrained.
     for post in posts:
         if _should_skip_via_cursor(post, cursor_last_seen):
             continue
@@ -251,8 +255,13 @@ def run_validate_tokens(args) -> int:
         print(json.dumps({"error": f"invalid input: {e}"}))
         return 2
 
+    if not args.denylist:
+        print(json.dumps({"error": "--validate-tokens requires --denylist"}))
+        return 2
     denylist = set(yaml.safe_load(Path(args.denylist).read_text())["denylist"])
-    rule_index = set(args.rule_index.split(",")) if args.rule_index else set()
+    # Drop empty strings from a trailing/double comma so '"foo,,bar"' doesn't
+    # produce a '' entry that spuriously matches an empty LLM response.
+    rule_index = {s for s in args.rule_index.split(",") if s} if args.rule_index else set()
 
     filtered: list[str] = []
     for name in candidates[:20]:  # Cap at 20 — guards against flood-attack LLM output
@@ -311,7 +320,9 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--source-id")
     ap.add_argument("--rss-file")
-    ap.add_argument("--denylist", required=True)
+    # --denylist is only needed by --validate-tokens mode; parse and robots
+    # modes don't consult it. Enforcement is per-mode (see run_validate_tokens).
+    ap.add_argument("--denylist")
     ap.add_argument("--rule-index", default="")
     ap.add_argument("--cursor-last-seen-timestamp", default="")
     ap.add_argument("--cursor-last-url", default="")
