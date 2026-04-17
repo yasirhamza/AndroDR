@@ -33,7 +33,12 @@ import argparse
 import json
 import re
 import sys
-import xml.etree.ElementTree as ET
+import xml.etree.ElementTree as _ET  # for ParseError class reference
+
+try:
+    import defusedxml.ElementTree as ET
+except ImportError:
+    sys.exit("defusedxml required: pip install defusedxml")
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -216,16 +221,25 @@ def extract_from_text(text: str, known_families: set[str]) -> list[tuple[str, st
 
     # Pattern 5: known-families reverse match (case-insensitive whole-word).
     # Longest matches first so "Silver Fox" wins over "Silver" if both exist
-    # in the known-families list.
+    # in the known-families list. Shorter families whose words are already
+    # subwords of a prior (longer) family emission are skipped — same
+    # mechanism Patterns 4 and 6 use for dedup.
     text_lower = text.lower()
     for family in sorted(known_families, key=len, reverse=True):
         family_lower = family.lower()
         pat = re.compile(r"\b" + re.escape(family_lower) + r"\b")
-        if pat.search(text_lower) and family not in emitted_tokens:
-            # Check not already covered by a longer known-family match
-            if not any(family_lower in t.lower() and t != family for t in emitted_tokens):
-                out.append((family, "known_family", True))
-                _register(family)
+        if not pat.search(text_lower):
+            continue
+        if family in emitted_tokens:
+            continue
+        # Skip if any word of this family is already a subword of a prior
+        # (longer) multi-word family emission. Word-boundary dedup replaces
+        # the earlier plain-substring guard.
+        family_words = family.split()
+        if any(w in emitted_subwords for w in family_words):
+            continue
+        out.append((family, "known_family", True))
+        _register(family)
 
     # Pattern 1: CVE (distinct shape, no subword concerns)
     for m in RE_CVE.finditer(text):
