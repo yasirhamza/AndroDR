@@ -31,6 +31,7 @@ class PublicRepoIocFeed @Inject constructor(
             total += fetchAndUpsertPackages(now)
             total += fetchAndUpsertDomains(now)
             total += fetchAndUpsertCertHashes(now)
+            total += fetchAndUpsertApkHashes(now)
             total += fetchAndUpsertPopularApps(now)
             Log.i(TAG, "Public repo IOC feed: $total entries upserted")
         } catch (e: Exception) {
@@ -94,6 +95,29 @@ class PublicRepoIocFeed @Inject constructor(
             val hash = entry["indicator"]?.toString()?.lowercase() ?: return@mapNotNull null
             Indicator(
                 type = IndicatorResolver.TYPE_CERT_HASH, value = hash,
+                name = entry["family"]?.toString() ?: "",
+                campaign = entry["category"]?.toString() ?: "MALWARE",
+                severity = entry["severity"]?.toString() ?: "CRITICAL",
+                description = entry["description"]?.toString() ?: "",
+                source = SOURCE_ID, fetchedAt = fetchedAt
+            )
+        }
+
+        if (indicators.isNotEmpty()) {
+            indicatorDao.upsertAll(indicators)
+        }
+        return indicators.size
+    }
+
+    @Suppress("TooGenericExceptionCaught", "SwallowedException")
+    private suspend fun fetchAndUpsertApkHashes(fetchedAt: Long): Int {
+        val yaml = fetchUrl("${BASE_URL}ioc-data/malware-hashes.yml") ?: return 0
+        val entries = parseIocYaml(yaml)
+
+        val indicators = entries.mapNotNull { entry ->
+            val hash = entry["indicator"]?.toString()?.lowercase() ?: return@mapNotNull null
+            Indicator(
+                type = IndicatorResolver.TYPE_APK_HASH, value = hash,
                 name = entry["family"]?.toString() ?: "",
                 campaign = entry["category"]?.toString() ?: "MALWARE",
                 severity = entry["severity"]?.toString() ?: "CRITICAL",
