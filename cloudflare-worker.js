@@ -194,7 +194,7 @@ export default {
     <h3>Changes to This Policy</h3>
     <p>If this policy changes, the updated version will be published here and the "last updated" date will be revised.</p>
     <h3>Contact</h3>
-    <p>For privacy questions: <a href="mailto:privacy@androdr.dev">privacy@androdr.dev</a><br>
+    <p>For privacy questions: <a href="mailto:yhamad.dev@gmail.com">yhamad.dev@gmail.com</a><br>
     GitHub: <a href="https://github.com/yasirhamza/AndroDR/issues">github.com/yasirhamza/AndroDR/issues</a></p>
   </section>
   <footer>

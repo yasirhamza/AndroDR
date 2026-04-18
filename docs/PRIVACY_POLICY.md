@@ -194,5 +194,5 @@ If this policy changes, the updated version will be published in the repository 
 ## Contact
 
 For privacy questions or concerns:
-- Email: privacy@androdr.dev
+- Email: yhamad.dev@gmail.com
 - GitHub: github.com/yasirhamza/AndroDR/issues
