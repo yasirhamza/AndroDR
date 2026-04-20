@@ -4,6 +4,11 @@ data class AppTelemetry(
     val packageName: String,
     val appName: String,
     val certHash: String?,
+    // SHA-1 of the same signing-cert bytes used for certHash (SHA-256). Required to
+    // match community feeds (stalkerware-indicators, MVT) that index cert IOCs by
+    // SHA-1 — the Android ecosystem convention (apksigner --print-certs emits SHA-1
+    // by default).
+    val certHashSha1: String?,
     val apkHash: String?,
     val isSystemApp: Boolean,
     val fromTrustedStore: Boolean,
@@ -35,6 +40,7 @@ data class AppTelemetry(
         "package_name" to packageName,
         "app_name" to appName,
         "cert_hash" to certHash,
+        "cert_hash_sha1" to certHashSha1,
         "apk_hash" to apkHash,
         "is_system_app" to isSystemApp,
         "from_trusted_store" to fromTrustedStore,

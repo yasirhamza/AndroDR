@@ -68,7 +68,7 @@ class LogsourceTaxonomyCrossCheckTest {
     /** Services whose toFieldMap() is a member function on the data class. */
     private fun memberFunctionFieldMaps(): Map<String, Set<String>> = mapOf(
         "app_scanner" to AppTelemetry(
-            packageName = "x", appName = "x", certHash = null, apkHash = null,
+            packageName = "x", appName = "x", certHash = null, certHashSha1 = null, apkHash = null,
             isSystemApp = false, fromTrustedStore = false, installer = null,
             isSideloaded = false, isKnownOemApp = false, permissions = emptyList(),
             surveillancePermissionCount = 0, hasAccessibilityService = false,

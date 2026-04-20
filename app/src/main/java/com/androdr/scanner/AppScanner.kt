@@ -162,11 +162,11 @@ class AppScanner @Inject constructor(
 
         val isSystemApp = appInfo.flags and ApplicationInfo.FLAG_SYSTEM != 0
 
-        // Cert hash — skip for system apps (AOSP test key causes false positives)
+        // Cert hashes (SHA-256 + SHA-1) — skip for system apps (AOSP test key causes FPs)
         @Suppress("TooGenericExceptionCaught", "SwallowedException")
-        val certHash = if (!isSystemApp) {
+        val certHashes = if (!isSystemApp) {
             try {
-                extractCertHash(pkg)
+                extractCertHashes(pkg)
             } catch (e: Exception) {
                 Log.w(TAG, "collectTelemetry: cert hash extraction failed for $packageName: ${e.message}")
                 null
@@ -174,6 +174,8 @@ class AppScanner @Inject constructor(
         } else {
             null
         }
+        val certHash = certHashes?.sha256
+        val certHashSha1 = certHashes?.sha1
 
         // APK file hash for VirusTotal lookup
         @Suppress("TooGenericExceptionCaught", "SwallowedException")
@@ -249,6 +251,7 @@ class AppScanner @Inject constructor(
             packageName = packageName,
             appName = appName,
             certHash = certHash,
+            certHashSha1 = certHashSha1,
             apkHash = apkHash,
             isSystemApp = isSystemApp,
             fromTrustedStore = fromTrustedStore,
@@ -284,7 +287,17 @@ class AppScanner @Inject constructor(
         return digest.digest().joinToString("") { "%02x".format(it) }
     }
 
-    private fun extractCertHash(packageInfo: android.content.pm.PackageInfo): String? {
+    /**
+     * Returns SHA-256 + SHA-1 of the first signing cert. SHA-1 is required to
+     * match community feeds (stalkerware-indicators, MVT) that index by SHA-1,
+     * per the Android ecosystem convention (apksigner prints SHA-1 by default).
+     * Both hashes are of the same certificate bytes.
+     *
+     * Tripwire: if a 3rd algorithm is added (e.g. BLAKE3 64-hex collides with
+     * SHA-256 by length), switch from per-algo AppTelemetry fields to
+     * `Map<String, String>` keyed by algorithm and update rule 002 to iterate.
+     */
+    private fun extractCertHashes(packageInfo: android.content.pm.PackageInfo): CertHashes? {
         val signatures = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
             packageInfo.signingInfo?.apkContentsSigners
         } else {
@@ -292,9 +305,15 @@ class AppScanner @Inject constructor(
             packageInfo.signatures
         }
         val cert = signatures?.firstOrNull() ?: return null
-        val digest = MessageDigest.getInstance("SHA-256")
-        return digest.digest(cert.toByteArray()).joinToString("") { "%02x".format(it) }
+        val certBytes = cert.toByteArray()
+        val sha256 = MessageDigest.getInstance("SHA-256").digest(certBytes)
+            .joinToString("") { "%02x".format(it) }
+        val sha1 = MessageDigest.getInstance("SHA-1").digest(certBytes)
+            .joinToString("") { "%02x".format(it) }
+        return CertHashes(sha256 = sha256, sha1 = sha1)
     }
+
+    private data class CertHashes(val sha256: String, val sha1: String)
 
     /**
      * Returns the installer package name for [packageName], handling API-level differences
