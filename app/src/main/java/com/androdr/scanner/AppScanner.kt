@@ -195,12 +195,12 @@ class AppScanner @Inject constructor(
 
         // Known-app resolver
         val knownApp = knownAppResolver.lookup(packageName)
-        // Primary: known-good DB (Plexus/UAD feeds, 14k+ apps)
+        // Primary: known-good DB (Plexus/UAD feeds, 14k+ apps, including Samsung/Xiaomi/etc.
+        //   partner preloads classified as OEM via UAD-ng's Oem/Carrier/Misc lists)
         // Fallback: OEM prefix matching (for apps not in DB yet)
         val isKnownOemApp = knownApp?.category in setOf(
             KnownAppCategory.OEM, KnownAppCategory.AOSP, KnownAppCategory.GOOGLE
         ) || oemPrefixResolver.isOemPrefix(packageName, localDevice)
-            || (isSystemApp && oemPrefixResolver.isPartnershipPrefix(packageName, localDevice))
 
         val isSideloaded = !isSystemApp && !fromTrustedStore && !isKnownOemApp
 

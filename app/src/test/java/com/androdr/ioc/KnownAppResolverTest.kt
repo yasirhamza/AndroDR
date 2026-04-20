@@ -54,6 +54,7 @@ class KnownAppResolverTest {
             category = "USER_APP", sourceId = "plexus", fetchedAt = 1000L
         )
         coEvery { mockDao.getAll() } returns listOf(dbEntry)
+        every { mockBundled.lookup("com.whatsapp") } returns null
 
         resolver.refreshCache()
         val result = resolver.lookup("com.whatsapp")
@@ -136,6 +137,64 @@ class KnownAppResolverTest {
         val result = resolver.lookup(rro)
 
         assertEquals(base, result?.packageName)
+    }
+
+    @Test
+    fun `cache USER_APP does not override bundled OEM for same package`() = runTest {
+        // Regression: Plexus feed writes every entry as USER_APP and can race UAD writes
+        // in the Room DB. When bundled JSON has an authoritative OEM/AOSP/GOOGLE
+        // classification for the same package, that must win — otherwise Netflix/Facebook
+        // preloads on Samsung devices get mis-classified as USER_APP and trip
+        // rule-014 App Impersonation (HIGH).
+        val cachedUserApp = KnownAppDbEntry(
+            packageName = "com.facebook.katana", displayName = "Facebook",
+            category = "USER_APP", sourceId = "plexus", fetchedAt = 1000L
+        )
+        coEvery { mockDao.getAll() } returns listOf(cachedUserApp)
+        every { mockBundled.lookup("com.facebook.katana") } returns KnownAppEntry(
+            packageName = "com.facebook.katana", displayName = "Facebook",
+            category = KnownAppCategory.OEM, sourceId = "bundled", fetchedAt = 0L
+        )
+
+        resolver.refreshCache()
+        val result = resolver.lookup("com.facebook.katana")
+
+        assertEquals(KnownAppCategory.OEM, result?.category)
+    }
+
+    @Test
+    fun `cache OEM is preferred over bundled USER_APP`() = runTest {
+        // Symmetric case: fresh UAD fetch (cache) has OEM, older bundled has USER_APP.
+        // Cache's authoritative classification wins.
+        val cachedOem = KnownAppDbEntry(
+            packageName = "com.example.preload", displayName = "Preload",
+            category = "OEM", sourceId = "uad_ng", fetchedAt = 2000L
+        )
+        coEvery { mockDao.getAll() } returns listOf(cachedOem)
+        every { mockBundled.lookup("com.example.preload") } returns KnownAppEntry(
+            packageName = "com.example.preload", displayName = "Preload",
+            category = KnownAppCategory.USER_APP, sourceId = "bundled", fetchedAt = 0L
+        )
+
+        resolver.refreshCache()
+        val result = resolver.lookup("com.example.preload")
+
+        assertEquals(KnownAppCategory.OEM, result?.category)
+    }
+
+    @Test
+    fun `cache USER_APP is returned when bundled has no entry`() = runTest {
+        val cachedUserApp = KnownAppDbEntry(
+            packageName = "com.whatsapp", displayName = "WhatsApp",
+            category = "USER_APP", sourceId = "plexus", fetchedAt = 1000L
+        )
+        coEvery { mockDao.getAll() } returns listOf(cachedUserApp)
+        every { mockBundled.lookup("com.whatsapp") } returns null
+
+        resolver.refreshCache()
+        val result = resolver.lookup("com.whatsapp")
+
+        assertEquals(KnownAppCategory.USER_APP, result?.category)
     }
 
     @Test

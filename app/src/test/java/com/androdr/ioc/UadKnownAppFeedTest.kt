@@ -10,9 +10,12 @@ class UadKnownAppFeedTest {
 
     private val feed = UadKnownAppFeed()
 
+    // UAD-ng upstream emits title-case list values ("Oem", "Aosp", "Carrier", "Misc", "Google").
+    // See: https://raw.githubusercontent.com/Universal-Debloater-Alliance/universal-android-debloater-next-generation/main/resources/assets/uad_lists.json
+
     @Test
-    fun `OEM entry maps to OEM category`() {
-        val json = """{"com.samsung.clock":{"list":"OEM","description":"Samsung Clock"}}"""
+    fun `Oem entry maps to OEM category`() {
+        val json = """{"com.samsung.clock":{"list":"Oem","description":"Samsung Clock"}}"""
         val results = feed.parseUadJson(json)
         assertEquals(1, results.size)
         assertEquals("com.samsung.clock", results[0].packageName)
@@ -30,14 +33,14 @@ class UadKnownAppFeedTest {
 
     @Test
     fun `Misc entry maps to OEM category`() {
-        val json = """{"com.example.misc":{"list":"Misc","description":"Misc App"}}"""
+        val json = """{"com.facebook.katana":{"list":"Misc","description":"Facebook"}}"""
         val results = feed.parseUadJson(json)
         assertEquals(KnownAppCategory.OEM, results[0].category)
     }
 
     @Test
-    fun `AOSP entry maps to AOSP category`() {
-        val json = """{"com.android.settings":{"list":"AOSP","description":"Settings"}}"""
+    fun `Aosp entry maps to AOSP category`() {
+        val json = """{"com.android.settings":{"list":"Aosp","description":"Settings"}}"""
         val results = feed.parseUadJson(json)
         assertEquals(KnownAppCategory.AOSP, results[0].category)
     }
@@ -47,6 +50,14 @@ class UadKnownAppFeedTest {
         val json = """{"com.google.android.gms":{"list":"Google","description":"Play Services"}}"""
         val results = feed.parseUadJson(json)
         assertEquals(KnownAppCategory.GOOGLE, results[0].category)
+    }
+
+    @Test
+    fun `Netflix preload in Misc list classifies as OEM not USER_APP`() {
+        val json = """{"com.netflix.mediaclient":{"list":"Misc","description":"Netflix"}}"""
+        val results = feed.parseUadJson(json)
+        assertEquals(1, results.size)
+        assertEquals(KnownAppCategory.OEM, results[0].category)
     }
 
     @Test

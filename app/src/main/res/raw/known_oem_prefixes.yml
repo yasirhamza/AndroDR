@@ -89,12 +89,13 @@ conditional:
       - "com.shannon."
       - "com.wsomacp"
       - "com.wssyncmldm"
-    # Apps pre-installed via Samsung partnerships — counts as OEM only
-    # when the app has FLAG_SYSTEM (pre-installed) AND the device is Samsung.
-    partnership_prefixes:
-      - "com.microsoft."
-      - "com.touchtype."
-      - "com.facebook."
+    # partnership_prefixes intentionally omitted. Samsung-bundled partner apps
+    # (Microsoft, Netflix, Facebook, Spotify, Booking, LinkedIn, etc.) are
+    # classified via the known_good_apps.json database (UAD-ng Oem/Carrier/Misc
+    # lists) — a community-maintained data source that scales without requiring
+    # AndroDR releases for every new Samsung partner deal. A closed allowlist
+    # here produced HIGH "firmware implant" false positives on any un-listed
+    # preload; see issue #147.
 
   xiaomi:
     manufacturer_match: ["xiaomi"]

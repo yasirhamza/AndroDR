@@ -33,10 +33,15 @@ class UadKnownAppFeed : KnownAppFeed {
             val results = mutableListOf<KnownAppEntry>()
             root.keys().forEach { packageName ->
                 val obj = root.optJSONObject(packageName) ?: return@forEach
+                // UAD-ng upstream JSON emits title-case list values.
+                // See uad_lists.json: values are "Oem", "Aosp", "Carrier", "Misc", "Google".
+                // Earlier revisions checked "OEM"/"AOSP" which silently dropped ~83% of
+                // UAD entries, causing Samsung-preloaded apps (Netflix, Facebook, etc.) to
+                // fall back to Plexus's USER_APP classification and trip App Impersonation FPs.
                 val listField = obj.optString("list")
                 val category = when (listField) {
-                    "OEM", "Carrier", "Misc" -> KnownAppCategory.OEM
-                    "AOSP"                   -> KnownAppCategory.AOSP
+                    "Oem", "Carrier", "Misc" -> KnownAppCategory.OEM
+                    "Aosp"                   -> KnownAppCategory.AOSP
                     "Google"                 -> KnownAppCategory.GOOGLE
                     else                     -> return@forEach
                 }

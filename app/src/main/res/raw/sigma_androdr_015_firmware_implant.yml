@@ -1,11 +1,13 @@
-title: System app with unknown origin
+title: Unrecognized system app
 id: androdr-015
 status: production
-description: System-level app does not match any known OEM or AOSP package prefix.
+description: Pre-installed system app that does not match any known OEM/AOSP/Google package in the known-good database.
 author: AndroDR
 date: 2026/03/27
-tags:
-    - attack.t1398
+# T1398 (Install Insecure or Malicious Configuration) was removed in #147
+# when this rule was downgraded from HIGH "Firmware Implant" to LOW
+# "Unrecognized System App" — T1398 implies malicious intent, which LOW
+# severity informational findings cannot support without corroborating signals.
 logsource:
     product: androdr
     service: app_scanner
@@ -14,13 +16,13 @@ detection:
         is_system_app: true
         is_known_oem_app: false
     condition: selection
-level: high
+level: low
 category: incident
 display:
     category: app_risk
     icon: memory
-    triggered_title: "Firmware Implant"
+    triggered_title: "Unrecognized System App"
     evidence_type: none
-    guidance: "CRITICAL -- possible firmware-level implant; seek expert forensic assistance"
+    guidance: "Review whether this preload is expected for your device model and carrier."
 remediation:
-    - "This app has system privileges but does not match any known manufacturer package."
+    - "This app was pre-installed on the device but is not in the known-good app database. This is normal for some carrier and partner preloads; verify the app name matches something you recognize."

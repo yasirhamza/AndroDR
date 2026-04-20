@@ -70,14 +70,6 @@ class OemPrefixResolver @Inject constructor(
         isOemPrefix(packageName, device)
 
     /**
-     * Returns true iff [packageName] is a partnership prefix in the applicable
-     * set for [device]. Partnership prefixes only classify as OEM when the
-     * app also has FLAG_SYSTEM (pre-installed). See spec §9 and #90.
-     */
-    fun isPartnershipPrefix(packageName: String, device: DeviceIdentity): Boolean =
-        applicablePrefixesFor(device).partnership.any { packageName.startsWith(it) }
-
-    /**
      * Returns true iff [installer] is a trusted app store. Trusted installers
      * are unconditional (every device), so [device] is accepted but only used
      * for the fallback `isOemPrefix` call.
@@ -97,7 +89,6 @@ class OemPrefixResolver @Inject constructor(
         perDeviceCache.getOrPut(device) {
             val d = data.get()
             val strict = mutableSetOf<String>()
-            val partnership = mutableSetOf<String>()
 
             // Unconditional always applies
             strict.addAll(d.unconditionalStrict)
@@ -106,14 +97,10 @@ class OemPrefixResolver @Inject constructor(
             for (block in d.conditional) {
                 if (block.matches(device)) {
                     strict.addAll(block.strictPrefixes)
-                    partnership.addAll(block.partnershipPrefixes)
                 }
             }
 
-            ApplicablePrefixes(
-                strict = strict.toSet(),
-                partnership = partnership.toSet(),
-            )
+            ApplicablePrefixes(strict = strict.toSet())
         }
 
     /**
@@ -128,10 +115,8 @@ class OemPrefixResolver @Inject constructor(
             val parsed = parseOemPrefixYaml(yaml)
 
             // Sanity checks — reject obviously malicious remote data
-            val allStrict = parsed.unconditionalStrict +
+            val allPrefixes = parsed.unconditionalStrict +
                 parsed.conditional.flatMap { it.strictPrefixes }
-            val allPartnership = parsed.conditional.flatMap { it.partnershipPrefixes }
-            val allPrefixes = allStrict + allPartnership
             if (allPrefixes.any { it.length < 4 }) {
                 Log.w(TAG, "Remote OEM prefix feed rejected: prefix too short")
                 return@withContext
@@ -175,7 +160,6 @@ class OemPrefixResolver @Inject constructor(
         val manufacturerMatch: Set<String>,
         val brandMatch: Set<String>,
         val strictPrefixes: Set<String>,
-        val partnershipPrefixes: Set<String>,
     ) {
         /**
          * A block matches a device iff the device's manufacturer is in
@@ -191,7 +175,6 @@ class OemPrefixResolver @Inject constructor(
     /** The effective allowlist for a specific device identity. */
     data class ApplicablePrefixes(
         val strict: Set<String>,
-        val partnership: Set<String>,
     )
 
     // ─── YAML parsing ──────────────────────────────────────────────────────
@@ -244,17 +227,17 @@ class OemPrefixResolver @Inject constructor(
                 val strictPrefixes = (block["strict_prefixes"] as? List<*>)
                     ?.filterIsInstance<String>()
                     ?.toSet() ?: emptySet()
-                val partnershipPrefixes = (block["partnership_prefixes"] as? List<*>)
-                    ?.filterIsInstance<String>()
-                    ?.toSet() ?: emptySet()
 
-                if (strictPrefixes.isNotEmpty() || partnershipPrefixes.isNotEmpty()) {
+                // `partnership_prefixes` is parsed-and-ignored for forward-compat with
+                // older bundled/remote YAML that still carries the block — see #147 for
+                // why the concept was retired (hand-maintained allowlist produced FPs;
+                // known_good_apps.json is the canonical trust anchor).
+                if (strictPrefixes.isNotEmpty()) {
                     conditionalBlocks += ConditionalBlock(
                         id = blockId,
                         manufacturerMatch = manufacturerMatch,
                         brandMatch = brandMatch,
                         strictPrefixes = strictPrefixes,
-                        partnershipPrefixes = partnershipPrefixes,
                     )
                 }
             }
@@ -278,16 +261,14 @@ class OemPrefixResolver @Inject constructor(
     @Suppress("UNCHECKED_CAST")
     private fun parseLegacyFlat(doc: Map<*, *>): ParsedOemData {
         val strictPrefixes = mutableSetOf<String>()
-        val partnershipPrefixes = mutableSetOf<String>()
         for ((key, value) in doc) {
             val keyStr = key.toString()
+            // Accept any `*_prefixes` list (oem, chipset, partnership, etc.) as
+            // unconditional in the legacy flat layout. Partnership semantics were
+            // retired in #147 — on the legacy path we can't know device manufacturer
+            // so treating them as unconditional is acceptable.
             if (keyStr.endsWith("_prefixes") && value is List<*>) {
-                val prefixes = value.filterIsInstance<String>()
-                if (keyStr.contains("partner")) {
-                    partnershipPrefixes.addAll(prefixes)
-                } else {
-                    strictPrefixes.addAll(prefixes)
-                }
+                strictPrefixes.addAll(value.filterIsInstance<String>())
             }
         }
         val installers = (doc["trusted_installers"] as? List<*>)
@@ -296,11 +277,8 @@ class OemPrefixResolver @Inject constructor(
             ?.take(MAX_INSTALLER_COUNT)
             ?.toSet() ?: emptySet()
 
-        // Legacy: all prefixes become unconditional. Partnership prefixes
-        // are dropped on the legacy fallback path — this is acceptable
-        // because the production YAML ships with the new structure.
         return ParsedOemData(
-            unconditionalStrict = strictPrefixes + partnershipPrefixes,
+            unconditionalStrict = strictPrefixes,
             conditional = emptyList(),
             trustedInstallers = installers,
         )

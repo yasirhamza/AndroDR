@@ -92,16 +92,12 @@ class OemPrefixResolverTest {
     }
 
     @Test
-    fun `partnership prefixes are not strict OEM prefixes`() {
+    fun `partner prefixes are not strict OEM prefixes on any device`() {
+        // Former partnership concept retired in #147: Facebook/Microsoft preloads
+        // are now classified via the known_good_apps.json DB, not prefix matching.
+        // isOemPrefix must return false for these — they're user-space bundle IDs.
         assertFalse(resolver.isOemPrefix("com.facebook.katana", samsung))
         assertFalse(resolver.isOemPrefix("com.microsoft.office.word", samsung))
-    }
-
-    @Test
-    fun `partnership prefixes match isPartnershipPrefix on Samsung device`() {
-        assertTrue(resolver.isPartnershipPrefix("com.facebook.katana", samsung))
-        assertTrue(resolver.isPartnershipPrefix("com.microsoft.office.word", samsung))
-        assertTrue(resolver.isPartnershipPrefix("com.touchtype.swiftkey", samsung))
     }
 
     @Test
