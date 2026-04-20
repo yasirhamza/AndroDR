@@ -83,13 +83,6 @@ class OemPrefixResolverConditionalTest {
     }
 
     @Test
-    fun `partnership prefixes only apply on the matching OEM device`() {
-        assertTrue(resolver.isPartnershipPrefix("com.facebook.katana", samsung))
-        assertFalse(resolver.isPartnershipPrefix("com.facebook.katana", pixel))
-        assertFalse(resolver.isPartnershipPrefix("com.facebook.katana", xiaomi))
-    }
-
-    @Test
     fun `applicablePrefixesFor caches per device identity`() {
         val a = resolver.applicablePrefixesFor(pixel)
         val b = resolver.applicablePrefixesFor(pixel)

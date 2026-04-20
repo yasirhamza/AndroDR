@@ -105,8 +105,7 @@ class UsageStatsScanner @Inject constructor(
         val packageName = event.packageName ?: return
 
         // Skip OEM/system apps — only track user-installed app activity
-        if (oemPrefixResolver.isOemPrefix(packageName, localDevice) ||
-            oemPrefixResolver.isPartnershipPrefix(packageName, localDevice)) return
+        if (oemPrefixResolver.isOemPrefix(packageName, localDevice)) return
 
         // Resolve app label (cached to avoid repeated PM lookups)
         val appLabel = labelCache.getOrPut(packageName) {

@@ -89,12 +89,9 @@ conditional:
       - "com.shannon."
       - "com.wsomacp"
       - "com.wssyncmldm"
-    # Apps pre-installed via Samsung partnerships — counts as OEM only
-    # when the app has FLAG_SYSTEM (pre-installed) AND the device is Samsung.
-    partnership_prefixes:
-      - "com.microsoft."
-      - "com.touchtype."
-      - "com.facebook."
+    # partnership_prefixes retired in #147. Samsung-bundled partner apps
+    # (Microsoft, Netflix, Facebook, etc.) are classified via the
+    # known_good_apps.json database (UAD-ng Oem/Carrier/Misc lists).
 
   xiaomi:
     manufacturer_match: ["xiaomi"]

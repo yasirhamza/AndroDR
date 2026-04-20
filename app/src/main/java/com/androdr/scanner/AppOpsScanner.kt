@@ -25,18 +25,25 @@ class AppOpsScanner @Inject constructor(
     @ApplicationContext private val context: Context
 ) {
 
-    /** Dangerous ops to check per package. Values are AppOpsManager.OPSTR_* constants. */
-    private val dangerousOps = listOf(
-        AppOpsManager.OPSTR_CAMERA,
-        AppOpsManager.OPSTR_RECORD_AUDIO,
-        AppOpsManager.OPSTR_READ_CONTACTS,
-        AppOpsManager.OPSTR_READ_CALL_LOG,
-        AppOpsManager.OPSTR_FINE_LOCATION,
-        AppOpsManager.OPSTR_READ_SMS,
-        AppOpsManager.OPSTR_READ_EXTERNAL_STORAGE,
-        // Not a public OPSTR_* constant but valid on API 26+; the per-op try/catch handles
-        // any platform that doesn't recognise it.
-        "android:request_install_packages"
+    /**
+     * Dangerous ops to check, paired with the Android runtime permission that gates each.
+     * An op is only recorded if the package's manifest *declares* the matching permission —
+     * otherwise `unsafeCheckOpNoThrow` returns the default policy mode (often `MODE_ALLOWED`)
+     * for ops the app never requested, producing false-positive "camera/mic access" findings
+     * on apps that never declared those permissions. See #147.
+     *
+     * `android:request_install_packages` lacks a public `OPSTR_*` constant but is valid on
+     * API 26+; the per-op try/catch handles platforms that don't recognise it.
+     */
+    private val opPermissionPairs = listOf(
+        AppOpsManager.OPSTR_CAMERA               to "android.permission.CAMERA",
+        AppOpsManager.OPSTR_RECORD_AUDIO         to "android.permission.RECORD_AUDIO",
+        AppOpsManager.OPSTR_READ_CONTACTS        to "android.permission.READ_CONTACTS",
+        AppOpsManager.OPSTR_READ_CALL_LOG        to "android.permission.READ_CALL_LOG",
+        AppOpsManager.OPSTR_FINE_LOCATION        to "android.permission.ACCESS_FINE_LOCATION",
+        AppOpsManager.OPSTR_READ_SMS             to "android.permission.READ_SMS",
+        AppOpsManager.OPSTR_READ_EXTERNAL_STORAGE to "android.permission.READ_EXTERNAL_STORAGE",
+        "android:request_install_packages"       to "android.permission.REQUEST_INSTALL_PACKAGES",
     )
 
     // The inner op loop uses `continue` for null/unknown-op cases and for permission mode
@@ -58,8 +65,11 @@ class AppOpsScanner @Inject constructor(
                 val appInfo = pkgInfo.applicationInfo ?: continue
                 val isSystem = appInfo.flags and ApplicationInfo.FLAG_SYSTEM != 0
                 val uid = appInfo.uid
+                val declaredPermissions = pkgInfo.requestedPermissions?.toSet() ?: emptySet()
 
-                for (opStr in dangerousOps) {
+                for ((opStr, permission) in opPermissionPairs) {
+                    if (permission !in declaredPermissions) continue
+
                     val mode = try {
                         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                             opsManager.unsafeCheckOpNoThrow(opStr, uid, packageName)
