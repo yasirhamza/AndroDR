@@ -35,6 +35,7 @@ import com.androdr.ioc.feeds.HaGeZiTifFeed
 import com.androdr.ioc.feeds.MalwareBazaarCertFeed
 import com.androdr.ioc.feeds.MvtIndicatorsFeed
 import com.androdr.ioc.feeds.PlexusKnownAppFeed
+import com.androdr.ioc.feeds.StalkerwareCertHashFeed
 import com.androdr.ioc.feeds.StalkerwareIndicatorsFeed
 import com.androdr.ioc.feeds.ThreatFoxDomainFeed
 import com.androdr.ioc.feeds.UadKnownAppFeed
@@ -101,7 +102,7 @@ object AppModule {
     @Provides
     @Singleton
     fun provideCertHashIocFeeds(): @JvmSuppressWildcards List<CertHashIocFeed> =
-        listOf(MalwareBazaarCertFeed())
+        listOf(MalwareBazaarCertFeed(), StalkerwareCertHashFeed())
 
     @Provides
     @Singleton

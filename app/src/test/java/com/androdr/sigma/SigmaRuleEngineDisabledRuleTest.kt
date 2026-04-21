@@ -41,6 +41,7 @@ class SigmaRuleEngineDisabledRuleTest {
         packageName = "com.test.app",
         appName = "Test App",
         certHash = null,
+        certHashSha1 = null,
         apkHash = null,
         isSystemApp = false,
         fromTrustedStore = false,

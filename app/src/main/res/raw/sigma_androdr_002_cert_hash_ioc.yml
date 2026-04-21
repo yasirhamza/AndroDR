@@ -10,9 +10,17 @@ logsource:
     product: androdr
     service: app_scanner
 detection:
-    selection:
+    # Single cert_hash_ioc_db holds fingerprints keyed by raw hex. SHA-256
+    # (64 hex chars) and SHA-1 (40 hex chars) cannot collide by length, so a
+    # unified table is safe. AppScanner emits both hashes of the same cert
+    # bytes so either algorithm can match. Community feeds
+    # (stalkerware-indicators, MVT) ship SHA-1 per Android ecosystem
+    # convention; bundled known_bad_certs.json uses SHA-256.
+    selection_sha256:
         cert_hash|ioc_lookup: cert_hash_ioc_db
-    condition: selection
+    selection_sha1:
+        cert_hash_sha1|ioc_lookup: cert_hash_ioc_db
+    condition: selection_sha256 or selection_sha1
 level: critical
 category: incident
 display:

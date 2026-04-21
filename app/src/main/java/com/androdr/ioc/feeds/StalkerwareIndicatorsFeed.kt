@@ -52,61 +52,34 @@ class StalkerwareIndicatorsFeed : IocFeed {
     }
 
     /**
-     * Minimal line-based YAML parser for the AssoEchap ioc.yaml structure.
-     * No external YAML library required — the format is regular enough to
-     * parse with a simple state machine.
+     * Delegates YAML walking to [StalkerwareYamlParser] and emits one
+     * [IocEntry] per package name per family. The cert half of the same
+     * feed is consumed by [StalkerwareCertHashFeed].
      */
     internal fun parseYaml(yaml: String, fetchedAt: Long): List<IocEntry> {
         val results = mutableListOf<IocEntry>()
-        var currentType = "stalkerware"
-        var currentName = ""
-        var inPackages = false
-
-        for (line in yaml.lines()) {
-            when {
-                line.startsWith("- name:") -> {
-                    currentName = line.removePrefix("- name:").trim()
-                    inPackages = false
+        for (family in StalkerwareYamlParser.parse(yaml)) {
+            val category = when {
+                family.type.contains("stalker", ignoreCase = true) -> "STALKERWARE"
+                family.type.contains("spy", ignoreCase = true)     -> "SPYWARE"
+                family.type.contains("monitor", ignoreCase = true) -> "MONITORING"
+                else -> "STALKERWARE"
+            }
+            for (pkg in family.packages) {
+                val displayName = family.name.ifBlank {
+                    pkg.substringAfterLast('.').replaceFirstChar { it.uppercase() }
                 }
-                line.trimStart().startsWith("type:") -> {
-                    currentType = line.trimStart().removePrefix("type:").trim()
-                    inPackages = false
-                }
-                line.trimStart() == "packages:" -> {
-                    inPackages = true
-                }
-                inPackages && line.trimStart().startsWith("- ") && !line.startsWith("- name:") -> {
-                    val pkg = line.trimStart().removePrefix("- ").trim()
-                    // Only process lines that look like package names (contain a dot, no spaces)
-                    if (pkg.contains('.') && !pkg.contains(' ')) {
-                        val category = when {
-                            currentType.contains("stalker", ignoreCase = true) -> "STALKERWARE"
-                            currentType.contains("spy", ignoreCase = true)     -> "SPYWARE"
-                            currentType.contains("monitor", ignoreCase = true) -> "MONITORING"
-                            else -> "STALKERWARE"
-                        }
-                        val displayName = currentName.ifBlank {
-                            pkg.substringAfterLast('.').replaceFirstChar { it.uppercase() }
-                        }
-                        results.add(
-                            IocEntry(
-                                packageName = pkg,
-                                name = displayName,
-                                category = category,
-                                severity = "CRITICAL",
-                                description = "Listed in the community stalkerware-indicators " +
-                                    "database (type: $currentType). " +
-                                    "See https://github.com/AssoEchap/stalkerware-indicators",
-                                source = sourceId,
-                                fetchedAt = fetchedAt
-                            )
-                        )
-                    }
-                }
-                // Any non-package-list line resets the inPackages flag
-                inPackages && !line.trimStart().startsWith("- ") && line.isNotBlank() -> {
-                    inPackages = false
-                }
+                results += IocEntry(
+                    packageName = pkg,
+                    name = displayName,
+                    category = category,
+                    severity = "CRITICAL",
+                    description = "Listed in the community stalkerware-indicators " +
+                        "database (type: ${family.type}). " +
+                        "See https://github.com/AssoEchap/stalkerware-indicators",
+                    source = sourceId,
+                    fetchedAt = fetchedAt,
+                )
             }
         }
         return results
