@@ -37,26 +37,31 @@ android {
         versionCode = maxOf(mainBuildNumber, 439)
         versionName = "0.9.0.$versionCode"
 
-        // Release note: pick the most recent "headline" commit on HEAD.
-        // Prefers `feat:` commits (new features — the actual reason for a
-        // release), falls back to `fix:` only if no feat exists. Conventional
-        // `chore:`, `ci:`, `docs:`, `refactor:`, `test:` commits are
-        // skipped because they don't tell users anything about the release.
-        fun gitSubjectMatching(pattern: String): String? = runCatching {
+        // Release note: use the HEAD commit's subject line — that's what was just
+        // built. Earlier revisions used `git log --grep=^feat(` which walked HEAD
+        // backward through all reachable history and returned the most recent
+        // `feat:` commit *anywhere*. On a fix/chore release that produced a
+        // subject from an unrelated feature months ago. See #150.
+        val headSubjectRaw = runCatching {
             providers.exec {
                 isIgnoreExitValue = true
-                commandLine(
-                    "git", "log", "-1", "--pretty=%s", "--extended-regexp", "--grep", pattern
-                )
+                commandLine("git", "log", "-1", "--pretty=%s", "HEAD")
             }.standardOutput.asText.get().trim().takeIf { it.isNotBlank() }
-        }.getOrNull()
+        }.getOrNull() ?: "See CHANGELOG for details"
 
-        val releaseNoteRaw = gitSubjectMatching("^feat(\\(|:)")
-            ?: gitSubjectMatching("^fix(\\(|:)")
-            ?: "See CHANGELOG for details"
-        // Strip the conventional-commit prefix (feat:, fix(scope):, etc.)
-        // so the About screen reads naturally.
-        val releaseNote = releaseNoteRaw.replace(Regex("""^(feat|fix)(\([^)]*\))?:\s*"""), "")
+        // Strip the conventional-commit prefix and any trailing squash-merge PR
+        // number so the About screen reads naturally. Quotes escaped for the
+        // buildConfigField literal.
+        val conventionalPrefix = Regex(
+            """^(feat|fix|chore|docs|refactor|test|ci|build|perf|style)(\([^)]*\))?:\s*"""
+        )
+        // Squash-merge commits can carry multiple trailing issue/PR references
+        // (e.g. "feat: X (#151) (#152)") — strip them all; release notes shown
+        // in Settings shouldn't include issue numbers.
+        val trailingPrNumber = Regex("""(\s*\(#\d+\))+\s*$""")
+        val releaseNote = headSubjectRaw
+            .replace(conventionalPrefix, "")
+            .replace(trailingPrNumber, "")
             .replace("\"", "\\\"")
 
         buildConfigField("String", "RELEASE_NOTE", "\"$releaseNote\"")
