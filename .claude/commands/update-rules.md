@@ -10,7 +10,7 @@ You are the dispatcher for the AndroDR AI-powered SIGMA rule update pipeline. Yo
 
 The user invokes one of four modes:
 - `/update-rules full` — check all feeds for new threat intel
-- `/update-rules source <id>` — check one feed (valid IDs: `abusech`, `asb`, `nvd`, `amnesty`, `citizenlab`, `stalkerware`, `attack`)
+- `/update-rules source <id>` — check one feed (valid IDs: `abusech`, `asb`, `nvd`, `amnesty`, `stalkerware`, `attack`)
 - `/update-rules threat "<name>"` — research a specific threat by name
 - `/update-rules discover [--top N]` — autonomously discover up to N (default 5) emerging threats from configured discovery sources and fan out to research subagents
 
@@ -25,7 +25,7 @@ Runs from a terminal shell; subagents inherit the parent session's environment v
 | abusech (ThreatFox + MalwareBazaar) | `MALWAREBAZAAR_API_KEY` | **Required** — the single abuse.ch Auth-Key covers both endpoints. HTTP 401 without it. |
 | asb (Android Security Bulletin) | — | None (public HTML) |
 | nvd | `NVD_API_KEY` | **Optional** — raises anon rate limit from 5 req/30s to 50 req/30s. Weekly cadence works anonymously. |
-| amnesty, stalkerware, citizenlab, attack (GitHub-based) | `GITHUB_TOKEN` | **Optional** — raises anon GitHub API limit from 60/hr to 5000/hr. Weekly cadence works anonymously. |
+| amnesty, stalkerware, attack (GitHub-based) | `GITHUB_TOKEN` | **Optional** — raises anon GitHub API limit from 60/hr to 5000/hr. Weekly cadence works anonymously. |
 
 **Abort the full-sweep run** if `MALWAREBAZAAR_API_KEY` is missing when `abusech` is in the dispatch set. A single-feed invocation (`/update-rules source asb`, `/update-rules source amnesty`, etc.) that doesn't need abusech should proceed regardless.
 
@@ -48,7 +48,6 @@ Based on the invocation mode:
 - `update-rules-ingest-asb` with cursor from feed-state.json
 - `update-rules-ingest-nvd` with cursor from feed-state.json
 - `update-rules-ingest-amnesty` with existing rule index
-- `update-rules-ingest-citizenlab` with existing rule index
 - `update-rules-ingest-stalkerware` with cursor from feed-state.json
 - `update-rules-ingest-attack` with cursor from feed-state.json
 
