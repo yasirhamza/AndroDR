@@ -44,6 +44,9 @@ interface ForensicTimelineEventDao {
     @Query("SELECT DISTINCT packageName FROM forensic_timeline WHERE category = 'package_install'")
     suspend fun getInstalledPackagesAlreadyEmitted(): List<String>
 
+    @Query("SELECT DISTINCT packageName FROM forensic_timeline WHERE category = 'device_admin_grant'")
+    suspend fun getAdminGrantedPackagesAlreadyEmitted(): List<String>
+
     @Query("SELECT * FROM forensic_timeline ORDER BY startTimestamp ASC LIMIT 10000")
     suspend fun getAllForExport(): List<ForensicTimelineEvent>
 

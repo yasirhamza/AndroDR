@@ -81,6 +81,27 @@ class SigmaCorrelationEngineTest {
     }
 
     @Test
+    fun `first-scan seeding — historic install plus fresh admin-now does not fire corr-001`() {
+        // Issue #79 seeding-strategy guard. On the first AndroDR scan after
+        // install, DeviceAdminGrantEmitter stamps pre-existing admins with
+        // timestamp = now. A genuine historic install (firstInstallTime) may
+        // sit weeks or months before that. corr-001's 1h window must reject
+        // that pair, otherwise every device with any pre-existing admin would
+        // produce a false "install-then-admin" finding on first scan.
+        val thirtyDaysMs = 30L * 24L * 3_600_000L
+        val events = listOf(
+            event(1, 1_000L, "package_install"),                    // "real" historic install
+            event(2, 1_000L + thirtyDaysMs, "device_admin_grant")    // "now" on first scan
+        )
+        val binds = bindings(1L to setOf("atom-install"), 2L to setOf("atom-admin"))
+        val signals = SigmaCorrelationEngine().evaluate(listOf(installRule), events, binds)
+        assertTrue(
+            "historic install plus seed-timestamp admin must not fire corr-001",
+            signals.isEmpty()
+        )
+    }
+
+    @Test
     fun `event_count fires when threshold met within window`() {
         val events = listOf(
             event(1, 1000, "permission_use"),
