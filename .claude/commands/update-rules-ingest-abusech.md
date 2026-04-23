@@ -47,8 +47,9 @@ Every WebFetch call below must include the header `Auth-Key: $MALWAREBAZAAR_API_
 
 1. Use WebFetch to POST to `https://mb-api.abuse.ch/api/v1/` with body:
    ```json
-   {"query": "get_taginfo", "tag": "android", "limit": 50}
+   {"query": "get_file_type", "file_type": "apk", "limit": 1000}
    ```
+   Do NOT use `get_taginfo` with `tag=android` — that only returns samples a reporter explicitly tagged "android", missing most APK uploads. `get_file_type&file_type=apk` returns all recent APKs regardless of tagging (AndroDR #146). The limit of 1000 is the endpoint maximum; MalwareBazaar holds ~6 months of Android samples within that window.
 2. Parse the response. Each sample has: `sha256_hash`, `md5_hash`, `file_name`, `file_type`, `signature` (malware family), `tags`, `first_seen`
 3. Filter to samples after `last_seen_timestamp` (malwarebazaar cursor)
 4. Extract file hashes and family names
@@ -113,8 +114,7 @@ Emit a JSON object extending the existing SIR array:
     }
   ],
   "upstream_snapshot_hash_set": [
-    ["C2_DOMAIN", "c2.example.com"],
-    ["APK_HASH", "abc123...sha256"]
+    ["C2_DOMAIN", "c2.example.com"]
   ]
 }
 ```
@@ -127,9 +127,13 @@ Emit a JSON object extending the existing SIR array:
 
 ### upstream_snapshot_hash_set
 
-The full `(type, normalized_value)` set from both ThreatFox recent JSON
-and MalwareBazaar recent CSV. Normalize domains to lowercase, strip
-protocol and trailing `.`. Normalize hashes to lowercase hex.
+The `(type, normalized_value)` set of `C2_DOMAIN` pairs from the ThreatFox
+response. Normalize domains to lowercase, strip protocol and trailing `.`.
+
+MalwareBazaar APK-hash pairs are NOT included in this set — as of AndroDR
+#146, MalwareBazaar is no longer a Kotlin-bypass feed (the snapshot
+represents "what the device direct-fetches"). APK hashes flow through
+`candidate_ioc_entries` only.
 
 ### Self-dedup
 
