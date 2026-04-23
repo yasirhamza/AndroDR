@@ -51,6 +51,7 @@ class ScanOrchestrator @Inject constructor(
     private val dnsEventDao: DnsEventDao,
     private val forensicTimelineEventDao: ForensicTimelineEventDao,
     private val installEventEmitter: InstallEventEmitter,
+    private val deviceAdminGrantEmitter: DeviceAdminGrantEmitter,
     private val sigmaRuleEngine: SigmaRuleEngine,
     private val sigmaCorrelationEngine: SigmaCorrelationEngine,
     private val indicatorResolver: IndicatorResolver,
@@ -365,7 +366,12 @@ class ScanOrchestrator @Inject constructor(
         // such members. Fixed in `saveScanWithCorrelation`.
         val installEvents = runCatching {
             installEventEmitter.emitNew(result.id, appTelemetry)
-        }.getOrDefault(emptyList())
+        }.onFailure { Log.w(TAG, "installEventEmitter failed: ${it.message}", it) }
+            .getOrDefault(emptyList())
+        val adminGrantEvents = runCatching {
+            deviceAdminGrantEmitter.emitNew(result.id)
+        }.onFailure { Log.w(TAG, "deviceAdminGrantEmitter failed: ${it.message}", it) }
+            .getOrDefault(emptyList())
         val correlationRules = sigmaRuleEngine.getCorrelationRules()
         val maxRuleWindowMs = correlationRules.maxOfOrNull { it.timespanMs } ?: 0L
         val lookbackEvents = if (maxRuleWindowMs > 0) {
@@ -378,7 +384,7 @@ class ScanOrchestrator @Inject constructor(
         runCatching {
             scanRepository.saveScanWithCorrelation(
                 scan = result,
-                findingTimelineEvents = installEvents + findingTimelineEvents,
+                findingTimelineEvents = installEvents + adminGrantEvents + findingTimelineEvents,
                 replaceUsageStatsEvents = taggedUsageEvents,
                 lookbackEvents = lookbackEvents
             ) { eventsWithIds ->
@@ -397,7 +403,8 @@ class ScanOrchestrator @Inject constructor(
                 }
             }
             Log.i(TAG, "Persisted scan ${result.id} with ${findingTimelineEvents.size} finding, " +
-                "${installEvents.size} install, $correlationSignalCount signal, " +
+                "${installEvents.size} install, ${adminGrantEvents.size} admin_grant, " +
+                "$correlationSignalCount signal, " +
                 "${taggedUsageEvents.size} usage events (single transaction)")
         }.onFailure { Log.e(TAG, "Failed to persist scan results", it) }
 

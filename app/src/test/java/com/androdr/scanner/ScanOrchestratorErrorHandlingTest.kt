@@ -132,6 +132,7 @@ class ScanOrchestratorErrorHandlingTest {
             dnsEventDao = dnsEventDao,
             forensicTimelineEventDao = mockk(relaxed = true),
             installEventEmitter = mockk(relaxed = true),
+            deviceAdminGrantEmitter = mockk(relaxed = true),
             sigmaRuleEngine = sigmaRuleEngine,
             sigmaCorrelationEngine = mockk(relaxed = true),
             indicatorResolver = indicatorResolver,
