@@ -27,7 +27,6 @@ class KotlinMirrorFeedsCrossCheckTest {
         "stalkerware-indicators",  // StalkerwareIndicatorsFeed.kt
         "mvt-indicators",          // MvtIndicatorsFeed.kt
         "threatfox",               // ThreatFoxDomainFeed.kt
-        "malwarebazaar",           // MalwareBazaarApkHashFeed.kt
     )
 
     private fun mirrorFeedsFile(): File {

@@ -6,7 +6,6 @@ import com.androdr.data.model.CertHashIocEntry
 import com.androdr.data.model.DomainIocEntry
 import com.androdr.data.model.IocEntry
 import com.androdr.data.model.Indicator
-import com.androdr.ioc.feeds.MalwareBazaarApkHashFeed
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
@@ -28,7 +27,6 @@ class IndicatorUpdater @Inject constructor(
     private val certHashFeeds: @JvmSuppressWildcards List<CertHashIocFeed>,
     private val packageFeeds: @JvmSuppressWildcards List<IocFeed>
 ) {
-    private val apkHashFeed = MalwareBazaarApkHashFeed()
     private val updateMutex = Mutex()
 
     suspend fun update(): Int {
@@ -55,11 +53,7 @@ class IndicatorUpdater @Inject constructor(
             val certJobs = certHashFeeds.map { feed ->
                 async { runFeed(feed.sourceId) { feed.fetch().map { it.toIndicator() } } }
             }
-            // APK hash feed (MalwareBazaar recent Android samples)
-            val apkHashJob = async {
-                runFeed(apkHashFeed.sourceId) { apkHashFeed.fetch() }
-            }
-            total = (pkgJobs + domJobs + certJobs + listOf(apkHashJob)).sumOf { it.await() }
+            total = (pkgJobs + domJobs + certJobs).sumOf { it.await() }
         }
         resolver.refreshCache()
         Log.i(TAG, "Indicator update complete — fetched: $total, DB: ${dao.count()}")
