@@ -15,8 +15,37 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  # Jobs added in subsequent tasks.
-  placeholder:
+  build-and-test:
     runs-on: ubuntu-latest
     steps:
-      - run: echo "scaffold"
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: true
+      - uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: 'gradle'
+      - uses: android-actions/setup-android@v3
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-read-only: ${{ github.ref != 'refs/heads/main' }}
+      - name: Build debug APK + run unit tests
+        run: ./gradlew assembleDebug test --stacktrace
+      - name: Upload debug APK
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: app-debug
+          path: app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 14
+          if-no-files-found: warn
+      - name: Upload unit test reports
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: unit-test-reports
+          path: app/build/reports/tests/
+          retention-days: 14
+          if-no-files-found: warn
