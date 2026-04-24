@@ -62,6 +62,7 @@ class Phase3MigrationSafetyTest {
     )
 
     @Test
+    @Suppress("LongMethod") // End-to-end migration safety scenario — splitting reduces narrative clarity
     fun `all 13 pruned package rows survive the IocUpdateWorker cycle post-prune`() = runTest {
         val dao = FakeIndicatorDao()
 
