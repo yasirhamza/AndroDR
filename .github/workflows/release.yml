@@ -1,0 +1,106 @@
+name: Release
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - '**/*.md'
+      - 'docs/**'
+      - 'notes/**'
+  workflow_dispatch:
+
+permissions:
+  contents: write    # gh release create
+  actions: read      # poll ci-success
+  checks: read       # poll ci-success
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: true
+      - uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: 'gradle'
+      - uses: android-actions/setup-android@v3
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Wait for ci-success on this SHA
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const sha = context.sha;
+            // 25 min accommodates cold-cache ci.yml runs (Gradle + Android SDK +
+            // unit tests + lint + detekt + emulator queue). Serial current runtime
+            // is ~5 min warm; cold cache can hit ~8-10 min. 25 leaves slack without
+            // burning runner minutes on a wedged CI.
+            const timeoutMs = 25 * 60 * 1000;
+            const pollMs = 30 * 1000;
+            const deadline = Date.now() + timeoutMs;
+            core.info(`Polling ci-success for ${sha}`);
+            while (Date.now() < deadline) {
+              const { data } = await github.rest.checks.listForRef({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                ref: sha,
+                check_name: 'ci-success',
+              });
+              const runs = data.check_runs;
+              if (runs.length === 0) {
+                core.info('ci-success not reported yet; waiting...');
+              } else {
+                const run = runs[0];
+                core.info(`ci-success status=${run.status} conclusion=${run.conclusion}`);
+                if (run.status === 'completed') {
+                  if (run.conclusion === 'success') {
+                    core.info('ci-success passed; proceeding to build release');
+                    return;
+                  }
+                  core.setFailed(`ci-success concluded '${run.conclusion}'; aborting release`);
+                  return;
+                }
+              }
+              await new Promise(r => setTimeout(r, pollMs));
+            }
+            core.setFailed('Timed out waiting for ci-success');
+      - name: Build debug APK
+        run: ./gradlew assembleDebug --stacktrace
+      - name: Compute version and release notes
+        id: version
+        run: |
+          set -euo pipefail
+          BASE_VERSION=$(grep 'versionName' app/build.gradle.kts | head -1 | sed 's/.*"\([0-9.]*\)\..*/\1/')
+          if [ -z "$BASE_VERSION" ]; then
+            echo "ERROR: failed to extract BASE_VERSION from app/build.gradle.kts" >&2
+            grep 'versionName' app/build.gradle.kts >&2
+            exit 1
+          fi
+          BUILD=$(git rev-list --count HEAD)
+          VERSION="${BASE_VERSION}.${BUILD}"
+          TAG="v${VERSION}"
+          PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+          if [ -n "$PREV_TAG" ]; then
+            CHANGES=$(git log "$PREV_TAG"..HEAD --pretty=format:"- %s" --no-merges)
+          else
+            CHANGES=$(git log -20 --pretty=format:"- %s" --no-merges)
+          fi
+          printf "## What's Changed\n\n%s\n\n**Full changelog**: https://github.com/%s/compare/%s...%s\n" \
+            "$CHANGES" "${{ github.repository }}" "${PREV_TAG:-v0.0.0}" "$TAG" > /tmp/release-notes.md
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "${{ steps.version.outputs.tag }}" \
+            app/build/outputs/apk/debug/app-debug.apk \
+            --title "AndroDR ${{ steps.version.outputs.tag }}" \
+            --notes-file /tmp/release-notes.md
