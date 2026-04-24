@@ -96,6 +96,7 @@ export default {
     </p>
   </section>
   <hr>
+  <!-- ANDRODR:PRIVACY:START -->
   <section class="privacy" id="privacy">
     <h2>Privacy Policy</h2>
     <p><em>Last updated: 2026-03-26</em></p>
@@ -197,6 +198,7 @@ export default {
     <p>For privacy questions: <a href="mailto:privacy@androdr.dev">privacy@androdr.dev</a><br>
     GitHub: <a href="https://github.com/yasirhamza/AndroDR/issues">github.com/yasirhamza/AndroDR/issues</a></p>
   </section>
+  <!-- ANDRODR:PRIVACY:END -->
   <footer>
     <p>&copy; 2026 AndroDR. Open source under the project license.</p>
     <p><a href="https://github.com/yasirhamza/AndroDR">Source Code</a></p>
