@@ -966,56 +966,55 @@ Expected: `success`. Both workflows running in parallel on main confirms they do
 
 **Files:** none (GitHub admin action).
 
-- [ ] **Step 1: Inspect full protection (not just required_status_checks) as a baseline**
+**Important:** AndroDR's `main` protection lives in a GitHub **ruleset**, not classic branch protection. The classic `branches/main/protection` endpoint returns 404. Discover the ruleset ID first; the commands below use the ruleset API.
 
-Run:
-```bash
-gh api repos/yasirhamza/AndroDR/branches/main/protection > /tmp/protection-before.json
-cat /tmp/protection-before.json | jq '.required_status_checks'
-```
-Expected: JSON including `"contexts": ["build"]`. Save `/tmp/protection-before.json` — the rollback in Step 4 uses it.
-
-- [ ] **Step 2: Update to `ci-success` via JSON body**
-
-The endpoint takes a JSON body, not form-encoded. Use `--input` with a heredoc:
+- [ ] **Step 1: Discover the ruleset ID and save baseline**
 
 ```bash
-gh api \
-  -X PATCH \
-  repos/yasirhamza/AndroDR/branches/main/protection/required_status_checks \
-  --input - <<'JSON'
-{
-  "strict": true,
-  "contexts": ["ci-success"]
-}
-JSON
+gh api repos/yasirhamza/AndroDR/rulesets
+# Output includes: [{id: <N>, name: "Protect main", enforcement: "active", ...}]
+RULESET_ID=$(gh api repos/yasirhamza/AndroDR/rulesets --jq '.[] | select(.name == "Protect main") | .id')
+echo "Ruleset ID: $RULESET_ID"
+gh api "repos/yasirhamza/AndroDR/rulesets/$RULESET_ID" > /tmp/ruleset-before.json
+jq '.rules | map(select(.type == "required_status_checks")) | .[0].parameters.required_status_checks' /tmp/ruleset-before.json
 ```
+Expected: `[{"context": "build"}]`. Save `/tmp/ruleset-before.json` — used for rollback in Step 4.
 
-Expected: JSON response with `"contexts": ["ci-success"]` and `"strict": true`.
-
-If the API call fails with 422 or similar, fall back to the web UI: repo Settings → Branches → `main` → Edit → Require status checks → remove `build`, add `ci-success`.
-
-- [ ] **Step 3: Verify the change and confirm other protection fields are intact**
-
-Run:
-```bash
-gh api repos/yasirhamza/AndroDR/branches/main/protection/required_status_checks
-# And diff full protection vs baseline:
-gh api repos/yasirhamza/AndroDR/branches/main/protection > /tmp/protection-after.json
-diff <(jq -S . /tmp/protection-before.json) <(jq -S . /tmp/protection-after.json) || true
-```
-Expected:
-- `required_status_checks.contexts` = `["ci-success"]`.
-- Diff only touches `required_status_checks`; other fields (`enforce_admins`, `required_pull_request_reviews`, etc.) unchanged.
-
-- [ ] **Step 4: If something other than `required_status_checks` changed, restore from baseline**
-
-Rare but possible if the PATCH silently touches unrelated fields. Replay full protection from baseline:
+- [ ] **Step 2: Construct the updated ruleset with `ci-success` as required**
 
 ```bash
-gh api -X PUT repos/yasirhamza/AndroDR/branches/main/protection --input /tmp/protection-before.json
-# Then redo Step 2.
+jq '.rules |= map(
+     if .type == "required_status_checks"
+     then .parameters.required_status_checks = [{"context": "ci-success"}]
+     else .
+     end
+   ) | {name, target, enforcement, bypass_actors, conditions, rules}' \
+   /tmp/ruleset-before.json > /tmp/ruleset-after.json
+# Diff check: should show exactly build → ci-success
+diff <(jq -S . /tmp/ruleset-before.json | jq '.rules | map(select(.type == "required_status_checks"))') \
+     <(jq -S . /tmp/ruleset-after.json   | jq '.rules | map(select(.type == "required_status_checks"))')
 ```
+
+- [ ] **Step 3: Apply the ruleset update**
+
+```bash
+gh api -X PUT "repos/yasirhamza/AndroDR/rulesets/$RULESET_ID" --input /tmp/ruleset-after.json
+```
+Expected: JSON response with updated rule. Verify:
+```bash
+gh api "repos/yasirhamza/AndroDR/rulesets/$RULESET_ID" \
+  --jq '.rules[] | select(.type == "required_status_checks") | .parameters.required_status_checks'
+```
+Expected: `[{"context": "ci-success"}]`.
+
+- [ ] **Step 4: If anything else changed unexpectedly, restore from baseline**
+
+```bash
+gh api -X PUT "repos/yasirhamza/AndroDR/rulesets/$RULESET_ID" --input /tmp/ruleset-before.json
+# Then redo Step 2-3 with care.
+```
+
+**Why ruleset, not classic protection:** GitHub is deprecating classic branch protection in favor of rulesets (which can apply across branches, multiple repos via org-level rulesets, and have more granular bypass controls). `main` was already configured via the ruleset API, so we update there. The `gh api -X PATCH branches/main/protection/...` form returns 404 on this repo.
 
 ---
 

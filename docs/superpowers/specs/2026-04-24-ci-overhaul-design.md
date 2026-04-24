@@ -317,18 +317,24 @@ two main commits:
 
 ### Manual step — flip branch protection
 
-One-time admin action via `gh`:
+One-time admin action. Protection is a **ruleset** on this repo, not
+classic branch protection:
 
 ```bash
-gh api \
-  -X PATCH \
-  repos/yasirhamza/AndroDR/branches/main/protection/required_status_checks \
-  -f 'contexts[]=ci-success' \
-  -f 'strict=true'
+RULESET_ID=$(gh api repos/yasirhamza/AndroDR/rulesets \
+  --jq '.[] | select(.name == "Protect main") | .id')
+gh api "repos/yasirhamza/AndroDR/rulesets/$RULESET_ID" > /tmp/ruleset-before.json
+jq '.rules |= map(
+     if .type == "required_status_checks"
+     then .parameters.required_status_checks = [{"context": "ci-success"}]
+     else . end
+   ) | {name, target, enforcement, bypass_actors, conditions, rules}' \
+   /tmp/ruleset-before.json > /tmp/ruleset-after.json
+gh api -X PUT "repos/yasirhamza/AndroDR/rulesets/$RULESET_ID" \
+  --input /tmp/ruleset-after.json
 ```
 
-(Exact API shape verified during implementation. Falling back to the web
-UI is fine.)
+See plan Task 18 for the full discover → diff → apply → verify → rollback flow.
 
 ### PR 2 — Delete old workflow
 
