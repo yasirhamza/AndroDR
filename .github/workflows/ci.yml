@@ -164,3 +164,41 @@ jobs:
         run: python3 scripts/merge-ioc-data.py --help
       - name: Smoke-test generate_known_good_apps.py arg parsing
         run: python3 scripts/generate_known_good_apps.py --help || true
+  instrumented:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+      - uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: 'gradle'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-read-only: ${{ github.ref != 'refs/heads/main' }}
+      - name: Enable KVM for hardware acceleration
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
+            | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Run instrumented tests on emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          arch: x86_64
+          profile: pixel_6
+          force-avd-creation: false
+          script: ./gradlew connectedDebugAndroidTest --stacktrace
+      - name: Upload instrumented test report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: instrumented-test-report
+          path: app/build/reports/androidTests/connected/
+          retention-days: 14
+          if-no-files-found: warn
