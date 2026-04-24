@@ -176,6 +176,29 @@ git commit -m "build: bump android-sigma-rules submodule"
 
 Bump when you need upstream schema changes (a new modifier or logsource service) or when staging rules should be promoted into the built APK.
 
+### Syncing the privacy policy
+
+`docs/PRIVACY_POLICY.md` is the single source of truth. Two artifacts are rendered from it:
+
+- `cloudflare-worker.js` in this repo — the inline HTML served by the Cloudflare Worker mirror at `androdr.yasirhamza.workers.dev`.
+- `index.html` in the `androdr-site` repo — the GitHub Pages site at `yasirhamza.github.io/androdr-site`.
+
+When you edit the privacy markdown, re-render the Worker copy in the same commit:
+
+```bash
+python3 scripts/render_privacy.py docs/PRIVACY_POLICY.md cloudflare-worker.js
+```
+
+Commit both files together. A `check-privacy-sync` CI job fails the PR with an exact remediation message if you forget.
+
+After the PR merges, push the updated Worker live. A wrapper script handles the Cloudflare API call so no Node toolchain is needed:
+
+```bash
+CLOUDFLARE_API_TOKEN=… CLOUDFLARE_ACCOUNT_ID=… ./scripts/deploy-worker.sh
+```
+
+For the GitHub Pages site, open a small `androdr-site` PR with a re-rendered `index.html`. That repo has its own `check-privacy-sync` workflow (PR + weekly cron) that fetches the renderer from AndroDR to detect drift.
+
 ## PR workflow
 
 - Branch from `main`. Name branches `feat/<issue>-<short-name>`, `fix/<topic>`, `docs/<topic>`, `ci/<topic>`, `test/<topic>`.
