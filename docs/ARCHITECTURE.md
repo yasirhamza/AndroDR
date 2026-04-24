@@ -84,7 +84,7 @@ Current package tree under `app/src/main/java/com/androdr/`:
 ├── di/              Hilt modules
 ├── ioc/             IOC resolver, dispatcher, feeds, STIX2 serialization, periodic update worker
 │   └── feeds/       Feed-specific ingesters (stalkerware, MVT, MalwareBazaar, ThreatFox, UAD, Plexus, cert-hash)
-├── network/         LocalVpnService (local DNS interception) + DNS event capture
+├── network/         DnsVpnService (local DNS interception) + DNS event capture
 ├── reporting/       ReportFormatter, ReportExporter, timeline formatter/exporter, guidance text helpers
 ├── scanner/         Pure telemetry emitters (app, device, accessibility, app-ops, file artifacts, process, usage stats, receivers, device-admin-grant, install event)
 │   └── bugreport/   Bug-report ZIP parser and per-section modules
@@ -143,7 +143,7 @@ A telemetry emitter is a pure function of device state: given the current state 
 
 **Network / DNS**
 
-- `LocalVpnService` (in `network/`) — Intercepts DNS queries via a local VPN loopback and emits `DnsEvent` records, each carrying the queried domain and the requesting app's UID. These records are the telemetry input for the `dns_monitor` rule service.
+- `DnsVpnService` (in `network/`) — Intercepts DNS queries via a local VPN loopback and emits `DnsEvent` records, each carrying the queried domain and the requesting app's UID. These records are the telemetry input for the `dns_monitor` rule service.
 
 **Bug-report analysis** (`scanner/bugreport/`)
 
@@ -513,7 +513,7 @@ Run with `./gradlew testDebugUnitTest`.
 
 `app/src/androidTest/` contains tests that require an Android runtime:
 - Room DAO contracts for `ScanResult`, `DnsEvent`, and `ForensicTimelineEvent`
-- `LocalVpnService` DNS interception path (requires a VPN-capable emulator image)
+- `DnsVpnService` DNS interception path (requires a VPN-capable emulator image)
 - FileProvider-backed report export and share flows
 
 Run on a connected device or emulator with `./gradlew connectedDebugAndroidTest`.
