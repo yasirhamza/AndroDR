@@ -1,0 +1,30 @@
+name: Notify androdr-site of privacy changes
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'docs/PRIVACY_POLICY.md'
+      - 'scripts/render_privacy.py'
+      - 'scripts/requirements.txt'
+
+permissions:
+  contents: read
+
+jobs:
+  dispatch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fire repository_dispatch to androdr-site
+        env:
+          GH_TOKEN: ${{ secrets.PRIVACY_SYNC_TOKEN }}
+          SOURCE_SHA: ${{ github.sha }}
+        run: |
+          if [ -z "$GH_TOKEN" ]; then
+            echo "::error::PRIVACY_SYNC_TOKEN secret is not configured. See CONTRIBUTING or the plan for setup steps."
+            exit 1
+          fi
+          gh api repos/yasirhamza/androdr-site/dispatches \
+            --method POST \
+            -f event_type=privacy-updated \
+            -f "client_payload[source_sha]=$SOURCE_SHA"
