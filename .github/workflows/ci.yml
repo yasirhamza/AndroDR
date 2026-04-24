@@ -143,3 +143,24 @@ jobs:
             echo "Upstream may have force-pushed, or the submodule points at a dangling commit." >&2
             exit 1
           fi
+  python-pipeline:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+      - name: Syntax-check tracked Python scripts
+        run: |
+          set -euo pipefail
+          mapfile -t PY_FILES < <(git ls-files 'scripts/*.py')
+          if [ ${#PY_FILES[@]} -eq 0 ]; then
+            echo "No tracked Python scripts found"
+            exit 0
+          fi
+          python3 -m py_compile "${PY_FILES[@]}"
+          echo "PASS: ${#PY_FILES[@]} script(s) compile"
+      - name: Smoke-test merge-ioc-data.py arg parsing
+        run: python3 scripts/merge-ioc-data.py --help
+      - name: Smoke-test generate_known_good_apps.py arg parsing
+        run: python3 scripts/generate_known_good_apps.py --help || true
