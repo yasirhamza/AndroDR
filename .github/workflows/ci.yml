@@ -124,3 +124,22 @@ jobs:
           sudo mv gitleaks /usr/local/bin/
       - name: Scan for secrets
         run: gitleaks detect --source . --verbose
+  submodule-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+      - name: Verify submodule HEAD is reachable from upstream main
+        working-directory: third-party/android-sigma-rules
+        run: |
+          set -euo pipefail
+          git fetch origin main
+          HEAD_SHA=$(git rev-parse HEAD)
+          if git merge-base --is-ancestor "$HEAD_SHA" origin/main; then
+            echo "PASS: submodule HEAD $HEAD_SHA is reachable from upstream main"
+          else
+            echo "FAIL: submodule HEAD $HEAD_SHA is NOT reachable from upstream main" >&2
+            echo "Upstream may have force-pushed, or the submodule points at a dangling commit." >&2
+            exit 1
+          fi
