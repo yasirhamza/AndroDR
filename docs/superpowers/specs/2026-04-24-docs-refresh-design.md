@@ -20,7 +20,15 @@ Concrete drift identified during discovery:
 - `CONTRIBUTING.md` has a 4-bullet "Architecture Principles" section that duplicates (and contradicts) content in README.
 - `CLAUDE.md` project-layout section predates the SIGMA engine, IOC pipeline, and bugreport module entirely.
 - `docs/PRIVACY_POLICY.md` is dated 2026-03-26, still describes the MalwareBazaar cert-hash feed as a "stub" (it has been active since commit `8f5b6c9`), omits bugreport analysis as a retained feature, and carries a hallucinated contact email (`privacy@androdr.dev`) that is not owned by the project.
-- The privacy policy exists in **three places** that are already drifting: `docs/PRIVACY_POLICY.md` (2026-03-26 version), `androdr-privacy/index.md` (identical manual mirror), and `androdr-site/index.html` (embedded inline, 2026-04-01 version, with the correct contact email). Same document, three sources, already out of sync.
+- The privacy policy exists in **four places** that are already drifting:
+  1. `docs/PRIVACY_POLICY.md` in AndroDR (2026-03-26 version, hallucinated contact email)
+  2. `androdr-privacy/index.md` (identical manual mirror of #1)
+  3. `androdr-site/index.html` (embedded inline, 2026-04-01 version, correct contact email)
+  4. `cloudflare-worker.js` in AndroDR (inline HTML copy served by the Cloudflare Worker, 2026-03-26 version, hallucinated contact email)
+
+  Source #4 is a full self-contained HTML page returned by the Worker so it serves correctly during the `yasirhamza` account shadowban that would otherwise 404 anonymous visits to the GitHub Pages site.
+
+  The Worker is deployed manually via `wrangler deploy` from a local checkout. There is no Cloudflare CI in this repo. This means the render pipeline can keep the file in the repo fresh automatically, but the maintainer must remember to redeploy the Worker to push the change live.
 - `docs/ROADMAP.md` contradicts the project-wide convention that GitHub Issues are the canonical roadmap; the tables are a stale snapshot.
 - `docs/play-store/` contains duplicate numbered/unnumbered versions of five files (leftover from a rename that didn't clean up).
 - `androdr-site` has two near-identical deploy workflows (`pages.yml` and `static.yml`).
@@ -62,26 +70,19 @@ After this work, each fact lives in exactly one place. Other files reference it.
 
 ## 5. PR A — Privacy publishing pipeline
 
-Cross-repo work. Lands first.
+Cross-repo work. Lands first. The render script is canonical in the AndroDR repo (`scripts/render_privacy.py`) — both render workflows fetch it from there at execution time, so there is only one place the renderer logic can drift.
+
+**Pipeline shape:**
+
+- **Source of truth:** `docs/PRIVACY_POLICY.md` in AndroDR.
+- **Canonical renderer:** `scripts/render_privacy.py` in AndroDR (plus tests and requirements).
+- **Render target 1:** `cloudflare-worker.js` in AndroDR (fenced region replaced by a same-repo workflow on push to main when the privacy markdown changes).
+- **Render target 2:** `androdr-site/index.html` (fenced region replaced by a workflow in the site repo, fired by `repository_dispatch` from AndroDR — the workflow fetches both the markdown and the renderer from AndroDR at run time).
+- **Manual step:** the Worker is deployed by the maintainer via `wrangler deploy`. Workflow commit messages remind them.
 
 ### 5.1 Changes in `AndroDR` repo
 
-1. **`docs/PRIVACY_POLICY.md` content update.** Keep the existing section structure (philosophy → what we do → data → permissions → network → DNS → bugreport → exports → what we don't collect → sharing → retention → transparency → Play Data Safety → children → GDPR/CCPA → contact). Content edits:
-   - Replace all `privacy@androdr.dev` references with `yhamad.dev@gmail.com`.
-   - "What AndroDR Does": mention the SIGMA rule engine briefly; mention STIX2 indicator import/export; clarify DNS monitor remains optional.
-   - "Data That Stays On Your Device" table: add rows for forensic timeline events (persisted per #79) and bugreport analysis findings.
-   - "Network Requests" table: remove the "(planned)" stub; add MalwareBazaar APK hash feed as active; add abuse.ch ThreatFox; update the MVT entry to reflect the IOC dispatcher model; add stalkerware-indicators cert-hash ingestion.
-   - "Bug Report Analysis" section: tighten wording; reinforce that only analysis findings persist (no raw bugreport text).
-   - "Google Play Data Safety Alignment": expand to mirror the declarations in `docs/play-store/18-data-safety-form.md` so the two stay consistent.
-   - Update `_Last updated:_` to the merge date.
-
-2. **Sweep `docs/play-store/store-listing.md`** for `privacy@androdr.dev` and replace with `yhamad.dev@gmail.com` (this PR, not PR B, because it's an email-fix).
-
-3. **New workflow `.github/workflows/notify-privacy-sync.yml`.** Triggers on push to `main` when `docs/PRIVACY_POLICY.md` changes. Fires a `repository_dispatch` to `yasirhamza/androdr-site` with event type `privacy-updated` so the render runs immediately. The daily cron in the site repo is a safety net, not the happy path.
-
-### 5.2 Changes in `androdr-site` repo
-
-4. **Fence the privacy section in `index.html`.** Add HTML comments around the existing `<section class="privacy" id="privacy">` block:
+1. **Fence the privacy section in `cloudflare-worker.js`.** Add HTML comments around the `<section class="privacy" id="privacy">` block in the inline HTML template so the renderer can cleanly replace between them. No content change — just the fence markers.
 
    ```html
    <!-- ANDRODR:PRIVACY:START -->
@@ -91,45 +92,89 @@ Cross-repo work. Lands first.
    <!-- ANDRODR:PRIVACY:END -->
    ```
 
-   No content change to the privacy HTML in this commit — just fence markers so the next commit (the first automated render) can cleanly replace between them.
-
-5. **New `scripts/render_privacy.py`** — small Python script. Responsibilities:
-   - Read `docs/PRIVACY_POLICY.md` content (passed as argument or fetched via API by the workflow).
+2. **New `scripts/render_privacy.py`** — the canonical renderer. Responsibilities:
+   - Read the privacy markdown (passed as argument).
    - Convert Markdown to HTML using the PyPI `markdown` package with the `tables` extension (pin version in `scripts/requirements.txt`).
-   - Wrap output in `<section class="privacy" id="privacy">...</section>` so existing CSS classes apply.
+   - Wrap output in `<section class="privacy" id="privacy">...</section>` so existing CSS classes apply unchanged.
    - Assert structural invariants before writing. Counts are locked in at first run (observed: 18 `<h2>` headings, 3 `<table>` blocks as of 2026-04-24). Script exits non-zero if invariants fail — a content restructure is deliberate and requires updating the assertion counts in the same commit.
-   - Update the `Last updated: YYYY-MM-DD` line inside the rendered section from the markdown's `_Last updated: YYYY-MM-DD_` line.
-   - Output: modified `index.html` with the fenced region replaced.
+   - Inject a `Last updated: YYYY-MM-DD` line inside the rendered section from the markdown's `_Last updated: YYYY-MM-DD_` line.
+   - Replace the fenced region in the target file. Target is passed as a CLI argument so the same script renders both `cloudflare-worker.js` (in this repo) and `androdr-site/index.html` (in the other repo).
 
-6. **New workflow `.github/workflows/render-privacy.yml`.** Triggers:
-   - `push` to main (so edits to the renderer itself take effect)
+3. **New `scripts/test_render_privacy.py`** + **`scripts/fixtures/sample_privacy.md`** + **`scripts/requirements.txt`** — unit tests for the renderer (runnable with `pytest`) and pinned dependency. Covers: section wrapping, h2 count, table rendering, last-updated extraction, structural-invariant assertions, fenced-region replacement.
+
+4. **New workflow `.github/workflows/render-privacy-worker.yml`.** Triggers on push to `main` when `docs/PRIVACY_POLICY.md`, `scripts/render_privacy.py`, or `cloudflare-worker.js` change, plus `workflow_dispatch` for manual runs. Steps:
+   - Checkout.
+   - Install Python + `scripts/requirements.txt`.
+   - Run `scripts/render_privacy.py docs/PRIVACY_POLICY.md cloudflare-worker.js`.
+   - If `cloudflare-worker.js` changed, commit (`docs(privacy): render into cloudflare-worker.js`) with a **reminder in the commit body** that the maintainer must run `wrangler deploy` to push the Worker live.
+
+5. **New workflow `.github/workflows/notify-privacy-sync.yml`.** Triggers on push to `main` when `docs/PRIVACY_POLICY.md` or `scripts/render_privacy.py` changes. Fires a `repository_dispatch` to `yasirhamza/androdr-site` with event type `privacy-updated` so the site render runs immediately. The daily cron in the site repo is a safety net.
+
+6. **`docs/PRIVACY_POLICY.md` content update.** Keep the existing section structure (philosophy → what we do → data → permissions → network → DNS → bugreport → exports → what we don't collect → sharing → retention → transparency → Play Data Safety → children → GDPR/CCPA → contact). Content edits:
+   - Replace all `privacy@androdr.dev` references with `yhamad.dev@gmail.com`.
+   - "What AndroDR Does": mention the SIGMA rule engine briefly; mention STIX2 indicator import/export; clarify DNS monitor remains optional.
+   - "Data That Stays On Your Device" table: add rows for forensic timeline events (persisted per #79) and bugreport analysis findings.
+   - "Network Requests" table: remove the "(planned)" stub; add MalwareBazaar APK hash feed as active; add abuse.ch ThreatFox; update the MVT entry to reflect the IOC dispatcher model; add stalkerware-indicators cert-hash ingestion.
+   - "Bug Report Analysis" section: tighten wording; reinforce that only analysis findings persist (no raw bugreport text).
+   - "Google Play Data Safety Alignment": expand to mirror the declarations in `docs/play-store/18-data-safety-form.md` so the two stay consistent.
+   - Update `_Last updated:_` to the merge date.
+
+7. **Sweep `docs/play-store/store-listing.md`** for `privacy@androdr.dev` → `yhamad.dev@gmail.com` (in this PR, not PR B, because it's an email fix).
+
+### 5.2 Changes in `androdr-site` repo
+
+8. **Fence the privacy section in `index.html`.** Same fence-markers pattern as `cloudflare-worker.js`.
+
+9. **New workflow `.github/workflows/render-privacy.yml`.** Triggers:
+   - `push` to main (on workflow file or fence markers changes — no local script path, see below)
    - `repository_dispatch` with type `privacy-updated` (fires from AndroDR repo)
    - `schedule` daily at a quiet UTC hour (safety net)
    - `workflow_dispatch` (manual trigger for testing)
 
    Steps:
    - Checkout `androdr-site`.
-   - Fetch `docs/PRIVACY_POLICY.md` from `yasirhamza/AndroDR` using `gh api` (authenticated with `GITHUB_TOKEN`, required because the shadowban blocks anonymous raw.githubusercontent.com reads).
-   - Run `scripts/render_privacy.py` → modified `index.html`.
-   - If `index.html` changed, commit (`docs(privacy): sync from AndroDR@<shortsha>`) and push to main. The existing Pages deploy workflow handles publishing.
+   - Install Python.
+   - Fetch `docs/PRIVACY_POLICY.md`, `scripts/render_privacy.py`, and `scripts/requirements.txt` from `yasirhamza/AndroDR` using `gh api` (authenticated with `GITHUB_TOKEN`, required because the shadowban blocks anonymous `raw.githubusercontent.com` reads).
+   - `pip install -r` the fetched requirements.
+   - Run the fetched script: `python3 /tmp/render_privacy.py /tmp/PRIVACY_POLICY.md index.html`.
+   - If `index.html` changed, commit (`docs(privacy): sync from AndroDR@<shortsha>`) and push. The existing Pages deploy workflow handles publishing.
 
-7. **Delete `.github/workflows/static.yml`.** Keep `pages.yml` as the only deploy workflow.
+10. **Delete `.github/workflows/static.yml`.** Keep `pages.yml` as the only deploy workflow.
 
 ### 5.3 Archive `androdr-privacy`
 
-8. Replace `androdr-privacy/index.md` with a one-line forwarding pointer:
+11. Replace `androdr-privacy/index.md` with a one-line forwarding pointer:
 
-   > Moved. See https://github.com/yasirhamza/AndroDR/blob/main/docs/PRIVACY_POLICY.md
+    > Moved. See https://github.com/yasirhamza/AndroDR/blob/main/docs/PRIVACY_POLICY.md
 
-9. `gh repo archive yasirhamza/androdr-privacy --confirm`. Repo remains publicly visible (subject to the shadowban) but is frozen. The URL does not 404.
+12. `gh repo archive yasirhamza/androdr-privacy --yes`. Repo remains publicly visible (subject to the shadowban) but is frozen. The URL does not 404.
 
-### 5.4 Verification (PR A)
+### 5.4 Cutover order
 
-- Run `scripts/render_privacy.py` locally against current `docs/PRIVACY_POLICY.md`, diff output against today's `<section class="privacy">` — expect structural parity.
-- `workflow_dispatch` the render workflow on a branch before merging; inspect the commit it produces.
-- After merge, make a trivial whitespace edit to `docs/PRIVACY_POLICY.md` in a throwaway branch, merge it, and confirm the site commit fires within minutes and Cloudflare-fronted site reflects the change.
-- Grep: zero matches for `privacy@androdr\.dev` anywhere in either repo after merge.
-- API check: `androdr-privacy` is archived.
+The site-repo PR is merged *before* the AndroDR PR so that when AndroDR's content update lands, the dispatch it fires lands on a site repo whose render workflow is already in place.
+
+1. **Site PR** — items 8–10 above. First-run behavior: on merge, the new `render-privacy.yml` workflow fires (push trigger on the workflow file itself). It fetches the renderer from AndroDR main, which does not yet contain `scripts/render_privacy.py` → **the first run fails, as expected**. This is acceptable because the production path is the `repository_dispatch` trigger that fires after the AndroDR PR merges.
+2. **AndroDR PR** — items 1–7 above. On merge, three things fire:
+   - `render-privacy-worker.yml` (in AndroDR) renders `cloudflare-worker.js`. The commit it produces reminds the maintainer to `wrangler deploy`.
+   - `notify-privacy-sync.yml` (in AndroDR) dispatches `privacy-updated` to `androdr-site`.
+   - The site's `render-privacy.yml` receives the dispatch and succeeds (script now exists on AndroDR main), renders `index.html`, and commits.
+3. **Maintainer runs `wrangler deploy`** from local checkout to push the updated Worker live.
+4. **Archive androdr-privacy** per §5.3.
+
+### 5.5 Verification (PR A)
+
+- **Renderer tests green.** `cd scripts && python3 -m pytest test_render_privacy.py` passes.
+- **Local dry-run against real markdown.** Run the renderer against `docs/PRIVACY_POLICY.md` and a copy of `cloudflare-worker.js`; diff the output against today's inline HTML — expect structural parity (same h2/h3 counts, same table row counts).
+- **Same dry-run against `androdr-site/index.html`** — same expectation.
+- **Workflow dry-run.** `workflow_dispatch` each render workflow on its branch before merging; inspect the commit it produces.
+- **End-to-end post-merge.** After both PRs are merged, make a trivial whitespace edit to `docs/PRIVACY_POLICY.md` in a throwaway branch and merge it. Confirm:
+  - `render-privacy-worker.yml` runs successfully and updates `cloudflare-worker.js` in AndroDR.
+  - `notify-privacy-sync.yml` fires the dispatch.
+  - `render-privacy.yml` in `androdr-site` runs successfully and updates `index.html`.
+  - Live `https://yasirhamza.github.io/androdr-site/#privacy` reflects the change within minutes.
+  - Maintainer runs `wrangler deploy`; `https://androdr.yasirhamza.workers.dev/#privacy` reflects the change.
+- **Drift grep.** Zero matches for `privacy@androdr\.dev` anywhere in either repo after merge.
+- **Archive check.** `gh api repos/yasirhamza/androdr-privacy --jq '.archived'` returns `true`.
 
 ---
 
@@ -281,7 +326,8 @@ Split PR B into logical commits so the review diff tells a story:
 |------|-----------|
 | Privacy markdown renderer produces HTML that breaks site styling | Script includes structural assertions (expected `<h2>`/`<h3>`/`<table>` counts); dry-run before merge |
 | Shadowban blocks render workflow's authenticated GH API calls | Workflow uses `GITHUB_TOKEN`; test on branch first |
-| Cloudflare Worker caches stale HTML after site rebuild | Workflow can optionally call Cloudflare purge API; otherwise wait for TTL. Verify manually on first cutover. |
+| Cloudflare Worker caches stale HTML after site rebuild | Worker serves its own inline HTML independently of GH Pages, so site-cache staleness is a non-issue; Worker staleness is handled by the `wrangler deploy` step in §5.4. |
+| Maintainer forgets to `wrangler deploy` after `cloudflare-worker.js` changes | Render-privacy-worker commit message includes an explicit reminder; post-merge verification (§5.5) compares the live Worker response with the repo file. |
 | ARCHITECTURE.md claims something wrong (e.g., wrong module boundary) | Cross-reference every claim against current source while drafting; request code-reviewer pass after draft |
 | ROADMAP deletion breaks an inbound link we missed | Full grep before delete |
 | `androdr-privacy` archive breaks an external backlink | Leave archived, not deleted; forwarding `index.md` stays in place; URL still resolves |

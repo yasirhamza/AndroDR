@@ -2,59 +2,67 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Establish `docs/PRIVACY_POLICY.md` in the AndroDR repo as the single source of truth for the privacy policy, auto-render it into the `androdr-site` public site at build time, archive the dead `androdr-privacy` mirror repo, and fix the hallucinated contact email everywhere.
+**Goal:** Establish `docs/PRIVACY_POLICY.md` in the AndroDR repo as the single source of truth for the privacy policy, auto-render it into two derived artifacts (`cloudflare-worker.js` in AndroDR and `index.html` in `androdr-site`), archive the dead `androdr-privacy` mirror repo, and fix the hallucinated contact email everywhere.
 
-**Architecture:** Cross-repo pipeline. AndroDR is the authoritative edit surface; a workflow fires `repository_dispatch` on privacy markdown change; the `androdr-site` repo's render workflow fetches the markdown (authenticated GH API, required because of the account shadowban), converts it to HTML via a small Python script with structural assertions, replaces a fenced region in `index.html`, and pushes — existing GitHub Pages workflow handles the rest. Cloudflare Worker mirror picks up the change via its normal pull.
+**Architecture:** Cross-repo pipeline with **one canonical renderer** in AndroDR (`scripts/render_privacy.py`) used by two workflows:
 
-**Tech Stack:** Python 3 + `markdown` PyPI package (with `tables` extension), GitHub Actions, `gh` CLI.
+- `.github/workflows/render-privacy-worker.yml` in AndroDR renders `cloudflare-worker.js` on push when privacy content changes. Commit message reminds the maintainer to `wrangler deploy`.
+- `.github/workflows/render-privacy.yml` in `androdr-site` fetches the markdown AND the renderer from AndroDR at run time (authenticated — the account shadowban blocks anonymous `raw.githubusercontent.com`) and renders `index.html`. It fires on `repository_dispatch` from AndroDR, with a daily cron as safety net.
+
+**Tech Stack:** Python 3 + `markdown` PyPI package (with `tables` extension), GitHub Actions, `gh` CLI. Worker deployment is manual (`wrangler deploy`).
 
 **Spec:** `docs/superpowers/specs/2026-04-24-docs-refresh-design.md` §5.
 
 ---
 
+## Cutover sequence (critical — read before starting)
+
+Two PRs, merged in this order:
+
+1. **Site PR first** (tasks 1–3): small PR in `yasirhamza/androdr-site`. On merge, the new render workflow fires once and **fails as expected** because the renderer doesn't exist on AndroDR main yet. This is a known, acceptable first-run failure — see Task 3 Step 4.
+2. **AndroDR PR second** (tasks 4–12): larger PR in `yasirhamza/AndroDR`. On merge: the worker-render workflow produces an updated `cloudflare-worker.js`; the notify workflow dispatches to the site; the site render workflow now succeeds.
+3. **Manual `wrangler deploy`** (task 13) to push the updated Worker live.
+4. **Archive `androdr-privacy`** (task 14).
+
+---
+
 ## File structure
 
-**Repo: `yasirhamza/androdr-site` (separate repo, local checkout at /tmp for plan execution)**
-- Create: `scripts/render_privacy.py` — markdown-to-HTML-fragment renderer with structural assertions
-- Create: `scripts/requirements.txt` — pinned dependency for renderer
-- Create: `scripts/test_render_privacy.py` — tests for the renderer
-- Create: `scripts/fixtures/sample_privacy.md` — minimal test fixture
-- Create: `.github/workflows/render-privacy.yml` — triggers rendering (push, dispatch, cron, manual)
-- Modify: `index.html` — add `<!-- ANDRODR:PRIVACY:START -->` / `<!-- ANDRODR:PRIVACY:END -->` fences around existing `<section class="privacy">`
+### `yasirhamza/androdr-site` (site PR)
+- Modify: `index.html` — fence the privacy section with `<!-- ANDRODR:PRIVACY:START -->` / `<!-- ANDRODR:PRIVACY:END -->`
+- Create: `.github/workflows/render-privacy.yml` — fetches renderer + markdown from AndroDR, renders `index.html`
 - Delete: `.github/workflows/static.yml` — duplicate of `pages.yml`
 
-**Repo: `yasirhamza/AndroDR`**
-- Modify: `docs/PRIVACY_POLICY.md` — content update (email fix, active feeds, timeline, bugreport retention language, Data Safety alignment expansion, last-updated date)
-- Modify: `docs/play-store/store-listing.md` — email fix (`privacy@androdr.dev` → `yhamad.dev@gmail.com`)
-- Create: `.github/workflows/notify-privacy-sync.yml` — fires `repository_dispatch` to `androdr-site` on privacy markdown change
+### `yasirhamza/AndroDR` (AndroDR PR)
+- Modify: `cloudflare-worker.js` — fence privacy section, content update
+- Modify: `docs/PRIVACY_POLICY.md` — content refresh, email fix, date bump
+- Modify: `docs/play-store/store-listing.md` — email fix
+- Create: `scripts/requirements.txt` — pinned `markdown` dependency
+- Create: `scripts/render_privacy.py` — canonical renderer (CLI takes markdown path + target html path)
+- Create: `scripts/test_render_privacy.py` — renderer tests
+- Create: `scripts/fixtures/sample_privacy.md` — minimal fixture for tests
+- Create: `.github/workflows/render-privacy-worker.yml` — renders `cloudflare-worker.js` on push
+- Create: `.github/workflows/notify-privacy-sync.yml` — fires `repository_dispatch` to site
 
-**Repo: `yasirhamza/androdr-privacy`**
-- Replace: `index.md` with single-line forwarding pointer
+### `yasirhamza/androdr-privacy` (admin action)
+- Modify: `index.md` → forwarding pointer
 - Archive via `gh repo archive`
 
 ---
 
-## Cutover sequence
-
-Because this is cross-repo and has visible public effects, land changes in this order:
-
-1. Tasks 1–6 land in a single PR against `yasirhamza/androdr-site`. First merge of this PR triggers the render workflow; the workflow will regenerate the privacy HTML from AndroDR's *current* `docs/PRIVACY_POLICY.md` (old content). That is safe — it normalizes the already-live content into the fenced region, no regression.
-2. Tasks 7–9 land in a single PR against `yasirhamza/AndroDR`. Merge fires the `repository_dispatch`; the site re-renders with the updated content; Cloudflare mirror catches up on next pull.
-3. Task 10 (archive mirror repo) runs after both PRs are merged and verified.
-
----
+# Part 1: Site PR
 
 ## Task 1: Fence the privacy section in `androdr-site/index.html`
 
 **Repo:** `yasirhamza/androdr-site`
 **Files:**
-- Modify: `index.html` around the `<section class="privacy" id="privacy">` block
+- Modify: `index.html` (fence markers around existing `<section class="privacy">`)
 
-- [ ] **Step 1: Clone `androdr-site` if not already local**
+- [ ] **Step 1: Clone the site repo and create a branch**
 
-Run:
 ```bash
-cd /tmp && [ -d androdr-site-work ] || gh repo clone yasirhamza/androdr-site androdr-site-work
+cd /tmp && rm -rf androdr-site-work
+gh repo clone yasirhamza/androdr-site androdr-site-work
 cd /tmp/androdr-site-work
 git checkout -b docs/privacy-pipeline
 ```
@@ -62,11 +70,11 @@ git checkout -b docs/privacy-pipeline
 - [ ] **Step 2: Locate the privacy section**
 
 Run: `grep -n 'section class="privacy"' index.html`
-Expected: one match on a line around 219 (`<section class="privacy" id="privacy">`).
+Expected: one line showing `<section class="privacy" id="privacy">`.
 
-- [ ] **Step 3: Wrap with fence comments**
+- [ ] **Step 3: Insert `<!-- ANDRODR:PRIVACY:START -->` before the section and `<!-- ANDRODR:PRIVACY:END -->` after its matching `</section>`**
 
-Edit `index.html`. Replace:
+Use Edit on `index.html`. Replace:
 ```html
   <section class="privacy" id="privacy">
 ```
@@ -76,19 +84,43 @@ with:
   <section class="privacy" id="privacy">
 ```
 
-And replace the matching closing `</section>` (the one on the line immediately before the `<!-- Footer -->` comment or the `<footer>` tag) with:
+Then find the closing `</section>` that matches (the one right before the `<footer>` block) and replace:
+```html
+  </section>
+
+  <hr>
+
+  <!-- Footer -->
+```
+with:
 ```html
   </section>
   <!-- ANDRODR:PRIVACY:END -->
+
+  <hr>
+
+  <!-- Footer -->
 ```
 
-Verify with: `grep -c 'ANDRODR:PRIVACY' index.html`
-Expected: `2`
+(If the exact surrounding context differs, adjust the Edit match; the invariant is exactly one `START` and exactly one `END`, with the `<section>...</section>` block between them and nothing else.)
 
-- [ ] **Step 4: Confirm the fence brackets exactly one privacy section**
+- [ ] **Step 4: Verify fence markers bracket exactly one privacy section**
 
-Run: `python3 -c "import re,sys; html=open('index.html').read(); m=re.search(r'<!-- ANDRODR:PRIVACY:START -->(.*?)<!-- ANDRODR:PRIVACY:END -->', html, re.DOTALL); print('lines:', m.group(1).count(chr(10)) if m else 'NO MATCH')"`
-Expected: `lines: <some number > 150>` (the fenced region is the bulk of the privacy content).
+Run:
+```bash
+grep -c 'ANDRODR:PRIVACY:START' index.html
+grep -c 'ANDRODR:PRIVACY:END' index.html
+python3 -c "
+import re
+html = open('index.html').read()
+m = re.search(r'<!-- ANDRODR:PRIVACY:START -->(.*?)<!-- ANDRODR:PRIVACY:END -->', html, re.DOTALL)
+assert m, 'fence region not found'
+inner = m.group(1)
+assert inner.count('<section class=\"privacy\"') == 1, f'expected 1 section, got {inner.count(\"<section class=\\\"privacy\\\"\")}'
+print('OK: fence region contains exactly one privacy section')
+"
+```
+Expected: each grep prints `1`, Python prints `OK: fence region contains exactly one privacy section`.
 
 - [ ] **Step 5: Commit**
 
@@ -99,40 +131,248 @@ git commit -m "site: fence privacy section for render-privacy workflow"
 
 ---
 
-## Task 2: Create `scripts/requirements.txt` in `androdr-site`
+## Task 2: Create `render-privacy.yml` workflow in `androdr-site`
 
 **Repo:** `yasirhamza/androdr-site`
 **Files:**
-- Create: `scripts/requirements.txt`
+- Create: `.github/workflows/render-privacy.yml`
 
-- [ ] **Step 1: Create the requirements file**
+- [ ] **Step 1: Write the workflow**
+
+Create `.github/workflows/render-privacy.yml` with this content:
+
+```yaml
+name: Render privacy from AndroDR
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/render-privacy.yml'
+      - 'index.html'
+  repository_dispatch:
+    types: [privacy-updated]
+  schedule:
+    # Daily safety net at 05:17 UTC in case a dispatch was missed.
+    - cron: '17 5 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: render-privacy
+  cancel-in-progress: false
+
+jobs:
+  render:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout androdr-site
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Fetch renderer + markdown from AndroDR
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mkdir -p /tmp/androdr
+          for path in docs/PRIVACY_POLICY.md scripts/render_privacy.py scripts/requirements.txt; do
+            out="/tmp/androdr/$(basename "$path")"
+            gh api "repos/yasirhamza/AndroDR/contents/$path" --jq '.content' | base64 -d > "$out"
+            test -s "$out" || { echo "fetch failed: $path"; exit 1; }
+          done
+
+      - name: Capture source SHA for commit message
+        id: src
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          SHA=$(gh api repos/yasirhamza/AndroDR/commits/main --jq '.sha' | cut -c1-7)
+          echo "sha=$SHA" >> "$GITHUB_OUTPUT"
+
+      - name: Install renderer dependencies
+        run: python -m pip install -r /tmp/androdr/requirements.txt
+
+      - name: Render privacy into index.html
+        run: python3 /tmp/androdr/render_privacy.py /tmp/androdr/PRIVACY_POLICY.md index.html
+
+      - name: Commit if changed
+        run: |
+          if git diff --quiet -- index.html; then
+            echo "no change — privacy content already in sync"
+            exit 0
+          fi
+          git config user.name 'androdr-site-bot'
+          git config user.email 'yhamad.dev@gmail.com'
+          git add index.html
+          git commit -m "docs(privacy): sync from AndroDR@${{ steps.src.outputs.sha }}"
+          git push
+```
+
+- [ ] **Step 2: Lint the YAML**
+
+Run: `python3 -c "import yaml; yaml.safe_load(open('.github/workflows/render-privacy.yml'))"`
+Expected: no output, exit 0.
+
+- [ ] **Step 3: Commit**
 
 ```bash
-mkdir -p scripts
-cat > scripts/requirements.txt <<'EOF'
-markdown==3.6
+git add .github/workflows/render-privacy.yml
+git commit -m "site: render-privacy workflow (fetches renderer + markdown from AndroDR)"
+```
+
+---
+
+## Task 3: Delete duplicate `static.yml`, push, and open the site PR
+
+**Repo:** `yasirhamza/androdr-site`
+
+- [ ] **Step 1: Compare `static.yml` against `pages.yml`**
+
+Run:
+```bash
+cat .github/workflows/pages.yml .github/workflows/static.yml
+```
+
+Both are GitHub Pages deploy workflows. Confirm `static.yml` has no unique step that `pages.yml` lacks. If it does, stop and ask the user before deleting.
+
+- [ ] **Step 2: Delete `static.yml`**
+
+```bash
+git rm .github/workflows/static.yml
+git commit -m "site: remove duplicate static.yml deploy workflow"
+```
+
+- [ ] **Step 3: Push and open PR**
+
+```bash
+git push -u origin docs/privacy-pipeline
+gh pr create --repo yasirhamza/androdr-site \
+  --title "privacy: render from AndroDR markdown via repository_dispatch" \
+  --body "$(cat <<'EOF'
+Part 1 of the privacy publishing pipeline (the other half lands in yasirhamza/AndroDR).
+
+- Fences the existing privacy section with ANDRODR:PRIVACY markers.
+- Adds render-privacy.yml that fetches the renderer + markdown from AndroDR main at run time and renders into index.html. Authenticated GH API fetch is required because the account shadowban blocks anonymous raw.githubusercontent.com.
+- Removes duplicate static.yml in favor of pages.yml.
+
+### Expected first-run failure
+On merge, the push event fires render-privacy.yml. The renderer script does not exist on AndroDR main yet (it lands in the AndroDR-side PR that merges next). The first run will fail with "fetch failed: scripts/render_privacy.py" and that is expected. Normal operation begins once the AndroDR PR merges and the subsequent repository_dispatch triggers a successful render.
+
+Spec: AndroDR/docs/superpowers/specs/2026-04-24-docs-refresh-design.md §5.
 EOF
+)"
+```
+
+- [ ] **Step 4: Merge and confirm expected first-run failure**
+
+After merge, inspect the first workflow run:
+```bash
+gh run list --repo yasirhamza/androdr-site --workflow render-privacy.yml --limit 3
+```
+
+Expected: one failed run with the "fetch failed: scripts/render_privacy.py" message. This is the expected first-run failure — do not treat it as a blocker.
+
+---
+
+# Part 2: AndroDR PR
+
+All remaining tasks happen in the AndroDR repo worktree at `.claude/worktrees/docs-privacy` on branch `docs/privacy-content-update` (already created during plan execution setup).
+
+## Task 4: Fence the privacy section in `cloudflare-worker.js`
+
+**Repo:** `yasirhamza/AndroDR` (worktree `.claude/worktrees/docs-privacy`)
+**Files:**
+- Modify: `cloudflare-worker.js`
+
+- [ ] **Step 1: Change to the worktree**
+
+```bash
+cd /home/yasir/AndroDR/.claude/worktrees/docs-privacy
+git status  # should report clean tree on docs/privacy-content-update
+```
+
+- [ ] **Step 2: Locate the privacy section**
+
+Run: `grep -n '<section class="privacy"' cloudflare-worker.js`
+Expected: one match.
+
+- [ ] **Step 3: Wrap with fence markers**
+
+Use Edit to wrap the `<section class="privacy" id="privacy">...</section>` block with the same `<!-- ANDRODR:PRIVACY:START -->` and `<!-- ANDRODR:PRIVACY:END -->` comments. Note: the HTML is inside a JavaScript template literal, so the comments become literal characters in the response HTML — that's fine; browsers ignore HTML comments.
+
+The final structure inside the template literal must be:
+```
+  <!-- ANDRODR:PRIVACY:START -->
+  <section class="privacy" id="privacy">
+    ...existing content...
+  </section>
+  <!-- ANDRODR:PRIVACY:END -->
+```
+
+- [ ] **Step 4: Verify the fence brackets exactly one privacy section**
+
+Run:
+```bash
+grep -c 'ANDRODR:PRIVACY:START' cloudflare-worker.js
+grep -c 'ANDRODR:PRIVACY:END' cloudflare-worker.js
+python3 -c "
+import re
+txt = open('cloudflare-worker.js').read()
+m = re.search(r'<!-- ANDRODR:PRIVACY:START -->(.*?)<!-- ANDRODR:PRIVACY:END -->', txt, re.DOTALL)
+assert m, 'fence region not found'
+assert m.group(1).count('<section class=\"privacy\"') == 1
+print('OK')
+"
+```
+Expected: two `1`s and `OK`.
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add cloudflare-worker.js
+git commit -m "worker: fence privacy section for render pipeline"
+```
+
+---
+
+## Task 5: Add `scripts/requirements.txt`
+
+**Repo:** `yasirhamza/AndroDR`
+**Files:**
+- Create: `scripts/requirements.txt`
+
+- [ ] **Step 1: Create the file**
+
+Use Write to create `scripts/requirements.txt` with content:
+```
+markdown==3.6
 ```
 
 - [ ] **Step 2: Commit**
 
 ```bash
 git add scripts/requirements.txt
-git commit -m "site: pin markdown dependency for render-privacy script"
+git commit -m "scripts: pin markdown dependency for privacy renderer"
 ```
 
 ---
 
-## Task 3: Write tests for `render_privacy.py` (fail first)
+## Task 6: Write failing tests for `render_privacy.py`
 
-**Repo:** `yasirhamza/androdr-site`
+**Repo:** `yasirhamza/AndroDR`
 **Files:**
 - Create: `scripts/fixtures/sample_privacy.md`
 - Create: `scripts/test_render_privacy.py`
 
-- [ ] **Step 1: Create test fixture**
+- [ ] **Step 1: Create the fixture**
 
-Create `scripts/fixtures/sample_privacy.md`:
+Use Write to create `scripts/fixtures/sample_privacy.md`:
 ```markdown
 # AndroDR Privacy Policy
 
@@ -156,9 +396,9 @@ It scans.
 - Email: yhamad.dev@gmail.com
 ```
 
-- [ ] **Step 2: Write test file**
+- [ ] **Step 2: Create the tests**
 
-Create `scripts/test_render_privacy.py`:
+Use Write to create `scripts/test_render_privacy.py`:
 ```python
 """Tests for render_privacy.py — the markdown-to-HTML fragment renderer."""
 from __future__ import annotations
@@ -182,7 +422,8 @@ def test_render_wraps_in_privacy_section():
 def test_render_produces_h2_for_top_sections():
     html = render_privacy.render(FIXTURE.read_text())
     h2_count = len(re.findall(r"<h2[^>]*>", html))
-    assert h2_count == 3  # Our Philosophy, What AndroDR Does, Contact
+    # Injected "Privacy Policy" h2 + 3 source h2s.
+    assert h2_count == 4
 
 
 def test_render_produces_table_block():
@@ -203,7 +444,6 @@ def test_render_injects_last_updated_into_fragment():
 
 def test_assert_structural_invariants_pass_matching_fixture():
     html = render_privacy.render(FIXTURE.read_text())
-    # Should not raise
     render_privacy.assert_structural_invariants(html, expected_h2=3, expected_tables=1)
 
 
@@ -233,7 +473,7 @@ def test_replace_fenced_region():
     assert "<!-- ANDRODR:PRIVACY:END -->" in result
 
 
-def test_replace_fenced_region_preserves_fences():
+def test_replace_fenced_region_preserves_fences_exactly_once():
     template = "<!-- ANDRODR:PRIVACY:START -->\nOLD\n<!-- ANDRODR:PRIVACY:END -->"
     result = render_privacy.replace_fenced_region(template, "NEW")
     assert result.count("<!-- ANDRODR:PRIVACY:START -->") == 1
@@ -246,51 +486,52 @@ def test_replace_fenced_region_raises_when_fence_missing():
         render_privacy.replace_fenced_region(template, "x")
 ```
 
-- [ ] **Step 3: Run tests and confirm they fail with import error**
+- [ ] **Step 3: Install deps and confirm tests fail with ImportError**
 
-Run:
 ```bash
-cd /tmp/androdr-site-work/scripts
-python3 -m pip install markdown==3.6 pytest -q
-python3 -m pytest test_render_privacy.py -v
+cd /home/yasir/AndroDR/.claude/worktrees/docs-privacy/scripts
+python3 -m pip install --quiet markdown==3.6 pytest
+python3 -m pytest test_render_privacy.py -v 2>&1 | tail -20
 ```
-Expected: all 11 tests fail because `render_privacy` module doesn't exist yet (`ModuleNotFoundError` or `ImportError`).
+Expected: all tests fail with `ModuleNotFoundError: No module named 'render_privacy'` (module doesn't exist yet).
 
 - [ ] **Step 4: Commit failing tests**
 
 ```bash
-cd /tmp/androdr-site-work
+cd /home/yasir/AndroDR/.claude/worktrees/docs-privacy
 git add scripts/fixtures/sample_privacy.md scripts/test_render_privacy.py
-git commit -m "site: tests for privacy render script (red)"
+git commit -m "scripts: tests for privacy renderer (red)"
 ```
 
 ---
 
-## Task 4: Implement `render_privacy.py`
+## Task 7: Implement `render_privacy.py`
 
-**Repo:** `yasirhamza/androdr-site`
+**Repo:** `yasirhamza/AndroDR`
 **Files:**
 - Create: `scripts/render_privacy.py`
 
 - [ ] **Step 1: Write the implementation**
 
-Create `scripts/render_privacy.py`:
+Use Write to create `scripts/render_privacy.py`:
 ```python
-"""Render docs/PRIVACY_POLICY.md (from the AndroDR repo) into an HTML fragment
-for injection into index.html in the androdr-site repo.
+"""Render docs/PRIVACY_POLICY.md into the privacy section of a target HTML file.
 
 Usage:
-    python3 render_privacy.py <markdown-path> <index-html-path>
+    python3 render_privacy.py <markdown-path> <target-html-path>
+
+Targets: cloudflare-worker.js (in this repo) and index.html (in androdr-site).
+Both files have <!-- ANDRODR:PRIVACY:START --> ... <!-- ANDRODR:PRIVACY:END -->
+fence markers; this script replaces the region between them.
 
 The script:
   1. Parses the markdown into an HTML fragment with the 'tables' extension.
   2. Wraps it in <section class="privacy" id="privacy">...</section>
-     so existing CSS in index.html applies unchanged.
+     so existing CSS in both target files applies unchanged.
   3. Asserts structural invariants (expected <h2> and <table> counts); exits
      non-zero if they don't match. Update EXPECTED_H2 / EXPECTED_TABLES in the
      same commit that deliberately changes the privacy structure.
-  4. Replaces the fenced region (<!-- ANDRODR:PRIVACY:START --> ... END -->)
-     in index.html with the new section.
+  4. Replaces the fenced region in the target file.
 """
 from __future__ import annotations
 
@@ -320,12 +561,12 @@ def extract_last_updated(md_text: str) -> str | None:
 def render(md_text: str) -> str:
     """Convert markdown to an HTML fragment wrapped in <section class="privacy">.
 
-    The rendered fragment mirrors the structure the current index.html already
-    uses, so the existing .privacy CSS selectors apply without change. The top
+    The rendered fragment mirrors the structure the current target files use,
+    so the existing .privacy CSS selectors apply without change. The top
     `# AndroDR Privacy Policy` H1 in the markdown is dropped (the H2 "Privacy
     Policy" title lives in the HTML template), and the `_Last updated: ..._`
-    line is rendered as a `<p><em>Last updated: YYYY-MM-DD</em></p>` at the
-    top of the fragment so the date stays visible.
+    line is rendered as `<p><em>Last updated: YYYY-MM-DD</em></p>` at the top
+    of the fragment so the date stays visible.
     """
     last_updated = extract_last_updated(md_text)
     # Strip the H1 and the last-updated line; we'll re-inject the date below.
@@ -341,7 +582,7 @@ def assert_structural_invariants(html: str, expected_h2: int = EXPECTED_H2,
                                  expected_tables: int = EXPECTED_TABLES) -> None:
     """Raise AssertionError if rendered HTML deviates from expected structure."""
     h2_count = len(re.findall(r"<h2[^>]*>", html))
-    # First <h2> is the "Privacy Policy" title we injected; source markdown
+    # First <h2> is the "Privacy Policy" title we inject; source markdown
     # contributes the rest.
     source_h2 = h2_count - 1
     assert source_h2 == expected_h2, (
@@ -375,20 +616,20 @@ def replace_fenced_region(template: str, new_section: str) -> str:
 
 def main(argv: list[str]) -> int:
     if len(argv) != 3:
-        print(f"usage: {argv[0]} <markdown-path> <index-html-path>", file=sys.stderr)
+        print(f"usage: {argv[0]} <markdown-path> <target-html-path>", file=sys.stderr)
         return 2
     md_path = Path(argv[1])
-    html_path = Path(argv[2])
+    target_path = Path(argv[2])
     md_text = md_path.read_text(encoding="utf-8")
     rendered = render(md_text)
     assert_structural_invariants(rendered)
-    template = html_path.read_text(encoding="utf-8")
+    template = target_path.read_text(encoding="utf-8")
     updated = replace_fenced_region(template, rendered)
     if updated == template:
         print("no change")
         return 0
-    html_path.write_text(updated, encoding="utf-8")
-    print(f"updated {html_path}")
+    target_path.write_text(updated, encoding="utf-8")
+    print(f"updated {target_path}")
     return 0
 
 
@@ -396,325 +637,121 @@ if __name__ == "__main__":
     raise SystemExit(main(sys.argv))
 ```
 
-- [ ] **Step 2: Run tests — should now pass**
+- [ ] **Step 2: Run tests — should pass**
 
-Run:
 ```bash
-cd /tmp/androdr-site-work/scripts
-python3 -m pytest test_render_privacy.py -v
+cd /home/yasir/AndroDR/.claude/worktrees/docs-privacy/scripts
+python3 -m pytest test_render_privacy.py -v 2>&1 | tail -20
 ```
 Expected: all 11 tests PASS.
 
-- [ ] **Step 3: Dry-run against real privacy markdown**
+- [ ] **Step 3: Dry-run against `cloudflare-worker.js` to verify end-to-end**
 
-Run:
 ```bash
-cd /tmp/androdr-site-work
-cp /home/yasir/AndroDR/docs/PRIVACY_POLICY.md /tmp/live-privacy.md
-python3 scripts/render_privacy.py /tmp/live-privacy.md index.html
+cd /home/yasir/AndroDR/.claude/worktrees/docs-privacy
+cp cloudflare-worker.js /tmp/worker-before.js
+python3 scripts/render_privacy.py docs/PRIVACY_POLICY.md cloudflare-worker.js
+echo "--- diff summary ---"
+diff <(head -100 /tmp/worker-before.js) <(head -100 cloudflare-worker.js) | head -40
 ```
-Expected: script prints `updated index.html` and exits 0.
+Expected: either `updated cloudflare-worker.js` (current markdown and worker content are different, which is likely because the worker has the old 2026-03-26 date hard-coded) or `no change` (if they happen to match). No assertion failure — the counts should match between markdown and worker.
 
-- [ ] **Step 4: Verify the rendered HTML looks reasonable**
+**If the script reports an AssertionError about h2/table counts:** the markdown or target has drifted structurally from when the counts were locked. Stop and investigate before continuing.
 
-Run:
+- [ ] **Step 4: Revert the preview edit — the AndroDR PR's privacy content update will happen in Task 10, not here**
+
 ```bash
-grep -c '<h3' index.html
-grep -c '<table>' index.html
-grep -c 'yhamad.dev@gmail.com\|privacy@androdr.dev' index.html
-```
-Expected: some `<h3>` count, 3 `<table>` blocks, and `yhamad.dev@gmail.com` present. (Current markdown still has `privacy@androdr.dev` — that gets fixed in Task 7.)
-
-- [ ] **Step 5: Revert the dry-run edit to index.html**
-
-The render in Step 3 modified index.html for preview only. We want the committed state to still have the unmodified fenced region (from Task 1), not pre-applied content. Revert:
-```bash
-git checkout -- index.html
+git checkout -- cloudflare-worker.js
 ```
 
-- [ ] **Step 6: Commit the script**
+- [ ] **Step 5: Commit the script**
 
 ```bash
 git add scripts/render_privacy.py
-git commit -m "site: add render_privacy.py (tests now green)"
+git commit -m "scripts: render_privacy.py canonical markdown-to-HTML renderer (green)"
 ```
 
 ---
 
-## Task 5: Create the `render-privacy.yml` workflow in `androdr-site`
+## Task 8: Add `render-privacy-worker.yml` workflow
 
-**Repo:** `yasirhamza/androdr-site`
+**Repo:** `yasirhamza/AndroDR`
 **Files:**
-- Create: `.github/workflows/render-privacy.yml`
+- Create: `.github/workflows/render-privacy-worker.yml`
 
 - [ ] **Step 1: Write the workflow**
 
-Create `.github/workflows/render-privacy.yml`:
+Use Write to create `.github/workflows/render-privacy-worker.yml`:
 ```yaml
-name: Render privacy from AndroDR
+name: Render privacy into cloudflare-worker.js
 
 on:
   push:
     branches: [main]
     paths:
+      - 'docs/PRIVACY_POLICY.md'
       - 'scripts/render_privacy.py'
-      - 'scripts/requirements.txt'
-      - '.github/workflows/render-privacy.yml'
-  repository_dispatch:
-    types: [privacy-updated]
-  schedule:
-    # Daily safety net in case a repository_dispatch was missed.
-    - cron: '17 5 * * *'
+      - 'cloudflare-worker.js'
+      - '.github/workflows/render-privacy-worker.yml'
   workflow_dispatch:
 
 permissions:
   contents: write
 
 concurrency:
-  group: render-privacy
+  group: render-privacy-worker
   cancel-in-progress: false
 
 jobs:
   render:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout androdr-site
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
 
       - name: Install renderer dependencies
         run: python -m pip install -r scripts/requirements.txt
 
-      - name: Fetch PRIVACY_POLICY.md from AndroDR
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          gh api repos/yasirhamza/AndroDR/contents/docs/PRIVACY_POLICY.md \
-            --jq '.content' | base64 -d > /tmp/PRIVACY_POLICY.md
-          test -s /tmp/PRIVACY_POLICY.md
-
-      - name: Capture source SHA
-        id: src
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          SHA=$(gh api repos/yasirhamza/AndroDR/commits/main --jq '.sha' | cut -c1-7)
-          echo "sha=$SHA" >> "$GITHUB_OUTPUT"
-
-      - name: Render privacy into index.html
-        run: python3 scripts/render_privacy.py /tmp/PRIVACY_POLICY.md index.html
+      - name: Render privacy into cloudflare-worker.js
+        run: python3 scripts/render_privacy.py docs/PRIVACY_POLICY.md cloudflare-worker.js
 
       - name: Commit if changed
         run: |
-          if git diff --quiet -- index.html; then
-            echo "no change — privacy content already in sync"
+          if git diff --quiet -- cloudflare-worker.js; then
+            echo "no change — worker already in sync"
             exit 0
           fi
-          git config user.name 'androdr-site-bot'
+          git config user.name 'androdr-bot'
           git config user.email 'yhamad.dev@gmail.com'
-          git add index.html
-          git commit -m "docs(privacy): sync from AndroDR@${{ steps.src.outputs.sha }}"
+          git add cloudflare-worker.js
+          git commit -m "docs(privacy): render into cloudflare-worker.js
+
+          Reminder: run 'wrangler deploy' locally to push this change to the
+          Cloudflare Worker. The render workflow only updates the file in the
+          repo; the live Worker deploys from a local checkout."
           git push
 ```
 
-- [ ] **Step 2: Lint the YAML**
+- [ ] **Step 2: Lint YAML**
 
-Run: `python3 -c "import yaml; yaml.safe_load(open('.github/workflows/render-privacy.yml'))"`
-Expected: no output, exit 0.
+```bash
+python3 -c "import yaml; yaml.safe_load(open('.github/workflows/render-privacy-worker.yml'))"
+```
+Expected: no output.
 
 - [ ] **Step 3: Commit**
 
 ```bash
-git add .github/workflows/render-privacy.yml
-git commit -m "site: render-privacy workflow (push/dispatch/cron/manual triggers)"
+git add .github/workflows/render-privacy-worker.yml
+git commit -m "ci: render-privacy-worker workflow (updates cloudflare-worker.js on push)"
 ```
 
 ---
 
-## Task 6: Delete duplicate `static.yml` workflow, open the site PR
-
-**Repo:** `yasirhamza/androdr-site`
-**Files:**
-- Delete: `.github/workflows/static.yml`
-
-- [ ] **Step 1: Verify `pages.yml` is sufficient for deploy**
-
-Run:
-```bash
-cat .github/workflows/pages.yml
-cat .github/workflows/static.yml
-diff <(grep -v '^#\|^$\|name:' .github/workflows/pages.yml) <(grep -v '^#\|^$\|name:' .github/workflows/static.yml)
-```
-Expected: the two files are near-identical pages-deploy jobs. If there is a unique step in `static.yml`, stop and ask the user before deleting.
-
-- [ ] **Step 2: Delete `static.yml`**
-
-```bash
-git rm .github/workflows/static.yml
-git commit -m "site: remove duplicate static.yml deploy workflow"
-```
-
-- [ ] **Step 3: Push and open PR**
-
-```bash
-git push -u origin docs/privacy-pipeline
-gh pr create --repo yasirhamza/androdr-site \
-  --title "privacy: render from AndroDR markdown via repository_dispatch" \
-  --body "$(cat <<'EOF'
-Establishes single-source-of-truth pipeline for the privacy policy.
-
-- Fences the existing privacy section with ANDRODR:PRIVACY markers
-- Adds scripts/render_privacy.py (with tests) to convert markdown → HTML fragment
-- Adds render-privacy.yml workflow (push / repository_dispatch / daily cron / manual)
-- Removes duplicate static.yml in favor of pages.yml
-
-First merge will trigger a render of the current AndroDR PRIVACY_POLICY.md
-(unchanged content; just normalizes the already-live copy into the fenced
-region). A subsequent AndroDR PR updates the markdown content and fires the
-dispatch.
-
-Spec: https://github.com/yasirhamza/AndroDR/blob/main/docs/superpowers/specs/2026-04-24-docs-refresh-design.md §5
-EOF
-)"
-```
-
-- [ ] **Step 4: Watch the workflow after merge**
-
-After the PR merges, confirm `render-privacy.yml` runs successfully on the push-to-main trigger and produces a `docs(privacy): sync from AndroDR@<sha>` commit (or "no change — privacy content already in sync" if no diff).
-
-```bash
-gh run list --repo yasirhamza/androdr-site --workflow render-privacy.yml --limit 3
-```
-
-Expected: at least one successful run. If it failed, inspect logs with `gh run view --repo yasirhamza/androdr-site <run-id> --log`.
-
----
-
-## Task 7: Update `docs/PRIVACY_POLICY.md` content
-
-**Repo:** `yasirhamza/AndroDR`
-**Files:**
-- Modify: `docs/PRIVACY_POLICY.md`
-
-- [ ] **Step 1: Create branch in AndroDR repo**
-
-```bash
-cd /home/yasir/AndroDR
-git checkout main
-git pull --ff-only
-git checkout -b docs/privacy-content-update
-```
-
-- [ ] **Step 2: Update the `_Last updated:_` line**
-
-Use Edit to change `_Last updated: 2026-03-26_` → `_Last updated: 2026-04-24_`.
-
-- [ ] **Step 3: Replace all `privacy@androdr.dev` with `yhamad.dev@gmail.com`**
-
-Run: `grep -n "privacy@androdr.dev" docs/PRIVACY_POLICY.md`
-Expected: one match on line 197.
-
-Use Edit (replace_all=true) to change `privacy@androdr.dev` → `yhamad.dev@gmail.com`.
-
-- [ ] **Step 4: Update "What AndroDR Does" to mention SIGMA engine + STIX2**
-
-Edit the "What AndroDR Does" section so its last bullet cluster includes:
-- "Uses auditable YAML [SIGMA](https://github.com/SigmaHQ/sigma)-style detection rules — detection logic is not hidden in compiled code"
-- "Imports and exports STIX2-compatible indicators for interoperability with other forensic tools"
-
-- [ ] **Step 5: Extend "Data That Stays On Your Device" table**
-
-Append two rows to the table:
-```
-| Forensic timeline events (e.g., device admin grants) | Displayed in the timeline screen and exportable as part of reports | On-device Room database |
-| Bug report analysis findings | Displayed with scan results; raw bug report file is not retained | On-device Room database |
-```
-
-- [ ] **Step 6: Update "Network Requests" table**
-
-Remove the "Cert hash IOCs (planned)" stub row. Add or update these rows to reflect the current ingesters:
-
-```
-| MalwareBazaar APK hashes + cert hashes | abuse.ch MalwareBazaar public API | Hashes of known malicious APKs and the cert hashes that signed them | 1 API request per refresh |
-| ThreatFox indicators | abuse.ch ThreatFox public API | Command-and-control domain and IP indicators | 1 API request per refresh |
-| Stalkerware cert-hash indicators | AssoEchap/stalkerware-indicators (GitHub) | Cert hashes of known stalkerware signers | 1 HTTP GET |
-```
-
-Keep the existing rows for stalkerware package names, mvt-indicators (but note the dispatcher/cross-dedup wording), and the UAD / Plexus known-app databases.
-
-Append this paragraph below the table:
-> IOC ingesters run in a dispatcher that deduplicates indicators across feeds before writing to the on-device database. Each feed is independently auditable in `app/src/main/java/com/androdr/ioc/feeds/`.
-
-- [ ] **Step 7: Tighten "Bug Report Analysis" section**
-
-Ensure the section explicitly says:
-> AndroDR retains only the analysis *findings* — flagged app names, indicator matches, detected patterns — in the scan result. The original bug report ZIP is not stored on-device after analysis completes.
-
-- [ ] **Step 8: Expand "Google Play Data Safety Alignment"**
-
-Update the bullet list to mirror the declarations in `docs/play-store/18-data-safety-form.md` (read that file first and align the language). At minimum:
-- Data collected — installed apps (on-device), device info (bugreport analysis findings, user-initiated reports only), diagnostic info (app logcat in user-initiated reports only)
-- Data shared — none (explicit user-initiated sharing only)
-- Data encrypted in transit — N/A (no user data transmitted)
-- Data deletion — clear app data / uninstall
-- Optional data collection — none
-
-- [ ] **Step 9: Sanity-check the result**
-
-Run:
-```bash
-grep -c "^## " docs/PRIVACY_POLICY.md
-grep -c "^|" docs/PRIVACY_POLICY.md
-grep -c "privacy@androdr.dev" docs/PRIVACY_POLICY.md
-grep -c "yhamad.dev@gmail.com" docs/PRIVACY_POLICY.md
-```
-Expected: heading count still `18` (no structural break); table row count `≥ 22`; zero matches for `privacy@androdr.dev`; at least one match for `yhamad.dev@gmail.com`.
-
-If the heading count changed, update `EXPECTED_H2` in `androdr-site/scripts/render_privacy.py` within the same cross-repo coordination before merging (raise to user).
-
-- [ ] **Step 10: Commit**
-
-```bash
-git add docs/PRIVACY_POLICY.md
-git commit -m "docs(privacy): refresh content — active feeds, timeline, bugreport retention, correct contact"
-```
-
----
-
-## Task 8: Sweep contact email in `docs/play-store/store-listing.md`
-
-**Repo:** `yasirhamza/AndroDR`
-**Files:**
-- Modify: `docs/play-store/store-listing.md`
-
-- [ ] **Step 1: Locate the bad email**
-
-Run: `grep -n "privacy@androdr.dev" docs/play-store/store-listing.md`
-Expected: one match on line 58.
-
-- [ ] **Step 2: Replace**
-
-Use Edit to change `privacy@androdr.dev` → `yhamad.dev@gmail.com`.
-
-- [ ] **Step 3: Verify no more occurrences anywhere in repo**
-
-Run: `grep -rn "privacy@androdr.dev" . --exclude-dir=.git --exclude-dir=.claude`
-Expected: zero output.
-
-- [ ] **Step 4: Commit**
-
-```bash
-git add docs/play-store/store-listing.md
-git commit -m "docs(play-store): correct contact email in store listing"
-```
-
----
-
-## Task 9: Add `notify-privacy-sync.yml` workflow in AndroDR
+## Task 9: Add `notify-privacy-sync.yml` workflow
 
 **Repo:** `yasirhamza/AndroDR`
 **Files:**
@@ -722,7 +759,7 @@ git commit -m "docs(play-store): correct contact email in store listing"
 
 - [ ] **Step 1: Write the workflow**
 
-Create `.github/workflows/notify-privacy-sync.yml`:
+Use Write to create `.github/workflows/notify-privacy-sync.yml`:
 ```yaml
 name: Notify androdr-site of privacy changes
 
@@ -731,6 +768,8 @@ on:
     branches: [main]
     paths:
       - 'docs/PRIVACY_POLICY.md'
+      - 'scripts/render_privacy.py'
+      - 'scripts/requirements.txt'
 
 permissions:
   contents: read
@@ -743,54 +782,237 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.PRIVACY_SYNC_TOKEN }}
         run: |
+          if [ -z "$GH_TOKEN" ]; then
+            echo "::error::PRIVACY_SYNC_TOKEN secret is not configured. See CONTRIBUTING or the plan for setup steps."
+            exit 1
+          fi
           gh api repos/yasirhamza/androdr-site/dispatches \
             --method POST \
             -f event_type=privacy-updated \
-            -f 'client_payload[source_sha]=${{ github.sha }}'
+            -f "client_payload[source_sha]=${{ github.sha }}"
 ```
 
-- [ ] **Step 2: Flag the token requirement to the user**
+- [ ] **Step 2: Flag token setup to the user**
 
-The default `GITHUB_TOKEN` **cannot** dispatch to another repo. This workflow needs a Personal Access Token (classic, with `repo` scope) or a fine-grained token scoped to `yasirhamza/androdr-site` with `Contents: read` + `Metadata: read` + `Actions: write`. Store it as `PRIVACY_SYNC_TOKEN` in AndroDR repo secrets.
+The default `GITHUB_TOKEN` cannot dispatch to another repo. The PR must be accompanied by a manual secret setup:
 
-Print this instruction so the user (or a follow-up task) handles it:
+1. Create a **fine-grained PAT** scoped to `yasirhamza/androdr-site` with `Contents: read`, `Metadata: read`, `Actions: write` (only these three).
+2. Add it as `PRIVACY_SYNC_TOKEN` in `yasirhamza/AndroDR` repo secrets (Settings → Secrets and variables → Actions → New repository secret).
 
-Run: `echo "MANUAL STEP: create PAT with dispatch scope on androdr-site, add as PRIVACY_SYNC_TOKEN secret in AndroDR repo"`
+Print this note so the user sees it:
 
-- [ ] **Step 3: Lint the YAML**
+```bash
+echo "============================================================"
+echo "MANUAL STEP before merging this PR:"
+echo "  Create a fine-grained PAT scoped to yasirhamza/androdr-site"
+echo "  with Contents: read, Metadata: read, Actions: write."
+echo "  Add it as secret PRIVACY_SYNC_TOKEN in yasirhamza/AndroDR."
+echo "============================================================"
+```
 
-Run: `python3 -c "import yaml; yaml.safe_load(open('.github/workflows/notify-privacy-sync.yml'))"`
-Expected: no output, exit 0.
+- [ ] **Step 3: Lint YAML**
+
+```bash
+python3 -c "import yaml; yaml.safe_load(open('.github/workflows/notify-privacy-sync.yml'))"
+```
+Expected: no output.
 
 - [ ] **Step 4: Commit**
 
 ```bash
 git add .github/workflows/notify-privacy-sync.yml
-git commit -m "ci: dispatch privacy-updated event to androdr-site on PRIVACY_POLICY change"
+git commit -m "ci: notify androdr-site when privacy content or renderer changes"
 ```
 
-- [ ] **Step 5: Push branch and open AndroDR PR**
+---
+
+## Task 10: Update `docs/PRIVACY_POLICY.md` content
+
+**Repo:** `yasirhamza/AndroDR`
+**Files:**
+- Modify: `docs/PRIVACY_POLICY.md`
+
+- [ ] **Step 1: Read current file (so Write has prior Read on this path)**
 
 ```bash
+wc -l docs/PRIVACY_POLICY.md
+grep -n "Last updated\|privacy@androdr" docs/PRIVACY_POLICY.md
+```
+
+- [ ] **Step 2: Update `_Last updated:_` to `2026-04-24`**
+
+Use Edit: `_Last updated: 2026-03-26_` → `_Last updated: 2026-04-24_`.
+
+- [ ] **Step 3: Replace all occurrences of `privacy@androdr.dev` with `yhamad.dev@gmail.com`**
+
+Use Edit with `replace_all=true` on `privacy@androdr.dev` → `yhamad.dev@gmail.com`.
+
+Verify: `grep -c "privacy@androdr.dev" docs/PRIVACY_POLICY.md` returns `0`.
+
+- [ ] **Step 4: Update "What AndroDR Does" section**
+
+Add these bullets at the end of the existing list (immediately before the `---` divider):
+
+```
+- Evaluates detection rules expressed as auditable YAML — detection logic is not hidden inside compiled code
+- Imports and exports STIX2-compatible indicators for interoperability with other forensic tools
+```
+
+And ensure the DNS monitor bullet reads "**optional** DNS monitor".
+
+- [ ] **Step 5: Extend "Data That Stays On Your Device" table**
+
+Append two rows to the table (before the closing `---`):
+```
+| Forensic timeline events (e.g., device admin grants) | Displayed in the timeline screen; included in exported reports | On-device Room database |
+| Bug report analysis findings | Displayed with scan results; the original bug report ZIP is not retained after analysis | On-device Room database |
+```
+
+- [ ] **Step 6: Update "Network Requests AndroDR Makes" table**
+
+Remove the "Cert hash IOCs (planned)" row. Add or update these rows to reflect the currently-live ingesters:
+
+```
+| MalwareBazaar APK + cert hashes | abuse.ch MalwareBazaar public API | Hashes of known malicious APKs and the cert hashes that signed them | 1 API request per refresh |
+| ThreatFox indicators | abuse.ch ThreatFox public API | Command-and-control domain / IP indicators | 1 API request per refresh |
+| Stalkerware cert-hash indicators | AssoEchap/stalkerware-indicators (GitHub) | Cert hashes of known stalkerware signers | 1 HTTP GET |
+```
+
+Keep existing rows for stalkerware package names, MVT, UAD, and Plexus.
+
+Append this paragraph below the table:
+> All ingesters run inside a dispatcher that deduplicates indicators across feeds before writing to the on-device database. Each feed is independently auditable in `app/src/main/java/com/androdr/ioc/feeds/`.
+
+- [ ] **Step 7: Tighten "Bug Report Analysis" section**
+
+Make sure the section contains this language (add it if missing):
+> AndroDR retains only the analysis findings — flagged app names, indicator matches, detected patterns — in the scan result. The original bug report ZIP is not stored on-device after analysis completes.
+
+- [ ] **Step 8: Expand "Google Play Data Safety Alignment"**
+
+Read `docs/play-store/18-data-safety-form.md` (via Read tool) and align the bullet list in this section so the two files say the same thing. At minimum the bullets should cover:
+
+- Data collected: on-device only — installed app list, device info (in user-initiated reports), diagnostic info (app logcat in user-initiated reports)
+- Data shared: none (only user-initiated sharing)
+- Data encrypted in transit: N/A — no user data is transmitted
+- Data deletion: clear app data or uninstall
+- Optional data collection: none
+
+- [ ] **Step 9: Sanity-check counts**
+
+```bash
+grep -c "^## " docs/PRIVACY_POLICY.md
+grep -c "privacy@androdr.dev" docs/PRIVACY_POLICY.md
+grep -c "yhamad.dev@gmail.com" docs/PRIVACY_POLICY.md
+grep -c "^_Last updated: 2026-04-24_$" docs/PRIVACY_POLICY.md
+```
+
+Expected:
+- `## ` heading count must be exactly `18` (the renderer's EXPECTED_H2). If it differs, update `scripts/render_privacy.py`'s `EXPECTED_H2` in the same commit.
+- `privacy@androdr.dev` → `0`
+- `yhamad.dev@gmail.com` → at least `1`
+- `_Last updated: 2026-04-24_` → `1`
+
+- [ ] **Step 10: Dry-run the renderer against the updated markdown**
+
+```bash
+python3 scripts/render_privacy.py docs/PRIVACY_POLICY.md cloudflare-worker.js
+```
+
+Expected: either `updated cloudflare-worker.js` or `no change`. If AssertionError fires, the heading or table count is off — fix the markdown (or the EXPECTED_* constants with explicit justification) before continuing.
+
+Revert the preview: `git checkout -- cloudflare-worker.js`
+
+- [ ] **Step 11: Commit**
+
+```bash
+git add docs/PRIVACY_POLICY.md
+git commit -m "docs(privacy): refresh — active feeds, timeline, bugreport retention, fix contact"
+```
+
+---
+
+## Task 11: Fix contact email in `docs/play-store/store-listing.md`
+
+**Repo:** `yasirhamza/AndroDR`
+**Files:**
+- Modify: `docs/play-store/store-listing.md`
+
+- [ ] **Step 1: Confirm the bad email is present**
+
+```bash
+grep -n "privacy@androdr.dev" docs/play-store/store-listing.md
+```
+Expected: one match around line 58.
+
+- [ ] **Step 2: Replace**
+
+Use Edit: `privacy@androdr.dev` → `yhamad.dev@gmail.com`.
+
+- [ ] **Step 3: Confirm zero matches remain anywhere in the repo**
+
+```bash
+cd /home/yasir/AndroDR/.claude/worktrees/docs-privacy
+grep -rn "privacy@androdr.dev" . --exclude-dir=.git --exclude-dir=.claude
+```
+Expected: no output. (The `.claude` exclusion prevents matching the plan file which legitimately refers to the old string.)
+
+- [ ] **Step 4: Commit**
+
+```bash
+git add docs/play-store/store-listing.md
+git commit -m "docs(play-store): correct contact email in store listing"
+```
+
+---
+
+## Task 12: Push branch and open the AndroDR PR
+
+**Repo:** `yasirhamza/AndroDR`
+
+- [ ] **Step 1: Push**
+
+```bash
+cd /home/yasir/AndroDR/.claude/worktrees/docs-privacy
 git push -u origin docs/privacy-content-update
+```
+
+- [ ] **Step 2: Open PR**
+
+```bash
 gh pr create \
-  --title "docs(privacy): refresh policy + wire up site auto-render" \
+  --title "docs(privacy): single-source-of-truth pipeline + content refresh" \
   --body "$(cat <<'EOF'
+Part 2 of the privacy publishing pipeline. Depends on the androdr-site PR (merged first).
+
 ## Summary
-- Refreshes \`docs/PRIVACY_POLICY.md\` content (active feeds including MalwareBazaar APK/cert hashes and ThreatFox, timeline events, bugreport retention language, Data Safety alignment expansion)
-- Fixes hallucinated \`privacy@androdr.dev\` contact (replaced with \`yhamad.dev@gmail.com\`) in the privacy policy and in docs/play-store/store-listing.md
-- Adds notify-privacy-sync.yml workflow that fires \`repository_dispatch\` to androdr-site when the privacy markdown changes, so the public site auto-renders
+- Fences the privacy section in cloudflare-worker.js so the renderer can replace it.
+- Adds scripts/render_privacy.py (the canonical renderer) with tests, fixture, and pinned requirements.
+- Adds .github/workflows/render-privacy-worker.yml — on push when privacy content or renderer changes, re-renders cloudflare-worker.js. Commit message reminds the maintainer to run wrangler deploy.
+- Adds .github/workflows/notify-privacy-sync.yml — fires repository_dispatch to androdr-site so its render workflow runs immediately.
+- Refreshes docs/PRIVACY_POLICY.md content:
+  - Replaces hallucinated contact privacy@androdr.dev with yhamad.dev@gmail.com (same fix in docs/play-store/store-listing.md)
+  - Removes "Cert hash IOCs (planned)" stub; documents active MalwareBazaar APK+cert feed, ThreatFox, and stalkerware cert-hash ingestion
+  - Adds timeline events and bugreport findings to the on-device data table
+  - Adds IOC dispatcher / cross-dedup note
+  - Aligns Google Play Data Safety section with docs/play-store/18-data-safety-form.md
+  - Updates last-updated date to 2026-04-24
 
-Depends on androdr-site PR (https://github.com/yasirhamza/androdr-site/pulls) landing first; once that is in, merging this PR will propagate content to the public site within minutes.
+## Manual setup required before merge
+Create a fine-grained PAT scoped to yasirhamza/androdr-site (Contents: read, Metadata: read, Actions: write) and add it as PRIVACY_SYNC_TOKEN in this repo's Actions secrets. Without it, the notify-privacy-sync workflow will fail.
 
-Closes no issues directly; implements spec §5 (PR A) of docs/superpowers/specs/2026-04-24-docs-refresh-design.md
+## Post-merge manual action
+Run \`wrangler deploy\` from a local checkout to push the updated cloudflare-worker.js to the live Worker at androdr.yasirhamza.workers.dev.
+
+Spec: docs/superpowers/specs/2026-04-24-docs-refresh-design.md §5
 
 ## Test plan
-- [ ] PRIVACY_SYNC_TOKEN secret created in AndroDR repo (PAT with dispatch scope on androdr-site)
-- [ ] CI build check green
-- [ ] After merge, notify-privacy-sync workflow runs successfully
-- [ ] After merge, androdr-site render-privacy workflow fires and produces a \`docs(privacy): sync from AndroDR@<sha>\` commit
-- [ ] Live site (GitHub Pages + Cloudflare mirror) reflects the new content within 5–10 minutes
+- [ ] PRIVACY_SYNC_TOKEN secret exists in repo settings
+- [ ] CI build + lint pass
+- [ ] After merge: render-privacy-worker workflow succeeds and produces a "docs(privacy): render into cloudflare-worker.js" commit
+- [ ] After merge: notify-privacy-sync workflow succeeds and fires dispatch
+- [ ] After merge: androdr-site render-privacy workflow succeeds and updates index.html
+- [ ] After wrangler deploy: live Cloudflare Worker shows Last updated 2026-04-24 and correct contact email
 
 🤖 Generated with [Claude Code](https://claude.com/claude-code)
 EOF
@@ -799,17 +1021,47 @@ EOF
 
 ---
 
-## Task 10: Archive the `androdr-privacy` repo
+## Task 13: Manual `wrangler deploy`
+
+**Maintainer:** Yasir
+**Environment:** local machine with `wrangler` installed and Cloudflare authenticated
+
+- [ ] **Step 1: After the AndroDR PR merges and the worker-render commit lands on main**
+
+```bash
+cd /home/yasir/AndroDR
+git checkout main && git pull --ff-only
+grep "Last updated" cloudflare-worker.js | head -2
+```
+Expected: the `Last updated: 2026-04-24` string appears inside the inline HTML.
+
+- [ ] **Step 2: Deploy**
+
+```bash
+wrangler deploy cloudflare-worker.js
+```
+
+If the Worker is deployed under a different name or script path, use the maintainer's standard `wrangler deploy` invocation.
+
+- [ ] **Step 3: Verify live response**
+
+```bash
+curl -s https://androdr.yasirhamza.workers.dev/ | grep "Last updated\|yhamad.dev\|privacy@androdr" | head -5
+```
+Expected: at least one line containing `Last updated: 2026-04-24`, at least one containing `yhamad.dev@gmail.com`, zero containing `privacy@androdr.dev`.
+
+---
+
+## Task 14: Archive `androdr-privacy`
 
 **Repo:** `yasirhamza/androdr-privacy`
 
-Run after Tasks 1–9 are merged and the pipeline is verified end-to-end.
+Run only after Tasks 1–13 succeed and the pipeline is verified end-to-end. Archiving is semi-destructive — confirm with user before running if in doubt.
 
 - [ ] **Step 1: Replace `index.md` with a forwarding pointer**
 
 ```bash
-cd /tmp
-rm -rf androdr-privacy-archive
+cd /tmp && rm -rf androdr-privacy-archive
 gh repo clone yasirhamza/androdr-privacy androdr-privacy-archive
 cd androdr-privacy-archive
 cat > index.md <<'EOF'
@@ -817,8 +1069,10 @@ cat > index.md <<'EOF'
 
 The canonical AndroDR privacy policy now lives at
 https://github.com/yasirhamza/AndroDR/blob/main/docs/PRIVACY_POLICY.md
-and is rendered publicly at https://yasirhamza.github.io/androdr-site/#privacy
-(mirrored at https://androdr.yasirhamza.workers.dev ).
+
+It is rendered publicly at:
+- https://yasirhamza.github.io/androdr-site/#privacy (GitHub Pages)
+- https://androdr.yasirhamza.workers.dev/#privacy (Cloudflare Worker mirror)
 
 This repository is archived and no longer accepts changes.
 EOF
@@ -829,38 +1083,50 @@ git push
 
 - [ ] **Step 2: Archive the repo**
 
-Run:
 ```bash
 gh repo archive yasirhamza/androdr-privacy --yes
 ```
-Expected: confirmation that the repo is now archived.
 
 - [ ] **Step 3: Verify**
 
-Run: `gh api repos/yasirhamza/androdr-privacy --jq '{archived, updated_at}'`
+```bash
+gh api repos/yasirhamza/androdr-privacy --jq '{archived, updated_at}'
+```
 Expected: `"archived": true`.
 
 ---
 
 ## End-to-end verification
 
-Run after both PRs are merged and Task 10 completes.
+Run after Tasks 1–14 complete. This is the gate between PR A and PR B.
 
-- [ ] **Step 1: Live site reflects content update**
+- [ ] **Step 1: Live site shows fresh content**
 
-Open https://androdr.yasirhamza.workers.dev in a browser. Confirm the `#privacy` section shows `Last updated: 2026-04-24` and the correct contact email `yhamad.dev@gmail.com`. Also confirm the MalwareBazaar row no longer says `(planned)`.
+Open `https://androdr.yasirhamza.workers.dev/#privacy` in a browser. Confirm:
+- `Last updated: 2026-04-24`
+- Contact is `yhamad.dev@gmail.com`
+- MalwareBazaar cert hash row no longer says `(planned)`
 
-- [ ] **Step 2: Cross-repo grep is clean**
+Also open `https://yasirhamza.github.io/androdr-site/#privacy` (may 404 anonymously due to shadowban; use an authenticated GitHub session or check from the workflow logs instead).
 
-Run: `grep -rn "privacy@androdr\.dev" /home/yasir/AndroDR --exclude-dir=.git --exclude-dir=.claude`
-Expected: zero output.
+- [ ] **Step 2: No stale email anywhere**
 
-- [ ] **Step 3: Archive is visible**
+```bash
+cd /home/yasir/AndroDR && git checkout main && git pull --ff-only
+grep -rn "privacy@androdr\.dev" . --exclude-dir=.git --exclude-dir=.claude
+```
+Expected: no output.
 
-Open https://github.com/yasirhamza/androdr-privacy. Confirm the repo shows the "Archived" banner and the `index.md` pointer is visible.
+- [ ] **Step 3: Archive visible**
 
-- [ ] **Step 4: Trigger a trivial propagation test**
+Open `https://github.com/yasirhamza/androdr-privacy`. Confirm the archived banner and the forwarding `index.md`.
 
-Make a whitespace-only commit to `docs/PRIVACY_POLICY.md` on a throwaway branch in AndroDR, merge it, and confirm the site re-renders within ~5 minutes.
+- [ ] **Step 4: Propagation test**
 
-If all four verification steps pass, PR A is complete. Proceed to PR B plan.
+Make a whitespace-only commit to `docs/PRIVACY_POLICY.md` on a throwaway branch, merge it, and confirm within ~5 minutes:
+- `render-privacy-worker.yml` run succeeded and pushed a "docs(privacy): render into cloudflare-worker.js" commit
+- `notify-privacy-sync.yml` run succeeded
+- `androdr-site/render-privacy.yml` run succeeded and pushed a "docs(privacy): sync from AndroDR@<sha>" commit
+- `wrangler deploy` (manual) and re-check the live Worker
+
+If all four steps pass, PR A is complete. Proceed to PR B.
