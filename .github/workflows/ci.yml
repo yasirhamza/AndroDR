@@ -49,3 +49,36 @@ jobs:
           path: app/build/reports/tests/
           retention-days: 14
           if-no-files-found: warn
+  lint-and-detekt:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+      - uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: 'gradle'
+      - uses: android-actions/setup-android@v3
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-read-only: ${{ github.ref != 'refs/heads/main' }}
+      - name: Lint + detekt
+        run: ./gradlew lintDebug detekt --stacktrace
+      - name: Upload lint report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: lint-report
+          path: app/build/reports/lint-results-debug.html
+          retention-days: 14
+          if-no-files-found: warn
+      - name: Upload detekt report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: detekt-report
+          path: app/build/reports/detekt/
+          retention-days: 14
+          if-no-files-found: warn
