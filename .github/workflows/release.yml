@@ -53,6 +53,7 @@ jobs:
                 repo: context.repo.repo,
                 ref: sha,
                 check_name: 'ci-success',
+                filter: 'latest',
               });
               const runs = data.check_runs;
               if (runs.length === 0) {
@@ -102,5 +103,6 @@ jobs:
         run: |
           gh release create "${{ steps.version.outputs.tag }}" \
             app/build/outputs/apk/debug/app-debug.apk \
+            --target "${{ github.sha }}" \
             --title "AndroDR ${{ steps.version.outputs.tag }}" \
             --notes-file /tmp/release-notes.md
