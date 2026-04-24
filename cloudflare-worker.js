@@ -97,108 +97,274 @@ export default {
   </section>
   <hr>
   <!-- ANDRODR:PRIVACY:START -->
-  <section class="privacy" id="privacy">
-    <h2>Privacy Policy</h2>
-    <p><em>Last updated: 2026-03-26</em></p>
-    <h3>Our Philosophy</h3>
-    <p>AndroDR is an open-source security tool built on a simple principle: <strong>your data stays on your device</strong>. The entire source code is publicly auditable — you don't have to trust our words, you can read the code.</p>
-    <p>We believe security tools should give users full visibility and control, not create new surveillance risks. AndroDR collects no accounts, no analytics, no telemetry, and phones home to no servers.</p>
-    <h3>What AndroDR Does</h3>
-    <ul>
-      <li>Checks installed apps against known malware and stalkerware databases</li>
-      <li>Matches app signing certificates against known malicious certificate hashes</li>
-      <li>Detects apps with dangerous permission combinations</li>
-      <li>Identifies sideloaded apps from untrusted sources</li>
-      <li>Detects accessibility service and device admin abuse</li>
-      <li>Monitors DNS queries for connections to known command-and-control servers</li>
-      <li>Audits device security settings (screen lock, bootloader, debug mode, patch level)</li>
-      <li>Analyzes Android bug reports for spyware indicators (user-initiated only)</li>
-    </ul>
-    <h3>Data That Stays On Your Device</h3>
-    <p>All scan data is stored locally in an on-device database. <strong>None of it is ever transmitted to us or any third party.</strong></p>
-    <table>
-      <thead><tr><th>Data</th><th>Purpose</th><th>Storage</th></tr></thead>
-      <tbody>
-        <tr><td>Installed app list</td><td>Scanned for threat detection</td><td>On-device database</td></tr>
-        <tr><td>DNS queries</td><td>Checked against domain blocklist</td><td>On-device database</td></tr>
-        <tr><td>Device security flags</td><td>Posture assessment</td><td>On-device database</td></tr>
-        <tr><td>Scan results and history</td><td>Track security state over time</td><td>On-device database</td></tr>
-        <tr><td>Security reports</td><td>User-initiated export only</td><td>Device storage</td></tr>
-      </tbody>
-    </table>
-    <p><strong>We cannot see your scan results.</strong> There is no cloud backend, no remote dashboard, no server-side processing. Cloud backup is disabled — your scan data is never uploaded to Google's backup service.</p>
-    <h3>Permissions and Why We Need Them</h3>
-    <table>
-      <thead><tr><th>Permission</th><th>Why it's needed</th></tr></thead>
-      <tbody>
-        <tr><td><code>QUERY_ALL_PACKAGES</code></td><td>To scan all installed apps for malware indicators</td></tr>
-        <tr><td><code>INTERNET</code></td><td>To fetch publicly available threat intelligence feeds (no user data sent)</td></tr>
-        <tr><td><code>FOREGROUND_SERVICE</code></td><td>To run the DNS monitoring VPN service in the background</td></tr>
-        <tr><td><code>ACCESS_NETWORK_STATE</code></td><td>To check network connectivity before fetching IOC feed updates</td></tr>
-        <tr><td><code>READ_LOGS</code></td><td>To capture AndroDR's own process log for user-initiated security reports</td></tr>
-        <tr><td><code>MANAGE_EXTERNAL_STORAGE</code></td><td>To scan external storage for known spyware file artifacts</td></tr>
-      </tbody>
-    </table>
-    <h3>Network Requests AndroDR Makes</h3>
-    <p>AndroDR fetches publicly available threat intelligence feeds to keep its detection databases current. These requests contain <strong>no user data, no device identifiers, and no information about your installed apps</strong>.</p>
-    <table>
-      <thead><tr><th>Feed</th><th>Source</th><th>What's fetched</th></tr></thead>
-      <tbody>
-        <tr><td>Stalkerware indicators</td><td>AssoEchap (GitHub)</td><td>Known stalkerware package names</td></tr>
-        <tr><td>Spyware domain IOCs</td><td>mvt-project (GitHub)</td><td>Known spyware C2 domains</td></tr>
-        <tr><td>Known app database</td><td>UAD / Plexus</td><td>Legitimate app lists for false positive reduction</td></tr>
-      </tbody>
-    </table>
-    <p>All requests are unauthenticated public HTTP GET requests. No API keys, no cookies, no tracking headers.</p>
-    <h3>DNS Monitoring</h3>
-    <p>AndroDR's DNS monitor uses a local VPN to intercept DNS queries <strong>on your device only</strong>. DNS queries are resolved locally — no traffic is routed to external servers. The VPN does not route, inspect, or modify your web traffic. You can enable or disable DNS monitoring at any time.</p>
-    <h3>Bug Report Analysis</h3>
-    <p>AndroDR can analyze Android bug report files (<code>.zip</code>) that you manually provide. Everything is processed <strong>entirely on-device</strong> — no part of the bug report is transmitted anywhere.</p>
-    <h3>What Exported Reports Contain</h3>
-    <p>When you export a security report, it includes device information, scan results, DNS event logs, and application logs. Reports are generated only when you tap the export button. You choose who to share them with. <strong>We never see your reports.</strong></p>
-    <h3>What We Do NOT Collect</h3>
-    <ul>
-      <li>No personal information (name, email, phone number)</li>
-      <li>No device identifiers (IMEI, serial number, advertising ID)</li>
-      <li>No location data</li>
-      <li>No browsing history or message content</li>
-      <li>No photos or files</li>
-      <li>No usage analytics or telemetry</li>
-      <li>No crash reporting or analytics SDKs</li>
-      <li>No data shared with third parties</li>
-      <li>No advertising SDKs</li>
-      <li>No cloud backup of app data</li>
-    </ul>
-    <h3>Data Sharing</h3>
-    <p>AndroDR shares data <strong>only when you explicitly choose to</strong> — via user-initiated report export through the Android share sheet. Nothing is sent anywhere without your explicit action.</p>
-    <h3>Data Retention and Deletion</h3>
-    <ul>
-      <li>Scan history and DNS events are stored on-device indefinitely until you clear them</li>
-      <li>Cloud backup is disabled</li>
-      <li>Uninstalling AndroDR deletes all stored data</li>
-      <li>You can clear all app data via Android Settings &gt; Apps &gt; AndroDR &gt; Clear Data</li>
-    </ul>
-    <h3>Open Source Transparency</h3>
-    <p>AndroDR's source code is <a href="https://github.com/yasirhamza/AndroDR">publicly available</a>. Every detection heuristic, every network request, every data storage operation is visible in the code.</p>
-    <h3>Google Play Data Safety Alignment</h3>
-    <ul>
-      <li><strong>Data collected:</strong> Installed app list (on-device only, never transmitted)</li>
-      <li><strong>Data shared:</strong> None</li>
-      <li><strong>Data encrypted in transit:</strong> N/A — no user data is transmitted</li>
-      <li><strong>Data deletion:</strong> Available via app uninstall or clearing app data</li>
-    </ul>
-    <h3>Children's Privacy</h3>
-    <p>AndroDR does not knowingly collect any data from children under 13. The app does not collect data from anyone — it operates entirely on-device.</p>
-    <h3>International Users (GDPR / CCPA)</h3>
-    <p><strong>EU users (GDPR):</strong> No personal data is collected or processed by the developer. All data resides on your device under your control. Uninstalling the app erases all data.</p>
-    <p><strong>California users (CCPA):</strong> AndroDR does not sell, share, or disclose personal information to any third party.</p>
-    <h3>Changes to This Policy</h3>
-    <p>If this policy changes, the updated version will be published here and the "last updated" date will be revised.</p>
-    <h3>Contact</h3>
-    <p>For privacy questions: <a href="mailto:yhamad.dev@gmail.com">yhamad.dev@gmail.com</a><br>
-    GitHub: <a href="https://github.com/yasirhamza/AndroDR/issues">github.com/yasirhamza/AndroDR/issues</a></p>
-  </section>
-  <!-- ANDRODR:PRIVACY:END -->
+<section class="privacy" id="privacy">
+<h2>Privacy Policy</h2>
+<p><em>Last updated: 2026-04-25</em></p>
+<h2>Our Philosophy</h2>
+<p>AndroDR is an open-source security tool built on a simple principle: <strong>your data stays on your device</strong>. The entire source code is publicly auditable — you don't have to trust our words, you can read the code.</p>
+<p>We believe security tools should give users full visibility and control, not create new surveillance risks. AndroDR collects no accounts, no analytics, no telemetry, and phones home to no servers. Everything it does happens on your device, under your control.</p>
+<hr />
+<h2>What AndroDR Does</h2>
+<p>AndroDR scans your device for security threats:
+- Checks installed apps against known malware and stalkerware databases
+- Matches app signing certificates against known malicious certificate hashes
+- Detects apps with dangerous permission combinations
+- Identifies sideloaded apps from untrusted sources
+- Detects accessibility service and device admin abuse
+- Optionally monitors DNS queries for connections to known command-and-control servers (<strong>optional</strong> DNS monitoring — you must explicitly enable the local VPN)
+- Audits device security settings (screen lock, bootloader, debug mode, patch level)
+- Analyzes Android bug reports for spyware indicators (user-initiated only)
+- Evaluates detection rules expressed as auditable YAML — detection logic is not hidden inside compiled code
+- Imports and exports STIX2-compatible indicators for interoperability with other forensic tools</p>
+<hr />
+<h2>Data That Stays On Your Device</h2>
+<p>All scan data is stored locally in an on-device database. <strong>None of it is ever transmitted to us or any third party.</strong></p>
+<table>
+<thead>
+<tr>
+<th>Data</th>
+<th>Purpose</th>
+<th>Storage</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Installed app list (names, permissions, signing certs)</td>
+<td>Scanned for threat detection</td>
+<td>On-device Room database</td>
+</tr>
+<tr>
+<td>DNS queries (domain names, timestamps)</td>
+<td>Checked against domain blocklist</td>
+<td>On-device Room database</td>
+</tr>
+<tr>
+<td>Device security flags</td>
+<td>Posture assessment</td>
+<td>On-device Room database</td>
+</tr>
+<tr>
+<td>Scan results and history</td>
+<td>Track security state over time</td>
+<td>On-device Room database</td>
+</tr>
+<tr>
+<td>Security reports</td>
+<td>User-initiated export only</td>
+<td>Device storage, shared via Android share sheet</td>
+</tr>
+<tr>
+<td>Forensic timeline events (e.g., device admin grants)</td>
+<td>Displayed in the timeline screen; included in exported reports</td>
+<td>On-device Room database</td>
+</tr>
+<tr>
+<td>Bug report analysis findings</td>
+<td>Displayed with scan results; original bug report ZIP is discarded after analysis</td>
+<td>On-device Room database</td>
+</tr>
+</tbody>
+</table>
+<p><strong>We cannot see your scan results.</strong> There is no cloud backend, no remote dashboard, no server-side processing. Cloud backup is disabled (<code>android:allowBackup="false"</code>) — your scan data is never uploaded to Google's backup service.</p>
+<hr />
+<h2>Permissions and Why We Need Them</h2>
+<table>
+<thead>
+<tr>
+<th>Permission</th>
+<th>Why it's needed</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>QUERY_ALL_PACKAGES</code></td>
+<td>To scan all installed apps for malware indicators. A security scanner cannot detect threats in apps it cannot see. Without this permission, Android limits package visibility and malware could hide from detection.</td>
+</tr>
+<tr>
+<td><code>INTERNET</code></td>
+<td>To fetch publicly available threat intelligence feeds (IOC lists). No user data is sent.</td>
+</tr>
+<tr>
+<td><code>FOREGROUND_SERVICE</code></td>
+<td>To run the DNS monitoring VPN service while the app is in the background.</td>
+</tr>
+<tr>
+<td><code>ACCESS_NETWORK_STATE</code></td>
+<td>To check network connectivity before fetching IOC feed updates.</td>
+</tr>
+<tr>
+<td><code>READ_LOGS</code></td>
+<td>To capture AndroDR's own process log for inclusion in user-initiated security reports. This permission reads only the app's own log output (<code>logcat --pid</code>), not system-wide logs. It is used exclusively when you manually export a report.</td>
+</tr>
+<tr>
+<td><code>MANAGE_EXTERNAL_STORAGE</code></td>
+<td>To scan external storage for known spyware file artifacts. On Android 11+, scoped storage prevents apps from checking arbitrary file paths without this permission. AndroDR checks a small set of known artifact paths documented in forensic research — it does not browse or index your files.</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2>Network Requests AndroDR Makes</h2>
+<p>AndroDR fetches publicly available threat intelligence feeds to keep its detection databases current. These requests contain <strong>no user data, no device identifiers, and no information about your installed apps</strong>.</p>
+<table>
+<thead>
+<tr>
+<th>Feed</th>
+<th>Source</th>
+<th>What's fetched</th>
+<th>Requests per update</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Stalkerware indicators</td>
+<td>AssoEchap/stalkerware-indicators (GitHub)</td>
+<td>Known stalkerware package names</td>
+<td>1 HTTP GET</td>
+</tr>
+<tr>
+<td>Mercenary spyware domain IOCs</td>
+<td>mvt-project/mvt-indicators (GitHub)</td>
+<td>Known spyware C2 domains from multiple campaigns (Pegasus, Predator, RCS Lab, etc.)</td>
+<td>1 index fetch + 1 per campaign (~10-20 requests)</td>
+</tr>
+<tr>
+<td>Known app database (UAD)</td>
+<td>Universal Android Debloater (GitHub)</td>
+<td>Legitimate app lists for false positive reduction</td>
+<td>1 HTTP GET</td>
+</tr>
+<tr>
+<td>Known app database (Plexus)</td>
+<td>Plexus (techlore.tech)</td>
+<td>App compatibility data</td>
+<td>~19 paginated requests</td>
+</tr>
+<tr>
+<td>MalwareBazaar APK + cert hashes</td>
+<td>abuse.ch MalwareBazaar public API</td>
+<td>Hashes of known malicious APKs and the cert hashes that signed them</td>
+<td>1 API request per refresh</td>
+</tr>
+<tr>
+<td>ThreatFox indicators</td>
+<td>abuse.ch ThreatFox public API</td>
+<td>Command-and-control domain / IP indicators</td>
+<td>1 API request per refresh</td>
+</tr>
+<tr>
+<td>Stalkerware cert-hash indicators</td>
+<td>AssoEchap/stalkerware-indicators (GitHub)</td>
+<td>Cert hashes of known stalkerware signers</td>
+<td>1 HTTP GET</td>
+</tr>
+</tbody>
+</table>
+<p>All requests are unauthenticated public HTTP GET requests. No API keys, no authentication tokens, no cookies, and no tracking headers are sent. You can verify this in the source code at <code>app/src/main/java/com/androdr/ioc/feeds/</code>.</p>
+<p>All ingesters run inside a dispatcher that deduplicates indicators across feeds before writing to the on-device database. Each feed is independently auditable in <code>app/src/main/java/com/androdr/ioc/feeds/</code>.</p>
+<hr />
+<h2>DNS Monitoring</h2>
+<p>AndroDR's DNS monitor uses a local VPN to intercept DNS queries <strong>on your device only</strong>. This is how it detects connections to known malicious domains.</p>
+<ul>
+<li>DNS queries are resolved locally — <strong>no traffic is routed to external servers</strong></li>
+<li>DNS event logs are stored on-device only</li>
+<li>The VPN does not route, inspect, or modify your web traffic, app data, or any non-DNS network activity</li>
+<li>You can enable or disable DNS monitoring at any time</li>
+</ul>
+<hr />
+<h2>Bug Report Analysis</h2>
+<p>AndroDR can analyze Android bug report files (<code>.zip</code>) that you manually provide. This feature:</p>
+<ul>
+<li>Reads the bug report ZIP file you select — which may contain sensitive system logs, process lists, and device state</li>
+<li>Scans for spyware indicators: C2 beacon patterns, suspicious process names, base64 exfiltration blobs, abnormal wakelocks, and crash patterns</li>
+<li>Processes everything <strong>entirely on-device</strong> — no part of the bug report is transmitted anywhere</li>
+<li>Does not retain the original bug report file — only the analysis findings are stored in scan results</li>
+</ul>
+<p>AndroDR retains only the analysis findings — flagged app names, indicator matches, detected patterns — in the scan result. The original bug report ZIP is not stored on-device after analysis completes.</p>
+<p>Bug report files are among the most sensitive files on an Android device. AndroDR reads them only when you explicitly choose to analyze one.</p>
+<hr />
+<h2>What Exported Reports Contain</h2>
+<p>When you export a security report, it includes:</p>
+<ul>
+<li><strong>Device information:</strong> manufacturer, model, Android version, API level, security patch date</li>
+<li><strong>Scan results:</strong> flagged apps with package names, risk levels, and reasons</li>
+<li><strong>DNS event log:</strong> recent DNS queries with domain names, timestamps, and blocked/allowed status</li>
+<li><strong>Application log:</strong> up to 300 lines of AndroDR's own process log (not system-wide logs)</li>
+</ul>
+<p>Reports are generated only when you tap the export button. You choose who to share them with via the Android share sheet. <strong>We never see your reports.</strong></p>
+<hr />
+<h2>What We Do NOT Collect</h2>
+<ul>
+<li>No personal information (name, email, phone number)</li>
+<li>No device identifiers (IMEI, serial number, advertising ID)</li>
+<li>No location data</li>
+<li>No browsing history</li>
+<li>No message content</li>
+<li>No photos or files</li>
+<li>No usage analytics or telemetry</li>
+<li>No automatic crash reporting or analytics SDKs</li>
+<li>No data shared with third parties</li>
+<li>No advertising SDKs</li>
+<li>No cloud backup of app data</li>
+</ul>
+<hr />
+<h2>Data Sharing</h2>
+<p>AndroDR shares data <strong>only when you explicitly choose to</strong>:</p>
+<ul>
+<li><strong>Report export:</strong> You generate a security report and share it via the Android share sheet. You choose the recipient. We never see it. Review the "What Exported Reports Contain" section above to understand what is included.</li>
+<li><strong>No automatic sharing:</strong> Nothing is sent anywhere without your explicit action.</li>
+</ul>
+<hr />
+<h2>Data Retention and Deletion</h2>
+<ul>
+<li>Scan history and DNS events are stored on-device indefinitely until you clear them</li>
+<li>Cloud backup is disabled — your data is not backed up to Google's servers</li>
+<li>Uninstalling AndroDR deletes all stored data from the device</li>
+<li>You can clear all app data at any time via Android Settings &gt; Apps &gt; AndroDR &gt; Clear Data</li>
+</ul>
+<hr />
+<h2>Open Source Transparency</h2>
+<p>AndroDR's source code is publicly available. Every detection heuristic, every network request, every data storage operation is visible in the code. This is intentional — security tools that operate as black boxes ask for trust they haven't earned.</p>
+<ul>
+<li><strong>Repository:</strong> github.com/yasirhamza/AndroDR</li>
+<li><strong>Detection logic:</strong> <code>app/src/main/java/com/androdr/scanner/</code></li>
+<li><strong>Network requests:</strong> <code>app/src/main/java/com/androdr/ioc/feeds/</code></li>
+<li><strong>Data storage:</strong> <code>app/src/main/java/com/androdr/data/</code></li>
+</ul>
+<p>If you find a privacy concern in the code, open an issue or contact us directly.</p>
+<hr />
+<h2>Google Play Data Safety Alignment</h2>
+<p>For Google Play's Data Safety section, AndroDR declares:</p>
+<ul>
+<li><strong>Data collected:</strong> Installed app list (package names, permissions, signing certs — on-device only, never transmitted); device info (model, OS version, security patch level — included in user-initiated reports only); DNS query domain names (only when the optional DNS VPN is enabled — on-device only, auto-deleted after 30 days); diagnostic info (app-own logcat — included in user-initiated reports only)</li>
+<li><strong>Data shared:</strong> None — user-initiated report sharing is under user control and not considered "sharing with third parties"</li>
+<li><strong>Data encrypted in transit:</strong> N/A — no user data is transmitted; all outbound requests are inbound-only IOC feed downloads over HTTPS</li>
+<li><strong>Data encrypted at rest:</strong> Yes — Room database is stored on Android's encrypted file system; cached reports reside in the app's private storage directory</li>
+<li><strong>Data deletion:</strong> Users can clear all stored data at any time via Android Settings &gt; Apps &gt; AndroDR &gt; Clear Data, or by uninstalling the app; DNS events are also automatically deleted after 30 days</li>
+<li><strong>Optional data collection:</strong> DNS query monitoring is entirely optional — the local VPN must be explicitly enabled by the user</li>
+</ul>
+<hr />
+<h2>Children's Privacy</h2>
+<p>AndroDR does not knowingly collect any data from children under 13. The app does not collect data from anyone — it operates entirely on-device.</p>
+<hr />
+<h2>International Users (GDPR / CCPA)</h2>
+<p>AndroDR processes no personal data on any server. All processing occurs on your device. As a result:</p>
+<ul>
+<li><strong>EU users (GDPR):</strong> No personal data is collected or processed by the developer. Your rights under GDPR (access, rectification, erasure, portability) are fulfilled by the fact that all data resides on your device under your control. Uninstalling the app erases all data. The data controller for on-device data is you.</li>
+<li><strong>California users (CCPA):</strong> AndroDR does not sell, share, or disclose personal information to any third party. There is no personal information to sell because none is collected.</li>
+</ul>
+<hr />
+<h2>Governing Law</h2>
+<p>This privacy policy is governed by the laws of the jurisdiction in which the developer resides. Disputes related to this policy shall be resolved in the courts of that jurisdiction.</p>
+<hr />
+<h2>Changes to This Policy</h2>
+<p>If this policy changes, the updated version will be published in the repository and the "last updated" date will be revised. Since AndroDR collects no data, meaningful policy changes are unlikely.</p>
+<hr />
+<h2>Contact</h2>
+<p>For privacy questions or concerns:
+- Email: yhamad.dev@gmail.com
+- GitHub: github.com/yasirhamza/AndroDR/issues</p>
+</section>
+<!-- ANDRODR:PRIVACY:END -->
   <footer>
     <p>&copy; 2026 AndroDR. Open source under the project license.</p>
     <p><a href="https://github.com/yasirhamza/AndroDR">Source Code</a></p>
