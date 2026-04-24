@@ -1,6 +1,6 @@
 # AndroDR Privacy Policy
 
-_Last updated: 2026-03-26_
+_Last updated: 2026-04-25_
 
 ## Our Philosophy
 
@@ -18,9 +18,11 @@ AndroDR scans your device for security threats:
 - Detects apps with dangerous permission combinations
 - Identifies sideloaded apps from untrusted sources
 - Detects accessibility service and device admin abuse
-- Monitors DNS queries for connections to known command-and-control servers
+- Optionally monitors DNS queries for connections to known command-and-control servers (**optional** DNS monitoring — you must explicitly enable the local VPN)
 - Audits device security settings (screen lock, bootloader, debug mode, patch level)
 - Analyzes Android bug reports for spyware indicators (user-initiated only)
+- Evaluates detection rules expressed as auditable YAML — detection logic is not hidden inside compiled code
+- Imports and exports STIX2-compatible indicators for interoperability with other forensic tools
 
 ---
 
@@ -35,6 +37,8 @@ All scan data is stored locally in an on-device database. **None of it is ever t
 | Device security flags | Posture assessment | On-device Room database |
 | Scan results and history | Track security state over time | On-device Room database |
 | Security reports | User-initiated export only | Device storage, shared via Android share sheet |
+| Forensic timeline events (e.g., device admin grants) | Displayed in the timeline screen; included in exported reports | On-device Room database |
+| Bug report analysis findings | Displayed with scan results; original bug report ZIP is discarded after analysis | On-device Room database |
 
 **We cannot see your scan results.** There is no cloud backend, no remote dashboard, no server-side processing. Cloud backup is disabled (`android:allowBackup="false"`) — your scan data is never uploaded to Google's backup service.
 
@@ -63,9 +67,13 @@ AndroDR fetches publicly available threat intelligence feeds to keep its detecti
 | Mercenary spyware domain IOCs | mvt-project/mvt-indicators (GitHub) | Known spyware C2 domains from multiple campaigns (Pegasus, Predator, RCS Lab, etc.) | 1 index fetch + 1 per campaign (~10-20 requests) |
 | Known app database (UAD) | Universal Android Debloater (GitHub) | Legitimate app lists for false positive reduction | 1 HTTP GET |
 | Known app database (Plexus) | Plexus (techlore.tech) | App compatibility data | ~19 paginated requests |
-| Cert hash IOCs (planned) | MalwareBazaar (abuse.ch) | Known malicious signing certificate hashes. This feed is not yet active — currently returns no data. When activated, it will require an optional API key that you provide. | 0 (stub) |
+| MalwareBazaar APK + cert hashes | abuse.ch MalwareBazaar public API | Hashes of known malicious APKs and the cert hashes that signed them | 1 API request per refresh |
+| ThreatFox indicators | abuse.ch ThreatFox public API | Command-and-control domain / IP indicators | 1 API request per refresh |
+| Stalkerware cert-hash indicators | AssoEchap/stalkerware-indicators (GitHub) | Cert hashes of known stalkerware signers | 1 HTTP GET |
 
 All requests are unauthenticated public HTTP GET requests. No API keys, no authentication tokens, no cookies, and no tracking headers are sent. You can verify this in the source code at `app/src/main/java/com/androdr/ioc/feeds/`.
+
+All ingesters run inside a dispatcher that deduplicates indicators across feeds before writing to the on-device database. Each feed is independently auditable in `app/src/main/java/com/androdr/ioc/feeds/`.
 
 ---
 
@@ -88,6 +96,8 @@ AndroDR can analyze Android bug report files (`.zip`) that you manually provide.
 - Scans for spyware indicators: C2 beacon patterns, suspicious process names, base64 exfiltration blobs, abnormal wakelocks, and crash patterns
 - Processes everything **entirely on-device** — no part of the bug report is transmitted anywhere
 - Does not retain the original bug report file — only the analysis findings are stored in scan results
+
+AndroDR retains only the analysis findings — flagged app names, indicator matches, detected patterns — in the scan result. The original bug report ZIP is not stored on-device after analysis completes.
 
 Bug report files are among the most sensitive files on an Android device. AndroDR reads them only when you explicitly choose to analyze one.
 
@@ -157,10 +167,12 @@ If you find a privacy concern in the code, open an issue or contact us directly.
 
 For Google Play's Data Safety section, AndroDR declares:
 
-- **Data collected:** Installed app list (on-device only, never transmitted), device info (included in user-initiated reports only)
-- **Data shared:** None (user-initiated report sharing is under user control)
-- **Data encrypted in transit:** N/A — no user data is transmitted
-- **Data deletion:** Available via app uninstall or clearing app data
+- **Data collected:** Installed app list (package names, permissions, signing certs — on-device only, never transmitted); device info (model, OS version, security patch level — included in user-initiated reports only); DNS query domain names (only when the optional DNS VPN is enabled — on-device only, auto-deleted after 30 days); diagnostic info (app-own logcat — included in user-initiated reports only)
+- **Data shared:** None — user-initiated report sharing is under user control and not considered "sharing with third parties"
+- **Data encrypted in transit:** N/A — no user data is transmitted; all outbound requests are inbound-only IOC feed downloads over HTTPS
+- **Data encrypted at rest:** Yes — Room database is stored on Android's encrypted file system; cached reports reside in the app's private storage directory
+- **Data deletion:** Users can clear all stored data at any time via Android Settings > Apps > AndroDR > Clear Data, or by uninstalling the app; DNS events are also automatically deleted after 30 days
+- **Optional data collection:** DNS query monitoring is entirely optional — the local VPN must be explicitly enabled by the user
 
 ---
 
@@ -194,5 +206,5 @@ If this policy changes, the updated version will be published in the repository 
 ## Contact
 
 For privacy questions or concerns:
-- Email: privacy@androdr.dev
+- Email: yhamad.dev@gmail.com
 - GitHub: github.com/yasirhamza/AndroDR/issues

@@ -55,7 +55,7 @@ security, antivirus, spyware, stalkerware, malware, scanner, privacy, EDR, foren
 
 ## Contact Email
 
-privacy@androdr.dev
+yhamad.dev@gmail.com
 
 ## Privacy Policy URL
 

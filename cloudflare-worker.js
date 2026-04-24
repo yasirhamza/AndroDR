@@ -96,6 +96,7 @@ export default {
     </p>
   </section>
   <hr>
+  <!-- ANDRODR:PRIVACY:START -->
   <section class="privacy" id="privacy">
     <h2>Privacy Policy</h2>
     <p><em>Last updated: 2026-03-26</em></p>
@@ -194,9 +195,10 @@ export default {
     <h3>Changes to This Policy</h3>
     <p>If this policy changes, the updated version will be published here and the "last updated" date will be revised.</p>
     <h3>Contact</h3>
-    <p>For privacy questions: <a href="mailto:privacy@androdr.dev">privacy@androdr.dev</a><br>
+    <p>For privacy questions: <a href="mailto:yhamad.dev@gmail.com">yhamad.dev@gmail.com</a><br>
     GitHub: <a href="https://github.com/yasirhamza/AndroDR/issues">github.com/yasirhamza/AndroDR/issues</a></p>
   </section>
+  <!-- ANDRODR:PRIVACY:END -->
   <footer>
     <p>&copy; 2026 AndroDR. Open source under the project license.</p>
     <p><a href="https://github.com/yasirhamza/AndroDR">Source Code</a></p>
