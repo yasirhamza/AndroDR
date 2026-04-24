@@ -82,3 +82,30 @@ jobs:
           path: app/build/reports/detekt/
           retention-days: 14
           if-no-files-found: warn
+  apk-analyze:
+    runs-on: ubuntu-latest
+    needs: build-and-test
+    steps:
+      - uses: android-actions/setup-android@v3
+      - name: Download debug APK
+        uses: actions/download-artifact@v4
+        with:
+          name: app-debug
+          path: apk/
+      - name: Check manifest for exported components without permission
+        run: |
+          set -euo pipefail
+          APKANALYZER=$(find "$ANDROID_HOME/cmdline-tools" -name apkanalyzer -type f | head -1)
+          if [ -z "$APKANALYZER" ]; then
+            echo "apkanalyzer not found under $ANDROID_HOME/cmdline-tools" >&2
+            exit 1
+          fi
+          APK=apk/app-debug.apk
+          MANIFEST=$("$APKANALYZER" manifest print "$APK")
+          if echo "$MANIFEST" | grep -qE 'exported="true"' && \
+             ! echo "$MANIFEST" | grep -qE 'permission='; then
+            echo "FAIL: exported component(s) without permission" >&2
+            echo "$MANIFEST"
+            exit 1
+          fi
+          echo "PASS: no exported components without permission"
