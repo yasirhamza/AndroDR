@@ -51,7 +51,10 @@ class AppOpsScannerTest {
 
         assertTrue(
             "Expected no telemetry for package without camera/mic declared permissions; got $results",
-            results.none { it.operation == AppOpsManager.OPSTR_CAMERA || it.operation == AppOpsManager.OPSTR_RECORD_AUDIO }
+            results.none {
+                it.operation == AppOpsManager.OPSTR_CAMERA ||
+                    it.operation == AppOpsManager.OPSTR_RECORD_AUDIO
+            }
         )
     }
 

@@ -34,14 +34,13 @@ class DeviceAdminGrantEmitter @Inject constructor(
      */
     suspend fun emitNew(scanId: Long): List<ForensicTimelineEvent> {
         val dpm = context.getSystemService(DevicePolicyManager::class.java)
-            ?: return emptyList()
         // activeAdmins returns ComponentNames; multiple receivers under one
         // package (or work-profile vs primary-owner admins on the profile
         // where AndroDR runs) collapse to a single row per package via the
         // .distinct() call inside buildEvents.
-        val packages = dpm.activeAdmins?.map { it.packageName } ?: return emptyList()
-        if (packages.isEmpty()) return emptyList()
-        return buildEvents(scanId, packages, System.currentTimeMillis(), ::resolveAppLabel)
+        val packages = dpm?.activeAdmins?.map { it.packageName }.orEmpty()
+        return if (packages.isEmpty()) emptyList()
+        else buildEvents(scanId, packages, System.currentTimeMillis(), ::resolveAppLabel)
     }
 
     /**

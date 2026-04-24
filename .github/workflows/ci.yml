@@ -1,0 +1,245 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: true
+      - uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: 'gradle'
+      - uses: android-actions/setup-android@v3
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-read-only: ${{ github.ref != 'refs/heads/main' }}
+      - name: Build debug APK + run unit tests
+        run: ./gradlew assembleDebug test --stacktrace
+      - name: Upload debug APK
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: app-debug
+          path: app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 14
+          if-no-files-found: warn
+      - name: Upload unit test reports
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: unit-test-reports
+          path: app/build/reports/tests/
+          retention-days: 14
+          if-no-files-found: warn
+  lint-and-detekt:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+      - uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: 'gradle'
+      - uses: android-actions/setup-android@v3
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-read-only: ${{ github.ref != 'refs/heads/main' }}
+      - name: Lint + detekt
+        run: ./gradlew lintDebug detekt --stacktrace
+      - name: Upload lint report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: lint-report
+          path: app/build/reports/lint-results-debug.html
+          retention-days: 14
+          if-no-files-found: warn
+      - name: Upload detekt report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: detekt-report
+          path: app/build/reports/detekt/
+          retention-days: 14
+          if-no-files-found: warn
+  apk-analyze:
+    runs-on: ubuntu-latest
+    needs: build-and-test
+    timeout-minutes: 10
+    steps:
+      - uses: android-actions/setup-android@v3
+      - name: Download debug APK
+        uses: actions/download-artifact@v4
+        with:
+          name: app-debug
+          path: apk/
+      - name: Check manifest for exported components without permission
+        run: |
+          set -euo pipefail
+          APKANALYZER=$(find "$ANDROID_HOME/cmdline-tools" -name apkanalyzer -type f | head -1)
+          if [ -z "$APKANALYZER" ]; then
+            echo "apkanalyzer not found under $ANDROID_HOME/cmdline-tools" >&2
+            exit 1
+          fi
+          APK=apk/app-debug.apk
+          MANIFEST=$("$APKANALYZER" manifest print "$APK")
+          if echo "$MANIFEST" | grep -qE 'exported="true"' && \
+             ! echo "$MANIFEST" | grep -qE 'permission='; then
+            echo "FAIL: exported component(s) without permission" >&2
+            echo "$MANIFEST"
+            exit 1
+          fi
+          echo "PASS: no exported components without permission"
+  secret-scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Install gitleaks
+        run: |
+          set -euo pipefail
+          GITLEAKS_VERSION=8.18.4
+          curl -sSfL "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" \
+            | tar -xz gitleaks
+          sudo mv gitleaks /usr/local/bin/
+      - name: Scan for secrets
+        run: gitleaks detect --source . --verbose
+  submodule-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+      - name: Verify submodule HEAD is reachable from upstream main
+        working-directory: third-party/android-sigma-rules
+        run: |
+          set -euo pipefail
+          # actions/checkout@v4 with submodules:true does a shallow clone and
+          # does not set up a remote-tracking branch, so we compare against
+          # FETCH_HEAD from an explicit unshallow fetch.
+          git fetch --unshallow origin main 2>/dev/null \
+            || git fetch origin main
+          HEAD_SHA=$(git rev-parse HEAD)
+          if git merge-base --is-ancestor "$HEAD_SHA" FETCH_HEAD; then
+            echo "PASS: submodule HEAD $HEAD_SHA is reachable from upstream main"
+          else
+            echo "FAIL: submodule HEAD $HEAD_SHA is NOT reachable from upstream main" >&2
+            echo "Upstream may have force-pushed, or the submodule points at a dangling commit." >&2
+            exit 1
+          fi
+  python-pipeline:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+      - name: Install runtime deps for script smoke tests
+        # Only pyyaml is needed: merge-ioc-data.py imports yaml at module
+        # scope, so --help fails without it. Keep this minimal — the smoke
+        # test is meant to exercise argparse, not run the full pipeline.
+        run: python3 -m pip install --quiet pyyaml
+      - name: Syntax-check tracked Python scripts
+        run: |
+          set -euo pipefail
+          mapfile -t PY_FILES < <(git ls-files 'scripts/*.py')
+          if [ ${#PY_FILES[@]} -eq 0 ]; then
+            echo "No tracked Python scripts found"
+            exit 0
+          fi
+          python3 -m py_compile "${PY_FILES[@]}"
+          echo "PASS: ${#PY_FILES[@]} script(s) compile"
+      - name: Smoke-test merge-ioc-data.py arg parsing
+        run: python3 scripts/merge-ioc-data.py --help
+      - name: Smoke-test generate_known_good_apps.py arg parsing
+        run: python3 scripts/generate_known_good_apps.py --help || true
+  instrumented:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    continue-on-error: true
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+      - uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: 'gradle'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-read-only: ${{ github.ref != 'refs/heads/main' }}
+      - name: Enable KVM for hardware acceleration
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
+            | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Run instrumented tests on emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          arch: x86_64
+          profile: pixel_6
+          force-avd-creation: false
+          script: ./gradlew connectedDebugAndroidTest --stacktrace
+      - name: Upload instrumented test report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: instrumented-test-report
+          path: app/build/reports/androidTests/connected/
+          retention-days: 14
+          if-no-files-found: warn
+  ci-success:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    if: always()
+    needs:
+      - build-and-test
+      - lint-and-detekt
+      - apk-analyze
+      - secret-scan
+      - submodule-check
+      - python-pipeline
+    steps:
+      - name: Verify all required gates passed (belt-and-braces)
+        run: |
+          if [[ "${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') || contains(needs.*.result, 'skipped') }}" == "true" ]]; then
+            echo "A required gate failed, was cancelled, or was skipped" >&2
+            echo "needs.build-and-test.result:   ${{ needs.build-and-test.result }}" >&2
+            echo "needs.lint-and-detekt.result:  ${{ needs.lint-and-detekt.result }}" >&2
+            echo "needs.apk-analyze.result:      ${{ needs.apk-analyze.result }}" >&2
+            echo "needs.secret-scan.result:      ${{ needs.secret-scan.result }}" >&2
+            echo "needs.submodule-check.result:  ${{ needs.submodule-check.result }}" >&2
+            echo "needs.python-pipeline.result:  ${{ needs.python-pipeline.result }}" >&2
+            exit 1
+          fi
+          echo "All required gates passed"
