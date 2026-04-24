@@ -35,37 +35,9 @@ local VPN service, and generates structured security reports.
 python3 scripts/generate_known_good_apps.py
 ```
 
-## Project layout
+## Architecture reference
 
-```
-app/src/main/java/com/androdr/
-├── data/
-│   ├── db/          Room DAOs + AppDatabase
-│   └── model/       Domain models (AppRisk, DeviceFlag, DnsEvent, ScanResult)
-│   └── repo/        ScanRepository, DnsEventRepository
-├── reporting/       ReportFormatter, ReportExporter (export + share flow)
-├── scanner/         ScanOrchestrator, AppScanner, DeviceAuditor
-├── ui/
-│   ├── apps/        Apps screen + ViewModel
-│   ├── dashboard/   Dashboard screen + ViewModel
-│   ├── device/      Device audit screen + ViewModel
-│   ├── history/     History screen + ViewModel (includes export)
-│   └── network/     DNS monitor screen + ViewModel
-├── vpn/             LocalVpnService (DNS interception)
-├── worker/          PeriodicScanWorker (WorkManager)
-└── MainActivity.kt
-```
-
-## Key architectural decisions
-- **Hilt** for DI throughout — every ViewModel, Repository, and service is
-  injected
-- **Room** stores `ScanResult` (serialized via `kotlinx.serialization`) and
-  `DnsEvent` rows
-- **FileProvider** (`${applicationId}.fileprovider`) serves exported report
-  files from `cacheDir/reports/`; paths config is at
-  `res/xml/file_paths.xml`
-- **ReportExporter** is a `@Singleton`; it fetches DNS events and captures
-  the app's own logcat (`logcat --pid`) before writing a plaintext report
+See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the architecture, module map, and design principles. Keep that document as the single source of truth — do not duplicate its content here.
 
 ## Development workflow
 All pull requests target **`main`**. Feature work lives on topic branches
