@@ -17,6 +17,7 @@ concurrency:
 jobs:
   build-and-test:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
         with:
@@ -51,6 +52,7 @@ jobs:
           if-no-files-found: warn
   lint-and-detekt:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
         with:
@@ -85,6 +87,7 @@ jobs:
   apk-analyze:
     runs-on: ubuntu-latest
     needs: build-and-test
+    timeout-minutes: 10
     steps:
       - uses: android-actions/setup-android@v3
       - name: Download debug APK
@@ -111,6 +114,7 @@ jobs:
           echo "PASS: no exported components without permission"
   secret-scan:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
         with:
@@ -126,6 +130,7 @@ jobs:
         run: gitleaks detect --source . --verbose
   submodule-check:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
         with:
@@ -145,6 +150,7 @@ jobs:
           fi
   python-pipeline:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -168,6 +174,7 @@ jobs:
     runs-on: ubuntu-latest
     if: github.event_name == 'pull_request'
     continue-on-error: true
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
         with:
@@ -204,6 +211,7 @@ jobs:
           if-no-files-found: warn
   ci-success:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     if: always()
     needs:
       - build-and-test
