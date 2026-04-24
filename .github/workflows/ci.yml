@@ -139,9 +139,13 @@ jobs:
         working-directory: third-party/android-sigma-rules
         run: |
           set -euo pipefail
-          git fetch origin main
+          # actions/checkout@v4 with submodules:true does a shallow clone and
+          # does not set up a remote-tracking branch, so we compare against
+          # FETCH_HEAD from an explicit unshallow fetch.
+          git fetch --unshallow origin main 2>/dev/null \
+            || git fetch origin main
           HEAD_SHA=$(git rev-parse HEAD)
-          if git merge-base --is-ancestor "$HEAD_SHA" origin/main; then
+          if git merge-base --is-ancestor "$HEAD_SHA" FETCH_HEAD; then
             echo "PASS: submodule HEAD $HEAD_SHA is reachable from upstream main"
           else
             echo "FAIL: submodule HEAD $HEAD_SHA is NOT reachable from upstream main" >&2
@@ -156,6 +160,11 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.x'
+      - name: Install runtime deps for script smoke tests
+        # Only pyyaml is needed: merge-ioc-data.py imports yaml at module
+        # scope, so --help fails without it. Keep this minimal — the smoke
+        # test is meant to exercise argparse, not run the full pipeline.
+        run: python3 -m pip install --quiet pyyaml
       - name: Syntax-check tracked Python scripts
         run: |
           set -euo pipefail
