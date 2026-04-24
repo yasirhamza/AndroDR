@@ -293,3 +293,164 @@ The following steps trace a stalkerware app from installation to a user-visible 
 ---
 
 [#143]: https://github.com/yasirhamza/AndroDR/issues/143
+
+---
+
+## 5. Data layer
+
+### 5.1 Room database
+
+All persistent state lives in a single Room database declared in `AppDatabase` (schema version 16 at time of writing). It registers six entities:
+
+| Entity | Table | Purpose |
+|---|---|---|
+| `ScanResult` | `ScanResult` | One row per completed scan; stores all findings and device-flag results as serialized JSON |
+| `DnsEvent` | `DnsEvent` | DNS queries intercepted by `DnsVpnService`, with timestamp and optional match reason |
+| `ForensicTimelineEvent` | `forensic_timeline` | Every timestamped forensic event — findings, package installs, device-admin grants, IOC-matched DNS hits, usage-stats, correlation signals |
+| `Indicator` | `indicators` | IOC feed entries: package names, cert hashes, APK hashes, and C2 domains sourced from all configured feeds |
+| `KnownAppDbEntry` | (internal) | Known-good app cache (Plexus + UAD-ng) for false-positive suppression |
+| `CveEntity` | (internal) | CVE records for unpatched-CVE detection |
+
+`ScanResult` is annotated with `@Serializable` (kotlinx.serialization). The `findings`, `deviceFlags`, and other list fields are stored as JSON blobs via Room `TypeConverters`. This means rule-level changes — new fields in a `Finding`, new display metadata from YAML — do not require a DB migration for every update; only changes to the outer `ScanResult` entity shape itself need a migration entry in `Migrations.kt`.
+
+The `ScanRepository` is the single access point for scan-related writes. Scan + timeline events are saved in a single `withTransaction` block so the Room `InvalidationTracker` fires exactly one invalidation per scan, avoiding intermediate "half-saved" states visible to UI `Flow` collectors.
+
+### 5.2 Retention and auto-prune
+
+DNS events and forensic timeline events are pruned to a 30-day rolling window. The pruning runs inside `IocUpdateWorker.doWork()`, which executes on the existing WorkManager IOC-refresh schedule:
+
+```
+val thirtyDaysAgo = System.currentTimeMillis() - (30L * 24 * 60 * 60 * 1000)
+scanRepository.pruneOldDnsEvents(thirtyDaysAgo)   // → DnsEventDao.deleteOlderThan()
+forensicTimelineEventDao.deleteOlderThan(thirtyDaysAgo)
+```
+
+`ScanResult` rows are not auto-pruned; they persist until the user manually deletes a scan from the history screen. The DAO caps history reads at 50 rows, so the UI never renders stale data regardless of how many rows accumulate.
+
+### 5.3 Cloud backup disabled
+
+`android:allowBackup="false"` is set in `AndroidManifest.xml`. Scan data, IOC indicator rows, and timeline events are never transmitted to Google's automatic backup infrastructure. Users who uninstall the app lose all stored data; this is intentional.
+
+### 5.4 IOC indicator model and STIX2
+
+The `Indicator` entity is the unified runtime indicator row: one row per `(type, value)` pair — where `type` is `package`, `domain`, `cert_hash`, or `apk_hash` — plus provenance fields (`source`, `fetchedAt`, `campaign`, `severity`, `description`). Room enforces uniqueness on `(type, value)` with insert-or-replace semantics so duplicate contributions from multiple feeds converge to a single row.
+
+STIX2 serialization lives in `StixBundle.kt` (in `ioc/`). The extension function `List<Indicator>.toStixBundle()` converts indicator rows into a minimal STIX2.1 bundle of `indicator` objects. The same data-class hierarchy is used for ingest (parsing STIX2 bundles from external feeds) and for the reporting layer's machine-readable export path.
+
+---
+
+## 6. Reporting and export
+
+### 6.1 ReportFormatter
+
+`ReportFormatter` is a pure stateless `object` (no I/O). Its `formatScanReport()` function assembles a human-readable ASCII plaintext report from a `ScanResult`, a list of `DnsEvent` rows, a logcat capture, and optional extended telemetry (device posture, processes, file artifacts, accessibility services, broadcast receivers, app-ops). Output is strictly ASCII — no Unicode — so the file is readable in any text viewer and can be passed to forensic processing scripts without encoding surprises.
+
+The report is split into two independently selectable sections via the `ExportMode` enum:
+
+- `FINDINGS_ONLY` — verdict, device checks, campaign detections, per-app findings, bug-report findings.
+- `TELEMETRY_ONLY` — DNS activity, app hash inventory, extended telemetry, application log. Intended for analyst handoff: the recipient can run their own rules against raw telemetry without being biased by the device's current ruleset.
+- `BOTH` — default; produces the full report.
+
+### 6.2 ReportExporter
+
+`ReportExporter` is a `@Singleton` that orchestrates the export flow. When called, it:
+
+1. Fetches a snapshot of recent DNS events from `DnsEventDao.getRecentSnapshot()`.
+2. Collects last-run telemetry from `ScanOrchestrator` (or re-runs `AppScanner.collectTelemetry()` if the cache is stale).
+3. Calls `ReportFormatter.formatScanReport()` to produce the text.
+4. Writes the output to `cacheDir/reports/androdr_report_<timestamp>.txt`.
+5. Returns a `FileProvider` URI (`${applicationId}.fileprovider`) that the caller passes to the Android share sheet.
+
+Logcat capture is scoped to AndroDR's own process (`--pid`) and to a specific list of AndroDR log tags, capped at 500 lines. System-wide logs are never captured. The `FileProvider` path configuration is at `res/xml/file_paths.xml`, which exposes only the `cache/reports/` subdirectory.
+
+### 6.3 Timeline export
+
+`TimelineFormatter` formats bug-report analysis results (SIGMA findings and `TimelineEvent` records) into a plaintext timeline, with an assessment header derived from rule guidance priority. `TimelineExporter` serializes `ForensicTimelineEvent` rows to either plaintext (human-readable, date-grouped) or CSV (machine-readable, with all IOC and correlation fields preserved). The CSV format includes `rule_id`, `correlation_id`, and `kind` columns so downstream tools can distinguish raw telemetry rows from correlation signals and reconstruct which rule fired.
+
+### 6.4 STIX2 export
+
+For forensic tool interoperability, the reporting layer can export findings as a STIX2.1 indicator bundle using `List<Indicator>.toStixBundle()` from `StixBundle.kt`. This allows handoff to threat-intelligence platforms that consume STIX2 without requiring a custom importer.
+
+### 6.5 Share model
+
+All sharing is user-initiated: the user taps "Export" in the history or bug-report screen, the share sheet appears, and the user chooses a destination. There is no automatic upload path and no background exfiltration route. This is a consequence of Design Principle 4 (chapter 2) and is enforced by construction — `ReportExporter` returns a `Uri` that must be handed to an explicit `Intent.ACTION_SEND`; no code path calls a network API.
+
+---
+
+## 7. DNS monitor
+
+### 7.1 DnsVpnService
+
+`DnsVpnService` (in `network/`) extends Android's `VpnService` and implements a local loopback tunnel that intercepts DNS traffic only. When started, it establishes a virtual TUN interface addressed at `10.0.0.2/32`, with a virtual DNS server at `10.0.0.1`. All outbound traffic is routed through the tunnel, but the service only reads and acts on UDP packets whose destination port is 53; all other packets are forwarded without inspection.
+
+The service parses each DNS query, resolves it via a single shared upstream socket (currently Google's `8.8.8.8:53`), and injects the response back into the TUN interface for the querying app. Matched queries (blocklist or IOC domain hit) receive an NXDOMAIN response in place of a real resolution. DNS events are batched via a `DnsLogBuffer` and flushed to `ScanRepository.logDnsEventsBatch()` periodically, rather than one Room transaction per query, to keep battery impact minimal.
+
+IOC enrichment happens at flush time: `ScanRepository.logDnsEventsBatch()` performs a `IndicatorDao.lookup()` for each matched domain to attach campaign name, severity, and description before writing the `ForensicTimelineEvent` row. The bloom-filter path that runs on the VPN hot path returns a lightweight stub; full metadata lives only in the Room `indicators` table.
+
+### 7.2 Integration with the rule engine
+
+`DnsEvent` records carrying a non-null `reason` field are also written as `ForensicTimelineEvent` rows (category `dns_ioc_match`). These rows participate in the forensic timeline and can trigger correlation rules alongside telemetry from scans and bug-report analysis. A rule with `logsource.service: dns_monitor` can fire whether the matched domain arrived via a scan-time IOC check or a real-time DNS interception, because both paths produce identically shaped telemetry.
+
+### 7.3 Strictly optional; user-consent required
+
+The VPN tunnel cannot be pre-granted. Android requires the user to accept a system-level VPN permission dialog on first start. If the user declines, or if the permission is revoked later, the tunnel is not established and DNS monitoring silently produces no events. The rest of AndroDR (app scanning, device audit, bug-report analysis) works normally without the DNS monitor active.
+
+### 7.4 Why DNS-only
+
+Full IP-level packet filtering was evaluated and parked. The reasons:
+
+- **TLS SNI inspection** would be needed for meaningful HTTPS-level detection, which conflicts with privacy-by-design: it requires decrypting or interfering with encrypted traffic that is not AndroDR's.
+- **DNS-level matching covers the majority of observed mobile C2 patterns.** Stalkerware and mercenary spyware consistently use distinct C2 domains; a domain blocklist catches these reliably without packet inspection.
+- **Broader filtering materially expands the review burden.** IP-level filtering would require AndroDR to make allow/deny decisions for all traffic, raising the risk of false-positive network breaks.
+
+The formal architecture decision entry is in Chapter 11.
+
+---
+
+## 8. Bug-report analysis
+
+### 8.1 What Android bug reports contain
+
+An Android bug report is a ZIP file generated by the OS (`adb bugreport`) or triggered from developer options. It contains the full `dumpstate.txt` — a concatenation of dozens of `dumpsys` service outputs — along with native tombstones, battery stats, process lists, and system property snapshots. This material covers forensic signal that is not reachable through normal runtime APIs: historical package install timestamps, past accessibility service registrations, historical battery drain events linked to wakelocks, ADB trusted key fingerprints, and crash tombstones. AndroDR accepts a user-provided bug-report ZIP and runs it through a structured analysis pipeline.
+
+### 8.2 Parser modules
+
+The `scanner/bugreport/` package contains one parser module per dumpsys section or signal type:
+
+| Module | Dumpsys section / source | Output type |
+|---|---|---|
+| `AccessibilityModule` | `accessibility` | accessibility service records |
+| `ActivityModule` | `activity` | activity manager state |
+| `AdbKeysModule` | `adb_keys` / raw ZIP | trusted ADB key fingerprints |
+| `AppOpsModule` | `appops` | app-op grant records |
+| `BatteryDailyModule` | `batterystats` | `BatteryDailyEvent` — per-app daily battery usage |
+| `DbInfoModule` | `dbinfo` | `DatabasePathObservation` — database file paths by package |
+| `InstallTimeModule` | `package` | `PackageInstallHistoryEntry` — historical install timestamps |
+| `PlatformCompatModule` | `platform_compat` | `PlatformCompatChange` — compat-framework overrides |
+| `ReceiverModule` | `package` | broadcast receiver registrations |
+| `DumpsysSectionParser` | (all) | raw section extraction utility |
+| `GetpropParser` | `SYSTEM PROPERTIES` | `SystemPropertySnapshot` + device identity |
+| `TombstoneParser` | `tombstone` | `TombstoneEvent` — native crash tombstones |
+| `WakelockParser` | `power` | `WakelockAcquisition` — partial-wakelock history |
+
+`BugreportModule` is the common interface; each module declares `targetSections` (the dumpsys service names it needs) and implements `analyze()` (section-targeted) or `analyzeRaw()` (raw ZIP entries). The coordinator is `BugReportAnalyzer`.
+
+### 8.3 Analysis pipeline
+
+The pipeline runs in six ordered stages:
+
+1. **Accept.** The user selects a bug-report ZIP via the Android file picker. AndroDR receives a `Uri`; it never auto-captures or auto-processes bug reports.
+
+2. **Parse.** `BugReportAnalyzer.analyze()` opens the ZIP twice: a pre-pass extracts the `SYSTEM PROPERTIES` section to derive the source device identity (manufacturer and brand via `GetpropParser`), which is needed for OEM-prefix filtering. The main pass calls `DumpsysSectionParser.extractSections()` to carve out the sections each module declared, then runs every module in turn.
+
+3. **Emit telemetry.** Each module returns a `ModuleResult` carrying a list of typed telemetry records (as `Map<String, Any?>`) tagged with a `telemetryService` string, plus optional `TimelineEvent` rows. `TombstoneParser` and `WakelockParser` produce their own typed records (`TombstoneEvent`, `WakelockAcquisition`). All of these are collected into a `TelemetryBundle` and flow into the SIGMA rule engine alongside `AppTelemetry` and `DeviceTelemetry`. There is no bug-report-specific detection logic in the evaluator itself.
+
+4. **Match.** `SigmaRuleEngine` evaluates rules whose `logsource.service` matches the telemetry service strings emitted by each module (`bugreport`, `tombstone_parser`, `wakelock_parser`, `battery_daily`, `package_install_history`, `platform_compat`, `db_info`, etc.). Any rule in the bundled or remote rule set can fire against bug-report telemetry without any special-casing.
+
+5. **Display findings.** The bug-report screen shows what was detected, grouped by severity, with pointers into the raw dumpsys section (via `TimelineEvent.source` and `details` fields) so an analyst can verify the raw signal. The forensic timeline screen shows the same events in chronological order alongside runtime scan findings.
+
+6. **Discard raw.** The original ZIP is not copied or persisted by AndroDR. Only the structured findings and `ForensicTimelineEvent` rows derived from parsing are written to Room (via `ScanRepository.saveScanResults()`). When the user deletes a scan from the history screen, the associated timeline rows are removed in the same Room transaction.
+
+### 8.4 Privacy handling
+
+Android bug reports are among the most sensitive files a device can produce — they contain process lists, network state, installed-app histories, and system logs from all apps on the device. AndroDR's handling follows a strict "your device, your choice" model: the user explicitly selects the file, it is analyzed locally and immediately, and the raw ZIP is never retained. Sharing a bug-report analysis result follows the same user-initiated share-sheet path as any other export.
