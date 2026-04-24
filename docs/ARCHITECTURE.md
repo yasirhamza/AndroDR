@@ -454,3 +454,137 @@ The pipeline runs in six ordered stages:
 ### 8.4 Privacy handling
 
 Android bug reports are among the most sensitive files a device can produce — they contain process lists, network state, installed-app histories, and system logs from all apps on the device. AndroDR's handling follows a strict "your device, your choice" model: the user explicitly selects the file, it is analyzed locally and immediately, and the raw ZIP is never retained. Sharing a bug-report analysis result follows the same user-initiated share-sheet path as any other export.
+
+## 9. AI rule-authoring pipeline
+
+AndroDR uses an AI-assisted pipeline — implemented as Claude Code skills and slash-commands under `.claude/commands/` and loaded via `.claude/skills/` — to generate and validate SIGMA detection rules from upstream threat-intelligence sources. **External contributors do not need access to this pipeline.** Hand-authored rules following the schema in `third-party/android-sigma-rules/validation/rule-schema.json` go through the same validation gates; see `CONTRIBUTING.md` for the manual path.
+
+### 9.1 Pipeline stages
+
+1. **Ingest.** Feed-specific skills parse upstream threat-intelligence sources into a normalized SIR (Structured Indicator Record) format. Six feed ingesters exist, invoked individually or as part of the full cycle:
+   - `/update-rules-ingest-abusech` — abuse.ch ThreatFox and MalwareBazaar (Android APK hashes, malicious domains)
+   - `/update-rules-ingest-stalkerware` — AmnestyTech/stalkerware-indicators GitHub repository
+   - `/update-rules-ingest-asb` — Android Security Bulletins (patched CVEs with severity metadata)
+   - `/update-rules-ingest-nvd` — NVD/NIST CVE database filtered to Android-relevant entries
+   - `/update-rules-ingest-attack` — MITRE ATT&CK Mobile STIX data (technique identifiers and descriptions)
+   - `/update-rules-ingest-amnesty` — AmnestyTech/investigations GitHub repository (mercenary spyware campaigns)
+
+2. **Discover.** `/update-rules-discover` autonomously surfaces threat names from vendor-blog RSS feeds and HTML indices without a user-supplied threat name. It produces a list of candidate names for the research stage.
+
+3. **Research.** `/update-rules-research-threat` takes a named threat (from discovery or from the user) and does targeted web research to fill in any gaps in its SIR — package names, certificate hashes, C2 domains, MITRE technique IDs.
+
+4. **Author.** `/update-rules-author` turns one or more SIRs into candidate SIGMA YAML rules. It applies the bundled rule schema and the current logsource taxonomy to emit rules that the Kotlin engine can evaluate without modification.
+
+5. **Validate.** `/update-rules-validate` runs a five-gate validation pipeline on every candidate rule:
+   - Gate 1 — JSON schema conformance against `rule-schema.json`
+   - Gate 2 — field alignment (all fields referenced in `detection` are recognized logsource fields)
+   - Gate 3 — modifier compliance (all modifiers are in the verified modifier set)
+   - Gate 4 — IOC existence check (any `ioc_lookup` target must resolve to a non-empty indicator database)
+   - Gate 5 — no false-positive on the bundled known-good app list
+
+6. **Review.** `/update-rules-review` performs an independent LLM review of the AI-authored rules, checking for detection-logic errors, overly broad conditions, and missing remediation guidance. This is structurally separate from the author agent so that the reviewer cannot be biased by the authoring reasoning trace.
+
+7. **Stage and promote.** Rules land first in staging. Gate-4 harness testing (the test harness run against real telemetry samples) must confirm expected behavior before a rule is promoted to production. Promotion is a manual step; the pipeline does not auto-merge to the rules repository.
+
+### 9.2 Orchestrator
+
+`/update-rules` runs the full cycle end-to-end: ingest all feeds → discover new threats → research → author → validate → review. It is designed for unattended execution and reports a summary of new, updated, and rejected rules when it completes.
+
+### 9.3 Rules repository and submodule
+
+The canonical rules repository is `https://github.com/yasirhamza/android-sigma-rules`. It is vendored into AndroDR as a git submodule at `third-party/android-sigma-rules/`. The submodule pointer is intentionally pinned: rules added upstream by the AI pipeline do NOT automatically affect the built APK. The pointer is bumped only when AndroDR needs upstream schema changes (for example, when the pipeline discovers a schema gap and a new field or logsource service is ratified). Bundling new rules into the APK requires copying the rule YAML into `app/src/main/res/raw/` and bumping the submodule.
+
+---
+
+## 10. Test strategy
+
+### 10.1 Unit tests
+
+`app/src/test/` contains pure JVM tests that cover:
+- Rule YAML parsers and the SIGMA rule evaluator
+- Telemetry emitters (each emitter's output shape is verified against expected records)
+- The IOC resolver and bloom-filter index
+- `ReportFormatter` and `ReportExporter` output correctness
+- `kotlinx.serialization` round-trips for domain models
+
+Run with `./gradlew testDebugUnitTest`.
+
+### 10.2 Instrumentation tests
+
+`app/src/androidTest/` contains tests that require an Android runtime:
+- Room DAO contracts for `ScanResult`, `DnsEvent`, and `ForensicTimelineEvent`
+- `LocalVpnService` DNS interception path (requires a VPN-capable emulator image)
+- FileProvider-backed report export and share flows
+
+Run on a connected device or emulator with `./gradlew connectedDebugAndroidTest`.
+
+### 10.3 Schema cross-check
+
+`BundledRulesSchemaCrossCheckTest` is the tripwire for schema drift. It reads `third-party/android-sigma-rules/validation/rule-schema.json` (the submodule copy) and cross-checks it against the modifiers and logsource services that `SigmaRuleParser` actually recognizes. The build fails if parser and schema disagree. Any PR that adds a new modifier or logsource service to the Kotlin engine must also update the JSON schema in the submodule and bump the submodule pointer.
+
+### 10.4 Rule validation gates
+
+Every proposed rule change — AI-generated or hand-authored — runs through the five-gate validation pipeline described in §9.1.5 before being merged to the rules repository. The gates run in CI on the `android-sigma-rules` repository.
+
+### 10.5 UAT persona testing
+
+`/uat-test` evaluates AndroDR output from real user perspectives across three personas: a domestic-violence survivor, an investigative journalist, and an IT administrator. It is run before material UX changes land to catch wording, severity, and guidance issues that unit tests cannot surface.
+
+### 10.6 On-device smoke test
+
+`scripts/smoke-test.sh` boots a headless `Medium_Phone_API_36.1` AVD (API 36, no window, no audio, no snapshot), installs the debug APK (`com.androdr.debug`), launches the app, and scans logcat for crash signals. The script is required before any release build is tagged. It requires `ANDROID_HOME` to be set.
+
+### 10.7 Lint and static analysis
+
+`./gradlew lintDebug detekt` run on every CI build. Lint warnings are treated as errors in release builds. The project uses the default Android Lint configuration; no suppressions are added without a comment explaining the rationale.
+
+---
+
+## 11. Decisions
+
+Short ADR-style entries. Each decision is stated as a one-line claim followed by a rationale paragraph.
+
+### D1. Detection logic in YAML SIGMA rules, not Kotlin code
+
+New detection patterns are added as rule files, not as Kotlin branches. Rules are reviewable as data by contributors who are not Android engineers, portable to any compatible rule engine, and updatable without an app-store release. The Kotlin rule engine is intentionally a pure evaluator with no detection logic of its own.
+
+### D2. IOC data lives in the external rules repository, not bundled in the APK
+
+Threat indicators (package names, certificate hashes, C2 domains, IP ranges) change faster than app-release cadence. Keeping IOC data in the external `android-sigma-rules` repository means new indicators reach users within hours via a background rule-feed refresh rather than weeks via an app-store review cycle.
+
+### D3. DNS-only VPN scope; full IP filtering parked indefinitely
+
+Full IP-level packet inspection was evaluated and rejected. TLS SNI handling would conflict with the privacy-by-design posture (the app would need to intercept and re-sign TLS, acting as a local MITM). DNS matching covers the large majority of mobile C2 traffic, and DNS interception is non-invasive — only the DNS query hostname is inspected, not the payload. Broader IP filtering would also materially expand the review burden and raise the risk of false-positive network breaks for legitimate apps.
+
+### D4. Pure-emitter telemetry/findings contract
+
+Emitters (scanner modules, VPN service, bug-report parsers) produce typed telemetry records and are forbidden from making detection decisions. The rule engine is the sole decision-maker. This separation keeps emitters independently testable, makes the engine deterministic given a fixed rule set, and ensures that detection behavior lives in exactly one place. Static enforcement of the contract is tracked in [#136]; a machine-readable telemetry schema is tracked in [#137].
+
+### D5. SIGMA compatibility where practical
+
+The rule schema tracks SIGMA semantics for `logsource`, `detection`, `condition`, and modifier syntax. Divergences from upstream SIGMA are limited to Android-specific logsource services (e.g. `service: app_scanner`, `service: dns_event`) and display metadata fields (`triggered_title`, `safe_title`, `icon`, `evidence_type`, `summary_template`, `guidance`) that have no SIGMA equivalent. This keeps the schema legible to security analysts familiar with SIGMA without requiring them to learn a new DSL.
+
+### D6. No cloud backend
+
+All scanning and rule evaluation happens on the device. Indicator updates are unauthenticated fetches from upstream threat-intelligence sources (abuse.ch, AmnestyTech, MITRE, NVD); these requests carry no user data or device identifiers. This posture is load-bearing for GDPR and CCPA compliance: there is no personal data processing on any AndroDR-controlled server because there is no AndroDR-controlled server.
+
+### D7. Rule engine capabilities
+
+The rule engine supports the following verified capabilities, derived from `SigmaRuleParser` and `SigmaRuleEvaluator`:
+
+- **Field matching with modifiers:** `contains`, `startswith`, `endswith`, `re` (regex, ReDoS-protected with a 500-character cap, 1-second timeout, and a 256-entry LRU cache), `gte`, `lte`, `gt`, `lt`, `ioc_lookup`. The `all` combiner flips the default any-of quantifier to all-of for a selection.
+- **IOC lookups:** the `ioc_lookup` modifier calls a named lookup lambda (e.g. `package_ioc_db`, `domain_ioc_db`, `cert_hash_ioc_db`) registered in the evaluator's `iocLookups` map. Lookup databases are typed and independently updatable.
+- **Evidence providers:** rules can reference named evidence providers (e.g. CVE lists with campaign attribution) that are injected alongside IOC databases. This allows a rule to surface structured remediation evidence rather than a bare match.
+- **Display metadata:** `title`, `severity`, `category`, `evidence_type`, `triggered_title`, `safe_title`, `icon`, `summary_template`, and `guidance` are embedded directly in the rule YAML and surfaced in the UI without any Kotlin changes.
+- **Correlation rules:** a rule may span multiple telemetry services in its condition, correlating findings across the app scanner, DNS monitor, and bug-report analysis pipeline.
+- **Remote rule feeds:** the engine accepts a list of configurable feed URLs; rules are fetched, validated, and merged with the bundled set at runtime. Feed rules can extend or override bundled rules by rule ID.
+
+### Open architecture work
+
+- Persist all telemetry types to Room for complete forensic export: [#96]
+- Static enforcement of the pure-emitter contract: [#136]
+- Machine-readable telemetry schema contract: [#137]
+- Rule-lineage tooling for the rule-author agent: [#139]
+
+[#96]: https://github.com/yasirhamza/AndroDR/issues/96
+[#139]: https://github.com/yasirhamza/AndroDR/issues/139
