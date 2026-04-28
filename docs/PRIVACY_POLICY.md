@@ -70,6 +70,9 @@ AndroDR fetches publicly available threat intelligence feeds to keep its detecti
 | MalwareBazaar APK + cert hashes | abuse.ch MalwareBazaar public API | Hashes of known malicious APKs and the cert hashes that signed them | 1 API request per refresh |
 | ThreatFox indicators | abuse.ch ThreatFox public API | Command-and-control domain / IP indicators | 1 API request per refresh |
 | Stalkerware cert-hash indicators | AssoEchap/stalkerware-indicators (GitHub) | Cert hashes of known stalkerware signers | 1 HTTP GET |
+| SIGMA detection rules | android-sigma-rules/rules (GitHub) | Rule manifest (`rules.txt`), SHA-256 integrity manifest (`rules.sha256`), then one GET per rule YAML file listed in the manifest. Each downloaded rule is integrity-checked against the manifest before being loaded. | 2 manifests + 1 per rule |
+| Centralized IOC data | android-sigma-rules/rules (GitHub) | Package names, C2 domains, signing-cert hashes, APK hashes, and known-good app lists from the repo's `ioc-data/` directory | 5 HTTP GETs |
+| **Optional:** custom rule URLs | URLs you configure in Settings → Custom Rule Sources | Same SIGMA-rule-feed format as above. Disabled by default; only fetched if you add a URL. | Same as above per configured URL |
 
 All requests are unauthenticated public HTTP GET requests. No API keys, no authentication tokens, no cookies, and no tracking headers are sent. You can verify this in the source code at `app/src/main/java/com/androdr/ioc/feeds/`.
 
@@ -160,6 +163,15 @@ AndroDR's source code is publicly available. Every detection heuristic, every ne
 - **Data storage:** `app/src/main/java/com/androdr/data/`
 
 If you find a privacy concern in the code, open an issue or contact us directly.
+
+### Detection rules live in a separate, public repository
+
+What the app looks for is not hidden inside compiled Kotlin. AndroDR's detection rules are authored as human-readable YAML in an independent public repository — [github.com/android-sigma-rules/rules](https://github.com/android-sigma-rules/rules) — and bundled into the app at build time via a pinned git submodule. The rule schema (`validation/rule-schema.json`) is published alongside the rules. This decoupling has two privacy consequences:
+
+- **You can read every rule before installing.** Each rule names the indicator (package name, signing-cert hash, DNS domain, permission combination, etc.), the threat it models, and the public source it was derived from. No detection exists only inside the binary.
+- **Rule changes are reviewable independently of the app.** New detections land in the rules repo through a public 5-gate validation pipeline (schema check, build, IOC sanity, semantic deduplication, and an independent review pass). You can audit the diff between any two rule-bundle versions without disassembling the APK.
+
+The threat-intelligence feeds AndroDR ingests at runtime are listed in the "Network Requests" section above. The rules that decide what those indicators *mean* live in the rules repo. Both are public; neither is part of the compiled app's hidden state. Advanced users can also configure additional rule sources in Settings; those URLs are fetched in the same way as the default repo and are listed in the Network Requests table above.
 
 ---
 

@@ -257,6 +257,24 @@ export default {
 <td>Cert hashes of known stalkerware signers</td>
 <td>1 HTTP GET</td>
 </tr>
+<tr>
+<td>SIGMA detection rules</td>
+<td>android-sigma-rules/rules (GitHub)</td>
+<td>Rule manifest (<code>rules.txt</code>), SHA-256 integrity manifest (<code>rules.sha256</code>), then one GET per rule YAML file listed in the manifest. Each downloaded rule is integrity-checked against the manifest before being loaded.</td>
+<td>2 manifests + 1 per rule</td>
+</tr>
+<tr>
+<td>Centralized IOC data</td>
+<td>android-sigma-rules/rules (GitHub)</td>
+<td>Package names, C2 domains, signing-cert hashes, APK hashes, and known-good app lists from the repo's <code>ioc-data/</code> directory</td>
+<td>5 HTTP GETs</td>
+</tr>
+<tr>
+<td><strong>Optional:</strong> custom rule URLs</td>
+<td>URLs you configure in Settings → Custom Rule Sources</td>
+<td>Same SIGMA-rule-feed format as above. Disabled by default; only fetched if you add a URL.</td>
+<td>Same as above per configured URL</td>
+</tr>
 </tbody>
 </table>
 <p>All requests are unauthenticated public HTTP GET requests. No API keys, no authentication tokens, no cookies, and no tracking headers are sent. You can verify this in the source code at <code>app/src/main/java/com/androdr/ioc/feeds/</code>.</p>
@@ -331,6 +349,13 @@ export default {
 <li><strong>Data storage:</strong> <code>app/src/main/java/com/androdr/data/</code></li>
 </ul>
 <p>If you find a privacy concern in the code, open an issue or contact us directly.</p>
+<h3>Detection rules live in a separate, public repository</h3>
+<p>What the app looks for is not hidden inside compiled Kotlin. AndroDR's detection rules are authored as human-readable YAML in an independent public repository — <a href="https://github.com/android-sigma-rules/rules">github.com/android-sigma-rules/rules</a> — and bundled into the app at build time via a pinned git submodule. The rule schema (<code>validation/rule-schema.json</code>) is published alongside the rules. This decoupling has two privacy consequences:</p>
+<ul>
+<li><strong>You can read every rule before installing.</strong> Each rule names the indicator (package name, signing-cert hash, DNS domain, permission combination, etc.), the threat it models, and the public source it was derived from. No detection exists only inside the binary.</li>
+<li><strong>Rule changes are reviewable independently of the app.</strong> New detections land in the rules repo through a public 5-gate validation pipeline (schema check, build, IOC sanity, semantic deduplication, and an independent review pass). You can audit the diff between any two rule-bundle versions without disassembling the APK.</li>
+</ul>
+<p>The threat-intelligence feeds AndroDR ingests at runtime are listed in the "Network Requests" section above. The rules that decide what those indicators <em>mean</em> live in the rules repo. Both are public; neither is part of the compiled app's hidden state. Advanced users can also configure additional rule sources in Settings; those URLs are fetched in the same way as the default repo and are listed in the Network Requests table above.</p>
 <hr />
 <h2>Google Play Data Safety Alignment</h2>
 <p>For Google Play's Data Safety section, AndroDR declares:</p>
