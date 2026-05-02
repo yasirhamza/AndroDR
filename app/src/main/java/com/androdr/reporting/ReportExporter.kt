@@ -8,6 +8,7 @@ import com.androdr.data.db.DnsEventDao
 import com.androdr.data.model.ScanResult
 import com.androdr.scanner.AppScanner
 import com.androdr.scanner.ScanOrchestrator
+import com.androdr.util.appVersion
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -71,6 +72,7 @@ class ReportExporter @Inject constructor(
             accessibilityTelemetry = accessibilityTelemetry,
             receiverTelemetry = receiverTelemetry,
             appOpsTelemetry = appOpsTelemetry,
+            versionName = context.appVersion().name,
         )
 
         val reportsDir = File(context.cacheDir, "reports").apply { mkdirs() }

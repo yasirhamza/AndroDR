@@ -9,6 +9,7 @@ import com.androdr.data.model.TimelineEvent
 import com.androdr.reporting.TimelineFormatter
 import com.androdr.scanner.ScanOrchestrator
 import com.androdr.sigma.Finding
+import com.androdr.util.appVersion
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
@@ -115,7 +116,8 @@ class BugReportViewModel @Inject constructor(
                     _timeline.value,
                     _findings.value,
                     hashByPkg,
-                    displayNames
+                    displayNames,
+                    versionName = appContext.appVersion().name
                 )
                 _shareUri.value = withContext(Dispatchers.IO) {
                     val reportsDir = File(appContext.cacheDir, "reports").apply { mkdirs() }

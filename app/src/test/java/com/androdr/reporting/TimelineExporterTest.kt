@@ -26,7 +26,7 @@ class TimelineExporterTest {
 
     @Test
     fun `plaintext export contains header and events`() {
-        val text = TimelineExporter.formatPlaintext(events)
+        val text = TimelineExporter.formatPlaintext(events, versionName = "test")
         assertTrue(text.contains("AndroDR Forensic Timeline"))
         assertTrue(text.contains("IOC: com.evil.spy"))
         assertTrue(text.contains("com.evil.spy used CAMERA"))
@@ -141,7 +141,7 @@ class TimelineExporterTest {
 
     @Test
     fun `empty events produce valid output`() {
-        val text = TimelineExporter.formatPlaintext(emptyList())
+        val text = TimelineExporter.formatPlaintext(emptyList(), versionName = "test")
         assertTrue(text.contains("No timeline events"))
         val csv = TimelineExporter.formatCsv(emptyList())
         assertTrue(csv.lines().first().contains("timestamp"))
@@ -157,14 +157,14 @@ class TimelineExporterTest {
             )
         )
         val names = mapOf("com.whatsapp" to "WhatsApp")
-        val text = TimelineExporter.formatPlaintext(eventsNoName, names)
+        val text = TimelineExporter.formatPlaintext(eventsNoName, names, versionName = "test")
         assertTrue("Should resolve display name", text.contains("App: WhatsApp (com.whatsapp)"))
     }
 
     @Test
     fun `assessment driven by rule guidance`() {
         val guidance = mapOf("androdr-001" to "UNINSTALL IMMEDIATELY -- known malware")
-        val text = TimelineExporter.formatPlaintext(events, ruleGuidance = guidance)
+        val text = TimelineExporter.formatPlaintext(events, ruleGuidance = guidance, versionName = "test")
         assertTrue("Should have assessment", text.contains("ASSESSMENT:"))
         assertTrue("Rule guidance drives critical assessment",
             text.contains("CRITICAL ACTIVITY DETECTED"))
@@ -176,7 +176,7 @@ class TimelineExporterTest {
         // guidance, assessment falls through to NO CONCERNS. Phase B will
         // reintroduce finding-driven REVIEW/CRITICAL assessments via the
         // Finding-row variant.
-        val text = TimelineExporter.formatPlaintext(events)
+        val text = TimelineExporter.formatPlaintext(events, versionName = "test")
         assertTrue(text.contains("ASSESSMENT:"))
     }
 
@@ -189,13 +189,13 @@ class TimelineExporterTest {
                 packageName = "com.test"
             )
         )
-        val text = TimelineExporter.formatPlaintext(infoEvents)
+        val text = TimelineExporter.formatPlaintext(infoEvents, versionName = "test")
         assertTrue(text.contains("NO CONCERNS"))
     }
 
     @Test
     fun `output is ASCII only`() {
-        val text = TimelineExporter.formatPlaintext(events)
+        val text = TimelineExporter.formatPlaintext(events, versionName = "test")
         val nonAscii = text.filter { it.code > 127 }
         assertTrue("Non-ASCII characters found: $nonAscii", nonAscii.isEmpty())
     }
