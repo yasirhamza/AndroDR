@@ -12,6 +12,7 @@ import com.androdr.reporting.ReportFormatter
 import com.androdr.scanner.ScanOrchestrator
 import com.androdr.sigma.SigmaRuleEngine
 import com.androdr.sigma.SigmaRuleFeed
+import com.androdr.util.appVersion
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -45,7 +46,10 @@ class ScanBroadcastReceiver : BroadcastReceiver() {
                     val scan = scanOrchestrator.runFullScan()
                     val dns = dnsEventDao.getRecentSnapshot()
                     val inventory = scanOrchestrator.lastAppTelemetry
-                    val report = ReportFormatter.formatScanReport(scan, dns, emptyList(), inventory)
+                    val report = ReportFormatter.formatScanReport(
+                        scan, dns, emptyList(), inventory,
+                        versionName = context.appVersion().name
+                    )
                     val outDir = context.getExternalFilesDir(null) ?: return@launch
                     File(outDir, "androdr_last_report.txt").writeText(report)
                     Log.i(TAG, "Scan complete, report written to ${outDir.absolutePath}")

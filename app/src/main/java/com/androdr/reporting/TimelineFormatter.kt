@@ -23,13 +23,14 @@ object TimelineFormatter {
         timeline: List<TimelineEvent>,
         findings: List<Finding>,
         hashByPkg: Map<String, String> = emptyMap(),
-        displayNames: Map<String, String> = emptyMap()
+        displayNames: Map<String, String> = emptyMap(),
+        versionName: String
     ): String = buildString {
         val generated = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).format(Date())
 
         appendLine(RULE)
         appendLine("  AndroDR Bug Report Analysis Timeline")
-        appendLine("  Version   : ${com.androdr.BuildConfig.VERSION_NAME}")
+        appendLine("  Version   : $versionName")
         appendLine("  Generated : $generated")
         appendLine("  Android   : ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT})")
         appendLine("  Device    : ${Build.MANUFACTURER} ${Build.MODEL}")
