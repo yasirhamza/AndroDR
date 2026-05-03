@@ -35,6 +35,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.androdr.util.appVersion
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -255,21 +256,18 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
                     containerColor = MaterialTheme.colorScheme.surfaceContainer
                 )
             ) {
+                val appVersion = remember(context) { context.appVersion() }
                 Column(
                     modifier = Modifier.padding(16.dp),
                     verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     StatRow(
                         label = "Version",
-                        value = com.androdr.BuildConfig.VERSION_NAME
+                        value = appVersion.name
                     )
                     StatRow(
                         label = "Build",
-                        value = com.androdr.BuildConfig.VERSION_CODE.toString()
-                    )
-                    StatRow(
-                        label = "What's New",
-                        value = com.androdr.BuildConfig.RELEASE_NOTE
+                        value = appVersion.code.toString()
                     )
                     StatRow(
                         label = "Android",

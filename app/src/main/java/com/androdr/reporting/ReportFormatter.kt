@@ -38,6 +38,7 @@ object ReportFormatter {
         accessibilityTelemetry: List<AccessibilityTelemetry> = emptyList(),
         receiverTelemetry: List<ReceiverTelemetry> = emptyList(),
         appOpsTelemetry: List<AppOpsTelemetry> = emptyList(),
+        versionName: String,
     ): String = buildString {
         val includeFindings = mode != ExportMode.TELEMETRY_ONLY
         val includeTelemetry = mode != ExportMode.FINDINGS_ONLY
@@ -49,7 +50,7 @@ object ReportFormatter {
         appendLine(RULE)
         appendLine("  AndroDR Security Report")
         appendLine("  Format    : v${ReportExporter.EXPORT_FORMAT_VERSION} (mode=${mode.name})")
-        appendLine("  Version   : ${com.androdr.BuildConfig.VERSION_NAME}")
+        appendLine("  Version   : $versionName")
         appendLine("  Generated : $generated")
         appendLine("  Scan time : $scanDate")
         appendLine("  Android   : ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT})")

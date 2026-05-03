@@ -1,5 +1,6 @@
 package com.androdr.ui.history
 
+import android.content.Context
 import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -10,7 +11,9 @@ import com.androdr.reporting.ExportMode
 import com.androdr.reporting.ReportExporter
 import com.androdr.reporting.ReportFormatter
 import com.androdr.scanner.ScanOrchestrator
+import com.androdr.util.appVersion
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -25,7 +28,8 @@ class HistoryViewModel @Inject constructor(
     private val repository: ScanRepository,
     private val orchestrator: ScanOrchestrator,
     private val reportExporter: ReportExporter,
-    private val dnsEventDao: DnsEventDao
+    private val dnsEventDao: DnsEventDao,
+    @ApplicationContext private val appContext: Context
 ) : ViewModel() {
 
     /** Full scan history, newest first. */
@@ -77,7 +81,8 @@ class HistoryViewModel @Inject constructor(
             val dnsEvents = dnsEventDao.getRecentSnapshot()
             val inventory = orchestrator.lastAppTelemetry
             _sheetReportText.value = ReportFormatter.formatScanReport(
-                scan, dnsEvents, emptyList(), inventory
+                scan, dnsEvents, emptyList(), inventory,
+                versionName = appContext.appVersion().name
             )
         }
     }

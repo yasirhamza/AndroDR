@@ -30,7 +30,7 @@ class TimelineFormatterTest {
     @Test
     fun `verdict shows CLEAN when no triggered findings`() {
         val text = TimelineFormatter.formatTimeline(
-            emptyList(), emptyList()
+            emptyList(), emptyList(), versionName = "test"
         )
         assertTrue(text.contains("ANALYSIS VERDICT: CLEAN"))
     }
@@ -38,7 +38,7 @@ class TimelineFormatterTest {
     @Test
     fun `verdict shows CRITICAL THREATS when critical findings present`() {
         val text = TimelineFormatter.formatTimeline(
-            emptyList(), listOf(criticalFinding)
+            emptyList(), listOf(criticalFinding), versionName = "test"
         )
         assertTrue(text.contains("ANALYSIS VERDICT: CRITICAL THREATS DETECTED"))
         assertTrue(text.contains("1 critical"))
@@ -47,7 +47,7 @@ class TimelineFormatterTest {
     @Test
     fun `verdict shows ISSUES FOUND for medium findings`() {
         val text = TimelineFormatter.formatTimeline(
-            emptyList(), listOf(mediumFinding)
+            emptyList(), listOf(mediumFinding), versionName = "test"
         )
         assertTrue(text.contains("ANALYSIS VERDICT: ISSUES FOUND"))
         assertTrue(text.contains("1 medium"))
@@ -58,7 +58,7 @@ class TimelineFormatterTest {
         val names = mapOf("com.test.app" to "Test App")
         val text = TimelineFormatter.formatTimeline(
             emptyList(), listOf(mediumFinding),
-            displayNames = names
+            displayNames = names, versionName = "test"
         )
         assertTrue("Display name should appear", text.contains("Test App (com.test.app)"))
     }
@@ -69,7 +69,7 @@ class TimelineFormatterTest {
         val names = mapOf("com.whatsapp" to "WhatsApp")
         val text = TimelineFormatter.formatTimeline(
             emptyList(), emptyList(),
-            hashByPkg = hashes, displayNames = names
+            hashByPkg = hashes, displayNames = names, versionName = "test"
         )
         assertTrue("Display name in inventory", text.contains("WhatsApp"))
         assertTrue("Package name in inventory", text.contains("Package: com.whatsapp"))
@@ -80,7 +80,8 @@ class TimelineFormatterTest {
         val text = TimelineFormatter.formatTimeline(
             emptyList(),
             listOf(criticalFinding, mediumFinding),
-            mapOf("com.test" to "hash123")
+            mapOf("com.test" to "hash123"),
+            versionName = "test"
         )
         val nonAscii = text.filter { it.code > 127 }
         assertTrue("Non-ASCII characters found: $nonAscii", nonAscii.isEmpty())

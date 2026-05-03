@@ -56,7 +56,7 @@ class ReportFormatterTest {
 
     @Test
     fun `verdict shows no threats when clean`() {
-        val text = ReportFormatter.formatScanReport(cleanScan, emptyList(), emptyList())
+        val text = ReportFormatter.formatScanReport(cleanScan, emptyList(), emptyList(), versionName = "test")
         assertTrue(text.contains("No threats detected"))
         assertTrue(text.contains("SUMMARY:"))
         assertTrue(text.contains("Flagged: 0"))
@@ -65,7 +65,7 @@ class ReportFormatterTest {
     @Test
     fun `verdict shows device settings when only device issues`() {
         val scan = buildScan(deviceFlags = listOf(deviceFinding))
-        val text = ReportFormatter.formatScanReport(scan, emptyList(), emptyList())
+        val text = ReportFormatter.formatScanReport(scan, emptyList(), emptyList(), versionName = "test")
         assertTrue(text.contains("device setting(s) need attention"))
         assertTrue(text.contains("Device posture: USB Debugging Enabled"))
     }
@@ -73,7 +73,7 @@ class ReportFormatterTest {
     @Test
     fun `action guidance from rule guidance field for malware`() {
         val scan = buildScan(appRisks = listOf(malwareFinding), knownMalwareCount = 1)
-        val text = ReportFormatter.formatScanReport(scan, emptyList(), emptyList())
+        val text = ReportFormatter.formatScanReport(scan, emptyList(), emptyList(), versionName = "test")
         assertTrue(text.contains("ACTION REQUIRED:"))
         assertTrue("Guidance from rule", text.contains("UNINSTALL IMMEDIATELY"))
     }
@@ -81,7 +81,7 @@ class ReportFormatterTest {
     @Test
     fun `action guidance from rule guidance field for sideloads`() {
         val scan = buildScan(appRisks = listOf(sideloadFinding), riskySideloadCount = 1)
-        val text = ReportFormatter.formatScanReport(scan, emptyList(), emptyList())
+        val text = ReportFormatter.formatScanReport(scan, emptyList(), emptyList(), versionName = "test")
         assertTrue("Guidance from rule", text.contains("REVIEW -- sideloaded app"))
     }
 
@@ -90,7 +90,8 @@ class ReportFormatterTest {
         val scan = buildScan(appRisks = listOf(sideloadFinding))
         val names = mapOf("com.unknown.app" to "Mystery App")
         val text = ReportFormatter.formatScanReport(
-            scan, emptyList(), emptyList(), displayNames = names
+            scan, emptyList(), emptyList(), displayNames = names,
+            versionName = "test"
         )
         assertTrue("Display name should appear", text.contains("Mystery App"))
     }
@@ -102,7 +103,7 @@ class ReportFormatterTest {
             knownMalwareCount = 1,
             riskySideloadCount = 1
         )
-        val text = ReportFormatter.formatScanReport(scan, emptyList(), emptyList())
+        val text = ReportFormatter.formatScanReport(scan, emptyList(), emptyList(), versionName = "test")
         assertTrue(text.contains("UNINSTALL IMMEDIATELY"))
         assertTrue(text.contains("REVIEW -- sideloaded app"))
     }
@@ -115,14 +116,14 @@ class ReportFormatterTest {
             knownMalwareCount = 1,
             riskySideloadCount = 1
         )
-        val text = ReportFormatter.formatScanReport(scan, emptyList(), emptyList())
+        val text = ReportFormatter.formatScanReport(scan, emptyList(), emptyList(), versionName = "test")
         val nonAscii = text.filter { it.code > 127 }
         assertTrue("Non-ASCII characters found: $nonAscii", nonAscii.isEmpty())
     }
 
     @Test
     fun `no action block when scan is clean`() {
-        val text = ReportFormatter.formatScanReport(cleanScan, emptyList(), emptyList())
+        val text = ReportFormatter.formatScanReport(cleanScan, emptyList(), emptyList(), versionName = "test")
         assertFalse(text.contains("ACTION REQUIRED:"))
     }
 
@@ -137,7 +138,7 @@ class ReportFormatterTest {
     fun `BOTH mode contains both section markers`() {
         val text = ReportFormatter.formatScanReport(
             richScan(), emptyList(), listOf("log line"),
-            mode = ExportMode.BOTH
+            mode = ExportMode.BOTH, versionName = "test"
         )
         assertTrue(text.contains("FINDINGS SECTION"))
         assertTrue(text.contains("TELEMETRY SECTION"))
@@ -149,7 +150,7 @@ class ReportFormatterTest {
     fun `TELEMETRY_ONLY writes only telemetry section`() {
         val text = ReportFormatter.formatScanReport(
             richScan(), emptyList(), listOf("log line"),
-            mode = ExportMode.TELEMETRY_ONLY
+            mode = ExportMode.TELEMETRY_ONLY, versionName = "test"
         )
         assertTrue(text.contains("TELEMETRY SECTION"))
         assertTrue(text.contains("DNS ACTIVITY"))
@@ -163,7 +164,7 @@ class ReportFormatterTest {
     fun `FINDINGS_ONLY writes only findings section`() {
         val text = ReportFormatter.formatScanReport(
             richScan(), emptyList(), listOf("log line"),
-            mode = ExportMode.FINDINGS_ONLY
+            mode = ExportMode.FINDINGS_ONLY, versionName = "test"
         )
         assertTrue(text.contains("FINDINGS SECTION"))
         assertTrue(text.contains("DEVICE CHECKS"))
@@ -175,7 +176,7 @@ class ReportFormatterTest {
 
     @Test
     fun `format version line is present`() {
-        val text = ReportFormatter.formatScanReport(cleanScan, emptyList(), emptyList())
+        val text = ReportFormatter.formatScanReport(cleanScan, emptyList(), emptyList(), versionName = "test")
         assertTrue(text.contains("Format    : v${ReportExporter.EXPORT_FORMAT_VERSION}"))
     }
 }

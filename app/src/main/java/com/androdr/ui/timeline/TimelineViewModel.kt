@@ -10,6 +10,7 @@ import com.androdr.data.model.ForensicTimelineEvent
 import com.androdr.data.repo.ScanRepository
 import com.androdr.reporting.TimelineExporter
 import com.androdr.sigma.Finding
+import com.androdr.util.appVersion
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
@@ -331,14 +332,21 @@ class TimelineViewModel @Inject constructor(
     fun generateReport() {
         viewModelScope.launch {
             val allEvents = withContext(Dispatchers.IO) { dao.getAllForExport() }
+            val versionName = appContext.appVersion().name
             _reportText.value = withContext(Dispatchers.Default) {
-                TimelineExporter.formatPlaintext(allEvents, buildDisplayNames(allEvents), buildRuleGuidance())
+                TimelineExporter.formatPlaintext(
+                    allEvents, buildDisplayNames(allEvents), buildRuleGuidance(),
+                    versionName = versionName
+                )
             }
         }
     }
 
     fun exportPlaintext() = export("txt") {
-        TimelineExporter.formatPlaintext(it, buildDisplayNames(it), buildRuleGuidance())
+        TimelineExporter.formatPlaintext(
+            it, buildDisplayNames(it), buildRuleGuidance(),
+            versionName = appContext.appVersion().name
+        )
     }
     fun exportCsv() = export("csv") { TimelineExporter.formatCsv(it) }
 
