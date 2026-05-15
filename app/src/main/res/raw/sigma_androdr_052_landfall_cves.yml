@@ -1,0 +1,39 @@
+title: CVE exploited by LANDFALL spyware
+id: androdr-052
+status: experimental
+description: >
+    Device has unpatched CVEs known to be exploited by LANDFALL,
+    a commercial-grade Android spyware family active since at least
+    July 2024 against Samsung Galaxy S22/S23/S24, Z Fold4, and Z
+    Flip4 users in Iraq, Iran, Turkey, and Morocco. Delivered via
+    a malformed DNG image over WhatsApp.
+author: AndroDR (AI-generated)
+date: 2026/05/03
+references:
+    - https://unit42.paloaltonetworks.com/landfall-is-new-commercial-grade-android-spyware/
+    - https://thehackernews.com/2025/11/samsung-zero-click-flaw-exploited-to.html
+    - https://securityaffairs.com/184331/security/landfall-spyware-exploited-samsung-zero-day-cve-2025-21042-in-middle-east-attacks.html
+tags:
+    - attack.t1404
+    - attack.t1664
+    - campaign.landfall
+logsource:
+    product: androdr
+    service: device_auditor
+detection:
+    selection:
+        unpatched_cve_id|contains:
+            - "CVE-2025-21042"
+            - "CVE-2025-21043"
+    condition: selection
+display:
+    category: device_posture
+    icon: shield_alert
+    triggered_title: "{count} CVEs linked to LANDFALL"
+    safe_title: "No LANDFALL-linked CVEs"
+    evidence_type: cve_list
+    summary_template: "LANDFALL spyware exploits {count} unpatched CVEs on this device"
+level: medium
+category: device_posture
+remediation:
+    - "Go to Settings > Software Update > Download and Install immediately. Also check Play Store > Settings > About > Google Play system update. These Samsung libimagecodec.quram.so vulnerabilities are exploited by LANDFALL spyware via malformed DNG images sent over WhatsApp."

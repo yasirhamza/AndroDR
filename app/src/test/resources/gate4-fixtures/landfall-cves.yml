@@ -1,0 +1,15 @@
+# Fixture for androdr-052: CVEs exploited by LANDFALL spyware
+rule_file: sigma_androdr_052_landfall_cves.yml
+service: device_auditor
+
+true_positives:
+  - unpatched_cve_id: "CVE-2025-21042"
+  - unpatched_cve_id: "CVE-2025-21043"
+  - unpatched_cve_id: "CVE-2025-21042,CVE-2025-21043"
+  - unpatched_cve_id: "CVE-2024-99999,CVE-2025-21042"
+
+true_negatives:
+  - unpatched_cve_id: "CVE-2024-21042"
+  - unpatched_cve_id: ""
+  - unpatched_cve_id: "CVE-2025-99999"
+  - unpatched_cve_id: "CVE-2024-99999,CVE-2025-99998"
