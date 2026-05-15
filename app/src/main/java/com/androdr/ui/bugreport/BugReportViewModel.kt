@@ -39,6 +39,16 @@ class BugReportViewModel @Inject constructor(
     private val _isAnalyzing = MutableStateFlow(false)
     val isAnalyzing: StateFlow<Boolean> = _isAnalyzing.asStateFlow()
 
+    /** True once an analysis has finished (success OR failure, NOT cancellation).
+     *  Used to render a completion confirmation distinct from the pre-analysis
+     *  idle state — the bug in #148 was that the UI couldn't tell those apart. */
+    private val _analysisFinished = MutableStateFlow(false)
+    val analysisFinished: StateFlow<Boolean> = _analysisFinished.asStateFlow()
+
+    /** Non-null when the most recent analysis threw an unrecoverable error. */
+    private val _errorMessage = MutableStateFlow<String?>(null)
+    val errorMessage: StateFlow<String?> = _errorMessage.asStateFlow()
+
     /** Emits a [Uri] when a report is ready to share; null when idle or after consumption. */
     private val _shareUri = MutableStateFlow<Uri?>(null)
     val shareUri: StateFlow<Uri?> = _shareUri.asStateFlow()
@@ -83,12 +93,28 @@ class BugReportViewModel @Inject constructor(
     fun analyzeUri(uri: Uri) {
         viewModelScope.launch {
             _isAnalyzing.value = true
+            _analysisFinished.value = false
+            _errorMessage.value = null
             _findings.value = emptyList()
             _timeline.value = emptyList()
             try {
                 val result = orchestrator.analyzeBugReport(uri)
                 _findings.value = result.findings
                 _timeline.value = result.timeline
+                _analysisFinished.value = true
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                val raw = e.message ?: e::class.simpleName ?: "Unknown error"
+                // Cap to keep zip/IO exception messages (which often embed
+                // long content:// URIs and stack-frame-like strings) from
+                // overflowing the error card on small screens.
+                _errorMessage.value = if (raw.length > MAX_ERROR_MESSAGE_LEN) {
+                    raw.take(MAX_ERROR_MESSAGE_LEN) + "…"
+                } else {
+                    raw
+                }
+                _analysisFinished.value = true
             } finally {
                 _isAnalyzing.value = false
             }
@@ -140,5 +166,9 @@ class BugReportViewModel @Inject constructor(
     /** Call after the share intent has been launched to reset the URI state. */
     fun onShareConsumed() {
         _shareUri.value = null
+    }
+
+    private companion object {
+        const val MAX_ERROR_MESSAGE_LEN = 280
     }
 }
