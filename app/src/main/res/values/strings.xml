@@ -82,6 +82,12 @@
     <string name="bugreport_analyzing">Analyzing system diagnostic\u2026</string>
     <string name="bugreport_empty_state">No analysis yet</string>
     <string name="bugreport_empty_hint">Select a system diagnostic .zip file to scan for threats</string>
+    <string name="bugreport_complete_clean_title">Scan complete — no security signals detected</string>
+    <string name="bugreport_complete_clean_hint">Your system diagnostic was analyzed against AndroDR\'s detection rules and no triggered findings were produced.</string>
+    <!-- PluralsCandidate: compact completion summary; matches bugreport_finding_count style -->
+    <string name="bugreport_complete_timeline_only" tools:ignore="PluralsCandidate">Scan complete — %1$d timeline event(s), no triggered findings</string>
+    <string name="bugreport_error_title">Analysis failed</string>
+    <string name="bugreport_error_hint">Reason: %1$s</string>
     <string name="dashboard_bugreport_title">Deep Device Scan</string>
     <string name="dashboard_bugreport_hint">Analyze a system diagnostic for hidden threats</string>
 

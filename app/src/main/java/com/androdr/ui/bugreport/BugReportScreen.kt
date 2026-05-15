@@ -56,7 +56,9 @@ import com.androdr.R
 import com.androdr.ui.common.FindingCard
 
 @Suppress("LongMethod") // Bug report screen combines file-picker launch, progress state,
-// empty-state, findings list, and export; splitting would require threading state through extra wrappers.
+// empty-state, completion confirmation, error card, findings list, timeline, and export.
+// Splitting into child composables would require threading 5+ state flows through wrappers;
+// keeping inline trades length for state-flow locality.
 @Composable
 fun BugReportScreen(
     viewModel: BugReportViewModel = hiltViewModel()
@@ -64,6 +66,8 @@ fun BugReportScreen(
     val findings by viewModel.findings.collectAsStateWithLifecycle()
     val timeline by viewModel.timeline.collectAsStateWithLifecycle()
     val isAnalyzing by viewModel.isAnalyzing.collectAsStateWithLifecycle()
+    val analysisFinished by viewModel.analysisFinished.collectAsStateWithLifecycle()
+    val errorMessage by viewModel.errorMessage.collectAsStateWithLifecycle()
     val exporting by viewModel.exporting.collectAsStateWithLifecycle()
     val shareUri by viewModel.shareUri.collectAsStateWithLifecycle()
 
@@ -203,8 +207,8 @@ fun BugReportScreen(
                 }
             }
 
-            // Empty state before any analysis
-            if (!isAnalyzing && !hasResults) {
+            // Pre-analysis empty state (initial, no analysis attempted yet)
+            if (!isAnalyzing && !analysisFinished) {
                 item {
                     Box(
                         modifier = Modifier
@@ -237,7 +241,131 @@ fun BugReportScreen(
                 }
             }
 
-            // Analysis results
+            // Error card — analysis threw an unhandled exception
+            if (!isAnalyzing && analysisFinished && errorMessage != null) {
+                item {
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.errorContainer
+                        )
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(16.dp),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Filled.Error,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onErrorContainer
+                            )
+                            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                Text(
+                                    text = stringResource(R.string.bugreport_error_title),
+                                    style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = MaterialTheme.colorScheme.onErrorContainer
+                                )
+                                Text(
+                                    text = stringResource(
+                                        R.string.bugreport_error_hint,
+                                        errorMessage ?: ""
+                                    ),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onErrorContainer,
+                                    maxLines = 6,
+                                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Completion confirmation card — analysis succeeded but yielded no triggered findings.
+            // Without this card the screen would revert to the idle empty-state and the user
+            // could not distinguish success-with-no-signals from "spinner crashed silently".
+            if (!isAnalyzing && analysisFinished && errorMessage == null && !hasResults) {
+                item {
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceContainerHighest
+                        )
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(16.dp),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Filled.Info,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                Text(
+                                    text = stringResource(R.string.bugreport_complete_clean_title),
+                                    style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                Text(
+                                    text = if (timeline.isNotEmpty()) {
+                                        stringResource(
+                                            R.string.bugreport_complete_timeline_only,
+                                            timeline.size
+                                        )
+                                    } else {
+                                        stringResource(R.string.bugreport_complete_clean_hint)
+                                    },
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                    }
+                }
+
+                // Timeline-only result: still show the timeline + an export button so
+                // the user can capture forensic events that didn't trip a SIGMA rule.
+                if (timeline.isNotEmpty()) {
+                    item {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.End,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            OutlinedButton(
+                                onClick = { viewModel.exportReport() },
+                                enabled = !exporting
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Filled.Share,
+                                    contentDescription = stringResource(R.string.report_export_cd),
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(stringResource(R.string.report_export_label))
+                            }
+                        }
+                    }
+                    item {
+                        Text(
+                            text = stringResource(R.string.bugreport_timeline_count, timeline.size),
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                    items(timeline.sortedBy { it.timestamp }) { event ->
+                        TimelineEventCard(event = event)
+                    }
+                }
+            }
+
+            // Analysis results — at least one triggered SIGMA finding
             if (!isAnalyzing && hasResults) {
                 // Export button
                 item {
