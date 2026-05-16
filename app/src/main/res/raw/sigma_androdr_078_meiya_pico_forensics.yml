@@ -1,0 +1,45 @@
+title: Massistant Chinese mobile forensic tool installed
+id: androdr-078
+status: experimental
+category: incident
+description: >
+    Detects the Massistant Android mobile forensic client installed on
+    this device. Massistant is developed by Xiamen Meiya Pico Information
+    Co., Ltd. (rebranded SDIC Intelligence) and used by Chinese mainland
+    Public Security Bureaus to extract SMS, contacts, GPS, photos, audio
+    and messaging-app data from physically seized devices. The successor
+    to MFSocket (2019). Documented by Lookout in July 2025. Companion to
+    androdr-051 (Cellebrite UFED) which covers the same threat category
+    (state mobile-forensics tooling) from the workstation/exploit angle.
+author: AndroDR (AI-generated)
+date: 2026/05/16
+references:
+    - https://www.lookout.com/threat-intelligence/article/massistant-chinese-mobile-forensics
+    - https://thehackernews.com/2025/07/chinas-massistant-tool-secretly.html
+tags:
+    - attack.t1533
+    - attack.t1636.004
+    - attack.t1430
+    - campaign.massistant
+logsource:
+    product: androdr
+    service: app_scanner
+detection:
+    selection:
+        package_name|ioc_lookup: package_ioc_db
+    filter_system_app:
+        is_system_app: true
+    condition: selection and not filter_system_app
+level: critical
+display:
+    category: app_risk
+    icon: warning
+    triggered_title: "Massistant Forensic Tool"
+    evidence_type: ioc_match
+    guidance: "CRITICAL -- this device may have been physically accessed by law enforcement using Chinese mobile forensics tooling. The app may auto-uninstall on USB disconnect."
+falsepositives:
+    - Vendor-internal Meiya Pico QA installs (cross-check package_name against the published Massistant identifier).
+remediation:
+    - "Massistant is a mobile forensic client used by Chinese law enforcement to extract data from seized devices."
+    - "If you did not install this app yourself, your device may have been accessed without your knowledge. Seek advice from a digital security trainer or a relevant civil-society organization."
+    - "Uninstall the app: Settings > Apps > find 'APKToolPlus' or 'Massistant' > Uninstall."

@@ -1,0 +1,29 @@
+# Fixture for androdr-078: Massistant Chinese mobile forensic tool installed.
+# Verifies the dedicated labeled wrapper fires on the documented Meiya Pico
+# package and stays silent on system apps + benign user apps.
+#
+# Companion to androdr-051 (Cellebrite UFED); both target state mobile-forensics
+# tooling but from different angles (Cellebrite = unpatched-CVE detector for
+# the workstation's exploits; Massistant = installed-package detector for the
+# client-side forensic agent).
+rule_file: sigma_androdr_078_meiya_pico_forensics.yml
+service: app_scanner
+ioc_stubs:
+  package_ioc_db:
+    - "com.meyapico.massistant"
+    - "com.thetruthspy"  # decoy from another family; rule still keys on IOC DB
+true_positives:
+  - package_name: "com.meyapico.massistant"
+    is_system_app: false
+  - package_name: "com.thetruthspy"  # any package in the IOC DB fires the wrapper
+    is_system_app: false
+true_negatives:
+  # System-app masquerade — filter_system_app suppresses
+  - package_name: "com.meyapico.massistant"
+    is_system_app: true
+  # Benign user app not in IOC DB
+  - package_name: "com.google.android.gm"
+    is_system_app: false
+  # Common settings package not in IOC DB
+  - package_name: "com.android.settings"
+    is_system_app: true

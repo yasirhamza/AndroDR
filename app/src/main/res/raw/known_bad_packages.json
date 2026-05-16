@@ -870,5 +870,327 @@
     "severity": "CRITICAL",
     "description": "Package name used by NSO Group Pegasus spyware to disguise itself as an Android system component.",
     "source": "amnesty-investigations"
+  },
+  {
+    "packageName": "com.serv.services",
+    "name": "NoviSpy",
+    "category": "NATION_STATE_SPYWARE",
+    "severity": "CRITICAL",
+    "description": "NoviSpy spyware \u2014 deployed by Serbian intelligence against journalists"
+  },
+  {
+    "packageName": "com.accesibilityservice",
+    "name": "NoviSpy",
+    "category": "NATION_STATE_SPYWARE",
+    "severity": "CRITICAL",
+    "description": "NoviSpy spyware \u2014 disguised as accessibility service"
+  },
+  {
+    "packageName": "com.li.activity",
+    "name": "NoviSpy",
+    "category": "NATION_STATE_SPYWARE",
+    "severity": "CRITICAL",
+    "description": "NoviSpy spyware variant"
+  },
+  {
+    "packageName": "com.gu.activity",
+    "name": "NoviSpy",
+    "category": "NATION_STATE_SPYWARE",
+    "severity": "CRITICAL",
+    "description": "NoviSpy spyware variant"
+  },
+  {
+    "packageName": "com.google.android.service",
+    "name": "ResidentBat",
+    "category": "NATION_STATE_SPYWARE",
+    "severity": "CRITICAL",
+    "description": "ResidentBat spyware \u2014 targets Belarusian journalists, disguised as Google service"
+  },
+  {
+    "packageName": "com.google.bat",
+    "name": "ResidentBat",
+    "category": "NATION_STATE_SPYWARE",
+    "severity": "CRITICAL",
+    "description": "ResidentBat spyware"
+  },
+  {
+    "packageName": "com.huaweisettingsapp.mkz",
+    "name": "ResidentBat",
+    "category": "NATION_STATE_SPYWARE",
+    "severity": "CRITICAL",
+    "description": "ResidentBat spyware \u2014 disguised as Huawei settings"
+  },
+  {
+    "packageName": "com.linkedln.service",
+    "name": "ResidentBat",
+    "category": "NATION_STATE_SPYWARE",
+    "severity": "CRITICAL",
+    "description": "ResidentBat spyware \u2014 typosquats LinkedIn"
+  },
+  {
+    "packageName": "com.oneplussync.bat",
+    "name": "ResidentBat",
+    "category": "NATION_STATE_SPYWARE",
+    "severity": "CRITICAL",
+    "description": "ResidentBat spyware \u2014 disguised as OnePlus sync"
+  },
+  {
+    "packageName": "cm.google.android.apps.assistant",
+    "name": "ResidentBat",
+    "category": "NATION_STATE_SPYWARE",
+    "severity": "CRITICAL",
+    "description": "ResidentBat spyware \u2014 typosquats Google (cm. not com.)"
+  },
+  {
+    "packageName": "com.android.framework.safety",
+    "name": "ResidentBat",
+    "category": "NATION_STATE_SPYWARE",
+    "severity": "CRITICAL",
+    "description": "ResidentBat spyware \u2014 disguised as Android framework"
+  },
+  {
+    "packageName": "com.hihonor.core.service",
+    "name": "ResidentBat",
+    "category": "NATION_STATE_SPYWARE",
+    "severity": "CRITICAL",
+    "description": "ResidentBat spyware \u2014 disguised as Honor service"
+  },
+  {
+    "packageName": "com.client.appA",
+    "name": "Cellebrite",
+    "category": "FORENSIC_TOOL",
+    "severity": "HIGH",
+    "description": "Cellebrite UFED agent \u2014 presence indicates physical device extraction occurred"
+  },
+  {
+    "packageName": "org.lgvvfj.pluscqpuj",
+    "name": "Mirax Bot",
+    "category": "MALWARE",
+    "severity": "CRITICAL",
+    "description": "Mirax Bot Android banking RAT \u2014 masquerades as video player (Meta-ads distribution, 2025-12+)"
+  },
+  {
+    "packageName": "org.yjeiwd.plusdc71",
+    "name": "Mirax Bot",
+    "category": "MALWARE",
+    "severity": "CRITICAL",
+    "description": "Mirax Bot Android banking RAT variant"
+  },
+  {
+    "packageName": "org.dawme.secure5ny",
+    "name": "Mirax Bot",
+    "category": "MALWARE",
+    "severity": "CRITICAL",
+    "description": "Mirax Bot Android banking RAT variant"
+  },
+  {
+    "packageName": "org.azgaw.managergst1d",
+    "name": "Mirax Bot",
+    "category": "MALWARE",
+    "severity": "CRITICAL",
+    "description": "Mirax Bot Android banking RAT variant"
+  },
+  {
+    "packageName": "com.oblivion.client",
+    "name": "Oblivion RAT",
+    "category": "SPYWARE",
+    "severity": "CRITICAL",
+    "description": "Oblivion RAT Android MaaS \u2014 masquerades as Google Play update (2026-03)"
+  },
+  {
+    "packageName": "com.oblivion.dropper",
+    "name": "Oblivion RAT",
+    "category": "SPYWARE",
+    "severity": "CRITICAL",
+    "description": "Oblivion RAT dropper APK"
+  },
+  {
+    "packageName": "com.yandexxxx.update",
+    "name": "Oblivion RAT",
+    "category": "SPYWARE",
+    "severity": "CRITICAL",
+    "description": "Oblivion RAT \u2014 typosquats Yandex update"
+  },
+  {
+    "packageName": "ru.y34tuy.t8595",
+    "name": "TaxiSpy",
+    "category": "MALWARE",
+    "severity": "CRITICAL",
+    "description": "TaxiSpy Android banking RAT \u2014 hijacks default SMS handler, Firebase C2 (Russian banking targets, 2026-03)"
+  },
+  {
+    "packageName": "net.ustexas.myavlive",
+    "name": "PromptSpy",
+    "category": "MALWARE",
+    "severity": "CRITICAL",
+    "description": "PromptSpy \u2014 first Android malware to abuse Google Gemini at runtime; JPMorgan Chase impersonation in Argentina (2026-03)"
+  },
+  {
+    "packageName": "calldetaila.ndcallhisto.rytogetan.ynumber",
+    "name": "CallPhantom",
+    "category": "MALWARE",
+    "severity": "CRITICAL",
+    "description": "CallPhantom premium-SMS fraud app (top variant, 3M+ downloads)"
+  },
+  {
+    "packageName": "com.pixelxinnovation.manager",
+    "name": "CallPhantom",
+    "category": "MALWARE",
+    "severity": "CRITICAL",
+    "description": "CallPhantom premium-SMS fraud app"
+  },
+  {
+    "packageName": "sc.call.ofany.mobiledetail",
+    "name": "CallPhantom",
+    "category": "MALWARE",
+    "severity": "CRITICAL",
+    "description": "CallPhantom premium-SMS fraud app"
+  },
+  {
+    "packageName": "com.cddhaduk.callerid.block.contact",
+    "name": "CallPhantom",
+    "category": "MALWARE",
+    "severity": "CRITICAL",
+    "description": "CallPhantom premium-SMS fraud app"
+  },
+  {
+    "packageName": "com.basehistory.historydownloading",
+    "name": "CallPhantom",
+    "category": "MALWARE",
+    "severity": "CRITICAL",
+    "description": "CallPhantom premium-SMS fraud app"
+  },
+  {
+    "packageName": "com.call.of.any.number",
+    "name": "CallPhantom",
+    "category": "MALWARE",
+    "severity": "CRITICAL",
+    "description": "CallPhantom premium-SMS fraud app"
+  },
+  {
+    "packageName": "com.rajni.callhistory",
+    "name": "CallPhantom",
+    "category": "MALWARE",
+    "severity": "CRITICAL",
+    "description": "CallPhantom premium-SMS fraud app"
+  },
+  {
+    "packageName": "com.callhistory.calldetails.callerids.callerhistory.callhostoryanynumber.getcall.history.callhistorymanager",
+    "name": "CallPhantom",
+    "category": "MALWARE",
+    "severity": "CRITICAL",
+    "description": "CallPhantom premium-SMS fraud app"
+  },
+  {
+    "packageName": "com.callinformative.instantcallhistory.callhistorybluethem.callinfo",
+    "name": "CallPhantom",
+    "category": "MALWARE",
+    "severity": "CRITICAL",
+    "description": "CallPhantom premium-SMS fraud app"
+  },
+  {
+    "packageName": "com.call.detail.caller.history",
+    "name": "CallPhantom",
+    "category": "MALWARE",
+    "severity": "CRITICAL",
+    "description": "CallPhantom premium-SMS fraud app"
+  },
+  {
+    "packageName": "com.anycallinformation.datadetailswho.callinfo.numberfinder",
+    "name": "CallPhantom",
+    "category": "MALWARE",
+    "severity": "CRITICAL",
+    "description": "CallPhantom premium-SMS fraud app"
+  },
+  {
+    "packageName": "com.callhistory.callhistoryyourgf",
+    "name": "CallPhantom",
+    "category": "MALWARE",
+    "severity": "CRITICAL",
+    "description": "CallPhantom premium-SMS fraud app"
+  },
+  {
+    "packageName": "com.calldetails.smshistory.callhistoryofanynumber",
+    "name": "CallPhantom",
+    "category": "MALWARE",
+    "severity": "CRITICAL",
+    "description": "CallPhantom premium-SMS fraud app"
+  },
+  {
+    "packageName": "com.callhistory.anynumber.chapfvor.history",
+    "name": "CallPhantom",
+    "category": "MALWARE",
+    "severity": "CRITICAL",
+    "description": "CallPhantom premium-SMS fraud app"
+  },
+  {
+    "packageName": "com.callhistory.callhistoryany.call",
+    "name": "CallPhantom",
+    "category": "MALWARE",
+    "severity": "CRITICAL",
+    "description": "CallPhantom premium-SMS fraud app"
+  },
+  {
+    "packageName": "com.getanynumberofcallhistory.callhistoryofanynumber.findcalldetailsofanynumber",
+    "name": "CallPhantom",
+    "category": "MALWARE",
+    "severity": "CRITICAL",
+    "description": "CallPhantom premium-SMS fraud app"
+  },
+  {
+    "packageName": "com.easyranktools.callhistoryforanynumber",
+    "name": "CallPhantom",
+    "category": "MALWARE",
+    "severity": "CRITICAL",
+    "description": "CallPhantom premium-SMS fraud app"
+  },
+  {
+    "packageName": "com.sbpinfotech.findlocationofanynumber",
+    "name": "CallPhantom",
+    "category": "MALWARE",
+    "severity": "CRITICAL",
+    "description": "CallPhantom premium-SMS fraud app"
+  },
+  {
+    "packageName": "callhistoryeditor.callhistory.numberdetails.calleridlocator",
+    "name": "CallPhantom",
+    "category": "MALWARE",
+    "severity": "CRITICAL",
+    "description": "CallPhantom premium-SMS fraud app"
+  },
+  {
+    "packageName": "com.all_historydownload.anynumber.callhistorybackup",
+    "name": "CallPhantom",
+    "category": "MALWARE",
+    "severity": "CRITICAL",
+    "description": "CallPhantom premium-SMS fraud app"
+  },
+  {
+    "packageName": "com.earth.earth_vpn",
+    "name": "DCHSpy",
+    "category": "NATION_STATE_SPYWARE",
+    "severity": "CRITICAL",
+    "description": "DCHSpy MuddyWater Earth VPN lure"
+  },
+  {
+    "packageName": "com.comodoapp.comodovpn",
+    "name": "DCHSpy",
+    "category": "NATION_STATE_SPYWARE",
+    "severity": "CRITICAL",
+    "description": "DCHSpy MuddyWater Comodo VPN lure"
+  },
+  {
+    "packageName": "com.hv.hide_vpn",
+    "name": "DCHSpy",
+    "category": "NATION_STATE_SPYWARE",
+    "severity": "CRITICAL",
+    "description": "DCHSpy MuddyWater Hide VPN lure"
+  },
+  {
+    "packageName": "com.meyapico.massistant",
+    "name": "Massistant",
+    "category": "FORENSIC_TOOL",
+    "severity": "CRITICAL",
+    "description": "Massistant Chinese mobile forensics by Meiya Pico"
   }
 ]

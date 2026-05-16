@@ -1,0 +1,22 @@
+# Fixture for androdr-002: APK signed with known bad certificate.
+# Net-new fixture for the generic app_scanner cert_hash_ioc rule, populated
+# with the BITTER ToSpy developer signing-cert SHA-1 from the 2026-05 harvest.
+# Uses cert_hash_sha1 because the Android ecosystem convention (and the BITTER
+# IOC publication) indexes cert hashes by SHA-1 from `apksigner --print-certs`.
+rule_file: sigma_androdr_002_cert_hash_ioc.yml
+service: app_scanner
+ioc_stubs:
+  cert_hash_ioc_db:
+    - "de90f6899eec315f4ed05c2aa052d4fe8b71125a"   # BITTER ToSpy dev cert (SHA-1)
+    - "3ac97735164824657b683e805133b1274b2dedabf9fdd6aa9aca31089d501e64"  # NoviSpy SHA-256 (historical)
+true_positives:
+  - cert_hash_sha1: "de90f6899eec315f4ed05c2aa052d4fe8b71125a"
+    is_system_app: false
+  - cert_hash: "3ac97735164824657b683e805133b1274b2dedabf9fdd6aa9aca31089d501e64"
+    is_system_app: false
+true_negatives:
+  # system-app masquerade — suppressed if rule has filter_system_app, otherwise NA
+  - cert_hash_sha1: "0000000000000000000000000000000000000000"
+    is_system_app: false
+  - cert_hash: "0000000000000000000000000000000000000000000000000000000000000000"
+    is_system_app: false

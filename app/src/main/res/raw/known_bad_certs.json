@@ -46,5 +46,110 @@
     "severity": "CRITICAL",
     "description": "Signing certificate associated with trojanized repackages of legitimate apps. Apps signed with this certificate are modified copies distributed outside official stores.",
     "source": "malwarebazaar"
+  },
+  {
+    "certHash": "3ac97735164824657b683e805133b1274b2dedabf9fdd6aa9aca31089d501e64",
+    "familyName": "NoviSpy",
+    "category": "NATION_STATE_SPYWARE",
+    "severity": "CRITICAL",
+    "description": "NoviSpy signing certificate"
+  },
+  {
+    "certHash": "35926e966186c8f2deec66864389d73989c75c85cb6668da2f455db6fe67e91f",
+    "familyName": "NoviSpy",
+    "category": "NATION_STATE_SPYWARE",
+    "severity": "CRITICAL",
+    "description": "NoviSpy signing certificate variant"
+  },
+  {
+    "certHash": "38693e1ea0fbf39d28f66b1714fdeed4e23b3973276481097d2d66e87f3647eb",
+    "familyName": "NoviSpy",
+    "category": "NATION_STATE_SPYWARE",
+    "severity": "CRITICAL",
+    "description": "NoviSpy signing certificate variant"
+  },
+  {
+    "certHash": "18afc5c6bfaee504a26291f6bf3e6f823dbedd54bba0c4acac2e7c2414b3e24d",
+    "familyName": "ResidentBat",
+    "category": "NATION_STATE_SPYWARE",
+    "severity": "CRITICAL",
+    "description": "ResidentBat signing certificate"
+  },
+  {
+    "certHash": "c1884e617348ebbdfe7cfe5fc99945b37296d6ebc6059bb74fbaeea277d32941",
+    "familyName": "ResidentBat",
+    "category": "NATION_STATE_SPYWARE",
+    "severity": "CRITICAL",
+    "description": "ResidentBat signing certificate"
+  },
+  {
+    "certHash": "e5016f3cfb937d502dabedc32ca3bdef3bbcce032fb3b1bff3b9c6482895f4fd",
+    "familyName": "ResidentBat",
+    "category": "NATION_STATE_SPYWARE",
+    "severity": "CRITICAL",
+    "description": "ResidentBat signing certificate"
+  },
+  {
+    "certHash": "d12616542268d32329f1c4357b5d5a57e954e13d2338d27bb8439794291b8c6d",
+    "familyName": "ResidentBat",
+    "category": "NATION_STATE_SPYWARE",
+    "severity": "CRITICAL",
+    "description": "ResidentBat signing certificate"
+  },
+  {
+    "certHash": "3e9f1192e33cb851b48479629c93d29770a4f76af00f1e42a3c6e7f97db62c79",
+    "familyName": "ResidentBat",
+    "category": "NATION_STATE_SPYWARE",
+    "severity": "CRITICAL",
+    "description": "ResidentBat signing certificate"
+  },
+  {
+    "certHash": "6782039a81a85264acdc6af0973b225ada6009f76faae7f948a1de040bb32f0c",
+    "familyName": "ResidentBat",
+    "category": "NATION_STATE_SPYWARE",
+    "severity": "CRITICAL",
+    "description": "ResidentBat signing certificate"
+  },
+  {
+    "certHash": "a6a067b0d899fb514b7b4597d4fe16fcd4d7e5c361f6c84b3d45ed7e394036c7",
+    "familyName": "ResidentBat",
+    "category": "NATION_STATE_SPYWARE",
+    "severity": "CRITICAL",
+    "description": "ResidentBat signing certificate"
+  },
+  {
+    "certHash": "6d6278ffc80ad9dd1b1c6b445847ce108f3ea5ce349f232689e9b8c1fd10801e",
+    "familyName": "ResidentBat",
+    "category": "NATION_STATE_SPYWARE",
+    "severity": "CRITICAL",
+    "description": "ResidentBat signing certificate"
+  },
+  {
+    "certHash": "fc5a4ad10f0686aa8eae2c08ba13cc451cbd6037",
+    "familyName": "EasyPhoneTrack",
+    "category": "STALKERWARE",
+    "severity": "CRITICAL",
+    "description": "EasyPhoneTrack stalkerware signing certificate"
+  },
+  {
+    "certHash": "892c4f172ad3262ec398b40bbf8130c6421040a1",
+    "familyName": "EasyPhoneTrack",
+    "category": "STALKERWARE",
+    "severity": "CRITICAL",
+    "description": "EasyPhoneTrack stalkerware signing certificate"
+  },
+  {
+    "certHash": "1ce722f401c3fa8fe498ff824669c0007a200aa9",
+    "familyName": "MobileTrackerFree",
+    "category": "STALKERWARE",
+    "severity": "CRITICAL",
+    "description": "MobileTrackerFree stalkerware signing certificate"
+  },
+  {
+    "certHash": "de90f6899eec315f4ed05c2aa052d4fe8b71125a",
+    "familyName": "BITTER",
+    "category": "NATION_STATE_SPYWARE",
+    "severity": "CRITICAL",
+    "description": "BITTER ToSpy developer signing certificate (SHA-1)"
   }
 ]
