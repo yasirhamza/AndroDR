@@ -34,36 +34,68 @@ class ThreatFoxDomainFeed : DomainIocFeed {
     /**
      * Parses the ThreatFox recent JSON export.
      *
-     * The response structure is:
+     * Two schemas are tolerated (AndroDR #174 — abuse.ch changed the live
+     * /export/json/recent/ shape some time before 2026-05-15):
+     *
+     * **Current schema (2026-05-15+):** a flat dict keyed by numeric ID strings,
+     * with `ioc_value` as the IOC field and `tags` as a comma-separated string.
      * ```json
      * {
-     *   "query_status": "ok",
-     *   "data": {
-     *     "2024-01-01": [ { "ioc_type": "domain", "ioc": "...", "malware": "...", "tags": [...] }, ... ],
-     *     ...
-     *   }
+     *   "1814938": [ { "ioc_type": "domain", "ioc_value": "...", "malware": "...", "tags": "android,banking" } ],
+     *   ...
      * }
      * ```
      *
-     * Filters for entries where `ioc_type` is `"domain"` and the entry is Android-related
-     * (tags contain "android"/"Android" or malware field contains "android"/"apk" case-insensitive).
+     * **Legacy schema:** date-keyed dict under a `data` wrapper, with `ioc` as
+     * the IOC field and `tags` as a JSON array. Tolerated in case abuse.ch
+     * reverts; not expected to be served today.
+     * ```json
+     * { "query_status": "ok", "data": { "2024-01-01": [ { "ioc_type": "domain", "ioc": "...", "tags": [...] } ] } }
+     * ```
+     *
+     * Filters for entries where `ioc_type` is `"domain"` and the entry is
+     * Android-related (see [isAndroidRelated]).
      */
-    @Suppress("TooGenericExceptionCaught", "NestedBlockDepth")
+    @Suppress("TooGenericExceptionCaught", "NestedBlockDepth", "ReturnCount")
     internal fun parseRecentJson(json: String, fetchedAt: Long): List<DomainIocEntry> {
         return try {
             val root = JSONObject(json)
-            val data = root.optJSONObject("data") ?: return emptyList()
+            // Schema detection. Two known shapes are valid:
+            //   - Legacy: root has a "data" key holding a JSONObject of arrays.
+            //   - Current: top-level is itself a JSONObject of arrays (numeric-id keys).
+            // Anything else (e.g., data-as-string, list at root) is unrecognized
+            // and must NOT silently degrade to zero — the silent-zero failure
+            // mode is exactly what caused #174.
+            val entriesContainer: JSONObject = when {
+                root.optJSONObject("data") != null -> root.optJSONObject("data")!!
+                hasArrayValuedKeys(root) -> root
+                else -> {
+                    Log.w(
+                        TAG,
+                        "parseRecentJson: unrecognized schema (no `data` object, " +
+                            "no array-valued top-level keys) — returning empty list. " +
+                            "Top-level keys: ${root.keys().asSequence().take(KEY_PREVIEW).toList()}"
+                    )
+                    return emptyList()
+                }
+            }
             val results = mutableListOf<DomainIocEntry>()
+            var entriesSeen = 0
 
-            for (dateKey in data.keys()) {
-                val dayEntries = data.optJSONArray(dateKey) ?: continue
+            for (key in entriesContainer.keys()) {
+                val dayEntries = entriesContainer.optJSONArray(key) ?: continue
+                entriesSeen += dayEntries.length()
                 @Suppress("LoopWithTooManyJumpStatements")
                 for (i in 0 until dayEntries.length()) {
                     val entry = dayEntries.optJSONObject(i) ?: continue
                     if (entry.optString("ioc_type") != "domain") continue
                     if (!isAndroidRelated(entry)) continue
 
-                    val rawIoc = entry.optString("ioc").trim()
+                    // Field renamed `ioc` -> `ioc_value` in the current schema;
+                    // tolerate both for backward-compat.
+                    val rawIoc = entry.optString("ioc_value")
+                        .ifEmpty { entry.optString("ioc") }
+                        .trim()
                     val domain = stripProtocol(rawIoc).lowercase()
                     if (domain.isEmpty()) continue
 
@@ -79,6 +111,14 @@ class ThreatFoxDomainFeed : DomainIocFeed {
                     )
                 }
             }
+            // M2 from review: log non-zero counts so a developer can tell
+            // "feed worked, zero Android today" apart from "feed silently
+            // broke again" without re-reading the upstream API.
+            Log.i(
+                TAG,
+                "parseRecentJson: ${results.size} Android domain(s) extracted " +
+                    "from $entriesSeen ThreatFox IOC entries"
+            )
             results
         } catch (e: Exception) {
             Log.w(TAG, "parseRecentJson failed: ${e.message}")
@@ -87,15 +127,34 @@ class ThreatFoxDomainFeed : DomainIocFeed {
     }
 
     /**
-     * Checks if a ThreatFox entry is Android-related by inspecting tags and malware fields.
+     * Returns true if the JSONObject has at least one key whose value is a
+     * JSONArray. Used as a schema-shape heuristic for the current ThreatFox
+     * response (numeric-id keys mapping to single-element arrays).
+     */
+    private fun hasArrayValuedKeys(obj: JSONObject): Boolean {
+        for (key in obj.keys()) {
+            if (obj.optJSONArray(key) != null) return true
+        }
+        return false
+    }
+
+    /**
+     * Checks if a ThreatFox entry is Android-related by inspecting tags and
+     * malware fields.
+     *
+     * In the current ThreatFox schema (AndroDR #174) `tags` is a comma-separated
+     * string. The legacy shape was a JSON array. Both are handled.
      */
     internal fun isAndroidRelated(entry: JSONObject): Boolean {
-        val tags = entry.optJSONArray("tags")
-        if (tags != null) {
-            for (i in 0 until tags.length()) {
-                val tag = tags.optString(i, "")
+        val tagsArray = entry.optJSONArray("tags")
+        if (tagsArray != null) {
+            for (i in 0 until tagsArray.length()) {
+                val tag = tagsArray.optString(i, "")
                 if (tag.contains("android", ignoreCase = true)) return true
             }
+        } else {
+            val tagsString = entry.optString("tags", "")
+            if (tagsString.contains("android", ignoreCase = true)) return true
         }
         val malware = entry.optString("malware", "")
         return malware.contains("android", ignoreCase = true) ||
@@ -142,5 +201,6 @@ class ThreatFoxDomainFeed : DomainIocFeed {
         private const val RECENT_URL = "https://threatfox.abuse.ch/export/json/recent/"
         private const val TIMEOUT_MS = 15_000
         private const val USER_AGENT = "AndroDR/1.0"
+        private const val KEY_PREVIEW = 5
     }
 }
