@@ -1,0 +1,29 @@
+# Fixture for androdr-003: DNS query to known C2 domain.
+# Net-new fixture for the generic dns_monitor IOC-lookup rule, populated with
+# 2026-05 discover-harvest C2 domains spanning all four covered threats:
+#   NGate (NFC payment relay)
+#   BITTER / ProSpy / ToSpy (MENA hack-for-hire)
+#   DCHSpy / MuddyWater (Iranian VPN-impersonating spyware)
+#   CallPhantom (Firebase RTDB used as lightweight C2)
+# Plus a long-standing stalkerware base domain for backwards compatibility.
+rule_file: sigma_androdr_003_domain_ioc.yml
+service: dns_monitor
+ioc_stubs:
+  domain_ioc_db:
+    - "thetruthspy.com"                              # historical stalkerware
+    - "protecaocartao.online"                        # NGate distribution + fake Play
+    - "noblico.net"                                  # BITTER ProSpy/ToSpy C2
+    - "comodo-vpn.com"                               # DCHSpy MuddyWater base C2
+    - "call-history-7cda4-default-rtdb.firebaseio.com"  # CallPhantom Firebase RTDB
+true_positives:
+  - domain: "thetruthspy.com"
+  - domain: "protecaocartao.online"
+  - domain: "noblico.net"
+  - domain: "comodo-vpn.com"
+  - domain: "call-history-7cda4-default-rtdb.firebaseio.com"
+true_negatives:
+  # benign domains not in IOC DB:
+  - domain: "www.google.com"
+  - domain: "github.com"
+  # near-collision: legitimate Firebase RTDB hostname not in our stub:
+  - domain: "my-app-prod-default-rtdb.firebaseio.com"

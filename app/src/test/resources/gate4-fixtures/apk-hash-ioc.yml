@@ -1,0 +1,19 @@
+# Fixture for androdr-004: APK file hash matches known malware.
+# Net-new fixture for the generic app_scanner apk_hash_ioc rule, populated with
+# 2026-05 discover-harvest APK SHA-256 hashes from Mirax/BITTER/DCHSpy/EagleMsgSpy.
+rule_file: sigma_androdr_004_apk_hash_ioc.yml
+service: app_scanner
+ioc_stubs:
+  apk_hash_ioc_db:
+    - "53de68ebec281e7233bffc52199b22ec2dba463eec3b29d4c399838e18daecbf"  # Mirax StreamTV
+    - "e18683bc061e888f158c9a3a7478615df2d7daae1952a072d7f549cd1c1e326a"  # BITTER ProSpy/ToSpy
+    - "aa656a243d2008327e06fd5bbad919eea99aa271132dbaeabb146e22effbfd1b"  # DCHSpy Earth VPN
+    - "e5b656166c612dd8d6e6d7de7fb89b47157703510052539e5eb7e8180fde4552"  # EagleMsgSpy
+true_positives:
+  - apk_hash: "53de68ebec281e7233bffc52199b22ec2dba463eec3b29d4c399838e18daecbf"
+  - apk_hash: "e18683bc061e888f158c9a3a7478615df2d7daae1952a072d7f549cd1c1e326a"
+  - apk_hash: "aa656a243d2008327e06fd5bbad919eea99aa271132dbaeabb146e22effbfd1b"
+  - apk_hash: "e5b656166c612dd8d6e6d7de7fb89b47157703510052539e5eb7e8180fde4552"
+true_negatives:
+  # SHA-256 of "hello world" — definitively not malware:
+  - apk_hash: "b94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9"

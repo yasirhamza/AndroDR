@@ -1,15 +1,38 @@
-# Fixture for androdr-001: package name IOC lookup
+# Fixture for androdr-001: package name IOC lookup.
+# Mixes long-standing stalkerware TPs with 2026-05 discover-harvest TPs
+# (Mirax RAT, CallPhantom Google Play fraud, DCHSpy MuddyWater VPN-lures,
+# Massistant Meiya Pico forensic tool) — ensures harvest IOCs route into the
+# generic ioc_lookup rule alongside historical samples.
 rule_file: sigma_androdr_001_package_ioc.yml
 service: app_scanner
 ioc_stubs:
   package_ioc_db:
     - "com.thetruthspy"
     - "com.flexispy.app"
+    # 2026-05 harvest sample TPs:
+    - "org.lgvvfj.pluscqpuj"                                # Mirax StreamTV dropper
+    - "calldetaila.ndcallhisto.rytogetan.ynumber"           # CallPhantom top variant (3M+ downloads)
+    - "com.earth.earth_vpn"                                 # DCHSpy MuddyWater Earth VPN lure
+    - "com.meyapico.massistant"                             # Massistant
 true_positives:
   - package_name: "com.thetruthspy"
     is_system_app: false
+  - package_name: "org.lgvvfj.pluscqpuj"
+    is_system_app: false
+  - package_name: "calldetaila.ndcallhisto.rytogetan.ynumber"
+    is_system_app: false
+  - package_name: "com.earth.earth_vpn"
+    is_system_app: false
+  - package_name: "com.meyapico.massistant"
+    is_system_app: false
 true_negatives:
+  # system-app masquerade — filter_system_app suppresses all of these:
   - package_name: "com.thetruthspy"
     is_system_app: true
+  - package_name: "com.meyapico.massistant"
+    is_system_app: true
+  # benign user apps not in IOC DB:
   - package_name: "com.google.android.gm"
+    is_system_app: false
+  - package_name: "org.mozilla.firefox"
     is_system_app: false
