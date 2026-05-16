@@ -30,14 +30,17 @@ URL hostname bindings are locked by `test_discover_source_urls.py`. DO NOT edit 
 |---|---|
 | `securelist` | `https://securelist.com/feed/` |
 | `welivesecurity` | `https://www.welivesecurity.com/en/feed/` |
-| `google-tag` | `https://blog.google/threat-analysis-group/rss/` |
+| `google-tag` | `https://blog.google/security/rss/` |
+
+> Note: source-id `google-tag` historically pointed at `https://blog.google/threat-analysis-group/rss/`, which Google retired (returns 404). The id is retained for feed-state cursor continuity, but the feed now covers Google's broader Security blog (which still includes TAG posts among other Google security/privacy content). Per-post LLM extraction handles the broader scope.
+
 
 ### Web path (WebFetch + synthesized-RSS)
 
 | Source ID | Index URL |
 |---|---|
 | `zimperium` | `https://www.zimperium.com/blog/` |
-| `lookout` | `https://www.lookout.com/threat-intelligence/blog` |
+| `lookout` | `https://www.lookout.com/threat-intelligence` |
 
 ## Process
 
