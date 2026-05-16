@@ -27,7 +27,7 @@ Two new fields on `AppTelemetry`, both list-type:
 
 | Field (Kotlin)               | Wire name in SIGMA              | Type            | Description                                                                                       |
 |------------------------------|----------------------------------|-----------------|---------------------------------------------------------------------------------------------------|
-| `embeddedComponentClasses`   | `embedded_component_class`       | `List<String>`  | Concatenation of `.name` from `PackageInfo.services`, `receivers`, `activities`, `providers`. Each entry is a fully-qualified class name (e.g., `com.outlogic.collector.GeoSyncService`). Deduplicated. Capped at `MAX_COMPONENTS_PER_APP=256` per app to bound memory. |
+| `embeddedComponentClasses`   | `embedded_component_class`       | `List<String>`  | Concatenation of `.name` from `PackageInfo.services`, `receivers`, `activities`, `providers`. Each entry is a fully-qualified class name (e.g., `com.outlogic.collector.GeoSyncService`). Deduplicated. Capped at `MAX_COMPONENTS_PER_APP=1024` per app to bound memory. |
 | `embeddedNativeLibs`         | `embedded_native_lib`            | `List<String>`  | Filenames of `lib/*/*.so` entries inside the APK. ABI prefix stripped — we report `libfoo.so`, not `lib/arm64-v8a/libfoo.so`. Deduplicated across ABIs. Capped at `MAX_NATIVE_LIBS_PER_APP=128`.                                  |
 
 Both fields default to `emptyList()` so the model is fully backward-compatible (no migration of in-place code that constructs `AppTelemetry`).
@@ -65,10 +65,26 @@ Both functions are `internal` so the existing `AppScannerTest` source-set patter
 
 ### Performance budget
 
-- **Manifest components:** PackageInfo is already fetched today for permissions; reading `.services[i].name` is O(1) per component. Negligible cost.
-- **Native libs:** opening a ZipFile is ~5-15 ms on a Z Fold 2; iterating the central directory is another ~1-5 ms; we never decompress. Worst case 20 ms per app × 500 apps = **10 s added** to a cold full scan. Acceptable (current scan ~14 s; new ceiling ~24 s).
+Expressed per-app so the budget scales correctly across the wide spread of real-device app counts (median ~80-150 apps; high-risk users ~50-150; power users ~300-500; the project's existing `ScanOrchestrator.kt` comment anchors at ~500 as the conservative ceiling):
+
+- **Manifest components:** PackageInfo is already fetched today for permissions; reading `.services[i].name` is O(1) per component. **Negligible** added cost — sub-millisecond per app.
+- **Native libs:** opening a ZipFile is ~5-15 ms on a Z Fold 2; iterating the central directory is another ~1-5 ms; we never decompress. Adds **~20 ms per app worst case**, often less for tiny apps.
 - We open the ZipFile once per app, NOT per-rule. Persisted output is reused at rule-evaluation time.
-- The dex-string path was rejected on this exact budget; revisit only if rule-coverage gaps demand it.
+
+| Device profile | Apps | Added scan time |
+|---|---|---|
+| Test phone (constrained) | <50 | <1 s |
+| Median user | 80-150 | 1.6-3 s |
+| Power user | 300-500 | 6-10 s |
+| Hard ceiling | 500 (per existing comment) | ~10 s |
+
+Current full scan baseline on a 500-app device: ~14 s. New ceiling after this change: ~24 s. Median users will see scan time go from ~5 s to ~7 s.
+
+The dex-string path was rejected on this exact budget; revisit only if rule-coverage gaps demand it.
+
+### On-device validation against a test phone
+
+The Samsung Z Fold 2 (R3CR300WRRH) attached to the dev VM is a *test* phone with fewer installed apps than a real-user phone. Use it to verify correctness (`embeddedComponentClasses` non-empty for the launcher activity, native libs non-empty for at least Google Play Services) — NOT as a stress test of the perf budget. Stress testing against a 500-app device is out of scope for this spec's acceptance criteria.
 
 ### Decoupling guarantee
 
