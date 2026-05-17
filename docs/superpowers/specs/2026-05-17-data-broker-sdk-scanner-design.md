@@ -28,7 +28,7 @@ Two new fields on `AppTelemetry`, both list-type:
 | Field (Kotlin)               | Wire name in SIGMA              | Type            | Description                                                                                       |
 |------------------------------|----------------------------------|-----------------|---------------------------------------------------------------------------------------------------|
 | `embeddedComponentClasses`   | `embedded_component_class`       | `List<String>`  | Concatenation of `.name` from `PackageInfo.services`, `receivers`, `activities`, `providers`. Each entry is a fully-qualified class name (e.g., `com.outlogic.collector.GeoSyncService`). Deduplicated. Capped at `MAX_COMPONENTS_PER_APP=1024` per app to bound memory. |
-| `embeddedNativeLibs`         | `embedded_native_lib`            | `List<String>`  | Filenames of `lib/*/*.so` entries inside the APK. ABI prefix stripped — we report `libfoo.so`, not `lib/arm64-v8a/libfoo.so`. Deduplicated across ABIs. Capped at `MAX_NATIVE_LIBS_PER_APP=128`.                                  |
+| `embeddedNativeLibs`         | `embedded_native_lib`            | `List<String>`  | Filenames of `lib/*/*.so` entries inside the APK. ABI prefix stripped — we report `libfoo.so`, not `lib/arm64-v8a/libfoo.so`. Deduplicated across ABIs. Capped at `MAX_NATIVE_LIBS_PER_APP=256`.                                  |
 
 Both fields default to `emptyList()` so the model is fully backward-compatible (no migration of in-place code that constructs `AppTelemetry`).
 
