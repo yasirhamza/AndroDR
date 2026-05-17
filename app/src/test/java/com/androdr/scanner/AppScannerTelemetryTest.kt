@@ -336,6 +336,43 @@ class AppScannerTelemetryTest {
         assertEquals("com.example.A1", result.first())
     }
 
+    @Test
+    fun `extractComponentClassNames falls back to second PackageInfo when primary has null services and receivers`() {
+        // Primary mimics a Binder-truncated PackageInfo: services + receivers nulled
+        // by the framework's parcel-size limit. Activities + providers untouched.
+        val primary = PackageInfo().apply {
+            services = null
+            receivers = null
+            activities = arrayOf(
+                ActivityInfo().apply { name = "com.example.broker.MainActivity" }
+            )
+            providers = null
+        }
+        // Fallback mimics the per-package re-fetch: services + receivers populated,
+        // activities + providers null (the re-fetch flag set is GET_SERVICES | GET_RECEIVERS only).
+        val fallback = PackageInfo().apply {
+            services = arrayOf(
+                ServiceInfo().apply { name = "com.outlogic.collector.GeoSyncService" }
+            )
+            receivers = arrayOf(
+                ActivityInfo().apply { name = "com.outlogic.collector.WakeReceiver" }
+            )
+            activities = null
+            providers = null
+        }
+
+        val result = scanner.extractComponentClassNames(primary, fallback)
+
+        assertEquals(
+            listOf(
+                "com.example.broker.MainActivity",
+                "com.outlogic.collector.GeoSyncService",
+                "com.outlogic.collector.WakeReceiver"
+            ),
+            result
+        )
+    }
+
     // ── 10. extractNativeLibFileNames ────────────────────────────────────────
 
     @Test

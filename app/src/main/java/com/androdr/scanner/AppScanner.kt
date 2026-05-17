@@ -258,7 +258,7 @@ class AppScanner @Inject constructor(
         // Launcher activity check (API call — not derivable from manifest alone)
         val hasLauncherActivity = pm.getLaunchIntentForPackage(packageName) != null
 
-        val embeddedComponentClasses = extractComponentClassNames(pkg)
+        val embeddedComponentClasses = extractComponentClassNames(pkg, pkgDetail)
         val embeddedNativeLibs = extractNativeLibFileNames(appInfo)
 
         return AppTelemetry(
@@ -300,12 +300,19 @@ class AppScanner @Inject constructor(
      * small manifest perturbations (a manifest gaining one component
      * doesn't shift the survival window arbitrarily).
      */
-    internal fun extractComponentClassNames(packageInfo: PackageInfo): List<String> {
+    internal fun extractComponentClassNames(
+        primary: PackageInfo,
+        fallback: PackageInfo? = null,
+    ): List<String> {
         val out = LinkedHashSet<String>()
-        packageInfo.services?.forEach { it.name?.takeIf { n -> n.isNotBlank() }?.let { n -> out.add(n) } }
-        packageInfo.receivers?.forEach { it.name?.takeIf { n -> n.isNotBlank() }?.let { n -> out.add(n) } }
-        packageInfo.activities?.forEach { it.name?.takeIf { n -> n.isNotBlank() }?.let { n -> out.add(n) } }
-        packageInfo.providers?.forEach { it.name?.takeIf { n -> n.isNotBlank() }?.let { n -> out.add(n) } }
+        val services   = primary.services   ?: fallback?.services
+        val receivers  = primary.receivers  ?: fallback?.receivers
+        val activities = primary.activities ?: fallback?.activities
+        val providers  = primary.providers  ?: fallback?.providers
+        services?.forEach   { it.name?.takeIf { n -> n.isNotBlank() }?.let { n -> out.add(n) } }
+        receivers?.forEach  { it.name?.takeIf { n -> n.isNotBlank() }?.let { n -> out.add(n) } }
+        activities?.forEach { it.name?.takeIf { n -> n.isNotBlank() }?.let { n -> out.add(n) } }
+        providers?.forEach  { it.name?.takeIf { n -> n.isNotBlank() }?.let { n -> out.add(n) } }
         return out.asSequence().sorted().take(MAX_COMPONENTS_PER_APP).toList()
     }
 
