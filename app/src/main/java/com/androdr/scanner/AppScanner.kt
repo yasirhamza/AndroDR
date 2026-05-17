@@ -13,6 +13,7 @@ import com.androdr.ioc.DeviceIdentity
 import com.androdr.ioc.KnownAppResolver
 import com.androdr.ioc.OemPrefixResolver
 import java.security.MessageDigest
+import java.util.zip.ZipFile
 import android.content.pm.PackageInfo
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
@@ -295,6 +296,39 @@ class AppScanner @Inject constructor(
         packageInfo.activities?.forEach { it.name?.takeIf { n -> n.isNotBlank() }?.let { n -> out.add(n) } }
         packageInfo.providers?.forEach { it.name?.takeIf { n -> n.isNotBlank() }?.let { n -> out.add(n) } }
         return out.asSequence().sorted().take(MAX_COMPONENTS_PER_APP).toList()
+    }
+
+    /**
+     * Returns deduped, sorted leaf filenames of native libraries embedded
+     * in the APK at [applicationInfo.publicSourceDir]. ABI prefix is stripped
+     * so `lib/arm64-v8a/libxmode.so` and `lib/x86_64/libxmode.so` collapse
+     * to a single `libxmode.so` entry. Output is capped at
+     * [MAX_NATIVE_LIBS_PER_APP]. Sort happens BEFORE truncation so the
+     * surviving subset is the lexicographically-first N (deterministic
+     * under small APK perturbations). Failures (unreadable APK, corrupt
+     * zip) are logged and produce an empty list — never thrown — so one
+     * bad APK cannot abort the whole scan.
+     */
+    @Suppress("TooGenericExceptionCaught", "SwallowedException")
+    internal fun extractNativeLibFileNames(applicationInfo: ApplicationInfo): List<String> {
+        val path = applicationInfo.publicSourceDir ?: return emptyList()
+        val out = LinkedHashSet<String>()
+        try {
+            ZipFile(path).use { zip ->
+                val entries = zip.entries()
+                while (entries.hasMoreElements()) {
+                    val name = entries.nextElement().name
+                    if (name.startsWith("lib/") && name.endsWith(".so")) {
+                        val leaf = name.substringAfterLast('/')
+                        if (leaf.isNotBlank()) out.add(leaf)
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "extractNativeLibFileNames failed for $path: ${e.message}")
+            return emptyList()
+        }
+        return out.asSequence().sorted().take(MAX_NATIVE_LIBS_PER_APP).toList()
     }
 
     private fun computeApkHash(appInfo: ApplicationInfo): String? {

@@ -17,19 +17,40 @@ import com.androdr.ioc.OemPrefixResolver
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
+import java.io.File
+import java.io.FileOutputStream
+import java.util.zip.ZipEntry
+import java.util.zip.ZipOutputStream
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
+import org.junit.Rule
 import org.junit.Test
+import org.junit.rules.TemporaryFolder
 
 class AppScannerTelemetryTest {
+
+    @get:Rule
+    val tempFolder = TemporaryFolder()
 
     private lateinit var context: Context
     private lateinit var pm: PackageManager
     private lateinit var knownAppResolver: KnownAppResolver
     private lateinit var oemPrefixResolver: OemPrefixResolver
     private lateinit var scanner: AppScanner
+
+    private fun buildSyntheticApk(name: String, entries: List<String>): File {
+        val file = tempFolder.newFile(name)
+        ZipOutputStream(FileOutputStream(file)).use { zip ->
+            for (entry in entries) {
+                zip.putNextEntry(ZipEntry(entry))
+                zip.write(byteArrayOf(0)) // placeholder body so the entry is well-formed
+                zip.closeEntry()
+            }
+        }
+        return file
+    }
 
     @Before
     fun setUp() {
@@ -313,5 +334,52 @@ class AppScannerTelemetryTest {
         // sort-then-take guarantees lexicographic stability — the smallest name survives.
         // ("com.example.A1" lex-precedes "com.example.A1000", "A1001", ..., as well as "A2".)
         assertEquals("com.example.A1", result.first())
+    }
+
+    // ── 10. extractNativeLibFileNames ────────────────────────────────────────
+
+    @Test
+    fun `extractNativeLibFileNames returns deduped leaf filenames across ABIs`() {
+        val apk = buildSyntheticApk("test.apk", listOf(
+            "AndroidManifest.xml",
+            "classes.dex",
+            "lib/arm64-v8a/libxmode.so",
+            "lib/arm64-v8a/libcollector.so",
+            "lib/x86_64/libxmode.so",                 // dup of arm64-v8a leaf
+            "lib/armeabi-v7a/libcollector.so",        // dup of arm64-v8a leaf
+            "lib/arm64-v8a/libunique.so",
+            "res/values/strings.xml"
+        ))
+        val appInfo = ApplicationInfo().apply { publicSourceDir = apk.absolutePath }
+
+        val result = scanner.extractNativeLibFileNames(appInfo)
+
+        assertEquals(listOf("libcollector.so", "libunique.so", "libxmode.so"), result)
+    }
+
+    @Test
+    fun `extractNativeLibFileNames returns emptyList for a non-existent path`() {
+        val appInfo = ApplicationInfo().apply { publicSourceDir = "/does/not/exist.apk" }
+        assertEquals(emptyList<String>(), scanner.extractNativeLibFileNames(appInfo))
+    }
+
+    @Test
+    fun `extractNativeLibFileNames returns emptyList for a corrupt zip`() {
+        val bogus = tempFolder.newFile("bogus.apk")
+        bogus.writeText("not a zip file")
+        val appInfo = ApplicationInfo().apply { publicSourceDir = bogus.absolutePath }
+        assertEquals(emptyList<String>(), scanner.extractNativeLibFileNames(appInfo))
+    }
+
+    @Test
+    fun `extractNativeLibFileNames truncates to MAX_NATIVE_LIBS_PER_APP and keeps lexicographically-first entries`() {
+        val entries = (1..400).map { "lib/arm64-v8a/lib$it.so" }
+        val apk = buildSyntheticApk("big.apk", entries)
+        val appInfo = ApplicationInfo().apply { publicSourceDir = apk.absolutePath }
+        val result = scanner.extractNativeLibFileNames(appInfo)
+        assertEquals(256, result.size)
+        // sort-then-take guarantees lexicographic stability — "lib1.so" precedes
+        // "lib100.so" etc.
+        assertEquals("lib1.so", result.first())
     }
 }
