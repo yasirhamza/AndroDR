@@ -1,6 +1,7 @@
 # Fixture for androdr-078: Massistant Chinese mobile forensic tool installed.
-# Verifies the dedicated labeled wrapper fires on the documented Meiya Pico
-# package and stays silent on system apps + benign user apps.
+# Uses narrow `package_name` equality match (not the generic package_ioc_db
+# lookup) so the rule's "Massistant Forensic Tool" attribution only attaches
+# to actual Massistant installs, not every IOC-DB hit.
 #
 # Companion to androdr-051 (Cellebrite UFED); both target state mobile-forensics
 # tooling but from different angles (Cellebrite = unpatched-CVE detector for
@@ -8,22 +9,22 @@
 # client-side forensic agent).
 rule_file: sigma_androdr_078_meiya_pico_forensics.yml
 service: app_scanner
-ioc_stubs:
-  package_ioc_db:
-    - "com.meyapico.massistant"
-    - "com.thetruthspy"  # decoy from another family; rule still keys on IOC DB
 true_positives:
   - package_name: "com.meyapico.massistant"
-    is_system_app: false
-  - package_name: "com.thetruthspy"  # any package in the IOC DB fires the wrapper
     is_system_app: false
 true_negatives:
   # System-app masquerade — filter_system_app suppresses
   - package_name: "com.meyapico.massistant"
     is_system_app: true
-  # Benign user app not in IOC DB
+  # Other IOC families must NOT trigger Massistant attribution
+  - package_name: "com.thetruthspy"
+    is_system_app: false
+  # Benign user app
   - package_name: "com.google.android.gm"
     is_system_app: false
-  # Common settings package not in IOC DB
+  # Benign system app
   - package_name: "com.android.settings"
     is_system_app: true
+  # Similar-looking but different vendor (defense against accidental contains-style match)
+  - package_name: "com.meyapico.legitimate-other-app"
+    is_system_app: false
