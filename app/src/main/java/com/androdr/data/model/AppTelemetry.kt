@@ -35,6 +35,9 @@ data class AppTelemetry(
      */
     val lastUpdateTime: Long = 0L,
     val source: TelemetrySource,
+    // NEW (#168):
+    val embeddedComponentClasses: List<String> = emptyList(),
+    val embeddedNativeLibs: List<String> = emptyList(),
 ) {
     fun toFieldMap(): Map<String, Any?> = mapOf(
         "package_name" to packageName,
@@ -56,6 +59,9 @@ data class AppTelemetry(
         "receiver_permissions" to receiverPermissions,
         "has_launcher_activity" to hasLauncherActivity,
         "first_install_time" to firstInstallTime,
-        "last_update_time" to lastUpdateTime
+        "last_update_time" to lastUpdateTime,
+        // NEW (#168):
+        "embedded_component_class" to embeddedComponentClasses,
+        "embedded_native_lib" to embeddedNativeLibs
     )
 }

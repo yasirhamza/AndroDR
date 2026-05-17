@@ -252,6 +252,9 @@ class AppScanner @Inject constructor(
         // Launcher activity check (API call — not derivable from manifest alone)
         val hasLauncherActivity = pm.getLaunchIntentForPackage(packageName) != null
 
+        val embeddedComponentClasses = extractComponentClassNames(pkg)
+        val embeddedNativeLibs = extractNativeLibFileNames(appInfo)
+
         return AppTelemetry(
             packageName = packageName,
             appName = appName,
@@ -274,6 +277,8 @@ class AppScanner @Inject constructor(
             firstInstallTime = pkg.firstInstallTime,
             lastUpdateTime = pkg.lastUpdateTime,
             source = TelemetrySource.LIVE_SCAN,
+            embeddedComponentClasses = embeddedComponentClasses,
+            embeddedNativeLibs = embeddedNativeLibs,
         )
     }
 

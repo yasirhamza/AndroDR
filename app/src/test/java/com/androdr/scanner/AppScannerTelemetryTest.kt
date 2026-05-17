@@ -382,4 +382,43 @@ class AppScannerTelemetryTest {
         // "lib100.so" etc.
         assertEquals("lib1.so", result.first())
     }
+
+    // ── 11. Integration: collectTelemetry populates embedded SDK fields ──────
+
+    @Test
+    fun `collectTelemetry populates embeddedComponentClasses and embeddedNativeLibs`() = runTest {
+        val apk = buildSyntheticApk("integration.apk", listOf(
+            "lib/arm64-v8a/libxmode.so"
+        ))
+        val pkgInfo = PackageInfo().apply {
+            packageName = "com.example.broker"
+            applicationInfo = ApplicationInfo().apply {
+                publicSourceDir = apk.absolutePath
+                sourceDir = apk.absolutePath
+            }
+            services = arrayOf(ServiceInfo().apply { name = "com.outlogic.GeoCollectorService" })
+            receivers = null
+            // Three components chosen so the lex-sort behavior is observable end-to-end:
+            // "com.example.broker.MainActivity" < "com.outlogic.GeoCollectorService" < "com.zzz.LastActivity"
+            activities = arrayOf(
+                ActivityInfo().apply { name = "com.example.broker.MainActivity" },
+                ActivityInfo().apply { name = "com.zzz.LastActivity" }
+            )
+            providers = null
+        }
+        installPackages(pkgInfo)
+
+        val telemetry = scanner.collectTelemetry()
+
+        val entry = telemetry.single { it.packageName == "com.example.broker" }
+        assertEquals(
+            listOf(
+                "com.example.broker.MainActivity",
+                "com.outlogic.GeoCollectorService",
+                "com.zzz.LastActivity"
+            ),
+            entry.embeddedComponentClasses
+        )
+        assertEquals(listOf("libxmode.so"), entry.embeddedNativeLibs)
+    }
 }
