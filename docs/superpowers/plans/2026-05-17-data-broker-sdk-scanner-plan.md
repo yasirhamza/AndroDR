@@ -421,7 +421,7 @@ git -c commit.gpgsign=false commit -m "feat(scanner): extract embedded native li
 
 - [ ] **Step 1: Write the failing integration test**
 
-Append to `AppScannerTelemetryTest.kt`. The existing mock fixture in this file already programs `every { packageManager.getInstalledPackages(any<Int>()) }` — the new test reuses that mockk wiring by overriding the return value just for this case.
+Append to `AppScannerTelemetryTest.kt`. The existing file already has an `installPackages(vararg packages: PackageInfo)` helper at line 91 that programs the mockk `pm` (PackageManager mock, declared at line 28 as `private lateinit var pm: PackageManager`) with `every { pm.getInstalledPackages(any<Int>()) } returns ...`. Use that helper — do NOT reach into `pm` directly and do NOT use a different mock name (the variable is `pm`, not `packageManager`).
 
 ```kotlin
 @Test
@@ -445,7 +445,7 @@ fun `collectTelemetry populates embeddedComponentClasses and embeddedNativeLibs`
         )
         providers = null
     }
-    every { packageManager.getInstalledPackages(any<Int>()) } returns listOf(pkgInfo)
+    installPackages(pkgInfo)
 
     val telemetry = scanner.collectTelemetry()
 
@@ -521,12 +521,11 @@ val embeddedComponentClasses = extractComponentClassNames(pkg)
 val embeddedNativeLibs = extractNativeLibFileNames(appInfo)
 ```
 
-Then pass them as the last two named arguments to the constructor:
+Then pass them as the last two named arguments to the constructor. The existing call at AppScanner.kt:250 has `source = TelemetrySource.LIVE_SCAN` at line 271 — leave that and every other existing named arg untouched; only add the two new lines:
 
 ```kotlin
 return AppTelemetry(
-    // ... all existing named args, unchanged ...
-    source = TelemetrySource.RUNTIME,
+    // ... all existing named args, unchanged — including source = TelemetrySource.LIVE_SCAN ...
     embeddedComponentClasses = embeddedComponentClasses,
     embeddedNativeLibs = embeddedNativeLibs,
 )
