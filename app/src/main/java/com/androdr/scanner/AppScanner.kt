@@ -4,7 +4,6 @@ import android.Manifest
 import android.content.Context
 import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
-import android.content.pm.ProviderInfo
 import android.os.Build
 import android.util.Log
 import com.androdr.data.model.AppTelemetry
