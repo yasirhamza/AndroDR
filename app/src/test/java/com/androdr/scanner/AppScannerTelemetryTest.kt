@@ -7,6 +7,7 @@ import android.content.pm.PackageInfo
 import android.content.pm.PackageManager
 import android.content.pm.ServiceInfo
 import android.content.pm.ActivityInfo
+import android.content.pm.ProviderInfo
 import android.content.res.Resources
 import com.androdr.R
 import com.androdr.data.model.KnownAppCategory
@@ -255,5 +256,62 @@ class AppScannerTelemetryTest {
         val fieldMap = telemetry.toFieldMap()
         assertEquals(firstInstall, fieldMap["first_install_time"])
         assertEquals(lastUpdate, fieldMap["last_update_time"])
+    }
+
+    // ── 9. extractComponentClassNames ────────────────────────────────────────
+
+    @Test
+    fun `extractComponentClassNames returns deduped sorted class names from all four component kinds`() {
+        val pkgInfo = PackageInfo().apply {
+            services = arrayOf(
+                ServiceInfo().apply { name = "com.outlogic.collector.GeoSyncService" },
+                ServiceInfo().apply { name = "com.example.legit.NormalService" }
+            )
+            receivers = arrayOf(
+                ActivityInfo().apply { name = "com.outlogic.collector.WakeReceiver" }
+            )
+            activities = arrayOf(
+                ActivityInfo().apply { name = "com.example.legit.MainActivity" },
+                ActivityInfo().apply { name = "com.example.legit.MainActivity" } // dup
+            )
+            providers = arrayOf(
+                ProviderInfo().apply { name = "com.example.legit.SettingsProvider" }
+            )
+        }
+
+        val result = scanner.extractComponentClassNames(pkgInfo)
+
+        assertEquals(
+            listOf(
+                "com.example.legit.MainActivity",
+                "com.example.legit.NormalService",
+                "com.example.legit.SettingsProvider",
+                "com.outlogic.collector.GeoSyncService",
+                "com.outlogic.collector.WakeReceiver"
+            ),
+            result
+        )
+    }
+
+    @Test
+    fun `extractComponentClassNames returns emptyList when all four arrays are null`() {
+        val pkgInfo = PackageInfo().apply {
+            services = null
+            receivers = null
+            activities = null
+            providers = null
+        }
+        assertEquals(emptyList<String>(), scanner.extractComponentClassNames(pkgInfo))
+    }
+
+    @Test
+    fun `extractComponentClassNames truncates to MAX_COMPONENTS_PER_APP and keeps lexicographically-first entries`() {
+        val many = (1..2000).map { ActivityInfo().apply { name = "com.example.A$it" } }.toTypedArray()
+        val pkgInfo = PackageInfo().apply { activities = many; services = null; receivers = null; providers = null }
+        val result = scanner.extractComponentClassNames(pkgInfo)
+        assertEquals(1024, result.size)
+        // sort-then-take guarantees lexicographic stability — the smallest name survives.
+        // ("com.example.A1" lex-precedes "com.example.A1000", "A1001", ..., as well as "A2".)
+        assertEquals("com.example.A1", result.first())
     }
 }

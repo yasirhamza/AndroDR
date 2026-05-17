@@ -4,6 +4,7 @@ import android.Manifest
 import android.content.Context
 import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
+import android.content.pm.ProviderInfo
 import android.os.Build
 import android.util.Log
 import com.androdr.data.model.AppTelemetry
@@ -46,6 +47,10 @@ class AppScanner @Inject constructor(
          * thrashing the storage queue or saturating the CPU schedulers.
          */
         private const val TELEMETRY_PARALLELISM = 16
+
+        // NEW (#168):
+        private const val MAX_COMPONENTS_PER_APP = 1024
+        private const val MAX_NATIVE_LIBS_PER_APP = 256
     }
 
     /**
@@ -270,6 +275,27 @@ class AppScanner @Inject constructor(
             lastUpdateTime = pkg.lastUpdateTime,
             source = TelemetrySource.LIVE_SCAN,
         )
+    }
+
+    /**
+     * Returns deduped, sorted class names from a PackageInfo's services,
+     * receivers, activities, and providers arrays. Used downstream by SIGMA
+     * rules that fingerprint embedded SDKs by class-name prefix. See
+     * spec `docs/superpowers/specs/2026-05-17-data-broker-sdk-scanner-design.md`.
+     *
+     * Output is capped at [MAX_COMPONENTS_PER_APP] to bound memory against
+     * pathological/malicious manifests. Sort happens BEFORE truncation so
+     * the truncated subset is the lexicographically-first N — stable under
+     * small manifest perturbations (a manifest gaining one component
+     * doesn't shift the survival window arbitrarily).
+     */
+    internal fun extractComponentClassNames(packageInfo: PackageInfo): List<String> {
+        val out = LinkedHashSet<String>()
+        packageInfo.services?.forEach { it.name?.takeIf { n -> n.isNotBlank() }?.let { n -> out.add(n) } }
+        packageInfo.receivers?.forEach { it.name?.takeIf { n -> n.isNotBlank() }?.let { n -> out.add(n) } }
+        packageInfo.activities?.forEach { it.name?.takeIf { n -> n.isNotBlank() }?.let { n -> out.add(n) } }
+        packageInfo.providers?.forEach { it.name?.takeIf { n -> n.isNotBlank() }?.let { n -> out.add(n) } }
+        return out.asSequence().sorted().take(MAX_COMPONENTS_PER_APP).toList()
     }
 
     private fun computeApkHash(appInfo: ApplicationInfo): String? {
