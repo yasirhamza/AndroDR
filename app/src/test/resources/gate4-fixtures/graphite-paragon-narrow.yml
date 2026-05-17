@@ -1,0 +1,25 @@
+# Fixture for androdr-005: DNS query to known Graphite/Paragon C2 domain.
+# Validates the post-narrowing behavior — only the 2 explicitly-listed
+# placeholder domains fire the "Graphite/Paragon Spyware" attribution.
+# Other malicious-domain hits (e.g., NGate, BITTER, stalkerware) must NOT
+# trigger Graphite attribution; they surface via generic androdr-003 instead.
+#
+# When real Paragon C2 indicators are sourced into the rule, expand the TP
+# set here to include them.
+rule_file: sigma_androdr_005_graphite_paragon.yml
+service: dns_monitor
+true_positives:
+  - domain: "paragon-graphite.net"
+  - domain: "graphite-spyware.xyz"
+true_negatives:
+  # Other malicious families — must NOT trigger Graphite/Paragon attribution
+  - domain: "protecaocartao.online"           # NGate
+  - domain: "noblico.net"                     # BITTER
+  - domain: "comodo-vpn.com"                  # DCHSpy MuddyWater
+  - domain: "thetruthspy.com"                 # stalkerware
+  # Near-substring on the original Graphite name — must NOT match equality selector
+  - domain: "not-paragon-graphite.net.evil"
+  - domain: "paragon-graphite.net.evil.example.com"
+  # Benign domains
+  - domain: "www.google.com"
+  - domain: "github.com"

@@ -3,19 +3,32 @@ id: androdr-005
 status: production
 description: >
     Detects DNS queries to infrastructure associated with Paragon's
-    Graphite mercenary spyware, based on Citizen Lab research.
+    Graphite mercenary spyware. Previously this rule used the generic
+    domain_ioc_db lookup — that caused the "Graphite/Paragon Spyware"
+    nation-state attribution to fire on every malicious-domain match
+    (stalkerware C2, banking RAT infrastructure, etc.). Narrowed to an
+    explicit domain list so the attribution is honest.
 author: AndroDR
-date: 2026/03/27
+date: 2026/05/17
 references:
     - https://citizenlab.ca/tag/paragon/
 tags:
     - attack.t1437
+    - campaign.paragon
+    - campaign.graphite
 logsource:
     product: androdr
     service: dns_monitor
 detection:
+    # NOTE: These are placeholder domains that have been in the bundled
+    # blocklist as demo data. Real Citizen Lab Paragon C2 indicators have
+    # not yet been sourced into ioc-data/c2-domains.yml with explicit
+    # family attribution. When real Paragon-attributed C2 domains are
+    # published and ingested, add them here and remove the placeholders.
     selection:
-        domain|ioc_lookup: domain_ioc_db
+        domain:
+            - "paragon-graphite.net"
+            - "graphite-spyware.xyz"
     condition: selection
 level: critical
 category: incident
@@ -27,6 +40,7 @@ display:
     guidance: "CRITICAL -- nation-state spyware indicators; seek expert forensic assistance"
 falsepositives:
     - Domains may be repurposed after takedown
+    - Current list is placeholder data; the rule will not fire on real Paragon infrastructure until that data is sourced
 remediation:
     - "A connection to infrastructure associated with Paragon Graphite spyware was blocked."
     - "This may indicate your device is targeted by a nation-state level threat."
