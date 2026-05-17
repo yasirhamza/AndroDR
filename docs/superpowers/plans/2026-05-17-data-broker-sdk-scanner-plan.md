@@ -128,12 +128,13 @@ This task adds the pure-function extractor only. Wiring into `collectTelemetry()
 
 - [ ] **Step 1: Write the failing test for the happy path**
 
-Open `app/src/test/java/com/androdr/scanner/AppScannerTelemetryTest.kt`. Append after the existing tests:
+Open `app/src/test/java/com/androdr/scanner/AppScannerTelemetryTest.kt`.
+
+**Imports:** `android.content.pm.ServiceInfo` (line 8) and `android.content.pm.ActivityInfo` (line 9) are ALREADY imported in this file — do not add them a second time. Only `android.content.pm.ProviderInfo` is genuinely new; add that single line at the file top in the existing import block (after the other `android.content.pm.*` imports), NOT inline next to the test methods (Kotlin requires imports at the top of the file).
+
+**Test methods:** append the three test methods below at the bottom of the class body, alongside the existing `@Test` methods. (The `import` line goes at the top; only the `@Test` blocks below go at the bottom.)
 
 ```kotlin
-import android.content.pm.ProviderInfo
-import android.content.pm.ActivityInfo
-import android.content.pm.ServiceInfo
 
 @Test
 fun `extractComponentClassNames returns deduped sorted class names from all four component kinds`() {
@@ -205,7 +206,7 @@ Expected: compile error — `extractComponentClassNames` does not exist on `AppS
 
 - [ ] **Step 3: Add the function to `AppScanner.kt`**
 
-Open `app/src/main/java/com/androdr/scanner/AppScanner.kt`. Add this `internal` function inside the class (just below `collectTelemetry()` is the natural spot):
+Open `app/src/main/java/com/androdr/scanner/AppScanner.kt`. Place this `internal` function **after `buildTelemetryForPackage()`** (and before any APK-hash helpers) so the two SDK-signal extractors live next to each other and don't split the existing `collectTelemetry` → `buildTelemetryForPackage` pair:
 
 ```kotlin
 /**
@@ -485,7 +486,14 @@ Open `app/src/main/java/com/androdr/data/model/AppTelemetry.kt`. The constructor
 
 - [ ] **Step 4: Add the two keys to `toFieldMap()`**
 
-`AppTelemetry.toFieldMap()` (at line 39) is what `LogsourceTaxonomyCrossCheckTest` inspects — adding constructor fields alone won't make the cross-check happy because the test compares `toFieldMap().keys` against the taxonomy YAML. Append the two new entries at the end of the map (after `"last_update_time" to lastUpdateTime`):
+`AppTelemetry.toFieldMap()` (at line 39) is what `LogsourceTaxonomyCrossCheckTest` inspects — adding constructor fields alone won't make the cross-check happy because the test compares `toFieldMap().keys` against the taxonomy YAML. Append the two new entries at the end of the map.
+
+The existing `mapOf(...)` body ends at line 59 with `"last_update_time" to lastUpdateTime` and NO trailing comma (line 60 is the closing `)`). To insert the new entries, you must:
+
+1. **Add a trailing comma** to the existing `"last_update_time" to lastUpdateTime` line.
+2. **Append two new lines** below it.
+
+Result (lines 58-62 region after edit):
 
 ```kotlin
     fun toFieldMap(): Map<String, Any?> = mapOf(
@@ -500,20 +508,24 @@ Open `app/src/main/java/com/androdr/data/model/AppTelemetry.kt`. The constructor
 
 The snake_case map keys must match the taxonomy YAML byte-for-byte; the cross-check does NOT do case conversion. `LogsourceTaxonomyCrossCheckTest.kt` itself does NOT need to be modified — its `memberFunctionFieldMaps()` constructs `AppTelemetry(...)` with named args and the two new fields take their `emptyList()` defaults without breaking the call.
 
-- [ ] **Step 5: Wire the extractors into `collectTelemetry()`**
+- [ ] **Step 5: Wire the extractors into `buildTelemetryForPackage()`**
 
-In `AppScanner.kt`, find the body of `collectTelemetry()` where each `AppTelemetry(...)` is constructed. Just before constructing the `AppTelemetry`, compute:
+Despite the function name suggesting otherwise, `AppTelemetry(...)` is NOT constructed in `collectTelemetry()` — `collectTelemetry()` (line 96) fans out to `buildTelemetryForPackage()` (line 147), which is where the single `AppTelemetry(...)` constructor call lives (currently around line 250, `return AppTelemetry(...)`).
+
+In `buildTelemetryForPackage`, an `applicationInfo` is already null-checked into the local `appInfo` (line 153: `val appInfo = pkg.applicationInfo ?: return null`). Reuse that — don't re-dereference `pkg.applicationInfo`, which would re-introduce the nullability the function already handled. The `PackageInfo` parameter is named `pkg` in this function.
+
+Just before `return AppTelemetry(...)`, compute:
 
 ```kotlin
-val embeddedComponentClasses = extractComponentClassNames(packageInfo)
-val embeddedNativeLibs = extractNativeLibFileNames(packageInfo.applicationInfo)
+val embeddedComponentClasses = extractComponentClassNames(pkg)
+val embeddedNativeLibs = extractNativeLibFileNames(appInfo)
 ```
 
-Then pass them to the constructor:
+Then pass them as the last two named arguments to the constructor:
 
 ```kotlin
-AppTelemetry(
-    // ... existing args ...
+return AppTelemetry(
+    // ... all existing named args, unchanged ...
     source = TelemetrySource.RUNTIME,
     embeddedComponentClasses = embeddedComponentClasses,
     embeddedNativeLibs = embeddedNativeLibs,
