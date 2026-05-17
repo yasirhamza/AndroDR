@@ -125,7 +125,7 @@ class AppScanner @Inject constructor(
         @Suppress("OPT_IN_USAGE")
         val workerDispatcher = Dispatchers.IO.limitedParallelism(TELEMETRY_PARALLELISM)
 
-        coroutineScope {
+        val telemetryList = coroutineScope {
             installedPackages
                 .map { pkg ->
                     async(workerDispatcher) { buildTelemetryForPackage(pm, pkg) }
@@ -133,6 +133,12 @@ class AppScanner @Inject constructor(
                 .awaitAll()
                 .filterNotNull()
         }
+
+        Log.d(TAG, "collectTelemetry: ${telemetryList.size} apps, " +
+            "${telemetryList.count { it.embeddedComponentClasses.isNotEmpty() }} with components, " +
+            "${telemetryList.count { it.embeddedNativeLibs.isNotEmpty() }} with native libs")
+
+        telemetryList
     }
 
     /**
