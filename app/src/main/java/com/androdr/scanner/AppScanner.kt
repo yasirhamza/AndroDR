@@ -13,6 +13,7 @@ import com.androdr.ioc.DeviceIdentity
 import com.androdr.ioc.KnownAppResolver
 import com.androdr.ioc.OemPrefixResolver
 import java.security.MessageDigest
+import java.util.zip.ZipFile
 import android.content.pm.PackageInfo
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
@@ -46,6 +47,10 @@ class AppScanner @Inject constructor(
          * thrashing the storage queue or saturating the CPU schedulers.
          */
         private const val TELEMETRY_PARALLELISM = 16
+
+        // NEW (#168):
+        private const val MAX_COMPONENTS_PER_APP = 1024
+        private const val MAX_NATIVE_LIBS_PER_APP = 256
     }
 
     /**
@@ -120,7 +125,7 @@ class AppScanner @Inject constructor(
         @Suppress("OPT_IN_USAGE")
         val workerDispatcher = Dispatchers.IO.limitedParallelism(TELEMETRY_PARALLELISM)
 
-        coroutineScope {
+        val telemetryList = coroutineScope {
             installedPackages
                 .map { pkg ->
                     async(workerDispatcher) { buildTelemetryForPackage(pm, pkg) }
@@ -128,6 +133,12 @@ class AppScanner @Inject constructor(
                 .awaitAll()
                 .filterNotNull()
         }
+
+        Log.d(TAG, "collectTelemetry: ${telemetryList.size} apps, " +
+            "${telemetryList.count { it.embeddedComponentClasses.isNotEmpty() }} with components, " +
+            "${telemetryList.count { it.embeddedNativeLibs.isNotEmpty() }} with native libs")
+
+        telemetryList
     }
 
     /**
@@ -247,6 +258,9 @@ class AppScanner @Inject constructor(
         // Launcher activity check (API call — not derivable from manifest alone)
         val hasLauncherActivity = pm.getLaunchIntentForPackage(packageName) != null
 
+        val embeddedComponentClasses = extractComponentClassNames(pkg, pkgDetail)
+        val embeddedNativeLibs = extractNativeLibFileNames(appInfo)
+
         return AppTelemetry(
             packageName = packageName,
             appName = appName,
@@ -269,7 +283,70 @@ class AppScanner @Inject constructor(
             firstInstallTime = pkg.firstInstallTime,
             lastUpdateTime = pkg.lastUpdateTime,
             source = TelemetrySource.LIVE_SCAN,
+            embeddedComponentClasses = embeddedComponentClasses,
+            embeddedNativeLibs = embeddedNativeLibs,
         )
+    }
+
+    /**
+     * Returns deduped, sorted class names from a PackageInfo's services,
+     * receivers, activities, and providers arrays. Used downstream by SIGMA
+     * rules that fingerprint embedded SDKs by class-name prefix. See
+     * spec `docs/superpowers/specs/2026-05-17-data-broker-sdk-scanner-design.md`.
+     *
+     * Output is capped at [MAX_COMPONENTS_PER_APP] to bound memory against
+     * pathological/malicious manifests. Sort happens BEFORE truncation so
+     * the truncated subset is the lexicographically-first N — stable under
+     * small manifest perturbations (a manifest gaining one component
+     * doesn't shift the survival window arbitrarily).
+     */
+    internal fun extractComponentClassNames(
+        primary: PackageInfo,
+        fallback: PackageInfo? = null,
+    ): List<String> {
+        val out = LinkedHashSet<String>()
+        val services   = primary.services   ?: fallback?.services
+        val receivers  = primary.receivers  ?: fallback?.receivers
+        val activities = primary.activities ?: fallback?.activities
+        val providers  = primary.providers  ?: fallback?.providers
+        services?.forEach   { it.name?.takeIf { n -> n.isNotBlank() }?.let { n -> out.add(n) } }
+        receivers?.forEach  { it.name?.takeIf { n -> n.isNotBlank() }?.let { n -> out.add(n) } }
+        activities?.forEach { it.name?.takeIf { n -> n.isNotBlank() }?.let { n -> out.add(n) } }
+        providers?.forEach  { it.name?.takeIf { n -> n.isNotBlank() }?.let { n -> out.add(n) } }
+        return out.asSequence().sorted().take(MAX_COMPONENTS_PER_APP).toList()
+    }
+
+    /**
+     * Returns deduped, sorted leaf filenames of native libraries embedded
+     * in the APK at [applicationInfo.publicSourceDir]. ABI prefix is stripped
+     * so `lib/arm64-v8a/libxmode.so` and `lib/x86_64/libxmode.so` collapse
+     * to a single `libxmode.so` entry. Output is capped at
+     * [MAX_NATIVE_LIBS_PER_APP]. Sort happens BEFORE truncation so the
+     * surviving subset is the lexicographically-first N (deterministic
+     * under small APK perturbations). Failures (unreadable APK, corrupt
+     * zip) are logged and produce an empty list — never thrown — so one
+     * bad APK cannot abort the whole scan.
+     */
+    @Suppress("TooGenericExceptionCaught", "SwallowedException")
+    internal fun extractNativeLibFileNames(applicationInfo: ApplicationInfo): List<String> {
+        val path = applicationInfo.publicSourceDir ?: return emptyList()
+        val out = LinkedHashSet<String>()
+        try {
+            ZipFile(path).use { zip ->
+                val entries = zip.entries()
+                while (entries.hasMoreElements()) {
+                    val name = entries.nextElement().name
+                    if (name.startsWith("lib/") && name.endsWith(".so")) {
+                        val leaf = name.substringAfterLast('/')
+                        if (leaf.isNotBlank()) out.add(leaf)
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "extractNativeLibFileNames failed for $path: ${e.message}")
+            return emptyList()
+        }
+        return out.asSequence().sorted().take(MAX_NATIVE_LIBS_PER_APP).toList()
     }
 
     private fun computeApkHash(appInfo: ApplicationInfo): String? {

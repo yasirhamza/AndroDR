@@ -7,6 +7,7 @@ import android.content.pm.PackageInfo
 import android.content.pm.PackageManager
 import android.content.pm.ServiceInfo
 import android.content.pm.ActivityInfo
+import android.content.pm.ProviderInfo
 import android.content.res.Resources
 import com.androdr.R
 import com.androdr.data.model.KnownAppCategory
@@ -16,19 +17,40 @@ import com.androdr.ioc.OemPrefixResolver
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
+import java.io.File
+import java.io.FileOutputStream
+import java.util.zip.ZipEntry
+import java.util.zip.ZipOutputStream
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
+import org.junit.Rule
 import org.junit.Test
+import org.junit.rules.TemporaryFolder
 
 class AppScannerTelemetryTest {
+
+    @get:Rule
+    val tempFolder = TemporaryFolder()
 
     private lateinit var context: Context
     private lateinit var pm: PackageManager
     private lateinit var knownAppResolver: KnownAppResolver
     private lateinit var oemPrefixResolver: OemPrefixResolver
     private lateinit var scanner: AppScanner
+
+    private fun buildSyntheticApk(name: String, entries: List<String>): File {
+        val file = tempFolder.newFile(name)
+        ZipOutputStream(FileOutputStream(file)).use { zip ->
+            for (entry in entries) {
+                zip.putNextEntry(ZipEntry(entry))
+                zip.write(byteArrayOf(0)) // placeholder body so the entry is well-formed
+                zip.closeEntry()
+            }
+        }
+        return file
+    }
 
     @Before
     fun setUp() {
@@ -255,5 +277,185 @@ class AppScannerTelemetryTest {
         val fieldMap = telemetry.toFieldMap()
         assertEquals(firstInstall, fieldMap["first_install_time"])
         assertEquals(lastUpdate, fieldMap["last_update_time"])
+    }
+
+    // ── 9. extractComponentClassNames ────────────────────────────────────────
+
+    @Test
+    fun `extractComponentClassNames returns deduped sorted class names from all four component kinds`() {
+        val pkgInfo = PackageInfo().apply {
+            services = arrayOf(
+                ServiceInfo().apply { name = "com.outlogic.collector.GeoSyncService" },
+                ServiceInfo().apply { name = "com.example.legit.NormalService" }
+            )
+            receivers = arrayOf(
+                ActivityInfo().apply { name = "com.outlogic.collector.WakeReceiver" }
+            )
+            activities = arrayOf(
+                ActivityInfo().apply { name = "com.example.legit.MainActivity" },
+                ActivityInfo().apply { name = "com.example.legit.MainActivity" } // dup
+            )
+            providers = arrayOf(
+                ProviderInfo().apply { name = "com.example.legit.SettingsProvider" }
+            )
+        }
+
+        val result = scanner.extractComponentClassNames(pkgInfo)
+
+        assertEquals(
+            listOf(
+                "com.example.legit.MainActivity",
+                "com.example.legit.NormalService",
+                "com.example.legit.SettingsProvider",
+                "com.outlogic.collector.GeoSyncService",
+                "com.outlogic.collector.WakeReceiver"
+            ),
+            result
+        )
+    }
+
+    @Test
+    fun `extractComponentClassNames returns emptyList when all four arrays are null`() {
+        val pkgInfo = PackageInfo().apply {
+            services = null
+            receivers = null
+            activities = null
+            providers = null
+        }
+        assertEquals(emptyList<String>(), scanner.extractComponentClassNames(pkgInfo))
+    }
+
+    @Test
+    fun `extractComponentClassNames truncates to MAX_COMPONENTS_PER_APP and keeps lexicographically-first entries`() {
+        val many = (1..2000).map { ActivityInfo().apply { name = "com.example.A$it" } }.toTypedArray()
+        val pkgInfo = PackageInfo().apply { activities = many; services = null; receivers = null; providers = null }
+        val result = scanner.extractComponentClassNames(pkgInfo)
+        assertEquals(1024, result.size)
+        // sort-then-take guarantees lexicographic stability — the smallest name survives.
+        // ("com.example.A1" lex-precedes "com.example.A1000", "A1001", ..., as well as "A2".)
+        assertEquals("com.example.A1", result.first())
+    }
+
+    @Test
+    fun `extractComponentClassNames falls back to second PackageInfo when primary has null services and receivers`() {
+        // Primary mimics a Binder-truncated PackageInfo: services + receivers nulled
+        // by the framework's parcel-size limit. Activities + providers untouched.
+        val primary = PackageInfo().apply {
+            services = null
+            receivers = null
+            activities = arrayOf(
+                ActivityInfo().apply { name = "com.example.broker.MainActivity" }
+            )
+            providers = null
+        }
+        // Fallback mimics the per-package re-fetch: services + receivers populated,
+        // activities + providers null (the re-fetch flag set is GET_SERVICES | GET_RECEIVERS only).
+        val fallback = PackageInfo().apply {
+            services = arrayOf(
+                ServiceInfo().apply { name = "com.outlogic.collector.GeoSyncService" }
+            )
+            receivers = arrayOf(
+                ActivityInfo().apply { name = "com.outlogic.collector.WakeReceiver" }
+            )
+            activities = null
+            providers = null
+        }
+
+        val result = scanner.extractComponentClassNames(primary, fallback)
+
+        assertEquals(
+            listOf(
+                "com.example.broker.MainActivity",
+                "com.outlogic.collector.GeoSyncService",
+                "com.outlogic.collector.WakeReceiver"
+            ),
+            result
+        )
+    }
+
+    // ── 10. extractNativeLibFileNames ────────────────────────────────────────
+
+    @Test
+    fun `extractNativeLibFileNames returns deduped leaf filenames across ABIs`() {
+        val apk = buildSyntheticApk("test.apk", listOf(
+            "AndroidManifest.xml",
+            "classes.dex",
+            "lib/arm64-v8a/libxmode.so",
+            "lib/arm64-v8a/libcollector.so",
+            "lib/x86_64/libxmode.so",                 // dup of arm64-v8a leaf
+            "lib/armeabi-v7a/libcollector.so",        // dup of arm64-v8a leaf
+            "lib/arm64-v8a/libunique.so",
+            "res/values/strings.xml"
+        ))
+        val appInfo = ApplicationInfo().apply { publicSourceDir = apk.absolutePath }
+
+        val result = scanner.extractNativeLibFileNames(appInfo)
+
+        assertEquals(listOf("libcollector.so", "libunique.so", "libxmode.so"), result)
+    }
+
+    @Test
+    fun `extractNativeLibFileNames returns emptyList for a non-existent path`() {
+        val appInfo = ApplicationInfo().apply { publicSourceDir = "/does/not/exist.apk" }
+        assertEquals(emptyList<String>(), scanner.extractNativeLibFileNames(appInfo))
+    }
+
+    @Test
+    fun `extractNativeLibFileNames returns emptyList for a corrupt zip`() {
+        val bogus = tempFolder.newFile("bogus.apk")
+        bogus.writeText("not a zip file")
+        val appInfo = ApplicationInfo().apply { publicSourceDir = bogus.absolutePath }
+        assertEquals(emptyList<String>(), scanner.extractNativeLibFileNames(appInfo))
+    }
+
+    @Test
+    fun `extractNativeLibFileNames truncates to MAX_NATIVE_LIBS_PER_APP and keeps lexicographically-first entries`() {
+        val entries = (1..400).map { "lib/arm64-v8a/lib$it.so" }
+        val apk = buildSyntheticApk("big.apk", entries)
+        val appInfo = ApplicationInfo().apply { publicSourceDir = apk.absolutePath }
+        val result = scanner.extractNativeLibFileNames(appInfo)
+        assertEquals(256, result.size)
+        // sort-then-take guarantees lexicographic stability — "lib1.so" precedes
+        // "lib100.so" etc.
+        assertEquals("lib1.so", result.first())
+    }
+
+    // ── 11. Integration: collectTelemetry populates embedded SDK fields ──────
+
+    @Test
+    fun `collectTelemetry populates embeddedComponentClasses and embeddedNativeLibs`() = runTest {
+        val apk = buildSyntheticApk("integration.apk", listOf(
+            "lib/arm64-v8a/libxmode.so"
+        ))
+        val pkgInfo = PackageInfo().apply {
+            packageName = "com.example.broker"
+            applicationInfo = ApplicationInfo().apply {
+                publicSourceDir = apk.absolutePath
+                sourceDir = apk.absolutePath
+            }
+            services = arrayOf(ServiceInfo().apply { name = "com.outlogic.GeoCollectorService" })
+            receivers = null
+            // Three components chosen so the lex-sort behavior is observable end-to-end:
+            // "com.example.broker.MainActivity" < "com.outlogic.GeoCollectorService" < "com.zzz.LastActivity"
+            activities = arrayOf(
+                ActivityInfo().apply { name = "com.example.broker.MainActivity" },
+                ActivityInfo().apply { name = "com.zzz.LastActivity" }
+            )
+            providers = null
+        }
+        installPackages(pkgInfo)
+
+        val telemetry = scanner.collectTelemetry()
+
+        val entry = telemetry.single { it.packageName == "com.example.broker" }
+        assertEquals(
+            listOf(
+                "com.example.broker.MainActivity",
+                "com.outlogic.GeoCollectorService",
+                "com.zzz.LastActivity"
+            ),
+            entry.embeddedComponentClasses
+        )
+        assertEquals(listOf("libxmode.so"), entry.embeddedNativeLibs)
     }
 }
