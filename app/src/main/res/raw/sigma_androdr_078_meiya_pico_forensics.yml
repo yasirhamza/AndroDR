@@ -12,7 +12,7 @@ description: >
     androdr-051 (Cellebrite UFED) which covers the same threat category
     (state mobile-forensics tooling) from the workstation/exploit angle.
 author: AndroDR (AI-generated)
-date: 2026/05/16
+date: 2026/05/17
 references:
     - https://www.lookout.com/threat-intelligence/article/massistant-chinese-mobile-forensics
     - https://thehackernews.com/2025/07/chinas-massistant-tool-secretly.html
@@ -26,7 +26,8 @@ logsource:
     service: app_scanner
 detection:
     selection:
-        package_name|ioc_lookup: package_ioc_db
+        package_name:
+            - "com.meyapico.massistant"
     filter_system_app:
         is_system_app: true
     condition: selection and not filter_system_app
@@ -38,7 +39,7 @@ display:
     evidence_type: ioc_match
     guidance: "CRITICAL -- this device may have been physically accessed by law enforcement using Chinese mobile forensics tooling. The app may auto-uninstall on USB disconnect."
 falsepositives:
-    - Vendor-internal Meiya Pico QA installs (cross-check package_name against the published Massistant identifier).
+    - Vendor-internal Meiya Pico QA installs (the published Massistant identifier is com.meyapico.massistant; cross-check install source and signing certificate before treating as malicious).
 remediation:
     - "Massistant is a mobile forensic client used by Chinese law enforcement to extract data from seized devices."
     - "If you did not install this app yourself, your device may have been accessed without your knowledge. Seek advice from a digital security trainer or a relevant civil-society organization."
