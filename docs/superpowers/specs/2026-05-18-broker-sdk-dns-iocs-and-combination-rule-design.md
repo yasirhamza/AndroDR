@@ -252,7 +252,7 @@ The fifth `true_negative` (SignalFrame) is load-bearing — it asserts that the 
 11. **Two-reviewer cycle** (spec-compliance + harsh-quality, parallel).
 12. **AndroDR PR.**
 13. **On-device positive verification** on Z Fold 2: build a fixture APK declaring an Outlogic class + holding `ACCESS_FINE_LOCATION` in its manifest, install via `adb`, scan, confirm `androdr-083` fires and `androdr-079` also fires (both should). Uninstall fixture, clean workspace.
-14. **Admin-merge both PRs.**
+14. **Merge both PRs.** Submodule PR admin-merges (light-CI submodule, established pattern across PRs #22 and #23). AndroDR PR waits for CI to go green and merges without `--admin` — GHA is now enforced on this repo as of 2026-05-18.
 
 ## Acceptance criteria
 
@@ -266,7 +266,7 @@ The fifth `true_negative` (SignalFrame) is load-bearing — it asserts that the 
 - [ ] Gate 5 LLM review on `androdr-083`: `pass` or `pass_with_notes` with `fp_risk: low`.
 - [ ] Two-reviewer cycle: both PASS or ACCEPTABLE.
 - [ ] On-device verification: positive fixture (Outlogic class + `ACCESS_FINE_LOCATION`) installed on Z Fold 2 → scan → `androdr-083` fires; fixture uninstalled and workspace clean.
-- [ ] AndroDR PR merged. Both PRs squash-merged via admin.
+- [ ] Submodule PR squash-merged via admin. AndroDR PR squash-merged after CI is green (no `--admin`).
 
 ## Out of scope
 

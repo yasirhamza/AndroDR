@@ -10,7 +10,7 @@
 
 **Spec:** [`docs/superpowers/specs/2026-05-18-broker-sdk-dns-iocs-and-combination-rule-design.md`](../specs/2026-05-18-broker-sdk-dns-iocs-and-combination-rule-design.md) (commit `6b02c00` on `feat/168-dns-iocs-and-combination-rule`).
 
-**CI note:** GHA is enforced now. Earlier PRs in the #168 arc were admin-merged after local checks because CI was "out of budget"; that no longer applies. **Do NOT use `--admin` on `gh pr merge` for either PR in this plan.** Wait for CI to go green. The prerequisite PR #196 (detekt suppressions) must be merged on `main` before either PR in this plan opens, or `lint-and-detekt` will fail.
+**CI note:** GHA is enforced now on the AndroDR repo. Earlier PRs in the #168 arc were admin-merged after local checks because CI was "out of budget"; that no longer applies for the **AndroDR PR**. The submodule repo (`android-sigma-rules/rules`) has light CI and continues to admin-merge per the established pattern across PRs #22 and #23. **Do NOT use `--admin` on `gh pr merge` for the AndroDR PR.** Wait for CI to go green there. The prerequisite PR #196 (detekt suppressions) must be merged on AndroDR `main` before this plan's AndroDR PR opens, or `lint-and-detekt` will fail.
 
 ---
 
@@ -488,7 +488,13 @@ EOF
 )"
 cd /home/yasir/AndroDR
 ```
-Capture the submodule PR URL — Task 13's AndroDR PR body references it.
+
+Capture the submodule PR URL into a shell variable that persists across Tasks 6, 13:
+
+```bash
+SUBMODULE_PR_URL=$(gh pr view --repo android-sigma-rules/rules feat/168-dns-iocs-and-combination-rule --json url -q .url)
+echo "$SUBMODULE_PR_URL" | tee /tmp/submodule_pr_url.txt
+```
 
 - [ ] **Step 5: Admin-merge the submodule PR**
 
@@ -507,9 +513,11 @@ git -C /home/yasir/AndroDR/third-party/android-sigma-rules fetch origin
 git -C /home/yasir/AndroDR/third-party/android-sigma-rules checkout main
 git -C /home/yasir/AndroDR/third-party/android-sigma-rules pull --ff-only
 SUBMODULE_SHA=$(git -C /home/yasir/AndroDR/third-party/android-sigma-rules log -1 --pretty=format:'%H')
+echo "$SUBMODULE_SHA" | tee /tmp/submodule_sha.txt
 echo "Submodule HEAD: $SUBMODULE_SHA"
 ```
-Record `$SUBMODULE_SHA` — Task 13's AndroDR PR body references it.
+
+`SUBMODULE_PR_URL` and `SUBMODULE_SHA` are written to `/tmp/*.txt` so they survive across separate Bash invocations. Task 13 reads them back via `$(cat /tmp/submodule_pr_url.txt)` etc.
 
 ---
 
@@ -895,43 +903,63 @@ Expected: both installs succeed; package listed.
 
 - [ ] **Step 6: Grant the location permission programmatically**
 
-Manifest `<uses-permission>` declares the permission but Android runtime-permission model requires user grant. Grant via adb:
+Manifest `<uses-permission>` declares the permission but Android runtime-permission model requires user grant. The rule's `permissions|contains` matches on either `ACCESS_FINE_LOCATION` or `ACCESS_BACKGROUND_LOCATION` — granting just the former is enough to satisfy the AND condition:
 ```bash
 adb shell pm grant com.androdr.fixture.broker.combo android.permission.ACCESS_FINE_LOCATION
-adb shell pm grant com.androdr.fixture.broker.combo android.permission.ACCESS_BACKGROUND_LOCATION
 ```
-Expected: no errors.
+Expected: no error.
 
-- [ ] **Step 7: Trigger AndroDR scan**
+- [ ] **Step 7: Capture pre-scan ScanResult ID, trigger AndroDR scan, poll for completion**
 
+Snapshot the latest scan ID before the scan triggers, then poll the DB until a newer one appears:
 ```bash
+adb exec-out run-as com.androdr.debug cat databases/androdr.db > /tmp/androdr.db
+adb exec-out run-as com.androdr.debug cat databases/androdr.db-wal > /tmp/androdr.db-wal 2>/dev/null
+adb exec-out run-as com.androdr.debug cat databases/androdr.db-shm > /tmp/androdr.db-shm 2>/dev/null
+PRE_SCAN_ID=$(sqlite3 /tmp/androdr.db "SELECT COALESCE(MAX(id), 0) FROM ScanResult")
+echo "Pre-scan ScanResult max id: $PRE_SCAN_ID"
+
 adb shell am start -n com.androdr.debug/com.androdr.MainActivity
 sleep 5
 adb shell input tap 884 1267   # Run Scan button per PR #190 session
-sleep 90
+
+# Poll until a new ScanResult lands (cap at 5 min to fail fast if the tap missed)
+for i in $(seq 1 30); do
+  sleep 10
+  adb exec-out run-as com.androdr.debug cat databases/androdr.db > /tmp/androdr.db 2>/dev/null
+  adb exec-out run-as com.androdr.debug cat databases/androdr.db-wal > /tmp/androdr.db-wal 2>/dev/null
+  adb exec-out run-as com.androdr.debug cat databases/androdr.db-shm > /tmp/androdr.db-shm 2>/dev/null
+  POST_SCAN_ID=$(sqlite3 /tmp/androdr.db "SELECT COALESCE(MAX(id), 0) FROM ScanResult")
+  if [ "$POST_SCAN_ID" -gt "$PRE_SCAN_ID" ]; then
+    echo "New scan completed at id=$POST_SCAN_ID after $((i * 10))s"
+    break
+  fi
+done
+
+if [ "$POST_SCAN_ID" = "$PRE_SCAN_ID" ]; then
+  echo "FAIL: no new scan after 5 minutes — the tap at (884, 1267) likely missed the Run Scan button. Inspect via 'adb shell uiautomator dump' and re-tap the correct coordinates."
+  exit 1
+fi
 ```
+
+Expected: a new ScanResult ID greater than `PRE_SCAN_ID` is captured into `POST_SCAN_ID`. If the tap missed (UI moved since PR #190), the script fails fast with a clear diagnostic.
 
 - [ ] **Step 8: Verify findings include androdr-083**
 
+Reuse the `POST_SCAN_ID` captured in Step 7:
+
 ```bash
-adb exec-out run-as com.androdr.debug cat databases/androdr.db > /tmp/androdr.db
-adb exec-out run-as com.androdr.debug cat databases/androdr.db-wal > /tmp/androdr.db-wal
-adb exec-out run-as com.androdr.debug cat databases/androdr.db-shm > /tmp/androdr.db-shm
-LATEST_SCAN=$(sqlite3 /tmp/androdr.db "SELECT id FROM ScanResult ORDER BY timestamp DESC LIMIT 1")
-sqlite3 /tmp/androdr.db "SELECT findings FROM ScanResult WHERE id=$LATEST_SCAN" | python3 -c "
+sqlite3 /tmp/androdr.db "SELECT findings FROM ScanResult WHERE id=$POST_SCAN_ID" | python3 -c "
 import sys, json
 data = json.loads(sys.stdin.read())
-from collections import Counter
-ids = Counter(f.get('ruleId', '?') for f in data)
-print('Per-rule counts:')
-for rid, count in sorted(ids.items()):
-    print(f'  {rid}: {count}')
 target_rules = ['androdr-079', 'androdr-083']
-print()
 print('Target firings:')
+hits = 0
 for f in data:
     if f.get('ruleId') in target_rules:
         print(f'  rule={f[\"ruleId\"]} package={f.get(\"packageName\", f.get(\"package\", \"?\"))}')
+        hits += 1
+print(f'Total target firings: {hits} (expected: 2)')
 "
 ```
 
@@ -978,11 +1006,15 @@ Expected: 2 new files + 2 modified (SigmaRuleEngine.kt + submodule pointer).
 
 - [ ] **Step 2: Commit**
 
+Load the captured submodule values from Task 6 (`/tmp/submodule_pr_url.txt` and `/tmp/submodule_sha.txt`) into the commit message via shell substitution on the raw heredoc:
+
 ```bash
-git commit -m "$(cat <<'EOF'
+SUBMODULE_PR_URL=$(cat /tmp/submodule_pr_url.txt)
+SUBMODULE_SHA=$(cat /tmp/submodule_sha.txt)
+COMMIT_MSG=$(cat <<'EOF'
 feat(rules): broker-SDK DNS IOCs + combination rule (#168, closes)
 
-Sibling of android-sigma-rules PR <SUBMODULE_PR_URL> (squash <SUBMODULE_SHA>).
+Sibling of android-sigma-rules PR __SUBMODULE_PR_URL__ (squash __SUBMODULE_SHA__).
 Closes #168.
 
 - Bumps submodule pointer.
@@ -1009,10 +1041,13 @@ Verification:
 
 Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
 EOF
-)"
+)
+COMMIT_MSG="${COMMIT_MSG//__SUBMODULE_PR_URL__/$SUBMODULE_PR_URL}"
+COMMIT_MSG="${COMMIT_MSG//__SUBMODULE_SHA__/$SUBMODULE_SHA}"
+git commit -m "$COMMIT_MSG"
 ```
 
-Replace `<SUBMODULE_PR_URL>` and `<SUBMODULE_SHA>` with the values from Task 6.
+The `__PLACEHOLDER__` form is used inside the single-quoted heredoc (which would prevent `$VAR` expansion) and substituted via Bash parameter expansion after — produces a valid commit message with the real values inlined.
 
 - [ ] **Step 3: Push**
 
@@ -1020,9 +1055,12 @@ Run: `git push -u origin feat/168-dns-iocs-and-combination-rule`
 
 - [ ] **Step 4: Open the AndroDR PR**
 
-Run:
+Run (uses the same `__PLACEHOLDER__` substitution pattern as Step 2):
+
 ```bash
-gh pr create --title "feat(#168, closes): broker-SDK DNS IOCs + combination rule" --body "$(cat <<'EOF'
+SUBMODULE_PR_URL=$(cat /tmp/submodule_pr_url.txt)
+SUBMODULE_SHA=$(cat /tmp/submodule_sha.txt)
+PR_BODY=$(cat <<'EOF'
 ## Summary
 
 Closes #168 by shipping the two remaining deliverables:
@@ -1030,7 +1068,7 @@ Closes #168 by shipping the two remaining deliverables:
 - **DNS detection** (via the submodule): 18 broker-telemetry domain entries added to \`ioc-data/c2-domains.yml\` with per-vendor \`family\` attribution + new \`DATA_BROKER_SDK\` category enum. The existing androdr-003 generic DNS rule picks them up automatically — no new SIGMA rules for DNS.
 - **Combination rule androdr-083**: fires when an app embeds one of the 4 anchored broker SDKs AND holds ACCESS_FINE_LOCATION or ACCESS_BACKGROUND_LOCATION. status: experimental, level: high.
 
-Sibling submodule PR: <SUBMODULE_PR_URL> (squash <SUBMODULE_SHA>).
+Sibling submodule PR: __SUBMODULE_PR_URL__ (squash __SUBMODULE_SHA__).
 
 ## Verification
 - [x] Gate 1 (validate-rule.py): PASS on androdr-083
@@ -1055,10 +1093,15 @@ Sibling submodule PR: <SUBMODULE_PR_URL> (squash <SUBMODULE_SHA>).
 
 🤖 Generated with [Claude Code](https://claude.com/claude-code)
 EOF
-)"
+)
+PR_BODY="${PR_BODY//__SUBMODULE_PR_URL__/$SUBMODULE_PR_URL}"
+PR_BODY="${PR_BODY//__SUBMODULE_SHA__/$SUBMODULE_SHA}"
+PR_URL=$(gh pr create --title "feat(#168, closes): broker-SDK DNS IOCs + combination rule" --body "$PR_BODY")
+PR_NUM=$(echo "$PR_URL" | grep -oE '[0-9]+$')
+echo "$PR_NUM" | tee /tmp/androdr_pr_num.txt
 ```
 
-Replace `<SUBMODULE_PR_URL>` and `<SUBMODULE_SHA>`. Capture the AndroDR PR number — Task 14 needs it.
+`PR_NUM` is written to `/tmp/androdr_pr_num.txt` so Tasks 14, 15 read it back via `$(cat /tmp/androdr_pr_num.txt)`.
 
 ---
 
@@ -1070,16 +1113,29 @@ Replace `<SUBMODULE_PR_URL>` and `<SUBMODULE_SHA>`. Capture the AndroDR PR numbe
 
 - [ ] **Step 1: Watch CI to terminal state**
 
-Use the `Monitor` tool with a polling script:
+`gh pr checks` does NOT support `--json`. The right API is `gh pr view --json statusCheckRollup`. Each entry has a `status` (`COMPLETED`/`IN_PROGRESS`/`QUEUED`) and a `conclusion` (`SUCCESS`/`FAILURE`/`CANCELLED`/`SKIPPED`/`TIMED_OUT`/`NEUTRAL`). Use the `Monitor` tool with this polling script:
 
 ```bash
+PR_NUM=$(cat /tmp/androdr_pr_num.txt)
 prev=""
 while true; do
-  s=$(gh pr checks <PR-NUM> --json name,bucket 2>/dev/null || echo "[]")
-  cur=$(echo "$s" | jq -r '.[] | select(.bucket!="pending") | "\(.name): \(.bucket)"' 2>/dev/null | sort)
+  s=$(gh pr view "$PR_NUM" --json statusCheckRollup --jq '.statusCheckRollup' 2>/dev/null || echo "[]")
+  # Emit a line per check that has reached a terminal state (changed since last poll).
+  cur=$(echo "$s" | jq -r '
+    .[] |
+    select(.status == "COMPLETED") |
+    "\(.name): \(.conclusion // "?")"
+  ' 2>/dev/null | sort)
   comm -13 <(echo "$prev") <(echo "$cur")
   prev="$cur"
-  if echo "$s" | jq -e 'length > 0 and all(.bucket!="pending")' >/dev/null 2>&1; then
+  # Exit when every check is COMPLETED (none still IN_PROGRESS or QUEUED).
+  if echo "$s" | jq -e 'length > 0 and all(.status == "COMPLETED")' >/dev/null 2>&1; then
+    # Surface any non-SUCCESS terminal states explicitly (FAILURE / CANCELLED / TIMED_OUT).
+    fails=$(echo "$s" | jq -r '.[] | select(.status == "COMPLETED" and .conclusion != "SUCCESS" and .conclusion != "SKIPPED" and .conclusion != "NEUTRAL") | "\(.name): \(.conclusion)"')
+    if [ -n "$fails" ]; then
+      echo "NON_SUCCESS_GATES:"
+      echo "$fails"
+    fi
     echo "ALL_DONE"
     break
   fi
@@ -1087,10 +1143,17 @@ while true; do
 done
 ```
 
+The script emits one line per gate when it first transitions to `COMPLETED`, prints the conclusion (`SUCCESS`/`FAILURE`/etc.), and surfaces all non-success terminal states at the end before printing `ALL_DONE`. Silence is NOT success — if a gate stays in `IN_PROGRESS` indefinitely the loop continues and the implementer notices by absence of `ALL_DONE`.
+
 - [ ] **Step 2: Verify all required gates green**
 
-Run: `gh pr checks <PR-NUM>`
-Expected: all required gates (`build-and-test`, `lint-and-detekt`, `python-pipeline`, `secret-scan`, `submodule-check`, `instrumented` if applicable) show `pass`.
+Run:
+```bash
+PR_NUM=$(cat /tmp/androdr_pr_num.txt)
+gh pr checks "$PR_NUM"
+```
+
+Expected: all required gates from the AndroDR `.github/workflows/ci.yml` show `pass`. The full required-gate set is `build-and-test`, `lint-and-detekt`, `python-pipeline`, `secret-scan`, `submodule-check`, `apk-analyze`, `instrumented` (when applicable for the diff), plus the umbrella `ci-success` gate that fails if any of the above fails.
 
 If any gate is `fail`:
 - Read the failure logs via `gh run view --log-failed <run-id>`.
@@ -1105,10 +1168,14 @@ If any gate is `fail`:
 
 - [ ] **Step 1: Merge (no admin-bypass)**
 
-Run: `gh pr merge <PR-NUM> --squash --delete-branch`
+Run:
+```bash
+PR_NUM=$(cat /tmp/androdr_pr_num.txt)
+gh pr merge "$PR_NUM" --squash --delete-branch
+```
 Expected: merge succeeds. The PR body's `Closes #168` auto-closes the issue.
 
-If GitHub complains about required reviewers etc., resolve via the repo's PR settings (or use admin only if a clearly-extraneous required reviewer can't approve in time — but the user's standing instruction is to wait for CI).
+If GitHub complains about required reviewers etc., resolve via the repo's PR settings. Do NOT use `--admin` — the whole point of Task 14 is that CI is now an enforced gate, and bypassing it here defeats the recent CI-cleanup work (PR #196 + this plan's CI discipline).
 
 - [ ] **Step 2: Pull main + verify**
 
