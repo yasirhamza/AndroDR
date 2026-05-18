@@ -52,7 +52,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -63,6 +62,7 @@ import com.androdr.R
 import com.androdr.sigma.Finding
 import com.androdr.ui.common.SeverityChip
 import com.androdr.ui.common.severityColor
+import com.androdr.ui.theme.androdrColors
 
 private val FILTER_LEVELS = listOf("critical", "high", "medium", "low")
 
@@ -167,7 +167,8 @@ fun AppScanScreen(
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun AppGroupCard(group: AppGroup, onClick: () -> Unit) {
-    val color = severityColor(group.highestLevel)
+    val colors = MaterialTheme.androdrColors
+    val color = severityColor(group.highestLevel, colors)
 
     Card(
         modifier = Modifier
@@ -244,7 +245,8 @@ private fun AppGroupDetailSheet(
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val context = LocalContext.current
-    val color = severityColor(group.highestLevel)
+    val colors = MaterialTheme.androdrColors
+    val color = severityColor(group.highestLevel, colors)
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -322,7 +324,7 @@ private fun AppGroupDetailSheet(
                         Icon(
                             imageVector = Icons.Filled.Warning,
                             contentDescription = null,
-                            tint = severityColor(finding.level),
+                            tint = severityColor(finding.level, colors),
                             modifier = Modifier.size(18.dp)
                         )
                         Column {
@@ -425,7 +427,8 @@ private fun AppGroupDetailSheet(
 
 @Composable
 fun RiskChip(level: String, modifier: Modifier = Modifier) {
-    val color = severityColor(level)
+    val colors = MaterialTheme.androdrColors
+    val color = severityColor(level, colors)
     SuggestionChip(
         onClick = {},
         label = {
@@ -442,5 +445,3 @@ fun RiskChip(level: String, modifier: Modifier = Modifier) {
         modifier = modifier
     )
 }
-
-fun riskLevelColor(level: String): Color = severityColor(level)

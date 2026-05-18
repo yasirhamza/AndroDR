@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
-<resources>
+<resources xmlns:tools="http://schemas.android.com/tools">
     <style name="Theme.AndroDR" parent="android:Theme.Material.NoActionBar">
-        <item name="android:statusBarColor">#1A1A2E</item>
-        <item name="android:navigationBarColor">#1A1A2E</item>
+        <item name="android:forceDarkAllowed" tools:targetApi="29">false</item>
+        <item name="android:windowBackground">@android:color/transparent</item>
     </style>
 </resources>

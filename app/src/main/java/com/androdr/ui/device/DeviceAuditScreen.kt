@@ -28,6 +28,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.androdr.ui.theme.androdrColors
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.androdr.R
@@ -85,7 +86,7 @@ fun DeviceAuditScreen(
                         Text(
                             text = stringResource(R.string.device_issues_attention, triggeredCount),
                             style = MaterialTheme.typography.bodySmall,
-                            color = Color(0xFFCF6679)
+                            color = MaterialTheme.androdrColors.critical
                         )
                     } else if (totalCount > 0) {
                         Text(
@@ -123,7 +124,7 @@ fun DeviceAuditScreen(
                 item {
                     SectionHeader(
                         text = stringResource(R.string.section_issues_found),
-                        color = Color(0xFFCF6679)
+                        color = MaterialTheme.androdrColors.critical
                     )
                 }
                 items(triggeredFindings) { finding ->

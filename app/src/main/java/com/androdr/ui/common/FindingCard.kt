@@ -21,13 +21,13 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.androdr.R
 import com.androdr.sigma.Evidence
 import com.androdr.sigma.Finding
+import com.androdr.ui.theme.androdrColors
 
 // Compose composable rendering a finding card with evidence summary; splitting would fragment UI logic
 @Suppress("LongMethod")
@@ -39,8 +39,8 @@ fun FindingCard(finding: Finding, onEvidenceTap: ((Finding) -> Unit)? = null) {
             if (hasEvidence && onEvidenceTap != null) Modifier.clickable { onEvidenceTap(finding) } else Modifier
         ),
         colors = CardDefaults.cardColors(
-            containerColor = if (finding.triggered) Color(0xFFCF6679).copy(alpha = 0.08f)
-            else MaterialTheme.colorScheme.surfaceContainerHigh
+            containerColor = if (finding.triggered) MaterialTheme.androdrColors.critical.copy(alpha = 0.08f)
+                             else MaterialTheme.colorScheme.surfaceContainer
         )
     ) {
         Row(modifier = Modifier.padding(16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -51,7 +51,8 @@ fun FindingCard(finding: Finding, onEvidenceTap: ((Finding) -> Unit)? = null) {
                 } else {
                     stringResource(R.string.finding_passed)
                 },
-                tint = if (finding.triggered) Color(0xFFCF6679) else MaterialTheme.colorScheme.primary,
+                tint = if (finding.triggered) MaterialTheme.androdrColors.critical
+                       else MaterialTheme.colorScheme.primary,
                 modifier = Modifier.size(24.dp)
             )
             Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
