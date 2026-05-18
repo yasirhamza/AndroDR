@@ -23,6 +23,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -35,6 +38,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.androdr.ui.theme.ThemeMode
 import com.androdr.util.appVersion
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -47,6 +51,7 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
     val blocklistBlockMode by viewModel.blocklistBlockMode.collectAsStateWithLifecycle()
     val domainIocBlockMode by viewModel.domainIocBlockMode.collectAsStateWithLifecycle()
     val customRuleUrls by viewModel.customRuleUrls.collectAsStateWithLifecycle()
+    val themeMode by viewModel.themeMode.collectAsStateWithLifecycle()
 
     val sigmaRuleCount by viewModel.sigmaRuleCount.collectAsStateWithLifecycle()
     val domainIocCount by viewModel.domainIocCount.collectAsStateWithLifecycle()
@@ -123,6 +128,22 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.primary
             )
+
+            Text(
+                text = "Appearance",
+                style = MaterialTheme.typography.titleMedium,
+                modifier = Modifier.padding(top = 16.dp)
+            )
+            Text(
+                text = "Choose how AndroDR adapts to your system theme.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            ThemeModePicker(
+                selected = themeMode,
+                onSelect = { viewModel.setThemeMode(it) }
+            )
+            HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
 
             Text(
                 text = "DNS Blocklist",
@@ -425,5 +446,28 @@ private fun UpdateStatusRow(label: String, status: String) {
             color = if (status.startsWith("Failed")) MaterialTheme.colorScheme.error
                     else MaterialTheme.colorScheme.primary
         )
+    }
+}
+
+@Composable
+private fun ThemeModePicker(
+    selected: ThemeMode,
+    onSelect: (ThemeMode) -> Unit
+) {
+    val options = listOf(
+        ThemeMode.AUTO  to "System",
+        ThemeMode.LIGHT to "Light",
+        ThemeMode.DARK  to "Dark"
+    )
+    SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+        options.forEachIndexed { index, (mode, label) ->
+            SegmentedButton(
+                selected = selected == mode,
+                onClick  = { onSelect(mode) },
+                shape    = SegmentedButtonDefaults.itemShape(index = index, count = options.size)
+            ) {
+                Text(label)
+            }
+        }
     }
 }
