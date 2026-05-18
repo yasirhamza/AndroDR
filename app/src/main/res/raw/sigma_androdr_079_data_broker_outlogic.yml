@@ -1,0 +1,48 @@
+title: Embedded data-broker SDK — Outlogic (X-Mode Social)
+id: androdr-079
+status: experimental
+category: incident
+description: >
+    Detects the Outlogic (formerly X-Mode Social) location-data broker SDK
+    embedded inside an installed app. X-Mode was banned from the Play Store
+    in December 2020 after Vice/Motherboard reporting tied it to US military
+    and federal LE buyers. The vendor was acquired by Digital Envoy in
+    August 2021 and rebranded as Outlogic. The FTC finalized a settlement
+    in April 2024 prohibiting sale of sensitive location data. The match
+    set is the two unambiguous io.xmode.* class prefixes documented by
+    Exodus Privacy tracker #354 and the ExpressVPN 'Xoth' investigation;
+    the io.mysdk.* prefix is intentionally excluded because it is shared
+    with SignalFrame/WirelessRegistry and would cause false positives.
+author: AndroDR (AI-generated)
+date: 2026/05/18
+references:
+    - https://reports.exodus-privacy.eu.org/en/trackers/354/
+    - https://www.ftc.gov/news-events/news/press-releases/2024/04/ftc-finalizes-order-x-mode-successor-outlogic-prohibiting-it-sharing-or-selling-sensitive-location
+tags:
+    - attack.t1430
+    - attack.t1437.001
+logsource:
+    product: androdr
+    service: app_scanner
+detection:
+    selection:
+        embedded_component_class|contains:
+            - 'io.xmode.BcnConfig'
+            - 'io.xmode.locationsdk'
+    filter_system_app:
+        is_system_app: true
+    condition: selection and not filter_system_app
+level: medium
+display:
+    category: app_risk
+    icon: warning
+    triggered_title: "Data-broker SDK: Outlogic"
+    evidence_type: ioc_match
+    summary_template: "Outlogic SDK class detected: {matched_value}"
+    guidance: "This app embeds the Outlogic (X-Mode) location-broker SDK, known for reselling fine-grained location data to military and federal LE customers. Consider uninstalling or denying location permissions."
+falsepositives:
+    - "App that legitimately embeds the SDK with disclosed user consent; rare given the SDK's regulatory history."
+    - "Pre-installed system app shipping the SDK (filtered out by filter_system_app)."
+remediation:
+    - "Review whether you need this app; broker SDKs run in the background."
+    - "If keeping the app, deny ACCESS_BACKGROUND_LOCATION and ACCESS_FINE_LOCATION."

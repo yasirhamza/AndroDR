@@ -1,0 +1,44 @@
+title: Embedded data-broker SDK — Predicio (Telescope)
+id: androdr-081
+status: experimental
+category: incident
+description: >
+    Detects the Predicio 'Telescope' SDK embedded inside an installed app.
+    Predicio was removed from Google Play and Apple's App Store in
+    February 2021 after Vice/Motherboard reporting (Joseph Cox) exposed
+    that the Salaat First Muslim prayer app exfiltrated user location to
+    predic.io endpoints. The SDK is functionally defunct but historical
+    versions may persist on devices that have not been re-published.
+author: AndroDR (AI-generated)
+date: 2026/05/18
+references:
+    - https://www.vice.com/en/article/muslim-app-location-data-salaat-first/
+    - https://reports.exodus-privacy.eu.org/en/trackers/357/
+tags:
+    - attack.t1430
+    - attack.t1437.001
+logsource:
+    product: androdr
+    service: app_scanner
+detection:
+    selection:
+        embedded_component_class|contains:
+            - 'com.telescope.android'
+            - 'io.predic.tracker'
+    filter_system_app:
+        is_system_app: true
+    condition: selection and not filter_system_app
+level: medium
+display:
+    category: app_risk
+    icon: warning
+    triggered_title: "Data-broker SDK: Predicio"
+    evidence_type: ioc_match
+    summary_template: "Predicio (Telescope) SDK class detected: {matched_value}"
+    guidance: "This app embeds the Predicio location-broker SDK, banned from both major app stores in 2021. Historical versions may remain on un-updated apps; consider uninstalling."
+falsepositives:
+    - "Legacy app that has not been re-published since 2020-2021 and retained the Predicio SDK."
+    - "Pre-installed system app shipping the SDK (filtered out by filter_system_app)."
+remediation:
+    - "Uninstall this app or check the developer's website for an updated version that removed the SDK."
+    - "If keeping the app, deny ACCESS_BACKGROUND_LOCATION and ACCESS_FINE_LOCATION."
