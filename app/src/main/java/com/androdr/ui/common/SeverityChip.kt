@@ -55,6 +55,7 @@ fun severityColor(level: String, colors: ExtendedColors): Color = when (level.lo
     else       -> colors.neutral
 }
 
+@Suppress("UnusedPrivateMember") // Compose @Preview functions are invoked by the IDE preview tool, not by code.
 @Preview(name = "Severity chips — Dark", uiMode = Configuration.UI_MODE_NIGHT_YES)
 @Preview(name = "Severity chips — Light", uiMode = Configuration.UI_MODE_NIGHT_NO)
 @Composable
