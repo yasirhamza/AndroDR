@@ -64,6 +64,7 @@ private fun relativeLuminance(c: Color): Double {
 }
 
 private fun Color.toHex(): String = String.format(
+    java.util.Locale.ROOT,
     "#%02X%02X%02X",
     (red * 255).toInt(), (green * 255).toInt(), (blue * 255).toInt()
 )

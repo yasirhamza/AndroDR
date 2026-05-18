@@ -58,6 +58,7 @@ import javax.inject.Inject
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
 
+    @Suppress("LateinitUsage") // Hilt field injection requires lateinit on @AndroidEntryPoint activities.
     @Inject lateinit var settingsRepository: SettingsRepository
 
     override fun onCreate(savedInstanceState: android.os.Bundle?) {
