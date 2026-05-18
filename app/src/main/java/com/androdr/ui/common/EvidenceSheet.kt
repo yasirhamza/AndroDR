@@ -24,13 +24,13 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.androdr.sigma.CveEvidence
 import com.androdr.sigma.Evidence
 import com.androdr.sigma.Finding
+import com.androdr.ui.theme.androdrColors
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -105,7 +105,7 @@ private fun CveListContent(evidence: Evidence.CveList, remediation: List<String>
         Text(
             text = "${evidence.campaignCount} CVE(s) linked to known spyware campaigns",
             style = MaterialTheme.typography.bodySmall,
-            color = Color(0xFFCF6679)
+            color = MaterialTheme.androdrColors.critical
         )
     }
 
@@ -155,7 +155,7 @@ private fun CveCard(cve: CveEvidence) {
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
             containerColor = if (cve.campaigns.isNotEmpty())
-                Color(0xFFCF6679).copy(alpha = 0.06f)
+                MaterialTheme.androdrColors.critical.copy(alpha = 0.06f)
             else
                 MaterialTheme.colorScheme.surfaceContainer
         )
@@ -202,8 +202,8 @@ private fun CveCard(cve: CveEvidence) {
                                 )
                             },
                             colors = SuggestionChipDefaults.suggestionChipColors(
-                                containerColor = Color(0xFFCF6679).copy(alpha = 0.2f),
-                                labelColor = Color(0xFFCF6679)
+                                containerColor = MaterialTheme.androdrColors.criticalContainer,
+                                labelColor = MaterialTheme.androdrColors.critical
                             )
                         )
                     }
@@ -258,7 +258,7 @@ private fun PermissionClusterContent(evidence: Evidence.PermissionCluster) {
     Text(
         text = "${evidence.surveillanceCount} of ${evidence.permissions.size} permissions are surveillance-capable",
         style = MaterialTheme.typography.bodySmall,
-        color = Color(0xFFCF6679)
+        color = MaterialTheme.androdrColors.critical
     )
 
     Spacer(modifier = Modifier.height(4.dp))
@@ -278,8 +278,8 @@ private fun PermissionClusterContent(evidence: Evidence.PermissionCluster) {
                     )
                 },
                 colors = SuggestionChipDefaults.suggestionChipColors(
-                    containerColor = Color(0xFFFF9800).copy(alpha = 0.15f),
-                    labelColor = Color(0xFFFF9800)
+                    containerColor = MaterialTheme.androdrColors.high.copy(alpha = 0.15f),
+                    labelColor = MaterialTheme.androdrColors.high
                 )
             )
         }

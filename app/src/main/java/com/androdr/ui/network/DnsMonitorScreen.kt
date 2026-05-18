@@ -36,7 +36,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -46,6 +45,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.androdr.R
 import com.androdr.ui.settings.SettingsViewModel
 import com.androdr.data.model.DnsEvent
+import com.androdr.ui.theme.androdrColors
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -255,7 +255,7 @@ private fun DnsEventItem(event: DnsEvent) {
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
             containerColor = if (isMatched)
-                Color(0xFFCF6679).copy(alpha = 0.08f)
+                MaterialTheme.androdrColors.critical.copy(alpha = 0.08f)
             else
                 MaterialTheme.colorScheme.surfaceContainerHigh
         )
@@ -270,7 +270,7 @@ private fun DnsEventItem(event: DnsEvent) {
                     text = event.domain,
                     style = MaterialTheme.typography.bodyMedium,
                     fontWeight = FontWeight.SemiBold,
-                    color = if (isMatched) Color(0xFFCF6679)
+                    color = if (isMatched) MaterialTheme.androdrColors.critical
                     else MaterialTheme.colorScheme.onSurface
                 )
                 Text(
@@ -299,10 +299,10 @@ private fun DnsEventItem(event: DnsEvent) {
                 },
                 colors = SuggestionChipDefaults.suggestionChipColors(
                     containerColor = if (isMatched)
-                        Color(0xFFCF6679).copy(alpha = 0.2f)
+                        MaterialTheme.androdrColors.criticalContainer
                     else
                         MaterialTheme.colorScheme.primary.copy(alpha = 0.15f),
-                    labelColor = if (isMatched) Color(0xFFCF6679)
+                    labelColor = if (isMatched) MaterialTheme.androdrColors.critical
                     else MaterialTheme.colorScheme.primary
                 )
             )

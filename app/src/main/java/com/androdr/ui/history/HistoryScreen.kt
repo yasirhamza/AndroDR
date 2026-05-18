@@ -58,7 +58,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
@@ -72,6 +71,7 @@ import com.androdr.reporting.ExportMode
 import com.androdr.scanner.ScanOrchestrator
 import com.androdr.ui.common.ExportModeDialog
 import com.androdr.ui.common.severityColor
+import com.androdr.ui.theme.androdrColors
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -249,7 +249,8 @@ private fun ScanReportBottomSheet(
     val context = LocalContext.current
     val dateFormatter = remember { SimpleDateFormat("MMM d, yyyy  HH:mm", Locale.getDefault()) }
     val dateString = dateFormatter.format(Date(scan.timestamp))
-    val riskColor = severityColor(scan.overallRiskLevel.name)
+    val colors = MaterialTheme.androdrColors
+    val riskColor = severityColor(scan.overallRiskLevel.name, colors)
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -396,7 +397,8 @@ private fun ScanHistoryItem(
     val dateString = dateFormatter.format(Date(scan.timestamp))
 
     val riskLevel = scan.overallRiskLevel
-    val riskColor = severityColor(riskLevel.name)
+    val colors = MaterialTheme.androdrColors
+    val riskColor = severityColor(riskLevel.name, colors)
 
     Card(
         modifier = Modifier
@@ -558,13 +560,13 @@ private fun DiffSection(diff: ScanOrchestrator.ScanDiff) {
                 text = stringResource(R.string.diff_new_risks),
                 style = MaterialTheme.typography.labelMedium,
                 fontWeight = FontWeight.Bold,
-                color = Color(0xFFCF6679)
+                color = MaterialTheme.androdrColors.critical
             )
             diff.newFindings.forEach { finding ->
                 Text(
                     text = "\u2022 ${finding.title} (${finding.level.uppercase()})",
                     style = MaterialTheme.typography.bodySmall,
-                    color = Color(0xFFCF6679)
+                    color = MaterialTheme.androdrColors.critical
                 )
             }
         }

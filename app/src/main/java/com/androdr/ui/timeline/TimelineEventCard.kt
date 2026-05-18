@@ -53,6 +53,8 @@ import com.androdr.R
 import com.androdr.data.model.ForensicTimelineEvent
 import com.androdr.sigma.FindingCategory
 import com.androdr.ui.common.SeverityChip
+import com.androdr.ui.theme.ExtendedColors
+import com.androdr.ui.theme.androdrColors
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -65,7 +67,8 @@ fun TimelineEventCard(
 ) {
     // Neutral telemetry card — no severity badge. Severity lives on
     // Finding rows only; telemetry is pure observation per spec §3.
-    val neutralColor = Color(0xFF00D4AA)
+    val colors = MaterialTheme.androdrColors
+    val neutralColor = colors.neutral
     Card(
         modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
         colors = CardDefaults.cardColors(
@@ -97,7 +100,7 @@ fun TimelineEventCard(
                     maxLines = 2, overflow = TextOverflow.Ellipsis
                 )
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    if (event.campaignName.isNotEmpty()) TagChip(event.campaignName, Color(0xFFCF6679))
+                    if (event.campaignName.isNotEmpty()) TagChip(event.campaignName, colors.critical)
                     if (event.iocType.isNotEmpty()) TagChip(event.iocType, neutralColor)
                     TagChip(event.source, MaterialTheme.colorScheme.primary)
                 }
@@ -199,17 +202,15 @@ private fun CategoryChip(category: FindingCategory) {
 
 @Composable
 private fun severityBackgroundFor(level: String): Color {
-    // Dark-theme-appropriate severity tints: a faint wash of the severity color
-    // over the dark surface. The previous light-theme pastels (0xFFFFF8E1 etc.)
-    // produced bright backgrounds that made text unreadable on dark screens.
+    val colors = MaterialTheme.androdrColors
     val tint = when (level.uppercase()) {
-        "CRITICAL" -> Color(0xFFCF6679) // Material dark error
-        "HIGH" -> Color(0xFFFF8A65)     // deep orange 300
-        "MEDIUM" -> Color(0xFFFFD54F)   // amber 300
-        "LOW" -> Color(0xFF64B5F6)      // blue 300
-        else -> return MaterialTheme.colorScheme.surface
+        "CRITICAL" -> colors.critical
+        "HIGH"     -> colors.high
+        "MEDIUM"   -> colors.medium
+        "LOW"      -> colors.low
+        else       -> return MaterialTheme.colorScheme.surface
     }
-    return tint.copy(alpha = 0.10f) // 10% opacity over dark surface = subtle, readable
+    return tint.copy(alpha = 0.10f)
 }
 
 @Suppress("LongMethod") // Compose detail sheet renders header + all metadata sections + linked evidence
@@ -368,11 +369,12 @@ fun CorrelationClusterCard(
     cluster: EventCluster,
     onEventTap: (ForensicTimelineEvent) -> Unit
 ) {
+    val colors = MaterialTheme.androdrColors
     val clusterColor = when (cluster.pattern) {
         CorrelationPattern.PERMISSION_THEN_C2,
-        CorrelationPattern.INSTALL_THEN_ADMIN -> Color(0xFFCF6679) // Red box
-        CorrelationPattern.MULTI_PERMISSION_BURST -> Color(0xFFFF9800) // Orange box
-        else -> Color(0xFF00D4AA) // neutral
+        CorrelationPattern.INSTALL_THEN_ADMIN     -> colors.critical
+        CorrelationPattern.MULTI_PERMISSION_BURST -> colors.high
+        else                                      -> colors.neutral
     }
 
     Card(
