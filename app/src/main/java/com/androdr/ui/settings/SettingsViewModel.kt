@@ -20,6 +20,7 @@ import com.androdr.ioc.OemPrefixResolver
 import com.androdr.scanner.AppScanner
 import com.androdr.sigma.SigmaRuleEngine
 import com.androdr.sigma.SigmaRuleFeed
+import com.androdr.ui.theme.ThemeMode
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
@@ -65,6 +66,13 @@ class SettingsViewModel @Inject constructor(
 
     val domainIocBlockMode = settingsRepository.domainIocBlockMode
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
+
+    val themeMode = settingsRepository.themeMode
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), ThemeMode.AUTO)
+
+    fun setThemeMode(mode: ThemeMode) {
+        viewModelScope.launch { settingsRepository.setThemeMode(mode) }
+    }
 
     val customRuleUrls: StateFlow<String> get() = _customRuleUrlsInput.asStateFlow()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), "")
