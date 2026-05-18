@@ -10,6 +10,8 @@
 
 **Drift-guard idiom — `.copy(alpha = …)`:** The drift-guard test only catches raw `Color(0xFF…)` literals. Sub-percent tints like the `0.06f`/`0.08f`/`0.15f` washes in `EvidenceSheet` / `DashboardScreen` are migrated to `MaterialTheme.androdrColors.critical.copy(alpha = 0.08f)` (etc.) — those are NOT caught by the guard and preserve the original visual weight. The `*Container` fields in `ExtendedColors` are calibrated for the 20%-ish chip-background use case only.
 
+**Line-number anchors in migration tasks (11-20):** Line numbers cited in migration tasks are correct against `main` at plan-write time. If a rebase has shifted lines, the literals (`Color(0xFFCF6679)` etc.) are unique enough — grep within the named file and migrate every hit. Cited line numbers are an aid, not a hard contract.
+
 **Tech Stack:** Kotlin, Jetpack Compose, Material 3, Hilt, Jetpack DataStore (Preferences), AndroidX `WindowCompat`. JVM unit tests with JUnit 4.
 
 **Spec:** `docs/superpowers/specs/2026-05-18-light-dark-theme-design.md`
@@ -693,13 +695,12 @@ git commit -m "feat(settings-ui): add Appearance section with System/Light/Dark 
 
 - [ ] **Step 1: Add imports**
 
-In `app/src/main/java/com/androdr/MainActivity.kt`, add to imports (alphabetical):
+In `app/src/main/java/com/androdr/MainActivity.kt`, add to imports (alphabetical). Skip any import already present in the file (e.g. `Composable` may already be imported — check before adding):
 
 ```kotlin
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
-import androidx.compose.runtime.Composable
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.graphics.Color
@@ -712,6 +713,8 @@ import com.androdr.data.repo.SettingsRepository
 import com.androdr.ui.theme.ThemeMode
 import javax.inject.Inject
 ```
+
+(`Composable` is already imported; `Modifier` is also already imported.)
 
 - [ ] **Step 2: Inject SettingsRepository and rewire onCreate**
 
@@ -767,7 +770,7 @@ private fun SystemBarsEffect() {
 Notes for the implementer:
 - `androidx.compose.ui.graphics.luminance` is the Compose built-in WCAG luminance helper; do not write a custom one.
 - We do NOT call `WindowCompat.setDecorFitsSystemWindows(window, true)` because that is the platform default — adding it is misleading.
-- The `Surface` wrap is required because Task 10 makes the Activity window background transparent; without it, dialogs and translucent areas would show through to whatever the OEM put underneath.
+- The `Surface` wrap is required because Task 10 makes the Activity window background transparent; without it, dialogs and translucent areas would show through to whatever the OEM put underneath. `AndroDRApp` internally wraps in `Scaffold`, which also paints a surface — this is a deliberate double-paint: the outer Surface guarantees full-window coverage even at the brief moments before/around Scaffold layout.
 
 - [ ] **Step 3: Build the debug APK**
 
@@ -943,21 +946,17 @@ val colors = MaterialTheme.androdrColors
 
 Then change every `severityColor(X)` in that Composable to `severityColor(X, colors)`.
 
-- [ ] **Step 3: Update the `riskLevelColor` wrapper**
+- [ ] **Step 3: Delete the dead `riskLevelColor` wrapper**
 
-The wrapper at line 446 (`fun riskLevelColor(level: String): Color = severityColor(level)`) needs the same parameter:
+The wrapper at line 446 (`fun riskLevelColor(level: String): Color = severityColor(level)`) has **zero external callers** (verified by `grep -rn "riskLevelColor(" app/src/main/java --include="*.kt"` — only the definition matches). It is dead code. Refactoring it would just postpone removal.
+
+Delete the entire line:
 
 ```kotlin
-fun riskLevelColor(level: String, colors: ExtendedColors): Color = severityColor(level, colors)
+fun riskLevelColor(level: String): Color = severityColor(level)
 ```
 
-Then update every caller of `riskLevelColor(...)` in the project (grep first):
-
-```bash
-grep -rn "riskLevelColor(" app/src/main/java --include="*.kt"
-```
-
-For each Composable-scope caller, pass `MaterialTheme.androdrColors`. If a non-Composable caller exists, it must already have access to an `ExtendedColors` instance (or be refactored to receive one). **Verify the grep output before proceeding** — if any caller cannot easily get an `ExtendedColors`, flag it and request guidance; don't paper over it.
+If your grep returns any caller besides the definition itself (the codebase may have evolved since this plan was written): STOP, surface the caller list to the human reviewer, and treat that as a scope expansion. Do NOT silently keep the wrapper.
 
 - [ ] **Step 4: Verify it compiles**
 
@@ -1008,7 +1007,7 @@ tint = if (finding.triggered) MaterialTheme.androdrColors.critical
 - [ ] **Step 4: Verify it compiles**
 
 Run: `./gradlew :app:compileDebugKotlin`
-Expected: still failing on `HistoryScreen.kt` etc. Continue without committing.
+Expected: the ONLY compile errors should be of the form "No value passed for parameter 'colors'" at `severityColor(...)` call sites in files not yet migrated (`HistoryScreen.kt` etc.). If you see any other error class — especially in the file you just edited — STOP, do not commit, surface the error.
 
 ---
 
@@ -1040,7 +1039,7 @@ The rule of thumb: low-alpha washes (≤ 0.15) keep the `.copy(alpha = …)` for
 - [ ] **Step 3: Verify it compiles**
 
 Run: `./gradlew :app:compileDebugKotlin`
-Expected: still failing on other files. Don't commit yet.
+Expected: the ONLY compile errors should be of the form "No value passed for parameter 'colors'" at `severityColor(...)` call sites in files not yet migrated. If you see any other error class — especially in the file you just edited — STOP, do not commit, surface the error.
 
 ---
 
@@ -1078,42 +1077,76 @@ val colors = MaterialTheme.androdrColors
 if (event.campaignName.isNotEmpty()) TagChip(event.campaignName, colors.critical)
 ```
 
-- [ ] **Step 4: Refactor the severity switch (lines 205-210)**
+- [ ] **Step 4: Migrate `severityBackgroundFor` — keep it `@Composable`, preserve the surface fallback**
 
-If the current code is an inline `when` or a private helper, convert to a non-Composable helper:
+The current function at lines 200-213 is:
 
 ```kotlin
-private fun severityTier(severity: String, colors: ExtendedColors): Color =
-    when (severity.uppercase()) {
+@Composable
+private fun severityBackgroundFor(level: String): Color {
+    val tint = when (level.uppercase()) {
+        "CRITICAL" -> Color(0xFFCF6679)
+        "HIGH" -> Color(0xFFFF8A65)
+        "MEDIUM" -> Color(0xFFFFD54F)
+        "LOW" -> Color(0xFF64B5F6)
+        else -> return MaterialTheme.colorScheme.surface
+    }
+    return tint.copy(alpha = 0.10f)
+}
+```
+
+It is **already `@Composable`** (it reads `MaterialTheme.colorScheme.surface`) and the `else` branch *early-returns* the surface color, not a tinted version. Both behaviors must be preserved. Replace with:
+
+```kotlin
+@Composable
+private fun severityBackgroundFor(level: String): Color {
+    val colors = MaterialTheme.androdrColors
+    val tint = when (level.uppercase()) {
         "CRITICAL" -> colors.critical
         "HIGH"     -> colors.high
         "MEDIUM"   -> colors.medium
         "LOW"      -> colors.low
-        else       -> colors.neutral
+        else       -> return MaterialTheme.colorScheme.surface
     }
+    return tint.copy(alpha = 0.10f)
+}
 ```
 
-Call site passes `severityTier(severity, MaterialTheme.androdrColors)` (or the local `colors` from Step 3).
+Behavioral notes:
+- Stays `@Composable` (it must, to read `androdrColors` and `colorScheme.surface`).
+- Surface-fallback `else` branch unchanged.
+- The original `0xFFFF8A65` (deep orange 300) for HIGH and `0xFFFFD54F` (amber 300) for MEDIUM are intentionally unified with the standard `colors.high` / `colors.medium`. Document this in the PR description (the wash on HIGH/MEDIUM rows will look slightly different — deeper orange and darker amber).
+- Original `0xFF64B5F6` LOW maps to `colors.low` — same hue, no change.
 
-The original code uses `0xFFFF8A65` (deep orange 300) for HIGH and `0xFFFFD54F` (amber 300) for MEDIUM; both are now collapsed into the single `colors.high` / `colors.medium` fields. This is intentional — having two separate orange shades for HIGH was unintentional drift between this file and `SeverityChip`.
+- [ ] **Step 5: Migrate the correlation pattern switch in `CorrelationClusterCard` (lines 371-376)**
 
-- [ ] **Step 5: Refactor the correlation pattern switch (lines 373-375)**
+The current switch uses Kotlin fall-through to map two patterns to the same red:
 
 ```kotlin
-private fun correlationPatternColor(pattern: CorrelationPattern, colors: ExtendedColors): Color =
-    when (pattern) {
-        CorrelationPattern.INSTALL_THEN_ADMIN     -> colors.critical
-        CorrelationPattern.MULTI_PERMISSION_BURST -> colors.high
-        else                                      -> colors.neutral
-    }
+val clusterColor = when (cluster.pattern) {
+    CorrelationPattern.PERMISSION_THEN_C2,
+    CorrelationPattern.INSTALL_THEN_ADMIN -> Color(0xFFCF6679) // Red box
+    CorrelationPattern.MULTI_PERMISSION_BURST -> Color(0xFFFF9800) // Orange box
+    else -> Color(0xFF00D4AA) // neutral
+}
 ```
 
-Update the call site to pass `MaterialTheme.androdrColors`.
+`PERMISSION_THEN_C2` MUST stay grouped with `INSTALL_THEN_ADMIN` — dropping it silently demotes a critical correlation. Replace inline (no helper needed; the call site is the only consumer):
+
+```kotlin
+val colors = MaterialTheme.androdrColors
+val clusterColor = when (cluster.pattern) {
+    CorrelationPattern.PERMISSION_THEN_C2,
+    CorrelationPattern.INSTALL_THEN_ADMIN     -> colors.critical
+    CorrelationPattern.MULTI_PERMISSION_BURST -> colors.high
+    else                                      -> colors.neutral
+}
+```
 
 - [ ] **Step 6: Verify it compiles**
 
 Run: `./gradlew :app:compileDebugKotlin`
-Expected: still failing on remaining files. Don't commit yet.
+Expected: the ONLY compile errors should be of the form "No value passed for parameter 'colors'" at `severityColor(...)` call sites in files not yet migrated. If you see any other error class — especially in the file you just edited — STOP, do not commit, surface the error.
 
 ---
 
@@ -1141,7 +1174,7 @@ import com.androdr.ui.theme.androdrColors
 - [ ] **Step 3: Verify it compiles**
 
 Run: `./gradlew :app:compileDebugKotlin`
-Expected: still failing on remaining files. Don't commit yet.
+Expected: the ONLY remaining compile errors should be "No value passed for parameter 'colors'" at `severityColor(...)` call sites in `HistoryScreen.kt`. If you see any other error class — especially in `DnsMonitorScreen.kt` itself — STOP, do not commit, surface the error.
 
 ---
 
@@ -1160,15 +1193,13 @@ import com.androdr.ui.theme.androdrColors
 
 (`MaterialTheme` may already be imported — skip if so.)
 
-- [ ] **Step 2: Update `severityColor` call sites**
+- [ ] **Step 2: Update `severityColor` call sites — each Composable needs its own `colors`**
 
-At each of the two `severityColor(...)` sites (lines 252 and 399), add a local palette pull at the top of the enclosing Composable:
+The two `severityColor(...)` calls are in DIFFERENT enclosing Composables (line 252 in one card; line 399 in another). Compose locals don't leak across function boundaries, so **add `val colors = MaterialTheme.androdrColors` at the top of EACH of the two enclosing Composable bodies** — not just once.
 
-```kotlin
-val colors = MaterialTheme.androdrColors
-```
-
-Then change `severityColor(scan.overallRiskLevel.name)` → `severityColor(scan.overallRiskLevel.name, colors)`, and similarly for `severityColor(riskLevel.name)`.
+Then change:
+- `severityColor(scan.overallRiskLevel.name)` → `severityColor(scan.overallRiskLevel.name, colors)` at line 252.
+- `severityColor(riskLevel.name)` → `severityColor(riskLevel.name, colors)` at line 399.
 
 - [ ] **Step 3: Replace hardcoded literals**
 
@@ -1254,32 +1285,51 @@ else       -> Pair(Icons.Filled.Info, Color(0xFF00D4AA))
 import com.androdr.ui.theme.androdrColors
 ```
 
-- [ ] **Step 2: Replace the switch**
+- [ ] **Step 2: Refactor `findingIconAndColor` to take `colors`**
 
-If the switch is inside a `@Composable`, pull the palette at the top:
-
-```kotlin
-val colors = MaterialTheme.androdrColors
-```
-
-Then replace the literals:
+The switch is inside the non-Composable helper `findingIconAndColor(severity: String)` at line 490. Keep it non-Composable; add the palette parameter:
 
 ```kotlin
-"CRITICAL" -> Pair(Icons.Filled.Error, colors.critical)
-"HIGH"     -> Pair(Icons.Filled.Warning, colors.high)
-"MEDIUM"   -> Pair(Icons.Filled.Warning, colors.medium)
-"ERROR"    -> Pair(Icons.Filled.Error, colors.critical)
-else       -> Pair(Icons.Filled.Info, colors.neutral)
+private fun findingIconAndColor(
+    severity: String,
+    colors: ExtendedColors
+): Pair<ImageVector, Color> = when (severity.uppercase()) {
+    "CRITICAL" -> Pair(Icons.Filled.Error, colors.critical)
+    "HIGH"     -> Pair(Icons.Filled.Warning, colors.high)
+    "MEDIUM"   -> Pair(Icons.Filled.Warning, colors.medium)
+    "ERROR"    -> Pair(Icons.Filled.Error, colors.critical)
+    else       -> Pair(Icons.Filled.Info, colors.neutral)
+}
 ```
 
-If the switch lives in a non-Composable helper, convert it to take `colors: ExtendedColors` as the second parameter (same idiom as `severityColor`), and pass `MaterialTheme.androdrColors` from each call site.
+Add an import for `ExtendedColors`:
 
-- [ ] **Step 3: Verify it compiles**
+```kotlin
+import com.androdr.ui.theme.ExtendedColors
+```
+
+- [ ] **Step 3: Update the caller at line 441**
+
+The only caller is inside `@Composable fun TimelineEventCard(event: ...)` at line 441:
+
+```kotlin
+val (icon, color) = findingIconAndColor(event.severity)
+```
+
+Change to:
+
+```kotlin
+val (icon, color) = findingIconAndColor(event.severity, MaterialTheme.androdrColors)
+```
+
+(Verify there are no other callers with `grep -n "findingIconAndColor(" app/src/main/java/com/androdr/ui/bugreport/BugReportScreen.kt`. If new callers appeared, update each the same way.)
+
+- [ ] **Step 4: Verify it compiles**
 
 Run: `./gradlew :app:compileDebugKotlin`
 Expected: BUILD SUCCESSFUL.
 
-- [ ] **Step 4: Commit**
+- [ ] **Step 5: Commit**
 
 ```bash
 git add app/src/main/java/com/androdr/ui/bugreport/BugReportScreen.kt
@@ -1311,21 +1361,39 @@ The two "risk-level" hues at 346-348 (`0xFFFF1744`, `0xFFFF6E40`, `0xFFFFD54F`) 
 
 The plan proceeds with (a). If the dashboard's risk header *needs* a louder presentation for UX reasons, that's a follow-up design decision, not a migration concern.
 
-- [ ] **Step 1: Add import**
+DashboardScreen has **four separate `@Composable` functions** that each contain hardcoded literals:
+- `PostScanGuidance` (starts at line 287) — severity switch lines 300-315.
+- `RiskLevelCard` (starts at line 344) — risk-level switch lines 346-350.
+- `DiffBanner` (starts at line 407) — warning card lines 411-428.
+- `PartialScanBanner` (starts at line 563) — warning card lines 567-585.
+
+Each Composable needs its own `val colors = MaterialTheme.androdrColors` pull — Compose locals do not leak across function boundaries.
+
+- [ ] **Step 1: Add import + remove the dead one**
+
+Add:
 
 ```kotlin
 import com.androdr.ui.theme.androdrColors
 ```
 
-- [ ] **Step 2: Migrate lines 300-315 (severity switch)**
+Remove the now-dead import at line 61 (verified: no remaining usages of `severityColor` symbol in the file after this migration):
 
-At the top of the enclosing Composable:
+```kotlin
+import com.androdr.ui.common.severityColor   // delete this line
+```
+
+Skipping the removal will produce a "Unused import" warning that may fail release lint (CLAUDE.md notes warnings are treated as errors in release builds).
+
+- [ ] **Step 2: Migrate `PostScanGuidance` severity switch (lines 300-315)**
+
+Inside `PostScanGuidance`, add at the top of its body:
 
 ```kotlin
 val colors = MaterialTheme.androdrColors
 ```
 
-Replace each line in the switch:
+Replace each literal in the switch:
 
 | Old                  | New              |
 |----------------------|------------------|
@@ -1334,9 +1402,15 @@ Replace each line in the switch:
 | `Color(0xFFE6A800)`  | `colors.medium`  |
 | `Color(0xFF00D4AA)`  | `colors.neutral` |
 
-- [ ] **Step 3: Migrate lines 346-350 (risk-level switch)**
+- [ ] **Step 3: Migrate `RiskLevelCard` risk-level switch (lines 346-350)**
 
-Inside the enclosing Composable (palette already pulled in Step 2), replace each:
+Inside `RiskLevelCard` (a different Composable from PostScanGuidance), add its own:
+
+```kotlin
+val colors = MaterialTheme.androdrColors
+```
+
+Replace each:
 
 | Old                                | New                              |
 |------------------------------------|----------------------------------|
@@ -1346,23 +1420,39 @@ Inside the enclosing Composable (palette already pulled in Step 2), replace each
 | `Color(0xFF00D4AA)` (LOW)          | `colors.low`                     |
 | `Color(0xFF00D4AA)` (null branch)  | `colors.neutral`                 |
 
-Note the LOW branch was using the brand teal (`0xFF00D4AA`) in the original — now it correctly uses `colors.low` (blue). The null branch keeps the neutral teal. This is the same deliberate "LOW gets its own color" fix from Task 11.
+The LOW branch shifts from brand teal to actual blue (same deliberate fix as Task 11). Null branch keeps the neutral teal.
 
-- [ ] **Step 4: Migrate the warning cards (lines 411-428 and 567-585)**
+- [ ] **Step 4: Migrate `DiffBanner` warning card (lines 411-428)**
 
-Each card has three orange uses: container background (`0xFFFF9800).copy(alpha = 0.15f)`), icon tint, label color. Replace:
+Inside `DiffBanner` (yet another Composable), add its own:
+
+```kotlin
+val colors = MaterialTheme.androdrColors
+```
+
+Replace the three orange uses (container alpha wash, icon tint, label color):
 
 | Old                                       | New                                                  |
 |-------------------------------------------|------------------------------------------------------|
 | `Color(0xFFFF9800).copy(alpha = 0.15f)`   | `colors.high.copy(alpha = 0.15f)` (keep wash form)   |
 | `Color(0xFFFF9800)`                       | `colors.high`                                        |
 
-- [ ] **Step 5: Verify it compiles**
+- [ ] **Step 5: Migrate `PartialScanBanner` warning card (lines 567-585)**
+
+Inside `PartialScanBanner` (fourth Composable), add its own:
+
+```kotlin
+val colors = MaterialTheme.androdrColors
+```
+
+Apply the same mapping table as Step 4.
+
+- [ ] **Step 6: Verify it compiles**
 
 Run: `./gradlew :app:compileDebugKotlin`
 Expected: BUILD SUCCESSFUL.
 
-- [ ] **Step 6: Commit**
+- [ ] **Step 7: Commit**
 
 ```bash
 git add app/src/main/java/com/androdr/ui/dashboard/DashboardScreen.kt
@@ -1540,6 +1630,15 @@ If the tester's Honor device is reachable, re-test the exact screen where text w
 
 If no Honor device is available: explicitly note "Honor re-test pending — relies on tester verification post-merge" in the PR description. Do not claim the bug fixed without device confirmation.
 
+### Visual changes to call out in the PR description
+
+These are deliberate semantic-color migrations that a tester running visual regression WILL notice. Document them so they are not filed as regressions:
+
+- **LOW severity is now blue, not brand teal.** Affects severity chips, finding cards, dashboard risk swatches, timeline backgrounds. The original code lumped LOW into the neutral teal bucket; the new palette gives LOW its own blue (`androdrColors.low`). Intended fix.
+- **Dashboard CRITICAL / HIGH / MEDIUM risk swatches lose the "loud" presentation.** Previously `0xFFFF1744` (siren red), `0xFFFF6E40` (deep orange), `0xFFFFD54F` (amber 300). Now use the standard severity palette (`androdrColors.critical / .high / .medium`). The siren-red attention grab is gone; if a louder dashboard banner is wanted, raise as a separate UX decision.
+- **TimelineEventCard severity-row washes shift slightly on HIGH and MEDIUM.** Previously `0xFFFF8A65` (deep orange 300) and `0xFFFFD54F` (amber 300) used in `severityBackgroundFor`. Now use `androdrColors.high` (deeper orange) and `androdrColors.medium` (darker amber) at the same 10% alpha. Subtle but visible.
+- **SeverityChip disabled state changes from `0xFF888888`** to `colorScheme.onSurface.copy(alpha = 0.38f)` — adapts to theme instead of being a fixed grey.
+
 - [ ] **Step 7: Commit preview + close**
 
 ```bash
@@ -1553,7 +1652,7 @@ This task produces no further commits; verification output goes into the PR desc
 
 ## Self-Review Notes
 
-Plan has been through one full revision cycle after a two-reviewer plan-gate review. Verified post-revision:
+Plan has been through two full revision cycles, each preceded by a two-reviewer plan-gate review. Verified post-v2-revision:
 
 - **Spec coverage:** every spec section maps to at least one task. Migration covers all 9 files containing hardcoded `Color(0xFF…)` literals (verified by `grep -rn "Color(0x" app/src/main/java --include="*.kt" | grep -v "ui/theme/" | awk -F: '{print $1}' | sort -u`).
 - **`severityColor` cascade:** broken by keeping the function non-Composable and threading `ExtendedColors` through callers; Tasks 11-12-17 form one coherent compile-passing unit, committed together.
