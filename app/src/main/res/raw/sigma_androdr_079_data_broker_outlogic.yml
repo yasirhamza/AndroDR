@@ -1,6 +1,6 @@
 title: Embedded data-broker SDK — Outlogic (X-Mode Social)
 id: androdr-079
-status: experimental
+status: production
 category: incident
 description: >
     Detects the Outlogic (formerly X-Mode Social) location-data broker SDK

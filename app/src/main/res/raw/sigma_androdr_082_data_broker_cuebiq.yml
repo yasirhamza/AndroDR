@@ -1,6 +1,6 @@
 title: Embedded data-broker SDK — Cuebiq
 id: androdr-082
-status: experimental
+status: production
 category: incident
 description: >
     Detects the Cuebiq location-data broker SDK embedded inside an
