@@ -1,9 +1,11 @@
 package com.androdr.ui.theme
 
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.graphics.Color
 
 // Primary brand color: teal/security green
@@ -84,9 +86,18 @@ private val LightColorScheme = lightColorScheme(
 )
 
 @Composable
-fun AndroDRTheme(content: @Composable () -> Unit) {
-    MaterialTheme(
-        colorScheme = DarkColorScheme,
-        content = content
-    )
+fun AndroDRTheme(
+    themeMode: ThemeMode = ThemeMode.AUTO,
+    content: @Composable () -> Unit
+) {
+    val useDarkTheme = resolveDarkTheme(themeMode, systemInDark = isSystemInDarkTheme())
+    val colorScheme    = if (useDarkTheme) DarkColorScheme   else LightColorScheme
+    val extendedColors = if (useDarkTheme) DarkExtendedColors else LightExtendedColors
+
+    CompositionLocalProvider(LocalAndroDRColors provides extendedColors) {
+        MaterialTheme(
+            colorScheme = colorScheme,
+            content = content
+        )
+    }
 }
