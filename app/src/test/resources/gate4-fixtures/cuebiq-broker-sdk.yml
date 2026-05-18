@@ -1,0 +1,30 @@
+# Fixture for androdr-082: Cuebiq data-broker SDK.
+rule_file: sigma_androdr_082_data_broker_cuebiq.yml
+service: app_scanner
+true_positives:
+  - package_name: "com.example.cuebiqembedder"
+    is_system_app: false
+    embedded_component_class:
+      - "com.cuebiq.cuebiqsdk.model.Collector"
+      - "com.cuebiq.cuebiqsdk.receiver.CoverageReceiver"
+true_negatives:
+  # System-app masquerade — filter_system_app suppresses
+  - package_name: "com.example.cuebiqembedder"
+    is_system_app: true
+    embedded_component_class:
+      - "com.cuebiq.cuebiqsdk.model.Collector"
+  # Benign user app
+  - package_name: "com.google.android.gm"
+    is_system_app: false
+    embedded_component_class: []
+  # Cross-isolation: Predicio fixture's class must NOT trigger Cuebiq
+  - package_name: "com.example.predicioembedder"
+    is_system_app: false
+    embedded_component_class:
+      - "com.telescope.android.LocationCollector"
+  # An unrelated app with a 'cuebiq' substring outside the SDK namespace —
+  # must NOT trigger Cuebiq.
+  - package_name: "com.example.cuebiqtravelblog"
+    is_system_app: false
+    embedded_component_class:
+      - "com.cuebiqtravelblog.MainActivity"

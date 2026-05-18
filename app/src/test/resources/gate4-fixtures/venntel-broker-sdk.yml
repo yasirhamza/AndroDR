@@ -1,0 +1,29 @@
+# Fixture for androdr-080: Venntel / Gravy GOLD legacy SDK.
+rule_file: sigma_androdr_080_data_broker_venntel.yml
+service: app_scanner
+true_positives:
+  - package_name: "com.example.venntelembedder"
+    is_system_app: false
+    embedded_component_class:
+      - "com.timerazor.gravysdk.GravyService"
+      - "com.gravy.gravysdk.ParcelableState"
+true_negatives:
+  # System-app masquerade — filter_system_app suppresses
+  - package_name: "com.example.venntelembedder"
+    is_system_app: true
+    embedded_component_class:
+      - "com.timerazor.gravysdk.GravyService"
+  # Benign user app
+  - package_name: "com.google.android.gm"
+    is_system_app: false
+    embedded_component_class: []
+  # Cross-isolation: Outlogic fixture's class must NOT trigger Venntel
+  - package_name: "com.example.outlogicembedder"
+    is_system_app: false
+    embedded_component_class:
+      - "io.xmode.BcnConfig"
+  # Similar-sounding but unrelated package — must NOT trigger
+  - package_name: "com.example.gravyfood"
+    is_system_app: false
+    embedded_component_class:
+      - "com.gravyfood.delivery.MainActivity"

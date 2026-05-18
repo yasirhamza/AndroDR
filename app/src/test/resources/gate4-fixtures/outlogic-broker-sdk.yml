@@ -1,0 +1,34 @@
+# Fixture for androdr-079: Outlogic (X-Mode Social) data-broker SDK.
+# The fifth true_negative (SignalFrame using io.mysdk.*) is load-bearing:
+# it asserts that the rule does NOT match the io.mysdk.* prefix, which
+# was intentionally dropped from the match set to avoid false positives
+# on SignalFrame/WirelessRegistry-using apps.
+rule_file: sigma_androdr_079_data_broker_outlogic.yml
+service: app_scanner
+true_positives:
+  - package_name: "com.example.outlogicembedder"
+    is_system_app: false
+    embedded_component_class:
+      - "io.xmode.BcnConfig"
+      - "io.xmode.locationsdk.GeoSyncService"
+true_negatives:
+  # System-app masquerade — filter_system_app suppresses
+  - package_name: "com.example.outlogicembedder"
+    is_system_app: true
+    embedded_component_class:
+      - "io.xmode.BcnConfig"
+  # Benign user app — no embedded class at all
+  - package_name: "com.google.android.gm"
+    is_system_app: false
+    embedded_component_class: []
+  # Cross-isolation: Cuebiq fixture's class must NOT trigger Outlogic
+  - package_name: "com.example.cuebiqembedder"
+    is_system_app: false
+    embedded_component_class:
+      - "com.cuebiq.cuebiqsdk.model.Collector"
+  # SignalFrame/WirelessRegistry uses io.mysdk.* — must NOT trigger Outlogic.
+  # This case defends the design choice to drop io.mysdk.* from the match set.
+  - package_name: "com.example.signalframeembedder"
+    is_system_app: false
+    embedded_component_class:
+      - "io.mysdk.networkmodule.network.networking.wirelessregistry.WrxConfig"

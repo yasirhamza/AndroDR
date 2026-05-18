@@ -1,0 +1,47 @@
+title: Embedded data-broker SDK — Cuebiq
+id: androdr-082
+status: experimental
+category: incident
+description: >
+    Detects the Cuebiq location-data broker SDK embedded inside an
+    installed app. Cuebiq-sourced data was used in the New York Times
+    'Privacy Project' (December 2019) to re-identify named individuals,
+    including a US Secret Service agent traveling with the President.
+    Cuebiq announced an SDK sunset in 2021 but a permissive variant
+    remained available; historical versions persist in apps that have
+    not been re-published. Match set is the two canonical class anchors
+    from Exodus Privacy tracker #57 and the glorifiedgrep OSS static
+    analysis tool.
+author: AndroDR (AI-generated)
+date: 2026/05/18
+references:
+    - https://reports.exodus-privacy.eu.org/en/trackers/57/
+    - https://www.adexchanger.com/mobile/location-intel-provider-cuebiq-is-shutting-down-its-sdk-in-the-name-of-privacy/
+tags:
+    - attack.t1430
+    - attack.t1437.001
+logsource:
+    product: androdr
+    service: app_scanner
+detection:
+    selection:
+        embedded_component_class|contains:
+            - 'com.cuebiq.cuebiqsdk.model.Collector'
+            - 'com.cuebiq.cuebiqsdk.receiver.CoverageReceiver'
+    filter_system_app:
+        is_system_app: true
+    condition: selection and not filter_system_app
+level: medium
+display:
+    category: app_risk
+    icon: warning
+    triggered_title: "Data-broker SDK: Cuebiq"
+    evidence_type: ioc_match
+    summary_template: "Cuebiq SDK class detected: {matched_value}"
+    guidance: "This app embeds the Cuebiq location-data broker SDK, whose data has been used to track named individuals (NYT Privacy Project, 2019). Consider uninstalling or denying location permissions."
+falsepositives:
+    - "Legacy app that has not been re-published since the 2021 SDK sunset."
+    - "Pre-installed system app shipping the SDK (filtered out by filter_system_app)."
+remediation:
+    - "Review whether you need this app; the Cuebiq SDK transmits precise location to broker infrastructure."
+    - "If keeping the app, deny ACCESS_BACKGROUND_LOCATION and ACCESS_FINE_LOCATION."

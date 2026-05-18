@@ -1,0 +1,44 @@
+title: Embedded data-broker SDK — Venntel (Gravy GOLD legacy)
+id: androdr-080
+status: experimental
+category: incident
+description: >
+    Detects the legacy Gravy GOLD SDK (published under TimeRAZOR Inc.,
+    later branded Venntel) embedded inside an installed app. Venntel
+    resold the resulting location feed to ICE, CBP, DEA, and US military
+    customers per Senator Wyden's investigations and the FTC complaint
+    (December 2024). Match set is the two confirmed class prefixes from
+    the vendor's own Javadoc and an independent third-party mirror.
+author: AndroDR (AI-generated)
+date: 2026/05/18
+references:
+    - https://www.ftc.gov/news-events/news/press-releases/2024/12/ftc-takes-action-against-gravy-analytics-venntel-unlawfully-selling-location-data-tracking-consumers
+    - https://www.eff.org/deeplinks/2022/08/fog-revealed-guided-tour-how-cops-can-browse-your-location-data
+tags:
+    - attack.t1430
+    - attack.t1437.001
+logsource:
+    product: androdr
+    service: app_scanner
+detection:
+    selection:
+        embedded_component_class|contains:
+            - 'com.timerazor.gravysdk'
+            - 'com.gravy.gravysdk'
+    filter_system_app:
+        is_system_app: true
+    condition: selection and not filter_system_app
+level: medium
+display:
+    category: app_risk
+    icon: warning
+    triggered_title: "Data-broker SDK: Venntel"
+    evidence_type: ioc_match
+    summary_template: "Venntel/Gravy GOLD SDK class detected: {matched_value}"
+    guidance: "This app embeds the legacy Gravy GOLD SDK, whose data flowed through Venntel to US federal law-enforcement customers. The SDK is legacy and rare in modern apps; presence is high-signal."
+falsepositives:
+    - "App that legitimately embeds the SDK with disclosed user consent; rare given Venntel's regulatory history."
+    - "Pre-installed system app shipping the SDK (filtered out by filter_system_app)."
+remediation:
+    - "Review whether you need this app; the Gravy GOLD SDK transmits precise location to broker infrastructure."
+    - "If keeping the app, deny ACCESS_BACKGROUND_LOCATION and ACCESS_FINE_LOCATION."
