@@ -5,6 +5,7 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
+import com.androdr.ui.theme.ThemeMode
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
@@ -34,6 +35,19 @@ class SettingsRepository @Inject constructor(
 
     suspend fun setDomainIocBlockMode(value: Boolean) {
         dataStore.edit { it[KEY_DOMAIN_IOC_BLOCK_MODE] = value }
+    }
+
+    val themeMode: Flow<ThemeMode> = dataStore.data
+        .map { prefs ->
+            when (prefs[KEY_THEME_MODE]) {
+                "LIGHT" -> ThemeMode.LIGHT
+                "DARK"  -> ThemeMode.DARK
+                else    -> ThemeMode.AUTO
+            }
+        }
+
+    suspend fun setThemeMode(mode: ThemeMode) {
+        dataStore.edit { it[KEY_THEME_MODE] = mode.name }
     }
 
     /**
@@ -103,5 +117,6 @@ class SettingsRepository @Inject constructor(
         private val KEY_BLOCKLIST_BLOCK_MODE  = booleanPreferencesKey("blocklist_block_mode")
         private val KEY_DOMAIN_IOC_BLOCK_MODE = booleanPreferencesKey("domain_ioc_block_mode")
         private val KEY_CUSTOM_RULE_URLS = stringPreferencesKey("custom_sigma_rule_urls")
+        private val KEY_THEME_MODE = stringPreferencesKey("theme_mode")
     }
 }
