@@ -48,7 +48,6 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -58,7 +57,7 @@ import com.androdr.R
 import com.androdr.data.model.RiskLevel
 import com.androdr.data.model.ScanResult
 import com.androdr.scanner.ScanProgress
-import com.androdr.ui.common.severityColor
+import com.androdr.ui.theme.androdrColors
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -285,6 +284,7 @@ fun DashboardScreen(
 
 @Composable
 private fun PostScanGuidance(riskLevel: RiskLevel?, latestScan: ScanResult?) {
+    val colors = MaterialTheme.androdrColors
     val hasCriticalAppRisks = latestScan?.appRisks?.any {
         it.triggered && it.level.lowercase() == "critical"
     } ?: false
@@ -297,22 +297,27 @@ private fun PostScanGuidance(riskLevel: RiskLevel?, latestScan: ScanResult?) {
                 stringResource(R.string.guidance_critical_device)
             },
             Icons.Filled.Error,
-            Color(0xFFCF6679)
+            colors.critical
         )
         RiskLevel.HIGH -> Triple(
             stringResource(R.string.guidance_high),
             Icons.Filled.Warning,
-            Color(0xFFFF9800)
+            colors.high
         )
         RiskLevel.MEDIUM -> Triple(
             stringResource(R.string.guidance_medium),
             Icons.Filled.Info,
-            Color(0xFFE6A800)
+            colors.medium
         )
-        RiskLevel.LOW, null -> Triple(
+        RiskLevel.LOW -> Triple(
             stringResource(R.string.guidance_low),
             Icons.Filled.CheckCircle,
-            Color(0xFF00D4AA)
+            colors.low
+        )
+        null -> Triple(
+            stringResource(R.string.guidance_low),
+            Icons.Filled.CheckCircle,
+            colors.neutral
         )
     }
 
@@ -342,12 +347,13 @@ private fun PostScanGuidance(riskLevel: RiskLevel?, latestScan: ScanResult?) {
 @Suppress("LongMethod") // Compose UI layout with conditional risk display
 @Composable
 private fun RiskLevelCard(latestScan: ScanResult?) {
+    val colors = MaterialTheme.androdrColors
     val (riskColor, riskLabel) = when (latestScan?.overallRiskLevel) {
-        RiskLevel.CRITICAL -> Pair(Color(0xFFFF1744), "CRITICAL")  // bold red — unmistakable danger
-        RiskLevel.HIGH     -> Pair(Color(0xFFFF6E40), "HIGH")     // deep orange
-        RiskLevel.MEDIUM   -> Pair(Color(0xFFFFD54F), "MEDIUM")   // amber
-        RiskLevel.LOW      -> Pair(Color(0xFF00D4AA), "LOW")      // brand teal — all clear
-        null               -> Pair(Color(0xFF00D4AA), "\u2014")
+        RiskLevel.CRITICAL -> Pair(colors.critical, "CRITICAL")
+        RiskLevel.HIGH     -> Pair(colors.high, "HIGH")
+        RiskLevel.MEDIUM   -> Pair(colors.medium, "MEDIUM")
+        RiskLevel.LOW      -> Pair(colors.low, "LOW")
+        null               -> Pair(colors.neutral, "\u2014")
     }
 
     Card(
@@ -405,10 +411,11 @@ private fun RiskLevelCard(latestScan: ScanResult?) {
 
 @Composable
 private fun DiffBanner(newCount: Int) {
+    val colors = MaterialTheme.androdrColors
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
-            containerColor = Color(0xFFFF9800).copy(alpha = 0.15f)
+            containerColor = colors.high.copy(alpha = 0.15f)
         )
     ) {
         Row(
@@ -419,13 +426,13 @@ private fun DiffBanner(newCount: Int) {
             Icon(
                 imageVector = Icons.Filled.Warning,
                 contentDescription = null,
-                tint = Color(0xFFFF9800)
+                tint = colors.high
             )
             Text(
                 text = stringResource(R.string.dashboard_new_risks, newCount),
                 style = MaterialTheme.typography.bodyMedium,
                 fontWeight = FontWeight.SemiBold,
-                color = Color(0xFFFF9800)
+                color = colors.high
             )
         }
     }
@@ -561,10 +568,11 @@ private fun ScanProgressCard(progress: ScanProgress) {
  */
 @Composable
 private fun PartialScanBanner(scan: ScanResult) {
+    val colors = MaterialTheme.androdrColors
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
-            containerColor = Color(0xFFFF9800).copy(alpha = 0.15f)
+            containerColor = colors.high.copy(alpha = 0.15f)
         )
     ) {
         Row(
@@ -575,14 +583,14 @@ private fun PartialScanBanner(scan: ScanResult) {
             Icon(
                 imageVector = Icons.Filled.Warning,
                 contentDescription = null,
-                tint = Color(0xFFFF9800)
+                tint = colors.high
             )
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = stringResource(R.string.partial_scan_banner_title),
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.SemiBold,
-                    color = Color(0xFFFF9800)
+                    color = colors.high
                 )
                 Text(
                     text = stringResource(
