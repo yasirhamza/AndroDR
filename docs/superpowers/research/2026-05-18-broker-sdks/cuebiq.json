@@ -1,0 +1,135 @@
+{
+  "threat": {
+    "name": "Cuebiq",
+    "aliases": ["Cuebiq SDK", "com.cuebiq.cuebiqsdk"],
+    "families": [],
+    "related_brands": [
+      {
+        "name": "Spectus",
+        "relationship": "sibling_product",
+        "note": "Spectus (spectus.ai) was launched in Feb 2022 by the Cuebiq leadership team as the rebrand of the Cuebiq Workbench geospatial data-cleanroom product. Cuebiq itself continues as a separate ad-tech brand focused on Media Measurement and Audience Targeting and is a channel partner of Spectus. Spectus is NOT a direct rename of the Cuebiq SDK; it is the cleanroom product line. Listed here for analyst context, not as an SDK identifier."
+      }
+    ],
+    "category": "data_broker_sdk",
+    "subcategory": "location_data_broker",
+    "description": "Cuebiq is a New York-headquartered location data broker that historically distributed a first-party Android SDK embedded into consumer apps to collect persistent fine-grained location signals (GPS, Wi-Fi, Bluetooth, beacon). The New York Times 'Privacy Project' (Dec 2019, Thompson & Warzel, 'One Nation, Tracked' / 'Twelve Million Phones, One Dataset, Zero Privacy') used a Cuebiq-sourced dataset of 50 billion location pings from 12 million US devices to demonstrate fine-grained tracking of identifiable individuals including a Secret Service agent traveling with the US President. Cuebiq publicly announced in 2021 that it was sunsetting the closed SDK in favor of a 'Workbench' clean-room product (subsequently rebranded as Spectus in Feb 2022), but a permissive open-source variant of the SDK remained available, and the historical SDK is still present in apps that have not been re-published. The on-device anchors below identify the historical Cuebiq SDK as catalogued by the Exodus Privacy tracker registry (tracker #57) and by independent open-source static-analysis tooling."
+  },
+  "provenance": {
+    "vendor_page": "https://cuebiq.com/",
+    "vendor_sdk_page": "https://www.cuebiq.com/cuebiq-sdk/publisher/",
+    "independent_sources": [
+      {
+        "name": "Exodus Privacy tracker registry, tracker #57 (Cuebiq)",
+        "url": "https://reports.exodus-privacy.eu.org/en/trackers/57/",
+        "type": "structured_tracker_database",
+        "note": "Canonical community-maintained Android tracker signature database. Lists Cuebiq with code signature 'com.cuebiq.cuebiqsdk.model.Collector|com.cuebiq.cuebiqsdk.receiver.CoverageReceiver'. Page was unreachable from researcher network at time of fetch; signature text confirmed via Google search snippets and via the independent corroborating source below.",
+        "fetch_status": "indirect_search_snippet"
+      },
+      {
+        "name": "glorifiedgrep (securisec) — Android static-analysis tool, _TRACKERS dictionary",
+        "url": "https://github.com/securisec/glorifiedgrep/blob/master/glorifiedgrep/android/modules/constants.py",
+        "type": "structured_oss_signature_database",
+        "note": "Independent open-source security tool reproduces the same Cuebiq regex: 'com.cuebiq.cuebiqsdk.model.Collector|com.cuebiq.cuebiqsdk.receiver.CoverageReceiver'. Confirms the Exodus signatures.",
+        "fetch_status": "direct"
+      },
+      {
+        "name": "AdExchanger — 'Location Intel Provider Cuebiq Is Shutting Down Its SDK In The Name Of Privacy'",
+        "url": "https://www.adexchanger.com/mobile/location-intel-provider-cuebiq-is-shutting-down-its-sdk-in-the-name-of-privacy/",
+        "type": "trade_press",
+        "note": "Confirms the existence and historical role of the Cuebiq mobile SDK, the transition to the 'Workbench' clean-room product, and that an open-source variant of the SDK remained available.",
+        "fetch_status": "direct"
+      },
+      {
+        "name": "New York Times 'Privacy Project' — Thompson & Warzel, 'Twelve Million Phones, One Dataset, Zero Privacy' / 'One Nation, Tracked' (Dec 2019)",
+        "url": "https://www.nytimes.com/interactive/2019/12/19/opinion/location-tracking-cell-phone.html",
+        "type": "investigative_journalism",
+        "note": "Demonstrated that Cuebiq-sourced location pings could re-identify named individuals including a US Secret Service agent. Direct fetch blocked from researcher environment; existence and content confirmed via multiple independent secondary sources (CPO Magazine, FlowingData, Common Dreams, MacRumors, Daring Fireball).",
+        "fetch_status": "indirect_search_snippet"
+      },
+      {
+        "name": "Businesswire — 'Data Cleanroom Spectus Brings Privacy, Speed and Affordability to Geospatial Data Market' (Feb 2022)",
+        "url": "https://www.businesswire.com/news/home/20220223005479/en/Data-Cleanroom-Spectus-Brings-Privacy-Speed-and-Affordability-to-Geospatial-Data-Market",
+        "type": "vendor_press_release",
+        "note": "Establishes that Spectus was created by the Cuebiq leadership team as the rebrand of Cuebiq Workbench. Provides ground truth for the related_brands.Spectus entry.",
+        "fetch_status": "indirect_search_snippet"
+      }
+    ],
+    "researcher_notes": "The Exodus Privacy infrastructure was unreachable (ECONNREFUSED) from the researcher's egress network at fetch time; the canonical tracker page (https://reports.exodus-privacy.eu.org/en/trackers/57/) is referenced indirectly. The exact code-signature regex appears verbatim both in Google search-result snippets of that Exodus page AND in the independent glorifiedgrep OSS tool, giving 2 independent structured corroborations of the same two class anchors. No first-party vendor source (cuebiq.com developer docs) was reachable to enumerate native libraries, network domains, or full Maven coordinates; those IOC classes are therefore intentionally omitted rather than fabricated."
+  },
+  "source": {
+    "feed": "threat_research",
+    "harvested_at": "2026-05-18",
+    "researcher": "claude-code/threat-researcher (off-pipeline pass for AndroDR #168)"
+  },
+  "confidence": "high",
+  "confidence_rationale": "Two independent structured signature databases (Exodus Privacy tracker #57 and glorifiedgrep OSS) agree verbatim on the two class anchors. Vendor existence, role, and SDK history are corroborated by trade press (AdExchanger), investigative journalism (NYT Privacy Project), and a vendor press release (Businesswire/Spectus). The on-device anchors are stable, well-known, and have been the Exodus-canonical signature for the Cuebiq tracker for years.",
+  "requires_verification": false,
+  "indicators": [
+    {
+      "type": "embedded_component_class",
+      "value": "com.cuebiq.cuebiqsdk.receiver.CoverageReceiver",
+      "android_component_kind": "receiver",
+      "confidence": "high",
+      "source_urls": [
+        "https://reports.exodus-privacy.eu.org/en/trackers/57/",
+        "https://github.com/securisec/glorifiedgrep/blob/master/glorifiedgrep/android/modules/constants.py"
+      ],
+      "notes": "Manifest-declared BroadcastReceiver used by the Cuebiq SDK to subscribe to system events (e.g. connectivity / location-coverage changes) that trigger background location collection. Listed as one of two canonical anchors in the Exodus tracker signature for Cuebiq and replicated verbatim in the glorifiedgrep _TRACKERS dictionary. Matchable on-device via AndroidManifest.xml <receiver android:name=\"com.cuebiq.cuebiqsdk.receiver.CoverageReceiver\"/>."
+    },
+    {
+      "type": "embedded_component_class",
+      "value": "com.cuebiq.cuebiqsdk.model.Collector",
+      "android_component_kind": "class",
+      "confidence": "high",
+      "source_urls": [
+        "https://reports.exodus-privacy.eu.org/en/trackers/57/",
+        "https://github.com/securisec/glorifiedgrep/blob/master/glorifiedgrep/android/modules/constants.py"
+      ],
+      "notes": "Core data-collector class inside the Cuebiq SDK. Listed as one of two canonical anchors in the Exodus tracker signature for Cuebiq and replicated verbatim in glorifiedgrep. This is a class anchor (DEX class) rather than a manifest component, so scanner matching should be against dex_classes / loaded classes, not <receiver|service|activity|provider> declarations."
+    },
+    {
+      "type": "package_name_prefix",
+      "value": "com.cuebiq.cuebiqsdk",
+      "confidence": "high",
+      "source_urls": [
+        "https://reports.exodus-privacy.eu.org/en/trackers/57/",
+        "https://github.com/securisec/glorifiedgrep/blob/master/glorifiedgrep/android/modules/constants.py"
+      ],
+      "notes": "Java/Kotlin package prefix under which the Cuebiq SDK ships. Useful as a wider-net DEX-package match supporting the two precise class anchors above. NOT a host-app applicationId — this is the SDK's internal package namespace."
+    }
+  ],
+  "behavioral_signals": [
+    {
+      "id": "cuebiq.persistent_background_location_collection",
+      "description": "Cuebiq SDK persistently collects fine-grained location signals (GPS + Wi-Fi + Bluetooth + beacon) from host-app users and uploads them to Cuebiq infrastructure for resale as geospatial datasets. Confirmed by AdExchanger and corroborated by the NYT Privacy Project demonstration.",
+      "source_urls": [
+        "https://www.adexchanger.com/mobile/location-intel-provider-cuebiq-is-shutting-down-its-sdk-in-the-name-of-privacy/",
+        "https://www.nytimes.com/interactive/2019/12/19/opinion/location-tracking-cell-phone.html"
+      ]
+    },
+    {
+      "id": "cuebiq.boot_or_connectivity_triggered_wakeup",
+      "description": "Presence of CoverageReceiver implies the SDK registers a BroadcastReceiver that wakes the host app to resume location collection on system events. Implementation-level behavioral inference from the manifest anchor; not independently verified at the bytecode level in this research pass.",
+      "source_urls": [
+        "https://reports.exodus-privacy.eu.org/en/trackers/57/"
+      ]
+    }
+  ],
+  "absent_iocs": {
+    "network_domain": "No vendor-confirmed Cuebiq SDK callback domain (e.g. api.cuebiq.com, cdn.cuebiq.com, signal.cuebiq.com) could be verified from a structured source in this research pass; the Cuebiq publisher SDK page (https://www.cuebiq.com/cuebiq-sdk/publisher/) returned 404 and no decompiled-binary source was reachable. Intentionally omitted to avoid fabrication.",
+    "native_library": "No evidence located that the Cuebiq SDK ships native .so libraries; existing tracker signatures rely purely on JVM-class anchors. Intentionally omitted.",
+    "host_app_package_names": "Cuebiq has stated the SDK shipped in 200+ partner apps but does not publish a public partner list, and no structured per-app list was reachable from this researcher's network. Out of scope for an SDK-detection SIR (we detect the embedded SDK, not host apps)."
+  },
+  "rule_authoring_hints": {
+    "primary_anchor_field": "embedded_component_class",
+    "primary_anchor_values": [
+      "com.cuebiq.cuebiqsdk.receiver.CoverageReceiver",
+      "com.cuebiq.cuebiqsdk.model.Collector"
+    ],
+    "logsource_service": "installed_app",
+    "suggested_severity": "medium",
+    "suggested_severity_rationale": "Embedded data-broker SDK with documented location-resale business model and a prior history of being used to re-identify named individuals (NYT 2019). Not malware, not credential theft — privacy exposure rather than direct compromise — hence medium rather than high.",
+    "match_either_anchor": true,
+    "match_either_anchor_rationale": "Exodus uses an OR regex between the two classes ('Collector|CoverageReceiver') because either class on its own is a reliable indicator of the Cuebiq SDK being embedded. AndroDR rules should follow the same semantics: presence of either anchor in a host app's manifest+dex is sufficient to flag."
+  }
+}

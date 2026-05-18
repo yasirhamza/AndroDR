@@ -1,0 +1,82 @@
+{
+  "schema_version": "1.0",
+  "id": "sir-2026-05-18-mobilewalla",
+  "threat": {
+    "name": "Mobilewalla",
+    "families": [
+      "Mobilewalla SDK",
+      "MW",
+      "Covariate"
+    ],
+    "category": "data_broker_sdk",
+    "platforms": [
+      "android"
+    ],
+    "description": "Mobilewalla, Inc. is an Atlanta-headquartered consumer-data broker founded in 2011 by Anindya Datta. The firm sells precise-geolocation, demographic, and behavioral mobile data products (Covariate API, LendBetter, Telescope, Market Flow, Feature Mart) keyed on the device advertising identifier (IFA/MAID). On 3 December 2024 the U.S. Federal Trade Commission filed a five-count complaint alleging unfair sale and retention of sensitive precise-location data; the consent order was finalized on 14 January 2025, banning Mobilewalla from selling sensitive location data and from collecting consumer data from RTB exchanges for any purpose other than participating in those auctions. CRITICAL CONTEXT for on-device detection: per the FTC complaint and accompanying tech-at-FTC analysis, the overwhelming majority of Mobilewalla's data (~95%) is sourced second-hand from third-party suppliers (RTB bidstream, DSPs, DMPs, data aggregators), NOT from a first-party Mobilewalla SDK shipped at scale in consumer apps. Mobilewalla does offer an optional 'lightweight SDK' as an add-on to its Covariate REST API integration (e.g. LendBetter financial-services product, used for optional SMS parsing) and a Python 'mw-feature-serving-sdk' (server-side, not on-device), but no public corpus (Exodus Privacy, AppCensus, ExpressVPN/Defensive Lab, academic SOUPS/USENIX papers, FTC complaint, FTC tech analysis, Senate Warren letter) discloses a concrete Android package prefix, Java/Kotlin class name, native library filename, or telemetry hostname tied to a deployed first-party Mobilewalla on-device SDK. This SIR therefore carries no on-device class or native-lib anchors and relies on a single corporate domain plus behavioral signals. The threat-name should drive watchlist coverage and downstream supplier-graph analysis rather than direct embedded-SDK detection until additional reverse-engineering evidence appears.",
+    "first_seen": "2011-03-07",
+    "last_seen": "2025-01-14"
+  },
+  "behavioral_signals": [
+    "Collects and retains device advertising identifiers (IFA/MAID) paired with precise latitude/longitude/timestamp tuples from mobile devices, without verifying end-user consent (per FTC complaint, Counts 1, 3, 4, 5).",
+    "Sources approximately 95% of its location feed second-hand via real-time bidding (RTB) bid requests and third-party data suppliers (DSPs, DMPs, data aggregators), rather than via a first-party on-device SDK shipped in consumer apps.",
+    "Offers an optional lightweight Android SDK as an add-on to its Covariate REST API integration (documented for the LendBetter financial-services product, used for SMS parsing among other inputs).",
+    "Operates the Covariate REST API endpoint that accepts batch device-ID lookups (up to 10,000 device IDs per call, JSON-encoded responses) for partner enrichment queries.",
+    "Sells/licenses precise-location and demographic feeds to third-party buyers including telecom, financial-services, AWS-marketplace, and (per FTC) data resellers, advertisers, and analytics firms."
+  ],
+  "indicators": [
+    {
+      "type": "domain",
+      "value": "mobilewalla.com",
+      "confidence": "high",
+      "source_urls": [
+        "https://en.wikipedia.org/wiki/Mobilewalla",
+        "https://www.ftc.gov/legal-library/browse/cases-proceedings/202-3196-mobilewalla-inc-matter",
+        "https://apitracker.io/a/mobilewalla",
+        "https://www.mobilewalla.com/"
+      ],
+      "notes": "Primary corporate / API-root domain. Used as the website-of-record in the FTC case file, on the company's own marketing site, and in third-party API directories (apitracker.io). Mobilewalla's Covariate REST API and integration documentation are reached via this domain (subdomains not publicly enumerated). Flag any host-app outbound DNS to mobilewalla.com or *.mobilewalla.com as a strong signal that the host app integrates a Mobilewalla data-pipeline component (SDK add-on, Covariate API call, or partner-pipeline relay)."
+    },
+    {
+      "type": "package_name",
+      "value": "mw-feature-serving-sdk",
+      "confidence": "medium",
+      "source_urls": [
+        "https://pypi.org/project/mw-feature-serving-sdk/"
+      ],
+      "notes": "PyPI Python package name. SERVER-SIDE only — this is Mobilewalla's Feature Machine Python client SDK, not an Android library. Listed here as a corroborating namespace artifact ('mw-feature-serving-sdk' confirms 'mw' as the vendor short-prefix and 'feature-serving' as the product line). Do NOT use as an Android on-device indicator; included so future reverse engineers searching for Mobilewalla namespaces can correlate."
+    }
+  ],
+  "ttp_refs": [
+    "T1437.001",
+    "T1430"
+  ],
+  "provenance": {
+    "vendor_page": "https://www.mobilewalla.com/",
+    "independent_sources": [
+      "https://www.ftc.gov/legal-library/browse/cases-proceedings/202-3196-mobilewalla-inc-matter",
+      "https://www.ftc.gov/system/files/ftc_gov/pdf/2023196mobilewallacomplaint.pdf",
+      "https://www.ftc.gov/news-events/news/press-releases/2024/12/ftc-takes-action-against-mobilewalla-collecting-selling-sensitive-location-data",
+      "https://www.ftc.gov/news-events/news/press-releases/2025/01/ftc-finalizes-order-banning-mobilewalla-selling-sensitive-location-data",
+      "https://www.ftc.gov/policy/advocacy-research/tech-at-ftc/2024/12/unpacking-real-time-bidding-through-ftcs-case-mobilewalla",
+      "https://www.federalregister.gov/documents/2024/12/06/2024-28745/mobilewalla-inc-analysis-of-proposed-consent-order-to-aid-public-comment",
+      "https://en.wikipedia.org/wiki/Mobilewalla",
+      "https://themarkup.org/privacy/2021/09/30/theres-a-multibillion-dollar-market-for-your-phones-location-data",
+      "https://www.warren.senate.gov/imo/media/doc/2020.08.03%20Letter%20to%20data%20broker%20Mobilewalla.pdf",
+      "https://www.openmarketsinstitute.org/publications/ftc-acts-mobilewalla-partners-submission",
+      "https://www.iccl.ie/wp-content/uploads/2020/09/8.-Example-of-the-types-of-data-for-sale-from-a-data-broker-22Mobilewalla22-Appendix-C.pdf",
+      "https://www.mobilewalla.com/feature-mart-0",
+      "https://www.mobilewalla.com/lend-better",
+      "https://apitracker.io/a/mobilewalla",
+      "https://pypi.org/project/mw-feature-serving-sdk/",
+      "https://www.hklaw.com/en/insights/publications/2024/12/ftc-cracks-down-on-selling-sensitive-location-info-restricts-use",
+      "https://www.wilmerhale.com/en/insights/blogs/wilmerhale-privacy-and-cybersecurity-law/20241216-ftc-continues-to-bring-enforcement-actions-against-data-brokers"
+    ]
+  },
+  "requires_verification": true,
+  "confidence": "high",
+  "source": {
+    "feed": "threat_research",
+    "url": "https://www.ftc.gov/legal-library/browse/cases-proceedings/202-3196-mobilewalla-inc-matter",
+    "retrieved_at": "2026-05-18"
+  }
+}
