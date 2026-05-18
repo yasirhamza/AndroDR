@@ -90,6 +90,8 @@ class BugReportViewModel @Inject constructor(
      * Analyzes the bug report zip at the given [uri].
      * Updates [isAnalyzing], [findings], and [timeline] reactively.
      */
+    // Orchestrator throws many exception types (IO, zip, parse); UI shows the raw message.
+    @Suppress("TooGenericExceptionCaught")
     fun analyzeUri(uri: Uri) {
         viewModelScope.launch {
             _isAnalyzing.value = true
