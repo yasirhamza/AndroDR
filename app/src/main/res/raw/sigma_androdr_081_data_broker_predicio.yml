@@ -1,6 +1,6 @@
 title: Embedded data-broker SDK — Predicio (Telescope)
 id: androdr-081
-status: experimental
+status: production
 category: incident
 description: >
     Detects the Predicio 'Telescope' SDK embedded inside an installed app.

@@ -1,6 +1,6 @@
 title: Embedded data-broker SDK — Venntel (Gravy GOLD legacy)
 id: androdr-080
-status: experimental
+status: production
 category: incident
 description: >
     Detects the legacy Gravy GOLD SDK (published under TimeRAZOR Inc.,
