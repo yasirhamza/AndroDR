@@ -940,15 +940,18 @@ if [ "$POST_SCAN_ID" = "$PRE_SCAN_ID" ]; then
   echo "FAIL: no new scan after 5 minutes — the tap at (884, 1267) likely missed the Run Scan button. Inspect via 'adb shell uiautomator dump' and re-tap the correct coordinates."
   exit 1
 fi
+
+echo "$POST_SCAN_ID" > /tmp/post_scan_id.txt
 ```
 
-Expected: a new ScanResult ID greater than `PRE_SCAN_ID` is captured into `POST_SCAN_ID`. If the tap missed (UI moved since PR #190), the script fails fast with a clear diagnostic.
+Expected: a new ScanResult ID greater than `PRE_SCAN_ID` is captured into `POST_SCAN_ID` and persisted to `/tmp/post_scan_id.txt` for Step 8 (Bash variables don't survive across tool invocations). If the tap missed (UI moved since PR #190), the script fails fast with a clear diagnostic.
 
 - [ ] **Step 8: Verify findings include androdr-083**
 
-Reuse the `POST_SCAN_ID` captured in Step 7:
+Reuse the `POST_SCAN_ID` captured in Step 7 (persisted to `/tmp/post_scan_id.txt`):
 
 ```bash
+POST_SCAN_ID=$(cat /tmp/post_scan_id.txt)
 sqlite3 /tmp/androdr.db "SELECT findings FROM ScanResult WHERE id=$POST_SCAN_ID" | python3 -c "
 import sys, json
 data = json.loads(sys.stdin.read())
@@ -981,9 +984,9 @@ Revert the settings.gradle.kts change. Open `/home/yasir/AndroDR/test-adversary/
 
 Verify clean working tree:
 ```bash
-git -C /home/yasir/AndroDR status --short | grep -vE '__pycache__|^\\?\\? notes/'
+git -C /home/yasir/AndroDR status --short | grep -vE '__pycache__|^\?\? notes/'
 ```
-Expected: only the intentional changes (res/raw + fixture + SigmaRuleEngine.kt + third-party pointer).
+Expected: only the intentional changes (res/raw + fixture + SigmaRuleEngine.kt + third-party pointer). The grep filter suppresses the pre-existing `__pycache__` deletions and untracked `notes/` directory that are not part of this work.
 
 ---
 

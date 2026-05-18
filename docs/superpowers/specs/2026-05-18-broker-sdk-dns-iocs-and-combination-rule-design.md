@@ -247,8 +247,8 @@ The fifth `true_negative` (SignalFrame) is load-bearing — it asserts that the 
    - `BundledRulesSchemaCrossCheckTest`.
    - `IocDataSchemaCrossCheckTest`.
    - `SigmaRuleParserTest`.
-   - Full `./gradlew testDebugUnitTest lintDebug`.
-10. **Gate 5 LLM review** on `androdr-083` via `update-rules-review` skill.
+   - Full `./gradlew testDebugUnitTest lintDebug :app:detekt`.
+10. **Gate 5 LLM self-review** on `androdr-083` — dispatch an Agent (general-purpose) with the rule body + SIR summary + similar-rule context, applying the 5 criteria from `.claude/commands/update-rules-review.md` (logical correctness, FP risk, severity, completeness, remediation). The skill is subagent-shaped so the criteria are embedded in the prompt rather than invoked via the `Skill` tool.
 11. **Two-reviewer cycle** (spec-compliance + harsh-quality, parallel).
 12. **AndroDR PR.**
 13. **On-device positive verification** on Z Fold 2: build a fixture APK declaring an Outlogic class + holding `ACCESS_FINE_LOCATION` in its manifest, install via `adb`, scan, confirm `androdr-083` fires and `androdr-079` also fires (both should). Uninstall fixture, clean workspace.
