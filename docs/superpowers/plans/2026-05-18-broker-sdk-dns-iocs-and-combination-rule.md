@@ -317,13 +317,20 @@ category: incident
 description: >
     Detects an installed app that BOTH embeds one of the documented
     data-broker SDKs (Outlogic, Venntel, Predicio, Cuebiq) AND holds
-    ACCESS_FINE_LOCATION or ACCESS_BACKGROUND_LOCATION. This is the
-    threat model from the DW Documentary "Dangerous apps — In the web
-    of data brokers": ordinary apps (weather, classifieds, dating,
-    games) embed a location-broker SDK and request location permission,
-    enabling the broker pipeline to sell precise-movement data to LE
-    and military buyers. Higher signal than either anchor alone because
-    the AND models the full pipeline.
+    ACCESS_FINE_LOCATION. This is the threat model from the DW
+    Documentary "Dangerous apps — In the web of data brokers":
+    ordinary apps (weather, classifieds, dating, games) embed a
+    location-broker SDK and request location permission, enabling the
+    broker pipeline to sell precise-movement data to LE and military
+    buyers. Higher signal than either anchor alone because the AND
+    models the full pipeline.
+
+    Note on permission matching: AndroDR's AppScanner emits the
+    `permissions` field as short names (the surveillance-permission
+    subset, with `android.permission.` stripped — see AppScanner.kt
+    line 275). ACCESS_BACKGROUND_LOCATION is not tracked in that
+    subset; matching on ACCESS_FINE_LOCATION suffices because Android
+    11+ requires FINE to be granted as a prerequisite for BACKGROUND.
 author: AndroDR (AI-generated)
 date: 2026/05/18
 references:
@@ -347,9 +354,7 @@ detection:
             - 'com.cuebiq.cuebiqsdk.model.Collector'
             - 'com.cuebiq.cuebiqsdk.receiver.CoverageReceiver'
     sensitive_location:
-        permissions|contains:
-            - 'android.permission.ACCESS_BACKGROUND_LOCATION'
-            - 'android.permission.ACCESS_FINE_LOCATION'
+        permissions|contains: 'ACCESS_FINE_LOCATION'
     filter_system_app:
         is_system_app: true
     condition: broker_sdk and sensitive_location and not filter_system_app
@@ -577,14 +582,13 @@ true_positives:
     embedded_component_class:
       - "io.xmode.BcnConfig"
     permissions:
-      - "android.permission.ACCESS_BACKGROUND_LOCATION"
-      - "android.permission.INTERNET"
+      - "ACCESS_FINE_LOCATION"
   - package_name: "com.example.cuebiqembedder"
     is_system_app: false
     embedded_component_class:
       - "com.cuebiq.cuebiqsdk.model.Collector"
     permissions:
-      - "android.permission.ACCESS_FINE_LOCATION"
+      - "ACCESS_FINE_LOCATION"
 true_negatives:
   # System-app variant — filter_system_app suppresses
   - package_name: "com.example.outlogicembedder"
@@ -592,29 +596,27 @@ true_negatives:
     embedded_component_class:
       - "io.xmode.BcnConfig"
     permissions:
-      - "android.permission.ACCESS_BACKGROUND_LOCATION"
+      - "ACCESS_FINE_LOCATION"
   # Broker SDK but NO location permission — the AND fails
   - package_name: "com.example.outlogicnoperm"
     is_system_app: false
     embedded_component_class:
       - "io.xmode.BcnConfig"
-    permissions:
-      - "android.permission.INTERNET"
+    permissions: []
   # Location permission but NO broker SDK — defends against misread that the rule fires on permission alone
   - package_name: "com.example.benignmapsapp"
     is_system_app: false
     embedded_component_class:
       - "com.maps.legitimate.NavigationService"
     permissions:
-      - "android.permission.ACCESS_FINE_LOCATION"
-      - "android.permission.ACCESS_BACKGROUND_LOCATION"
+      - "ACCESS_FINE_LOCATION"
   # SignalFrame's io.mysdk.* (intentionally NOT in the broker_sdk match set per androdr-079's exclusion) + location permission
   - package_name: "com.example.signalframeembedder"
     is_system_app: false
     embedded_component_class:
       - "io.mysdk.networkmodule.network.networking.wirelessregistry.WrxConfig"
     permissions:
-      - "android.permission.ACCESS_BACKGROUND_LOCATION"
+      - "ACCESS_FINE_LOCATION"
 ```
 
 The fifth `true_negative` (SignalFrame) is load-bearing — it asserts the rule honors the same `io.mysdk.*` exclusion as androdr-079.
