@@ -152,7 +152,10 @@ def test_generate_report_matches_golden():
 
     actual = audit_oem_prefixes.generate_report(uad=uad, yaml_doc=yaml_doc)
 
-    assert actual == expected, (
+    # rstrip on both sides — tolerates whether the fixture file (manually
+    # authored from the plan's code block) ends in a trailing newline or
+    # not, while still asserting all interior whitespace/blank-line structure.
+    assert actual.rstrip("\n") == expected.rstrip("\n"), (
         f"Report mismatch.\nExpected:\n{expected}\n---Actual:\n{actual}"
     )
 
