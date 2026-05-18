@@ -1,0 +1,49 @@
+# Fixture for androdr-083: broker SDK + sensitive location permission.
+# Exercises the AND condition: positive fires only when BOTH clauses hold.
+#
+# Note: `permissions` entries use short names (no `android.permission.`
+# prefix) because AppScanner.kt:275 emits the surveillance-permission
+# subset stripped of the prefix. The rule matches on `ACCESS_FINE_LOCATION`.
+rule_file: sigma_androdr_083_broker_sdk_with_location_permission.yml
+service: app_scanner
+true_positives:
+  - package_name: "com.example.outlogicembedder"
+    is_system_app: false
+    embedded_component_class:
+      - "io.xmode.BcnConfig"
+    permissions:
+      - "ACCESS_FINE_LOCATION"
+  - package_name: "com.example.cuebiqembedder"
+    is_system_app: false
+    embedded_component_class:
+      - "com.cuebiq.cuebiqsdk.model.Collector"
+    permissions:
+      - "ACCESS_FINE_LOCATION"
+true_negatives:
+  # System-app variant — filter_system_app suppresses
+  - package_name: "com.example.outlogicembedder"
+    is_system_app: true
+    embedded_component_class:
+      - "io.xmode.BcnConfig"
+    permissions:
+      - "ACCESS_FINE_LOCATION"
+  # Broker SDK but NO location permission — the AND fails
+  - package_name: "com.example.outlogicnoperm"
+    is_system_app: false
+    embedded_component_class:
+      - "io.xmode.BcnConfig"
+    permissions: []
+  # Location permission but NO broker SDK — defends against misread that the rule fires on permission alone
+  - package_name: "com.example.benignmapsapp"
+    is_system_app: false
+    embedded_component_class:
+      - "com.maps.legitimate.NavigationService"
+    permissions:
+      - "ACCESS_FINE_LOCATION"
+  # SignalFrame's io.mysdk.* (intentionally NOT in the broker_sdk match set per androdr-079's exclusion) + location permission
+  - package_name: "com.example.signalframeembedder"
+    is_system_app: false
+    embedded_component_class:
+      - "io.mysdk.networkmodule.network.networking.wirelessregistry.WrxConfig"
+    permissions:
+      - "ACCESS_FINE_LOCATION"

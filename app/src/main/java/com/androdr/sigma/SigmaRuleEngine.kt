@@ -350,6 +350,7 @@ class SigmaRuleEngine @Inject constructor(
             R.raw.sigma_androdr_080_data_broker_venntel,
             R.raw.sigma_androdr_081_data_broker_predicio,
             R.raw.sigma_androdr_082_data_broker_cuebiq,
+            R.raw.sigma_androdr_083_broker_sdk_with_location_permission,
             // Atom rules — pass-through matchers for raw timeline event categories.
             // Referenced by sprint-75 correlation rules (Task 9); tagged
             // level: informational so they are filtered out of the user-facing
