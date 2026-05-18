@@ -115,17 +115,17 @@ Proposed additions: none
 
 ## Unmapped UAD prefixes (1)
 
-Packages whose second-segment word does not match any conditional block's manufacturer_match or brand_match. Consider adding a new conditional block.
+Packages whose second-segment word is not recognized as belonging to any conditional block. Consider adding a new conditional block or extending the script's VENDOR_WORD_TO_BLOCK table.
 
   - com.nothing.   # UAD: com.nothing.launcher (1 package)
 
 ## Unconditional matches (skipped from per-vendor analysis)
 
-  - com.qualcomm.   # UAD: com.qualcomm.atfwd (1 package, covered by chipset_prefixes)
   - com.google.     # UAD: com.google.android.gms (1 package, covered by aosp_prefixes)
+  - com.qualcomm.   # UAD: com.qualcomm.atfwd (1 package, covered by chipset_prefixes)
 ```
 
-The exact format above is what the script will produce. Whitespace, blank lines, and section ordering matter for the test.
+The exact format above is what the script will produce. Whitespace, blank lines, and section ordering matter for the test. The Unconditional-matches section is sorted alphabetically by prefix (`com.google.` before `com.qualcomm.`).
 
 - [ ] **Step 4: Write the failing test**
 
@@ -200,11 +200,18 @@ Create `scripts/audit_oem_prefixes.py`:
 Audit known_oem_prefixes.yml against the UAD-ng catalog.
 
 Fetches UAD's consolidated JSON, derives a second-segment reverse-DNS prefix
-per package, maps each prefix onto a conditional block in our YAML using the
-YAML's manufacturer_match / brand_match lists, and emits a Markdown report
-to stdout (and optionally to a file).
+per package, maps each prefix onto a conditional block in our YAML using a
+static VENDOR_WORD_TO_BLOCK table, and emits a Markdown report to stdout
+(and optionally to a file).
 
 Does NOT auto-edit the YAML. Human reviews the report and edits manually.
+
+Why a static mapping table: package-name second-segments often differ from
+the OEM's manufacturer_match strings (e.g., com.hihonor. is Honor but the
+block's match words are {huawei, honor}; com.miui. is Xiaomi but no
+match word equals "miui"). A static table is the maintainable middle
+ground between hand-coding per package and parsing UAD's vendor field
+(which UAD doesn't reliably expose per entry).
 
 Usage:
     python3 scripts/audit_oem_prefixes.py
@@ -218,7 +225,7 @@ import json
 import sys
 import urllib.request
 from pathlib import Path
-from typing import Any
+from typing import Any, Optional
 
 import yaml
 
@@ -230,8 +237,44 @@ DEFAULT_YAML = Path(__file__).resolve().parent.parent / "app/src/main/res/raw/kn
 DEFAULT_OUTPUT = Path(__file__).resolve().parent.parent / "build/oem-audit-report.md"
 DEFAULT_CACHE = Path(__file__).resolve().parent.parent / "build/audit-cache/uad_lists.json"
 
+# Static mapping: second-segment word -> conditional block name in
+# known_oem_prefixes.yml. Extend as new vendor namespaces are recognized.
+# Keep keys lowercase. Order doesn't matter (dict lookup by key).
+VENDOR_WORD_TO_BLOCK: dict[str, str] = {
+    # Samsung
+    "samsung": "samsung", "sec": "samsung", "knox": "samsung", "osp": "samsung",
+    "skms": "samsung", "mygalaxy": "samsung", "sem": "samsung", "wssyncmldm": "samsung",
+    # Xiaomi
+    "xiaomi": "xiaomi", "miui": "xiaomi", "mi": "xiaomi", "duokan": "xiaomi",
+    "mipay": "xiaomi", "redmi": "xiaomi", "poco": "xiaomi",
+    # Huawei / Honor (one block covers both since the spinoff)
+    "huawei": "huawei", "honor": "huawei", "hihonor": "huawei",
+    "magic": "huawei", "gtp": "huawei",
+    # Oppo (incl. OPlus, ColorOS, Heytap shared brand stack)
+    "oppo": "oppo", "oplus": "oppo", "coloros": "oppo", "heytap": "oppo",
+    # OnePlus (separate block today; OnePlus shares parent with Oppo but
+    # the YAML keeps them split — respect that split here)
+    "oneplus": "oneplus",
+    # Vivo (incl. BBK shared brand stack)
+    "vivo": "vivo", "bbk": "vivo", "iqoo": "vivo",
+    # Asus
+    "asus": "asus",
+    # Realme
+    "realme": "realme",
+    # LG
+    "lge": "lg",
+    # HTC
+    "htc": "htc",
+    # Sony
+    "sony": "sony",
+    # Motorola / Lenovo
+    "motorola": "motorola", "moto": "motorola", "lenovo": "motorola",
+    # Amazon (Fire devices)
+    "amazon": "amazon",
+}
 
-def fetch_uad(cache: Path | None = None) -> dict[str, dict[str, Any]]:
+
+def fetch_uad(cache: Optional[Path] = None) -> dict[str, dict[str, Any]]:
     if cache and cache.exists():
         return json.loads(cache.read_text())
     req = urllib.request.Request(UAD_URL, headers={"User-Agent": "AndroDR-audit/1.0"})
@@ -270,60 +313,46 @@ def conditional_blocks(yaml_doc: dict[str, Any]) -> dict[str, dict[str, Any]]:
     return yaml_doc.get("conditional", {}) or {}
 
 
-def block_match_words(block: dict[str, Any]) -> set[str]:
-    """Union of manufacturer_match and brand_match lowercase words."""
-    out: set[str] = set()
-    for key in ("manufacturer_match", "brand_match"):
-        for word in block.get(key, []) or []:
-            out.add(word.lower())
-    return out
+def block_strict_prefixes(block: dict[str, Any]) -> set[str]:
+    """Only strict_prefixes — partnership_prefixes are parsed-and-ignored by
+    the runtime resolver (see OemPrefixResolver.kt comment), so the audit
+    must not count them as 'currently allowlisted'."""
+    return set(block.get("strict_prefixes", []) or [])
 
 
-def block_prefixes(block: dict[str, Any]) -> set[str]:
-    """Union of strict_prefixes and partnership_prefixes (if present)."""
-    out: set[str] = set()
-    for key in ("strict_prefixes", "partnership_prefixes"):
-        for prefix in block.get(key, []) or []:
-            out.add(prefix)
-    return out
+def map_prefix_to_block(prefix: str) -> Optional[str]:
+    """Look up the prefix's second segment in VENDOR_WORD_TO_BLOCK.
 
-
-def map_prefix_to_block(prefix: str, blocks: dict[str, dict[str, Any]]) -> str | None:
-    """Return the block name whose match words include the prefix's second segment.
-
-    com.hihonor. -> 'huawei' if huawei block has 'honor' in match words.
-    com.nothing. -> None (no block matches 'nothing').
+    com.hihonor. -> 'huawei' (via VENDOR_WORD_TO_BLOCK['hihonor'])
+    com.nothing. -> None (not in table)
     """
     parts = prefix.rstrip(".").split(".")
     if len(parts) < 2:
         return None
-    second = parts[1].lower()
-    for name, block in blocks.items():
-        if second in block_match_words(block) or second == name.lower():
-            return name
-    return None
+    return VENDOR_WORD_TO_BLOCK.get(parts[1].lower())
 
 
 def generate_report(uad: dict[str, dict[str, Any]], yaml_doc: dict[str, Any]) -> str:
     unconditional = collect_unconditional_prefixes(yaml_doc)
     blocks = conditional_blocks(yaml_doc)
 
-    # Group UAD packages by derived prefix.
+    # Group UAD packages by derived prefix (sorted package iteration so the
+    # per-prefix package lists are deterministic).
     prefix_to_packages: dict[str, list[str]] = {}
     for pkg in sorted(uad.keys()):
         prefix = derive_prefix(pkg)
         prefix_to_packages.setdefault(prefix, []).append(pkg)
 
-    # Partition prefixes.
-    unconditional_hits: list[tuple[str, list[str], str]] = []  # (prefix, packages, matching_list_name)
+    # Partition prefixes into three buckets: unconditional, per-block, unmapped.
+    unconditional_hits: list[tuple[str, list[str], str]] = []
     per_block: dict[str, list[tuple[str, list[str]]]] = {name: [] for name in blocks}
-    per_block_existing: dict[str, set[str]] = {name: block_prefixes(b) for name, b in blocks.items()}
+    per_block_existing: dict[str, set[str]] = {name: block_strict_prefixes(b) for name, b in blocks.items()}
     unmapped: list[tuple[str, list[str]]] = []
 
     aosp_set = set(yaml_doc.get("unconditional", {}).get("aosp_prefixes", []) or [])
     chipset_set = set(yaml_doc.get("unconditional", {}).get("chipset_prefixes", []) or [])
 
-    def _matching_unconditional_list(prefix: str) -> str | None:
+    def _matching_unconditional_list(prefix: str) -> Optional[str]:
         if prefix in aosp_set:
             return "aosp_prefixes"
         if prefix in chipset_set:
@@ -337,13 +366,12 @@ def generate_report(uad: dict[str, dict[str, Any]], yaml_doc: dict[str, Any]) ->
         if match_list is not None:
             unconditional_hits.append((prefix, packages, match_list))
             continue
-        block_name = map_prefix_to_block(prefix, blocks)
-        if block_name is None:
+        block_name = map_prefix_to_block(prefix)
+        if block_name is None or block_name not in per_block:
             unmapped.append((prefix, packages))
         else:
             per_block[block_name].append((prefix, packages))
 
-    # Counts for header.
     aosp_google_count = sum(len(pkgs) for _, pkgs, _ in unconditional_hits)
     vendor_mapped_count = sum(len(pkgs) for entries in per_block.values() for _, pkgs in entries)
     unmapped_count = sum(len(pkgs) for _, pkgs in unmapped)
@@ -365,7 +393,8 @@ def generate_report(uad: dict[str, dict[str, Any]], yaml_doc: dict[str, Any]) ->
         lines.append(f"brand_match: {brand}")
         lines.append("")
         existing = sorted(per_block_existing[name])
-        lines.append(f"Currently allowlisted ({len(existing)} prefix{'es' if len(existing) != 1 else ''}):")
+        plural = "prefixes" if len(existing) != 1 else "prefix"
+        lines.append(f"Currently allowlisted ({len(existing)} {plural}):")
         for p in existing:
             lines.append(f"  - {p}")
         lines.append("")
@@ -373,9 +402,10 @@ def generate_report(uad: dict[str, dict[str, Any]], yaml_doc: dict[str, Any]) ->
         proposed = [(prefix, pkgs) for prefix, pkgs in per_block[name] if prefix not in per_block_existing[name]]
         if proposed:
             lines.append(f"Proposed additions ({len(proposed)}):")
-            for prefix, pkgs in sorted(proposed):
+            for prefix, pkgs in sorted(proposed, key=lambda x: x[0]):
                 pkg_list = ", ".join(pkgs)
-                lines.append(f"  - {prefix}   # UAD: {pkg_list} ({len(pkgs)} package{'s' if len(pkgs) != 1 else ''})")
+                pkg_plural = "packages" if len(pkgs) != 1 else "package"
+                lines.append(f"  - {prefix}   # UAD: {pkg_list} ({len(pkgs)} {pkg_plural})")
         else:
             lines.append("Proposed additions: none")
         lines.append("")
@@ -384,21 +414,25 @@ def generate_report(uad: dict[str, dict[str, Any]], yaml_doc: dict[str, Any]) ->
         lines.append(f"## Unmapped UAD prefixes ({len(unmapped)})")
         lines.append("")
         lines.append(
-            "Packages whose second-segment word does not match any conditional block's "
-            "manufacturer_match or brand_match. Consider adding a new conditional block."
+            "Packages whose second-segment word is not recognized as belonging to any "
+            "conditional block. Consider adding a new conditional block or extending the "
+            "script's VENDOR_WORD_TO_BLOCK table."
         )
         lines.append("")
-        for prefix, pkgs in sorted(unmapped):
+        for prefix, pkgs in sorted(unmapped, key=lambda x: x[0]):
             pkg_list = ", ".join(pkgs)
-            lines.append(f"  - {prefix}   # UAD: {pkg_list} ({len(pkgs)} package{'s' if len(pkgs) != 1 else ''})")
+            pkg_plural = "packages" if len(pkgs) != 1 else "package"
+            lines.append(f"  - {prefix}   # UAD: {pkg_list} ({len(pkgs)} {pkg_plural})")
         lines.append("")
 
     if unconditional_hits:
         lines.append("## Unconditional matches (skipped from per-vendor analysis)")
         lines.append("")
-        for prefix, pkgs, list_name in sorted(unconditional_hits):
+        # Sort by prefix string only (not by tuple) so output is deterministic.
+        for prefix, pkgs, list_name in sorted(unconditional_hits, key=lambda x: x[0]):
             pkg_list = ", ".join(pkgs)
-            lines.append(f"  - {prefix}   # UAD: {pkg_list} ({len(pkgs)} package{'s' if len(pkgs) != 1 else ''}, covered by {list_name})")
+            pkg_plural = "packages" if len(pkgs) != 1 else "package"
+            lines.append(f"  - {prefix}   # UAD: {pkg_list} ({len(pkgs)} {pkg_plural}, covered by {list_name})")
         lines.append("")
 
     return "\n".join(lines)
@@ -427,6 +461,12 @@ def main() -> int:
 if __name__ == "__main__":
     raise SystemExit(main())
 ```
+
+Notable design points (per round-1 review):
+- **Static `VENDOR_WORD_TO_BLOCK` table** replaces the broken second-segment-vs-match-word check. Real-world prefixes like `com.hihonor.`, `com.miui.`, `com.sec.`, `com.coloros.` all map correctly now; the original logic would have dumped them all into "Unmapped".
+- **`block_strict_prefixes` returns only `strict_prefixes`** — `partnership_prefixes` is parsed-and-ignored by the runtime resolver (`OemPrefixResolver.kt:231` comment), so the audit must not count them as "currently allowlisted" or it would under-report proposed additions.
+- **Deterministic sort by prefix-only** in the Unconditional and Unmapped sections — tuple sorts produced order surprises in early drafts.
+- **`Optional[str]` instead of `str | None`** for compatibility with older Python (project's CI lane is 3.11, but `Optional` is harmless on newer versions and removes one Python-version footgun).
 
 - [ ] **Step 2: Run the test to verify it passes**
 
@@ -483,6 +523,8 @@ This is the only judgment-based task. The decision criteria are explicit:
 1. The prefix is listed under "Proposed additions" for a conditional block, AND
 2. ALL UAD packages cited under it use a vendor-namespace reverse-DNS that genuinely belongs to that vendor (sanity-check by reading the package names), AND
 3. The prefix's second segment is unambiguously vendor-identifying (e.g., `com.hihonor.` is unambiguously Honor; `com.market.` would NOT be — too generic).
+
+**Verification budget:** if confirming a prefix's vendor identity requires more than ONE web search (i.e., you can't find a clear hit on the vendor's developer site, Wikipedia, or the UAD package description), **skip it** and list it in the commit message's `Deliberately skipped` section with a one-line reason. Better to leave a gap than to mis-allowlist.
 
 **Add a new conditional block when:**
 1. An "Unmapped" entry has ≥ 2 distinct UAD packages, AND
@@ -578,7 +620,13 @@ EOF
 **Files:**
 - Create: `app/src/test/java/com/androdr/ioc/OemPrefixCoverageRegressionTest.kt`
 
-This test locks the coverage so a future YAML edit that strips a prefix breaks the build.
+This test locks the coverage so a future YAML edit that strips a prefix breaks the build with a precise failure message.
+
+**Project pattern (confirmed):**
+- The existing `app/src/test/java/com/androdr/ioc/OemPrefixResolverTest.kt` and `OemPrefixResolverConditionalTest.kt` are JVM unit tests using **MockK** to stub `Context` + `Resources`, with the YAML stream injected from the classpath via `getResourceAsStream("raw/known_oem_prefixes.yml")`. The new test uses the same pattern.
+- `OemPrefixResolver` loads bundled data in its constructor (private `loadBundledData()` invoked from `init`). There is no public `loadBundled()` method — do NOT call one.
+- `DeviceIdentity` is a top-level `data class` in `com.androdr.ioc` (defined in `DeviceIdentity.kt`), NOT nested in `OemPrefixResolver`. Import as `com.androdr.ioc.DeviceIdentity`.
+- Don't use `@RunWith(Parameterized::class)` — it conflicts with the per-test MockK init the project uses. A single `@Test` iterating a `List<Pair<DeviceIdentity, String>>` and asserting each is the simpler match for project style.
 
 - [ ] **Step 1: Write the test**
 
@@ -588,87 +636,86 @@ Create `app/src/test/java/com/androdr/ioc/OemPrefixCoverageRegressionTest.kt`:
 package com.androdr.ioc
 
 import android.content.Context
-import androidx.test.core.app.ApplicationProvider
-import androidx.test.ext.junit.runners.AndroidJUnit4
-import com.androdr.ioc.OemPrefixResolver.DeviceIdentity
-import kotlinx.coroutines.runBlocking
-import org.junit.Before
-import org.junit.Test
-import org.junit.runner.RunWith
-import org.junit.runners.Parameterized
+import android.content.res.Resources
+import com.androdr.R
+import io.mockk.every
+import io.mockk.mockk
 import org.junit.Assert.assertTrue
+import org.junit.Test
 
 /**
- * Coverage lock: every entry below must remain recognized as an OEM prefix
- * for its device identity. Strip one from known_oem_prefixes.yml and this
- * test will say which one and why.
+ * Coverage lock: every (DeviceIdentity, package) pair below must remain
+ * recognized as an OEM prefix. Strip a prefix from known_oem_prefixes.yml
+ * and this test will name the case that broke.
  *
  * Add a case whenever the audit script surfaces a new prefix that lands
  * in the YAML.
  */
-@RunWith(Parameterized::class)
-class OemPrefixCoverageRegressionTest(
-    private val deviceIdentity: DeviceIdentity,
-    private val packageName: String,
-) {
+class OemPrefixCoverageRegressionTest {
 
-    private lateinit var resolver: OemPrefixResolver
+    private val resolver: OemPrefixResolver
 
-    @Before
-    fun setUp() {
-        val ctx = ApplicationProvider.getApplicationContext<Context>()
-        resolver = OemPrefixResolver(ctx)
-        runBlocking { resolver.loadBundled() }
+    init {
+        val context: Context = mockk(relaxed = true)
+        val resources: Resources = mockk(relaxed = true)
+        every { context.resources } returns resources
+        val yamlStream = javaClass.classLoader!!
+            .getResourceAsStream("raw/known_oem_prefixes.yml")!!
+        every { resources.openRawResource(R.raw.known_oem_prefixes) } returns yamlStream
+        resolver = OemPrefixResolver(context)
     }
 
     @Test
-    fun `package is recognized as OEM for matching device`() {
-        assertTrue(
-            "Expected $packageName to match an OEM prefix for $deviceIdentity",
-            resolver.isOemPrefix(packageName, deviceIdentity),
-        )
-    }
-
-    companion object {
-        @JvmStatic
-        @Parameterized.Parameters(name = "{1} on {0}")
-        fun cases(): List<Array<Any>> = listOf(
+    fun `every coverage case still matches its expected device identity`() {
+        val cases: List<Pair<DeviceIdentity, String>> = listOf(
             // Honor / Huawei (the original bug)
-            arrayOf(DeviceIdentity("honor", "honor"), "com.hihonor.appmarket"),
-            arrayOf(DeviceIdentity("huawei", "huawei"), "com.huawei.systemmanager"),
+            DeviceIdentity("honor", "honor") to "com.hihonor.appmarket",
+            DeviceIdentity("huawei", "huawei") to "com.huawei.systemmanager",
             // Samsung
-            arrayOf(DeviceIdentity("samsung", "samsung"), "com.samsung.android.sm"),
-            // Xiaomi
-            arrayOf(DeviceIdentity("xiaomi", "redmi"), "com.miui.gallery"),
+            DeviceIdentity("samsung", "samsung") to "com.samsung.android.sm",
+            // Xiaomi (brand=redmi tests the brand_match list)
+            DeviceIdentity("xiaomi", "redmi") to "com.miui.gallery",
             // OnePlus
-            arrayOf(DeviceIdentity("oneplus", "oneplus"), "com.oneplus.gallery"),
+            DeviceIdentity("oneplus", "oneplus") to "com.oneplus.gallery",
             // OPPO
-            arrayOf(DeviceIdentity("oppo", "oppo"), "com.oplus.gallery"),
+            DeviceIdentity("oppo", "oppo") to "com.oplus.gallery",
             // Vivo
-            arrayOf(DeviceIdentity("vivo", "vivo"), "com.vivo.email"),
+            DeviceIdentity("vivo", "vivo") to "com.vivo.email",
             // Asus
-            arrayOf(DeviceIdentity("asus", "asus"), "com.asus.deskclock"),
-            // Add one case per conditional block + one case per NEW block introduced in Task 4.
+            DeviceIdentity("asus", "asus") to "com.asus.deskclock",
+            // Add one case per NEW conditional block introduced in Task 4
+            // (e.g., for Nothing: DeviceIdentity("nothing", "nothing") to "com.nothing.launcher").
+        )
+
+        val failures = cases.filterNot { (device, pkg) ->
+            resolver.isOemPrefix(pkg, device)
+        }
+
+        assertTrue(
+            "Lost OEM coverage for ${failures.size} case(s):\n" +
+                failures.joinToString("\n") { (d, p) -> "  - $p on $d" },
+            failures.isEmpty(),
         )
     }
 }
 ```
 
-**Important:** verify the exact constructor of `DeviceIdentity` and `OemPrefixResolver`'s public API. Open `app/src/main/java/com/androdr/ioc/OemPrefixResolver.kt` and `app/src/main/java/com/androdr/ioc/DeviceIdentity.kt` (or wherever `DeviceIdentity` is declared — grep for it: `grep -rn "data class DeviceIdentity\|class DeviceIdentity" app/src/main/java`).
+Notes:
+- The `init {}` block mirrors `OemPrefixResolverTest.kt`'s init exactly. Don't change the construction pattern.
+- Lowercase manufacturer/brand strings (the resolver normalizes anyway, but DeviceIdentity test fixtures should reflect normalized form for clarity).
+- The single-test/iterate-list approach gives one consolidated failure listing all broken cases at once — easier to act on than parameterized test names that fail one-at-a-time.
 
-If the resolver requires construction via Hilt (constructor takes `@ApplicationContext Context`), the test setup may need to use Hilt's `HiltAndroidTest` + a test rule. Check `app/src/test/java/com/androdr/ioc/OemPrefixResolverTest.kt` (if it exists) for the project's existing pattern and follow it. If `OemPrefixResolver` has a parameterless `loadBundled()` method, use it; if not, the test may need to load the YAML directly. Adapt to match the existing resolver's actual API.
-
-Add one case for every prefix you added in Task 4 — at minimum one per conditional block (Honor included), plus one for any new conditional block.
+Add one extra case per NEW conditional block you introduced in Task 4 (e.g. Nothing, Transsion). The case's `DeviceIdentity` MUST match one of the block's `manufacturer_match` / `brand_match` strings; the package MUST start with one of the block's new `strict_prefixes`.
 
 - [ ] **Step 2: Run the test**
 
-Run: `./gradlew :app:testDebugUnitTest --tests "com.androdr.ioc.OemPrefixCoverageRegressionTest"`
+```bash
+export JAVA_HOME=/home/yasir/Applications/android-studio/jbr
+export PATH="$JAVA_HOME/bin:$PATH"
+./gradlew :app:testDebugUnitTest --tests "com.androdr.ioc.OemPrefixCoverageRegressionTest"
+```
 
-(Use the JDK env: `export JAVA_HOME=/home/yasir/Applications/android-studio/jbr; export PATH="$JAVA_HOME/bin:$PATH"` if not already set.)
-
-Expected: all parameterized cases PASS. If a case fails, the failure name (`com.hihonor.appmarket on DeviceIdentity(honor, honor)`) tells you precisely what's not covered — go fix the YAML.
-
-If the test refuses to run because the resolver requires Android instrumentation (not JVM unit test), move the test to `app/src/androidTest/java/...` instead and run via `./gradlew connectedDebugAndroidTest` on the emulator. Spec preference: JVM unit test if possible. Match the project's existing pattern: if `OemPrefixResolverTest.kt` lives under `src/test/`, ours does too; if under `src/androidTest/`, ours does too.
+Expected: PASS (1 test). If failures appear, the assertion message lists every broken case (`com.hihonor.appmarket on DeviceIdentity(manufacturer=honor, brand=honor)`); go fix the YAML.
 
 - [ ] **Step 3: Commit**
 
@@ -676,8 +723,6 @@ If the test refuses to run because the resolver requires Android instrumentation
 git add app/src/test/java/com/androdr/ioc/OemPrefixCoverageRegressionTest.kt
 git commit -m "test(ioc): coverage regression test for OEM prefix allowlist"
 ```
-
-(Adjust the path in the `git add` if you ended up in `src/androidTest/`.)
 
 ---
 
@@ -724,11 +769,27 @@ The remote-fetch path in `OemPrefixResolver` pulls from `https://raw.githubuserc
 
 - [ ] **Step 1: Set up the submodule worktree**
 
+The submodule is typically in a detached-HEAD state (it's pinned). Reset to upstream main before branching:
+
 ```bash
 cd third-party/android-sigma-rules
 git fetch origin
-git checkout -b sync/oem-prefix-coverage-honor origin/main
+git checkout main 2>/dev/null || git checkout -b main origin/main
+git pull --ff-only origin main
+git checkout -b sync/oem-prefix-coverage-honor
 ```
+
+If `git remote -v` shows you can push to upstream directly, proceed to step 3 unchanged. If you LACK push permission to `android-sigma-rules/rules` (likely on a first contributor's machine), fork-first:
+
+```bash
+gh repo fork android-sigma-rules/rules --remote=true --remote-name=fork
+git push -u fork sync/oem-prefix-coverage-honor
+gh pr create --repo android-sigma-rules/rules \
+  --head "<your-github-user>:sync/oem-prefix-coverage-honor" \
+  --title "..." --body "..."
+```
+
+(Substitute your GitHub username for `<your-github-user>` and use the title/body from step 3 below.)
 
 - [ ] **Step 2: Copy the bundled YAML over**
 
@@ -768,6 +829,100 @@ cd ../..
 - [ ] **Step 6: No commit on AndroDR side for this task**
 
 The submodule edit lives in the submodule's own history. The pointer in AndroDR is intentionally left at the previous commit until the upstream PR merges.
+
+---
+
+## Task 8: Open the AndroDR PR
+
+**Files:** none modified.
+
+This task ties off the AndroDR side. Run after Task 7 (so the upstream mirror PR link can go in the body).
+
+- [ ] **Step 1: Push the branch**
+
+```bash
+git push -u origin fix/oem-allowlist-audit
+```
+
+- [ ] **Step 2: File a tracking issue** (per the project's `Closes #N` convention)
+
+```bash
+gh issue create --title "androdr-015 FP storm on Honor (MagicOS): expand OEM allowlist coverage" \
+  --body "$(cat <<'EOF'
+## Problem
+
+A tester running AndroDR on an Honor (MagicOS) device reported the `androdr-015` "Unrecognized System App" rule firing many times. The huawei conditional block in `known_oem_prefixes.yml` matches `manufacturer/brand=honor` correctly but only lists `com.huawei.` and `com.honor.` — Honor MagicOS packages live under `com.hihonor.*`, `com.magic.*`, `com.gtp.*`, etc.
+
+## Scope
+
+- Add Honor/MagicOS prefixes to the huawei block.
+- Audit every other conditional block against UAD-ng; close gaps.
+- Add `scripts/audit_oem_prefixes.py` for repeatable future audits.
+- Add `OemPrefixCoverageRegressionTest` to lock the coverage.
+- Mirror the new YAML to the upstream android-sigma-rules repo.
+
+## Out of scope
+
+- Modifying `androdr-015` (data-only fix).
+- `OemPrefixResolver` API changes.
+- Cert-based OEM trust validation.
+
+## Design + plan
+
+- Spec: `docs/superpowers/specs/2026-05-18-oem-allowlist-coverage-audit-design.md`
+- Plan: `docs/superpowers/plans/2026-05-18-oem-allowlist-audit.md`
+EOF
+)"
+```
+
+Record the issue number from the output (e.g. `#NNN`).
+
+- [ ] **Step 3: Open the PR**
+
+```bash
+gh pr create --title "fix(data): expand OEM allowlist coverage from UAD-ng audit (Honor MagicOS + others)" \
+  --body "$(cat <<'EOF'
+## Summary
+
+- Adds `scripts/audit_oem_prefixes.py` — repeatable diff of UAD-ng catalog vs. our `known_oem_prefixes.yml`, with a `VENDOR_WORD_TO_BLOCK` static mapping so package-name second-segments correctly route into conditional blocks (e.g., `com.hihonor.` → huawei block).
+- Closes the Honor MagicOS coverage gap that produced the tester-reported `androdr-015` FP storm — adds `com.hihonor.`, `com.magic.`, `com.gtp.` (and any other surfaced) to the `huawei` block.
+- One-time audit pass against every conditional block; gaps closed per audit report; new conditional blocks added for previously-unmodeled vendors (e.g., Nothing, Transsion if surfaced).
+- `OemPrefixCoverageRegressionTest` locks the coverage with one case per block.
+
+## Test plan
+
+- [x] `python3 -m pytest scripts/test_audit_oem_prefixes.py` — script test passes.
+- [x] `./gradlew :app:testDebugUnitTest` — full unit suite passes incl. new `OemPrefixCoverageRegressionTest`.
+- [x] `./gradlew detekt lintDebug` — both pass.
+- [ ] Honor MagicOS re-test by tester — pending; relies on the original reporter to confirm the FP storm is resolved post-merge.
+
+## Mirror
+
+Upstream PR against `android-sigma-rules/rules` is at <UPSTREAM-PR-URL> (filed in Task 7). Submodule pointer is intentionally NOT bumped in this PR — the remote-fetch path in `OemPrefixResolver` uses the URL directly and will pick up the additions on next refresh; pointer bump is a follow-up after upstream merges.
+
+## Out of scope (deliberately deferred)
+
+- `androdr-015` rule changes (data-only fix per spec).
+- `OemPrefixResolver` API changes.
+- Cert-based OEM trust (proper long-term answer; separate spec).
+
+Closes #<ISSUE-FROM-STEP-2>
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+EOF
+)"
+```
+
+Fill in `<UPSTREAM-PR-URL>` (from Task 7 step 3) and `<ISSUE-FROM-STEP-2>` (from this task's step 2) before running.
+
+- [ ] **Step 4: Decide on CI strategy**
+
+Per project convention (memory `feedback_local_ci_policy`), GHA budget is constrained. After PR opens:
+
+- If CI is currently working, let the run complete and admin-merge on green.
+- If CI budget is tight, cancel in-flight runs and admin-merge after local-test green.
+
+Either way the final step is `gh pr merge <PR#> --admin --squash --delete-branch`. No code change in this task.
 
 ---
 
