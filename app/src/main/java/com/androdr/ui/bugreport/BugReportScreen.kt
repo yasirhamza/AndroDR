@@ -54,6 +54,8 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.androdr.R
 import com.androdr.ui.common.FindingCard
+import com.androdr.ui.theme.ExtendedColors
+import com.androdr.ui.theme.androdrColors
 
 @Suppress("LongMethod") // Bug report screen combines file-picker launch, progress state,
 // empty-state, completion confirmation, error card, findings list, timeline, and export.
@@ -438,7 +440,7 @@ fun BugReportScreen(
 
 @Composable
 private fun TimelineEventCard(event: com.androdr.data.model.TimelineEvent) {
-    val (icon, color) = findingIconAndColor(event.severity)
+    val (icon, color) = findingIconAndColor(event.severity, MaterialTheme.androdrColors)
 
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -487,10 +489,13 @@ private fun TimelineEventCard(event: com.androdr.data.model.TimelineEvent) {
     }
 }
 
-private fun findingIconAndColor(severity: String): Pair<ImageVector, Color> = when (severity.uppercase()) {
-    "CRITICAL" -> Pair(Icons.Filled.Error, Color(0xFFCF6679))
-    "HIGH" -> Pair(Icons.Filled.Warning, Color(0xFFFF9800))
-    "MEDIUM" -> Pair(Icons.Filled.Warning, Color(0xFFE6A800))
-    "ERROR" -> Pair(Icons.Filled.Error, Color(0xFFCF6679))
-    else -> Pair(Icons.Filled.Info, Color(0xFF00D4AA))
+private fun findingIconAndColor(
+    severity: String,
+    colors: ExtendedColors
+): Pair<ImageVector, Color> = when (severity.uppercase()) {
+    "CRITICAL" -> Pair(Icons.Filled.Error, colors.critical)
+    "HIGH"     -> Pair(Icons.Filled.Warning, colors.high)
+    "MEDIUM"   -> Pair(Icons.Filled.Warning, colors.medium)
+    "ERROR"    -> Pair(Icons.Filled.Error, colors.critical)
+    else       -> Pair(Icons.Filled.Info, colors.neutral)
 }
