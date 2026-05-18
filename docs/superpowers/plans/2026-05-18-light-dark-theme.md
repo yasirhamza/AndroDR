@@ -1377,13 +1377,13 @@ Add:
 import com.androdr.ui.theme.androdrColors
 ```
 
-Remove the now-dead import at line 61 (verified: no remaining usages of `severityColor` symbol in the file after this migration):
+Remove the dead import at line 61 — it is already unused at HEAD (zero `severityColor` call sites in this file; the import has been dead for at least one prior change). Removing it now closes a long-standing release-lint warning:
 
 ```kotlin
 import com.androdr.ui.common.severityColor   // delete this line
 ```
 
-Skipping the removal will produce a "Unused import" warning that may fail release lint (CLAUDE.md notes warnings are treated as errors in release builds).
+Skipping the removal will keep the "Unused import" warning that may fail release lint (CLAUDE.md notes warnings are treated as errors in release builds).
 
 - [ ] **Step 2: Migrate `PostScanGuidance` severity switch (lines 300-315)**
 
