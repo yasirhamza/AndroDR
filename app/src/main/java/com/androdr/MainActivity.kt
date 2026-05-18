@@ -2,6 +2,7 @@ package com.androdr
 
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Dashboard
@@ -12,14 +13,23 @@ import androidx.compose.material.icons.outlined.Apps
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.platform.LocalView
+import androidx.core.view.WindowCompat
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.NavHost
 import androidx.navigation.NavType
@@ -35,21 +45,56 @@ import com.androdr.ui.history.HistoryScreen
 import com.androdr.ui.network.DnsMonitorScreen
 import com.androdr.ui.timeline.TimelineScreen
 import com.androdr.ui.settings.SettingsScreen
+import com.androdr.data.repo.SettingsRepository
 import com.androdr.ui.theme.AndroDRTheme
+import com.androdr.ui.theme.ThemeMode
 import android.app.Activity
 import android.net.Uri
 import dagger.hilt.android.AndroidEntryPoint
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import javax.inject.Inject
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
 
+    @Inject lateinit var settingsRepository: SettingsRepository
+
     override fun onCreate(savedInstanceState: android.os.Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
-            AndroDRTheme {
-                AndroDRApp()
+            val themeMode by settingsRepository.themeMode
+                .collectAsStateWithLifecycle(initialValue = ThemeMode.AUTO)
+            AndroDRTheme(themeMode = themeMode) {
+                SystemBarsEffect()
+                Surface(
+                    modifier = Modifier.fillMaxSize(),
+                    color = MaterialTheme.colorScheme.background
+                ) {
+                    AndroDRApp()
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SystemBarsEffect() {
+    val view = LocalView.current
+    val surface = MaterialTheme.colorScheme.surface
+    val surfaceArgb = surface.toArgb()
+    // Drive icon brightness from the actual surface luminance — this is the
+    // only truthful signal when the user has forced LIGHT on a system-dark
+    // device or vice versa. isSystemInDarkTheme() lies in that case.
+    val barsLookDark = surface.luminance() < 0.5f
+    if (!view.isInEditMode) {
+        SideEffect {
+            val window = (view.context as android.app.Activity).window
+            window.statusBarColor = surfaceArgb
+            window.navigationBarColor = surfaceArgb
+            WindowCompat.getInsetsController(window, view).apply {
+                isAppearanceLightStatusBars = !barsLookDark
+                isAppearanceLightNavigationBars = !barsLookDark
             }
         }
     }
