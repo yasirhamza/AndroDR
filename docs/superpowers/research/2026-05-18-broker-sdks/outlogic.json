@@ -1,0 +1,212 @@
+{
+  "schema_version": "1.0",
+  "id": "sir-2026-05-18-outlogic",
+  "threat": {
+    "name": "Outlogic",
+    "families": [
+      "X-Mode Social",
+      "X-Mode",
+      "Outlogic",
+      "Digital Envoy",
+      "EasyOpt",
+      "Picket",
+      "The Visualizer App"
+    ],
+    "category": "data_broker_sdk",
+    "platforms": [
+      "android"
+    ],
+    "description": "X-Mode Social was a location-data SDK that paid app publishers to embed a tracker collecting precise device location, advertising ID, and Bluetooth/Wi-Fi beacon signals, then sold the resulting bulk feeds to private buyers and U.S. military / federal law-enforcement customers. Vice/Motherboard reporting in November 2020 exposed the military-contractor pipeline; Apple and Google banned the SDK from their stores in December 2020. In August 2021 the parent company was acquired by Digital Envoy (Atlanta) and rebranded as Outlogic. In January 2024 the FTC announced a settlement prohibiting X-Mode/Outlogic from selling sensitive location data (visits to medical, reproductive-health, and worship sites) and ordering deletion of previously collected data; the order was finalized in April 2024. On-device anchors carry over from the X-Mode era: the SDK ships under three Java/Kotlin code-signature prefixes (`io.xmode.BcnConfig`, `io.xmode.locationsdk`, `io.mysdk`) per Exodus Privacy tracker #354 and ExpressVPN's Xoth investigation. Telemetry endpoints observed by Exodus include `api.myendpoint.io`, `bin5y4muil.execute-api.us-east-1.amazonaws.com`, and `api.smartechmetrics.com`. No native `.so` libraries are documented in the consulted sources — the SDK appears to be pure Java/Kotlin. Consumer-app coverage is broad and consumer-facing: 199 Android packages were identified by ExpressVPN / Defensive Lab Agency as of January 2021, including Muslim Pro (com.bitsmedia.android.muslimpro, 50M+ installs), Perfect365 (com.arcsoft.perfect365, 50M+ installs), ShopSavvy (com.biggu.shopsavvy, 10M+ installs), and Where's My Droid (com.alienmanfc6.wheresmyandroid, 10M+ installs).",
+    "first_seen": "2013-01-01",
+    "last_seen": "2024-04-15"
+  },
+  "behavioral_signals": [
+    "Embeds a third-party location-broker SDK that collects precise GPS coordinates, Bluetooth beacon IDs, and Wi-Fi scan results in the background.",
+    "Forwards collected location/beacon data to broker-controlled telemetry endpoints distinct from the host app's own backend.",
+    "Sells/licenses the aggregated location feed to third-party buyers — including, in this case, U.S. military and federal law-enforcement customers (per Motherboard/Vice reporting) — without meaningful end-user consent (per FTC complaint)."
+  ],
+  "indicators": [
+    {
+      "type": "embedded_component_class",
+      "value": "io.xmode.BcnConfig",
+      "confidence": "high",
+      "source_urls": [
+        "https://reports.exodus-privacy.eu.org/en/trackers/354/",
+        "https://raw.githubusercontent.com/expressvpn/xoth_location_tracker_investigation/main/sdk_signatures.md"
+      ],
+      "notes": "Exact class anchor from Exodus Privacy tracker #354 code-detection rule; corroborated verbatim in the ExpressVPN / Defensive Lab Agency 'Xoth' SDK-signatures table. Match as full class name or class-name prefix."
+    },
+    {
+      "type": "embedded_component_class",
+      "value": "io.xmode.locationsdk",
+      "confidence": "high",
+      "source_urls": [
+        "https://reports.exodus-privacy.eu.org/en/trackers/354/",
+        "https://raw.githubusercontent.com/expressvpn/xoth_location_tracker_investigation/main/sdk_signatures.md"
+      ],
+      "notes": "Package prefix from Exodus Privacy tracker #354 code-detection rule; corroborated by ExpressVPN sdk_signatures.md. Use as a class-name prefix (any class under `io.xmode.locationsdk.*`)."
+    },
+    {
+      "type": "embedded_component_class",
+      "value": "io.mysdk.",
+      "confidence": "high",
+      "source_urls": [
+        "https://reports.exodus-privacy.eu.org/en/trackers/354/",
+        "https://raw.githubusercontent.com/expressvpn/xoth_location_tracker_investigation/main/sdk_signatures.md"
+      ],
+      "notes": "Third code-signature prefix used by the X-Mode/Outlogic SDK per Exodus Privacy and ExpressVPN. NOTE: this prefix is also shared by SignalFrame/WirelessRegistry (e.g. `io.mysdk.networkmodule.network.networking.wirelessregistry`), so matches under `io.mysdk.*` should be cross-checked against the more specific `io.xmode.*` anchors before high-confidence attribution to Outlogic."
+    },
+    {
+      "type": "domain",
+      "value": "api.myendpoint.io",
+      "confidence": "high",
+      "source_urls": [
+        "https://reports.exodus-privacy.eu.org/en/trackers/354/"
+      ],
+      "notes": "Telemetry endpoint from Exodus Privacy tracker #354 network-detection rule."
+    },
+    {
+      "type": "domain",
+      "value": "bin5y4muil.execute-api.us-east-1.amazonaws.com",
+      "confidence": "high",
+      "source_urls": [
+        "https://reports.exodus-privacy.eu.org/en/trackers/354/"
+      ],
+      "notes": "AWS API Gateway telemetry endpoint from Exodus Privacy tracker #354 network-detection rule."
+    },
+    {
+      "type": "domain",
+      "value": "api.smartechmetrics.com",
+      "confidence": "high",
+      "source_urls": [
+        "https://reports.exodus-privacy.eu.org/en/trackers/354/"
+      ],
+      "notes": "Telemetry endpoint from Exodus Privacy tracker #354 network-detection rule."
+    },
+    {
+      "type": "domain",
+      "value": "xmode.io",
+      "confidence": "high",
+      "source_urls": [
+        "https://en.wikipedia.org/wiki/X-Mode_social",
+        "https://reports.exodus-privacy.eu.org/en/trackers/354/"
+      ],
+      "notes": "Vendor's primary product/privacy-policy domain; sometimes referenced from inside the SDK and in linked privacy policies of consumer apps (e.g. com.audiosdroid.soundfontpiano lists `https://xmode.io/privacy/` per ExpressVPN data)."
+    },
+    {
+      "type": "domain",
+      "value": "outlogic.io",
+      "confidence": "high",
+      "source_urls": [
+        "https://en.wikipedia.org/wiki/X-Mode_social",
+        "https://www.ftc.gov/news-events/news/press-releases/2024/04/ftc-finalizes-order-x-mode-successor-outlogic-prohibiting-it-sharing-or-selling-sensitive-location"
+      ],
+      "notes": "Post-rebrand corporate domain (Digital Envoy acquisition, August 2021)."
+    },
+    {
+      "type": "package_name",
+      "value": "com.bitsmedia.android.muslimpro",
+      "confidence": "high",
+      "source_urls": [
+        "https://raw.githubusercontent.com/expressvpn/xoth_location_tracker_investigation/main/xmode.csv",
+        "https://en.wikipedia.org/wiki/X-Mode_social"
+      ],
+      "notes": "Muslim Pro — ~50M+ installs. Most-discussed consumer app in the X-Mode controversy (Vice/Motherboard, Nov 2020); confirmed by ExpressVPN/Defensive Lab static analysis. App developer publicly responded to the controversy; SDK was removed in subsequent releases. Listed here as a historical example, not a current-version assertion."
+    },
+    {
+      "type": "package_name",
+      "value": "com.arcsoft.perfect365",
+      "confidence": "high",
+      "source_urls": [
+        "https://raw.githubusercontent.com/expressvpn/xoth_location_tracker_investigation/main/xmode.csv"
+      ],
+      "notes": "Perfect365 makeover app — ~50M+ installs. Confirmed in ExpressVPN/Defensive Lab static-analysis dataset (January 2021)."
+    },
+    {
+      "type": "package_name",
+      "value": "com.biggu.shopsavvy",
+      "confidence": "high",
+      "source_urls": [
+        "https://raw.githubusercontent.com/expressvpn/xoth_location_tracker_investigation/main/xmode.csv"
+      ],
+      "notes": "ShopSavvy barcode/QR scanner — ~10M+ installs. Confirmed in ExpressVPN/Defensive Lab static-analysis dataset."
+    },
+    {
+      "type": "package_name",
+      "value": "com.alienmanfc6.wheresmyandroid",
+      "confidence": "high",
+      "source_urls": [
+        "https://raw.githubusercontent.com/expressvpn/xoth_location_tracker_investigation/main/xmode.csv"
+      ],
+      "notes": "Where's My Droid device-finder — ~10M+ installs. Confirmed in ExpressVPN/Defensive Lab static-analysis dataset."
+    },
+    {
+      "type": "package_name",
+      "value": "com.appgeneration.itunerfree",
+      "confidence": "high",
+      "source_urls": [
+        "https://raw.githubusercontent.com/expressvpn/xoth_location_tracker_investigation/main/xmode.csv"
+      ],
+      "notes": "myTuner Radio and Podcasts — ~10M+ installs. Confirmed in ExpressVPN/Defensive Lab static-analysis dataset."
+    },
+    {
+      "type": "package_name",
+      "value": "com.ulmon.android.playlondonofflinemap",
+      "confidence": "high",
+      "source_urls": [
+        "https://reports.exodus-privacy.eu.org/en/trackers/354/"
+      ],
+      "notes": "Ulmon CityMaps2Go offline-map app (London). Listed on the Exodus Privacy tracker #354 'apps detected' index. Many sibling Ulmon city packages are also flagged (Lisbon, San Francisco, Dubai, Berlin, Amsterdam, Los Angeles, Singapore, Vienna, New York, Prague, Hong Kong, Bangkok, Istanbul, Florence, Tokyo, Chicago, Viennaofflinemap, Florenceofflinemap, etc.)."
+    },
+    {
+      "type": "package_name",
+      "value": "com.wapoapp",
+      "confidence": "high",
+      "source_urls": [
+        "https://reports.exodus-privacy.eu.org/en/trackers/354/"
+      ],
+      "notes": "Wapo dating app. Listed on Exodus Privacy tracker #354 apps index."
+    },
+    {
+      "type": "package_name",
+      "value": "com.wapoapp.wapa",
+      "confidence": "high",
+      "source_urls": [
+        "https://reports.exodus-privacy.eu.org/en/trackers/354/"
+      ],
+      "notes": "Wapa dating app (sibling to Wapo). Listed on Exodus Privacy tracker #354 apps index."
+    },
+    {
+      "type": "package_name",
+      "value": "com.williamking.whattheforecast",
+      "confidence": "high",
+      "source_urls": [
+        "https://reports.exodus-privacy.eu.org/en/trackers/354/"
+      ],
+      "notes": "WTForecast weather app. Listed on Exodus Privacy tracker #354 apps index."
+    }
+  ],
+  "ttp_refs": [
+    "T1437.001",
+    "T1430"
+  ],
+  "provenance": {
+    "vendor_page": "https://xmode.io/",
+    "independent_sources": [
+      "https://reports.exodus-privacy.eu.org/en/trackers/354/",
+      "https://raw.githubusercontent.com/expressvpn/xoth_location_tracker_investigation/main/sdk_signatures.md",
+      "https://raw.githubusercontent.com/expressvpn/xoth_location_tracker_investigation/main/xmode.csv",
+      "https://www.theregister.com/2021/02/03/location_tracking_report_xmode_sdk/",
+      "https://www.theregister.com/2021/02/06/google_xmode_android_apps_play_store/",
+      "https://en.wikipedia.org/wiki/X-Mode_social",
+      "https://www.ftc.gov/news-events/news/press-releases/2024/04/ftc-finalizes-order-x-mode-successor-outlogic-prohibiting-it-sharing-or-selling-sensitive-location"
+    ]
+  },
+  "requires_verification": false,
+  "confidence": "high",
+  "source": {
+    "feed": "threat_research",
+    "url": "https://reports.exodus-privacy.eu.org/en/trackers/354/",
+    "retrieved_at": "2026-05-18"
+  }
+}

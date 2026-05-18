@@ -1,0 +1,134 @@
+{
+  "schema_version": "sir-1.0",
+  "source": {
+    "feed": "threat_research",
+    "fetched_at": "2026-05-18"
+  },
+  "threat": {
+    "name": "Predicio",
+    "families": [],
+    "aliases": ["Telescope SDK", "predic.io SDK"],
+    "category": "data_broker_sdk",
+    "description": "Predicio was a France-based location-data broker (corporate site: predic.io) that paid Android app developers to embed its 'Telescope' SDK. The SDK harvested precise GPS coordinates, advertising IDs, IP addresses, device model, OS info, and timestamps, sending them to predic.io infrastructure (sdk.predic.io). Predicio resold the data into a supply chain that included Gravy Analytics / Venntel, a U.S. government contractor selling to ICE, CBP, and the IRS. In January 2021, VICE Motherboard (Joseph Cox) reported that the Salaat First Muslim prayer app (org.hicham.salaat, 10M+ installs) was exfiltrating user location to Predicio. In February 2021, Google issued a 7-day ultimatum to Android developers requiring removal of the Predicio SDK or face Play Store removal; Apple followed. Confirmed apps embedding the SDK included Salaat First, Weawow (weather, 1M+ installs), and 'Fu*** Weather'. Exodus Privacy maintains a tracker profile (#357) listing static and network signatures used in the wild.",
+    "first_observed": "2020-03",
+    "last_observed": "2021-02"
+  },
+  "behavioral_signals": [
+    {
+      "signal": "Embedded third-party SDK in otherwise-benign productivity / weather / prayer apps that initialises only after region check (UK/DE/FR/IT)",
+      "source_urls": ["https://www.vice.com/en/article/muslim-app-location-data-salaat-first/"]
+    },
+    {
+      "signal": "Periodic background location collection (every 20 minutes baseline, up to every 1 minute on high movement) sent to predic.io",
+      "source_urls": ["https://reports.exodus-privacy.eu.org/en/trackers/357/"]
+    },
+    {
+      "signal": "Exfiltrates advertising ID + precise lat/long + IP + OS + device model + timestamp",
+      "source_urls": ["https://www.vice.com/en/article/muslim-app-location-data-salaat-first/"]
+    },
+    {
+      "signal": "App requests ACCESS_FINE_LOCATION + ACCESS_COARSE_LOCATION + INTERNET + ACCESS_NETWORK_STATE + ACCESS_WIFI_STATE (Predicio SDK minimum permission set)",
+      "source_urls": ["https://github.com/camillepredicio/android/blob/master/README.md"]
+    }
+  ],
+  "indicators": [
+    {
+      "type": "embedded_component_class",
+      "value": "com.telescope.android",
+      "context": "Exodus Privacy code-signature regex (tracker #357). The Telescope SDK is Predicio's productised location-collection SDK; presence of any class under com.telescope.android in a compiled APK indicates the Predicio SDK is embedded.",
+      "confidence": "high",
+      "source_urls": [
+        "https://reports.exodus-privacy.eu.org/en/trackers/357/",
+        "https://www.vice.com/en/article/google-predicio-ban-muslim-prayer-app/"
+      ]
+    },
+    {
+      "type": "embedded_component_class",
+      "value": "io.predic.tracker",
+      "context": "Exodus Privacy code-signature regex (tracker #357) — alternate package namespace used by Predicio SDK builds. Direct match on Predicio's own predic.io reverse-DNS namespace.",
+      "confidence": "high",
+      "source_urls": [
+        "https://reports.exodus-privacy.eu.org/en/trackers/357/"
+      ]
+    },
+    {
+      "type": "embedded_component_class",
+      "value": "io.predic",
+      "context": "Broader namespace prefix derived from Predicio's reverse-DNS (predic.io). Captures any io.predic.* class loaded into the host app. Documented in mirrored Predicio Android SDK repositories on JitPack (com.github.team-predicio:android-sdk:2.1.3). Use with care — broader match than tracker #357 signature.",
+      "confidence": "medium",
+      "source_urls": [
+        "https://jitpack.io/p/team-predicio/android-sdk",
+        "https://github.com/camillepredicio/android/blob/master/README.md"
+      ]
+    },
+    {
+      "type": "domain",
+      "value": "sdk.predic.io",
+      "context": "Predicio SDK callback / telemetry endpoint observed in compiled Salaat First (org.hicham.salaat) and Weawow APKs. Identified by Kaspersky GReAT director Costin Raiu in Motherboard reporting and used as Exodus tracker #357 network signature.",
+      "confidence": "high",
+      "source_urls": [
+        "https://www.vice.com/en/article/muslim-app-location-data-salaat-first/",
+        "https://reports.exodus-privacy.eu.org/en/trackers/357/"
+      ]
+    },
+    {
+      "type": "domain",
+      "value": "predic.io",
+      "context": "Parent corporate domain. apps.predic.io was Predicio's publisher onboarding portal. www.predic.io was the corporate marketing site. Any traffic to *.predic.io from a non-Predicio publisher is anomalous.",
+      "confidence": "high",
+      "source_urls": [
+        "https://www.vice.com/en/article/muslim-app-location-data-salaat-first/",
+        "https://www.vice.com/en/article/google-predicio-ban-muslim-prayer-app/"
+      ]
+    },
+    {
+      "type": "package_name",
+      "value": "org.hicham.salaat",
+      "context": "Salaat First — Muslim prayer-times app, 10M+ Google Play installs, confirmed by developer Hicham Boushaba to have embedded the Predicio SDK from March 2020 until removal in December 2020. Primary case study in Motherboard reporting.",
+      "confidence": "high",
+      "source_urls": [
+        "https://www.vice.com/en/article/muslim-app-location-data-salaat-first/"
+      ]
+    }
+  ],
+  "embedded_native_libs": [],
+  "provenance": {
+    "vendor_page": null,
+    "vendor_page_note": "predic.io corporate site went dark after the Google Play Store enforcement action in February 2021. Historical references survive in mirrored SDK repos (github.com/AX-NICOLAS/android-sdk, github.com/camillepredicio/android) and on JitPack (jitpack.io/p/team-predicio/android-sdk).",
+    "independent_sources": [
+      {
+        "publisher": "Exodus Privacy",
+        "url": "https://reports.exodus-privacy.eu.org/en/trackers/357/",
+        "type": "structured",
+        "value": "Tracker profile #357 — authoritative code & network signatures (com.telescope.android | io.predic.tracker; sdk.predic.io)"
+      },
+      {
+        "publisher": "VICE Motherboard (Joseph Cox)",
+        "url": "https://www.vice.com/en/article/muslim-app-location-data-salaat-first/",
+        "type": "investigative",
+        "value": "2021-01-11 investigation confirming Salaat First (org.hicham.salaat) embedded Predicio SDK and exfiltrated location to sdk.predic.io; developer interview"
+      },
+      {
+        "publisher": "VICE Motherboard (Joseph Cox)",
+        "url": "https://www.vice.com/en/article/google-predicio-ban-muslim-prayer-app/",
+        "type": "investigative",
+        "value": "2021-02-09 reporting on Google Play 7-day removal ultimatum; names Telescope as Predicio's SDK and Weawow as a second affected app"
+      },
+      {
+        "publisher": "Electronic Frontier Foundation",
+        "url": "https://www.eff.org/deeplinks/2021/03/apple-and-google-kicked-two-location-data-brokers-out-their-app-stores-good-now",
+        "type": "advocacy_summary",
+        "value": "2021-03 policy analysis confirming Apple + Google both removed Predicio, and linking Predicio -> Gravy Analytics -> Venntel -> ICE/CBP/IRS supply chain"
+      },
+      {
+        "publisher": "Predicio (mirrored SDK README)",
+        "url": "https://github.com/camillepredicio/android/blob/master/README.md",
+        "type": "primary_artifact",
+        "value": "Mirrored Predicio Android SDK README documenting main class PredicIO, integration permissions, and JitPack coordinates com.github.team-predicio:android-sdk:2.1.3"
+      }
+    ]
+  },
+  "confidence": "high",
+  "requires_verification": false,
+  "notes": "Tutela Technologies was investigated as a possible alias but is a SEPARATE Canadian network-measurement firm (acquired by Comlinkdata in 2020); no evidence linking it to Predicio was found in this research pass, so it is NOT listed as an alias. Aliases included are 'Telescope SDK' (Predicio's internal product name for the location SDK, confirmed by Motherboard) and 'predic.io SDK' (informal name in Exodus / community reporting). embedded_native_libs is intentionally empty: no JNI / .so files have been reported for the Predicio SDK in any of the sources reviewed — the SDK appears to be pure Java/Kotlin per the mirrored README and Exodus signature, which scans dex class names only. If a future reverse-engineering pass surfaces native libs, add them here. Class signatures com.telescope.android and io.predic.tracker are the highest-confidence on-device anchors and should be used directly by the AppTelemetry embedded-SDK scanner."
+}

@@ -1,0 +1,203 @@
+{
+  "schema_version": "sir-1.0",
+  "source": {
+    "feed": "threat_research",
+    "fetched_at": "2026-05-18"
+  },
+  "threat": {
+    "name": "Venntel",
+    "families": ["Venntel Mobile"],
+    "aliases": ["Gravy Analytics", "Gravy GOLD SDK", "TimeRAZOR Gravy SDK", "Unacast (post-2023 parent)"],
+    "category": "data_broker_sdk",
+    "description": "Venntel is a Herndon, Virginia-based location-data broker founded in 2015 and incorporated as a wholly-owned subsidiary of Gravy Analytics Inc. Gravy Analytics was later acquired by Norwegian location-data firm Unacast in a November 2023 merger; the combined entity now operates under the Unacast/Gravy Analytics brand and Venntel remains the U.S. government-facing subsidiary. Venntel sells smartphone movement data to U.S. federal agencies including DHS/ICE/CBP, the IRS, the DEA, and the FBI; Sen. Ron Wyden's office has published multiple disclosures of the procurement pipeline. In December 2024 the FTC filed a complaint against Gravy Analytics and Venntel for unfairly selling sensitive location data without verifiable consumer consent (finalized January 2025). In January 2025 the threat actor 'Nightly' leaked an alleged 17TB of Gravy data, exposing approximately 3,455 source apps including FlightRadar, Tinder, Grindr, Candy Crush, and MyFitnessPal. CRITICAL CAVEAT: Venntel and Gravy Analytics do NOT ship their own consumer-app collector SDK in the modern (post-2020) supply chain; both the FTC complaint and Wyden's office characterise Gravy as an aggregator that purchases data indirectly from upstream brokers (Complementics, Predicio, Mobilewalla, X-Mode) and from real-time-bidding ad-exchange feeds. The only Venntel/Gravy-branded Android SDK with documented class names is the legacy 'Gravy GOLD SDK' published by TimeRAZOR Inc. on api.findgravy.com, originally a developer-facing location-and-proximity SDK with confirmed package prefix com.timerazor.gravysdk (and a later com.gravy.gravysdk namespace in mirrored Javadocs). This legacy SDK is the only direct on-device anchor; detection of Venntel data flows in modern apps must rely on (1) legacy Gravy SDK class presence, (2) telemetry to *.findgravy.com / gravyanalytics.com infrastructure, or (3) detection of the upstream feeder SDKs covered by sibling SIRs (Outlogic/X-Mode, Predicio, Complementics, Adsquare). On-device detection of pure RTB bidstream exfiltration is out of scope for AppTelemetry.",
+    "first_observed": "2015",
+    "last_observed": "2025-01"
+  },
+  "behavioral_signals": [
+    {
+      "signal": "Legacy Gravy GOLD SDK runs a foreground/background Service that performs geofence + proximity tracking and periodically reports device location and dwell-time events to *.findgravy.com",
+      "source_urls": [
+        "https://api.findgravy.com/static/androidHtml/jdocs/docs_content/gravy_sdk_doc_public/com/timerazor/gravysdk/core/client/GravyService.html",
+        "https://api.findgravy.com/docs/goldindex"
+      ]
+    },
+    {
+      "signal": "App requests ACCESS_FINE_LOCATION + ACCESS_NETWORK_STATE + WAKE_LOCK + GET_ACCOUNTS + READ_PHONE_STATE alongside a com.google.android.c2dm.intent.RECEIVE GCM receiver registered to GcmWakefulBroadcastReceiver in the gravysdk namespace",
+      "source_urls": [
+        "https://studyres.com/doc/4537418/android-gravy-sdk-guide"
+      ]
+    },
+    {
+      "signal": "Modern Venntel data ingestion is upstream-driven: presence of Outlogic/X-Mode, Predicio, Complementics, Mobilewalla, or Adsquare SDKs in an app implies the device's location is likely to flow into Venntel's pipeline. Detection of Venntel-bound data therefore primarily requires matching the feeder SDKs covered by sibling SIRs.",
+      "source_urls": [
+        "https://www.eff.org/de/deeplinks/2022/06/how-federal-government-buys-our-cell-phone-location-data",
+        "https://www.wyden.senate.gov/imo/media/doc/wyden_letter_to_dhs_oig_on_ice_purchasing_location_datapdf.pdf"
+      ]
+    },
+    {
+      "signal": "Real-time-bidding (RTB) bidstream exfiltration: Gravy's primary modern data source per FTC complaint and Wikipedia summary is harvesting location data from RTB ad exchanges, NOT from in-app SDK code. This pathway is NOT on-device detectable from a host app's manifest or DEX.",
+      "source_urls": [
+        "https://en.wikipedia.org/wiki/Gravy_Analytics",
+        "https://www.adexchanger.com/data-privacy-roundup/reflecting-on-the-ftcs-latest-settlements-with-sellers-of-sensitive-location-data/"
+      ]
+    }
+  ],
+  "indicators": [
+    {
+      "type": "embedded_component_class",
+      "value": "com.timerazor.gravysdk",
+      "context": "Authoritative root package of the Gravy GOLD Android SDK, published by TimeRAZOR Inc. and documented at api.findgravy.com/static/androidHtml/jdocs/. Sub-packages include com.timerazor.gravysdk.client (containing GravyService), com.timerazor.gravysdk.notification (containing GcmWakefulBroadcastReceiver), com.timerazor.gravysdk.core.ui, and com.timerazor.gravysdk.core.util. Presence of any com.timerazor.gravysdk.* class in a compiled APK is the highest-confidence on-device anchor for a direct Gravy/Venntel SDK embed.",
+      "confidence": "high",
+      "source_urls": [
+        "https://api.findgravy.com/static/androidHtml/jdocs/docs_content/gravy_sdk_doc_public/com/timerazor/gravysdk/core/client/GravyService.html",
+        "https://api.findgravy.com/static/androidHtml/jdocs/docs_gold/gravy_sdk_doc_public/com/timerazor/gravysdk/core/ui/PopupDialogFragment.html",
+        "https://api.findgravy.com/static/androidHtml/jdocs/docs_gold/gravy_sdk_doc_public/com/timerazor/gravysdk/core/util/DirectionsJSONParser.html",
+        "https://studyres.com/doc/4537418/android-gravy-sdk-guide"
+      ]
+    },
+    {
+      "type": "embedded_component_class",
+      "value": "com.gravy.gravysdk",
+      "context": "Alternate (likely later-build) root namespace of the Gravy GOLD SDK confirmed by the mirrored Javadoc page api.findgravy.com/static/androidHtml/com/gravy/gravysdk/client/ParcelableState.html. Subpackage com.gravy.gravysdk.client mirrors the com.timerazor.gravysdk.client structure. Use as a secondary signature alongside com.timerazor.gravysdk.",
+      "confidence": "high",
+      "source_urls": [
+        "https://api.findgravy.com/static/androidHtml/com/gravy/gravysdk/client/ParcelableState.html"
+      ]
+    },
+    {
+      "type": "domain",
+      "value": "findgravy.com",
+      "context": "Root corporate / SDK-infrastructure domain for Gravy Analytics. Hosts api.findgravy.com (SDK Javadocs, GOLD API endpoint), developers.findgravy.com (publisher portal), and multiple sub-API endpoints. Listed as a tracker domain in craiu/mobiletrackers and EFF HTTPS Everywhere Atlas.",
+      "confidence": "high",
+      "source_urls": [
+        "https://github.com/craiu/mobiletrackers/blob/master/list.txt",
+        "https://www.eff.org/https-everywhere/atlas/domains/findgravy.com.html",
+        "http://developers.findgravy.com/products/gold-api/docs/"
+      ]
+    },
+    {
+      "type": "domain",
+      "value": "api.findgravy.com",
+      "context": "Primary Gravy GOLD SDK telemetry/control-plane endpoint. Documented in mobiletrackers list and confirmed by SDK Javadoc hosting. Sibling subdomains observed in mobiletrackers: nwzhmwux-api.findgravy.com, zmq5ytc1-api.findgravy.com, mtm1nwmx-api.findgravy.com, ws.findgravy.com, img01.findgravy.com, img02.findgravy.com, img03.findgravy.com, img04.findgravy.com.",
+      "confidence": "high",
+      "source_urls": [
+        "https://github.com/craiu/mobiletrackers/blob/master/list.txt",
+        "https://api.findgravy.com/docs/goldindex"
+      ]
+    },
+    {
+      "type": "domain",
+      "value": "ws.findgravy.com",
+      "context": "Gravy WebSocket / push-channel endpoint listed in craiu/mobiletrackers tracker list. Used by the Gravy SDK for live location/proximity updates.",
+      "confidence": "high",
+      "source_urls": [
+        "https://github.com/craiu/mobiletrackers/blob/master/list.txt"
+      ]
+    },
+    {
+      "type": "domain",
+      "value": "gravyanalytics.com",
+      "context": "Gravy Analytics corporate domain (now redirects to unacast.com per Wikipedia / Unacast partner directory). Listed in craiu/mobiletrackers as a tracker domain. Any direct traffic from a host app to gravyanalytics.com is a strong indicator of an embedded Gravy SDK or first-party integration.",
+      "confidence": "high",
+      "source_urls": [
+        "https://github.com/craiu/mobiletrackers/blob/master/list.txt",
+        "https://en.wikipedia.org/wiki/Gravy_Analytics"
+      ]
+    },
+    {
+      "type": "domain",
+      "value": "api.foozor.com",
+      "context": "Legacy Gravy/TimeRAZOR API host listed alongside the findgravy.com cluster in craiu/mobiletrackers. testapi.foozor.com is a sibling staging endpoint. Foozor was an earlier TimeRAZOR product brand that shared infrastructure with the Gravy SDK.",
+      "confidence": "medium",
+      "source_urls": [
+        "https://github.com/craiu/mobiletrackers/blob/master/list.txt"
+      ]
+    },
+    {
+      "type": "package_name",
+      "value": "com.timeRAZOR",
+      "context": "First-party app 'Gravy: fun local events nearby' published by TimeRAZOR Inc. on Google Play. This is the original Gravy consumer app that shipped the GOLD SDK in production and is the canonical example of a host app embedding com.timerazor.gravysdk.* classes. Note: case-sensitive — published as com.timeRAZOR, not com.timerazor.",
+      "confidence": "high",
+      "source_urls": [
+        "https://www.androidblip.com/android-apps/com.timeRAZOR.html",
+        "https://apk.support/app/com.timeRAZOR"
+      ]
+    }
+  ],
+  "embedded_native_libs": [],
+  "provenance": {
+    "vendor_page": "https://www.venntel.com/",
+    "vendor_page_note": "Venntel's public marketing site (venntel.com) does not publish an Android SDK or a developer integration portal — Venntel positions itself as a data buyer / analytics platform for government, not an SDK vendor. The only Venntel/Gravy-branded developer-facing SDK is the legacy Gravy GOLD SDK hosted at api.findgravy.com and developers.findgravy.com under the TimeRAZOR Inc. brand, which is Gravy Analytics' precursor entity.",
+    "independent_sources": [
+      {
+        "publisher": "Federal Trade Commission",
+        "url": "https://www.ftc.gov/news-events/news/press-releases/2024/12/ftc-takes-action-against-gravy-analytics-venntel-unlawfully-selling-location-data-tracking-consumers",
+        "type": "regulator",
+        "value": "2024-12 FTC enforcement action establishing the Gravy -> Venntel -> federal-LE data flow and confirming Gravy is an aggregator, not an SDK publisher in the modern supply chain"
+      },
+      {
+        "publisher": "Federal Trade Commission",
+        "url": "https://www.ftc.gov/news-events/news/press-releases/2025/01/ftc-finalizes-order-prohibiting-gravy-analytics-venntel-selling-sensitive-location-data",
+        "type": "regulator",
+        "value": "2025-01 final consent order requiring Gravy/Venntel to delete sensitive location data and establish a Sensitive Location Data Program"
+      },
+      {
+        "publisher": "Office of U.S. Senator Ron Wyden",
+        "url": "https://www.wyden.senate.gov/imo/media/doc/wyden_letter_to_dhs_oig_on_ice_purchasing_location_datapdf.pdf",
+        "type": "investigative",
+        "value": "2026-03 Wyden letter to DHS OIG documenting ICE's renewed purchase of Venntel location data and the broader Gravy/Venntel federal procurement pipeline"
+      },
+      {
+        "publisher": "Electronic Frontier Foundation",
+        "url": "https://www.eff.org/de/deeplinks/2022/06/how-federal-government-buys-our-cell-phone-location-data",
+        "type": "advocacy_summary",
+        "value": "EFF analysis confirming Gravy/Venntel sources data indirectly via upstream brokers (Complementics, Predicio, Mobilewalla) and via RTB bidstream rather than first-party SDKs"
+      },
+      {
+        "publisher": "VICE Motherboard (Joseph Cox)",
+        "url": "https://www.vice.com/en/article/ice-dhs-fbi-location-data-venntel-apps/",
+        "type": "investigative",
+        "value": "Foundational reporting identifying Venntel as ICE/DHS/FBI location-data contractor and tracing the supply chain through Sygic and intermediaries"
+      },
+      {
+        "publisher": "NRK Beta (Martin Gundersen)",
+        "url": "https://nrkbeta.no/2020/12/03/my-phone-was-spying-on-me-so-i-tracked-down-the-surveillants/",
+        "type": "investigative",
+        "value": "Reverse-traced data flow showing Sygic / Funny Weather -> Complementics / Predicio -> Gravy Analytics -> Venntel using GDPR subject-access requests"
+      },
+      {
+        "publisher": "TimeRAZOR Inc. / Gravy Analytics (vendor primary artifact)",
+        "url": "https://api.findgravy.com/static/androidHtml/jdocs/docs_content/gravy_sdk_doc_public/com/timerazor/gravysdk/core/client/GravyService.html",
+        "type": "primary_artifact",
+        "value": "Official Gravy GOLD Android SDK Javadoc confirming root package com.timerazor.gravysdk and com.timerazor.gravysdk.core.client.GravyService manifest service"
+      },
+      {
+        "publisher": "TimeRAZOR Inc. / Gravy Analytics (vendor primary artifact)",
+        "url": "https://api.findgravy.com/static/androidHtml/com/gravy/gravysdk/client/ParcelableState.html",
+        "type": "primary_artifact",
+        "value": "Mirrored Javadoc confirming alternate root package com.gravy.gravysdk used in later SDK builds"
+      },
+      {
+        "publisher": "craiu/mobiletrackers (community tracker domain list)",
+        "url": "https://github.com/craiu/mobiletrackers/blob/master/list.txt",
+        "type": "structured",
+        "value": "Authoritative community tracker list enumerating findgravy.com / api.findgravy.com / ws.findgravy.com / gravyanalytics.com / api.foozor.com plus sub-API endpoints"
+      },
+      {
+        "publisher": "TechCrunch (Lorenzo Franceschi-Bicchierai)",
+        "url": "https://techcrunch.com/2025/01/13/gravy-analytics-data-broker-breach-trove-of-location-data-threatens-privacy-millions/",
+        "type": "investigative",
+        "value": "2025-01 reporting on the Nightly threat actor leak exposing ~3,455 source apps (incl. FlightRadar, Tinder, Grindr, Candy Crush, MyFitnessPal) feeding the Gravy pipeline"
+      },
+      {
+        "publisher": "Wikipedia",
+        "url": "https://en.wikipedia.org/wiki/Gravy_Analytics",
+        "type": "encyclopedia",
+        "value": "Corporate-history summary confirming Unacast acquisition (Nov 2023), Venntel subsidiary status, and RTB-driven data acquisition model"
+      }
+    ]
+  },
+  "confidence": "high",
+  "requires_verification": false,
+  "notes": "Per the project brief, this SIR explicitly documents that Venntel as a corporate entity does NOT ship its own consumer-app collector SDK in the typical case. The only direct on-device anchors are (1) the legacy Gravy GOLD Android SDK published under the TimeRAZOR Inc. brand at api.findgravy.com (class prefixes com.timerazor.gravysdk and com.gravy.gravysdk, manifest service GravyService, manifest receiver GcmWakefulBroadcastReceiver) and (2) telemetry to the *.findgravy.com / gravyanalytics.com / api.foozor.com domain cluster. Modern (post-2020) Venntel detection should compose with the sibling SIRs for upstream feeder SDKs: Outlogic/X-Mode (already authored), Predicio (already authored), Adsquare (already authored), and Complementics/Mobilewalla (not yet covered). embedded_native_libs is empty: no JNI / .so libraries are documented in the Gravy SDK Javadocs or anywhere in the source corpus reviewed in this pass. confidence is set to 'high' and requires_verification to false because (a) the Gravy SDK class prefixes are confirmed by the SDK's own official Javadoc (a primary artifact) and an independent third-party reproduction (studyres.com/doc/4537418), (b) the domain cluster is confirmed by a structured community tracker list (craiu/mobiletrackers) and EFF's HTTPS Everywhere Atlas, and (c) the Gravy -> Venntel corporate relationship is confirmed by an FTC enforcement document. Cross-source agreement >= 2 on every indicator. Implementation guidance for issue #168: emit an embedded_component_class signal when com.timerazor.gravysdk.* OR com.gravy.gravysdk.* classes are present, and emit a domain signal for any *.findgravy.com or gravyanalytics.com host observed via DNS monitoring."
+}

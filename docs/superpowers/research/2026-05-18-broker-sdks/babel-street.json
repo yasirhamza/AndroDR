@@ -1,0 +1,109 @@
+{
+  "schema_version": "1.0",
+  "id": "sir-2026-05-18-babel-street",
+  "threat": {
+    "name": "Babel Street",
+    "families": [
+      "LocateX"
+    ],
+    "category": "data_broker_sdk",
+    "platforms": [
+      "android"
+    ],
+    "description": "Babel Street is a US data-aggregation and search-tool vendor (LocateX product) that buys location data from upstream brokers (Venntel/Gravy, Outlogic, Mobilewalla) and resells query access to LE and intelligence customers. It does not ship an on-device SDK; AndroDR detection of Babel Street involvement is indirect (DNS or via detection of an upstream SDK). The LocateX product, exposed publicly in October 2024 by 404 Media, Krebs on Security, NOTUS and Haaretz after Atlas Privacy obtained access via a private investigator, lets analysts pivot on a Mobile Advertising ID (MAID) and reconstruct a device's location history from broker feeds. Government customers documented in EPIC FOIA productions and federal procurement records include CBP (contract 70B03C21F00001121, ~$3.8M), ICE (~$2.5M cumulative since 2018), the Secret Service (contract modification totaling $1,999,394), and OFAC ($154,982, 2021). The product has been used to demonstrate tracking of devices visiting abortion clinics, places of worship, schools, and the homes of New Jersey law-enforcement personnel — the latter triggering Atlas Data Privacy Corporation v. Babel Street, Inc. et al, 1:24-cv-10596 (D.N.J.) under Daniel's Law. Senator Ron Wyden has separately pressed Babel Street and its data partners (notably Near Intelligence, Venntel) over data sourcing and opt-out handling. Because Babel Street is a consumer of broker data rather than a producer of an Android SDK, AndroDR cannot identify it via manifest classes or native libraries; the only on-device-adjacent telemetry surface is DNS resolution of Babel Street corporate / analytics hostnames, which would be expected from an *analyst* device (a customer of Babel Street) rather than a *target* device. These domains are therefore lower-value, high-FP DNS anchors and MUST be paired with additional context (e.g. operator profile, simultaneous resolution of multiple Babel Street infrastructure hostnames, presence on a known LE workstation profile) before being treated as a signal. Detection of the *target-side* pipeline (Android phones whose locations end up in LocateX) is only possible by detecting the upstream SDKs Babel Street buys from (Outlogic / X-Mode, Venntel, Mobilewalla, Predicio, etc.) — those are covered by separate SIRs in this directory.",
+    "first_seen": "2017-01-01",
+    "last_seen": "2026-05-18"
+  },
+  "behavioral_signals": [
+    "Procurement-side: licensed Babel Street / LocateX customers (LE, IC, federal agencies, vetted contractors) authenticate to Babel Street web portals and issue MAID-pivot or geofence queries against pre-purchased broker location data. Visible at the network layer as DNS resolution of Babel Street corporate auth/portal hostnames from an analyst workstation.",
+    "Query pipeline: LocateX answers are computed against location feeds that Babel Street has previously ingested from upstream brokers (Venntel/Gravy Analytics, Outlogic/X-Mode, Mobilewalla, Predicio, Near Intelligence). The target device itself never contacts Babel Street; it contacts the upstream broker's SDK telemetry endpoint, which is then aggregated and re-sold.",
+    "No on-device collector: Babel Street ships no Android SDK, no manifest component, and no native library — the company sits one or more hops downstream of the data-collection event. Any AndroDR finding tagged 'Babel Street' on a target device is therefore presumptively wrong; the correct attribution is to the upstream SDK vendor whose code is actually embedded.",
+    "Access-control weakness: per Atlas Privacy / 404 Media reporting, Babel Street's vetting of LocateX customers was demonstrated to be self-attestation only (a private investigator claiming a future LE contracting relationship was granted trial access), meaning the population of devices issuing queries against Babel Street infrastructure is broader than the formal customer list."
+  ],
+  "indicators": [
+    {
+      "type": "domain",
+      "value": "babelstreet.com",
+      "confidence": "high",
+      "source_urls": [
+        "https://www.babelstreet.com/",
+        "https://krebsonsecurity.com/2024/10/the-global-surveillance-free-for-all-in-mobile-ad-data/"
+      ],
+      "notes": "Primary corporate domain for Babel Street, Inc. (Reston, VA). Confirmed live and referenced in Krebs / 404 Media / EFF coverage of LocateX. ANALYST-SIDE indicator only: resolution on a target device is not evidence of LocateX targeting; resolution on an LE/IC analyst device is consistent with active Babel Street tooling use. High FP risk on non-analyst devices."
+    },
+    {
+      "type": "domain",
+      "value": "app.babelstreet.com",
+      "confidence": "high",
+      "source_urls": [
+        "https://app.babelstreet.com/UserAccount/Login.aspx",
+        "https://www.babelstreet.com/"
+      ],
+      "notes": "Babel Street customer web-application portal (ASP.NET, observed login page at /UserAccount/Login.aspx). This is the primary authenticated front end through which licensed customers reach Babel Street analytics products, including the LocateX query UI demonstrated by Atlas Privacy. Resolution from an analyst workstation is the highest-signal Babel Street DNS anchor."
+    },
+    {
+      "type": "domain",
+      "value": "developer.babelstreet.com",
+      "confidence": "high",
+      "source_urls": [
+        "https://developer.babelstreet.com/login",
+        "https://developer.babelstreet.com/api-doc",
+        "https://developer.babelstreet.com/api-guide"
+      ],
+      "notes": "Developer portal hosting interactive API documentation and the API console for Babel Street / Rosette analytics APIs. Active calls require an X-BabelStreetAPI-Key header. Customer/integrator-side indicator."
+    },
+    {
+      "type": "domain",
+      "value": "docs.babelstreet.com",
+      "confidence": "high",
+      "source_urls": [
+        "https://docs.babelstreet.com/Extract/en/babel-street-analytics-server-user-guide.html"
+      ],
+      "notes": "Babel Street product documentation host (e.g. Analytics Server user guide). Consulted by integrators / on-prem customers."
+    },
+    {
+      "type": "domain",
+      "value": "support.babelstreet.com",
+      "confidence": "high",
+      "source_urls": [
+        "https://support.babelstreet.com/"
+      ],
+      "notes": "Babel Street customer support portal (Atlassian Jira Service Management deployment). Customer-side indicator."
+    },
+    {
+      "type": "domain",
+      "value": "analytics-status.babelstreet.com",
+      "confidence": "high",
+      "source_urls": [
+        "https://developer.babelstreet.com/api-doc",
+        "https://developer.babelstreet.com/api-guide"
+      ],
+      "notes": "Service-status page for Babel Street Analytics API; referenced from the developer-portal API documentation. Useful corroborator alongside app.babelstreet.com when profiling an analyst workstation."
+    }
+  ],
+  "ttp_refs": [
+    "T1430",
+    "T1437.001"
+  ],
+  "provenance": {
+    "vendor_page": "https://www.babelstreet.com",
+    "independent_sources": [
+      "https://www.404media.co/inside-the-u-s-government-bought-tool-that-can-track-phones-at-abortion-clinics/",
+      "https://krebsonsecurity.com/2024/10/the-global-surveillance-free-for-all-in-mobile-ad-data/",
+      "https://www.eff.org/deeplinks/2024/11/creators-police-location-tracking-tool-arent-vetting-buyers-heres-how-protect",
+      "https://www.eff.org/deeplinks/2024/12/location-tracking-tools-endanger-abortion-access-lawmakers-must-act-now",
+      "https://www.notus.org/technology/cell-phone-tracking-law-enforcement-abortion-clinic",
+      "https://epic.org/documents/epic-foia-cbp-babel-street-location-tracking-service/",
+      "https://dockets.justia.com/docket/new-jersey/njdce/1:2024cv10596/557655",
+      "https://www.vice.com/en/article/secret-service-phone-location-data-babel-street/",
+      "https://theintercept.com/2021/11/04/treasury-surveillance-location-data-babel-street/"
+    ]
+  },
+  "requires_verification": true,
+  "confidence": "high",
+  "source": {
+    "feed": "threat_research",
+    "url": "https://www.404media.co/inside-the-u-s-government-bought-tool-that-can-track-phones-at-abortion-clinics/",
+    "retrieved_at": "2026-05-18"
+  }
+}

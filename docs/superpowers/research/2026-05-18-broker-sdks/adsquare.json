@@ -1,0 +1,131 @@
+{
+  "schema_version": "sir-1.0",
+  "source": {
+    "feed": "threat_research",
+    "fetched_at": "2026-05-18"
+  },
+  "threat": {
+    "name": "Adsquare",
+    "families": [],
+    "aliases": ["Adsquare GmbH", "adsquare"],
+    "category": "data_broker_aggregator",
+    "description": "Adsquare GmbH is a Berlin-based location-intelligence company (IAB Europe TCF Vendor ID 66) that operates as a *data aggregator*, NOT a first-party Android SDK vendor. Adsquare's own public statement (to The Markup, 2021-09-30) reads: 'Adsquare is not a location data broker. Adsquare does not resell data in a raw format to third parties... Adsquare doesn't collect location data. Adsquare sources and aggregates location data from a variety of suppliers.' Confirming this posture, Adsquare's only public GitHub repos (github.com/adsquare/data-delivery and github.com/adsquare/data-stats-hll) are 100% Java server-side libraries — Avro-based ingestion utilities for SSPs, app publishers, and data providers to *push* data INTO Adsquare's backend. They are explicitly NOT Android client SDKs and contain no Android manifest components, no Android Gradle config, and no compiled .so/.aar artefacts. Adsquare was named contextually in the Netzpolitik / Bayerischer Rundfunk / Le Monde 'Databroker Files' joint investigation (2024-2025) as part of the European broker pipeline and is described as a 'Berlin-based Location Intelligence specialist' whose alleged data-protection violations Netzpolitik uncovered in 2023 — but none of the published Databroker Files articles attribute a specific Android package name, manifest component, native library, or telemetry endpoint to Adsquare on-device. Exodus Privacy's tracker database contains NO Adsquare tracker entry (no code signature, no network signature) as of 2026-05-18. AppCensus has no published Adsquare-specific tracker analysis. ICCL's RTB reports do not name Adsquare. Confirmed upstream supplier relationships: Tamoco supplies US location segments to Adsquare (Tamoco 'Trusted Partners' page); other supplier identities are not publicly disclosed by Adsquare ('to keep a competitive advantage' per The Markup). For AndroDR's installed_app rule pack, the consequence is that Adsquare is detectable only INDIRECTLY — by detecting its upstream supplier SDKs (Tamoco, Predicio, and similar location-SDK vendors covered by sibling SIRs in this research batch), and possibly by network observation of *.adsquare.com host contact from a publisher app (which would be anomalous, since publishers normally pipe data through their SDK provider, not directly to Adsquare). No first-party on-device anchors exist to bundle into the embedded_component_class or embedded_native_lib rule fields.",
+    "first_observed": "2012",
+    "last_observed": "2026-05"
+  },
+  "behavioral_signals": [
+    {
+      "signal": "Adsquare aggregates SDK-derived location data sourced from third-party publisher SDKs rather than shipping a first-party Android SDK; vendor explicitly states 'Adsquare doesn't collect location data' (The Markup 2021-09-30).",
+      "source_urls": [
+        "https://themarkup.org/privacy/2021/09/30/theres-a-multibillion-dollar-market-for-your-phones-location-data"
+      ]
+    },
+    {
+      "signal": "Adsquare's only public code artefacts are server-side Java/Avro ingestion libraries for publishers and SSPs to push data TO Adsquare backend — no Android client SDK exists in their GitHub org.",
+      "source_urls": [
+        "https://github.com/adsquare/data-delivery",
+        "https://github.com/adsquare"
+      ]
+    },
+    {
+      "signal": "Named in Netzpolitik / BR / Le Monde 'Databroker Files' (2024-2025) as a key node in the European location-data broker pipeline, with prior 2023 Netzpolitik investigation alleging data-protection violations against German users.",
+      "source_urls": [
+        "https://netzpolitik.org/2024/databroker-files-firma-verschleudert-36-milliarden-standorte-von-menschen-in-deutschland/",
+        "https://netzpolitik.org/databroker-files/"
+      ]
+    },
+    {
+      "signal": "Known upstream supplier: Tamoco (US location segments listed as available via Adsquare and LiveRamp). Other supplier identities undisclosed.",
+      "source_urls": [
+        "https://www.tamoco.com/trusted-partners/",
+        "https://themarkup.org/privacy/2021/09/30/theres-a-multibillion-dollar-market-for-your-phones-location-data"
+      ]
+    },
+    {
+      "signal": "Registered IAB Europe TCF vendor (Vendor ID 66) with 41-partner downstream redistribution list (Adelphic, Adform, Adobe, Amazon Advertising, Google Ireland, LiveRamp, Magnite, Meta, Pubmatic, StackAdapt, The Trade Desk, Xandr, Yahoo EMEA, etc.).",
+      "source_urls": [
+        "https://adsquare.com/partner-list/"
+      ]
+    },
+    {
+      "signal": "No Exodus Privacy tracker fingerprint exists for Adsquare — neither code signature (class regex) nor network signature (host regex) is present in Exodus's database as of 2026-05-18, consistent with the no-first-party-SDK posture.",
+      "source_urls": [
+        "https://reports.exodus-privacy.eu.org/en/trackers/"
+      ]
+    }
+  ],
+  "indicators": [
+    {
+      "type": "domain",
+      "value": "adsquare.com",
+      "context": "Adsquare corporate / marketing domain. NOT confirmed as an on-device telemetry endpoint — Adsquare does not publish SDK or endpoint documentation, and no investigative or academic source observed a publisher app contacting *.adsquare.com directly. Treat as low-value detection: presence in DNS logs may indicate B2B onboarding traffic from an app publisher rather than end-user data exfiltration. Use only as a weak corroborating signal alongside a confirmed supplier-SDK detection.",
+      "confidence": "low",
+      "source_urls": [
+        "https://adsquare.com/",
+        "https://github.com/adsquare/data-delivery"
+      ]
+    },
+    {
+      "type": "domain",
+      "value": "help.adsquare.com",
+      "context": "Adsquare customer-facing help center subdomain. Same caveat as adsquare.com — corporate B2B, not a confirmed mobile telemetry endpoint.",
+      "confidence": "low",
+      "source_urls": [
+        "https://help.adsquare.com/en/articles/1327420-introducing-adsquare"
+      ]
+    }
+  ],
+  "embedded_component_classes": [],
+  "embedded_native_libs": [],
+  "provenance": {
+    "vendor_page": "https://adsquare.com/",
+    "vendor_page_note": "Adsquare's marketing site documents the *aggregator* business model and SDK-derived-data sourcing policy, but publishes NO Android SDK download, NO integration guide, NO sample manifest, and NO endpoint reference. The GitHub org (github.com/adsquare) hosts only server-side Java/Avro ingestion libraries (data-delivery, data-stats-hll). The apitracker.io listing for adsquare describes a 'real-time mobile-first data exchange' but its SDK page is empty.",
+    "independent_sources": [
+      {
+        "publisher": "The Markup (Alfred Ng, Maddy Varner)",
+        "url": "https://themarkup.org/privacy/2021/09/30/theres-a-multibillion-dollar-market-for-your-phones-location-data",
+        "type": "investigative",
+        "value": "Direct quote from Adsquare VP of marketing: 'Adsquare is not a location data broker. Adsquare does not resell data in a raw format to third parties... Adsquare doesn't collect location data. Adsquare sources and aggregates location data from a variety of suppliers.' Establishes aggregator posture authoritatively."
+      },
+      {
+        "publisher": "Netzpolitik.org (Sebastian Meineck, Ingo Dachwitz et al.) / BR / Le Monde",
+        "url": "https://netzpolitik.org/2024/databroker-files-firma-verschleudert-36-milliarden-standorte-von-menschen-in-deutschland/",
+        "type": "investigative",
+        "value": "Databroker Files joint investigation (2024) naming Adsquare as a Berlin-based Location Intelligence specialist active in the European location-data broker pipeline, with reference to a prior 2023 Netzpolitik investigation alleging GDPR violations affecting users in Germany. Provides political/geographic context but no Android SDK fingerprint."
+      },
+      {
+        "publisher": "Netzpolitik.org (Databroker Files index)",
+        "url": "https://netzpolitik.org/databroker-files/",
+        "type": "investigative_index",
+        "value": "Series index for the Databroker Files investigation (2024-2025)."
+      },
+      {
+        "publisher": "Adsquare GmbH (primary)",
+        "url": "https://github.com/adsquare/data-delivery",
+        "type": "primary_artifact",
+        "value": "Adsquare's own GitHub data-delivery repo — 100% Java (no Android), Avro-based ingestion library for publishers/SSPs to push data TO Adsquare backend. Confirms aggregator architecture and absence of a first-party Android client SDK."
+      },
+      {
+        "publisher": "Adsquare GmbH (primary)",
+        "url": "https://adsquare.com/partner-list/",
+        "type": "primary_artifact",
+        "value": "Adsquare's published list of 41 downstream third-party partners (Adelphic, Adform, Adobe, Amazon Advertising, Google Ireland, LiveRamp, Magnite, Meta, Pubmatic, StackAdapt, The Trade Desk, Xandr, Yahoo EMEA, etc.). Confirms scale of downstream redistribution."
+      },
+      {
+        "publisher": "Tamoco Ltd.",
+        "url": "https://www.tamoco.com/trusted-partners/",
+        "type": "structured",
+        "value": "Tamoco confirms it supplies US location segments to Adsquare — concrete named upstream supplier SDK whose detection is a transitive proxy for Adsquare data presence."
+      },
+      {
+        "publisher": "Exodus Privacy",
+        "url": "https://reports.exodus-privacy.eu.org/en/trackers/",
+        "type": "structured",
+        "value": "Exodus tracker database — no Adsquare entry exists as of 2026-05-18. Searches against the reports.exodus-privacy.eu.org domain return no Adsquare tracker profile, no code signature, and no network signature. Consistent with Adsquare's no-first-party-SDK posture."
+      }
+    ]
+  },
+  "confidence": "high",
+  "requires_verification": true,
+  "notes": "Confidence is HIGH for the *finding* that Adsquare ships no first-party Android SDK (supported by Adsquare's own statement, their own GitHub artefacts, and the absence of an Exodus tracker fingerprint — three independent structured sources). Confidence is correspondingly LOW for any concrete on-device IOC: there is nothing concrete to bundle into AppTelemetry's embedded_component_class or embedded_native_lib fields. requires_verification=true is set because (a) we cannot rule out an undisclosed private Android SDK distributed only to select publishers under NDA — Adsquare keeps supplier identities secret 'for competitive advantage' (The Markup), and (b) if such an SDK exists it would likely use a private package namespace (e.g., com.adsquare.*, io.adsquare.*, sdk.adsquare.*) — these are NOT included as indicators because no source documents their existence; populating them would violate the 'never invent IOCs' rule. RECOMMENDATION TO THE installed_app RULE-PACK AUTHOR: do NOT author a direct Adsquare rule. Instead, treat Adsquare as a *meta-broker* whose presence is inferred from detection of its confirmed upstream supplier SDKs (Tamoco — see sibling Tamoco SIR if produced — plus Predicio and similar location-SDK vendors). If a future reverse-engineering pass on a Databroker-Files-implicated German app surfaces an Adsquare-attributed package name or .so, file an issue under #168 and add a real indicator here. Aliases 'Adsquare GmbH' and lowercase 'adsquare' are listed because public references vary; the canonical legal name is Adsquare GmbH, Berlin."
+}

@@ -1,0 +1,219 @@
+{
+  "schema_version": "1.0",
+  "id": "sir-2026-05-18-gravy-analytics",
+  "threat": {
+    "name": "Gravy Analytics",
+    "families": [
+      "Unacast",
+      "Venntel",
+      "Gravy Analytics Inc."
+    ],
+    "category": "data_broker_aggregator",
+    "platforms": [
+      "android",
+      "ios"
+    ],
+    "description": "Gravy Analytics is a US data aggregator (parent of Venntel, merged with Unacast in 2023) that purchases location data from upstream SDKs rather than shipping its own collector. Detection of Gravy-side flows is via DNS to known telemetry hostnames or correlation with apps that have been documented as Gravy data sources. Headquartered in Ashburn, VA, the company resells advertising-ID-keyed precise location data (latitude/longitude with timestamp) to commercial customers and, via its Venntel subsidiary, to US federal agencies including ICE, CBP, DEA, and the US Army / US Air Force Special Operations Command (per Vice/Motherboard, EFF, and Jack Poulson reporting). On 3 December 2024 the FTC announced a proposed consent order, finalized in January 2025, banning Gravy Analytics and Venntel from selling, disclosing, or using sensitive location data (visits to medical, reproductive-health, religious, and military sites) except in narrowly defined national-security or law-enforcement contexts, and ordering deletion of historic sensitive-location data and any derived products. The FTC complaint alleges Gravy used geofencing to enumerate consumers attending events tied to medical conditions and places of worship and then sold those lists. Approximately one month later, in early January 2025, a threat actor 'Nightly' posted samples and infrastructure claims on the XSS Russian-language cybercrime forum; Unacast confirmed in an SEC-style breach disclosure that an attacker had used a 'misappropriated key' to exfiltrate files from its Amazon S3 environment on or around 4 January 2025. A 1.4 GB sample containing ~30 million records seeded onto the forum; the attacker claimed a 10-17 TB dataset. From the sample, security researcher Baptiste Robert (Predicta Lab) extracted 3,455 Android package names and 12,371 total app identifiers (Android + iOS) that appeared as data sources in the leak — although several named app vendors (Tinder, MuslimPro, Grindr, Flightradar24) publicly denied any direct integration with Gravy, consistent with the 404 Media / Wired finding that most of the data flows in via the real-time-bidding (RTB) ad-auction 'bidstream' rather than embedded broker SDKs. For AndroDR, this means: NO on-device class/native-lib anchor exists for Gravy itself; detection MUST rely on (a) DNS telemetry to Gravy/Venntel/Unacast-controlled hostnames, (b) presence of consumer apps documented as appearing in the leaked dataset (treated as historical, not current-version assertions), and (c) downstream correlation with the embedded RTB / location-SDK partners that Gravy buys from (covered by the Outlogic, Predicio, and similar SIRs in this research pass).",
+    "first_seen": "2013-01-01",
+    "last_seen": "2025-01-14"
+  },
+  "behavioral_signals": [
+    "Aggregator-side ingestion: receives precise GPS coordinates keyed to AAID (Android Advertising ID) or IDFA from upstream mobile SDKs and from real-time-bidding (RTB) bidstream feeds, then redistributes the merged dataset to commercial and government buyers (per FTC complaint, 404 Media, Wired, EFF).",
+    "Geofencing of sensitive locations: per the FTC complaint, Gravy/Venntel generated lists of consumers who visited specific medical, reproductive-health, religious, and military sites; this is an aggregator-side analytic, not an on-device behavior, but apps whose users appeared in such lists are by definition feeding Gravy.",
+    "Government data delivery via Venntel API endpoints: documented Venntel platform paths include `/Venntel/GetLocationData`, `/Venntel/GetDeviceLocationData`, and `/Venntel/GetDeviceDetails` (EFF / Reveal documentation). These are server-to-server and not directly observable from a consumer device, but the parent Venntel domains may resolve from beacon / management traffic.",
+    "Cloud storage on AWS S3: Unacast confirmed the January 2025 breach involved files in its Amazon cloud environment accessed via a misappropriated key (Unacast statement, Krebs/TechCrunch). Indicates Gravy's ingest pipeline writes to S3 buckets, but no bucket names have been disclosed in public reporting.",
+    "Telemetry pull rather than push for many sources: the 404 Media / Wired analysis emphasizes that the majority of Gravy's data flows in via RTB bid requests broadcast by ad exchanges, not via a Gravy-branded SDK shipped inside consumer apps — so on-device DNS to a Gravy-owned hostname will be RARE in practice; most flows hit ad-exchange domains (e.g. PubMatic, OpenX, Smaato, MoPub, Magnite) that are not exclusive to Gravy."
+  ],
+  "indicators": [
+    {
+      "type": "domain",
+      "value": "gravyanalytics.com",
+      "confidence": "high",
+      "source_urls": [
+        "https://gravyanalytics.com/privacy-policy",
+        "https://en.wikipedia.org/wiki/Gravy_Analytics",
+        "https://techcrunch.com/2025/01/13/gravy-analytics-data-broker-breach-trove-of-location-data-threatens-privacy-millions/"
+      ],
+      "notes": "Primary corporate domain. TechCrunch confirmed the domain was returning a 503/non-functional response for an extended period following the January 2025 breach disclosure. Apex domain; match the apex and any sub-host. DNS resolution from a consumer device is uncommon (Gravy is an aggregator, not an SDK), so a hit is high-signal."
+    },
+    {
+      "type": "domain",
+      "value": "unacast.com",
+      "confidence": "high",
+      "source_urls": [
+        "https://www.unacast.com/gravy-analytics",
+        "https://en.wikipedia.org/wiki/Gravy_Analytics",
+        "https://gravyanalytics.com/privacy-policy"
+      ],
+      "notes": "Parent-company domain post-November-2023 merger. The Gravy Analytics privacy policy explicitly references Unacast as the controlling entity. Apex domain; match the apex and any sub-host."
+    },
+    {
+      "type": "domain",
+      "value": "venntel.com",
+      "confidence": "high",
+      "source_urls": [
+        "https://www.venntel.com/",
+        "https://www.eff.org/deeplinks/2022/08/fog-revealed-guided-tour-how-cops-can-browse-your-location-data",
+        "https://www.ftc.gov/news-events/news/press-releases/2024/12/ftc-takes-action-against-gravy-analytics-venntel-unlawfully-selling-location-data-tracking-consumers"
+      ],
+      "notes": "Subsidiary of Gravy Analytics that resells data to US federal agencies (ICE, CBP, DEA, US Army, US Air Force Special Operations Command). The EFF Fog Revealed investigation documented Venntel API paths used by law-enforcement-facing front-ends: `/Venntel/GetLocationData`, `/Venntel/GetDeviceLocationData`, `/Venntel/GetDeviceDetails`. These paths are server-to-server and unlikely to appear on consumer devices, but the apex domain may still resolve."
+    },
+    {
+      "type": "domain",
+      "value": "explore.venntel.com",
+      "confidence": "medium",
+      "source_urls": [
+        "https://explore.venntel.com/"
+      ],
+      "notes": "Public-facing customer/marketing subdomain. Single source (vendor's own site); listed for completeness rather than as a known telemetry target."
+    },
+    {
+      "type": "package_name",
+      "value": "com.king.candycrushsaga",
+      "confidence": "high",
+      "source_urls": [
+        "https://raw.githubusercontent.com/steffandroid/gravy-scanner/main/app/src/main/res/raw/naughty_apps",
+        "https://www.404media.co/candy-crush-tinder-myfitnesspal-see-the-thousands-of-apps-hijacked-to-spy-on-your-location/",
+        "https://www.wired.com/story/gravy-location-data-app-leak-rtb/"
+      ],
+      "notes": "Candy Crush Saga. Confirmed in the steffandroid/gravy-scanner package list extracted by researcher Baptiste Robert (Predicta Lab) from the leaked sample, and named explicitly in 404 Media / Wired headline coverage. Note: King has not confirmed any direct relationship with Gravy — per Wired reporting, most data inflow is via RTB bidstream, not an embedded Gravy SDK. Indicator should be treated as 'app was present in the leaked dataset', not 'app currently ships a Gravy SDK'."
+    },
+    {
+      "type": "package_name",
+      "value": "com.king.candycrushsodasaga",
+      "confidence": "high",
+      "source_urls": [
+        "https://raw.githubusercontent.com/steffandroid/gravy-scanner/main/app/src/main/res/raw/naughty_apps"
+      ],
+      "notes": "Candy Crush Soda Saga. Confirmed in the steffandroid/gravy-scanner package list (leaked-sample-derived). Same RTB-bidstream caveat as the main Candy Crush package."
+    },
+    {
+      "type": "package_name",
+      "value": "com.tinder",
+      "confidence": "high",
+      "source_urls": [
+        "https://raw.githubusercontent.com/steffandroid/gravy-scanner/main/app/src/main/res/raw/naughty_apps",
+        "https://www.404media.co/candy-crush-tinder-myfitnesspal-see-the-thousands-of-apps-hijacked-to-spy-on-your-location/"
+      ],
+      "notes": "Tinder. Present in the leaked Gravy dataset per the Predicta Lab extraction. Match Group / Tinder publicly denied any direct relationship with Gravy Analytics — consistent with the data having arrived via RTB rather than an embedded SDK. Historical-sample indicator, not a current-version assertion."
+    },
+    {
+      "type": "package_name",
+      "value": "com.grindrapp.android",
+      "confidence": "high",
+      "source_urls": [
+        "https://raw.githubusercontent.com/steffandroid/gravy-scanner/main/app/src/main/res/raw/naughty_apps",
+        "https://www.404media.co/candy-crush-tinder-myfitnesspal-see-the-thousands-of-apps-hijacked-to-spy-on-your-location/"
+      ],
+      "notes": "Grindr. Present in the leaked Gravy dataset. Grindr publicly denied a direct Gravy relationship — same RTB caveat."
+    },
+    {
+      "type": "package_name",
+      "value": "com.myfitnesspal.android",
+      "confidence": "high",
+      "source_urls": [
+        "https://raw.githubusercontent.com/steffandroid/gravy-scanner/main/app/src/main/res/raw/naughty_apps",
+        "https://www.404media.co/candy-crush-tinder-myfitnesspal-see-the-thousands-of-apps-hijacked-to-spy-on-your-location/"
+      ],
+      "notes": "MyFitnessPal. Present in the leaked Gravy dataset and called out by name in 404 Media's headline coverage."
+    },
+    {
+      "type": "package_name",
+      "value": "com.tumblr",
+      "confidence": "high",
+      "source_urls": [
+        "https://raw.githubusercontent.com/steffandroid/gravy-scanner/main/app/src/main/res/raw/naughty_apps",
+        "https://www.404media.co/candy-crush-tinder-myfitnesspal-see-the-thousands-of-apps-hijacked-to-spy-on-your-location/"
+      ],
+      "notes": "Tumblr. Present in the leaked Gravy dataset and named in 404 Media coverage."
+    },
+    {
+      "type": "package_name",
+      "value": "com.kiloo.subwaysurf",
+      "confidence": "high",
+      "source_urls": [
+        "https://raw.githubusercontent.com/steffandroid/gravy-scanner/main/app/src/main/res/raw/naughty_apps",
+        "https://www.404media.co/candy-crush-tinder-myfitnesspal-see-the-thousands-of-apps-hijacked-to-spy-on-your-location/"
+      ],
+      "notes": "Subway Surfers (Kiloo). Present in the leaked Gravy dataset and named in 404 Media coverage."
+    },
+    {
+      "type": "package_name",
+      "value": "com.imangi.templerun",
+      "confidence": "high",
+      "source_urls": [
+        "https://raw.githubusercontent.com/steffandroid/gravy-scanner/main/app/src/main/res/raw/naughty_apps",
+        "https://www.404media.co/candy-crush-tinder-myfitnesspal-see-the-thousands-of-apps-hijacked-to-spy-on-your-location/"
+      ],
+      "notes": "Temple Run. Present in the leaked Gravy dataset and named in 404 Media coverage."
+    },
+    {
+      "type": "package_name",
+      "value": "com.imangi.templerun2",
+      "confidence": "high",
+      "source_urls": [
+        "https://raw.githubusercontent.com/steffandroid/gravy-scanner/main/app/src/main/res/raw/naughty_apps"
+      ],
+      "notes": "Temple Run 2. Present in the leaked Gravy dataset."
+    },
+    {
+      "type": "package_name",
+      "value": "com.flightradar24free",
+      "confidence": "high",
+      "source_urls": [
+        "https://raw.githubusercontent.com/steffandroid/gravy-scanner/main/app/src/main/res/raw/naughty_apps",
+        "https://www.404media.co/candy-crush-tinder-myfitnesspal-see-the-thousands-of-apps-hijacked-to-spy-on-your-location/"
+      ],
+      "notes": "Flightradar24 (free tier). Present in the leaked Gravy dataset. Flightradar24 publicly denied any direct relationship with Gravy — RTB caveat applies."
+    },
+    {
+      "type": "package_name",
+      "value": "com.muslim.quran.muslima.muslimpro",
+      "confidence": "high",
+      "source_urls": [
+        "https://raw.githubusercontent.com/steffandroid/gravy-scanner/main/app/src/main/res/raw/naughty_apps",
+        "https://www.404media.co/candy-crush-tinder-myfitnesspal-see-the-thousands-of-apps-hijacked-to-spy-on-your-location/"
+      ],
+      "notes": "Muslim Pro / prayer companion variant. Present in the leaked Gravy dataset. MuslimPro publicly denied a direct Gravy relationship. Note: the canonical Muslim Pro package is `com.bitsmedia.android.muslimpro` (covered by the X-Mode/Outlogic SIR); this variant `com.muslim.quran.muslima.muslimpro` appears as a separate entry in the Predicta Lab extraction."
+    },
+    {
+      "type": "package_name",
+      "value": "com.zynga.words",
+      "confidence": "high",
+      "source_urls": [
+        "https://raw.githubusercontent.com/steffandroid/gravy-scanner/main/app/src/main/res/raw/naughty_apps"
+      ],
+      "notes": "Zynga Words with Friends. Present in the leaked Gravy dataset. Numerous additional Zynga titles (`com.zynga.words3`, `com.zynga.farmville3`, `com.zynga.FarmVille2CountryEscape`, `com.zynga.FarmVilleTropicEscape`, `com.zynga.backgammonplus`, `com.zynga.boggle`, `com.zynga.livepoker`, `com.zynga.ozmatch`, `com.zynga.pottermatch`, `com.zynga.wizardofoz`, `com.zynga.wonkamatch`) are also in the list — listed here as a representative anchor for the Zynga portfolio."
+    }
+  ],
+  "ttp_refs": [
+    "T1437.001",
+    "T1430",
+    "T1592"
+  ],
+  "provenance": {
+    "vendor_page": "https://gravyanalytics.com",
+    "independent_sources": [
+      "https://www.ftc.gov/news-events/news/press-releases/2024/12/ftc-takes-action-against-gravy-analytics-venntel-unlawfully-selling-location-data-tracking-consumers",
+      "https://www.ftc.gov/news-events/news/press-releases/2025/01/ftc-finalizes-order-prohibiting-gravy-analytics-venntel-selling-sensitive-location-data",
+      "https://www.federalregister.gov/documents/2024/12/06/2024-28738/gravy-analytics-inc-analysis-of-proposed-consent-order-to-aid-public-comment",
+      "https://www.404media.co/hackers-claim-massive-breach-of-location-data-giant-threaten-to-leak-data/",
+      "https://www.404media.co/candy-crush-tinder-myfitnesspal-see-the-thousands-of-apps-hijacked-to-spy-on-your-location/",
+      "https://techcrunch.com/2025/01/13/gravy-analytics-data-broker-breach-trove-of-location-data-threatens-privacy-millions/",
+      "https://www.nbcnews.com/tech/security/location-data-broker-gravy-analytics-was-seemingly-hacked-experts-say-rcna187038",
+      "https://en.wikipedia.org/wiki/Gravy_Analytics",
+      "https://www.theregister.com/2025/02/06/gravy_analytics_data_breach_suit/",
+      "https://www.eff.org/deeplinks/2022/08/fog-revealed-guided-tour-how-cops-can-browse-your-location-data",
+      "https://github.com/steffandroid/gravy-scanner",
+      "https://www.kaspersky.com/blog/geolocation-data-broker-leak/53050/",
+      "https://www.malwarebytes.com/blog/news/2025/01/massive-breach-at-location-data-seller-millions-of-users-affected"
+    ]
+  },
+  "requires_verification": true,
+  "confidence": "high",
+  "source": {
+    "feed": "threat_research",
+    "url": "https://www.ftc.gov/news-events/news/press-releases/2024/12/ftc-takes-action-against-gravy-analytics-venntel-unlawfully-selling-location-data-tracking-consumers",
+    "retrieved_at": "2026-05-18"
+  }
+}
