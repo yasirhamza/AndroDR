@@ -121,11 +121,11 @@ Packages whose second-segment word is not recognized as belonging to any conditi
 
 ## Unconditional matches (skipped from per-vendor analysis)
 
-  - com.google.     # UAD: com.google.android.gms (1 package, covered by aosp_prefixes)
+  - com.google.   # UAD: com.google.android.gms (1 package, covered by aosp_prefixes)
   - com.qualcomm.   # UAD: com.qualcomm.atfwd (1 package, covered by chipset_prefixes)
 ```
 
-The exact format above is what the script will produce. Whitespace, blank lines, and section ordering matter for the test. The Unconditional-matches section is sorted alphabetically by prefix (`com.google.` before `com.qualcomm.`).
+The exact format above is what the script will produce. Whitespace, blank lines, and section ordering matter for the test. The Unconditional-matches section is sorted alphabetically by prefix (`com.google.` before `com.qualcomm.`). Every line after a prefix uses exactly 3 spaces before `#` — the script does NOT pad to align the `#` column, so the visual misalignment between `com.google.` (12 chars) and `com.qualcomm.` (13 chars) is expected.
 
 - [ ] **Step 4: Write the failing test**
 
@@ -267,8 +267,11 @@ VENDOR_WORD_TO_BLOCK: dict[str, str] = {
     "htc": "htc",
     # Sony
     "sony": "sony",
-    # Motorola / Lenovo
-    "motorola": "motorola", "moto": "motorola", "lenovo": "motorola",
+    # Motorola
+    "motorola": "motorola", "moto": "motorola",
+    # Lenovo intentionally NOT mapped to motorola — Lenovo is the parent
+    # brand but has its own namespace; let com.lenovo.* surface as Unmapped
+    # so a human decides whether to add a `lenovo` conditional block.
     # Amazon (Fire devices)
     "amazon": "amazon",
 }
