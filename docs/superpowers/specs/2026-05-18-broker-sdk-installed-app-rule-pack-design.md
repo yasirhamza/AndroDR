@@ -5,7 +5,7 @@
 - [`2026-05-17-data-broker-sdk-scanner-design.md`](2026-05-17-data-broker-sdk-scanner-design.md) — scanner extension that emits the new fields (shipped PR #183).
 - [`2026-05-18-broker-sdk-sir-research-design.md`](2026-05-18-broker-sdk-sir-research-design.md) — SIR research pass (shipped PR #188).
 
-**Scope of this spec:** authoring the **first detection rules** that consume the `embedded_component_class` taxonomy field added in PR #178. 4 SIGMA YAML rules for the four anchored broker SDKs, 4 positive test fixtures, and 2 `telemetry_gap` decision records for the un-anchored SDKs. No code changes in AndroDR repo proper — the work lives in the `android-sigma-rules` submodule plus a submodule-pointer bump.
+**Scope of this spec:** authoring the **first detection rules** that consume the `embedded_component_class` taxonomy field added in PR #178. 4 SIGMA YAML rules for the four anchored broker SDKs, 4 Gate-4 test fixtures, and 2 `telemetry_gap` decision records for the un-anchored SDKs. Work spans both repos: the rules land in the `android-sigma-rules` submodule; the AndroDR side bumps the submodule pointer, copies the rule YAMLs into `app/src/main/res/raw/` for runtime bundling, and adds the Gate-4 fixtures (no Kotlin code changes — only YAML rule resources + YAML fixtures).
 
 **Date:** 2026-05-18
 
@@ -30,16 +30,16 @@ This is also the first user of the new `embedded_component_class` field anywhere
 
 ID range 079–082 is the next contiguous block after androdr-078 (Meiya Pico, currently in staging). All 4 rules land at `third-party/android-sigma-rules/staging/app_scanner/`.
 
-### 4 positive test fixtures
+### 4 Gate-4 test fixtures
 
-At `third-party/android-sigma-rules/validation/test-fixtures/`:
+At `app/src/test/resources/gate4-fixtures/` **in the AndroDR repo** (the harness is Kotlin: `GateFourTestHarness` + `GateFourFixtureTest`):
 
-- `outlogic-positive-app.json`
-- `venntel-positive-app.json`
-- `predicio-positive-app.json`
-- `cuebiq-positive-app.json`
+- `outlogic-broker-sdk.yml`
+- `venntel-broker-sdk.yml`
+- `predicio-broker-sdk.yml`
+- `cuebiq-broker-sdk.yml`
 
-Each is a minimal `AppTelemetry` JSON containing the SDK's class names in `embedded_component_class`. Assertions: own rule fires, the other 3 rules do not fire, the existing `benign-app.json` fires none of the 4.
+Each fixture is YAML with `rule_file`, `service: app_scanner`, `true_positives`, and `true_negatives` blocks matching the established pattern from `meiya-pico-forensics.yml`. `true_positives` contain telemetry records with the SDK's class names in `embedded_component_class`; `true_negatives` include the corresponding system-app variant (must be suppressed by `filter_system_app`) plus a benign reference and a similarly-named-but-different-vendor record to defend against accidental contains-style overmatch.
 
 ### 2 `telemetry_gap` decision records
 
@@ -117,32 +117,41 @@ Everything else is structurally identical (status, level, category, logsource, f
 | `display.summary_template` | `Venntel SDK class detected: {matched_value}` | `Predicio SDK class detected: {matched_value}` | `Cuebiq SDK class detected: {matched_value}` |
 | `display.guidance` | One sentence on the Venntel pipeline + remediation pattern. | One sentence on the Predicio ban + remediation. | One sentence on the Cuebiq NYT exposé + remediation. |
 
-## Test fixtures
+## Gate-4 test fixtures
 
-Pattern (Outlogic example):
+Format follows the existing precedent (`app/src/test/resources/gate4-fixtures/meiya-pico-forensics.yml`). Outlogic example:
 
-```json
-{
-  "fixture_id": "outlogic-positive-app",
-  "description": "Positive fixture for androdr-079 — app embedding the Outlogic SDK",
-  "app_telemetry": {
-    "package_name": "com.example.outlogicembedder",
-    "is_system_app": false,
-    "embedded_component_class": [
-      "io.xmode.BcnConfig",
-      "io.xmode.locationsdk.GeoSyncService"
-    ],
-    "embedded_native_lib": [],
-    "permissions": ["android.permission.ACCESS_FINE_LOCATION"]
-  },
-  "expected_rule_ids": ["androdr-079"],
-  "must_not_fire_rule_ids": ["androdr-080", "androdr-081", "androdr-082"]
-}
+```yaml
+# Fixture for androdr-079: Outlogic (X-Mode Social) data-broker SDK.
+rule_file: sigma_androdr_079_data_broker_outlogic.yml
+service: app_scanner
+true_positives:
+  - package_name: "com.example.outlogicembedder"
+    is_system_app: false
+    embedded_component_class:
+      - "io.xmode.BcnConfig"
+      - "io.xmode.locationsdk.GeoSyncService"
+true_negatives:
+  # System-app masquerade — filter_system_app suppresses
+  - package_name: "com.example.outlogicembedder"
+    is_system_app: true
+    embedded_component_class: ["io.xmode.BcnConfig"]
+  # Benign user app
+  - package_name: "com.google.android.gm"
+    is_system_app: false
+    embedded_component_class: []
+  # Other broker-SDK fixture's TP must NOT trigger this rule (cross-isolation)
+  - package_name: "com.example.cuebiqembedder"
+    is_system_app: false
+    embedded_component_class: ["com.cuebiq.cuebiqsdk.model.Collector"]
+  # SignalFrame/WirelessRegistry uses io.mysdk.* — must NOT trigger Outlogic
+  # (defends the design choice to drop io.mysdk.* from the match set)
+  - package_name: "com.example.signalframeembedder"
+    is_system_app: false
+    embedded_component_class: ["io.mysdk.networkmodule.network.networking.wirelessregistry.WrxConfig"]
 ```
 
-If the existing fixture schema (read from `benign-app.json` at implementation time) uses different field names for the assertion block, the plan adapts to match.
-
-Each rule's fixture contains 1–2 class entries matching that rule's `|contains` values. Plus a single `permissions` entry just to make the telemetry plausibly app-shaped (not load-bearing for the rule).
+The fifth `true_negative` (SignalFrame) is load-bearing — it asserts the design choice to drop `io.mysdk.*` from the Outlogic match set. The other 3 rules' fixtures follow the same pattern, with the cross-isolation negative case rotating across the 4 broker SDKs.
 
 ## `telemetry_gap` decisions
 
@@ -192,26 +201,26 @@ The `missing_field` value (`concrete_mobilewalla_sdk_anchor`) is descriptive, no
 
 6. **Commit + push** the submodule branch; open PR in `android-sigma-rules`.
 
-7. **AndroDR-side PR** — bumps submodule pointer to the merged commit. No Kotlin changes. `BundledRulesSchemaCrossCheckTest` passes (taxonomy and `AppTelemetry` are already aligned).
+7. **AndroDR-side PR** — bumps submodule pointer to the merged commit, copies the 4 rule YAMLs into `app/src/main/res/raw/sigma_androdr_07{9,80,81,82}_data_broker_*.yml` for runtime bundling, and adds the 4 Gate-4 fixtures under `app/src/test/resources/gate4-fixtures/`. No Kotlin code changes. `./gradlew testDebugUnitTest` must pass: `BundledRulesSchemaCrossCheckTest` (taxonomy and `AppTelemetry` are already aligned), `GateFourFixtureTest` (the new fixtures fire correctly), `SigmaRuleParserTest`, `LogsourceTaxonomyCrossCheckTest`, and the existing rule-evaluator suite.
 
 8. **On-device dry-run** — install the new submodule on Z Fold 2 (R3CR300WRRH), run a scan from the Dashboard, confirm zero findings for these 4 rule IDs (the device is not expected to contain broker-SDK-shipping apps). Capture `adb logcat -s AppScanner:D` output as evidence in the AndroDR PR.
 
 ## Acceptance criteria
 
 - [ ] 4 SIGMA YAML rules at `third-party/android-sigma-rules/staging/app_scanner/androdr_{079,080,081,082}_data_broker_*.yml`, each `status: experimental`, `level: medium`, `service: app_scanner`, matching only on the class-name prefixes locked in section "Per-rule design" (exemplar YAML for Outlogic; deltas table for the other 3) — and notably NOT on `io.mysdk.*`.
-- [ ] 4 positive test fixtures at `third-party/android-sigma-rules/validation/test-fixtures/{outlogic,venntel,predicio,cuebiq}-positive-app.json`, each asserting own-rule-fires + other-3-do-not + benign-fires-none.
+- [ ] 4 Gate-4 fixtures at `app/src/test/resources/gate4-fixtures/{outlogic,venntel,predicio,cuebiq}-broker-sdk.yml`, each `rule_file` pointing to its bundled rule, `service: app_scanner`, with `true_positives` firing its rule and `true_negatives` covering the system-app variant + benign + cross-SDK isolation + (for Outlogic) the SignalFrame `io.mysdk.*` negative case.
 - [ ] 2 `telemetry_gap` decisions in the author's manifest output for Mobilewalla and Adsquare, citing their SIR IDs and quoting the gap reason. No YAML rules ship for these two.
 - [ ] All 5 validator gates green.
 - [ ] Two-reviewer cycle (spec-compliance + harsh-quality, parallel) passes; failures trigger targeted re-author + re-review.
-- [ ] Submodule PR merged. AndroDR PR bumping the submodule pointer also merged. `BundledRulesSchemaCrossCheckTest` green.
+- [ ] Submodule PR merged.
+- [ ] AndroDR PR merged: submodule pointer bumped + 4 rule YAMLs copied into `app/src/main/res/raw/` + 4 Gate-4 fixtures added. `./gradlew testDebugUnitTest lintDebug` green; `GateFourFixtureTest` and `BundledRulesSchemaCrossCheckTest` both pass.
 - [ ] On-device dry-run: zero findings for the 4 new rule IDs on Z Fold 2; `adb logcat` evidence captured in the AndroDR PR description.
 
 ## Out of scope
 
 - DNS rule pack consuming the 2 aggregator SIRs plus the 8 SIRs' domain indicators.
 - The combination rule from the parent #168 issue.
-- Promotion of the 4 rules from `staging/app_scanner/` to `app_scanner/`.
-- Bundling the rules into `app/src/main/res/raw/` for the on-device APK.
+- Promotion of the 4 rules from `staging/app_scanner/` to `app_scanner/` and corresponding flip from `status: experimental` to `status: production` (follow-up PR after the rules sit in staging or fire on a real device).
 - Reverse-engineering Mobilewalla or Adsquare APKs to surface concrete anchors.
 
 ## Handoff to next session
