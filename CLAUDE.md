@@ -39,6 +39,10 @@ python3 scripts/generate_known_good_apps.py
 
 See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the architecture, module map, and design principles. Keep that document as the single source of truth — do not duplicate its content here.
 
+## AI pipeline & review conventions
+
+See [`docs/AI-PIPELINE-CONVENTIONS.md`](docs/AI-PIPELINE-CONVENTIONS.md) for the review/approval workflow (two-reviewer cycle, HitL gate before commits, no speculative edits), architectural decisions that constrain future detection work (rule-driven YAML, rule-repo mirroring, IP filtering parked), and roadmap/contact pointers. Anything AI-assisted touching this codebase should follow it.
+
 ## Development workflow
 All pull requests target **`main`**. Feature work lives on topic branches
 (e.g. `feat/<issue-number>-<short-name>`, `fix/<topic>`, `docs/<topic>`)
