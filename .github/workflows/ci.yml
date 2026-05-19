@@ -15,8 +15,44 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  # Classifies the diff into "code" / "rules" / "python" buckets so downstream
+  # jobs can skip themselves on irrelevant changes. Saves GHA minutes on
+  # YAML-only and Python-only PRs. secret-scan + submodule-check always run
+  # (cheap, catch accidents). ci-success treats `skipped` as a pass.
+  # No untrusted input is interpolated into run: scripts in any job below.
+  changes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      code: ${{ steps.filter.outputs.code }}
+      rules: ${{ steps.filter.outputs.rules }}
+      python: ${{ steps.filter.outputs.python }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            rules:
+              - 'app/src/main/res/raw/sigma_*.yml'
+              - 'app/src/main/res/raw/known_oem_prefixes.yml'
+            python:
+              - 'scripts/**'
+            code:
+              - 'app/src/**'
+              - '!app/src/main/res/raw/sigma_*.yml'
+              - '!app/src/main/res/raw/known_oem_prefixes.yml'
+              - 'app/build.gradle.kts'
+              - 'build.gradle.kts'
+              - 'settings.gradle.kts'
+              - 'gradle/**'
+              - 'gradle.properties'
+              - 'third-party/android-sigma-rules'
+              - '.github/workflows/**'
   build-and-test:
     runs-on: ubuntu-latest
+    needs: changes
+    if: ${{ needs.changes.outputs.code == 'true' || needs.changes.outputs.rules == 'true' }}
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
@@ -52,6 +88,8 @@ jobs:
           if-no-files-found: warn
   lint-and-detekt:
     runs-on: ubuntu-latest
+    needs: changes
+    if: ${{ needs.changes.outputs.code == 'true' }}
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
@@ -86,7 +124,8 @@ jobs:
           if-no-files-found: warn
   apk-analyze:
     runs-on: ubuntu-latest
-    needs: build-and-test
+    needs: [changes, build-and-test]
+    if: ${{ needs.changes.outputs.code == 'true' || needs.changes.outputs.rules == 'true' }}
     timeout-minutes: 10
     steps:
       - uses: android-actions/setup-android@v3
@@ -154,6 +193,8 @@ jobs:
           fi
   python-pipeline:
     runs-on: ubuntu-latest
+    needs: changes
+    if: ${{ needs.changes.outputs.python == 'true' }}
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
@@ -181,7 +222,8 @@ jobs:
         run: python3 scripts/generate_known_good_apps.py --help || true
   instrumented:
     runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request'
+    needs: changes
+    if: ${{ github.event_name == 'pull_request' && needs.changes.outputs.code == 'true' }}
     continue-on-error: true
     timeout-minutes: 30
     steps:
@@ -232,8 +274,11 @@ jobs:
     steps:
       - name: Verify all required gates passed (belt-and-braces)
         run: |
-          if [[ "${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') || contains(needs.*.result, 'skipped') }}" == "true" ]]; then
-            echo "A required gate failed, was cancelled, or was skipped" >&2
+          # `skipped` is a PASS here — the path-filter job intentionally
+          # excludes downstream jobs that don't apply (e.g., python-pipeline
+          # on a Kotlin-only PR). `failure` and `cancelled` are still fails.
+          if [[ "${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') }}" == "true" ]]; then
+            echo "A required gate failed or was cancelled" >&2
             echo "needs.build-and-test.result:   ${{ needs.build-and-test.result }}" >&2
             echo "needs.lint-and-detekt.result:  ${{ needs.lint-and-detekt.result }}" >&2
             echo "needs.apk-analyze.result:      ${{ needs.apk-analyze.result }}" >&2
@@ -242,4 +287,4 @@ jobs:
             echo "needs.python-pipeline.result:  ${{ needs.python-pipeline.result }}" >&2
             exit 1
           fi
-          echo "All required gates passed"
+          echo "All required gates passed (or were intentionally skipped by path filter)"
