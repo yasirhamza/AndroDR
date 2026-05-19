@@ -22,6 +22,7 @@ unconditional:
     - "com.qualcomm."
     - "com.qti."
     - "vendor.qti."
+    - "org.codeaurora."   # Code Aurora Forum — Qualcomm-aligned open-source baseband/IMS namespace (e.g., org.codeaurora.ims)
     - "com.mediatek."
     - "com.mtk."
     - "com.unisoc."
@@ -40,6 +41,38 @@ unconditional:
   custom_rom_prefixes:
     - "org.lineageos."
     - "com.cyanogenmod."
+
+  # Partner pre-installs — cross-OEM packages bundled by manufacturers as
+  # part of commercial partnerships. Each ships as system: true on the OEM
+  # image but its package namespace belongs to the partner, not the OEM,
+  # so it falls through OEM-conditional blocks and trips androdr-015
+  # (Unrecognized System App, LOW) as a false positive.
+  #
+  # Treated as unconditional because the signed package is identical
+  # across every OEM that ships it (Microsoft, Meta, the SwiftKey APK on
+  # Play are the same APK whether preloaded on HONOR, Samsung, OPPO, etc.).
+  #
+  # Entry-shape rules:
+  #   * Trailing dot ("com.X.") only when the partner namespace has no
+  #     publicly-distributable apps an attacker could spoof under it.
+  #   * Exact-match (no trailing dot) where the partner also publishes
+  #     user-installable apps under com.<partner>.* that we do NOT want
+  #     implicitly trusted (e.g., com.facebook.katana / com.microsoft.emmx /
+  #     com.touchtype.* sibling APKs an attacker could publish).
+  #
+  # NOT-added intentionally:
+  #   * com.aura.*  — IronSource AppCloud sponsored-app installer (different
+  #     vendor than the Aura identity-protection brand). The project's own
+  #     known_good_apps.json catalogs 5+ com.aura.oobe.* / com.aura.jet.*
+  #     packages as "App from <carrier>. Installs apps on oobe and is made
+  #     by advertising company 'ironSource'." Existing exclusion comment at
+  #     conditional/us_carrier_tmobile (below) is the standing project
+  #     stance. Detection of these as Unrecognized System App is intended.
+  partner_preinstall_prefixes:
+    - "com.touchtype.swiftkey"    # SwiftKey (Microsoft-owned, exact-match — TouchType Ltd. namespace isn't reserved on Play, so a trailing-dot prefix would create a spoofing surface)
+    - "com.microsoft.appmanager"  # Microsoft Phone Link / Link to Windows (exact-match; trailing dot covered via Kotlin startsWith semantics for variants like com.microsoft.appmanager.cn)
+    - "com.facebook.appmanager"   # Facebook OEM stub appmanager — preinstalled on most non-Google OEM images
+    - "com.facebook.services"     # Facebook OEM stub services
 
   # Trusted app store installer package names. These are compared against
   # installer identity, not against arbitrary package names, so they are

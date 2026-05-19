@@ -82,6 +82,13 @@ class OemPrefixCoverageRegressionTest {
             DeviceIdentity("fairphone", "fairphone") to "com.fairphone.activator",
             // Wiko
             DeviceIdentity("wiko", "wiko") to "com.wiko.services",
+            // Code Aurora Forum — Qualcomm-aligned baseband/IMS (unconditional via chipset_prefixes)
+            DeviceIdentity("honor", "honor") to "org.codeaurora.ims",
+            // Partner pre-installs — unconditional, must match on every device
+            DeviceIdentity("honor", "honor") to "com.touchtype.swiftkey",
+            DeviceIdentity("samsung", "samsung") to "com.microsoft.appmanager",
+            DeviceIdentity("xiaomi", "redmi") to "com.facebook.appmanager",
+            DeviceIdentity("oneplus", "oneplus") to "com.facebook.services",
         )
 
         val failures = cases.filterNot { (device, pkg) ->
@@ -92,6 +99,40 @@ class OemPrefixCoverageRegressionTest {
             "Lost OEM coverage for ${failures.size} case(s):\n" +
                 failures.joinToString("\n") { (d, p) -> "  - $p on $d" },
             failures.isEmpty(),
+        )
+    }
+
+    @Test
+    fun `partner pre-install allowlist does NOT over-trust user-installable sibling packages`() {
+        // Negative coverage lock — these must NOT match an OEM prefix because they're
+        // user-installable apps in the same namespace as a partner preinstall. If
+        // someone widens com.touchtype.swiftkey to com.touchtype. or com.microsoft.appmanager
+        // to com.microsoft., this test fails and points to the over-trust.
+        val nonOemCases: List<Pair<DeviceIdentity, String>> = listOf(
+            // Microsoft user-installable apps under com.microsoft.* — must NOT match
+            DeviceIdentity("honor", "honor") to "com.microsoft.emmx",       // Edge
+            DeviceIdentity("honor", "honor") to "com.microsoft.teams",
+            DeviceIdentity("honor", "honor") to "com.microsoft.office.word",
+            // Facebook user apps under com.facebook.* — must NOT match
+            DeviceIdentity("honor", "honor") to "com.facebook.katana",      // Facebook
+            DeviceIdentity("honor", "honor") to "com.facebook.orca",        // Messenger
+            DeviceIdentity("honor", "honor") to "com.facebook.lite",        // Facebook Lite
+            // IronSource AppCloud (com.aura.*) — intentionally NOT in the allowlist
+            // because known_good_apps.json catalogs these as sponsored-app bloatware.
+            // Flagging as Unrecognized System App is the intended behavior.
+            DeviceIdentity("honor", "honor") to "com.aura.oobe.honor",
+            DeviceIdentity("samsung", "samsung") to "com.aura.oobe.samsung.gl",
+            DeviceIdentity("motorola", "motorola") to "com.aura.oobe.motorola",
+        )
+
+        val falseTrust = nonOemCases.filter { (device, pkg) ->
+            resolver.isOemPrefix(pkg, device)
+        }
+
+        assertTrue(
+            "Over-trust regression for ${falseTrust.size} case(s) — these should NOT be OEM:\n" +
+                falseTrust.joinToString("\n") { (d, p) -> "  - $p on $d" },
+            falseTrust.isEmpty(),
         )
     }
 }
