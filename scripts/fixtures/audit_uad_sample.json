@@ -1,0 +1,9 @@
+{
+    "com.huawei.systemmanager": {"list": "Oem", "description": "Huawei system manager"},
+    "com.hihonor.appmarket": {"list": "Oem", "description": "Honor app market"},
+    "com.hihonor.calendar": {"list": "Oem", "description": "Honor calendar"},
+    "com.samsung.android.bixby.agent": {"list": "Oem", "description": "Samsung Bixby"},
+    "com.nothing.launcher": {"list": "Oem", "description": "Nothing launcher"},
+    "com.qualcomm.atfwd": {"list": "Aosp", "description": "Qualcomm AT command forwarder"},
+    "com.google.android.gms": {"list": "Google", "description": "Google Play Services"}
+}
