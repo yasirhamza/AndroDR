@@ -58,6 +58,8 @@ class OemPrefixCoverageRegressionTest {
             DeviceIdentity("lge", "lge") to "com.lge.launcher3",
             // Sony
             DeviceIdentity("sony", "sony") to "com.sonymobile.xperiaservices",
+            // HTC (legacy block — kept in YAML for older devices)
+            DeviceIdentity("htc", "htc") to "com.htc.launcher",
             // Amazon
             DeviceIdentity("amazon", "amazon") to "com.amazon.kindle",
             // Transsion (manufacturer=transsion, brand=tecno — brand_match includes "tecno")
