@@ -52,7 +52,10 @@ VENDOR_WORD_TO_BLOCK: dict[str, str] = {
     "mipay": "xiaomi", "redmi": "xiaomi", "poco": "xiaomi",
     # Huawei / Honor (one block covers both since the spinoff)
     "huawei": "huawei", "honor": "huawei", "hihonor": "huawei",
-    "magic": "huawei", "gtp": "huawei",
+    "magic": "huawei",
+    # gtp intentionally NOT mapped: com.gtp.* is the Go Dev Team (3P launcher
+    # publisher), not an Honor/Huawei namespace, even though Honor MagicOS
+    # preloads GO Launcher. Let it surface in Unmapped for human review.
     # Oppo (incl. OPlus, ColorOS, Heytap shared brand stack)
     "oppo": "oppo", "oplus": "oppo", "coloros": "oppo", "heytap": "oppo",
     # OnePlus (separate block today; OnePlus shares parent with Oppo but
