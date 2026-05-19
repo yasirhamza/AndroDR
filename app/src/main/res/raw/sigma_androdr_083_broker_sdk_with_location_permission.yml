@@ -3,22 +3,12 @@ id: androdr-083
 status: experimental
 category: incident
 description: >
-    Detects an installed app that BOTH embeds one of the documented
-    data-broker SDKs (Outlogic, Venntel, Predicio, Cuebiq) AND holds
-    ACCESS_FINE_LOCATION. This is the threat model from the DW
-    Documentary "Dangerous apps — In the web of data brokers":
-    ordinary apps (weather, classifieds, dating, games) embed a
-    location-broker SDK and request location permission, enabling the
-    broker pipeline to sell precise-movement data to LE and military
-    buyers. Higher signal than either anchor alone because the AND
-    models the full pipeline.
-
-    Note on permission matching: AndroDR's AppScanner emits the
-    `permissions` field as short names (the surveillance-permission
-    subset, with `android.permission.` stripped — see AppScanner.kt
-    line 275). ACCESS_BACKGROUND_LOCATION is not tracked in that
-    subset; matching on ACCESS_FINE_LOCATION suffices because Android
-    11+ requires FINE to be granted as a prerequisite for BACKGROUND.
+    This app combines a documented data-broker SDK (Outlogic, Venntel,
+    Predicio, or Cuebiq) with permission to access your precise location.
+    The two signals together indicate an active broker pipeline —
+    ordinary-looking apps (weather, classifieds, dating, games) embed
+    these SDKs to monetize precise-movement data, which has historically
+    been sold to law-enforcement and military buyers.
 author: AndroDR (AI-generated)
 date: 2026/05/18
 references:

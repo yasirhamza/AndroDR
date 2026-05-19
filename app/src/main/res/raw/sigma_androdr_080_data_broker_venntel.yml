@@ -3,12 +3,10 @@ id: androdr-080
 status: production
 category: incident
 description: >
-    Detects the legacy Gravy GOLD SDK (published under TimeRAZOR Inc.,
-    later branded Venntel) embedded inside an installed app. Venntel
-    resold the resulting location feed to ICE, CBP, DEA, and US military
-    customers per Senator Wyden's investigations and the FTC complaint
-    (December 2024). Match set is the two confirmed class prefixes from
-    the vendor's own Javadoc and an independent third-party mirror.
+    This app contains the legacy Gravy GOLD / Venntel data-broker SDK.
+    Venntel resold the location feed to ICE, CBP, DEA, and US military
+    customers per Senator Wyden's investigations and the December 2024
+    FTC complaint.
 author: AndroDR (AI-generated)
 date: 2026/05/18
 references:
