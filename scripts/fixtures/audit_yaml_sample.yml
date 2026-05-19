@@ -1,0 +1,21 @@
+version: "test-fixture"
+description: "Minimal fixture for audit script tests."
+
+unconditional:
+  aosp_prefixes:
+    - "com.android."
+    - "com.google."
+  chipset_prefixes:
+    - "com.qualcomm."
+
+conditional:
+  huawei:
+    manufacturer_match: ["huawei", "honor"]
+    brand_match: ["huawei", "honor"]
+    strict_prefixes:
+      - "com.huawei."
+  samsung:
+    manufacturer_match: ["samsung"]
+    brand_match: ["samsung"]
+    strict_prefixes:
+      - "com.samsung."

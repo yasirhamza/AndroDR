@@ -1,4 +1,4 @@
-version: "2026-04-10"
+version: "2026-05-19"
 description: "Known OEM, carrier, and chipset vendor package prefixes. Split into unconditional and device-conditional sections: conditional blocks only apply when the assessed device's manufacturer/brand matches the block's manufacturer_match / brand_match lists. This closes the prefix-spoofing attack from #90 where an attacker could hide malware under a foreign vendor's package namespace on a device that doesn't actually use that vendor."
 sources:
   - uad-list
@@ -89,9 +89,13 @@ conditional:
       - "com.shannon."
       - "com.wsomacp"
       - "com.wssyncmldm"
-    # partnership_prefixes retired in #147. Samsung-bundled partner apps
-    # (Microsoft, Netflix, Facebook, etc.) are classified via the
-    # known_good_apps.json database (UAD-ng Oem/Carrier/Misc lists).
+    # partnership_prefixes intentionally omitted. Samsung-bundled partner apps
+    # (Microsoft, Netflix, Facebook, Spotify, Booking, LinkedIn, etc.) are
+    # classified via the known_good_apps.json database (UAD-ng Oem/Carrier/Misc
+    # lists) — a community-maintained data source that scales without requiring
+    # AndroDR releases for every new Samsung partner deal. A closed allowlist
+    # here produced HIGH "firmware implant" false positives on any un-listed
+    # preload; see issue #147.
 
   xiaomi:
     manufacturer_match: ["xiaomi"]
@@ -102,18 +106,25 @@ conditional:
       - "com.mi."
       - "com.duokan."
       - "com.mipay."
+      - "android.miui."   # UAD: android.miui.home.launcher.res, android.miui.overlay, android.miui.overlay.telephony, android.miui.poco.launcher.res (4 packages)
+      - "eu.xiaomi."   # UAD: eu.xiaomi.ext, eu.xiaomi.module.inject (2 packages)
 
   motorola:
-    manufacturer_match: ["motorola"]
+    manufacturer_match: ["motorola", "lenovo"]
     brand_match: ["motorola", "lenovo"]
     strict_prefixes:
       - "com.motorola."
+      - "com.lenovo."   # UAD: com.lenovo.leos.appstore, com.lenovo.leos.cloud.sync, com.lenovo.levoice.caption, com.lenovo.levoice.trigger, com.lenovo.levoice_agent, com.lenovo.levoice_notes, com.lenovo.lsf.user, com.lenovo.ue.device, com.lenovo.weathercenter (9 packages)
+      - "com.tblenovo."   # UAD: com.tblenovo.center, com.tblenovo.lenovotips (2 packages)
+      - "com.zui."   # UAD: com.zui.android.overlay.common, com.zui.antitheft, com.zui.browser, com.zui.camera, com.zui.contacts, com.zui.launcher, ... (64 packages)
 
   oneplus:
     manufacturer_match: ["oneplus"]
     brand_match: ["oneplus"]
     strict_prefixes:
       - "com.oneplus."
+      - "cn.oneplus."   # UAD: cn.oneplus.nvbackup, cn.oneplus.oem_tcma, cn.oneplus.oemtcma, cn.oneplus.opmms, cn.oneplus.photos (5 packages)
+      - "net.oneplus."   # UAD: net.oneplus.commonlogtool, net.oneplus.forums, net.oneplus.launcher, net.oneplus.odm, net.oneplus.push, net.oneplus.weather, ... (14 packages)
 
   lg:
     manufacturer_match: ["lge"]
@@ -132,6 +143,8 @@ conditional:
     brand_match: ["sony"]
     strict_prefixes:
       - "com.sony."
+      - "com.sonymobile."   # UAD: com.sonymobile.advancedlogging, com.sonymobile.android.contacts, com.sonymobile.assist, com.sonymobile.cameracommon, com.sonymobile.email, com.sonymobile.home.product.res.overlay, com.sonymobile.lifelog, com.sonymobile.music.googlelyricsplugin, com.sonymobile.xperiaservices, ... (68 packages)
+      - "com.sonyericsson."   # UAD: com.sonyericsson.album, com.sonyericsson.android.camera, com.sonyericsson.android.conversations, com.sonyericsson.fmradio, com.sonyericsson.home, com.sonyericsson.music, com.sonyericsson.setupwizard, ... (57 packages)
 
   huawei:
     manufacturer_match: ["huawei", "honor"]
@@ -139,6 +152,7 @@ conditional:
     strict_prefixes:
       - "com.huawei."
       - "com.honor."
+      - "com.hihonor."   # UAD: com.hihonor.HnMultiScreenShot, com.hihonor.aipluginengine, com.hihonor.android.launcher, com.hihonor.appmarket, com.hihonor.assistant, com.hihonor.camera, com.hihonor.contacts, com.hihonor.id, com.hihonor.search, com.hihonor.systemmanager, ... (85 packages)
 
   asus:
     manufacturer_match: ["asus"]
@@ -163,16 +177,81 @@ conditional:
 
   vivo:
     manufacturer_match: ["vivo"]
-    brand_match: ["vivo"]
+    brand_match: ["vivo", "iqoo"]
     strict_prefixes:
       - "com.vivo."
       - "com.bbk."
+      - "com.iqoo."   # UAD: com.iqoo.aftersale.engineermode, com.iqoo.engineermode, com.iqoo.powersaving, com.iqoo.secure, com.iqoo.user.engineermode, com.iqoo.website (6 packages)
 
   amazon:
     manufacturer_match: ["amazon"]
     brand_match: ["amazon"]
     strict_prefixes:
       - "com.amazon."
+
+  transsion:
+    manufacturer_match: ["transsion", "tecno", "infinix", "itel"]
+    brand_match: ["transsion", "tecno", "infinix", "itel"]
+    strict_prefixes:
+      - "com.transsion."   # UAD: com.transsion.XOSLauncher, com.transsion.aivoiceassistant, com.transsion.calendar, com.transsion.camera, com.transsion.hilauncher, com.transsion.infinix.xclub, com.transsion.itel.manual, com.transsion.phonemanager, com.transsion.systemupdate, ... (94 packages)
+      - "com.infinix."   # UAD: com.infinix, com.infinix.xshare (2 packages)
+      - "com.itel."   # UAD: com.itel.TWSService (1 package)
+      # com.tecno. intentionally absent: zero packages in UAD's current catalog.
+      # Add when the audit script surfaces them.
+
+  nothing:
+    manufacturer_match: ["nothing"]
+    brand_match: ["nothing"]
+    strict_prefixes:
+      - "com.nothing."   # UAD: com.nothing.OfflineOTAUpgradeApp, com.nothing.applocker, com.nothing.camera, com.nothing.dirac, com.nothing.glyphnotification, com.nothing.launcher, com.nothing.smartcenter, com.nothing.weather, ... (24 packages)
+
+  zte:
+    manufacturer_match: ["zte", "nubia"]
+    brand_match: ["zte", "nubia"]
+    strict_prefixes:
+      - "com.zte."   # UAD: com.zte.assistant, com.zte.contacts.sub, com.zte.easymode, com.zte.faceverify, com.zte.fingerprints, com.zte.mifavor.launcher, com.zte.setupwizard, com.zte.weather, com.zte.zdmdaemon, ... (26 packages)
+      - "cn.nubia."   # UAD: cn.nubia.accounts, cn.nubia.browser, cn.nubia.calendar.preset, cn.nubia.contacts, cn.nubia.deskclock.preset, cn.nubia.gallery3d, cn.nubia.launcher, cn.nubia.security2, cn.nubia.setupwizard, cn.nubia.thememanager, ... (85 packages)
+
+  tcl:
+    manufacturer_match: ["tcl", "alcatel"]
+    brand_match: ["tcl", "alcatel"]
+    strict_prefixes:
+      - "com.tcl."   # UAD: com.tcl.android.launcher, com.tcl.camera, com.tcl.compass, com.tcl.faceunlock, com.tcl.fmradio, com.tcl.fota.system, com.tcl.screenrecorder, com.tcl.tct.filemanager, com.tcl.weather, ... (39 packages)
+      - "com.tct."   # UAD: com.tct.android.browser, com.tct.calculator, com.tct.camera, com.tct.contacts.transfer, com.tct.dialer, com.tct.faceunlock, com.tct.music, com.tct.phone, com.tct.setupwizard, ... (71 packages)
+      - "com.tclhz."   # UAD: com.tclhz.gallery, com.tclhz.gallery.a_overlay (2 packages)
+
+  meizu:
+    manufacturer_match: ["meizu"]
+    brand_match: ["meizu"]
+    strict_prefixes:
+      - "com.meizu."   # UAD: com.meizu.account, com.meizu.assistant, com.meizu.battery, com.meizu.cloud, com.meizu.flyme.launcher, com.meizu.media.camera, com.meizu.mstore, com.meizu.safe, com.meizu.setup, com.meizu.voiceassist, ... (39 packages)
+      - "com.flyme."   # UAD: com.flyme.aod, com.flyme.netadmin, com.flyme.systemuiex, com.flyme.systemuitools, com.flyme.telecom.usagedata.service (5 packages)
+
+  hmd:
+    # manufacturer_match strings are forward-looking: real Nokia/HMD phones
+    # report "HMD Global" (with space) and match via brand_match below.
+    manufacturer_match: ["hmd", "hmdglobal", "nokia"]
+    brand_match: ["hmd", "hmdglobal", "nokia"]
+    strict_prefixes:
+      - "com.hmdglobal."   # UAD: com.hmdglobal.camera2, com.hmdglobal.datago, com.hmdglobal.datago.overlay.base, com.hmdglobal.datago.overlay.base.s600ww, com.hmdglobal.enterprise.api, com.hmdglobal.support (6 packages)
+
+  blackview:
+    manufacturer_match: ["blackview"]
+    brand_match: ["blackview"]
+    strict_prefixes:
+      - "com.blackview."   # UAD: com.blackview.ai.doki, com.blackview.app.cloudfolder, com.blackview.appsedge, com.blackview.cplog, com.blackview.easytrans, com.blackview.filetrans, com.blackview.gamemode, com.blackview.launcher, com.blackview.note, com.blackview.searchcenter, com.blackview.weather, ... (20 packages)
+
+  fairphone:
+    manufacturer_match: ["fairphone"]
+    brand_match: ["fairphone"]
+    strict_prefixes:
+      - "com.fairphone."   # UAD: com.fairphone.activator, com.fairphone.myfairphone (2 packages)
+
+  wiko:
+    manufacturer_match: ["wiko"]
+    brand_match: ["wiko"]
+    strict_prefixes:
+      - "com.wiko."   # UAD: com.wiko.packageinstaller, com.wiko.services (2 packages)
 
   # US carrier-branded builds: these prefixes apply only when the build
   # brand matches the carrier, typically on carrier-branded phones.
