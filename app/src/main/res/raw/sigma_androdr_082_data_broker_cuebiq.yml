@@ -3,15 +3,12 @@ id: androdr-082
 status: production
 category: incident
 description: >
-    Detects the Cuebiq location-data broker SDK embedded inside an
-    installed app. Cuebiq-sourced data was used in the New York Times
-    'Privacy Project' (December 2019) to re-identify named individuals,
+    This app contains the Cuebiq location-data broker SDK. Cuebiq-sourced
+    data was used by the December 2019 New York Times 'Privacy Project'
+    to re-identify named individuals from supposedly-anonymous datasets,
     including a US Secret Service agent traveling with the President.
-    Cuebiq announced an SDK sunset in 2021 but a permissive variant
-    remained available; historical versions persist in apps that have
-    not been re-published. Match set is the two canonical class anchors
-    from Exodus Privacy tracker #57 and the glorifiedgrep OSS static
-    analysis tool.
+    Cuebiq announced an SDK sunset in 2021, but historical versions
+    persist in apps that have not been re-published.
 author: AndroDR (AI-generated)
 date: 2026/05/18
 references:

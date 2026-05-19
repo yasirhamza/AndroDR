@@ -3,12 +3,11 @@ id: androdr-081
 status: production
 category: incident
 description: >
-    Detects the Predicio 'Telescope' SDK embedded inside an installed app.
-    Predicio was removed from Google Play and Apple's App Store in
-    February 2021 after Vice/Motherboard reporting (Joseph Cox) exposed
-    that the Salaat First Muslim prayer app exfiltrated user location to
-    predic.io endpoints. The SDK is functionally defunct but historical
-    versions may persist on devices that have not been re-published.
+    This app contains the Predicio 'Telescope' data-broker SDK. Predicio
+    was removed from Google Play and the App Store in February 2021
+    after reporting exposed that the Salaat First Muslim prayer app
+    exfiltrated user location to broker servers. The SDK is defunct, but
+    historical versions persist in apps that have not been re-published.
 author: AndroDR (AI-generated)
 date: 2026/05/18
 references:

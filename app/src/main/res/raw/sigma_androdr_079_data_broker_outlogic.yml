@@ -3,16 +3,11 @@ id: androdr-079
 status: production
 category: incident
 description: >
-    Detects the Outlogic (formerly X-Mode Social) location-data broker SDK
-    embedded inside an installed app. X-Mode was banned from the Play Store
-    in December 2020 after Vice/Motherboard reporting tied it to US military
-    and federal LE buyers. The vendor was acquired by Digital Envoy in
-    August 2021 and rebranded as Outlogic. The FTC finalized a settlement
-    in April 2024 prohibiting sale of sensitive location data. The match
-    set is the two unambiguous io.xmode.* class prefixes documented by
-    Exodus Privacy tracker #354 and the ExpressVPN 'Xoth' investigation;
-    the io.mysdk.* prefix is intentionally excluded because it is shared
-    with SignalFrame/WirelessRegistry and would cause false positives.
+    This app contains the Outlogic (formerly X-Mode) data-broker SDK.
+    X-Mode was banned from the Play Store in December 2020 after
+    reporting tied its location feed to US military and federal
+    law-enforcement buyers; the FTC settled with successor Outlogic in
+    April 2024 over the sale of sensitive location data.
 author: AndroDR (AI-generated)
 date: 2026/05/18
 references:
