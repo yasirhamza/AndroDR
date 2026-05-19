@@ -196,6 +196,8 @@ conditional:
       - "com.transsion."   # UAD: com.transsion.XOSLauncher, com.transsion.aivoiceassistant, com.transsion.calendar, com.transsion.camera, com.transsion.hilauncher, com.transsion.infinix.xclub, com.transsion.itel.manual, com.transsion.phonemanager, com.transsion.systemupdate, ... (94 packages)
       - "com.infinix."   # UAD: com.infinix, com.infinix.xshare (2 packages)
       - "com.itel."   # UAD: com.itel.TWSService (1 package)
+      # com.tecno. intentionally absent: zero packages in UAD's current catalog.
+      # Add when the audit script surfaces them.
 
   nothing:
     manufacturer_match: ["nothing"]
@@ -226,6 +228,8 @@ conditional:
       - "com.flyme."   # UAD: com.flyme.aod, com.flyme.netadmin, com.flyme.systemuiex, com.flyme.systemuitools, com.flyme.telecom.usagedata.service (5 packages)
 
   hmd:
+    # manufacturer_match strings are forward-looking: real Nokia/HMD phones
+    # report "HMD Global" (with space) and match via brand_match below.
     manufacturer_match: ["hmd", "hmdglobal", "nokia"]
     brand_match: ["hmd", "hmdglobal", "nokia"]
     strict_prefixes:
