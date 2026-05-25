@@ -27,3 +27,5 @@ display:
     guidance: "REVIEW -- sideloaded app with elevated permissions; verify intentional"
 remediation:
     - "This app was not installed from a trusted app store. Verify you intended to install it."
+implies_flags:
+    - sideloaded

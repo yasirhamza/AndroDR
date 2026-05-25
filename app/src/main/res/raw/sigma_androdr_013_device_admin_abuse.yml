@@ -27,3 +27,5 @@ display:
     guidance: "UNINSTALL -- device admin abuse indicates stalkerware; revoke admin first"
 remediation:
     - "Go to Settings > Security > Device Admin Apps and remove this app first, then uninstall."
+implies_flags:
+    - sideloaded

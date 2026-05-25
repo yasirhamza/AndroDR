@@ -303,7 +303,7 @@ class ScanOrchestrator @Inject constructor(
             it.category == FindingCategory.APP_RISK && it.matchContext["is_sideloaded"] == "true"
         }
         val malwareCount = allFindings.count {
-            it.level == "critical" && it.ruleId in KNOWN_MALWARE_RULE_IDS
+            it.level == "critical" && "known_malware" in it.impliesFlags
         }
 
         Log.i(TAG, "Scan complete — SIGMA: ${allFindings.size} findings from " +
@@ -481,7 +481,7 @@ class ScanOrchestrator @Inject constructor(
             bugReportFindings = emptyList(),
             riskySideloadCount = 0,
             knownMalwareCount = result.findings.count {
-                it.level == "critical" && it.ruleId in KNOWN_MALWARE_RULE_IDS
+                it.level == "critical" && "known_malware" in it.impliesFlags
             },
             scannerErrors = bugReportScannerErrors
         )
@@ -600,9 +600,6 @@ class ScanOrchestrator @Inject constructor(
          * the progress bar fills to 100%.
          */
         private const val SCANNER_COUNT = 8
-
-        /** Rule IDs that represent confirmed malware matches (IOC database hits). */
-        private val KNOWN_MALWARE_RULE_IDS = setOf("androdr-001", "androdr-002")
 
         /**
          * Maximum age of the cached app telemetry that [analyzeBugReport]

@@ -44,3 +44,5 @@ remediation:
     - "Massistant is a mobile forensic client used by Chinese law enforcement to extract data from seized devices."
     - "If you did not install this app yourself, your device may have been accessed without your knowledge. Seek advice from a digital security trainer or a relevant civil-society organization."
     - "Uninstall the app: Settings > Apps > find 'APKToolPlus' or 'Massistant' > Uninstall."
+implies_flags:
+    - known_malware

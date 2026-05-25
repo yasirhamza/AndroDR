@@ -45,3 +45,5 @@ display:
     evidence_type: none
 remediation:
     - "This sideloaded app uses a package name that imitates a well-known app. It is likely a fake or trojanized version. Uninstall it from Settings > Apps and install the legitimate version from Google Play Store."
+implies_flags:
+    - sideloaded

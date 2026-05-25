@@ -478,8 +478,9 @@ object ReportFormatter {
         val appName = highest.matchContext["app_name"]?.toString()?.takeIf { it.isNotEmpty() }
             ?: displayNames[pkg]
             ?: pkg
-        val isKnownMalware = findings.any { it.ruleId.startsWith("androdr-00") }
-        val isSideloaded = findings.any { it.ruleId == "androdr-010" }
+        val subjectFlags = findings.flatMap { it.impliesFlags }.toSet()
+        val isKnownMalware = "known_malware" in subjectFlags
+        val isSideloaded = "sideloaded" in subjectFlags
 
         val flags = buildList {
             if (isKnownMalware) add("[!] Known Malware")

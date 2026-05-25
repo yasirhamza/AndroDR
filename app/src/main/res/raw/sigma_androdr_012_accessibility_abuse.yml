@@ -27,3 +27,5 @@ display:
     guidance: "UNINSTALL -- accessibility service abuse indicates stalkerware"
 remediation:
     - "This app can read your screen content. Go to Settings > Accessibility and disable its service before uninstalling."
+implies_flags:
+    - sideloaded

@@ -34,3 +34,5 @@ falsepositives:
 remediation:
     - "This app's name impersonates a system component but was installed from an untrusted source."
     - "Uninstall it unless you specifically installed it."
+implies_flags:
+    - sideloaded

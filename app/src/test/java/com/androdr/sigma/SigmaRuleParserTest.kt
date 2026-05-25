@@ -233,4 +233,49 @@ class SigmaRuleParserTest {
         assertEquals("attack.t1036", rule.tags[0])
         assertEquals(1, rule.falsepositives.size)
     }
+
+    @Test
+    fun `parses implies_flags as a list of strings`() {
+        val yaml = """
+            title: Implies sideloaded
+            id: test-005
+            category: incident
+            logsource:
+                product: androdr
+                service: app_scanner
+            detection:
+                selection:
+                    is_sideloaded: true
+                condition: selection
+            level: medium
+            implies_flags:
+                - sideloaded
+                - known_malware
+        """.trimIndent()
+
+        val rule = SigmaRuleParser.parse(yaml)
+        assertNotNull(rule)
+        assertEquals(listOf("sideloaded", "known_malware"), rule!!.impliesFlags)
+    }
+
+    @Test
+    fun `implies_flags defaults to empty list when absent`() {
+        val yaml = """
+            title: No implications declared
+            id: test-006
+            category: incident
+            logsource:
+                product: androdr
+                service: app_scanner
+            detection:
+                selection:
+                    is_sideloaded: true
+                condition: selection
+            level: medium
+        """.trimIndent()
+
+        val rule = SigmaRuleParser.parse(yaml)
+        assertNotNull(rule)
+        assertTrue(rule!!.impliesFlags.isEmpty())
+    }
 }

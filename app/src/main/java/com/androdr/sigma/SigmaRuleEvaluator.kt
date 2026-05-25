@@ -33,7 +33,11 @@ data class Finding(
     val guidance: String = "",
     val triggered: Boolean = true,
     val evidence: Evidence = Evidence.None,
-    val matchContext: Map<String, String> = emptyMap()
+    val matchContext: Map<String, String> = emptyMap(),
+    // Propagated from the rule. Subject-level properties the detection
+    // guarantees (e.g. "sideloaded", "known_malware"). The presentation
+    // layer aggregates the union across same-subject findings.
+    val impliesFlags: List<String> = emptyList()
 )
 
 /**
@@ -155,7 +159,8 @@ object SigmaRuleEvaluator {
             triggered = triggered,
             evidence = evidenceResult?.evidence ?: Evidence.None,
             matchContext = record.filterValues { it !is List<*> && it !is Map<*, *> }
-                .mapValues { (_, v) -> v?.toString() ?: "" }
+                .mapValues { (_, v) -> v?.toString() ?: "" },
+            impliesFlags = rule.impliesFlags
         )
     }
 

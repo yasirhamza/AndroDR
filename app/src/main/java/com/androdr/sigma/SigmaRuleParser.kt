@@ -186,7 +186,8 @@ object SigmaRuleParser {
                 remediation = (doc["remediation"] as? List<*>)?.map { it.toString() } ?: emptyList(),
                 display = parseDisplay(doc["display"] as? Map<*, *>),
                 enabled = enabled,
-                reportSafeState = reportSafeState
+                reportSafeState = reportSafeState,
+                impliesFlags = (doc["implies_flags"] as? List<*>)?.map { it.toString() } ?: emptyList()
             )
         } catch (e: SigmaRuleParseException) {
             throw e
