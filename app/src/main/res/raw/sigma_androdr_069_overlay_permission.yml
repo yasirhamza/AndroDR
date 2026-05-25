@@ -32,3 +32,5 @@ display:
     evidence_type: none
 remediation:
     - "This sideloaded app can draw over other apps, which is used by banking trojans to steal passwords. Go to Settings > Apps > Special access > Display over other apps and revoke its permission, then uninstall the app."
+implies_flags:
+    - sideloaded

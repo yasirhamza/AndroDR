@@ -29,3 +29,5 @@ remediation:
     - "This sideloaded app can read all your notifications, including banking codes and 2FA messages."
     - "Go to Settings > Apps > Special access > Notification access and revoke this app's access."
     - "If you did not install this app intentionally, uninstall it immediately."
+implies_flags:
+    - sideloaded

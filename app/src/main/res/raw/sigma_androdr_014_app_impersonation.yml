@@ -25,3 +25,5 @@ display:
     guidance: "UNINSTALL -- impersonates a legitimate app; likely malicious"
 remediation:
     - "This app impersonates a well-known app but was not installed from a trusted store."
+implies_flags:
+    - sideloaded

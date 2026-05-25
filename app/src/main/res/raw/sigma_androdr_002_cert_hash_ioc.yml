@@ -31,3 +31,5 @@ display:
     guidance: "UNINSTALL IMMEDIATELY -- signed by a known threat developer"
 remediation:
     - "This app is signed by a known threat developer. Uninstall it even if the name looks legitimate."
+implies_flags:
+    - known_malware

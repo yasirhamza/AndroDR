@@ -25,3 +25,5 @@ display:
     guidance: "UNINSTALL IMMEDIATELY -- matches known malware signatures"
 remediation:
     - "Uninstall this app immediately."
+implies_flags:
+    - known_malware

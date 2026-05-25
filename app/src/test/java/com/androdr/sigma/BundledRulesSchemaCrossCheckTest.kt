@@ -154,4 +154,108 @@ class BundledRulesSchemaCrossCheckTest {
             )
         }
     }
+
+    /**
+     * Defense in depth: a rule's `implies_flags: [sideloaded]` only carries the
+     * intended guarantee if the rule's detection actually conditions on the app
+     * being sideloaded. Two structural patterns satisfy this:
+     *
+     *   1. A block referenced positively in `condition` declares
+     *      `from_trusted_store: false` or `is_sideloaded: true`
+     *
+     *   2. A block referenced negatively (`not <name>`) in `condition` declares
+     *      `from_trusted_store: true` or `is_sideloaded: false`
+     *      (the negation makes the property hold)
+     *
+     * Without this gate, a rule author could add the annotation to a rule that
+     * fires on Play Store apps and the Flag would silently lie.
+     *
+     * Asymmetry note: there is no parallel gate for `implies_flags: [known_malware]`.
+     * That annotation is semantic ("this rule's detection corpus is a curated
+     * malware database") and doesn't have a single structural signature — IOC
+     * lookups (`|ioc_lookup`) and exact-literal package-name matches (e.g. -078)
+     * are both valid. Adding a known_malware gate without false negatives would
+     * require a more sophisticated heuristic; deferred.
+     *
+     * Tokenizer scope: the condition parser below handles flat conditions
+     * (`a and not b and not c`, `a or b`). It does NOT correctly handle
+     * parenthesized negation like `not (filter_a or filter_b)` — after paren
+     * stripping the inner `or` would reset the negation state. The bundled
+     * corpus has no such conditions today; the loop at the end asserts this
+     * so a future rule introducing parens trips the test rather than silently
+     * mis-classifying.
+     */
+    @Test
+    fun `rules declaring implies_flags sideloaded structurally guarantee it`() {
+        val yamlLoader = Load(
+            LoadSettings.builder().setMaxAliasesForCollections(10).setAllowDuplicateKeys(false).build()
+        )
+        val violations = detectionAndAtomRuleFiles().mapNotNull { file ->
+            @Suppress("UNCHECKED_CAST")
+            val doc = yamlLoader.loadFromString(file.readText()) as? Map<String, Any?>
+                ?: return@mapNotNull null
+            val implies = (doc["implies_flags"] as? List<*>)?.map { it.toString() } ?: return@mapNotNull null
+            if ("sideloaded" !in implies) return@mapNotNull null
+            sideloadedStructuralViolation(file.name, doc)
+        }
+        if (violations.isNotEmpty()) {
+            fail(
+                "implies_flags structural-guarantee gate FAILED for ${violations.size} rule(s):\n" +
+                    violations.joinToString("\n") { "  - $it" }
+            )
+        }
+    }
+
+    private fun sideloadedStructuralViolation(fileName: String, doc: Map<String, Any?>): String? {
+        @Suppress("UNCHECKED_CAST")
+        val detection = doc["detection"] as? Map<String, Any?> ?: return null
+        val condition = (detection["condition"] as? String) ?: ""
+
+        // Tripwire: parens not supported by flat-condition tokenizer below.
+        if ("(" in condition || ")" in condition) {
+            return "$fileName: condition contains parentheses, which this structural " +
+                "gate does not parse correctly. Refactor to a flat condition or " +
+                "extend the test with a proper boolean-expression parser."
+        }
+
+        val (positive, negative) = tokenizeFlatCondition(condition)
+        val sideloadEvidence = positive.any { name -> blockEstablishesSideload(detection, name, negated = false) } ||
+            negative.any { name -> blockEstablishesSideload(detection, name, negated = true) }
+        return if (sideloadEvidence) null
+        else "$fileName: declares `implies_flags: [sideloaded]` but no detection clause " +
+            "establishes it. Need either a positive block with `from_trusted_store: false` / " +
+            "`is_sideloaded: true`, or a negated block (`not <name>` in condition) with " +
+            "`from_trusted_store: true` / `is_sideloaded: false`."
+    }
+
+    /** Split a flat SIGMA condition string into (positively-referenced, negatively-referenced) block names. */
+    private fun tokenizeFlatCondition(condition: String): Pair<Set<String>, Set<String>> {
+        val tokens = condition.lowercase().split(Regex("\\s+")).filter { it.isNotEmpty() }
+        val pos = mutableSetOf<String>()
+        val neg = mutableSetOf<String>()
+        var negate = false
+        for (tok in tokens) when (tok) {
+            "and", "or" -> negate = false
+            "not" -> negate = true
+            else -> { if (negate) neg.add(tok) else pos.add(tok); negate = false }
+        }
+        return pos to neg
+    }
+
+    /**
+     * True iff the named detection block, considered with its polarity in the condition,
+     * establishes the sideloaded property:
+     *   positive: block has `from_trusted_store: false` or `is_sideloaded: true`
+     *   negated:  block has `from_trusted_store: true` or `is_sideloaded: false`
+     */
+    private fun blockEstablishesSideload(
+        detection: Map<String, Any?>, name: String, negated: Boolean
+    ): Boolean {
+        @Suppress("UNCHECKED_CAST")
+        val block = detection[name] as? Map<String, Any?> ?: return false
+        val trustedExpected = if (negated) true else false
+        val sideloadedExpected = if (negated) false else true
+        return (block["from_trusted_store"] == trustedExpected) ||
+            (block["is_sideloaded"] == sideloadedExpected)
+    }
 }

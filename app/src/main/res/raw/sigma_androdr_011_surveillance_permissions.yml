@@ -31,3 +31,5 @@ display:
     guidance: "REVIEW -- app has extensive surveillance capabilities"
 remediation:
     - "This app has extensive surveillance capabilities. If you did not install it intentionally, uninstall it."
+implies_flags:
+    - sideloaded

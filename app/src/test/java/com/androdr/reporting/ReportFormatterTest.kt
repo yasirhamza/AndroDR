@@ -3,6 +3,7 @@ package com.androdr.reporting
 import com.androdr.data.model.ScanResult
 import com.androdr.sigma.Finding
 import com.androdr.sigma.FindingCategory
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -32,17 +33,37 @@ class ReportFormatterTest {
         category = FindingCategory.APP_RISK,
         triggered = true,
         guidance = "UNINSTALL IMMEDIATELY -- matches known malware signatures",
-        matchContext = mapOf("package_name" to "com.evil.spy", "app_name" to "EvilSpy")
+        matchContext = mapOf("package_name" to "com.evil.spy", "app_name" to "EvilSpy"),
+        impliesFlags = listOf("known_malware")
     )
 
     private val sideloadFinding = Finding(
         ruleId = "androdr-010",
-        title = "Sideloaded App",
+        title = "Sideloaded Application",
         level = "high",
         category = FindingCategory.APP_RISK,
         triggered = true,
         guidance = "REVIEW -- sideloaded app with elevated permissions; verify intentional",
-        matchContext = mapOf("package_name" to "com.unknown.app")
+        matchContext = mapOf(
+            "package_name" to "com.unknown.app",
+            "is_sideloaded" to "true"
+        ),
+        impliesFlags = listOf("sideloaded")
+    )
+
+    private val impersonationFinding = Finding(
+        ruleId = "androdr-014",
+        title = "App Impersonation",
+        level = "high",
+        category = FindingCategory.APP_RISK,
+        triggered = true,
+        guidance = "UNINSTALL -- impersonates a legitimate app; likely malicious",
+        matchContext = mapOf(
+            "package_name" to "org.telegram.messenger",
+            "app_name" to "Telegram",
+            "is_sideloaded" to "true"
+        ),
+        impliesFlags = listOf("sideloaded")
     )
 
     private val deviceFinding = Finding(
@@ -178,5 +199,66 @@ class ReportFormatterTest {
     fun `format version line is present`() {
         val text = ReportFormatter.formatScanReport(cleanScan, emptyList(), emptyList(), versionName = "test")
         assertTrue(text.contains("Format    : v${ReportExporter.EXPORT_FORMAT_VERSION}"))
+    }
+
+    // -- Flag aggregation tests (issue #205) ----------------------------------
+
+    @Test
+    fun `impersonation finding alone renders Sideloaded flag via impliesFlags`() {
+        // Issue #205: FakeTelegram (org.telegram.messenger spoof) fires
+        // androdr-014 but NOT androdr-010, because the sideload rule's
+        // filter_known_good suppresses it for known-popular package names.
+        // The Sideloaded flag must still surface from the impersonation
+        // rule's own implies_flags declaration.
+        val scan = buildScan(appRisks = listOf(impersonationFinding))
+        val text = ReportFormatter.formatScanReport(scan, emptyList(), emptyList(), versionName = "test")
+        assertTrue("Flags line should appear", text.contains("Flags   :"))
+        assertTrue("Sideloaded flag must render", text.contains("Flags   : Sideloaded"))
+    }
+
+    @Test
+    fun `sideload and impersonation findings both fire — Sideloaded flag not duplicated`() {
+        val both = listOf(sideloadFinding, impersonationFinding.copy(
+            matchContext = impersonationFinding.matchContext + ("package_name" to "com.unknown.app")
+        ))
+        val scan = buildScan(appRisks = both)
+        val text = ReportFormatter.formatScanReport(scan, emptyList(), emptyList(), versionName = "test")
+        val flagsLine = text.lineSequence().first { it.trimStart().startsWith("Flags   :") }
+        assertEquals("Flags   : Sideloaded", flagsLine.trim())
+    }
+
+    @Test
+    fun `known malware finding renders Known Malware flag via impliesFlags`() {
+        val scan = buildScan(appRisks = listOf(malwareFinding), knownMalwareCount = 1)
+        val text = ReportFormatter.formatScanReport(scan, emptyList(), emptyList(), versionName = "test")
+        assertTrue("Known Malware flag must render",
+            text.contains("Flags   : [!] Known Malware"))
+    }
+
+    @Test
+    fun `malware plus sideload renders both flags`() {
+        val both = listOf(malwareFinding.copy(
+            matchContext = mapOf("package_name" to "com.unknown.app")
+        ), sideloadFinding)
+        val scan = buildScan(appRisks = both, knownMalwareCount = 1, riskySideloadCount = 1)
+        val text = ReportFormatter.formatScanReport(scan, emptyList(), emptyList(), versionName = "test")
+        assertTrue("Both flags must render",
+            text.contains("Flags   : [!] Known Malware / Sideloaded"))
+    }
+
+    @Test
+    fun `finding with no impliesFlags produces no Flags line`() {
+        val orphan = Finding(
+            ruleId = "androdr-999",
+            title = "Some Other Finding",
+            level = "medium",
+            category = FindingCategory.APP_RISK,
+            triggered = true,
+            matchContext = mapOf("package_name" to "com.orphan.app")
+            // impliesFlags defaults to empty
+        )
+        val scan = buildScan(appRisks = listOf(orphan))
+        val text = ReportFormatter.formatScanReport(scan, emptyList(), emptyList(), versionName = "test")
+        assertFalse("No Flags line expected when no implies_flags", text.contains("Flags   :"))
     }
 }

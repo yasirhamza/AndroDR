@@ -16,7 +16,12 @@ data class SigmaRule(
     val remediation: List<String>,
     val display: SigmaDisplay = SigmaDisplay(),
     val enabled: Boolean = true,
-    val reportSafeState: Boolean = false
+    val reportSafeState: Boolean = false,
+    // Orthogonal subject-level properties the detection structurally guarantees.
+    // Schema-defined enum (see third-party/android-sigma-rules/validation/rule-schema.json):
+    // "sideloaded", "known_malware". Renderers aggregate the union across all
+    // findings for the same subject to surface as Flag chips.
+    val impliesFlags: List<String> = emptyList()
 )
 
 data class SigmaDetection(

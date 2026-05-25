@@ -31,3 +31,5 @@ display:
 remediation:
     - "This app combines screen reading with surveillance permissions."
     - "Disable its accessibility service in Settings, then uninstall."
+implies_flags:
+    - sideloaded
