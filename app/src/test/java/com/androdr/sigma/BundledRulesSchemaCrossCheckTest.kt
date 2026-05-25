@@ -188,74 +188,74 @@ class BundledRulesSchemaCrossCheckTest {
     @Test
     fun `rules declaring implies_flags sideloaded structurally guarantee it`() {
         val yamlLoader = Load(
-            LoadSettings.builder()
-                .setMaxAliasesForCollections(10)
-                .setAllowDuplicateKeys(false)
-                .build()
+            LoadSettings.builder().setMaxAliasesForCollections(10).setAllowDuplicateKeys(false).build()
         )
-
-        val violations = mutableListOf<String>()
-
-        detectionAndAtomRuleFiles().forEach { file ->
+        val violations = detectionAndAtomRuleFiles().mapNotNull { file ->
             @Suppress("UNCHECKED_CAST")
-            val doc = yamlLoader.loadFromString(file.readText()) as? Map<String, Any?> ?: return@forEach
-            val implies = (doc["implies_flags"] as? List<*>)?.map { it.toString() } ?: return@forEach
-            if ("sideloaded" !in implies) return@forEach
-
-            @Suppress("UNCHECKED_CAST")
-            val detection = doc["detection"] as? Map<String, Any?> ?: return@forEach
-            val condition = (detection["condition"] as? String) ?: ""
-
-            // Tripwire: bail out if condition uses parens — tokenizer below
-            // assumes flat conditions and can silently misclassify negation
-            // inside parens.
-            if ("(" in condition || ")" in condition) {
-                violations += "${file.name}: condition contains parentheses, " +
-                    "which this structural gate does not parse correctly. " +
-                    "Either refactor the rule's condition to a flat form " +
-                    "or extend the test with a proper boolean-expression parser."
-                return@forEach
-            }
-
-            // Tokenize: split on whitespace, lowercased, group block refs by polarity.
-            val tokens = condition.lowercase().split(Regex("\\s+")).filter { it.isNotEmpty() }
-            val positiveRefs = mutableSetOf<String>()
-            val negativeRefs = mutableSetOf<String>()
-            var negate = false
-            for (tok in tokens) {
-                when (tok) {
-                    "and", "or" -> negate = false
-                    "not" -> negate = true
-                    else -> {
-                        if (negate) negativeRefs.add(tok) else positiveRefs.add(tok)
-                        negate = false
-                    }
-                }
-            }
-
-            val sideloadEvidence = positiveRefs.any { name ->
-                @Suppress("UNCHECKED_CAST")
-                val block = detection[name] as? Map<String, Any?> ?: return@any false
-                (block["from_trusted_store"] == false) || (block["is_sideloaded"] == true)
-            } || negativeRefs.any { name ->
-                @Suppress("UNCHECKED_CAST")
-                val block = detection[name] as? Map<String, Any?> ?: return@any false
-                (block["from_trusted_store"] == true) || (block["is_sideloaded"] == false)
-            }
-
-            if (!sideloadEvidence) {
-                violations += "${file.name}: declares `implies_flags: [sideloaded]` but no detection clause " +
-                    "establishes it. Need either a positive block with `from_trusted_store: false` / " +
-                    "`is_sideloaded: true`, or a negated block (`not <name>` in condition) with " +
-                    "`from_trusted_store: true` / `is_sideloaded: false`."
-            }
+            val doc = yamlLoader.loadFromString(file.readText()) as? Map<String, Any?>
+                ?: return@mapNotNull null
+            val implies = (doc["implies_flags"] as? List<*>)?.map { it.toString() } ?: return@mapNotNull null
+            if ("sideloaded" !in implies) return@mapNotNull null
+            sideloadedStructuralViolation(file.name, doc)
         }
-
         if (violations.isNotEmpty()) {
             fail(
                 "implies_flags structural-guarantee gate FAILED for ${violations.size} rule(s):\n" +
                     violations.joinToString("\n") { "  - $it" }
             )
         }
+    }
+
+    private fun sideloadedStructuralViolation(fileName: String, doc: Map<String, Any?>): String? {
+        @Suppress("UNCHECKED_CAST")
+        val detection = doc["detection"] as? Map<String, Any?> ?: return null
+        val condition = (detection["condition"] as? String) ?: ""
+
+        // Tripwire: parens not supported by flat-condition tokenizer below.
+        if ("(" in condition || ")" in condition) {
+            return "$fileName: condition contains parentheses, which this structural " +
+                "gate does not parse correctly. Refactor to a flat condition or " +
+                "extend the test with a proper boolean-expression parser."
+        }
+
+        val (positive, negative) = tokenizeFlatCondition(condition)
+        val sideloadEvidence = positive.any { name -> blockEstablishesSideload(detection, name, negated = false) } ||
+            negative.any { name -> blockEstablishesSideload(detection, name, negated = true) }
+        return if (sideloadEvidence) null
+        else "$fileName: declares `implies_flags: [sideloaded]` but no detection clause " +
+            "establishes it. Need either a positive block with `from_trusted_store: false` / " +
+            "`is_sideloaded: true`, or a negated block (`not <name>` in condition) with " +
+            "`from_trusted_store: true` / `is_sideloaded: false`."
+    }
+
+    /** Split a flat SIGMA condition string into (positively-referenced, negatively-referenced) block names. */
+    private fun tokenizeFlatCondition(condition: String): Pair<Set<String>, Set<String>> {
+        val tokens = condition.lowercase().split(Regex("\\s+")).filter { it.isNotEmpty() }
+        val pos = mutableSetOf<String>()
+        val neg = mutableSetOf<String>()
+        var negate = false
+        for (tok in tokens) when (tok) {
+            "and", "or" -> negate = false
+            "not" -> negate = true
+            else -> { if (negate) neg.add(tok) else pos.add(tok); negate = false }
+        }
+        return pos to neg
+    }
+
+    /**
+     * True iff the named detection block, considered with its polarity in the condition,
+     * establishes the sideloaded property:
+     *   positive: block has `from_trusted_store: false` or `is_sideloaded: true`
+     *   negated:  block has `from_trusted_store: true` or `is_sideloaded: false`
+     */
+    private fun blockEstablishesSideload(
+        detection: Map<String, Any?>, name: String, negated: Boolean
+    ): Boolean {
+        @Suppress("UNCHECKED_CAST")
+        val block = detection[name] as? Map<String, Any?> ?: return false
+        val trustedExpected = if (negated) true else false
+        val sideloadedExpected = if (negated) false else true
+        return (block["from_trusted_store"] == trustedExpected) ||
+            (block["is_sideloaded"] == sideloadedExpected)
     }
 }
