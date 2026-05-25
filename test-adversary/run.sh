@@ -358,7 +358,11 @@ run_scenario() {
 
     # Step 6: TRIGGER SCAN
     echo "  Triggering scan..."
-    $ADB shell am broadcast -a com.androdr.ACTION_SCAN -p com.androdr.debug >/dev/null 2>&1
+    # Delete the previous report first; otherwise the poll loop below sees a
+    # stale file from the initial threat-DB update or a prior scenario and pulls
+    # the wrong scan output. Load mode does the same on its single-scan path.
+    $ADB shell rm -f /sdcard/Android/data/com.androdr.debug/files/androdr_last_report.txt 2>/dev/null || true
+    $ADB shell am broadcast -a com.androdr.ACTION_SCAN -n com.androdr.debug/com.androdr.debug.ScanBroadcastReceiver </dev/null >/dev/null 2>&1
     # Poll for report file instead of fixed sleep
     local waited=0
     while [ $waited -lt 60 ]; do
