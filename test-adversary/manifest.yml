@@ -44,7 +44,7 @@ scenarios:
     tags: [android, cerberus, banker]
     attack: [T1429, T1636]
     expected_patterns:
-      - "not installed from a trusted app store"
+      - "Sideloaded Application"
 
   - id: spynote_rat
     track: 1
@@ -57,7 +57,7 @@ scenarios:
     tags: [android, spynote, rat]
     attack: [T1429, T1430, T1512]
     expected_patterns:
-      - "not installed from a trusted app store"
+      - "Sideloaded Application"
 
   - id: anubis_banker
     track: 1
@@ -70,7 +70,7 @@ scenarios:
     tags: [android, Anubis, banker, sms-stealer]
     attack: [T1429, T1636]
     expected_patterns:
-      - "not installed from a trusted app store"
+      - "Sideloaded Application"
 
   - id: brata_rat
     track: 1
@@ -83,7 +83,7 @@ scenarios:
     tags: [android, BRATA, banker, trojan]
     attack: [T1429, T1636]
     expected_patterns:
-      - "not installed from a trusted app store"
+      - "Sideloaded Application"
 
   - id: hydra_dropper
     track: 1
@@ -96,7 +96,7 @@ scenarios:
     tags: [android, Hydra, banker]
     attack: [T1429, T1636]
     expected_patterns:
-      - "not installed from a trusted app store"
+      - "Sideloaded Application"
 
   - id: vultur_rat
     track: 1
@@ -109,7 +109,7 @@ scenarios:
     tags: [android, Vultur, trojan]
     attack: [T1429, T1512, T1636]
     expected_patterns:
-      - "not installed from a trusted app store"
+      - "Sideloaded Application"
 
   - id: sharkbot_banker
     track: 1
@@ -122,7 +122,7 @@ scenarios:
     sha256: "ab62a82d7752a52bc81001c7fc990037b45040f68e98769492f877815375876d"
     tags: [android, SharkBot, banker]
     expected_patterns:
-      - "not installed from a trusted app store"
+      - "Sideloaded Application"
 
   - id: ermac_stealer
     track: 1
@@ -135,7 +135,7 @@ scenarios:
     sha256: "ab62a82d7752a52bc81001c7fc990037b45040f68e98769492f877815375876d"
     tags: [android, Ermac, stealer]
     expected_patterns:
-      - "not installed from a trusted app store"
+      - "Sideloaded Application"
 
   - id: godfather_banker
     track: 1
@@ -148,7 +148,7 @@ scenarios:
     sha256: "ab62a82d7752a52bc81001c7fc990037b45040f68e98769492f877815375876d"
     tags: [android, GodFather, banker]
     expected_patterns:
-      - "not installed from a trusted app store"
+      - "Sideloaded Application"
 
   - id: hookbot_rat
     track: 1
@@ -161,7 +161,7 @@ scenarios:
     sha256: "ab62a82d7752a52bc81001c7fc990037b45040f68e98769492f877815375876d"
     tags: [android, Hook, rat]
     expected_patterns:
-      - "not installed from a trusted app store"
+      - "Sideloaded Application"
 
   # ── Track 2: Stalkerware ───────────────────────────────────────────────
   - id: thetruthspy_stalkerware
@@ -176,7 +176,7 @@ scenarios:
     attack: [T1429, T1430, T1512, T1636]
     expected_patterns:
       - "surveillance capabilities"
-      - "not installed from a trusted app store"
+      - "Sideloaded Application"
 
   - id: andrmonitor_stalkerware
     track: 2
@@ -190,7 +190,7 @@ scenarios:
     attack: [T1429, T1430, T1512, T1636]
     expected_patterns:
       - "surveillance capabilities"
-      - "not installed from a trusted app store"
+      - "Sideloaded Application"
 
   - id: tispy_stalkerware
     track: 2
@@ -204,7 +204,7 @@ scenarios:
     attack: [T1429, T1430, T1512, T1636]
     expected_patterns:
       - "surveillance capabilities"
-      - "not installed from a trusted app store"
+      - "Sideloaded Application"
 
   - id: cocospy_stalkerware
     track: 2
@@ -218,7 +218,7 @@ scenarios:
     tags: [android, Cocospy, stalkerware]
     expected_patterns:
       - "Surveillance Permissions"
-      - "not installed from a trusted app store"
+      - "Sideloaded Application"
 
   - id: mspy_stalkerware
     track: 2
@@ -232,7 +232,7 @@ scenarios:
     tags: [android, mSpy, stalkerware]
     expected_patterns:
       - "Surveillance Permissions"
-      - "not installed from a trusted app store"
+      - "Sideloaded Application"
 
   - id: eyezy_stalkerware
     track: 2
@@ -246,7 +246,7 @@ scenarios:
     tags: [android, Eyezy, stalkerware]
     expected_patterns:
       - "Surveillance Permissions"
-      - "not installed from a trusted app store"
+      - "Sideloaded Application"
 
   # ── Track 3: Mercenary spyware simulation ──────────────────────────────
   - id: mercenary_package_name
@@ -313,7 +313,7 @@ scenarios:
     attack: [T1429, T1430, T1512, T1636]
     expected_patterns:
       - "surveillance capabilities"
-      - "not installed from a trusted app store"
+      - "Sideloaded Application"
 
   - id: mercenary_file_artifacts
     track: 3
@@ -477,7 +477,7 @@ scenarios:
     source: adb_inject
     inject:
       - type: trigger_update
-        adb_cmd: "shell am broadcast -a com.androdr.ACTION_SCAN -p com.androdr.debug"
+        adb_cmd: "shell am broadcast -a com.androdr.ACTION_SCAN -n com.androdr.debug/com.androdr.debug.ScanBroadcastReceiver"
     attack: [T1404]
     expected_patterns:
       # After a scan, the report header shows patch level
