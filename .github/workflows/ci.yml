@@ -20,6 +20,13 @@ jobs:
   # YAML-only and Python-only PRs. secret-scan + submodule-check always run
   # (cheap, catch accidents). ci-success treats `skipped` as a pass.
   # No untrusted input is interpolated into run: scripts in any job below.
+  #
+  # IMPORTANT: dorny/paths-filter@v3 evaluates each pattern in a filter under
+  # "any matches" semantics. A `!pattern` entry is therefore a separate
+  # positive matcher meaning "file does NOT match pattern" — it does NOT
+  # subtract from earlier positive matches the way .gitignore does. Keep
+  # `code` (and any future filter) as a positive allowlist; do not add `!`
+  # patterns here. See PR #202's regression for the bug this caused.
   changes:
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -39,15 +46,30 @@ jobs:
             python:
               - 'scripts/**'
             code:
-              - 'app/src/**'
-              - '!app/src/main/res/raw/sigma_*.yml'
-              - '!app/src/main/res/raw/known_oem_prefixes.yml'
+              # Kotlin / Java sources across all source sets
+              - 'app/src/**/*.kt'
+              - 'app/src/**/*.java'
+              # Android XML (manifests, layouts, values, drawable XML, keep.xml)
+              - 'app/src/**/*.xml'
+              # Non-rule resources under res/raw (rule files match `rules` above)
+              - 'app/src/main/res/raw/*.json'
+              - 'app/src/main/res/raw/*.txt'
+              - 'app/src/main/res/raw/known_spyware_artifacts.yml'
+              # Test fixtures and resource bundles
+              - 'app/src/test/resources/**'
+              - 'app/src/androidTest/resources/**'
+              # Build configuration
               - 'app/build.gradle.kts'
+              - 'app/proguard-rules.pro'
               - 'build.gradle.kts'
               - 'settings.gradle.kts'
               - 'gradle/**'
               - 'gradle.properties'
+              - 'gradlew'
+              - 'gradlew.bat'
+              # Submodule pointer (rule-schema cross-check tests)
               - 'third-party/android-sigma-rules'
+              # CI workflows
               - '.github/workflows/**'
   build-and-test:
     runs-on: ubuntu-latest
