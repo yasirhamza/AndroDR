@@ -70,6 +70,7 @@ fun DashboardScreen(
 ) {
     val latestScan by viewModel.latestScan.collectAsStateWithLifecycle()
     val isScanning by viewModel.isScanning.collectAsStateWithLifecycle()
+    val isUpdatingIntel by viewModel.isUpdatingIntel.collectAsStateWithLifecycle()
     val scanProgress by viewModel.scanProgress.collectAsStateWithLifecycle()
     val scanDiff by viewModel.scanDiff.collectAsStateWithLifecycle()
     val matchedDnsCount by viewModel.matchedDnsCount.collectAsStateWithLifecycle()
@@ -185,7 +186,7 @@ fun DashboardScreen(
             // making forward progress. The old UX was a single spinning button
             // which gave no indication of stages or progress.
             if (isScanning) {
-                ScanProgressCard(progress = scanProgress)
+                ScanProgressCard(progress = scanProgress, isUpdatingIntel = isUpdatingIntel)
             } else {
                 Button(
                     onClick = { viewModel.runScan() },
@@ -496,16 +497,17 @@ private fun UsageAccessBanner(onOpenSettings: () -> Unit) {
  */
 @Suppress("LongMethod") // Compose UI function with sectioned rendering
 @Composable
-private fun ScanProgressCard(progress: ScanProgress) {
+private fun ScanProgressCard(progress: ScanProgress, isUpdatingIntel: Boolean = false) {
     val running = progress as? ScanProgress.Running
-    val stageText = when (running?.phase) {
-        ScanProgress.Running.Phase.COLLECTING_TELEMETRY ->
+    val stageText = when {
+        isUpdatingIntel -> stringResource(R.string.updating_intel)
+        running?.phase == ScanProgress.Running.Phase.COLLECTING_TELEMETRY ->
             stringResource(R.string.scan_phase_collecting)
-        ScanProgress.Running.Phase.EVALUATING_RULES ->
+        running?.phase == ScanProgress.Running.Phase.EVALUATING_RULES ->
             stringResource(R.string.scan_phase_evaluating)
-        ScanProgress.Running.Phase.SAVING_RESULTS ->
+        running?.phase == ScanProgress.Running.Phase.SAVING_RESULTS ->
             stringResource(R.string.scan_phase_saving)
-        null -> stringResource(R.string.scanning)
+        else -> stringResource(R.string.scanning)
     }
 
     Card(
