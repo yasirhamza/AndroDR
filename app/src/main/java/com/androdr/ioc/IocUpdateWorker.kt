@@ -8,26 +8,15 @@ import androidx.work.WorkerParameters
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
 import com.androdr.data.db.ForensicTimelineEventDao
-import com.androdr.data.repo.CveRepository
 import com.androdr.data.repo.ScanRepository
 import com.androdr.sigma.SigmaRuleEngine
-import com.androdr.sigma.SigmaRuleFeed
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 
 @HiltWorker
-@Suppress("LongParameterList") // All parameters are Hilt-injected dependencies
 class IocUpdateWorker @AssistedInject constructor(
     @Assisted context: Context,
     @Assisted params: WorkerParameters,
-    private val indicatorUpdater: IndicatorUpdater,
-    private val knownAppUpdater: KnownAppUpdater,
-    private val publicRepoIocFeed: PublicRepoIocFeed,
-    private val knownAppResolver: KnownAppResolver,
-    private val oemPrefixResolver: OemPrefixResolver,
-    private val sigmaRuleFeed: SigmaRuleFeed,
+    private val intelRefresher: IntelRefresher,
     private val sigmaRuleEngine: SigmaRuleEngine,
-    private val cveRepository: CveRepository,
     private val scanRepository: ScanRepository,
     private val forensicTimelineEventDao: ForensicTimelineEventDao
 ) : CoroutineWorker(context, params) {
@@ -35,11 +24,7 @@ class IocUpdateWorker @AssistedInject constructor(
     @Suppress("TooGenericExceptionCaught")
     override suspend fun doWork(): Result {
         return try {
-            val fetched = runAllUpdaters()
-            refreshPublicRepoIoc()
-            refreshOemPrefixes()
-            refreshSigmaRules()
-            refreshCveDatabase()
+            val fetched = intelRefresher.refreshAll(skipIfRefreshedWithinMs = RECENT_REFRESH_SKIP_MS)
             val thirtyDaysAgo = System.currentTimeMillis() - (30L * 24 * 60 * 60 * 1000)
             scanRepository.pruneOldDnsEvents(thirtyDaysAgo)
             forensicTimelineEventDao.deleteOlderThan(thirtyDaysAgo)
@@ -51,59 +36,16 @@ class IocUpdateWorker @AssistedInject constructor(
         }
     }
 
-    private suspend fun runAllUpdaters(): Int = coroutineScope {
-        val indicators = async { indicatorUpdater.update() }
-        val knownApps = async { knownAppUpdater.update() }
-        indicators.await() + knownApps.await()
-    }
-
-    @Suppress("TooGenericExceptionCaught")
-    private suspend fun refreshSigmaRules() {
-        try {
-            val remoteRules = sigmaRuleFeed.fetch()
-            if (remoteRules.isNotEmpty()) {
-                sigmaRuleEngine.setRemoteRules(remoteRules)
-                Log.i(TAG, "SIGMA rules refreshed: ${remoteRules.size} remote rules loaded")
-            }
-        } catch (e: Exception) {
-            Log.w(TAG, "SIGMA rule refresh failed: ${e.message}")
-        }
-    }
-
-    @Suppress("TooGenericExceptionCaught")
-    private suspend fun refreshCveDatabase() {
-        try {
-            cveRepository.refresh()
-            Log.i(TAG, "CVE database refreshed: ${cveRepository.getActivelyExploitedCount()} Android CVEs")
-        } catch (e: Exception) {
-            Log.w(TAG, "CVE database refresh failed (non-fatal): ${e.message}")
-        }
-    }
-
-    @Suppress("TooGenericExceptionCaught")
-    private suspend fun refreshPublicRepoIoc() {
-        try {
-            val count = publicRepoIocFeed.update()
-            if (count > 0) {
-                Log.i(TAG, "Public repo IOC feed: $count entries loaded")
-                knownAppResolver.refreshCache()
-            }
-        } catch (e: Exception) {
-            Log.w(TAG, "Public repo IOC feed failed (non-fatal): ${e.message}")
-        }
-    }
-
-    @Suppress("TooGenericExceptionCaught")
-    private suspend fun refreshOemPrefixes() {
-        try {
-            oemPrefixResolver.refresh()
-        } catch (e: Exception) {
-            Log.w(TAG, "OEM prefix refresh failed (non-fatal): ${e.message}")
-        }
-    }
-
     companion object {
         private const val TAG = "IocUpdateWorker"
         const val WORK_NAME = "ioc_periodic_update"
+
+        /**
+         * If a refresh (e.g. a manual pre-scan one) completed within this
+         * window, the periodic worker reuses it instead of re-downloading.
+         * The worker's real cadence is 12h, so this only ever suppresses a
+         * redundant back-to-back refresh.
+         */
+        private const val RECENT_REFRESH_SKIP_MS = 5L * 60 * 1000 // 5 minutes
     }
 }

@@ -10,6 +10,7 @@
     <!-- Dashboard -->
     <string name="run_scan">Run Scan</string>
     <string name="scanning">Scanning…</string>
+    <string name="updating_intel">Updating threat intel…</string>
 
     <!-- Usage Access permission banner — shown when forensic timeline data is unavailable -->
     <string name="usage_access_banner_title">Enable Usage Access</string>

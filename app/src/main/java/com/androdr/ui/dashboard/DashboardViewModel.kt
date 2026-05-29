@@ -7,8 +7,8 @@ import com.androdr.data.db.IndicatorDao
 import com.androdr.data.model.ScanResult
 import com.androdr.data.repo.ScanRepository
 import com.androdr.data.repo.ScanRepository.Companion.preferRuntimeScan
+import com.androdr.ioc.IntelRefresher
 import com.androdr.ioc.IocDatabase
-import com.androdr.ioc.IndicatorUpdater
 import com.androdr.scanner.ScanOrchestrator
 import com.androdr.scanner.ScanProgress
 import com.androdr.ui.permissions.UsageStatsPermission
@@ -32,7 +32,7 @@ class DashboardViewModel @Inject constructor(
     private val repository: ScanRepository,
     private val indicatorDao: IndicatorDao,
     private val iocDatabase: IocDatabase,
-    private val indicatorUpdater: IndicatorUpdater,
+    private val intelRefresher: IntelRefresher,
     @ApplicationContext private val context: Context
 ) : ViewModel() {
 
@@ -43,6 +43,15 @@ class DashboardViewModel @Inject constructor(
 
     private val _isScanning = MutableStateFlow(false)
     val isScanning: StateFlow<Boolean> = _isScanning.asStateFlow()
+
+    /**
+     * True while a scan is blocked on the pre-scan threat-intel refresh. Lets
+     * the Dashboard show "Updating threat intel…" instead of a generic
+     * "Scanning…" with a non-advancing bar during the (potentially ~30s)
+     * network refresh, so the scan doesn't look hung.
+     */
+    private val _isUpdatingIntel = MutableStateFlow(false)
+    val isUpdatingIntel: StateFlow<Boolean> = _isUpdatingIntel.asStateFlow()
 
     /**
      * Live scan progress published by the orchestrator. The Dashboard UI
@@ -106,10 +115,15 @@ class DashboardViewModel @Inject constructor(
             _isScanning.value = true
             try {
                 val isStale = _iocLastUpdated.value == null ||
-                    System.currentTimeMillis() - (_iocLastUpdated.value ?: 0L) > 24 * 60 * 60 * 1000L
+                    System.currentTimeMillis() - (_iocLastUpdated.value ?: 0L) > PRE_SCAN_REFRESH_THROTTLE_MS
                 val hasOnlyBundled = _iocEntryCount.value <= bundledCount
                 if (isStale || hasOnlyBundled) {
-                    doUpdate()
+                    _isUpdatingIntel.value = true
+                    try {
+                        doUpdate()
+                    } finally {
+                        _isUpdatingIntel.value = false
+                    }
                 }
                 orchestrator.runFullScan()
             } finally {
@@ -121,7 +135,7 @@ class DashboardViewModel @Inject constructor(
     @Suppress("TooGenericExceptionCaught")
     private suspend fun doUpdate() {
         try {
-            indicatorUpdater.update()
+            intelRefresher.refreshAll(skipIfRefreshedWithinMs = PRE_SCAN_REFRESH_THROTTLE_MS)
             refreshIocState()
             // Only warn if DB is still empty after update attempt (not just zero new entries)
             if (_iocEntryCount.value <= bundledCount) {
@@ -134,6 +148,16 @@ class DashboardViewModel @Inject constructor(
 
     private suspend fun refreshIocState() {
         _iocEntryCount.value = indicatorDao.count() + bundledCount
-        _iocLastUpdated.value = indicatorDao.lastFetchTime("stalkerware_indicators")
+        _iocLastUpdated.value = indicatorDao.lastFetchTimeGlobal()
+    }
+
+    companion object {
+        /**
+         * A manual scan refreshes threat intel first, but only if the last
+         * refresh is older than this. Prevents back-to-back full syncs
+         * (~6–8 MB each) on rapid re-scans while still giving a deliberate
+         * scan fresh intel. The background worker refreshes every 12h anyway.
+         */
+        private const val PRE_SCAN_REFRESH_THROTTLE_MS = 60L * 60 * 1000 // 1 hour
     }
 }
