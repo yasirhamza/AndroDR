@@ -27,17 +27,19 @@ Runs from a terminal shell; subagents inherit the parent session's environment v
 | nvd | `NVD_API_KEY` | **Optional** — raises anon rate limit from 5 req/30s to 50 req/30s. Weekly cadence works anonymously. |
 | amnesty, stalkerware, attack (GitHub-based) | `GITHUB_TOKEN` | **Optional** — raises anon GitHub API limit from 60/hr to 5000/hr. Weekly cadence works anonymously. |
 
-**Abort the full-sweep run** if `MALWAREBAZAAR_API_KEY` is missing when `abusech` is in the dispatch set. A single-feed invocation (`/update-rules source asb`, `/update-rules source amnesty`, etc.) that doesn't need abusech should proceed regardless.
+If `MALWAREBAZAAR_API_KEY` is missing when `abusech` is in the dispatch set, **do not abort the run**: skip the abusech ingester, record it as a feed FAILURE (distinct from "no new data"), and continue with the remaining feeds — a degraded sweep with a loud per-feed error beats no sweep. This matches the `update-rules-e2e` workflow's behavior. A single-feed `/update-rules source abusech` invocation with no key should stop immediately, since there is nothing else to run.
+
+**Tool note:** WebFetch cannot send POST requests or custom headers. Authenticated calls (`Auth-Key` for abuse.ch, `Authorization: token $GITHUB_TOKEN` for GitHub) must use Bash + curl. Anonymous GET access via WebFetch is fine for the GitHub/NVD/ASB feeds at the lower rate limits.
 
 Note: `virustotal` is listed in `allowed-sources.json` as a valid provenance label but no ingester currently calls the VT API. `VIRUSTOTAL_API_KEY` is not needed today.
 
 ## Step 1: Read State
 
-1. Read `feed-state.json` from the public sigma repo to get feed cursors
-2. Glob `rules/production/**/*.yml` and `rules/staging/**/*.yml` to build an index of existing rules (IDs, titles, IOCs referenced)
-3. Determine the next available rule ID by finding the highest `androdr-NNN` across all existing rules and incrementing
+1. Read `feed-state.json` from the sigma repo root to get feed cursors
+2. Build an index of existing rules (IDs, titles, IOCs referenced). Production rules live in **service-named directories at the sigma repo root** (`app_scanner/`, `device_auditor/`, `dns_monitor/`, `file_scanner/`, `process_monitor/`, `receiver_audit/`, `accessibility_audit/`, `appops_audit/`, ...); staged rules live under `staging/<service>/`. Glob `<service>/**/*.yml` and `staging/**/*.yml` — there is no `rules/` prefix directory.
+3. Determine the next available rule ID by finding the highest `androdr-NNN` across all existing rules and incrementing. Never reuse an ID that previously existed and was later removed (check `git log` in the sigma repo if in doubt).
 
-The public sigma repo path: check if `../android-sigma-rules/` exists relative to the AndroDR repo. If not, ask the user where it is.
+The sigma repo is the git submodule at `third-party/android-sigma-rules/` (see CLAUDE.md). If the submodule is not initialized, run `git submodule update --init` rather than asking the user for a path.
 
 ## Step 2: Dispatch Ingesters
 
@@ -86,7 +88,7 @@ For each SIR:
 ## Step 4: Generate Rules
 
 **Before dispatching the Rule Author**, read the logsource field taxonomy:
-1. Read `android-sigma-rules/validation/logsource-taxonomy.yml`
+1. Read `third-party/android-sigma-rules/validation/logsource-taxonomy.yml`
 2. Identify which services are relevant based on the SIRs' `rule_hint` values:
    - `ioc_lookup` → `app_scanner` (package names), `dns_monitor` (domains)
    - `behavioral` → `app_scanner`, `accessibility_audit`, `appops_audit`, `receiver_audit`
@@ -146,9 +148,10 @@ by the `parser` field. Take the union with `U_ingesters` → `U_authoritative`.
 
 ### 6.5.3 Filter candidates
 
-For each candidate across all ingesters, drop it if
-`(type, normalized_value)` is in `U_authoritative`. The survivors form the
-**approved delta** that proceeds to Step 7.
+For each candidate across all ingesters — **plus any `ioc_data` entries
+emitted by the Rule Author** from research/discover SIRs (Step 4 output) —
+drop it if `(type, normalized_value)` is in `U_authoritative`. The
+survivors form the **approved delta** that proceeds to Step 7.
 
 ### 6.5.4 Safety checks before Step 7
 
@@ -220,7 +223,7 @@ User actions for an IOC-only candidate: same as for a rule candidate —
 ## Step 8: Process User Decisions
 
 For each passing candidate, ask the user to:
-- **Approve** — write the rule to `rules/staging/[category]/` in the sigma repo, commit
+- **Approve** — write the rule to `staging/<service>/` in the sigma repo (per-service subdirectories, e.g. `staging/app_scanner/`), commit
 - **Modify** — apply user's changes, re-validate, then write
 - **Reject** — discard, log reason
 
@@ -254,7 +257,7 @@ For each approved candidate (rule OR IOC-only):
 4. Commit the ioc-data change(s) + rule change(s) + feed-state update as
    a single atomic commit. Commit message format:
    ```
-   feat(rules+ioc): add <threat-name> (source: <source-id>) [Phase 4 of #117]
+   feat(rules+ioc): add <threat-name> (source: <source-id>)
    ```
 
 ### 8.2 Safety rules
@@ -269,7 +272,7 @@ For each approved candidate (rule OR IOC-only):
 
 ## Safety Rules
 
-- NEVER write rules directly to `rules/production/` — staging only
+- NEVER write rules directly to the production service directories at the sigma repo root (`app_scanner/`, `device_auditor/`, etc.) — `staging/<service>/` only
 - NEVER set `status` to anything other than `experimental` for AI-generated rules
 - NEVER modify AndroDR application code (Kotlin sources)
 - NEVER commit API keys or credentials to any file

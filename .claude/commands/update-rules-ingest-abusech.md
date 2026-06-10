@@ -16,17 +16,20 @@ You receive:
 
 - `MALWAREBAZAAR_API_KEY` — single abuse.ch Auth-Key covering both ThreatFox and MalwareBazaar. **Both endpoints return HTTP 401 without it.**
 
-**Fail fast if unset.** Before any WebFetch call, verify the env var is available. If it is missing or empty, abort the run immediately with an explicit error (`"MALWAREBAZAAR_API_KEY env var not set — abusech ingester cannot authenticate"`) and return `{"sirs": [], "updated_cursors": {}, "error": "..."}`. Do NOT silently return empty SIRs — that looks like "no new threats" and masks the auth failure from the orchestrator.
+**Fail fast if unset.** Before any API call, verify the env var is available (`test -n "$MALWAREBAZAAR_API_KEY"`). If it is missing or empty, abort the run immediately with an explicit error (`"MALWAREBAZAAR_API_KEY env var not set — abusech ingester cannot authenticate"`) and return `{"sirs": [], "updated_cursors": {}, "error": "..."}`. Do NOT silently return empty SIRs — that looks like "no new threats" and masks the auth failure from the orchestrator.
 
-Every WebFetch call below must include the header `Auth-Key: $MALWAREBAZAAR_API_KEY`.
+**Use Bash + curl for every API call below — NOT WebFetch.** WebFetch can only do GET requests and cannot set custom headers; both abuse.ch endpoints require a POST with the header `Auth-Key: $MALWAREBAZAAR_API_KEY`.
 
 ## Process
 
 ### ThreatFox
 
-1. Use WebFetch to POST to `https://threatfox-api.abuse.ch/api/v1/` with body:
-   ```json
-   {"query": "taginfo", "tag": "Android", "limit": 100}
+1. POST to the ThreatFox API via curl:
+   ```bash
+   curl -s -X POST https://threatfox-api.abuse.ch/api/v1/ \
+     -H "Auth-Key: $MALWAREBAZAAR_API_KEY" \
+     -H "Content-Type: application/json" \
+     -d '{"query": "taginfo", "tag": "Android", "limit": 100}'
    ```
 2. Parse the JSON response. Each IOC has: `id`, `ioc`, `ioc_type`, `threat_type`, `malware`, `tags`, `first_seen_utc`, `reference`
 3. Filter to IOCs with `first_seen_utc` after `last_seen_timestamp` (or take all if null)
@@ -45,9 +48,11 @@ Every WebFetch call below must include the header `Auth-Key: $MALWAREBAZAAR_API_
 
 ### MalwareBazaar
 
-1. Use WebFetch to POST to `https://mb-api.abuse.ch/api/v1/` with body:
-   ```json
-   {"query": "get_file_type", "file_type": "apk", "limit": 1000}
+1. POST to the MalwareBazaar API via curl (form-encoded, per the MB API):
+   ```bash
+   curl -s https://mb-api.abuse.ch/api/v1/ \
+     -H "Auth-Key: $MALWAREBAZAAR_API_KEY" \
+     --data "query=get_file_type&file_type=apk&limit=1000"
    ```
    Do NOT use `get_taginfo` with `tag=android` — that only returns samples a reporter explicitly tagged "android", missing most APK uploads. `get_file_type&file_type=apk` returns all recent APKs regardless of tagging (AndroDR #146). The limit of 1000 is the endpoint maximum; MalwareBazaar holds ~6 months of Android samples within that window.
 2. Parse the response. Each sample has: `sha256_hash`, `md5_hash`, `file_name`, `file_type`, `signature` (malware family), `tags`, `first_seen`
