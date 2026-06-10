@@ -17,7 +17,7 @@ You receive:
 
 ## CRITICAL: IOC Data vs Rules — Know the Difference
 
-**IOC data** (package names, cert hashes, domains, IPs) should be added to `ioc-data/` YAML files in the public rules repo — NOT expressed as individual SIGMA rules. The generic IOC lookup rules (androdr-001, 002, 003) already catch ALL entries in those databases. Creating a per-family rule for each malware family is wasteful and duplicates what IOC lookups do.
+**IOC data** (package names, cert hashes, domains, file hashes, IPs) should be added to `ioc-data/` YAML files in the public rules repo — NOT expressed as individual SIGMA rules. The generic IOC lookup rules (androdr-001 package names, 002 cert hashes, 003 domains, 004 APK hashes) already catch ALL entries in those databases. Creating a per-family rule for each malware family is wasteful and duplicates what IOC lookups do.
 
 **SIGMA rules** are for behavioral/TTP patterns that IOC lookups CANNOT express — permission combinations, accessibility+surveillance combos, system name impersonation, device posture checks.
 
@@ -120,6 +120,16 @@ Use ONLY these modifiers. Any other modifier name will be rejected by the parser
 | Sideloaded app with suspicious permissions, outdated patch (CVSS 7.0-8.9) | `medium` |
 | Informational signal, low-confidence IOC, minor CVE (CVSS < 7.0) | `low` |
 
+### Device-posture severity cap (MANDATORY)
+
+Findings from `device_posture`-category rules are **clamped to `medium` at
+runtime** by `SeverityCapPolicy` (`app/src/main/java/com/androdr/sigma/SeverityCapPolicy.kt`),
+regardless of the declared `level:`. Declaring `high` or `critical` on a
+device-posture rule (CVE / patch-level / device-flag checks, typically
+`device_auditor` service) is dead text — the engine downgrades it.
+**Declare at most `medium` for device-posture rules.** The `high`/`critical`
+rows in the table above apply only to incident-category rules.
+
 ## Decision Flagging
 
 > **Authoritative format:** `third-party/android-sigma-rules/validation/decisions-schema.json`.
@@ -206,7 +216,11 @@ decisions:
 - NEVER extrapolate patterns (e.g., "similar package names would be...")
 - NEVER fill in missing fields with guesses
 - NEVER use category values: TEST, FIXTURE, SIMULATION, DEBUG
-- NEVER use familyName containing: test, fixture, simulation, sample, example
+- `category` MUST be one of the enum in `validation/ioc-entry-schema.json`:
+  `STALKERWARE`, `SPYWARE`, `MALWARE`, `NATION_STATE_SPYWARE`,
+  `FORENSIC_TOOL`, `MONITORING`, `DATA_BROKER_SDK`. There is **no `TROJAN`
+  category** — label banking trojans and RATs as `MALWARE`.
+- NEVER use a `family` value containing: test, fixture, simulation, sample, example (and there is no `familyName` field — the schema rejects unknown keys)
 - If a SIR has only IPs and AndroDR doesn't monitor raw IP connections, flag as skip
 
 ### Mandatory `source` field
@@ -223,9 +237,14 @@ entries:
     source: "stalkerware-indicators"   # ← MANDATORY
 ```
 
-Allowed sources: `stalkerware-indicators`, `malwarebazaar`, `threatfox`,
+Allowed sources (authoritative list: `validation/allowed-sources.json`):
+`stalkerware-indicators`, `malwarebazaar`, `threatfox`,
 `amnesty-investigations`, `citizenlab-indicators`, `mvt-indicators`,
-`virustotal`, `android-security-bulletin`, `zimperium-ioc`
+`virustotal`, `android-security-bulletin`, `zimperium-ioc`,
+`threat_research`
+
+Use `threat_research` for entries derived from research/discover SIRs
+(web-sourced intel where `source.feed` is `"threat_research"`).
 
 Entries without a valid `source` will be REJECTED by the validation gate.
 
@@ -254,7 +273,7 @@ Return a JSON object:
       "type": "package_name",
       "indicator": "com.example.malware",
       "family": "MalwareName",
-      "category": "TROJAN",
+      "category": "MALWARE",
       "severity": "CRITICAL",
       "description": "...",
       "source": "malwarebazaar",

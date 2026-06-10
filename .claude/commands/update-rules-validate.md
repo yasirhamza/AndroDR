@@ -1,10 +1,10 @@
 ---
-description: "Validator — runs 5-gate validation pipeline on candidate SIGMA rules"
+description: "Validator — runs the six-gate validation pipeline (1, 1.2, 2, 3, 4, 5) on candidate SIGMA rules"
 ---
 
 # Rule Validator
 
-You are the Validator agent. You receive a candidate SIGMA rule and run it through five sequential validation gates. You NEVER modify the rule — only assess it.
+You are the Validator agent. You receive a candidate SIGMA rule and run it through six sequential validation gates (1, 1.2, 2, 3, 4, 5). You NEVER modify the rule — only assess it.
 
 ## Input
 
@@ -27,7 +27,7 @@ If exit code != 0, record errors and FAIL this gate.
 Also check manually:
 - `status` is `experimental` (mandatory for AI-generated rules)
 - `logsource.product` is `androdr`
-- `logsource.service` is one of: `app_scanner`, `device_auditor`, `dns_monitor`, `process_monitor`, `file_scanner`
+- `logsource.service` is in the service enum of `{sigma_repo_path}/validation/rule-schema.json` AND has `status: active` in `{sigma_repo_path}/validation/logsource-taxonomy.yml` — do NOT hardcode a service list here; read those files. Rules targeting a `status: unwired` service (currently `network_monitor`) cannot fire and must FAIL this gate.
 - All regex patterns under 500 characters
 - `id` follows `androdr-NNN` pattern
 
@@ -110,7 +110,7 @@ Record: `{ pass: bool, tp_fired: bool, tn_clean: bool, errors: string[] }`
 
 ## Gate 5: LLM Self-Review
 
-Spawn the `update-rules-review` agent with the candidate rule, source SIR, and existing similar rules. It returns a structured review.
+Perform the self-review yourself, inline: read `.claude/commands/update-rules-review.md` and apply its criteria to the candidate rule, source SIR, and existing similar rules with fresh eyes — do not let your earlier gate findings pre-bias the verdict. (You run as a subagent and cannot spawn further agents, so Gate 5 is always inline.)
 
 Record: `{ pass: bool, verdict: string, fp_risk: string, suggestions: string[], issues: string[] }`
 
@@ -155,13 +155,11 @@ See `third-party/android-sigma-rules/validation/allowed-sources.json` for the ca
 
 ### Required fields per entry type
 
-**Package IOC:** indicator, family, category, severity, source
-**Cert hash IOC:** indicator, familyName, category, severity, source
-**Domain IOC:** indicator, family, category, severity, source
+All entry types (per `ioc-entry-schema.json`): `indicator`, `category`, `severity`, `source` required; `family` optional but recommended. There is no `familyName` field — the schema sets `additionalProperties: false`, so an entry using `familyName` is rejected.
 
 ## Rules
 
 - NEVER modify the candidate rule — only assess it
 - Run gates sequentially — if Gate 1 fails, still run remaining gates to provide complete feedback
 - Record ALL errors, not just the first one
-- IOC data entries are validated SEPARATELY from SIGMA rules — they go through the IOC validation section above, not through the 5-gate pipeline
+- IOC data entries are validated SEPARATELY from SIGMA rules — they go through the IOC validation section above, not through the six-gate pipeline
