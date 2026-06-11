@@ -30,8 +30,14 @@ Also check manually:
 - `logsource.service` is in the service enum of `{sigma_repo_path}/validation/rule-schema.json` AND has `status: active` in `{sigma_repo_path}/validation/logsource-taxonomy.yml` — do NOT hardcode a service list here; read those files. Rules targeting a `status: unwired` service (currently `network_monitor`) cannot fire and must FAIL this gate.
 - All regex patterns under 500 characters
 - `id` follows `androdr-NNN` pattern
+- `id` is NOT listed in `{sigma_repo_path}/validation/retired-rule-ids.txt` (retired IDs are never reused — `validate-rule.py` also enforces this)
 
 Record: `{ pass: bool, errors: string[] }`
+
+Note: `validate-rule.py` also enforces the device-posture severity cap
+(top-level `category: device_posture` above `medium` fails) and rejects lone
+actively-exploited-CVE posture rules (androdr-047 duplicates). Surface the
+script's stderr verbatim — the Rule Author needs it for repair.
 
 ### Gate 1.2: Decision Manifest Structure
 

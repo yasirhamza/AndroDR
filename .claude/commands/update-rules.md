@@ -103,6 +103,7 @@ Pass all valid SIRs to the Rule Author agent (`update-rules-author`) along with:
 - 5 existing production rules as style examples (pick diverse services/types)
 - The existing rule index (for dedup awareness)
 - **The extracted taxonomy field lists for relevant services** (injected into the prompt context so the Rule Author doesn't need to read the file itself)
+- **The contents of `third-party/android-sigma-rules/validation/authoring-lessons.yml`** (curated guidance from past human rejections). If the file is missing or unparseable, dispatch without it and log a warning — never fail the run over lessons.
 
 The Rule Author returns a list of CandidateRule objects (YAML + decision manifest).
 
@@ -269,6 +270,37 @@ For each approved candidate (rule OR IOC-only):
   only.
 - NEVER modify `kotlin-mirror-feeds.yml` in the same commit as an
   ioc-data write.
+
+### 8.3 Run ledger (Phase 2, candidate-accuracy spec)
+
+After all HitL decisions, write one ledger file to `pipeline-runs/` in the
+sigma repo: `YYYY-MM-DD-<mode>.yml` (schema in `pipeline-runs/README.md`).
+Record per candidate: `id` (rule ID or indicator), `verdict`
+(`approved` / `approved_with_modification` / `rejected`), the reviewer's
+`reason` (required unless approved), and a `failure_class`
+(`severity_judgment`, `fp_risk`, `duplicate_semantics`, `weak_sourcing`,
+`category_choice`, `other`, or `null`). Compute `totals` including
+`approval_without_modification_rate` (approved ÷ candidates, 2 decimal
+places). Show the ledger to the user before committing (normal HitL gate).
+
+**A ledger write failure never blocks rule commits** — rules are the
+product, the ledger is telemetry. Report the failure in the run summary
+and move on.
+
+### 8.4 Lessons curation + metric trend
+
+1. If any rejection `reason` this run describes a *judgment* error not yet
+   covered by `validation/authoring-lessons.yml`, draft a one-paragraph
+   lesson (`class` + `guidance`) and present it as a candidate for the user
+   to approve, modify, or reject. Hard cap: 20 lessons — at the cap,
+   propose which stale lesson to drop.
+2. In the final run summary, print `approval_without_modification_rate`
+   for this run and the previous four (read from `pipeline-runs/`), oldest
+   first, so the trend is visible:
+
+   ```
+   Approval-without-modification trend: 0.57 → 0.63 → 0.71 (this run)
+   ```
 
 ## Safety Rules
 
