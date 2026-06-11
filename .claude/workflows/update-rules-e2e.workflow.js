@@ -7,7 +7,7 @@ export const meta = {
     { title: 'Research', detail: 'per-threat + open-web researchers → SIRs' },
     { title: 'Author', detail: 'SIRs → candidate rules + IOC-data entries' },
     { title: 'Dedup', detail: 'drop IOC candidates already pulled on-device via kotlin-mirror-feeds (incl. manual MVT STIX traversal — parser_limited feeds the validator skips)' },
-    { title: 'Validate', detail: 'gates 1/1.2/2/3/5 + IOC structural validation (gate 4 + strict complementarity deferred)' },
+    { title: 'Validate', detail: 'gates 1/1.2/2/3 + independent Gate-5 reviewer per candidate + one author-repair round; IOC structural validation (gate 4 + strict complementarity deferred)' },
   ],
 }
 
@@ -425,25 +425,65 @@ if (iocDataRaw.length) {
 }
 
 phase('Validate')
-const validationThunks = candidates.map(c => () =>
-  agent(validatePrompt(c, allSirs), { label: `validate:${c.rule_id || 'rule'}`, phase: 'Validate', schema: VALIDATE_OUT })
-    .then(v => ({ candidate: c, validation: v }))
-)
+
+function mergeAssessment(c, v, r, retryCount) {
+  const validation = v || { rule_id: c.rule_id || 'unknown', overall: 'error', gates: {}, retry_count: 0 }
+  validation.gates = validation.gates || {}
+  validation.gates.self_review = r
+    ? { pass: r.verdict !== 'fail', verdict: r.verdict, fp_risk: r.false_positive_risk || 'unknown', suggestions: r.suggestions || [], issues: r.issues || [] }
+    : { pass: false, verdict: 'error', fp_risk: 'unknown', suggestions: [], issues: ['review agent failed or was skipped'] }
+  const gatesPass = !!v && validation.overall === 'pass'
+  const reviewPass = !!r && r.verdict !== 'fail'
+  validation.overall = (gatesPass && reviewPass) ? 'pass' : 'fail'
+  validation.retry_count = retryCount
+  return { candidate: c, validation }
+}
+
+// Validator and independent reviewer run concurrently per candidate:
+// slots [2i] = validation, [2i+1] = review. IOC validation rides last.
+const assessThunks = candidates.flatMap(c => [
+  () => agent(validatePrompt(c, allSirs), { label: `validate:${c.rule_id || 'rule'}`, phase: 'Validate', schema: VALIDATE_OUT }),
+  () => agent(reviewPrompt(c, allSirs), { label: `review:${c.rule_id || 'rule'}`, phase: 'Validate', schema: REVIEW_OUT }),
+])
 const iocValidationThunk = iocData.length
   ? [() => agent(iocValidatePrompt(iocData), { label: 'validate:ioc-data', phase: 'Validate', schema: IOC_VALIDATE_OUT })]
   : []
 
-const validatedAll = await parallel([...validationThunks, ...iocValidationThunk])
-// A null slot means the validator agent errored or was skipped — keep the
-// candidate visible as a failure instead of silently dropping it.
-const ruleValidations = validatedAll.slice(0, candidates.length)
-  .map((v, i) => v || { candidate: candidates[i], validation: null })
+const assessRaw = await parallel([...assessThunks, ...iocValidationThunk])
 const iocValidation = iocData.length
-  ? (validatedAll[validatedAll.length - 1] || { valid_entries: [], rejected: [], log: ['ioc validation agent failed or was skipped'] })
+  ? (assessRaw[assessRaw.length - 1] || { valid_entries: [], rejected: [], log: ['ioc validation agent failed or was skipped'] })
   : { valid_entries: [], rejected: [], log: [] }
 
-const passed = ruleValidations.filter(rv => rv.validation && rv.validation.overall === 'pass')
-const failed = ruleValidations.filter(rv => !rv.validation || rv.validation.overall !== 'pass')
+const firstRound = candidates.map((c, i) => mergeAssessment(c, assessRaw[2 * i], assessRaw[2 * i + 1], 0))
+const passed = firstRound.filter(rv => rv.validation.overall === 'pass')
+let failed = firstRound.filter(rv => rv.validation.overall !== 'pass')
+
+// One author-repair round for failures (dispatcher Step 6 contract: a second
+// failure is final). Repaired candidates are re-validated AND re-reviewed.
+if (failed.length) {
+  log(`${failed.length} candidate(s) failed first assessment — one repair round`)
+  const repairs = await parallel(failed.map(rv => () =>
+    agent(repairPrompt(rv.candidate, rv.validation, allSirs),
+      { label: `repair:${rv.candidate.rule_id || 'rule'}`, phase: 'Validate', schema: REPAIR_OUT })))
+  const retryPairs = []
+  const unrepairable = []
+  repairs.forEach((rep, i) => {
+    if (rep && rep.yaml && !rep.skip_note) {
+      retryPairs.push({ candidate: { ...failed[i].candidate, yaml: rep.yaml, decisions: rep.decisions || failed[i].candidate.decisions } })
+    } else {
+      if (rep && rep.skip_note) failed[i].validation.repair_skip_note = rep.skip_note
+      unrepairable.push(failed[i])
+    }
+  })
+  const reRaw = retryPairs.length ? await parallel(retryPairs.flatMap(p => [
+    () => agent(validatePrompt(p.candidate, allSirs), { label: `revalidate:${p.candidate.rule_id || 'rule'}`, phase: 'Validate', schema: VALIDATE_OUT }),
+    () => agent(reviewPrompt(p.candidate, allSirs), { label: `rereview:${p.candidate.rule_id || 'rule'}`, phase: 'Validate', schema: REVIEW_OUT }),
+  ])) : []
+  const secondRound = retryPairs.map((p, i) => mergeAssessment(p.candidate, reRaw[2 * i], reRaw[2 * i + 1], 1))
+  passed.push(...secondRound.filter(rv => rv.validation.overall === 'pass'))
+  failed = [...unrepairable, ...secondRound.filter(rv => rv.validation.overall !== 'pass')]
+  log(`After repair round: ${passed.length} passed, ${failed.length} failed`)
+}
 
 return {
   status: 'candidates_ready',
