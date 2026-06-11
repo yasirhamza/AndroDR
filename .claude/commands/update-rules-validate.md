@@ -13,6 +13,7 @@ You receive:
 - `source_sir`: the SIR that informed the rule (for IOC verification)
 - `existing_rules`: list of existing rule IDs, titles, and detection summaries
 - `sigma_repo_path`: path to the public sigma repo (for validation scripts and fixtures)
+- `authoring_lessons`: (optional) curated guidance from past human rejections (`validation/authoring-lessons.yml`). Apply it when judging the rule, especially in Gate 5. When absent, proceed normally.
 
 ## Gate 1: Schema Validation
 
@@ -116,7 +117,7 @@ Record: `{ pass: bool, tp_fired: bool, tn_clean: bool, errors: string[] }`
 
 ## Gate 5: LLM Self-Review
 
-Perform the self-review yourself, inline: read `.claude/commands/update-rules-review.md` and apply its criteria to the candidate rule, source SIR, and existing similar rules with fresh eyes — do not let your earlier gate findings pre-bias the verdict. (You run as a subagent and cannot spawn further agents, so Gate 5 is always inline.)
+Perform the self-review yourself, inline: read `.claude/commands/update-rules-review.md` and apply its criteria to the candidate rule, source SIR, and existing similar rules with fresh eyes — do not let your earlier gate findings pre-bias the verdict. (You run as a subagent and cannot spawn further agents, so in the dispatcher path Gate 5 runs inline. Exception: the `update-rules-e2e` workflow runs Gate 5 as a separate independent reviewer agent and explicitly tells the validator to SKIP this gate — if your instructions say to skip Gate 5, do so and record it as skipped.)
 
 Record: `{ pass: bool, verdict: string, fp_risk: string, suggestions: string[], issues: string[] }`
 

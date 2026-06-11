@@ -229,9 +229,11 @@ ${JSON.stringify(sirs)}
 Return ONLY {candidates:[...], ioc_data:[...]} JSON as the command specifies. Entire final message = that JSON.`
 }
 
-function validatePrompt(c, sirs) {
+function validatePrompt(c, sirs, slot) {
   const yaml = c.yaml || ''
-  const rid = c.rule_id || 'unknown'
+  // slot disambiguates the temp file when the author emits duplicate or
+  // missing rule_ids — parallel validators must never share a path.
+  const rid = `${c.rule_id || 'unknown'}-${slot}`
   // Match SIRs the author attributed to this candidate; source_sirs entries may
   // be SIR ids or threat names. Fall back to ALL SIRs only if nothing matches.
   const matched = (Array.isArray(c.source_sirs) && c.source_sirs.length)
@@ -441,15 +443,17 @@ function mergeAssessment(c, v, r, retryCount) {
 
 // Validator and independent reviewer run concurrently per candidate:
 // slots [2i] = validation, [2i+1] = review. IOC validation rides last.
-const assessThunks = candidates.flatMap(c => [
-  () => agent(validatePrompt(c, allSirs), { label: `validate:${c.rule_id || 'rule'}`, phase: 'Validate', schema: VALIDATE_OUT }),
+const assessThunks = candidates.flatMap((c, i) => [
+  () => agent(validatePrompt(c, allSirs, `a${i}`), { label: `validate:${c.rule_id || 'rule'}`, phase: 'Validate', schema: VALIDATE_OUT }),
   () => agent(reviewPrompt(c, allSirs), { label: `review:${c.rule_id || 'rule'}`, phase: 'Validate', schema: REVIEW_OUT }),
 ])
 const iocValidationThunk = iocData.length
   ? [() => agent(iocValidatePrompt(iocData), { label: 'validate:ioc-data', phase: 'Validate', schema: IOC_VALIDATE_OUT })]
   : []
 
-const assessRaw = await parallel([...assessThunks, ...iocValidationThunk])
+const assessRaw = (assessThunks.length || iocValidationThunk.length)
+  ? await parallel([...assessThunks, ...iocValidationThunk])
+  : []
 const iocValidation = iocData.length
   ? (assessRaw[assessRaw.length - 1] || { valid_entries: [], rejected: [], log: ['ioc validation agent failed or was skipped'] })
   : { valid_entries: [], rejected: [], log: [] }
@@ -469,14 +473,14 @@ if (failed.length) {
   const unrepairable = []
   repairs.forEach((rep, i) => {
     if (rep && rep.yaml && !rep.skip_note) {
-      retryPairs.push({ candidate: { ...failed[i].candidate, yaml: rep.yaml, decisions: rep.decisions || failed[i].candidate.decisions } })
+      retryPairs.push({ candidate: { ...failed[i].candidate, yaml: rep.yaml, decisions: (Array.isArray(rep.decisions) && rep.decisions.length) ? rep.decisions : failed[i].candidate.decisions } })
     } else {
       if (rep && rep.skip_note) failed[i].validation.repair_skip_note = rep.skip_note
       unrepairable.push(failed[i])
     }
   })
-  const reRaw = retryPairs.length ? await parallel(retryPairs.flatMap(p => [
-    () => agent(validatePrompt(p.candidate, allSirs), { label: `revalidate:${p.candidate.rule_id || 'rule'}`, phase: 'Validate', schema: VALIDATE_OUT }),
+  const reRaw = retryPairs.length ? await parallel(retryPairs.flatMap((p, i) => [
+    () => agent(validatePrompt(p.candidate, allSirs, `b${i}`), { label: `revalidate:${p.candidate.rule_id || 'rule'}`, phase: 'Validate', schema: VALIDATE_OUT }),
     () => agent(reviewPrompt(p.candidate, allSirs), { label: `rereview:${p.candidate.rule_id || 'rule'}`, phase: 'Validate', schema: REVIEW_OUT }),
   ])) : []
   const secondRound = retryPairs.map((p, i) => mergeAssessment(p.candidate, reRaw[2 * i], reRaw[2 * i + 1], 1))
@@ -512,5 +516,7 @@ return {
     'Gate 4 (gradle dry-run via GateFourFixtureTest) for each approved rule',
     'validate-ioc-complementarity.py --mode strict for each approved IOC entry (needs reachable upstream)',
     'HiTL approve/modify/reject per candidate, then write to staging/ + ioc-data/, re-validate, and commit to the submodule',
+    'Run ledger write to pipeline-runs/YYYY-MM-DD-e2e.yml after HiTL decisions (dispatcher Step 8.3)',
+    'Lessons curation + approval-rate trend (dispatcher Step 8.4)',
   ],
 }

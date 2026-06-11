@@ -114,6 +114,7 @@ For each CandidateRule, spawn a Validator agent (`update-rules-validate`) with:
 - The source SIR(s) that informed it
 - The existing rule index
 - Path to the validation directory in the sigma repo
+- The contents of `validation/authoring-lessons.yml` (same graceful-degradation rule as for the Rule Author: missing/unparseable → dispatch without it, log a warning)
 
 Validators can run in parallel (one per candidate rule).
 
