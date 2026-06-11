@@ -39,8 +39,15 @@ scripts/files in `third-party/android-sigma-rules`. **No Android app code.**
 
 ### 1a. Severity-cap lint (`validation/validate-rule.py`, sigma repo)
 
-New check: if `display.category == "device_posture"` and `level` is `high`
-or `critical` → **error**:
+New check: if the top-level `category` field is `"device_posture"` and
+`level` is `high` or `critical` → **error**:
+
+> **Implementation correction (2026-06-11):** the cap is applied at runtime
+> via `SeverityCapPolicy.applyCap(rule.category, rule.level)` — the
+> **top-level `category`** field. `display.category` only selects the UI
+> grouping bucket (androdr-020/030 are `category: incident`, displayed
+> under device_posture, and legitimately fire at `critical`). The lint
+> therefore keys on top-level `category` only.
 
 > `device_posture rules are clamped to medium at runtime by SeverityCapPolicy; declare level: medium or below (or reclassify as category incident if a genuine HIGH/CRITICAL signal is intended)`
 
@@ -49,9 +56,12 @@ categories are unaffected.
 
 ### 1b. Lone-exploited-CVE lint (`validation/validate-rule.py`, sigma repo)
 
-New check: a rule with `display.category == "device_posture"` whose
-detection references the `unpatched_cve_id` field with **exactly one** CVE
-value (string equality or single-element list, any modifier) → **error**:
+New check: a rule with top-level `category == "device_posture"` (same
+keying as 1a, per the 2026-06-11 correction) whose detection references
+the `unpatched_cve_id` field with **exactly one** CVE value (string
+equality or single-element list, any modifier) → **error**. An **empty**
+value list is also rejected as a vacuous selection (reviewer finding,
+2026-06-11):
 
 > `single actively-exploited-CVE rules duplicate androdr-047 (CISA KEV catalog); only named-campaign CVE sets (cf. androdr-048..052) justify a dedicated rule`
 
@@ -73,12 +83,17 @@ registry once added.
 ### 1d. Author auto-retry on deterministic failures (AndroDR side)
 
 The e2e workflow currently runs validators once; failed candidates go
-straight to the report. Change: candidates whose ValidationResult fails on
-a deterministic gate (schema / decision-manifest / the new lints) are sent
-back — validator stderr verbatim — to a **fresh author agent** for one
-repair attempt, then re-validated. A second failure marks the candidate
-failed for the report. One retry round only (matches the dispatcher skill's
-existing Step 6 contract; prevents loops).
+straight to the report. Change: failed candidates are sent back —
+validator stderr verbatim — to a **fresh author agent** for one repair
+attempt, then re-validated AND re-reviewed. A second failure marks the
+candidate failed for the report. One retry round only (matches the
+dispatcher skill's existing Step 6 contract; prevents loops).
+
+> **Implementation note (2026-06-11):** the repair round triggers on ANY
+> failure, including independent-review (judgment) failures, not only
+> deterministic-gate failures as originally drafted — review verdicts come
+> with concrete `issues` that are just as repairable, and the
+> one-round + `skip_note` escape hatch bounds the cost either way.
 
 ### 1e. Independent Gate 5 reviewer (AndroDR side, e2e workflow)
 

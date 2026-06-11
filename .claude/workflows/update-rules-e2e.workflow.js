@@ -7,7 +7,7 @@ export const meta = {
     { title: 'Research', detail: 'per-threat + open-web researchers → SIRs' },
     { title: 'Author', detail: 'SIRs → candidate rules + IOC-data entries' },
     { title: 'Dedup', detail: 'drop IOC candidates already pulled on-device via kotlin-mirror-feeds (incl. manual MVT STIX traversal — parser_limited feeds the validator skips)' },
-    { title: 'Validate', detail: 'gates 1/1.2/2/3/5 + IOC structural validation (gate 4 + strict complementarity deferred)' },
+    { title: 'Validate', detail: 'gates 1/1.2/2/3 + independent Gate-5 reviewer per candidate + one author-repair round; IOC structural validation (gate 4 + strict complementarity deferred)' },
   ],
 }
 
@@ -86,6 +86,29 @@ const VALIDATE_OUT = {
     overall: { type: 'string' },
     gates: { type: 'object', additionalProperties: true },
     retry_count: { type: 'number' },
+  },
+}
+const REVIEW_OUT = {
+  type: 'object',
+  required: ['verdict'],
+  additionalProperties: true,
+  properties: {
+    verdict: { type: 'string' },              // pass | pass_with_notes | fail
+    false_positive_risk: { type: 'string' },  // low | medium | high
+    issues: { type: 'array', items: { type: 'string' } },
+    suggestions: { type: 'array', items: { type: 'string' } },
+    notes: { type: 'array', items: { type: 'string' } },
+  },
+}
+const REPAIR_OUT = {
+  type: 'object',
+  required: ['rule_id', 'yaml'],
+  additionalProperties: true,
+  properties: {
+    rule_id: { type: 'string' },
+    yaml: { type: 'string' },
+    decisions: { type: 'array', items: { type: 'object', additionalProperties: true } },
+    skip_note: { type: 'string' },
   },
 }
 const DEDUP_OUT = {
@@ -196,6 +219,8 @@ Existing IOC database — READ the actual files under ${SIGMA}/ioc-data/ (c2-dom
 
 Logsource taxonomy: READ ${SIGMA}/validation/logsource-taxonomy.yml. Only use field names listed there for the target service, and only target services with status: active in that file (do not rely on a memorized list — the taxonomy is the source of truth). Any status: unwired service (currently network_monitor) must NEVER be targeted; record a telemetry_gap decision instead.
 
+Authoring lessons: READ ${SIGMA}/validation/authoring-lessons.yml if it exists — it is curated guidance distilled from past human rejections. Apply every lesson. If the file is missing or unparseable, proceed without it and say so in a log field.
+
 Decision Gate reminder: pure indicator lists (package names / cert hashes / domains / file hashes) → emit ioc_data entries (the generic androdr-001/002/003/004 lookups already match them), do NOT create a per-family rule. Only unique behavioral / TTP / device-posture patterns become SIGMA rules. status must be experimental; author "AndroDR AI Pipeline". Use ONLY the supported modifiers listed in the command.
 
 SIRs to process (JSON array):
@@ -204,9 +229,11 @@ ${JSON.stringify(sirs)}
 Return ONLY {candidates:[...], ioc_data:[...]} JSON as the command specifies. Entire final message = that JSON.`
 }
 
-function validatePrompt(c, sirs) {
+function validatePrompt(c, sirs, slot) {
   const yaml = c.yaml || ''
-  const rid = c.rule_id || 'unknown'
+  // slot disambiguates the temp file when the author emits duplicate or
+  // missing rule_ids — parallel validators must never share a path.
+  const rid = `${c.rule_id || 'unknown'}-${slot}`
   // Match SIRs the author attributed to this candidate; source_sirs entries may
   // be SIR ids or threat names. Fall back to ALL SIRs only if nothing matches.
   const matched = (Array.isArray(c.source_sirs) && c.source_sirs.length)
@@ -216,8 +243,10 @@ function validatePrompt(c, sirs) {
   const srcSirs = matched.length ? matched : sirs
   return `You are the rule Validator for the AndroDR SIGMA pipeline, running inside ${REPO} (rules submodule at ${SIGMA}). You NEVER modify the rule — only assess it.
 
-Read ${REPO}/.claude/commands/update-rules-validate.md. Run Gates 1, 1.2, 2, 3, and 5.
+Read ${REPO}/.claude/commands/update-rules-validate.md. Run Gates 1, 1.2, 2, and 3 ONLY.
 DO NOT run Gate 4 (the gradle dry-run): it is DEFERRED to the post-approval step in the main session to avoid concurrent gradle builds racing in a shared working tree. Record gates.dry_run = {"pass": null, "skipped": true, "reason": "deferred to post-approval"}.
+DO NOT run Gate 5 (self-review): an INDEPENDENT reviewer agent runs it separately in this workflow so it has genuinely fresh eyes. Record gates.self_review = {"pass": null, "skipped": true, "reason": "run independently by the workflow"}.
+Authoring lessons: READ ${SIGMA}/validation/authoring-lessons.yml if it exists and apply its guidance when judging the rule. If missing or unparseable, proceed without it and note that in your output.
 
 Write the candidate YAML to a UNIQUE temp file: /tmp/cand-${rid}.yml (do NOT use a shared filename — other validators run in parallel). Then:
   python3 ${SIGMA}/validation/validate-rule.py /tmp/cand-${rid}.yml
@@ -225,7 +254,6 @@ If the candidate carries a non-empty decisions array, also validate it via ${SIG
 
 Gate 2: verify every concrete IOC in the rule exists in the source SIR(s) below; permission names against ${SIGMA}/validation/android-permissions.txt; ATT&CK tags match attack.tNNNN[.NNN].
 Gate 3: check ID collision / exact-duplicate / subsumption against the existing rule index below.
-Gate 5: perform the self-review yourself following ${REPO}/.claude/commands/update-rules-review.md criteria (read it first); report verdict, fp_risk, suggestions, issues.
 
 sigma_repo_path: ${SIGMA}
 existing rule index:
@@ -238,7 +266,56 @@ Candidate YAML:
 ${yaml}
 ---
 
-Return ONLY the ValidationResult JSON (rule_id, overall, gates{schema,ioc_verify,dedup,dry_run,self_review}, retry_count). Entire final message = that JSON.`
+Return ONLY the ValidationResult JSON (rule_id, overall, gates{schema,ioc_verify,dedup,dry_run,self_review}, retry_count). Base "overall" on Gates 1/1.2/2/3 only (the skipped gates are merged by the workflow). Entire final message = that JSON.`
+}
+
+function reviewPrompt(c, sirs) {
+  const related = sirs
+    .filter(s => s && s.threat && s.threat.name)
+    .map(s => `- ${s.threat.name}: ${(s.threat.description || '').slice(0, 200)}`)
+    .slice(0, 10)
+    .join('\n')
+  return `You are an INDEPENDENT reviewer for the AndroDR SIGMA pipeline (Gate 5), running inside ${REPO} (rules submodule at ${SIGMA}). You have NOT seen the Rule Author's reasoning or any validator gate results — review with completely fresh eyes.
+
+Read ${REPO}/.claude/commands/update-rules-review.md and apply its five criteria exactly.
+Also READ ${SIGMA}/validation/authoring-lessons.yml if it exists and apply its guidance; if missing, proceed without it.
+
+For "similar_rules" context, pick 2-3 same-category entries from this index and read their YAML files in the submodule (production rules live in service-named dirs at the repo root, staged ones under staging/<service>/):
+${RULE_INDEX}
+
+SIR summaries (source threat intel context):
+${related || '(none provided)'}
+
+Candidate YAML:
+---
+${c.yaml || ''}
+---
+
+Return ONLY {verdict, false_positive_risk, issues, suggestions, notes} JSON per the review command's output section. Entire final message = that JSON.`
+}
+
+function repairPrompt(candidate, validation, sirs) {
+  return `You are the Rule Author for the AndroDR SIGMA pipeline, running inside ${REPO} (rules submodule at ${SIGMA}).
+
+Read ${REPO}/.claude/commands/update-rules-author.md and follow it EXACTLY.
+Also READ ${SIGMA}/validation/authoring-lessons.yml if it exists and apply its guidance.
+
+Your earlier candidate FAILED validation. Fix ONLY the reported failures — do not redesign the rule, change its ID, or touch passing aspects. If a failure cannot be fixed without inventing data (e.g. an IOC the SIRs never contained), return the original yaml unchanged plus a skip_note explaining why.
+
+today's date: ${TODAY}
+
+FAILED candidate (rule_id ${candidate.rule_id || 'unknown'}):
+---
+${candidate.yaml || ''}
+---
+
+ValidationResult (fix every gate with pass=false; validator stderr is included verbatim):
+${JSON.stringify(validation)}
+
+Source SIRs (the ONLY permitted data source for indicators):
+${JSON.stringify(sirs)}
+
+Return ONLY {rule_id, yaml, decisions, skip_note?} JSON. Entire final message = that JSON.`
 }
 
 function dedupPrompt(iocs) {
@@ -350,25 +427,67 @@ if (iocDataRaw.length) {
 }
 
 phase('Validate')
-const validationThunks = candidates.map(c => () =>
-  agent(validatePrompt(c, allSirs), { label: `validate:${c.rule_id || 'rule'}`, phase: 'Validate', schema: VALIDATE_OUT })
-    .then(v => ({ candidate: c, validation: v }))
-)
+
+function mergeAssessment(c, v, r, retryCount) {
+  const validation = v || { rule_id: c.rule_id || 'unknown', overall: 'error', gates: {}, retry_count: 0 }
+  validation.gates = validation.gates || {}
+  validation.gates.self_review = r
+    ? { pass: r.verdict !== 'fail', verdict: r.verdict, fp_risk: r.false_positive_risk || 'unknown', suggestions: r.suggestions || [], issues: r.issues || [] }
+    : { pass: false, verdict: 'error', fp_risk: 'unknown', suggestions: [], issues: ['review agent failed or was skipped'] }
+  const gatesPass = !!v && validation.overall === 'pass'
+  const reviewPass = !!r && r.verdict !== 'fail'
+  validation.overall = (gatesPass && reviewPass) ? 'pass' : 'fail'
+  validation.retry_count = retryCount
+  return { candidate: c, validation }
+}
+
+// Validator and independent reviewer run concurrently per candidate:
+// slots [2i] = validation, [2i+1] = review. IOC validation rides last.
+const assessThunks = candidates.flatMap((c, i) => [
+  () => agent(validatePrompt(c, allSirs, `a${i}`), { label: `validate:${c.rule_id || 'rule'}`, phase: 'Validate', schema: VALIDATE_OUT }),
+  () => agent(reviewPrompt(c, allSirs), { label: `review:${c.rule_id || 'rule'}`, phase: 'Validate', schema: REVIEW_OUT }),
+])
 const iocValidationThunk = iocData.length
   ? [() => agent(iocValidatePrompt(iocData), { label: 'validate:ioc-data', phase: 'Validate', schema: IOC_VALIDATE_OUT })]
   : []
 
-const validatedAll = await parallel([...validationThunks, ...iocValidationThunk])
-// A null slot means the validator agent errored or was skipped — keep the
-// candidate visible as a failure instead of silently dropping it.
-const ruleValidations = validatedAll.slice(0, candidates.length)
-  .map((v, i) => v || { candidate: candidates[i], validation: null })
+const assessRaw = (assessThunks.length || iocValidationThunk.length)
+  ? await parallel([...assessThunks, ...iocValidationThunk])
+  : []
 const iocValidation = iocData.length
-  ? (validatedAll[validatedAll.length - 1] || { valid_entries: [], rejected: [], log: ['ioc validation agent failed or was skipped'] })
+  ? (assessRaw[assessRaw.length - 1] || { valid_entries: [], rejected: [], log: ['ioc validation agent failed or was skipped'] })
   : { valid_entries: [], rejected: [], log: [] }
 
-const passed = ruleValidations.filter(rv => rv.validation && rv.validation.overall === 'pass')
-const failed = ruleValidations.filter(rv => !rv.validation || rv.validation.overall !== 'pass')
+const firstRound = candidates.map((c, i) => mergeAssessment(c, assessRaw[2 * i], assessRaw[2 * i + 1], 0))
+const passed = firstRound.filter(rv => rv.validation.overall === 'pass')
+let failed = firstRound.filter(rv => rv.validation.overall !== 'pass')
+
+// One author-repair round for failures (dispatcher Step 6 contract: a second
+// failure is final). Repaired candidates are re-validated AND re-reviewed.
+if (failed.length) {
+  log(`${failed.length} candidate(s) failed first assessment — one repair round`)
+  const repairs = await parallel(failed.map(rv => () =>
+    agent(repairPrompt(rv.candidate, rv.validation, allSirs),
+      { label: `repair:${rv.candidate.rule_id || 'rule'}`, phase: 'Validate', schema: REPAIR_OUT })))
+  const retryPairs = []
+  const unrepairable = []
+  repairs.forEach((rep, i) => {
+    if (rep && rep.yaml && !rep.skip_note) {
+      retryPairs.push({ candidate: { ...failed[i].candidate, yaml: rep.yaml, decisions: (Array.isArray(rep.decisions) && rep.decisions.length) ? rep.decisions : failed[i].candidate.decisions } })
+    } else {
+      if (rep && rep.skip_note) failed[i].validation.repair_skip_note = rep.skip_note
+      unrepairable.push(failed[i])
+    }
+  })
+  const reRaw = retryPairs.length ? await parallel(retryPairs.flatMap((p, i) => [
+    () => agent(validatePrompt(p.candidate, allSirs, `b${i}`), { label: `revalidate:${p.candidate.rule_id || 'rule'}`, phase: 'Validate', schema: VALIDATE_OUT }),
+    () => agent(reviewPrompt(p.candidate, allSirs), { label: `rereview:${p.candidate.rule_id || 'rule'}`, phase: 'Validate', schema: REVIEW_OUT }),
+  ])) : []
+  const secondRound = retryPairs.map((p, i) => mergeAssessment(p.candidate, reRaw[2 * i], reRaw[2 * i + 1], 1))
+  passed.push(...secondRound.filter(rv => rv.validation.overall === 'pass'))
+  failed = [...unrepairable, ...secondRound.filter(rv => rv.validation.overall !== 'pass')]
+  log(`After repair round: ${passed.length} passed, ${failed.length} failed`)
+}
 
 return {
   status: 'candidates_ready',
@@ -397,5 +516,7 @@ return {
     'Gate 4 (gradle dry-run via GateFourFixtureTest) for each approved rule',
     'validate-ioc-complementarity.py --mode strict for each approved IOC entry (needs reachable upstream)',
     'HiTL approve/modify/reject per candidate, then write to staging/ + ioc-data/, re-validate, and commit to the submodule',
+    'Run ledger write to pipeline-runs/YYYY-MM-DD-e2e.yml after HiTL decisions (dispatcher Step 8.3)',
+    'Lessons curation + approval-rate trend (dispatcher Step 8.4)',
   ],
 }

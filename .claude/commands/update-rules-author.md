@@ -14,6 +14,7 @@ You receive:
 - `example_rules`: 5-10 existing rules as style reference
 - `existing_rule_index`: list of existing rule IDs, titles, and IOC references
 - `taxonomy_fields`: (optional) logsource field lists for services relevant to the SIRs' `rule_hint`, pre-extracted by the orchestrator. When present, use this instead of reading `logsource-taxonomy.yml` directly.
+- `authoring_lessons`: (optional) curated guidance distilled from past human rejections (`validation/authoring-lessons.yml`). Treat every lesson as a hard constraint on your output. When absent, proceed normally.
 
 ## CRITICAL: IOC Data vs Rules — Know the Difference
 
