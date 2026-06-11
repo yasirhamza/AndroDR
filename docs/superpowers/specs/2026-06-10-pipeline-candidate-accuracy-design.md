@@ -39,8 +39,15 @@ scripts/files in `third-party/android-sigma-rules`. **No Android app code.**
 
 ### 1a. Severity-cap lint (`validation/validate-rule.py`, sigma repo)
 
-New check: if `display.category == "device_posture"` and `level` is `high`
-or `critical` → **error**:
+New check: if the top-level `category` field is `"device_posture"` and
+`level` is `high` or `critical` → **error**:
+
+> **Implementation correction (2026-06-11):** the cap is applied at runtime
+> via `SeverityCapPolicy.applyCap(rule.category, rule.level)` — the
+> **top-level `category`** field. `display.category` only selects the UI
+> grouping bucket (androdr-020/030 are `category: incident`, displayed
+> under device_posture, and legitimately fire at `critical`). The lint
+> therefore keys on top-level `category` only.
 
 > `device_posture rules are clamped to medium at runtime by SeverityCapPolicy; declare level: medium or below (or reclassify as category incident if a genuine HIGH/CRITICAL signal is intended)`
 
