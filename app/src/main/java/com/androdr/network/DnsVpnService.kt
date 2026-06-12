@@ -64,9 +64,8 @@ import javax.inject.Inject
  *     the OS does not kill the tunnel under memory pressure. (`systemExempted` would
  *     be the more idiomatic VPN type, but on targetSdk 34 lint requires it to be
  *     paired with `SCHEDULE_EXACT_ALARM`/`USE_EXACT_ALARM` permissions that AndroDR
- *     does not need; AndroDR is sideload/MDM-distributed and not Play-Store-reviewed,
- *     so `specialUse` is the right pragmatic choice. If the app is ever published to
- *     Play, switch to `systemExempted` and add the alarm permissions.)
+ *     does not need, so `specialUse` is the right pragmatic choice; the subtype is
+ *     justified in the Play Console special-use declaration form.)
  */
 @Suppress("TooManyFunctions")
 @AndroidEntryPoint
