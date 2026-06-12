@@ -31,7 +31,7 @@ Open-source Android security scanner and endpoint detection (EDR). Detects spywa
 
 Detection logic is expressed as [SIGMA](https://github.com/SigmaHQ/sigma)-compatible YAML rules evaluated against telemetry emitted by the scanner. Rules are reviewable as data — not hidden in compiled code.
 
-Indicator data (malicious package names, certificate hashes, C2 domains, APK hashes) lives in the external [`android-sigma-rules`](https://github.com/yasirhamza/android-sigma-rules) repository and refreshes at runtime. New indicators reach users within hours, not release cycles.
+Indicator data (malicious package names, certificate hashes, C2 domains, APK hashes) lives in the external [`android-sigma-rules`](https://github.com/android-sigma-rules/rules) repository and refreshes at runtime. New indicators reach users within hours, not release cycles.
 
 ## Architecture
 
@@ -77,7 +77,7 @@ Mirror (for regions where GitHub downloads are throttled): https://androdr.yasir
 
 ## Privacy
 
-All scanning and analysis happens entirely on your device. No data is transmitted to any server. See the [privacy policy](https://androdr.yasirhamza.workers.dev/#privacy).
+All scanning and analysis happens entirely on your device — no user data is sent to the developer or any third party. The only network traffic is fetching public threat-intelligence feeds and, if you enable the optional DNS monitor, ordinary DNS resolution. See the [privacy policy](https://androdr.yasirhamza.workers.dev/privacy).
 
 ## Contributing
 

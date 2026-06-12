@@ -1,6 +1,6 @@
 # AndroDR Privacy Policy
 
-_Last updated: 2026-04-25_
+_Last updated: 2026-06-12_
 
 ## Our Philosophy
 
@@ -37,7 +37,7 @@ All scan data is stored locally in an on-device database. **None of it is ever t
 | Device security flags | Posture assessment | On-device Room database |
 | Scan results and history | Track security state over time | On-device Room database |
 | Security reports | User-initiated export only | Device storage, shared via Android share sheet |
-| Forensic timeline events (e.g., device admin grants) | Displayed in the timeline screen; included in exported reports | On-device Room database |
+| Forensic timeline events (e.g., device admin grants; app open/close events if Usage Access is granted) | Displayed in the timeline screen; included in exported reports; auto-deleted after 30 days | On-device Room database |
 | Bug report analysis findings | Displayed with scan results; original bug report ZIP is discarded after analysis | On-device Room database |
 
 **We cannot see your scan results.** There is no cloud backend, no remote dashboard, no server-side processing. Cloud backup is disabled (`android:allowBackup="false"`) — your scan data is never uploaded to Google's backup service.
@@ -54,6 +54,8 @@ All scan data is stored locally in an on-device database. **None of it is ever t
 | `ACCESS_NETWORK_STATE` | To check network connectivity before fetching IOC feed updates. |
 | `READ_LOGS` | To capture AndroDR's own process log for inclusion in user-initiated security reports. This permission reads only the app's own log output (`logcat --pid`), not system-wide logs. It is used exclusively when you manually export a report. |
 | `MANAGE_EXTERNAL_STORAGE` | To scan external storage for known spyware file artifacts. On Android 11+, scoped storage prevents apps from checking arbitrary file paths without this permission. AndroDR checks a small set of known artifact paths documented in forensic research — it does not browse or index your files. |
+| `PACKAGE_USAGE_STATS` | **Optional.** Adds app open/close events for user-installed apps to the forensic timeline (useful for spotting surveillance apps activating at unusual times). This special permission must be granted manually via Settings → Special access → Usage access; if you don't grant it, the timeline simply omits usage events. Usage events stay on-device and are auto-deleted after 30 days. |
+| `FOREGROUND_SERVICE_SPECIAL_USE` | Android 14+ requires declaring a foreground service type; the DNS monitor's long-running on-device tunnel uses the `specialUse` type because it fits no predefined category. |
 
 ---
 
@@ -67,14 +69,18 @@ AndroDR fetches publicly available threat intelligence feeds to keep its detecti
 | Mercenary spyware domain IOCs | mvt-project/mvt-indicators (GitHub) | Known spyware C2 domains from multiple campaigns (Pegasus, Predator, RCS Lab, etc.) | 1 index fetch + 1 per campaign (~10-20 requests) |
 | Known app database (UAD) | Universal Android Debloater (GitHub) | Legitimate app lists for false positive reduction | 1 HTTP GET |
 | Known app database (Plexus) | Plexus (techlore.tech) | App compatibility data | ~19 paginated requests |
-| MalwareBazaar APK + cert hashes | abuse.ch MalwareBazaar public API | Hashes of known malicious APKs and the cert hashes that signed them | 1 API request per refresh |
-| ThreatFox indicators | abuse.ch ThreatFox public API | Command-and-control domain / IP indicators | 1 API request per refresh |
+| ThreatFox indicators | abuse.ch ThreatFox public API | Command-and-control domain indicators | 1 HTTP GET per refresh |
+| Malicious-domain blocklist | HaGeZi Threat Intelligence Feed (GitHub, hagezi/dns-blocklists) | Domain blocklist used by the optional DNS monitor | 1 HTTP GET |
 | Stalkerware cert-hash indicators | AssoEchap/stalkerware-indicators (GitHub) | Cert hashes of known stalkerware signers | 1 HTTP GET |
-| SIGMA detection rules | android-sigma-rules/rules (GitHub) | Rule manifest (`rules.txt`), SHA-256 integrity manifest (`rules.sha256`), then one GET per rule YAML file listed in the manifest. Each downloaded rule is integrity-checked against the manifest before being loaded. | 2 manifests + 1 per rule |
-| Centralized IOC data | android-sigma-rules/rules (GitHub) | Package names, C2 domains, signing-cert hashes, APK hashes, and known-good app lists from the repo's `ioc-data/` directory | 5 HTTP GETs |
+| SIGMA detection rules | android-sigma-rules/rules (GitHub) | Rule manifest (`rules.txt`), SHA-256 integrity manifest (`rules.sha256`), then one GET per rule YAML file listed in the manifest. Downloaded rules are integrity-checked against the SHA-256 manifest when it is available; if the integrity manifest cannot be fetched, rules load without the check. | 2 manifests + 1 per rule |
+| Centralized IOC data | android-sigma-rules/rules (GitHub) | Package names, C2 domains, signing-cert hashes, APK hashes, known-good app lists, and OEM package prefixes from the repo's `ioc-data/` directory | 6 HTTP GETs |
+| CISA Known Exploited Vulnerabilities catalog | cisa.gov | Catalog of actively exploited CVEs, used by the patch-level audit | 1 HTTP GET per refresh |
+| Android vulnerability database (OSV) | osv-vulnerabilities.storage.googleapis.com | Android CVE metadata used by the patch-level audit | 1 HTTP GET per refresh |
 | **Optional:** custom rule URLs | URLs you configure in Settings → Custom Rule Sources | Same SIGMA-rule-feed format as above. Disabled by default; only fetched if you add a URL. | Same as above per configured URL |
 
-All requests are unauthenticated public HTTP GET requests. No API keys, no authentication tokens, no cookies, and no tracking headers are sent. You can verify this in the source code at `app/src/main/java/com/androdr/ioc/feeds/`.
+All requests are unauthenticated public HTTP GET requests. No API keys, no authentication tokens, no cookies, and no tracking headers are sent. You can verify this in the source code at `app/src/main/java/com/androdr/ioc/feeds/` and `app/src/main/java/com/androdr/data/repo/CveRepository.kt`.
+
+The app does **not** query the MalwareBazaar API directly (that endpoint requires an authentication key, which the app deliberately does not ship). MalwareBazaar-derived APK hashes reach the app through the "Centralized IOC data" feed above, after review in the public rules repository.
 
 All ingesters run inside a dispatcher that deduplicates indicators across feeds before writing to the on-device database. Each feed is independently auditable in `app/src/main/java/com/androdr/ioc/feeds/`.
 
@@ -84,9 +90,10 @@ All ingesters run inside a dispatcher that deduplicates indicators across feeds 
 
 AndroDR's DNS monitor uses a local VPN to intercept DNS queries **on your device only**. This is how it detects connections to known malicious domains.
 
-- DNS queries are resolved locally — **no traffic is routed to external servers**
-- DNS event logs are stored on-device only
-- The VPN does not route, inspect, or modify your web traffic, app data, or any non-DNS network activity
+- Intercepted DNS queries are checked against the on-device blocklist. Blocked domains receive a local NXDOMAIN answer and the query is **never sent anywhere**
+- Allowed queries are forwarded to a public DNS resolver (Google Public DNS, 8.8.8.8) over standard DNS (UDP port 53) and the answers are returned to your apps. This is the same unencrypted DNS protocol Android uses by default when Private DNS is off: the resolver sees the domain names your apps look up, as any DNS resolver does. AndroDR attaches no device identifiers or app information to these queries
+- DNS event logs are stored on-device only and automatically deleted after 30 days
+- The VPN routes only the DNS server address — it does not route, inspect, or modify your web traffic, app data, or any non-DNS network activity
 - You can enable or disable DNS monitoring at any time
 
 ---
@@ -113,7 +120,7 @@ When you export a security report, it includes:
 - **Device information:** manufacturer, model, Android version, API level, security patch date
 - **Scan results:** flagged apps with package names, risk levels, and reasons
 - **DNS event log:** recent DNS queries with domain names, timestamps, and blocked/allowed status
-- **Application log:** up to 300 lines of AndroDR's own process log (not system-wide logs)
+- **Application log:** up to 500 lines of AndroDR's own process log (not system-wide logs)
 
 Reports are generated only when you tap the export button. You choose who to share them with via the Android share sheet. **We never see your reports.**
 
@@ -124,7 +131,7 @@ Reports are generated only when you tap the export button. You choose who to sha
 - No personal information (name, email, phone number)
 - No device identifiers (IMEI, serial number, advertising ID)
 - No location data
-- No browsing history
+- No browsing history (DNS lookups made while the optional monitor is enabled are processed as described in "DNS Monitoring" and stored only on your device)
 - No message content
 - No photos or files
 - No usage analytics or telemetry
@@ -146,7 +153,8 @@ AndroDR shares data **only when you explicitly choose to**:
 
 ## Data Retention and Deletion
 
-- Scan history and DNS events are stored on-device indefinitely until you clear them
+- Scan history is stored on-device indefinitely until you clear it
+- DNS event logs and forensic timeline events are automatically deleted after 30 days
 - Cloud backup is disabled — your data is not backed up to Google's servers
 - Uninstalling AndroDR deletes all stored data from the device
 - You can clear all app data at any time via Android Settings > Apps > AndroDR > Clear Data
@@ -169,7 +177,7 @@ If you find a privacy concern in the code, open an issue or contact us directly.
 What the app looks for is not hidden inside compiled Kotlin. AndroDR's detection rules are authored as human-readable YAML in an independent public repository — [github.com/android-sigma-rules/rules](https://github.com/android-sigma-rules/rules) — and bundled into the app at build time via a pinned git submodule. The rule schema (`validation/rule-schema.json`) is published alongside the rules. This decoupling has two privacy consequences:
 
 - **You can read every rule before installing.** Each rule names the indicator (package name, signing-cert hash, DNS domain, permission combination, etc.), the threat it models, and the public source it was derived from. No detection exists only inside the binary.
-- **Rule changes are reviewable independently of the app.** New detections land in the rules repo through a public 5-gate validation pipeline (schema check, build, IOC sanity, semantic deduplication, and an independent review pass). You can audit the diff between any two rule-bundle versions without disassembling the APK.
+- **Rule changes are reviewable independently of the app.** New detections land in the rules repo through a public six-gate validation pipeline (schema check, decision-manifest structure, indicator verification against the source intelligence, semantic deduplication, dry-run evaluation against test fixtures, and an independent review pass). You can audit the diff between any two rule-bundle versions without disassembling the APK.
 
 The threat-intelligence feeds AndroDR ingests at runtime are listed in the "Network Requests" section above. The rules that decide what those indicators *mean* live in the rules repo. Both are public; neither is part of the compiled app's hidden state. Advanced users can also configure additional rule sources in Settings; those URLs are fetched in the same way as the default repo and are listed in the Network Requests table above.
 
@@ -179,10 +187,10 @@ The threat-intelligence feeds AndroDR ingests at runtime are listed in the "Netw
 
 For Google Play's Data Safety section, AndroDR declares:
 
-- **Data collected:** Installed app list (package names, permissions, signing certs — on-device only, never transmitted); device info (model, OS version, security patch level — included in user-initiated reports only); DNS query domain names (only when the optional DNS VPN is enabled — on-device only, auto-deleted after 30 days); diagnostic info (app-own logcat — included in user-initiated reports only)
+- **Data collected:** Installed app list (package names, permissions, signing certs — on-device only, never transmitted); device info (model, OS version, security patch level — included in user-initiated reports only); DNS query domain names (only when the optional DNS VPN is enabled — on-device only, auto-deleted after 30 days); app usage events (app open/close times for user-installed apps — only if you manually grant Usage Access; on-device only, auto-deleted after 30 days); diagnostic info (app-own logcat — included in user-initiated reports only)
 - **Data shared:** None — user-initiated report sharing is under user control and not considered "sharing with third parties"
-- **Data encrypted in transit:** N/A — no user data is transmitted; all outbound requests are inbound-only IOC feed downloads over HTTPS
-- **Data encrypted at rest:** Yes — Room database is stored on Android's encrypted file system; cached reports reside in the app's private storage directory
+- **Data encrypted in transit:** No user data is transmitted to the developer. Threat-intelligence downloads use HTTPS. When the optional DNS monitor is enabled, DNS queries are forwarded to Google Public DNS over standard unencrypted DNS (UDP/53) — the same protocol Android uses by default when Private DNS is off (see "DNS Monitoring" above)
+- **Data encrypted at rest:** Yes — Room database is stored in the app's private directory on Android's encrypted file system (file-based encryption is standard on Android 10+; on Android 8–9 devices it depends on device configuration); cached reports reside in the app's private storage directory
 - **Data deletion:** Users can clear all stored data at any time via Android Settings > Apps > AndroDR > Clear Data, or by uninstalling the app; DNS events are also automatically deleted after 30 days
 - **Optional data collection:** DNS query monitoring is entirely optional — the local VPN must be explicitly enabled by the user
 

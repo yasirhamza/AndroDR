@@ -67,9 +67,9 @@
         </activity>
 
         <!-- DNS VPN Service.
-             foregroundServiceType=specialUse: AndroDR is sideload-/MDM-distributed and
-             not Play-Store-reviewed; specialUse is the correct type for a long-running
-             on-device security tunnel that does not fit any of the predefined categories.
+             foregroundServiceType=specialUse: the correct type for a long-running
+             on-device security tunnel that does not fit any of the predefined
+             categories (declared in the Play Console special-use form).
              systemExempted would also work conceptually but lint requires extra exact-alarm
              permissions on targetSdk 34+ that we do not need. -->
         <service
