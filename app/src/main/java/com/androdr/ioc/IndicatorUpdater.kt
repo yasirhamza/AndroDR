@@ -63,7 +63,19 @@ class IndicatorUpdater @Inject constructor(
     private suspend fun runFeed(sourceId: String, fetch: suspend () -> List<Indicator>): Int {
         val entries = fetch()
         if (entries.isNotEmpty()) {
-            dao.upsertAll(entries)
+            // Upsert in bounded chunks rather than one giant transaction. A single
+            // `upsertAll` of a large feed (e.g. hagezi_tif ~540k rows) holds the
+            // sole write connection for the entire run, starving reader threads on
+            // the connection pool for tens of seconds (observed ~28s) and stalling
+            // the UI. Each chunk is its own transaction, so the write lock is
+            // released between batches and readers can interleave.
+            //
+            // Tradeoff: the feed write is no longer atomic with the
+            // deleteStaleEntries below — a crash mid-feed leaves new + old rows
+            // coexisting. That is benign for an IOC cache (PK is (type,value)
+            // with REPLACE, and the next successful sync self-heals), and is the
+            // intended price for not holding one long write lock.
+            entries.chunked(UPSERT_CHUNK_SIZE).forEach { chunk -> dao.upsertAll(chunk) }
             val runStart = entries.minOf { it.fetchedAt } - 1
             dao.deleteStaleEntries(sourceId, runStart)
             Log.i(TAG, "Feed '$sourceId': ${entries.size} indicators upserted")
@@ -75,6 +87,18 @@ class IndicatorUpdater @Inject constructor(
 
     companion object {
         private const val TAG = "IndicatorUpdater"
+
+        /**
+         * Rows per upsert transaction. Bounds how long the single write lock is
+         * held per batch so reader threads on the connection pool are not starved
+         * during a bulk feed sync, while keeping per-batch overhead low.
+         *
+         * This is a transaction-duration knob, not a binding-count limit: Room's
+         * `@Insert(List)` compiles one statement and executes it per row, so
+         * SQLite's ~999-variable limit does not apply. Value is empirically in
+         * the range that keeps lock-release frequent without excessive batches.
+         */
+        internal const val UPSERT_CHUNK_SIZE = 2_000
     }
 }
 
