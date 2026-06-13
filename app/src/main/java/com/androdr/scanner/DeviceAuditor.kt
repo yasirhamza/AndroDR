@@ -148,9 +148,7 @@ class DeviceAuditor @Inject constructor(
             val systemPropertiesClass = Class.forName("android.os.SystemProperties")
             val getMethod = systemPropertiesClass.getMethod("get", String::class.java, String::class.java)
             val verifiedBootState = getMethod.invoke(null, "ro.boot.verifiedbootstate", "") as? String
-            if (!verifiedBootState.isNullOrBlank()) {
-                return verifiedBootState.lowercase() == "orange"
-            }
+            interpretVerifiedBootState(verifiedBootState)?.let { return it }
         } catch (e: Exception) {
             Log.w(TAG, "DeviceAuditor: SystemProperties reflection blocked, falling through: ${e.message}")
             // Reflection blocked on this device/API level — fall through
@@ -166,6 +164,26 @@ class DeviceAuditor @Inject constructor(
         } catch (e: Exception) {
             Log.w(TAG, "DeviceAuditor: bootloader lock state check failed: ${e.message}")
             false
+        }
+    }
+
+    /**
+     * Interprets the authoritative Android Verified Boot state string
+     * (`ro.boot.verifiedbootstate`).
+     *
+     * - `orange` → bootloader unlocked (`true`)
+     * - `green` / `yellow` / `red` → bootloader locked (`false`)
+     * - null/blank/unrecognised → `null`, signalling the caller to fall back to
+     *   the OEM `Build.BOOTLOADER` heuristic.
+     *
+     * `internal` for unit-test visibility within the module.
+     */
+    internal fun interpretVerifiedBootState(state: String?): Boolean? {
+        if (state.isNullOrBlank()) return null
+        return when (state.lowercase()) {
+            "orange" -> true
+            "green", "yellow", "red" -> false
+            else -> null
         }
     }
 }
