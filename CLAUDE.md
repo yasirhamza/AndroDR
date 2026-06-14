@@ -105,3 +105,32 @@ pointer stays pinned until explicitly bumped. New rules added upstream by
 `/update-rules` don't affect the build until they're bundled into
 `app/src/main/res/raw/`. Bump the submodule when you need upstream schema
 changes (e.g., after the AI pipeline reveals a schema gap).
+
+**Rule manifest integrity (`rules.sha256`) — keep it in sync:** The app fetches
+`rules.txt` + `rules.sha256` from `android-sigma-rules` main and **skips any
+rule whose content hash doesn't match the manifest** (`SigmaRuleFeed` fail-closed
+integrity check). A rule edited without regenerating `rules.sha256` is therefore
+*silently dropped on-device* with no error. Whenever you change a rule listed in
+`rules.txt`, regenerate the manifest:
+
+```bash
+cd third-party/android-sigma-rules
+while read -r f; do printf '%s  %s\n' "$(sha256sum "$f" | cut -d' ' -f1)" "$f"; done < rules.txt > rules.sha256
+```
+
+`RuleManifestIntegrityTest` (AndroDR unit tests) fails the build if the pinned
+submodule's manifest has drifted, and a `validate-manifest` job exists in
+`android-sigma-rules`'s `validate.yml`. **Note: that org's GitHub Actions are
+currently dormant** (0 runs), so the rules-repo gate does not execute yet —
+AndroDR's CI is the enforced guard for now.
+
+**Safe ordering for any rule change** (so AndroDR CI gates *before* the change
+reaches production — the app pulls rules from `android-sigma-rules` main on a 12h
+cycle, not from the submodule, so a broken manifest on main is live for up to 12h
+regardless of the submodule):
+
+1. Edit the rule YAML on an `android-sigma-rules` branch + regenerate `rules.sha256`.
+2. Bump the AndroDR submodule pointer to that branch commit in an AndroDR PR.
+3. Confirm `RuleManifestIntegrityTest` is green in AndroDR CI.
+4. Only then merge the `android-sigma-rules` branch to main.
+5. Re-point the submodule at the resulting main commit.
