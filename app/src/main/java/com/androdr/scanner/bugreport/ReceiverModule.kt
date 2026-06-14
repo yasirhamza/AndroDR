@@ -33,14 +33,31 @@ class ReceiverModule @Inject constructor(
     )
 
     /**
+     * Matches an intent-action header line within the "Non-Data Actions" table,
+     * e.g. `    android.provider.Telephony.SMS_RECEIVED:`. The action must
+     * contain at least one dot and the line must end at the colon, which
+     * distinguishes it from receiver-entry lines (`<n> pkg/component ...`) and
+     * from the nested `Action: "..."` evidence lines.
+     */
+    private val intentHeaderRegex = Regex(
+        """^\s+[A-Za-z][\w.]*\.[\w.]+\s*:\s*$""",
+        RegexOption.MULTILINE
+    )
+
+    /**
      * Safety cap on how much text we read past the LAST sensitive intent's
      * header when building its per-intent block. Intermediate intents are
      * naturally bounded by the next intent's start position, so this cap
-     * only applies to the final one in the list. Chosen large enough to
-     * hold thousands of receiver entries (the biggest realistic intent
-     * block is ~tens of KB on any device), small enough to prevent a
-     * degenerate bug report from making us substring most of a 16+ MB
-     * package section.
+     * only applies to the final one in the list.
+     *
+     * Note: `truncateAtNextHeader` now trims every block (including the last)
+     * at the next intent-action header of any kind, so in practice this cap
+     * only takes effect when the last enumerated intent is genuinely the final
+     * group in the table (no following header at all). It is kept as a bound on
+     * the substring length so a degenerate bug report cannot make us copy most
+     * of a 16+ MB package section before truncation runs. Chosen large enough
+     * to hold thousands of receiver entries (the biggest realistic intent block
+     * is ~tens of KB on any device).
      */
     private val lastIntentBlockCap = 256 * 1024
 
@@ -100,7 +117,17 @@ class ReceiverModule @Inject constructor(
             } else {
                 minOf(intentStart + lastIntentBlockCap, sectionText.length)
             }
-            val block = sectionText.substring(intentStart, blockEnd)
+            // `blockEnd` only bounds us at the next *enumerated* intent (or the
+            // cap, for the last enumerated intent). But the dumpsys table also
+            // contains NON-enumerated intent groups, and the receivers under
+            // those must not be attributed to this intent. Concretely, because
+            // SMS_RECEIVED sorts last among the enumerated actions, its block
+            // ran to the 256 KB cap and swept in every following group — e.g.
+            // androidx.work's DiagnosticsReceiver (registered under
+            // androidx.work.diagnostics.*) was reported as an SMS receiver.
+            // Truncate at the first intent-action header that follows this
+            // intent's own header so each block holds only its own receivers.
+            val block = truncateAtNextHeader(sectionText.substring(intentStart, blockEnd))
 
             receiverEntryRegex.findAll(block).forEach { match ->
                 val packageName = match.groupValues[1]
@@ -122,5 +149,18 @@ class ReceiverModule @Inject constructor(
             telemetry = telemetry,
             telemetryService = "receiver_audit"
         )
+    }
+
+    /**
+     * Trims [block] (which begins with one intent-action header) so it ends at
+     * the next intent-action header, keeping only the receiver entries that
+     * belong to this intent. If no following header is present, the block is
+     * returned unchanged.
+     */
+    private fun truncateAtNextHeader(block: String): String {
+        val firstLineEnd = block.indexOf('\n')
+        if (firstLineEnd < 0) return block
+        val next = intentHeaderRegex.find(block, firstLineEnd + 1) ?: return block
+        return block.substring(0, next.range.first)
     }
 }

@@ -139,6 +139,83 @@ class ReceiverModuleTest {
     }
 
     @Test
+    fun `does not attribute receivers from a following non-enumerated intent`() = runBlocking {
+        // SMS_RECEIVED sorts last among the enumerated actions, so its block
+        // previously ran to the safety cap and swept in receivers belonging to
+        // later, non-enumerated intent groups (e.g. androidx.work's
+        // DiagnosticsReceiver under androidx.work.diagnostics.*).
+        val section = """
+            Receiver Resolver Table:
+              Non-Data Actions:
+                  android.provider.Telephony.SMS_RECEIVED:
+                    12345 com.evil.sms/.SmsReceiver filter abcdef
+                      Action: "android.provider.Telephony.SMS_RECEIVED"
+                  androidx.work.impl.diagnostics.REQUEST_DIAGNOSTICS:
+                    67890 com.benign.app/androidx.work.impl.diagnostics.DiagnosticsReceiver filter beef
+                      Action: "androidx.work.impl.diagnostics.REQUEST_DIAGNOSTICS"
+        """.trimIndent()
+
+        val result = module.analyze(section, mockIndicatorResolver, DeviceIdentity.UNKNOWN)
+
+        // The real SMS receiver is still detected...
+        assertTrue(
+            "expected the genuine SMS receiver to be detected",
+            result.telemetry.any { it["package_name"] == "com.evil.sms" },
+        )
+        // ...but the WorkManager diagnostics receiver must NOT be mislabelled as
+        // an SMS receiver (nor appear at all — its intent is not enumerated).
+        assertTrue(
+            "WorkManager DiagnosticsReceiver must not be attributed to SMS_RECEIVED",
+            result.telemetry.none { it["package_name"] == "com.benign.app" },
+        )
+    }
+
+    @Test
+    fun `non-enumerated group between two enumerated intents is excluded from both`() = runBlocking {
+        // A non-enumerated intent group sits BETWEEN two enumerated ones. This
+        // is the case only `truncateAtNextHeader` handles: BOOT_COMPLETED's
+        // blockEnd is the SMS header, so without header-level truncation the
+        // in-between receiver would be swept into BOOT_COMPLETED.
+        val section = """
+            Receiver Resolver Table:
+              Non-Data Actions:
+                  android.intent.action.BOOT_COMPLETED:
+                    11111 com.app.boot/.BootReceiver filter aaaa
+                      Action: "android.intent.action.BOOT_COMPLETED"
+                  com.example.custom.MIDDLE_ACTION:
+                    33333 com.middle.app/.MiddleReceiver filter cccc
+                      Action: "com.example.custom.MIDDLE_ACTION"
+                  android.provider.Telephony.SMS_RECEIVED:
+                    22222 com.app.sms/.SmsReceiver filter bbbb
+                      Action: "android.provider.Telephony.SMS_RECEIVED"
+        """.trimIndent()
+
+        val result = module.analyze(section, mockIndicatorResolver, DeviceIdentity.UNKNOWN)
+
+        assertTrue(
+            "boot receiver must map to BOOT_COMPLETED only",
+            result.telemetry.any {
+                it["package_name"] == "com.app.boot" &&
+                    it["intent_action"] == "android.intent.action.BOOT_COMPLETED"
+            },
+        )
+        assertTrue(
+            "sms receiver must map to SMS_RECEIVED only",
+            result.telemetry.any {
+                it["package_name"] == "com.app.sms" &&
+                    it["intent_action"] == "android.provider.Telephony.SMS_RECEIVED"
+            },
+        )
+        // The in-between non-enumerated receiver must not be attributed to the
+        // preceding enumerated intent (nor appear at all — its action is not
+        // enumerated). This is what fails if truncateAtNextHeader is a no-op.
+        assertTrue(
+            "middle receiver must not be swept into BOOT_COMPLETED",
+            result.telemetry.none { it["package_name"] == "com.middle.app" },
+        )
+    }
+
+    @Test
     fun `empty section produces no telemetry`() = runBlocking {
         val result = module.analyze("", mockIndicatorResolver, com.androdr.ioc.DeviceIdentity.UNKNOWN)
         assertTrue(result.telemetry.isEmpty())

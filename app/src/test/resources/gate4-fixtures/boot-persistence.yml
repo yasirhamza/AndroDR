@@ -15,8 +15,27 @@ true_positives:
   - package_name: "com.shady.persistence"
     intent_action: "android.intent.action.LOCKED_BOOT_COMPLETED"
     is_system_app: false
+  # Genuine boot persistence via the app's OWN receiver component must still
+  # fire even though component_name is present (guards filter_framework_component
+  # against over-matching).
+  - package_name: "com.shady.malware"
+    intent_action: "android.intent.action.BOOT_COMPLETED"
+    component_name: "com.shady.malware.BootReceiver"
+    is_system_app: false
 
 true_negatives:
+  # WorkManager's reschedule receiver (androidx.work) — present in nearly every
+  # modern app; filtered by filter_framework_component. This is the false
+  # positive the filter exists to suppress (AndroDR itself flagged on it).
+  - package_name: "com.benign.app"
+    intent_action: "android.intent.action.BOOT_COMPLETED"
+    component_name: "androidx.work.impl.background.systemalarm.RescheduleReceiver"
+    is_system_app: false
+  # Play-services boot receiver — also filtered by framework-component prefix.
+  - package_name: "com.benign.gmsapp"
+    intent_action: "android.intent.action.LOCKED_BOOT_COMPLETED"
+    component_name: "com.google.android.gms.measurement.AppMeasurementReceiver"
+    is_system_app: false
   # System app — filtered by is_system_app
   - package_name: "com.android.phone"
     intent_action: "android.intent.action.BOOT_COMPLETED"
