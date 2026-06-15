@@ -23,8 +23,9 @@
          roots (GTS CA 1C3/1D4, WR1-4, WE1-2; roots R1-R4) and rotates keys
          frequently, so any fixed pin set breaks unpredictably per-device — it
          silently disabled OSV enrichment until found via on-device testing.
-         Google explicitly advises against pinning their domains. This host
-         falls back to base-config: system CAs only, no user CAs, no cleartext —
+         Google rotates CAs frequently across their fleet and advises against
+         pinning leaf/intermediate certs for their domains. This host falls back
+         to base-config: system CAs only, no user CAs, no cleartext —
          standard secure TLS for a public read-only data feed. The primary
          actively-exploited source (cisa.gov) remains pinned. -->
 

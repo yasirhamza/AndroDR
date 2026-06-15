@@ -1,5 +1,6 @@
 package com.androdr.security
 
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.w3c.dom.Element
@@ -65,6 +66,37 @@ class NetworkSecurityConfigTest {
                     "rotation cannot brick the domain",
                 pinCount >= 2,
             )
+        }
+    }
+
+    /**
+     * Guards the deliberate decision to NOT pin storage.googleapis.com: Google
+     * serves it from many POPs with varying cert chains, so any pin breaks
+     * per-device and silently disables OSV CVE enrichment. This makes that
+     * decision enforced rather than merely documented in a comment — a
+     * re-added Google pin fails the build.
+     */
+    @Test
+    fun `storage_googleapis_com is not pinned`() {
+        val doc = DocumentBuilderFactory.newInstance()
+            .newDocumentBuilder()
+            .parse(configFile())
+
+        val domainConfigs = doc.getElementsByTagName("domain-config")
+        for (i in 0 until domainConfigs.length) {
+            val dc = domainConfigs.item(i) as Element
+            val domains = dc.getElementsByTagName("domain")
+            val coversGoogleStorage = (0 until domains.length).any {
+                domains.item(it).textContent.trim().contains("storage.googleapis.com")
+            }
+            if (coversGoogleStorage) {
+                assertEquals(
+                    "storage.googleapis.com must not be pinned (Google rotates CAs per-POP; " +
+                        "pinning it silently breaks OSV CVE enrichment)",
+                    0,
+                    dc.getElementsByTagName("pin-set").length,
+                )
+            }
         }
     }
 }
