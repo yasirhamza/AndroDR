@@ -18,24 +18,15 @@
         </pin-set>
     </domain-config>
 
-    <!-- Pin Google Storage (OSV feeds). The bucket
-         osv-vulnerabilities.storage.googleapis.com now serves a chain rooted at
-         GTS Root R4 via the WE2 intermediate (migrated from GTS Root R1 / WR2,
-         which silently broke pinning and disabled OSV CVE enrichment). We pin
-         the current intermediate + root and keep GTS Root R1 as a backup root,
-         since Google rotates between roots and Android matches any pin in the
-         set against any cert in the verified chain. -->
-    <domain-config>
-        <domain includeSubdomains="true">storage.googleapis.com</domain>
-        <pin-set expiration="2027-06-01">
-            <!-- GTS Root R4 (current root) -->
-            <pin digest="SHA-256">mEflZT5enoR1FuXLgYYGqnVEoZvmf9c2bVBpiOjYQ0c=</pin>
-            <!-- WE2 intermediate (current) -->
-            <pin digest="SHA-256">vh78KSg1Ry4NaqGDV10w/cTb9VH3BQUZoCWNa93W/EY=</pin>
-            <!-- GTS Root R1 (backup root) -->
-            <pin digest="SHA-256">hxqRlPTu1bMS/0DITB1SSu0vd4u/8l8TjPgfaAp63Gc=</pin>
-        </pin-set>
-    </domain-config>
+    <!-- Google Storage (OSV CVE feed) is deliberately NOT pinned. Google serves
+         *.storage.googleapis.com from many POPs with varying intermediates and
+         roots (GTS CA 1C3/1D4, WR1-4, WE1-2; roots R1-R4) and rotates keys
+         frequently, so any fixed pin set breaks unpredictably per-device — it
+         silently disabled OSV enrichment until found via on-device testing.
+         Google explicitly advises against pinning their domains. This host
+         falls back to base-config: system CAs only, no user CAs, no cleartext —
+         standard secure TLS for a public read-only data feed. The primary
+         actively-exploited source (cisa.gov) remains pinned. -->
 
     <!-- Pin GitHub (SIGMA rule feed) -->
     <domain-config>
