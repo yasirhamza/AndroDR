@@ -235,6 +235,10 @@ class CveRepository @Inject constructor(
         private const val TAG = "CveRepository"
         private const val CISA_KEV_URL =
             "https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json"
+        // storage.googleapis.com is intentionally NOT certificate-pinned: Google
+        // serves it from many POPs with varying cert chains, so any pin breaks
+        // per-device. Do not "fix" an OSV TLS failure by adding a pin — see the
+        // rationale in res/xml/network_security_config.xml.
         private const val OSV_ANDROID_URL =
             "https://osv-vulnerabilities.storage.googleapis.com/Android/all.zip"
         private const val TIMEOUT_MS = 30_000
