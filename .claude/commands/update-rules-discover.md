@@ -41,6 +41,24 @@ URL hostname bindings are locked by `test_discover_source_urls.py`. DO NOT edit 
 |---|---|
 | `zimperium` | `https://www.zimperium.com/blog/` |
 | `lookout` | `https://www.lookout.com/threat-intelligence` |
+| `threatfabric` | `https://www.threatfabric.com/blogs` |
+| `cleafy` | `https://www.cleafy.com/cleafy-labs` |
+| `group-ib` | `https://www.group-ib.com/blog/` |
+
+> **Why these three (added for the banking-fraud / NFC-relay gap):**
+> ThreatFabric, Cleafy, and Group-IB are the primary discoverers of the
+> dominant 2025–2026 Android threat classes — ThreatFabric broke Crocodilus,
+> Cleafy broke SuperCard X and the NFC-relay-goes-local wave, and Group-IB
+> broke the Ghost Tapped NFC-relay cluster (54+ variants). None of these
+> surfaced via the original five sources, which skew general-purpose
+> (Securelist / WeLiveSecurity / Google) or mobile-EDR-competitor
+> (Zimperium / Lookout). These three are the banking-fraud specialists.
+>
+> **Robustness caveat:** all three sit behind Cloudflare. WebFetch already
+> logs `Cloudflare 403` for `lookout`; expect the same intermittently here.
+> A 403 is a `fetch_error` — log it and do NOT advance that source's cursor
+> (the threat names still reach a human via the report, and a name known by
+> any other route can always be researched with `/update-rules threat`).
 
 ## Process
 
@@ -70,7 +88,7 @@ For securelist / welivesecurity / google-tag:
 
 ### Per-source: Web
 
-For zimperium / lookout:
+For zimperium / lookout / threatfabric / cleafy / group-ib:
 
 1. Check robots.txt first as for RSS.
 2. WebFetch the index URL with prompt asking for recent posts in structured form:
@@ -104,10 +122,10 @@ After parsing the LLM response, **each candidate is passed through the same toke
 
 ## Merging + ranking
 
-Collect candidates from all 5 sources. Dedup by threat_name (keep the earliest-surfaced source URL per name). Rank:
+Collect candidates from all 8 sources. Dedup by threat_name (keep the earliest-surfaced source URL per name). Rank:
 
 1. Most-recent `pub_date` first (all candidates share the same tier now that regex pattern-labels are gone)
-2. Break pub_date ties by source-order preference (securelist → welivesecurity → google-tag → zimperium → lookout) for determinism
+2. Break pub_date ties by source-order preference (securelist → welivesecurity → google-tag → zimperium → lookout → threatfabric → cleafy → group-ib) for determinism
 3. Slice to `top_n`
 
 ## Output
@@ -138,3 +156,20 @@ Failed sources appear in `log` but NOT in `updated_cursors`.
 - NEVER advance a source cursor when that source's fetch or parse failed
 - NEVER skip the token-shape validator on LLM output — it's the structural XPIA defense
 - NEVER batch multiple posts into a single LLM extraction call — per-post isolation is the XPIA containment boundary
+
+## Dependencies (rule-repo, separate PR)
+
+The three web sources added for the banking-fraud gap (`threatfabric`,
+`cleafy`, `group-ib`) need a matching entry in the android-sigma-rules
+submodule before their cursors can persist, on its own PR + submodule pointer
+bump (per CLAUDE.md submodule protocol):
+
+- `validation/feed-state-schema.json`: add `threatfabric`, `cleafy`, and
+  `group-ib` as `DiscoverSourceCursor` properties under `discover.sources`
+  (the object is `additionalProperties: false`).
+
+Until it lands, the same failure mode as the PRODAFT cursor applies: the
+dispatcher's Step 8 "strip keys not in schema" will **silently drop** any new
+`threatfabric`/`cleafy`/`group-ib` cursor, so those sources re-scan from
+scratch each run. Discovery itself still works and the threat names still
+reach a human — only cursor persistence is gated.
