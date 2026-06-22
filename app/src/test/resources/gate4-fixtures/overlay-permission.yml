@@ -1,4 +1,12 @@
 # Fixture for androdr-069: sideloaded app with screen overlay permission
+#
+# Telemetry here MUST mirror what AppScanner actually emits in the
+# `permissions` field: short-named permission identifiers (e.g.
+# "SYSTEM_ALERT_WINDOW", not "android.permission.SYSTEM_ALERT_WINDOW"), and
+# only security-relevant permissions (surveillance + high-risk) — INTERNET and
+# other normal permissions are never surfaced. A prior version of this fixture
+# fed fully-qualified names the scanner never produces, which let the rule pass
+# the test while being dead on-device.
 rule_file: sigma_androdr_069_overlay_permission.yml
 service: app_scanner
 ioc_stubs:
@@ -10,8 +18,7 @@ true_positives:
     is_system_app: false
     from_trusted_store: false
     permissions:
-      - "android.permission.INTERNET"
-      - "android.permission.SYSTEM_ALERT_WINDOW"
+      - "SYSTEM_ALERT_WINDOW"
 
 true_negatives:
   # System app with the permission — filtered by is_system_app
@@ -19,23 +26,22 @@ true_negatives:
     is_system_app: true
     from_trusted_store: false
     permissions:
-      - "android.permission.SYSTEM_ALERT_WINDOW"
+      - "SYSTEM_ALERT_WINDOW"
   # Trusted-store app with the permission — filtered by from_trusted_store
   - package_name: "com.example.legitimate"
     is_system_app: false
     from_trusted_store: true
     permissions:
-      - "android.permission.SYSTEM_ALERT_WINDOW"
+      - "SYSTEM_ALERT_WINDOW"
   # Known-good sideloaded app — filtered by known_good_app_db
   - package_name: "com.google.android.gm"
     is_system_app: false
     from_trusted_store: false
     permissions:
-      - "android.permission.SYSTEM_ALERT_WINDOW"
-  # Sideloaded app without the overlay permission
+      - "SYSTEM_ALERT_WINDOW"
+  # Sideloaded app without the overlay permission (only a surveillance perm)
   - package_name: "com.shady.nooverlay"
     is_system_app: false
     from_trusted_store: false
     permissions:
-      - "android.permission.INTERNET"
-      - "android.permission.CAMERA"
+      - "CAMERA"

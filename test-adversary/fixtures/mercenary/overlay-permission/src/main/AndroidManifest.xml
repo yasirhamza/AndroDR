@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Adversary fixture for androdr-069 (Screen Overlay / Sideloaded).
+  Declares ONLY SYSTEM_ALERT_WINDOW so the overlay-permission detection is
+  exercised in isolation. No fixture previously declared this permission, which
+  is why androdr-069 went dead (FQN-vs-short-name mismatch) without being caught.
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+    <application android:label="Overlay Perm Test" />
+</manifest>

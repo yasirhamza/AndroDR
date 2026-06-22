@@ -20,11 +20,13 @@ detection:
     selection:
         is_system_app: false
         from_trusted_store: false
-        permissions|contains: "android.permission.SYSTEM_ALERT_WINDOW"
+        permissions|contains: "SYSTEM_ALERT_WINDOW"
     filter_known_good:
         package_name|ioc_lookup: known_good_app_db
     condition: selection and not filter_known_good
 level: medium
+falsepositives:
+    - "Legitimate sideloaded apps that draw overlays: password managers (autofill), screen recorders/casters, blue-light/dimmer tools, floating-widget and chat-head utilities, and accessibility helpers. Popular ones are suppressed by filter_known_good; niche FOSS overlay tools may still trip this medium-severity 'review' signal."
 display:
     category: app_risk
     icon: layers

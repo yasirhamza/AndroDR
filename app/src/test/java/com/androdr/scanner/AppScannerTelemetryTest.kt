@@ -213,6 +213,39 @@ class AppScannerTelemetryTest {
         assertTrue(telemetry.permissions.contains("CAMERA"))
     }
 
+    // ── 5b. High-risk (non-surveillance) permission exposure ────────────────
+    // Regression for the dead androdr-069 overlay rule: SYSTEM_ALERT_WINDOW is
+    // not a surveillance permission, so it was never placed in the `permissions`
+    // field and rule 069 could never fire on-device. It must now be exposed
+    // (short-named, like surveillance perms) WITHOUT inflating the surveillance
+    // count (which rules 011/017 gate on).
+
+    @Test
+    fun `SYSTEM_ALERT_WINDOW is exposed in permissions but not counted as surveillance`() = runTest {
+        val pkg = buildPackageInfo(
+            pkgName = "com.shady.overlay",
+            installerPkg = null,
+            permissions = arrayOf(
+                Manifest.permission.INTERNET,
+                Manifest.permission.SYSTEM_ALERT_WINDOW
+            )
+        )
+        installPackages(pkg)
+
+        val result = scanner.collectTelemetry()
+
+        assertEquals(1, result.size)
+        val telemetry = result[0]
+        assertTrue(
+            "Expected SYSTEM_ALERT_WINDOW (short-named) in permissions",
+            telemetry.permissions.contains("SYSTEM_ALERT_WINDOW")
+        )
+        assertEquals(
+            "Overlay permission must NOT inflate surveillance count",
+            0, telemetry.surveillancePermissionCount
+        )
+    }
+
     // ── 6. Accessibility service detection ──────────────────────────────────
 
     @Test

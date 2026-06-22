@@ -70,6 +70,19 @@ class AppScanner @Inject constructor(
     )
 
     /**
+     * High-risk permissions that are NOT surveillance signals but are abused by
+     * malware — e.g. SYSTEM_ALERT_WINDOW, which banking trojans use to draw fake
+     * credential-overlay screens. These are surfaced in the `permissions`
+     * telemetry field (short-named, the same convention as surveillance perms,
+     * so rules match them as `permissions|contains: "SYSTEM_ALERT_WINDOW"`), but
+     * are deliberately excluded from [AppTelemetry.surveillancePermissionCount]
+     * so they do not inflate the surveillance-cluster rules (androdr-011/017).
+     */
+    private val highRiskPermissions = setOf(
+        Manifest.permission.SYSTEM_ALERT_WINDOW
+    )
+
+    /**
      * Collects per-app telemetry metadata for every installed package without performing
      * any detection or risk-scoring logic. The returned [AppTelemetry] list feeds into the
      * SIGMA rule engine which applies its own detection rules independently.
@@ -220,6 +233,7 @@ class AppScanner @Inject constructor(
         // Surveillance permissions
         val grantedPermissions = pkg.requestedPermissions?.toList() ?: emptyList()
         val matchedSurveillancePerms = grantedPermissions.filter { it in surveillancePermissions }
+        val matchedHighRiskPerms = grantedPermissions.filter { it in highRiskPermissions }
 
         // Accessibility service
         val hasAccessibilityService = pkg.services?.any { svc ->
@@ -272,7 +286,8 @@ class AppScanner @Inject constructor(
             installer = installerPackage,
             isSideloaded = isSideloaded,
             isKnownOemApp = isKnownOemApp,
-            permissions = matchedSurveillancePerms.map { it.substringAfterLast('.') },
+            permissions = (matchedSurveillancePerms + matchedHighRiskPerms)
+                .map { it.substringAfterLast('.') },
             surveillancePermissionCount = matchedSurveillancePerms.size,
             hasAccessibilityService = hasAccessibilityService,
             hasDeviceAdmin = hasDeviceAdmin,

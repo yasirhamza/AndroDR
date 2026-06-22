@@ -15,7 +15,11 @@ data class AppTelemetry(
     val installer: String?,
     val isSideloaded: Boolean,
     val isKnownOemApp: Boolean,
+    // Security-relevant permissions, short-named (e.g. "CAMERA", "SYSTEM_ALERT_WINDOW"):
+    // the surveillance set plus the curated high-risk set (see AppScanner). Rules
+    // match individual tokens via `permissions|contains`. NOT the full requested list.
     val permissions: List<String>,
+    // Count of surveillance perms ONLY (not high-risk perms) — see AppScanner.
     val surveillancePermissionCount: Int,
     val hasAccessibilityService: Boolean,
     val hasDeviceAdmin: Boolean,
