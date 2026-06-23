@@ -3,12 +3,14 @@ id: androdr-087
 status: experimental
 category: incident
 description: >
-    A sideloaded app registers an NFC Host Card Emulation (HCE) service
-    (BIND_NFC_SERVICE) and holds the NFC permission. NFC-relay malware such
-    as SuperCard X and the "Ghost Tapped" cluster uses an HCE service to
-    relay a victim's contactless payment card to a criminal's POS or ATM
-    terminal in real time. Legitimate apps with this capability are almost
-    always installed from an app store or are known-good.
+    A sideloaded app registers an NFC card-emulation service (BIND_NFC_SERVICE —
+    HostApduService or OffHostApduService) and holds the NFC permission. NFC-relay
+    malware such as SuperCard X and the "Ghost Tapped" cluster uses a card-emulation
+    service to relay a victim's contactless payment card to a criminal's POS or ATM
+    terminal in real time. Legitimate apps with this capability are almost always
+    installed from an app store or are known-good. Note: a relay that drives
+    emulation solely via the default-payment-app role, without declaring its own
+    service, is not covered here (a static-manifest blind spot).
 author: AndroDR
 date: 2026/06/23
 references:
@@ -29,7 +31,7 @@ detection:
     condition: selection and not filter_known_good
 level: high
 falsepositives:
-    - "Sideloaded but legitimate contactless apps: third-party wallets, transit or payment cards, crypto hardware-wallet companions, and tap-to-pay tools installed outside an app store. Popular ones are suppressed by filter_known_good."
+    - "Sideloaded but legitimate contactless apps: third-party wallets, transit or payment cards, crypto hardware-wallet companions, secure-element (eSE/OffHost) tap-to-pay tools, and wallets sideloaded by privacy-focused users (e.g. GrapheneOS). filter_known_good suppresses POPULAR apps only (package-name match against the known-good DB); niche or regional wallets not in that list will trip this high-severity signal."
 display:
     category: app_risk
     icon: contactless
