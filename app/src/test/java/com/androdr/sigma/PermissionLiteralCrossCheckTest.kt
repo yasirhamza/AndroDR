@@ -54,16 +54,19 @@ class PermissionLiteralCrossCheckTest {
     /** Field name of a SIGMA matcher key, stripping any `|modifier` suffix. */
     private fun fieldName(key: String): String = key.substringBefore('|')
 
+    /** Add the literal value(s) of a single matcher (scalar or list). */
+    private fun addLiterals(value: Any?, into: MutableList<String>) {
+        when (value) {
+            is String -> into.add(value)
+            is List<*> -> value.forEach { it?.let { e -> into.add(e.toString()) } }
+        }
+    }
+
     /** Recursively collect the literal value(s) of every `permissions` matcher. */
     private fun collectPermissionLiterals(node: Any?, into: MutableList<String>) {
         when (node) {
             is Map<*, *> -> node.forEach { (k, v) ->
-                if (k is String && fieldName(k) == "permissions") {
-                    when (v) {
-                        is String -> into.add(v)
-                        is List<*> -> v.forEach { it?.let { e -> into.add(e.toString()) } }
-                    }
-                }
+                if (k is String && fieldName(k) == "permissions") addLiterals(v, into)
                 collectPermissionLiterals(v, into)
             }
             is List<*> -> node.forEach { collectPermissionLiterals(it, into) }
