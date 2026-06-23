@@ -1,0 +1,45 @@
+title: Sideloaded app with screen-overlay and accessibility access (banking-trojan takeover)
+id: androdr-088
+status: experimental
+category: incident
+description: >
+    A sideloaded app combines the screen-overlay permission (SYSTEM_ALERT_WINDOW)
+    with an accessibility service. This is the core Android banking-trojan
+    device-takeover pattern: the overlay draws a fake credential screen over a real
+    banking app while the accessibility service auto-grants permissions, auto-clicks,
+    and harvests typed input and on-screen content (Crocodilus, PixRevolution,
+    AntiDot). Overlay access alone (androdr-069) is a weak, common signal; accessibility
+    access alone (androdr-012) is already high-severity but generic. Their combination on a
+    sideloaded, unvetted app specifically attributes the banking-trojan takeover pattern and
+    warrants takeover-specific remediation.
+author: AndroDR
+date: 2026/06/23
+references:
+    - https://www.threatfabric.com/blogs/exposing-crocodilus-new-device-takeover-malware-targeting-android-devices
+    - https://zimperium.com/blog/pixrevolution-the-agent-operated-android-trojan-hijacking-brazils-pix-payments-in-real-time
+tags:
+    - attack.t1626
+    - attack.t1417.001
+logsource:
+    product: androdr
+    service: app_scanner
+detection:
+    selection:
+        is_sideloaded: true
+        permissions|contains: "SYSTEM_ALERT_WINDOW"
+        has_accessibility_service: true
+    filter_known_good:
+        package_name|ioc_lookup: known_good_app_db
+    condition: selection and not filter_known_good
+level: high
+falsepositives:
+    - "Sideloaded but legitimate apps that genuinely combine overlay + accessibility: screen readers and accessibility suites, password managers with autofill-over-apps, screen-dimmer/automation tools (e.g. Tasker-style), and remote-support apps. Popular ones are suppressed by filter_known_good; niche tools may still trip this."
+display:
+    category: app_risk
+    icon: layers
+    triggered_title: "Overlay + Accessibility (Sideloaded)"
+    evidence_type: none
+remediation:
+    - "This sideloaded app can both draw over other apps AND read/control your screen — the combination banking-trojan malware uses to show fake login screens and steal what you type. If you don't fully trust it, uninstall it: Settings > Apps > [this app] > Uninstall, and revoke its access under Settings > Accessibility and Settings > Apps > Special access > Display over other apps."
+implies_flags:
+    - sideloaded

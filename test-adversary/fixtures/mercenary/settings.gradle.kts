@@ -23,5 +23,6 @@ include(
     ":firmware-implant-sim",
     ":notification-listener-abuse",
     ":overlay-permission",
-    ":nfc-relay"
+    ":nfc-relay",
+    ":overlay-accessibility-combo"
 )

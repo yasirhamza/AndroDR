@@ -1,0 +1,41 @@
+# Fixture for androdr-088: sideloaded app combining screen-overlay + accessibility.
+# Telemetry mirrors real AppScanner output: permissions short-named ("SYSTEM_ALERT_WINDOW"),
+# has_accessibility_service a boolean derived from a BIND_ACCESSIBILITY_SERVICE service.
+rule_file: sigma_androdr_088_overlay_accessibility_combo.yml
+service: app_scanner
+ioc_stubs:
+  known_good_app_db:
+    - "com.trusted.accessibilitytool"
+
+true_positives:
+  - package_name: "com.shady.takeover"
+    is_sideloaded: true
+    has_accessibility_service: true
+    permissions:
+      - "SYSTEM_ALERT_WINDOW"
+
+true_negatives:
+  # Play-installed app with both — not sideloaded
+  - package_name: "com.legit.suite"
+    is_sideloaded: false
+    has_accessibility_service: true
+    permissions:
+      - "SYSTEM_ALERT_WINDOW"
+  # Known-good sideloaded accessibility tool — filtered by known_good_app_db
+  - package_name: "com.trusted.accessibilitytool"
+    is_sideloaded: true
+    has_accessibility_service: true
+    permissions:
+      - "SYSTEM_ALERT_WINDOW"
+  # Sideloaded app with overlay but NO accessibility service
+  - package_name: "com.shady.overlayonly"
+    is_sideloaded: true
+    has_accessibility_service: false
+    permissions:
+      - "SYSTEM_ALERT_WINDOW"
+  # Sideloaded app with accessibility but NO overlay permission
+  - package_name: "com.shady.a11yonly"
+    is_sideloaded: true
+    has_accessibility_service: true
+    permissions:
+      - "CAMERA"
