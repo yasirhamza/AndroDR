@@ -6,6 +6,7 @@ import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
 import android.os.Build
 import android.util.Log
+import androidx.annotation.VisibleForTesting
 import com.androdr.data.model.AppTelemetry
 import com.androdr.data.model.TelemetrySource
 import com.androdr.data.model.KnownAppCategory
@@ -33,7 +34,7 @@ class AppScanner @Inject constructor(
 
     private val localDevice = DeviceIdentity.local()
 
-    private companion object {
+    companion object {
         private const val TAG = "AppScanner"
 
         /**
@@ -51,37 +52,52 @@ class AppScanner @Inject constructor(
         // NEW (#168):
         private const val MAX_COMPONENTS_PER_APP = 1024
         private const val MAX_NATIVE_LIBS_PER_APP = 256
+
+        /**
+         * Dangerous permission combinations that, when two or more appear together,
+         * suggest a high-risk surveillance or data-exfiltration capability. Counted
+         * by [AppTelemetry.surveillancePermissionCount].
+         */
+        private val SURVEILLANCE_PERMISSIONS = setOf(
+            Manifest.permission.RECORD_AUDIO,
+            Manifest.permission.READ_CONTACTS,
+            Manifest.permission.READ_CALL_LOG,
+            Manifest.permission.PROCESS_OUTGOING_CALLS,
+            Manifest.permission.READ_SMS,
+            Manifest.permission.SEND_SMS,
+            Manifest.permission.ACCESS_FINE_LOCATION,
+            Manifest.permission.CAMERA,
+            Manifest.permission.READ_EXTERNAL_STORAGE
+        )
+
+        /**
+         * High-risk permissions that are NOT surveillance signals but are abused by
+         * malware — e.g. SYSTEM_ALERT_WINDOW (banking-trojan credential overlays) and
+         * NFC (card-emulation relay fraud). Surfaced in the `permissions` telemetry
+         * field (short-named), but deliberately excluded from
+         * [AppTelemetry.surveillancePermissionCount] so they do not inflate the
+         * surveillance-cluster rules (androdr-011/017).
+         */
+        private val HIGH_RISK_PERMISSIONS = setOf(
+            Manifest.permission.SYSTEM_ALERT_WINDOW,
+            Manifest.permission.NFC
+        )
+
+        /**
+         * The exact set of short-named permissions the scanner places in
+         * [AppTelemetry.permissions]. This is the SINGLE SOURCE OF TRUTH for which
+         * permissions a SIGMA rule can match via `permissions|contains`.
+         * `PermissionLiteralCrossCheckTest` asserts every bundled rule's permission
+         * literal is a member — closing the dead-rule class that silently killed
+         * androdr-069 (a rule referenced a permission the scanner never emitted; #225).
+         */
+        @VisibleForTesting
+        internal val EXPOSED_PERMISSION_SHORT_NAMES: Set<String> =
+            (SURVEILLANCE_PERMISSIONS + HIGH_RISK_PERMISSIONS)
+                .map { it.substringAfterLast('.') }
+                .toSet()
     }
 
-    /**
-     * Dangerous permission combinations that, when two or more appear together,
-     * suggest a high-risk surveillance or data-exfiltration capability.
-     */
-    private val surveillancePermissions = setOf(
-        Manifest.permission.RECORD_AUDIO,
-        Manifest.permission.READ_CONTACTS,
-        Manifest.permission.READ_CALL_LOG,
-        Manifest.permission.PROCESS_OUTGOING_CALLS,
-        Manifest.permission.READ_SMS,
-        Manifest.permission.SEND_SMS,
-        Manifest.permission.ACCESS_FINE_LOCATION,
-        Manifest.permission.CAMERA,
-        Manifest.permission.READ_EXTERNAL_STORAGE
-    )
-
-    /**
-     * High-risk permissions that are NOT surveillance signals but are abused by
-     * malware — e.g. SYSTEM_ALERT_WINDOW, which banking trojans use to draw fake
-     * credential-overlay screens. These are surfaced in the `permissions`
-     * telemetry field (short-named, the same convention as surveillance perms,
-     * so rules match them as `permissions|contains: "SYSTEM_ALERT_WINDOW"`), but
-     * are deliberately excluded from [AppTelemetry.surveillancePermissionCount]
-     * so they do not inflate the surveillance-cluster rules (androdr-011/017).
-     */
-    private val highRiskPermissions = setOf(
-        Manifest.permission.SYSTEM_ALERT_WINDOW,
-        Manifest.permission.NFC
-    )
 
     /**
      * Collects per-app telemetry metadata for every installed package without performing
@@ -233,8 +249,8 @@ class AppScanner @Inject constructor(
 
         // Surveillance permissions
         val grantedPermissions = pkg.requestedPermissions?.toList() ?: emptyList()
-        val matchedSurveillancePerms = grantedPermissions.filter { it in surveillancePermissions }
-        val matchedHighRiskPerms = grantedPermissions.filter { it in highRiskPermissions }
+        val matchedSurveillancePerms = grantedPermissions.filter { it in SURVEILLANCE_PERMISSIONS }
+        val matchedHighRiskPerms = grantedPermissions.filter { it in HIGH_RISK_PERMISSIONS }
 
         // Accessibility service
         val hasAccessibilityService = pkg.services?.any { svc ->
