@@ -246,6 +246,32 @@ class AppScannerTelemetryTest {
         )
     }
 
+    @Test
+    fun `NFC permission is exposed in permissions but not counted as surveillance`() = runTest {
+        val pkg = buildPackageInfo(
+            pkgName = "com.shady.nfc",
+            installerPkg = null,
+            permissions = arrayOf(
+                Manifest.permission.NFC,
+                Manifest.permission.INTERNET
+            )
+        )
+        installPackages(pkg)
+
+        val result = scanner.collectTelemetry()
+
+        assertEquals(1, result.size)
+        val telemetry = result[0]
+        assertTrue(
+            "Expected NFC (short-named) in permissions",
+            telemetry.permissions.contains("NFC")
+        )
+        assertEquals(
+            "NFC must not inflate surveillance count",
+            0, telemetry.surveillancePermissionCount
+        )
+    }
+
     // ── 6. Accessibility service detection ──────────────────────────────────
 
     @Test

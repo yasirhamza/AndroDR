@@ -79,7 +79,8 @@ class AppScanner @Inject constructor(
      * so they do not inflate the surveillance-cluster rules (androdr-011/017).
      */
     private val highRiskPermissions = setOf(
-        Manifest.permission.SYSTEM_ALERT_WINDOW
+        Manifest.permission.SYSTEM_ALERT_WINDOW,
+        Manifest.permission.NFC
     )
 
     /**

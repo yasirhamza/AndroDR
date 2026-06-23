@@ -1,0 +1,43 @@
+title: Sideloaded app emulating a contactless payment card (NFC relay)
+id: androdr-087
+status: experimental
+category: incident
+description: >
+    A sideloaded app registers an NFC card-emulation service (BIND_NFC_SERVICE —
+    HostApduService or OffHostApduService) and holds the NFC permission. NFC-relay
+    malware such as SuperCard X and the "Ghost Tapped" cluster uses a card-emulation
+    service to relay a victim's contactless payment card to a criminal's POS or ATM
+    terminal in real time. Legitimate apps with this capability are almost always
+    installed from an app store or are known-good. Note: a relay that drives
+    emulation solely via the default-payment-app role, without declaring its own
+    service, is not covered here (a static-manifest blind spot).
+author: AndroDR
+date: 2026/06/23
+references:
+    - https://www.cleafy.com/cleafy-labs/supercardx-exposing-chinese-speaker-maas-for-nfc-relay-fraud-operation
+    - https://www.group-ib.com/blog/ghost-tapped-chinese-malware/
+tags:
+    - attack.t1646
+logsource:
+    product: androdr
+    service: app_scanner
+detection:
+    selection:
+        is_sideloaded: true
+        service_permissions|contains: "BIND_NFC_SERVICE"
+        permissions|contains: "NFC"
+    filter_known_good:
+        package_name|ioc_lookup: known_good_app_db
+    condition: selection and not filter_known_good
+level: high
+falsepositives:
+    - "Sideloaded but legitimate contactless apps: third-party wallets, transit or payment cards, crypto hardware-wallet companions, secure-element (eSE/OffHost) tap-to-pay tools, and wallets sideloaded by privacy-focused users (e.g. GrapheneOS). filter_known_good suppresses POPULAR apps only (package-name match against the known-good DB); niche or regional wallets not in that list will trip this high-severity signal."
+display:
+    category: app_risk
+    icon: contactless
+    triggered_title: "NFC Card Emulation (Sideloaded)"
+    evidence_type: none
+remediation:
+    - "This sideloaded app can emulate a contactless payment card (NFC HCE). NFC-relay malware abuses this to relay your bank card to a criminal's payment terminal in real time. If you didn't install a wallet you trust, uninstall it: Settings > Apps > [this app] > Uninstall."
+implies_flags:
+    - sideloaded

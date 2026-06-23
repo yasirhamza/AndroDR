@@ -1,0 +1,45 @@
+# Fixture for androdr-087: sideloaded NFC card-emulation (HCE) app.
+# Telemetry mirrors real AppScanner output:
+#   service_permissions = fully-qualified (android.permission.BIND_NFC_SERVICE)
+#   permissions         = short-named ("NFC")
+rule_file: sigma_androdr_087_nfc_relay.yml
+service: app_scanner
+ioc_stubs:
+  known_good_app_db:
+    - "com.trusted.wallet"
+
+true_positives:
+  - package_name: "com.shady.nfcrelay"
+    is_sideloaded: true
+    service_permissions:
+      - "android.permission.BIND_NFC_SERVICE"
+    permissions:
+      - "NFC"
+
+true_negatives:
+  # Play-installed wallet — not sideloaded
+  - package_name: "com.google.android.apps.walletnfcrel"
+    is_sideloaded: false
+    service_permissions:
+      - "android.permission.BIND_NFC_SERVICE"
+    permissions:
+      - "NFC"
+  # Known-good sideloaded wallet — filtered by known_good_app_db
+  - package_name: "com.trusted.wallet"
+    is_sideloaded: true
+    service_permissions:
+      - "android.permission.BIND_NFC_SERVICE"
+    permissions:
+      - "NFC"
+  # Sideloaded app with NFC perm but NO HCE service
+  - package_name: "com.shady.nohce"
+    is_sideloaded: true
+    service_permissions: []
+    permissions:
+      - "NFC"
+  # Sideloaded HCE service but NO NFC permission (edge) — composite requires both
+  - package_name: "com.shady.nonfcperm"
+    is_sideloaded: true
+    service_permissions:
+      - "android.permission.BIND_NFC_SERVICE"
+    permissions: []
