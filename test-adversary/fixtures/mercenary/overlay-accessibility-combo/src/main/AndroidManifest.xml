@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Adversary fixture for androdr-088 (Overlay + Accessibility / Sideloaded).
+  Declares SYSTEM_ALERT_WINDOW + an accessibility service guarded by
+  BIND_ACCESSIBILITY_SERVICE — the banking-trojan device-takeover fingerprint.
+  The service class is a stub; the scanner reads the manifest declaration
+  statically (it derives has_accessibility_service from the service permission)
+  and never starts it.
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+    <application android:label="Overlay A11y Test">
+        <service
+            android:name=".A11yService"
+            android:exported="true"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+        </service>
+    </application>
+</manifest>
