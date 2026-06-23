@@ -7,7 +7,7 @@ import org.junit.Test
 import java.io.File
 
 /**
- * Build-time cross-check: the 5 discover source IDs in
+ * Build-time cross-check: the 8 discover source IDs in
  * update-rules-discover.md MUST match feed-state-schema.json's
  * discover.sources.properties. Drift fails the build.
  */
@@ -15,6 +15,8 @@ class DiscoverSourceIdsCrossCheckTest {
 
     private val skillSourceIds = setOf(
         "securelist", "welivesecurity", "zimperium", "lookout", "google-tag",
+        // Banking-fraud specialists added for the intel-source gap (PRODAFT PR):
+        "threatfabric", "cleafy", "group-ib",
     )
 
     private fun schemaFile(): File? {

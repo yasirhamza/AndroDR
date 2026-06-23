@@ -2,8 +2,8 @@ export const meta = {
   name: 'update-rules-e2e',
   description: 'Research Android threat intel across feeds + open sources, author & validate AndroDR SIGMA rule/IOC candidates for a final human-in-the-loop review (no writes/commits in the workflow)',
   phases: [
-    { title: 'Ingest', detail: 'parallel feed ingesters (abuse.ch, ASB, NVD, stalkerware, ATT&CK, Amnesty)' },
-    { title: 'Discover', detail: 'vendor-blog discovery → top-5 emerging threat names' },
+    { title: 'Ingest', detail: 'parallel feed ingesters (abuse.ch, ASB, NVD, stalkerware, ATT&CK, Amnesty, PRODAFT)' },
+    { title: 'Discover', detail: 'vendor-blog discovery (incl. ThreatFabric, Cleafy, Group-IB) → top-5 emerging threat names' },
     { title: 'Research', detail: 'per-threat + open-web researchers → SIRs' },
     { title: 'Author', detail: 'SIRs → candidate rules + IOC-data entries' },
     { title: 'Dedup', detail: 'drop IOC candidates already pulled on-device via kotlin-mirror-feeds (incl. manual MVT STIX traversal — parser_limited feeds the validator skips)' },
@@ -31,7 +31,7 @@ if (missingArgs.length) {
       next_id: 'androdr-NNN — highest existing ID + 1 from globbing <service>/ and staging/ in the submodule; NEVER reuse an ID that existed before and was removed (check git log)',
       rule_index: 'one "androdr-NNN Title" line per existing rule (production service dirs + staging/)',
       tracked_threat_names: 'comma-separated threat names already covered by rules/IOC data',
-      cursors: 'object keyed abusech/asb/nvd/stalkerware/attack/amnesty — one human-readable cursor summary string per feed, from the live feed-state.json',
+      cursors: 'object keyed abusech/asb/nvd/stalkerware/attack/amnesty/prodaft — one human-readable cursor summary string per feed, from the live feed-state.json',
       discover_cursors: 'per-source "id: last_seen=... url=..." lines from feed-state.json discover.sources',
       since: 'YYYY-MM-DD lower bound for the open-web sweep (use feed-state.json last_full_sweep)',
     },
@@ -191,7 +191,7 @@ Return ONLY {sirs, updated_cursors} JSON. Entire final message = that JSON.`
 function openWebPrompt() {
   return `You are an open-source threat-intel researcher casting a WIDE net for AndroDR, running inside ${REPO}.
 
-Goal: find EMERGING Android malware / spyware / stalkerware / commercial-surveillance campaigns disclosed roughly since ${OPEN_WEB_SINCE} that are NOT already covered by AndroDR and that the configured feeds + the discover source list (Securelist / WeLiveSecurity / Google / Zimperium / Lookout) may have MISSED.
+Goal: find EMERGING Android malware / spyware / stalkerware / commercial-surveillance campaigns disclosed roughly since ${OPEN_WEB_SINCE} that are NOT already covered by AndroDR and that the configured feeds + the discover source list (Securelist / WeLiveSecurity / Google / Zimperium / Lookout / ThreatFabric / Cleafy / Group-IB) may have MISSED.
 
 Cast wider — search these additional reliable vendors/authorities: Dr.Web, Cleafy, ThreatFabric, Bitdefender, McAfee, Trend Micro, Check Point Research, Group-IB, Palo Alto Unit 42, CISA mobile advisories, NCSC. ${TOOLING}
 
@@ -361,7 +361,7 @@ Return ONLY {valid_entries:[...], rejected:[{entry, reason}], log:[...]}. Entire
 // ============================ ORCHESTRATION ============================
 
 phase('Ingest')
-const INGEST_IDS = ['abusech', 'asb', 'nvd', 'stalkerware', 'attack', 'amnesty']
+const INGEST_IDS = ['abusech', 'asb', 'nvd', 'stalkerware', 'attack', 'amnesty', 'prodaft']
 const ingestRaw = await parallel(
   INGEST_IDS.map(id => () => agent(ingestPrompt(id), { label: `ingest:${id}`, phase: 'Ingest', schema: SIR_OUT }))
 )

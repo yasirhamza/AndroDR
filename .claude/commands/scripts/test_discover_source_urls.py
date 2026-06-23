@@ -14,6 +14,9 @@ EXPECTED_HOSTNAME_SUBSTRING = {
     "zimperium":      "zimperium.com",
     "lookout":        "lookout.com",
     "google-tag":     "blog.google",
+    "threatfabric":   "threatfabric.com",
+    "cleafy":         "cleafy.com",
+    "group-ib":       "group-ib.com",
 }
 
 
