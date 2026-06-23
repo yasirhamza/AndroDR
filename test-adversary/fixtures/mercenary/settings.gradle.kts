@@ -22,5 +22,6 @@ include(
     ":multi-abuse-combo",
     ":firmware-implant-sim",
     ":notification-listener-abuse",
-    ":overlay-permission"
+    ":overlay-permission",
+    ":nfc-relay"
 )

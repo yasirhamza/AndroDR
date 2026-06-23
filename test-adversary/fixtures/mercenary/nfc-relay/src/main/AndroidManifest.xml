@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Adversary fixture for androdr-087 (NFC Card Emulation / Sideloaded).
+  Declares an HCE HostApduService protected by BIND_NFC_SERVICE plus the NFC
+  permission — the minimal NFC-relay malware fingerprint. The service class is
+  a stub; the scanner reads the manifest declaration statically, never starts it.
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <uses-permission android:name="android.permission.NFC" />
+    <application android:label="NFC Relay Test">
+        <service
+            android:name=".RelayApduService"
+            android:exported="true"
+            android:permission="android.permission.BIND_NFC_SERVICE">
+            <intent-filter>
+                <action android:name="android.nfc.cardemulation.action.HOST_APDU_SERVICE" />
+            </intent-filter>
+        </service>
+    </application>
+</manifest>
