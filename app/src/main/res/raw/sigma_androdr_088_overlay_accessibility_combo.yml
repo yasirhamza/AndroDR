@@ -8,9 +8,10 @@ description: >
     device-takeover pattern: the overlay draws a fake credential screen over a real
     banking app while the accessibility service auto-grants permissions, auto-clicks,
     and harvests typed input and on-screen content (Crocodilus, PixRevolution,
-    AntiDot). Either capability alone is a weaker signal (androdr-069 overlay /
-    androdr-012 accessibility); together on a sideloaded, unvetted app they are a
-    high-confidence takeover indicator.
+    AntiDot). Overlay access alone (androdr-069) is a weak, common signal; accessibility
+    access alone (androdr-012) is already high-severity but generic. Their combination on a
+    sideloaded, unvetted app specifically attributes the banking-trojan takeover pattern and
+    warrants takeover-specific remediation.
 author: AndroDR
 date: 2026/06/23
 references:
