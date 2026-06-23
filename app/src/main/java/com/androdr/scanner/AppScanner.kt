@@ -98,8 +98,6 @@ class AppScanner @Inject constructor(
                 .toSet()
     }
 
-    // Permission sets moved to the companion object as the single source of truth
-    // for EXPOSED_PERMISSION_SHORT_NAMES (see #225).
 
     /**
      * Collects per-app telemetry metadata for every installed package without performing

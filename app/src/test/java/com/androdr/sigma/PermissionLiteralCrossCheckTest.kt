@@ -22,8 +22,13 @@ import java.io.File
  * time. See #225.
  *
  * Scope: the `permissions` field only. `service_permissions` / `receiver_permissions`
- * are open-ended (the scanner emits every declared component permission verbatim),
- * so they are intentionally NOT constrained here.
+ * are open-ended (the scanner emits every declared component permission verbatim, FQN),
+ * so they have no fixed enum to validate against and are intentionally NOT constrained
+ * here. The guard also requires WHOLE short names — substring matchers like
+ * `permissions|contains: "ALERT"` are deliberately disallowed (use the exact name).
+ *
+ * Longer term this is subsumed by the machine-readable telemetry contract (#137);
+ * until then it is a tactical, drift-proof guard for the one enumerable field.
  */
 class PermissionLiteralCrossCheckTest {
 
@@ -70,9 +75,20 @@ class PermissionLiteralCrossCheckTest {
         val exposed = AppScanner.EXPOSED_PERMISSION_SHORT_NAMES
         assertTrue("Exposed permission set is unexpectedly empty", exposed.isNotEmpty())
 
+        val ruleFiles = bundledRuleFiles()
+        // Floor guard: a guard test that silently checks ZERO rules (wrong working
+        // directory, null listFiles) would pass green having validated nothing —
+        // the exact failure mode this test exists to prevent. Mirror the floor in
+        // BundledRulesSchemaCrossCheckTest.
+        assertTrue(
+            "Expected at least 40 bundled rule files but found ${ruleFiles.size} — is the " +
+                "test running from the correct working directory?",
+            ruleFiles.size >= 40,
+        )
+
         val failures = mutableListOf<String>()
 
-        bundledRuleFiles().forEach { file ->
+        ruleFiles.forEach { file ->
             @Suppress("UNCHECKED_CAST")
             val root = yamlLoader.loadFromString(file.readText()) as? Map<String, Any?> ?: return@forEach
             val detection = root["detection"] ?: return@forEach
@@ -82,8 +98,11 @@ class PermissionLiteralCrossCheckTest {
                 if (literal !in exposed) {
                     failures += "${file.name}: permissions literal \"$literal\" is not a short-named " +
                         "member of AppScanner.EXPOSED_PERMISSION_SHORT_NAMES $exposed — the rule can " +
-                        "never fire. Use a short name the scanner emits, or add the permission to " +
-                        "AppScanner's surveillance/high-risk set."
+                        "never fire (the scanner emits short names like \"NFC\", not this value). " +
+                        "Fix: use the exact short name the scanner emits, or add the permission to " +
+                        "AppScanner's surveillance/high-risk set. If you intended a SUBSTRING match " +
+                        "(e.g. \"ALERT\" for SYSTEM_ALERT_WINDOW), that is intentionally disallowed — " +
+                        "use the whole short name."
                 }
             }
         }
