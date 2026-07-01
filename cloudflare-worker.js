@@ -99,7 +99,7 @@ export default {
   <!-- ANDRODR:PRIVACY:START -->
 <section class="privacy" id="privacy">
 <h2>Privacy Policy</h2>
-<p><em>Last updated: 2026-06-12</em></p>
+<p><em>Last updated: 2026-07-01</em></p>
 <h2>Our Philosophy</h2>
 <p>AndroDR is an open-source security tool built on a simple principle: <strong>your data stays on your device</strong>. The entire source code is publicly auditable — you don't have to trust our words, you can read the code.</p>
 <p>We believe security tools should give users full visibility and control, not create new surveillance risks. AndroDR collects no accounts, no analytics, no telemetry, and phones home to no servers. Everything it does happens on your device, under your control.</p>
@@ -264,6 +264,12 @@ export default {
 <td>AssoEchap/stalkerware-indicators (GitHub)</td>
 <td>Cert hashes of known stalkerware signers</td>
 <td>1 HTTP GET</td>
+</tr>
+<tr>
+<td>Mobile-malware C2 domain IOCs</td>
+<td>AlfredoRR/IOC (GitHub)</td>
+<td>C2 domains for named banking-trojan/RAT campaigns (Banking-Heist, FakeCall, TrickMo, AppLite, Crocodilus, BTMOB-RAT, NFCStealer, DroidLock)</td>
+<td>1 HTTP GET per campaign (8 requests)</td>
 </tr>
 <tr>
 <td>SIGMA detection rules</td>

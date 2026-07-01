@@ -1,6 +1,6 @@
 # AndroDR Privacy Policy
 
-_Last updated: 2026-06-12_
+_Last updated: 2026-07-01_
 
 ## Our Philosophy
 
@@ -72,6 +72,7 @@ AndroDR fetches publicly available threat intelligence feeds to keep its detecti
 | ThreatFox indicators | abuse.ch ThreatFox public API | Command-and-control domain indicators | 1 HTTP GET per refresh |
 | Malicious-domain blocklist | HaGeZi Threat Intelligence Feed (GitHub, hagezi/dns-blocklists) | Domain blocklist used by the optional DNS monitor | 1 HTTP GET |
 | Stalkerware cert-hash indicators | AssoEchap/stalkerware-indicators (GitHub) | Cert hashes of known stalkerware signers | 1 HTTP GET |
+| Mobile-malware C2 domain IOCs | AlfredoRR/IOC (GitHub) | C2 domains for named banking-trojan/RAT campaigns (Banking-Heist, FakeCall, TrickMo, AppLite, Crocodilus, BTMOB-RAT, NFCStealer, DroidLock) | 1 HTTP GET per campaign (8 requests) |
 | SIGMA detection rules | android-sigma-rules/rules (GitHub) | Rule manifest (`rules.txt`), SHA-256 integrity manifest (`rules.sha256`), then one GET per rule YAML file listed in the manifest. Downloaded rules are integrity-checked against the SHA-256 manifest when it is available; if the integrity manifest cannot be fetched, rules load without the check. | 2 manifests + 1 per rule |
 | Centralized IOC data | android-sigma-rules/rules (GitHub) | Package names, C2 domains, signing-cert hashes, APK hashes, known-good app lists, and OEM package prefixes from the repo's `ioc-data/` directory | 6 HTTP GETs |
 | CISA Known Exploited Vulnerabilities catalog | cisa.gov | Catalog of actively exploited CVEs, used by the patch-level audit | 1 HTTP GET per refresh |

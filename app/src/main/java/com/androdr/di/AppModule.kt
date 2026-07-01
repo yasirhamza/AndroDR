@@ -39,6 +39,7 @@ import com.androdr.ioc.feeds.StalkerwareCertHashFeed
 import com.androdr.ioc.feeds.StalkerwareIndicatorsFeed
 import com.androdr.ioc.feeds.ThreatFoxDomainFeed
 import com.androdr.ioc.feeds.UadKnownAppFeed
+import com.androdr.ioc.feeds.ZimperiumIocFeed
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -91,7 +92,8 @@ object AppModule {
     fun provideDomainIocFeeds(): @JvmSuppressWildcards List<DomainIocFeed> = listOf(
         MvtIndicatorsFeed(),
         ThreatFoxDomainFeed(),
-        HaGeZiTifFeed()
+        HaGeZiTifFeed(),
+        ZimperiumIocFeed()
     )
 
     @Provides
