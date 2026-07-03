@@ -119,10 +119,13 @@ while read -r f; do printf '%s  %s\n' "$(sha256sum "$f" | cut -d' ' -f1)" "$f"; 
 ```
 
 `RuleManifestIntegrityTest` (AndroDR unit tests) fails the build if the pinned
-submodule's manifest has drifted, and a `validate-manifest` job exists in
-`android-sigma-rules`'s `validate.yml`. **Note: that org's GitHub Actions are
-currently dormant** (0 runs), so the rules-repo gate does not execute yet —
-AndroDR's CI is the enforced guard for now.
+submodule's manifest has drifted, and `android-sigma-rules`'s `validate.yml`
+gates that repo directly. **The rules-repo gate is live as of 2026-07-03**
+(verified green on all three trigger paths: `pull_request`, `push` to main,
+and manual `workflow_dispatch` — the last added via rules PR #41 as a standing
+re-validation lever). Rules-repo PRs must have a green `validate` check before
+merge; AndroDR's CI remains the second, independent guard via the pinned
+submodule.
 
 **Safe ordering for any rule change** (so AndroDR CI gates *before* the change
 reaches production — the app pulls rules from `android-sigma-rules` main on a 12h
