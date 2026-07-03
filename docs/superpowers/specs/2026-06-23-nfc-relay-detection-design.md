@@ -86,6 +86,15 @@ Domains only — IP filtering is parked (DNS-only scope). `nfcrackatm.com` (Devi
 
 Single capability signal + sideloaded → `medium`. Multiple conditions across distinct dimensions → `high`. This codifies the detection reviewer's guidance from the androdr-069 review (see issue #226, the overlay+accessibility combo) and the user's directive. androdr-087 is `high` because it requires four conditions.
 
+> **Superseded (2026-07-03):** the normative statement of this convention now
+> lives in `.claude/commands/update-rules-author.md` § "Multi-condition
+> requirement for `high`". Two corrections relative to the paragraph above:
+> coupled declarations count as ONE condition (BIND_NFC_SERVICE + NFC is one
+> signal, so androdr-087 is sideloaded + one strong capability = two
+> independent conditions, not four — conclusion unchanged, 087 stays `high`),
+> and two independent conditions are the floor for `high`, with signal
+> strength deciding sufficiency (069's weak overlay stays `medium`).
+
 ## 8. Delivery
 
 - **AndroDR PR:** the rule (`res/raw`), the `AppScanner.kt` one-liner, register the rule in `SigmaRuleEngine`'s bundled list, gate4 fixture, scanner unit test, adversary `nfc-relay` fixture (+ `settings.gradle.kts`).

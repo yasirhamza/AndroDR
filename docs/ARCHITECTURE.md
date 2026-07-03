@@ -180,7 +180,7 @@ A detection rule is a YAML document with these sections:
 - `logsource.service` — names the telemetry type the rule targets. Supported services (verified in `SigmaRuleEngine`): `app_scanner`, `device_auditor`, `process_monitor`, `dns_monitor`, `file_scanner`, `accessibility_audit`, `receiver_audit`, `appops_audit`, `tombstone_parser`, `wakelock_parser`, `battery_daily`, `package_install_history`, `platform_compat`, `db_info`.
 - `detection` — one or more named selections, each mapping field names (with optional modifiers) to match values, plus a `condition` expression combining selection names with `and`, `or`, `not`.
 - `category` — required top-level field, must be `incident` or `device_posture`. Missing or invalid category raises `SigmaRuleParseException` and fails the build.
-- `level` — severity string (`informational`, `low`, `medium`, `high`, `critical`). The `SeverityCapPolicy` caps `device_posture` rules at `high`.
+- `level` — severity string (`informational`, `low`, `medium`, `high`, `critical`). The `SeverityCapPolicy` caps `device_posture` rules at `medium`.
 - `display` — contains `triggered_title`, `safe_title`, `icon`, `evidence_type`, `summary_template`, `guidance`.
 - `remediation` — list of strings (template-expanded at finding-build time).
 
@@ -246,7 +246,7 @@ Feed-level cursor state (last-fetched timestamps) and per-indicator provenance (
 When `SigmaRuleEvaluator` matches a rule against a telemetry record, it produces a `Finding` via the internal `buildFinding()` factory (the only sanctioned construction path — bypassing it risks severity-cap violations). A `Finding` carries:
 
 - `ruleId`, `title` — rule identity and display title (template-expanded from the matched record)
-- `level` — severity after `SeverityCapPolicy.applyCap()` (caps `device_posture` rules at `high`)
+- `level` — severity after `SeverityCapPolicy.applyCap()` (caps `device_posture` rules at `medium`)
 - `category` — `FindingCategory` enum: `DEVICE_POSTURE`, `APP_RISK`, or `NETWORK`
 - `tags` — MITRE ATT&CK and other tags from the rule
 - `remediation` — list of template-expanded remediation strings
