@@ -277,7 +277,7 @@ function reviewPrompt(c, sirs) {
     .join('\n')
   return `You are an INDEPENDENT reviewer for the AndroDR SIGMA pipeline (Gate 5), running inside ${REPO} (rules submodule at ${SIGMA}). You have NOT seen the Rule Author's reasoning or any validator gate results — review with completely fresh eyes.
 
-Read ${REPO}/.claude/commands/update-rules-review.md and apply its five criteria exactly.
+Read ${REPO}/.claude/commands/update-rules-review.md and apply ALL of its review criteria exactly (the skill file is authoritative — do not assume a fixed count).
 Also READ ${SIGMA}/validation/authoring-lessons.yml if it exists and apply its guidance; if missing, proceed without it.
 
 For "similar_rules" context, pick 2-3 same-category entries from this index and read their YAML files in the submodule (production rules live in service-named dirs at the repo root, staged ones under staging/<service>/):

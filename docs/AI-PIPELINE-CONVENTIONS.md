@@ -96,6 +96,18 @@ changes.
 
 ## Architectural decisions
 
+### Workflow prompts reference skill files — never restate their rules
+
+Orchestration prompts (`.claude/workflows/*.workflow.js`, the `update-rules.md`
+dispatcher) must point agents at the authoritative skill file ("read
+`update-rules-review.md` and apply ALL of its criteria") instead of
+paraphrasing, counting, or summarizing its content inline. Every inline
+restatement is a second dispatch path that silently drifts when the skill
+changes — a hardcoded "apply its five criteria" survived the addition of a
+sixth criterion and would have caused the primary Gate-5 path to skip it.
+When a prompt needs shared policy text, inject the file (as done with
+`authoring-lessons.yml`), don't copy it.
+
 ### Detection logic is rule-driven YAML, never hardcoded Kotlin
 
 Detection patterns (system name impersonation, permission clusters,

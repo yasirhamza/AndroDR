@@ -70,6 +70,7 @@ Generate rules following this exact structure (match the style of example_rules)
 title: [Descriptive title — what is detected]
 id: androdr-[NNN]
 status: experimental
+category: [incident/device_posture — top-level field; drives SeverityCapPolicy, distinct from display.category]
 description: [What the rule detects and why it matters. Reference the threat name.]
 author: AndroDR AI Pipeline
 date: [YYYY/MM/DD — today's date]
@@ -94,6 +95,8 @@ falsepositives:
     - "[Realistic false positive scenario]"
 remediation:
     - "[Actionable step for the user]"
+implies_flags:              # OPTIONAL — app_scanner only; OMIT this entire block (never emit an empty list) when no flag applies
+    - [sideloaded and/or known_malware — see "implies_flags Annotation" below]
 ```
 
 ### Supported modifiers
@@ -112,6 +115,44 @@ Use ONLY these modifiers. Any other modifier name will be rejected by the parser
 
 **List-field defaults (no `|all` suffix):** `field|contains: [A, B, C]` on a list-valued field matches if ANY element of the field contains ANY of `[A, B, C]`. Add `|all` to require every listed value.
 
+## implies_flags Annotation (app_scanner rules — MANDATORY check)
+
+The rule schema defines an optional top-level `implies_flags:` list — orthogonal
+facts about the app the rule fires on that the detection **structurally
+guarantees**. Renderers aggregate them into Flag chips on the per-app report card
+(`Flags: Sideloaded`, `Flags: [!] Known Malware`). A rule that omits a due
+annotation still fires, but its chip silently fails to render — a UX regression
+no gate catches. The only structural gate (`BundledRulesSchemaCrossCheckTest`)
+rejects over-claimed `sideloaded`, and only for rules bundled into the app;
+`known_malware` has no structural gate in either direction, and feed-delivered
+rules get only an enum check. Getting this right is on you and Gate 5.
+(Authoritative enum: `validation/rule-schema.json` `implies_flags`; database
+registry: `validation/ioc-lookup-definitions.yml`.)
+
+Apply these checks to EVERY new `app_scanner` rule:
+
+1. The detection structurally guarantees sideloadedness, in either sanctioned
+   form — (a) a positively-referenced block requires `is_sideloaded: true` or
+   `from_trusted_store: false`, or (b) a negated block (`not filter_x` in the
+   condition) requires `from_trusted_store: true` / `is_sideloaded: false`
+   (androdr-068's shape) → declare `implies_flags: [sideloaded]`.
+2. Selection matches curated known-BAD data — `|ioc_lookup` against
+   `package_ioc_db` / `cert_hash_ioc_db` / `apk_hash_ioc_db`, or exact literal
+   known-malware package-name / cert-hash / APK-hash values in the rule itself
+   (androdr-078's shape) → add `known_malware`. These three databases are
+   exhaustive for `known_malware`; domain matches identify traffic, not the
+   app's identity.
+3. Both can apply: `implies_flags: [sideloaded, known_malware]`.
+4. `known_good_app_db` lookups are ALLOWLIST filters (used in negated `filter_*`
+   blocks) — they never justify `known_malware`.
+
+Rules for any non-app_scanner service (e.g. `service: dns_monitor`) have no app
+subject — never declare `implies_flags` on them, even on IOC matches.
+
+Exemplars: androdr-001/002/004 (`known_malware` via `|ioc_lookup`); androdr-078
+(`known_malware` via exact literal); androdr-069/077/087/088 (`sideloaded`);
+androdr-068 (`sideloaded` via negated trusted-store filter).
+
 ## Severity Assignment
 
 | Criteria | Level |
@@ -121,9 +162,51 @@ Use ONLY these modifiers. Any other modifier name will be rejected by the parser
 | Sideloaded app with suspicious permissions, outdated patch (CVSS 7.0-8.9) | `medium` |
 | Informational signal, low-confidence IOC, minor CVE (CVSS < 7.0) | `low` |
 
+### Multi-condition requirement for `high` (MANDATORY)
+
+For behavioral (non-IOC) rules, `level: high` or above requires the detection to
+combine **at least two independent conditions** — signals where one does not
+imply the other. Counting rules:
+
+- Coupled declarations count as ONE condition: a card-emulation service's
+  `BIND_NFC_SERVICE` always co-occurs with the `NFC` permission, so matching
+  both is one signal, not two.
+- An aggregate threshold over individually-common signals
+  (`surveillance_permission_count|gte: N`) counts as ONE condition regardless
+  of N — cf. androdr-011, which pairs the count with `from_trusted_store: false`
+  to earn `high`. A `permissions|contains|all` list of mutually independent
+  permissions counts each listed permission as its own signal.
+- Sideloadedness counts as one condition — in selection form OR negated
+  trusted-store-filter form (androdr-068's shape) — but never alone justifies
+  `high`.
+
+Two independent conditions are the FLOOR, not a guarantee: a weak, common
+capability plus sideloaded stays `medium` (androdr-069: sideloaded + overlay),
+while a strong, specific capability plus sideloaded earns `high` (androdr-067:
+sideloaded + notification-listener binding; androdr-012: sideloaded +
+accessibility; androdr-087: sideloaded + the coupled NFC card-emulation pair
+counted as one capability). androdr-088 (sideloaded + overlay + accessibility)
+exceeds the floor. A behavioral rule resting on ONE independent signal is
+`medium` at most, full stop.
+
+This requirement gates the Severity Assignment table above: threat-class rows
+set the ceiling, this section sets the evidence floor. A single-signal
+behavioral rule stays `medium` even when it targets a banking-trojan family —
+record a severity decision flag if that feels wrong.
+
+Exception: an exact match against curated known-bad data — `|ioc_lookup`
+against an IOC database, exact literal known-malware package/cert/hash/domain
+values in the rule (androdr-005/078), or a curated artifact-path list
+(androdr-020) — may be `high`/`critical` on that single condition: confidence
+is carried by the curated data. The generic IOC rules (androdr-001/002/004)
+declare `critical` directly in their `level:`; per-entry family/category
+attribution lives in the IOC data entry, not in the finding severity.
+
 ### Device-posture severity cap (MANDATORY)
 
-Findings from `device_posture`-category rules are **clamped to `medium` at
+Findings from rules with top-level `category: device_posture` (the field the cap
+keys on — NOT `display.category`; cf. androdr-020: `category: incident`,
+displayed under device_posture, uncapped) are **clamped to `medium` at
 runtime** by `SeverityCapPolicy` (`app/src/main/java/com/androdr/sigma/SeverityCapPolicy.kt`),
 regardless of the declared `level:`. Declaring `high` or `critical` on a
 device-posture rule (CVE / patch-level / device-flag checks, typically
