@@ -7,7 +7,11 @@
         </trust-anchors>
     </base-config>
 
-    <!-- Pin CISA feed domain -->
+    <!-- Pin CISA feed domain.
+         KNOWN OUTLIER: still pins an intermediate + leaf (the pattern that
+         caused the 2026-07-03 GitHub outage below), and the pinned leaf
+         expires 2026-09-22. Migration to root pins (needs DigiCert Global
+         Root G3 for the current ECC chain) is tracked in a follow-up issue. -->
     <domain-config>
         <domain includeSubdomains="true">cisa.gov</domain>
         <pin-set expiration="2027-06-01">
@@ -29,14 +33,51 @@
          standard secure TLS for a public read-only data feed. The primary
          actively-exploited source (cisa.gov) remains pinned. -->
 
-    <!-- Pin GitHub (SIGMA rule feed) -->
+    <!-- Pin GitHub (SIGMA rule + IOC feed — the app's detection-content channel).
+
+         ROOT-SPKI pins only for this host, never leaf or intermediate.
+         Incident 2026-07-03 (see PR for this change + issue on feed
+         observability): the previous set pinned the Let's Encrypt R12
+         intermediate + a *.github.io leaf; GitHub's chain moved to LE's
+         next hierarchy (YR2 intermediate under ISRG Root YR) and the
+         ~90-day leaf rotated, so BOTH pins died and every rule/IOC fetch
+         failed closed — silently, on every device, until found via
+         on-device testing (the same failure mode as the
+         storage.googleapis.com note above).
+
+         Roots live for decades and survive leaf/intermediate churn. This
+         set mirrors GitHub's own CAA policy for githubusercontent.com
+         (issue "letsencrypt.org" / "digicert.com" / "sectigo.com"): both
+         LE generations incl. RSA+ECDSA siblings, both classic DigiCert
+         roots, both USERTrust (Sectigo) roots. Only GitHub adopting a CA
+         outside its current CAA set breaks it, and the pin-set expiration
+         bounds that worst case (Android stops enforcing expired pins —
+         fail-open to system-CA TLS, not an outage).
+
+         To re-verify against the live chain:
+           openssl s_client -connect raw.githubusercontent.com:443 \
+             -servername raw.githubusercontent.com -showcerts
+           openssl x509 -pubkey -noout | openssl pkey -pubin -outform der \
+             | openssl dgst -sha256 -binary | base64 -->
     <domain-config>
         <domain includeSubdomains="true">raw.githubusercontent.com</domain>
         <pin-set expiration="2027-06-01">
-            <!-- Let's Encrypt R12 intermediate -->
-            <pin digest="SHA-256">kZwN96eHtZftBWrOZUsd6cA4es80n3NzSk/XtYz2EqQ=</pin>
-            <!-- Leaf: *.github.io -->
-            <pin digest="SHA-256">ccs02cz7WiIuRPsyJxR7Gs1f3flkG9wDnaPocSu+U+8=</pin>
+            <!-- ISRG Root YR (letsencrypt.org/certs/gen-y/root-yr.pem; matches live chain 2026-07-03) -->
+            <pin digest="SHA-256">fk6IOKit1ild5647BH06ujSIq5XbCgqlbYl6ANhhi88=</pin>
+            <!-- ISRG Root YE (letsencrypt.org/certs/gen-y/root-ye.pem — gen-Y ECDSA sibling) -->
+            <pin digest="SHA-256">sCkq5UWXjg+7mKu9lMhhYF5bGLsy7VI/UNW3tccdR7w=</pin>
+            <!-- ISRG Root X1 (letsencrypt.org/certs/isrgrootx1.pem) -->
+            <pin digest="SHA-256">C5+lpZ7tcVwmwQIMcRtPbsQtWLABXhQzejna0wHFr8M=</pin>
+            <!-- ISRG Root X2 (letsencrypt.org/certs/isrg-root-x2.pem) -->
+            <pin digest="SHA-256">diGVwiVYbubAI3RW4hB9xU8e/CH2GnkuvVFZE8zmgzI=</pin>
+            <!-- DigiCert Global Root CA (cacerts.digicert.com/DigiCertGlobalRootCA.crt) -->
+            <pin digest="SHA-256">r/mIkG3eEpVdm+u/ko/cwxzOMo1bk4TyHIlByibiA5E=</pin>
+            <!-- DigiCert Global Root G2 (cacerts.digicert.com/DigiCertGlobalRootG2.crt) -->
+            <pin digest="SHA-256">i7WTqTvh0OioIruIfFR4kMPnBqrS2rdiVPl/s2uC/CY=</pin>
+            <!-- USERTrust RSA Certification Authority (crt.usertrust.com AIA) -->
+            <pin digest="SHA-256">x4QzPSC810K5/cMjb05Qm4k3Bw5zBn4lTdO/nEW/Td4=</pin>
+            <!-- USERTrust ECC Certification Authority (crt.usertrust.com AIA) -->
+            <pin digest="SHA-256">ICGRfpgmOUXIWcQ/HXPLQTkFPEFPoDyjvH7ohhQpjzs=</pin>
         </pin-set>
     </domain-config>
 </network-security-config>
