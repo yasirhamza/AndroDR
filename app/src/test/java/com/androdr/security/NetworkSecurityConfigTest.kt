@@ -24,6 +24,10 @@ import javax.xml.parsers.DocumentBuilderFactory
  */
 class NetworkSecurityConfigTest {
 
+    private companion object {
+        const val NINETY_DAYS_MS = 90L * 24 * 60 * 60 * 1000
+    }
+
     private fun configFile(): File = listOf(
         File("app/src/main/res/xml/network_security_config.xml"),
         File("src/main/res/xml/network_security_config.xml"),
@@ -55,17 +59,39 @@ class NetworkSecurityConfigTest {
             assertTrue("$domain: <pin-set> is missing an expiration", expiration.isNotBlank())
             val expiresAt = dateFormat.parse(expiration)?.time
                 ?: error("$domain: unparseable expiration '$expiration'")
+            // Lead-time, not just expiry: Android FAIL-OPENS on an expired pin-set
+            // (pins silently stop being enforced), so a test that only fails after
+            // the date has passed fires when protection is already gone. 90 days
+            // gives a release cycle to remeasure roots and extend.
             assertTrue(
-                "$domain: pin-set expired on $expiration — pinning is no longer enforced",
-                expiresAt > now,
+                "$domain: pin-set expires $expiration — within 90 days. Remeasure the " +
+                    "roots (recipe in network_security_config.xml) and extend the date " +
+                    "BEFORE devices fail open to unpinned TLS",
+                expiresAt > now + NINETY_DAYS_MS,
             )
 
-            val pinCount = pinSet.getElementsByTagName("pin").length
+            val pins = pinSet.getElementsByTagName("pin")
             assertTrue(
-                "$domain: only $pinCount pin(s) — ship at least 2 (a backup) so cert " +
+                "$domain: only ${pins.length} pin(s) — ship at least 2 (a backup) so cert " +
                     "rotation cannot brick the domain",
-                pinCount >= 2,
+                pins.length >= 2,
             )
+            // A malformed pin doesn't fail gracefully: Android rejects the whole
+            // config at runtime. Catch truncated/typo'd digests at build time.
+            for (p in 0 until pins.length) {
+                val value = pins.item(p).textContent.trim()
+                val decoded = try {
+                    java.util.Base64.getDecoder().decode(value)
+                } catch (e: IllegalArgumentException) {
+                    throw AssertionError("$domain: pin '$value' is not valid base64", e)
+                }
+                assertEquals(
+                    "$domain: pin '$value' decodes to ${decoded.size} bytes — a SHA-256 " +
+                        "SPKI pin must be exactly 32",
+                    32,
+                    decoded.size,
+                )
+            }
         }
     }
 
