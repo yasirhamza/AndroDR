@@ -23,6 +23,10 @@ interface FeedHealthDao {
      * including feeds that have never succeeded (lastSuccessAt = 0). This is the
      * "which feeds are stale" query — never a global MAX, so a single healthy
      * feed cannot mask the rest.
+     *
+     * TODO(#236 part 2): consumed by the rule-driven stale-intel device_posture
+     * finding (DeviceAuditor reads this to populate an intel_stale_* telemetry
+     * field). Unused until that lands; kept because it's the natural primitive.
      */
     @Query("SELECT * FROM feed_health WHERE lastSuccessAt < :threshold")
     suspend fun staleSince(threshold: Long): List<FeedHealth>

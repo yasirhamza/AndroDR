@@ -95,12 +95,12 @@ class IntelRefresher @Inject constructor(
     }
 
     private suspend fun refreshOemPrefixes() {
-        // Unit-returning refresh: the only failure signal is a thrown exception,
-        // which the recorder converts to a null result + failure row.
-        feedHealthRecorder.record(
-            FeedHealthRecorder.FEED_OEM_PREFIXES,
-            succeeded = { true },
-        ) { oemPrefixResolver.refresh() }
+        // refresh() returns prefixes accepted this run (0 on any failure), a real
+        // success signal — the feed's URL is on the raw.githubusercontent.com
+        // channel, so a false-green here would hide the 2026-07-03 outage class.
+        feedHealthRecorder.recordCount(FeedHealthRecorder.FEED_OEM_PREFIXES) {
+            oemPrefixResolver.refresh()
+        }
     }
 
     private suspend fun refreshSigmaRules() {
@@ -115,12 +115,14 @@ class IntelRefresher @Inject constructor(
     }
 
     private suspend fun refreshCveDatabase() {
-        val count = feedHealthRecorder.recordCount(FeedHealthRecorder.FEED_CVE) {
+        // refresh() now returns a this-run reachability signal (>0 = CISA fetched
+        // or 304 unchanged; 0 = CISA errored) rather than a standing DB total, so
+        // a swallowed fetch error can't false-green the feed.
+        val reachable = feedHealthRecorder.recordCount(FeedHealthRecorder.FEED_CVE) {
             cveRepository.refresh()
-            cveRepository.getActivelyExploitedCount()
         }
-        if (count > 0) {
-            Log.i(TAG, "CVE database refreshed: $count Android CVEs")
+        if (reachable > 0) {
+            Log.i(TAG, "CVE database refreshed: ${cveRepository.getActivelyExploitedCount()} Android CVEs")
         }
     }
 

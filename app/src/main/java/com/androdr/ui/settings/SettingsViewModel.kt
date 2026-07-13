@@ -51,7 +51,6 @@ data class FeedHealthUi(
     val lastSuccessAt: Long,
     val isCritical: Boolean,
     val isStale: Boolean,
-    val lastError: String?,
 )
 
 @Suppress("LongParameterList") // SettingsViewModel requires injection of all IOC DAOs, updaters,
@@ -261,22 +260,22 @@ class SettingsViewModel @Inject constructor(
 
     /**
      * Maps the persisted per-feed health rows into UI models, sorted critical
-     * feeds first then most-stale first. A feed is stale when its last success
-     * is older than [FEED_STALE_THRESHOLD_MS] (or it has never succeeded) — a
-     * per-feed check, never a global MAX, so one healthy feed can't mask the
-     * rest (the failure mode behind the 2026-07-03 outage, #236).
+     * feeds first then most-stale first. Staleness is a per-feed check (never a
+     * global MAX, so one healthy feed can't mask the rest — the failure mode
+     * behind the 2026-07-03 outage, #236), tighter for critical detection-content
+     * feeds, and also triggered by a hard-failure streak — see
+     * [FeedHealthRecorder.isStale]. lastError is intentionally NOT surfaced here
+     * (it can carry attacker-influenced exception text; keep it out of the UI).
      */
     private suspend fun loadFeedHealth(): List<FeedHealthUi> {
         val now = System.currentTimeMillis()
-        val staleBefore = now - FEED_STALE_THRESHOLD_MS
         return feedHealthDao.getAll()
             .map { h ->
                 FeedHealthUi(
-                    label = FEED_LABELS[h.feedId] ?: h.feedId,
+                    label = FeedHealthRecorder.FEED_LABELS[h.feedId] ?: h.feedId,
                     lastSuccessAt = h.lastSuccessAt,
                     isCritical = h.feedId in FeedHealthRecorder.CRITICAL_FEEDS,
-                    isStale = h.lastSuccessAt < staleBefore,
-                    lastError = h.lastError,
+                    isStale = FeedHealthRecorder.isStale(h.feedId, h.lastSuccessAt, h.consecutiveFailures, now),
                 )
             }
             .sortedWith(compareByDescending<FeedHealthUi> { it.isCritical }.thenBy { it.lastSuccessAt })
@@ -408,17 +407,5 @@ class SettingsViewModel @Inject constructor(
     companion object {
         private const val TAG = "SettingsViewModel"
         private const val DEBOUNCE_MS = 500L
-
-        /** A feed unrefreshed for this long (6 missed 12h cycles) is stale. */
-        private const val FEED_STALE_THRESHOLD_MS = 3L * 24 * 60 * 60 * 1000
-
-        private val FEED_LABELS = mapOf(
-            FeedHealthRecorder.FEED_SIGMA_RULES to "SIGMA rules",
-            FeedHealthRecorder.FEED_PUBLIC_REPO_IOC to "Curated IOCs",
-            FeedHealthRecorder.FEED_INDICATORS to "Bulk indicators",
-            FeedHealthRecorder.FEED_KNOWN_APPS to "Known apps",
-            FeedHealthRecorder.FEED_OEM_PREFIXES to "OEM prefixes",
-            FeedHealthRecorder.FEED_CVE to "CVE database",
-        )
     }
 }

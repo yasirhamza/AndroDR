@@ -95,4 +95,52 @@ class FeedHealthRecorderTest {
         assertEquals(0, cap.captured.consecutiveFailures)
         coVerify { dao.upsert(any()) }
     }
+
+    @Test
+    fun `successful fetch whose health upsert throws still returns the result`() = runTest {
+        // A DB-write failure must NOT turn a genuine success into a discarded null.
+        val dao = mockk<FeedHealthDao>(relaxed = true)
+        coEvery { dao.get(any()) } returns null
+        coEvery { dao.upsert(any()) } throws RuntimeException("db locked")
+        val recorder = FeedHealthRecorder(dao)
+
+        val result = recorder.recordCount("f") { 42 }
+
+        assertEquals("success preserved despite failed health write", 42, result)
+    }
+
+    @Test
+    fun `DB read failure on the failure path does not propagate`() = runTest {
+        // The recorder must never abort the caller's refresh, even if the health
+        // DB itself is unhealthy while recording a feed failure.
+        val dao = mockk<FeedHealthDao>(relaxed = true)
+        coEvery { dao.get(any()) } throws RuntimeException("db corrupt")
+        coEvery { dao.upsert(any()) } returns Unit
+        val recorder = FeedHealthRecorder(dao)
+
+        val result = recorder.recordCount("f") { 0 } // empty → failure path → get() throws
+
+        assertEquals(0, result) // returned normally, no exception escaped
+    }
+
+    @Test
+    fun `every feed id has a label and isStale honors critical threshold plus streak`() {
+        val ids = listOf(
+            FeedHealthRecorder.FEED_INDICATORS, FeedHealthRecorder.FEED_KNOWN_APPS,
+            FeedHealthRecorder.FEED_PUBLIC_REPO_IOC, FeedHealthRecorder.FEED_OEM_PREFIXES,
+            FeedHealthRecorder.FEED_SIGMA_RULES, FeedHealthRecorder.FEED_CVE,
+        )
+        // Drift guard: a new feed id without a label would ship the raw id to users.
+        ids.forEach { assertTrue("no label for $it", FeedHealthRecorder.FEED_LABELS.containsKey(it)) }
+
+        val now = 100L * 24 * 60 * 60 * 1000
+        // Fresh + no failures → not stale.
+        assertTrue(!FeedHealthRecorder.isStale(FeedHealthRecorder.FEED_CVE, now, 0, now))
+        // A hard-failure streak flags stale even with a recent success.
+        assertTrue(FeedHealthRecorder.isStale(FeedHealthRecorder.FEED_CVE, now, 3, now))
+        // Critical feed uses the tighter window: 2 days stale for critical, not for non-critical.
+        val twoDaysAgo = now - 2L * 24 * 60 * 60 * 1000
+        assertTrue(FeedHealthRecorder.isStale(FeedHealthRecorder.FEED_SIGMA_RULES, twoDaysAgo, 0, now))
+        assertTrue(!FeedHealthRecorder.isStale(FeedHealthRecorder.FEED_INDICATORS, twoDaysAgo, 0, now))
+    }
 }

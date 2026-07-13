@@ -423,7 +423,7 @@ private fun FeedHealthList(feedHealth: List<FeedHealthUi>) {
     if (feedHealth.isEmpty()) return
     Spacer(modifier = Modifier.height(4.dp))
     Text(
-        text = "Feed health",
+        text = "Feed health  (• = critical detection feed)",
         style = MaterialTheme.typography.labelMedium,
         color = MaterialTheme.colorScheme.onSurfaceVariant
     )
