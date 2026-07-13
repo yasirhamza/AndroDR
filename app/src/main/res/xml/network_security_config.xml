@@ -7,18 +7,32 @@
         </trust-anchors>
     </base-config>
 
-    <!-- Pin CISA feed domain.
-         KNOWN OUTLIER: still pins an intermediate + leaf (the pattern that
-         caused the 2026-07-03 GitHub outage below), and the pinned leaf
-         expires 2026-09-22. Migration to root pins (needs DigiCert Global
-         Root G3 for the current ECC chain) is tracked in a follow-up issue. -->
+    <!-- Pin CISA feed domain (KEV / known-exploited-vulnerabilities source).
+
+         ROOT-SPKI pins only (see the GitHub note below for the policy and the
+         2026-07-03 incident that motivated it). Migrated 2026-07-13 (#237) from
+         the previous intermediate + leaf pins — the pinned leaf
+         (www.homelandsecurity.gov) was set to expire 2026-09-22, and the
+         shrinking CA/B leaf-lifetime rules made a silent KEV-feed outage a
+         near-certainty before this pin-set's own expiration. Proactive, ahead
+         of the leaf expiry, not a post-outage fix.
+
+         cisa.gov currently serves an ECC chain anchored at DigiCert Global
+         Root G3. Global Root CA + G2 are carried as CA-switch backups (DigiCert
+         routinely rotates intermediates and could re-anchor an RSA chain).
+
+         Re-verify: openssl s_client -connect cisa.gov:443 -servername cisa.gov
+         -showcerts, then SPKI-hash the ROOT cert (recipe under the GitHub
+         block). -->
     <domain-config>
         <domain includeSubdomains="true">cisa.gov</domain>
         <pin-set expiration="2027-06-01">
-            <!-- DigiCert Global G3 TLS ECC SHA384 2020 CA1 (intermediate) -->
-            <pin digest="SHA-256">qBRjZmOmkSNJL0p70zek7odSIzqs/muR4Jk9xYyCP+E=</pin>
-            <!-- Leaf: www.homelandsecurity.gov -->
-            <pin digest="SHA-256">aMs+EaUklWPQX1BUlfn0NuPZZfgh+zL3/zVKxWtfNfo=</pin>
+            <!-- DigiCert Global Root G3 (cacerts.digicert.com/DigiCertGlobalRootG3.crt — current ECC chain) -->
+            <pin digest="SHA-256">uUwZgwDOxcBXrQcntwu+kYFpkiVkOaezL0WYEZ3anJc=</pin>
+            <!-- DigiCert Global Root CA (cacerts.digicert.com/DigiCertGlobalRootCA.crt — RSA backup) -->
+            <pin digest="SHA-256">r/mIkG3eEpVdm+u/ko/cwxzOMo1bk4TyHIlByibiA5E=</pin>
+            <!-- DigiCert Global Root G2 (cacerts.digicert.com/DigiCertGlobalRootG2.crt — RSA backup) -->
+            <pin digest="SHA-256">i7WTqTvh0OioIruIfFR4kMPnBqrS2rdiVPl/s2uC/CY=</pin>
         </pin-set>
     </domain-config>
 
