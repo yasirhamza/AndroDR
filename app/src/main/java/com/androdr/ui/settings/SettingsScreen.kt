@@ -504,7 +504,7 @@ private fun UpdateStatusRow(label: String, status: String) {
         Text(
             status,
             style = MaterialTheme.typography.bodyMedium,
-            color = if (status.startsWith("Failed")) MaterialTheme.colorScheme.error
+            color = if (status.contains("failed", ignoreCase = true)) MaterialTheme.colorScheme.error
                     else MaterialTheme.colorScheme.primary
         )
     }
