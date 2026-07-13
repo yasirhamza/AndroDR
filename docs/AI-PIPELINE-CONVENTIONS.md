@@ -154,7 +154,13 @@ Rules:
   **must** also be added to the submodule under the matching
   `<logsource_service>/` directory (filename strips the `sigma_` prefix).
 - Bundled and submodule copies of a rule must be byte-identical. Drift is a
-  bug to reconcile, not expected behaviour.
+  bug to reconcile, not expected behaviour — and it is a *live* bug, not a
+  cosmetic one: the app replaces a bundled rule with the same-id remote copy
+  fetched from the rule repo's main, so a stale mirror copy is what devices
+  actually run. When copies diverge, **bundled is canonical**; mirror→bundled
+  back-ports are case-by-case decisions recorded in the rule repo's
+  `decisions/` directory. `BundledMirrorParityTest` enforces parity at the
+  pinned submodule commit.
 - The CLAUDE.md note about "submodule pointer pinned, AI pipeline writes
   upstream first" describes the AI pipeline's flow only. Rules authored
   manually in AndroDR do not get a free pass — they must be mirrored by

@@ -18,6 +18,13 @@ object SigmaRuleParser {
 
     private const val TAG = "SigmaRuleParser"
     internal const val MAX_REGEX_LENGTH = 500
+
+    // Correlation grammar (types, timespan units, this cap) is mirrored by
+    // android-sigma-rules/validation/validate-rule.py's correlation branch —
+    // rules CI enforces there what this parser enforces here. Change either
+    // side only together, or a rule can pass repo CI and be dropped on-device
+    // (BundledRulesSchemaCrossCheckTest excludes correlation files, so no
+    // AndroDR test catches the divergence).
     private const val CORRELATION_TIMESPAN_CAP_DAYS = 90
     private val TIMESPAN_REGEX = Regex("""^(\d+)([smhd])$""")
     private val settings = LoadSettings.builder()

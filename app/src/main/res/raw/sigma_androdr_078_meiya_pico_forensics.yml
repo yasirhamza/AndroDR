@@ -1,6 +1,6 @@
 title: Massistant Chinese mobile forensic tool installed
 id: androdr-078
-status: experimental
+status: production
 category: incident
 description: >
     Detects the Massistant Android mobile forensic client installed on

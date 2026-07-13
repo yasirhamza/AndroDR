@@ -16,6 +16,9 @@ detection:
     # bytes so either algorithm can match. Community feeds
     # (stalkerware-indicators, MVT) ship SHA-1 per Android ecosystem
     # convention; bundled known_bad_certs.json uses SHA-256.
+    # Tripwire: when adding a 3rd algorithm whose hex length matches an
+    # existing one (e.g. BLAKE3 64-hex collides with SHA-256), switch to
+    # algorithm-tagged keys (sha1:ABCD.., sha256:..).
     selection_sha256:
         cert_hash|ioc_lookup: cert_hash_ioc_db
     selection_sha1:
