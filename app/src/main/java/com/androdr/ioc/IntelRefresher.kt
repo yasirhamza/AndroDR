@@ -31,7 +31,8 @@ class IntelRefresher @Inject constructor(
     private val oemPrefixResolver: OemPrefixResolver,
     private val sigmaRuleFeed: SigmaRuleFeed,
     private val sigmaRuleEngine: SigmaRuleEngine,
-    private val cveRepository: CveRepository
+    private val cveRepository: CveRepository,
+    private val feedHealthRecorder: FeedHealthRecorder
 ) {
 
     private val refreshMutex = Mutex()
@@ -74,53 +75,52 @@ class IntelRefresher @Inject constructor(
     }
 
     private suspend fun runBulkUpdaters(): Int = coroutineScope {
-        val indicators = async { indicatorUpdater.update() }
-        val knownApps = async { knownAppUpdater.update() }
+        val indicators = async {
+            feedHealthRecorder.recordCount(FeedHealthRecorder.FEED_INDICATORS) { indicatorUpdater.update() }
+        }
+        val knownApps = async {
+            feedHealthRecorder.recordCount(FeedHealthRecorder.FEED_KNOWN_APPS) { knownAppUpdater.update() }
+        }
         indicators.await() + knownApps.await()
     }
 
-    @Suppress("TooGenericExceptionCaught")
     private suspend fun refreshPublicRepoIoc() {
-        try {
-            val count = publicRepoIocFeed.update()
-            if (count > 0) {
-                Log.i(TAG, "Public repo IOC feed: $count entries loaded")
-                knownAppResolver.refreshCache()
-            }
-        } catch (e: Exception) {
-            Log.w(TAG, "Public repo IOC feed failed (non-fatal): ${e.message}")
+        val count = feedHealthRecorder.recordCount(FeedHealthRecorder.FEED_PUBLIC_REPO_IOC) {
+            publicRepoIocFeed.update()
+        }
+        if (count > 0) {
+            Log.i(TAG, "Public repo IOC feed: $count entries loaded")
+            knownAppResolver.refreshCache()
         }
     }
 
-    @Suppress("TooGenericExceptionCaught")
     private suspend fun refreshOemPrefixes() {
-        try {
-            oemPrefixResolver.refresh()
-        } catch (e: Exception) {
-            Log.w(TAG, "OEM prefix refresh failed (non-fatal): ${e.message}")
-        }
+        // Unit-returning refresh: the only failure signal is a thrown exception,
+        // which the recorder converts to a null result + failure row.
+        feedHealthRecorder.record(
+            FeedHealthRecorder.FEED_OEM_PREFIXES,
+            succeeded = { true },
+        ) { oemPrefixResolver.refresh() }
     }
 
-    @Suppress("TooGenericExceptionCaught")
     private suspend fun refreshSigmaRules() {
-        try {
-            val remoteRules = sigmaRuleFeed.fetch()
-            if (remoteRules.isNotEmpty()) {
-                sigmaRuleEngine.setRemoteRules(remoteRules)
-                Log.i(TAG, "SIGMA rules refreshed: ${remoteRules.size} remote rules loaded")
-            }
-        } catch (e: Exception) {
-            Log.w(TAG, "SIGMA rule refresh failed: ${e.message}")
+        val remoteRules = feedHealthRecorder.record(
+            FeedHealthRecorder.FEED_SIGMA_RULES,
+            succeeded = { it.isNotEmpty() },
+        ) { sigmaRuleFeed.fetch() }
+        if (remoteRules != null && remoteRules.isNotEmpty()) {
+            sigmaRuleEngine.setRemoteRules(remoteRules)
+            Log.i(TAG, "SIGMA rules refreshed: ${remoteRules.size} remote rules loaded")
         }
     }
 
-    @Suppress("TooGenericExceptionCaught")
     private suspend fun refreshCveDatabase() {
-        try {
+        val count = feedHealthRecorder.recordCount(FeedHealthRecorder.FEED_CVE) {
             cveRepository.refresh()
-            Log.i(TAG, "CVE database refreshed: ${cveRepository.getActivelyExploitedCount()} Android CVEs")
-        } catch (e: Exception) {
-            Log.w(TAG, "CVE database refresh failed (non-fatal): ${e.message}")
+            cveRepository.getActivelyExploitedCount()
+        }
+        if (count > 0) {
+            Log.i(TAG, "CVE database refreshed: $count Android CVEs")
         }
     }
 

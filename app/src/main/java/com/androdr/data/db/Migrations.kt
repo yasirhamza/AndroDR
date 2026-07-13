@@ -520,3 +520,25 @@ val MIGRATION_15_16 = object : Migration(15, 16) {
         // Note: no severity index — the column no longer exists.
     }
 }
+
+/**
+ * v17: per-feed threat-intel refresh health (#236). One row per logical feed,
+ * recording last attempt/success and failure streak so a channel outage stops
+ * being invisible (previously masked by a global MAX(fetchedAt) that any single
+ * healthy feed kept fresh).
+ */
+val MIGRATION_16_17 = object : Migration(16, 17) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS feed_health (
+                feedId               TEXT NOT NULL PRIMARY KEY,
+                lastAttemptAt        INTEGER NOT NULL,
+                lastSuccessAt        INTEGER NOT NULL,
+                lastError            TEXT,
+                consecutiveFailures  INTEGER NOT NULL
+            )
+            """.trimIndent()
+        )
+    }
+}

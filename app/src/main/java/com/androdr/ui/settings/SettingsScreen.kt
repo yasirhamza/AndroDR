@@ -59,6 +59,7 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
     val certHashIocCount by viewModel.certHashIocCount.collectAsStateWithLifecycle()
     val cveCount by viewModel.cveCount.collectAsStateWithLifecycle()
     val lastUpdated by viewModel.lastUpdated.collectAsStateWithLifecycle()
+    val feedHealth by viewModel.feedHealth.collectAsStateWithLifecycle()
     val updating by viewModel.updating.collectAsStateWithLifecycle()
     val hashExporting by viewModel.hashExporting.collectAsStateWithLifecycle()
     val hashShareUri by viewModel.hashShareUri.collectAsStateWithLifecycle()
@@ -181,7 +182,8 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
                 updating = updating,
                 onUpdateClick = { viewModel.triggerUpdate() },
                 iocSourceLabel = iocSourceLabel,
-                sigmaRuleSource = sigmaRuleSource
+                sigmaRuleSource = sigmaRuleSource,
+                feedHealth = feedHealth
             )
             HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
 
@@ -323,7 +325,8 @@ private fun ThreatDatabaseSection(
     updating: Boolean,
     onUpdateClick: () -> Unit,
     iocSourceLabel: Map<String, String> = emptyMap(),
-    sigmaRuleSource: String = "bundled"
+    sigmaRuleSource: String = "bundled",
+    feedHealth: List<FeedHealthUi> = emptyList()
 ) {
     Text(
         text = "Threat Database",
@@ -351,18 +354,8 @@ private fun ThreatDatabaseSection(
 
             HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
 
-            val dateFormatter = remember {
-                SimpleDateFormat("MMM d, yyyy  HH:mm", Locale.getDefault())
-            }
-            Text(
-                text = if (lastUpdated != null) {
-                    "Last updated: ${dateFormatter.format(Date(lastUpdated))}"
-                } else {
-                    "Last updated: Never"
-                },
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+            LastUpdatedText(lastUpdated)
+            FeedHealthList(feedHealth)
 
             Spacer(modifier = Modifier.height(4.dp))
 
@@ -406,6 +399,74 @@ private fun StatRow(label: String, value: String) {
             fontWeight = FontWeight.SemiBold,
             color = MaterialTheme.colorScheme.primary
         )
+    }
+}
+
+@Composable
+private fun LastUpdatedText(lastUpdated: Long?) {
+    val dateFormatter = remember {
+        SimpleDateFormat("MMM d, yyyy  HH:mm", Locale.getDefault())
+    }
+    Text(
+        text = if (lastUpdated != null) {
+            "Last updated: ${dateFormatter.format(Date(lastUpdated))}"
+        } else {
+            "Last updated: Never"
+        },
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant
+    )
+}
+
+@Composable
+private fun FeedHealthList(feedHealth: List<FeedHealthUi>) {
+    if (feedHealth.isEmpty()) return
+    Spacer(modifier = Modifier.height(4.dp))
+    Text(
+        text = "Feed health",
+        style = MaterialTheme.typography.labelMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant
+    )
+    feedHealth.forEach { FeedHealthRow(it) }
+}
+
+@Composable
+private fun FeedHealthRow(feed: FeedHealthUi) {
+    val ageText = feedRelativeAge(feed.lastSuccessAt)
+    val color = when {
+        feed.isStale -> MaterialTheme.colorScheme.error
+        else -> MaterialTheme.colorScheme.onSurfaceVariant
+    }
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Text(
+            text = if (feed.isCritical) "• ${feed.label}" else feed.label,
+            style = MaterialTheme.typography.bodySmall,
+            color = color
+        )
+        Text(
+            text = if (feed.isStale) "$ageText — stale" else ageText,
+            style = MaterialTheme.typography.bodySmall,
+            fontWeight = if (feed.isStale) FontWeight.SemiBold else FontWeight.Normal,
+            color = color
+        )
+    }
+}
+
+/** Human "x ago" for a last-success epoch-ms, or "never" for 0. */
+private fun feedRelativeAge(lastSuccessAt: Long): String {
+    if (lastSuccessAt <= 0L) return "never"
+    val deltaMs = System.currentTimeMillis() - lastSuccessAt
+    val days = deltaMs / (24 * 60 * 60 * 1000)
+    val hours = deltaMs / (60 * 60 * 1000)
+    val minutes = deltaMs / (60 * 1000)
+    return when {
+        days >= 1 -> "${days}d ago"
+        hours >= 1 -> "${hours}h ago"
+        minutes >= 1 -> "${minutes}m ago"
+        else -> "just now"
     }
 }
 
