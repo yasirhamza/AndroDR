@@ -6,12 +6,14 @@ import androidx.lifecycle.viewModelScope
 import android.content.Context
 import android.net.Uri
 import androidx.core.content.FileProvider
+import com.androdr.data.db.FeedHealthDao
 import com.androdr.data.db.ForensicTimelineEventDao
 import com.androdr.data.db.IndicatorDao
 import com.androdr.data.repo.CveRepository
 import com.androdr.data.repo.SettingsRepository
 import com.androdr.ioc.CertHashIocDatabase
 import com.androdr.data.model.Indicator
+import com.androdr.ioc.FeedHealthRecorder
 import com.androdr.ioc.IndicatorResolver
 import com.androdr.ioc.IndicatorUpdater
 import com.androdr.ioc.toStixBundle
@@ -43,6 +45,14 @@ data class UpdateResult(
     val oemPrefixes: String = ""
 )
 
+/** One feed's health for the Settings "Threat Database" card (#236). */
+data class FeedHealthUi(
+    val label: String,
+    val lastSuccessAt: Long,
+    val isCritical: Boolean,
+    val isStale: Boolean,
+)
+
 @Suppress("LongParameterList") // SettingsViewModel requires injection of all IOC DAOs, updaters,
 // and engines to display threat database stats and trigger manual updates from one screen.
 @HiltViewModel
@@ -58,7 +68,8 @@ class SettingsViewModel @Inject constructor(
     private val appScanner: AppScanner,
     private val sigmaRuleFeed: SigmaRuleFeed,
     private val forensicTimelineEventDao: ForensicTimelineEventDao,
-    private val oemPrefixResolver: OemPrefixResolver
+    private val oemPrefixResolver: OemPrefixResolver,
+    private val feedHealthDao: FeedHealthDao
 ) : ViewModel() {
 
     val blocklistBlockMode = settingsRepository.blocklistBlockMode
@@ -95,6 +106,9 @@ class SettingsViewModel @Inject constructor(
 
     private val _lastUpdated = MutableStateFlow<Long?>(null)
     val lastUpdated: StateFlow<Long?> = _lastUpdated.asStateFlow()
+
+    private val _feedHealth = MutableStateFlow<List<FeedHealthUi>>(emptyList())
+    val feedHealth: StateFlow<List<FeedHealthUi>> = _feedHealth.asStateFlow()
 
     private val _updating = MutableStateFlow(false)
     val updating: StateFlow<Boolean> = _updating.asStateFlow()
@@ -225,6 +239,7 @@ class SettingsViewModel @Inject constructor(
                 certHashIocDatabase.getAllBadCerts().size
             _cveCount.value = cveRepository.getActivelyExploitedCount()
             _lastUpdated.value = indicatorDao.lastFetchTimeGlobal()
+            _feedHealth.value = loadFeedHealth()
 
             // Determine downloaded vs bundled per type
             val labels = mutableMapOf<String, String>()
@@ -241,6 +256,29 @@ class SettingsViewModel @Inject constructor(
 
             _sigmaRuleSource.value = if (sigmaRuleEngine.hasRemoteRules()) "downloaded" else "bundled"
         }
+    }
+
+    /**
+     * Maps the persisted per-feed health rows into UI models, sorted critical
+     * feeds first then most-stale first. Staleness is a per-feed check (never a
+     * global MAX, so one healthy feed can't mask the rest — the failure mode
+     * behind the 2026-07-03 outage, #236), tighter for critical detection-content
+     * feeds, and also triggered by a hard-failure streak — see
+     * [FeedHealthRecorder.isStale]. lastError is intentionally NOT surfaced here
+     * (it can carry attacker-influenced exception text; keep it out of the UI).
+     */
+    private suspend fun loadFeedHealth(): List<FeedHealthUi> {
+        val now = System.currentTimeMillis()
+        return feedHealthDao.getAll()
+            .map { h ->
+                FeedHealthUi(
+                    label = FeedHealthRecorder.FEED_LABELS[h.feedId] ?: h.feedId,
+                    lastSuccessAt = h.lastSuccessAt,
+                    isCritical = h.feedId in FeedHealthRecorder.CRITICAL_FEEDS,
+                    isStale = FeedHealthRecorder.isStale(h.feedId, h.lastSuccessAt, h.consecutiveFailures, now),
+                )
+            }
+            .sortedWith(compareByDescending<FeedHealthUi> { it.isCritical }.thenBy { it.lastSuccessAt })
     }
 
     // -- App hash export --------------------------------------------------------

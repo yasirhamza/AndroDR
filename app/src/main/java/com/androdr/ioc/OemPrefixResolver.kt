@@ -107,11 +107,15 @@ class OemPrefixResolver @Inject constructor(
      * Fetches the latest OEM prefix list from the public rules repo.
      * On success, replaces the in-memory cache AND invalidates [perDeviceCache]
      * so subsequent queries re-derive the applicable set.
+     *
+     * @return the number of prefixes+installers accepted THIS fetch, or 0 on any
+     * failure (unreachable, rejected, exception). A real this-run success signal
+     * so feed-health can't false-green on a swallowed network error (#236).
      */
     @Suppress("TooGenericExceptionCaught", "ReturnCount")
-    suspend fun refresh() = withContext(Dispatchers.IO) {
+    suspend fun refresh(): Int = withContext(Dispatchers.IO) {
         try {
-            val yaml = fetchUrl(PREFIXES_URL) ?: return@withContext
+            val yaml = fetchUrl(PREFIXES_URL) ?: return@withContext 0
             val parsed = parseOemPrefixYaml(yaml)
 
             // Sanity checks — reject obviously malicious remote data
@@ -119,14 +123,15 @@ class OemPrefixResolver @Inject constructor(
                 parsed.conditional.flatMap { it.strictPrefixes }
             if (allPrefixes.any { it.length < 4 }) {
                 Log.w(TAG, "Remote OEM prefix feed rejected: prefix too short")
-                return@withContext
+                return@withContext 0
             }
             if (allPrefixes.size > MAX_PREFIX_COUNT) {
                 Log.w(TAG, "Remote OEM prefix feed rejected: too many prefixes (${allPrefixes.size})")
-                return@withContext
+                return@withContext 0
             }
 
-            if (allPrefixes.isNotEmpty() || parsed.trustedInstallers.isNotEmpty()) {
+            val accepted = allPrefixes.size + parsed.trustedInstallers.size
+            if (accepted > 0) {
                 data.set(parsed)
                 perDeviceCache.clear()
                 Log.i(
@@ -136,8 +141,10 @@ class OemPrefixResolver @Inject constructor(
                         "${parsed.trustedInstallers.size} installers",
                 )
             }
+            accepted
         } catch (e: Exception) {
             Log.w(TAG, "OEM prefix refresh failed: ${e.message}")
+            0
         }
     }
 

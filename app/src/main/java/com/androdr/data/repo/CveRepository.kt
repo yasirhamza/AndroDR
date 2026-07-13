@@ -53,21 +53,32 @@ class CveRepository @Inject constructor(
         }
     }
 
-    suspend fun refresh() = withContext(Dispatchers.IO) {
-        val cisaResult = fetchCisaKev()
+    /**
+     * @return a this-run health signal for feed tracking (#236): >0 when the
+     * primary CISA feed was reachable this cycle — either freshly fetched OR a
+     * 304 Not-Modified (cache still authoritative) — and 0 when CISA errored
+     * (empty). Keyed on CISA (the actively-exploited source), not a standing DB
+     * total, so a swallowed HTTP/TLS error can't false-green the feed. OSV is
+     * best-effort and does not gate the signal.
+     */
+    suspend fun refresh(): Int = withContext(Dispatchers.IO) {
+        val cisaResult = fetchCisaKev()  // null=304, empty=error, non-empty=fetched
         val osvResult = fetchOsvAndroid()
         // On 304 (null), fall back to cached Room data so the merge preserves enrichment
         val cisaEntries = cisaResult ?: cveDao.getActivelyExploited()
         val osvEntries = osvResult ?: emptyList()
+        // CISA reachable this cycle = fetched (non-empty) OR 304 (null). Errored = empty.
+        val cisaReachable = cisaResult == null || cisaResult.isNotEmpty()
         if (cisaResult == null && osvResult == null) {
             Log.i(TAG, "CVE refresh: both feeds unchanged (ETag hit)")
-            return@withContext
+            return@withContext if (cisaReachable) cisaEntries.size.coerceAtLeast(1) else 0
         }
         val merged = mergeEntries(cisaEntries, osvEntries)
         if (merged.isNotEmpty()) {
             cveDao.upsertAll(merged)
         }
         Log.i(TAG, "CVE refresh: ${cisaEntries.size} CISA + ${osvEntries.size} OSV → ${merged.size} merged")
+        if (cisaReachable) merged.size.coerceAtLeast(1) else 0
     }
 
     suspend fun getUnpatchedCves(devicePatchLevel: String): List<CveEntity> =
