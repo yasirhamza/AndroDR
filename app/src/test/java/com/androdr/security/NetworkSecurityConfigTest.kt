@@ -26,6 +26,43 @@ class NetworkSecurityConfigTest {
 
     private companion object {
         const val NINETY_DAYS_MS = 90L * 24 * 60 * 60 * 1000
+
+        /**
+         * Domain-agnostic catalog mapping each allowed CA root's SPKI pin
+         * (base64 SHA-256) → the root's common name + provenance URL. Deliberately
+         * a superset of any single domain's pins (all ISRG + all listed DigiCert +
+         * both USERTrust, regardless of which host currently uses which). Every
+         * `<pin>` in the config must be a KEY here.
+         *
+         * This enforces the "root pins only, never leaf or intermediate" POLICY
+         * mechanically — the pattern behind both the 2026-07-03 GitHub outage and
+         * the cisa.gov leaf expiry. It does NOT verify CORRECTNESS: offline, it
+         * cannot confirm a listed base64 is genuinely that root's SPKI or matches
+         * a live chain (a wrong-but-32-byte value curated into both the XML and
+         * this map would pass). Provenance (the source URL per entry) is the guard
+         * against that — recompute before trusting:
+         *   openssl x509 -pubkey -noout | openssl pkey -pubin -outform der \
+         *     | openssl dgst -sha256 -binary | base64
+         *
+         * Provenance URLs (all under the CA's own domain):
+         *   ISRG Root YR: letsencrypt.org/certs/gen-y/root-yr.pem
+         *   ISRG Root YE: letsencrypt.org/certs/gen-y/root-ye.pem
+         *   ISRG Root X1: letsencrypt.org/certs/isrgrootx1.pem
+         *   ISRG Root X2: letsencrypt.org/certs/isrg-root-x2.pem
+         *   DigiCert Global Root CA/G2/G3: cacerts.digicert.com/DigiCertGlobalRoot{CA,G2,G3}.crt
+         *   USERTrust RSA/ECC: crt.usertrust.com
+         */
+        val KNOWN_CA_ROOT_SPKI: Map<String, String> = mapOf(
+            "fk6IOKit1ild5647BH06ujSIq5XbCgqlbYl6ANhhi88=" to "ISRG Root YR",
+            "sCkq5UWXjg+7mKu9lMhhYF5bGLsy7VI/UNW3tccdR7w=" to "ISRG Root YE",
+            "C5+lpZ7tcVwmwQIMcRtPbsQtWLABXhQzejna0wHFr8M=" to "ISRG Root X1",
+            "diGVwiVYbubAI3RW4hB9xU8e/CH2GnkuvVFZE8zmgzI=" to "ISRG Root X2",
+            "r/mIkG3eEpVdm+u/ko/cwxzOMo1bk4TyHIlByibiA5E=" to "DigiCert Global Root CA",
+            "i7WTqTvh0OioIruIfFR4kMPnBqrS2rdiVPl/s2uC/CY=" to "DigiCert Global Root G2",
+            "uUwZgwDOxcBXrQcntwu+kYFpkiVkOaezL0WYEZ3anJc=" to "DigiCert Global Root G3",
+            "x4QzPSC810K5/cMjb05Qm4k3Bw5zBn4lTdO/nEW/Td4=" to "USERTrust RSA Certification Authority",
+            "ICGRfpgmOUXIWcQ/HXPLQTkFPEFPoDyjvH7ohhQpjzs=" to "USERTrust ECC Certification Authority",
+        )
     }
 
     private fun configFile(): File = listOf(
@@ -93,6 +130,55 @@ class NetworkSecurityConfigTest {
                 )
             }
         }
+    }
+
+    /**
+     * Enforces "root SPKI pins only" across every pinned domain: each `<pin>`
+     * digest must be a named member of [KNOWN_CA_ROOT_SPKI]. A leaf or
+     * intermediate pin — the rotation time-bomb behind the 2026-07-03 GitHub
+     * outage and the cisa.gov leaf expiry — has an SPKI that isn't in the
+     * allowlist and fails here, forcing a conscious edit with provenance.
+     */
+    @Test
+    fun `every pin is a known CA root SPKI`() {
+        val doc = DocumentBuilderFactory.newInstance()
+            .newDocumentBuilder()
+            .parse(configFile())
+
+        val pins = doc.getElementsByTagName("pin")
+        assertTrue("expected at least one <pin>", pins.length > 0)
+
+        for (p in 0 until pins.length) {
+            val value = pins.item(p).textContent.trim()
+            val domain = ((pins.item(p).parentNode.parentNode) as? Element)
+                ?.getElementsByTagName("domain")?.item(0)?.textContent?.trim()
+                ?: "unknown-domain"
+            assertTrue(
+                "$domain: pin '$value' is not a known CA-root SPKI. Root pins only — " +
+                    "never leaf or intermediate (they rotate and cause silent " +
+                    "fail-closed outages). If this is genuinely a CA root, add it to " +
+                    "KNOWN_CA_ROOT_SPKI with its name and provenance URL, verified " +
+                    "with the openssl recipe in that map's doc.",
+                KNOWN_CA_ROOT_SPKI.containsKey(value),
+            )
+        }
+    }
+
+    /**
+     * Negative case for the roots-only guard: a leaf/intermediate SPKI (anything
+     * not in the catalog) must be rejected. Documents that the guard is a real
+     * filter, not a tautology that would pass any 32-byte value.
+     */
+    @Test
+    fun `roots-only guard rejects a non-root SPKI`() {
+        // Old cisa.gov leaf pin (www.homelandsecurity.gov) — a real 32-byte,
+        // valid-base64 pin that is NOT a CA root; the migration removed it.
+        val leafPin = "aMs+EaUklWPQX1BUlfn0NuPZZfgh+zL3/zVKxWtfNfo="
+        assertEquals(32, java.util.Base64.getDecoder().decode(leafPin).size)
+        assertTrue(
+            "guard would accept a leaf pin — it must only accept catalogued roots",
+            !KNOWN_CA_ROOT_SPKI.containsKey(leafPin),
+        )
     }
 
     /**
