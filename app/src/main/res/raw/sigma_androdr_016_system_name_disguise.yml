@@ -29,6 +29,7 @@ display:
     icon: masks
     triggered_title: "System Name Disguise"
     evidence_type: none
+    guidance: "REVIEW -- disguised as system app but not from manufacturer"
 falsepositives:
     - Legitimate developer tools with system-sounding names
 remediation:
