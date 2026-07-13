@@ -107,9 +107,13 @@ pointer stays pinned until explicitly bumped. New rules added upstream by
 changes (e.g., after the AI pipeline reveals a schema gap).
 
 **Rule manifest integrity (`rules.sha256`) — keep it in sync:** The app fetches
-`rules.txt` + `rules.sha256` from `android-sigma-rules` main and **skips any
-rule whose content hash doesn't match the manifest** (`SigmaRuleFeed` fail-closed
-integrity check). A rule edited without regenerating `rules.sha256` is therefore
+`rules.txt` + `rules.sha256` from `android-sigma-rules` main and, for the default
+repo, **fails closed**. A rule whose content hash doesn't match the manifest is
+dropped (this was always the case); and, both since #238, a rule listed in
+`rules.txt` but absent from the manifest is dropped, and a `rules.sha256` that is
+itself missing, unfetchable, or empty/corrupt causes **all** remote rules to be
+dropped rather than loaded unverified. (Custom rule URLs configured in settings
+stay lenient: they may ship no manifest.) A rule edited without regenerating `rules.sha256` is therefore
 *silently dropped on-device* with no error. Whenever you change a rule listed in
 `rules.txt`, regenerate the manifest:
 
