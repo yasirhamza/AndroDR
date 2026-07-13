@@ -1,6 +1,7 @@
 package com.androdr.sigma
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class SigmaRuleFeedTest {
@@ -60,5 +61,52 @@ class SigmaRuleFeedTest {
     @Test
     fun `parseHashManifest returns empty for blank input`() {
         assertEquals(0, SigmaRuleFeed.parseHashManifest("").size)
+    }
+
+    // --- Integrity decision (fail-closed for the default repo) — #238 ---
+
+    private val yaml = "title: t\nid: androdr-001\n"
+    private val goodHash = java.security.MessageDigest.getInstance("SHA-256")
+        .digest(yaml.toByteArray()).joinToString("") { "%02x".format(it) }
+
+    @Test
+    fun `matching hash is accepted`() {
+        val d = SigmaRuleFeed.decideRuleFile("a.yml", yaml, mapOf("a.yml" to goodHash), requireManifest = true)
+        assertEquals(SigmaRuleFeed.RuleFileDecision.Accept, d)
+    }
+
+    @Test
+    fun `mismatched hash is skipped regardless of requireManifest`() {
+        for (req in listOf(true, false)) {
+            val d = SigmaRuleFeed.decideRuleFile("a.yml", yaml, mapOf("a.yml" to "deadbeef"), requireManifest = req)
+            assertTrue("req=$req", d is SigmaRuleFeed.RuleFileDecision.Skip)
+        }
+    }
+
+    @Test
+    fun `file absent from manifest fails closed when manifest required`() {
+        // Manifest present (other file listed) but THIS file missing → unverified → skip.
+        val d = SigmaRuleFeed.decideRuleFile("a.yml", yaml, mapOf("other.yml" to goodHash), requireManifest = true)
+        assertTrue(d is SigmaRuleFeed.RuleFileDecision.Skip)
+    }
+
+    @Test
+    fun `file absent from manifest is accepted for lenient custom feed`() {
+        val d = SigmaRuleFeed.decideRuleFile("a.yml", yaml, mapOf("other.yml" to goodHash), requireManifest = false)
+        assertEquals(SigmaRuleFeed.RuleFileDecision.Accept, d)
+    }
+
+    @Test
+    fun `empty manifest map accepts for lenient custom feed`() {
+        val d = SigmaRuleFeed.decideRuleFile("a.yml", yaml, emptyMap(), requireManifest = false)
+        assertEquals(SigmaRuleFeed.RuleFileDecision.Accept, d)
+    }
+
+    @Test
+    fun `empty manifest map fails closed when manifest required (corrupt or missing sha256)`() {
+        // A corrupt/garbage rules.sha256 parses to an empty map. It must NOT be
+        // treated as "no verification needed" — that would be a fail-open bypass.
+        val d = SigmaRuleFeed.decideRuleFile("a.yml", yaml, emptyMap(), requireManifest = true)
+        assertTrue(d is SigmaRuleFeed.RuleFileDecision.Skip)
     }
 }
