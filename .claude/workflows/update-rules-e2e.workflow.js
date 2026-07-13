@@ -204,18 +204,18 @@ Set "requires_verification": true on any SIR built from a single unstructured so
 Return ONLY {sirs, updated_cursors: {}} JSON. Entire final message = that JSON.`
 }
 
-function authorPrompt(sirs) {
+function authorPrompt(sirs, nextId) {
   return `You are the Rule Author for the AndroDR SIGMA pipeline, running inside ${REPO} (rules submodule at ${SIGMA}).
 
 Read ${REPO}/.claude/commands/update-rules-author.md and follow it EXACTLY, including the IOC-data-vs-rule Decision Gate that you MUST apply to every SIR.
 
-next_id: ${NEXT_ID}  (assign rule IDs sequentially from here)
+next_id: ${nextId}  (assign rule IDs sequentially from here; this range is reserved for your shard, so never reuse an id outside it)
 today's date: ${TODAY}
 
-Existing rule index (for dedup; do NOT recreate):
+Existing rule index (for dedup; do NOT recreate a rule that already exists):
 ${RULE_INDEX}
 
-Existing IOC database — READ the actual files under ${SIGMA}/ioc-data/ (c2-domains.yml, malware-hashes.yml, package-names.yml, cert-hashes.yml) and do NOT re-add indicators already present there.
+Do NOT dedup IOC indicators against the existing ioc-data corpus — a dedicated downstream stage reads the actual ioc-data files and drops anything already present. Emit every indicator your SIRs attribute (correctly typed and formatted); redundancy is removed later, so do not spend time reading c2-domains.yml / malware-hashes.yml / package-names.yml / cert-hashes.yml.
 
 Logsource taxonomy: READ ${SIGMA}/validation/logsource-taxonomy.yml. Only use field names listed there for the target service, and only target services with status: active in that file (do not rely on a memorized list — the taxonomy is the source of truth). Any status: unwired service (currently network_monitor) must NEVER be targeted; record a telemetry_gap decision instead.
 
@@ -324,7 +324,9 @@ function dedupPrompt(iocs) {
 Proposed IOC-data candidates (JSON array):
 ${JSON.stringify(iocs)}
 
-Step 1 — read ${SIGMA}/validation/kotlin-mirror-feeds.yml. It lists the feeds the app pulls on-device and the IOC TYPES each delivers. Note that NO mirror feed carries file hashes (APK_HASH / cert hashes) — so file_hash candidates are always additive and never need dropping.
+The candidates above are pre-filtered to DOMAIN and PACKAGE-NAME types only — file/cert hashes are dropped from your input upstream because NO mirror feed carries them (always additive), so you never need to handle hashes here.
+
+Step 1 — read ${SIGMA}/validation/kotlin-mirror-feeds.yml. It lists the feeds the app pulls on-device and the IOC TYPES each delivers.
 
 Step 2 — build the authoritative on-device coverage set U for the candidate types present (domains, package names). CRITICAL: feeds tagged 'parser_limited: true' (currently mvt-indicators and threatfox) are SKIPPED by validate-ioc-complementarity.py, but the Kotlin client still delivers them on-device — so you MUST fetch them MANUALLY rather than trusting the Python parser:
   - mvt-indicators: fetch https://raw.githubusercontent.com/mvt-project/mvt-indicators/main/indicators.yaml (a dict with key 'indicators'). Each item has a 'github' ref {owner,repo,branch,path}; build the raw URL https://raw.githubusercontent.com/<owner>/<repo>/<branch>/<path> and fetch that STIX2 JSON. From each object of type 'indicator', regex the pattern for domain-name:value and (for package candidates) app/process names. Union every bundle. (As of last run there were 15 bundles incl. a dedicated "Wintego Helios" bundle — MVT mirrors AmnestyTech/investigations, so Amnesty-sourced domains very often ALREADY live in MVT.)
@@ -412,18 +414,54 @@ if (allSirs.length === 0) {
 }
 
 phase('Author')
-const authored = await agent(authorPrompt(allSirs), { label: 'author', phase: 'Author', schema: AUTHOR_OUT })
-const candidates = (authored && authored.candidates) || []
-const iocDataRaw = (authored && authored.ioc_data) || []
-log(`Author produced ${candidates.length} rule candidate(s) + ${iocDataRaw.length} IOC-data entr(ies)`)
+// Shard the SIRs across parallel author agents. The author is read-heavy and its
+// output (often hundreds of IOC entries) is generated sequentially, so a single
+// agent over all SIRs is the pipeline's slowest stage. Fan-out turns wall-clock
+// from sum-of-all-SIRs into slowest-single-shard. Each shard gets a disjoint
+// rule-id range so sequential id assignment can never collide across shards.
+const AUTHOR_SHARD_SIZE = 8
+const ID_BASE = (() => {
+  const m = /(\d+)\s*$/.exec(NEXT_ID || '')
+  return m ? parseInt(m[1], 10) : NaN
+})()
+const ID_PREFIX = (NEXT_ID || 'androdr-089').replace(/(\d+)\s*$/, '')
+const ID_STRIDE = 50 // per-shard id headroom; far above any single-shard rule count
+function shardNextId(shardIndex) {
+  return Number.isNaN(ID_BASE) ? NEXT_ID : `${ID_PREFIX}${String(ID_BASE + shardIndex * ID_STRIDE).padStart(3, '0')}`
+}
+const sirShards = []
+for (let i = 0; i < allSirs.length; i += AUTHOR_SHARD_SIZE) sirShards.push(allSirs.slice(i, i + AUTHOR_SHARD_SIZE))
+log(`Author: ${allSirs.length} SIR(s) → ${sirShards.length} parallel shard(s) of ≤${AUTHOR_SHARD_SIZE}`)
+
+const authoredShards = await parallel(
+  sirShards.map((shard, i) => () =>
+    agent(authorPrompt(shard, shardNextId(i)), { label: `author:shard${i}`, phase: 'Author', schema: AUTHOR_OUT })
+  )
+)
+const candidates = authoredShards.filter(Boolean).flatMap(a => a.candidates || [])
+const iocDataRaw = authoredShards.filter(Boolean).flatMap(a => a.ioc_data || [])
+log(`Author produced ${candidates.length} rule candidate(s) + ${iocDataRaw.length} IOC-data entr(ies) across ${sirShards.length} shard(s)`)
 
 phase('Dedup')
+// The mirror-feed dedup's cost is the manual on-device coverage fetch (MVT's ~15
+// STIX bundles + stalkerware), which only covers DOMAINS and PACKAGE NAMES. Per
+// the stage's own Step 1, NO mirror feed carries file/cert hashes, so those are
+// always additive — route them straight through and only send the dedup agent
+// the types it can actually drop. On a hash-only run the expensive agent is
+// skipped entirely.
+const needsMirrorDedup = (t) => !/hash/i.test(t || '')
+const alwaysAdditive = iocDataRaw.filter(e => !needsMirrorDedup(e.type))
+const dedupCandidates = iocDataRaw.filter(e => needsMirrorDedup(e.type))
 let iocData = iocDataRaw
-let dedupResult = { additive: iocDataRaw, dropped: [], log: ['no IOC candidates to dedup'] }
-if (iocDataRaw.length) {
-  dedupResult = await agent(dedupPrompt(iocDataRaw), { label: 'dedup:mirror-feeds', phase: 'Dedup', schema: DEDUP_OUT })
-  iocData = (dedupResult && dedupResult.additive) || []
-  log(`Mirror-feed dedup: ${iocData.length} additive, ${(dedupResult.dropped || []).length} dropped as on-device-redundant`)
+let dedupResult = { additive: dedupCandidates, dropped: [], log: ['no domain/package candidates to dedup'] }
+if (dedupCandidates.length) {
+  dedupResult = await agent(dedupPrompt(dedupCandidates), { label: 'dedup:mirror-feeds', phase: 'Dedup', schema: DEDUP_OUT })
+  const survivors = (dedupResult && dedupResult.additive) || []
+  iocData = [...alwaysAdditive, ...survivors]
+  log(`Mirror-feed dedup: ${survivors.length}/${dedupCandidates.length} domain+package additive, ` +
+    `${(dedupResult.dropped || []).length} dropped; ${alwaysAdditive.length} hash entr(ies) bypassed (always additive)`)
+} else {
+  log(`Mirror-feed dedup skipped: all ${alwaysAdditive.length} candidate(s) are file/cert hashes (always additive)`)
 }
 
 phase('Validate')
