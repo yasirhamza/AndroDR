@@ -420,6 +420,22 @@ scenarios:
       - "Notification Listener"
       - "Hidden App (No Launcher Icon)"
 
+  - id: sms_notification_otp_theft
+    track: 3
+    risk: high
+    technique: T1636.004
+    tactic: collection
+    description: "Sideloaded app combining RECEIVE_SMS with a NotificationListenerService — the OTP-theft banker combo (Mamont pattern) that androdr-089 attributes"
+    source: fixture
+    fixture: fixtures/mercenary/sms-notification-otp-theft.apk
+    sha256: "bc5c80660862eaa1a12f21cfb4840f966689d71ec118b84befc1204242c547c1"
+    tags: [android, sms-interception, notification-listener, banker-pattern]
+    attack: [T1636.004, T1517]
+    expected_patterns:
+      - "SMS + Notification Access"
+      - "Notification Listener"
+      - "Hidden App (No Launcher Icon)"
+
   - id: firmware_implant_sim
     track: 3
     risk: medium
