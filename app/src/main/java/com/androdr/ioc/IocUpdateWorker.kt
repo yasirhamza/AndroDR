@@ -24,11 +24,15 @@ class IocUpdateWorker @AssistedInject constructor(
     @Suppress("TooGenericExceptionCaught")
     override suspend fun doWork(): Result {
         return try {
-            val fetched = intelRefresher.refreshAll(skipIfRefreshedWithinMs = RECENT_REFRESH_SKIP_MS)
+            val report = intelRefresher.refreshAll(skipIfRefreshedWithinMs = RECENT_REFRESH_SKIP_MS)
             val thirtyDaysAgo = System.currentTimeMillis() - (30L * 24 * 60 * 60 * 1000)
             scanRepository.pruneOldDnsEvents(thirtyDaysAgo)
             forensicTimelineEventDao.deleteOlderThan(thirtyDaysAgo)
-            Log.i(TAG, "Worker finished — $fetched IOC entries, ${sigmaRuleEngine.ruleCount()} SIGMA rules")
+            Log.i(
+                TAG,
+                "Worker finished — ${report.bulkFetchedCount} IOC entries, " +
+                    "${sigmaRuleEngine.ruleCount()} SIGMA rules",
+            )
             Result.success()
         } catch (e: Exception) {
             Log.e(TAG, "IOC update failed: ${e.message}")

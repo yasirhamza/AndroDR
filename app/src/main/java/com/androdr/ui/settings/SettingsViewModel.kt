@@ -15,18 +15,14 @@ import com.androdr.ioc.CertHashIocDatabase
 import com.androdr.data.model.Indicator
 import com.androdr.ioc.FeedHealthRecorder
 import com.androdr.ioc.IndicatorResolver
-import com.androdr.ioc.IndicatorUpdater
+import com.androdr.ioc.IntelRefresher
 import com.androdr.ioc.toStixBundle
-import com.androdr.ioc.KnownAppUpdater
-import com.androdr.ioc.OemPrefixResolver
 import com.androdr.scanner.AppScanner
 import com.androdr.sigma.SigmaRuleEngine
-import com.androdr.sigma.SigmaRuleFeed
 import com.androdr.ui.theme.ThemeMode
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -53,8 +49,6 @@ data class FeedHealthUi(
     val isStale: Boolean,
 )
 
-@Suppress("LongParameterList") // SettingsViewModel requires injection of all IOC DAOs, updaters,
-// and engines to display threat database stats and trigger manual updates from one screen.
 @HiltViewModel
 class SettingsViewModel @Inject constructor(
     @ApplicationContext private val appContext: Context,
@@ -63,12 +57,9 @@ class SettingsViewModel @Inject constructor(
     private val certHashIocDatabase: CertHashIocDatabase,
     private val sigmaRuleEngine: SigmaRuleEngine,
     private val cveRepository: CveRepository,
-    private val indicatorUpdater: IndicatorUpdater,
-    private val knownAppUpdater: KnownAppUpdater,
+    private val intelRefresher: IntelRefresher,
     private val appScanner: AppScanner,
-    private val sigmaRuleFeed: SigmaRuleFeed,
     private val forensicTimelineEventDao: ForensicTimelineEventDao,
-    private val oemPrefixResolver: OemPrefixResolver,
     private val feedHealthDao: FeedHealthDao
 ) : ViewModel() {
 
@@ -151,84 +142,48 @@ class SettingsViewModel @Inject constructor(
     }
 
     /** Triggers all feed updates, SIGMA rule refresh, and CVE refresh. */
-    @Suppress("TooGenericExceptionCaught", "LongMethod") // Per-feed error handling is intentionally verbose
+    @Suppress("TooGenericExceptionCaught") // refreshAll is fault-tolerant; catch guards the rare non-feed error
     fun triggerUpdate() {
         if (_updating.value) return
         viewModelScope.launch {
             _updating.value = true
-            var indicatorsStatus = ""
-            var knownAppsStatus = ""
-            var sigmaRulesStatus = ""
-            var cveDatabaseStatus = ""
-            var oemPrefixesStatus = ""
             try {
-                val indicatorJob = async {
-                    try {
-                        val count = indicatorUpdater.update()
-                        "$count indicators"
-                    } catch (e: Exception) {
-                        Log.w(TAG, "Indicator update failed: ${e.message}")
-                        "Failed: ${e.message}"
-                    }
-                }
-                val knownAppJob = async {
-                    try {
-                        val count = knownAppUpdater.update()
-                        "$count apps"
-                    } catch (e: Exception) {
-                        Log.w(TAG, "Known app update failed: ${e.message}")
-                        "Failed: ${e.message}"
-                    }
-                }
-                val oemPrefixJob = async {
-                    try {
-                        oemPrefixResolver.refresh()
-                        "Updated"
-                    } catch (e: Exception) {
-                        Log.w(TAG, "OEM prefix refresh failed: ${e.message}")
-                        "Failed: ${e.message}"
-                    }
-                }
-                indicatorsStatus = indicatorJob.await()
-                knownAppsStatus = knownAppJob.await()
-                oemPrefixesStatus = oemPrefixJob.await()
-
-                // Refresh SIGMA rules
-                sigmaRulesStatus = try {
-                    val remoteRules = sigmaRuleFeed.fetch()
-                    if (remoteRules.isNotEmpty()) {
-                        sigmaRuleEngine.setRemoteRules(remoteRules)
-                    }
-                    "${sigmaRuleEngine.ruleCount()} rules"
-                } catch (e: Exception) {
-                    Log.w(TAG, "SIGMA rule refresh failed: ${e.message}")
-                    "Failed: ${e.message}"
-                }
-
-                // Refresh CVE database
-                cveDatabaseStatus = try {
-                    cveRepository.refresh()
-                    "Updated"
-                } catch (e: Exception) {
-                    Log.w(TAG, "CVE database refresh failed: ${e.message}")
-                    "Failed: ${e.message}"
-                }
-
+                // Route through the shared refresher (skip window 0 = always run)
+                // so the manual path records feed_health exactly like the periodic
+                // worker and pre-scan refresh do — a direct call to the updaters
+                // wrote no health row, so the health list in this very card read
+                // stale right after a successful manual update (#244). This also
+                // picks up the curated public-repo IOC feed + known-app cache
+                // refresh the old manual path skipped entirely.
+                val report = intelRefresher.refreshAll(skipIfRefreshedWithinMs = 0L)
+                _updateResult.value = report.toUpdateResult()
                 refreshStats()
             } catch (e: Exception) {
+                // refreshAll swallows per-feed failures, so reaching here means an
+                // unexpected non-feed error (e.g. a DB read). Still surface a result
+                // dialog rather than leaving the spinner with no outcome.
                 Log.e(TAG, "Threat database update failed: ${e.message}")
+                _updateResult.value = ALL_FEEDS_FAILED
             } finally {
-                _updateResult.value = UpdateResult(
-                    indicators = indicatorsStatus,
-                    knownApps = knownAppsStatus,
-                    sigmaRules = sigmaRulesStatus,
-                    cveDatabase = cveDatabaseStatus,
-                    oemPrefixes = oemPrefixesStatus
-                )
                 _updating.value = false
             }
         }
     }
+
+    // Per-feed status strings for the manual dialog. Counts are the recorded
+    // this-run signals; a 0 count is a failure ("empty is failure", #236) and
+    // renders as such so every feed presents success/failure the same way. No
+    // exception text is surfaced (the health list below the dialog carries the
+    // authoritative per-feed stale/failed state, and #236 deliberately keeps
+    // attacker-influenceable error strings out of the UI). Assumes a non-skipped
+    // report — the manual path always passes skipIfRefreshedWithinMs = 0.
+    private fun IntelRefresher.RefreshReport.toUpdateResult(): UpdateResult = UpdateResult(
+        indicators = if (indicators > 0) "$indicators indicators" else UPDATE_FAILED,
+        knownApps = if (knownApps > 0) "$knownApps apps" else UPDATE_FAILED,
+        sigmaRules = if (sigmaRemoteRules > 0) "${sigmaRuleEngine.ruleCount()} rules" else UPDATE_FAILED,
+        cveDatabase = if (cveReachable > 0) "Updated" else UPDATE_FAILED,
+        oemPrefixes = if (oemPrefixes > 0) "Updated" else UPDATE_FAILED,
+    )
 
     private fun refreshStats() {
         viewModelScope.launch {
@@ -407,5 +362,16 @@ class SettingsViewModel @Inject constructor(
     companion object {
         private const val TAG = "SettingsViewModel"
         private const val DEBOUNCE_MS = 500L
+
+        // Manual-update dialog sentinel. UpdateStatusRow renders any status
+        // containing "failed" in the error color, so this word must stay in it.
+        private const val UPDATE_FAILED = "Update failed"
+        private val ALL_FEEDS_FAILED = UpdateResult(
+            indicators = UPDATE_FAILED,
+            knownApps = UPDATE_FAILED,
+            sigmaRules = UPDATE_FAILED,
+            cveDatabase = UPDATE_FAILED,
+            oemPrefixes = UPDATE_FAILED,
+        )
     }
 }

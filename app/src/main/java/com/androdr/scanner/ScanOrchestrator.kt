@@ -178,7 +178,12 @@ class ScanOrchestrator @Inject constructor(
             }
         ))
         sigmaRuleEngine.loadBundledRules()
-        // Fetch remote rules in background — non-blocking, failures are silent
+        // Fetch remote rules in background — non-blocking, failures are silent.
+        // This is the ONE sanctioned direct sigmaRuleFeed.fetch() that does NOT
+        // record feed_health (contrast IntelRefresher.refreshAll, the single
+        // recorded path): it's a cold-start engine bootstrap, not a scheduled
+        // refresh, and the worker/pre-scan/manual paths all record it in normal
+        // operation.
         @Suppress("TooGenericExceptionCaught")
         try {
             val remoteRules = sigmaRuleFeed.fetch()
