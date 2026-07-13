@@ -24,5 +24,6 @@ include(
     ":notification-listener-abuse",
     ":overlay-permission",
     ":nfc-relay",
-    ":overlay-accessibility-combo"
+    ":overlay-accessibility-combo",
+    ":sms-notification-otp-theft"
 )

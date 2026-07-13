@@ -46,6 +46,7 @@ MODULES=(
     "multi-abuse-combo"
     "firmware-implant-sim"
     "notification-listener-abuse"
+    "sms-notification-otp-theft"
 )
 
 echo ""

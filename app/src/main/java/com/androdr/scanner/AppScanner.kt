@@ -72,15 +72,24 @@ class AppScanner @Inject constructor(
 
         /**
          * High-risk permissions that are NOT surveillance signals but are abused by
-         * malware — e.g. SYSTEM_ALERT_WINDOW (banking-trojan credential overlays) and
-         * NFC (card-emulation relay fraud). Surfaced in the `permissions` telemetry
-         * field (short-named), but deliberately excluded from
-         * [AppTelemetry.surveillancePermissionCount] so they do not inflate the
-         * surveillance-cluster rules (androdr-011/017).
+         * malware — e.g. SYSTEM_ALERT_WINDOW (banking-trojan credential overlays),
+         * NFC (card-emulation relay fraud), and RECEIVE_SMS (real-time interception
+         * of incoming OTP/2FA texts by SMS-stealing bankers). Surfaced in the
+         * `permissions` telemetry field (short-named) so combo rules can match them,
+         * but deliberately excluded from [AppTelemetry.surveillancePermissionCount]
+         * so they do not inflate the surveillance-cluster rules (androdr-011/017).
+         *
+         * RECEIVE_SMS lives here rather than in [SURVEILLANCE_PERMISSIONS] on
+         * purpose: unlike READ_SMS (reading the stored inbox — genuine surveillance),
+         * RECEIVE_SMS is an interception/fraud enabler that is extremely common in
+         * legitimate OTP-autofill apps, so counting it toward the surveillance
+         * cluster would be a large false-positive driver. It is matchable for the
+         * multi-condition OTP-theft rule (androdr-089) without that side effect.
          */
         private val HIGH_RISK_PERMISSIONS = setOf(
             Manifest.permission.SYSTEM_ALERT_WINDOW,
-            Manifest.permission.NFC
+            Manifest.permission.NFC,
+            Manifest.permission.RECEIVE_SMS
         )
 
         /**

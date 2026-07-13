@@ -1,0 +1,56 @@
+title: Sideloaded app with SMS interception and notification access (OTP-theft banker)
+id: androdr-089
+status: experimental
+category: incident
+description: >
+    A sideloaded app combines the RECEIVE_SMS permission (real-time interception of
+    incoming texts) with a NotificationListenerService binding (reading every
+    notification). Together on an unvetted, sideloaded app this is the OTP-theft
+    signature of SMS-stealing banking trojans: the app siphons one-time passcodes
+    and 2FA codes both as they arrive by SMS and as they surface in notification
+    shades, defeating SMS- and push-based two-factor authentication. Mamont relies
+    purely on this SMS+notification combo; RedWing and GoldPickaxe use it alongside
+    the overlay/accessibility takeover already attributed by androdr-088. Notification
+    access alone (androdr-067) is high but generic; pairing it with SMS interception
+    on a sideloaded app specifically attributes the OTP-theft pattern and warrants
+    banker-specific remediation.
+author: AndroDR
+date: 2026/07/13
+references:
+    - https://news.drweb.com/show/?i=14934
+    - https://zimperium.com/blog/redwing-android-banking-trojan
+tags:
+    - attack.t1636.004
+    - attack.t1517
+logsource:
+    product: androdr
+    service: app_scanner
+detection:
+    selection:
+        is_sideloaded: true
+        permissions|contains: "RECEIVE_SMS"
+        service_permissions|contains: "BIND_NOTIFICATION_LISTENER_SERVICE"
+    filter_known_good:
+        # from_trusted_store gates the exemption: known_good_app_db is a
+        # package-name-only lookup with no signature binding (ADR #51), so
+        # without this a sideloaded banker could impersonate a known-good
+        # package name and be silently exempted — the exact impersonation
+        # bypass androdr-011 was fixed to close. A genuinely sideloaded app
+        # (from_trusted_store: false) can never reach the exemption.
+        package_name|ioc_lookup: known_good_app_db
+        from_trusted_store: true
+    condition: selection and not filter_known_good
+level: high
+falsepositives:
+    - "Sideloaded but legitimate apps that genuinely combine SMS receipt with notification access: alternative SMS/messaging clients with notification sync, call/SMS backup tools, and automation suites (e.g. Tasker-style) that react to both texts and notifications. Popular ones are suppressed by filter_known_good; niche tools may still trip this."
+display:
+    category: app_risk
+    icon: sms
+    triggered_title: "SMS + Notification Access (Sideloaded)"
+    evidence_type: none
+remediation:
+    - "This sideloaded app can both read your incoming text messages AND see all your notifications — the exact combination SMS-stealing banking malware uses to intercept the one-time codes that protect your bank and other accounts."
+    - "If you did not install this app intentionally, or do not fully trust it, uninstall it: Settings > Apps > [this app] > Uninstall."
+    - "Revoke its access under Settings > Apps > Special access > Notification access and Settings > Apps > [this app] > Permissions > SMS."
+implies_flags:
+    - sideloaded
