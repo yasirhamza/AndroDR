@@ -58,6 +58,10 @@ reports-from-device-tests/
 build/uat/
 .superpowers/
 
+# MemSearch plugin: local conversation memory + vector index.
+# MUST stay out of this public repo — it captures session summaries.
+.memsearch/
+
 # Local-only: LinkedIn post drafts + screenshots, not for the repo
 docs/linkedin-*/
 
