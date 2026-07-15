@@ -66,8 +66,6 @@ gradle/actions/setup-gradle v4 validates all wrapper jars by default
 
 ## Release integrity (layer 4) — verifying a release
 
-> **Status: pending PR 2 of #252** — remove this note when it merges.
-
 Every release published by `release.yml` carries three artifacts: the
 signed APK, `bom.json` (CycloneDX SBOM), and a provenance attestation
 stored in the repo's attestation log. To verify a downloaded APK

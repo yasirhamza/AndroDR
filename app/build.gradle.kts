@@ -6,6 +6,7 @@ plugins {
     alias(libs.plugins.hilt)
     alias(libs.plugins.ksp)
     alias(libs.plugins.detekt)
+    alias(libs.plugins.cyclonedx.bom)
 }
 
 android {
@@ -142,6 +143,16 @@ android {
         // since the adaptive icon is only drawn on API 26+ devices anyway.
         disable += setOf("GradleDependency", "AndroidGradlePluginVersion", "ObsoleteSdkInt")
     }
+}
+
+// SBOM for release evidence (#252). Aggregate task emits JSON only; the
+// direct task is restricted to what actually ships (release runtime).
+tasks.cyclonedxBom {
+    jsonOutput.set(layout.buildDirectory.file("reports/cyclonedx/bom.json"))
+    xmlOutput.unsetConvention()
+}
+tasks.cyclonedxDirectBom {
+    includeConfigs.set(listOf("releaseRuntimeClasspath"))
 }
 
 // KSP source sets for Room schema export (optional but recommended)

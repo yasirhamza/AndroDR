@@ -25,8 +25,6 @@ many detection-content fixes reach all installs without an app update.
 
 ## Verifying release artifacts
 
-> **Status: pending PR 2 of #252** — remove this note when it merges.
-
 Every GitHub release ships a signed APK, a CycloneDX SBOM, and a SLSA
 build-provenance attestation. See
 [docs/supply-chain.md](docs/supply-chain.md) for verification commands.

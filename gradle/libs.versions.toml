@@ -40,6 +40,7 @@ snakeyamlEngine = "2.7"
 # Code quality & security
 detekt = "1.23.7"
 # owaspDepCheck removed -- replaced by Dependabot (.github/dependabot.yml)
+cyclonedx = "3.3.0"
 
 # Testing
 junit = "4.13.2"
@@ -116,3 +117,4 @@ kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", versi
 hilt = { id = "com.google.dagger.hilt.android", version.ref = "hilt" }
 ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
 detekt = { id = "io.gitlab.arturbosch.detekt", version.ref = "detekt" }
+cyclonedx-bom = { id = "org.cyclonedx.bom", version.ref = "cyclonedx" }
