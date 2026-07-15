@@ -31,6 +31,8 @@ AGP 8.7.3, CodeQL (`java-kotlin`), `actions/dependency-review-action`,
 - **GitHub-native-first:** the only third-party additions allowed are the CycloneDX Gradle plugin and SHA-pinned versions of actions already in use.
 - Commit messages follow repo convention (`type(scope): subject`) and end with `Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>`.
 - Branches: PR 1 = `feat/252-supply-chain-pr1` (already exists, spec committed on it), PR 2 = `feat/252-supply-chain-pr2-release`, PR 3 = `feat/252-supply-chain-pr3-depverify`.
+- **Signing decision (maintainer, 2026-07-15): the Play upload key is NEVER stored in CI.** GitHub releases are signed by a dedicated CI release keystore (Task 8 generates it). Any step that would export, base64, or `gh secret set` the upload keystore or its `~/.gradle` passwords is a plan violation.
+- **Phase 2 prerequisite:** local `gh` ≥ 2.49 (`gh attestation` does not exist in 2.45, which is currently installed). Upgrade before Task 10.
 
 ---
 
@@ -81,7 +83,7 @@ for f in .github/workflows/ci.yml .github/workflows/release.yml .github/workflow
 done
 ```
 
-One caveat: `ci.yml` line 24 has a **comment** mentioning `dorny/paths-filter@v3` — the sed will rewrite it too. That's acceptable (comment stays truthful) but check the diff reads sensibly.
+Two caveats: `ci.yml` line 24 has a **comment** mentioning `dorny/paths-filter@v3`, and `ci.yml` line 203 has a comment mentioning `actions/checkout@v4` — the sed rewrites both. That's acceptable (comments stay truthful, verified to still pass actionlint) but check the diff reads sensibly.
 
 - [ ] **Step 2: Verify no mutable tag remains and actionlint passes**
 
@@ -127,21 +129,28 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
 ```
 # Tracked-path denylist — the outbound-leak guard's source of truth.
 # One git pathspec glob per line; CI fails if any TRACKED file matches
-# (git ls-files -- ':(glob)PATTERN'). Lines starting with # are comments.
+# (git ls-files -- ':(glob,icase)PATTERN' — case-insensitive, so
+# Release.JKS cannot escape). Lines starting with # are comments.
+# Every pattern is **/-prefixed: root-anchored globs miss a state dir
+# auto-created in a subdirectory or worktree, which is exactly the
+# motivating incident's recurrence mode.
 # Mirror every addition here into .gitignore so the file never gets
 # tracked in the first place.
 #
 # NOTE: .claude/ is deliberately NOT wholesale-denylisted — the repo
 # intentionally tracks .claude/commands/ (the public update-rules
 # pipeline skills). Only local state is banned.
-.memsearch/**
-.superpowers/**
-.claude/settings.local.json
+**/.memsearch/**
+**/.superpowers/**
+**/.claude/settings.local.json
 **/*.jks
 **/*.keystore
+**/*.p12
+**/*.pfx
+**/*.pepk
+**/*.bks
 **/local.properties
-**/.env
-**/.env.*
+**/.env*
 ```
 
 - [ ] **Step 2: Write the checker script**
@@ -159,7 +168,7 @@ DENYLIST="${1:-.github/tracked-path-denylist.txt}"
 fail=0
 while IFS= read -r pattern; do
   case "$pattern" in ''|'#'*) continue ;; esac
-  matches=$(git ls-files -- ":(glob)$pattern")
+  matches=$(git ls-files -- ":(glob,icase)$pattern")
   if [ -n "$matches" ]; then
     echo "DENYLISTED tracked path(s) matching '$pattern':" >&2
     echo "$matches" >&2
@@ -190,21 +199,25 @@ Expected: `PASS: no tracked file matches the denylist` (verified 2026-07-15 that
 - [ ] **Step 4: Red test — stage a denylisted file, expect failure**
 
 ```bash
-touch .env.test && git add .env.test
+mkdir -p sub && touch .env.test sub/Fake.JKS && git add .env.test sub/Fake.JKS
 bash .github/scripts/check-tracked-paths.sh; echo "exit=$?"
-git rm --cached -q .env.test && rm .env.test
+git rm --cached -q .env.test sub/Fake.JKS && rm .env.test sub/Fake.JKS && rmdir sub
 ```
 
-Expected: `DENYLISTED tracked path(s) matching '**/.env.*': .env.test`, `FAIL: ...`, `exit=1`. (Staged files appear in `git ls-files`, so this exercises the real failure path without committing.)
+Expected: matches reported for both `'**/.env*'` (`.env.test`) and `'**/*.jks'` (`sub/Fake.JKS` — proves subdirectory + case-insensitive matching), then `FAIL: ...`, `exit=1`. (Staged files appear in `git ls-files`, so this exercises the real failure path without committing.)
 
 - [ ] **Step 5: Mirror into .gitignore**
 
 Append to `.gitignore` (after the `.memsearch/` block; `.claude/`, `.superpowers/`, `*.jks`, `*.keystore`, `local.properties` are already ignored):
 
 ```
-# Env files — must never be tracked (see .github/tracked-path-denylist.txt)
-.env
-.env.*
+# Env files + key-material formats — must never be tracked
+# (mirrors .github/tracked-path-denylist.txt)
+.env*
+*.p12
+*.pfx
+*.pepk
+*.bks
 ```
 
 - [ ] **Step 6: Add the CI job and wire it into ci-success**
@@ -254,7 +267,31 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
 
 **Interfaces:**
 - Consumes: pin table from Task 1.
-- Produces: CI job names `dependency-submission` and `dependency-review`, both folded into `ci-success` (skipped-counts-as-pass, same as every other path-filtered gate). **Design refinement vs the spec:** blocking happens via the existing required `ci-success` check rather than a new required ruleset context — this reuses the repo's established path-filter pattern so docs-only PRs aren't blocked waiting for a check that never reports. Task 5's docs and the PR body must state this.
+- Produces: CI job names `dependency-submission` and `dependency-review`, both folded into `ci-success` (skipped-counts-as-pass, same as every other path-filtered gate). **Design refinement vs the spec (ratified at plan gate):** blocking happens via the existing required `ci-success` check rather than a new required ruleset context — this reuses the repo's established path-filter pattern so docs-only PRs aren't blocked waiting for a check that never reports. Task 5's docs and the PR body must state this.
+
+- [ ] **Step 0: Enable the dependency graph + alerts (repo settings pre-flight)**
+
+The graph and alerts are currently DISABLED (verified at plan gate: the
+compare endpoint 403s, `vulnerability-alerts` 404s). Without this, both new
+jobs hard-fail inside required `ci-success` and wedge PR 1.
+
+```bash
+gh api -X PUT repos/:owner/:repo/vulnerability-alerts        # enables alerts + dependency graph
+gh api -X PUT repos/:owner/:repo/automated-security-fixes    # Dependabot security updates
+gh api repos/:owner/:repo/vulnerability-alerts && echo "alerts: enabled"
+```
+
+Expected: both PUTs return 204; the GET returns 204 (enabled). Then, once
+alerts populate (minutes), pre-audit the standing tree:
+
+```bash
+gh api "repos/:owner/:repo/dependabot/alerts?state=open&severity=critical,high" --jq 'length'
+```
+
+Expected: `0`. If not 0, list them — fixable ones get version bumps in a
+separate prior PR; genuinely unfixable ones are pre-seeded into
+`allow-ghsas` (Step 3) with reason + review date, so PR 1's own gate can't
+ambush us.
 
 - [ ] **Step 1: Add the `deps` filter bucket**
 
@@ -268,7 +305,11 @@ In `ci.yml`, `changes` job: add `deps: ${{ steps.filter.outputs.deps }}` to `out
               - 'build.gradle.kts'
               - 'settings.gradle.kts'
               - '.github/workflows/ci.yml'
+              - '.github/dependency-review-config.yml'
 ```
+
+(The config file is in the bucket so a suppressions-only PR re-runs the
+gate under the new policy.)
 
 (`.github/workflows/ci.yml` is included so this very PR bootstraps the first graph snapshots on both the PR head and, after merge, on `main` — otherwise the first Dependabot PR would have no base snapshot to diff against.)
 
@@ -292,6 +333,12 @@ After `tracked-path-denylist` in `ci.yml`:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
           submodules: true
+          # This job holds a contents:write token while resolving the PR
+          # branch's Gradle build — keep the token off disk. Residual
+          # exposure via the action's env is an accepted trade-off; the
+          # fork-safe generate-and-upload/download-and-submit split is the
+          # escape hatch if it ever matters.
+          persist-credentials: false
       - uses: actions/setup-java@c1e323688fd81a25caa38c78aa6df2d33d3e20d9 # v4.8.0
         with:
           java-version: '21'
@@ -299,6 +346,13 @@ After `tracked-path-denylist` in `ci.yml`:
           cache: 'gradle'
       - uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407 # v3.2.2
       - uses: gradle/actions/dependency-submission@ed408507eac070d1f99cc633dbcf757c94c7933a # v4.4.3
+        with:
+          # Graph telemetry only — nothing built here ships. Verification
+          # must be off because the action's init script injects the
+          # github-dependency-graph plugin, whose artifacts are (by design)
+          # not recorded in gradle/verification-metadata.xml once PR 3
+          # lands. Harmless before PR 3.
+          additional-arguments: --dependency-verification=off
   # Delta-only SCA gate: fails a PR that introduces/bumps a dependency
   # carrying a known Crit/High vuln. Pre-existing tree CVEs are Dependabot's
   # job (fixable -> update PR, unfixable -> Security-tab alert).
@@ -435,9 +489,14 @@ jobs:
           languages: java-kotlin
           build-mode: manual
       - name: Build for CodeQL tracing
-        # --no-daemon: CodeQL traces compiler invocations; the Gradle
-        # daemon detaches them from the traced process tree.
-        run: ./gradlew --no-daemon assembleDebug --stacktrace
+        # CodeQL traces compiler invocations, so every flag here exists to
+        # force real compilation to happen in-process:
+        #   --no-daemon: the daemon detaches compilers from the traced tree
+        #   --no-build-cache: gradle.properties sets org.gradle.caching=true;
+        #     a cache hit means NO compiler runs and CodeQL sees no source
+        #     (guaranteed on cron runs and any PR without Kotlin changes)
+        #   --no-configuration-cache: same failure mode via the config cache
+        run: ./gradlew --no-daemon --no-build-cache --no-configuration-cache assembleDebug --stacktrace
       - uses: github/codeql-action/analyze@02c5e83432fe5497fd85b873b6c9f16a8578e1d9 # v3.37.0
         with:
           category: '/language:java-kotlin'
@@ -450,10 +509,11 @@ actionlint
 git add .github/workflows/codeql.yml
 git commit -m "ci(security): CodeQL java-kotlin SAST on PRs + weekly cron
 
-Manual build mode (AGP needs the Android SDK, so autobuild can't work).
-Path-filtered to code; GitHub's code-scanning merge protection treats
-'analysis not expected for these paths' as satisfied, so docs-only PRs
-aren't blocked.
+Manual build mode (AGP needs the Android SDK, so autobuild can't work),
+with build/config caches disabled so the traced build actually compiles.
+Path-filtered to code paths; whether code-scanning merge protection
+skips docs-only PRs cleanly is verified empirically after the ruleset
+rule is added (Task 7), with a recorded rollback if it doesn't.
 
 Refs #252
 
@@ -500,9 +560,13 @@ many detection-content fixes reach all installs without an app update.
 
 ## Verifying release artifacts
 
+> **Status: pending PR 2 of #252** — remove this note when it merges.
+
 Every GitHub release ships a signed APK, a CycloneDX SBOM, and a SLSA
 build-provenance attestation. See
 [docs/supply-chain.md](docs/supply-chain.md) for verification commands.
+The Play upload key is never stored in CI; GitHub releases are signed with
+a dedicated CI release key.
 
 ## Scope notes
 
@@ -539,7 +603,7 @@ evident or blocking.
 | 1 | Dependency integrity | Gradle checksum verification (sha256) | `gradle/verification-metadata.xml` |
 | 2 | Dependency vulns (SCA) | dependency-review PR gate + Dependabot | `ci.yml`, `.github/dependency-review-config.yml`, `.github/dependabot.yml` |
 | 3 | CI/build hardening | All actions SHA-pinned; least-privilege tokens | `.github/workflows/*.yml` |
-| 4 | Release integrity | Upload-key-signed APK + CycloneDX SBOM + SLSA provenance | `release.yml` |
+| 4 | Release integrity | CI-release-key-signed APK (pinned cert digest) + CycloneDX SBOM + SLSA provenance | `release.yml` |
 | 5 | First-party SAST | CodeQL `java-kotlin`, PRs + weekly | `codeql.yml` |
 | 6 | Outbound-leak guard | Tracked-path denylist CI job | `.github/tracked-path-denylist.txt` + `.github/scripts/check-tracked-paths.sh` |
 
@@ -576,30 +640,51 @@ Every `uses:` in every workflow is pinned to a full commit SHA with a
 `# vX.Y.Z` comment. Dependabot's `github-actions` ecosystem updates the
 SHAs monthly and preserves the comments. **Never add an action pinned to
 a tag or branch** — a mutable tag is exactly the March 2025
-`tj-actions/changed-files` attack vector.
+`tj-actions/changed-files` attack vector. **Never use
+`pull_request_target` with a checkout of the PR head** — it runs with
+secrets against attacker-controlled content; if a workflow ever needs
+secrets against PR content, use the two-workflow artifact hand-off
+pattern instead.
 
 ## Release integrity (layer 4) — verifying a release
 
+> **Status: pending PR 2 of #252** — remove this note when it merges.
+
 Every release published by `release.yml` carries three artifacts: the
 signed APK, `bom.json` (CycloneDX SBOM), and a provenance attestation
-stored in the repo's attestation log. To verify a downloaded APK:
+stored in the repo's attestation log. To verify a downloaded APK
+(requires `gh` ≥ 2.49):
 
     # Provenance: proves this exact file was built by release.yml in this
-    # repo at a specific commit (SLSA build attestation).
+    # repo at a specific commit (SLSA build attestation). This is the
+    # authenticity anchor.
     gh attestation verify app-release.apk --repo yasirhamza/AndroDR
 
-    # Signature: proves it's signed with the AndroDR upload key.
+    # Signature: proves it's signed with the AndroDR CI release key.
     apksigner verify --print-certs app-release.apk
 
-The signing key is a **Play App Signing upload key** (Google holds the
-actual app-signing key), and `release.yml` additionally pins the expected
-certificate SHA-256 digest — a build signed with any other key fails CI.
+GitHub releases are signed with a **dedicated CI release key** that exists
+only for this purpose; the **Play upload key is never stored in CI** (and
+Google holds the actual app-signing key behind Play App Signing, a third
+key). `release.yml` pins the CI key's certificate SHA-256 digest — a build
+signed with any other key fails CI. Play-Store and GitHub installs have
+different signatures and cannot upgrade over each other; that has always
+been true.
 
-**Key-leak runbook:** if the upload key or its passwords are suspected
-compromised: (1) rotate the four `RELEASE_*` GitHub secrets immediately,
-(2) request an upload-key reset in Play Console → Setup → App signing,
-(3) re-provision secrets from the new keystore. Play Store users are
-unaffected during rotation; GitHub-release sideloaders must reinstall.
+**Key-leak runbook (CI release key):** the blast radius is "someone can
+sign an APK whose signature matches GitHub releases" — provenance
+verification is unaffected and still distinguishes real releases. To
+rotate: (1) generate a fresh keystore (`keytool -genkeypair`, see PR 2 of
+#252 for the exact recipe), (2) replace the four `RELEASE_*` GitHub
+secrets and the `EXPECTED_CERT_SHA256` pin in `release.yml`, (3) note in
+the next release that sideloaders must uninstall/reinstall once. No Play
+Console involvement.
+
+**Token runbook (`DEPENDABOT_REGEN_TOKEN`):** fine-grained PAT, this repo
+only, Contents read/write, 90-day expiry. On expiry Dependabot PRs fail
+regen with an auth error at checkout/push; renew with a fresh PAT via
+`gh secret set DEPENDABOT_REGEN_TOKEN --app dependabot`. Expiry date is
+recorded in #252's closing comment.
 
 **"Am I affected?" (new CVE in some library):** download `bom.json` from
 the latest release (or run `./gradlew :app:cyclonedxBom` locally) and
@@ -607,9 +692,18 @@ search it for the artifact — answer in minutes, no build required.
 
 ## Dependency checksum verification (layer 1)
 
+> **Status: pending PR 3 of #252** — remove this note when it merges.
+
 `gradle/verification-metadata.xml` records the sha256 of every resolved
 artifact (dependencies *and* plugins). Any mismatch — tampered artifact,
 typosquat, poisoned mirror — fails the build before code runs.
+
+**What it does and does not guarantee:** for artifacts already in the
+tree, any byte change is fatal. For a *newly bumped* version (Dependabot),
+the regenerated checksum is trust-on-first-use — it pins whatever the
+regen run downloaded. Verification protects all unchanged artifacts and
+every subsequent fetch of the new one; the authenticity of the new version
+itself rests on advisory data and review of the bump PR.
 
 After **any** dependency change, regenerate:
 
@@ -619,11 +713,20 @@ After **any** dependency change, regenerate:
       assembleDebugAndroidTest :app:cyclonedxBom
 
 and commit the updated file. Dependabot PRs are handled automatically by
-`.github/workflows/dependabot-verification-regen.yml`, which regenerates
-and pushes onto the bot's branch. A red build complaining about
+`.github/workflows/dependabot-verification-regen.yml`, which runs the same
+task list with `--dry-run` added (resolution without executing the bumped
+tree's code) and pushes onto the bot's branch. If a Dependabot PR stays
+red after regen (an execution-only configuration the dry run can't reach),
+run the command above locally and push. A red build complaining about
 "Dependency verification failed" on a *non*-Dependabot branch means you
 changed dependencies without regenerating (or something genuinely
 tampered — check which artifact and why before regenerating).
+
+The `dependency-submission` CI job runs with verification off by design:
+it only reports the graph, and its init-script-injected plugin is not in
+the metadata. **Rollback coupling:** reverting PR 2 (CycloneDX) also
+requires dropping `:app:cyclonedxBom` from the command above and from the
+regen workflow — the task only exists while the plugin is applied.
 
 ## Outbound-leak guard (layer 6)
 
@@ -642,7 +745,9 @@ state (`settings.local.json`) is denylisted.
 
 To fix a violation: `git rm --cached <path>`, confirm `.gitignore` covers
 it, and if the content was sensitive treat it as leaked (it was pushed) —
-rotate/purge accordingly.
+rotate/purge accordingly. This guard is **point-in-time**: a file that
+ever reached a pushed commit is leaked even if since deleted — the guard
+prevents recurrence; it does not audit history.
 
 ## Enforcement summary
 
@@ -650,6 +755,14 @@ rotate/purge accordingly.
   (which folds in dependency-review, the denylist guard, and all build
   gates), CodeQL code-scanning rule (blocks on new high-severity alerts),
   no force-push/deletion.
+- **Known limits:** repository admins hold an always-on bypass
+  (`bypass_mode: always`) — the gates constrain automation and habit, not
+  a determined or deceived admin, and "run this command to merge past red
+  CI" remains a live social-engineering channel. Required checks are
+  non-strict, so a green `ci-success` may predate the current base.
+- **Unwind order:** to disable CodeQL, delete the `code_scanning` rule
+  from ruleset 14651316 *first*, or merges wedge waiting for analyses
+  that never arrive.
 - `release.yml` refuses to publish unless `ci-success` passed for the SHA
   and the APK signature matches the pinned certificate digest.
 ```
@@ -700,9 +813,18 @@ gh pr checks --watch
 Expected green: `ci-success` (with new jobs `tracked-path-denylist`,
 `dependency-submission`, `dependency-review` all pass — the deps bucket
 fires because ci.yml changed), `analyze (java-kotlin)` (CodeQL; first run
-takes ~15–30 min), plus all pre-existing jobs. If CodeQL's manual build
-fails, fix before proceeding (likely SDK/licenses — compare against the
-working `build-and-test` job setup).
+takes ~15–30 min), plus all pre-existing jobs.
+
+First-run notes:
+- `dependency-review` has no base snapshot on main yet (the submission job
+  first reaches main via this PR's merge). Expected: snapshot-warning
+  retries, then "Retry timeout exceeded. Proceeding...", then either a
+  pass or the full head tree evaluated as "added". The Step 0 pre-audit
+  guarantees no standing Crit/High ambush; record which behavior was
+  observed in a PR comment (the spec wants the observation on record).
+- If CodeQL reports "no source code seen during the build", the build hit
+  a cache despite the flags — do NOT chase SDK/license theories first;
+  verify the `--no-build-cache --no-configuration-cache` flags survived.
 
 - [ ] **Step 3: Live red-test the denylist guard on the PR**
 
@@ -716,7 +838,7 @@ gh pr checks --watch   # expect all green again
 ```
 
 Expected: the middle run shows `tracked-path-denylist` failing with
-`DENYLISTED tracked path(s) matching '**/.env.*'`; the final run is green.
+`DENYLISTED tracked path(s) matching '**/.env*'`; the final run is green.
 Screenshot/link the failed run in a PR comment as evidence.
 
 - [ ] **Step 4: 4-agent review ceremony**
@@ -754,11 +876,18 @@ analyses exist, so do not add it before this returns results.)
 - [ ] **Step 2: Update the ruleset — add the code_scanning rule**
 
 Write `/tmp/claude-1000/-home-yasir-AndroDR/*/scratchpad/ruleset.json` — but
-first re-fetch current state (do not blind-overwrite):
+first re-fetch current state **including `bypass_actors`** (do not
+blind-overwrite, and do not let a jq filter hide fields):
 
 ```bash
-gh api repos/:owner/:repo/rulesets/14651316 --jq '{name, target, enforcement, conditions, rules}'
+gh api repos/:owner/:repo/rulesets/14651316 --jq '{name, target, enforcement, conditions, bypass_actors, rules}'
 ```
+
+The live ruleset has `bypass_actors: [{actor_id: 5, actor_type: "RepositoryRole", bypass_mode: "always"}]`
+(repo admins bypass everything). **Preserve it verbatim in the PUT** —
+removing the bypass is a maintainer decision, not an implementer side
+effect. (Empirically verified at plan gate: the API retains an omitted
+`bypass_actors` on PUT, but be explicit rather than lean on that.)
 
 Then PUT the same content with one addition to `rules` (keep every existing
 rule byte-identical; `required_status_checks` stays `ci-success`-only per
@@ -770,6 +899,7 @@ the Task 3 design refinement):
   "target": "branch",
   "enforcement": "active",
   "conditions": { "ref_name": { "include": ["refs/heads/main"], "exclude": [] } },
+  "bypass_actors": [ { "actor_id": 5, "actor_type": "RepositoryRole", "bypass_mode": "always" } ],
   "rules": [
     { "type": "pull_request", "parameters": { "allowed_merge_methods": ["merge", "squash", "rebase"], "dismiss_stale_reviews_on_push": true, "require_code_owner_review": false, "require_last_push_approval": false, "required_approving_review_count": 0, "required_review_thread_resolution": false, "required_reviewers": [] } },
     { "type": "required_status_checks", "parameters": { "do_not_enforce_on_create": false, "required_status_checks": [ { "context": "ci-success" } ], "strict_required_status_checks_policy": false } },
@@ -787,7 +917,28 @@ gh api -X PUT repos/:owner/:repo/rulesets/14651316 --input <scratchpad>/ruleset.
 
 Expected: `rules` now lists `code_scanning`.
 
-- [ ] **Step 3: Enable private vulnerability reporting** (referenced by SECURITY.md)
+- [ ] **Step 3: Empirically verify docs-only PRs aren't blocked by the code_scanning rule**
+
+GitHub does not document how the rule treats "CodeQL never ran because the
+PR matched no analysis paths" — if it blocks waiting for results, every
+docs PR wedges (admin bypass being the only relief).
+
+```bash
+git checkout -b test/codeql-rule-docs-only main
+echo "" >> docs/supply-chain.md && git add docs/supply-chain.md
+git commit -m "test: TEMPORARY docs-only PR to probe code_scanning rule" && git push -u origin test/codeql-rule-docs-only
+gh pr create --title "test: probe code_scanning merge protection (will close unmerged)" --body "Probing whether the ruleset blocks docs-only PRs. Closes nothing."
+gh pr view --json mergeStateStatus --jq .mergeStateStatus   # after ci-success reports
+```
+
+Expected: `CLEAN` (or `UNSTABLE`, but NOT `BLOCKED` once `ci-success` is
+green and no CodeQL analysis is pending). Then close the PR unmerged and
+delete the branch. **If BLOCKED:** rollback = re-PUT the ruleset without
+the `code_scanning` rule, and record in docs/supply-chain.md that CodeQL
+gating is advisory (Security tab + PR annotations) pending a
+GitHub-side fix.
+
+- [ ] **Step 4: Enable private vulnerability reporting** (referenced by SECURITY.md; addition ratified at plan gate)
 
 ```bash
 gh api -X PUT repos/:owner/:repo/private-vulnerability-reporting
@@ -800,41 +951,66 @@ Expected: `true`.
 
 ## Phase 2 — PR 2: Release integrity
 
-### Task 8: Provision signing secrets + pin the expected certificate digest
+### Task 8: Generate the dedicated CI release keystore + provision its secrets
+
+**Maintainer decision (2026-07-15): the Play upload key is NOT stored in
+CI.** This task creates a brand-new keystore whose only job is signing
+GitHub-release APKs. Blast radius of a leak: lookalike signatures on
+sideload APKs — provenance attestation remains the authenticity anchor.
+Rotation: rerun this task, update the `EXPECTED_CERT_SHA256` pin.
 
 **Interfaces:**
-- Produces: GitHub Actions secrets `RELEASE_KEYSTORE_BASE64`, `RELEASE_STORE_PASSWORD`, `RELEASE_KEY_ALIAS`, `RELEASE_KEY_PASSWORD`; and the upload-cert SHA-256 hex digest (lowercase, no colons) used by Task 9's verify step.
+- Produces: `~/keystores/androdr-ci-release.jks` (local, outside the repo);
+  GitHub Actions secrets `RELEASE_KEYSTORE_BASE64`, `RELEASE_STORE_PASSWORD`,
+  `RELEASE_KEY_ALIAS` (= `androdr-ci`), `RELEASE_KEY_PASSWORD`; and the CI
+  cert's SHA-256 hex digest (lowercase, no colons) used by Task 9's verify
+  step. The upload keystore (`release-keystore.jks` at the repo root) and
+  `~/.gradle/gradle.properties` are NOT read by this task at all.
 
-- [ ] **Step 1: Set the four secrets (values never displayed)**
-
-```bash
-cd /home/yasir/AndroDR
-base64 -w0 release-keystore.jks | gh secret set RELEASE_KEYSTORE_BASE64
-grep '^RELEASE_STORE_PASSWORD=' ~/.gradle/gradle.properties | cut -d= -f2- | tr -d '\n' | gh secret set RELEASE_STORE_PASSWORD
-grep '^RELEASE_KEY_ALIAS='      ~/.gradle/gradle.properties | cut -d= -f2- | tr -d '\n' | gh secret set RELEASE_KEY_ALIAS
-grep '^RELEASE_KEY_PASSWORD='   ~/.gradle/gradle.properties | cut -d= -f2- | tr -d '\n' | gh secret set RELEASE_KEY_PASSWORD
-gh secret list
-```
-
-Expected: `gh secret list` shows all four names with today's timestamp.
-
-- [ ] **Step 2: Extract the expected signing-cert digest**
+- [ ] **Step 1: Generate the CI keystore (password never displayed, passed via env not argv)**
 
 ```bash
 export JAVA_HOME=/home/yasir/Applications/android-studio/jbr
-ALIAS=$(grep '^RELEASE_KEY_ALIAS=' ~/.gradle/gradle.properties | cut -d= -f2- | tr -d '\n')
-grep '^RELEASE_STORE_PASSWORD=' ~/.gradle/gradle.properties | cut -d= -f2- | tr -d '\n' \
-  | "$JAVA_HOME/bin/keytool" -exportcert -keystore release-keystore.jks -alias "$ALIAS" -storepass:file /dev/stdin 2>/dev/null \
-  | sha256sum | cut -d' ' -f1
+mkdir -p ~/keystores
+export CI_STOREPASS=$(openssl rand -base64 24)
+"$JAVA_HOME/bin/keytool" -genkeypair -v \
+  -keystore ~/keystores/androdr-ci-release.jks -alias androdr-ci \
+  -keyalg RSA -keysize 4096 -validity 10950 \
+  -dname "CN=AndroDR GitHub Releases, O=AndroDR" \
+  -storepass:env CI_STOREPASS -keypass:env CI_STOREPASS
+```
+
+Expected: "Generating 4,096 bit RSA key pair" + keystore written. The
+password lives only in this shell's environment (`:env` keeps it out of
+argv → not visible in `/proc/<pid>/cmdline`).
+
+- [ ] **Step 2: Provision the four secrets (values piped, never displayed)**
+
+```bash
+base64 -w0 ~/keystores/androdr-ci-release.jks | gh secret set RELEASE_KEYSTORE_BASE64
+printf '%s' "$CI_STOREPASS" | gh secret set RELEASE_STORE_PASSWORD
+printf '%s' "$CI_STOREPASS" | gh secret set RELEASE_KEY_PASSWORD
+printf '%s' 'androdr-ci'    | gh secret set RELEASE_KEY_ALIAS
+gh secret list
+```
+
+Expected: all four names listed with today's timestamp. (Store password and
+key password are deliberately the same random value — PKCS12 keystores
+require it anyway.)
+
+- [ ] **Step 3: Extract the CI cert digest, then drop the password from the environment**
+
+```bash
+"$JAVA_HOME/bin/keytool" -exportcert -keystore ~/keystores/androdr-ci-release.jks \
+  -alias androdr-ci -storepass:env CI_STOREPASS 2>/dev/null | sha256sum | cut -d' ' -f1
+unset CI_STOREPASS
 ```
 
 Expected: a 64-char lowercase hex digest. **This digest is public** (it's
-printed by `apksigner` on any distributed APK) — record it; Task 9 embeds
-it in `release.yml` as `EXPECTED_CERT_SHA256`.
-
-If `-storepass:file /dev/stdin` is rejected by this keytool build, fall back
-to an env var read inside a subshell so the value stays out of the transcript:
-`STOREPASS=$(grep ... | cut -d= -f2-)` then `keytool ... -storepass "$STOREPASS"`.
+printable from any APK signed with the key) — record it; Task 9 embeds it
+in `release.yml` as `EXPECTED_CERT_SHA256`. Loss of the keystore or
+password later is a non-event: regenerate and rotate (documented in
+docs/supply-chain.md).
 
 ---
 
@@ -844,9 +1020,11 @@ to an env var read inside a subshell so the value stays out of the transcript:
 - Modify: `.github/workflows/release.yml`
 - Modify: `gradle/libs.versions.toml` ([versions] + [plugins])
 - Modify: `app/build.gradle.kts` (plugins block + task config)
+- Modify: `SECURITY.md` + `docs/supply-chain.md` (delete the two
+  "Status: pending PR 2 of #252" marker lines — this PR makes them true)
 
 **Interfaces:**
-- Consumes: secrets + cert digest from Task 8; pin table from Task 1; `actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a # v3.0.0`.
+- Consumes: CI-keystore secrets + cert digest from Task 8; pin table from Task 1; `actions/attest-build-provenance@96278af6caaf10aea03fd8d33a09a777ca52d62f # v3.2.0` (v3.2.0 chosen over v3.0.0 because it requires — and this plan grants — the `artifact-metadata: write` permission; pinning the older one means the first Dependabot actions bump breaks attestation by adding the requirement without the permission).
 - Produces: Gradle task `:app:cyclonedxBom` emitting `app/build/reports/cyclonedx/bom.json`; release assets `app-release.apk` + `bom.json`. (The Cloudflare worker points at the separate `androdr-releases` repo's `app-debug.apk`, so this rename cannot break it — verified 2026-07-15.)
 
 - [ ] **Step 0: Create the PR 2 branch off fresh main**
@@ -906,19 +1084,22 @@ Expected: `CycloneDX <N> components` with N > 50 (the app has a large
 runtime tree). If the components list is tiny or includes test-only deps,
 revisit `includeConfigs`.
 
-- [ ] **Step 3: Verify release signing locally**
+- [ ] **Step 3: Verify release signing mechanics locally**
 
 ```bash
 export JAVA_HOME=/home/yasir/Applications/android-studio/jbr
 export ANDROID_HOME=/home/yasir/Android/Sdk
 ./gradlew assembleRelease --stacktrace
-BT=$(ls "$ANDROID_HOME/build-tools" | sort -V | tail -1)
-"$ANDROID_HOME/build-tools/$BT/apksigner" verify --print-certs app/build/outputs/apk/release/app-release.apk | grep -i 'SHA-256'
+BT=$(find "$ANDROID_HOME/build-tools" -maxdepth 1 -mindepth 1 -type d | sort -V | tail -1)
+"$BT/apksigner" verify --print-certs app/build/outputs/apk/release/app-release.apk | grep -i 'SHA-256'
 ```
 
-Expected: build succeeds (passwords resolve from `~/.gradle/gradle.properties`);
-apksigner prints `Signer #1 certificate SHA-256 digest: <digest>` matching
-Task 8's digest exactly. If they differ, STOP — wrong keystore/alias.
+Expected: build succeeds and apksigner prints a certificate digest. NOTE:
+locally this is the **upload key's** digest (local builds use your real
+keystore at `release-keystore.jks` + `~/.gradle` passwords) — it will NOT
+match Task 8's pinned CI digest, by design. This step proves the signing
+path works; the pinned-digest match is proven by the CI dry-run (Task 10
+Step 2), where the decoded keystore is the CI one.
 
 - [ ] **Step 4: Rewrite release.yml**
 
@@ -945,12 +1126,9 @@ on:
         type: boolean
         default: false
 
-permissions:
-  contents: write      # gh release create
-  actions: read        # poll ci-success
-  checks: read         # poll ci-success
-  id-token: write      # provenance attestation (OIDC)
-  attestations: write  # provenance attestation
+# No workflow-level permissions: scoped per-job (spec: "per-job token
+# scoping") so a future second job doesn't silently inherit release powers.
+permissions: {}
 
 concurrency:
   group: release
@@ -960,9 +1138,17 @@ jobs:
   release:
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    permissions:
+      contents: write            # gh release create
+      actions: read              # poll ci-success
+      checks: read               # poll ci-success
+      id-token: write            # provenance attestation (OIDC)
+      attestations: write        # provenance attestation
+      artifact-metadata: write   # required by attest-build-provenance >= v3.2
     env:
-      # Play App Signing upload cert (public — printable from any shipped
-      # APK). A build signed with any other key must fail.
+      # Dedicated CI release cert (public — printable from any APK signed
+      # with it; the Play upload key is never stored in CI). A build signed
+      # with any other key must fail.
       EXPECTED_CERT_SHA256: '<DIGEST-FROM-TASK-8>'
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
@@ -997,17 +1183,17 @@ jobs:
           ORG_GRADLE_PROJECT_RELEASE_KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
           ORG_GRADLE_PROJECT_RELEASE_KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
         run: ./gradlew assembleRelease --stacktrace
-      - name: Verify APK signature against pinned upload cert
+      - name: Verify APK signature against pinned CI release cert
         run: |
           set -euo pipefail
-          BT="$ANDROID_HOME/build-tools/$(ls "$ANDROID_HOME/build-tools" | sort -V | tail -1)"
+          BT=$(find "$ANDROID_HOME/build-tools" -maxdepth 1 -mindepth 1 -type d | sort -V | tail -1)
           APK=app/build/outputs/apk/release/app-release.apk
           "$BT/apksigner" verify --print-certs "$APK" | tee /tmp/apksigner.out
           if ! grep -qi "certificate SHA-256 digest: ${EXPECTED_CERT_SHA256}" /tmp/apksigner.out; then
-            echo "FAIL: APK is not signed by the expected upload key" >&2
+            echo "FAIL: APK is not signed by the expected CI release key" >&2
             exit 1
           fi
-          echo "PASS: signature matches pinned upload certificate"
+          echo "PASS: signature matches pinned CI release certificate"
       - name: Generate CycloneDX SBOM
         run: ./gradlew :app:cyclonedxBom
       - name: Compute version and release notes
@@ -1015,8 +1201,11 @@ jobs:
         run: |
           <UNCHANGED — keep the existing version/notes script verbatim>
       - name: Attest build provenance (APK + SBOM)
+        # Deliberately skipped on dry-runs: attestations are permanent in
+        # the repo's attestation log (declared deviation — first real
+        # release is the attestation test, verified immediately post-merge).
         if: ${{ inputs.dry_run != true }}
-        uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a # v3.0.0
+        uses: actions/attest-build-provenance@96278af6caaf10aea03fd8d33a09a777ca52d62f # v3.2.0
         with:
           subject-path: |
             app/build/outputs/apk/release/app-release.apk
@@ -1026,6 +1215,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          # shellcheck disable=SC2016  # backticks in printf are literal markdown
           {
             cat /tmp/release-notes.md
             printf '\n---\nVerify this release: `gh attestation verify app-release.apk --repo %s`\nSBOM: `bom.json` (CycloneDX). Details: docs/supply-chain.md\n' "${{ github.repository }}"
@@ -1055,17 +1245,22 @@ Notes for the implementer:
 - `inputs.dry_run != true` is `true` on push events (where `inputs` is
   empty), so pushes to main always publish — behavior preserved.
 
-- [ ] **Step 5: actionlint + commit**
+- [ ] **Step 5: Remove the "pending PR 2" markers, actionlint + commit**
+
+Delete the `> **Status: pending PR 2 of #252** …` lines from `SECURITY.md`
+and `docs/supply-chain.md` (layer-4 section) — this PR makes those sections
+true.
 
 ```bash
 actionlint
-git add .github/workflows/release.yml gradle/libs.versions.toml app/build.gradle.kts
+git add .github/workflows/release.yml gradle/libs.versions.toml app/build.gradle.kts SECURITY.md docs/supply-chain.md
 git commit -m "feat(release): signed release APK + SBOM + provenance attestation
 
-release.yml now builds assembleRelease with the Play upload key from CI
-secrets, hard-fails unless the signature matches the pinned upload-cert
-digest, attaches a CycloneDX SBOM, and attests SLSA build provenance for
-both artifacts. workflow_dispatch gains a dry_run input for branch testing.
+release.yml now builds assembleRelease signed with a dedicated CI release
+keystore (the Play upload key is never stored in CI — maintainer decision),
+hard-fails unless the signature matches the pinned CI-cert digest, attaches
+a CycloneDX SBOM, and attests SLSA build provenance for both artifacts.
+workflow_dispatch gains a dry_run input for branch testing.
 Sideload note: previously sideloaded debug-signed GitHub APKs need a
 one-time uninstall/reinstall.
 
@@ -1084,9 +1279,13 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
 git push -u origin feat/252-supply-chain-pr2-release
 gh pr create --title "feat(release): signed APK + SBOM + provenance (supply-chain PR 2)" --body "$(cat <<'EOF'
 Phase 2 of #252: release.yml switches from debug to a signed assembleRelease
-APK (Play App Signing upload key, cert digest pinned in the workflow),
-generates a CycloneDX SBOM, and attests SLSA build provenance. Dry-run
-evidence and unit-test/CI status in comments.
+APK — signed with a dedicated CI release keystore; the Play upload key is
+never stored in CI (maintainer decision at plan gate). The workflow pins the
+CI cert digest, generates a CycloneDX SBOM, and attests SLSA build
+provenance. Dry-run evidence and CI status in comments.
+
+Declared deviation: dry-runs skip attestation (permanent log pollution);
+the first post-merge release is the attestation test, verified immediately.
 
 Known one-time cost: previously sideloaded debug-signed GitHub APKs will
 need uninstall/reinstall (signature change). Play Store unaffected.
@@ -1107,14 +1306,21 @@ gh run watch $(gh run list --workflow=release.yml --limit 1 --json databaseId --
 ```
 
 Expected: run succeeds; `Verify APK signature` step logs
-`PASS: signature matches pinned upload certificate`; `release-dry-run`
-artifact contains `app-release.apk` + `bom.json`; **no release and no
-attestation were created** (`gh release list --limit 1` shows no new tag).
+`PASS: signature matches pinned CI release certificate` — this is the
+definitive proof that the decoded CI keystore, the secrets, and the pinned
+digest all agree; `release-dry-run` artifact contains `app-release.apk` +
+`bom.json`; **no release and no attestation were created** (declared
+deviation; `gh release list --limit 1` shows no new tag).
 Link the green run in a PR comment as evidence.
 
 - [ ] **Step 3: 4-agent review ceremony** (same as Task 6 Step 4), fix, re-green.
 
 - [ ] **Step 4: Squash-merge and verify the first signed release end-to-end**
+
+Prerequisite check (global constraint): `gh --version` must be ≥ 2.49
+(`gh attestation` doesn't exist in 2.45). If not yet upgraded: install
+gh from the official apt repo or a release binary, verify
+`gh attestation --help` works, then proceed.
 
 ```bash
 gh pr merge --squash --delete-branch
@@ -1132,7 +1338,7 @@ under the release's assets (`gh release view "$TAG"`).
 - [ ] **Step 5: Add the sideload-break note to the first signed release**
 
 ```bash
-gh release edit "$TAG" --notes-file <(gh release view "$TAG" --json body --jq .body; printf '\n> **Sideload note:** starting with this release, APKs are signed with the AndroDR release (upload) key instead of a debug key. If you sideloaded an older GitHub APK, uninstall it once before installing this one (signature mismatch). Play Store installs are unaffected.\n')
+gh release edit "$TAG" --notes-file <(gh release view "$TAG" --json body --jq .body; printf '\n> **Sideload note:** starting with this release, GitHub APKs are signed with a stable AndroDR CI release key instead of a per-build debug key. If you sideloaded an older GitHub APK, uninstall it once before installing this one (signature mismatch); future updates will install over this one cleanly. Play Store installs are unaffected.\n')
 ```
 
 ---
@@ -1174,15 +1380,18 @@ Expected: BUILD SUCCESSFUL (verification active — failures would say
 - [ ] **Step 3: Tamper test — flip one checksum, expect red, restore**
 
 ```bash
-sed -i '0,/sha256 value="[0-9a-f]/s//sha256 value="0/' gradle/verification-metadata.xml
+sed -i -E '0,/sha256 value="[0-9a-f]+"/s//sha256 value="0000000000000000000000000000000000000000000000000000000000000000"/' gradle/verification-metadata.xml
+git diff --stat gradle/verification-metadata.xml   # MUST show the file changed — a no-op here invalidates the test
 ./gradlew assembleDebug 2>&1 | grep -m1 -i "verification failed" && echo "TAMPER DETECTED (expected)"
 git checkout -- gradle/verification-metadata.xml
 ./gradlew assembleDebug --quiet && echo "restored: green"
 ```
 
-Expected: `Dependency verification failed` → `TAMPER DETECTED (expected)`,
-then `restored: green`. Capture this output for the PR body (the spec's
-documented tamper-case evidence).
+Expected: the diff shows exactly one change (the replacement digest is a
+fixed all-zeros value, so this can't silently no-op the way a
+single-character flip could), then `Dependency verification failed` →
+`TAMPER DETECTED (expected)`, then `restored: green`. Capture this output
+for the PR body (the spec's documented tamper-case evidence).
 
 - [ ] **Step 4: Commit**
 
@@ -1214,8 +1423,11 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
 Ask the user to create a fine-grained PAT at
 https://github.com/settings/personal-access-tokens/new with: Resource owner
 = themselves; Repository access = **Only select repositories → AndroDR**;
-Permissions = **Contents: Read and write** (nothing else); Expiration = 1
-year. Then store it (paste into the terminal prompt, not into chat):
+Permissions = **Contents: Read and write** (nothing else); Expiration =
+**90 days** (plan-gate security decision: this token can push branches and
+create releases if stolen — short expiry bounds the window; renewal is one
+`gh secret set` with a fresh token, documented in docs/supply-chain.md).
+Then store it (paste into the terminal prompt, not into chat):
 
 ```bash
 gh secret set DEPENDABOT_REGEN_TOKEN --app dependabot
@@ -1224,9 +1436,11 @@ gh secret list --app dependabot
 
 Expected: `DEPENDABOT_REGEN_TOKEN` listed under Dependabot secrets.
 **Fallback if the user declines the PAT:** skip this task, delete the
-workflow from the plan, and document manual regen as the process (already
-in `docs/supply-chain.md`) — Dependabot PRs then arrive red until the
-maintainer runs the regen command locally and pushes.
+workflow from the plan, AND edit `docs/supply-chain.md` to replace the
+"handled automatically by …dependabot-verification-regen.yml" sentence
+with the manual process — Dependabot PRs then arrive red until the
+maintainer runs the regen command locally and pushes. The docs must not
+claim automation that doesn't exist.
 
 - [ ] **Step 2: Write the workflow**
 
@@ -1239,13 +1453,29 @@ name: Regenerate dependency verification metadata
 # gradle/verification-metadata.xml is regenerated. This regenerates it on
 # the bot's branch and pushes with a PAT (a GITHUB_TOKEN push would not
 # retrigger CI). Runs ONLY for dependabot[bot] on same-repo branches.
+#
+# THREAT MODEL (plan-gate security review): this job processes a
+# freshly-bumped, not-yet-verified dependency tree while a contents-write
+# PAT exists in the repo's Dependabot secrets. A stolen PAT can push
+# branches and forge releases. Mitigations, in order:
+#   - checkout uses the default read-only token, persist-credentials: false
+#     -> no credential on disk while Gradle runs
+#   - --dry-run: dependencies resolve but NO task of the bumped tree
+#     executes (residual risk: configuration-time code in settings/build
+#     scripts and plugin application still runs — that code is repo-owned,
+#     Dependabot only edits libs.versions.toml, but a bumped *plugin
+#     version's* configuration code does run)
+#   - the PAT enters exactly one step's env (the push), after Gradle exited
+#   - TOFU caveat: the regenerated checksum of the new artifact pins
+#     whatever this runner downloaded — see docs/supply-chain.md
+#   - 90-day PAT expiry bounds the exposure window
 
 on:
   pull_request:
     branches: [main]
     paths:
       - 'gradle/libs.versions.toml'
-      - '.github/workflows/**'
+      - '.github/workflows/dependabot-verification-regen.yml'
 
 permissions: {}
 
@@ -1258,14 +1488,15 @@ jobs:
     if: ${{ github.actor == 'dependabot[bot]' && github.event.pull_request.head.repo.full_name == github.repository }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
           ref: ${{ github.head_ref }}
           fetch-depth: 0
           submodules: true
-          token: ${{ secrets.DEPENDABOT_REGEN_TOKEN }}
-          persist-credentials: true
+          persist-credentials: false
       - uses: actions/setup-java@c1e323688fd81a25caa38c78aa6df2d33d3e20d9 # v4.8.0
         with:
           java-version: '21'
@@ -1275,12 +1506,19 @@ jobs:
       - uses: gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a # v4.4.3
         with:
           cache-read-only: true
-      - name: Regenerate verification metadata
+      - name: Regenerate verification metadata (resolution only, no task execution)
+        # Same task list as the documented local command; --dry-run is the
+        # ONLY difference (declared) — it resolves every configuration the
+        # graph needs without executing the bumped tree's tasks. Side
+        # effect: assembleRelease is safe here (its validateSigning task,
+        # which would fail on the runner's missing keystore, never runs).
         run: |
-          ./gradlew --write-verification-metadata sha256 \
+          ./gradlew --dry-run --write-verification-metadata sha256 \
             assembleDebug assembleRelease testDebugUnitTest lintDebug detekt \
             assembleDebugAndroidTest :app:cyclonedxBom
       - name: Commit and push if changed
+        env:
+          REGEN_TOKEN: ${{ secrets.DEPENDABOT_REGEN_TOKEN }}
         run: |
           set -euo pipefail
           if git diff --quiet -- gradle/verification-metadata.xml; then
@@ -1291,33 +1529,39 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add gradle/verification-metadata.xml
           git commit -m "build: regenerate dependency verification metadata for Dependabot bump"
-          git push
+          git push "https://x-access-token:${REGEN_TOKEN}@github.com/${{ github.repository }}.git" "HEAD:${{ github.head_ref }}"
 ```
 
 Notes:
-- `assembleRelease` here runs unsigned-config resolution only if signing
-  props are absent; Gradle only *reads* `RELEASE_*` properties at execution
-  of signing tasks, and `--write-verification-metadata` with these tasks
-  resolves configurations. If `assembleRelease` fails on the runner for a
-  missing keystore file, drop `assembleRelease` from BOTH this workflow and
-  the documented local command (Task 11 Step 1) — release resolution is
-  covered by `releaseRuntimeClasspath` through `:app:cyclonedxBom`. Keep the
-  two command sites identical.
-- The `.github/workflows/**` path trigger exists so Dependabot's
-  github-actions bumps (which can change resolved plugins? they don't touch
-  Gradle) no-op quickly via "No metadata changes needed" rather than
-  leaving a red build unexplained.
+- If a Dependabot PR is still red after regen ("Dependency verification
+  failed" on an artifact the dry run didn't resolve — an execution-only
+  configuration), the documented remedy is a local regen without
+  `--dry-run` + push (docs/supply-chain.md layer 1). Expected to be rare;
+  observe the first real cycle.
+- The narrow `paths:` trigger is deliberate: actions-SHA bumps can't change
+  Gradle checksums, so `.github/workflows/**` would only burn a ~20-min
+  Gradle run to print "No metadata changes needed". The workflow's own file
+  is included for self-testing on the PR that introduces or edits it —
+  though as a non-Dependabot PR it skips via the `if:` guard (actionlint +
+  PR 3's own CI cover it).
 
-- [ ] **Step 3: actionlint + commit**
+- [ ] **Step 3: Remove the "pending PR 3" marker, actionlint + commit**
+
+Delete the `> **Status: pending PR 3 of #252** …` line from
+`docs/supply-chain.md` (layer-1 section) — this PR makes it true.
 
 ```bash
 actionlint
-git add .github/workflows/dependabot-verification-regen.yml
+git add .github/workflows/dependabot-verification-regen.yml docs/supply-chain.md
 git commit -m "ci(security): auto-regen verification metadata on Dependabot PRs
 
-Pushes with a repo-scoped fine-grained PAT (Dependabot secret) so the
-regen commit retriggers CI; GITHUB_TOKEN pushes would leave required
-checks stale. Guarded to dependabot[bot] on same-repo branches only.
+Hardened per plan-gate security review: read-only checkout without
+persisted credentials, --dry-run regeneration so the bumped tree's tasks
+never execute, and the repo-scoped fine-grained PAT (Dependabot secret,
+90-day expiry) enters only the final push step's env — a PAT push is what
+retriggers CI, which a GITHUB_TOKEN push would not. Guarded to
+dependabot[bot] on same-repo branches only. TOFU caveat documented in
+docs/supply-chain.md.
 
 Refs #252
 
@@ -1346,19 +1590,34 @@ gh pr checks --watch
 ```
 
 Expected: full CI green — every job (build, tests, lint, detekt, CodeQL,
-emulator) now resolves dependencies under verification. A red job citing
-"Dependency verification failed" means the Task 11 task set missed a
-configuration: regenerate with the failing task appended, commit, push.
+emulator) now resolves dependencies under verification, **specifically
+including `dependency-submission`** (this PR touches the deps bucket, so
+the job runs — it must stay green thanks to its
+`--dependency-verification=off` argument; if it reds on verification, that
+argument regressed). A red job citing "Dependency verification failed"
+means the Task 11 task set missed a configuration: regenerate with the
+failing task appended, commit, push.
 Post the Task 11 Step 3 tamper-test output as a PR comment.
 
 - [ ] **Step 2: 4-agent review ceremony**, fix, re-green.
 
-- [ ] **Step 3: Squash-merge; verify issue closed; final acceptance sweep**
+- [ ] **Step 3: Squash-merge; watch the first release under verification; verify issue closed; final acceptance sweep**
 
 ```bash
 gh pr merge --squash --delete-branch
+# CRITICAL: the merge push triggers release.yml — the FIRST assembleRelease
+# under active dependency verification (CI never runs that path on PRs).
+# Do not proceed to the AC sweep until this run is green and a NEW tag
+# exists (a stale PR 2-era release would let the sweep false-pass).
+gh run watch $(gh run list --workflow=release.yml --branch main --limit 1 --json databaseId --jq '.[0].databaseId')
+gh release list --limit 2   # newest tag must postdate the PR 3 merge
 gh issue view 252 --json state --jq .state   # expect CLOSED
 ```
+
+If the release run reds with "Dependency verification failed", a
+release-only configuration is missing from the metadata: regenerate
+locally with the failing task appended, open a small fix PR (the plan's
+safe-ordering rules apply), and re-verify.
 
 Then walk the spec's acceptance criteria and check each against live state:
 
@@ -1373,18 +1632,47 @@ ls gradle/verification-metadata.xml   # AC8
 gh api repos/:owner/:repo/rulesets/14651316 --jq '[.rules[].type]'   # AC9: includes code_scanning
 ```
 
-Post a closing comment on #252 summarizing the three merged PRs and any
-follow-ups discovered (e.g., first Dependabot cycle observation, PR 3
-fallback if PAT declined).
+Post a closing comment on #252 summarizing the three merged PRs, plus —
+mandatory, these are declared deviations/pending items:
+- AC "auto-regen works" is pending the **first real Dependabot cycle**
+  (monthly) — record that it must be observed and where to look.
+- The `DEPENDABOT_REGEN_TOKEN` expiry date (90 days from creation) and the
+  renewal command.
+- The Play upload key is NOT in CI (maintainer decision superseding the
+  issue's original risk-1 mitigation); GitHub releases sign with the
+  dedicated CI key, digest pinned in release.yml.
+- Any follow-ups discovered (e.g., PR 3 fallback if PAT declined,
+  docs-only-PR probe outcome from Task 7 Step 3).
 
 ---
 
+## Deviations register (declared; ratified at the 2026-07-15 plan gate)
+
+1. **`dependency-review` blocks via `ci-success`**, not a separate required
+   ruleset check — a separate context would deadlock docs-only PRs. Stated
+   in PR 1's body and `docs/supply-chain.md`.
+2. **Signing: dedicated CI release keystore** instead of the Play upload
+   key in CI (maintainer decision, supersedes issue #252's original PR-2
+   design). Upload key never leaves the maintainer machine.
+3. **Dry-runs skip attestation** (spec's testing section wanted it
+   pre-merge) — attestations are permanent log entries; first post-merge
+   release is the compensating verification, watched immediately.
+4. **Metadata generation uses the full CI task set**, superseding the
+   spec's original `help` bootstrap (now corrected in the spec) — `help`
+   alone leaves test/lint/SBOM configurations unrecorded.
+5. **AC "auto-regen works" is accepted on the first real Dependabot
+   cycle** — Dependabot secrets are unreadable outside Dependabot-triggered
+   runs, so the PAT push path cannot be faithfully simulated pre-merge.
+   Recorded in #252's closing comment as pending observation.
+6. **Private vulnerability reporting enabled** (Task 7 Step 4) — addition
+   beyond the issue's SECURITY.md scope, ratified at the plan gate.
+7. **Regen workflow runs `--dry-run`** — the one difference from the
+   documented local regen command (security: bumped tree's tasks never
+   execute on the PAT-adjacent runner). Residual-risk and TOFU caveats in
+   the workflow header + docs.
+
 ## Plan self-review notes (already applied)
 
-- Spec's "add `dependency-review` as a required ruleset check" is realized
-  via `ci-success` (Task 3 interface note) — deliberate refinement, stated
-  in PR 1's body and `docs/supply-chain.md`, so a docs-only PR is never
-  blocked by a check that can't report.
 - Spec's release-notes "verify this release" snippet: implemented inline in
   the Publish step (Task 9) rather than a template file — YAGNI.
 - CLAUDE.md is deliberately untouched: regen and triage live in
