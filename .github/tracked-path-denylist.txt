@@ -1,0 +1,24 @@
+# Tracked-path denylist — the outbound-leak guard's source of truth.
+# One git pathspec glob per line; CI fails if any TRACKED file matches
+# (git ls-files -- ':(glob,icase)PATTERN' — case-insensitive, so
+# Release.JKS cannot escape). Lines starting with # are comments.
+# Every pattern is **/-prefixed: root-anchored globs miss a state dir
+# auto-created in a subdirectory or worktree, which is exactly the
+# motivating incident's recurrence mode.
+# Mirror every addition here into .gitignore so the file never gets
+# tracked in the first place.
+#
+# NOTE: .claude/ is deliberately NOT wholesale-denylisted — the repo
+# intentionally tracks .claude/commands/ and .claude/workflows/ (the
+# public update-rules pipeline). Only local state is banned.
+**/.memsearch/**
+**/.superpowers/**
+**/.claude/settings.local.json
+**/*.jks
+**/*.keystore
+**/*.p12
+**/*.pfx
+**/*.pepk
+**/*.bks
+**/local.properties
+**/.env*
