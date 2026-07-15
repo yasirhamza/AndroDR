@@ -9,8 +9,8 @@
 # tracked in the first place.
 #
 # NOTE: .claude/ is deliberately NOT wholesale-denylisted — the repo
-# intentionally tracks .claude/commands/ (the public update-rules
-# pipeline skills). Only local state is banned.
+# intentionally tracks .claude/commands/ and .claude/workflows/ (the
+# public update-rules pipeline). Only local state is banned.
 **/.memsearch/**
 **/.superpowers/**
 **/.claude/settings.local.json

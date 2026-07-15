@@ -60,7 +60,9 @@ a tag or branch** — a mutable tag is exactly the March 2025
 `pull_request_target` with a checkout of the PR head** — it runs with
 secrets against attacker-controlled content; if a workflow ever needs
 secrets against PR content, use the two-workflow artifact hand-off
-pattern instead.
+pattern instead. The Gradle wrapper jar is tamper-checked too:
+gradle/actions/setup-gradle v4 validates all wrapper jars by default
+(validate-wrappers: true) in every job that uses it.
 
 ## Release integrity (layer 4) — verifying a release
 
@@ -95,6 +97,8 @@ rotate: (1) generate a fresh keystore (`keytool -genkeypair`, see PR 2 of
 secrets and the `EXPECTED_CERT_SHA256` pin in `release.yml`, (3) note in
 the next release that sideloaders must uninstall/reinstall once. No Play
 Console involvement.
+
+> **Status: pending PR 3 of #252** — remove this note when it merges.
 
 **Token runbook (`DEPENDABOT_REGEN_TOKEN`):** fine-grained PAT, this repo
 only, Contents read/write, 90-day expiry. On expiry Dependabot PRs fail
@@ -167,10 +171,11 @@ prevents recurrence; it does not audit history.
 
 ## Enforcement summary
 
-- Ruleset "Protect main": PRs required, required check `ci-success`
-  (which folds in dependency-review, the denylist guard, and all build
-  gates), CodeQL code-scanning rule (blocks on new high-severity alerts),
-  no force-push/deletion.
+- *(Pending post-merge Task 7 of #252 — marker removed when live)* Ruleset
+  "Protect main": PRs required, required check `ci-success` (which folds
+  in dependency-review, the denylist guard, and all build gates), CodeQL
+  code-scanning rule (blocks on new high-severity alerts), no
+  force-push/deletion.
 - **Known limits:** repository admins hold an always-on bypass
   (`bypass_mode: always`) — the gates constrain automation and habit, not
   a determined or deceived admin, and "run this command to merge past red
@@ -179,5 +184,6 @@ prevents recurrence; it does not audit history.
 - **Unwind order:** to disable CodeQL, delete the `code_scanning` rule
   from ruleset 14651316 *first*, or merges wedge waiting for analyses
   that never arrive.
-- `release.yml` refuses to publish unless `ci-success` passed for the SHA
-  and the APK signature matches the pinned certificate digest.
+- *(Pending PR 2 of #252)* `release.yml` refuses to publish unless
+  `ci-success` passed for the SHA and the APK signature matches the pinned
+  certificate digest.

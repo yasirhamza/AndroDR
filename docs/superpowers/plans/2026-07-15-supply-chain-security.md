@@ -369,7 +369,7 @@ After `tracked-path-denylist` in `ci.yml`:
           retry-on-snapshot-warnings: true
 ```
 
-- [ ] **Step 3: Write the suppressions/config file**
+- [ ] **Step 3: Write the suppressions/config file** (Shipped deviation: see Deviations register #8 — bootstrap block, removed post-merge.)
 
 `.github/dependency-review-config.yml`:
 
@@ -1670,6 +1670,14 @@ mandatory, these are declared deviations/pending items:
    documented local regen command (security: bumped tree's tasks never
    execute on the PAT-adjacent runner). Residual-risk and TOFU caveats in
    the workflow header + docs.
+8. **Bootstrap suppression block (18 GHSAs)** — Task 3's config shipped with
+   a clearly-marked, wholesale-removable block instead of the planned empty
+   allow-ghsas: the snapshot-less first dependency-review run evaluated the
+   whole standing build-classpath tree as "added" (18 distinct crit/high,
+   all AGP-toolchain, enumerated via the compare API after per-run drip).
+   Removed by the follow-up PR immediately after PR 1 merges; see the block
+   banner in .github/dependency-review-config.yml and PR #255's evidence
+   comment.
 
 ## Plan self-review notes (already applied)
 

@@ -6,7 +6,9 @@ set -euo pipefail
 
 DENYLIST="${1:-.github/tracked-path-denylist.txt}"
 fail=0
-while IFS= read -r pattern; do
+while IFS= read -r pattern || [ -n "$pattern" ]; do
+  pattern="${pattern%$'\r'}"
+  pattern="${pattern%"${pattern##*[![:space:]]}"}"
   case "$pattern" in ''|'#'*) continue ;; esac
   matches=$(git ls-files -- ":(glob,icase)$pattern")
   if [ -n "$matches" ]; then

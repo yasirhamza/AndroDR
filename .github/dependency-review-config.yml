@@ -5,10 +5,12 @@
 #   remove the entry when a fix ships.
 fail-on-severity: high
 
-# Entry format: - GHSA-xxxx-xxxx-xxxx  # <reason>; review by YYYY-MM-DD
+# Entry format: - GHSA-xxxx-xxxx-xxxx  # <reason>; review by YYYY-MM-DD (bootstrap-block entries below are exempt from per-entry dates; the block carries its own hard removal date)
 allow-ghsas:
   # ============================ BOOTSTRAP BLOCK ============================
   # REMOVE THIS ENTIRE BLOCK in the follow-up PR right after PR #255 merges.
+  # HARD REVIEW-BY: 2026-07-31 — if this block still exists after that date,
+  # treat as an incident: the gate is blind to these GHSAs for future app deps.
   #
   # The first-ever dependency-review run has no base snapshot on main, so
   # the entire pre-existing tree evaluates as "added" and every standing

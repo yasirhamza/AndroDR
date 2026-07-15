@@ -165,7 +165,10 @@ executed in sequence (merge N before starting N+1).
   aren't manifest-parseable, so PR-side submission is what lets
   `dependency-review` diff the graph) + `dependency-review` job (PR,
   `fail-on-severity: high`) + `.github/dependency-review-config.yml`
-  with empty `allow-ghsas` and the reason/review-date convention documented.
+  with an initially-empty `allow-ghsas` (shipped with a temporary 18-entry
+  bootstrap block for the snapshot-less first run — deviation #8 in the
+  plan's register, removed post-merge) and the reason/review-date
+  convention documented.
   The submission job checks out with `persist-credentials: false` (it holds
   a `contents: write` token on PR-triggered Gradle resolution) and runs with
   dependency verification off (graph telemetry only — required once PR 3
