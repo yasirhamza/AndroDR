@@ -120,16 +120,26 @@ jobs:
           set -euo pipefail
           BT=$(find "$ANDROID_HOME/build-tools" -maxdepth 1 -mindepth 1 -type d | sort -V | tail -1)
           "$BT/apksigner" verify --print-certs "$APK_PATH" | tee /tmp/apksigner.out
-          SIGNER_COUNT=$(grep -c '^Signer .* certificate SHA-256 digest:' /tmp/apksigner.out || true)
-          if [ "$SIGNER_COUNT" -ne 1 ]; then
-            echo "FAIL: expected exactly 1 signer, found ${SIGNER_COUNT}" >&2
+          # apksigner's signer-line format varies by build-tools version:
+          #   'Signer #1 certificate SHA-256 digest: <hex>'          (older)
+          #   'V2 Signer: certificate SHA-256 digest: <hex>'         (newer, per-scheme)
+          #   'Signer (minSdkVersion=N) certificate SHA-256 digest:' (v3.1 rotation)
+          # Collect the DISTINCT cert digests across all signer lines: one
+          # signer signing multiple schemes repeats the same digest; a second
+          # signer introduces a different one. 'Source Stamp Signer' lines
+          # don't match (they don't start with 'Signer'/'V<n> Signer').
+          DIGESTS=$(grep -E '^(Signer|V[0-9.]+ Signer:).* certificate SHA-256 digest:' /tmp/apksigner.out \
+            | sed -E 's/.*certificate SHA-256 digest: *//' | tr 'A-F' 'a-f' | sort -u)
+          COUNT=$(printf '%s\n' "$DIGESTS" | grep -c . || true)
+          if [ "$COUNT" -ne 1 ]; then
+            echo "FAIL: expected exactly 1 distinct signer certificate, found ${COUNT} (0 = unsigned or apksigner output format drift — inspect /tmp/apksigner.out above)" >&2
             exit 1
           fi
-          if ! grep -q "^Signer #1 certificate SHA-256 digest: ${EXPECTED_CERT_SHA256}" /tmp/apksigner.out; then
+          if [ "$DIGESTS" != "$EXPECTED_CERT_SHA256" ]; then
             echo "FAIL: APK is not signed by the expected CI release key" >&2
             exit 1
           fi
-          echo "PASS: exactly one signer, matching pinned CI release certificate"
+          echo "PASS: exactly one signer certificate, matching pinned CI release cert"
       - name: Remove decoded keystore
         if: always()
         run: rm -f "$RUNNER_TEMP/release-keystore.jks"
