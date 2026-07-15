@@ -7,8 +7,6 @@
 Preferred: use GitHub's private vulnerability reporting —
 **Security → Report a vulnerability** on this repository.
 
-> **Status: enabled as a post-merge step of #252 (plan Task 7)** — if the button is missing, use the email channel below; this note is removed by the follow-up PR.
-
 Alternatively, email **yhamad.dev@gmail.com** with:
 
 - A description of the issue and its impact

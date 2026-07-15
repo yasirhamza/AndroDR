@@ -171,10 +171,9 @@ prevents recurrence; it does not audit history.
 
 ## Enforcement summary
 
-- *(Pending post-merge Task 7 of #252 — marker removed when live)* Ruleset
-  "Protect main": PRs required, required check `ci-success` (which folds
-  in dependency-review, the denylist guard, and all build gates), CodeQL
-  code-scanning rule (blocks on new high-severity alerts), no
+- Ruleset "Protect main": PRs required, required check `ci-success` (which
+  folds in dependency-review, the denylist guard, and all build gates),
+  CodeQL code-scanning rule (blocks on new high-severity alerts), no
   force-push/deletion.
 - **Known limits:** repository admins hold an always-on bypass
   (`bypass_mode: always`) — the gates constrain automation and habit, not
