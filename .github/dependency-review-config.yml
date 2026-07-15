@@ -1,0 +1,9 @@
+# Policy for actions/dependency-review-action (the delta-only SCA gate).
+# Severity >= high with a fix available -> bump instead of suppressing.
+# Genuinely unfixable advisories go in allow-ghsas, each with a comment:
+#   reason, owner, and a review-by date. Re-review at each entry's date;
+#   remove the entry when a fix ships.
+fail-on-severity: high
+
+# allow-ghsas:
+#   - GHSA-xxxx-xxxx-xxxx  # <reason>; review by YYYY-MM-DD
