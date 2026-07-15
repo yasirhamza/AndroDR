@@ -13,7 +13,7 @@ buildscript {
             // regression. If this repo ever goes multi-module, duplicate
             // this constraint in every module applying cyclonedx-bom (or
             // hoist to a convention plugin) — it is module-local.
-            classpath("com.fasterxml.jackson.core:jackson-databind:2.21.4")
+            classpath("com.fasterxml.jackson.core:jackson-databind:2.21.5")
         }
     }
 }
