@@ -171,19 +171,26 @@ prevents recurrence; it does not audit history.
 
 ## Enforcement summary
 
-- *(Pending post-merge Task 7 of #252 — marker removed when live)* Ruleset
-  "Protect main": PRs required, required check `ci-success` (which folds
-  in dependency-review, the denylist guard, and all build gates), CodeQL
-  code-scanning rule (blocks on new high-severity alerts), no
+- Ruleset "Protect main": PRs required, required check `ci-success` (which
+  folds in dependency-review, the denylist guard, and all build gates), no
   force-push/deletion.
+- **CodeQL is advisory, not merge-blocking** (empirically settled
+  2026-07-16): GitHub's `code_scanning` ruleset rule blocks any PR whose
+  changed paths don't trigger the path-filtered CodeQL workflow — it does
+  not treat "analysis not expected" as satisfied — so a docs-only PR
+  wedges permanently. The rule was added, probed, and rolled back per the
+  recorded plan. CodeQL findings still land in the Security tab and as PR
+  annotations on code PRs; revisit if GitHub adds path-aware expectation
+  handling (or if we ever accept always-running CodeQL on every PR).
 - **Known limits:** repository admins hold an always-on bypass
   (`bypass_mode: always`) — the gates constrain automation and habit, not
   a determined or deceived admin, and "run this command to merge past red
   CI" remains a live social-engineering channel. Required checks are
   non-strict, so a green `ci-success` may predate the current base.
-- **Unwind order:** to disable CodeQL, delete the `code_scanning` rule
-  from ruleset 14651316 *first*, or merges wedge waiting for analyses
-  that never arrive.
+- **Unwind order (historical note):** if a `code_scanning` ruleset rule is
+  ever re-added, disabling CodeQL requires deleting that rule *first*, or
+  merges wedge waiting for analyses that never arrive — the same wedge the
+  2026-07-16 probe hit from the path-filter side.
 - *(Pending PR 2 of #252)* `release.yml` refuses to publish unless
   `ci-success` passed for the SHA and the APK signature matches the pinned
   certificate digest.

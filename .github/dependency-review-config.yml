@@ -5,41 +5,5 @@
 #   remove the entry when a fix ships.
 fail-on-severity: high
 
-# Entry format: - GHSA-xxxx-xxxx-xxxx  # <reason>; review by YYYY-MM-DD (bootstrap-block entries below are exempt from per-entry dates; the block carries its own hard removal date)
-allow-ghsas:
-  # ============================ BOOTSTRAP BLOCK ============================
-  # REMOVE THIS ENTIRE BLOCK in the follow-up PR right after PR #255 merges.
-  # HARD REVIEW-BY: 2026-07-31 — if this block still exists after that date,
-  # treat as an incident: the gate is blind to these GHSAs for future app deps.
-  #
-  # The first-ever dependency-review run has no base snapshot on main, so
-  # the entire pre-existing tree evaluates as "added" and every standing
-  # advisory fires at once. All 18 entries below are the Gradle BUILD
-  # CLASSPATH (AGP 8.7.3 toolchain: netty 4.1.93, protobuf, jdom2, jose4j,
-  # commons-io, jackson, bcprov) — none ship in the APK, and none are
-  # reachable as network services at build time. Enumerated via the
-  # dependency-graph compare API on 2026-07-15 (18 distinct crit/high).
-  # Once main has its first snapshot (created by this PR's merge push),
-  # the gate is delta-only and these suppressions become dead weight —
-  # leaving them would permanently blind the gate to any future *app*
-  # dependency carrying the same GHSA. Standing-tree handling belongs to
-  # Dependabot (see docs/supply-chain.md).
-  - GHSA-574f-3g2m-x479  # bcprov 1.77 (critical) — GOST cipher unused by AGP signing
-  - GHSA-j3rv-43j4-c7qm  # jackson-databind 2.18.3 — CI plugin toolchain
-  - GHSA-rmj7-2vxq-3g9f  # jackson-databind 2.18.3 — CI plugin toolchain
-  - GHSA-3qp7-7mw8-wx86  # netty-handler 4.1.93 — AGP tooling
-  - GHSA-4g8c-wm8x-jfhw  # netty-handler 4.1.93 — AGP tooling
-  - GHSA-c653-97m9-rcg9  # netty-handler 4.1.93 — AGP tooling
-  - GHSA-x4gw-5cx5-pgmh  # netty-handler 4.1.93 — AGP tooling
-  - GHSA-57rv-r2g8-2cj3  # netty-codec-http 4.1.93 — AGP tooling
-  - GHSA-f6hv-jmp6-3vwv  # netty-codec-http 4.1.93 — AGP tooling
-  - GHSA-pwqr-wmgm-9rr8  # netty-codec-http 4.1.93 — AGP tooling
-  - GHSA-mj4r-2hfc-f8p6  # netty-codec 4.1.93 — AGP tooling
-  - GHSA-prj3-ccx8-p6x4  # netty-codec-http2 4.1.93 — AGP tooling
-  - GHSA-w9fj-cfpg-grvv  # netty-codec-http2 4.1.93 — AGP tooling
-  - GHSA-xpw8-rcwv-8f8p  # netty-codec-http2 4.1.93 — AGP tooling
-  - GHSA-2363-cqg2-863c  # jdom2 2.0.6 XXE — AGP tooling
-  - GHSA-3677-xxcr-wjqv  # jose4j 0.9.5 — AGP tooling
-  - GHSA-735f-pc8j-v9w8  # protobuf-java 3.22.3 — AGP tooling
-  - GHSA-78wr-2p64-hpwj  # commons-io 2.13.0 — AGP tooling
-  # ========================== END BOOTSTRAP BLOCK =========================
+# allow-ghsas:
+#   - GHSA-xxxx-xxxx-xxxx  # <reason>; review by YYYY-MM-DD
