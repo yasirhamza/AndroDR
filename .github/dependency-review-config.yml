@@ -5,5 +5,11 @@
 #   remove the entry when a fix ships.
 fail-on-severity: high
 
-# allow-ghsas:
-#   - GHSA-xxxx-xxxx-xxxx  # <reason>; review by YYYY-MM-DD
+# Entry format: - GHSA-xxxx-xxxx-xxxx  # <reason>; review by YYYY-MM-DD
+allow-ghsas:
+  # bcprov-jdk18on 1.77 GOST 28147 CTR keystream reuse (critical). Build
+  # classpath only: pulled transitively by AGP 8.7.3 via settings.gradle.kts,
+  # never ships in the APK, and AGP's signing code does not use the GOST
+  # cipher. Fix (bcprov 1.78) arrives with a future AGP bump — remove this
+  # entry when AGP updates. Owner: maintainer; review by 2026-10-15.
+  - GHSA-574f-3g2m-x479
