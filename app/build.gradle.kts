@@ -1,3 +1,18 @@
+buildscript {
+    dependencies {
+        constraints {
+            // The CycloneDX plugin (SBOM generation) transitively pulls
+            // jackson-databind 2.20.1, which carries GHSA-j3rv-43j4-c7qm and
+            // GHSA-rmj7-2vxq-3g9f (both high, fixed in 2.21.4). Policy:
+            // fix exists -> bump, not suppress. Constraint lives HERE (not
+            // the root build file) because plugins{} below resolve into this
+            // project's buildscript classpath. Remove when the plugin ships
+            // a patched jackson on its own.
+            classpath("com.fasterxml.jackson.core:jackson-databind:2.21.4")
+        }
+    }
+}
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
