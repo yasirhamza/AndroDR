@@ -13,3 +13,11 @@ allow-ghsas:
   # cipher. Fix (bcprov 1.78) arrives with a future AGP bump — remove this
   # entry when AGP updates. Owner: maintainer; review by 2026-10-15.
   - GHSA-574f-3g2m-x479
+  # jackson-databind 2.18.3 polymorphic-deserialization validator bypasses
+  # (high x2). Gradle build classpath only — absent from the project's own
+  # buildEnvironment tree; comes from the build/CI plugin toolchain (likely
+  # the dependency-graph plugin the submission action injects). Never ships
+  # in the APK; nothing deserializes untrusted input at build time here.
+  # Owner: maintainer; review by 2026-10-15.
+  - GHSA-j3rv-43j4-c7qm
+  - GHSA-rmj7-2vxq-3g9f
