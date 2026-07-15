@@ -62,6 +62,14 @@ build/uat/
 # MUST stay out of this public repo — it captures session summaries.
 .memsearch/
 
+# Env files + key-material formats — must never be tracked
+# (mirrors .github/tracked-path-denylist.txt)
+.env*
+*.p12
+*.pfx
+*.pepk
+*.bks
+
 # Local-only: LinkedIn post drafts + screenshots, not for the repo
 docs/linkedin-*/
 

@@ -213,6 +213,13 @@ jobs:
             echo "Upstream may have force-pushed, or the submodule points at a dangling commit." >&2
             exit 1
           fi
+  tracked-path-denylist:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - name: Check no denylisted local-state/sensitive path is tracked
+        run: bash .github/scripts/check-tracked-paths.sh
   python-pipeline:
     runs-on: ubuntu-latest
     needs: changes
@@ -292,6 +299,7 @@ jobs:
       - apk-analyze
       - secret-scan
       - submodule-check
+      - tracked-path-denylist
       - python-pipeline
     steps:
       - name: Verify all required gates passed (belt-and-braces)
@@ -306,6 +314,7 @@ jobs:
             echo "needs.apk-analyze.result:      ${{ needs.apk-analyze.result }}" >&2
             echo "needs.secret-scan.result:      ${{ needs.secret-scan.result }}" >&2
             echo "needs.submodule-check.result:  ${{ needs.submodule-check.result }}" >&2
+            echo "needs.tracked-path-denylist.result: ${{ needs.tracked-path-denylist.result }}" >&2
             echo "needs.python-pipeline.result:  ${{ needs.python-pipeline.result }}" >&2
             exit 1
           fi
