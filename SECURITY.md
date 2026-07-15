@@ -25,9 +25,8 @@ many detection-content fixes reach all installs without an app update.
 
 ## Verifying release artifacts
 
-> **Status: pending PR 2 of #252** — remove this note when it merges.
-
-Every GitHub release ships a signed APK, a CycloneDX SBOM, and a SLSA
+Every GitHub release **from the July 2026 signed-release cutover (#252)
+onward** ships a signed APK, a CycloneDX SBOM, and a SLSA
 build-provenance attestation. See
 [docs/supply-chain.md](docs/supply-chain.md) for verification commands.
 The Play upload key is never stored in CI; GitHub releases are signed with

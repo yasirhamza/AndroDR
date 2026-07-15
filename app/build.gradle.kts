@@ -1,3 +1,23 @@
+buildscript {
+    dependencies {
+        constraints {
+            // The CycloneDX plugin (SBOM generation) transitively pulls
+            // jackson-databind 2.20.1, which carries GHSA-j3rv-43j4-c7qm and
+            // GHSA-rmj7-2vxq-3g9f (both high, fixed in 2.21.4). Policy:
+            // fix exists -> bump, not suppress. Constraint lives HERE (not
+            // the root build file) because plugins{} below resolve into this
+            // project's buildscript classpath. Remove when the plugin ships
+            // a patched jackson on its own.
+            // Residual: GHSA-5jmj-h7xm-6q6v (medium) still spans <2.21.5 —
+            // bump to 2.21.5 when released; don't mistake its alert for a
+            // regression. If this repo ever goes multi-module, duplicate
+            // this constraint in every module applying cyclonedx-bom (or
+            // hoist to a convention plugin) — it is module-local.
+            classpath("com.fasterxml.jackson.core:jackson-databind:2.21.4")
+        }
+    }
+}
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -6,6 +26,7 @@ plugins {
     alias(libs.plugins.hilt)
     alias(libs.plugins.ksp)
     alias(libs.plugins.detekt)
+    alias(libs.plugins.cyclonedx.bom)
 }
 
 android {
@@ -75,7 +96,8 @@ android {
 
     signingConfigs {
         create("release") {
-            storeFile = file("${rootProject.projectDir}/release-keystore.jks")
+            storeFile = file(providers.gradleProperty("RELEASE_KEYSTORE_PATH")
+                .getOrElse("${rootProject.projectDir}/release-keystore.jks"))
             storePassword = providers.gradleProperty("RELEASE_STORE_PASSWORD").getOrElse("")
             keyAlias = providers.gradleProperty("RELEASE_KEY_ALIAS").getOrElse("androdr")
             keyPassword = providers.gradleProperty("RELEASE_KEY_PASSWORD").getOrElse("")
@@ -142,6 +164,19 @@ android {
         // since the adaptive icon is only drawn on API 26+ devices anyway.
         disable += setOf("GradleDependency", "AndroidGradlePluginVersion", "ObsoleteSdkInt")
     }
+}
+
+// SBOM for release evidence (#252). release.yml invokes :app:cyclonedxBom
+// (aggregate), which CONSUMES cyclonedxDirectBom's output (verified in the
+// task graph and plugin bytecode) — so the includeConfigs restriction below
+// is effective for the shipped bom.json even though only the aggregate task
+// is invoked. Aggregate emits JSON only.
+tasks.cyclonedxBom {
+    jsonOutput.set(layout.buildDirectory.file("reports/cyclonedx/bom.json"))
+    xmlOutput.unsetConvention()
+}
+tasks.cyclonedxDirectBom {
+    includeConfigs.set(listOf("releaseRuntimeClasspath"))
 }
 
 // KSP source sets for Room schema export (optional but recommended)

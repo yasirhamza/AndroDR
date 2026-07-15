@@ -66,12 +66,10 @@ gradle/actions/setup-gradle v4 validates all wrapper jars by default
 
 ## Release integrity (layer 4) — verifying a release
 
-> **Status: pending PR 2 of #252** — remove this note when it merges.
-
-Every release published by `release.yml` carries three artifacts: the
-signed APK, `bom.json` (CycloneDX SBOM), and a provenance attestation
-stored in the repo's attestation log. To verify a downloaded APK
-(requires `gh` ≥ 2.49):
+Every release published by `release.yml` since the July 2026 cutover
+(#252) carries three artifacts: the signed APK, `bom.json` (CycloneDX
+SBOM), and a provenance attestation stored in the repo's attestation log.
+To verify a downloaded APK (requires `gh` ≥ 2.49):
 
     # Provenance: proves this exact file was built by release.yml in this
     # repo at a specific commit (SLSA build attestation). This is the
@@ -88,6 +86,10 @@ key). `release.yml` pins the CI key's certificate SHA-256 digest — a build
 signed with any other key fails CI. Play-Store and GitHub installs have
 different signatures and cannot upgrade over each other; that has always
 been true.
+
+**Dry-run:** `gh workflow run release.yml --ref main -f dry_run=true` builds,
+signs, verifies, and uploads APK+SBOM as a `release-dry-run` artifact without
+publishing or attesting. Dispatch is deliberately restricted to `main`.
 
 **Key-leak runbook (CI release key):** the blast radius is "someone can
 sign an APK whose signature matches GitHub releases" — provenance
@@ -191,6 +193,5 @@ prevents recurrence; it does not audit history.
   ever re-added, disabling CodeQL requires deleting that rule *first*, or
   merges wedge waiting for analyses that never arrive — the same wedge the
   2026-07-16 probe hit from the path-filter side.
-- *(Pending PR 2 of #252)* `release.yml` refuses to publish unless
-  `ci-success` passed for the SHA and the APK signature matches the pinned
-  certificate digest.
+- `release.yml` refuses to publish unless `ci-success` passed for the SHA
+  and the APK signature matches the pinned certificate digest.

@@ -8,11 +8,15 @@ on:
       - 'docs/**'
       - 'notes/**'
   workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Build, sign, verify, and generate SBOM only — do not publish a release or attestation'
+        type: boolean
+        default: false
 
-permissions:
-  contents: write    # gh release create
-  actions: read      # poll ci-success
-  checks: read       # poll ci-success
+# No workflow-level permissions: scoped per-job (spec: "per-job token
+# scoping") so a future second job doesn't silently inherit release powers.
+permissions: {}
 
 concurrency:
   group: release
@@ -20,8 +24,27 @@ concurrency:
 
 jobs:
   release:
+    # workflow_dispatch on an arbitrary ref would hand the signing secrets
+    # to unreviewed code and mint a legitimate signed+attested release from
+    # a branch, bypassing review. Dispatch is therefore main-only; branch
+    # testing of this workflow is no longer possible by design.
+    if: ${{ github.event_name != 'workflow_dispatch' || github.ref == 'refs/heads/main' }}
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    permissions:
+      contents: write             # gh release create
+      actions: read               # poll ci-success
+      checks: read                # poll ci-success
+      id-token: write             # provenance attestation (OIDC)
+      attestations: write         # provenance attestation
+      artifact-metadata: write    # used by attest-build-provenance >= v3.2 (registry modes); harmless for file attestations, kept for forward-compat
+    env:
+      # Dedicated CI release cert (public — printable from any APK signed
+      # with it; the Play upload key is never stored in CI). A build signed
+      # with any other key must fail.
+      EXPECTED_CERT_SHA256: '940f1b9dacd798507fd2290a7f59341a0c72499f79662e576fc02c7a8a7cbc8b'
+      APK_PATH: app/build/outputs/apk/release/app-release.apk
+      SBOM_PATH: app/build/reports/cyclonedx/bom.json
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
@@ -73,8 +96,43 @@ jobs:
               await new Promise(r => setTimeout(r, pollMs));
             }
             core.setFailed('Timed out waiting for ci-success');
-      - name: Build debug APK
-        run: ./gradlew assembleDebug --stacktrace
+      - name: Decode release keystore
+        env:
+          RELEASE_KEYSTORE_BASE64: ${{ secrets.RELEASE_KEYSTORE_BASE64 }}
+        run: |
+          set -euo pipefail
+          if [ -z "$RELEASE_KEYSTORE_BASE64" ]; then
+            echo "RELEASE_KEYSTORE_BASE64 secret is not set" >&2
+            exit 1
+          fi
+          printf '%s' "$RELEASE_KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release-keystore.jks"
+      - name: Build signed release APK
+        env:
+          ORG_GRADLE_PROJECT_RELEASE_STORE_PASSWORD: ${{ secrets.RELEASE_STORE_PASSWORD }}
+          ORG_GRADLE_PROJECT_RELEASE_KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
+          ORG_GRADLE_PROJECT_RELEASE_KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
+          ORG_GRADLE_PROJECT_RELEASE_KEYSTORE_PATH: ${{ runner.temp }}/release-keystore.jks
+        run: ./gradlew assembleRelease --stacktrace
+      - name: Generate CycloneDX SBOM
+        run: ./gradlew :app:cyclonedxBom
+      - name: Verify APK signature against pinned CI release cert
+        run: |
+          set -euo pipefail
+          BT=$(find "$ANDROID_HOME/build-tools" -maxdepth 1 -mindepth 1 -type d | sort -V | tail -1)
+          "$BT/apksigner" verify --print-certs "$APK_PATH" | tee /tmp/apksigner.out
+          SIGNER_COUNT=$(grep -c '^Signer .* certificate SHA-256 digest:' /tmp/apksigner.out || true)
+          if [ "$SIGNER_COUNT" -ne 1 ]; then
+            echo "FAIL: expected exactly 1 signer, found ${SIGNER_COUNT}" >&2
+            exit 1
+          fi
+          if ! grep -q "^Signer #1 certificate SHA-256 digest: ${EXPECTED_CERT_SHA256}" /tmp/apksigner.out; then
+            echo "FAIL: APK is not signed by the expected CI release key" >&2
+            exit 1
+          fi
+          echo "PASS: exactly one signer, matching pinned CI release certificate"
+      - name: Remove decoded keystore
+        if: always()
+        run: rm -f "$RUNNER_TEMP/release-keystore.jks"
       - name: Compute version and release notes
         id: version
         run: |
@@ -97,12 +155,38 @@ jobs:
           printf "## What's Changed\n\n%s\n\n**Full changelog**: https://github.com/%s/compare/%s...%s\n" \
             "$CHANGES" "${{ github.repository }}" "${PREV_TAG:-v0.0.0}" "$TAG" > /tmp/release-notes.md
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+      - name: Attest build provenance (APK + SBOM)
+        # Deliberately skipped on dry-runs: attestations are permanent in
+        # the repo's attestation log (declared deviation — first real
+        # release is the attestation test, verified immediately post-merge).
+        if: ${{ inputs.dry_run != true }}
+        uses: actions/attest-build-provenance@96278af6caaf10aea03fd8d33a09a777ca52d62f # v3.2.0
+        with:
+          subject-path: |
+            ${{ env.APK_PATH }}
+            ${{ env.SBOM_PATH }}
       - name: Publish release
+        if: ${{ inputs.dry_run != true }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          # shellcheck disable=SC2016  # backticks in printf are literal markdown
+          {
+            cat /tmp/release-notes.md
+            printf '\n---\nVerify this release: `gh attestation verify app-release.apk --repo %s`\nSBOM: `bom.json` (CycloneDX). Details: docs/supply-chain.md\n' "${{ github.repository }}"
+          } > /tmp/release-notes-full.md
           gh release create "${{ steps.version.outputs.tag }}" \
-            app/build/outputs/apk/debug/app-debug.apk \
+            "$APK_PATH" \
+            "$SBOM_PATH" \
             --target "${{ github.sha }}" \
             --title "AndroDR ${{ steps.version.outputs.tag }}" \
-            --notes-file /tmp/release-notes.md
+            --notes-file /tmp/release-notes-full.md
+      - name: Upload dry-run artifacts
+        if: ${{ inputs.dry_run == true }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: release-dry-run
+          path: |
+            ${{ env.APK_PATH }}
+            ${{ env.SBOM_PATH }}
+          retention-days: 7
