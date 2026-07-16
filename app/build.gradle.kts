@@ -1,19 +1,30 @@
 buildscript {
     dependencies {
         constraints {
-            // The CycloneDX plugin (SBOM generation) transitively pulls
-            // jackson-databind 2.20.1, which carries GHSA-j3rv-43j4-c7qm and
-            // GHSA-rmj7-2vxq-3g9f (both high, fixed in 2.21.4). Policy:
-            // fix exists -> bump, not suppress. Constraint lives HERE (not
-            // the root build file) because plugins{} below resolve into this
-            // project's buildscript classpath. Remove when the plugin ships
-            // a patched jackson on its own.
-            // Residual: GHSA-5jmj-h7xm-6q6v (medium) still spans <2.21.5 —
-            // bump to 2.21.5 when released; don't mistake its alert for a
-            // regression. If this repo ever goes multi-module, duplicate
-            // this constraint in every module applying cyclonedx-bom (or
-            // hoist to a convention plugin) — it is module-local.
-            classpath("com.fasterxml.jackson.core:jackson-databind:2.21.4")
+            // Build-classpath security constraints (the plugins{} block below
+            // resolves into this project's buildscript classpath, so these
+            // live HERE, not in the root build file). Policy: a fix exists ->
+            // bump, never suppress. None of these artifacts ship in the APK.
+            // If this repo ever goes multi-module, duplicate this block in
+            // every module that applies these plugins (or hoist to a
+            // convention plugin) — it is module-local.
+
+            // CycloneDX plugin (SBOM) pulls jackson-databind 2.20.1, carrying
+            // GHSA-j3rv-43j4-c7qm + GHSA-rmj7-2vxq-3g9f (high) and the residual
+            // GHSA-5jmj-h7xm-6q6v (medium, <2.21.5). 2.21.5 clears all three.
+            // This constraint reaches it because CycloneDX is applied in this
+            // project's plugins{} block. Drop once the plugin ships a patched
+            // jackson itself (still 3.3.0 as of 2026-07-16).
+            classpath("com.fasterxml.jackson.core:jackson-databind:2.21.5")
+
+            // NOTE: the bcprov-jdk18on 1.77 critical (GHSA-574f-3g2m-x479) is
+            // NOT fixable here — it is a transitive of the Android Gradle
+            // Plugin, resolved on the pluginManagement classpath that a
+            // per-project buildscript constraint cannot reach (verified: the
+            // constraint was a no-op). It clears with an AGP bump (8.7.3 ->
+            // a release shipping BC >= 1.80.2), which also requires a Gradle
+            // wrapper bump — tracked as a separate toolchain-upgrade PR.
+            // It is build-classpath only and never ships in the APK/AAB.
         }
     }
 }
