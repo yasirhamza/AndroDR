@@ -26,6 +26,12 @@ class PackageLifecycleReceiver : BroadcastReceiver() {
     @Inject lateinit var forensicTimelineEventDao: ForensicTimelineEventDao
 
     override fun onReceive(context: Context, intent: Intent) {
+        // Front-door action check. The receiver is exported="false" so Android
+        // already blocks third-party delivery, but verifying the action before
+        // doing any work makes the intent contract explicit and keeps the
+        // receiver safe even if it is ever exported (CWE-925).
+        if (!handlesAction(intent.action)) return
+
         val pkg = intent.data?.schemeSpecificPart ?: return
         if (pkg == context.packageName) return // ignore self
 
@@ -85,5 +91,13 @@ class PackageLifecycleReceiver : BroadcastReceiver() {
 
     companion object {
         private const val TAG = "PackageLifecycle"
+
+        /**
+         * The only broadcast actions this receiver acts on. Used as the
+         * front-door guard in [onReceive]; extracted so the intent-verification
+         * contract can be unit-tested without a Hilt/Robolectric harness.
+         */
+        fun handlesAction(action: String?): Boolean =
+            action == Intent.ACTION_PACKAGE_ADDED || action == Intent.ACTION_PACKAGE_REMOVED
     }
 }
