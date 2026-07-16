@@ -240,7 +240,11 @@ jobs:
   dependency-submission:
     runs-on: ubuntu-latest
     needs: changes
-    if: ${{ needs.changes.outputs.deps == 'true' }}
+    # Always submit on pushes to main: the compare API needs a snapshot for
+    # the EXACT base SHA (no reliable nearest-commit fallback — proven live
+    # on PR #260, whose base was a merge that skipped the deps bucket and
+    # left dependency-review comparing against nothing). ~90s per merge.
+    if: ${{ needs.changes.outputs.deps == 'true' || github.event_name == 'push' }}
     timeout-minutes: 20
     permissions:
       contents: write
@@ -282,6 +286,15 @@ jobs:
         with:
           config-file: './.github/dependency-review-config.yml'
           retry-on-snapshot-warnings: true
+          # TEMPORARY (remove in the auto-regen follow-up PR): the current
+          # main tip (94c8049, a merge that skipped the deps bucket) has no
+          # graph snapshot, so the default base compare reports the whole
+          # tree as "added". Pin the base to the last snapshot-bearing main
+          # commit; the push-rule on dependency-submission above guarantees
+          # every FUTURE main tip has a snapshot, after which this override
+          # must go (a stale pin would accumulate false deltas).
+          base-ref: d0fc8945a9bafe3438c7b6cbf4af5a3974308d4c
+          head-ref: ${{ github.event.pull_request.head.sha }}
   python-pipeline:
     runs-on: ubuntu-latest
     needs: changes
