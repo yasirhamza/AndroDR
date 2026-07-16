@@ -1678,6 +1678,26 @@ mandatory, these are declared deviations/pending items:
    Removed by the follow-up PR immediately after PR 1 merges; see the block
    banner in .github/dependency-review-config.yml and PR #255's evidence
    comment.
+9. **Auto-regen workflow postponed** (maintainer decision 2026-07-16):
+   the interactive PAT provisioning couldn't complete in-session, and the
+   maintainer chose to postpone rather than block. PR 3 ships without
+   `.github/workflows/dependabot-verification-regen.yml`; docs describe
+   manual regen as the current process. Follow-up PR adds the workflow
+   (full YAML in Task 12 above) once `DEPENDABOT_REGEN_TOKEN` exists —
+   ideally before the ~2026-08-01 Dependabot cycle. Recorded in #252's
+   closing comment.
+10. **Task 11's tamper-test recipe corrected during execution:** the
+   written recipe (flip the file's FIRST sha256) was a false negative —
+   that entry was a sources jar `assembleDebug` never resolves, and
+   configuration-cache reuse skipped verification entirely. Corrected
+   form: zero out the digest of an artifact the build actually resolves
+   (e.g. `activity-1.9.1.aar`) and run with `--no-configuration-cache`.
+   Docs carry the config-cache caveat; any future copy of the recipe must
+   use the corrected form.
+11. **Task 11's local clean-build proof aborted mid-run** (maintainer
+   wall-clock request): PR CI under active verification is the accepted
+   green proof. (The build happened to finish before the abort took
+   effect, so its green evidence exists anyway — see task report.)
 
 ## Plan self-review notes (already applied)
 

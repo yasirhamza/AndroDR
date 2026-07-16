@@ -100,21 +100,21 @@ secrets and the `EXPECTED_CERT_SHA256` pin in `release.yml`, (3) note in
 the next release that sideloaders must uninstall/reinstall once. No Play
 Console involvement.
 
-> **Status: pending PR 3 of #252** — remove this note when it merges.
+> **Status: postponed follow-up of #252** — arrives with the auto-regen
+> workflow; remove this note when that lands.
 
-**Token runbook (`DEPENDABOT_REGEN_TOKEN`):** fine-grained PAT, this repo
-only, Contents read/write, 90-day expiry. On expiry Dependabot PRs fail
-regen with an auth error at checkout/push; renew with a fresh PAT via
-`gh secret set DEPENDABOT_REGEN_TOKEN --app dependabot`. Expiry date is
-recorded in #252's closing comment.
+**Token runbook (planned `DEPENDABOT_REGEN_TOKEN`):** needed only once the
+postponed auto-regen workflow lands — fine-grained PAT, this repo only,
+Contents read/write, 90-day expiry, stored as a **Dependabot** secret
+(`gh secret set DEPENDABOT_REGEN_TOKEN --app dependabot`). On expiry,
+Dependabot PRs fail regen with an auth error at checkout/push; renew with
+a fresh PAT via the same command.
 
 **"Am I affected?" (new CVE in some library):** download `bom.json` from
 the latest release (or run `./gradlew :app:cyclonedxBom` locally) and
 search it for the artifact — answer in minutes, no build required.
 
 ## Dependency checksum verification (layer 1)
-
-> **Status: pending PR 3 of #252** — remove this note when it merges.
 
 `gradle/verification-metadata.xml` records the sha256 of every resolved
 artifact (dependencies *and* plugins). Any mismatch — tampered artifact,
@@ -134,15 +134,20 @@ After **any** dependency change, regenerate:
       assembleDebug assembleRelease testDebugUnitTest lintDebug detekt \
       assembleDebugAndroidTest :app:cyclonedxBom
 
-and commit the updated file. Dependabot PRs are handled automatically by
-`.github/workflows/dependabot-verification-regen.yml`, which runs the same
-task list with `--dry-run` added (resolution without executing the bumped
-tree's code) and pushes onto the bot's branch. If a Dependabot PR stays
-red after regen (an execution-only configuration the dry run can't reach),
-run the command above locally and push. A red build complaining about
-"Dependency verification failed" on a *non*-Dependabot branch means you
-changed dependencies without regenerating (or something genuinely
-tampered — check which artifact and why before regenerating).
+and commit the updated file. **Dependabot bumps currently require this
+manually:** check out the bot's branch, run the command, push — the
+monthly grouped Gradle PR arrives red until then. An auto-regen workflow
+(hardened design in the #252 plan: `--dry-run` resolution so the bumped
+tree's tasks never execute, PAT confined to the push step) is a
+**postponed follow-up**, waiting on its fine-grained PAT being
+provisioned. A red build complaining about "Dependency verification
+failed" on a *non*-Dependabot branch means you changed dependencies
+without regenerating (or something genuinely tampered — check which
+artifact and why before regenerating).
+
+When re-testing verification locally, pass `--no-configuration-cache`:
+configuration-cache reuse skips resolution entirely and can silently
+bypass verification, making a tampered file look green.
 
 The `dependency-submission` CI job runs with verification off by design:
 it only reports the graph, and its init-script-injected plugin is not in
