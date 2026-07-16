@@ -125,20 +125,38 @@ tree, any byte change is fatal. For a *newly bumped* version (Dependabot),
 the regenerated checksum is trust-on-first-use — it pins whatever the
 regen run downloaded. Verification protects all unchanged artifacts and
 every subsequent fetch of the new one; the authenticity of the new version
-itself rests on advisory data and review of the bump PR.
+itself rests on advisory data and review of the bump PR. The **initial
+baseline is itself one TOFU event**: it attests continuity from the
+July 2026 generation environment, not upstream authenticity —
+`verify-signatures=false` is the deliberate scope boundary.
 
 After **any** dependency change, regenerate:
 
     export JAVA_HOME=/home/yasir/Applications/android-studio/jbr  # or your JDK 21
-    ./gradlew --write-verification-metadata sha256 \
+    ./gradlew --write-verification-metadata sha256 --refresh-dependencies \
       assembleDebug assembleRelease testDebugUnitTest lintDebug detekt \
       assembleDebugAndroidTest :app:cyclonedxBom
 
+`--refresh-dependencies` is not optional: a warm local cache skips
+re-recording parent POMs and module metadata, producing a file that passes
+locally and fails CI's cold resolution (this bit PR 3 itself). Triage rule:
+missing `.pom`/`.module` entries for versions nothing pins are
+candidate-metadata drift — fix by regenerating, **never** by weakening
+`<configuration>`.
+
 and commit the updated file. **Dependabot bumps currently require this
-manually:** check out the bot's branch, run the command, push — the
-monthly grouped Gradle PR arrives red until then. An auto-regen workflow
-(hardened design in the #252 plan: `--dry-run` resolution so the bumped
-tree's tasks never execute, PAT confined to the push step) is a
+manually** — and the bumped tree is unreviewed code, so do NOT run the
+full command on a bot branch directly: it executes the new dependency,
+plugin, and test code on your machine. Instead, on bot branches run the
+`--dry-run` form first (it resolves without executing tasks and writes
+`gradle/verification-metadata.dryrun.xml`), review the bump and the
+dryrun diff against advisory data, and only then run the full command
+(or adopt the dryrun file and let CI's cold-cache run prove
+completeness). Note that even `--dry-run` executes configuration-time
+plugin code — for a suspicious bump, regenerate in a disposable
+container. The monthly grouped Gradle PR arrives red until regen. An
+auto-regen workflow (hardened design in the #252 plan: `--dry-run`
+resolution on an ephemeral runner, PAT confined to the push step) is a
 **postponed follow-up**, waiting on its fine-grained PAT being
 provisioned. A red build complaining about "Dependency verification
 failed" on a *non*-Dependabot branch means you changed dependencies
@@ -152,8 +170,9 @@ bypass verification, making a tampered file look green.
 The `dependency-submission` CI job runs with verification off by design:
 it only reports the graph, and its init-script-injected plugin is not in
 the metadata. **Rollback coupling:** reverting PR 2 (CycloneDX) also
-requires dropping `:app:cyclonedxBom` from the command above and from the
-regen workflow — the task only exists while the plugin is applied.
+requires dropping `:app:cyclonedxBom` from the command above (and from
+the auto-regen workflow once that postponed follow-up lands) — the task
+only exists while the plugin is applied.
 
 ## Outbound-leak guard (layer 6)
 
