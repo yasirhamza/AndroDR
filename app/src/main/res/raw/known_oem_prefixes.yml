@@ -1,4 +1,4 @@
-version: "2026-05-19"
+version: "2026-07-25"
 description: "Known OEM, carrier, and chipset vendor package prefixes. Split into unconditional and device-conditional sections: conditional blocks only apply when the assessed device's manufacturer/brand matches the block's manufacturer_match / brand_match lists. This closes the prefix-spoofing attack from #90 where an attacker could hide malware under a foreign vendor's package namespace on a device that doesn't actually use that vendor."
 sources:
   - uad-list
@@ -201,6 +201,7 @@ conditional:
       - "com.coloros."
       - "com.heytap."
       - "com.oplus."
+      - "oplus"   # ColorOS ships a bare, dotless `oplus` package labelled "Android System" (observed on CPH2735/A5 5G, Android 15). It has FLAG_SYSTEM set but matches no com.* prefix, so androdr-015 reported it as an Unrecognized System App. Matching is startsWith, so this also covers `oplus.*` — an intra-vendor spoofing surface identical to the one every other prefix here already carries, and bounded to devices whose manufacturer/brand is actually OPPO (#90).
 
   realme:
     manufacturer_match: ["realme"]
