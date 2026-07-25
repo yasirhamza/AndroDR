@@ -2,42 +2,51 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Detect third-party keyboards that are enabled (medium) or actively selected (high) on the device, without false-positiving on OEM and partner-preinstalled keyboards.
+**Goal:** Detect third-party keyboards that are enabled (low), actively selected (medium), or squatting a manufacturer namespace (high), without false-positiving on OEM, partner-preinstalled, or curated FOSS keyboards.
 
-**Architecture:** A new `InputMethodScanner` reads the enabled input-method list and the selected keyboard once per scan. `AppScanner` joins that state onto each package as two `AppTelemetry` booleans, so both SIGMA rules live in the `app_scanner` logsource and inherit the existing `is_known_oem_app` / `from_trusted_store` / `known_good_app_db` guards.
+**Architecture:** `InputMethodScanner` reads the enabled input-method list and the selected keyboard once per scan as its own tracked scanner. `ScanOrchestrator` joins that device-wide state onto each `AppTelemetry` record, so all three SIGMA rules live in the `app_scanner` logsource. Exemption is a purpose-built `known_good_ime_db`, not the general app allowlist.
 
-**Tech Stack:** Kotlin, Hilt, JUnit4 + MockK (pure JVM unit tests, no Robolectric), snakeyaml-engine, SIGMA YAML rules delivered via the `android-sigma-rules` submodule.
+**Tech Stack:** Kotlin, Hilt, JUnit4 + MockK (pure JVM, no Robolectric), snakeyaml-engine, SIGMA YAML delivered via the `android-sigma-rules` submodule.
 
-**Spec:** `docs/superpowers/specs/2026-07-25-ime-detection-design.md`
+**Spec:** `docs/superpowers/specs/2026-07-25-ime-detection-design.md` (revised after the 2026-07-25 four-agent plan gate)
 
 ## Global Constraints
 
-- Build env for every gradle command: `export JAVA_HOME=/home/yasir/Applications/android-studio/jbr && export ANDROID_HOME=/home/yasir/Android/Sdk && export PATH="$JAVA_HOME/bin:$PATH"`
-- Rule IDs are **androdr-090** and **androdr-091**. Highest existing is 089; only androdr-084 is retired. Never reuse a retired ID.
-- Neither rule may gate on `from_trusted_store: false` — a Play-installed keyboard reads typed input exactly as a sideloaded one does.
-- Neither rule may gate on `is_system_app: false` — preinstalled keyboards are a supply-chain risk and the OEM/known-good guards already suppress legitimate ones.
-- Every bundled rule must be **byte-equal** to its mirror counterpart (`BundledMirrorParityTest`): mirror path is `<service_dir>/<name>.yml` with the `sigma_` prefix stripped.
-- `logsource-taxonomy.yml` and `AppTelemetry.toFieldMap()` are checked in **both directions** — extra-in-Kotlin and extra-in-taxonomy both fail. They must change in the same commit (Task 2).
-- `isReturnDefaultValues = true` is set for unit tests, so un-mocked Android statics return null rather than throwing.
-- Delivery follows the safe ordering in CLAUDE.md. `submodule-check` is red by construction while the submodule is pinned to a rules-repo branch — expected, not a failure.
+- Build env for every gradle command: `export JAVA_HOME=/home/yasir/Applications/android-studio/jbr && export ANDROID_HOME=/home/yasir/Android/Sdk && export PATH="$JAVA_HOME/bin:$ANDROID_HOME/platform-tools:$PATH"`
+- **Every command block runs from `/home/yasir/AndroDR`.** Submodule work uses `git -C third-party/android-sigma-rules …` — never bare `cd`, which stranded the previous draft's later steps in the wrong directory.
+- Rule IDs **090, 091, 092**. 089 is highest in use; 084 is the only retired ID.
+- Severities: 090 `low`, 091 `medium`, 092 `high`. `high` on 090/091 would violate the MANDATORY multi-condition rule at `.claude/commands/update-rules-author.md:165`; 092 earns it on two independent conditions.
+- Exemption is `known_good_ime_db` only. Never `known_good_app_db` — it classifies the Baidu/Sogou/iFlytek vendor variants as `OEM`, and `PlexusKnownAppFeed` writes every entry as `USER_APP`, which `TRUSTED_CATEGORIES` accepts.
+- Neither 090 nor 091 gates on `from_trusted_store` or `is_system_app`.
+- Bundled rules must be **byte-equal** to their mirror counterparts; same for `known_good_imes.yml` across bundle, mirror, and test fixture.
+- Verification commands are `./gradlew testDebugUnitTest lintDebug detekt` — CI runs `detekt` (`ci.yml:140`).
+- Manifest regeneration uses `LC_ALL=C sort` — `rules.txt` is C-collated and the default locale reorders it.
+- Delivery follows CLAUDE.md safe ordering. `submodule-check` is red by construction while pinned to a rules branch.
+
+- [ ] **Task 0: Create the working branch**
+
+```bash
+cd /home/yasir/AndroDR && git checkout -b feat/ime-detection
+git -C third-party/android-sigma-rules checkout -b feat/ime-detection
+```
 
 ---
 
 ### Task 1: `InputMethodScanner`
 
-Standalone. Touches no telemetry, so the build stays green independently.
+Standalone; touches no telemetry.
 
 **Files:**
 - Create: `app/src/main/java/com/androdr/scanner/InputMethodScanner.kt`
 - Test: `app/src/test/java/com/androdr/scanner/InputMethodScannerTest.kt`
 
 **Interfaces:**
-- Consumes: nothing from earlier tasks.
-- Produces: `InputMethodScanner.currentState(): InputMethodScanner.ImeState`, where
-  `ImeState(val enabledPackages: Set<String>, val activePackage: String?)` and
-  `ImeState.EMPTY`. Task 2 injects this class into `AppScanner`.
+- Produces: `InputMethodScanner.currentState(): ImeState`, with
+  `ImeState(enabledPackages: Set<String>, activePackage: String?)`, methods
+  `isEnabled(pkg): Boolean` / `isActive(pkg): Boolean`, and `ImeState.EMPTY`.
+  Task 2b consumes all four.
 
-- [ ] **Step 1: Write the failing test**
+- [ ] **Step 1: Write the failing tests**
 
 Create `app/src/test/java/com/androdr/scanner/InputMethodScannerTest.kt`:
 
@@ -66,7 +75,6 @@ class InputMethodScannerTest {
     private fun imeInfo(pkg: String): InputMethodInfo =
         mockk { every { packageName } returns pkg }
 
-    /** Builds a Context whose INPUT_METHOD_SERVICE returns [imm]. */
     private fun contextWith(imm: InputMethodManager?): Context = mockk(relaxed = true) {
         every { getSystemService(Context.INPUT_METHOD_SERVICE) } returns imm
         every { getContentResolver() } returns contentResolver
@@ -77,6 +85,17 @@ class InputMethodScannerTest {
         every {
             Settings.Secure.getString(any(), Settings.Secure.DEFAULT_INPUT_METHOD)
         } returns value
+    }
+
+    /** Spec §3: is_active_ime implies is_enabled_ime, on every path. */
+    private fun assertInvariant(state: InputMethodScanner.ImeState) {
+        val active = state.activePackage
+        if (active != null) {
+            assertTrue(
+                "invariant violated: active=$active absent from enabled=${state.enabledPackages}",
+                state.isEnabled(active),
+            )
+        }
     }
 
     @After
@@ -99,6 +118,10 @@ class InputMethodScannerTest {
             state.enabledPackages,
         )
         assertEquals("com.samsung.android.honeyboard", state.activePackage)
+        assertTrue(state.isActive("com.samsung.android.honeyboard"))
+        assertTrue(state.isEnabled("com.touchtype.swiftkey"))
+        assertTrue(!state.isActive("com.touchtype.swiftkey"))
+        assertInvariant(state)
     }
 
     @Test
@@ -107,24 +130,32 @@ class InputMethodScannerTest {
             every { enabledInputMethodList } returns listOf(imeInfo("com.baidu.input"))
         }
         stubDefaultIme(null)
-        assertNull(InputMethodScanner(contextWith(imm)).currentState().activePackage)
+        InputMethodScanner(contextWith(imm)).currentState().let {
+            assertNull(it.activePackage); assertInvariant(it)
+        }
 
         stubDefaultIme("")
-        assertNull(InputMethodScanner(contextWith(imm)).currentState().activePackage)
+        InputMethodScanner(contextWith(imm)).currentState().let {
+            assertNull(it.activePackage); assertInvariant(it)
+        }
     }
 
     @Test
-    fun `missing InputMethodManager degrades to empty state rather than throwing`() {
+    fun `missing InputMethodManager degrades to empty state`() {
         stubDefaultIme("com.baidu.input/.ImeService")
-
         val state = InputMethodScanner(contextWith(null)).currentState()
-
         assertTrue(state.enabledPackages.isEmpty())
         assertNull(state.activePackage)
+        assertInvariant(state)
     }
 
+    /**
+     * The two reads fail independently. A throwing enabled-list with a readable
+     * default must NOT yield is_active_ime=true alongside is_enabled_ime=false —
+     * androdr-091 omits is_enabled_ime and would fire on the contradictory state.
+     */
     @Test
-    fun `a throwing enabledInputMethodList degrades to an empty enabled set`() {
+    fun `a throwing enabled list still upholds the invariant`() {
         val imm: InputMethodManager = mockk {
             every { enabledInputMethodList } throws SecurityException("denied")
         }
@@ -132,22 +163,22 @@ class InputMethodScannerTest {
 
         val state = InputMethodScanner(contextWith(imm)).currentState()
 
-        assertTrue(state.enabledPackages.isEmpty())
         assertEquals("com.baidu.input", state.activePackage)
+        assertTrue(state.isEnabled("com.baidu.input"))
+        assertInvariant(state)
     }
 }
 ```
 
-- [ ] **Step 2: Run the test to verify it fails**
+- [ ] **Step 2: Run to verify failure**
 
 ```bash
-export JAVA_HOME=/home/yasir/Applications/android-studio/jbr && export ANDROID_HOME=/home/yasir/Android/Sdk && export PATH="$JAVA_HOME/bin:$PATH"
-./gradlew testDebugUnitTest --tests 'com.androdr.scanner.InputMethodScannerTest'
+cd /home/yasir/AndroDR && ./gradlew testDebugUnitTest --tests 'com.androdr.scanner.InputMethodScannerTest'
 ```
 
-Expected: compilation failure — `Unresolved reference: InputMethodScanner`.
+Expected: compilation failure, `Unresolved reference: InputMethodScanner`.
 
-- [ ] **Step 3: Write the implementation**
+- [ ] **Step 3: Implement**
 
 Create `app/src/main/java/com/androdr/scanner/InputMethodScanner.kt`:
 
@@ -163,18 +194,14 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Reads which input methods (keyboards) are enabled, and which one is currently
- * selected.
+ * Reads which input methods (keyboards) are enabled and which one is selected.
  *
- * An IME observes every text field the user types into — passwords included, since
- * the keyboard renders the keys and receives the taps. Android gates enablement
- * behind an explicit warning for that reason. Installed, enabled and active are
- * three distinct states and only the latter two carry risk: an installed-but-never
- * -enabled IME cannot observe anything.
+ * An IME observes every text field the user types into, passwords included, which
+ * is why Android gates enablement behind an explicit warning. Installed, enabled
+ * and active are three distinct states; only the latter two carry exposure.
  *
- * Both reads are public APIs requiring no permission. Every failure path degrades to
- * "nothing observed" rather than guessing, so a blocked read can never manufacture a
- * finding.
+ * Both reads are public APIs requiring no permission, and they fail independently —
+ * see [currentState] for why the active package is folded into the enabled set.
  */
 @Singleton
 class InputMethodScanner @Inject constructor(
@@ -185,14 +212,17 @@ class InputMethodScanner @Inject constructor(
         val enabledPackages: Set<String>,
         val activePackage: String?,
     ) {
+        fun isEnabled(pkg: String): Boolean = pkg in enabledPackages
+        fun isActive(pkg: String): Boolean = pkg == activePackage
+
         companion object {
             val EMPTY = ImeState(emptySet(), null)
         }
     }
 
     /**
-     * Snapshot of IME state. Call once per scan — the result is device-wide, not
-     * per-package, so it must be hoisted out of any per-package loop.
+     * Snapshot of IME state — device-wide, not per-package. Called once per scan by
+     * [ScanOrchestrator], which joins it onto each AppTelemetry record.
      */
     @Suppress("TooGenericExceptionCaught", "SwallowedException")
     fun currentState(): ImeState {
@@ -220,7 +250,15 @@ class InputMethodScanner @Inject constructor(
             null
         }
 
-        return ImeState(enabledPackages = enabled, activePackage = active)
+        // The invariant (active implies enabled) is enforced HERE rather than asserted
+        // downstream: the two reads above fail independently, so a throwing enabled-list
+        // with a readable default would otherwise produce is_active_ime=true alongside
+        // is_enabled_ime=false. androdr-091 omits is_enabled_ime by design and would
+        // fire on that contradictory state.
+        return ImeState(
+            enabledPackages = enabled + listOfNotNull(active),
+            activePackage = active,
+        )
     }
 
     companion object {
@@ -229,70 +267,62 @@ class InputMethodScanner @Inject constructor(
 }
 ```
 
-- [ ] **Step 4: Run the test to verify it passes**
+- [ ] **Step 4: Run to verify pass**
 
 ```bash
-./gradlew testDebugUnitTest --tests 'com.androdr.scanner.InputMethodScannerTest'
+cd /home/yasir/AndroDR && ./gradlew testDebugUnitTest --tests 'com.androdr.scanner.InputMethodScannerTest'
 ```
 
-Expected: `BUILD SUCCESSFUL`, 4 tests passing.
+Expected: `BUILD SUCCESSFUL`, 4 tests.
 
 - [ ] **Step 5: Commit**
 
 ```bash
+cd /home/yasir/AndroDR
 git add app/src/main/java/com/androdr/scanner/InputMethodScanner.kt \
         app/src/test/java/com/androdr/scanner/InputMethodScannerTest.kt
 git commit -m "feat(scanner): read enabled and active input methods
 
-An IME sees every text field including passwords, so enabled/active state
-is the signal that separates a real exposure from a dormant install. All
-failure paths degrade to empty rather than guessing."
+The two underlying reads fail independently, so the active-implies-enabled
+invariant is enforced by construction rather than asserted downstream."
 ```
 
 ---
 
-### Task 2: Telemetry fields + taxonomy (atomic)
+### Task 2a: Telemetry fields + taxonomy (atomic)
 
-`LogsourceTaxonomyCrossCheckTest` compares taxonomy field names against `toFieldMap()` output in **both** directions, so the submodule taxonomy bump and the Kotlin field addition must land in one commit. Splitting them breaks the build in either order.
+`LogsourceTaxonomyCrossCheckTest` compares taxonomy names against `toFieldMap()` output in **both** directions (`extraInKotlin` and `extraInTaxonomy`), so these must land together. Note it reads the **working-tree** YAML, not the pinned commit.
 
 **Files:**
-- Modify: `third-party/android-sigma-rules/validation/logsource-taxonomy.yml` (on a rules-repo branch)
+- Modify: `third-party/android-sigma-rules/validation/logsource-taxonomy.yml`
 - Modify: `app/src/main/java/com/androdr/data/model/AppTelemetry.kt`
-- Modify: `app/src/main/java/com/androdr/scanner/AppScanner.kt`
-- Test: `app/src/test/java/com/androdr/scanner/AppScannerImeTelemetryTest.kt`
 
 **Interfaces:**
-- Consumes: `InputMethodScanner.currentState()` / `ImeState` from Task 1.
-- Produces: `AppTelemetry.isEnabledIme: Boolean` and `AppTelemetry.isActiveIme: Boolean`, surfaced in `toFieldMap()` as `is_enabled_ime` and `is_active_ime`. Task 3's rules match on those two field names.
+- Produces: `AppTelemetry.isEnabledIme` / `.isActiveIme`, exposed as `is_enabled_ime` / `is_active_ime`. Task 2b sets them; Task 4's rules match them.
 
-- [ ] **Step 1: Create the rules-repo branch and add the taxonomy fields**
+- [ ] **Step 1: Add both taxonomy fields**
 
-```bash
-cd third-party/android-sigma-rules
-git checkout -b feat/ime-telemetry-fields
-```
-
-In `validation/logsource-taxonomy.yml`, under `app_scanner:` → `fields:`, immediately after the `has_device_admin` line, add:
+In `third-party/android-sigma-rules/validation/logsource-taxonomy.yml`, under `app_scanner:` → `fields:`, after the `embedded_native_lib` entry (matching the Kotlin insertion point in Step 2):
 
 ```yaml
       is_enabled_ime: { type: boolean, description: "True if the package is in the device's enabled input-method list" }
       is_active_ime: { type: boolean, description: "True if the package is the currently selected keyboard. Implies is_enabled_ime." }
 ```
 
-- [ ] **Step 2: Add the fields to `AppTelemetry`**
+- [ ] **Step 2: Add both fields to `AppTelemetry`**
 
-In `app/src/main/java/com/androdr/data/model/AppTelemetry.kt`, append to the constructor after `embeddedNativeLibs` (last position, both defaulted, so no existing call site changes):
+In `app/src/main/java/com/androdr/data/model/AppTelemetry.kt`, append after `embeddedNativeLibs` (last position, both defaulted — all three construction sites use named arguments, so none break):
 
 ```kotlin
     val embeddedNativeLibs: List<String> = emptyList(),
-    // Input-method state (device-wide, joined per package by AppScanner).
-    // isActiveIme implies isEnabledIme — Android requires enablement before selection.
+    // Device-wide input-method state, joined per package by ScanOrchestrator.
+    // isActiveIme implies isEnabledIme — enforced in InputMethodScanner.currentState().
     val isEnabledIme: Boolean = false,
     val isActiveIme: Boolean = false,
 ) {
 ```
 
-And in `toFieldMap()`, after the `"embedded_native_lib"` entry:
+and in `toFieldMap()`, after `"embedded_native_lib"`:
 
 ```kotlin
         "embedded_native_lib" to embeddedNativeLibs,
@@ -301,147 +331,22 @@ And in `toFieldMap()`, after the `"embedded_native_lib"` entry:
     )
 ```
 
-- [ ] **Step 3: Wire the scanner into `AppScanner`**
-
-Add the constructor dependency:
-
-```kotlin
-class AppScanner @Inject constructor(
-    @ApplicationContext private val context: Context,
-    private val knownAppResolver: KnownAppResolver,
-    private val oemPrefixResolver: OemPrefixResolver,
-    private val inputMethodScanner: InputMethodScanner
-) {
-```
-
-In `collectTelemetry()`, read the state **once** before the per-package loop and pass it down:
-
-```kotlin
-val imeState = inputMethodScanner.currentState()
-```
-
-Change the `buildTelemetryForPackage` signature to accept it:
-
-```kotlin
-    private fun buildTelemetryForPackage(
-        pm: PackageManager,
-        pkg: PackageInfo,
-        imeState: InputMethodScanner.ImeState
-    ): AppTelemetry? {
-```
-
-Update the call site in `collectTelemetry()` to pass `imeState`, and set the fields in the returned `AppTelemetry(...)` alongside the other flags:
-
-```kotlin
-            isEnabledIme = packageName in imeState.enabledPackages,
-            isActiveIme = packageName == imeState.activePackage,
-```
-
-- [ ] **Step 4: Write the failing test**
-
-Create `app/src/test/java/com/androdr/scanner/AppScannerImeTelemetryTest.kt`:
-
-```kotlin
-package com.androdr.scanner
-
-import com.androdr.data.model.AppTelemetry
-import com.androdr.data.model.TelemetrySource
-import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
-import org.junit.Assert.assertTrue
-import org.junit.Test
-
-/**
- * Contract tests for the IME telemetry fields. The join itself is a set lookup;
- * what matters is that the two fields reach toFieldMap() under the names the
- * rules match on, and that the active-implies-enabled invariant holds.
- */
-class AppScannerImeTelemetryTest {
-
-    private fun telemetry(
-        pkg: String,
-        enabled: Boolean,
-        active: Boolean,
-    ) = AppTelemetry(
-        packageName = pkg, appName = pkg, certHash = null, certHashSha1 = null,
-        apkHash = null, isSystemApp = false, fromTrustedStore = false, installer = null,
-        isSideloaded = false, isKnownOemApp = false, permissions = emptyList(),
-        surveillancePermissionCount = 0, hasAccessibilityService = false,
-        hasDeviceAdmin = false, knownAppCategory = null,
-        source = TelemetrySource.LIVE_SCAN,
-        isEnabledIme = enabled, isActiveIme = active,
-    )
-
-    @Test
-    fun `IME fields are exposed to rules under their taxonomy names`() {
-        val map = telemetry("com.baidu.input", enabled = true, active = true).toFieldMap()
-        assertEquals(true, map["is_enabled_ime"])
-        assertEquals(true, map["is_active_ime"])
-    }
-
-    @Test
-    fun `IME fields default to false so the bugreport path stays silent`() {
-        val map = AppTelemetry(
-            packageName = "x", appName = "x", certHash = null, certHashSha1 = null,
-            apkHash = null, isSystemApp = false, fromTrustedStore = false, installer = null,
-            isSideloaded = false, isKnownOemApp = false, permissions = emptyList(),
-            surveillancePermissionCount = 0, hasAccessibilityService = false,
-            hasDeviceAdmin = false, knownAppCategory = null,
-            source = TelemetrySource.BUGREPORT_IMPORT,
-        ).toFieldMap()
-        assertEquals(false, map["is_enabled_ime"])
-        assertEquals(false, map["is_active_ime"])
-    }
-
-    @Test
-    fun `the join marks only the matching packages`() {
-        val state = InputMethodScanner.ImeState(
-            enabledPackages = setOf("com.samsung.android.honeyboard", "com.touchtype.swiftkey"),
-            activePackage = "com.samsung.android.honeyboard",
-        )
-
-        fun enabled(p: String) = p in state.enabledPackages
-        fun active(p: String) = p == state.activePackage
-
-        assertTrue(enabled("com.touchtype.swiftkey"))
-        assertFalse(active("com.touchtype.swiftkey"))
-        assertTrue(enabled("com.samsung.android.honeyboard"))
-        assertTrue(active("com.samsung.android.honeyboard"))
-        assertFalse(enabled("com.baidu.input"))
-        assertFalse(active("com.baidu.input"))
-    }
-}
-```
-
-`TelemetrySource` has exactly two constants, `LIVE_SCAN` and `BUGREPORT_IMPORT`, and
-the field is required with no default on every telemetry class — name it explicitly.
-
-- [ ] **Step 5: Bump the submodule pointer and run the gates**
+- [ ] **Step 3: Run the lockstep gate**
 
 ```bash
-cd third-party/android-sigma-rules && git add -A \
-  && git commit -m "feat(taxonomy): add is_enabled_ime / is_active_ime to app_scanner" \
-  && git push -u origin feat/ime-telemetry-fields && cd ../..
-git add third-party/android-sigma-rules
-./gradlew testDebugUnitTest --tests 'com.androdr.sigma.LogsourceTaxonomyCrossCheckTest' \
-                            --tests 'com.androdr.scanner.AppScannerImeTelemetryTest'
+cd /home/yasir/AndroDR && ./gradlew testDebugUnitTest --tests 'com.androdr.sigma.LogsourceTaxonomyCrossCheckTest'
 ```
 
-Expected: `BUILD SUCCESSFUL`. A failure naming `extraInKotlin` means the taxonomy edit did not reach the pinned commit; `extraInTaxonomy` means `toFieldMap()` is missing an entry.
+Expected: `BUILD SUCCESSFUL`. `extraInKotlin` ⇒ the on-disk taxonomy YAML is missing a field; `extraInTaxonomy` ⇒ `toFieldMap()` is missing an entry.
 
-- [ ] **Step 6: Run the full suite and commit**
+- [ ] **Step 4: Commit both halves together**
 
 ```bash
-./gradlew testDebugUnitTest lintDebug
-git add app/src/main/java/com/androdr/data/model/AppTelemetry.kt \
-        app/src/main/java/com/androdr/scanner/AppScanner.kt \
-        app/src/test/java/com/androdr/scanner/AppScannerImeTelemetryTest.kt \
-        third-party/android-sigma-rules
-git commit -m "feat(telemetry): expose enabled/active IME state on AppTelemetry
-
-Placed on AppTelemetry rather than a dedicated input_method logsource so
-the rules inherit is_known_oem_app and from_trusted_store — the guards a
-narrow logsource lacks, which is what makes androdr-066 unfixable in YAML.
+cd /home/yasir/AndroDR
+git -C third-party/android-sigma-rules add validation/logsource-taxonomy.yml
+git -C third-party/android-sigma-rules commit -m "feat(taxonomy): add is_enabled_ime / is_active_ime to app_scanner"
+git add app/src/main/java/com/androdr/data/model/AppTelemetry.kt third-party/android-sigma-rules
+git commit -m "feat(telemetry): add IME state fields to AppTelemetry
 
 Taxonomy and toFieldMap are cross-checked in both directions, so the
 submodule bump ships in the same commit."
@@ -449,345 +354,336 @@ submodule bump ships in the same commit."
 
 ---
 
-### Task 3: The two rules and their fixtures
+### Task 2b: Orchestrator registration and join
 
 **Files:**
-- Create: `app/src/main/res/raw/sigma_androdr_090_ime_enabled.yml`
-- Create: `app/src/main/res/raw/sigma_androdr_091_ime_active.yml`
-- Create: `third-party/android-sigma-rules/app_scanner/androdr_090_ime_enabled.yml` (byte-equal copy)
-- Create: `third-party/android-sigma-rules/app_scanner/androdr_091_ime_active.yml` (byte-equal copy)
-- Modify: `third-party/android-sigma-rules/rules.txt`, `third-party/android-sigma-rules/rules.sha256`
-- Create: `app/src/test/resources/gate4-fixtures/ime-enabled.yml`
-- Create: `app/src/test/resources/gate4-fixtures/ime-active.yml`
+- Modify: `app/src/main/java/com/androdr/scanner/ScanOrchestrator.kt`
+- Test: `app/src/test/java/com/androdr/scanner/ScanOrchestratorImeJoinTest.kt`
 
 **Interfaces:**
-- Consumes: `is_enabled_ime` / `is_active_ime` from Task 2.
-- Produces: findings titled "Third-party keyboard enabled" (medium) and "Third-party keyboard in use" (high).
+- Consumes: `InputMethodScanner` (Task 1), `AppTelemetry.isEnabledIme/isActiveIme` (Task 2a).
 
-- [ ] **Step 1: Write the medium rule**
+`AppScanner` is deliberately **not** modified. Injecting the IME read there would nest it inside `trackedAsync("appScanner", scannerErrors, emptyList())`, so a throw would zero all app telemetry and silence every `app_scanner` rule. Keeping `AppScanner`'s constructor unchanged also leaves `AppScannerTelemetryTest:72`'s positional construction valid.
 
-Create `app/src/main/res/raw/sigma_androdr_090_ime_enabled.yml`:
+- [ ] **Step 1: Inject and register as the ninth tracked scanner**
 
-```yaml
-title: Third-party keyboard enabled
-id: androdr-090
-status: experimental
-description: >
-    A keyboard outside the manufacturer and known-good sets is enabled as an
-    input method. An IME observes every text field the user types into,
-    passwords included, which is why Android gates enablement behind an
-    explicit warning. This rule covers a keyboard that is enabled but not
-    currently selected; androdr-091 covers the selected case.
-author: AndroDR
-date: 2026/07/25
-references:
-    - https://attack.mitre.org/techniques/T1417/001/
-tags:
-    - attack.t1417.001
-logsource:
-    product: androdr
-    service: app_scanner
-detection:
-    selection:
-        is_enabled_ime: true
-        is_active_ime: false
-        is_known_oem_app: false
-    filter_known_good:
-        package_name|ioc_lookup: known_good_app_db
-        from_trusted_store: true
-    condition: selection and not filter_known_good
-level: medium
-category: incident
-display:
-    category: app_risk
-    icon: keyboard
-    triggered_title: "Third-Party Keyboard Enabled"
-    evidence_type: none
-    guidance: "REVIEW -- this keyboard can read everything you type when selected"
-falsepositives:
-    - Deliberately installed second keyboard for another language or layout
-remediation:
-    - "This keyboard is enabled and can read everything you type whenever it is selected, including passwords."
-    - "Check Settings > System > Languages & input > On-screen keyboard, and remove it if you did not add it deliberately."
+Add `private val inputMethodScanner: InputMethodScanner` to `ScanOrchestrator`'s constructor. Bump `SCANNER_COUNT` from 8 to 9 (and its keep-in-sync comment). Alongside the other `trackedAsync` calls near line 237:
+
+```kotlin
+        val imeStateDeferred = trackedAsync(
+            "inputMethodScanner", scannerErrors, InputMethodScanner.ImeState.EMPTY
+        ) {
+            inputMethodScanner.currentState()
+        }
 ```
 
-Deliberately absent, per spec §5: no `from_trusted_store: false` (a Play-installed
-keyboard reads input identically) and no `is_system_app: false` (preinstalled
-keyboards are a supply-chain risk; OEM/known-good guards already cover legitimate
-ones).
+- [ ] **Step 2: Join at the composition point**
 
-- [ ] **Step 2: Write the high rule**
+Where `appTelemetryDeferred.await()` is consumed, replace the awaited value with:
 
-Create `app/src/main/res/raw/sigma_androdr_091_ime_active.yml` — identical to Task 3
-Step 1 except for the fields below. Repeating in full rather than saying "same as
-above", because the file must stand alone:
-
-```yaml
-title: Third-party keyboard in use
-id: androdr-091
-status: experimental
-description: >
-    A keyboard outside the manufacturer and known-good sets is the currently
-    selected input method. It observes every text field the user types into,
-    passwords included. This is the active case; androdr-090 covers a keyboard
-    that is enabled but not selected.
-author: AndroDR
-date: 2026/07/25
-references:
-    - https://attack.mitre.org/techniques/T1417/001/
-tags:
-    - attack.t1417.001
-logsource:
-    product: androdr
-    service: app_scanner
-detection:
-    selection:
-        is_active_ime: true
-        is_known_oem_app: false
-    filter_known_good:
-        package_name|ioc_lookup: known_good_app_db
-        from_trusted_store: true
-    condition: selection and not filter_known_good
-level: high
-category: incident
-display:
-    category: app_risk
-    icon: keyboard
-    triggered_title: "Third-Party Keyboard In Use"
-    evidence_type: none
-    guidance: "REVIEW -- this keyboard is reading everything you type"
-falsepositives:
-    - Deliberately chosen keyboard for another language or layout
-remediation:
-    - "This is your active keyboard, so it can read everything you type, including passwords and card numbers."
-    - "If you did not choose it, switch keyboards in Settings > System > Languages & input > On-screen keyboard, then remove it."
+```kotlin
+        val imeState = imeStateDeferred.await()
+        val appTelemetry = appTelemetryDeferred.await().map {
+            it.copy(
+                isEnabledIme = imeState.isEnabled(it.packageName),
+                isActiveIme = imeState.isActive(it.packageName),
+            )
+        }
 ```
 
-`is_enabled_ime` is intentionally omitted — active implies enabled, and restating it
-would let a telemetry regression silently disable the rule.
+- [ ] **Step 3: Write the join test**
 
-- [ ] **Step 3: Mirror both rules and regenerate the manifest**
+Create `app/src/test/java/com/androdr/scanner/ScanOrchestratorImeJoinTest.kt`. Model the Hilt-free construction on `ScanOrchestratorErrorHandlingTest.kt`, which already builds a `ScanOrchestrator` with mocked scanners; mirror its `setUp()` and add:
+
+```kotlin
+    @Test
+    fun `IME state is joined onto the matching packages only`() = runTest {
+        every { inputMethodScanner.currentState() } returns InputMethodScanner.ImeState(
+            enabledPackages = setOf("com.samsung.android.honeyboard", "com.touchtype.swiftkey"),
+            activePackage = "com.samsung.android.honeyboard",
+        )
+        every { appScanner.collectTelemetry() } returns listOf(
+            appTelemetry("com.samsung.android.honeyboard"),
+            appTelemetry("com.touchtype.swiftkey"),
+            appTelemetry("com.baidu.input"),
+        )
+
+        val result = orchestrator.runFullScan()
+        val rows = orchestrator.lastAppTelemetry.associateBy { it.packageName }
+
+        assertTrue(rows.getValue("com.samsung.android.honeyboard").isActiveIme)
+        assertTrue(rows.getValue("com.touchtype.swiftkey").isEnabledIme)
+        assertFalse(rows.getValue("com.touchtype.swiftkey").isActiveIme)
+        assertFalse(rows.getValue("com.baidu.input").isEnabledIme)
+        assertTrue(rows.values.none { it.isActiveIme && !it.isEnabledIme })
+        verify(exactly = 1) { inputMethodScanner.currentState() }   // hoisted out of the loop
+    }
+
+    @Test
+    fun `a failing IME read does not zero app telemetry`() = runTest {
+        every { inputMethodScanner.currentState() } throws SecurityException("denied")
+        every { appScanner.collectTelemetry() } returns listOf(appTelemetry("com.baidu.input"))
+
+        val result = orchestrator.runFullScan()
+
+        assertEquals(1, orchestrator.lastAppTelemetry.size)   // app telemetry survives
+        assertTrue(result.scannerErrors.any { it.scanner == "inputMethodScanner" })
+    }
+```
+
+`appTelemetry(pkg)` is a local helper building a minimal `AppTelemetry` with named
+arguments and `source = TelemetrySource.LIVE_SCAN`. Adapt the accessor for
+`lastAppTelemetry` / `runFullScan`'s return to whatever
+`ScanOrchestratorErrorHandlingTest` already uses.
+
+- [ ] **Step 4: Verify and commit**
 
 ```bash
-cd third-party/android-sigma-rules
-git checkout feat/ime-telemetry-fields
-cp ../../app/src/main/res/raw/sigma_androdr_090_ime_enabled.yml app_scanner/androdr_090_ime_enabled.yml
-cp ../../app/src/main/res/raw/sigma_androdr_091_ime_active.yml  app_scanner/androdr_091_ime_active.yml
-printf 'app_scanner/androdr_090_ime_enabled.yml\napp_scanner/androdr_091_ime_active.yml\n' >> rules.txt
-sort -o rules.txt rules.txt
-while read -r f; do printf '%s  %s\n' "$(sha256sum "$f" | cut -d' ' -f1)" "$f"; done < rules.txt > rules.sha256
-python3 validation/validate-rule.py app_scanner/androdr_090_ime_enabled.yml
-python3 validation/validate-rule.py app_scanner/androdr_091_ime_active.yml
-python3 validation/validate-delivery-set.py
-```
+cd /home/yasir/AndroDR && ./gradlew testDebugUnitTest lintDebug detekt
+git add app/src/main/java/com/androdr/scanner/ScanOrchestrator.kt \
+        app/src/test/java/com/androdr/scanner/ScanOrchestratorImeJoinTest.kt
+git commit -m "feat(scan): join IME state onto app telemetry in the orchestrator
 
-Expected: `PASS` from each of the three commands.
-
-- [ ] **Step 4: Write the gate-4 fixtures**
-
-Create `app/src/test/resources/gate4-fixtures/ime-enabled.yml`. True negatives are
-the real enabled IMEs from the attached Galaxy Z Fold 2:
-
-```yaml
-# Fixture for androdr-090. True negatives are the actual enabled input methods
-# on the attached Samsung SM-F916B, so the suppression paths are exercised
-# against a real device rather than invented packages.
-rule_file: sigma_androdr_090_ime_enabled.yml
-service: app_scanner
-ioc_stubs:
-  known_good_app_db:
-    - "com.touchtype.swiftkey"
-
-true_positives:
-  - package_name: "com.baidu.input"
-    is_enabled_ime: true
-    is_active_ime: false
-    is_known_oem_app: false
-    from_trusted_store: true
-
-true_negatives:
-  # Samsung's own keyboard — suppressed by the com.samsung. prefix
-  - package_name: "com.samsung.android.honeyboard"
-    is_enabled_ime: true
-    is_active_ime: true
-    is_known_oem_app: true
-    from_trusted_store: false
-  # Google voice input IME — suppressed by the com.google. prefix
-  - package_name: "com.google.android.tts"
-    is_enabled_ime: true
-    is_active_ime: false
-    is_known_oem_app: true
-    from_trusted_store: false
-  # SwiftKey — known-good and Play-installed, so the filter exempts it
-  - package_name: "com.touchtype.swiftkey"
-    is_enabled_ime: true
-    is_active_ime: false
-    is_known_oem_app: false
-    from_trusted_store: true
-  # Active keyboard belongs to androdr-091, not this rule
-  - package_name: "com.baidu.input"
-    is_enabled_ime: true
-    is_active_ime: true
-    is_known_oem_app: false
-    from_trusted_store: true
-  # Installed but never enabled — no exposure, no finding
-  - package_name: "com.example.dormantkeyboard"
-    is_enabled_ime: false
-    is_active_ime: false
-    is_known_oem_app: false
-    from_trusted_store: true
-```
-
-Create `app/src/test/resources/gate4-fixtures/ime-active.yml`:
-
-```yaml
-# Fixture for androdr-091. Mirrors ime-enabled.yml with the active case as the
-# true positive.
-rule_file: sigma_androdr_091_ime_active.yml
-service: app_scanner
-ioc_stubs:
-  known_good_app_db:
-    - "com.touchtype.swiftkey"
-
-true_positives:
-  - package_name: "com.baidu.input"
-    is_enabled_ime: true
-    is_active_ime: true
-    is_known_oem_app: false
-    from_trusted_store: true
-
-true_negatives:
-  # Samsung's own keyboard, active — suppressed by the com.samsung. prefix
-  - package_name: "com.samsung.android.honeyboard"
-    is_enabled_ime: true
-    is_active_ime: true
-    is_known_oem_app: true
-    from_trusted_store: false
-  # Enabled but dormant belongs to androdr-090, not this rule
-  - package_name: "com.baidu.input"
-    is_enabled_ime: true
-    is_active_ime: false
-    is_known_oem_app: false
-    from_trusted_store: true
-  # SwiftKey selected — known-good and Play-installed, so the filter exempts it
-  - package_name: "com.touchtype.swiftkey"
-    is_enabled_ime: true
-    is_active_ime: true
-    is_known_oem_app: false
-    from_trusted_store: true
-```
-
-- [ ] **Step 5: Run the gates**
-
-```bash
-./gradlew testDebugUnitTest --tests 'com.androdr.sigma.*'
-```
-
-Expected: `BUILD SUCCESSFUL`. Gate-4 fixture count rises from 22 to 24, and
-`BundledMirrorParityTest` plus `RuleManifestIntegrityTest` both pass — a parity
-failure means the `cp` in Step 3 did not run or the bundled file was edited
-afterwards.
-
-- [ ] **Step 6: Run the full suite and commit**
-
-```bash
-./gradlew testDebugUnitTest lintDebug
-cd third-party/android-sigma-rules && git add -A \
-  && git commit -m "feat(rules): androdr-090/091 third-party keyboard detection" \
-  && git push && cd ../..
-git add app/src/main/res/raw/sigma_androdr_090_ime_enabled.yml \
-        app/src/main/res/raw/sigma_androdr_091_ime_active.yml \
-        app/src/test/resources/gate4-fixtures/ime-enabled.yml \
-        app/src/test/resources/gate4-fixtures/ime-active.yml \
-        third-party/android-sigma-rules
-git commit -m "feat(rules): androdr-090/091 third-party keyboard detection
-
-Enabled = medium, active = high. Neither gates on from_trusted_store or
-is_system_app: a Play-installed or preinstalled keyboard reads typed input
-exactly as a sideloaded one does, and the OEM/known-good guards already
-suppress the legitimate ones.
-
-Fixture true negatives are the real enabled IMEs from the attached Fold 2."
+Registered as a ninth tracked scanner rather than injected into AppScanner:
+nesting it there would put the read inside trackedAsync(\"appScanner\", ...,
+emptyList()), so a throw would zero all app telemetry and silence every
+app_scanner rule."
 ```
 
 ---
 
-### Task 4: On-device verification and delivery
+### Task 3: `known_good_ime_db`
 
-**Files:** none modified. This task proves the acceptance criterion and ships.
+**Files:**
+- Create: `third-party/android-sigma-rules/ioc-data/known-good-imes.yml`
+- Create: `app/src/main/res/raw/known_good_imes.yml` (byte-equal)
+- Create: `app/src/test/resources/raw/known_good_imes.yml` (byte-equal)
+- Modify: `third-party/android-sigma-rules/validation/ioc-lookup-definitions.yml`
+- Create: `app/src/main/java/com/androdr/ioc/KnownGoodImeResolver.kt`
+- Modify: `app/src/main/java/com/androdr/scanner/ScanOrchestrator.kt` (`initRuleEngine`)
+- Test: `app/src/test/java/com/androdr/ioc/KnownGoodImeResolverTest.kt`, `.../KnownGoodImeParityTest.kt`
 
 **Interfaces:**
-- Consumes: everything from Tasks 1–3.
-- Produces: merged PRs in both repos.
+- Produces: IOC lookup name `known_good_ime_db`, matched by Task 4's rules.
 
-- [ ] **Step 1: Install on the attached device and scan**
+- [ ] **Step 1: Author the allowlist**
+
+Create `third-party/android-sigma-rules/ioc-data/known-good-imes.yml`. Include the OEM stock keyboards (Samsung HoneyBoard, Gboard, the Google TTS voice IME, ColorOS/MIUI/Vivo/HONOR stock), SwiftKey, and the FOSS set: `org.dslul.openboard.inputmethod.latin`, `helium314.keyboard`, `org.futo.inputmethod.latin`, `com.menny.android.anysoftkeyboard`, `rkr.simplekeyboard.inputmethod`, `org.pocketworkstation.pckeyboard`, `com.simplemobiletools.keyboard`, `juloo.keyboard2`.
+
+**Must not appear:** any `com.baidu.input*`, `com.sohu.inputmethod.*`, `com.iflytek.inputmethod.*`, `com.emoji.keyboard.touchpal`, `com.simejikeyboard`, `com.adamrocker.android.input.simeji`.
+
+Follow the `entries:` shape used by the other `ioc-data/*.yml` files so
+`validate-ioc-data.py` exercises provenance rather than short-circuiting.
+
+- [ ] **Step 2: Declare the lookup**
+
+In `third-party/android-sigma-rules/validation/ioc-lookup-definitions.yml`, under `lookups:`:
+
+```yaml
+  known_good_ime_db:
+    type: PACKAGE_NAME
+    files: [ioc-data/known-good-imes.yml]
+    description: "Curated allowlist of input methods (keyboards) that are not flagged by androdr-090/091. Deliberately separate from known_good_app_db, which classifies vendor cloud keyboards as OEM and accepts the Plexus USER_APP catch-all."
+```
+
+- [ ] **Step 3: Resolver, wiring, and the three-way parity gate**
+
+Create `KnownGoodImeResolver` modelled directly on `OemPrefixResolver`: bundled
+`R.raw.known_good_imes` load, a `refresh()` fetching
+`ioc-data/known-good-imes.yml` from rules main, and a `contains(pkg): Boolean`.
+Register it in `ScanOrchestrator.initRuleEngine()`'s `setIocLookups` map:
+
+```kotlin
+            "known_good_ime_db" to { v -> knownGoodImeResolver.contains(v.toString()) },
+```
+
+Create `KnownGoodImeParityTest` by copying `OemPrefixMirrorParityTest` and
+substituting the three `known_good_imes.yml` paths — same CI-hard-fail behaviour,
+same negative test.
+
+- [ ] **Step 4: Verify and commit**
 
 ```bash
-export JAVA_HOME=/home/yasir/Applications/android-studio/jbr && export ANDROID_HOME=/home/yasir/Android/Sdk && export PATH="$JAVA_HOME/bin:$ANDROID_HOME/platform-tools:$PATH"
-adb devices -l                      # expect R3CR300WRRH (SM_F916B)
+cd /home/yasir/AndroDR
+python3 third-party/android-sigma-rules/validation/validate-ioc-data.py third-party/android-sigma-rules/ioc-data/known-good-imes.yml
+./gradlew testDebugUnitTest --tests 'com.androdr.sigma.IocLookupDefinitionsCrossCheckTest' --tests 'com.androdr.ioc.*'
+./gradlew testDebugUnitTest lintDebug detekt
+git -C third-party/android-sigma-rules add -A
+git -C third-party/android-sigma-rules commit -m "feat(ioc-data): curated known-good input-method allowlist"
+git add -A && git commit -m "feat(ioc): known_good_ime_db lookup + three-way parity gate"
+```
+
+---
+
+### Task 4: The three rules, fixtures, and loader registration
+
+**Files:**
+- Create: `app/src/main/res/raw/sigma_androdr_09{0,1,2}_*.yml` and byte-equal mirrors in `third-party/android-sigma-rules/app_scanner/`
+- Modify: `app/src/main/java/com/androdr/sigma/SigmaRuleEngine.kt` (`BUNDLED_RULE_IDS`)
+- Modify: `third-party/android-sigma-rules/rules.txt`, `rules.sha256`
+- Create: three gate-4 fixtures; `app/src/test/java/com/androdr/scanner/ImeClassificationTest.kt`; `app/src/test/java/com/androdr/sigma/RuleFieldNameTaxonomyTest.kt`
+
+- [ ] **Step 1: Write the three rules**
+
+Per spec §5. `androdr-090` (`level: low`, no ATT&CK tag), `androdr-091`
+(`level: medium`, `tags: [attack.t1417.001]`), `androdr-092` (`level: high`,
+`tags: [attack.t1036.005]`). Each written out in full — no cross-references between
+files. `filter_known_good` uses `package_name|ioc_lookup: known_good_ime_db` with
+**no** `from_trusted_store` clause. Match `androdr-089`'s key ordering (`category:`
+immediately after `status:`). `falsepositives` must name accessibility keyboards,
+MDM-managed keyboards, non-Latin-script layouts, and deliberately installed second
+keyboards. Remediation says a keyboard **can** read what you type, keeps the Settings
+path manufacturer-agnostic, and adds the managed-device line from spec §5.
+
+- [ ] **Step 2: Register in the loader manifest**
+
+In `app/src/main/java/com/androdr/sigma/SigmaRuleEngine.kt`, after
+`R.raw.sigma_androdr_089_sms_notification_otp_theft` (line ~356):
+
+```kotlin
+            R.raw.sigma_androdr_090_ime_enabled,
+            R.raw.sigma_androdr_091_ime_active,
+            R.raw.sigma_androdr_092_ime_oem_namespace,
+```
+
+`BUNDLED_RULE_IDS` is an explicit R8-safe list; `BundledRulesManifestCompletenessTest`
+fails without this, and skipping it would ship rules that never load — making Task 5's
+on-device check pass vacuously.
+
+- [ ] **Step 3: Mirror and regenerate the manifest**
+
+```bash
+cd /home/yasir/AndroDR
+for n in 090_ime_enabled 091_ime_active 092_ime_oem_namespace; do
+  cp "app/src/main/res/raw/sigma_androdr_$n.yml" "third-party/android-sigma-rules/app_scanner/androdr_$n.yml"
+  printf 'app_scanner/androdr_%s.yml\n' "$n" >> third-party/android-sigma-rules/rules.txt
+done
+LC_ALL=C sort -o third-party/android-sigma-rules/rules.txt third-party/android-sigma-rules/rules.txt
+( cd third-party/android-sigma-rules && while read -r f; do printf '%s  %s\n' "$(sha256sum "$f" | cut -d' ' -f1)" "$f"; done < rules.txt > rules.sha256 )
+for n in 090_ime_enabled 091_ime_active 092_ime_oem_namespace; do
+  python3 third-party/android-sigma-rules/validation/validate-rule.py "third-party/android-sigma-rules/app_scanner/androdr_$n.yml"
+done
+python3 third-party/android-sigma-rules/validation/validate-delivery-set.py
+```
+
+Expected: `PASS` from all four validator invocations.
+
+- [ ] **Step 4: Gate-4 fixtures**
+
+One per rule. True negatives use **real** values: SwiftKey carries
+`is_known_oem_app: true` (its actual value via `partner_preinstall_prefixes`), with
+the `known_good_ime_db` path covered by a separate, explicitly synthetic package.
+Include a `com.baidu.input_mi`-shaped record with `is_known_oem_app: true` as a
+documented true negative for 090/091 and a **true positive** for 092.
+
+- [ ] **Step 5: Close the two blind spots the review found**
+
+`ImeClassificationTest` runs `com.baidu.input_mi`,
+`com.google.android.inputmethod.latin2` and `com.samsung.evilkeyboard` through the
+real `KnownAppResolver` / `OemPrefixResolver` and asserts the resulting
+`is_known_oem_app`. Gate-4 feeds field values verbatim and is structurally blind to
+this class; this test is what documents why 092 exists.
+
+`RuleFieldNameTaxonomyTest` iterates every bundled rule's detection keys (stripping
+`|modifiers`) and asserts each is declared in `logsource-taxonomy.yml` for that
+rule's `service`. A typo like `is_ime_enabled` otherwise passes every existing gate
+and is silently dead on-device — the class #225 closed for permission literals.
+
+- [ ] **Step 6: Verify and commit**
+
+```bash
+cd /home/yasir/AndroDR && ./gradlew testDebugUnitTest lintDebug detekt
+```
+
+Expected: gate-4 fixture count 22 → 25; `BundledMirrorParityTest`,
+`RuleManifestIntegrityTest`, `BundledRulesManifestCompletenessTest` all green.
+
+---
+
+### Task 5: Adversary fixture and on-device verification
+
+**Files:**
+- Create: `test-adversary/fixtures/mercenary/ime-abuse/`
+
+- [ ] **Step 1: Build the fixture**
+
+A minimal app declaring an `InputMethodService` with
+`android.permission.BIND_INPUT_METHOD`, named to a package absent from every
+allowlist. Follow the layout of the sibling `overlay-permission` fixture.
+
+- [ ] **Step 2: True positive on device**
+
+```bash
+cd /home/yasir/AndroDR && adb devices -l          # expect R3CR300WRRH (SM_F916B)
 ./gradlew installDebug
-adb shell ime list -s               # record the enabled set for comparison
-adb shell settings get secure default_input_method
+adb install -r test-adversary/fixtures/mercenary/ime-abuse/app-debug.apk
+adb shell ime enable <fixture-ime-id>
+adb shell ime set <fixture-ime-id>
 ```
 
-Run a scan in the app, then export or read the report.
+Scan, then assert androdr-091 fired for the fixture package. Restore with
+`adb shell ime reset` and uninstall.
 
-- [ ] **Step 2: Confirm the acceptance criterion**
+- [ ] **Step 3: Zero-false-positive baseline**
 
-Expected: **zero** IME findings on the Fold 2. All three enabled IMEs must be
-suppressed — HoneyBoard by `com.samsung.`, Google TTS by `com.google.`, SwiftKey by
-the `partner_preinstall_prefixes` entry.
+With the fixture removed, scan again. Expected: **zero** findings from 090/091/092.
+All three of the Fold 2's enabled IMEs must be suppressed — HoneyBoard by
+`com.samsung.`, Google TTS by `com.google.`, SwiftKey by `partner_preinstall_prefixes`.
 
-Any IME finding here is a false positive and blocks the task. The likely cause is
-that `partner_preinstall_prefixes` is not reaching the resolver — verify with
-`OemPrefixResolverConditionalTest` and check the allowlist parity gate from #265.
-
-- [ ] **Step 3: Open both PRs and follow the safe ordering**
+Read findings from the DB rather than by eye, and pull the `-wal` sidecar or recent
+writes are invisible:
 
 ```bash
-git push -u origin feat/ime-detection
-gh pr create --repo android-sigma-rules/rules --base main --head feat/ime-telemetry-fields \
-  --title "feat: IME telemetry fields + androdr-090/091" --body "..."
-gh pr create --repo yasirhamza/AndroDR --base main --head feat/ime-detection \
-  --title "feat(detection): third-party keyboard detection (androdr-090/091)" --body "Closes #NNN"
+adb exec-out run-as com.androdr.debug cat databases/androdr.db > /tmp/androdr.db
+adb exec-out run-as com.androdr.debug cat databases/androdr.db-wal > /tmp/androdr.db-wal
 ```
 
-Sequence, per CLAUDE.md:
+Assert both that no `androdr-09*` finding exists **and** that total findings > 0, so
+a failed or empty scan cannot masquerade as a clean result.
 
-1. AndroDR CI green. `submodule-check` and `ci-success` are red while the submodule is pinned to the rules branch — expected, not a failure. The gate that matters is `build-and-test`.
+---
+
+### Task 6: Delivery
+
+- [ ] **Step 1: Open both PRs**
+
+```bash
+cd /home/yasir/AndroDR
+git -C third-party/android-sigma-rules push -u origin feat/ime-detection
+git push -u origin feat/ime-detection
+gh pr create --repo android-sigma-rules/rules --base main --head feat/ime-detection \
+  --title "feat: IME telemetry fields, known-good-imes allowlist, androdr-090/091/092"
+gh pr create --repo yasirhamza/AndroDR --base main --head feat/ime-detection \
+  --title "feat(detection): third-party keyboard detection (androdr-090/091/092)"
+```
+
+PR bodies are written at creation time from spec §1 motivation, the review record in
+§10, and the CI evidence. Resolve the tracking issue number and use `Closes #N`.
+
+- [ ] **Step 2: Safe ordering**
+
+1. AndroDR CI green. `submodule-check` and `ci-success` red while pinned to the rules branch — expected; the gate that matters is `build-and-test`.
 2. Merge the rules PR.
-3. Repoint the submodule at the resulting main commit, commit, push. CI goes fully green.
+3. Repoint the submodule at the resulting main commit, commit, push; CI goes fully green.
 4. Merge the AndroDR PR.
 
-- [ ] **Step 4: Verify the live feed**
+- [ ] **Step 3: Confirm live delivery**
 
 ```bash
 curl -fsSL "https://raw.githubusercontent.com/android-sigma-rules/rules/main/rules.txt" | grep ime
+curl -fsSL "https://raw.githubusercontent.com/android-sigma-rules/rules/main/ioc-data/known-good-imes.yml" | head -5
 ```
 
-Expected: both `androdr_090_ime_enabled.yml` and `androdr_091_ime_active.yml` listed.
-Devices pick them up on the next 12h refresh.
+Both rule files listed and the allowlist served. Devices pick them up within 12h.
 
 ---
 
 ## Self-Review
 
-**Spec coverage:** §3 telemetry → Task 2. §4 scanner → Task 1. §5 both rules and the
-two deliberate omissions → Task 3 Steps 1–2. §6 degradation → Task 1 Steps 1/3
-(missing IMM, throwing list) and Task 2 Step 4 (bugreport defaults). §7 tests →
-Tasks 1–3 plus Task 4 Step 2. §8 delivery → Task 4 Step 3. §9 out-of-scope items are
-correctly absent.
+**Spec coverage:** §3 → Task 2a. §4 scanner and invariant → Task 1; orchestrator join → Task 2b. §5 rules → Task 4 Step 1; `known_good_ime_db` → Task 3; androdr-092 → Task 4. §6 degradation → Task 1 Steps 1/3 and Task 2b Step 3's failure test. §7 → Tasks 1–5, including the two blind-spot tests at Task 4 Step 5. §8 → Task 6. §9 items correctly absent.
 
-**Placeholders:** none. The PR `--body "..."` in Task 4 Step 3 is the one shorthand;
-bodies are written at PR time from the spec's motivation and the CI evidence.
+**Placeholders:** none. `<fixture-ime-id>` in Task 5 is a value the fixture's own manifest determines and `adb shell ime list -a` prints.
 
-**Type consistency:** `InputMethodScanner.ImeState(enabledPackages, activePackage)`
-is defined in Task 1 and consumed under those exact names in Task 2 Step 3 and Task 2
-Step 4. `isEnabledIme` / `isActiveIme` (Kotlin) map to `is_enabled_ime` /
-`is_active_ime` (YAML) consistently across Tasks 2 and 3.
+**Type consistency:** `ImeState(enabledPackages, activePackage)` with `isEnabled`/`isActive`/`EMPTY` defined in Task 1 and consumed under those names in Tasks 2b. `isEnabledIme`/`isActiveIme` (Kotlin) ↔ `is_enabled_ime`/`is_active_ime` (YAML) consistent across 2a, 2b and 4.
 
-**Verified against source:** `TelemetrySource` exposes `LIVE_SCAN` and
-`BUGREPORT_IMPORT` only. `AppScanner`'s constructor is
-`(context, knownAppResolver, oemPrefixResolver)`, so Task 2 Step 3 appends a fourth
-parameter. Rule IDs 090/091 are unallocated — 089 is the highest in use and only 084
-is retired.
+**Review findings addressed:** loader registration (Task 4 Step 2); `AppScanner` constructor untouched, so no positional-construction break; invariant by construction (Task 1 Step 3); real-scanner join test replacing the tautological one (Task 2b Step 3); working directories anchored throughout; `detekt` added; `LC_ALL=C` sort; branch creation (Task 0); fixture provenance corrected (Task 4 Step 4); positive acceptance criterion (Task 5 Step 2); field-name gate (Task 4 Step 5).
