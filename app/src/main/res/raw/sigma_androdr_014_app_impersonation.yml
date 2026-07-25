@@ -13,6 +13,7 @@ detection:
     selection:
         is_system_app: false
         from_trusted_store: false
+        is_known_oem_app: false
         known_app_category: USER_APP
     condition: selection
 level: high
