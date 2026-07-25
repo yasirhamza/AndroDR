@@ -1,7 +1,7 @@
 # Input-Method (IME) Detection — Design Spec
 
 **Date:** 2026-07-25
-**Status:** approved, pending implementation plan
+**Status:** revised after 4-agent plan gate; androdr-092 scope decision open
 **Origin:** OPPO CPH2735 field scan (issue #263 triage) — Baidu IME installed, unreported
 
 ## 1. Motivation
@@ -55,34 +55,47 @@ have false-positived on SwiftKey across every Samsung and HONOR device.
 Both default to `false`.
 
 **Invariant:** `is_active_ime` implies `is_enabled_ime`. Android requires enablement
-before selection. Asserted by test.
+before selection. Enforced by construction in §4, not merely asserted — the two
+underlying reads fail independently.
 
 ### Why `AppTelemetry` and not a new logsource
 
 Rejected: a new `input_method` logsource with its own `InputMethodTelemetry`,
 mirroring `accessibility_audit`.
 
-That logsource would carry no `is_known_oem_app` and no `from_trusted_store`, so the
-rule could not suppress SwiftKey, HoneyBoard, or Google's voice IME without
-duplicating the classification logic. This is the same defect that makes
-`androdr-066` unfixable in YAML (`ReceiverTelemetry` has no sideload field) and the
-reason `androdr-012` / `androdr-017` key off `has_accessibility_service` on
-`AppTelemetry` rather than the `accessibility_audit` logsource. Precedent is
-consistent: the "does this app do X" boolean belongs on the app record.
+An earlier draft justified this by asserting a narrow logsource *cannot* carry
+`is_known_oem_app` / `from_trusted_store`. That is false — it describes today's
+wiring, not a constraint. `ReceiverAuditScanner` already holds a `PackageManager`;
+injecting `KnownAppResolver` + `OemPrefixResolver` would put those fields on
+`ReceiverTelemetry` and make `androdr-066` fixable in YAML. The real reasons are:
 
-Placing the state on `AppTelemetry` means both rules inherit every guard fixed in
-#263 and #265, and remain pure YAML — future tuning ships on the 12h feed with no
-app release.
+- **A planned family, not a one-off.** #180 already plans `is_default_sms_handler`,
+  `has_notification_listener` and `is_default_nfc_payment_app` as `app_scanner`
+  booleans. IME state is the first member of that family.
+- **The dormant case is unrepresentable in a narrow logsource.** A per-IME record
+  cannot express "installed but never enabled" — the safe state, and the one that
+  decides whether there is any exposure at all, is simply an absent row.
+- **Composability.** A future keyboard-plus-accessibility co-occurrence (#230)
+  needs both signals on the same record.
+
+Note this is genuinely a new *category* of field on `AppTelemetry`: device-wide
+selection state joined onto packages, unlike `has_accessibility_service`, which is
+an intrinsic manifest declaration. It is the third such field group planned, so the
+tripwire is: **at the third device-state field, extract a nested value object** with
+a flat field map (keys stay flat, so the taxonomy and rules are unaffected).
 
 ## 4. Scanner — `InputMethodScanner`
 
-New file, `app/src/main/java/com/androdr/scanner/InputMethodScanner.kt`, following
-the `AccessibilityAuditScanner` shape.
+New file, `app/src/main/java/com/androdr/scanner/InputMethodScanner.kt`.
 
 ```kotlin
 @Singleton
 class InputMethodScanner @Inject constructor(@ApplicationContext context: Context) {
-    data class ImeState(val enabledPackages: Set<String>, val activePackage: String?)
+    data class ImeState(val enabledPackages: Set<String>, val activePackage: String?) {
+        fun isEnabled(pkg: String) = pkg in enabledPackages
+        fun isActive(pkg: String) = pkg == activePackage
+        companion object { val EMPTY = ImeState(emptySet(), null) }
+    }
     fun currentState(): ImeState
 }
 ```
@@ -90,51 +103,132 @@ class InputMethodScanner @Inject constructor(@ApplicationContext context: Contex
 - Enabled set: `InputMethodManager.getEnabledInputMethodList()`, mapped to package names.
 - Active: `Settings.Secure.getString(resolver, Settings.Secure.DEFAULT_INPUT_METHOD)`
   returns `pkg/.ServiceClass`; the package is `substringBefore('/')`. Verified against
-  the Fold 2's live output.
+  the Fold 2's live output and against `android-36/android.jar`.
 
 Both are public APIs requiring no permission.
 
-Injected into `AppScanner` the same way `oemPrefixResolver` and `knownAppResolver`
-are, and called **once per scan**, hoisted out of the per-package loop. Keeps
-`InputMethodManager` specifics out of the telemetry builder and keeps it mockable.
+**The invariant is enforced by construction, not asserted after the fact:**
+
+```kotlin
+return ImeState(enabledPackages = enabled + listOfNotNull(active), activePackage = active)
+```
+
+The two reads fail independently, so a thrown enabled-list read with a readable
+default setting would otherwise yield `is_active_ime: true` alongside
+`is_enabled_ime: false` — a state §3 declares impossible, and one that `androdr-091`
+fires on because it deliberately omits `is_enabled_ime`. Folding `active` into the
+enabled set preserves the true signal while making the invariant hold structurally.
+
+The join lives in `ScanOrchestrator`, **not** inside `AppScanner`:
+
+```kotlin
+val ime = imeStateDeferred.await()
+val appTelemetry = appTelemetryDeferred.await()
+    .map { it.copy(isEnabledIme = ime.isEnabled(it.packageName), isActiveIme = ime.isActive(it.packageName)) }
+```
+
+`InputMethodScanner` is registered as a ninth tracked scanner (`SCANNER_COUNT` 8 → 9).
+Injecting it into `AppScanner` instead would nest it inside
+`trackedAsync("appScanner", scannerErrors, emptyList())`, so a thrown IME read would
+zero out **all** app telemetry and silence every `app_scanner` rule — the
+detection-evasion hazard `trackScanner` exists to prevent. Tracking it separately also
+yields a `ScannerFailure` row and the partial-scan banner when the read fails, so
+"we could not check your keyboard" is reported rather than silently indistinguishable
+from "your keyboard is fine".
 
 ## 5. The rules
 
-Two rules, because `level` is a rule-scoped field and there is no severity-boost
-primitive (tracked separately as #230).
+Severity follows the **mandatory** multi-condition rule in
+`.claude/commands/update-rules-author.md:165` — a behavioral rule resting on one
+independent signal is `medium` at most. `androdr-060` is the governing precedent: an
+*active accessibility service*, a strictly more powerful capability, is `medium`.
 
-### `androdr-0XX` — Third-party keyboard enabled (`level: medium`)
+### `androdr-090` — Third-party keyboard enabled (`level: low`)
 
 ```yaml
 detection:
     selection:
         is_enabled_ime: true
-        is_active_ime: false          # the active case belongs to the high rule
+        is_active_ime: false          # the active case belongs to androdr-091
         is_known_oem_app: false
     filter_known_good:
-        package_name|ioc_lookup: known_good_app_db
-        from_trusted_store: true
+        package_name|ioc_lookup: known_good_ime_db
     condition: selection and not filter_known_good
-level: medium
+level: low
 ```
 
-### `androdr-0XY` — Third-party keyboard in use (`level: high`)
+No ATT&CK tag. Per the precedent set in `androdr-015`, `attack.t1417.001` (Input
+Capture: Keylogging) implies malicious intent that a `low` informational finding
+cannot support without corroborating signals.
 
-Identical, with `is_active_ime: true` and no `is_enabled_ime` clause (implied by the
-invariant).
+### `androdr-091` — Third-party keyboard in use (`level: medium`)
 
-### Two deliberate departures from androdr-011/012/013
+Identical selection with `is_active_ime: true` and no `is_enabled_ime` clause
+(implied by the §4 invariant), plus `tags: [attack.t1417.001]`.
 
-**No `from_trusted_store: false` gate.** A keyboard installed from Play sees typed
-input exactly as a sideloaded one does. Baidu IME is most likely a Play install, so
-gating on sideloading would miss the case that motivated this work. A consequence is
-that `filter_known_good` is genuinely reachable here, unlike in `androdr-011` — which
-is correct: the ADR #51 impersonation concern applies to claiming an app is
-sideloaded, and these rules make no such claim.
+### `androdr-092` — Keyboard claiming a manufacturer namespace (`level: high`) — SCOPE DECISION PENDING
 
-**No `is_system_app: false` gate.** A preinstalled keyboard is a real supply-chain
-risk and devices carry only one to three IMEs, so the noise ceiling is low. The OEM
-and known-good guards already suppress legitimate preloads.
+```yaml
+detection:
+    selection:
+        is_enabled_ime: true
+        is_known_oem_app: true
+        is_system_app: false
+        from_trusted_store: false
+    condition: selection
+level: high
+```
+
+`is_known_oem_app` is a package-*name* test with no signature binding: `isOemPrefix`
+is a bare `startsWith`, and `com.android.`, `com.google.` and `android.` are
+**unconditional** prefixes applying on every device. A keyboard sideloaded as
+`com.google.android.inputmethod.latin2` therefore satisfies `is_known_oem_app: true`
+and is exempted from androdr-090/091 — and from androdr-010/011/012/013/014/016/017
+and 089, all of which carry the same guard. There is no backstop rule today.
+
+This rule keys the anomaly instead of the name: legitimate manufacturer software is
+either preinstalled (`is_system_app: true`) or store-installed
+(`from_trusted_store: true`). A squatter is neither. It earns `high` on two
+independent conditions — namespace claim, and absence of both legitimate provenance
+paths — comparable to `androdr-016` (system name disguise), also `high`.
+
+**This is an addition beyond the approved scope and needs an explicit decision.** The
+security review made it a condition of clearing its FAIL verdict.
+
+### Exemption model — `known_good_ime_db`
+
+`known_good_app_db` is unusable here, for two independent reasons:
+
+1. **It exempts the threat.** `known_good_apps.json` classifies `com.baidu.input_mi`,
+   `_huawei`, `_vivo`, five Sogou variants and `com.iflytek.inputmethod.miui` as
+   category `OEM`, which sets `is_known_oem_app: true` on every device. One of those
+   rows cites the Citizen Lab research §1 uses as motivation.
+2. **`USER_APP` is a catch-all.** `PlexusKnownAppFeed` writes every fetched entry as
+   `USER_APP`, and `TRUSTED_CATEGORIES` includes `USER_APP`. On any device that has
+   refreshed the Plexus feed, a Play-installed `com.baidu.input` satisfies both
+   `known_good_app_db` and `from_trusted_store: true` — the filter matches and the
+   motivating case goes silent.
+
+A keyboard allowlist is a different editorial judgment than a general app allowlist:
+roughly 50 entries, not 14,343, and it must include FOSS keyboards that no
+installer-provenance gate can vouch for. New `ioc-data/known-good-imes.yml` declared
+in `validation/ioc-lookup-definitions.yml` and wired in
+`ScanOrchestrator.initRuleEngine()`, cross-checked by
+`IocLookupDefinitionsCrossCheckTest`.
+
+Because the filter no longer gates on `from_trusted_store`, it is reachable — which
+is the point. ADR #51's concern is name-only exemption of *sideloaded* apps; a
+curated, keyboard-specific list is a narrower and deliberately maintained surface.
+`from_trusted_store` could not have served as the anchor anyway: `isTrustedInstaller`
+accepts any OEM-prefixed installer name, and `getInstallerPackageName` falls back to
+`initiatingPackageName`, so a dropper named `com.google.play.svcupdate` forges it.
+That weakness is pre-existing and tracked separately.
+
+Initial `known-good-imes.yml` must include, at minimum: Gboard, Samsung HoneyBoard,
+SwiftKey, the Google TTS voice IME, the ColorOS/MIUI/Vivo/HONOR stock keyboards, and
+the FOSS set — OpenBoard, HeliBoard, FUTO, AnySoftKeyboard, Simple Keyboard,
+Hacker's Keyboard, Unexpected Keyboard. It must **not** include the Baidu, Sogou,
+iFlytek, TouchPal or Simeji families.
 
 ### Expected outcomes
 
@@ -144,49 +238,109 @@ and known-good guards already suppress legitimate preloads.
 | Fold 2 | `com.google.android.tts` | suppressed — `com.google.` prefix |
 | Fold 2 | `com.touchtype.swiftkey` | suppressed — `partner_preinstall_prefixes` |
 | CPH2735 | ColorOS keyboard | suppressed — `com.coloros.` prefix |
-| CPH2735 | `com.baidu.input` | **flagged** — medium if enabled, high if selected |
+| CPH2735 | `com.baidu.input` | **flagged** — low if dormant, medium if selected |
+| any | `com.baidu.input_mi` and vendor variants | **flagged** — absent from `known_good_ime_db` |
+| any | OpenBoard/HeliBoard from F-Droid | suppressed — on the curated list |
+| any | sideloaded `com.google.android.inputmethod.latin2` | **flagged** by androdr-092 |
 
-Zero findings on the Fold 2. This is the acceptance criterion.
+Acceptance requires **both**: zero findings on the Fold 2, and a confirmed true
+positive. A negative-only criterion is satisfied by an implementation that never
+sets either flag.
+
+### False positives to name explicitly in the rules
+
+`falsepositives` must cover: a deliberately installed second keyboard for another
+language or layout; accessibility keyboards (switch-access, scanning, large-key);
+MDM-deployed corporate keyboards, which the user cannot remove; and regional OEM
+stock keyboards on devices whose manufacturer string matches no conditional block.
+
+Remediation must say a keyboard **can** read what you type, not that it **is**. The
+Settings path varies by manufacturer — Samsung and ColorOS both differ from AOSP —
+so guidance stays path-agnostic, and adds: "If your employer manages this device,
+contact your IT administrator before removing it."
 
 ## 6. Degradation
 
-- `InputMethodManager` unavailable or throwing: empty state, both flags false,
-  neither rule fires. Silence over guessing, consistent with other scanners
-  returning `emptyList()`.
-- **Bugreport path:** `AppTelemetry` built from a bugreport has no IME state, so both
-  flags are false and the rules stay silent. Stated explicitly rather than discovered
-  later. `dumpsys input_method` does appear in bugreports and is a viable follow-up;
-  out of scope for v1.
+The two reads fail independently; §4's construction is what keeps that safe.
+
+- `InputMethodManager` unavailable: `ImeState.EMPTY`, both flags false, no findings.
+- Enabled-list read throws, default setting readable: the active package is folded
+  into the enabled set, so the invariant holds and `androdr-091` fires on a true
+  signal rather than a contradictory one.
+- Default-setting read fails: `activePackage` is null; only `androdr-090` can fire.
+- The scanner is separately tracked, so any failure surfaces as a `ScannerFailure`
+  row and the partial-scan banner rather than silent absence.
+
+**Bugreport path:** no bugreport module emits `app_scanner` telemetry at all —
+`AppTelemetry` is constructed in exactly one place in `main`. These rules therefore
+cannot fire on an imported bugreport, and no defaulting behaviour needs testing.
+
+**Forward compatibility:** an older APK receiving these rules from the 12h feed has
+no `is_enabled_ime` key; `matchEquals` returns false for a missing field, so the
+rules stay silent rather than false-positiving. Fail-closed by construction.
 
 ## 7. Tests & verification
 
-- `InputMethodScanner`: `pkg/.Class` parsing; null/blank default setting; null
-  `InputMethodManager`.
-- `AppScanner`: flags land on the correct packages; active-implies-enabled invariant.
-- Gate-4 fixtures for both rules. True negatives taken verbatim from the Fold 2
-  (`honeyboard`, `google.android.tts`, `swiftkey`); true positive `com.baidu.input`.
-  Real device output as fixture data.
-- `LogsourceTaxonomyCrossCheckTest` will fail unless the taxonomy carries both new
-  fields — this is the lockstep gate, not an optional step.
-- On-device verification against the attached Fold 2: expect zero IME findings.
+- `InputMethodScanner`: `pkg/.Class` parsing; null/blank default; null
+  `InputMethodManager`; throwing enabled-list. The invariant is asserted here, across
+  all four degradation paths — this is where it can actually be violated.
+- **Real-classification test:** run `com.baidu.input_mi`,
+  `com.google.android.inputmethod.latin2` and `com.samsung.evilkeyboard` through the
+  actual `KnownAppResolver` / `OemPrefixResolver` and assert the resulting
+  `is_known_oem_app`. Gate-4 fixtures feed field values verbatim and are structurally
+  blind to this entire class.
+- **Orchestrator join:** assert flags land on the right packages via
+  `AppScannerTelemetryTest`'s existing harness, and `verify(exactly = 1)` on
+  `currentState()` — the only mechanical check that it is hoisted out of the loop.
+- Gate-4 fixtures for each rule. SwiftKey's true-negative record must carry
+  `is_known_oem_app: true` (its real value, via `partner_preinstall_prefixes`), with
+  the `known_good_ime_db` path covered by a separate, explicitly synthetic package.
+- **Adversary fixture** `test-adversary/fixtures/mercenary/ime-abuse`: a minimal
+  `InputMethodService`, enabled via `adb shell ime enable` / `ime set`, scanned,
+  asserted, then `adb shell ime reset`. Every recent behavioral rule has one.
+- On-device: zero findings on the Fold 2 **and** a true positive from the adversary
+  fixture or a deliberately installed F-Droid keyboard.
+- Bundled↔mirror↔fixture parity for `known-good-imes.yml`, mirroring the gate added
+  for `known_oem_prefixes.yml` in #265.
+
+**Gap worth closing here:** no gate checks that a rule's detection field names exist
+in the taxonomy for its logsource. A typo like `is_ime_enabled` passes Gate 1, Gate 4,
+schema cross-check, mirror parity and manifest integrity, and is dead on-device
+because `matchEquals` returns false for a missing field — the same silent-dead-rule
+class #225 closed for permission literals. Two new fields entering by hand is the
+moment to close it.
 
 ## 8. Delivery
 
-`LogsourceTaxonomyCrossCheckTest` validates `logsource-taxonomy.yml` against
-`toFieldMap()` output, so the taxonomy and the Kotlin change must land together.
-
-1. Rules-repo PR: `validation/logsource-taxonomy.yml` gains both fields under
-   `app_scanner`; both rule YAMLs added; `rules.txt` + regenerated `rules.sha256`.
-2. AndroDR PR: submodule pinned to that branch, plus scanner, telemetry fields,
-   bundled rules, fixtures.
+1. Rules-repo PR: taxonomy fields; `ioc-data/known-good-imes.yml`; the
+   `known_good_ime_db` entry in `ioc-lookup-definitions.yml`; rule YAMLs; `rules.txt`
+   and regenerated `rules.sha256`.
+2. AndroDR PR: submodule pinned to that branch, scanner, orchestrator registration
+   and join, telemetry fields, the IOC lookup wiring, bundled rules, fixtures,
+   adversary fixture.
 3. AndroDR CI green — `submodule-check` red until step 4, expected per CLAUDE.md.
 4. Merge rules PR, repoint submodule at main, merge AndroDR PR.
 
-## 9. Out of scope (deferred)
+## 9. Out of scope (deferred, with rationale)
 
+- **`is_known_oem_app` trust conflation** — the DB's `OEM` category means "vendor
+  preload you may want to debloat", not "trustworthy", and it is package-name-only.
+  Fixing it at `AppScanner.kt:253` changes `is_sideloaded` on real devices and
+  affects ten rules; it needs its own plan and a device sweep. Tracked in #263.
+  `androdr-092` is the local mitigation.
+- **`isTrustedInstaller` accepting OEM-prefixed installer names**, and the
+  `initiatingPackageName` fallback, which together make `from_trusted_store`
+  forgeable by a dropper. Pre-existing, repo-wide blast radius.
+- **Per-user blindness:** both reads are per-user, so a malicious IME in a work
+  profile or secondary user is invisible. No mitigation available via public API.
 - IME state from bugreports via `dumpsys input_method`.
-- Per-IME inventory section in the report (a `input_method` logsource could serve
-  this later; additive, nothing depends on it now).
-- Cloud-keyboard-specific IOC matching (naming known-vulnerable keyboard builds).
-- `androdr-066` boot-persistence fix — same class of missing telemetry, tracked
-  separately.
+- Cloud-keyboard IOC list naming known-vulnerable keyboard builds — the natural home
+  for a `high`/`critical` tier under the multi-condition convention's exception.
+- `androdr-066` boot-persistence fix.
+
+## 10. Review record
+
+Four-agent plan gate, 2026-07-25. Verdicts: security **FAIL**; spec-compliance,
+technical-accuracy and architect **PASS-WITH-FIXES**. This revision addresses the
+findings. The Plexus `USER_APP` catch-all and the vendor-variant `OEM` classification
+were each confirmed directly against shipped data before being accepted.
