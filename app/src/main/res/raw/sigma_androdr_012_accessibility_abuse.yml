@@ -13,6 +13,7 @@ detection:
     selection:
         is_system_app: false
         from_trusted_store: false
+        is_known_oem_app: false
         has_accessibility_service: true
     filter_known_good:
         package_name|ioc_lookup: known_good_app_db

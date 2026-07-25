@@ -1,0 +1,59 @@
+# Fixture for androdr-011: sideloaded app with a surveillance permission cluster
+#
+# Regression coverage for the OPPO CPH2735 field report: the rule selected on
+# is_system_app + from_trusted_store only, so OEM preloads shipped off a
+# non-/system partition (FLAG_SYSTEM unset, no installer package) satisfied
+# both and were scored HIGH as if sideloaded. Two ColorOS preloads were flagged
+# and set the report's overall verdict to HIGH. The is_known_oem_app guard is
+# what separates them from genuine sideloads — the true_negatives below are the
+# exact packages observed.
+#
+# Field names mirror AppScanner's emitted telemetry (AppTelemetry.toFieldMap):
+# surveillance_permission_count is a scanner-computed integer, not a list.
+rule_file: sigma_androdr_011_surveillance_permissions.yml
+service: app_scanner
+ioc_stubs:
+  known_good_app_db:
+    - "com.google.android.gm"
+
+true_positives:
+  # Genuine sideload holding a surveillance cluster
+  - package_name: "com.shady.stalkerware"
+    is_system_app: false
+    from_trusted_store: false
+    is_known_oem_app: false
+    surveillance_permission_count: 4
+
+true_negatives:
+  # OEM preload resolved via known_good_apps.json (category OEM) — observed
+  # false positive on OPPO CPH2735, "Clone Phone"
+  - package_name: "com.coloros.backuprestore"
+    is_system_app: false
+    from_trusted_store: false
+    is_known_oem_app: true
+    surveillance_permission_count: 4
+  # OEM preload resolved via the com.oplus. prefix in known_oem_prefixes.yml —
+  # observed false positive on OPPO CPH2735, "My OPPO"
+  - package_name: "com.oplus.member"
+    is_system_app: false
+    from_trusted_store: false
+    is_known_oem_app: true
+    surveillance_permission_count: 3
+  # System app — filtered by is_system_app
+  - package_name: "com.android.systemui"
+    is_system_app: true
+    from_trusted_store: false
+    is_known_oem_app: false
+    surveillance_permission_count: 4
+  # Trusted-store app — filtered by from_trusted_store
+  - package_name: "com.example.legitimate"
+    is_system_app: false
+    from_trusted_store: true
+    is_known_oem_app: false
+    surveillance_permission_count: 4
+  # Sideload below the cluster threshold (rule requires >= 2)
+  - package_name: "com.shady.singleperm"
+    is_system_app: false
+    from_trusted_store: false
+    is_known_oem_app: false
+    surveillance_permission_count: 1
