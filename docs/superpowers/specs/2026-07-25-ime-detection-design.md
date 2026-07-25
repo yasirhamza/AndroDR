@@ -1,7 +1,9 @@
 # Input-Method (IME) Detection — Design Spec
 
 **Date:** 2026-07-25
-**Status:** revised after 4-agent plan gate; androdr-092 scope decision open
+**Status:** **PROPOSAL — not scheduled for implementation.** Design and plan are
+complete and have passed a four-agent plan gate (see §10). Nothing is implemented.
+Pick this up by executing `docs/superpowers/plans/2026-07-25-ime-detection.md`.
 **Origin:** OPPO CPH2735 field scan (issue #263 triage) — Baidu IME installed, unreported
 
 ## 1. Motivation
