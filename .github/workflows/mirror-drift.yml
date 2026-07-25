@@ -1,0 +1,76 @@
+name: mirror-drift
+
+# Guards the OEM prefix allowlist against LIVE drift.
+#
+# OemPrefixResolver.refresh() fetches ioc-data/known-oem-prefixes.yml from
+# android-sigma-rules main every 12h and REPLACES the in-memory allowlist
+# wholesale — not a merge. The bundled res/raw copy is only a cold-start seed.
+# Devices therefore follow rules *main*, never the pinned submodule.
+#
+# OemPrefixMirrorParityTest gates the same file inside build-and-test, but it
+# can only compare against the commit the submodule is pinned to. A direct edit
+# on rules main is invisible to it until someone bumps the pin — which is how
+# #203's HONOR false-positive fix sat dead in the field for two months. This
+# workflow closes that specific gap by comparing against the live URL the app
+# actually fetches.
+#
+# Deliberately NOT triggered on pull_request. During the safe ordering in
+# CLAUDE.md an AndroDR PR is green *before* its rules-repo counterpart merges,
+# so a PR-time live check would be red by construction for the whole window —
+# the same trap submodule-check sets. The unit test is the PR gate; this is a
+# monitor for main.
+
+on:
+  schedule:
+    # Daily. The on-device refresh cycle is 12h, so a day's detection latency
+    # is the same order as the exposure window this is watching for.
+    - cron: '17 6 * * *'
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'app/src/main/res/raw/known_oem_prefixes.yml'
+      - '.github/workflows/mirror-drift.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  oem-prefix-live-drift:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      # Read the URL out of the Kotlin source rather than hardcoding it, so the
+      # guard cannot drift from the endpoint the app actually calls.
+      - name: Resolve the feed URL from OemPrefixResolver
+        id: url
+        run: |
+          set -euo pipefail
+          SRC=app/src/main/java/com/androdr/ioc/OemPrefixResolver.kt
+          URL=$(grep -oE 'https://raw\.githubusercontent\.com/[^"]+known-oem-prefixes\.yml' "$SRC" | head -1)
+          if [ -z "$URL" ]; then
+            echo "::error file=$SRC::could not resolve PREFIXES_URL — the constant moved or was renamed, and this guard is no longer watching anything"
+            exit 1
+          fi
+          echo "url=$URL" >> "$GITHUB_OUTPUT"
+          echo "Resolved feed URL: $URL"
+
+      - name: Fetch the live allowlist
+        run: |
+          set -euo pipefail
+          curl -fsSL --retry 3 --retry-delay 5 --max-time 30 \
+            "${{ steps.url.outputs.url }}" -o /tmp/live-known-oem-prefixes.yml
+          test -s /tmp/live-known-oem-prefixes.yml
+
+      - name: Compare against the bundled allowlist
+        run: |
+          set -euo pipefail
+          BUNDLED=app/src/main/res/raw/known_oem_prefixes.yml
+          if diff -u "$BUNDLED" /tmp/live-known-oem-prefixes.yml; then
+            echo "PASS: bundled allowlist is byte-equal to live rules-main"
+          else
+            echo "::error file=$BUNDLED::Bundled OEM allowlist has drifted from the live feed on android-sigma-rules main. Devices run the live copy, so anything bundled-only is dropped on-device within 12h of install. Diff above: '-' is bundled, '+' is live. Reconcile both copies and the src/test/resources fixture, then ship via the safe ordering in CLAUDE.md."
+            exit 1
+          fi

@@ -105,4 +105,31 @@ class OemPrefixResolverConditionalTest {
         assertTrue(resolver.isOemPrefix("com.coloros.safecenter", oppo))
         assertTrue(resolver.isOemPrefix("com.heytap.market", oppo))
     }
+
+    @Test
+    fun `bare oplus package IS OEM on an OPPO device`() {
+        // ColorOS ships a dotless `oplus` package labelled "Android System".
+        // It matches no com.* prefix, so androdr-015 reported it as an
+        // Unrecognized System App on a CPH2735 field scan (#263 follow-up).
+        val oppo = DeviceIdentity(manufacturer = "oppo", brand = "oppo")
+        assertTrue(resolver.isOemPrefix("oplus", oppo))
+    }
+
+    @Test
+    fun `bare oplus package is NOT OEM on non-OPPO devices`() {
+        // The #90 invariant applied to the dotless entry: `oplus` lives in the
+        // conditional oppo block, so it must contribute nothing on any device
+        // whose manufacturer/brand isn't OPPO. Without this, a sideloaded
+        // `oplus`-named APK would be silently classified as manufacturer
+        // software on a Samsung or a Pixel and skip every sideload-gated rule.
+        assertFalse(
+            "a bare `oplus` package on a Samsung must not be classified as OEM",
+            resolver.isOemPrefix("oplus", samsung),
+        )
+        assertFalse(resolver.isOemPrefix("oplus", pixel))
+        assertFalse(resolver.isOemPrefix("oplus", unknown))
+        // startsWith semantics — the spoofing shape, off-vendor
+        assertFalse(resolver.isOemPrefix("oplus.malware.dropper", samsung))
+        assertFalse(resolver.isOemPrefix("oplus.malware.dropper", pixel))
+    }
 }
