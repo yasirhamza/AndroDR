@@ -75,8 +75,8 @@ while still flagging `com.baidu.input` on the CPH2735.
 ## 4. Design — a curated keyboard allowlist is the only exemption
 
 Given §2, the exemption cannot be derived from OEM namespaces, installer provenance,
-or the general app allowlist. It has to be an explicit, maintained list of keyboards:
-`known_good_ime_db`, keyed on **exact package name**.
+or the general app allowlist. It has to be an explicit, maintained list of keyboard
+package names, matched **exactly**.
 
 Exact matching is load-bearing. It is what makes a namespace squatter fall out for
 free: `com.google.android.inputmethod.latin` is on the list,
@@ -99,8 +99,9 @@ it. Pre-existing; tracked in #267.)
 
 `service_permissions` is already on `AppTelemetry` (`:62`) and already in the
 taxonomy (`:33`), and `androdr-089` already ships this matcher shape in production.
-So the detection lands as YAML plus one IOC list — **no scanner, no telemetry field,
-no taxonomy change, no `SCANNER_COUNT` change.**
+So the detection lands as a single rule YAML — **no scanner, no telemetry field, no
+taxonomy change, no `SCANNER_COUNT` change, and no new Kotlin beyond one line in the
+bundled-rule registry.**
 
 ### `androdr-090` — Unreviewed keyboard installed (`level: low`)
 
@@ -109,7 +110,10 @@ detection:
     selection:
         service_permissions|contains: "BIND_INPUT_METHOD"
     filter_known_good:
-        package_name|ioc_lookup: known_good_ime_db
+        package_name:
+            - com.google.android.inputmethod.latin
+            - com.samsung.android.honeyboard
+            # … full list per §7
     condition: selection and not filter_known_good
 level: low
 ```
@@ -122,24 +126,37 @@ installed but never enabled, which has no capability at all, and on apps that bu
 an IME service for a niche feature. The remediation text below is written to stay
 truthful under that ambiguity, but Phase 2 is what removes it.
 
-### Wiring `known_good_ime_db`
+### Where the allowlist lives in Phase 1 — inline, not an IOC lookup
 
-Modelled on `OemPrefixResolver`, which #265 already proved and gated:
+The allowlist is a **plain list inside the rule**, not a new `ioc_lookup` database:
 
-- `ioc-data/known-good-imes.yml` in the rules repo; bundled seed at
-  `res/raw/known_good_imes.yml`.
-- Declared in `validation/ioc-lookup-definitions.yml`; cross-checked against the
-  Kotlin registry by `IocLookupDefinitionsCrossCheckTest`.
-- One entry in the `setIocLookups` map in `ScanOrchestrator.initRuleEngine()`.
-- `KnownGoodImeResolver`: bundled load + 12h remote refresh, so adding a keyboard
-  ships without an app release.
+```yaml
+filter_known_good:
+    package_name:
+        - com.google.android.inputmethod.latin
+        - com.samsung.android.honeyboard
+        # … ~50 entries, see §7
+condition: selection and not filter_known_good
+```
 
-**The parity gate is mandatory, not optional.** `refresh()` replaces the in-memory
-list wholesale, so a mirror missing an entry silently *removes* an exemption and
-manufactures false positives on every device within 12h. That is exactly how #203's
-HONOR fix died in the field for two months. Extend `OemPrefixMirrorParityTest`'s
-three-way check (bundle ↔ mirror ↔ test fixture) to this file, and add it to the
-`mirror-drift.yml` daily job added in #265.
+A bare list on a string field is standard SIGMA "any of", already used in production
+by `androdr-066` (`intent_action`). Because rules themselves ship on the 12h feed,
+adding a keyboard still reaches devices without an app release — which was the only
+thing a resolver-backed lookup would have bought.
+
+The alternative, a `known_good_ime_db` IOC lookup, was costed and rejected for Phase 1.
+It is not "one IOC list": the lookup name is asserted by exact set equality across
+three places (`ScanOrchestrator.initRuleEngine()`, `ioc-lookup-definitions.yml`, and a
+hardcoded set in `IocLookupDefinitionsCrossCheckTest`), the refresh has to be driven
+from `IntelRefresher` (`:143`) with a new `FeedHealthRecorder` constant and a matching
+update to the feed list in `IntelRefresherTest:73-78`, and the wholesale-replace
+refresh makes a three-way parity gate mandatory — because a mirror missing an entry
+silently *removes* an exemption and manufactures false positives on every device
+within 12h, which is how #203's HONOR fix died for two months.
+
+That is ~15 files of infrastructure to hold ~50 package names that one rule reads.
+Revisit it in Phase 2 **only if** the second rule makes reuse genuinely load-bearing;
+duplicating a list across two rules is cheaper than the wiring above.
 
 ## 6. Phase 2 — enabled/active state
 
@@ -204,7 +221,9 @@ from "your keyboard is fine".
 `androdr-090` gains `is_enabled_ime: true` + `is_active_ime: false` and keeps
 `level: low`. A new `androdr-091` takes the active case at `level: medium` with
 `tags: [attack.t1417.001]`, selecting `is_active_ime: true` and the same
-`known_good_ime_db` filter.
+inline allowlist filter. If duplicating the list across two rules becomes the
+maintenance burden, that is the trigger to reconsider the IOC lookup costed in §5 —
+not before.
 
 Severity follows the **mandatory** multi-condition rule at
 `.claude/commands/update-rules-author.md:165` — one independent signal is `medium` at
@@ -274,8 +293,9 @@ draft, which could not flag them (§11).
 
 ## 10. Tests
 
-- **Allowlist parity:** three-way byte equality (bundle ↔ mirror ↔ test fixture) plus
-  the `mirror-drift.yml` daily live check. Non-negotiable per §5.
+- **Allowlist integrity:** the list is inside the rule, so the existing
+  `BundledMirrorParityTest` byte-equality gate already covers it — no new parity
+  machinery. `RuleManifestIntegrityTest` covers the `rules.sha256` entry.
 - **Real-classification test:** run `com.baidu.input_mi`,
   `com.google.android.inputmethod.latin2` and `com.samsung.evilkeyboard` through the
   actual resolvers and assert the resulting exemption decision. Gate-4 fixtures feed
