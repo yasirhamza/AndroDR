@@ -1,8 +1,27 @@
 # IME Detection Implementation Plan
 
+> ## ⚠️ SUPERSEDED — DO NOT EXECUTE
+>
+> This plan implements the 2026-07-25 design, which was replaced on 2026-07-26 after
+> two blocking defects were verified against shipped data (see the spec's §11):
+>
+> 1. **Task 4 builds `androdr-092`**, whose selection is the exact OPPO preload shape
+>    (`is_known_oem_app: true` + `is_system_app: false` + `from_trusted_store: false`)
+>    that PR #264 had just excluded — re-firing that false positive at `level: high`.
+> 2. **Tasks 4's rules carry `is_known_oem_app: false`**, which suppresses the Baidu,
+>    Sogou and iFlytek vendor variants outright, so they cannot flag the threat class
+>    the feature exists to find.
+>
+> The rewritten design also splits delivery into two phases, the first of which needs
+> no scanner, no telemetry fields and no taxonomy change — so Tasks 1, 2a and 2b are
+> no longer Phase 1 work at all.
+>
+> Read `docs/superpowers/specs/2026-07-25-ime-detection-design.md` and write a fresh
+> plan from it.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Detect third-party keyboards that are enabled (low), actively selected (medium), or squatting a manufacturer namespace (high), without false-positiving on OEM, partner-preinstalled, or curated FOSS keyboards.
+**Goal:** ~~Detect third-party keyboards that are enabled (low), actively selected (medium), or squatting a manufacturer namespace (high)~~ — superseded, see banner above.
 
 **Architecture:** `InputMethodScanner` reads the enabled input-method list and the selected keyboard once per scan as its own tracked scanner. `ScanOrchestrator` joins that device-wide state onto each `AppTelemetry` record, so all three SIGMA rules live in the `app_scanner` logsource. Exemption is a purpose-built `known_good_ime_db`, not the general app allowlist.
 
