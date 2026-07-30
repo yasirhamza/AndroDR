@@ -19,6 +19,7 @@
 - Rule ID is **androdr-090**. 089 is the highest in use; 084 is the only retired ID.
 - **The rule must never reference `is_known_oem_app`, in either polarity.** That field is `true` for the Baidu/Sogou/iFlytek vendor variants this rule exists to catch, and `true` for the ColorOS preloads whose false positive #264 fixed. See spec §2.
 - **No `is_system_app` and no `from_trusted_store` clause either.** The preinstalled vendor cloud keyboards are the threat; a Play-installed keyboard reads input identically.
+- **The allowlist is a name-only exemption, not a trust boundary.** `matchEquals` lowercases both sides (`SigmaRuleEvaluator.kt:304`), so the match is case-*insensitive* and binds to no signature. A sideloaded IME can impersonate an allowlisted package name (or a case variant) on any device where that name is free and be silenced — the ADR #51 bypass `androdr-089`/`androdr-011` guard against with `from_trusted_store: true`, which this rule cannot borrow (it would false-positive on sideloaded FOSS keyboards). Phase 1 ships this knowingly: suppression is local to `androdr-090` (the app still trips `androdr-010/011/014`), and cert-binding is the Phase 2 fix. See spec §4. Do **not** "harden" the rule by re-adding a provenance clause without reading that section.
 - Bundled rules must be **byte-equal** to their mirror counterpart (`BundledMirrorParityTest`). Mirror path strips the `sigma_` prefix and uses the logsource service as the directory: `app_scanner/androdr_090_unreviewed_keyboard.yml`.
 - Manifest regeneration uses `LC_ALL=C sort` — `rules.txt` is C-collated and the default locale reorders it.
 - Verification is `./gradlew testDebugUnitTest lintDebug detekt` — CI runs `detekt` (`ci.yml:140`).
@@ -48,13 +49,13 @@ The allowlist is the product (spec §7). Every false positive and every miss rou
 cd /home/yasir/AndroDR && python3 -c "
 import json,re
 apps=json.load(open('app/src/main/res/raw/known_good_apps.json'))
-pat=re.compile(r'(inputmethod|keyboard|\.ime\b|honeyboard|swiftkey)',re.I)
+pat=re.compile(r'(inputmethod|keyboard|\.ime\b|honeyboard|swiftkey|secime)',re.I)
 for a in sorted((x for x in apps if pat.search(x['packageName'])), key=lambda x:x['packageName']):
     print(f\"{a['packageName']:48} {a['category']}\")
 "
 ```
 
-Expected: 73 keyboard-ish packages. This is the menu the seed list below was drawn from — re-run it because the bundled DB may have been regenerated since this plan was written.
+Expected: ~73 keyboard-ish packages (the `secime` alternative catches vivo's `com.vivo.secime.service`, which the other alternatives miss). This is the menu the seed list below was drawn from — re-run it because the bundled DB may have been regenerated since this plan was written.
 
 - [ ] **Step 2: Harvest stock keyboards from every device you can reach**
 
@@ -73,7 +74,7 @@ If the OPPO CPH2735 is reachable, this is the step that captures its ColorOS sto
 
 - [ ] **Step 3: Record the exclusions explicitly**
 
-These are keyboard packages that appear in the shipped DB and **must not** be allowlisted. Confirm each is absent from your list before continuing:
+These are keyboard packages that **must not** be allowlisted — whether or not they appear in the shipped DB (`com.baidu.input`, the motivating case, is absent from it). Confirm each is absent from your list before continuing:
 
 ```
 com.emoji.keyboard.touchpal                 TouchPal
@@ -156,6 +157,7 @@ detection:
             - com.oplus.securitykeyboard
             - com.miui.securityinputmethod
             - com.huawei.ohos.inputmethod
+            - com.vivo.secime.service
             - com.lge.ime
             - com.blackberry.keyboard
             # Open source
@@ -412,7 +414,7 @@ Expected: `app_scanner/androdr_090_unreviewed_keyboard.yml` listed. Devices pick
 
 ## Self-Review
 
-**Spec coverage.** §5's rule → Task 2 Step 1. §5's inline-allowlist decision → Task 2 Step 1 (`filter_known_good.package_name`), with the rejected IOC-lookup alternative deliberately not built. §7's governance → Task 1, including the explicit exclusion list. §8's expected outcomes → Task 3 (Fold 2 zero findings; `com.baidu.input`, `com.baidu.input_mi` and the `latin2` squatter as gate-4 true positives). §10's tests → Task 2 Step 4 and Task 3. §11's deleted `androdr-092` and dropped `is_known_oem_app` guard → enforced by Global Constraints and asserted by the `com.baidu.input_mi` true positive, which the superseded design could not flag.
+**Spec coverage.** §5's rule → Task 2 Step 1. §5's inline-allowlist decision → Task 2 Step 1 (`filter_known_good.package_name`), with the rejected IOC-lookup alternative deliberately not built. §7's governance → Task 1, including the explicit exclusion list. §8's expected outcomes → Task 3 (Fold 2 zero findings; `com.baidu.input`, `com.baidu.input_mi` and the `latin2` squatter as gate-4 true positives). §10's tests → Task 2 Step 4 and Task 3 (§10's resolver-based "real-classification test" is Phase-2-only: Phase 1 uses no resolver — `package_name` is matched literally in both the fixture and on-device — so the #269 "computed-field" blindness it targets does not arise here, and Task 3's on-device scan covers real-device behaviour). §11's deleted `androdr-092` and dropped `is_known_oem_app` guard → enforced by Global Constraints and asserted by the `com.baidu.input_mi` true positive, which the superseded design could not flag.
 
 Deliberately **not** covered, per the spec: the scanner, the two telemetry booleans, the taxonomy change, the `androdr-091` active-case rule, and the adversary fixture — all Phase 2. Task 3 Step 3 replaces the adversary fixture for Phase 1 with a cheaper true-positive proof that needs no APK.
 
@@ -426,5 +428,7 @@ Deliberately **not** covered, per the spec: the scanner, the two telemetry boole
 
 - `validate-rule.py` → `PASS` (Gate 1 schema).
 - `GateFourFixtureTest[unreviewed-keyboard]` → **passed**, which confirms the rule parses in `SigmaRuleParser`, a bare `package_name` list works inside a filter block, all three true positives fire — including `com.baidu.input_mi`, the case the superseded design could not flag — and all six true negatives are suppressed.
+
+This was re-confirmed on 2026-07-30 during the plan-gate (a second `validate-rule.py` → PASS and a fresh `GateFourFixtureTest[unreviewed-keyboard]` → PASS). The later-added `com.vivo.secime.service` allowlist entry appears in no fixture, so it is an inert additional "any of" string that cannot change the gate-4 result.
 
 So Task 2's central artifacts are known-good as written. What remains genuinely unverified is Task 1's device harvest and Task 3's on-device behaviour, which no amount of desk checking can establish.
