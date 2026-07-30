@@ -103,7 +103,14 @@ the wrong mental model. Two consequences the design must own rather than paper o
   `known_good_apps.json` lookup (`KnownAppDatabase.kt:34`, no signature check) **or** the
   name falls under an *unconditional* OEM namespace prefix — `com.google.`, `com.android.`
   and `android.` all match on every device (`known_oem_prefixes.yml:15-19`;
-  `OemPrefixResolver.isOemPrefix` is a plain `startsWith`). So:
+  `OemPrefixResolver.isOemPrefix` is a plain `startsWith`). The unconditional set is
+  actually broader — the `partner_preinstall`, chipset, ODM and custom-ROM blocks are
+  unconditional too (`OemPrefixResolver.kt` folds every non-`trusted_installers` key into
+  the strict set); it is immaterial to today's allowlist because the only entry any of them
+  covers, SwiftKey via `partner_preinstall`, is *already* OEM-category in the DB. Whoever
+  grows the list should note the maintenance caveat: a future entry under a non-AOSP
+  unconditional prefix (a `com.microsoft.*` or chipset-namespace keyboard) that is *not*
+  also OEM/AOSP/GOOGLE in the DB would still be `is_known_oem_app: true` via the prefix. So:
     - a **USER_APP** name outside those namespaces — the FOSS set — leaves
       `is_known_oem_app: false`, so a same-name fake still trips `androdr-014` (sideloaded
       impersonation of a known app). Caught.
