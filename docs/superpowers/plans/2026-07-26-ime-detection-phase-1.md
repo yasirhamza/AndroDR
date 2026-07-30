@@ -19,7 +19,7 @@
 - Rule ID is **androdr-090**. 089 is the highest in use; 084 is the only retired ID.
 - **The rule must never reference `is_known_oem_app`, in either polarity.** That field is `true` for the Baidu/Sogou/iFlytek vendor variants this rule exists to catch, and `true` for the ColorOS preloads whose false positive #264 fixed. See spec §2.
 - **No `is_system_app` and no `from_trusted_store` clause either.** The preinstalled vendor cloud keyboards are the threat; a Play-installed keyboard reads input identically.
-- **The allowlist is a name-only exemption, not a trust boundary.** `matchEquals` lowercases both sides (`SigmaRuleEvaluator.kt:304`), so the match is case-*insensitive* and binds to no signature. A sideloaded IME can impersonate an allowlisted package name (or a case variant) on any device where that name is free and be silenced — the ADR #51 bypass `androdr-089`/`androdr-011` guard against with `from_trusted_store: true`, which this rule cannot borrow (it would false-positive on sideloaded FOSS keyboards). Phase 1 ships this knowingly: suppression is local to `androdr-090` (the app still trips `androdr-010/011/014`), and cert-binding is the Phase 2 fix. See spec §4. Do **not** "harden" the rule by re-adding a provenance clause without reading that section.
+- **The allowlist is a name-only exemption, not a trust boundary.** `matchEquals` lowercases both sides (`SigmaRuleEvaluator.kt:304`), so the match is case-*insensitive* and binds to no signature. A sideloaded IME can impersonate an allowlisted package name (or a case variant) on any device where that name is free and be silenced — the ADR #51 bypass `androdr-089`/`androdr-011` guard against with `from_trusted_store: true`, which this rule cannot borrow (it would false-positive on sideloaded FOSS keyboards). Phase 1 ships this knowingly: for a FOSS/USER_APP name the app still trips `androdr-014`, but for a GOOGLE/OEM/AOSP name the fake inherits `is_known_oem_app: true` from the name-keyed DB and evades `androdr-010/011/014` too — invisible app-wide. That app-wide gap is the pre-existing #263 conflation, which `androdr-090` neither creates nor widens; cert-binding (a keyed `(package, certHash)` lookup, not a field clause) is the only real fix and is Phase 2. See spec §4. Do **not** "harden" the rule by re-adding a provenance clause without reading that section.
 - Bundled rules must be **byte-equal** to their mirror counterpart (`BundledMirrorParityTest`). Mirror path strips the `sigma_` prefix and uses the logsource service as the directory: `app_scanner/androdr_090_unreviewed_keyboard.yml`.
 - Manifest regeneration uses `LC_ALL=C sort` — `rules.txt` is C-collated and the default locale reorders it.
 - Verification is `./gradlew testDebugUnitTest lintDebug detekt` — CI runs `detekt` (`ci.yml:140`).
@@ -55,7 +55,7 @@ for a in sorted((x for x in apps if pat.search(x['packageName'])), key=lambda x:
 "
 ```
 
-Expected: ~73 keyboard-ish packages (the `secime` alternative catches vivo's `com.vivo.secime.service`, which the other alternatives miss). This is the menu the seed list below was drawn from — re-run it because the bundled DB may have been regenerated since this plan was written.
+Expected: ~75 keyboard-ish packages (the `secime` alternative catches the vivo and Huawei secure IMEs — `com.vivo.secime.service` and `com.huawei.secime`, both now on the allowlist — which the other alternatives miss). This is the menu the seed list below was drawn from — re-run it because the bundled DB may have been regenerated since this plan was written.
 
 - [ ] **Step 2: Harvest stock keyboards from every device you can reach**
 
@@ -157,6 +157,7 @@ detection:
             - com.oplus.securitykeyboard
             - com.miui.securityinputmethod
             - com.huawei.ohos.inputmethod
+            - com.huawei.secime
             - com.vivo.secime.service
             - com.lge.ime
             - com.blackberry.keyboard
@@ -246,7 +247,7 @@ true_positives:
   - package_name: "com.baidu.input_mi"
     service_permissions:
       - "android.permission.BIND_INPUT_METHOD"
-  # Namespace squatter — caught by exact-match allowlisting, no special rule
+  # Namespace squatter — caught by the name allowlist (its name is not on it), no special rule
   - package_name: "com.google.android.inputmethod.latin2"
     service_permissions:
       - "android.permission.BIND_INPUT_METHOD"
@@ -308,7 +309,7 @@ telemetry field and no taxonomy change.
 Deliberately references neither is_known_oem_app nor is_system_app nor
 from_trusted_store: the first is true for the Baidu/Sogou/iFlytek vendor
 variants this rule exists to catch, and the preinstalled vendor cloud
-keyboards are the threat rather than the exemption. Exemption is an exact-match
+keyboards are the threat rather than the exemption. Exemption is a name-based
 allowlist inside the rule, which also retires the need for a namespace-squatter
 rule — a squatter's package name simply is not on the list."
 ```
@@ -429,6 +430,6 @@ Deliberately **not** covered, per the spec: the scanner, the two telemetry boole
 - `validate-rule.py` → `PASS` (Gate 1 schema).
 - `GateFourFixtureTest[unreviewed-keyboard]` → **passed**, which confirms the rule parses in `SigmaRuleParser`, a bare `package_name` list works inside a filter block, all three true positives fire — including `com.baidu.input_mi`, the case the superseded design could not flag — and all six true negatives are suppressed.
 
-This was re-confirmed on 2026-07-30 during the plan-gate (a second `validate-rule.py` → PASS and a fresh `GateFourFixtureTest[unreviewed-keyboard]` → PASS). The later-added `com.vivo.secime.service` allowlist entry appears in no fixture, so it is an inert additional "any of" string that cannot change the gate-4 result.
+This was re-confirmed on 2026-07-30 during the plan-gate (a second `validate-rule.py` → PASS and a fresh `GateFourFixtureTest[unreviewed-keyboard]` → PASS). The later-added `com.vivo.secime.service` and `com.huawei.secime` allowlist entries appear in no fixture, so they are inert additional "any of" strings that cannot change the gate-4 result.
 
 So Task 2's central artifacts are known-good as written. What remains genuinely unverified is Task 1's device harvest and Task 3's on-device behaviour, which no amount of desk checking can establish.

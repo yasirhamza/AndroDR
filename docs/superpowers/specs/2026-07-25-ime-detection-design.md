@@ -92,18 +92,33 @@ the wrong mental model. Two consequences the design must own rather than paper o
 - *A same-name impersonator is exempted.* On any device where an allowlisted name is not
   already taken — every non-GMS / ColorOS / custom-ROM device for Gboard, and effectively
   *every* device for the FOSS names, which are rarely preinstalled — a sideloaded IME can
-  claim `com.google.android.inputmethod.latin` (or a case variant like `…latin.Latin`,
-  which coexists with the real package) and be silenced by `filter_known_good`. This is
-  the exact impersonation-suppression bypass ADR #51 documents, and it is why
-  `androdr-089`/`androdr-011` gate their name-only exemption behind `from_trusted_store:
-  true` — a guard this rule cannot borrow (see below).
-- *The mitigation is scope, not strength.* The suppression is local to `androdr-090`: an
-  impersonating sideloaded keyboard still trips the sideload/permission/impersonation
-  rules (`androdr-010`, `androdr-011`, `androdr-014`), so it is not invisible to AndroDR,
-  only to the keyboard-specific finding. Binding the exemption to the signing cert
-  (`certHash`, already on telemetry) is the real fix and is deferred to Phase 2. Phase 1
-  ships the name-only exemption *knowingly*, for a `low` informational signal whose bypass
-  hides nothing a confirmed-malware rule would have caught.
+  claim `com.google.android.inputmethod.latin` (the match is case-insensitive, so a
+  final-segment case flip like `…inputmethod.Latin` is exempted too) and be silenced by
+  `filter_known_good`. This is the exact impersonation-suppression bypass ADR #51
+  documents, and it is why `androdr-089`/`androdr-011` gate their name-only exemption behind
+  `from_trusted_store: true` — a guard this rule cannot borrow (see below).
+- *What backstops it — and where nothing does.* Whether any other rule catches the
+  impersonator depends on the DB category of the name it claims, because the fake inherits
+  that category from the name-keyed `known_good_apps.json` lookup (`KnownAppDatabase.kt:34`,
+  no signature check):
+    - a **USER_APP** name — the FOSS set — leaves `is_known_oem_app: false`, so a same-name
+      fake still trips `androdr-014` (sideloaded impersonation of a known app). Caught.
+    - a **GOOGLE/OEM/AOSP** name — Gboard, the Samsung and vendor keyboards — sets
+      `is_known_oem_app: true`, and `androdr-010`/`-011`/`-014` each carry `is_known_oem_app:
+      false` in *their own* selection, so they fail too. The impersonator is invisible
+      app-wide, not merely to `androdr-090`.
+
+  The second case is **not a blind spot `androdr-090` introduces**: an OEM/Google-named
+  sideload is *already* invisible through the pre-existing `is_known_oem_app` trust
+  conflation (#263, a side effect of #264's guard), whether or not this rule ships. So the
+  honest claim is narrower and stronger than "the suppression is local": for OEM/Google
+  names there is no in-rule backstop at all, `androdr-090` neither creates nor widens that
+  gap, and the only real fix is to bind the exemption to the signing cert (`certHash`,
+  already on telemetry, `AppTelemetry.kt:49`). That binding cannot be a bare field
+  reference — `filter_known_good` matches a field against a constant set, so it cannot say
+  "package X only if its cert is Y"; it needs a keyed `(package, certHash)` lookup, which is
+  why cert-binding is Phase 2 work, not a one-line change. Phase 1 ships the name-only
+  exemption *knowingly*, for a `low` signal that hides nothing the app did not already hide.
 
 **No `is_system_app` exemption.** A preinstalled keyboard is not presumed safe here,
 because the preinstalled vendor cloud keyboards are precisely the threat — suppressing
@@ -181,8 +196,8 @@ silently *removes* an exemption and manufactures false positives on every device
 within 12h, which is how #203's HONOR fix died for two months.
 
 That is ~15 files of infrastructure to hold ~50 package names that one rule reads.
-Revisit it in Phase 2 **only if** the second rule makes reuse genuinely load-bearing;
-duplicating a list across two rules is cheaper than the wiring above.
+Revisit it in Phase 2 if a second rule makes reuse load-bearing — or sooner, per the churn
+caveat below; duplicating a list across two rules is cheaper than the wiring above.
 
 One caveat sharpens that revisit trigger. The inline list is expected to *churn* — every
 new keyboard or device adds an entry — and each edit that forgets to regenerate
@@ -300,7 +315,9 @@ fires on a keyboard not yet listed, triage it against the include/exclude criter
 and either add it — with a one-line rationale in a rule comment — or leave it to fire; and
 periodically sweep the F-Droid and Play keyboard categories for new stock and FOSS
 keyboards. Without a named owner and this cadence, "the allowlist is the product" rots
-into a standing pile of `low` false positives that no one is accountable for closing.
+into a standing pile of `low` false positives that no one is accountable for closing. The
+owner is assigned when this proposal is scheduled; until then the process above is unowned
+by design.
 
 `falsepositives` must name: a deliberately installed second keyboard for another
 language or layout; accessibility keyboards (switch-access, scanning, large-key);
@@ -319,7 +336,7 @@ not yet on the list.
 | CPH2735 | `com.baidu.input` | **low** | **low** dormant / **medium** if selected |
 | any | `com.baidu.input_mi` + vendor variants | **low** | **low** / **medium** |
 | any | OpenBoard, HeliBoard from F-Droid | suppressed — on list | suppressed |
-| any | sideloaded `…inputmethod.latin2` | **low** — exact-match miss | **low** / **medium** |
+| any | sideloaded `…inputmethod.latin2` | **low** — name not on list | **low** / **medium** |
 
 Acceptance requires **both**: zero findings on the Fold 2, and a confirmed true
 positive. A negative-only criterion is satisfied by an implementation that never
@@ -372,7 +389,8 @@ Both defects were verified against shipped data before this rewrite.
 `is_known_oem_app: true` + `is_system_app: false` + `from_trusted_store: false` — the
 exact OPPO preload shape #264 had just excluded, at `level: high`. It would have
 re-fired that false positive on OPPO's own security keyboards. Its purpose (catching
-namespace squatters) is served for free by exact-match allowlisting (§4).
+namespace squatters) is served for free by the name allowlist (§4): a *different-name*
+squatter is simply not on it.
 
 **The `is_known_oem_app: false` guard is dropped from all rules.** The draft correctly
 diagnosed that `known_good_app_db` is poisoned for keyboards, then replaced only the
