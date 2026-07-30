@@ -98,27 +98,39 @@ the wrong mental model. Two consequences the design must own rather than paper o
   documents, and it is why `androdr-089`/`androdr-011` gate their name-only exemption behind
   `from_trusted_store: true` — a guard this rule cannot borrow (see below).
 - *What backstops it — and where nothing does.* Whether any other rule catches the
-  impersonator depends on the DB category of the name it claims, because the fake inherits
-  that category from the name-keyed `known_good_apps.json` lookup (`KnownAppDatabase.kt:34`,
-  no signature check):
-    - a **USER_APP** name — the FOSS set — leaves `is_known_oem_app: false`, so a same-name
-      fake still trips `androdr-014` (sideloaded impersonation of a known app). Caught.
-    - a **GOOGLE/OEM/AOSP** name — Gboard, the Samsung and vendor keyboards — sets
+  impersonator turns on one field, `is_known_oem_app`, which `AppScanner.kt:255` sets true
+  when **either** the name carries an OEM/AOSP/GOOGLE category in the name-keyed
+  `known_good_apps.json` lookup (`KnownAppDatabase.kt:34`, no signature check) **or** the
+  name falls under an *unconditional* OEM namespace prefix — `com.google.`, `com.android.`
+  and `android.` all match on every device (`known_oem_prefixes.yml:15-19`;
+  `OemPrefixResolver.isOemPrefix` is a plain `startsWith`). So:
+    - a **USER_APP** name outside those namespaces — the FOSS set — leaves
+      `is_known_oem_app: false`, so a same-name fake still trips `androdr-014` (sideloaded
+      impersonation of a known app). Caught.
+    - a name that is *either* an OEM/AOSP/GOOGLE DB entry *or* in a `com.google.`/`com.android.`
+      namespace — Gboard and the whole Google/AOSP keyboard space — sets
       `is_known_oem_app: true`, and `androdr-010`/`-011`/`-014` each carry `is_known_oem_app:
       false` in *their own* selection, so they fail too. The impersonator is invisible
       app-wide, not merely to `androdr-090`.
 
-  The second case is **not a blind spot `androdr-090` introduces**: an OEM/Google-named
-  sideload is *already* invisible through the pre-existing `is_known_oem_app` trust
-  conflation (#263, a side effect of #264's guard), whether or not this rule ships. So the
-  honest claim is narrower and stronger than "the suppression is local": for OEM/Google
-  names there is no in-rule backstop at all, `androdr-090` neither creates nor widens that
-  gap, and the only real fix is to bind the exemption to the signing cert (`certHash`,
-  already on telemetry, `AppTelemetry.kt:49`). That binding cannot be a bare field
-  reference — `filter_known_good` matches a field against a constant set, so it cannot say
-  "package X only if its cert is Y"; it needs a keyed `(package, certHash)` lookup, which is
-  why cert-binding is Phase 2 work, not a one-line change. Phase 1 ships the name-only
-  exemption *knowingly*, for a `low` signal that hides nothing the app did not already hide.
+  The prefix path is why the case flip above (`…inputmethod.Latin`) is **not** caught even
+  though the case-sensitive DB lookup misses it: `startsWith("com.google.")` still holds, so
+  `is_known_oem_app` is true and `androdr-010` never fires. It also widens the gap past
+  impersonation entirely — a wholly novel `com.google.android.inputmethod.evil`, never in the
+  DB, is equally invisible to `androdr-010/011/014`. None of this is a blind spot
+  `androdr-090` introduces: any `com.google.*` / OEM-category sideload is *already* invisible
+  through the pre-existing `is_known_oem_app` trust conflation (#263, a side effect of #264's
+  guard), whether or not this rule ships. So the honest claim is narrower and stronger than
+  "the suppression is local": for those names there is no in-rule backstop at all,
+  `androdr-090` neither creates nor widens the gap, and the only real fix is to bind the
+  exemption to the signing cert (`certHash`, already on telemetry, `AppTelemetry.kt:49`).
+  That binding cannot be a bare field reference — `filter_known_good` matches one field
+  against a constant set — and it is a *larger* capability than the flat `known_good_ime_db`
+  set-membership lookup costed in §5: keying one field (cert) on another (package) is a lookup
+  *kind* the engine's `ioc_lookup` (`Map<String, (Any) -> Boolean>`) does not currently
+  support. That is why cert-binding is Phase 2 work, not a one-line change. Phase 1 ships the
+  name-only exemption *knowingly*, for a `low` signal that hides nothing the app did not
+  already hide.
 
 **No `is_system_app` exemption.** A preinstalled keyboard is not presumed safe here,
 because the preinstalled vendor cloud keyboards are precisely the threat — suppressing
@@ -176,7 +188,7 @@ filter_known_good:
     package_name:
         - com.google.android.inputmethod.latin
         - com.samsung.android.honeyboard
-        # … ~50 entries, see §7
+        # … a few dozen entries, see §7
 condition: selection and not filter_known_good
 ```
 
@@ -195,7 +207,8 @@ refresh makes a three-way parity gate mandatory — because a mirror missing an 
 silently *removes* an exemption and manufactures false positives on every device
 within 12h, which is how #203's HONOR fix died for two months.
 
-That is ~15 files of infrastructure to hold ~50 package names that one rule reads.
+That is ~15 files of infrastructure to hold the few dozen package names one rule reads (a
+~30-entry seed the device harvest grows).
 Revisit it in Phase 2 if a second rule makes reuse load-bearing — or sooner, per the churn
 caveat below; duplicating a list across two rules is cheaper than the wiring above.
 
