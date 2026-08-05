@@ -151,5 +151,40 @@
     "category": "NATION_STATE_SPYWARE",
     "severity": "CRITICAL",
     "description": "BITTER ToSpy developer signing certificate (SHA-1)"
+  },
+  {
+    "certHash": "1be914194d14b3deda93ea06e0c58ecd420bb89f",
+    "familyName": "Msafely",
+    "category": "STALKERWARE",
+    "severity": "CRITICAL",
+    "description": "Msafely/SpyX/SpyPhone stalkerware signing certificate (SHA-1) \u2014 if not self-installed, contact a DV hotline"
+  },
+  {
+    "certHash": "e82ededcdc22c6fa054aa74274ab789412b1c2f5",
+    "familyName": "Msafely",
+    "category": "STALKERWARE",
+    "severity": "CRITICAL",
+    "description": "Msafely APK signing certificate (stalkerware-indicators, 2026-07-03 sweep)"
+  },
+  {
+    "certHash": "4feaf05665d7ca7d017962cadfdb4e38cc8d79e7",
+    "familyName": "Msafely",
+    "category": "STALKERWARE",
+    "severity": "CRITICAL",
+    "description": "Msafely APK signing certificate (stalkerware-indicators, 2026-07-03 sweep)"
+  },
+  {
+    "certHash": "0172d7d80d2f0656711ed87c2433988bff820e3d",
+    "familyName": "Msafely",
+    "category": "STALKERWARE",
+    "severity": "CRITICAL",
+    "description": "Msafely APK signing certificate (stalkerware-indicators, 2026-07-03 sweep)"
+  },
+  {
+    "certHash": "9997e63018756cc7034f94b005205a5e15a3770c",
+    "familyName": "Spynger",
+    "category": "STALKERWARE",
+    "severity": "CRITICAL",
+    "description": "Spynger stalkerware signing certificate (SHA-1) \u2014 if not self-installed, contact a DV hotline"
   }
 ]

@@ -1192,5 +1192,369 @@
     "category": "FORENSIC_TOOL",
     "severity": "CRITICAL",
     "description": "Massistant Chinese mobile forensics by Meiya Pico"
+  },
+  {
+    "packageName": "com.app16330.core20461",
+    "name": "TrickMo",
+    "category": "MALWARE",
+    "severity": "HIGH",
+    "description": "TrickMo Android banking trojan package name"
+  },
+  {
+    "packageName": "com.app15318.core1173",
+    "name": "TrickMo",
+    "category": "MALWARE",
+    "severity": "HIGH",
+    "description": "TrickMo Android banking trojan package name"
+  },
+  {
+    "packageName": "uncle.collop416.wifekin78",
+    "name": "TrickMo",
+    "category": "MALWARE",
+    "severity": "HIGH",
+    "description": "TrickMo Android banking trojan package name"
+  },
+  {
+    "packageName": "nibong.lida531.butler836",
+    "name": "TrickMo",
+    "category": "MALWARE",
+    "severity": "HIGH",
+    "description": "TrickMo Android banking trojan package name"
+  },
+  {
+    "packageName": "com.onetower.defense.idle",
+    "name": "Android.MagicAd",
+    "category": "MALWARE",
+    "severity": "MEDIUM",
+    "description": "Android.MagicAd adware trojan package (Doctor Web Q2 2026); displays intrusive background ads via OEM-specific bypasses. Uninstall."
+  },
+  {
+    "packageName": "com.funbees.pighub",
+    "name": "Android.MagicAd",
+    "category": "MALWARE",
+    "severity": "MEDIUM",
+    "description": "Android.MagicAd app package name (threat research, 2026-07-03 sweep)"
+  },
+  {
+    "packageName": "com.ultimate.highway.racer",
+    "name": "Android.MagicAd",
+    "category": "MALWARE",
+    "severity": "MEDIUM",
+    "description": "Android.MagicAd app package name (threat research, 2026-07-03 sweep)"
+  },
+  {
+    "packageName": "com.anime.wallpapers.aesthetic",
+    "name": "Android.MagicAd",
+    "category": "MALWARE",
+    "severity": "MEDIUM",
+    "description": "Android.MagicAd app package name (threat research, 2026-07-03 sweep)"
+  },
+  {
+    "packageName": "com.simple.pdfviewer.reader.app",
+    "name": "Android.MagicAd",
+    "category": "MALWARE",
+    "severity": "MEDIUM",
+    "description": "Android.MagicAd app package name (threat research, 2026-07-03 sweep)"
+  },
+  {
+    "packageName": "com.fruit.blender.maker",
+    "name": "Android.MagicAd",
+    "category": "MALWARE",
+    "severity": "MEDIUM",
+    "description": "Android.MagicAd app package name (threat research, 2026-07-03 sweep)"
+  },
+  {
+    "packageName": "com.quickcommander.filehome.manager",
+    "name": "Android.MagicAd",
+    "category": "MALWARE",
+    "severity": "MEDIUM",
+    "description": "Android.MagicAd app package name (threat research, 2026-07-03 sweep)"
+  },
+  {
+    "packageName": "com.gamesland.platform",
+    "name": "Android.MagicAd",
+    "category": "MALWARE",
+    "severity": "MEDIUM",
+    "description": "Android.MagicAd app package name (threat research, 2026-07-03 sweep)"
+  },
+  {
+    "packageName": "com.rhythmball.music.runner",
+    "name": "Android.MagicAd",
+    "category": "MALWARE",
+    "severity": "MEDIUM",
+    "description": "Android.MagicAd app package name (threat research, 2026-07-03 sweep)"
+  },
+  {
+    "packageName": "com.uptwo.cleanup.master",
+    "name": "Android.MagicAd",
+    "category": "MALWARE",
+    "severity": "MEDIUM",
+    "description": "Android.MagicAd app package name (threat research, 2026-07-03 sweep)"
+  },
+  {
+    "packageName": "com.heartrate.healthtrack.rate.analyzer",
+    "name": "Android.MagicAd",
+    "category": "MALWARE",
+    "severity": "MEDIUM",
+    "description": "Android.MagicAd app package name (threat research, 2026-07-03 sweep)"
+  },
+  {
+    "packageName": "com.power.cleanup.pro",
+    "name": "Android.MagicAd",
+    "category": "MALWARE",
+    "severity": "MEDIUM",
+    "description": "Android.MagicAd app package name (threat research, 2026-07-03 sweep)"
+  },
+  {
+    "packageName": "com.track.app.base",
+    "name": "Android.MagicAd",
+    "category": "MALWARE",
+    "severity": "MEDIUM",
+    "description": "Android.MagicAd app package name (threat research, 2026-07-03 sweep)"
+  },
+  {
+    "packageName": "com.bp.logandiary.life",
+    "name": "Android.MagicAd",
+    "category": "MALWARE",
+    "severity": "MEDIUM",
+    "description": "Android.MagicAd app package name (threat research, 2026-07-03 sweep)"
+  },
+  {
+    "packageName": "com.line.protection.puppyrescue",
+    "name": "Android.MagicAd",
+    "category": "MALWARE",
+    "severity": "MEDIUM",
+    "description": "Android.MagicAd app package name (threat research, 2026-07-03 sweep)"
+  },
+  {
+    "packageName": "com.playall.video4k",
+    "name": "Android.MagicAd",
+    "category": "MALWARE",
+    "severity": "MEDIUM",
+    "description": "Android.MagicAd app package name (threat research, 2026-07-03 sweep)"
+  },
+  {
+    "packageName": "com.paperhub.festivals",
+    "name": "Android.MagicAd",
+    "category": "MALWARE",
+    "severity": "MEDIUM",
+    "description": "Android.MagicAd app package name (threat research, 2026-07-03 sweep)"
+  },
+  {
+    "packageName": "com.bloodp.recorder.pressure",
+    "name": "Android.MagicAd",
+    "category": "MALWARE",
+    "severity": "MEDIUM",
+    "description": "Android.MagicAd app package name (threat research, 2026-07-03 sweep)"
+  },
+  {
+    "packageName": "com.pekRacingTraffice.OffroadJeep",
+    "name": "Android.MagicAd",
+    "category": "MALWARE",
+    "severity": "MEDIUM",
+    "description": "Android.MagicAd app package name (threat research, 2026-07-03 sweep)"
+  },
+  {
+    "packageName": "com.snakearena.survival",
+    "name": "Android.MagicAd",
+    "category": "MALWARE",
+    "severity": "MEDIUM",
+    "description": "Android.MagicAd app package name (threat research, 2026-07-03 sweep)"
+  },
+  {
+    "packageName": "com.weathersense.livenow",
+    "name": "Android.MagicAd",
+    "category": "MALWARE",
+    "severity": "MEDIUM",
+    "description": "Android.MagicAd app package name (threat research, 2026-07-03 sweep)"
+  },
+  {
+    "packageName": "com.bp.bloodpressure.healthtraker",
+    "name": "Android.MagicAd",
+    "category": "MALWARE",
+    "severity": "MEDIUM",
+    "description": "Android.MagicAd app package name (threat research, 2026-07-03 sweep)"
+  },
+  {
+    "packageName": "com.jump.boy.funplay",
+    "name": "Android.MagicAd",
+    "category": "MALWARE",
+    "severity": "MEDIUM",
+    "description": "Android.MagicAd app package name (threat research, 2026-07-03 sweep)"
+  },
+  {
+    "packageName": "com.water.sorting.funpuzzle",
+    "name": "Android.MagicAd",
+    "category": "MALWARE",
+    "severity": "MEDIUM",
+    "description": "Android.MagicAd app package name (threat research, 2026-07-03 sweep)"
+  },
+  {
+    "packageName": "com.dogbee.linesaver",
+    "name": "Android.MagicAd",
+    "category": "MALWARE",
+    "severity": "MEDIUM",
+    "description": "Android.MagicAd app package name (threat research, 2026-07-03 sweep)"
+  },
+  {
+    "packageName": "com.billhub.apps",
+    "name": "Android.MagicAd",
+    "category": "MALWARE",
+    "severity": "MEDIUM",
+    "description": "Android.MagicAd app package name (threat research, 2026-07-03 sweep)"
+  },
+  {
+    "packageName": "com.utility.localweather",
+    "name": "Android.MagicAd",
+    "category": "MALWARE",
+    "severity": "MEDIUM",
+    "description": "Android.MagicAd app package name (threat research, 2026-07-03 sweep)"
+  },
+  {
+    "packageName": "com.supermax.clenauppro",
+    "name": "Android.MagicAd",
+    "category": "MALWARE",
+    "severity": "MEDIUM",
+    "description": "Android.MagicAd app package name (threat research, 2026-07-03 sweep)"
+  },
+  {
+    "packageName": "com.pekRacingTraffice.RacerATV",
+    "name": "Android.MagicAd",
+    "category": "MALWARE",
+    "severity": "MEDIUM",
+    "description": "Android.MagicAd app package name (threat research, 2026-07-03 sweep)"
+  },
+  {
+    "packageName": "com.aerovia.mobile",
+    "name": "Android.MagicAd",
+    "category": "MALWARE",
+    "severity": "MEDIUM",
+    "description": "Android.MagicAd app package name (threat research, 2026-07-03 sweep)"
+  },
+  {
+    "packageName": "com.blockstorm.puzzle.adventure",
+    "name": "Android.MagicAd",
+    "category": "MALWARE",
+    "severity": "MEDIUM",
+    "description": "Android.MagicAd app package name (threat research, 2026-07-03 sweep)"
+  },
+  {
+    "packageName": "com.finaldefense.Undeadman",
+    "name": "Android.MagicAd",
+    "category": "MALWARE",
+    "severity": "MEDIUM",
+    "description": "Android.MagicAd app package name (threat research, 2026-07-03 sweep)"
+  },
+  {
+    "packageName": "com.pekRacingTraffice.Offroad",
+    "name": "Android.MagicAd",
+    "category": "MALWARE",
+    "severity": "MEDIUM",
+    "description": "Android.MagicAd app package name (threat research, 2026-07-03 sweep)"
+  },
+  {
+    "packageName": "com.shortdrama.watchhigh",
+    "name": "Android.MagicAd",
+    "category": "MALWARE",
+    "severity": "MEDIUM",
+    "description": "Android.MagicAd app package name (threat research, 2026-07-03 sweep)"
+  },
+  {
+    "packageName": "com.zombieattack.defense",
+    "name": "Android.MagicAd",
+    "category": "MALWARE",
+    "severity": "MEDIUM",
+    "description": "Android.MagicAd app package name (threat research, 2026-07-03 sweep)"
+  },
+  {
+    "packageName": "com.chatapp.twig",
+    "name": "Android.MagicAd",
+    "category": "MALWARE",
+    "severity": "MEDIUM",
+    "description": "Android.MagicAd app package name (threat research, 2026-07-03 sweep)"
+  },
+  {
+    "packageName": "indianbhabhi.livechat.dating",
+    "name": "Android.MagicAd",
+    "category": "MALWARE",
+    "severity": "MEDIUM",
+    "description": "Android.MagicAd app package name (threat research, 2026-07-03 sweep)"
+  },
+  {
+    "packageName": "com.mobiledeviceinfo.mobiledeviceinfoapp",
+    "name": "Android.MagicAd",
+    "category": "MALWARE",
+    "severity": "MEDIUM",
+    "description": "Android.MagicAd app package name (threat research, 2026-07-03 sweep)"
+  },
+  {
+    "packageName": "com.corepulse.checkapps",
+    "name": "Android.MagicAd",
+    "category": "MALWARE",
+    "severity": "MEDIUM",
+    "description": "Android.MagicAd app package name (threat research, 2026-07-03 sweep)"
+  },
+  {
+    "packageName": "com.chaithu.foodorder",
+    "name": "Android.MagicAd",
+    "category": "MALWARE",
+    "severity": "MEDIUM",
+    "description": "Android.MagicAd app package name (threat research, 2026-07-03 sweep)"
+  },
+  {
+    "packageName": "com.peacecore.apps",
+    "name": "Android.MagicAd",
+    "category": "MALWARE",
+    "severity": "MEDIUM",
+    "description": "Android.MagicAd app package name (threat research, 2026-07-03 sweep)"
+  },
+  {
+    "packageName": "com.brainularapp.brainular",
+    "name": "Android.MagicAd",
+    "category": "MALWARE",
+    "severity": "MEDIUM",
+    "description": "Android.MagicAd app package name (threat research, 2026-07-03 sweep)"
+  },
+  {
+    "packageName": "com.ytapp.pythonlife",
+    "name": "Android.MagicAd",
+    "category": "MALWARE",
+    "severity": "MEDIUM",
+    "description": "Android.MagicAd app package name (threat research, 2026-07-03 sweep)"
+  },
+  {
+    "packageName": "com.weather.reportandforcast",
+    "name": "Android.MagicAd",
+    "category": "MALWARE",
+    "severity": "MEDIUM",
+    "description": "Android.MagicAd app package name (threat research, 2026-07-03 sweep)"
+  },
+  {
+    "packageName": "com.mushawara.iq",
+    "name": "Android.MagicAd",
+    "category": "MALWARE",
+    "severity": "MEDIUM",
+    "description": "Android.MagicAd app package name (threat research, 2026-07-03 sweep)"
+  },
+  {
+    "packageName": "com.modol.nap",
+    "name": "NFCShare",
+    "category": "MALWARE",
+    "severity": "HIGH",
+    "description": "NFCShare NFC card-data-theft trojan package (D3Lab). Uninstall immediately; contact bank to reissue exposed cards."
+  },
+  {
+    "packageName": "com.kit.kitty",
+    "name": "Octagon",
+    "category": "MALWARE",
+    "severity": "HIGH",
+    "description": "Octagon Android RAT stage-1 loader (K7 Security Labs, 2026-08). Disguised as 'Kitty'; hides an RC4-encrypted DEX in a fake font and DexClassLoader-drops the child RAT."
+  },
+  {
+    "packageName": "com.kisa.octagonpanel",
+    "name": "Octagon",
+    "category": "MALWARE",
+    "severity": "HIGH",
+    "description": "Octagon Android RAT child payload ('OctagonPanel'/'Ward') installed by the com.kit.kitty loader (K7 Security Labs, 2026-08)."
   }
 ]
