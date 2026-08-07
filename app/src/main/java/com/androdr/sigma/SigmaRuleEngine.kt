@@ -136,7 +136,8 @@ class SigmaRuleEngine @Inject constructor(
     private fun extractAtomCategory(rule: SigmaRule): String? {
         // Atom rules use a single `selection` with a `category` equals matcher.
         val selection = rule.detection.selections["selection"] ?: return null
-        val matcher = selection.fieldMatchers.firstOrNull { it.fieldName == "category" } ?: return null
+        val matcher = selection.fieldMatchers.firstOrNull { it.fieldName == ATOM_BINDING_FIELD }
+            ?: return null
         return matcher.values.firstOrNull()?.toString()
     }
 
@@ -297,6 +298,16 @@ class SigmaRuleEngine @Inject constructor(
 
     companion object {
         private const val TAG = "SigmaRuleEngine"
+
+        /**
+         * The single detection field [computeAtomBindings] matches timeline
+         * atom rules on. The taxonomy's `timeline` service entry and
+         * LogsourceTaxonomyCrossCheckTest build from this constant so the
+         * code↔taxonomy link cannot silently drift — if atom binding ever
+         * consults more fields, this must become a set and the taxonomy
+         * entry must grow with it (tracked as a follow-up to #268).
+         */
+        const val ATOM_BINDING_FIELD = "category"
 
         /** Explicit manifest of bundled SIGMA rule resources — R8-safe (no reflection). */
         private val BUNDLED_RULE_IDS = listOf(

@@ -131,12 +131,18 @@ re-validation lever). Rules-repo PRs must have a green `validate` check before
 merge; AndroDR's CI remains the second, independent guard via the pinned
 submodule.
 
-**Safe ordering for any rule change** (so AndroDR CI gates *before* the change
-reaches production — the app pulls rules from `android-sigma-rules` main on a 12h
-cycle, not from the submodule, so a broken manifest on main is live for up to 12h
-regardless of the submodule):
+**Safe ordering for any rule or `logsource-taxonomy.yml` change** (so AndroDR CI
+gates *before* the change reaches production — the app pulls rules from
+`android-sigma-rules` main on a 12h cycle, not from the submodule, so a broken
+manifest on main is live for up to 12h regardless of the submodule. Since #268
+the taxonomy is the trust root of `validate-rule.py`'s field lint, so taxonomy
+edits — including status flips like `unwired` → `active` — follow this same
+ordering; the AndroDR-side gates are `LogsourceTaxonomyCrossCheckTest` +
+`DetectionFieldCrossCheckTest`):
 
-1. Edit the rule YAML on an `android-sigma-rules` branch + regenerate `rules.sha256`.
+1. Edit the rule YAML on an `android-sigma-rules` branch + regenerate `rules.sha256`
+   (the manifest regen applies only when `rules.txt`-listed files change —
+   taxonomy-only edits skip it).
 2. Bump the AndroDR submodule pointer to that branch commit in an AndroDR PR.
 3. Confirm `RuleManifestIntegrityTest` is green in AndroDR CI.
 4. Only then merge the `android-sigma-rules` branch to main.

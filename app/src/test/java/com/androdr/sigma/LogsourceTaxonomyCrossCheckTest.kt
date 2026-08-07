@@ -60,10 +60,23 @@ class LogsourceTaxonomyCrossCheckTest {
     /**
      * Build the map of service name → actual toFieldMap() keys from Kotlin code.
      * Member functions are called on dummy instances; extension functions are
-     * called via imports from com.androdr.sigma (this package).
+     * called via imports from com.androdr.sigma (this package); engine-matched
+     * services have no toFieldMap() and are built from the engine's own
+     * constants.
      */
     private fun actualFieldMaps(): Map<String, Set<String>> =
-        memberFunctionFieldMaps() + extensionFunctionFieldMaps()
+        memberFunctionFieldMaps() + extensionFunctionFieldMaps() + engineMatchedFieldMaps()
+
+    /**
+     * Services with NO toFieldMap(): the engine matches literal field names
+     * directly. `timeline` atoms are bound by SigmaRuleEngine.computeAtomBindings,
+     * which consults exactly [SigmaRuleEngine.ATOM_BINDING_FIELD] — building the
+     * entry from that production constant keeps this a genuine code↔taxonomy
+     * cross-check rather than a hand-mirrored literal that drifts silently.
+     */
+    private fun engineMatchedFieldMaps(): Map<String, Set<String>> = mapOf(
+        "timeline" to setOf(SigmaRuleEngine.ATOM_BINDING_FIELD),
+    )
 
     /** Services whose toFieldMap() is a member function on the data class. */
     private fun memberFunctionFieldMaps(): Map<String, Set<String>> = mapOf(
