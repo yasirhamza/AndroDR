@@ -31,6 +31,11 @@ true_negatives:
     is_system_app: false
     from_trusted_store: false
     is_known_oem_app: true
+    # known_app_category is asserted by FixtureClassificationCrossCheckTest
+    # against the real bundled DB — do NOT remove as cruft. Rule androdr-011
+    # ignores this field by design; the assertion exists precisely because
+    # nothing else exercises the known_app_category computation (#269).
+    known_app_category: "OEM"
     surveillance_permission_count: 4
   # OEM preload resolved via the com.oplus. prefix in known_oem_prefixes.yml —
   # observed false positive on OPPO CPH2735, "My OPPO"
