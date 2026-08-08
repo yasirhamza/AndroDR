@@ -96,18 +96,19 @@ class OemPrefixResolver @Inject constructor(
         perDeviceCache.getOrPut(device) {
             val d = data.get()
             val strict = mutableSetOf<String>()
+            val installers = mutableSetOf<String>()
 
-            // Unconditional always applies
             strict.addAll(d.unconditionalStrict)
+            installers.addAll(d.trustedInstallers) // unconditional installers apply everywhere
 
-            // Conditional blocks apply iff manufacturer OR brand matches
             for (block in d.conditional) {
                 if (block.matches(device)) {
                     strict.addAll(block.strictPrefixes)
+                    installers.addAll(block.installers)
                 }
             }
 
-            ApplicablePrefixes(strict = strict.toSet())
+            ApplicablePrefixes(strict = strict.toSet(), installers = installers.toSet())
         }
 
     /**
@@ -174,6 +175,7 @@ class OemPrefixResolver @Inject constructor(
         val manufacturerMatch: Set<String>,
         val brandMatch: Set<String>,
         val strictPrefixes: Set<String>,
+        val installers: Set<String> = emptySet(),
     ) {
         /**
          * A block matches a device iff the device's manufacturer is in
@@ -189,6 +191,7 @@ class OemPrefixResolver @Inject constructor(
     /** The effective allowlist for a specific device identity. */
     data class ApplicablePrefixes(
         val strict: Set<String>,
+        val installers: Set<String> = emptySet(),
     )
 
     // ─── YAML parsing ──────────────────────────────────────────────────────
@@ -241,17 +244,23 @@ class OemPrefixResolver @Inject constructor(
                 val strictPrefixes = (block["strict_prefixes"] as? List<*>)
                     ?.filterIsInstance<String>()
                     ?.toSet() ?: emptySet()
+                val blockInstallers = (block["trusted_installers"] as? List<*>)
+                    ?.filterIsInstance<String>()
+                    ?.filter { it.length >= MIN_INSTALLER_LEN && it.contains('.') }
+                    ?.take(MAX_INSTALLER_COUNT)
+                    ?.toSet() ?: emptySet()
 
                 // `partnership_prefixes` is parsed-and-ignored for forward-compat with
                 // older bundled/remote YAML that still carries the block — see #147 for
                 // why the concept was retired (hand-maintained allowlist produced FPs;
                 // known_good_apps.json is the canonical trust anchor).
-                if (strictPrefixes.isNotEmpty()) {
+                if (strictPrefixes.isNotEmpty() || blockInstallers.isNotEmpty()) {
                     conditionalBlocks += ConditionalBlock(
                         id = blockId,
                         manufacturerMatch = manufacturerMatch,
                         brandMatch = brandMatch,
                         strictPrefixes = strictPrefixes,
+                        installers = blockInstallers,
                     )
                 }
             }

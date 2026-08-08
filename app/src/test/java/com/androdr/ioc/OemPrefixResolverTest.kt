@@ -34,6 +34,47 @@ class OemPrefixResolverTest {
         resolver = OemPrefixResolver(context)
     }
 
+    private fun resolverFromYaml(yaml: String): OemPrefixResolver {
+        val ctx: Context = mockk(relaxed = true)
+        val res: Resources = mockk(relaxed = true)
+        every { ctx.resources } returns res
+        every { res.openRawResource(R.raw.known_oem_prefixes) } returns
+            yaml.byteInputStream()
+        return OemPrefixResolver(ctx)
+    }
+
+    private val SYNTHETIC_YAML = """
+        version: "test"
+        unconditional:
+          aosp_prefixes: ["com.android."]
+          trusted_installers: ["com.android.vending"]
+        conditional:
+          samsung:
+            manufacturer_match: ["samsung"]
+            brand_match: ["samsung"]
+            strict_prefixes: ["com.samsung."]
+            trusted_installers: ["com.sec.android.app.samsungapps"]
+    """.trimIndent()
+
+    private val motorola = DeviceIdentity(manufacturer = "motorola", brand = "motorola")
+
+    @Test
+    fun `parseOemPrefixYaml reads per-block trusted_installers`() {
+        val r = resolverFromYaml(SYNTHETIC_YAML)
+        val samsungInstallers = r.applicablePrefixesFor(samsung).installers
+        assertTrue(samsungInstallers.contains("com.sec.android.app.samsungapps"))
+        assertTrue(samsungInstallers.contains("com.android.vending")) // unconditional included
+    }
+
+    @Test
+    fun `conditional installers apply only on a matching device`() {
+        val r = resolverFromYaml(SYNTHETIC_YAML)
+        assertTrue(r.applicablePrefixesFor(samsung).installers.contains("com.sec.android.app.samsungapps"))
+        assertFalse(r.applicablePrefixesFor(motorola).installers.contains("com.sec.android.app.samsungapps"))
+        // Unconditional store is present on every device:
+        assertTrue(r.applicablePrefixesFor(motorola).installers.contains("com.android.vending"))
+    }
+
     @Test
     fun `Samsung packages are OEM on a Samsung device`() {
         assertTrue(resolver.isOemPrefix("com.samsung.accessory.zenithmgr", samsung))
