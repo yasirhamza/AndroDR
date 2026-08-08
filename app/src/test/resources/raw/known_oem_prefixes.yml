@@ -1,5 +1,5 @@
 version: "2026-08-08"
-description: "Known OEM, carrier, and chipset vendor package prefixes. Split into unconditional and device-conditional sections: conditional blocks only apply when the assessed device's manufacturer/brand matches the block's manufacturer_match / brand_match lists. This closes the prefix-spoofing attack from #90 where an attacker could hide malware under a foreign vendor's package namespace on a device that doesn't actually use that vendor."
+description: "Known OEM, carrier, and chipset vendor package prefixes. Split into unconditional and device-conditional sections: conditional blocks only apply when the assessed device's manufacturer/brand matches the block's manufacturer_match / brand_match lists. This closes the prefix-spoofing attack from #90 where an attacker could hide malware under a foreign vendor's package namespace on a device that doesn't actually use that vendor. trusted_installers are likewise split into an unconditional list and per-block conditional lists, so this file isn't prefix-only (#280)."
 sources:
   - uad-list
   - plexus-data
@@ -173,6 +173,11 @@ conditional:
       - "com.oneplus."
       - "cn.oneplus."   # UAD: cn.oneplus.nvbackup, cn.oneplus.oem_tcma, cn.oneplus.oemtcma, cn.oneplus.opmms, cn.oneplus.photos (5 packages)
       - "net.oneplus."   # UAD: net.oneplus.commonlogtool, net.oneplus.forums, net.oneplus.launcher, net.oneplus.odm, net.oneplus.push, net.oneplus.weather, ... (14 packages)
+    # Device-conditional store trust (#280): HeyTap Market is the shared
+    # app store across the ColorOS/OxygenOS family (OPPO, realme, OnePlus
+    # all ship it), so it's trusted here too — not just in the oppo block.
+    trusted_installers:
+      - "com.heytap.market"
 
   lg:
     manufacturer_match: ["lge"]
@@ -232,6 +237,11 @@ conditional:
     brand_match: ["realme"]
     strict_prefixes:
       - "com.realme."
+    # Device-conditional store trust (#280): HeyTap Market is the shared
+    # app store across the ColorOS/OxygenOS family (OPPO, realme, OnePlus
+    # all ship it), so it's trusted here too — not just in the oppo block.
+    trusted_installers:
+      - "com.heytap.market"
 
   vivo:
     manufacturer_match: ["vivo"]
