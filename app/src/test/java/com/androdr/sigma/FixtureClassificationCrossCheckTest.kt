@@ -164,6 +164,84 @@ class FixtureClassificationCrossCheckTest {
             (entry as? Map<*, *>)?.entries?.associate { (k, v) -> k.toString() to v }
         } ?: emptyList()
 
+    /**
+     * Per-record classification checks (`is_known_oem_app` and
+     * `known_app_category`) for one fixture record. Pure extraction from the
+     * innermost loop of the test below — same conditions, messages, and
+     * skip/failure side effects, unchanged. Returns how many assertions were
+     * evaluated so the caller's running total stays correct (a `continue`
+     * can't cross this function boundary, so `pkg` is resolved by the caller
+     * before this is invoked).
+     */
+    private fun checkRecord(
+        where: String,
+        pkg: String,
+        record: Map<String, Any?>,
+        isTruePositive: Boolean,
+        failures: MutableList<String>,
+        skips: MutableList<String>,
+    ): Int {
+        var evaluated = 0
+
+        val assertedOem = record["is_known_oem_app"]
+        if (assertedOem is Boolean) {
+            if (isConditionalOnly(pkg)) {
+                skips += pkg
+                println("SKIP $where: OEM only via device-conditional prefix")
+            } else {
+                evaluated++
+                val computed = computedIsKnownOem(pkg)
+                when {
+                    isTruePositive && computed != assertedOem ->
+                        failures += "$where: TP asserts is_known_oem_app=" +
+                            "$assertedOem but the real resolvers compute " +
+                            "$computed — the fixture no longer matches " +
+                            "reality (#269 dead-rule case). " +
+                            classificationSource(pkg)
+                    !isTruePositive && assertedOem && !computed ->
+                        failures += "$where: TN asserts is_known_oem_app=true " +
+                            "but the real resolvers compute false — the " +
+                            "fixture invents a filter that does not exist; " +
+                            "on a real device this rule OVER-FIRES on this " +
+                            "package. " + classificationSource(pkg)
+                    !isTruePositive && !assertedOem && computed ->
+                        println(
+                            "BENIGN COUNTERFACTUAL $where: asserts false, " +
+                                "computes true — reality filters strictly " +
+                                "more; the TN stays a TN " +
+                                "(deliberate branch isolation)",
+                        )
+                }
+            }
+        } else if (assertedOem != null) {
+            // Gate 4 would coerce e.g. a quoted "false" through
+            // matchEquals; this cross-check cannot classify it and
+            // must not silently skip it.
+            failures += "$where: is_known_oem_app has non-boolean YAML " +
+                "type ${assertedOem.javaClass.simpleName} " +
+                "('$assertedOem') — use a bare boolean"
+        }
+
+        val assertedCategory = record["known_app_category"]
+        if (assertedCategory is String) {
+            evaluated++
+            val computed = knownAppResolver.lookup(pkg)?.category?.name
+            if (computed != assertedCategory) {
+                failures += "$where: asserts known_app_category=" +
+                    "'$assertedCategory' but the bundled DB computes " +
+                    "'$computed' (strict both polarities — the " +
+                    "more/less-filtering argument is boolean-shaped). " +
+                    classificationSource(pkg)
+            }
+        } else if (assertedCategory != null) {
+            failures += "$where: known_app_category has non-string YAML " +
+                "type ${assertedCategory.javaClass.simpleName} " +
+                "('$assertedCategory') — use a plain string"
+        }
+
+        return evaluated
+    }
+
     @Test
     fun `fixture classification assertions match the real resolvers`() {
         val failures = mutableListOf<String>()
@@ -181,62 +259,7 @@ class FixtureClassificationCrossCheckTest {
                 for (record in records(root, section)) {
                     val pkg = record["package_name"] as? String ?: continue
                     val where = "${file.name}/$section/$pkg"
-
-                    val assertedOem = record["is_known_oem_app"]
-                    if (assertedOem is Boolean) {
-                        if (isConditionalOnly(pkg)) {
-                            skips += pkg
-                            println("SKIP $where: OEM only via device-conditional prefix")
-                        } else {
-                            evaluated++
-                            val computed = computedIsKnownOem(pkg)
-                            when {
-                                isTruePositive && computed != assertedOem ->
-                                    failures += "$where: TP asserts is_known_oem_app=" +
-                                        "$assertedOem but the real resolvers compute " +
-                                        "$computed — the fixture no longer matches " +
-                                        "reality (#269 dead-rule case). " +
-                                        classificationSource(pkg)
-                                !isTruePositive && assertedOem && !computed ->
-                                    failures += "$where: TN asserts is_known_oem_app=true " +
-                                        "but the real resolvers compute false — the " +
-                                        "fixture invents a filter that does not exist; " +
-                                        "on a real device this rule OVER-FIRES on this " +
-                                        "package. " + classificationSource(pkg)
-                                !isTruePositive && !assertedOem && computed ->
-                                    println(
-                                        "BENIGN COUNTERFACTUAL $where: asserts false, " +
-                                            "computes true — reality filters strictly " +
-                                            "more; the TN stays a TN " +
-                                            "(deliberate branch isolation)",
-                                    )
-                            }
-                        }
-                    } else if (assertedOem != null) {
-                        // Gate 4 would coerce e.g. a quoted "false" through
-                        // matchEquals; this cross-check cannot classify it and
-                        // must not silently skip it.
-                        failures += "$where: is_known_oem_app has non-boolean YAML " +
-                            "type ${assertedOem.javaClass.simpleName} " +
-                            "('$assertedOem') — use a bare boolean"
-                    }
-
-                    val assertedCategory = record["known_app_category"]
-                    if (assertedCategory is String) {
-                        evaluated++
-                        val computed = knownAppResolver.lookup(pkg)?.category?.name
-                        if (computed != assertedCategory) {
-                            failures += "$where: asserts known_app_category=" +
-                                "'$assertedCategory' but the bundled DB computes " +
-                                "'$computed' (strict both polarities — the " +
-                                "more/less-filtering argument is boolean-shaped). " +
-                                classificationSource(pkg)
-                        }
-                    } else if (assertedCategory != null) {
-                        failures += "$where: known_app_category has non-string YAML " +
-                            "type ${assertedCategory.javaClass.simpleName} " +
-                            "('$assertedCategory') — use a plain string"
-                    }
+                    evaluated += checkRecord(where, pkg, record, isTruePositive, failures, skips)
                 }
             }
         }

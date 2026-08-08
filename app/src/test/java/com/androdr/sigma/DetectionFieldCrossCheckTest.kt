@@ -58,6 +58,8 @@ class DetectionFieldCrossCheckTest {
 
     private val yamlLoader = Load(LoadSettings.builder().build())
 
+    @Suppress("LoopWithTooManyJumpStatements")
+    // Token state-machine: the guard continues are clearer than flag-based restructuring.
     private fun checkConditionGrammar(
         condition: String,
         selectionNames: Set<String>,
@@ -112,7 +114,8 @@ class DetectionFieldCrossCheckTest {
         return errors
     }
 
-    @Suppress("UNCHECKED_CAST")
+    @Suppress("UNCHECKED_CAST", "ReturnCount")
+    // Guard-clause early returns are clearer than nested branches for these parse/taxonomy failure paths.
     private fun checkRuleFile(
         file: File,
         taxonomy: Map<String, TestRuleRepo.TaxonomyService>,
