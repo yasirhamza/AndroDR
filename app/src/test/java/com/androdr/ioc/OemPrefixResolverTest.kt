@@ -43,7 +43,7 @@ class OemPrefixResolverTest {
         return OemPrefixResolver(ctx)
     }
 
-    private val SYNTHETIC_YAML = """
+    private val syntheticYaml = """
         version: "test"
         unconditional:
           aosp_prefixes: ["com.android."]
@@ -60,7 +60,7 @@ class OemPrefixResolverTest {
 
     @Test
     fun `parseOemPrefixYaml reads per-block trusted_installers`() {
-        val r = resolverFromYaml(SYNTHETIC_YAML)
+        val r = resolverFromYaml(syntheticYaml)
         val samsungInstallers = r.applicablePrefixesFor(samsung).installers
         assertTrue(samsungInstallers.contains("com.sec.android.app.samsungapps"))
         assertTrue(samsungInstallers.contains("com.android.vending")) // unconditional included
@@ -68,7 +68,7 @@ class OemPrefixResolverTest {
 
     @Test
     fun `conditional installers apply only on a matching device`() {
-        val r = resolverFromYaml(SYNTHETIC_YAML)
+        val r = resolverFromYaml(syntheticYaml)
         assertTrue(r.applicablePrefixesFor(samsung).installers.contains("com.sec.android.app.samsungapps"))
         assertFalse(r.applicablePrefixesFor(motorola).installers.contains("com.sec.android.app.samsungapps"))
         // Unconditional store is present on every device:
@@ -120,6 +120,7 @@ class OemPrefixResolverTest {
         assertTrue(resolver.isTrustedInstaller("com.android.vending", generic))
         assertTrue(resolver.isTrustedInstaller("com.sec.android.app.samsungapps", generic))
         assertTrue(resolver.isTrustedInstaller("com.xiaomi.market", motorola))
+        assertTrue(resolver.isTrustedInstaller("com.huawei.appmarket", generic))
     }
 
     @Test
@@ -136,7 +137,7 @@ class OemPrefixResolverTest {
 
     @Test
     fun `store trust is device-conditional when data uses per-block installers (#280)`() {
-        val r = resolverFromYaml(SYNTHETIC_YAML)
+        val r = resolverFromYaml(syntheticYaml)
         assertTrue(r.isTrustedInstaller("com.sec.android.app.samsungapps", samsung))
         assertFalse(r.isTrustedInstaller("com.sec.android.app.samsungapps", motorola)) // cross-device forgery closed
         assertTrue(r.isTrustedInstaller("com.android.vending", motorola)) // Play everywhere
