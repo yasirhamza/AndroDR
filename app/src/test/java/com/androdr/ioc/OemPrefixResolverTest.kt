@@ -74,21 +74,36 @@ class OemPrefixResolverTest {
     }
 
     @Test
-    fun `bundled installers are trusted`() {
-        assertTrue(resolver.isTrustedInstaller("com.android.vending", generic))
-        assertTrue(resolver.isTrustedInstaller("com.sec.android.app.samsungapps", samsung))
-        assertTrue(resolver.isTrustedInstaller("com.xiaomi.market", xiaomi))
+    fun `bundled store installers are trusted`() {
+        assertTrue(resolver.isTrustedInstaller("com.android.vending"))
+        assertTrue(resolver.isTrustedInstaller("com.sec.android.app.samsungapps"))
+        assertTrue(resolver.isTrustedInstaller("com.xiaomi.market"))
+        assertTrue(resolver.isTrustedInstaller("com.huawei.appmarket"))
     }
 
     @Test
-    fun `OEM-prefix installers are trusted on matching device`() {
-        assertTrue(resolver.isTrustedInstaller("com.samsung.android.app.omcagent", samsung))
-        assertTrue(resolver.isTrustedInstaller("com.tmobile.pr.adapt", tmobile))
+    fun `OEM-prefixed non-store installers are NOT trusted (#267)`() {
+        // Pre-#267 these passed via the isOemPrefix disjunct. An installer name is
+        // attacker-influenced, so prefix-based trust was forgeable; trust now rests
+        // only on the explicit trusted_installers store list.
+        assertFalse(resolver.isTrustedInstaller("com.samsung.android.app.omcagent"))
+        assertFalse(resolver.isTrustedInstaller("com.tmobile.pr.adapt"))
+    }
+
+    @Test
+    fun `forged store-looking installer names are not trusted (#267)`() {
+        assertFalse(resolver.isTrustedInstaller("com.google.play.svcupdate"))
+        assertFalse(resolver.isTrustedInstaller("com.android.fakestore"))
+        assertFalse(resolver.isTrustedInstaller("android.evil.installer"))
+        // The system installer UI used for user-driven sideloads must NOT read as a
+        // store (matches the timeline path's [SIDELOADED] labeling).
+        assertFalse(resolver.isTrustedInstaller("com.google.android.packageinstaller"))
+        assertFalse(resolver.isTrustedInstaller("com.android.packageinstaller"))
     }
 
     @Test
     fun `unknown installers are not trusted`() {
-        assertFalse(resolver.isTrustedInstaller("com.unknown.installer", generic))
+        assertFalse(resolver.isTrustedInstaller("com.unknown.installer"))
     }
 
     @Test

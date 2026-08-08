@@ -70,15 +70,22 @@ class OemPrefixResolver @Inject constructor(
         isOemPrefix(packageName, device)
 
     /**
-     * Returns true iff [installer] is a trusted app store. Trusted installers
-     * are unconditional (every device), so [device] is accepted but only used
-     * for the fallback `isOemPrefix` call.
+     * Returns true iff [installer] is an explicitly trusted app-store package
+     * name (exact membership in the parsed `trusted_installers` list).
+     *
+     * Trust is deliberately NOT inferred from OEM package prefixes. An installer
+     * package name is attacker-influenced — a dropper sets its own
+     * `installingPackageName`, and the system installer UI surfaces via the
+     * `initiatingPackageName` fallback in AppScanner — so a prefix like
+     * `com.google.` could be forged (`com.google.play.svcupdate`) to fake store
+     * trust. Genuine stores are all enumerated in `trusted_installers`. See #267.
+     *
+     * Phase 1b (#136) will make membership device-conditional (an OEM store is
+     * trusted only on its own ecosystem) by moving the OEM stores into the
+     * per-vendor conditional blocks; that is a data change, not a signature change.
      */
-    fun isTrustedInstaller(installer: String, device: DeviceIdentity): Boolean {
-        val d = data.get()
-        return installer in d.trustedInstallers ||
-            isOemPrefix(installer, device)
-    }
+    fun isTrustedInstaller(installer: String): Boolean =
+        installer in data.get().trustedInstallers
 
     /**
      * Returns the applicable prefix set for [device]: unconditional prefixes
