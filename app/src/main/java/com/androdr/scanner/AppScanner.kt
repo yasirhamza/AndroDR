@@ -243,7 +243,7 @@ class AppScanner @Inject constructor(
         // Installer source
         val installerPackage = if (!isSystemApp) getInstallerPackageName(pm, packageName) else null
         val fromTrustedStore = installerPackage != null &&
-            oemPrefixResolver.isTrustedInstaller(installerPackage)
+            oemPrefixResolver.isTrustedInstaller(installerPackage, localDevice)
 
         // Known-app resolver
         val knownApp = knownAppResolver.lookup(packageName)

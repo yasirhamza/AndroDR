@@ -26,7 +26,8 @@ import javax.inject.Singleton
  *   trusted installers, Android Go, custom ROMs).
  * - `conditional:` — per-vendor blocks keyed by `manufacturer_match` and
  *   `brand_match`. Only blocks whose match list contains the current
- *   device's manufacturer or brand contribute prefixes.
+ *   device's manufacturer or brand contribute prefixes (and, optionally,
+ *   trusted installers).
  *
  * Every public query method takes a [DeviceIdentity]. Runtime callers pass
  * [DeviceIdentity.local]; bugreport callers pass
@@ -70,44 +71,41 @@ class OemPrefixResolver @Inject constructor(
         isOemPrefix(packageName, device)
 
     /**
-     * Returns true iff [installer] is an explicitly trusted app-store package
-     * name (exact membership in the parsed `trusted_installers` list).
+     * Returns true iff [installer] is a trusted app-store package for [device]:
+     * exact membership in the applicable installer set — unconditional stores
+     * (e.g. Play) plus the stores of any conditional block matching [device].
      *
-     * Trust is deliberately NOT inferred from OEM package prefixes. An installer
-     * package name is attacker-influenced — a dropper sets its own
-     * `installingPackageName`, and the system installer UI surfaces via the
-     * `initiatingPackageName` fallback in AppScanner — so a prefix like
-     * `com.google.` could be forged (`com.google.play.svcupdate`) to fake store
-     * trust. Genuine stores are all enumerated in `trusted_installers`. See #267.
-     *
-     * Phase 1b (#136) will make membership device-conditional (an OEM store is
-     * trusted only on its own ecosystem) by moving the OEM stores into the
-     * per-vendor conditional blocks and re-adding a device argument to this method.
+     * Trust is NOT inferred from OEM package prefixes (a forgeable installer
+     * name; see #267), and an OEM store is trusted only on its own ecosystem
+     * (a Samsung store name on a non-Samsung device is not trusted; #280).
      */
-    fun isTrustedInstaller(installer: String): Boolean =
-        installer in data.get().trustedInstallers
+    fun isTrustedInstaller(installer: String, device: DeviceIdentity): Boolean =
+        installer in applicablePrefixesFor(device).installers
 
     /**
      * Returns the applicable prefix set for [device]: unconditional prefixes
      * plus any conditional blocks whose `manufacturer_match` / `brand_match`
-     * contains [device]'s manufacturer or brand.
+     * contains [device]'s manufacturer or brand. Also returns the applicable
+     * installer set: unconditional installers plus the installers of any
+     * matching conditional blocks.
      */
     fun applicablePrefixesFor(device: DeviceIdentity): ApplicablePrefixes =
         perDeviceCache.getOrPut(device) {
             val d = data.get()
             val strict = mutableSetOf<String>()
+            val installers = mutableSetOf<String>()
 
-            // Unconditional always applies
             strict.addAll(d.unconditionalStrict)
+            installers.addAll(d.trustedInstallers) // unconditional installers apply everywhere
 
-            // Conditional blocks apply iff manufacturer OR brand matches
             for (block in d.conditional) {
                 if (block.matches(device)) {
                     strict.addAll(block.strictPrefixes)
+                    installers.addAll(block.installers)
                 }
             }
 
-            ApplicablePrefixes(strict = strict.toSet())
+            ApplicablePrefixes(strict = strict.toSet(), installers = installers.toSet())
         }
 
     /**
@@ -137,7 +135,13 @@ class OemPrefixResolver @Inject constructor(
                 return@withContext 0
             }
 
-            val accepted = allPrefixes.size + parsed.trustedInstallers.size
+            val allInstallers = (parsed.trustedInstallers +
+                parsed.conditional.flatMap { it.installers }).toSet()
+            if (allInstallers.size > MAX_TOTAL_INSTALLER_COUNT) {
+                Log.w(TAG, "Remote OEM prefix feed rejected: too many installers (${allInstallers.size})")
+                return@withContext 0
+            }
+            val accepted = allPrefixes.size + allInstallers.size
             if (accepted > 0) {
                 data.set(parsed)
                 perDeviceCache.clear()
@@ -145,7 +149,7 @@ class OemPrefixResolver @Inject constructor(
                     TAG,
                     "OEM data refreshed: ${parsed.unconditionalStrict.size} unconditional + " +
                         "${parsed.conditional.size} conditional blocks, " +
-                        "${parsed.trustedInstallers.size} installers",
+                        "${allInstallers.size} installers",
                 )
             }
             accepted
@@ -174,6 +178,7 @@ class OemPrefixResolver @Inject constructor(
         val manufacturerMatch: Set<String>,
         val brandMatch: Set<String>,
         val strictPrefixes: Set<String>,
+        val installers: Set<String> = emptySet(),
     ) {
         /**
          * A block matches a device iff the device's manufacturer is in
@@ -189,6 +194,7 @@ class OemPrefixResolver @Inject constructor(
     /** The effective allowlist for a specific device identity. */
     data class ApplicablePrefixes(
         val strict: Set<String>,
+        val installers: Set<String> = emptySet(),
     )
 
     // ─── YAML parsing ──────────────────────────────────────────────────────
@@ -218,11 +224,7 @@ class OemPrefixResolver @Inject constructor(
             }
 
             // Parse trusted installers
-            val installers = (unconditionalMap["trusted_installers"] as? List<*>)
-                ?.filterIsInstance<String>()
-                ?.filter { it.length >= MIN_INSTALLER_LEN && it.contains('.') }
-                ?.take(MAX_INSTALLER_COUNT)
-                ?.toSet() ?: emptySet()
+            val installers = parseInstallerList(unconditionalMap["trusted_installers"])
 
             // Parse conditional blocks
             val conditionalMap = doc["conditional"] as? Map<*, *> ?: emptyMap<Any, Any>()
@@ -241,17 +243,19 @@ class OemPrefixResolver @Inject constructor(
                 val strictPrefixes = (block["strict_prefixes"] as? List<*>)
                     ?.filterIsInstance<String>()
                     ?.toSet() ?: emptySet()
+                val blockInstallers = parseInstallerList(block["trusted_installers"])
 
                 // `partnership_prefixes` is parsed-and-ignored for forward-compat with
                 // older bundled/remote YAML that still carries the block — see #147 for
                 // why the concept was retired (hand-maintained allowlist produced FPs;
                 // known_good_apps.json is the canonical trust anchor).
-                if (strictPrefixes.isNotEmpty()) {
+                if (strictPrefixes.isNotEmpty() || blockInstallers.isNotEmpty()) {
                     conditionalBlocks += ConditionalBlock(
                         id = blockId,
                         manufacturerMatch = manufacturerMatch,
                         brandMatch = brandMatch,
                         strictPrefixes = strictPrefixes,
+                        installers = blockInstallers,
                     )
                 }
             }
@@ -285,11 +289,7 @@ class OemPrefixResolver @Inject constructor(
                 strictPrefixes.addAll(value.filterIsInstance<String>())
             }
         }
-        val installers = (doc["trusted_installers"] as? List<*>)
-            ?.filterIsInstance<String>()
-            ?.filter { it.length >= MIN_INSTALLER_LEN && it.contains('.') }
-            ?.take(MAX_INSTALLER_COUNT)
-            ?.toSet() ?: emptySet()
+        val installers = parseInstallerList(doc["trusted_installers"])
 
         return ParsedOemData(
             unconditionalStrict = strictPrefixes,
@@ -297,6 +297,19 @@ class OemPrefixResolver @Inject constructor(
             trustedInstallers = installers,
         )
     }
+
+    /**
+     * Parses a `trusted_installers` YAML list value into a validated installer
+     * set: strings only, at least [MIN_INSTALLER_LEN] chars, containing a dot
+     * (package-name-shaped), capped at [MAX_INSTALLER_COUNT]. Shared by the
+     * unconditional-section, per-conditional-block, and legacy-flat parse sites.
+     */
+    private fun parseInstallerList(raw: Any?): Set<String> =
+        (raw as? List<*>)
+            ?.filterIsInstance<String>()
+            ?.filter { it.length >= MIN_INSTALLER_LEN && it.contains('.') }
+            ?.take(MAX_INSTALLER_COUNT)
+            ?.toSet() ?: emptySet()
 
     // ─── HTTP fetch (unchanged) ────────────────────────────────────────────
 
@@ -328,6 +341,7 @@ class OemPrefixResolver @Inject constructor(
         private const val TIMEOUT_MS = 10_000
         private const val MAX_RESPONSE_SIZE = 100_000
         private const val MAX_INSTALLER_COUNT = 50
+        private const val MAX_TOTAL_INSTALLER_COUNT = 100
         private const val MAX_PREFIX_COUNT = 500
         private const val MIN_INSTALLER_LEN = 10
     }
