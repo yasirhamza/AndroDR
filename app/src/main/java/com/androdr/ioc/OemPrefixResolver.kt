@@ -142,7 +142,7 @@ class OemPrefixResolver @Inject constructor(
                     TAG,
                     "OEM data refreshed: ${parsed.unconditionalStrict.size} unconditional + " +
                         "${parsed.conditional.size} conditional blocks, " +
-                        "${parsed.trustedInstallers.size} installers",
+                        "${allInstallers.size} installers",
                 )
             }
             accepted
