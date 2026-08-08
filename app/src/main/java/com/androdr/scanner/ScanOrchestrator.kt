@@ -182,7 +182,7 @@ class ScanOrchestrator @Inject constructor(
             // (#136) makes membership device-conditional — via a device-conditional
             // restructure of known_oem_prefixes.yml plus a device argument reintroduced here.
             "trusted_installer_db" to { v ->
-                oemPrefixResolver.isTrustedInstaller(v.toString())
+                oemPrefixResolver.isTrustedInstaller(v.toString(), localDevice)
             }
         ))
         sigmaRuleEngine.loadBundledRules()

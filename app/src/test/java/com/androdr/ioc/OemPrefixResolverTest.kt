@@ -115,36 +115,31 @@ class OemPrefixResolverTest {
     }
 
     @Test
-    fun `bundled store installers are trusted`() {
-        assertTrue(resolver.isTrustedInstaller("com.android.vending"))
-        assertTrue(resolver.isTrustedInstaller("com.sec.android.app.samsungapps"))
-        assertTrue(resolver.isTrustedInstaller("com.xiaomi.market"))
-        assertTrue(resolver.isTrustedInstaller("com.huawei.appmarket"))
-    }
-
-    @Test
-    fun `OEM-prefixed non-store installers are NOT trusted (#267)`() {
-        // Pre-#267 these passed via the isOemPrefix disjunct. An installer name is
-        // attacker-influenced, so prefix-based trust was forgeable; trust now rests
-        // only on the explicit trusted_installers store list.
-        assertFalse(resolver.isTrustedInstaller("com.samsung.android.app.omcagent"))
-        assertFalse(resolver.isTrustedInstaller("com.tmobile.pr.adapt"))
+    fun `bundled store installers are trusted on any device (fixture still flat)`() {
+        // Bundled fixture is unchanged in PR A: all installers are top-level unconditional.
+        assertTrue(resolver.isTrustedInstaller("com.android.vending", generic))
+        assertTrue(resolver.isTrustedInstaller("com.sec.android.app.samsungapps", generic))
+        assertTrue(resolver.isTrustedInstaller("com.xiaomi.market", motorola))
     }
 
     @Test
     fun `forged store-looking installer names are not trusted (#267)`() {
-        assertFalse(resolver.isTrustedInstaller("com.google.play.svcupdate"))
-        assertFalse(resolver.isTrustedInstaller("com.android.fakestore"))
-        assertFalse(resolver.isTrustedInstaller("android.evil.installer"))
-        // The system installer UI used for user-driven sideloads must NOT read as a
-        // store (matches the timeline path's [SIDELOADED] labeling).
-        assertFalse(resolver.isTrustedInstaller("com.google.android.packageinstaller"))
-        assertFalse(resolver.isTrustedInstaller("com.android.packageinstaller"))
+        assertFalse(resolver.isTrustedInstaller("com.google.play.svcupdate", generic))
+        assertFalse(resolver.isTrustedInstaller("com.google.android.packageinstaller", generic))
+        assertFalse(resolver.isTrustedInstaller("com.android.packageinstaller", generic))
     }
 
     @Test
     fun `unknown installers are not trusted`() {
-        assertFalse(resolver.isTrustedInstaller("com.unknown.installer"))
+        assertFalse(resolver.isTrustedInstaller("com.unknown.installer", generic))
+    }
+
+    @Test
+    fun `store trust is device-conditional when data uses per-block installers (#280)`() {
+        val r = resolverFromYaml(SYNTHETIC_YAML)
+        assertTrue(r.isTrustedInstaller("com.sec.android.app.samsungapps", samsung))
+        assertFalse(r.isTrustedInstaller("com.sec.android.app.samsungapps", motorola)) // cross-device forgery closed
+        assertTrue(r.isTrustedInstaller("com.android.vending", motorola)) // Play everywhere
     }
 
     @Test

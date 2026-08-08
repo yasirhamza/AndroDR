@@ -70,22 +70,16 @@ class OemPrefixResolver @Inject constructor(
         isOemPrefix(packageName, device)
 
     /**
-     * Returns true iff [installer] is an explicitly trusted app-store package
-     * name (exact membership in the parsed `trusted_installers` list).
+     * Returns true iff [installer] is a trusted app-store package for [device]:
+     * exact membership in the applicable installer set — unconditional stores
+     * (e.g. Play) plus the stores of any conditional block matching [device].
      *
-     * Trust is deliberately NOT inferred from OEM package prefixes. An installer
-     * package name is attacker-influenced — a dropper sets its own
-     * `installingPackageName`, and the system installer UI surfaces via the
-     * `initiatingPackageName` fallback in AppScanner — so a prefix like
-     * `com.google.` could be forged (`com.google.play.svcupdate`) to fake store
-     * trust. Genuine stores are all enumerated in `trusted_installers`. See #267.
-     *
-     * Phase 1b (#136) will make membership device-conditional (an OEM store is
-     * trusted only on its own ecosystem) by moving the OEM stores into the
-     * per-vendor conditional blocks and re-adding a device argument to this method.
+     * Trust is NOT inferred from OEM package prefixes (a forgeable installer
+     * name; see #267), and an OEM store is trusted only on its own ecosystem
+     * (a Samsung store name on a non-Samsung device is not trusted; #280).
      */
-    fun isTrustedInstaller(installer: String): Boolean =
-        installer in data.get().trustedInstallers
+    fun isTrustedInstaller(installer: String, device: DeviceIdentity): Boolean =
+        installer in applicablePrefixesFor(device).installers
 
     /**
      * Returns the applicable prefix set for [device]: unconditional prefixes
@@ -138,7 +132,9 @@ class OemPrefixResolver @Inject constructor(
                 return@withContext 0
             }
 
-            val accepted = allPrefixes.size + parsed.trustedInstallers.size
+            val allInstallers = parsed.trustedInstallers +
+                parsed.conditional.flatMap { it.installers }
+            val accepted = allPrefixes.size + allInstallers.size
             if (accepted > 0) {
                 data.set(parsed)
                 perDeviceCache.clear()
