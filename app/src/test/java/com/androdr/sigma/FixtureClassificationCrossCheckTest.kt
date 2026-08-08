@@ -33,10 +33,12 @@ import java.io.File
  *    neutral [DeviceIdentity.UNKNOWN], which is documented to match no
  *    conditional prefix block.
  *
- * `from_trusted_store` / `is_sideloaded` are OUT OF SCOPE until #267: they
- * depend on installer/system inputs fixtures don't carry (6 fixture files / 33
- * records set them verbatim), and this test deliberately never calls
- * `OemPrefixResolver.isTrustedInstaller` (forgeable, #267).
+ * `from_trusted_store` / `is_sideloaded` remain OUT OF SCOPE here: they depend on
+ * installer/system inputs the fixtures don't carry (6 fixture files / 33 records set
+ * them verbatim). #267 (Phase 1) hardened `isTrustedInstaller` to exact store-list
+ * membership — no longer forgeable by prefix — but this cross-check still cannot
+ * compute those fields from package name alone. Extending it needs fixture-carried
+ * installer inputs; see the #136 pure-emitter migration.
  *
  * MISMATCH POLICY (polarity-aware — naive equality false-fails on 4 shipped
  * counterfactual TNs, e.g. `com.android.systemui → is_known_oem_app: false`
