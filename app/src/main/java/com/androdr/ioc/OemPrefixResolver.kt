@@ -82,7 +82,7 @@ class OemPrefixResolver @Inject constructor(
      *
      * Phase 1b (#136) will make membership device-conditional (an OEM store is
      * trusted only on its own ecosystem) by moving the OEM stores into the
-     * per-vendor conditional blocks; that is a data change, not a signature change.
+     * per-vendor conditional blocks and re-adding a device argument to this method.
      */
     fun isTrustedInstaller(installer: String): Boolean =
         installer in data.get().trustedInstallers
