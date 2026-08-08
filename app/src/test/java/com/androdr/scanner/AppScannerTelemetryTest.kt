@@ -151,6 +151,22 @@ class AppScannerTelemetryTest {
         assertTrue("Expected fromTrustedStore = true", telemetry.fromTrustedStore)
     }
 
+    @Test
+    fun `non-system app with forged OEM-prefixed installer is sideloaded, not trusted (#267)`() = runTest {
+        val pkg = buildPackageInfo(
+            pkgName = "com.evil.stage2",
+            installerPkg = "com.google.play.svcupdate"  // OEM-prefix-shaped, not a real store
+        )
+        installPackages(pkg)
+
+        val result = scanner.collectTelemetry()
+
+        assertEquals(1, result.size)
+        val telemetry = result[0]
+        assertFalse("forged installer must not confer store trust", telemetry.fromTrustedStore)
+        assertTrue("app must remain sideloaded", telemetry.isSideloaded)
+    }
+
     // ── 3. System app detection ─────────────────────────────────────────────
 
     @Test
