@@ -1,4 +1,4 @@
-version: "2026-07-25"
+version: "2026-08-08"
 description: "Known OEM, carrier, and chipset vendor package prefixes. Split into unconditional and device-conditional sections: conditional blocks only apply when the assessed device's manufacturer/brand matches the block's manufacturer_match / brand_match lists. This closes the prefix-spoofing attack from #90 where an attacker could hide malware under a foreign vendor's package namespace on a device that doesn't actually use that vendor."
 sources:
   - uad-list
@@ -75,25 +75,20 @@ unconditional:
     - "com.facebook.services"     # Facebook OEM stub services
 
   # Trusted app store installer package names. These are compared against
-  # installer identity, not against arbitrary package names, so they are
-  # safe to keep unconditional.
+  # installer identity, not against arbitrary package names. Only installers
+  # that are legitimately cross-vendor belong here.
+  #
+  # OEM-specific stores (Galaxy Store, Xiaomi Market, HeyTap Market, Huawei
+  # AppGallery, vivo App Store, ...) are NOT safe to trust unconditionally:
+  # their installer package name can be forged as the "installed from" value
+  # on a device that doesn't actually run that vendor's firmware, letting
+  # malware claim a trusted-store provenance it never had. Those now live in
+  # each vendor's own conditional block as a per-block `trusted_installers`
+  # list, so they're only trusted when the assessed device actually matches
+  # that vendor (#280).
   trusted_installers:
-    - "com.android.vending"             # Google Play Store
-    - "com.sec.android.app.samsungapps" # Samsung Galaxy Store
-    - "com.samsung.android.app.updatecenter"
-    - "com.samsung.android.app.watchmanager"
-    - "com.samsung.android.scloud"
-    - "com.samsung.android.themestore"
-    - "com.samsung.android.spay"
-    - "com.sec.android.app.sbrowser"
+    - "com.android.vending" # Google Play Store
     - "com.facebook.system"
-    - "com.xiaomi.market"
-    - "com.xiaomi.mipicks"
-    - "com.miui.packageinstaller"
-    - "com.heytap.market"
-    - "com.coloros.safecenter"
-    - "com.huawei.appmarket"
-    - "com.bbk.appstore"
 
 # ============================================================
 # DEVICE-CONDITIONAL PREFIXES — apply only when the assessed device's
@@ -122,6 +117,17 @@ conditional:
       - "com.shannon."
       - "com.wsomacp"
       - "com.wssyncmldm"
+    # Device-conditional store trust (#280): Galaxy Store and its companion
+    # Samsung apps are only trusted as installer identity on an actual
+    # Samsung device — see the note on unconditional.trusted_installers.
+    trusted_installers:
+      - "com.sec.android.app.samsungapps" # Samsung Galaxy Store
+      - "com.samsung.android.app.updatecenter"
+      - "com.samsung.android.app.watchmanager"
+      - "com.samsung.android.scloud"
+      - "com.samsung.android.themestore"
+      - "com.samsung.android.spay"
+      - "com.sec.android.app.sbrowser"
     # partnership_prefixes intentionally omitted. Samsung-bundled partner apps
     # (Microsoft, Netflix, Facebook, Spotify, Booking, LinkedIn, etc.) are
     # classified via the known_good_apps.json database (UAD-ng Oem/Carrier/Misc
@@ -141,6 +147,15 @@ conditional:
       - "com.mipay."
       - "android.miui."   # UAD: android.miui.home.launcher.res, android.miui.overlay, android.miui.overlay.telephony, android.miui.poco.launcher.res (4 packages)
       - "eu.xiaomi."   # UAD: eu.xiaomi.ext, eu.xiaomi.module.inject (2 packages)
+    # Device-conditional store trust (#280): Xiaomi Market / GetApps are
+    # only trusted as installer identity on a Xiaomi/Redmi/POCO device.
+    # com.miui.packageinstaller is intentionally NOT listed here — it's the
+    # MIUI sideload-confirmation UI (the "install this app?" prompt), not a
+    # store, so it was never a legitimate "installed from a trusted store"
+    # signal in the first place.
+    trusted_installers:
+      - "com.xiaomi.market"
+      - "com.xiaomi.mipicks"
 
   motorola:
     manufacturer_match: ["motorola", "lenovo"]
@@ -186,6 +201,10 @@ conditional:
       - "com.huawei."
       - "com.honor."
       - "com.hihonor."   # UAD: com.hihonor.HnMultiScreenShot, com.hihonor.aipluginengine, com.hihonor.android.launcher, com.hihonor.appmarket, com.hihonor.assistant, com.hihonor.camera, com.hihonor.contacts, com.hihonor.id, com.hihonor.search, com.hihonor.systemmanager, ... (85 packages)
+    # Device-conditional store trust (#280): Huawei AppGallery is only
+    # trusted as installer identity on a Huawei/Honor device.
+    trusted_installers:
+      - "com.huawei.appmarket"
 
   asus:
     manufacturer_match: ["asus"]
@@ -202,6 +221,11 @@ conditional:
       - "com.heytap."
       - "com.oplus."
       - "oplus"   # ColorOS ships a bare, dotless `oplus` package labelled "Android System" (observed on CPH2735/A5 5G, Android 15). It has FLAG_SYSTEM set but matches no com.* prefix, so androdr-015 reported it as an Unrecognized System App. Matching is startsWith, so this also covers `oplus.*` — an intra-vendor spoofing surface identical to the one every other prefix here already carries, and bounded to devices whose manufacturer/brand is actually OPPO (#90).
+    # Device-conditional store trust (#280): HeyTap Market / ColorOS Safe
+    # Center are only trusted as installer identity on an OPPO device.
+    trusted_installers:
+      - "com.heytap.market"
+      - "com.coloros.safecenter"
 
   realme:
     manufacturer_match: ["realme"]
@@ -216,6 +240,10 @@ conditional:
       - "com.vivo."
       - "com.bbk."
       - "com.iqoo."   # UAD: com.iqoo.aftersale.engineermode, com.iqoo.engineermode, com.iqoo.powersaving, com.iqoo.secure, com.iqoo.user.engineermode, com.iqoo.website (6 packages)
+    # Device-conditional store trust (#280): vivo App Store is only trusted
+    # as installer identity on a vivo/iQOO device.
+    trusted_installers:
+      - "com.bbk.appstore"
 
   amazon:
     manufacturer_match: ["amazon"]

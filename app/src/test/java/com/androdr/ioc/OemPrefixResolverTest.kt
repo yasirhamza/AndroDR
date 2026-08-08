@@ -115,12 +115,19 @@ class OemPrefixResolverTest {
     }
 
     @Test
-    fun `bundled store installers are trusted on any device (fixture still flat)`() {
-        // Bundled fixture is unchanged in PR A: all installers are top-level unconditional.
+    fun `bundled OEM stores are trusted only on their ecosystem (#280)`() {
         assertTrue(resolver.isTrustedInstaller("com.android.vending", generic))
-        assertTrue(resolver.isTrustedInstaller("com.sec.android.app.samsungapps", generic))
-        assertTrue(resolver.isTrustedInstaller("com.xiaomi.market", motorola))
-        assertTrue(resolver.isTrustedInstaller("com.huawei.appmarket", generic))
+        assertTrue(resolver.isTrustedInstaller("com.android.vending", samsung))
+        assertTrue(resolver.isTrustedInstaller("com.sec.android.app.samsungapps", samsung))
+        assertFalse(resolver.isTrustedInstaller("com.sec.android.app.samsungapps", generic))
+        assertTrue(resolver.isTrustedInstaller("com.xiaomi.market", xiaomi))
+        assertFalse(resolver.isTrustedInstaller("com.xiaomi.market", samsung))
+    }
+
+    @Test
+    fun `MIUI package installer is no longer a trusted installer anywhere (#280)`() {
+        assertFalse(resolver.isTrustedInstaller("com.miui.packageinstaller", xiaomi))
+        assertFalse(resolver.isTrustedInstaller("com.miui.packageinstaller", generic))
     }
 
     @Test
