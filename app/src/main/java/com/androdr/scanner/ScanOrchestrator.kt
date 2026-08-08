@@ -175,6 +175,14 @@ class ScanOrchestrator @Inject constructor(
                 val entry = knownAppResolver.lookup(pkg)
                 (entry != null && entry.category in TRUSTED_CATEGORIES) ||
                     oemPrefixResolver.isOemPrefix(pkg, localDevice)
+            },
+            // Pure-emitter trust path (#267 / #136). Phase 2 migrates the rules
+            // keyed on the computed `from_trusted_store` boolean onto this lookup;
+            // both are backed by the same resolver so they cannot diverge. Phase 1b
+            // (#136) makes membership device-conditional — via a device-conditional
+            // restructure of known_oem_prefixes.yml plus a device argument reintroduced here.
+            "trusted_installer_db" to { v ->
+                oemPrefixResolver.isTrustedInstaller(v.toString())
             }
         ))
         sigmaRuleEngine.loadBundledRules()

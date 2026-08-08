@@ -111,6 +111,31 @@ class SigmaRuleEvaluatorTest {
     }
 
     @Test
+    fun `trusted_installer_db lookup matches only enumerated stores (#267 pure-emitter path)`() {
+        // Inline rule keyed on the new lookup — the Phase 2 migration target.
+        val rule = makeRule(selections = mapOf(
+            "store" to SigmaSelection(listOf(
+                SigmaFieldMatcher("installer", SigmaModifier.IOC_LOOKUP, listOf("trusted_installer_db"))
+            ))
+        ), condition = "store", level = "informational")
+        // Wire the same lookup the orchestrator registers (real registration is a thin
+        // delegation to OemPrefixResolver.isTrustedInstaller, already covered by
+        // OemPrefixResolverTest — ScanOrchestrator itself is Hilt-wired and not
+        // unit-instantiable here).
+        val lookups = mapOf<String, (Any) -> Boolean>(
+            "trusted_installer_db" to { v ->
+                v.toString() in setOf("com.android.vending", "com.sec.android.app.samsungapps")
+            }
+        )
+        val trusted = mapOf<String, Any?>("installer" to "com.android.vending")
+        val forged = mapOf<String, Any?>("installer" to "com.google.play.svcupdate")
+        val nullInstaller = mapOf<String, Any?>("installer" to null)
+        assertEquals(1, SigmaRuleEvaluator.evaluate(listOf(rule), listOf(trusted), "app_scanner", lookups).size)
+        assertEquals(0, SigmaRuleEvaluator.evaluate(listOf(rule), listOf(forged), "app_scanner", lookups).size)
+        assertEquals(0, SigmaRuleEvaluator.evaluate(listOf(rule), listOf(nullInstaller), "app_scanner", lookups).size)
+    }
+
+    @Test
     fun `skips rules for different service`() {
         val rule = makeRule(service = "device_auditor", selections = mapOf(
             "selection" to SigmaSelection(listOf(
