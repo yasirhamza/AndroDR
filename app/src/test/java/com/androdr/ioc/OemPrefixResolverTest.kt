@@ -13,8 +13,10 @@ import org.junit.Test
  * Legacy behavior tests for OemPrefixResolver. These verify that when the
  * device identity matches the conditional block (e.g., assessing a Samsung
  * device), the appropriate prefixes are classified as OEM. The new
- * device-conditional behavior (Samsung prefix on a Pixel is NOT OEM) is
- * covered by [OemPrefixResolverConditionalTest].
+ * device-conditional behavior for OEM *prefixes* (Samsung prefix on a Pixel
+ * is NOT OEM) is covered by [OemPrefixResolverConditionalTest]; this class
+ * also covers device-conditional *installer* trust (e.g., HeyTap Market
+ * trusted on realme/OnePlus but not on a foreign device).
  */
 class OemPrefixResolverTest {
 
@@ -23,6 +25,8 @@ class OemPrefixResolverTest {
     private val xiaomi = DeviceIdentity(manufacturer = "xiaomi", brand = "xiaomi")
     private val tmobile = DeviceIdentity(manufacturer = "samsung", brand = "tmobile")
     private val generic = DeviceIdentity(manufacturer = "google", brand = "google")
+    private val realme = DeviceIdentity(manufacturer = "realme", brand = "realme")
+    private val oneplus = DeviceIdentity(manufacturer = "oneplus", brand = "oneplus")
 
     init {
         val context: Context = mockk(relaxed = true)
@@ -115,12 +119,26 @@ class OemPrefixResolverTest {
     }
 
     @Test
-    fun `bundled store installers are trusted on any device (fixture still flat)`() {
-        // Bundled fixture is unchanged in PR A: all installers are top-level unconditional.
+    fun `bundled OEM stores are trusted only on their ecosystem (#280)`() {
         assertTrue(resolver.isTrustedInstaller("com.android.vending", generic))
-        assertTrue(resolver.isTrustedInstaller("com.sec.android.app.samsungapps", generic))
-        assertTrue(resolver.isTrustedInstaller("com.xiaomi.market", motorola))
-        assertTrue(resolver.isTrustedInstaller("com.huawei.appmarket", generic))
+        assertTrue(resolver.isTrustedInstaller("com.android.vending", samsung))
+        assertTrue(resolver.isTrustedInstaller("com.sec.android.app.samsungapps", samsung))
+        assertFalse(resolver.isTrustedInstaller("com.sec.android.app.samsungapps", generic))
+        assertTrue(resolver.isTrustedInstaller("com.xiaomi.market", xiaomi))
+        assertFalse(resolver.isTrustedInstaller("com.xiaomi.market", samsung))
+    }
+
+    @Test
+    fun `HeyTap market is trusted across the ColorOS family, not foreign devices (#280)`() {
+        assertTrue(resolver.isTrustedInstaller("com.heytap.market", realme))
+        assertTrue(resolver.isTrustedInstaller("com.heytap.market", oneplus))
+        assertFalse(resolver.isTrustedInstaller("com.heytap.market", samsung))
+    }
+
+    @Test
+    fun `MIUI package installer is no longer a trusted installer anywhere (#280)`() {
+        assertFalse(resolver.isTrustedInstaller("com.miui.packageinstaller", xiaomi))
+        assertFalse(resolver.isTrustedInstaller("com.miui.packageinstaller", generic))
     }
 
     @Test
