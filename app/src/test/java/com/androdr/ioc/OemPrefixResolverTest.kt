@@ -175,4 +175,26 @@ class OemPrefixResolverTest {
         assertFalse(resolver.isOemPrefix("androidmalware.evil.spy", generic))
         assertTrue(resolver.isOemPrefix("android.provider.contacts", generic))
     }
+
+    @Test
+    fun `empty-string match tokens are filtered so an empty-identity device inherits nothing (#284)`() {
+        val yaml = """
+            version: "test"
+            unconditional:
+              trusted_installers: ["com.android.vending"]
+            conditional:
+              rogue:
+                manufacturer_match: [""]
+                brand_match: [""]
+                strict_prefixes: ["com.evil."]
+                trusted_installers: ["com.evil.store"]
+        """.trimIndent()
+        val r = resolverFromYaml(yaml)
+        val emptyDevice = DeviceIdentity(manufacturer = "", brand = "")
+        // Empty-identity device must NOT pick up the rogue block's installer or prefix.
+        assertFalse(r.isTrustedInstaller("com.evil.store", emptyDevice))
+        assertFalse(r.isOemPrefix("com.evil.malware", emptyDevice))
+        // Unconditional trust still applies to any device.
+        assertTrue(r.isTrustedInstaller("com.android.vending", emptyDevice))
+    }
 }

@@ -235,10 +235,12 @@ class OemPrefixResolver @Inject constructor(
                 val manufacturerMatch = (block["manufacturer_match"] as? List<*>)
                     ?.filterIsInstance<String>()
                     ?.map { it.lowercase() }
+                    ?.filter { it.isNotBlank() }
                     ?.toSet() ?: emptySet()
                 val brandMatch = (block["brand_match"] as? List<*>)
                     ?.filterIsInstance<String>()
                     ?.map { it.lowercase() }
+                    ?.filter { it.isNotBlank() }
                     ?.toSet() ?: emptySet()
                 val strictPrefixes = (block["strict_prefixes"] as? List<*>)
                     ?.filterIsInstance<String>()
