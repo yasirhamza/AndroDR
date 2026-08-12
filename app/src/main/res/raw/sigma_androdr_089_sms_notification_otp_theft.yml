@@ -31,14 +31,15 @@ detection:
         permissions|contains: "RECEIVE_SMS"
         service_permissions|contains: "BIND_NOTIFICATION_LISTENER_SERVICE"
     filter_known_good:
-        # from_trusted_store gates the exemption: known_good_app_db is a
-        # package-name-only lookup with no signature binding (ADR #51), so
+        # installer|ioc_lookup: trusted_installer_db gates the exemption
+        # (migrated from from_trusted_store per #136 Phase 2): known_good_app_db
+        # is a package-name-only lookup with no signature binding (ADR #51), so
         # without this a sideloaded banker could impersonate a known-good
         # package name and be silently exempted — the exact impersonation
         # bypass androdr-011 was fixed to close. A genuinely sideloaded app
-        # (from_trusted_store: false) can never reach the exemption.
+        # (installer not a trusted store) can never reach the exemption.
         package_name|ioc_lookup: known_good_app_db
-        from_trusted_store: true
+        installer|ioc_lookup: trusted_installer_db
     condition: selection and not filter_known_good
 level: high
 falsepositives:

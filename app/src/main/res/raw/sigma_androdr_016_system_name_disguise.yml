@@ -12,8 +12,9 @@ logsource:
 detection:
     selection_untrusted:
         is_system_app: false
-        from_trusted_store: false
         is_known_oem_app: false
+    store_installed:
+        installer|ioc_lookup: trusted_installer_db
     selection_name:
         app_name|contains:
             - System
@@ -21,7 +22,7 @@ detection:
             - Android
             - Samsung
             - Settings
-    condition: selection_untrusted and selection_name
+    condition: selection_untrusted and not store_installed and selection_name
 level: high
 category: incident
 display:

@@ -31,15 +31,21 @@ class Rule089OtpTheftTest {
             ?: error("androdr-089 failed to parse")
     }
 
-    // The rule filters on package_name|ioc_lookup: known_good_app_db.
-    private val knownGoodLookup = mapOf<String, (Any) -> Boolean>(
+    // The rule filters on package_name|ioc_lookup: known_good_app_db AND (post-#136
+    // migration) installer|ioc_lookup: trusted_installer_db.
+    private val iocLookups = mapOf<String, (Any) -> Boolean>(
         "known_good_app_db" to { pkg -> pkg.toString() == "com.google.android.apps.messaging" },
+        "trusted_installer_db" to { v -> v.toString() == "com.android.vending" },
     )
 
     /**
-     * @param sideloaded also drives from_trusted_store — the two are inverse in
-     *   AppScanner (is_sideloaded = !system && !fromTrustedStore && !knownOem), so
-     *   a realistic record never has both true.
+     * @param sideloaded drives the selection's literal `is_sideloaded` field.
+     * @param installer drives filter_known_good's `installer|ioc_lookup:
+     *   trusted_installer_db` matcher (#136 migration; formerly from_trusted_store).
+     *   is_sideloaded and installer are independent params here to isolate each
+     *   detection block's own logic — a realistic record never pairs
+     *   is_sideloaded=true with a genuinely trusted installer (is_sideloaded =
+     *   !system && !fromTrustedStore && !knownOem in AppScanner).
      */
     private fun record(
         sideloaded: Boolean = true,
@@ -47,16 +53,17 @@ class Rule089OtpTheftTest {
         // The scanner emits the FQN for service_permissions (ServiceInfo.permission).
         servicePermissions: List<String> = listOf("android.permission.BIND_NOTIFICATION_LISTENER_SERVICE"),
         packageName: String = "com.evil.mamont",
+        installer: String? = null,
     ): Map<String, Any?> = mapOf(
         "is_sideloaded" to sideloaded,
-        "from_trusted_store" to !sideloaded,
+        "installer" to installer,
         "permissions" to permissions,
         "service_permissions" to servicePermissions,
         "package_name" to packageName,
     )
 
     private fun fires(record: Map<String, Any?>): Boolean =
-        SigmaRuleEvaluator.evaluate(listOf(loadRule()), listOf(record), "app_scanner", knownGoodLookup)
+        SigmaRuleEvaluator.evaluate(listOf(loadRule()), listOf(record), "app_scanner", iocLookups)
             .any { it.triggered }
 
     @Test
@@ -100,19 +107,32 @@ class Rule089OtpTheftTest {
     fun `does not fire on a trusted-store app`() {
         assertFalse(
             "a store-installed app with the same capabilities must not fire",
-            fires(record(sideloaded = false)),
+            fires(record(sideloaded = false, installer = "com.android.vending")),
         )
     }
 
     @Test
     fun `sideloaded impersonator of a known-good package still fires`() {
         // Security regression guard (ceremony finding): the known-good filter is
-        // gated on from_trusted_store, so a sideloaded banker cannot escape by
-        // declaring a known-good package name. Without that gate this exact
-        // record would be silently exempted (the androdr-011 bypass class).
+        // gated on installer|ioc_lookup: trusted_installer_db (#136 migration,
+        // formerly from_trusted_store), so a sideloaded banker cannot escape by
+        // declaring a known-good package name. A non-store installer (here: none)
+        // on a sideloaded impersonator must still fire — without that gate this
+        // exact record would be silently exempted (the androdr-011 bypass class).
         assertTrue(
             "a sideloaded app impersonating a known-good package must NOT be exempted",
-            fires(record(packageName = "com.google.android.apps.messaging")),
+            fires(record(packageName = "com.google.android.apps.messaging", installer = null)),
+        )
+    }
+
+    @Test
+    fun `known-good package genuinely installed via a trusted store IS exempted`() {
+        // Positive case for the filter's dual gate: package name AND installer
+        // both trusted → exempt. (Structural-only: is_sideloaded is forced true
+        // here to isolate filter_known_good's own logic — see `record`'s KDoc.)
+        assertFalse(
+            "a known-good package genuinely installed via a trusted store must be exempted",
+            fires(record(packageName = "com.google.android.apps.messaging", installer = "com.android.vending")),
         )
     }
 }

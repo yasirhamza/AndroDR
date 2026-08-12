@@ -10,18 +10,22 @@
 #
 # Field names mirror AppScanner's emitted telemetry (AppTelemetry.toFieldMap):
 # surveillance_permission_count is a scanner-computed integer, not a list.
+# `installer` (not `from_trusted_store`) drives the store_installed / filter_known_good
+# gates since the #136 pure-emitter migration.
 rule_file: sigma_androdr_011_surveillance_permissions.yml
 service: app_scanner
 ioc_stubs:
   known_good_app_db:
     - "com.google.android.gm"
+  trusted_installer_db:
+    - "com.android.vending"
 
 true_positives:
   # Genuine sideload holding a surveillance cluster
   - package_name: "com.shady.stalkerware"
     is_system_app: false
-    from_trusted_store: false
     is_known_oem_app: false
+    installer: null
     surveillance_permission_count: 4
 
 true_negatives:
@@ -29,8 +33,8 @@ true_negatives:
   # false positive on OPPO CPH2735, "Clone Phone"
   - package_name: "com.coloros.backuprestore"
     is_system_app: false
-    from_trusted_store: false
     is_known_oem_app: true
+    installer: null
     # known_app_category is asserted by FixtureClassificationCrossCheckTest
     # against the real bundled DB — do NOT remove as cruft. Rule androdr-011
     # ignores this field by design; the assertion exists precisely because
@@ -41,24 +45,25 @@ true_negatives:
   # observed false positive on OPPO CPH2735, "My OPPO"
   - package_name: "com.oplus.member"
     is_system_app: false
-    from_trusted_store: false
     is_known_oem_app: true
+    installer: null
     surveillance_permission_count: 3
   # System app — filtered by is_system_app
   - package_name: "com.android.systemui"
     is_system_app: true
-    from_trusted_store: false
     is_known_oem_app: false
+    installer: null
     surveillance_permission_count: 4
-  # Trusted-store app — filtered by from_trusted_store
+  # Trusted-store app — filtered by store_installed (installer|ioc_lookup:
+  # trusted_installer_db, #136 migration)
   - package_name: "com.example.legitimate"
     is_system_app: false
-    from_trusted_store: true
     is_known_oem_app: false
+    installer: "com.android.vending"
     surveillance_permission_count: 4
   # Sideload below the cluster threshold (rule requires >= 2)
   - package_name: "com.shady.singleperm"
     is_system_app: false
-    from_trusted_store: false
     is_known_oem_app: false
+    installer: null
     surveillance_permission_count: 1

@@ -12,12 +12,14 @@ service: app_scanner
 ioc_stubs:
   known_good_app_db:
     - "com.google.android.gm"
+  trusted_installer_db:
+    - "com.android.vending"
 
 true_positives:
   - package_name: "com.shady.bankingoverlay"
     is_system_app: false
-    from_trusted_store: false
     is_known_oem_app: false
+    installer: null
     permissions:
       - "SYSTEM_ALERT_WINDOW"
 
@@ -25,38 +27,40 @@ true_negatives:
   # System app with the permission — filtered by is_system_app
   - package_name: "com.android.systemui"
     is_system_app: true
-    from_trusted_store: false
     is_known_oem_app: false
+    installer: null
     permissions:
       - "SYSTEM_ALERT_WINDOW"
-  # Trusted-store app with the permission — filtered by from_trusted_store
+  # Trusted-store app with the permission — filtered by store_installed
+  # (installer|ioc_lookup: trusted_installer_db, #136 migration)
   - package_name: "com.example.legitimate"
     is_system_app: false
-    from_trusted_store: true
     is_known_oem_app: false
+    installer: "com.android.vending"
     permissions:
       - "SYSTEM_ALERT_WINDOW"
   # Known-good sideloaded app — filtered by known_good_app_db
   - package_name: "com.google.android.gm"
     is_system_app: false
-    from_trusted_store: false
     is_known_oem_app: false
+    installer: null
     permissions:
       - "SYSTEM_ALERT_WINDOW"
   # Sideloaded app without the overlay permission (only a surveillance perm)
   - package_name: "com.shady.nooverlay"
     is_system_app: false
-    from_trusted_store: false
     is_known_oem_app: false
+    installer: null
     permissions:
       - "CAMERA"
   # OEM preload — filtered by is_known_oem_app. OEMs that ship preloads off
   # non-/system partitions (OPPO ColorOS) leave FLAG_SYSTEM unset and set no
-  # installer package, so is_system_app and from_trusted_store are both false
-  # on genuine manufacturer software. Overlay permission is common in preloads.
+  # installer package, so is_system_app is false and store_installed is false
+  # (no installer package) on genuine manufacturer software. Overlay
+  # permission is common in preloads.
   - package_name: "com.oplus.member"
     is_system_app: false
-    from_trusted_store: false
     is_known_oem_app: true
+    installer: null
     permissions:
       - "SYSTEM_ALERT_WINDOW"
