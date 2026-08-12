@@ -224,10 +224,14 @@ class BundledRulesSchemaCrossCheckTest {
 
     @Test
     fun `migrated filter-swap using negated trusted_installer_db establishes sideloaded (#136)`() {
+        // `selection` is deliberately NEUTRAL (no from_trusted_store/is_sideloaded) so the
+        // ONLY possible sideload evidence is the negated filter_known_good block's
+        // installer|ioc_lookup: trusted_installer_db. If that clause were removed from
+        // blockEstablishesSideload, this test must go RED (see task-2-report.md for proof).
         val doc = mapOf<String, Any?>(
             "implies_flags" to listOf("sideloaded"),
             "detection" to mapOf<String, Any?>(
-                "selection" to mapOf("is_sideloaded" to true),
+                "selection" to mapOf("is_system_app" to false, "is_known_oem_app" to false),
                 "filter_known_good" to mapOf(
                     "package_name|ioc_lookup" to "known_good_app_db",
                     "installer|ioc_lookup" to "trusted_installer_db"),
