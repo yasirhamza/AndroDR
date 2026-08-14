@@ -10,6 +10,7 @@ import com.androdr.data.model.FileArtifactTelemetry
 import com.androdr.data.model.ProcessTelemetry
 import com.androdr.data.model.ReceiverTelemetry
 import com.androdr.data.model.ScanResult
+import com.androdr.data.model.UNREGISTERED_IOC_LOOKUP
 import com.androdr.sigma.Finding
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -74,6 +75,15 @@ object ReportFormatter {
             appendLine()
             section("FINDINGS SECTION")
             appendFindingsSections(scan, dnsEvents, appInventory, displayNames)
+
+            val capabilitySkips = scan.scannerErrors.filter { it.exception == UNREGISTERED_IOC_LOOKUP }
+            if (capabilitySkips.isNotEmpty()) {
+                appendLine()
+                // ASCII-only per class doc: em dash replaced with the file's existing
+                // "--" convention (see e.g. appendVerdict's "Flagged:" line).
+                appendLine("RULES NOT EVALUATED ON THIS BUILD (missing capability -- update the app):")
+                capabilitySkips.forEach { appendLine("  - ${it.message}") }
+            }
         }
 
         if (includeTelemetry) {

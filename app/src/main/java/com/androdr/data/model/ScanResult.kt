@@ -29,6 +29,14 @@ data class ScannerFailure(
     val message: String?
 )
 
+/**
+ * [ScannerFailure.exception] value marking a capability skip — a rule this
+ * binary build cannot evaluate (unresolvable ioc_lookup) — as opposed to a
+ * scanner crash. A capability skip is accepted under-detection, not a
+ * failure: it must not raise the partial-scan banner (see [ScanResult.isPartialScan]).
+ */
+const val UNREGISTERED_IOC_LOOKUP = "UnregisteredIocLookup"
+
 @Entity
 @Serializable
 @TypeConverters(Converters::class)
@@ -50,11 +58,16 @@ data class ScanResult(
      */
     val scannerErrors: List<ScannerFailure> = emptyList()
 ) {
-    /** True if any scanner failed to complete during this scan. */
+    /**
+     * True if any scanner failed to complete during this scan. Capability
+     * skips ([UNREGISTERED_IOC_LOOKUP]) are excluded — a rule this binary
+     * cannot evaluate is accepted under-detection, not a failed scanner,
+     * and must not raise the partial-scan banner.
+     */
     @get:Ignore
     @Transient
     val isPartialScan: Boolean
-        get() = scannerErrors.isNotEmpty()
+        get() = scannerErrors.any { it.exception != UNREGISTERED_IOC_LOOKUP }
 
     // Overall risk driven by app threats. Device posture is a condition (not an incident)
     // and caps at MEDIUM. NETWORK findings are included with APP_RISK since DNS IOC rules

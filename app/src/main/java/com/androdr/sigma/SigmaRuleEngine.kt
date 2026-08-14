@@ -195,6 +195,14 @@ class SigmaRuleEngine @Inject constructor(
     /** Returns only rules that are enabled. Used internally by all evaluate* methods. */
     private fun effectiveRules(): List<SigmaRule> = getRules().filter { it.enabled }
 
+    /**
+     * Rules the CURRENT binary cannot evaluate (unresolvable ioc_lookup),
+     * over the full effective rule set, judged against the same iocLookups
+     * field evaluate() uses — single source, no observability drift.
+     */
+    fun unevaluableRules(): Map<String, String> =
+        SigmaRuleEvaluator.unevaluableRules(effectiveRules(), iocLookups)
+
     fun evaluateApps(telemetry: List<AppTelemetry>): List<Finding> {
         val records = telemetry.map { it.toFieldMap() }
         return SigmaRuleEvaluator.evaluate(effectiveRules(), records, "app_scanner", iocLookups, evidenceProviders)

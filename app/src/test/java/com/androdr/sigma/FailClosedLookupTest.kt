@@ -157,4 +157,14 @@ class FailClosedLookupTest {
         )
         assertTrue(SigmaRuleEvaluator.unevaluableRules(rules, allRegistered).isEmpty())
     }
+
+    @Test
+    fun `engine reports unevaluable rules over its effective set via its own lookups`() {
+        val engine = SigmaRuleEngine(io.mockk.mockk(relaxed = true))
+        engine.setRemoteRules(listOf(parse(migratedSideloadRule), parse(noLookupRule)))
+        engine.setIocLookups(emptyMap())
+        assertEquals(mapOf("androdr-010" to "trusted_installer_db"), engine.unevaluableRules())
+        engine.setIocLookups(allRegistered)
+        assertTrue(engine.unevaluableRules().isEmpty())
+    }
 }

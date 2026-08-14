@@ -7,6 +7,7 @@ import com.androdr.data.db.ForensicTimelineEventDao
 import com.androdr.data.db.toForensicTimelineEvent
 import com.androdr.data.model.ScanResult
 import com.androdr.data.model.ScannerFailure
+import com.androdr.data.model.UNREGISTERED_IOC_LOOKUP
 import com.androdr.data.repo.ScanRepository
 import com.androdr.ioc.IndicatorResolver
 import com.androdr.sigma.CveEvidenceProvider
@@ -205,6 +206,19 @@ class ScanOrchestrator @Inject constructor(
         ruleEngineInitialized = true
     }
 
+    /** Records one capability-skip entry per rule this binary cannot evaluate. */
+    private fun recordRuleCapabilitySkips(errors: MutableList<ScannerFailure>) {
+        sigmaRuleEngine.unevaluableRules().forEach { (ruleId, lookupName) ->
+            errors.add(
+                ScannerFailure(
+                    scanner = "ruleCapability",
+                    exception = UNREGISTERED_IOC_LOOKUP,
+                    message = "rule $ruleId not evaluated on this build: unregistered ioc_lookup '$lookupName'"
+                )
+            )
+        }
+    }
+
     /**
      * Runs a full device scan.
      *
@@ -231,6 +245,7 @@ class ScanOrchestrator @Inject constructor(
         // wrapper gives us mutex semantics with no extra boilerplate.
         val scannerErrors: MutableList<ScannerFailure> =
             Collections.synchronizedList(mutableListOf())
+        recordRuleCapabilitySkips(scannerErrors)
 
         // Initialize progress for phase 1 — 8 parallel scanners to track.
         _scanProgress.value = ScanProgress.Running(
@@ -449,6 +464,7 @@ class ScanOrchestrator @Inject constructor(
         //     is recorded as a scanner failure on the persisted ScanResult
         //     so the Dashboard partial-scan banner fires.
         val bugReportScannerErrors = mutableListOf<ScannerFailure>()
+        recordRuleCapabilitySkips(bugReportScannerErrors)
         val cacheAgeMs = System.currentTimeMillis() - lastAppTelemetryTimestamp
         val appTelemetry: List<com.androdr.data.model.AppTelemetry> =
             if (lastAppTelemetryTimestamp > 0L &&
