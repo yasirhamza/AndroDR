@@ -22,6 +22,7 @@ class IocLookupDefinitionsCrossCheckTest {
         "domain_ioc_db",
         "apk_hash_ioc_db",
         "known_good_app_db",
+        "trusted_installer_db",
     )
 
     private fun definitionsFile(): File {
@@ -70,6 +71,11 @@ class IocLookupDefinitionsCrossCheckTest {
         val failures = mutableListOf<String>()
 
         for ((name, def) in lookups) {
+            // Pure-emitter lookups (e.g. trusted_installer_db) are computed at
+            // runtime from an emitted field and are not backed by any ioc-data
+            // file, so they legitimately have no `files:` entry.
+            if (def["pure_emitter"] == true) continue
+
             @Suppress("UNCHECKED_CAST")
             val files = def["files"] as List<String>
             for (relPath in files) {

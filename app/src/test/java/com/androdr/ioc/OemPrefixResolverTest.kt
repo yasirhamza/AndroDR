@@ -27,6 +27,7 @@ class OemPrefixResolverTest {
     private val generic = DeviceIdentity(manufacturer = "google", brand = "google")
     private val realme = DeviceIdentity(manufacturer = "realme", brand = "realme")
     private val oneplus = DeviceIdentity(manufacturer = "oneplus", brand = "oneplus")
+    private val oppo = DeviceIdentity(manufacturer = "oppo", brand = "oppo")
 
     init {
         val context: Context = mockk(relaxed = true)
@@ -174,6 +175,20 @@ class OemPrefixResolverTest {
     fun `android prefix does not match androidmalware packages`() {
         assertFalse(resolver.isOemPrefix("androidmalware.evil.spy", generic))
         assertTrue(resolver.isOemPrefix("android.provider.contacts", generic))
+    }
+
+    @Test
+    fun `dropped non-store service installers are no longer trusted anywhere (#284)`() {
+        // Samsung device: the dropped Samsung-service entries are gone
+        assertFalse(resolver.isTrustedInstaller("com.samsung.android.scloud", samsung))
+        assertFalse(resolver.isTrustedInstaller("com.samsung.android.spay", samsung))
+        assertFalse(resolver.isTrustedInstaller("com.sec.android.app.sbrowser", samsung))
+        // OPPO device: coloros.safecenter gone
+        assertFalse(resolver.isTrustedInstaller("com.coloros.safecenter", oppo))
+        // Kept: real stores + updatecenter/watchmanager still trusted on Samsung
+        assertTrue(resolver.isTrustedInstaller("com.sec.android.app.samsungapps", samsung))
+        assertTrue(resolver.isTrustedInstaller("com.samsung.android.app.updatecenter", samsung))
+        assertTrue(resolver.isTrustedInstaller("com.samsung.android.app.watchmanager", samsung))
     }
 
     @Test

@@ -1,4 +1,4 @@
-version: "2026-08-08"
+version: "2026-08-12"
 description: "Known OEM, carrier, and chipset vendor package prefixes. Split into unconditional and device-conditional sections: conditional blocks only apply when the assessed device's manufacturer/brand matches the block's manufacturer_match / brand_match lists. This closes the prefix-spoofing attack from #90 where an attacker could hide malware under a foreign vendor's package namespace on a device that doesn't actually use that vendor. trusted_installers are likewise split into an unconditional list and per-block conditional lists, so this file isn't prefix-only (#280)."
 sources:
   - uad-list
@@ -124,10 +124,12 @@ conditional:
       - "com.sec.android.app.samsungapps" # Samsung Galaxy Store
       - "com.samsung.android.app.updatecenter"
       - "com.samsung.android.app.watchmanager"
-      - "com.samsung.android.scloud"
       - "com.samsung.android.themestore"
-      - "com.samsung.android.spay"
-      - "com.sec.android.app.sbrowser"
+    # Dropped per #284 audit (UAD-ng): com.samsung.android.scloud (Samsung
+    # Cloud), com.samsung.android.spay (Samsung Pay), and
+    # com.sec.android.app.sbrowser (Samsung Internet) are OEM-bundled
+    # services, not app-store installers — trusting installer identity
+    # against them fabricated a "trusted store" provenance no store backs.
     # partnership_prefixes intentionally omitted. Samsung-bundled partner apps
     # (Microsoft, Netflix, Facebook, Spotify, Booking, LinkedIn, etc.) are
     # classified via the known_good_apps.json database (UAD-ng Oem/Carrier/Misc
@@ -226,11 +228,12 @@ conditional:
       - "com.heytap."
       - "com.oplus."
       - "oplus"   # ColorOS ships a bare, dotless `oplus` package labelled "Android System" (observed on CPH2735/A5 5G, Android 15). It has FLAG_SYSTEM set but matches no com.* prefix, so androdr-015 reported it as an Unrecognized System App. Matching is startsWith, so this also covers `oplus.*` — an intra-vendor spoofing surface identical to the one every other prefix here already carries, and bounded to devices whose manufacturer/brand is actually OPPO (#90).
-    # Device-conditional store trust (#280): HeyTap Market / ColorOS Safe
-    # Center are only trusted as installer identity on an OPPO device.
+    # Device-conditional store trust (#280): HeyTap Market is only trusted
+    # as installer identity on an OPPO device.
     trusted_installers:
       - "com.heytap.market"
-      - "com.coloros.safecenter"
+    # com.coloros.safecenter dropped per #284 audit (UAD-ng): it's a ColorOS
+    # security utility, not an app-store installer.
 
   realme:
     manufacturer_match: ["realme"]
