@@ -53,6 +53,15 @@ import java.io.File
  * to this walk, and uncompilable `|re` patterns are constant-false at runtime —
  * both are gated by validate-rule.py's raw-YAML checks, tied to the bundled
  * set via BundledMirrorParityTest.
+ *
+ * Second, unrelated gate riding the same walk (#136 R1, spec B5): a detection
+ * base-field whose taxonomy `kind` is `judgment` (see
+ * `TaxonomyJudgmentCrossCheckTest`) may only be referenced by a rule id listed
+ * in `judgment-field-allowlist.yml`'s `delivered` list for that field — both
+ * surfaces this test walks (bundled res/raw and rules.txt) are "delivered" in
+ * that file's sense. `validate-rule.py` asserts the same allowlist on the
+ * rules-repo side; this is the independent AndroDR-side guard so neither can
+ * silently become the only one.
  */
 class DetectionFieldCrossCheckTest {
 
@@ -114,11 +123,72 @@ class DetectionFieldCrossCheckTest {
         return errors
     }
 
+    /**
+     * B5's judgment-field gate for a single matcher, split out of [checkRuleFile]
+     * purely to keep that function's length in bounds — same failure-message
+     * style, same [failures] sink.
+     */
+    private fun checkJudgmentFieldUsage(
+        file: File,
+        selName: String,
+        matcher: SigmaFieldMatcher,
+        ruleId: String,
+        fieldKind: String?,
+        judgmentAllowlist: Map<String, TestRuleRepo.JudgmentFieldAllowance>,
+        failures: MutableList<String>,
+    ) {
+        if (fieldKind != "judgment") return
+        val allowedIds = judgmentAllowlist[matcher.fieldName]?.delivered
+        if (allowedIds == null) {
+            failures += "${file.name}: selection '$selName' matches judgment field " +
+                "'${matcher.fieldName}' which has no entry at all in " +
+                "judgment-field-allowlist.yml — no rule may reference it until it is allowlisted"
+        } else if (ruleId !in allowedIds) {
+            failures += "${file.name}: selection '$selName' matches judgment field " +
+                "'${matcher.fieldName}' but rule id '$ruleId' is not in " +
+                "judgment-field-allowlist.yml's delivered list for that field " +
+                "(allowed: ${allowedIds.sorted()})"
+        }
+    }
+
+    /** Per-matcher checks (dead field, empty value list, B5's judgment-field gate),
+     *  split out of [checkRuleFile] purely to keep that function's length in bounds. */
+    private fun checkMatcher(
+        file: File,
+        selName: String,
+        matcher: SigmaFieldMatcher,
+        rule: SigmaRule,
+        service: TestRuleRepo.TaxonomyService,
+        judgmentAllowlist: Map<String, TestRuleRepo.JudgmentFieldAllowance>,
+        failures: MutableList<String>,
+    ) {
+        if (matcher.fieldName !in service.fields) {
+            failures += "${file.name}: selection '$selName' matches field " +
+                "'${matcher.fieldName}' which service '${rule.service}' does not " +
+                "provide — dead field (valid: ${service.fields.sorted()})"
+        }
+        if (matcher.values.isEmpty()) {
+            failures += "${file.name}: selection '$selName' field " +
+                "'${matcher.fieldName}' has an empty value list — constant-false " +
+                "matcher (vacuously TRUE for standalone |all)"
+        }
+        checkJudgmentFieldUsage(
+            file,
+            selName,
+            matcher,
+            rule.id,
+            service.fieldKinds[matcher.fieldName],
+            judgmentAllowlist,
+            failures,
+        )
+    }
+
     @Suppress("UNCHECKED_CAST", "ReturnCount")
     // Guard-clause early returns are clearer than nested branches for these parse/taxonomy failure paths.
     private fun checkRuleFile(
         file: File,
         taxonomy: Map<String, TestRuleRepo.TaxonomyService>,
+        judgmentAllowlist: Map<String, TestRuleRepo.JudgmentFieldAllowance>,
         failures: MutableList<String>,
     ) {
         val text = file.readText()
@@ -163,16 +233,7 @@ class DetectionFieldCrossCheckTest {
                 continue
             }
             for (matcher in selection.fieldMatchers) {
-                if (matcher.fieldName !in service.fields) {
-                    failures += "${file.name}: selection '$selName' matches field " +
-                        "'${matcher.fieldName}' which service '${rule.service}' does not " +
-                        "provide — dead field (valid: ${service.fields.sorted()})"
-                }
-                if (matcher.values.isEmpty()) {
-                    failures += "${file.name}: selection '$selName' field " +
-                        "'${matcher.fieldName}' has an empty value list — constant-false " +
-                        "matcher (vacuously TRUE for standalone |all)"
-                }
+                checkMatcher(file, selName, matcher, rule, service, judgmentAllowlist, failures)
             }
         }
 
@@ -183,11 +244,18 @@ class DetectionFieldCrossCheckTest {
     @Test
     fun `every bundled rule detection block is evaluable against the taxonomy`() {
         val taxonomy = TestRuleRepo.loadTaxonomy()
-        assumeTrue("submodule not checked out — skipping", taxonomy != null)
+        val judgmentAllowlist = TestRuleRepo.judgmentAllowlist()
+        assumeTrue(
+            "submodule not checked out — skipping",
+            taxonomy != null && judgmentAllowlist != null,
+        )
         requireNotNull(taxonomy)
+        requireNotNull(judgmentAllowlist)
 
         val failures = mutableListOf<String>()
-        TestRuleRepo.bundledRuleFiles().forEach { checkRuleFile(it, taxonomy, failures) }
+        TestRuleRepo.bundledRuleFiles().forEach {
+            checkRuleFile(it, taxonomy, judgmentAllowlist, failures)
+        }
         assertTrue(
             "Dead-rule gate (#268) failed for bundled rules:\n" +
                 failures.joinToString("\n") { "  - $it" },
@@ -199,12 +267,17 @@ class DetectionFieldCrossCheckTest {
     fun `every delivered rule detection block is evaluable against the taxonomy`() {
         val taxonomy = TestRuleRepo.loadTaxonomy()
         val delivered = TestRuleRepo.submoduleRuleFiles()
-        assumeTrue("submodule not checked out — skipping", taxonomy != null && delivered != null)
+        val judgmentAllowlist = TestRuleRepo.judgmentAllowlist()
+        assumeTrue(
+            "submodule not checked out — skipping",
+            taxonomy != null && delivered != null && judgmentAllowlist != null,
+        )
         requireNotNull(taxonomy)
         requireNotNull(delivered)
+        requireNotNull(judgmentAllowlist)
 
         val failures = mutableListOf<String>()
-        delivered.forEach { checkRuleFile(it, taxonomy, failures) }
+        delivered.forEach { checkRuleFile(it, taxonomy, judgmentAllowlist, failures) }
         assertTrue(
             "Dead-rule gate (#268) failed for rules.txt-delivered rules:\n" +
                 failures.joinToString("\n") { "  - $it" },

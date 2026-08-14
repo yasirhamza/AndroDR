@@ -44,6 +44,15 @@ internal object TestRuleRepo {
 
     private val yamlLoader = Load(LoadSettings.builder().build())
 
+    /**
+     * Strict loader for small frozen-set data files (severity-caps.yml,
+     * judgment-field-allowlist.yml): `setAllowDuplicateKeys(false)` so a
+     * duplicate top-level key (e.g. two `device_posture:` cap entries) fails
+     * loud instead of the second silently overwriting the first — the
+     * ioc-lookup-definitions.yml / IocLookupDefinitionsCrossCheckTest idiom.
+     */
+    private val strictYamlLoader = Load(LoadSettings.builder().setAllowDuplicateKeys(false).build())
+
     fun rulesDirectory(): File {
         val candidates = listOf(
             File("app/src/main/res/raw"),
@@ -107,8 +116,20 @@ internal object TestRuleRepo {
         return files
     }
 
-    /** One taxonomy service: its detection field names and lifecycle status. */
-    data class TaxonomyService(val fields: Set<String>, val status: String)
+    /**
+     * One taxonomy service: its detection field names, lifecycle status, and
+     * per-field `kind` (raw_fact/judgment — see logsource-taxonomy.yml's
+     * header). [fieldKinds] maps every name in [fields] to its raw YAML
+     * `kind` value, or null when the field entry has no `kind` key at all (or
+     * isn't a map) — validity of that value is a test concern
+     * ([TaxonomyJudgmentCrossCheckTest]), not a loader concern, so an
+     * unexpected/missing kind does NOT fail here.
+     */
+    data class TaxonomyService(
+        val fields: Set<String>,
+        val status: String,
+        val fieldKinds: Map<String, String?> = emptyMap(),
+    )
 
     /**
      * The pinned submodule's logsource taxonomy, or null when the submodule is
@@ -126,14 +147,17 @@ internal object TestRuleRepo {
         val services = doc["services"] as? Map<String, Map<String, Any?>>
             ?: error("logsource-taxonomy.yml has no services map")
         val parsed = services.mapValues { (name, entry) ->
-            val fields = (entry["fields"] as? Map<String, Any?>)?.keys
-            if (fields.isNullOrEmpty()) {
+            val fieldsRaw = entry["fields"] as? Map<String, Any?>
+            if (fieldsRaw.isNullOrEmpty()) {
                 error("taxonomy service '$name' lacks a non-empty fields map")
             }
             TaxonomyService(
-                fields = fields,
+                fields = fieldsRaw.keys,
                 status = entry["status"]?.toString()
                     ?: error("taxonomy service '$name' has no status"),
+                fieldKinds = fieldsRaw.mapValues { (_, fieldEntry) ->
+                    (fieldEntry as? Map<*, *>)?.get("kind")?.toString()
+                },
             )
         }
         assertTrue(
@@ -142,5 +166,59 @@ internal object TestRuleRepo {
             parsed.size >= MIN_TAXONOMY_SERVICES,
         )
         return parsed
+    }
+
+    /**
+     * Per-rule-category severity cap declared in `validation/severity-caps.yml`
+     * (#136 R1, spec B3), keyed by the YAML's own (unvalidated) category
+     * string — mapping that key to a real [RuleCategory] is
+     * [SeverityCapsCrossCheckTest]'s job, not this loader's, so an unknown key
+     * surfaces as a normal map entry rather than failing here. Null when the
+     * submodule is absent (assume-skip).
+     */
+    @Suppress("UNCHECKED_CAST")
+    fun severityCaps(): Map<String, String>? {
+        val root = submoduleRoot() ?: return null
+        val file = File(root, "validation/severity-caps.yml")
+        assertTrue("Submodule present but severity-caps.yml missing: ${file.path}", file.isFile)
+        val doc = strictYamlLoader.loadFromString(file.readText()) as? Map<String, Any?>
+            ?: error("severity-caps.yml did not parse to a map")
+        val caps = doc["caps"] as? Map<String, Any?>
+            ?: error("severity-caps.yml has no 'caps' map")
+        return caps.mapValues { (key, value) ->
+            value?.toString() ?: error("severity-caps.yml cap for '$key' is null")
+        }
+    }
+
+    /** One judgment field's allowed rule ids, split by delivery lifecycle. */
+    data class JudgmentFieldAllowance(val delivered: Set<String>, val staging: Set<String>)
+
+    /**
+     * `validation/judgment-field-allowlist.yml`'s `allowed` map (#136 R1, spec
+     * B5): field name → the rule ids permitted to reference it, split into
+     * `delivered` (res/raw + rules.txt) and `staging`. The TOP-LEVEL KEYS of
+     * this map are the frozen judgment-field set — see the YAML's own header
+     * and [TaxonomyJudgmentCrossCheckTest]. Null when the submodule is absent
+     * (assume-skip).
+     */
+    @Suppress("UNCHECKED_CAST")
+    fun judgmentAllowlist(): Map<String, JudgmentFieldAllowance>? {
+        val root = submoduleRoot() ?: return null
+        val file = File(root, "validation/judgment-field-allowlist.yml")
+        assertTrue(
+            "Submodule present but judgment-field-allowlist.yml missing: ${file.path}",
+            file.isFile,
+        )
+        val doc = strictYamlLoader.loadFromString(file.readText()) as? Map<String, Any?>
+            ?: error("judgment-field-allowlist.yml did not parse to a map")
+        val allowed = doc["allowed"] as? Map<String, Map<String, Any?>>
+            ?: error("judgment-field-allowlist.yml has no 'allowed' map")
+        return allowed.mapValues { (field, entry) ->
+            val delivered = (entry["delivered"] as? List<*>)?.map { it.toString() }?.toSet()
+                ?: error("judgment-field-allowlist.yml field '$field' has no 'delivered' list")
+            val staging = (entry["staging"] as? List<*>)?.map { it.toString() }?.toSet()
+                ?: error("judgment-field-allowlist.yml field '$field' has no 'staging' list")
+            JudgmentFieldAllowance(delivered = delivered, staging = staging)
+        }
     }
 }
