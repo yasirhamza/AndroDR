@@ -7,6 +7,7 @@ import com.androdr.data.db.ForensicTimelineEventDao
 import com.androdr.data.db.toForensicTimelineEvent
 import com.androdr.data.model.ScanResult
 import com.androdr.data.model.ScannerFailure
+import com.androdr.data.model.UNREGISTERED_IOC_LOOKUP
 import com.androdr.data.repo.ScanRepository
 import com.androdr.ioc.IndicatorResolver
 import com.androdr.sigma.CveEvidenceProvider
@@ -206,6 +207,32 @@ class ScanOrchestrator @Inject constructor(
     }
 
     /**
+     * Records one capability-skip entry per rule this binary cannot evaluate.
+     *
+     * The lookup name is FEED-CONTROLLED (it is whatever string the rule YAML
+     * put after `|ioc_lookup:`, and rules are fetched from the network), and
+     * this message is rendered verbatim into the exported report, so it is
+     * sanitized before interpolation: non-printable / non-ASCII characters are
+     * dropped so a name carrying newlines cannot forge report lines, and the
+     * remainder is truncated to [MAX_LOOKUP_NAME_CHARS] so it cannot flood the
+     * report. The rule id is parser-bounded (`androdr-\d+`-shaped, validated
+     * upstream) and is kept raw so it stays greppable.
+     */
+    private fun recordRuleCapabilitySkips(errors: MutableList<ScannerFailure>) {
+        sigmaRuleEngine.unevaluableRules().forEach { (ruleId, lookupName) ->
+            val safeName = sanitizeLookupName(lookupName)
+            errors.add(
+                ScannerFailure(
+                    scanner = "ruleCapability",
+                    exception = UNREGISTERED_IOC_LOOKUP,
+                    message = "rule $ruleId not evaluated on this build: unregistered ioc_lookup '$safeName'",
+                    ruleId = ruleId
+                )
+            )
+        }
+    }
+
+    /**
      * Runs a full device scan.
      *
      * [AppScanner.collectTelemetry] and [DeviceAuditor.collectTelemetry] execute concurrently on the IO dispatcher
@@ -231,6 +258,7 @@ class ScanOrchestrator @Inject constructor(
         // wrapper gives us mutex semantics with no extra boilerplate.
         val scannerErrors: MutableList<ScannerFailure> =
             Collections.synchronizedList(mutableListOf())
+        recordRuleCapabilitySkips(scannerErrors)
 
         // Initialize progress for phase 1 — 8 parallel scanners to track.
         _scanProgress.value = ScanProgress.Running(
@@ -449,6 +477,7 @@ class ScanOrchestrator @Inject constructor(
         //     is recorded as a scanner failure on the persisted ScanResult
         //     so the Dashboard partial-scan banner fires.
         val bugReportScannerErrors = mutableListOf<ScannerFailure>()
+        recordRuleCapabilitySkips(bugReportScannerErrors)
         val cacheAgeMs = System.currentTimeMillis() - lastAppTelemetryTimestamp
         val appTelemetry: List<com.androdr.data.model.AppTelemetry> =
             if (lastAppTelemetryTimestamp > 0L &&
@@ -567,11 +596,38 @@ class ScanOrchestrator @Inject constructor(
     /**
      * Computes a diff between two [ScanResult] snapshots.
      *
+     * PURE: the answer depends only on the two arguments. The set of rules that
+     * could not be evaluated is read from [newer]'s own persisted
+     * capability-skip entries ([UNREGISTERED_IOC_LOOKUP] failures, each
+     * carrying its [ScannerFailure.ruleId]) rather than from the live engine,
+     * so a diff computed at cold start — before any scan has run in this
+     * process, i.e. before the engine knows its own lookup registrations — is
+     * identical to one computed mid-session, and a History diff between two old
+     * scans reflects what *those* scans could evaluate rather than what this
+     * process can evaluate right now.
+     *
+     * A rule that triggered in [older] but was skipped during [newer] — rather
+     * than genuinely un-triggered — must NOT surface as "resolved": rendering a
+     * skipped CRITICAL as resolved is affirmative false reassurance, worse than
+     * a silent miss.
+     *
+     * Backward-compatibility limit: capability-skip rows persisted before
+     * [ScannerFailure.ruleId] existed carry no rule id, so they contribute
+     * nothing to the skip set and a rule skipped in such a scan can still read
+     * as resolved. Only scans written by an older binary are affected.
+     *
      * @param newer The more recent scan result.
      * @param older The earlier scan result used as the baseline.
      * @return A [ScanDiff] describing what changed between the two scans.
      */
-    fun computeDiff(newer: ScanResult, older: ScanResult): ScanDiff {
+    fun computeDiff(
+        newer: ScanResult,
+        older: ScanResult
+    ): ScanDiff {
+        val skippedRuleIds = newer.scannerErrors
+            .filter { it.exception == UNREGISTERED_IOC_LOOKUP }
+            .mapNotNull { it.ruleId }
+            .toSet()
         val olderTriggeredIds = older.findings
             .filter { it.triggered }
             .map { it.ruleId }
@@ -582,7 +638,9 @@ class ScanOrchestrator @Inject constructor(
             .toSet()
 
         val newFindings = newer.findings.filter { it.triggered && it.ruleId !in olderTriggeredIds }
-        val resolvedFindings = older.findings.filter { it.triggered && it.ruleId !in newerTriggeredIds }
+        val resolvedFindings = older.findings.filter {
+            it.triggered && it.ruleId !in newerTriggeredIds && it.ruleId !in skippedRuleIds
+        }
 
         return ScanDiff(
             newFindings      = newFindings,
@@ -603,6 +661,24 @@ class ScanOrchestrator @Inject constructor(
 
     companion object {
         private const val TAG = "ScanOrchestrator"
+
+        /**
+         * Cap on the feed-controlled `ioc_lookup` name echoed into a
+         * capability-skip message. Real names are short snake_case identifiers
+         * (`trusted_installer_db` is 20 chars), so this is generous while still
+         * bounding a hostile rule's contribution to one report line.
+         */
+        private const val MAX_LOOKUP_NAME_CHARS = 64
+
+        /**
+         * Reduces a feed-controlled lookup name to printable ASCII, then caps
+         * its length. Printable-ASCII-only is not cosmetic: the report is
+         * strictly ASCII (enforced by ReportFormatterTest) and is rendered
+         * line-per-entry, so a name containing CR/LF could otherwise inject
+         * lines that read as additional report content.
+         */
+        private fun sanitizeLookupName(name: String): String =
+            name.filter { it in ' '..'~' }.take(MAX_LOOKUP_NAME_CHARS)
 
         /**
          * Number of parallel scanners tracked by the progress indicator.

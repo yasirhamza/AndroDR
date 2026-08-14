@@ -46,6 +46,17 @@ data class Finding(
  */
 object SigmaRuleEvaluator {
 
+    /**
+     * Sentinel for an IOC_LOOKUP matcher that names no lookup at all.
+     *
+     * Public because it is part of [unevaluableRules]' return contract: callers
+     * receive it as a map VALUE and may need to distinguish "the rule named a
+     * lookup this build does not register" from "the rule named nothing at
+     * all". Kept a constant rather than a magic string so no caller has to
+     * hardcode the wording.
+     */
+    const val MISSING_LOOKUP_NAME = "(missing lookup name)"
+
     private val regexCache = java.util.concurrent.ConcurrentHashMap<String, Regex>()
     private val invalidPatterns = java.util.Collections.newSetFromMap(
         java.util.concurrent.ConcurrentHashMap<String, Boolean>()
@@ -93,6 +104,33 @@ object SigmaRuleEvaluator {
         }
     }
 
+    /**
+     * Rules this binary cannot faithfully evaluate: any detection matcher is an
+     * ioc_lookup whose name is unregistered — or missing/blank entirely.
+     * Returns ruleId → offending name (or [MISSING_LOOKUP_NAME]). evaluate()
+     * SKIPS these rules whole (fail-closed): the legacy matcher-false fallback
+     * inverts negated gates (#136 Phase-2 over-fire) and silently defeats
+     * filter exemptions. Must stay in lockstep with the IOC_LOOKUP branch below.
+     */
+    fun unevaluableRules(
+        rules: List<SigmaRule>,
+        iocLookups: Map<String, (Any) -> Boolean>
+    ): Map<String, String> {
+        val result = mutableMapOf<String, String>()
+        for (rule in rules) {
+            val offending = rule.detection.selections.values.asSequence()
+                .flatMap { it.fieldMatchers.asSequence() }
+                .filter { it.modifier == SigmaModifier.IOC_LOOKUP }
+                .map { m ->
+                    m.values.firstOrNull()?.toString()?.takeIf { it.isNotBlank() }
+                        ?: MISSING_LOOKUP_NAME
+                }
+                .firstOrNull { it == MISSING_LOOKUP_NAME || it !in iocLookups }
+            if (offending != null) result[rule.id] = offending
+        }
+        return result
+    }
+
     fun evaluate(
         rules: List<SigmaRule>,
         records: List<Map<String, Any?>>,
@@ -101,9 +139,12 @@ object SigmaRuleEvaluator {
         evidenceProviders: Map<String, EvidenceProvider> = emptyMap()
     ): List<Finding> {
         val matchingRules = rules.filter { it.service == service }
+        val skipped = unevaluableRules(matchingRules, iocLookups).keys
+        val evaluableRules = if (skipped.isEmpty()) matchingRules
+        else matchingRules.filter { it.id !in skipped }
         val findings = mutableListOf<Finding>()
         for (record in records) {
-            for (rule in matchingRules) {
+            for (rule in evaluableRules) {
                 val matched = evaluateCondition(rule.detection, record, iocLookups)
                 val category = parseCategory(rule.display.category)
                 if (matched) {

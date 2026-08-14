@@ -1,6 +1,8 @@
 package com.androdr.reporting
 
 import com.androdr.data.model.ScanResult
+import com.androdr.data.model.ScannerFailure
+import com.androdr.data.model.UNREGISTERED_IOC_LOOKUP
 import com.androdr.sigma.Finding
 import com.androdr.sigma.FindingCategory
 import org.junit.Assert.assertEquals
@@ -14,14 +16,16 @@ class ReportFormatterTest {
         appRisks: List<Finding> = emptyList(),
         deviceFlags: List<Finding> = emptyList(),
         knownMalwareCount: Int = 0,
-        riskySideloadCount: Int = 0
+        riskySideloadCount: Int = 0,
+        scannerErrors: List<ScannerFailure> = emptyList()
     ): ScanResult = ScanResult(
         id = 1L,
         timestamp = 1711900800000,
         findings = deviceFlags + appRisks,
         bugReportFindings = emptyList(),
         riskySideloadCount = riskySideloadCount,
-        knownMalwareCount = knownMalwareCount
+        knownMalwareCount = knownMalwareCount,
+        scannerErrors = scannerErrors
     )
 
     private val cleanScan = buildScan()
@@ -260,5 +264,49 @@ class ReportFormatterTest {
         val scan = buildScan(appRisks = listOf(orphan))
         val text = ReportFormatter.formatScanReport(scan, emptyList(), emptyList(), versionName = "test")
         assertFalse("No Flags line expected when no implies_flags", text.contains("Flags   :"))
+    }
+
+    // -- Rule capability skips (#136 R1, Task 2) -------------------------------
+
+    private val capabilitySkip = ScannerFailure(
+        scanner = "ruleCapability",
+        exception = UNREGISTERED_IOC_LOOKUP,
+        message = "rule androdr-010 not evaluated on this build: unregistered ioc_lookup 'trusted_installer_db'"
+    )
+
+    private val realScannerFailure = ScannerFailure(
+        scanner = "appScanner",
+        exception = "IllegalStateException",
+        message = "boom"
+    )
+
+    @Test
+    fun `capability skip renders its own section, not a partial-scan alarm`() {
+        val scan = buildScan(scannerErrors = listOf(capabilitySkip))
+        val text = ReportFormatter.formatScanReport(scan, emptyList(), emptyList(), versionName = "test")
+        assertTrue(
+            "Capability skip section header must appear",
+            text.contains("RULES NOT EVALUATED ON THIS BUILD")
+        )
+        assertTrue(
+            "Capability skip message must appear",
+            text.contains(
+                "rule androdr-010 not evaluated on this build: " +
+                    "unregistered ioc_lookup 'trusted_installer_db'"
+            )
+        )
+        assertFalse("Capability skip must not mark the scan partial", scan.isPartialScan)
+    }
+
+    @Test
+    fun `real scanner failure marks the scan partial`() {
+        val scan = buildScan(scannerErrors = listOf(realScannerFailure))
+        assertTrue("A real scanner failure must mark the scan partial", scan.isPartialScan)
+    }
+
+    @Test
+    fun `no capability skip section when there are no skips`() {
+        val text = ReportFormatter.formatScanReport(cleanScan, emptyList(), emptyList(), versionName = "test")
+        assertFalse(text.contains("RULES NOT EVALUATED ON THIS BUILD"))
     }
 }

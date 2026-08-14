@@ -44,6 +44,15 @@ internal object TestRuleRepo {
 
     private val yamlLoader = Load(LoadSettings.builder().build())
 
+    /**
+     * Strict loader for small frozen-set data files (severity-caps.yml,
+     * judgment-field-allowlist.yml): `setAllowDuplicateKeys(false)` so a
+     * duplicate top-level key (e.g. two `device_posture:` cap entries) fails
+     * loud instead of the second silently overwriting the first — the
+     * ioc-lookup-definitions.yml / IocLookupDefinitionsCrossCheckTest idiom.
+     */
+    private val strictYamlLoader = Load(LoadSettings.builder().setAllowDuplicateKeys(false).build())
+
     fun rulesDirectory(): File {
         val candidates = listOf(
             File("app/src/main/res/raw"),
@@ -53,6 +62,111 @@ internal object TestRuleRepo {
         return candidates.firstOrNull { it.isDirectory }
             ?: error("Could not locate res/raw; tried: ${candidates.map { it.absolutePath }}")
     }
+
+    /**
+     * Root of the `main` Kotlin source set, for the source-scanning gates
+     * ([PureEmitterContractTest], [IocLookupDefinitionsCrossCheckTest]) that
+     * assert properties of production code rather than of rules. Same
+     * candidate-path convention as [rulesDirectory], and fails loud for the
+     * same reason: a source-scan gate that cannot find the sources would pass
+     * vacuously, which is worse than no gate at all.
+     *
+     * Note this deliberately covers ONLY `src/main` — the `debug` source set is
+     * not shipped in a release build and is out of these gates' scope.
+     */
+    fun mainSourceRoot(): File {
+        val candidates = listOf(
+            File("app/src/main/java"),
+            File("src/main/java"),
+            File("/home/yasir/AndroDR/app/src/main/java"),
+        )
+        return candidates.firstOrNull { it.isDirectory }
+            ?: error("Could not locate main source root; tried: ${candidates.map { it.absolutePath }}")
+    }
+
+    /**
+     * One production source file under [mainSourceRoot], by its package-relative
+     * path (e.g. `com/androdr/scanner/ScanOrchestrator.kt`). Fails loud when the
+     * file has moved: a source-scan gate whose target vanished must not silently
+     * scan nothing.
+     */
+    fun mainSourceFile(relativePath: String): File {
+        val file = File(mainSourceRoot(), relativePath)
+        assertTrue(
+            "Expected production source at ${file.absolutePath} — moved or renamed? " +
+                "A source-scanning gate cannot be allowed to pass vacuously.",
+            file.isFile,
+        )
+        return file
+    }
+
+    /**
+     * Kotlin source with comments removed, so a source-scanning gate can match
+     * across newlines without KDoc/prose false positives — and so a comment
+     * cannot be used as a hiding place. Shared by
+     * [PureEmitterContractTest] (whole-file `Finding(` / `.copy(level =` scan)
+     * and [IocLookupDefinitionsCrossCheckTest] (paren-balanced extraction of the
+     * `setIocLookups(mapOf(...))` block); its behavior is pinned by
+     * PureEmitterContractTest's stripper self-test.
+     *
+     * String and character literals are preserved VERBATIM: a `//` inside
+     * `"https://…"` is not a comment, and some gates need to match literal
+     * content (e.g. field-map keys, registered lookup names). Nested block
+     * comments are handled — Kotlin allows them. Newlines inside stripped
+     * comments are preserved so offsets stay roughly line-aligned.
+     */
+    @Suppress("CyclomaticComplexMethod", "NestedBlockDepth", "LoopWithTooManyJumpStatements")
+    fun stripKotlinComments(source: String): String {
+        val out = StringBuilder(source.length)
+        var i = 0
+        var blockDepth = 0
+        while (i < source.length) {
+            val c = source[i]
+            val next = if (i + 1 < source.length) source[i + 1] else ' '
+            when {
+                blockDepth > 0 -> when {
+                    c == '/' && next == '*' -> { blockDepth++; i += 2 }
+                    c == '*' && next == '/' -> { blockDepth--; i += 2 }
+                    else -> {
+                        // Keep newlines so stripped comments don't collapse lines.
+                        if (c == '\n') {
+                            out.append('\n')
+                        }
+                        i++
+                    }
+                }
+                c == '/' && next == '/' -> while (i < source.length && source[i] != '\n') i++
+                c == '/' && next == '*' -> { blockDepth = 1; i += 2 }
+                source.startsWith(TRIPLE_QUOTE, i) -> {
+                    val end = source.indexOf(TRIPLE_QUOTE, i + TRIPLE_QUOTE.length)
+                    val stop = if (end < 0) source.length else end + TRIPLE_QUOTE.length
+                    out.append(source, i, stop)
+                    i = stop
+                }
+                c == '"' || c == '\'' -> i = copyLiteral(source, i, c, out)
+                else -> { out.append(c); i++ }
+            }
+        }
+        return out.toString()
+    }
+
+    /** Copies one quoted literal verbatim; returns the index just past it. */
+    private fun copyLiteral(source: String, start: Int, quote: Char, out: StringBuilder): Int {
+        var i = start
+        out.append(source[i]); i++
+        while (i < source.length) {
+            val ch = source[i]
+            out.append(ch); i++
+            if (ch == '\\' && i < source.length) {
+                out.append(source[i]); i++
+            } else if (ch == quote || ch == '\n') {
+                break
+            }
+        }
+        return i
+    }
+
+    private const val TRIPLE_QUOTE = "\"\"\""
 
     /**
      * Bundled non-correlation rule files. Correlation rules are excluded by the
@@ -107,8 +221,20 @@ internal object TestRuleRepo {
         return files
     }
 
-    /** One taxonomy service: its detection field names and lifecycle status. */
-    data class TaxonomyService(val fields: Set<String>, val status: String)
+    /**
+     * One taxonomy service: its detection field names, lifecycle status, and
+     * per-field `kind` (raw_fact/judgment — see logsource-taxonomy.yml's
+     * header). [fieldKinds] maps every name in [fields] to its raw YAML
+     * `kind` value, or null when the field entry has no `kind` key at all (or
+     * isn't a map) — validity of that value is a test concern
+     * ([TaxonomyJudgmentCrossCheckTest]), not a loader concern, so an
+     * unexpected/missing kind does NOT fail here.
+     */
+    data class TaxonomyService(
+        val fields: Set<String>,
+        val status: String,
+        val fieldKinds: Map<String, String?> = emptyMap(),
+    )
 
     /**
      * The pinned submodule's logsource taxonomy, or null when the submodule is
@@ -126,14 +252,17 @@ internal object TestRuleRepo {
         val services = doc["services"] as? Map<String, Map<String, Any?>>
             ?: error("logsource-taxonomy.yml has no services map")
         val parsed = services.mapValues { (name, entry) ->
-            val fields = (entry["fields"] as? Map<String, Any?>)?.keys
-            if (fields.isNullOrEmpty()) {
+            val fieldsRaw = entry["fields"] as? Map<String, Any?>
+            if (fieldsRaw.isNullOrEmpty()) {
                 error("taxonomy service '$name' lacks a non-empty fields map")
             }
             TaxonomyService(
-                fields = fields,
+                fields = fieldsRaw.keys,
                 status = entry["status"]?.toString()
                     ?: error("taxonomy service '$name' has no status"),
+                fieldKinds = fieldsRaw.mapValues { (_, fieldEntry) ->
+                    (fieldEntry as? Map<*, *>)?.get("kind")?.toString()
+                },
             )
         }
         assertTrue(
@@ -142,5 +271,59 @@ internal object TestRuleRepo {
             parsed.size >= MIN_TAXONOMY_SERVICES,
         )
         return parsed
+    }
+
+    /**
+     * Per-rule-category severity cap declared in `validation/severity-caps.yml`
+     * (#136 R1, spec B3), keyed by the YAML's own (unvalidated) category
+     * string — mapping that key to a real [RuleCategory] is
+     * [SeverityCapsCrossCheckTest]'s job, not this loader's, so an unknown key
+     * surfaces as a normal map entry rather than failing here. Null when the
+     * submodule is absent (assume-skip).
+     */
+    @Suppress("UNCHECKED_CAST")
+    fun severityCaps(): Map<String, String>? {
+        val root = submoduleRoot() ?: return null
+        val file = File(root, "validation/severity-caps.yml")
+        assertTrue("Submodule present but severity-caps.yml missing: ${file.path}", file.isFile)
+        val doc = strictYamlLoader.loadFromString(file.readText()) as? Map<String, Any?>
+            ?: error("severity-caps.yml did not parse to a map")
+        val caps = doc["caps"] as? Map<String, Any?>
+            ?: error("severity-caps.yml has no 'caps' map")
+        return caps.mapValues { (key, value) ->
+            value?.toString() ?: error("severity-caps.yml cap for '$key' is null")
+        }
+    }
+
+    /** One judgment field's allowed rule ids, split by delivery lifecycle. */
+    data class JudgmentFieldAllowance(val delivered: Set<String>, val staging: Set<String>)
+
+    /**
+     * `validation/judgment-field-allowlist.yml`'s `allowed` map (#136 R1, spec
+     * B5): field name → the rule ids permitted to reference it, split into
+     * `delivered` (res/raw + rules.txt) and `staging`. The TOP-LEVEL KEYS of
+     * this map are the frozen judgment-field set — see the YAML's own header
+     * and [TaxonomyJudgmentCrossCheckTest]. Null when the submodule is absent
+     * (assume-skip).
+     */
+    @Suppress("UNCHECKED_CAST")
+    fun judgmentAllowlist(): Map<String, JudgmentFieldAllowance>? {
+        val root = submoduleRoot() ?: return null
+        val file = File(root, "validation/judgment-field-allowlist.yml")
+        assertTrue(
+            "Submodule present but judgment-field-allowlist.yml missing: ${file.path}",
+            file.isFile,
+        )
+        val doc = strictYamlLoader.loadFromString(file.readText()) as? Map<String, Any?>
+            ?: error("judgment-field-allowlist.yml did not parse to a map")
+        val allowed = doc["allowed"] as? Map<String, Map<String, Any?>>
+            ?: error("judgment-field-allowlist.yml has no 'allowed' map")
+        return allowed.mapValues { (field, entry) ->
+            val delivered = (entry["delivered"] as? List<*>)?.map { it.toString() }?.toSet()
+                ?: error("judgment-field-allowlist.yml field '$field' has no 'delivered' list")
+            val staging = (entry["staging"] as? List<*>)?.map { it.toString() }?.toSet()
+                ?: error("judgment-field-allowlist.yml field '$field' has no 'staging' list")
+            JudgmentFieldAllowance(delivered = delivered, staging = staging)
+        }
     }
 }

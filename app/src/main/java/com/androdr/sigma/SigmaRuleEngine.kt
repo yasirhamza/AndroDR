@@ -112,12 +112,20 @@ class SigmaRuleEngine @Inject constructor(
      * level == "informational" that have a single `selection` with a `category`
      * equals matcher. Used by [SigmaCorrelationEngine] to bind raw timeline
      * events to the atom rule IDs referenced by correlation rules.
+     *
+     * Atom rules whose id is in [unevaluableRules] (unresolvable `ioc_lookup`,
+     * judged against this engine's own [iocLookups] — the same source
+     * [evaluate]-family methods use) are excluded: fail-closed applies to the
+     * binding path too, so a rule this binary cannot faithfully evaluate must
+     * not silently bind timeline events into correlations either.
      */
     fun computeAtomBindings(events: List<ForensicTimelineEvent>): Map<Long, Set<String>> {
+        val skippedRuleIds = unevaluableRules().keys
         val atomCategoryByRuleId: Map<String, String> = rules
             .asSequence()
             .filter { it.enabled }
             .filter { it.level == "informational" }
+            .filter { it.id !in skippedRuleIds }
             .mapNotNull { rule ->
                 val cat = extractAtomCategory(rule) ?: return@mapNotNull null
                 rule.id to cat
@@ -194,6 +202,14 @@ class SigmaRuleEngine @Inject constructor(
 
     /** Returns only rules that are enabled. Used internally by all evaluate* methods. */
     private fun effectiveRules(): List<SigmaRule> = getRules().filter { it.enabled }
+
+    /**
+     * Rules the CURRENT binary cannot evaluate (unresolvable ioc_lookup),
+     * over the full effective rule set, judged against the same iocLookups
+     * field evaluate() uses — single source, no observability drift.
+     */
+    fun unevaluableRules(): Map<String, String> =
+        SigmaRuleEvaluator.unevaluableRules(effectiveRules(), iocLookups)
 
     fun evaluateApps(telemetry: List<AppTelemetry>): List<Finding> {
         val records = telemetry.map { it.toFieldMap() }
