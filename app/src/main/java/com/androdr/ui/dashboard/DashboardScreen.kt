@@ -56,7 +56,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.androdr.R
 import com.androdr.data.model.RiskLevel
 import com.androdr.data.model.ScanResult
-import com.androdr.data.model.UNREGISTERED_IOC_LOOKUP
 import com.androdr.scanner.ScanProgress
 import com.androdr.ui.theme.androdrColors
 import java.text.SimpleDateFormat
@@ -598,7 +597,7 @@ private fun PartialScanBanner(scan: ScanResult) {
                 Text(
                     text = stringResource(
                         R.string.partial_scan_banner_body,
-                        scan.scannerErrors.count { it.exception != UNREGISTERED_IOC_LOOKUP }
+                        scan.realFailureCount
                     ),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurface

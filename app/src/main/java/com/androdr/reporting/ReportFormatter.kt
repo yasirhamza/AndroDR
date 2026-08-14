@@ -76,6 +76,9 @@ object ReportFormatter {
             section("FINDINGS SECTION")
             appendFindingsSections(scan, dnsEvents, appInventory, displayNames)
 
+            // Intentionally inside the includeFindings branch: a capability skip is a
+            // caveat ON the findings ("this list is missing these rules"), so it rides
+            // the same flag — a telemetry-only export has no findings list to caveat.
             val capabilitySkips = scan.scannerErrors.filter { it.exception == UNREGISTERED_IOC_LOOKUP }
             if (capabilitySkips.isNotEmpty()) {
                 appendLine()

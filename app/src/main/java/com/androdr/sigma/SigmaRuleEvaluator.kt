@@ -46,8 +46,16 @@ data class Finding(
  */
 object SigmaRuleEvaluator {
 
-    /** Sentinel for an IOC_LOOKUP matcher that names no lookup at all. */
-    internal const val MISSING_LOOKUP_NAME = "(missing lookup name)"
+    /**
+     * Sentinel for an IOC_LOOKUP matcher that names no lookup at all.
+     *
+     * Public because it is part of [unevaluableRules]' return contract: callers
+     * receive it as a map VALUE and may need to distinguish "the rule named a
+     * lookup this build does not register" from "the rule named nothing at
+     * all". Kept a constant rather than a magic string so no caller has to
+     * hardcode the wording.
+     */
+    const val MISSING_LOOKUP_NAME = "(missing lookup name)"
 
     private val regexCache = java.util.concurrent.ConcurrentHashMap<String, Regex>()
     private val invalidPatterns = java.util.Collections.newSetFromMap(

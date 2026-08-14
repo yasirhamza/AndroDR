@@ -45,13 +45,19 @@ class HistoryViewModel @Inject constructor(
      * The diff between [selectedScan] and the scan that immediately preceded it
      * in the history list (i.e. the next oldest entry). Null when no scan is
      * selected or the selected scan has no predecessor.
+     *
+     * [allScans] is newest-first (`ORDER BY timestamp DESC`), so `idx + 1` is
+     * the OLDER neighbour and the selected scan is the newer one:
+     * [ScanOrchestrator.computeDiff] takes `(newer, older)` in that order.
+     * Passing them the other way round silently inverts the whole section —
+     * new risks render as resolved and resolved risks as new.
      */
     val selectedDiff: StateFlow<ScanOrchestrator.ScanDiff?> =
         combine(allScans, _selectedScan) { scans, selected ->
             if (selected == null) return@combine null
             val idx = scans.indexOfFirst { it.id == selected.id }
             val predecessor = scans.getOrNull(idx + 1) ?: return@combine null
-            orchestrator.computeDiff(predecessor, selected)
+            orchestrator.computeDiff(selected, predecessor)
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
     /** Emits a [Uri] when a report is ready to share; null when idle or after consumption. */

@@ -206,14 +206,27 @@ class ScanOrchestrator @Inject constructor(
         ruleEngineInitialized = true
     }
 
-    /** Records one capability-skip entry per rule this binary cannot evaluate. */
+    /**
+     * Records one capability-skip entry per rule this binary cannot evaluate.
+     *
+     * The lookup name is FEED-CONTROLLED (it is whatever string the rule YAML
+     * put after `|ioc_lookup:`, and rules are fetched from the network), and
+     * this message is rendered verbatim into the exported report, so it is
+     * sanitized before interpolation: non-printable / non-ASCII characters are
+     * dropped so a name carrying newlines cannot forge report lines, and the
+     * remainder is truncated to [MAX_LOOKUP_NAME_CHARS] so it cannot flood the
+     * report. The rule id is parser-bounded (`androdr-\d+`-shaped, validated
+     * upstream) and is kept raw so it stays greppable.
+     */
     private fun recordRuleCapabilitySkips(errors: MutableList<ScannerFailure>) {
         sigmaRuleEngine.unevaluableRules().forEach { (ruleId, lookupName) ->
+            val safeName = sanitizeLookupName(lookupName)
             errors.add(
                 ScannerFailure(
                     scanner = "ruleCapability",
                     exception = UNREGISTERED_IOC_LOOKUP,
-                    message = "rule $ruleId not evaluated on this build: unregistered ioc_lookup '$lookupName'"
+                    message = "rule $ruleId not evaluated on this build: unregistered ioc_lookup '$safeName'",
+                    ruleId = ruleId
                 )
             )
         }
@@ -583,23 +596,38 @@ class ScanOrchestrator @Inject constructor(
     /**
      * Computes a diff between two [ScanResult] snapshots.
      *
+     * PURE: the answer depends only on the two arguments. The set of rules that
+     * could not be evaluated is read from [newer]'s own persisted
+     * capability-skip entries ([UNREGISTERED_IOC_LOOKUP] failures, each
+     * carrying its [ScannerFailure.ruleId]) rather than from the live engine,
+     * so a diff computed at cold start — before any scan has run in this
+     * process, i.e. before the engine knows its own lookup registrations — is
+     * identical to one computed mid-session, and a History diff between two old
+     * scans reflects what *those* scans could evaluate rather than what this
+     * process can evaluate right now.
+     *
+     * A rule that triggered in [older] but was skipped during [newer] — rather
+     * than genuinely un-triggered — must NOT surface as "resolved": rendering a
+     * skipped CRITICAL as resolved is affirmative false reassurance, worse than
+     * a silent miss.
+     *
+     * Backward-compatibility limit: capability-skip rows persisted before
+     * [ScannerFailure.ruleId] existed carry no rule id, so they contribute
+     * nothing to the skip set and a rule skipped in such a scan can still read
+     * as resolved. Only scans written by an older binary are affected.
+     *
      * @param newer The more recent scan result.
      * @param older The earlier scan result used as the baseline.
-     * @param skippedRuleIds Rule IDs this binary currently cannot evaluate
-     *   (unresolvable `ioc_lookup`). Defaults to the engine's own live view
-     *   ([SigmaRuleEngine.unevaluableRules]) so production callers get the
-     *   fail-closed behavior for free; tests may override it directly.
-     *   A rule that triggered in [older] but is now skipped — rather than
-     *   genuinely un-triggered — must NOT surface as "resolved": rendering a
-     *   skipped CRITICAL as resolved is affirmative false reassurance, worse
-     *   than a silent miss.
      * @return A [ScanDiff] describing what changed between the two scans.
      */
     fun computeDiff(
         newer: ScanResult,
-        older: ScanResult,
-        skippedRuleIds: Set<String> = sigmaRuleEngine.unevaluableRules().keys
+        older: ScanResult
     ): ScanDiff {
+        val skippedRuleIds = newer.scannerErrors
+            .filter { it.exception == UNREGISTERED_IOC_LOOKUP }
+            .mapNotNull { it.ruleId }
+            .toSet()
         val olderTriggeredIds = older.findings
             .filter { it.triggered }
             .map { it.ruleId }
@@ -633,6 +661,24 @@ class ScanOrchestrator @Inject constructor(
 
     companion object {
         private const val TAG = "ScanOrchestrator"
+
+        /**
+         * Cap on the feed-controlled `ioc_lookup` name echoed into a
+         * capability-skip message. Real names are short snake_case identifiers
+         * (`trusted_installer_db` is 20 chars), so this is generous while still
+         * bounding a hostile rule's contribution to one report line.
+         */
+        private const val MAX_LOOKUP_NAME_CHARS = 64
+
+        /**
+         * Reduces a feed-controlled lookup name to printable ASCII, then caps
+         * its length. Printable-ASCII-only is not cosmetic: the report is
+         * strictly ASCII (enforced by ReportFormatterTest) and is rendered
+         * line-per-entry, so a name containing CR/LF could otherwise inject
+         * lines that read as additional report content.
+         */
+        private fun sanitizeLookupName(name: String): String =
+            name.filter { it in ' '..'~' }.take(MAX_LOOKUP_NAME_CHARS)
 
         /**
          * Number of parallel scanners tracked by the progress indicator.
