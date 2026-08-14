@@ -4,7 +4,6 @@ import com.androdr.data.model.ForensicTimelineEvent
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
-import java.io.File
 
 /**
  * Fail-closed evaluator contract (spec 2026-08-14, Workstream A): a rule
@@ -223,16 +222,6 @@ class FailClosedLookupTest {
         assertEquals(setOf("androdr-atom-test-lookup"), bindings[1])
     }
 
-    private fun rulesDirectory(): File {
-        val candidates = listOf(
-            File("app/src/main/res/raw"),
-            File("src/main/res/raw"),
-            File("/home/yasir/AndroDR/app/src/main/res/raw"),
-        )
-        return candidates.firstOrNull { it.isDirectory }
-            ?: error("Could not locate res/raw; tried: ${candidates.map { it.absolutePath }}")
-    }
-
     /**
      * Corpus lint: no bundled `timeline`-service (atom) rule may carry an
      * `ioc_lookup` matcher. `computeAtomBindings` only pre-filters by the
@@ -243,13 +232,10 @@ class FailClosedLookupTest {
      */
     @Test
     fun `no bundled timeline atom rule contains an IOC_LOOKUP matcher`() {
-        val ruleFiles = rulesDirectory().listFiles { f ->
-            f.name.startsWith("sigma_androdr_") &&
-                f.name.endsWith(".yml") &&
-                !f.name.startsWith("sigma_androdr_corr_")
-        }?.sorted() ?: emptyList()
-
-        assertTrue("Expected bundled rule files to be found in res/raw", ruleFiles.isNotEmpty())
+        // Shared locator (its KDoc mandates it for new sweeps): it also carries
+        // the MIN_RULE_FILES floor, so a wrong-working-directory run fails loud
+        // instead of sweeping an empty corpus.
+        val ruleFiles = TestRuleRepo.bundledRuleFiles()
 
         val violations = ruleFiles.mapNotNull { file ->
             val rule = SigmaRuleParser.parse(file.readText()) ?: return@mapNotNull null

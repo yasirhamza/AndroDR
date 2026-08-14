@@ -64,6 +64,111 @@ internal object TestRuleRepo {
     }
 
     /**
+     * Root of the `main` Kotlin source set, for the source-scanning gates
+     * ([PureEmitterContractTest], [IocLookupDefinitionsCrossCheckTest]) that
+     * assert properties of production code rather than of rules. Same
+     * candidate-path convention as [rulesDirectory], and fails loud for the
+     * same reason: a source-scan gate that cannot find the sources would pass
+     * vacuously, which is worse than no gate at all.
+     *
+     * Note this deliberately covers ONLY `src/main` — the `debug` source set is
+     * not shipped in a release build and is out of these gates' scope.
+     */
+    fun mainSourceRoot(): File {
+        val candidates = listOf(
+            File("app/src/main/java"),
+            File("src/main/java"),
+            File("/home/yasir/AndroDR/app/src/main/java"),
+        )
+        return candidates.firstOrNull { it.isDirectory }
+            ?: error("Could not locate main source root; tried: ${candidates.map { it.absolutePath }}")
+    }
+
+    /**
+     * One production source file under [mainSourceRoot], by its package-relative
+     * path (e.g. `com/androdr/scanner/ScanOrchestrator.kt`). Fails loud when the
+     * file has moved: a source-scan gate whose target vanished must not silently
+     * scan nothing.
+     */
+    fun mainSourceFile(relativePath: String): File {
+        val file = File(mainSourceRoot(), relativePath)
+        assertTrue(
+            "Expected production source at ${file.absolutePath} — moved or renamed? " +
+                "A source-scanning gate cannot be allowed to pass vacuously.",
+            file.isFile,
+        )
+        return file
+    }
+
+    /**
+     * Kotlin source with comments removed, so a source-scanning gate can match
+     * across newlines without KDoc/prose false positives — and so a comment
+     * cannot be used as a hiding place. Shared by
+     * [PureEmitterContractTest] (whole-file `Finding(` / `.copy(level =` scan)
+     * and [IocLookupDefinitionsCrossCheckTest] (paren-balanced extraction of the
+     * `setIocLookups(mapOf(...))` block); its behavior is pinned by
+     * PureEmitterContractTest's stripper self-test.
+     *
+     * String and character literals are preserved VERBATIM: a `//` inside
+     * `"https://…"` is not a comment, and some gates need to match literal
+     * content (e.g. field-map keys, registered lookup names). Nested block
+     * comments are handled — Kotlin allows them. Newlines inside stripped
+     * comments are preserved so offsets stay roughly line-aligned.
+     */
+    @Suppress("CyclomaticComplexMethod", "NestedBlockDepth", "LoopWithTooManyJumpStatements")
+    fun stripKotlinComments(source: String): String {
+        val out = StringBuilder(source.length)
+        var i = 0
+        var blockDepth = 0
+        while (i < source.length) {
+            val c = source[i]
+            val next = if (i + 1 < source.length) source[i + 1] else ' '
+            when {
+                blockDepth > 0 -> when {
+                    c == '/' && next == '*' -> { blockDepth++; i += 2 }
+                    c == '*' && next == '/' -> { blockDepth--; i += 2 }
+                    else -> {
+                        // Keep newlines so stripped comments don't collapse lines.
+                        if (c == '\n') {
+                            out.append('\n')
+                        }
+                        i++
+                    }
+                }
+                c == '/' && next == '/' -> while (i < source.length && source[i] != '\n') i++
+                c == '/' && next == '*' -> { blockDepth = 1; i += 2 }
+                source.startsWith(TRIPLE_QUOTE, i) -> {
+                    val end = source.indexOf(TRIPLE_QUOTE, i + TRIPLE_QUOTE.length)
+                    val stop = if (end < 0) source.length else end + TRIPLE_QUOTE.length
+                    out.append(source, i, stop)
+                    i = stop
+                }
+                c == '"' || c == '\'' -> i = copyLiteral(source, i, c, out)
+                else -> { out.append(c); i++ }
+            }
+        }
+        return out.toString()
+    }
+
+    /** Copies one quoted literal verbatim; returns the index just past it. */
+    private fun copyLiteral(source: String, start: Int, quote: Char, out: StringBuilder): Int {
+        var i = start
+        out.append(source[i]); i++
+        while (i < source.length) {
+            val ch = source[i]
+            out.append(ch); i++
+            if (ch == '\\' && i < source.length) {
+                out.append(source[i]); i++
+            } else if (ch == quote || ch == '\n') {
+                break
+            }
+        }
+        return i
+    }
+
+    private const val TRIPLE_QUOTE = "\"\"\""
+
+    /**
      * Bundled non-correlation rule files. Correlation rules are excluded by the
      * `sigma_androdr_corr_` filename-prefix convention (as the other bundled
      * sweeps do); content-level drift between the naming convention and the
