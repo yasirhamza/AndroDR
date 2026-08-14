@@ -585,9 +585,21 @@ class ScanOrchestrator @Inject constructor(
      *
      * @param newer The more recent scan result.
      * @param older The earlier scan result used as the baseline.
+     * @param skippedRuleIds Rule IDs this binary currently cannot evaluate
+     *   (unresolvable `ioc_lookup`). Defaults to the engine's own live view
+     *   ([SigmaRuleEngine.unevaluableRules]) so production callers get the
+     *   fail-closed behavior for free; tests may override it directly.
+     *   A rule that triggered in [older] but is now skipped — rather than
+     *   genuinely un-triggered — must NOT surface as "resolved": rendering a
+     *   skipped CRITICAL as resolved is affirmative false reassurance, worse
+     *   than a silent miss.
      * @return A [ScanDiff] describing what changed between the two scans.
      */
-    fun computeDiff(newer: ScanResult, older: ScanResult): ScanDiff {
+    fun computeDiff(
+        newer: ScanResult,
+        older: ScanResult,
+        skippedRuleIds: Set<String> = sigmaRuleEngine.unevaluableRules().keys
+    ): ScanDiff {
         val olderTriggeredIds = older.findings
             .filter { it.triggered }
             .map { it.ruleId }
@@ -598,7 +610,9 @@ class ScanOrchestrator @Inject constructor(
             .toSet()
 
         val newFindings = newer.findings.filter { it.triggered && it.ruleId !in olderTriggeredIds }
-        val resolvedFindings = older.findings.filter { it.triggered && it.ruleId !in newerTriggeredIds }
+        val resolvedFindings = older.findings.filter {
+            it.triggered && it.ruleId !in newerTriggeredIds && it.ruleId !in skippedRuleIds
+        }
 
         return ScanDiff(
             newFindings      = newFindings,

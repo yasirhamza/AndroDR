@@ -1,8 +1,10 @@
 package com.androdr.sigma
 
+import com.androdr.data.model.ForensicTimelineEvent
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.io.File
 
 /**
  * Fail-closed evaluator contract (spec 2026-08-14, Workstream A): a rule
@@ -85,6 +87,33 @@ class FailClosedLookupTest {
         "known_good_app_db" to { _ -> false }
     )
 
+    // Atom rules match `computeAtomBindings`' expected shape (level: informational,
+    // service: timeline, a `selection` with a `category` equals matcher) PLUS an
+    // `ioc_lookup` matcher in the same selection — the shape this binary must
+    // refuse to bind on when the lookup is unresolvable.
+    private val atomRuleWithLookup = """
+        id: androdr-atom-test-lookup
+        title: Atom Test With Lookup
+        status: production
+        level: informational
+        category: incident
+        logsource: { product: androdr, service: timeline }
+        detection:
+          selection:
+            category: package_install
+            installer|ioc_lookup: trusted_installer_db
+          condition: selection
+    """.trimIndent()
+
+    private fun timelineEvent(id: Long, category: String): ForensicTimelineEvent =
+        ForensicTimelineEvent(
+            id = id,
+            startTimestamp = id * 1000L,
+            source = "test",
+            category = category,
+            description = "test"
+        )
+
     @Test
     fun `unregistered lookup in negated selection - rule skipped, no over-fire`() {
         val findings = SigmaRuleEvaluator.evaluate(
@@ -166,5 +195,75 @@ class FailClosedLookupTest {
         assertEquals(mapOf("androdr-010" to "trusted_installer_db"), engine.unevaluableRules())
         engine.setIocLookups(allRegistered)
         assertTrue(engine.unevaluableRules().isEmpty())
+    }
+
+    @Test
+    fun `computeAtomBindings excludes an atom rule with an unresolvable ioc_lookup`() {
+        val engine = SigmaRuleEngine(io.mockk.mockk(relaxed = true))
+        engine.setRemoteRules(listOf(parse(atomRuleWithLookup)))
+        engine.setIocLookups(emptyMap())
+
+        val bindings = engine.computeAtomBindings(listOf(timelineEvent(id = 1, category = "package_install")))
+
+        assertTrue(
+            "Atom rule with an unresolved ioc_lookup must produce no binding — fail-closed " +
+                "applies to the binding path too, got: $bindings",
+            bindings[1].orEmpty().isEmpty()
+        )
+    }
+
+    @Test
+    fun `computeAtomBindings binds the atom rule once its lookup is registered`() {
+        val engine = SigmaRuleEngine(io.mockk.mockk(relaxed = true))
+        engine.setRemoteRules(listOf(parse(atomRuleWithLookup)))
+        engine.setIocLookups(allRegistered)
+
+        val bindings = engine.computeAtomBindings(listOf(timelineEvent(id = 1, category = "package_install")))
+
+        assertEquals(setOf("androdr-atom-test-lookup"), bindings[1])
+    }
+
+    private fun rulesDirectory(): File {
+        val candidates = listOf(
+            File("app/src/main/res/raw"),
+            File("src/main/res/raw"),
+            File("/home/yasir/AndroDR/app/src/main/res/raw"),
+        )
+        return candidates.firstOrNull { it.isDirectory }
+            ?: error("Could not locate res/raw; tried: ${candidates.map { it.absolutePath }}")
+    }
+
+    /**
+     * Corpus lint: no bundled `timeline`-service (atom) rule may carry an
+     * `ioc_lookup` matcher. `computeAtomBindings` only pre-filters by the
+     * engine's live `unevaluableRules()` set at runtime — this test keeps the
+     * binding path *structurally* lookup-free at the corpus level too, so a
+     * newly-added atom rule can't reintroduce the hazard the runtime filter
+     * exists to guard against.
+     */
+    @Test
+    fun `no bundled timeline atom rule contains an IOC_LOOKUP matcher`() {
+        val ruleFiles = rulesDirectory().listFiles { f ->
+            f.name.startsWith("sigma_androdr_") &&
+                f.name.endsWith(".yml") &&
+                !f.name.startsWith("sigma_androdr_corr_")
+        }?.sorted() ?: emptyList()
+
+        assertTrue("Expected bundled rule files to be found in res/raw", ruleFiles.isNotEmpty())
+
+        val violations = ruleFiles.mapNotNull { file ->
+            val rule = SigmaRuleParser.parse(file.readText()) ?: return@mapNotNull null
+            if (rule.service != "timeline") return@mapNotNull null
+            val hasLookup = rule.detection.selections.values
+                .flatMap { it.fieldMatchers }
+                .any { it.modifier == SigmaModifier.IOC_LOOKUP }
+            if (hasLookup) "${file.name}: timeline/atom rule '${rule.id}' contains an IOC_LOOKUP matcher" else null
+        }
+
+        assertTrue(
+            "Atom/timeline rules must stay structurally lookup-free until the binding path " +
+                "itself pre-scans unevaluableRules():\n" + violations.joinToString("\n"),
+            violations.isEmpty()
+        )
     }
 }
