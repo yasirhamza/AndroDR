@@ -1,15 +1,20 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- The in-app brand mark (Icons.Filled.Security), scaled from its 24dp
+     viewport into the adaptive-icon 108dp viewport (x2.5, centered on 54,54)
+     so the launcher matches the dashboard header and the Play Store icon.
+     The carve path is painted in the launcher background color, mirroring
+     how the previous check-mark glyph was drawn. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <!-- Shield shape -->
+    <!-- Shield (Material Security outer path, transformed) -->
     <path
         android:fillColor="#00D4AA"
-        android:pathData="M54,24L30,34v16c0,14.4 10.2,27.9 24,31.2 13.8,-3.3 24,-16.8 24,-31.2V34L54,24z" />
-    <!-- Checkmark -->
+        android:pathData="M54,26.5L31.5,36.5v15c0,13.875 9.6,26.85 22.5,30 12.9,-3.15 22.5,-16.125 22.5,-30v-15L54,26.5z" />
+    <!-- Checkered carve (Material Security inner path, transformed) -->
     <path
-        android:fillColor="#1A1A2E"
-        android:pathData="M47,58l-8,-8 2.8,-2.8L47,52.4l13.2,-13.2L63,42L47,58z" />
+        android:fillColor="#0A0A0A"
+        android:pathData="M54,53.975h17.5c-1.325,10.3 -8.2,19.475 -17.5,22.35V54H36.5V39.75l17.5,-7.775V53.975z" />
 </vector>
