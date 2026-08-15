@@ -71,7 +71,9 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for the full development workflow (submod
 
 ## Download
 
-Latest release: https://github.com/yasirhamza/AndroDR/releases/latest
+**Google Play (open testing):** https://play.google.com/apps/testing/com.androdr — join as a tester and install/update from the Play Store like any app.
+
+Latest release APK: https://github.com/yasirhamza/AndroDR/releases/latest
 
 Mirror (for regions where GitHub downloads are throttled): https://androdr.yasirhamza.workers.dev
 
