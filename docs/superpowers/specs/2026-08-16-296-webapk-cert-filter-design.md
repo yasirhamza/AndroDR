@@ -98,8 +98,13 @@ The one new dependency is `cert_hash`:
   fallback `GET_SIGNATURES`) — `AppScanner.kt`.
 - `extractCertHashes` hashes the first signer from
   `signingInfo.apkContentsSigners` → SHA-256 lowercase hex — the same path
-  `cert_hash_ioc_db` malware matching uses in production today. WebAPKs are
-  ordinary single-signer APKs.
+  `cert_hash_ioc_db` malware matching uses in production today. The minted
+  WebAPK carries TWO Google co-signers (APK Signature Scheme v2); the
+  emitter hashes the first (`OU=WebAPK, O=Google`), and Chromium's
+  `EXPECTED_SIGNATURE` constant matches the second (`CN=CA, OU=Chrome
+  WebAPK, O=Google`), so the rule lists both — the emitted-first value is
+  required for the filter to match, the second adds Chromium-anchored
+  corroboration and ordering robustness.
 - Null `cert_hash` cannot NPE the evaluator (`Any?.toString()` → `"null"`,
   no match) — the filter simply doesn't apply and the rule fires.
 
@@ -125,6 +130,9 @@ positive test proves before anything merges to rules main.
 3. The value enters the rule YAML only if both agree. Disagreement stops the
    work for investigation. If Chromium documents multiple valid certs, all
    go into the list.
+
+Outcome 2026-08-16: two-signer APK; Signer #2 matched Chromium byte-for-byte;
+both certs enter the rule (see plan ledger Task 1 adjudication).
 
 ## Failure behavior
 
