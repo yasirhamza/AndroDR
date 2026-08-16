@@ -16,7 +16,19 @@ detection:
         is_known_oem_app: false
     filter_known_good:
         package_name|ioc_lookup: known_good_app_db
-    condition: selection and not filter_known_good
+    # WebAPK exemption (#296): PWAs minted by Google's WebAPK service have
+    # per-device randomized package names, so no allowlist can cover them.
+    # Trust is anchored on the minting service's signing cert — the prefix
+    # alone is spoofable, the cert is not. Both conjuncts must match.
+    # Two values: the minted APK carries two Google co-signers; the first is
+    # what the emitter observes at index 0, the second is Chromium's own
+    # EXPECTED_SIGNATURE validation constant.
+    filter_verified_webapk:
+        package_name|startswith: "org.chromium.webapk."
+        cert_hash:
+            - "16ec831c994af033e958063c3555b22de7b078c4a6a424bdbebf7753ca73eceb"
+            - "f9a8f75a7f0b5d2ccae8c2b570855640e709995558cd9706af74b84e68962faa"
+    condition: selection and not filter_known_good and not filter_verified_webapk
 level: medium
 category: incident
 display:
