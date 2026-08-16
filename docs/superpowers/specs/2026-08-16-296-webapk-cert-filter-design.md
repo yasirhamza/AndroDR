@@ -42,16 +42,20 @@ detection:
         package_name|ioc_lookup: known_good_app_db
     filter_verified_webapk:
         package_name|startswith: "org.chromium.webapk."
-        cert_hash: "<Google WebAPK minter cert SHA-256, lowercase hex>"
+        cert_hash:
+            - "16ec831c994af033e958063c3555b22de7b078c4a6a424bdbebf7753ca73eceb"  # signer #1, OU=WebAPK O=Google — the value the emitter observes at index 0
+            - "f9a8f75a7f0b5d2ccae8c2b570855640e709995558cd9706af74b84e68962faa"  # signer #2, CN=CA OU=Chrome WebAPK — Chromium EXPECTED_SIGNATURE
     condition: selection and not filter_known_good and not filter_verified_webapk
 ```
 
 Two entries in one selection map AND together: the exemption requires both
-the WebAPK namespace and Google's minting cert. If Chromium documents
-multiple valid minter certs, `cert_hash` becomes a YAML list (OR semantics).
+the WebAPK namespace and Google's minting cert. `cert_hash` is a YAML list
+with OR semantics — it already holds both Google co-signer hashes (see
+Field-contract audit below), and any future additional valid minter cert
+would append to the same list.
 
-The cert placeholder above is intentional until the ground-truth procedure
-below has produced a double-confirmed value.
+The shipped rule above carries both Google co-signers, emitted-first,
+matching the Field-contract audit below.
 
 ### Approaches considered and rejected
 
@@ -59,9 +63,9 @@ below has produced a double-confirmed value.
   `AppScanner`, cert data in `known-oem-prefixes.yml`): rejected on the
   emitter-purity principle — it reintroduces a trust judgment into the
   emitter that #136/R1 deliberately removed, and it silently exempts minted
-  WebAPKs from the full 15-rule trust family (including impersonation rules
-  014/077, which should stay live on WebAPKs: any website can get a PWA
-  minted under an arbitrary display name).
+  WebAPKs from the full 15-rule trust family at once, whereas the rule-side
+  fix adopted here is scoped to androdr-010 only — every other trust-family
+  rule's selection logic is untouched.
 - **Hardcoded cert constant in Kotlin**: same objections plus cert rotation
   requires an app release.
 - **New `webapk_minter_cert_db` ioc_lookup + rule filter**: R1 constraint —
@@ -185,15 +189,28 @@ binaries meanwhile.
 
 ## Out of scope
 
-- Other trust-family rules (011–017, 067–069, 077, 087–089) keep seeing
-  WebAPKs as sideloaded facts — deliberately: impersonation rules stay live
-  on minted WebAPKs. If WebAPK FPs surface on specific rules later, the same
-  filter pattern applies per-rule as pure feed updates.
+- Other trust-family rules (011–017, 067–069, 077, 087–089) are unchanged by
+  this fix and keep emitting their facts against WebAPKs. As a structural
+  matter, though, only androdr-016 (System Name Disguise —
+  `app_name|contains` System/Google/Android/Samsung/Settings) can actually
+  fire on a randomized `org.chromium.webapk.<hash>` package: 014 and 077 are
+  package-name-keyed (014 requires `known_app_category: USER_APP` sourced
+  from a package-name DB; 077 matches popular-app package-name prefixes) and
+  structurally cannot match a minted WebAPK's randomized package name. The
+  residual gap — a malicious PWA minted under a display name outside
+  androdr-016's list — is tracked as a follow-up issue. If WebAPK FPs surface
+  on specific rules later, the same filter pattern applies per-rule as pure
+  feed updates.
 - No changes to `trusted_installers` (Chrome stays untrusted), the
   `known_good_app_db` closure, `ioc-lookup-definitions.yml`, or any emitter
   code.
 - #136 Phase 2/3 remain parked; this design intentionally leaves
   `from_trusted_store` untouched so the Phase-2 migration is unaffected.
+- **Security-critical scope commitment**: this exemption must never be
+  extended to permission/capability rules (011/012/013/017/067/069) — a
+  minted WebAPK is a fixed Chromium shell whose runtime capabilities AndroDR
+  does not observe, so cert-trust may only gate the "installed from
+  untrusted source" claim, never any claim about behavior.
 
 ## Process
 
