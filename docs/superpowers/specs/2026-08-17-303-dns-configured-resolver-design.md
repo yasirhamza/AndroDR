@@ -47,8 +47,11 @@ resolvers right now?"
 - **Initial snapshot (synchronous, at VPN start):**
   `ConnectivityManager.getAllNetworks()` → keep networks whose capabilities
   include `NET_CAPABILITY_INTERNET` and `NET_CAPABILITY_NOT_VPN` → read
-  `LinkProperties.dnsServers`. Prefer the validated default-ish network; no
-  waiting on callbacks, so there is no startup blind window.
+  `LinkProperties.dnsServers`. Snapshot rule: among matching networks,
+  prefer one with `NET_CAPABILITY_VALIDATED` (first such wins); with none
+  validated, first match wins. The callback supersedes the snapshot within
+  milliseconds, so this choice only covers the start instant. No waiting on
+  callbacks — there is no startup blind window.
 - **Tracking:** `registerNetworkCallback` with a
   `NetworkRequest{INTERNET, NOT_VPN}`; `onLinkPropertiesChanged` and
   `onLost` update the list.
