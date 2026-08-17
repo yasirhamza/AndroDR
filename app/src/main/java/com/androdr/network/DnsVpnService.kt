@@ -80,8 +80,7 @@ class DnsVpnService : VpnService() {
         /** `true` while the tunnel is established and the read loop is active. */
         val isRunning = MutableStateFlow(false)
 
-        // Upstream DNS resolver
-        private const val UPSTREAM_DNS_HOST = "8.8.8.8"
+        // Upstream DNS port (the resolver ADDRESS comes from UnderlyingDnsTracker — #303)
         private const val UPSTREAM_DNS_PORT = 53
 
         // Virtual interface addresses
@@ -130,6 +129,7 @@ class DnsVpnService : VpnService() {
 
     private var logBuffer: DnsLogBuffer? = null
     private var resolver: UpstreamResolver? = null
+    private var dnsTracker: UnderlyingDnsTracker? = null
 
     /** Lock for tun-fd writes — both the read loop (NXDOMAIN responses) and the
      *  resolver receive coroutine write to the same FileOutputStream. */
@@ -162,6 +162,19 @@ class DnsVpnService : VpnService() {
     private fun startVpn() {
         if (isRunning.value) return
 
+        // #303: resolve the device's real DNS servers BEFORE establishing the
+        // tunnel. No resolvers -> do not capture device DNS at all (a captured
+        // tunnel with nowhere to forward would black-hole the whole device;
+        // monitor-off is strictly better). There is NO hardcoded fallback.
+        val tracker = UnderlyingDnsTracker(this).also { it.start() }
+        if (tracker.resolvers.value.isEmpty()) {
+            Log.w(TAG, "DnsVpnService: no non-VPN DNS resolvers available; not starting monitor")
+            tracker.stop()
+            stopSelf()
+            return
+        }
+        dnsTracker = tracker
+
         @Suppress("TooGenericExceptionCaught", "SwallowedException")
         val fd = try {
             Builder()
@@ -183,7 +196,7 @@ class DnsVpnService : VpnService() {
         val outputStream = FileOutputStream(fd.fileDescriptor)
 
         logBuffer = DnsLogBuffer(serviceScope, scanRepository).also { it.start() }
-        resolver = UpstreamResolver(serviceScope, this, outputStream, outputLock).also {
+        resolver = UpstreamResolver(serviceScope, this, outputStream, outputLock, tracker.resolvers).also {
             if (!it.start()) {
                 Log.w(TAG, "DnsVpnService: upstream resolver failed to start; aborting")
                 stopVpn()
@@ -206,7 +219,9 @@ class DnsVpnService : VpnService() {
     }
 
     private fun stopVpn() {
-        if (!isRunning.value && tunFd == null && resolver == null && logBuffer == null) {
+        if (!isRunning.value && tunFd == null && resolver == null &&
+            logBuffer == null && dnsTracker == null
+        ) {
             // Already stopped — nothing to do (avoids stopForeground/stopSelf churn).
             return
         }
@@ -217,6 +232,8 @@ class DnsVpnService : VpnService() {
         // shared output stream before we close the tun fd.
         resolver?.stop()
         resolver = null
+        dnsTracker?.stop()
+        dnsTracker = null
         // Synchronously drain any buffered DNS events before the service scope is
         // cancelled in onDestroy. Without this the last ~LOG_FLUSH_INTERVAL_MS of
         // events would be silently dropped.
@@ -540,54 +557,108 @@ class DnsVpnService : VpnService() {
     // ── Inner: pooled upstream resolver ───────────────────────────────────────
 
     /**
-     * Owns a single `protect()`'d [DatagramSocket] that all DNS forwards share. Outgoing
-     * queries have their 16-bit DNS transaction id rewritten to a unique value so the
-     * single receive loop can demux upstream replies and route them back to the correct
-     * tun source. Replaces the previous "new socket per query" hot path.
+     * Owns a single `protect()`'d, **`connect()`'d** [DatagramSocket] that all DNS
+     * forwards share. Outgoing queries have their 16-bit DNS transaction id rewritten
+     * to a unique value so the single receive loop can demux upstream replies and
+     * route them back to the correct tun source.
+     *
+     * #303: the upstream address comes from [UnderlyingDnsTracker] (the device's own
+     * configured resolvers) — never a hardcoded host. On resolver change the socket
+     * is swapped atomically; in-flight queries on the old socket age out via the
+     * sweep, indistinguishable from a normal timeout. If the resolver list goes
+     * empty mid-session the last socket is kept (its sends fail like any dead
+     * upstream) and recovery is automatic on the next tracker update. connect()
+     * makes the kernel reject off-path datagrams, so spoofed responses never reach
+     * [handleResponse].
      */
     private inner class UpstreamResolver(
         private val scope: CoroutineScope,
         private val vpnService: VpnService,
         private val outputStream: FileOutputStream,
-        private val outputLock: Any
+        private val outputLock: Any,
+        private val upstreams: kotlinx.coroutines.flow.StateFlow<List<InetAddress>>,
     ) {
-        private var socket: DatagramSocket? = null
-        private var upstreamAddr: InetAddress? = null
+        private inner class Channel(
+            val socket: DatagramSocket,
+            val addr: InetAddress,
+            val receiveJob: Job,
+        )
+
+        private val channelRef = java.util.concurrent.atomic.AtomicReference<Channel?>(null)
         private val pending = ConcurrentHashMap<Int, Pending>()
         private val txIdSeq = AtomicInteger(1)
-        private var receiveJob: Job? = null
         private var sweepJob: Job? = null
+        private var watchJob: Job? = null
 
         fun start(): Boolean {
-            @Suppress("TooGenericExceptionCaught")
-            return try {
-                val addr = InetAddress.getByName(UPSTREAM_DNS_HOST)
-                val s = DatagramSocket()
-                vpnService.protect(s)
-                s.soTimeout = 0   // blocking; the receive loop runs on its own coroutine
-                socket = s
-                upstreamAddr = addr
-                receiveJob = scope.launch { receiveLoop() }
-                sweepJob   = scope.launch { sweepLoop() }
-                true
-            } catch (e: Exception) {
-                Log.w(TAG, "UpstreamResolver: start failed", e)
-                false
+            val initial = upstreams.value.firstOrNull()
+            if (initial == null) {
+                Log.w(TAG, "UpstreamResolver: no configured resolvers at start")
+                return false
             }
+            if (!openChannel(initial)) return false
+            sweepJob = scope.launch { sweepLoop() }
+            watchJob = scope.launch {
+                upstreams.collect { list -> onUpstreamsChanged(list) }
+            }
+            return true
         }
 
         fun stop() {
-            receiveJob?.cancel(); receiveJob = null
-            sweepJob?.cancel();   sweepJob   = null
-            try { socket?.close() } catch (_: Exception) {}
-            socket = null
+            watchJob?.cancel(); watchJob = null
+            sweepJob?.cancel();  sweepJob  = null
+            channelRef.getAndSet(null)?.let { ch ->
+                ch.receiveJob.cancel()
+                try { ch.socket.close() } catch (_: Exception) {}
+            }
             pending.clear()
+        }
+
+        private fun onUpstreamsChanged(list: List<InetAddress>) {
+            val target = list.firstOrNull()
+            val current = channelRef.get()
+            when {
+                // Empty list: keep the current channel — its sends fail like any
+                // dead upstream and the next update heals it. NEVER a fallback host.
+                target == null -> Log.w(TAG, "UpstreamResolver: resolver list empty; keeping last channel")
+                current?.addr == target -> Unit
+                else -> {
+                    Log.i(TAG, "UpstreamResolver: switching upstream to $target")
+                    openChannel(target)
+                }
+            }
+        }
+
+        /** Opens+protects+connects a socket to [addr], swaps it in, closes the old one. */
+        @Suppress("TooGenericExceptionCaught")
+        private fun openChannel(addr: InetAddress): Boolean {
+            // Tracked outside the try so a mid-construction failure (protect()/connect()
+            // throwing after the socket is allocated but before it's swapped into
+            // channelRef) still gets its fd closed instead of leaking silently (#303).
+            var opened: DatagramSocket? = null
+            return try {
+                val s = DatagramSocket()
+                opened = s
+                vpnService.protect(s)
+                s.connect(addr, UPSTREAM_DNS_PORT)
+                s.soTimeout = 0   // blocking; the receive loop runs on its own coroutine
+                val job = scope.launch { receiveLoop(s) }
+                channelRef.getAndSet(Channel(s, addr, job))?.let { old ->
+                    old.receiveJob.cancel()
+                    try { old.socket.close() } catch (_: Exception) {}
+                }
+                true
+            } catch (e: Exception) {
+                Log.w(TAG, "UpstreamResolver: channel open failed for $addr: ${e.message}")
+                try { opened?.close() } catch (_: Exception) {}
+                false
+            }
         }
 
         /** Forward a DNS query through the shared upstream socket. Non-blocking. */
         @Suppress("TooGenericExceptionCaught", "SwallowedException", "ReturnCount")
         fun send(dnsPayload: ByteArray, srcIpBytes: ByteArray, srcPort: Int) {
-            val s = socket ?: return
+            val ch = channelRef.get() ?: return
             if (dnsPayload.size < 2) return
             // Hard cap to bound memory under sustained drop conditions (e.g. upstream
             // unreachable). Beyond the cap we drop new queries until the sweep loop
@@ -619,26 +690,24 @@ class DnsVpnService : VpnService() {
             rewritten[0] = ((ourTxId shr 8) and 0xFF).toByte()
             rewritten[1] = (ourTxId and 0xFF).toByte()
 
-            val addr = upstreamAddr ?: return
             try {
-                s.send(DatagramPacket(rewritten, rewritten.size, addr, UPSTREAM_DNS_PORT))
+                ch.socket.send(DatagramPacket(rewritten, rewritten.size))
             } catch (e: Exception) {
                 pending.remove(ourTxId)
                 Log.w(TAG, "UpstreamResolver: send failed: ${e.message}")
             }
         }
 
-        private suspend fun receiveLoop() {
-            val s = socket ?: return
+        private suspend fun receiveLoop(s: DatagramSocket) {
             val recvBuf = ByteArray(MAX_DNS_PACKET_SIZE)
-            while (scope.isActive && socket != null) {
+            while (scope.isActive && !s.isClosed) {
                 @Suppress("TooGenericExceptionCaught", "SwallowedException")
                 try {
                     val pkt = DatagramPacket(recvBuf, recvBuf.size)
                     s.receive(pkt)
                     handleResponse(recvBuf.copyOf(pkt.length))
                 } catch (e: Exception) {
-                    if (!scope.isActive || socket == null) break
+                    if (!scope.isActive || s.isClosed) break
                     Log.w(TAG, "UpstreamResolver: receive failed: ${e.message}")
                 }
             }
