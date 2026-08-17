@@ -67,7 +67,12 @@ user traffic).
 > The VPN tunnel terminates on the device inside the app — there is no remote
 > tunnel endpoint and no data is transmitted from the device to any VPN
 > server, so there is no device-to-endpoint link to encrypt. DNS queries are
-> forwarded to the device's own configured resolvers exactly as the operating system would send them without the VPN.
+> forwarded to the device's own configured resolvers exactly as the operating
+> system would send them without the VPN — with one exception: if the user has
+> enabled Android's Private DNS (DNS-over-TLS), queries are sent in plaintext
+> UDP/53 to those configured resolvers while the monitor is on, rather than
+> encrypted to the Private DNS server; users who need strict Private DNS
+> transport should leave the optional monitor off.
 
 **Store-listing sentence (Arabic listing — add to the privacy section):**
 

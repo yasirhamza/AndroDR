@@ -305,7 +305,8 @@ export default {
 <p>AndroDR's DNS monitor uses a local VPN to intercept DNS queries <strong>on your device only</strong>. This is how it detects connections to known malicious domains.</p>
 <ul>
 <li>Intercepted DNS queries are checked against the on-device blocklist. Blocked domains receive a local NXDOMAIN answer and the query is <strong>never sent anywhere</strong></li>
-<li>Allowed queries are forwarded to a public DNS resolver (Google Public DNS, 8.8.8.8) over standard DNS (UDP port 53) and the answers are returned to your apps. This is the same unencrypted DNS protocol Android uses by default when Private DNS is off: the resolver sees the domain names your apps look up, as any DNS resolver does. AndroDR attaches no device identifiers or app information to these queries</li>
+<li>Allowed queries are forwarded to your device's own configured DNS resolvers — the same servers Android itself uses (app versions 0.9.0.612 and later; earlier versions forwarded to Google Public DNS, 8.8.8.8) — over standard DNS (UDP port 53) and the answers are returned to your apps. This is the same unencrypted DNS protocol Android uses by default when Private DNS is off: your resolver sees the domain names your apps look up, exactly as it would without AndroDR. AndroDR attaches no device identifiers or app information to these queries</li>
+<li><strong>If you use Private DNS (DNS-over-TLS):</strong> while the monitor is on, queries are sent in plaintext (UDP port 53) to your network's configured resolvers instead of encrypted to your Private DNS server. If you need strict Private DNS transport for every query, leave the DNS monitor off</li>
 <li>DNS event logs are stored on-device only and automatically deleted after 30 days</li>
 <li>The VPN routes only the DNS server address — it does not route, inspect, or modify your web traffic, app data, or any non-DNS network activity</li>
 <li>You can enable or disable DNS monitoring at any time</li>

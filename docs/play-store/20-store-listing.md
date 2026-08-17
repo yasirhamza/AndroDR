@@ -57,9 +57,12 @@ AndroDR does not collect, transmit, or share any personal data. All scanning and
 
 The network monitor uses Android's VPN service (VpnService) to inspect DNS queries on your device. The VPN is local-only: it creates no tunnel to any remote server, routes only DNS traffic, and never carries your browsing data. DNS queries are checked against threat databases on your device and forwarded to your device's own configured DNS servers for normal resolution; blocked malicious domains are logged to the forensic timeline on your phone. The VPN is optional — every other feature works without it.
 
-<!-- Console note: paste this version only when 0.9.0.612+ is the live build.
-     Versions <=611 use Google Public DNS (8.8.8.8) — the currently-submitted
-     console text describes those accurately. -->
+> **Console note — do not paste.** Paste the "About the optional VPN" paragraph
+> above only when 0.9.0.612+ is the live build: it describes the
+> configured-resolver upstream (#303). Versions <=611 forward to Google Public
+> DNS (8.8.8.8), which the currently-submitted console text already describes
+> accurately. (Same convention as the version-gating banner in
+> `17-vpn-permission-declaration.md`.)
 
 ## Category
 Tools
