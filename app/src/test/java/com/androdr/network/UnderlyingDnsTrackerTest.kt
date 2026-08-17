@@ -1,6 +1,7 @@
 package com.androdr.network
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Test
 import java.net.InetAddress
 
@@ -9,6 +10,10 @@ import java.net.InetAddress
  * the ResolverState recency machine and orderResolvers. The Android wiring
  * (ConnectivityManager snapshot + NetworkCallback) is exercised on-device —
  * this project has no Robolectric, so nothing here may touch Android classes.
+ *
+ * The state machine publishes an [UpstreamSelection] — the WINNING NETWORK KEY
+ * plus its ordered resolvers — because the upstream channel's identity is
+ * (network, address), not the address alone. The tests assert both components.
  */
 class UnderlyingDnsTrackerTest {
 
@@ -36,18 +41,31 @@ class UnderlyingDnsTrackerTest {
     }
 
     @Test
-    fun `update publishes that network's resolvers ordered`() {
+    fun `update publishes that network's key and resolvers ordered`() {
         val s = ResolverState()
-        assertEquals(listOf(v4a, v6a), s.update("wifi", listOf(v6a, v4a)))
+        assertEquals(
+            UpstreamSelection("wifi", listOf(v4a, v6a)),
+            s.update("wifi", listOf(v6a, v4a))
+        )
     }
 
     @Test
     fun `most recently updated live network wins`() {
         val s = ResolverState()
         s.update("wifi", listOf(v4a))
-        assertEquals(listOf(v4b), s.update("cell", listOf(v4b)))
-        // Re-reporting wifi makes it most recent again.
-        assertEquals(listOf(v4a), s.update("wifi", listOf(v4a)))
+        assertEquals(UpstreamSelection("cell", listOf(v4b)), s.update("cell", listOf(v4b)))
+        // Re-reporting wifi makes it most recent again — the winning KEY flips back
+        // too, which is what forces the consumer to reopen its channel.
+        assertEquals(UpstreamSelection("wifi", listOf(v4a)), s.update("wifi", listOf(v4a)))
+    }
+
+    @Test
+    fun `same resolver address on a different network is a different selection`() {
+        val s = ResolverState()
+        s.update("wifi-old", listOf(v4a))
+        // Identical address, new network object (reconnect / AP roam / new lease).
+        val selection = s.update("wifi-new", listOf(v4a))
+        assertEquals(UpstreamSelection("wifi-new", listOf(v4a)), selection)
     }
 
     @Test
@@ -55,14 +73,14 @@ class UnderlyingDnsTrackerTest {
         val s = ResolverState()
         s.update("wifi", listOf(v4a))
         s.update("cell", listOf(v4b))
-        assertEquals(listOf(v4a), s.remove("cell"))
+        assertEquals(UpstreamSelection("wifi", listOf(v4a)), s.remove("cell"))
     }
 
     @Test
-    fun `losing the last network yields empty`() {
+    fun `losing the last network yields null`() {
         val s = ResolverState()
         s.update("wifi", listOf(v4a))
-        assertEquals(emptyList<InetAddress>(), s.remove("wifi"))
+        assertNull(s.remove("wifi"))
     }
 
     @Test
@@ -71,6 +89,6 @@ class UnderlyingDnsTrackerTest {
         s.update("wifi", listOf(v4a))
         s.update("cell", listOf(v4b))
         // cell reports no resolvers anymore -> falls back to wifi
-        assertEquals(listOf(v4a), s.update("cell", emptyList()))
+        assertEquals(UpstreamSelection("wifi", listOf(v4a)), s.update("cell", emptyList()))
     }
 }

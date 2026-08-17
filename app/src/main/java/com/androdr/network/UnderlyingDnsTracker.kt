@@ -20,32 +20,49 @@ internal fun orderResolvers(list: List<InetAddress>): List<InetAddress> =
     list.sortedBy { if (it is Inet4Address) 0 else 1 }
 
 /**
+ * The winning network **and** its ordered resolvers (#303).
+ *
+ * The upstream channel's identity is `(network, resolver address)`, not the
+ * address alone: the same address (`192.168.1.1` is near-universal) on a
+ * different network is a different upstream, and a connected UDP socket pins
+ * its source address at `connect()` time, so a network change with an
+ * unchanged resolver address must still force a reopen.
+ *
+ * [networkKey] is the `android.net.Network` at runtime (value-based
+ * equals/hashCode on netId); any stable key in JVM tests.
+ */
+data class UpstreamSelection(val networkKey: Any, val resolvers: List<InetAddress>)
+
+/**
  * Android-free recency machine behind [UnderlyingDnsTracker] (#303).
  *
  * Tracks the DNS server list of each live network (keyed by the [Network]
  * object at runtime; by any stable key in JVM tests). The MOST RECENTLY
  * updated live network wins — a deterministic rule that self-heals on the
  * next ConnectivityManager callback in the rare multi-network edge cases.
+ * Only networks the OS has VALIDATED ever reach this machine via the tracking
+ * callback (see [UnderlyingDnsTracker.start]).
  */
 internal class ResolverState {
     private val networks = LinkedHashMap<Any, List<InetAddress>>()
 
     @Synchronized
-    fun update(key: Any, dns: List<InetAddress>): List<InetAddress> {
+    fun update(key: Any, dns: List<InetAddress>): UpstreamSelection? {
         networks.remove(key) // re-insert => most recent
         if (dns.isNotEmpty()) networks[key] = dns
         return current()
     }
 
     @Synchronized
-    fun remove(key: Any): List<InetAddress> {
+    fun remove(key: Any): UpstreamSelection? {
         networks.remove(key)
         return current()
     }
 
+    /** The winning `(network, ordered resolvers)`, or null when nothing is tracked. */
     @Synchronized
-    fun current(): List<InetAddress> =
-        orderResolvers(networks.entries.lastOrNull()?.value.orEmpty())
+    fun current(): UpstreamSelection? =
+        networks.entries.lastOrNull()?.let { UpstreamSelection(it.key, orderResolvers(it.value)) }
 }
 
 /**
@@ -53,36 +70,42 @@ internal class ResolverState {
  *
  * [start] takes a synchronous snapshot of all networks with INTERNET+NOT_VPN
  * capabilities (preferring a VALIDATED one) so there is no startup blind
- * window, then registers a NetworkCallback to follow network changes.
- * [resolvers] is the ordered live list (IPv4 first); empty means "no known
- * non-VPN resolvers" — consumers must drop/abort rather than fall back to any
- * hardcoded resolver (no-Google-fallback guarantee).
+ * window, then registers a NetworkCallback — restricted to **VALIDATED**
+ * networks — to follow network changes.
+ * [selection] is the winning `(network, ordered resolvers)` pair; null means
+ * "no known non-VPN resolvers" — consumers must drop/abort rather than fall
+ * back to any hardcoded resolver (no-Google-fallback guarantee).
  */
 class UnderlyingDnsTracker(private val context: Context) {
 
     private val state = ResolverState()
-    private val _resolvers = MutableStateFlow<List<InetAddress>>(emptyList())
-    val resolvers: StateFlow<List<InetAddress>> = _resolvers
+    private val _selection = MutableStateFlow<UpstreamSelection?>(null)
+    val selection: StateFlow<UpstreamSelection?> = _selection
 
     private val cm: ConnectivityManager
         get() = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
 
     private val callback = object : ConnectivityManager.NetworkCallback() {
         override fun onLinkPropertiesChanged(network: Network, linkProperties: LinkProperties) {
-            _resolvers.value = state.update(network, linkProperties.dnsServers)
+            _selection.value = state.update(network, linkProperties.dnsServers)
         }
 
         override fun onLost(network: Network) {
-            _resolvers.value = state.remove(network)
+            _selection.value = state.remove(network)
         }
     }
 
-    @Suppress("TooGenericExceptionCaught", "DEPRECATION")
+    @Suppress("TooGenericExceptionCaught", "DEPRECATION", "LoopWithTooManyJumpStatements")
     fun start() {
         // Synchronous snapshot first — no startup blind window. Snapshot rule
         // (spec): among INTERNET+NOT_VPN networks with resolvers, first
-        // VALIDATED wins; with none validated, first match wins. The callback
-        // supersedes this within milliseconds.
+        // VALIDATED wins; with none validated, first match wins. The snapshot
+        // stays deliberately lenient (accept an unvalidated network when NO
+        // validated one exists) so monitor start is not blocked during the
+        // brief pre-validation window right after a network comes up; the
+        // VALIDATED-only tracking callback below supersedes an unvalidated
+        // snapshot choice within seconds. An unvalidated network can therefore
+        // be the upstream only while no validated network exists at all.
         try {
             var chosen: Pair<Network, List<InetAddress>>? = null
             var chosenValidated = false
@@ -99,14 +122,21 @@ class UnderlyingDnsTracker(private val context: Context) {
                 }
                 if (chosenValidated) break
             }
-            chosen?.let { _resolvers.value = state.update(it.first, it.second) }
+            chosen?.let { _selection.value = state.update(it.first, it.second) }
         } catch (e: Exception) {
             Log.w(TAG, "snapshot failed: ${e.message}")
         }
 
+        // VALIDATED is the capability the OS sets after its own connectivity
+        // check and the one ConnectivityService uses to pick the default
+        // network; INTERNET is merely *declared*. Requiring VALIDATED here
+        // keeps a network the OS has rejected (captive portal, no-internet AP,
+        // evil twin failing validation) out of tracking entirely — it can
+        // never become the device's sole DNS upstream (#303 security C1).
         val request = NetworkRequest.Builder()
             .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
             .addCapability(NetworkCapabilities.NET_CAPABILITY_NOT_VPN)
+            .addCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
             .build()
         @Suppress("SwallowedException")
         try {
@@ -124,7 +154,7 @@ class UnderlyingDnsTracker(private val context: Context) {
         } catch (e: Exception) {
             // Not registered / already unregistered — nothing to do.
         }
-        _resolvers.value = emptyList()
+        _selection.value = null
     }
 
     private companion object {
