@@ -84,7 +84,7 @@ Current package tree under `app/src/main/java/com/androdr/`:
 ├── di/              Hilt modules
 ├── ioc/             IOC resolver, dispatcher, feeds, STIX2 serialization, periodic update worker
 │   └── feeds/       Feed-specific ingesters (stalkerware, MVT, MalwareBazaar, ThreatFox, UAD, Plexus, cert-hash)
-├── network/         DnsVpnService (local DNS interception) + DNS event capture
+├── network/         DnsVpnService (local DNS interception) + UnderlyingDnsTracker (the device's own non-VPN resolvers) + DNS event capture
 ├── reporting/       ReportFormatter, ReportExporter, timeline formatter/exporter, guidance text helpers
 ├── scanner/         Pure telemetry emitters (app, device, accessibility, app-ops, file artifacts, process, usage stats, receivers, device-admin-grant, install event)
 │   └── bugreport/   Bug-report ZIP parser and per-section modules
@@ -387,7 +387,11 @@ All sharing is user-initiated: the user taps "Export" in the history or bug-repo
 
 `DnsVpnService` (in `network/`) extends Android's `VpnService` and implements a local loopback tunnel that intercepts DNS traffic only. When started, it establishes a virtual TUN interface addressed at `10.0.0.2/32`, with a virtual DNS server at `10.0.0.1`. All outbound traffic is routed through the tunnel, but the service only reads and acts on UDP packets whose destination port is 53; all other packets are forwarded without inspection.
 
-The service parses each DNS query, resolves it via a single shared upstream socket (currently Google's `8.8.8.8:53`), and injects the response back into the TUN interface for the querying app. Matched queries (blocklist or IOC domain hit) receive an NXDOMAIN response in place of a real resolution. DNS events are batched via a `DnsLogBuffer` and flushed to `ScanRepository.logDnsEventsBatch()` periodically, rather than one Room transaction per query, to keep battery impact minimal.
+The service parses each DNS query, resolves it via a single shared upstream socket, and injects the response back into the TUN interface for the querying app. Matched queries (blocklist or IOC domain hit) receive an NXDOMAIN response in place of a real resolution. DNS events are batched via a `DnsLogBuffer` and flushed to `ScanRepository.logDnsEventsBatch()` periodically, rather than one Room transaction per query, to keep battery impact minimal.
+
+The upstream address is **the device's own configured resolvers** (issue #303, app version 0.9.0.612+) — never a hardcoded third-party server. `UnderlyingDnsTracker` (same package) answers "what are the device's real, non-VPN DNS resolvers right now?": it takes a synchronous `ConnectivityManager` snapshot at VPN start (so there is no startup blind window) and then follows a `NetworkCallback` restricted to `INTERNET` + `NOT_VPN` + `VALIDATED` networks, so a network Android itself refused to use cannot become the monitor's upstream. It publishes the winning `(network, ordered resolvers)` pair; the most recently reported live network wins and IPv4 entries order before IPv6.
+
+`UpstreamResolver` consumes that pair. Its channel identity is `(network, address)`: the socket is `protect()`ed, bound to the selected network with `Network.bindSocket()`, and `connect()`ed to the resolver, so it is reopened whenever either the network or the address changes (a connected UDP socket pins its source address at `connect()` time). A failed reopen retries with backoff until the selection changes. If no resolvers are known the monitor **aborts at start** or drops queries mid-session — there is no fallback resolver anywhere in the code. The transport is plaintext UDP/53, matching Android's own default when Private DNS is off; with Private DNS (DoT) enabled, queries inside the monitor are still sent in plaintext to those resolvers (see `docs/PRIVACY_POLICY.md`).
 
 IOC enrichment happens at flush time: `ScanRepository.logDnsEventsBatch()` performs a `IndicatorDao.lookup()` for each matched domain to attach campaign name, severity, and description before writing the `ForensicTimelineEvent` row. The bloom-filter path that runs on the VPN hot path returns a lightweight stub; full metadata lives only in the Room `indicators` table.
 
