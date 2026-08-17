@@ -173,6 +173,10 @@ class DnsVpnService : VpnService() {
             stopSelf()
             return
         }
+        // Non-clobbering: if a previous tracker is still hanging around (shouldn't
+        // normally happen — guarded by isRunning/stopVpn — but belt-and-braces
+        // against ever silently leaking a registered NetworkCallback here).
+        dnsTracker?.stop()
         dnsTracker = tracker
 
         @Suppress("TooGenericExceptionCaught", "SwallowedException")
@@ -186,8 +190,12 @@ class DnsVpnService : VpnService() {
                 .establish()
         } catch (e: Exception) {
             Log.w(TAG, "DnsVpnService: VPN tunnel establishment failed: ${e.message}")
+            stopVpn()
             return
-        } ?: return
+        } ?: run {
+            stopVpn()
+            return
+        }
 
         tunFd = fd
         startForegroundCompat()
