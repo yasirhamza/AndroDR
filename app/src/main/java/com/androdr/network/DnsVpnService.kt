@@ -604,7 +604,8 @@ class DnsVpnService : VpnService() {
                 Log.w(TAG, "UpstreamResolver: no configured resolvers at start")
                 return false
             }
-            if (!openChannel(initial)) return false
+            val opened = runBlocking(Dispatchers.IO) { openChannel(initial) }
+            if (!opened) return false
             sweepJob = scope.launch { sweepLoop() }
             watchJob = scope.launch {
                 upstreams.collect { list -> onUpstreamsChanged(list) }
