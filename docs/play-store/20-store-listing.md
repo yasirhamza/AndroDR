@@ -16,7 +16,7 @@ AndroDR is a free, open-source security scanner that checks your Android phone f
 • Device security — screen lock, USB debugging, developer options, bootloader status, security patch level
 • Unpatched vulnerabilities — checks your patch level against the CISA Known Exploited Vulnerabilities catalog and OSV Android database
 • Mercenary spyware — specific checks for Pegasus (NSO Group), Predator (Intellexa), and Graphite (Paragon) indicators
-• DNS activity — optional network monitor detects connections to known command-and-control servers
+• DNS activity — optional network monitor uses Android's VPN service to create a local-only DNS filter that detects and blocks connections to known command-and-control servers
 • Surveillance permissions — identifies apps with camera, microphone, location, SMS, and contact access
 • Accessibility abuse — detects apps misusing accessibility services for monitoring
 • APK file hashes — SHA-256 hashes for every app, ready for VirusTotal lookup
@@ -52,6 +52,10 @@ AndroDR is a free, open-source security scanner that checks your Android phone f
 **Privacy:**
 
 AndroDR does not collect, transmit, or share any personal data. All scanning and analysis happens entirely on your device. Threat intelligence databases are downloaded to your phone — your data never goes the other way. See our full privacy policy for details.
+
+**About the optional VPN:**
+
+The network monitor uses Android's VPN service (VpnService) to inspect DNS queries on your device. The VPN is local-only: it creates no tunnel to any remote server, routes only DNS traffic, and never carries your browsing data. DNS queries are checked against threat databases on your device and forwarded to Google Public DNS (8.8.8.8) for normal resolution; blocked malicious domains are logged to the forensic timeline on your phone. The VPN is optional — every other feature works without it.
 
 ## Category
 Tools
