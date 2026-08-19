@@ -1,9 +1,9 @@
 # VPN Service Permission Declaration
 
-> **Version gating:** the text below describes app versions **0.9.0.612+**
+> **Version gating:** the text below describes app versions **0.9.0.615+**
 > (configured-resolver upstream, #303). The console declaration submitted
-> 2026-08-17 used the 8.8.8.8 wording, which stays accurate for builds <=611.
-> Re-paste the updated blocks below on the first console touch after 612 is live.
+> 2026-08-17 used the 8.8.8.8 wording, which stays accurate for builds <=614.
+> Re-paste the updated blocks below once a build 0.9.0.615 or later is live on Play (the 0.9.0.616 upload qualifies).
 
 ## Permission requested
 `android.permission.BIND_VPN_SERVICE`

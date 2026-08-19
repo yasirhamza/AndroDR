@@ -34,7 +34,7 @@ the socket is open to off-path traffic filtered only by the 16-bit txId.
   listing) proceeds NOW with the 8.8.8.8 text — it accurately describes every
   build users can currently install. The listing/declaration copy updates to
   "your device's configured DNS servers" with the release that ships this
-  change (612+). EN + AR snippets are prepared with that release.
+  change (0.9.0.615+, the first build containing #303). EN + AR snippets are prepared with that release.
 
 ## Design
 
@@ -197,7 +197,7 @@ issue if wanted).
 
 ## Rollout
 
-Ships in the next app release (612+). No rules-repo/feed involvement. With
+Ships in the app release 0.9.0.615+ (first build with #303). No rules-repo/feed involvement. With
 that release: update `docs/play-store/20-store-listing.md` ("About the
 optional VPN" paragraph) and `docs/play-store/17-vpn-permission-declaration.md`
 to say queries are forwarded to the device's own configured DNS servers
