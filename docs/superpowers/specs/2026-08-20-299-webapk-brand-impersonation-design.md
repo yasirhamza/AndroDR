@@ -19,10 +19,14 @@ phishing shipped as a minted WebAPK), so "Google-signed WebAPK" says nothing
 about intent.
 
 The detection anchor with real adversarial cost is the pairing of the app's
-**display name** with its **web scope**: the minting pipeline derives the scope
-from the origin serving the web manifest, so an attacker cannot mint a WebAPK
-scoped to `chase.com` without controlling content on `chase.com`. A brand name
-over a non-brand scope is therefore a high-confidence phishing signal.
+**display name** with its **web scope**: for a **genuine** mint the pipeline
+derives the scope from the origin serving the web manifest, so an attacker
+cannot mint a WebAPK scoped to `chase.com` without controlling content on
+`chase.com`. A brand name over a non-brand scope is therefore a high-confidence
+phishing signal. **This is an invariant of the minting service, not of the
+rule** — see §7: a self-built APK can adopt the `org.chromium.webapk.` prefix
+and self-declare a scope, forging both signals; that residual is caught only by
+androdr-010 (medium REVIEW) and is a documented non-goal.
 
 ## 2. Detection rules
 
@@ -103,10 +107,15 @@ threat class. Design notes, corrected against repo policy during planning:
   genuinely brand-published APK sideloaded from a mirror also fires — an
   accepted, documented FP (falsepositives wording follows
   authoring-lessons lesson 5). No `popular-apps.yml` additions are needed.
-- `filter_webapk` keeps WebAPKs exclusively androdr-092's domain: without
-  it, a *genuine* brand PWA browser-installed on API 36+ (installer ≠
-  vending) would fire 093 at high severity — the exact FP class 092's
-  scope check exists to prevent.
+- `filter_webapk` (`package_name|startswith "org.chromium.webapk." AND
+  webapk_scope|ioc_lookup: brand_domain_db`) exempts a WebAPK-prefixed
+  package *only when its scope is a genuine brand domain* — that case is
+  androdr-092's territory and would otherwise be a 092/093 double-fire on a
+  genuine brand PWA browser-installed on API 36+ (installer ≠ vending). The
+  scope conjunct is required, not the prefix alone: a fake that merely adopts
+  the prefix with a foreign or absent scope is NOT exempted and fires here,
+  so the two evasion levers collapse to the single irreducible forge-both
+  case (§7).
 - When the parked #136 Phase-2 branch lands it needs no sweep of 093 (093
   is already in the target idiom), only a rebase over the added files.
 
@@ -114,19 +123,25 @@ threat class. Design notes, corrected against repo policy during planning:
 
 **AppScanner (AndroDR):** in `buildTelemetryForPackage`, for packages with
 prefix `org.chromium.webapk.` only, perform a targeted
-`pm.getApplicationInfo(packageName, GET_META_DATA)` and read application-level
-meta-data keys `org.chromium.webapk.shell_apk.scope` and
-`org.chromium.webapk.shell_apk.startUrl` (both verified present on a real
-minted WebAPK via aapt2). Targeted read, not a `GET_META_DATA` flag on the
-bulk `getInstalledPackages` call — the bulk query already contends with Binder
-size limits, and only the prefixed packages can satisfy 092's selection.
-Read failure → nulls (rule then fires on brand-named WebAPKs, per §2 null
-semantics — fail-suspicious is intended for this prefix). New `AppTelemetry`
-fields `webapkScope`, `webapkStartUrl` (nullable strings), mapped as
-`webapk_scope` / `webapk_start_url` in `AppTelemetry.toFieldMap()` — the
-member function is the app_scanner field map (`TelemetryFieldMaps.kt` holds
-only the plan-6 bugreport services; `LogsourceTaxonomyCrossCheckTest`
-compares the taxonomy against a live `AppTelemetry` instance's map keys).
+`pm.getApplicationInfo(packageName, GET_META_DATA)` (helper `extractWebApkScope`)
+and read the application-level meta-data key
+`org.chromium.webapk.shell_apk.scope` (verified present on a real minted WebAPK
+via aapt2). Targeted read, not a `GET_META_DATA` flag on the bulk
+`getInstalledPackages` call — the bulk query already contends with Binder size
+limits, and only the prefixed packages can satisfy 092's selection. Read
+failure → null (rule then fires on brand-named WebAPKs, per §2 null semantics —
+fail-suspicious is intended for this prefix). The value is
+**attacker-controlled** (any app may adopt the prefix and self-declare it), so
+before it leaves the emitter it is stripped of control characters and capped at
+2048 chars — it flows into findings, `matchContext`, and the line-oriented
+report export, where an un-capped/newline value would forge report lines or
+exhaust memory. One new `AppTelemetry` field `webapkScope` (nullable string),
+mapped as `webapk_scope` in `AppTelemetry.toFieldMap()` — the member function
+is the app_scanner field map (`TelemetryFieldMaps.kt` holds only the plan-6
+bugreport services; `LogsourceTaxonomyCrossCheckTest` compares the taxonomy
+against a live `AppTelemetry` instance's map keys). (`webapk_start_url` was
+considered but dropped: no rule consumes it, and an unused attacker-controlled
+field is only surface.)
 
 **Rules repo:** `validation/logsource-taxonomy.yml` gains both fields under
 `app_scanner` as nullable raw_facts (taxonomy edits follow the safe-ordering,
@@ -171,20 +186,43 @@ sweep otherwise hard-fails (exit 2) on every push.
 on the `OemPrefixResolver` model** — bundled res/raw byte-copies
 (`brand_names.yml`, `brand_domains.yml`) for cold start, direct remote
 refresh of the two ioc-data URLs on the 12h cycle, in-memory
-`AtomicReference` state, size caps. No Room migration, no
-`PublicRepoIocFeed` changes. Mirror parity is gated by extending
-`OemPrefixMirrorParityTest` (its KDoc invites exactly this).
+`AtomicReference` state. No Room migration, no `PublicRepoIocFeed` changes.
+Mirror parity is gated by extending `OemPrefixMirrorParityTest`.
+
+**Suppression-channel hardening.** `brand_domain_db` is the fleet's first
+remote input that *suppresses* a finding (092's `not scope_legit`), and
+ioc-data is not covered by `rules.sha256`. So the resolver follows
+OemPrefixResolver's *validation* model, not just its delivery model:
+`buildMatcher` **rejects the whole fetch** (keeping previous state) if any
+name variant is < 2 chars, any domain lacks a dot or is a bare public suffix
+(a `PUBLIC_SUFFIX_DENYLIST`), or either list exceeds its cap — never a silent
+truncate. The same bounds are enforced at CI by a structural validator added
+to `validate-ioc-data.py` for `brand-names.yml`/`brand-domains.yml` (they
+previously took the entries-less pass-through), with the denylist kept in
+lockstep with the Kotlin one. `BrandRegistrySeedTest` additionally proves the
+*shipped* seeds parse to a non-empty matcher and that the two files' brand
+keys agree — closing the silent-content-loss (#203) class the byte-parity
+gate can't see.
+
+**Name matching robustness.** Labels and variants are NFKC-normalised with
+default-ignorable format characters (zero-width space/joiner, soft hyphen,
+RTL/LTR overrides) stripped before matching, and case folding uses `(?iu)`
+(Unicode-aware; `RegexOption.IGNORE_CASE` alone is ASCII-only on the JVM).
+This closes the pixel-identical zero-width interior-insertion evasion
+("Pay​Pal") without entering the homoglyph/confusables rabbit hole (§7).
 
 ## 4. Seed data (per-candidate HitL before any commit)
 
-~15–25 **financial/payment** brands (the documented phishing-WebAPK class),
-global majors plus the documented-abuse geography (PKO Bank Polski) and the
-current tester geography (Portugal). Each brand contributes: name variants
-to `brand-names.yml` (distinctive only — multi-token or unambiguous single
-tokens; ambiguous dictionary words banned, accepting the coverage loss on
-brands whose real label IS an ambiguous word) and official domains to
-`brand-domains.yml`. No `popular-apps.yml` additions (see §2 — the 093
-exemption is deliberately unreachable for sideloads). Curation policy
+23 **financial/payment** brands (HitL-approved), global majors plus the
+documented-abuse geography (PKO Bank Polski, mBank) and the current tester
+geography (Portugal: MB WAY, Millennium BCP, Caixadirecta). Each brand
+contributes: name variants to `brand-names.yml` (distinctive only —
+multi-token or unambiguous single tokens; ambiguous dictionary words banned,
+accepting the coverage loss on brands whose real label IS an ambiguous word)
+and its **complete** official domain list across every region the name
+variants cover to `brand-domains.yml` — an incomplete list is a guaranteed
+092 FP on the genuine regional app. No `popular-apps.yml` additions (see §2 —
+the 093 exemption is deliberately unreachable for sideloads). Curation policy
 recorded in each file's header. Expansion (social, crypto, mail providers)
 is follow-up work via the pipeline, not this change.
 
@@ -239,7 +277,22 @@ AndroDR PR.
 
 ## 7. Non-goals
 
-- Homoglyph/confusable-name detection (rabbit hole; revisit with evidence).
+- **Closing the forge-both WebAPK residual.** A self-built APK that adopts
+  the `org.chromium.webapk.` prefix *and* self-declares a scope on the
+  brand's genuine domain evades both 092 and 093. This is the irreducible
+  WebAPK-identity gap (per-app leaf certs, unmeasurable/forgeable installer —
+  the #311/#296 wall). It is **not a regression** (androdr-010 still surfaces
+  it as a medium REVIEW sideload) and is recorded as a deliberate boundary in
+  both rules' text and pinned by a test, not treated as impossible. The
+  scope-conjoined `filter_webapk` (§2) collapses the two evasion levers to
+  this single one and catches the lazy prefix-adopter.
+- Homoglyph/confusable-name detection, and Unicode confusables generally
+  (rabbit hole; the zero-width/default-ignorable class IS handled, §3).
+- Per-brand name↔domain pairing (a subdomain takeover on one listed brand's
+  domain currently exempts *any* brand name; the flat-set design is sound for
+  the apex per §2 but overstated for `*.brand.com`). Deferred — it needs the
+  evaluator's `(fieldValue) -> Boolean` lookup signature widened to carry the
+  full record. Tracked as a follow-up.
 - Non-financial brand categories in the seed (pipeline follow-up).
 - Any new evidence_type/UI machinery.
 - Emitting all signer certs / CA-anchored WebAPK trust (dead end — a real
