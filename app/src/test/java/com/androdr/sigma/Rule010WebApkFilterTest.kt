@@ -6,15 +6,21 @@ import org.junit.Test
 import java.io.File
 
 /**
- * Rule-level tests for androdr-010's cert-anchored WebAPK exemption (#296).
- * Loads the ACTUAL bundled rule file so the tests gate the shipped artifact,
- * not a hand-built copy. The minter certs are duplicated here on purpose: if
- * the rule file's cert values drift, these tests fail.
+ * Rule-level tests for androdr-010 after the WebAPK exemption was removed
+ * (reverses #296/#311). Loads the ACTUAL bundled rule file so the tests gate
+ * the shipped artifact.
+ *
+ * Design decision (#311): Chrome-minted WebAPKs are NOT exempted — a minted
+ * WebAPK can be a genuine credential-phishing app (Google's minter is
+ * unauthenticated), so it must surface as a REVIEW-level "Sideloaded
+ * Application" finding rather than be silently trusted. The only WebAPK
+ * exemption that remains is the general from_trusted_store path (Play-installed
+ * WebAPKs on older Android), which is not WebAPK-specific.
+ *
+ * The #311 lesson is retained: every record sets from_trusted_store EXPLICITLY,
+ * so trusted-store exemption vs. sideload firing is never left ambiguous.
  */
 class Rule010WebApkFilterTest {
-
-    private val minterCertSigner1 = "16ec831c994af033e958063c3555b22de7b078c4a6a424bdbebf7753ca73eceb"
-    private val minterCertSigner2 = "f9a8f75a7f0b5d2ccae8c2b570855640e709995558cd9706af74b84e68962faa"
 
     private fun loadRule(): SigmaRule {
         val f = listOf(
@@ -36,43 +42,40 @@ class Rule010WebApkFilterTest {
         SigmaRuleEvaluator.evaluate(listOf(loadRule()), listOf(record), "app_scanner", lookups)
             .any { it.triggered }
 
-    private fun app(pkg: String, cert: String?) = mapOf(
+    private fun app(pkg: String, fromTrustedStore: Boolean) = mapOf(
         "package_name" to pkg,
         "is_system_app" to false,
-        "from_trusted_store" to false,
+        "from_trusted_store" to fromTrustedStore,
         "is_known_oem_app" to false,
-        "cert_hash" to cert,
     )
 
-    @Test
-    fun `google minted webapk is exempt`() =
-        assertFalse(fires(app("org.chromium.webapk.a1b2c3d4", minterCertSigner1)))
+    // ── WebAPKs are no longer exempted — they surface as reviewable sideloads ──
 
     @Test
-    fun `second co-signer cert is also exempt`() =
-        assertFalse(fires(app("org.chromium.webapk.a1b2c3d4", minterCertSigner2)))
+    fun `non-store webapk fires (no exemption)`() =
+        assertTrue(fires(app("org.chromium.webapk.a1b2c3d4", fromTrustedStore = false)))
 
     @Test
-    fun `webapk prefix with wrong cert still fires`() =
-        assertTrue(fires(app("org.chromium.webapk.evil", "deadbeef".repeat(8))))
+    fun `a second distinct webapk also fires (no per-device dependence)`() =
+        assertTrue(fires(app("org.chromium.webapk.deadbeef99", fromTrustedStore = false)))
+
+    // ── The only remaining exemption is the general trusted-store path ──
 
     @Test
-    fun `minter cert on non webapk package still fires`() =
-        assertTrue(fires(app("com.evil.app", minterCertSigner1)))
+    fun `play-installed webapk stays exempt via from_trusted_store`() =
+        assertFalse(fires(app("org.chromium.webapk.a1b2c3d4", fromTrustedStore = true)))
 
-    @Test
-    fun `webapk prefix with null cert still fires`() =
-        assertTrue(fires(app("org.chromium.webapk.evil", null)))
+    // ── Regression guards for the base rule ──
 
     @Test
     fun `plain sideload still fires`() =
-        assertTrue(fires(app("com.random.sideload", "ab".repeat(32))))
+        assertTrue(fires(app("com.random.sideload", fromTrustedStore = false)))
 
     @Test
-    fun `known good app stays exempt`() =
-        assertFalse(fires(app("com.x8bit.bitwarden", "ab".repeat(32))))
+    fun `trusted-store app does not fire`() =
+        assertFalse(fires(app("com.some.playapp", fromTrustedStore = true)))
 
     @Test
-    fun `cert match is case insensitive`() =
-        assertFalse(fires(app("org.chromium.webapk.a1b2c3d4", minterCertSigner1.uppercase())))
+    fun `known good app stays exempt via existing filter`() =
+        assertFalse(fires(app("com.x8bit.bitwarden", fromTrustedStore = false)))
 }
