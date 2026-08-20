@@ -1,2 +1,62 @@
 version: "2026-08-20"
-brands: {}
+description: >
+  Display-name variants of brands protected against impersonation
+  (AndroDR #299). Consumed by the brand_name_db ioc_lookup (androdr-092,
+  androdr-093) via AndroDR's BrandImpersonationResolver: word-boundary,
+  case-insensitive containment against the emitted app_name. This file has
+  no entries key by design - it takes validate-ioc-data.py's structural
+  early-return path, like known-oem-prefixes.yml.
+  CURATION POLICY: variants must be distinctive - multi-token, or single
+  tokens that are not dictionary words. Ambiguous words (chase, wise, citi)
+  are banned even though some brands' real labels are exactly that; the
+  coverage loss is accepted over the false-positive surface. Every addition
+  goes through the human-in-the-loop gate.
+sources:
+  - manual-curation
+brands:
+  paypal:
+    display_names: ["PayPal"]
+  chase:
+    display_names: ["Chase Bank", "Chase Mobile"]
+  bank_of_america:
+    display_names: ["Bank of America", "BofA"]
+  wells_fargo:
+    display_names: ["Wells Fargo"]
+  citi:
+    display_names: ["Citibank", "Citi Mobile"]
+  capital_one:
+    display_names: ["Capital One"]
+  venmo:
+    display_names: ["Venmo"]
+  cash_app:
+    display_names: ["Cash App"]
+  zelle:
+    display_names: ["Zelle"]
+  barclays:
+    display_names: ["Barclays"]
+  hsbc:
+    display_names: ["HSBC"]
+  santander:
+    display_names: ["Santander"]
+  revolut:
+    display_names: ["Revolut"]
+  n26:
+    display_names: ["N26"]
+  monzo:
+    display_names: ["Monzo"]
+  ing:
+    display_names: ["ING Bank", "ING Banking"]
+  bbva:
+    display_names: ["BBVA"]
+  pko_bank_polski:
+    display_names: ["PKO Bank Polski", "iPKO", "IKO"]
+  mbank:
+    display_names: ["mBank"]
+  nubank:
+    display_names: ["Nubank"]
+  mb_way:
+    display_names: ["MB WAY"]
+  millennium_bcp:
+    display_names: ["Millennium BCP"]
+  caixa_geral_de_depositos:
+    display_names: ["Caixadirecta"]

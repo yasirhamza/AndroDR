@@ -1,2 +1,61 @@
 version: "2026-08-20"
-brands: {}
+description: >
+  Official web domains of impersonation-protected brands (AndroDR #299).
+  Consumed by the brand_domain_db ioc_lookup (androdr-092) via AndroDR's
+  BrandImpersonationResolver: the emitted webapk_scope URL's host is
+  matched by label-boundary suffix walk (paypal.com matches
+  www.paypal.com, never notpaypal.com). Entries must be bare registrable
+  domains - lowercase, no scheme, no path. Brand keys mirror
+  brand-names.yml. This file has no entries key by design - it takes
+  validate-ioc-data.py's structural early-return path, like
+  known-oem-prefixes.yml. Every addition goes through the
+  human-in-the-loop gate.
+sources:
+  - manual-curation
+brands:
+  paypal:
+    domains: [paypal.com]
+  chase:
+    domains: [chase.com]
+  bank_of_america:
+    domains: [bankofamerica.com, bofa.com]
+  wells_fargo:
+    domains: [wellsfargo.com]
+  citi:
+    domains: [citi.com, citibank.com]
+  capital_one:
+    domains: [capitalone.com]
+  venmo:
+    domains: [venmo.com]
+  cash_app:
+    domains: [cash.app]
+  zelle:
+    domains: [zellepay.com, zelle.com]
+  barclays:
+    domains: [barclays.co.uk, barclays.com]
+  hsbc:
+    domains: [hsbc.com, hsbc.co.uk]
+  santander:
+    domains: [santander.com, santander.co.uk, santander.pl]
+  revolut:
+    domains: [revolut.com]
+  n26:
+    domains: [n26.com]
+  monzo:
+    domains: [monzo.com]
+  ing:
+    domains: [ing.com, ing.nl, ing.pl]
+  bbva:
+    domains: [bbva.com, bbva.es, bbva.mx]
+  pko_bank_polski:
+    domains: [pkobp.pl, ipko.pl]
+  mbank:
+    domains: [mbank.pl]
+  nubank:
+    domains: [nubank.com.br]
+  mb_way:
+    domains: [mbway.pt]
+  millennium_bcp:
+    domains: [millenniumbcp.pt]
+  caixa_geral_de_depositos:
+    domains: [cgd.pt]

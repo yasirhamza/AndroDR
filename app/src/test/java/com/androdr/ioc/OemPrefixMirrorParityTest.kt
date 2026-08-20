@@ -91,6 +91,55 @@ class OemPrefixMirrorParityTest {
         )
     }
 
+    // ── Brand impersonation registry (#299): same feed model, same gate ──
+    // BrandImpersonationResolver.refresh() also replaces its state wholesale
+    // from the ioc-data mirrors, so the bundled seeds are cold-start-only and
+    // bundled-only content dies on-device within 12h — the #203 failure mode.
+
+    private fun brandPairs(): List<Pair<String, String>> = listOf(
+        "brand_names.yml" to "brand-names.yml",
+        "brand_domains.yml" to "brand-domains.yml",
+    )
+
+    private fun bundledBrandFile(name: String): File = listOf(
+        File("app/src/main/res/raw/$name"),
+        File("src/main/res/raw/$name"),
+        File("/home/yasir/AndroDR/app/src/main/res/raw/$name"),
+    ).firstOrNull { it.isFile }
+        ?: error("$name not found — brand parity gate cannot run from this working directory")
+
+    private fun mirrorBrandFile(name: String): File? = listOf(
+        File("third-party/android-sigma-rules/ioc-data/$name"),
+        File("../third-party/android-sigma-rules/ioc-data/$name"),
+        File("/home/yasir/AndroDR/third-party/android-sigma-rules/ioc-data/$name"),
+    ).firstOrNull { it.isFile }
+
+    @Test
+    fun `bundled brand registry seeds are byte-equal to their mirror counterparts`() {
+        for ((bundledName, mirrorName) in brandPairs()) {
+            val bundled = bundledBrandFile(bundledName)
+            val mirror = mirrorBrandFile(mirrorName)
+            assertTrue(
+                "submodule not checked out under CI — build-and-test uses " +
+                    "submodules: true, so this means the checkout regressed and the " +
+                    "brand parity gate would have passed without comparing anything",
+                mirror != null || System.getenv("CI") != "true",
+            )
+            assumeTrue("submodule not checked out — skipping", mirror != null)
+            requireNotNull(mirror)
+
+            assertTrue(
+                "$bundledName differs from ioc-data/$mirrorName. " +
+                    "BrandImpersonationResolver.refresh() replaces the registry " +
+                    "wholesale from the mirror, so anything bundled-only is dropped " +
+                    "on-device within 12h of install. Copy the mirror file over the " +
+                    "bundled one (filenames differ: underscores bundled, hyphens " +
+                    "mirrored) and ship via the safe ordering in CLAUDE.md.",
+                mirror.readBytes().contentEquals(bundled.readBytes()),
+            )
+        }
+    }
+
     @Test
     fun `unit-test fixture copy is byte-equal to the bundled allowlist`() {
         val bundled = bundledFile()
