@@ -55,11 +55,14 @@ class BrandImpersonationResolver @Inject constructor(
 
         @Suppress("SwallowedException", "TooGenericExceptionCaught")
         fun matchesDomain(scopeUrl: String): Boolean {
-            if (scopeUrl.isBlank()) return false
-            val host = try {
-                URI(scopeUrl.trim()).host
-            } catch (e: Exception) {
+            val host = if (scopeUrl.isBlank()) {
                 null
+            } else {
+                try {
+                    URI(scopeUrl.trim()).host
+                } catch (e: Exception) {
+                    null
+                }
             } ?: return false
             // Label-boundary suffix walk (same semantics as BlocklistManager):
             // strip the leftmost label until a listed domain is hit.
