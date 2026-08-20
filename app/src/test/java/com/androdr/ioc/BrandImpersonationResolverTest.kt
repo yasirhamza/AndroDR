@@ -165,6 +165,20 @@ class BrandImpersonationResolverTest {
         assertNull(BrandImpersonationResolver.buildMatcher(listOf("a"), listOf("paypal.com")))
 
     @Test
+    fun `buildMatcher rejects a zero-width-padded variant that normalises to one char`() =
+        // Raw length 3, normalises to "A" — the length bound must bind on the
+        // normalised form (else a 1-char over-matching pattern ships).
+        assertNull(BrandImpersonationResolver.buildMatcher(listOf("​​A"), listOf("paypal.com")))
+
+    @Test
+    fun `buildMatcher rejects a multi-label public-suffix domain`() =
+        assertNull(BrandImpersonationResolver.buildMatcher(listOf("HSBC"), listOf("com.hk")))
+
+    @Test
+    fun `buildMatcher accepts a genuine multi-label regional domain`() =
+        assertNotNull(BrandImpersonationResolver.buildMatcher(listOf("HSBC"), listOf("hsbc.com.hk")))
+
+    @Test
     fun `buildMatcher rejects empty inputs`() {
         assertNull(BrandImpersonationResolver.buildMatcher(emptyList(), listOf("paypal.com")))
         assertNull(BrandImpersonationResolver.buildMatcher(listOf("PayPal"), emptyList()))

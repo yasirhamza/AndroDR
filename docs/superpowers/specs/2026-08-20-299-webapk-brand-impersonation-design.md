@@ -107,15 +107,16 @@ threat class. Design notes, corrected against repo policy during planning:
   genuinely brand-published APK sideloaded from a mirror also fires — an
   accepted, documented FP (falsepositives wording follows
   authoring-lessons lesson 5). No `popular-apps.yml` additions are needed.
-- `filter_webapk` (`package_name|startswith "org.chromium.webapk." AND
-  webapk_scope|ioc_lookup: brand_domain_db`) exempts a WebAPK-prefixed
-  package *only when its scope is a genuine brand domain* — that case is
-  androdr-092's territory and would otherwise be a 092/093 double-fire on a
-  genuine brand PWA browser-installed on API 36+ (installer ≠ vending). The
-  scope conjunct is required, not the prefix alone: a fake that merely adopts
-  the prefix with a foreign or absent scope is NOT exempted and fires here,
-  so the two evasion levers collapse to the single irreducible forge-both
-  case (§7).
+- `filter_webapk` (`package_name|startswith "org.chromium.webapk."`)
+  excludes **all** WebAPK-prefixed packages, delegating them to androdr-092.
+  092 already covers them comprehensively — it fires on a foreign/absent
+  scope and exempts a genuine brand scope — so re-evaluating a WebAPK here
+  adds no detection, only a redundant 092/093 double-fire (and a false
+  positive on a genuine regional PWA whose domain is not yet in the
+  registry). A scope conjunct was considered and rejected for exactly that
+  reason: it buys nothing 092 doesn't already do and reintroduces the
+  double-fire. The forge-both residual (prefix + genuine brand scope) is
+  092's documented boundary, caught only at androdr-010 (§7).
 - When the parked #136 Phase-2 branch lands it needs no sweep of 093 (093
   is already in the target idiom), only a rebase over the added files.
 
@@ -143,8 +144,8 @@ against a live `AppTelemetry` instance's map keys). (`webapk_start_url` was
 considered but dropped: no rule consumes it, and an unused attacker-controlled
 field is only surface.)
 
-**Rules repo:** `validation/logsource-taxonomy.yml` gains both fields under
-`app_scanner` as nullable raw_facts (taxonomy edits follow the safe-ordering,
+**Rules repo:** `validation/logsource-taxonomy.yml` gains `webapk_scope` under
+`app_scanner` as a nullable raw_fact (taxonomy edits follow the safe-ordering,
 per CLAUDE.md). `validation/rule-schema.json` untouched unless it enumerates
 fields (cross-check tests will say). Existing gates enforce agreement:
 `LogsourceTaxonomyCrossCheckTest`, `DetectionFieldCrossCheckTest`,

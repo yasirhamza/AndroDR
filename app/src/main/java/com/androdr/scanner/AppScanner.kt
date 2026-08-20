@@ -41,7 +41,6 @@ class AppScanner @Inject constructor(
         // A URL cannot legitimately need this many chars; the cap bounds
         // memory and report size against a hostile meta-data value.
         private const val MAX_WEBAPK_SCOPE_CHARS = 2048
-        private val CONTROL_CHAR_REGEX = Regex("\\p{Cntrl}")
 
         /**
          * Maximum number of concurrent per-package workers in
@@ -356,7 +355,12 @@ class AppScanner @Inject constructor(
         return try {
             pm.getApplicationInfo(packageName, PackageManager.GET_META_DATA)
                 .metaData?.getString(WEBAPK_META_SCOPE)
-                ?.replace(CONTROL_CHAR_REGEX, "")
+                // Printable-ASCII only, then cap. URLs are ASCII (IDN hosts are
+                // punycode), and the forensic report is strictly ASCII and
+                // line-oriented (cf. ScanOrchestrator sanitisation, ReportFormatter)
+                // — this drops control chars, bidi overrides, and non-ASCII that
+                // would forge report lines or spoof the displayed URL.
+                ?.filter { it in ' '..'~' }
                 ?.take(MAX_WEBAPK_SCOPE_CHARS)
         } catch (e: Exception) {
             Log.w(TAG, "collectTelemetry: WebAPK meta-data read failed for $packageName: ${e.message}")

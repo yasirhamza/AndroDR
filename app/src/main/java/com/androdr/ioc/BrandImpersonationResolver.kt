@@ -112,8 +112,8 @@ class BrandImpersonationResolver @Inject constructor(
      * contract, cf. OemPrefixResolver.refresh).
      */
     suspend fun refresh(): Int = withContext(Dispatchers.IO) {
-        val namesYaml = SafeHttpFetch.fetch(NAMES_URL, maxBytes = MAX_FETCH_BYTES)
-        val domainsYaml = SafeHttpFetch.fetch(DOMAINS_URL, maxBytes = MAX_FETCH_BYTES)
+        val namesYaml = SafeHttpFetch.fetch(NAMES_URL, maxBytes = MAX_FETCH_BYTES, timeoutMs = TIMEOUT_MS)
+        val domainsYaml = SafeHttpFetch.fetch(DOMAINS_URL, maxBytes = MAX_FETCH_BYTES, timeoutMs = TIMEOUT_MS)
         if (namesYaml == null || domainsYaml == null) {
             Log.w(
                 TAG,
@@ -149,7 +149,9 @@ class BrandImpersonationResolver @Inject constructor(
         private const val MAX_DOMAINS = 500
         private const val MAX_LIST_VALUES = 2000
         private const val MIN_NAME_VARIANT_LEN = 2
+        private const val MAX_NAME_VARIANT_LEN = 128
         private const val MAX_FETCH_BYTES = 262_144
+        private const val TIMEOUT_MS = 15_000
         private const val NAMES_URL =
             "https://raw.githubusercontent.com/android-sigma-rules/rules/main/ioc-data/brand-names.yml"
         private const val DOMAINS_URL =
@@ -159,24 +161,42 @@ class BrandImpersonationResolver @Inject constructor(
 
         /**
          * Domain values that must never enter `brand_domain_db`: a bare TLD or
-         * a common multi-label public suffix would, via the label-boundary
-         * suffix walk, exempt an unbounded set of scopes from androdr-092. This
-         * is the on-device half of the guard; the rules-repo validator is the
-         * primary gate. Not a full PSL — just the suffixes our own registry's
-         * eTLD+1 entries end in, plus the obvious global TLDs.
+         * a public suffix would, via the label-boundary suffix walk, exempt an
+         * unbounded set of scopes from androdr-092. Best-effort backstop, NOT a
+         * full Public Suffix List — it covers the common global TLDs and the
+         * second-level registries of the ccTLDs a brand registry realistically
+         * touches (single-label entries are redundant with the no-dot check and
+         * kept only belt-and-suspenders). The primary integrity controls are
+         * the per-entry HitL gate and the rules-repo branch protection; this
+         * and the CI validator (kept in lockstep) are defence in depth on the
+         * un-hashed ioc-data channel. Keep in sync with
+         * validate-ioc-data.py:BRAND_PUBLIC_SUFFIX_DENYLIST.
          */
         private val PUBLIC_SUFFIX_DENYLIST = setOf(
-            "com", "org", "net", "io", "app", "co", "info", "biz",
+            // Single-label TLDs (redundant with the no-dot check).
+            "com", "org", "net", "io", "app", "co", "info", "biz", "dev", "me",
             "uk", "pl", "pt", "es", "mx", "nl", "br", "de", "be", "fr", "it",
-            "co.uk", "com.br", "com.mx", "com.au", "co.jp", "co.in", "com.pl",
+            "ar", "hk", "cz", "pe", "cn", "tw", "sg", "my", "ph", "vn", "id",
+            "th", "kr", "za", "in", "tr", "au", "nz", "jp", "ca", "us",
+            // Multi-label public suffixes (second-level registries).
+            "co.uk", "org.uk", "me.uk", "net.uk", "ltd.uk", "plc.uk",
+            "com.au", "net.au", "org.au", "co.jp", "ne.jp", "or.jp",
+            "com.br", "net.br", "org.br", "com.mx", "com.ar", "com.co",
+            "com.pe", "com.ve", "com.cl", "com.hk", "com.cn", "net.cn",
+            "org.cn", "com.tw", "com.sg", "com.my", "com.ph", "com.vn",
+            "co.id", "co.th", "co.kr", "co.za", "co.nz", "co.in", "co.il",
+            "com.tr", "com.sa", "com.eg", "com.ng", "com.pk", "com.bd",
+            "com.pl", "com.ua", "com.ru",
         )
 
         /**
          * Normalise a label or variant for matching: strip default-ignorable
-         * format characters (zero-width space/joiner, soft hyphen, RTL/LTR
-         * overrides) then NFKC-fold. Closes the pixel-identical zero-width
-         * insertion evasion ("Pay​Pal") without entering the homoglyph
-         * rabbit hole (confusables remain out of scope, spec §7).
+         * FORMAT characters (\p{Cf}: zero-width space/joiner, soft hyphen,
+         * RTL/LTR overrides) then NFKC-fold. Closes the pixel-identical
+         * zero-width *format-character* insertion evasion ("Pay​Pal"). It
+         * does NOT close invisible-LETTER tricks (e.g. U+3164 Hangul filler,
+         * category Lo) — those are Unicode confusables, an explicit non-goal
+         * (spec §7), not this format-character class.
          */
         internal fun normalizeLabel(s: String): String =
             Normalizer.normalize(CF_REGEX.replace(s, ""), Normalizer.Form.NFKC)
@@ -199,10 +219,15 @@ class BrandImpersonationResolver @Inject constructor(
          * caught the same way on both channels.
          */
         internal fun buildMatcher(names: List<String>, domains: List<String>): BrandMatcher? {
+            // Length-bound the NORMALISED variant, not the raw one: BrandMatcher
+            // matches on the normalised form, so a raw "​​A" (raw len
+            // 3, normalised "A") would otherwise slip a 1-char over-matching
+            // pattern past the min-length guard.
+            val normNames = names.map { normalizeLabel(it) }
             val cleanDomains = domains.map { it.trim().lowercase(Locale.ROOT) }
-            val valid = names.isNotEmpty() && domains.isNotEmpty() &&
-                names.size <= MAX_NAME_VARIANTS && domains.size <= MAX_DOMAINS &&
-                names.none { it.length < MIN_NAME_VARIANT_LEN } &&
+            val valid = normNames.isNotEmpty() && cleanDomains.isNotEmpty() &&
+                normNames.size <= MAX_NAME_VARIANTS && cleanDomains.size <= MAX_DOMAINS &&
+                normNames.none { it.length < MIN_NAME_VARIANT_LEN || it.length > MAX_NAME_VARIANT_LEN } &&
                 cleanDomains.none { !it.contains('.') || it in PUBLIC_SUFFIX_DENYLIST }
             return if (valid) BrandMatcher(names, cleanDomains.toSet()) else null
         }

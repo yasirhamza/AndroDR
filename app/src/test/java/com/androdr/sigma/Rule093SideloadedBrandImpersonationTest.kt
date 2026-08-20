@@ -72,8 +72,11 @@ class Rule093SideloadedBrandImpersonationTest {
     fun `system app does not fire`() =
         assertFalse(fires(app("PayPal", installer = null, isSystemApp = true)))
 
+    // WebAPK-prefixed packages are androdr-092's territory: 093 excludes them
+    // all, whatever the scope, so there is never a redundant 092/093 double-fire.
+
     @Test
-    fun `webapk with genuine brand scope is excluded (androdr-092 territory)`() =
+    fun `webapk with genuine brand scope is excluded`() =
         assertFalse(
             fires(
                 app(
@@ -84,8 +87,8 @@ class Rule093SideloadedBrandImpersonationTest {
         )
 
     @Test
-    fun `webapk-prefixed fake with FOREIGN scope fires (prefix alone is not a free pass)`() =
-        assertTrue(
+    fun `webapk with foreign scope is excluded (092 catches it)`() =
+        assertFalse(
             fires(
                 app(
                     "PayPal", installer = null,
@@ -95,8 +98,8 @@ class Rule093SideloadedBrandImpersonationTest {
         )
 
     @Test
-    fun `webapk-prefixed fake with NO scope fires`() =
-        assertTrue(
+    fun `webapk with no scope is excluded (092 catches it)`() =
+        assertFalse(
             fires(app("PayPal", installer = null, pkg = "org.chromium.webapk.fake_v2", scope = null))
         )
 

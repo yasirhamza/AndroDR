@@ -6,10 +6,8 @@ description: >
     A native app uses a protected brand's display name (a bank or payment
     provider) but was not installed from a trusted app store. Banking trojans
     and phishing droppers routinely name themselves after the institution they
-    target. Genuine Chrome-minted WebAPKs of the brand (web scope on the
-    brand's official domain) are excluded here and judged by the sharper
-    scope-anchored androdr-092 instead; a WebAPK-prefixed package whose scope
-    is NOT the brand's domain is not excluded and fires here too.
+    target. Chrome-minted WebAPKs (org.chromium.webapk.*) are excluded here
+    and judged by the sharper scope-anchored androdr-092 instead.
 author: AndroDR
 date: 2026/08/20
 references:
@@ -35,16 +33,14 @@ detection:
         package_name|ioc_lookup: known_good_app_db
         installer|ioc_lookup: trusted_installer_db
     filter_webapk:
-        # Exempt a WebAPK-prefixed package ONLY when its scope is a genuine
-        # brand domain (that case is androdr-092's territory and would be a
-        # 092/093 double-fire). A prefix alone is attacker-settable, so the
-        # scope conjunct is required: a fake that merely adopts the prefix but
-        # carries a foreign/absent scope is NOT exempted and fires here. The
-        # residual — an attacker who forges BOTH the prefix AND a genuine brand
-        # scope — is the irreducible WebAPK limitation documented in
-        # androdr-092 and closed only at androdr-010 (medium REVIEW).
+        # Delegate ALL WebAPK-prefixed packages to androdr-092, which owns
+        # them: 092 fires on a foreign/absent scope and exempts a genuine
+        # brand scope, so re-evaluating them here only produces a redundant
+        # 092/093 double-fire (and a false positive on a genuine regional PWA
+        # whose domain is not yet in the registry). The forge-both residual
+        # (prefix + genuine brand scope) is 092's documented boundary, caught
+        # only at androdr-010 (medium REVIEW).
         package_name|startswith: "org.chromium.webapk."
-        webapk_scope|ioc_lookup: brand_domain_db
     condition: selection and not store_installed and not filter_known_good and not filter_webapk
 level: high
 falsepositives:
