@@ -42,6 +42,10 @@ data class AppTelemetry(
     // NEW (#168):
     val embeddedComponentClasses: List<String> = emptyList(),
     val embeddedNativeLibs: List<String> = emptyList(),
+    // WebAPK shell-manifest meta-data (#299): web scope + start URL for
+    // org.chromium.webapk.* packages; null for every other app.
+    val webapkScope: String? = null,
+    val webapkStartUrl: String? = null,
 ) {
     fun toFieldMap(): Map<String, Any?> = mapOf(
         "package_name" to packageName,
@@ -66,6 +70,9 @@ data class AppTelemetry(
         "last_update_time" to lastUpdateTime,
         // NEW (#168):
         "embedded_component_class" to embeddedComponentClasses,
-        "embedded_native_lib" to embeddedNativeLibs
+        "embedded_native_lib" to embeddedNativeLibs,
+        // NEW (#299):
+        "webapk_scope" to webapkScope,
+        "webapk_start_url" to webapkStartUrl
     )
 }

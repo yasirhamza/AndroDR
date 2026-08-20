@@ -36,6 +36,9 @@ class AppScanner @Inject constructor(
 
     companion object {
         private const val TAG = "AppScanner"
+        private const val WEBAPK_PACKAGE_PREFIX = "org.chromium.webapk."
+        private const val WEBAPK_META_SCOPE = "org.chromium.webapk.shell_apk.scope"
+        private const val WEBAPK_META_START_URL = "org.chromium.webapk.shell_apk.startUrl"
 
         /**
          * Maximum number of concurrent per-package workers in
@@ -301,6 +304,28 @@ class AppScanner @Inject constructor(
         val embeddedComponentClasses = extractComponentClassNames(pkg, pkgDetail)
         val embeddedNativeLibs = extractNativeLibFileNames(appInfo)
 
+        // WebAPK shell-manifest meta-data (#299). Targeted per-package read:
+        // the bulk getInstalledPackages call deliberately omits GET_META_DATA
+        // (Binder size pressure), and only org.chromium.webapk.* packages can
+        // satisfy the WebAPK rules' selection anyway.
+        var webapkScope: String? = null
+        var webapkStartUrl: String? = null
+        if (packageName.startsWith(WEBAPK_PACKAGE_PREFIX)) {
+            @Suppress("TooGenericExceptionCaught", "SwallowedException")
+            try {
+                val metaData = pm.getApplicationInfo(
+                    packageName, PackageManager.GET_META_DATA
+                ).metaData
+                webapkScope = metaData?.getString(WEBAPK_META_SCOPE)
+                webapkStartUrl = metaData?.getString(WEBAPK_META_START_URL)
+            } catch (e: Exception) {
+                Log.w(
+                    TAG,
+                    "collectTelemetry: WebAPK meta-data read failed for $packageName: ${e.message}"
+                )
+            }
+        }
+
         return AppTelemetry(
             packageName = packageName,
             appName = appName,
@@ -326,6 +351,8 @@ class AppScanner @Inject constructor(
             source = TelemetrySource.LIVE_SCAN,
             embeddedComponentClasses = embeddedComponentClasses,
             embeddedNativeLibs = embeddedNativeLibs,
+            webapkScope = webapkScope,
+            webapkStartUrl = webapkStartUrl,
         )
     }
 
