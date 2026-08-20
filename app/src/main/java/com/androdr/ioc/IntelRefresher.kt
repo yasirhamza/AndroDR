@@ -31,6 +31,7 @@ class IntelRefresher @Inject constructor(
     private val publicRepoIocFeed: PublicRepoIocFeed,
     private val knownAppResolver: KnownAppResolver,
     private val oemPrefixResolver: OemPrefixResolver,
+    private val brandImpersonationResolver: BrandImpersonationResolver,
     private val sigmaRuleFeed: SigmaRuleFeed,
     private val sigmaRuleEngine: SigmaRuleEngine,
     private val cveRepository: CveRepository,
@@ -57,6 +58,7 @@ class IntelRefresher @Inject constructor(
         val indicators: Int = 0,
         val knownApps: Int = 0,
         val oemPrefixes: Int = 0,
+        val brandRegistry: Int = 0,
         val sigmaRemoteRules: Int = 0,
         val cveReachable: Int = 0,
     ) {
@@ -66,8 +68,9 @@ class IntelRefresher @Inject constructor(
 
     /**
      * Refreshes every threat-intel feed (bulk IOC feeds, the curated public
-     * rule-repo IOCs, OEM prefixes, SIGMA rules, and CVEs), recording per-feed
-     * health for each. Returns a [RefreshReport] of the per-feed this-run
+     * rule-repo IOCs, OEM prefixes, the brand impersonation registry, SIGMA
+     * rules, and CVEs), recording per-feed health for each. Returns a
+     * [RefreshReport] of the per-feed this-run
      * signals. Safe to call from any coroutine context.
      *
      * Every entry point — the periodic [IocUpdateWorker], the manual pre-scan
@@ -102,6 +105,7 @@ class IntelRefresher @Inject constructor(
         val (indicators, knownApps) = runBulkUpdaters()
         refreshPublicRepoIoc()
         val oemPrefixes = refreshOemPrefixes()
+        val brandRegistry = refreshBrandRegistry()
         val sigmaRemoteRules = refreshSigmaRules()
         val cveReachable = refreshCveDatabase()
         lastRefreshAt = System.currentTimeMillis()
@@ -110,6 +114,7 @@ class IntelRefresher @Inject constructor(
             indicators = indicators,
             knownApps = knownApps,
             oemPrefixes = oemPrefixes,
+            brandRegistry = brandRegistry,
             sigmaRemoteRules = sigmaRemoteRules,
             cveReachable = cveReachable,
         )
@@ -141,6 +146,15 @@ class IntelRefresher @Inject constructor(
         // channel, so a false-green here would hide the 2026-07-03 outage class.
         return feedHealthRecorder.recordCount(FeedHealthRecorder.FEED_OEM_PREFIXES) {
             oemPrefixResolver.refresh()
+        }
+    }
+
+    private suspend fun refreshBrandRegistry(): Int {
+        // refresh() returns name variants accepted this run (0 on any failure)
+        // — same "empty is failure" success signal as the OEM prefix feed,
+        // riding the same raw.githubusercontent.com channel (#299).
+        return feedHealthRecorder.recordCount(FeedHealthRecorder.FEED_BRAND_REGISTRY) {
+            brandImpersonationResolver.refresh()
         }
     }
 

@@ -1,0 +1,56 @@
+title: Sideloaded app impersonating a protected brand
+id: androdr-093
+status: experimental
+category: incident
+description: >
+    A native app uses a protected brand's display name (a bank or payment
+    provider) but was not installed from a trusted app store. Banking trojans
+    and phishing droppers routinely name themselves after the institution they
+    target. Chrome-minted WebAPKs (org.chromium.webapk.*) are excluded here
+    and judged by the sharper scope-anchored androdr-092 instead.
+author: AndroDR
+date: 2026/08/20
+references:
+    - https://attack.mitre.org/techniques/T1036/005/
+tags:
+    - attack.t1036.005
+logsource:
+    product: androdr
+    service: app_scanner
+detection:
+    selection:
+        is_system_app: false
+        app_name|ioc_lookup: brand_name_db
+    store_installed:
+        installer|ioc_lookup: trusted_installer_db
+    filter_known_good:
+        # Installer-gated exemption (the androdr-089 pattern, in Phase-2
+        # idiom): known_good_app_db is a package-name-only lookup with no
+        # signature binding (ADR #51), and a sideloaded fake can adopt any
+        # package name. Because the condition requires NOT store_installed,
+        # this exemption is unreachable for sideloads by design - an
+        # impersonation backstop, not a noise filter.
+        package_name|ioc_lookup: known_good_app_db
+        installer|ioc_lookup: trusted_installer_db
+    filter_webapk:
+        # Delegate ALL WebAPK-prefixed packages to androdr-092, which owns
+        # them: 092 fires on a foreign/absent scope and exempts a genuine
+        # brand scope, so re-evaluating them here only produces a redundant
+        # 092/093 double-fire (and a false positive on a genuine regional PWA
+        # whose domain is not yet in the registry). The forge-both residual
+        # (prefix + genuine brand scope) is 092's documented boundary, caught
+        # only at androdr-010 (medium REVIEW).
+        package_name|startswith: "org.chromium.webapk."
+    condition: selection and not store_installed and not filter_known_good and not filter_webapk
+level: high
+falsepositives:
+    - "A genuinely brand-published APK installed from outside a trusted store (an APK mirror; a non-system OEM/carrier preinstall; an enterprise/MDM deployment): the known-good exemption is deliberately unreachable for non-store installs (see filter comment), so every such app whose name matches a protected brand fires and needs user judgement. Verify with the source (your bank, employer, or device vendor); the safe remediation is to reinstall from Google Play."
+display:
+    category: app_risk
+    icon: content_copy
+    triggered_title: "Brand Impersonation (Sideloaded)"
+    evidence_type: none
+    guidance: "UNINSTALL -- sideloaded app named like a protected brand; likely a fake"
+remediation:
+    - "This app is named like a well-known brand but was not installed from a trusted app store. Fake banking and payment apps are distributed exactly this way."
+    - "Uninstall it: Settings > Apps > [this app] > Uninstall. Then install the brand's official app from Google Play."

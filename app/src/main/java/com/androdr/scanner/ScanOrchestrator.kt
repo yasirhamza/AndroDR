@@ -58,7 +58,8 @@ class ScanOrchestrator @Inject constructor(
     private val indicatorResolver: IndicatorResolver,
     private val sigmaRuleFeed: SigmaRuleFeed,
     private val knownAppResolver: com.androdr.ioc.KnownAppResolver,
-    private val oemPrefixResolver: com.androdr.ioc.OemPrefixResolver
+    private val oemPrefixResolver: com.androdr.ioc.OemPrefixResolver,
+    private val brandImpersonationResolver: com.androdr.ioc.BrandImpersonationResolver
 ) {
 
     private val initMutex = Mutex()
@@ -182,6 +183,15 @@ class ScanOrchestrator @Inject constructor(
             // from_trusted_store boolean onto this lookup.
             "trusted_installer_db" to { v ->
                 oemPrefixResolver.isTrustedInstaller(v.toString(), localDevice)
+            },
+            // Brand impersonation registry (#299): word-boundary display-name
+            // match + scope-host suffix match, resolver-backed (bundled seed
+            // + 12h remote refresh). Backs androdr-092/093.
+            "brand_name_db" to { v ->
+                brandImpersonationResolver.matchesBrandName(v.toString())
+            },
+            "brand_domain_db" to { v ->
+                brandImpersonationResolver.matchesBrandDomain(v.toString())
             }
         ))
         sigmaRuleEngine.loadBundledRules()

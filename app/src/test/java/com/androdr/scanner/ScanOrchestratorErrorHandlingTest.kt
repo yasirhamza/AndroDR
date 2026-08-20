@@ -150,7 +150,8 @@ class ScanOrchestratorErrorHandlingTest {
             indicatorResolver = indicatorResolver,
             sigmaRuleFeed = sigmaRuleFeed,
             knownAppResolver = knownAppResolver,
-            oemPrefixResolver = oemPrefixResolver
+            oemPrefixResolver = oemPrefixResolver,
+            brandImpersonationResolver = mockk(relaxed = true)
         )
     }
 

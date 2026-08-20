@@ -40,6 +40,8 @@ class IocLookupDefinitionsCrossCheckTest {
         "apk_hash_ioc_db",
         "known_good_app_db",
         "trusted_installer_db",
+        "brand_name_db",
+        "brand_domain_db",
     )
 
     /** Shared locator (its KDoc mandates it) — fail-loud for this test class. */

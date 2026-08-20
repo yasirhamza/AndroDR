@@ -34,6 +34,7 @@ class IntelRefresherTest {
     // relaxed: refreshPublicRepoIoc calls the Unit refreshCache() on success.
     private val knownAppResolver = mockk<KnownAppResolver>(relaxed = true)
     private val oemPrefixResolver = mockk<OemPrefixResolver>()
+    private val brandImpersonationResolver = mockk<BrandImpersonationResolver>()
     private val sigmaRuleFeed = mockk<SigmaRuleFeed>()
     // relaxed: refreshSigmaRules calls the Unit setRemoteRules(...) on success.
     private val sigmaRuleEngine = mockk<SigmaRuleEngine>(relaxed = true)
@@ -42,7 +43,8 @@ class IntelRefresherTest {
 
     private fun refresher() = IntelRefresher(
         indicatorUpdater, knownAppUpdater, publicRepoIocFeed, knownAppResolver,
-        oemPrefixResolver, sigmaRuleFeed, sigmaRuleEngine, cveRepository, recorder,
+        oemPrefixResolver, brandImpersonationResolver, sigmaRuleFeed, sigmaRuleEngine,
+        cveRepository, recorder,
     )
 
     private fun allFeedsSucceed() {
@@ -50,6 +52,7 @@ class IntelRefresherTest {
         coEvery { knownAppUpdater.update() } returns 50
         coEvery { publicRepoIocFeed.update() } returns 200
         coEvery { oemPrefixResolver.refresh() } returns 10
+        coEvery { brandImpersonationResolver.refresh() } returns 25
         coEvery { sigmaRuleFeed.fetch() } returns listOf(mockk<SigmaRule>(), mockk<SigmaRule>())
         coEvery { cveRepository.refresh() } returns 5
     }
@@ -64,16 +67,18 @@ class IntelRefresherTest {
         assertEquals(100, report.indicators)
         assertEquals(50, report.knownApps)
         assertEquals(10, report.oemPrefixes)
+        assertEquals(25, report.brandRegistry)
         assertEquals(2, report.sigmaRemoteRules)
         assertEquals(5, report.cveReachable)
         assertEquals(150, report.bulkFetchedCount)
 
-        // A success row (lastSuccessAt stamped, streak cleared) for all six feeds.
+        // A success row (lastSuccessAt stamped, streak cleared) for all seven feeds.
         for (feedId in listOf(
             FeedHealthRecorder.FEED_INDICATORS,
             FeedHealthRecorder.FEED_KNOWN_APPS,
             FeedHealthRecorder.FEED_PUBLIC_REPO_IOC,
             FeedHealthRecorder.FEED_OEM_PREFIXES,
+            FeedHealthRecorder.FEED_BRAND_REGISTRY,
             FeedHealthRecorder.FEED_SIGMA_RULES,
             FeedHealthRecorder.FEED_CVE,
         )) {
@@ -120,8 +125,8 @@ class IntelRefresherTest {
 
         assertTrue("second refresh within the window must skip", second.skipped)
         assertEquals(0, second.bulkFetchedCount)
-        // The skip must record nothing: only the first refresh's 6 rows exist,
-        // so a regressed skip guard that re-ran the feeds would push this past 6.
-        coVerify(exactly = 6) { dao.upsert(any()) }
+        // The skip must record nothing: only the first refresh's 7 rows exist,
+        // so a regressed skip guard that re-ran the feeds would push this past 7.
+        coVerify(exactly = 7) { dao.upsert(any()) }
     }
 }

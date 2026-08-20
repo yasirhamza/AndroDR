@@ -533,4 +533,64 @@ class AppScannerTelemetryTest {
         )
         assertEquals(listOf("libxmode.so"), entry.embeddedNativeLibs)
     }
+
+    // ── WebAPK scope emission (#299) ────────────────────────────────────────
+
+    private fun mockWebApkScopeMeta(pkgName: String, scope: String?) {
+        val meta = mockk<android.os.Bundle>()
+        every { meta.getString("org.chromium.webapk.shell_apk.scope") } returns scope
+        val appInfo = ApplicationInfo().apply {
+            packageName = pkgName
+            metaData = meta
+        }
+        every { pm.getApplicationInfo(pkgName, PackageManager.GET_META_DATA) } returns appInfo
+    }
+
+    @Test
+    fun `webapk package emits its scope`() = runTest {
+        val pkg = "org.chromium.webapk.abc123_v2"
+        installPackages(buildPackageInfo(pkgName = pkg, appLabel = "Excalidraw"))
+        mockWebApkScopeMeta(pkg, "https://excalidraw.com/")
+
+        assertEquals("https://excalidraw.com/", scanner.collectTelemetry()[0].webapkScope)
+    }
+
+    @Test
+    fun `non-webapk package emits null scope`() = runTest {
+        installPackages(buildPackageInfo(pkgName = "com.example.app"))
+        // No getApplicationInfo mock — the prefix gate must short-circuit
+        // before any meta-data read.
+        assertEquals(null, scanner.collectTelemetry()[0].webapkScope)
+    }
+
+    @Test
+    fun `webapk meta-data read failure yields null scope, not a crash`() = runTest {
+        val pkg = "org.chromium.webapk.def456_v2"
+        installPackages(buildPackageInfo(pkgName = pkg))
+        every {
+            pm.getApplicationInfo(pkg, PackageManager.GET_META_DATA)
+        } throws PackageManager.NameNotFoundException()
+
+        assertEquals(null, scanner.collectTelemetry()[0].webapkScope)
+    }
+
+    @Test
+    fun `control characters are stripped from an attacker scope`() = runTest {
+        val pkg = "org.chromium.webapk.evil_v2"
+        installPackages(buildPackageInfo(pkgName = pkg, appLabel = "PayPal"))
+        mockWebApkScopeMeta(pkg, "https://x/\n   -> forged report line")
+
+        val scope = scanner.collectTelemetry()[0].webapkScope
+        assertTrue("newline not stripped: $scope", scope?.contains('\n') == false)
+    }
+
+    @Test
+    fun `an oversized scope is capped`() = runTest {
+        val pkg = "org.chromium.webapk.big_v2"
+        installPackages(buildPackageInfo(pkgName = pkg))
+        mockWebApkScopeMeta(pkg, "https://x.example/" + "a".repeat(10_000))
+
+        val scope = scanner.collectTelemetry()[0].webapkScope
+        assertTrue("scope not capped: ${scope?.length}", (scope?.length ?: 0) <= 2048)
+    }
 }

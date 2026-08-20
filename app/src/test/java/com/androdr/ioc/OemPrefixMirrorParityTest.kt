@@ -24,9 +24,11 @@ import java.io.File
  *
  * [com.androdr.sigma.BundledMirrorParityTest] guards the rule directories
  * only; its walk excludes `ioc-data`, which is why the drift went unnoticed.
- * `known-oem-prefixes.yml` is currently the only ioc-data file with a bundled
- * counterpart, so this gate is deliberately file-specific rather than a
- * blanket ioc-data sweep — add a case here if that ever changes.
+ * This gate is deliberately file-specific rather than a blanket ioc-data
+ * sweep: the OEM prefix allowlist and (since #299) the brand impersonation
+ * registry seeds (`brand_names.yml`, `brand_domains.yml`) are the ioc-data
+ * files with a bundled res/raw counterpart — add a case below if another
+ * appears.
  *
  * There is a **third** hand-maintained copy at
  * `src/test/resources/raw/known_oem_prefixes.yml`, loaded by every
@@ -89,6 +91,53 @@ class OemPrefixMirrorParityTest {
                 "Fix recipe in this test's KDoc.",
             mirror.readBytes().contentEquals(bundled.readBytes()),
         )
+    }
+
+    // ── Brand impersonation registry (#299): same feed model, same gate ──
+    // BrandImpersonationResolver.refresh() also replaces its state wholesale
+    // from the ioc-data mirrors, so the bundled seeds are cold-start-only and
+    // bundled-only content dies on-device within 12h — the #203 failure mode.
+
+    private fun brandPairs(): List<Pair<String, String>> = listOf(
+        "brand_names.yml" to "brand-names.yml",
+        "brand_domains.yml" to "brand-domains.yml",
+    )
+
+    private fun bundledBrandFile(name: String): File = listOf(
+        File("app/src/main/res/raw/$name"),
+        File("src/main/res/raw/$name"),
+    ).firstOrNull { it.isFile }
+        ?: error("$name not found — brand parity gate cannot run from this working directory")
+
+    private fun mirrorBrandFile(name: String): File? = listOf(
+        File("third-party/android-sigma-rules/ioc-data/$name"),
+        File("../third-party/android-sigma-rules/ioc-data/$name"),
+    ).firstOrNull { it.isFile }
+
+    @Test
+    fun `bundled brand registry seeds are byte-equal to their mirror counterparts`() {
+        for ((bundledName, mirrorName) in brandPairs()) {
+            val bundled = bundledBrandFile(bundledName)
+            val mirror = mirrorBrandFile(mirrorName)
+            assertTrue(
+                "submodule not checked out under CI — build-and-test uses " +
+                    "submodules: true, so this means the checkout regressed and the " +
+                    "brand parity gate would have passed without comparing anything",
+                mirror != null || System.getenv("CI") != "true",
+            )
+            assumeTrue("submodule not checked out — skipping", mirror != null)
+            requireNotNull(mirror)
+
+            assertTrue(
+                "$bundledName differs from ioc-data/$mirrorName. " +
+                    "BrandImpersonationResolver.refresh() replaces the registry " +
+                    "wholesale from the mirror, so anything bundled-only is dropped " +
+                    "on-device within 12h of install. Copy the mirror file over the " +
+                    "bundled one (filenames differ: underscores bundled, hyphens " +
+                    "mirrored) and ship via the safe ordering in CLAUDE.md.",
+                mirror.readBytes().contentEquals(bundled.readBytes()),
+            )
+        }
     }
 
     @Test

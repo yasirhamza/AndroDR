@@ -42,6 +42,10 @@ data class AppTelemetry(
     // NEW (#168):
     val embeddedComponentClasses: List<String> = emptyList(),
     val embeddedNativeLibs: List<String> = emptyList(),
+    // WebAPK web scope from shell-manifest meta-data (#299); null for every
+    // non-WebAPK app. ATTACKER-CONTROLLED (any app may adopt the prefix and
+    // declare the key) — capped/sanitised in AppScanner before it lands here.
+    val webapkScope: String? = null,
 ) {
     fun toFieldMap(): Map<String, Any?> = mapOf(
         "package_name" to packageName,
@@ -66,6 +70,8 @@ data class AppTelemetry(
         "last_update_time" to lastUpdateTime,
         // NEW (#168):
         "embedded_component_class" to embeddedComponentClasses,
-        "embedded_native_lib" to embeddedNativeLibs
+        "embedded_native_lib" to embeddedNativeLibs,
+        // NEW (#299):
+        "webapk_scope" to webapkScope
     )
 }

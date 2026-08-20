@@ -1,0 +1,55 @@
+title: WebAPK impersonating a protected brand
+id: androdr-092
+status: experimental
+category: incident
+description: >
+    A Chrome-minted web app (WebAPK) uses a protected brand's display name,
+    but its web scope does not belong to that brand's official domains.
+    Google's WebAPK minting service is unauthenticated: any website can be
+    minted into a Google-signed WebAPK, and credential-phishing sites
+    impersonating banks have shipped this way (documented PKO Bank Polski
+    case). The scope is derived from the origin serving the web manifest, so
+    an attacker cannot mint a WebAPK scoped to a domain they do not control
+    - a brand name over a foreign scope is a high-confidence phishing
+    signal. Deliberately independent of installer trust: a phishing WebAPK
+    delivered through the Play install path must still fire. A brand-named
+    WebAPK with no scope meta-data also fires - every genuinely minted
+    WebAPK carries the scope key, so absence is itself suspicious.
+    LIMITATION: the scope is trustworthy only for a GENUINE mint. The rule
+    reads it from the package's own manifest, and any self-built APK can adopt
+    the org.chromium.webapk prefix and self-declare a scope on the brand's real
+    domain to evade both this rule and androdr-093. That residual is the
+    irreducible WebAPK-identity gap (per-app leaf certs, unmeasurable installer;
+    see androdr-010) and is caught only as a medium REVIEW sideload by
+    androdr-010, not here.
+author: AndroDR
+date: 2026/08/20
+references:
+    - https://attack.mitre.org/techniques/T1036/005/
+    - https://www.bleepingcomputer.com/news/security/webapk-technology-abused-to-install-malware-on-android-devices/
+    - https://chromium.googlesource.com/chromium/src/+/HEAD/chrome/android/webapk/README.md
+tags:
+    - attack.t1036.005
+logsource:
+    product: androdr
+    service: app_scanner
+detection:
+    selection:
+        package_name|startswith: "org.chromium.webapk."
+        app_name|ioc_lookup: brand_name_db
+    scope_legit:
+        webapk_scope|ioc_lookup: brand_domain_db
+    condition: selection and not scope_legit
+level: high
+falsepositives:
+    - "A brand's genuine web app served from an official domain missing from the brand-domains registry (e.g. a regional or newly launched domain). Fix by adding the domain to ioc-data/brand-domains.yml - the rule exempts any scope inside a listed official domain."
+    - "Not a false positive but a known evasion (recorded here so it is not mistaken for a miss): a self-built APK that forges the org.chromium.webapk prefix AND declares a scope on the brand's genuine domain escapes this rule; it is still surfaced by androdr-010 as a medium REVIEW sideload."
+display:
+    category: app_risk
+    icon: content_copy
+    triggered_title: "Brand Impersonation (Web App)"
+    evidence_type: none
+    guidance: "UNINSTALL -- web app named like a protected brand but not served from the brand's official site"
+remediation:
+    - "This web app is named like a well-known brand but is not served from the brand's official website. Phishing pages disguise themselves as banking apps exactly this way. Web address it opens: {webapk_scope}"
+    - "Uninstall it: Settings > Apps > [this app] > Uninstall. Then install the brand's official app from Google Play, or use the brand's website directly in your browser."
