@@ -68,8 +68,9 @@ class IntelRefresher @Inject constructor(
 
     /**
      * Refreshes every threat-intel feed (bulk IOC feeds, the curated public
-     * rule-repo IOCs, OEM prefixes, SIGMA rules, and CVEs), recording per-feed
-     * health for each. Returns a [RefreshReport] of the per-feed this-run
+     * rule-repo IOCs, OEM prefixes, the brand impersonation registry, SIGMA
+     * rules, and CVEs), recording per-feed health for each. Returns a
+     * [RefreshReport] of the per-feed this-run
      * signals. Safe to call from any coroutine context.
      *
      * Every entry point — the periodic [IocUpdateWorker], the manual pre-scan

@@ -38,7 +38,10 @@ class AppScanner @Inject constructor(
         private const val TAG = "AppScanner"
         private const val WEBAPK_PACKAGE_PREFIX = "org.chromium.webapk."
         private const val WEBAPK_META_SCOPE = "org.chromium.webapk.shell_apk.scope"
-        private const val WEBAPK_META_START_URL = "org.chromium.webapk.shell_apk.startUrl"
+        // A URL cannot legitimately need this many chars; the cap bounds
+        // memory and report size against a hostile meta-data value.
+        private const val MAX_WEBAPK_SCOPE_CHARS = 2048
+        private val CONTROL_CHAR_REGEX = Regex("\\p{Cntrl}")
 
         /**
          * Maximum number of concurrent per-package workers in
@@ -304,27 +307,7 @@ class AppScanner @Inject constructor(
         val embeddedComponentClasses = extractComponentClassNames(pkg, pkgDetail)
         val embeddedNativeLibs = extractNativeLibFileNames(appInfo)
 
-        // WebAPK shell-manifest meta-data (#299). Targeted per-package read:
-        // the bulk getInstalledPackages call deliberately omits GET_META_DATA
-        // (Binder size pressure), and only org.chromium.webapk.* packages can
-        // satisfy the WebAPK rules' selection anyway.
-        var webapkScope: String? = null
-        var webapkStartUrl: String? = null
-        if (packageName.startsWith(WEBAPK_PACKAGE_PREFIX)) {
-            @Suppress("TooGenericExceptionCaught", "SwallowedException")
-            try {
-                val metaData = pm.getApplicationInfo(
-                    packageName, PackageManager.GET_META_DATA
-                ).metaData
-                webapkScope = metaData?.getString(WEBAPK_META_SCOPE)
-                webapkStartUrl = metaData?.getString(WEBAPK_META_START_URL)
-            } catch (e: Exception) {
-                Log.w(
-                    TAG,
-                    "collectTelemetry: WebAPK meta-data read failed for $packageName: ${e.message}"
-                )
-            }
-        }
+        val webapkScope = extractWebApkScope(pm, packageName)
 
         return AppTelemetry(
             packageName = packageName,
@@ -352,8 +335,33 @@ class AppScanner @Inject constructor(
             embeddedComponentClasses = embeddedComponentClasses,
             embeddedNativeLibs = embeddedNativeLibs,
             webapkScope = webapkScope,
-            webapkStartUrl = webapkStartUrl,
         )
+    }
+
+    /**
+     * WebAPK web scope from shell-manifest meta-data (#299), or null for a
+     * non-WebAPK package or an unreadable/absent value. Targeted per-package
+     * read: the bulk getInstalledPackages call deliberately omits
+     * GET_META_DATA (Binder size pressure), and only org.chromium.webapk.*
+     * packages can satisfy the WebAPK rules' selection anyway.
+     *
+     * The value is an ATTACKER-CONTROLLED manifest string (any app may adopt
+     * the prefix and declare the key), so it is length-capped and stripped of
+     * control characters before it can reach findings, matchContext, and the
+     * line-oriented report export.
+     */
+    @Suppress("TooGenericExceptionCaught")
+    private fun extractWebApkScope(pm: PackageManager, packageName: String): String? {
+        if (!packageName.startsWith(WEBAPK_PACKAGE_PREFIX)) return null
+        return try {
+            pm.getApplicationInfo(packageName, PackageManager.GET_META_DATA)
+                .metaData?.getString(WEBAPK_META_SCOPE)
+                ?.replace(CONTROL_CHAR_REGEX, "")
+                ?.take(MAX_WEBAPK_SCOPE_CHARS)
+        } catch (e: Exception) {
+            Log.w(TAG, "collectTelemetry: WebAPK meta-data read failed for $packageName: ${e.message}")
+            null
+        }
     }
 
     /**

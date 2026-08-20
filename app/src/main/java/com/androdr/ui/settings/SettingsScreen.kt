@@ -109,6 +109,7 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
                     UpdateStatusRow("SIGMA Rules", result.sigmaRules)
                     UpdateStatusRow("CVE Database", result.cveDatabase)
                     UpdateStatusRow("OEM Prefixes", result.oemPrefixes)
+                    UpdateStatusRow("Brand Registry", result.brandRegistry)
                 }
             }
         )

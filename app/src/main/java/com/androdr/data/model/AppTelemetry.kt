@@ -42,10 +42,10 @@ data class AppTelemetry(
     // NEW (#168):
     val embeddedComponentClasses: List<String> = emptyList(),
     val embeddedNativeLibs: List<String> = emptyList(),
-    // WebAPK shell-manifest meta-data (#299): web scope + start URL for
-    // org.chromium.webapk.* packages; null for every other app.
+    // WebAPK web scope from shell-manifest meta-data (#299); null for every
+    // non-WebAPK app. ATTACKER-CONTROLLED (any app may adopt the prefix and
+    // declare the key) — capped/sanitised in AppScanner before it lands here.
     val webapkScope: String? = null,
-    val webapkStartUrl: String? = null,
 ) {
     fun toFieldMap(): Map<String, Any?> = mapOf(
         "package_name" to packageName,
@@ -72,7 +72,6 @@ data class AppTelemetry(
         "embedded_component_class" to embeddedComponentClasses,
         "embedded_native_lib" to embeddedNativeLibs,
         // NEW (#299):
-        "webapk_scope" to webapkScope,
-        "webapk_start_url" to webapkStartUrl
+        "webapk_scope" to webapkScope
     )
 }

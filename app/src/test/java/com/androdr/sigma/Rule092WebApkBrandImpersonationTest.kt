@@ -87,6 +87,14 @@ class Rule092WebApkBrandImpersonationTest {
         assertFalse(fires(webapk("PayPal", null, pkg = "com.fake.paypal")))
 
     @Test
+    fun `RESIDUAL — forged prefix plus forged genuine-brand scope escapes (recorded boundary, not a miss)`() =
+        // Irreducible WebAPK-identity gap: a self-built APK can adopt the
+        // prefix AND self-declare scope=paypal.com. This rule (and 093) then
+        // exempt it; androdr-010 still surfaces it as a medium REVIEW sideload.
+        // Pinned so the boundary is deliberate and visible, per the review.
+        assertFalse(fires(webapk("PayPal", "https://paypal.com/", pkg = "org.chromium.webapk.forged_v2")))
+
+    @Test
     fun `rule is high severity`() {
         val rule = loadRule()
         assertTrue(rule.level.equals("high", ignoreCase = true))

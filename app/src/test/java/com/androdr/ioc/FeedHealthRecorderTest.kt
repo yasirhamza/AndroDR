@@ -128,6 +128,7 @@ class FeedHealthRecorderTest {
         val ids = listOf(
             FeedHealthRecorder.FEED_INDICATORS, FeedHealthRecorder.FEED_KNOWN_APPS,
             FeedHealthRecorder.FEED_PUBLIC_REPO_IOC, FeedHealthRecorder.FEED_OEM_PREFIXES,
+            FeedHealthRecorder.FEED_BRAND_REGISTRY,
             FeedHealthRecorder.FEED_SIGMA_RULES, FeedHealthRecorder.FEED_CVE,
         )
         // Drift guard: a new feed id without a label would ship the raw id to users.

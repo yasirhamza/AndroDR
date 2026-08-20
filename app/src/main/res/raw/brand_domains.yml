@@ -5,16 +5,19 @@ description: >
   BrandImpersonationResolver: the emitted webapk_scope URL's host is
   matched by label-boundary suffix walk (paypal.com matches
   www.paypal.com, never notpaypal.com). Entries must be bare registrable
-  domains - lowercase, no scheme, no path. Brand keys mirror
-  brand-names.yml. This file has no entries key by design - it takes
-  validate-ioc-data.py's structural early-return path, like
-  known-oem-prefixes.yml. Every addition goes through the
+  domains - lowercase, no scheme, no path, and never a bare public suffix
+  (a suffix like co.uk would exempt everything under it). Brand keys mirror
+  brand-names.yml exactly. Domain lists must be COMPLETE per brand across
+  every region the brand's name variants cover: a genuine brand app scoped
+  to a region domain missing here is a false positive on androdr-092. This
+  file has no entries key by design - it takes validate-ioc-data.py's
+  brand early-return/validation path. Every addition goes through the
   human-in-the-loop gate.
 sources:
   - manual-curation
 brands:
   paypal:
-    domains: [paypal.com]
+    domains: [paypal.com, paypal.me]
   chase:
     domains: [chase.com]
   bank_of_america:
@@ -24,7 +27,7 @@ brands:
   citi:
     domains: [citi.com, citibank.com]
   capital_one:
-    domains: [capitalone.com]
+    domains: [capitalone.com, capitalone.co.uk]
   venmo:
     domains: [venmo.com]
   cash_app:
@@ -32,11 +35,11 @@ brands:
   zelle:
     domains: [zellepay.com, zelle.com]
   barclays:
-    domains: [barclays.co.uk, barclays.com]
+    domains: [barclays.co.uk, barclays.com, barclaycard.co.uk]
   hsbc:
-    domains: [hsbc.com, hsbc.co.uk]
+    domains: [hsbc.com, hsbc.co.uk, hsbc.com.hk, hsbc.ca, hsbc.com.mx]
   santander:
-    domains: [santander.com, santander.co.uk, santander.pl]
+    domains: [santander.com, santander.co.uk, santander.pl, santander.pt, santander.es, santander.de, santander.com.br, santander.com.mx]
   revolut:
     domains: [revolut.com]
   n26:
@@ -44,15 +47,15 @@ brands:
   monzo:
     domains: [monzo.com]
   ing:
-    domains: [ing.com, ing.nl, ing.pl]
+    domains: [ing.com, ing.nl, ing.pl, ing.de, ing.es, ing.be]
   bbva:
-    domains: [bbva.com, bbva.es, bbva.mx]
+    domains: [bbva.com, bbva.es, bbva.mx, bbva.com.ar, bbva.pe]
   pko_bank_polski:
     domains: [pkobp.pl, ipko.pl]
   mbank:
-    domains: [mbank.pl]
+    domains: [mbank.pl, mbank.cz]
   nubank:
-    domains: [nubank.com.br]
+    domains: [nubank.com.br, nubank.com.mx]
   mb_way:
     domains: [mbway.pt]
   millennium_bcp:

@@ -6,11 +6,13 @@ import org.junit.Test
 import java.io.File
 
 /**
- * Behavior spec for androdr-093 (#299): a sideloaded (non-store-installed)
- * native app whose display name matches a protected brand fires. The
- * known-good exemption is installer-gated and therefore deliberately
- * unreachable for sideloads (impersonation backstop — androdr-089 pattern);
- * WebAPKs are excluded (androdr-092's domain). Loads the ACTUAL bundled
+ * Behavior spec for androdr-093 (#299): a non-store-installed native app whose
+ * display name matches a protected brand fires. The known-good exemption is
+ * installer-gated and therefore deliberately unreachable for non-store installs
+ * (impersonation backstop — androdr-089 pattern). WebAPKs are excluded ONLY
+ * when their scope is a genuine brand domain (androdr-092's territory); a
+ * package that merely adopts the org.chromium.webapk prefix with a foreign or
+ * absent scope is NOT a free pass and still fires. Loads the ACTUAL bundled
  * rule file so the tests gate the shipped artifact.
  */
 class Rule093SideloadedBrandImpersonationTest {
@@ -25,10 +27,11 @@ class Rule093SideloadedBrandImpersonationTest {
             ?: error("androdr-093 failed to parse")
     }
 
-    // All three lookups MUST be registered or the fail-closed evaluator
-    // skips the rule whole.
+    // All four lookups the rule names MUST be registered or the fail-closed
+    // evaluator skips the whole rule.
     private val lookups = mapOf<String, (Any) -> Boolean>(
         "brand_name_db" to { v -> v.toString() == "PayPal" },
+        "brand_domain_db" to { v -> v.toString() == "https://paypal.com/" },
         "trusted_installer_db" to { v -> v.toString() == "com.android.vending" },
         "known_good_app_db" to { v -> v.toString() == "com.paypal.android.p2pmobile" },
     )
@@ -42,11 +45,13 @@ class Rule093SideloadedBrandImpersonationTest {
         installer: String?,
         pkg: String = "com.fake.bankapp",
         isSystemApp: Boolean = false,
+        scope: String? = null,
     ) = mapOf(
         "package_name" to pkg,
         "app_name" to appName,
         "installer" to installer,
         "is_system_app" to isSystemApp,
+        "webapk_scope" to scope,
     )
 
     @Test
@@ -60,7 +65,7 @@ class Rule093SideloadedBrandImpersonationTest {
     @Test
     fun `sideloaded app with GENUINE brand package name still fires`() =
         // The known-good exemption is installer-gated: unreachable for
-        // sideloads BY DESIGN (a fake can adopt any package name).
+        // non-store installs BY DESIGN (a fake can adopt any package name).
         assertTrue(fires(app("PayPal", installer = null, pkg = "com.paypal.android.p2pmobile")))
 
     @Test
@@ -68,10 +73,40 @@ class Rule093SideloadedBrandImpersonationTest {
         assertFalse(fires(app("PayPal", installer = null, isSystemApp = true)))
 
     @Test
-    fun `webapk package is excluded (androdr-092 territory)`() =
-        assertFalse(fires(app("PayPal", installer = null, pkg = "org.chromium.webapk.a1b2c3d4_v2")))
+    fun `webapk with genuine brand scope is excluded (androdr-092 territory)`() =
+        assertFalse(
+            fires(
+                app(
+                    "PayPal", installer = null,
+                    pkg = "org.chromium.webapk.a1b2c3d4_v2", scope = "https://paypal.com/",
+                )
+            )
+        )
+
+    @Test
+    fun `webapk-prefixed fake with FOREIGN scope fires (prefix alone is not a free pass)`() =
+        assertTrue(
+            fires(
+                app(
+                    "PayPal", installer = null,
+                    pkg = "org.chromium.webapk.fake_v2", scope = "https://evil.example/",
+                )
+            )
+        )
+
+    @Test
+    fun `webapk-prefixed fake with NO scope fires`() =
+        assertTrue(
+            fires(app("PayPal", installer = null, pkg = "org.chromium.webapk.fake_v2", scope = null))
+        )
 
     @Test
     fun `sideloaded non-brand app does not fire`() =
         assertFalse(fires(app("Sudoku Deluxe", installer = null)))
+
+    @Test
+    fun `rule is high severity`() {
+        val rule = loadRule()
+        assertTrue(rule.level.equals("high", ignoreCase = true))
+    }
 }

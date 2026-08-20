@@ -24,9 +24,11 @@ import java.io.File
  *
  * [com.androdr.sigma.BundledMirrorParityTest] guards the rule directories
  * only; its walk excludes `ioc-data`, which is why the drift went unnoticed.
- * `known-oem-prefixes.yml` is currently the only ioc-data file with a bundled
- * counterpart, so this gate is deliberately file-specific rather than a
- * blanket ioc-data sweep — add a case here if that ever changes.
+ * This gate is deliberately file-specific rather than a blanket ioc-data
+ * sweep: the OEM prefix allowlist and (since #299) the brand impersonation
+ * registry seeds (`brand_names.yml`, `brand_domains.yml`) are the ioc-data
+ * files with a bundled res/raw counterpart — add a case below if another
+ * appears.
  *
  * There is a **third** hand-maintained copy at
  * `src/test/resources/raw/known_oem_prefixes.yml`, loaded by every
@@ -104,14 +106,12 @@ class OemPrefixMirrorParityTest {
     private fun bundledBrandFile(name: String): File = listOf(
         File("app/src/main/res/raw/$name"),
         File("src/main/res/raw/$name"),
-        File("/home/yasir/AndroDR/app/src/main/res/raw/$name"),
     ).firstOrNull { it.isFile }
         ?: error("$name not found — brand parity gate cannot run from this working directory")
 
     private fun mirrorBrandFile(name: String): File? = listOf(
         File("third-party/android-sigma-rules/ioc-data/$name"),
         File("../third-party/android-sigma-rules/ioc-data/$name"),
-        File("/home/yasir/AndroDR/third-party/android-sigma-rules/ioc-data/$name"),
     ).firstOrNull { it.isFile }
 
     @Test
