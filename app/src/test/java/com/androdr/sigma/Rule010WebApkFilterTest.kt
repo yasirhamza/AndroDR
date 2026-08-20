@@ -6,15 +6,21 @@ import org.junit.Test
 import java.io.File
 
 /**
- * Rule-level tests for androdr-010's cert-anchored WebAPK exemption (#296).
- * Loads the ACTUAL bundled rule file so the tests gate the shipped artifact,
- * not a hand-built copy. The minter certs are duplicated here on purpose: if
- * the rule file's cert values drift, these tests fail.
+ * Rule-level tests for androdr-010's WebAPK exemption (#296/#311).
+ * Loads the ACTUAL bundled rule file so the tests gate the shipped artifact.
+ *
+ * #311 lesson baked in: every record here sets `from_trusted_store` to false
+ * EXPLICITLY, so the exemption filter itself is what's exercised — a record
+ * that would be exempted by the trusted-store conjunct instead would make
+ * these tests vacuously green (exactly how the #296 on-device verification
+ * went wrong).
+ *
+ * Semantics under test: a WebAPK is exempt iff its package carries the
+ * org.chromium.webapk. prefix AND its RECORDED installer is Play services or
+ * Chrome (the system-attested minted-install channel). Cert anchoring
+ * returns with the cert_hashes emitter in 0.9.0.617+ (#311).
  */
 class Rule010WebApkFilterTest {
-
-    private val minterCertSigner1 = "16ec831c994af033e958063c3555b22de7b078c4a6a424bdbebf7753ca73eceb"
-    private val minterCertSigner2 = "f9a8f75a7f0b5d2ccae8c2b570855640e709995558cd9706af74b84e68962faa"
 
     private fun loadRule(): SigmaRule {
         val f = listOf(
@@ -36,43 +42,48 @@ class Rule010WebApkFilterTest {
         SigmaRuleEvaluator.evaluate(listOf(loadRule()), listOf(record), "app_scanner", lookups)
             .any { it.triggered }
 
-    private fun app(pkg: String, cert: String?) = mapOf(
+    private fun app(pkg: String, installer: String?) = mapOf(
         "package_name" to pkg,
         "is_system_app" to false,
+        // Explicit: the trusted-store conjunct must NOT be what exempts here.
         "from_trusted_store" to false,
         "is_known_oem_app" to false,
-        "cert_hash" to cert,
+        "installer" to installer,
     )
 
     @Test
-    fun `google minted webapk is exempt`() =
-        assertFalse(fires(app("org.chromium.webapk.a1b2c3d4", minterCertSigner1)))
+    fun `gms-installed webapk is exempt even when not trusted-store`() =
+        assertFalse(fires(app("org.chromium.webapk.a1b2c3d4", "com.google.android.gms")))
 
     @Test
-    fun `second co-signer cert is also exempt`() =
-        assertFalse(fires(app("org.chromium.webapk.a1b2c3d4", minterCertSigner2)))
+    fun `chrome-installed webapk is exempt even when not trusted-store`() =
+        assertFalse(fires(app("org.chromium.webapk.a1b2c3d4", "com.android.chrome")))
 
     @Test
-    fun `webapk prefix with wrong cert still fires`() =
-        assertTrue(fires(app("org.chromium.webapk.evil", "deadbeef".repeat(8))))
-
-    @Test
-    fun `minter cert on non webapk package still fires`() =
-        assertTrue(fires(app("com.evil.app", minterCertSigner1)))
-
-    @Test
-    fun `webapk prefix with null cert still fires`() =
+    fun `webapk with null installer still fires`() =
         assertTrue(fires(app("org.chromium.webapk.evil", null)))
 
     @Test
+    fun `webapk installed by an arbitrary app still fires`() =
+        assertTrue(fires(app("org.chromium.webapk.evil", "com.evil.installer")))
+
+    @Test
+    fun `gms installer on a non-webapk package still fires`() =
+        assertTrue(fires(app("com.evil.app", "com.google.android.gms")))
+
+    @Test
+    fun `chrome installer on a non-webapk package still fires`() =
+        assertTrue(fires(app("com.evil.app", "com.android.chrome")))
+
+    @Test
+    fun `webapk prefix without trailing dot still fires`() =
+        assertTrue(fires(app("org.chromium.webapkevil", "com.evil.installer")))
+
+    @Test
     fun `plain sideload still fires`() =
-        assertTrue(fires(app("com.random.sideload", "ab".repeat(32))))
+        assertTrue(fires(app("com.random.sideload", null)))
 
     @Test
-    fun `known good app stays exempt`() =
-        assertFalse(fires(app("com.x8bit.bitwarden", "ab".repeat(32))))
-
-    @Test
-    fun `cert match is case insensitive`() =
-        assertFalse(fires(app("org.chromium.webapk.a1b2c3d4", minterCertSigner1.uppercase())))
+    fun `known good app stays exempt via existing filter`() =
+        assertFalse(fires(app("com.x8bit.bitwarden", null)))
 }

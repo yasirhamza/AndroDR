@@ -16,18 +16,25 @@ detection:
         is_known_oem_app: false
     filter_known_good:
         package_name|ioc_lookup: known_good_app_db
-    # WebAPK exemption (#296): PWAs minted by Google's WebAPK service have
-    # per-device randomized package names, so no allowlist can cover them.
-    # Trust is anchored on the minting service's signing cert — the prefix
-    # alone is spoofable, the cert is not. Both conjuncts must match.
-    # Two values: the minted APK carries two Google co-signers; the first is
-    # what the emitter observes at index 0, the second is Chromium's own
-    # EXPECTED_SIGNATURE validation constant.
+    # WebAPK exemption (#296/#311): PWAs minted by Google's WebAPK service
+    # have per-device randomized package names AND per-app leaf signing
+    # certs, so neither a package allowlist nor a fixed cert list can cover
+    # them (the #296 cert list only ever matched the device it was sampled
+    # on). The emitter exposes only the leaf cert today, so trust is
+    # anchored on the system-attested install channel instead: Chrome hands
+    # minted WebAPKs to Play services for install, and a sideloaded fake can
+    # never acquire gms/chrome as its RECORDED installer (adb/self-installs
+    # record null or the installing app itself). Prefix-gated, so this does
+    # NOT make Chrome a trusted installer generally (#284 rationale intact).
+    # Play-attributed WebAPKs (older Android) are already exempt via
+    # from_trusted_store. The unforgeable anchor — any-signer equals the
+    # constant Chrome WebAPK CA cert — lands with the cert_hashes emitter
+    # in 0.9.0.617+ (#311).
     filter_verified_webapk:
         package_name|startswith: "org.chromium.webapk."
-        cert_hash:
-            - "16ec831c994af033e958063c3555b22de7b078c4a6a424bdbebf7753ca73eceb"
-            - "f9a8f75a7f0b5d2ccae8c2b570855640e709995558cd9706af74b84e68962faa"
+        installer:
+            - "com.google.android.gms"
+            - "com.android.chrome"
     condition: selection and not filter_known_good and not filter_verified_webapk
 level: medium
 category: incident
