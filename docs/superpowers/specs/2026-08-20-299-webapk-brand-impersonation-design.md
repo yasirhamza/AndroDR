@@ -67,32 +67,48 @@ Deliberate properties:
 detection:
     selection:
         is_system_app: false
-        is_known_oem_app: false
-        from_trusted_store: false
         app_name|ioc_lookup: brand_name_db
+    store_installed:
+        installer|ioc_lookup: trusted_installer_db
     filter_known_good:
         package_name|ioc_lookup: known_good_app_db
+        installer|ioc_lookup: trusted_installer_db
     filter_webapk:
-        package_name|startswith: 'org.chromium.webapk.'
-    condition: selection and not filter_known_good and not filter_webapk
+        package_name|startswith: "org.chromium.webapk."
+    condition: selection and not store_installed and not filter_known_good and not filter_webapk
 level: high          # guidance: UNINSTALL; category: incident / app_risk
 status: experimental
-implies_flags: [sideloaded]
 ```
 
 Catches native fake-brand APKs (banker droppers) — the larger real-world
-threat class. `filter_webapk` keeps WebAPKs exclusively androdr-092's domain:
-without it, a *genuine* brand PWA browser-installed on API 36+ (installer ≠
-vending → `from_trusted_store: false`) would fire 093 at high severity — the
-exact FP class 092's scope check exists to prevent. Genuine brand apps
-sideloaded from mirrors are exempted per-package via `known_good_app_db`, so
-each seeded brand's official package(s) must be present in
-`popular-apps.yml` (see §4).
+threat class. Design notes, corrected against repo policy during planning:
 
-Uses main's current `from_trusted_store` vocabulary. The parked #136 Phase-2
-branch migrates that idiom to `installer|ioc_lookup: trusted_installer_db`
-fleet-wide; when Phase 2 lands it must sweep 093 too (rebase note for the
-parked branch).
+- **No judgment fields.** `from_trusted_store`, `is_sideloaded`, and
+  `is_known_oem_app` are `kind: judgment`; the judgment-field allowlist is
+  remove-only (#136 strangler-fig: "the emitter contract forbids new
+  uses"). 093 therefore uses the Phase-2 idiom the validator itself
+  recommends: `not (installer|ioc_lookup: trusted_installer_db)` — already
+  registered on main. The OEM exemption folds into `filter_known_good`,
+  whose Kotlin lambda already covers OEM prefixes.
+- **No `implies_flags`.** Main's structural sideload-guarantee gate does
+  not yet recognize the negated-lookup form (that recognition lives on the
+  parked Phase-2 branch). Nothing is lost: any 093 hit co-fires
+  androdr-010, which supplies the `sideloaded` flag.
+- **Evasion-resistant exemption (the androdr-089 pattern).** The
+  `filter_known_good` block conjoins the trusted-installer lookup, making
+  the exemption deliberately unreachable for sideloads — an impersonation
+  backstop, not a noise filter. Without it, a fake could adopt a known-good
+  *package name* (free-form for sideloads, no signature binding in
+  known_good_app_db per ADR #51) and be silently exempted. Consequence: a
+  genuinely brand-published APK sideloaded from a mirror also fires — an
+  accepted, documented FP (falsepositives wording follows
+  authoring-lessons lesson 5). No `popular-apps.yml` additions are needed.
+- `filter_webapk` keeps WebAPKs exclusively androdr-092's domain: without
+  it, a *genuine* brand PWA browser-installed on API 36+ (installer ≠
+  vending) would fire 093 at high severity — the exact FP class 092's
+  scope check exists to prevent.
+- When the parked #136 Phase-2 branch lands it needs no sweep of 093 (093
+  is already in the target idiom), only a rebase over the added files.
 
 ## 3. Emitter and schema
 
@@ -106,8 +122,11 @@ bulk `getInstalledPackages` call — the bulk query already contends with Binder
 size limits, and only the prefixed packages can satisfy 092's selection.
 Read failure → nulls (rule then fires on brand-named WebAPKs, per §2 null
 semantics — fail-suspicious is intended for this prefix). New `AppTelemetry`
-fields `webapkScope`, `webapkStartUrl` (nullable strings), mapped in
-`TelemetryFieldMaps.toFieldMap()` as `webapk_scope` / `webapk_start_url`.
+fields `webapkScope`, `webapkStartUrl` (nullable strings), mapped as
+`webapk_scope` / `webapk_start_url` in `AppTelemetry.toFieldMap()` — the
+member function is the app_scanner field map (`TelemetryFieldMaps.kt` holds
+only the plan-6 bugreport services; `LogsourceTaxonomyCrossCheckTest`
+compares the taxonomy against a live `AppTelemetry` instance's map keys).
 
 **Rules repo:** `validation/logsource-taxonomy.yml` gains both fields under
 `app_scanner` as nullable raw_facts (taxonomy edits follow the safe-ordering,
@@ -139,22 +158,35 @@ sound because scope is origin-bound at minting: the unreachable exempt path
 would require name = brand A while scope = brand B's real domain, i.e. the
 attacker controls a listed brand's origin — game over regardless.
 
-`ioc-entry-schema.json` and `validate-ioc-data.py` likely need the two new
-file shapes/categories admitted; the complementarity validator must not choke
-on them (implementation checkpoint — memory notes it silently skips
-`parser_limited` feeds).
+**Feed-file shape (resolved during planning): structural, no `entries:`
+key** — the `known-oem-prefixes.yml` pattern (`version`/`description`/
+`sources` + a `brands:` map). This takes the documented early-return path in
+`validate-ioc-data.py` and `IocDataSchemaCrossCheckTest`, so
+`ioc-entry-schema.json` needs no extension and `allowed-sources.json` no new
+source id. The one mandatory tooling change: both filenames must be added to
+`IOC_TYPE_BY_FILENAME` in `validate-ioc-complementarity.py`, whose `--all`
+sweep otherwise hard-fails (exit 2) on every push.
+
+**On-device delivery/storage: a self-contained `BrandImpersonationResolver`
+on the `OemPrefixResolver` model** — bundled res/raw byte-copies
+(`brand_names.yml`, `brand_domains.yml`) for cold start, direct remote
+refresh of the two ioc-data URLs on the 12h cycle, in-memory
+`AtomicReference` state, size caps. No Room migration, no
+`PublicRepoIocFeed` changes. Mirror parity is gated by extending
+`OemPrefixMirrorParityTest` (its KDoc invites exactly this).
 
 ## 4. Seed data (per-candidate HitL before any commit)
 
 ~15–25 **financial/payment** brands (the documented phishing-WebAPK class),
-global majors plus the documented-abuse geography (PKO Bank Polski). Each
-brand contributes: name variants to `brand-names.yml` (distinctive only —
-multi-token or unambiguous single tokens; ambiguous English words banned),
-official domains to `brand-domains.yml` (the ecosystem's app-serving
-domains), and its official Android package(s) to `popular-apps.yml` for 093's
-known-good exemption. Curation policy recorded in each file's header.
-Expansion (social, crypto, mail providers) is follow-up work via the
-pipeline, not this change.
+global majors plus the documented-abuse geography (PKO Bank Polski) and the
+current tester geography (Portugal). Each brand contributes: name variants
+to `brand-names.yml` (distinctive only — multi-token or unambiguous single
+tokens; ambiguous dictionary words banned, accepting the coverage loss on
+brands whose real label IS an ambiguous word) and official domains to
+`brand-domains.yml`. No `popular-apps.yml` additions (see §2 — the 093
+exemption is deliberately unreachable for sideloads). Curation policy
+recorded in each file's header. Expansion (social, crypto, mail providers)
+is follow-up work via the pipeline, not this change.
 
 ## 5. Fleet compatibility and delivery
 
@@ -165,6 +197,15 @@ they activate per-device as the next release (617+) rolls out. No coverage
 hole meanwhile: androdr-010 keeps flagging non-Play WebAPKs as reviewable
 sideloads. No R1 capability-gap violation (nothing negates a
 boolean that old binaries emit differently; old binaries simply skip).
+
+**Pre-R1 straggler safety (legacy closed-track testers may still run 606,
+which resolves unknown lookups to matcher-false instead of skipping):** both
+rules are still safe there, because each rule's *positively required*
+selection contains a new-lookup conjunct (`app_name|ioc_lookup:
+brand_name_db`) that resolves false — the negated lookups can never
+over-fire through an AND with false. This analysis goes in the rules-PR body
+to discharge the CAPABILITY CONSTRAINT header in
+`ioc-lookup-definitions.yml`.
 
 Standard safe-ordering: rules-repo branch (taxonomy + lookup defs + ioc-data
 + 2 rules + `rules.sha256` regen) → AndroDR PR (submodule bump + Kotlin:
@@ -184,9 +225,10 @@ AndroDR PR.
   (scope = official domain) does not; Play-installed fake **still** fires
   (pin `from_trusted_store` true and false to prove independence);
   null-scope brand-named WebAPK fires; non-brand WebAPK clean. 093:
-  sideloaded fake-brand native app fires; genuine package exempt via
-  known_good; store-installed clean; WebAPK excluded (no double-fire with
-  092).
+  sideloaded fake-brand native app fires; store-installed clean; system app
+  clean; WebAPK excluded (no double-fire with 092); genuine brand package
+  sideloaded **still fires** (asserting the backstop is unreachable — the
+  deliberate design choice, not a bug).
 - **Cross-check gates:** the existing schema/taxonomy/lookup drift tests
   plus `RuleManifestIntegrityTest` cover the wiring; rules-repo `validate`
   must be green.
