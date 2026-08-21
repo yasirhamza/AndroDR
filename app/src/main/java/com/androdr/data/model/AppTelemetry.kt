@@ -18,7 +18,20 @@ data class AppTelemetry(
     // Security-relevant permissions, short-named (e.g. "CAMERA", "SYSTEM_ALERT_WINDOW"):
     // the surveillance set plus the curated high-risk set (see AppScanner). Rules
     // match individual tokens via `permissions|contains`. NOT the full requested list.
+    // FROZEN compat surface: the fleet's shipped rules key on it; new rules should
+    // key on requestedPermissions instead.
     val permissions: List<String>,
+    // EVERY permission the app requests, verbatim fully-qualified names, zero
+    // curation (emitter-emits-all-facts). Rules must match it with exact
+    // element-wise equals, never `|contains`: android.permission.NFC is a
+    // substring of android.permission.NFC_TRANSACTION_EVENT, so substring
+    // matching false-positives. FLEET SAFETY — positive references only: on
+    // builds that predate this field a matcher on it evaluates false (there is
+    // NO unknown-field skip floor), which no-ops positive selections but
+    // INVERTS under `not` in the condition, over-firing on the old fleet.
+    // Never use this field in a negated filter until the fleet floor covers
+    // the emitter; PermissionLiteralCrossCheckTest enforces this.
+    val requestedPermissions: List<String> = emptyList(),
     // Count of surveillance perms ONLY (not high-risk perms) — see AppScanner.
     val surveillancePermissionCount: Int,
     val hasAccessibilityService: Boolean,
@@ -59,6 +72,7 @@ data class AppTelemetry(
         "is_sideloaded" to isSideloaded,
         "is_known_oem_app" to isKnownOemApp,
         "permissions" to permissions,
+        "requested_permissions" to requestedPermissions,
         "surveillance_permission_count" to surveillancePermissionCount,
         "has_accessibility_service" to hasAccessibilityService,
         "has_device_admin" to hasDeviceAdmin,

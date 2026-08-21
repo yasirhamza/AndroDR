@@ -101,6 +101,11 @@ class AppScanner @Inject constructor(
          * The exact set of short-named permissions the scanner places in
          * [AppTelemetry.permissions]. This is the SINGLE SOURCE OF TRUTH for which
          * permissions a SIGMA rule can match via `permissions|contains`.
+         *
+         * FROZEN: `permissions` is a compat surface for the fleet's shipped rules.
+         * New rules should match [AppTelemetry.requestedPermissions]
+         * (`requested_permissions` — every requested permission, verbatim FQN,
+         * exact-equals matching) instead of growing this curated set.
          * `PermissionLiteralCrossCheckTest` asserts every bundled rule's permission
          * literal is a member — closing the dead-rule class that silently killed
          * androdr-069 (a rule referenced a permission the scanner never emitted; #225).
@@ -262,9 +267,11 @@ class AppScanner @Inject constructor(
         val isSideloaded = !isSystemApp && !fromTrustedStore && !isKnownOemApp
 
         // Surveillance permissions
-        val grantedPermissions = pkg.requestedPermissions?.toList() ?: emptyList()
-        val matchedSurveillancePerms = grantedPermissions.filter { it in SURVEILLANCE_PERMISSIONS }
-        val matchedHighRiskPerms = grantedPermissions.filter { it in HIGH_RISK_PERMISSIONS }
+        // Manifest-REQUESTED permissions (PackageInfo.requestedPermissions), not
+        // runtime-granted — the historical name `grantedPermissions` was a misnomer.
+        val manifestRequestedPermissions = pkg.requestedPermissions?.toList() ?: emptyList()
+        val matchedSurveillancePerms = manifestRequestedPermissions.filter { it in SURVEILLANCE_PERMISSIONS }
+        val matchedHighRiskPerms = manifestRequestedPermissions.filter { it in HIGH_RISK_PERMISSIONS }
 
         // Accessibility service
         val hasAccessibilityService = pkg.services?.any { svc ->
@@ -321,6 +328,13 @@ class AppScanner @Inject constructor(
             isKnownOemApp = isKnownOemApp,
             permissions = (matchedSurveillancePerms + matchedHighRiskPerms)
                 .map { it.substringAfterLast('.') },
+            // Deliberately UNCAPPED, diverging from the embedded_* cap precedent:
+            // a sorted-truncation cap would let a hostile app push its real
+            // permissions past the cap with junk declarations, silently blinding
+            // every requested_permissions rule for exactly the apps that matter.
+            // Cost is retention of an already-materialized list, bounded by
+            // manifest size.
+            requestedPermissions = manifestRequestedPermissions,
             surveillancePermissionCount = matchedSurveillancePerms.size,
             hasAccessibilityService = hasAccessibilityService,
             hasDeviceAdmin = hasDeviceAdmin,
