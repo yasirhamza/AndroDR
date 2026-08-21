@@ -32,6 +32,26 @@ Also check manually:
 - All regex patterns under 500 characters
 - `id` follows `androdr-NNN` pattern
 - `id` is NOT listed in `{sigma_repo_path}/validation/retired-rule-ids.txt` (retired IDs are never reused — `validate-rule.py` also enforces this)
+- **ID allocation**: `id` must fall inside the sequential block allocated for
+  this run (starting at the dispatcher's `next_id`, one increment per candidate).
+  An out-of-block ID — e.g. a shard-stride ID like `androdr-244` when `next_id`
+  was `androdr-094` (2026-08-21 run) — FAILS this gate. If the caller supplied
+  no `next_id`, derive it by globbing existing rule IDs (production service dirs
+  + `staging/`) and taking highest + 1.
+- **Emitter surface (dead-rule check)**: for every literal matched against the
+  `permissions` field of an `app_scanner` rule, the literal MUST be a member of
+  `EXPOSED_PERMISSION_SHORT_NAMES` in the AndroDR app source
+  (`app/src/main/java/com/androdr/scanner/AppScanner.kt` — read the
+  `SURVEILLANCE_PERMISSIONS` + `HIGH_RISK_PERMISSIONS` sets; short name = text
+  after the last `.`). The scanner emits ONLY that curated subset in
+  `permissions`; a rule keying on anything else can never fire on-device and
+  `PermissionLiteralCrossCheckTest` will fail the AndroDR build (the 2026-08-21
+  run authored androdr-294 against `NEARBY_WIFI_DEVICES`, which the emitter
+  does not surface — a dead rule that every static gate passed).
+  `validation/android-permissions.txt` is NOT sufficient for this check: it
+  lists real Android permissions, not what the emitter emits. If the app source
+  is not reachable from the validation context, record a WARNING naming the
+  unverified literals instead of silently passing.
 
 Record: `{ pass: bool, errors: string[] }`
 
