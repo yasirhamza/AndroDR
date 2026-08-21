@@ -44,6 +44,9 @@ const TRACKED_THREAT_NAMES = ARGS.tracked_threat_names
 const CURSORS = ARGS.cursors
 const DISCOVER_CURSORS = ARGS.discover_cursors
 const OPEN_WEB_SINCE = ARGS.since
+// Optional: caller-seeded threats to research regardless of what Discover
+// surfaces — [{name, source_url}] (e.g. a specific campaign the user asked about).
+const SEED_THREATS = Array.isArray(ARGS.seed_threats) ? ARGS.seed_threats : []
 
 // ---- Schemas (kept loose on item shape to avoid spurious retries) ----
 const SIR_OUT = {
@@ -377,13 +380,17 @@ for (const { id, r } of ingestResults) {
 
 phase('Discover')
 const discover = await agent(discoverPrompt(), { label: 'discover:top5', phase: 'Discover', schema: DISCOVER_OUT })
-const threatNames = (discover && discover.threat_names ? discover.threat_names : []).slice(0, 5)
-log(`Discover surfaced ${threatNames.length} threat name(s): ${threatNames.join(', ') || '(none)'}`)
+const discoveredNames = (discover && discover.threat_names ? discover.threat_names : []).slice(0, 5)
+const seedUrls = Object.fromEntries(SEED_THREATS.filter(s => s && s.name && s.source_url).map(s => [s.name, s.source_url]))
+const seedNames = SEED_THREATS.map(s => s && s.name).filter(n => n && !discoveredNames.includes(n))
+const threatNames = [...seedNames, ...discoveredNames]
+log(`Discover surfaced ${discoveredNames.length} threat name(s): ${discoveredNames.join(', ') || '(none)'}` +
+  (seedNames.length ? `; caller-seeded: ${seedNames.join(', ')}` : ''))
 
 phase('Research')
 const researchThunks = [
   ...threatNames.map(name => () =>
-    agent(researchPrompt(name, discover.source_urls && discover.source_urls[name]),
+    agent(researchPrompt(name, seedUrls[name] || (discover && discover.source_urls && discover.source_urls[name])),
       { label: `research:${name}`.slice(0, 60), phase: 'Research', schema: SIR_OUT })),
   () => agent(openWebPrompt(), { label: 'research:open-web', phase: 'Research', schema: SIR_OUT }),
 ]
@@ -441,6 +448,37 @@ const authoredShards = await parallel(
 const candidates = authoredShards.filter(Boolean).flatMap(a => a.candidates || [])
 const iocDataRaw = authoredShards.filter(Boolean).flatMap(a => a.ioc_data || [])
 log(`Author produced ${candidates.length} rule candidate(s) + ${iocDataRaw.length} IOC-data entr(ies) across ${sirShards.length} shard(s)`)
+
+// Renumber into the allocated sequential block. The per-shard ID_STRIDE ranges
+// exist only to prevent mid-flight collisions between parallel authors — they
+// are NOT final IDs. Without this pass, stride IDs leak to HitL (the 2026-08-21
+// run surfaced androdr-244/294 when next_id was androdr-094). Deterministic
+// code, not prompts, owns final allocation.
+const replaceIdDeep = (val, oldId, newId) => {
+  if (typeof val === 'string') return val.split(oldId).join(newId)
+  if (Array.isArray(val)) return val.map(v => replaceIdDeep(v, oldId, newId))
+  if (val && typeof val === 'object') {
+    const out = {}
+    for (const k of Object.keys(val)) out[k] = replaceIdDeep(val[k], oldId, newId)
+    return out
+  }
+  return val
+}
+if (!Number.isNaN(ID_BASE)) {
+  const renames = []
+  candidates.forEach((c, i) => {
+    const finalId = `${ID_PREFIX}${String(ID_BASE + i).padStart(3, '0')}`
+    const oldId = c && c.rule_id
+    if (oldId && oldId !== finalId) {
+      const renumbered = replaceIdDeep(c, oldId, finalId)
+      renumbered.rule_id = finalId
+      renumbered.renumbered_from = oldId
+      candidates[i] = renumbered
+      renames.push(`${oldId}→${finalId}`)
+    }
+  })
+  if (renames.length) log(`Renumbered ${renames.length} candidate(s) into the sequential block: ${renames.join(', ')}`)
+}
 
 phase('Dedup')
 // The mirror-feed dedup's cost is the manual on-device coverage fetch (MVT's ~15

@@ -115,6 +115,24 @@ Use ONLY these modifiers. Any other modifier name will be rejected by the parser
 
 **List-field defaults (no `|all` suffix):** `field|contains: [A, B, C]` on a list-valued field matches if ANY element of the field contains ANY of `[A, B, C]`. Add `|all` to require every listed value.
 
+**`permissions` is a CURATED emitter subset, not the full manifest.** The
+scanner emits only the short names of `SURVEILLANCE_PERMISSIONS` +
+`HIGH_RISK_PERMISSIONS` from
+`app/src/main/java/com/androdr/scanner/AppScanner.kt`
+(`EXPOSED_PERMISSION_SHORT_NAMES`). A rule matching any other permission
+against `permissions` is a DEAD RULE — it passes every YAML gate and can never
+fire on-device (androdr-294, 2026-08-21 run: keyed on `NEARBY_WIFI_DEVICES`,
+which the emitter never surfaces). Before matching a permission literal, read
+that Kotlin set and verify membership; `validation/android-permissions.txt`
+proves a permission is real, NOT that it is emitted. If the detection needs a
+permission outside the emitted set, record a `telemetry_gap` decision and flag
+the emitter gap instead of authoring the match.
+
+**Rule IDs are provisional.** Author sequentially from the `next_id` you were
+given; when authors run sharded, the dispatcher renumbers all candidates into
+one sequential block afterward — never treat your assigned range as final and
+never invent IDs outside it.
+
 ## implies_flags Annotation (app_scanner rules — MANDATORY check)
 
 The rule schema defines an optional top-level `implies_flags:` list — orthogonal
