@@ -101,9 +101,14 @@ class ServiceActivationCrossCheckTest {
         val bugreportDir = File(TestRuleRepo.mainSourceRoot(), BUGREPORT_PKG)
         if (!bugreportDir.isDirectory) return false
         val literal = "\"$service\""
+        // Strip comments first (as referencedInMainOutsideEngine does): a
+        // module COMMENT that merely mentions a service literal must not mark the
+        // service wired-via-generic — that would be a false PASS hiding a dead
+        // service, defeating this gate. String literals survive stripping, so a
+        // real `telemetryService = "svc"` (or `SERVICE = "svc"`) still matches.
         return bugreportDir.walkTopDown()
             .filter { it.isFile && it.extension == "kt" }
-            .any { it.readText().contains(literal) }
+            .any { TestRuleRepo.stripKotlinComments(it.readText()).contains(literal) }
     }
 
     private fun mainKotlinFiles(): Sequence<File> =
