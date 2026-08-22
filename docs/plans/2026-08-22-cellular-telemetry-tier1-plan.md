@@ -103,12 +103,25 @@ gh pr create --draft --base main --head research/cellular-tier1 \
 Read \`build-and-test\` as the real gate. \`instrumented\` is \`continue-on-error\` — read its result explicitly."
 ```
 
-- [ ] **Step 5: Confirm CI ran and the expected jobs appear**
+- [ ] **Step 5: Confirm CI ran**
 
 ```bash
 gh pr checks --watch
 ```
-Expected: `build-and-test` green; `submodule-check` red; `instrumented` present in the job list (it only appears on `pull_request` events — if it is absent, the CI vehicle is not working and later tasks lose on-device coverage).
+
+Expected at Task 0: everything green, including `submodule-check` and `ci-success`. **They are green here and only go red from Task 2**, when the submodule pointer first moves to the unmerged rules branch. Do not expect red yet.
+
+`build-and-test`, `lint-and-detekt` and `instrumented` are all **skipped** at this step, because the empty commit changes no files and the `changes` path filter therefore sets `code=false`.
+
+**Do NOT use "`instrumented` appears in the job list" as the check that the CI vehicle works.** Verified empirically 2026-08-22: a skipped job is still *listed*, so `instrumented` is PRESENT under `workflow_dispatch` too. Presence cannot distinguish a `pull_request` run from a dispatch, and treating it as proof gives a false pass.
+
+**The CI vehicle is confirmed working only at Task 2 Step 6**, the first commit carrying Kotlin. There, `instrumented` must show a real conclusion (`success`/`failure`), not `skipped`:
+
+```bash
+gh run view <run-id> --json jobs --jq '.jobs[] | select(.name=="instrumented") | .conclusion'
+```
+
+If that still prints `skipped` on a commit that changed `.kt` files, the draft-PR mechanism is not delivering on-device coverage — stop and re-examine §9a before continuing.
 
 ---
 
