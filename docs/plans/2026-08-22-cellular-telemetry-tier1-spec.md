@@ -518,6 +518,27 @@ of this branch.
 tab on the Network screen, and the `CELLULAR (TIER 1)` section of an exported
 report. The Timeline shows it, but as an unranked telemetry row.
 
+### Now tracked as AndroDR #350
+
+The maintainer took this to main as a priority fix: a nullable `severity`
+column on `ForensicTimelineEvent`, populated at insert time from
+`Finding.level`, with the Timeline filter/sort coalescing
+`row.severity ?? row.finding?.level`.
+
+**Verified for that plan, so the implementer does not have to rediscover it:**
+`PureEmitterContractTest` bans `val severity` — but only inside
+`expectedEmitterFiles` (`it.name in expectedEmitterFiles`).
+`ForensicTimelineEvent.kt` is not in that set and declares no `toFieldMap()`,
+so adding the column does **not** trip the emitter contract.
+
+**Branch-side obligation, easy to miss:** the main fix alone will not make
+cellular findings filterable. Severity has to be written at the insert site,
+and the insert site for cellular is `CellularMonitor.persist()`, which exists
+only on this research branch. After rebasing onto the fix, `persist()` must
+set `severity = f.level` or cellular rows stay severity-less and the symptom
+persists unchanged. #350's own regression test will pass regardless, because
+it exercises a synthetic scanless row rather than this emitter.
+
 ## 9. Taxonomy, CI gates, and rule-repo mirroring
 
 ### The bidirectional constraint that drives this section
