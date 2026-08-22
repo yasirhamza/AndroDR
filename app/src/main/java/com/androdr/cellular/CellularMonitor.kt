@@ -98,6 +98,7 @@ class CellularMonitor(
         tm.registerTelephonyCallback(context.mainExecutor, cb)
         Log.i(TAG, "Cellular monitor started")
         recordSessionStart()
+        primeFromCurrentState(tm)
     }
 
     fun stop() {
@@ -108,6 +109,32 @@ class CellularMonitor(
         callback = null
         CellularState.clear()
         Log.i(TAG, "Cellular monitor stopped")
+    }
+
+    /**
+     * Reads the current cell state once at startup instead of waiting for the
+     * first change.
+     *
+     * onCellInfoChanged fires on CHANGE, so on a stationary device the first
+     * callback can be a long time coming — the view sits on "waiting for a
+     * radio update" and is indistinguishable from a monitor that is not
+     * working. Some devices happen to deliver an immediate callback when the
+     * listener registers; relying on that made startup device-dependent.
+     *
+     * Failure is non-fatal: the callback path is still live, so a refused or
+     * empty read only means the first update arrives later.
+     */
+    @SuppressLint("MissingPermission")
+    private fun primeFromCurrentState(tm: TelephonyManager) {
+        runCatching { tm.allCellInfo.orEmpty() }
+            .onSuccess { cells ->
+                if (cells.isEmpty()) {
+                    Log.i(TAG, "initial read returned no cells; waiting for a callback")
+                } else {
+                    handle(cells)
+                }
+            }
+            .onFailure { Log.w(TAG, "initial cell read refused: ${it.message}") }
     }
 
     internal fun handle(cellInfo: List<CellInfo>) {

@@ -227,9 +227,10 @@ fun DnsMonitorScreen(
                     deliveries = cellularDeliveries,
                 )
             }
-            if (cellularHistory.isEmpty()) {
-                item { CellularWaitingText() }
-            } else {
+            // No empty-state item here: CellularSummary already renders the
+            // waiting text when there is no snapshot, and adding a second one
+            // printed the same paragraph twice.
+            if (cellularHistory.isNotEmpty()) {
                 items(cellularHistory) { snap ->
                     Box(modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
                         CellularHistoryItem(snap)

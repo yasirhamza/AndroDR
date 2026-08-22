@@ -125,4 +125,57 @@ class CellularSourceInvariantsTest {
             src.contains("logCellularTimelineEvents("),
         )
     }
+
+    private fun screenSource(): String = repoFile(
+        "app/src/main/java/com/androdr/ui/network/DnsMonitorScreen.kt",
+        "src/main/java/com/androdr/ui/network/DnsMonitorScreen.kt",
+    ).readText()
+
+    /**
+     * The Cellular tab rendered its "waiting for a radio update" paragraph
+     * twice: CellularSummary already shows it when there is no snapshot, and a
+     * separate empty-state item showed it again underneath.
+     *
+     * Pinned by call-site count rather than by rendering, because the duplicate
+     * was structural — two independent branches choosing to draw the same
+     * thing — and that is visible in the source.
+     */
+    @Test
+    fun `the waiting text has exactly one call site`() {
+        // Exclude the declaration ("fun CellularWaitingText()"); count invocations.
+        val calls = Regex("""(?<!fun )CellularWaitingText\(\)""")
+            .findAll(screenSource()).count()
+        assertTrue(
+            "CellularWaitingText() should be invoked once (found $calls). Two call sites " +
+                "print the same paragraph twice when there is no data.",
+            calls == 1,
+        )
+    }
+
+    /**
+     * onCellInfoChanged fires on CHANGE, so a stationary device may not produce
+     * a callback for a long time and the view sits on "waiting for a radio
+     * update" — indistinguishable from a monitor that is not working. Some
+     * devices deliver an immediate callback on registration and some do not, so
+     * startup must not depend on that.
+     */
+    @Test
+    fun `the monitor reads current cell state at startup`() {
+        val src = monitorSource()
+        // Must be CALLED, not merely declared. An earlier version of this test
+        // matched the `fun primeFromCurrentState(` declaration, so deleting the
+        // call site still passed — caught by mutation-testing the gate.
+        val callSites = Regex("""(?<!fun )primeFromCurrentState\(""")
+            .findAll(src).count()
+        assertTrue(
+            "CellularMonitor.start() must CALL primeFromCurrentState (found " +
+                "$callSites call sites), or the UI stays empty until the serving " +
+                "cell happens to change",
+            callSites >= 1,
+        )
+        assertTrue(
+            "priming must actually read cell info",
+            Regex("""primeFromCurrentState[\s\S]{0,600}?allCellInfo""").containsMatchIn(src),
+        )
+    }
 }
