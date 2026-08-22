@@ -19,8 +19,10 @@ object GateFourTestHarness {
      * Run gate-4 validation for a single rule.
      *
      * @param rule           The [SigmaRule] under test.
-     * @param truePositives  Records that MUST produce at least one finding.
-     * @param trueNegatives  Records that MUST produce zero findings.
+     * @param truePositives  Records that MUST produce a triggered finding.
+     * @param trueNegatives  Records that MUST NOT produce a triggered finding
+     *                       (a report_safe_state rule's safe-state finding,
+     *                       triggered=false, is allowed here).
      * @param iocStubs       Optional IOC lookup stubs: lookup-name → set of
      *                       string values that should be considered "known bad".
      *                       Any key not referenced by the rule's detection
@@ -88,10 +90,11 @@ object GateFourTestHarness {
 
     /**
      * Evaluates [records] against [rule]. When [shouldFire] is true, each record
-     * must produce >= 1 finding (true-positive semantics); when false, each must
-     * produce 0 findings (true-negative semantics). Records that violate the
-     * expectation are reported in [errors] with the given [label]. Returns true
-     * if every record behaved as expected.
+     * must produce a triggered finding (true-positive semantics); when false,
+     * each must produce no triggered finding (true-negative semantics — a
+     * safe-state finding is fine). Records that violate the expectation are
+     * reported in [errors] with the given [label]. Returns true if every record
+     * behaved as expected.
      */
     @Suppress("LongParameterList")
     private fun evaluateFixtures(
@@ -110,16 +113,21 @@ object GateFourTestHarness {
                 service = rule.service,
                 iocLookups = iocLookups
             )
-            val fired = findings.isNotEmpty()
+            // A `report_safe_state: true` rule ALWAYS emits a finding — a
+            // safe-state one with triggered=false — so presence of a finding is
+            // not "fired". Count only genuinely-triggered findings; this also
+            // makes such rules' true-positives non-vacuous (they must actually
+            // trigger, not merely emit their safe-state row).
+            val fired = findings.any { it.triggered }
             if (fired != shouldFire) {
                 allPassed = false
                 errors.add(
                     if (shouldFire) {
-                        "$label[$index] FAILED: expected >= 1 finding but got 0 for " +
+                        "$label[$index] FAILED: expected a triggered finding but got none for " +
                             "rule \"${rule.id}\". Record: $record"
                     } else {
-                        "$label[$index] FAILED: expected 0 findings but got ${findings.size} " +
-                            "for rule \"${rule.id}\". Record: $record"
+                        "$label[$index] FAILED: expected no triggered finding but the rule fired " +
+                            "for \"${rule.id}\". Record: $record"
                     }
                 )
             }

@@ -1,0 +1,15 @@
+# Fixture for androdr-048: CVEs exploited by Pegasus spyware on Android.
+# Guards the #319 fix: the rule previously listed only iOS CVEs and thus
+# could never fire — the first true_negative is the removed iOS CVE, a
+# regression guard proving it no longer matches.
+rule_file: sigma_androdr_048_pegasus_cves.yml
+service: device_auditor
+true_positives:
+  - unpatched_cve_id: "CVE-2019-2215"
+  - unpatched_cve_id: "CVE-2023-7024"
+  - unpatched_cve_id: "CVE-2019-2215 CVE-2023-7024"
+true_negatives:
+  # The removed iOS BLASTPASS CVE — must NOT fire on Android any more
+  - unpatched_cve_id: "CVE-2023-41064"
+  - unpatched_cve_id: ""
+  - unpatched_cve_id: "CVE-2023-12345"
