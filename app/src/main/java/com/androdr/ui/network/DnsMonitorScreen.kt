@@ -81,20 +81,24 @@ fun DnsMonitorScreen(
     // where the grant had been forced with `adb shell pm grant`.
     var locationGranted by remember {
         mutableStateOf(
-            androidx.core.content.ContextCompat.checkSelfPermission(
-                context, android.Manifest.permission.ACCESS_FINE_LOCATION
-            ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+            com.androdr.cellular.CellularMonitor.hasRequiredPermissions(context)
         )
     }
     val locationPermissionLauncher = rememberLauncherForActivityResult(
         androidx.activity.result.contract.ActivityResultContracts.RequestMultiplePermissions()
     ) { result ->
-        // FINE specifically: Android 12+ lets the user answer "Approximate",
-        // which grants COARSE only and returns no cell information at all.
+        // Re-read the real permission state rather than trusting the result
+        // map: the button must disappear only when EVERY requirement the
+        // monitor checks is satisfied, not just the one the dialog was about.
         locationGranted =
-            result[android.Manifest.permission.ACCESS_FINE_LOCATION] == true
-        if (locationGranted) {
-            // Re-arm the running monitor; it checked permission at start.
+            com.androdr.cellular.CellularMonitor.hasRequiredPermissions(context)
+        // Only poke the service if it is ALREADY running. Sending this while
+        // the VPN is off would start a service that never calls
+        // startForeground() — a background start the platform restricts on
+        // Android 14+ — and it would be a no-op anyway, because the monitor is
+        // only constructed by startVpn(). When the VPN is off the card already
+        // says "Monitor not running", which is the accurate next step.
+        if (locationGranted && isVpnRunning) {
             context.startService(
                 android.content.Intent(context, DnsVpnService::class.java)
                     .setAction(DnsVpnService.ACTION_RETRY_CELLULAR)
@@ -262,10 +266,7 @@ fun DnsMonitorScreen(
                     locationGranted = locationGranted,
                     onGrantLocation = {
                         locationPermissionLauncher.launch(
-                            arrayOf(
-                                android.Manifest.permission.ACCESS_FINE_LOCATION,
-                                android.Manifest.permission.ACCESS_COARSE_LOCATION,
-                            )
+                            com.androdr.cellular.CellularMonitor.REQUESTED_PERMISSIONS
                         )
                     },
                 )

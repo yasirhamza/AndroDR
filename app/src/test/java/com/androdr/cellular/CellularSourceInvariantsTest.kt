@@ -241,10 +241,12 @@ class CellularSourceInvariantsTest {
                 "declaration alone never prompts the user",
             screen.contains("RequestMultiplePermissions()"),
         )
-        assertTrue(
-            "must request ACCESS_FINE_LOCATION — coarse returns no cell info",
-            screen.contains("ACCESS_FINE_LOCATION"),
-        )
+        // WHICH permissions is deliberately NOT asserted here. This gate broke
+        // when the inline array was replaced by CellularMonitor.REQUESTED_
+        // PERMISSIONS — a refactor that improved the code. Literal source
+        // matching is the wrong tool for that question;
+        // CellularPermissionContractTest answers it by reading the real arrays,
+        // which cannot drift from what the app actually requests.
         assertTrue(
             "must offer the user a way to trigger the request",
             screen.contains("Grant location permission"),

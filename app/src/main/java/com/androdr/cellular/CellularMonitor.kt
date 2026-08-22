@@ -68,11 +68,7 @@ class CellularMonitor(
 ) {
     private var callback: TelephonyCallback? = null
 
-    private fun hasPermissions(): Boolean =
-        ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) ==
-            PackageManager.PERMISSION_GRANTED &&
-            ContextCompat.checkSelfPermission(context, Manifest.permission.READ_PHONE_STATE) ==
-            PackageManager.PERMISSION_GRANTED
+    private fun hasPermissions(): Boolean = hasRequiredPermissions(context)
 
     @RequiresApi(Build.VERSION_CODES.S)
     private inner class Callback : TelephonyCallback(), TelephonyCallback.CellInfoListener {
@@ -353,8 +349,41 @@ class CellularMonitor(
         )
     }
 
-    private companion object {
-        const val TAG = "CellularMonitor"
+    companion object {
+        internal const val TAG = "CellularMonitor"
+
+        /**
+         * Permissions the monitor genuinely needs. READ_PHONE_STATE is easy to
+         * forget because it is not "a location permission", but without it
+         * getAllCellInfo is refused just as surely.
+         */
+        val REQUIRED_PERMISSIONS = arrayOf(
+            Manifest.permission.ACCESS_FINE_LOCATION,
+            Manifest.permission.READ_PHONE_STATE,
+        )
+
+        /**
+         * What to ASK for, which is a superset: Android 12+ refuses FINE unless
+         * COARSE is requested alongside it.
+         *
+         * Required and requested live together deliberately. They were two
+         * separate lists that drifted — the UI asked only for location while
+         * the monitor also demanded READ_PHONE_STATE, so granting location
+         * hid the request button while the monitor stayed blocked, and the
+         * screen reported a permission problem with no way to fix it.
+         */
+        val REQUESTED_PERMISSIONS = arrayOf(
+            Manifest.permission.ACCESS_FINE_LOCATION,
+            Manifest.permission.ACCESS_COARSE_LOCATION,
+            Manifest.permission.READ_PHONE_STATE,
+        )
+
+        /** Single source of truth for "can the monitor run". */
+        fun hasRequiredPermissions(context: Context): Boolean =
+            REQUIRED_PERMISSIONS.all {
+                ContextCompat.checkSelfPermission(context, it) ==
+                    PackageManager.PERMISSION_GRANTED
+            }
         const val TIMELINE_SOURCE = "cellular_monitor"
     }
 }
