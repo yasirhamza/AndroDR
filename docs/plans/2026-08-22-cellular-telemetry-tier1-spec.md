@@ -479,6 +479,45 @@ snapshot rat=LTE tac=set ci=set pci=set earfcn=set bw=null plmn=set
 op=set neighbours=11 rsrp=set tacChanged=false churn5m=0 ratChanged=false
 ```
 
+## 8b. Known limitation — cellular findings are timeline TELEMETRY, not FINDINGS
+
+Established on device 2026-08-22 by querying the database directly after the
+first real finding fired.
+
+The Timeline builds two kinds of row:
+
+- **Finding rows**, from `scanRepository.allScans → scans.first().findings` —
+  i.e. findings belonging to a **ScanResult**.
+- **Telemetry rows**, from the `forensic_timeline` table.
+
+Cellular findings are written to `forensic_timeline`, because the radio emitter
+is event-driven and has no scan to attach to (§8a). They therefore land as
+**telemetry rows**, and three things follow:
+
+1. **They are visible** in the Timeline and in its exports. Verified: the
+   `cellular_monitor` session row renders, and both cellular rows are present
+   in the table — the `androdr-102` finding is **position 1 of 450** in the
+   Timeline's own default query (`ORDER BY startTimestamp DESC LIMIT 500`).
+2. **They carry no severity.** `forensic_timeline` has no severity column;
+   the Timeline's severity filter reads `row.finding.level`, which only
+   exists on finding rows. Selecting **LOW** — the level `androdr-102`
+   declares — returns *"No timeline events yet"*. A cellular finding cannot be
+   found by filtering for its own severity.
+3. **They do not sort by severity.** The Timeline orders within a date group
+   by severity, so cellular rows do not appear near the top even when they are
+   the newest events on the device.
+
+**This is a model mismatch, not a bug in the emitter.** The Timeline's notion
+of "finding" is scan-bound; cellular detection is continuous. Making cellular
+findings first-class would mean teaching the Timeline to accept findings that
+belong to no scan — a change to shared code that affects every telemetry
+source, and a decision worth taking deliberately rather than as a side effect
+of this branch.
+
+**Until then, the reliable ways to see a cellular finding are** the Cellular
+tab on the Network screen, and the `CELLULAR (TIER 1)` section of an exported
+report. The Timeline shows it, but as an unranked telemetry row.
+
 ## 9. Taxonomy, CI gates, and rule-repo mirroring
 
 ### The bidirectional constraint that drives this section
