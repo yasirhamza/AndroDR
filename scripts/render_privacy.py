@@ -26,7 +26,7 @@ import markdown
 
 # Locked on 2026-04-24 against docs/PRIVACY_POLICY.md. Update in the same
 # commit that deliberately adds/removes a top-level section or table.
-EXPECTED_H2 = 18
+EXPECTED_H2 = 19
 EXPECTED_TABLES = 3
 
 FENCE_START = "<!-- ANDRODR:PRIVACY:START -->"
