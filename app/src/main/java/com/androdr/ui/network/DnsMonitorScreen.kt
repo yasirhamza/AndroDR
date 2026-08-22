@@ -3,6 +3,7 @@ package com.androdr.ui.network
 import android.content.Intent
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -30,6 +31,7 @@ import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
@@ -43,6 +45,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.androdr.R
+import com.androdr.network.DnsVpnService
 import com.androdr.ui.settings.SettingsViewModel
 import com.androdr.data.model.DnsEvent
 import com.androdr.ui.theme.androdrColors
@@ -66,9 +69,38 @@ fun DnsMonitorScreen(
     val cellularDeliveries by viewModel.cellularDeliveries.collectAsStateWithLifecycle()
     val cellularHistory by viewModel.cellularHistory.collectAsStateWithLifecycle()
     val cellularStatus by viewModel.cellularStatus.collectAsStateWithLifecycle()
+
+
     val blocklistBlockMode by settingsViewModel.blocklistBlockMode.collectAsStateWithLifecycle()
     val domainIocBlockMode by settingsViewModel.domainIocBlockMode.collectAsStateWithLifecycle()
     val context = LocalContext.current
+
+    // The app had no runtime permission request at all. The manifest declared
+    // location, but nothing ever asked for it, so on a normal install the
+    // cellular monitor was permanently inert — it only ever worked on a device
+    // where the grant had been forced with `adb shell pm grant`.
+    var locationGranted by remember {
+        mutableStateOf(
+            androidx.core.content.ContextCompat.checkSelfPermission(
+                context, android.Manifest.permission.ACCESS_FINE_LOCATION
+            ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+        )
+    }
+    val locationPermissionLauncher = rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.RequestMultiplePermissions()
+    ) { result ->
+        // FINE specifically: Android 12+ lets the user answer "Approximate",
+        // which grants COARSE only and returns no cell information at all.
+        locationGranted =
+            result[android.Manifest.permission.ACCESS_FINE_LOCATION] == true
+        if (locationGranted) {
+            // Re-arm the running monitor; it checked permission at start.
+            context.startService(
+                android.content.Intent(context, DnsVpnService::class.java)
+                    .setAction(DnsVpnService.ACTION_RETRY_CELLULAR)
+            )
+        }
+    }
 
     var selectedTab by remember { mutableIntStateOf(0) }
     val tabs = listOf(
@@ -227,6 +259,15 @@ fun DnsMonitorScreen(
                     findings = cellularFindings,
                     deliveries = cellularDeliveries,
                     status = cellularStatus,
+                    locationGranted = locationGranted,
+                    onGrantLocation = {
+                        locationPermissionLauncher.launch(
+                            arrayOf(
+                                android.Manifest.permission.ACCESS_FINE_LOCATION,
+                                android.Manifest.permission.ACCESS_COARSE_LOCATION,
+                            )
+                        )
+                    },
                 )
             }
             // No empty-state item here: CellularSummary already renders the
@@ -356,6 +397,8 @@ private fun CellularSummary(
     findings: List<com.androdr.sigma.Finding>,
     deliveries: Int,
     status: com.androdr.cellular.CellularState.Status,
+    locationGranted: Boolean,
+    onGrantLocation: () -> Unit,
 ) {
     Card(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
         Column(
@@ -392,6 +435,11 @@ private fun CellularSummary(
             }
             if (snapshot == null) {
                 CellularWaitingText(status)
+                if (!locationGranted) {
+                    Button(onClick = onGrantLocation, modifier = Modifier.fillMaxWidth()) {
+                        Text("Grant location permission")
+                    }
+                }
             } else {
                 CellularSnapshotLines(snapshot)
                 CellularFindingLines(findings)

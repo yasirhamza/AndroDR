@@ -83,6 +83,8 @@ class DnsVpnService : VpnService() {
 
         const val ACTION_START = "com.androdr.START_VPN"
         const val ACTION_STOP  = "com.androdr.STOP_VPN"
+        /** Re-arm cellular collection after the user grants location. */
+        const val ACTION_RETRY_CELLULAR = "com.androdr.RETRY_CELLULAR"
 
         /** `true` while the tunnel is established and the read loop is active. */
         val isRunning = MutableStateFlow(false)
@@ -160,6 +162,11 @@ class DnsVpnService : VpnService() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
             ACTION_STOP  -> stopVpn()
+            // The monitor checks permission once, at start. Granting location
+            // afterwards leaves it inert until something re-arms it, so the UI
+            // pokes the running service rather than making the user toggle the
+            // VPN off and on.
+            ACTION_RETRY_CELLULAR -> cellularMonitor?.start()
             else         -> startVpn()
         }
         return START_STICKY

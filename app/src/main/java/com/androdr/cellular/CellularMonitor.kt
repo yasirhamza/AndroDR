@@ -80,28 +80,55 @@ class CellularMonitor(
     }
 
     fun start() {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) {
-            Log.i(TAG, "TelephonyCallback requires API 31+; cellular monitor inert")
-            CellularState.setStatus(CellularState.Status.UNSUPPORTED_API)
-            return
-        }
-        if (!hasPermissions()) {
-            Log.i(TAG, "ACCESS_FINE_LOCATION / READ_PHONE_STATE not granted; cellular monitor inert")
-            CellularState.setStatus(CellularState.Status.MISSING_PERMISSION)
-            return
-        }
-        val tm = context.getSystemService(TelephonyManager::class.java)
-        if (tm == null) {
-            Log.w(TAG, "No TelephonyManager; cellular monitor inert")
-            CellularState.setStatus(CellularState.Status.NO_TELEPHONY)
-            return
-        }
+        // Idempotent: re-arming after the user grants location must not
+        // register a second callback on top of a live one.
+        if (callback != null) return
+        val tm = preflight() ?: return
+        // preflight() already rejects below API 31, but lint cannot see through
+        // it. Kept as a real check rather than a suppression: the arming code
+        // genuinely must not run on an older platform.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) arm(tm)
+    }
+
+    @RequiresApi(Build.VERSION_CODES.S)
+    private fun arm(tm: TelephonyManager) {
         val cb = Callback()
         callback = cb
         tm.registerTelephonyCallback(context.mainExecutor, cb)
         Log.i(TAG, "Cellular monitor started")
         recordSessionStart()
         primeFromCurrentState(tm)
+    }
+
+    /**
+     * Checks everything the monitor needs, recording WHICH requirement failed.
+     *
+     * Collapsed into one place because each of these conditions leaves the
+     * monitor silently inert, and the UI has to be able to tell them apart —
+     * "the VPN is off" and "the platform refused the read" look identical
+     * otherwise.
+     */
+    private fun preflight(): TelephonyManager? {
+        val blocked = when {
+            Build.VERSION.SDK_INT < Build.VERSION_CODES.S ->
+                CellularState.Status.UNSUPPORTED_API to
+                    "TelephonyCallback requires API 31+"
+            !hasPermissions() ->
+                CellularState.Status.MISSING_PERMISSION to
+                    "ACCESS_FINE_LOCATION / READ_PHONE_STATE not granted"
+            else -> null
+        }
+        if (blocked != null) {
+            Log.i(TAG, "${blocked.second}; cellular monitor inert")
+            CellularState.setStatus(blocked.first)
+            return null
+        }
+        val tm = context.getSystemService(TelephonyManager::class.java)
+        if (tm == null) {
+            Log.w(TAG, "No TelephonyManager; cellular monitor inert")
+            CellularState.setStatus(CellularState.Status.NO_TELEPHONY)
+        }
+        return tm
     }
 
     fun stop() {

@@ -225,4 +225,49 @@ class CellularSourceInvariantsTest {
             assertTrue("the card must handle $it", screen.contains(it))
         }
     }
+
+    /**
+     * The app declared location in the manifest but never asked for it at
+     * runtime, so on any normal install the cellular monitor was permanently
+     * inert. It only ever appeared to work on a development device where the
+     * grant had been forced with `adb shell pm grant` — which is exactly how
+     * the gap survived: every test device had been primed by hand.
+     */
+    @Test
+    fun `the app requests location at runtime`() {
+        val screen = screenSource()
+        assertTrue(
+            "the cellular UI must request location at runtime; a manifest " +
+                "declaration alone never prompts the user",
+            screen.contains("RequestMultiplePermissions()"),
+        )
+        assertTrue(
+            "must request ACCESS_FINE_LOCATION — coarse returns no cell info",
+            screen.contains("ACCESS_FINE_LOCATION"),
+        )
+        assertTrue(
+            "must offer the user a way to trigger the request",
+            screen.contains("Grant location permission"),
+        )
+    }
+
+    /**
+     * The monitor checks permission once, when it starts. Granting location
+     * afterwards leaves it inert until something re-arms it, so the grant flow
+     * must poke the running service rather than silently doing nothing.
+     */
+    @Test
+    fun `granting location re-arms the running monitor`() {
+        assertTrue(
+            "the grant callback must re-arm the monitor via ACTION_RETRY_CELLULAR",
+            screenSource().contains("ACTION_RETRY_CELLULAR"),
+        )
+        assertTrue(
+            "the service must handle the re-arm action",
+            repoFile(
+                "app/src/main/java/com/androdr/network/DnsVpnService.kt",
+                "src/main/java/com/androdr/network/DnsVpnService.kt",
+            ).readText().contains("ACTION_RETRY_CELLULAR ->"),
+        )
+    }
 }
