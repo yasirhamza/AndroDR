@@ -35,7 +35,9 @@ These are the highest-risk part of this plan. Both are all-or-nothing within a s
 
 So a new logsource requires **all four** in one commit: the taxonomy entry, the model's `toFieldMap()`, the hardcoded map in `LogsourceTaxonomyCrossCheckTest`, and the filename in `PureEmitterContractTest.expectedEmitterFiles`. Discovered the hard way during Task 2 execution — the original plan listed only three and the full suite failed.
 
-**B. Rule packaging.** `BundledMirrorParityTest` asserts every `res/raw/sigma_*.yml` has a byte-equal mirror counterpart **and** a `rules.txt` entry. `BundledRulesManifestCompletenessTest` asserts every `res/raw/*.yml` is registered in `SigmaRuleEngine`'s `R.raw` list. Therefore each rule addition must, in one commit: add the bundled YAML, register it in `BUNDLED_RULE_IDS`, copy it byte-identically to the mirror, append to `rules.txt`, and regenerate `rules.sha256`.
+**B. Rule packaging — SIX steps.** `BundledMirrorParityTest` asserts every `res/raw/sigma_*.yml` has a byte-equal mirror counterpart **and** a `rules.txt` entry. `BundledRulesManifestCompletenessTest` asserts every `res/raw/*.yml` is registered in `SigmaRuleEngine`'s `R.raw` list. Therefore each rule addition must, in one commit: add the bundled YAML, register it in `BUNDLED_RULE_IDS`, copy it byte-identically to the mirror, append to `rules.txt`, and regenerate `rules.sha256`.
+
+**Plus, for the FIRST rule of a new service only:** `rule-schema.json` enumerates the permitted `logsource.service` values, and `BundledRulesSchemaCrossCheckTest` rejects any rule naming a service absent from that enum. `SigmaRuleParser` does *not* whitelist services, so the schema is the only gate. Add the service to the enum on the rules branch before the first rule referencing it. Found during Task 5 execution.
 
 ## File Structure
 
@@ -1026,7 +1028,10 @@ At the start of `stopVpn()`:
 cd /home/yasir/AndroDR/.claude/worktrees/cellular-tier1
 ./gradlew assembleDebug lintDebug testDebugUnitTest
 ```
-Expected: PASS. If lint flags `MissingPermission`, confirm `hasPermissions()` guards the call path.
+Expected: PASS. Two lint facts learned during execution:
+
+- **`ACCESS_FINE_LOCATION` alone fails lint** (`CoarseFineLocation`, promoted to an error by `warningsAsErrors = true`). Android 12+ lets the user grant approximate-only, so `ACCESS_COARSE_LOCATION` must be declared alongside it. The runtime check still requires FINE specifically, since coarse-only does not yield full `CellInfo`.
+- **Incremental lint caches the manifest analysis.** After adding COARSE, `lintDebug` kept reporting the old error against a line whose content no longer matched. `./gradlew lintDebug --rerun-tasks` cleared it. If lint reports a line whose content does not match the error text, suspect the cache before the code.
 
 - [ ] **Step 5: Commit**
 
@@ -1199,9 +1204,10 @@ git push origin research/cellular-tier1
 - [ ] **Step 1: Confirm the real MCC/MNC and operator string**
 
 ```bash
-adb shell dumpsys telephony.registry | grep -iE "mOperatorAlphaLong|mMcc|mMnc" | head
+adb shell getprop gsm.operator.numeric
+adb shell dumpsys telephony.registry | grep -oE "mAlphaLong=[A-Za-z ]*" | sort | uniq -c
 ```
-Use the **observed** values; do not assume. Qatar is MCC 427 (Ooredoo `01`, Vodafone `02`), but the exact `operatorAlphaLong` string must be copied verbatim from the device.
+Use the **observed** values; do not assume. **Measured 2026-08-22 on the SM-F916B: `42702` and `Vodafone Qatar` — MCC 427, MNC 02.** An earlier draft of this plan assumed Ooredoo (MNC 01) and was wrong; the shipped rule targets Vodafone Qatar. Add an Ooredoo variant only if that SIM is actually used.
 
 - [ ] **Step 2: Write the rule**
 

@@ -79,6 +79,141 @@ already verified, do not re-run):
 The load-bearing result is the absence of `Integer.MAX_VALUE`: the platform is
 not silently blanking the fields the heuristics depend on.
 
+### SPIKE RESULTS — measured 2026-08-22 with a registered SIM
+
+**This section supersedes both the original evidence table and the no-SIM
+correction below it.** Measured from an instrumented test in the app process on
+SM-F916B / Android 13, SIM loaded (Ooredoo, `42701`), radio `IN_SERVICE`.
+
+#### 1. Foreground gating is real — the biggest single constraint
+
+| Caller state | `getAllCellInfo()` result |
+|---|---|
+| Background, location granted | **empty list** (0 records) |
+| No location permission | `SecurityException: Not allowed to access cell info` |
+| Activity visible (foreground) | **14 records** — 1 serving + 13 neighbours |
+
+**A background caller cannot distinguish "no cells nearby" from "not allowed to
+look".** It gets silence, not an error. This is the risk §10 named as the single
+biggest feasibility question, and the answer is that it is real and total.
+
+Consequence: `DnsVpnService` was `foregroundServiceType="specialUse"`, which
+confers **no** location access on Android 10+. The monitor would have collected
+nothing and reported nothing wrong. It now declares `"specialUse|location"` plus
+`FOREGROUND_SERVICE_LOCATION`.
+
+**RESOLVED 2026-08-22 — the production path works.** With the VPN running and
+no visible activity, `TelephonyCallback` inside the location-typed foreground
+service delivered a fully populated list:
+
+```
+snapshot rat=LTE tac=1437 ci=192816407 pci=167 earfcn=1600 bw=null
+mcc=427 mnc=01 op=Ooredoo neighbours=13 rsrp=-84
+```
+
+13 neighbours, real TAC/CI/PCI/EARFCN and operator — from a background
+foreground-service context. **The `specialUse|location` type was both necessary
+and sufficient.** Without it the identical code path yields an empty list and no
+error.
+
+Confirmed at the same time, in the production path rather than a test harness:
+`bandwidth` normalizes to `null` (androdr-101 would indeed have been dead),
+`neighbor_count` is populated so androdr-102 cannot over-fire, and
+`RadioStateStore` tracks prior state correctly (`prevTac=1437`,
+`tacChanged=false` on a same-cell delivery).
+
+**Callback frequency is low, and this is the remaining risk to H1.** Across a
+forced airplane-mode cycle — a full radio de-registration and re-registration —
+only **one** delivery arrived in roughly 60 seconds. A stationary device on one
+cell genuinely has little to report, so this is not yet evidence that the rate
+is too low while moving; but "3 TAC changes in 5 minutes" needs at least three
+deliveries in that window, and nothing measured so far demonstrates that rate is
+achievable. **Movement between cells remains the one unmeasured input**, and it
+gates the H1 threshold.
+
+**State does not survive a VPN restart.** `RadioStateStore` is per-monitor, so
+toggling the VPN resets `previousTac` to null and the churn window to zero.
+Expected, but it means H1 cannot fire across a restart and a long field session
+should avoid toggling.
+
+#### 2. Field richness — mixed, and it kills one heuristic
+
+| Field | Serving cell | Neighbours | Verdict |
+|---|---|---|---|
+| `bandwidth` | `2147483647` | `2147483647` (14/14) | **never populated — H2 is dead** |
+| `earfcn` | 1600 | 101 / 2850 / 6400 (0/14 sentinel) | fully populated — H3 viable |
+| `pci` | 167 | 108–467 (0/14 sentinel) | fully populated |
+| `tac` | 1437 | `2147483647` (13/14 sentinel) | serving only — enough for H1 |
+| `ci` | 192816407 | sentinel | serving only |
+| `mcc`/`mnc` | 427 / 01 | null | serving only |
+| `rsrp` | −84 | −76 … −104 | fully populated |
+
+#### 3. Rule consequences
+
+- **androdr-101 (narrow bandwidth) REMOVED as a dead rule.** `bandwidth` is the
+  sentinel in 14/14 app-visible records and 105/106 at the framework layer. It
+  could never fire. Restore only if bandwidth is ever observed populated.
+- **androdr-102 (isolated cell) ADDED.** Neighbours *are* visible — 13 of them —
+  so `neighbor_count: 0` is a real departure. Had they been invisible the field
+  would be 0 always and the rule would have fired on every snapshot; this is why
+  it was held back until measurement.
+- **androdr-106 (Ooredoo, MCC 427 / MNC 01) ADDED.** The loaded SIM is Ooredoo.
+  androdr-105 targets Vodafone Qatar (MNC 02) and is kept for that SIM.
+- **androdr-103 / 104 unaffected.** RAT comes from the `CellInfo` subtype, and
+  serving-cell TAC is populated, which is all the churn rule reads.
+
+#### 4. Correction to my own earlier correction
+
+The no-SIM reading below reported `Vodafone Qatar` / MNC 02. That was **stale
+registry history from a previously used SIM**, not the current one. With a SIM
+loaded the device is Ooredoo, MNC 01. A measurement taken while the radio is
+unregistered is not evidence about the registered case.
+
+#### 5. Still unmeasured
+
+Callback frequency — how often `onCellInfoChanged` actually fires while moving
+between cells — is **not** measured. It requires physically moving. Until it is,
+the H1 threshold of 3 changes per 5 minutes remains an unvalidated default.
+
+---
+
+### Correction to the evidence above (measured 2026-08-22, during implementation)
+
+**The "zero `Integer.MAX_VALUE`" result does not hold universally.** Re-reading
+`dumpsys telephony.registry` on the same SM-F916B during implementation, with
+**no SIM inserted** (`gsm.sim.state = ABSENT,NOT_READY`, every registration
+`OUT_OF_SERVICE`):
+
+| Field | Observed |
+|---|---|
+| `mBandwidth` | `2147483647` in **34 of 35** records (`0` in the remaining one) |
+| `mEarfcn` | `2147483647` in **34 of 35** records |
+| `mAlphaLong` | `Vodafone Qatar` in 34 |
+
+So the original table describes the **registered** case, not the general one.
+That is not a contradiction — an unregistered radio has nothing to report — but
+it must not be quoted as "the platform never blanks these fields". Two
+consequences:
+
+1. **Sentinel normalization is mandatory, not defensive.** Every integer field
+   is nullable and `Integer.MAX_VALUE` is mapped to `null` at the emitter
+   boundary. Without it, rules would match `2147483647` as if it were a real
+   measurement.
+2. **Heuristic 2 (narrow bandwidth) is unproven and may be inert.** It requires
+   `bandwidth_khz` ∈ {1400, 3000}. Bandwidth was never once observed as a
+   plausible real value on this device. Every v1 cellular rule requires
+   `is_registered: true`, so the unregistered case cannot produce false
+   positives — but whether bandwidth is populated *while registered* on this
+   hardware is **still unmeasured**, and H2 may simply never fire.
+
+**The spike is currently blocked: the device has no SIM.** Nothing in §10 can be
+measured until one is inserted. This gates H1, H2, H4 and H6 validation
+entirely.
+
+**Operator correction.** The device reports `gsm.operator.numeric = 42702` and
+`mAlphaLong = "Vodafone Qatar"` — MCC 427, **MNC 02**. Earlier drafts assumed
+Ooredoo (MNC 01). The shipped operator-mismatch rule targets Vodafone Qatar.
+
 **Caveat carried forward — this evidence is necessary but not sufficient.**
 `dumpsys` runs as the `shell` user and observes the *unredacted framework view*.
 It does not prove that an **unprivileged app** holding `ACCESS_FINE_LOCATION`
@@ -303,6 +438,85 @@ and is explicitly deferred**, exactly as the product note left it.
 
 **Persistence.** Every finding stores its full triggering snapshot, because §10
 depends on being able to adjudicate each flag after the fact.
+
+## 8a. Logging constraint — never log the cell identity tuple
+
+**Standing rule, added 2026-08-22 after a security review caught a violation
+in the first implementation.**
+
+`(mcc, mnc, tac, ci)` is a globally unique tower identifier and is **directly
+geolocatable** — resolving it to coordinates is exactly what OpenCelliD does,
+and §6 names OpenCelliD as the intended lookup for the deferred H5. Emitting
+that tuple on every callback delivery therefore writes a **continuous,
+timestamped location trail** to logcat, which is readable over adb and captured
+in bugreports.
+
+Three reasons this matters more here than the generic "don't log PII":
+
+1. **The threat model is the whole point.** This code runs on a device assumed
+   to be a target in a high-surveillance region. A location trail in a shared
+   log is precisely the artifact the project exists to avoid creating.
+2. **It inverts the product.** AndroDR ships `androdr-079`–`083` to flag apps
+   that harvest location. An AndroDR component logging tower identity makes it
+   one of them.
+3. **Retention was never the problem.** The full snapshot is deliberately
+   persisted to the app-private findings store — §10's methodology depends on
+   it. The defect was the *exposure surface*, not the data.
+
+**Rule:** logs carry **shape only** — whether a field arrived populated or
+blanked, plus non-identifying state (`rat`, neighbour count, `tacChanged`,
+churn count). Never raw `ci`, `tac`, `pci`, `mcc`, `mnc`, or operator name.
+
+This costs nothing diagnostically. The two findings the logging existed to
+establish both survive redaction: `bw=null` still demonstrates the bandwidth
+sentinel that killed `androdr-101`, and `neighbours=11` still demonstrates that
+neighbours are visible.
+
+Verified form:
+
+```
+snapshot rat=LTE tac=set ci=set pci=set earfcn=set bw=null plmn=set
+op=set neighbours=11 rsrp=set tacChanged=false churn5m=0 ratChanged=false
+```
+
+## 8b. Known limitation — cellular findings are timeline TELEMETRY, not FINDINGS
+
+Established on device 2026-08-22 by querying the database directly after the
+first real finding fired.
+
+The Timeline builds two kinds of row:
+
+- **Finding rows**, from `scanRepository.allScans → scans.first().findings` —
+  i.e. findings belonging to a **ScanResult**.
+- **Telemetry rows**, from the `forensic_timeline` table.
+
+Cellular findings are written to `forensic_timeline`, because the radio emitter
+is event-driven and has no scan to attach to (§8a). They therefore land as
+**telemetry rows**, and three things follow:
+
+1. **They are visible** in the Timeline and in its exports. Verified: the
+   `cellular_monitor` session row renders, and both cellular rows are present
+   in the table — the `androdr-102` finding is **position 1 of 450** in the
+   Timeline's own default query (`ORDER BY startTimestamp DESC LIMIT 500`).
+2. **They carry no severity.** `forensic_timeline` has no severity column;
+   the Timeline's severity filter reads `row.finding.level`, which only
+   exists on finding rows. Selecting **LOW** — the level `androdr-102`
+   declares — returns *"No timeline events yet"*. A cellular finding cannot be
+   found by filtering for its own severity.
+3. **They do not sort by severity.** The Timeline orders within a date group
+   by severity, so cellular rows do not appear near the top even when they are
+   the newest events on the device.
+
+**This is a model mismatch, not a bug in the emitter.** The Timeline's notion
+of "finding" is scan-bound; cellular detection is continuous. Making cellular
+findings first-class would mean teaching the Timeline to accept findings that
+belong to no scan — a change to shared code that affects every telemetry
+source, and a decision worth taking deliberately rather than as a side effect
+of this branch.
+
+**Until then, the reliable ways to see a cellular finding are** the Cellular
+tab on the Network screen, and the `CELLULAR (TIER 1)` section of an exported
+report. The Timeline shows it, but as an unranked telemetry row.
 
 ## 9. Taxonomy, CI gates, and rule-repo mirroring
 
