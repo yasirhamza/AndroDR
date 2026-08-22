@@ -1,0 +1,44 @@
+title: App embedding MoYu Group AdmoyuService component (BADBOX)
+id: androdr-094
+status: experimental
+category: incident
+description: >
+    Detects an installed app whose manifest declares a component class
+    containing 'AdmoyuService' — the service name observed by Kaspersky in
+    com.abc.nexus, the TV set-top variant of the MoYu Group (BADBOX
+    platform) zhima residential-proxy and ad-fraud chain. The name derives
+    from MoYu's admoyu.com ad-fraud infrastructure. Component-class
+    fingerprinting extends detection to repackaged or renamed variants
+    that keep internal component names, coverage the package-name IOC
+    database cannot provide (cf. androdr-079..082 embedded-SDK rules).
+author: AndroDR AI Pipeline
+date: 2026/08/21
+references:
+    - https://securelist.com/android-head-unit-malware/121106/
+    - https://github.com/deepfield/public-research/blob/main/ipmoyu/README.md
+tags:
+    - attack.t1604
+    - attack.t1643
+    - attack.t1407
+logsource:
+    product: androdr
+    service: app_scanner
+detection:
+    selection:
+        embedded_component_class|contains:
+            - 'AdmoyuService'
+    condition: selection
+level: critical
+display:
+    category: app_risk
+    icon: warning
+    triggered_title: "BADBOX/MoYu component: AdmoyuService"
+    evidence_type: ioc_match
+    summary_template: "MoYu Group (BADBOX) component class detected: {matched_value}"
+    guidance: "This app declares a service component matching MoYu Group's 'AdmoyuService' naming, associated with the BADBOX zhima residential-proxy and ad-fraud malware documented on Android TV boxes and car head units."
+falsepositives:
+    - "A legitimate app whose component class name coincidentally contains 'AdmoyuService'; none is known — the string references MoYu Group's admoyu.com ad-fraud infrastructure and is reported from a single vendor analysis (Kaspersky)."
+remediation:
+    - "Treat this app as MoYu Group (BADBOX) tooling: it can turn the device into a residential-proxy exit node and generate ad fraud."
+    - "Uninstall the app. If it is a preinstalled system app it cannot be fully removed without firmware replacement — consider replacing the device and avoid signing in to accounts on it."
+    - "Review the AndroDR DNS log for contact with BADBOX a1./t1. C2 domains (e.g. a1.xmsae.sbs, t1.xshaon123.sbs)."
