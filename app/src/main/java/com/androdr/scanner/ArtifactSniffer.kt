@@ -61,7 +61,8 @@ object ArtifactSniffer {
      * chunks, counting decompressed bytes; once the budget is exceeded (or an
      * entry's data is corrupt) it stops yielding names and lets [classify] decide
      * on what it has seen — so a bomb cannot force unbounded inflation here.
-     * [input] is NOT closed (the caller owns it).
+     * The wrapping ZipInputStream is closed on exit (releasing its Inflater),
+     * which also closes [input].
      */
     @Suppress("TooGenericExceptionCaught", "NestedBlockDepth")
     fun classifyZip(
@@ -71,28 +72,29 @@ object ArtifactSniffer {
         var inflated = 0L
         var budgetExceeded = false
         val buf = ByteArray(DRAIN_BUFFER)
-        val zip = ZipInputStream(input.buffered())
-        val names = sequence {
-            var entry = try { zip.nextEntry } catch (_: Exception) { null }
-            outer@ while (entry != null) {
-                if (!entry.isDirectory) yield(entry.name)
-                // Drain THIS entry ourselves, bounded, so reaching the next name
-                // cannot inflate a bomb without limit. Do NOT call closeEntry() /
-                // nextEntry() past the budget: both inflate the remainder.
-                try {
-                    var n = zip.read(buf)
-                    while (n >= 0) {
-                        inflated += n
-                        if (inflated > budgetBytes) { budgetExceeded = true; break@outer }
-                        n = zip.read(buf)
+        ZipInputStream(input.buffered()).use { zip ->
+            val names = sequence {
+                var entry = try { zip.nextEntry } catch (_: Exception) { null }
+                outer@ while (entry != null) {
+                    if (!entry.isDirectory) yield(entry.name)
+                    // Drain THIS entry ourselves, bounded, so reaching the next name
+                    // cannot inflate a bomb without limit. Do NOT call closeEntry() /
+                    // nextEntry() past the budget: both inflate the remainder.
+                    try {
+                        var n = zip.read(buf)
+                        while (n >= 0) {
+                            inflated += n
+                            if (inflated > budgetBytes) { budgetExceeded = true; break@outer }
+                            n = zip.read(buf)
+                        }
+                    } catch (_: Exception) {
+                        break@outer // corrupt entry data: classify on names seen so far
                     }
-                } catch (_: Exception) {
-                    break@outer // corrupt entry data: classify on names seen so far
+                    entry = try { zip.nextEntry } catch (_: Exception) { null }
                 }
-                entry = try { zip.nextEntry } catch (_: Exception) { null }
             }
+            val type = classify(names)
+            return SniffOutcome(type, inflated, budgetExceeded)
         }
-        val type = classify(names)
-        return SniffOutcome(type, inflated, budgetExceeded)
     }
 }
