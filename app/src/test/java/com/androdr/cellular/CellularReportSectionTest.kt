@@ -1,6 +1,8 @@
 package com.androdr.cellular
 
+import com.androdr.data.model.CellularSnapshot
 import com.androdr.data.model.ForensicTimelineEvent
+import com.androdr.data.model.TelemetrySource
 import com.androdr.data.model.ScanResult
 import com.androdr.reporting.ReportFormatter
 import org.junit.Assert.assertFalse
@@ -83,6 +85,59 @@ class CellularReportSectionTest {
         assertFalse(
             "empty section should be omitted entirely",
             render(emptyList()).contains("CELLULAR (TIER 1)")
+        )
+    }
+
+    private fun snapshot() = CellularSnapshot(
+        mcc = "427", mnc = "01", tac = 1437, ci = 192816407L, pci = 167,
+        earfcn = 1600, bands = listOf(3), bandwidthKhz = null, rat = "LTE",
+        operatorAlphaLong = "Ooredoo", operatorAlphaShort = "Ooredoo",
+        additionalPlmns = emptyList(), neighborCount = 13, servingRsrp = -84,
+        isRegistered = true, capturedAt = 1000L, source = TelemetrySource.LIVE_SCAN,
+        previousTac = 1436, previousRat = "LTE", tacChanged = true, ratChanged = false,
+        tacChangesLast5m = 4, servingMinusMaxNeighborRsrpDb = 8,
+        locationMovedMLast5m = null,
+    )
+
+    private fun renderTelemetry(s: CellularSnapshot?, deliveries: Int) =
+        ReportFormatter.formatScanReport(
+            scan = scan(),
+            dnsEvents = emptyList(),
+            logLines = emptyList(),
+            cellularSnapshot = s,
+            cellularDeliveries = deliveries,
+            versionName = "test",
+        )
+
+    @Test
+    fun `radio telemetry is reported even with no findings`() {
+        // A report showing only anomalies cannot distinguish "the radio was
+        // clean" from "the monitor never ran" — and cell info comes back EMPTY
+        // rather than erroring when not permitted, so that difference is real.
+        val out = renderTelemetry(snapshot(), deliveries = 12)
+        assertTrue("telemetry section missing", out.contains("CELLULAR TELEMETRY (TIER 1)"))
+        assertTrue("delivery count missing", out.contains("12"))
+        assertTrue("technology missing", out.contains("LTE"))
+        assertTrue("neighbour count missing", out.contains("13"))
+        assertTrue("churn count missing", out.contains("TAC changes (5m): 4"))
+    }
+
+    @Test
+    fun `telemetry section never carries tower identity`() {
+        val out = renderTelemetry(snapshot(), deliveries = 12)
+        assertFalse("TAC leaked", out.contains("1437"))
+        assertFalse("CI leaked", out.contains("192816407"))
+        assertFalse("PCI leaked", out.contains("PCI 167"))
+        assertTrue("must state what was withheld", out.contains("withheld"))
+    }
+
+    @Test
+    fun `telemetry section says so when the monitor produced nothing`() {
+        val out = renderTelemetry(null, deliveries = 0)
+        assertTrue(out.contains("No radio telemetry captured"))
+        assertTrue(
+            "must distinguish 'not running' from 'clean radio'",
+            out.contains("not running") || out.contains("no serving cell")
         )
     }
 }

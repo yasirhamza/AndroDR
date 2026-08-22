@@ -4,6 +4,7 @@ import android.content.Context
 import android.net.Uri
 import android.util.Log
 import androidx.core.content.FileProvider
+import com.androdr.cellular.CellularState
 import com.androdr.data.db.DnsEventDao
 import com.androdr.data.db.ForensicTimelineEventDao
 import com.androdr.data.model.ScanResult
@@ -80,6 +81,8 @@ class ReportExporter @Inject constructor(
             receiverTelemetry = receiverTelemetry,
             appOpsTelemetry = appOpsTelemetry,
             cellularEvents = cellularEvents,
+            cellularSnapshot = CellularState.latest.value,
+            cellularDeliveries = CellularState.deliveries.value,
             versionName = context.appVersion().name,
         )
 
