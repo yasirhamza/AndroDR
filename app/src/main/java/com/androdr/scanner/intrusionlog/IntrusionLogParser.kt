@@ -65,8 +65,6 @@ class IntrusionLogParser(
     private val maxSecurityRecords: Int = MAX_SECURITY_RECORDS
 ) {
 
-    private val json = Json { ignoreUnknownKeys = true }
-
     @Suppress("TooGenericExceptionCaught") // any per-line parse error means one malformed line, never a failed import
     fun parse(
         lines: Sequence<String>,
@@ -120,7 +118,9 @@ class IntrusionLogParser(
         net: MutableList<NetworkTelemetry>,
         sec: MutableList<SecurityLogEvent>
     ): LineOutcome {
-        val root = json.parseToJsonElement(line).jsonObject
+        // Only parseToJsonElement is used, which ignores decode-time config
+        // (ignoreUnknownKeys is inert here), so the default Json instance suffices.
+        val root = Json.parseToJsonElement(line).jsonObject
         val entry = root.entries.firstOrNull() ?: throw IllegalArgumentException("empty object")
         val type = entry.key
         require(type in KNOWN_WRAPPERS) { "unknown wrapper $type" }

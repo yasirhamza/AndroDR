@@ -5,7 +5,6 @@ import com.androdr.data.model.NetworkTelemetry
 import com.androdr.data.model.TelemetrySource
 import io.mockk.mockk
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class NetworkEvaluationTest {
@@ -58,10 +57,57 @@ class NetworkEvaluationTest {
     }
 
     @Test
-    fun `engine evaluateNetwork routes through network_monitor service`() {
-        // Method existence + service-string test: an engine with zero rules
-        // returns no findings but must not throw.
+    fun `engine evaluateNetwork dispatches under the network_monitor service`() {
+        // Load a network_monitor rule AND a security_log rule, then evaluate via
+        // the engine's evaluateNetwork path. The network rule fires; the
+        // security rule does NOT — proving evaluateNetwork passes the
+        // "network_monitor" service literal (a mis-wired literal would fire
+        // neither, or the wrong one).
+        val netRule = SigmaRuleParser.parse(
+            """
+            title: ADB over TCP
+            id: androdr-test-net
+            status: experimental
+            description: Test
+            category: incident
+            logsource:
+                product: androdr
+                service: network_monitor
+            detection:
+                selection:
+                    destination_port: 5555
+                condition: selection
+            level: medium
+            tags:
+                - attack.t1021
+            """.trimIndent()
+        )!!
+        val secRule = SigmaRuleParser.parse(
+            """
+            title: Never on this path
+            id: androdr-test-sec-wrongservice
+            status: experimental
+            description: Test
+            category: incident
+            logsource:
+                product: androdr
+                service: security_log
+            detection:
+                selection:
+                    destination_port: 5555
+                condition: selection
+            level: low
+            tags:
+                - attack.t1059
+            """.trimIndent()
+        )!!
         val engine = SigmaRuleEngine(mockContext)
-        assertTrue(engine.evaluateNetwork(listOf(connect("1.2.3.4", 80, null))).isEmpty())
+        engine.setRemoteRules(listOf(netRule, secRule))
+
+        val triggered = engine.evaluateNetwork(listOf(connect("192.168.1.7", 5555, "com.evil")))
+            .filter { it.triggered }
+            .map { it.ruleId }
+
+        assertEquals(listOf("androdr-test-net"), triggered)
     }
 }

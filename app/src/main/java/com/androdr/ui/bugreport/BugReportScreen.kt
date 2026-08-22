@@ -57,6 +57,9 @@ import com.androdr.scanner.ScanOrchestrator
 import com.androdr.ui.common.FindingCard
 import com.androdr.ui.theme.ExtendedColors
 import com.androdr.ui.theme.androdrColors
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 @Suppress("LongMethod") // Bug report screen combines file-picker launch, progress state,
 // empty-state, completion confirmation, error card, findings list, timeline, and export.
@@ -303,6 +306,11 @@ fun BugReportScreen(
                                 modifier = Modifier.padding(16.dp),
                                 verticalArrangement = Arrangement.spacedBy(4.dp)
                             ) {
+                                // Constructed once, not per recomposition (matches the
+                                // ScanGroupHeader/HistoryScreen date-formatter pattern).
+                                val summaryDateFmt = remember {
+                                    SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.US)
+                                }
                                 Text(
                                     text = stringResource(R.string.intrusion_log_summary_title),
                                     style = MaterialTheme.typography.titleSmall,
@@ -368,13 +376,11 @@ fun BugReportScreen(
                                     )
                                 }
                                 if (s.earliestEventMs != null && s.latestEventMs != null) {
-                                    val fmt =
-                                        java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.US)
                                     Text(
                                         text = stringResource(
                                             R.string.intrusion_log_summary_range,
-                                            fmt.format(java.util.Date(s.earliestEventMs)),
-                                            fmt.format(java.util.Date(s.latestEventMs))
+                                            summaryDateFmt.format(Date(s.earliestEventMs)),
+                                            summaryDateFmt.format(Date(s.latestEventMs))
                                         ),
                                         style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
