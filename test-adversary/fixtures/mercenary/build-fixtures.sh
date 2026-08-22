@@ -41,6 +41,7 @@ MODULES=(
     "accessibility-abuse"
     "device-admin-abuse"
     "surveillance-permissions"
+    "manic-mesh-relay"
     "system-name-disguise"
     "impersonation-play-store"
     "multi-abuse-combo"

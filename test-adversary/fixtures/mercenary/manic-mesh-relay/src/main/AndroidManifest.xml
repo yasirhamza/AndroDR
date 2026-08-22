@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Fixture for androdr-095 (Manic mesh-relay). A sideloaded app that pairs an
+  accessibility service with the Wi-Fi Direct + Bluetooth proximity radios the
+  Manic malware uses for store-and-forward mesh exfiltration. Declared, not
+  functional — the scanner reads manifest facts only.
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <uses-permission android:name="android.permission.NEARBY_WIFI_DEVICES" />
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+    <uses-permission android:name="android.permission.BLUETOOTH_ADVERTISE" />
+    <application android:label="Manic Relay Test">
+        <service
+            android:name="com.androdr.fixture.manic.A11yRelayService"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+        </service>
+    </application>
+</manifest>
