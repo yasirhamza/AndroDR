@@ -241,6 +241,57 @@ class IntrusionLogParserTest {
         assertFalse(data.contains('\n'))
     }
 
+    // Minor (batch A review): hostname is a dns_event's DEFINING payload — an
+    // absent/blank one must be malformed, not an empty-domain phantom row that
+    // inflates dnsEventCount and implies a DNS lookup was observed.
+    @Test
+    fun `dns_event without hostname is malformed and emits no phantom row`() {
+        val line = """{"dns_event":{"event_id":0,"event_time":1787400345334,"package_name":"com.a"}}"""
+        val result = parse(line)
+        assertEquals(0, result.dnsEvents.size)
+        assertEquals(1, result.malformedLines)
+    }
+
+    @Test
+    fun `dns_event with control-char-only hostname collapses to blank and is malformed`() {
+        // hostname sanitizes to a single space -> blank -> malformed (sanitize
+        // runs before the blank check).
+        val line = """{"dns_event":{"event_id":0,"event_time":1787400345334,"hostname":"\n"}}"""
+        val result = parse(line)
+        assertEquals(0, result.dnsEvents.size)
+        assertEquals(1, result.malformedLines)
+    }
+
+    // Minor: ip_address + port are a connect_event's DEFINING payload.
+    @Test
+    fun `connect_event without ip_address is malformed and emits no phantom row`() {
+        val line = """{"connect_event":{"event_id":1,"event_time":1787400345540,"port":443}}"""
+        val result = parse(line)
+        assertEquals(0, result.networkEvents.size)
+        assertEquals(1, result.malformedLines)
+    }
+
+    @Test
+    fun `connect_event without port is malformed`() {
+        val line =
+            """{"connect_event":{"event_id":1,"event_time":1787400345540,"ip_address":"/1.2.3.4"}}"""
+        val result = parse(line)
+        assertEquals(0, result.networkEvents.size)
+        assertEquals(1, result.malformedLines)
+    }
+
+    // Re-confirm the robustness that MUST stay: a secondary field (package_name)
+    // absent still parses, with the defining payload (hostname) intact.
+    @Test
+    fun `dns_event missing only package_name still parses with domain intact`() {
+        val line =
+            """{"dns_event":{"event_id":0,"event_time":1787400345334,"hostname":"only.example.com"}}"""
+        val dns = parse(line).dnsEvents.single()
+        assertEquals("only.example.com", dns.event.domain)
+        assertEquals(null, dns.event.appName)
+        assertEquals(-1, dns.event.appUid)
+    }
+
     // Finding 4: the onLine check (the analyzer threads coroutineContext
     // .ensureActive() into it) runs before the per-line try/catch, so throwing
     // from it stops the loop instead of being swallowed as a malformed line.
