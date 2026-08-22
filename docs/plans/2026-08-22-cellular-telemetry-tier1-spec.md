@@ -485,23 +485,57 @@ verifies the wrong tree and reports success for code that was never built.
 5. Local `testDebugUnitTest lintDebug` in the worktree before deployment and
    after every rebase.
 
-### Mirroring, with a deliberate exception
+### Mirroring and `rules.txt` — corrected 2026-08-22
 
-Every bundled rule must normally be mirrored into the submodule under the
-matching `<logsource_service>/` directory, byte identical. A `cellular_monitor/`
-directory is therefore created **on the rules-repo branch**.
+**An earlier draft of this spec said the cellular rules would be deliberately
+kept out of `rules.txt`. That was wrong and would fail CI.** Correction made
+during implementation planning, after reading `BundledMirrorParityTest`.
 
-**These rules are deliberately NOT added to `rules.txt`.** The reason this
-matters: the app fetches `rules.txt` from `android-sigma-rules` **main** every
-12h, so a rule listed there reaches the entire fleet within 12h regardless of any
-submodule pointer. Keeping the cellular rules out of `rules.txt` — and off rules
-`main` entirely — means the fleet never fetches them, `rules.sha256` regeneration
-does not apply, and the fail-closed manifest path is never involved.
+That test enforces two invariants on **every** bundled rule in `res/raw/`
+(correlation rules, `sigma_androdr_corr_*`, are the only exemption):
 
-Because the rules-repo branch is never merged, the usual "state the exception in
-the PR" obligation does not arise. **If that branch is ever proposed for merge,
-this exception must be stated explicitly and re-approved**, since it deviates
-from the default expectation that a mirrored rule is a shipped rule.
+1. A **byte-equal** mirror counterpart must exist in the submodule, in the
+   directory named for its logsource service (`sigma_` prefix stripped).
+2. It must be **listed in `rules.txt`**, or the test fails with
+   `"<name>: missing from rules.txt (OTA-unreachable)"`.
+
+A third test additionally requires mirror rule basenames to be unique across
+service directories.
+
+**Resolution — list them in `rules.txt` on the unmerged rules-repo branch.**
+This satisfies the gate while keeping fleet exposure at exactly zero, because
+the two facts are independent:
+
+- The **app** fetches `rules.txt` from `android-sigma-rules` **main**, on a 12h
+  cycle. The research branch is never merged, so main contains neither the
+  cellular rules nor any `rules.txt` entry for them. **The fleet cannot fetch
+  what main does not have.**
+- The **test** reads `rules.txt` from the **pinned submodule commit**, which is
+  the research branch. There it lists the cellular rules, so parity passes.
+
+Fleet isolation was never provided by the `rules.txt` omission — it is provided
+by the branch never merging (§3). The omission bought nothing and broke a gate.
+
+**Consequences for the rules-repo branch:**
+
+- Create `cellular_monitor/` and place the five rules there, byte-identical to
+  the bundled copies.
+- Append their paths to `rules.txt`.
+- **Regenerate `rules.sha256`**, since `rules.txt`-listed files changed. This is
+  now required (the earlier draft wrongly stated it did not apply):
+
+  ```bash
+  cd third-party/android-sigma-rules
+  while read -r f; do printf '%s  %s\n' "$(sha256sum "$f" | cut -d' ' -f1)" "$f"; done \
+      < rules.txt > rules.sha256
+  ```
+
+- `RuleManifestIntegrityTest` then passes against the pinned commit.
+
+**If that branch is ever proposed for merge to rules `main`, this becomes a
+genuine fleet-delivery change** and must be re-approved on those terms — merging
+it would put the cellular rules on the 12h fetch path for every user within 12
+hours.
 
 ## 10. Spike (implementation step 0) and validation methodology
 
