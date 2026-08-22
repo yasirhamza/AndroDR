@@ -943,7 +943,9 @@ git add app/src/main/java/com/androdr/scanner/ArtifactSniffer.kt app/src/test/ja
 git commit -m "feat(scanner): artifact sniffer routes bugreport vs intrusion-log zips (#342)"
 ```
 
----### Task 8: `IntrusionLogAnalyzer` — coordinator
+---
+
+### Task 8: `IntrusionLogAnalyzer` — coordinator
 
 **Files:**
 - Create: `app/src/main/java/com/androdr/scanner/IntrusionLogAnalyzer.kt`
