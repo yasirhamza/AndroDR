@@ -87,7 +87,8 @@ Current package tree under `app/src/main/java/com/androdr/`:
 ├── network/         DnsVpnService (local DNS interception) + UnderlyingDnsTracker (the device's own non-VPN resolvers) + DNS event capture
 ├── reporting/       ReportFormatter, ReportExporter, timeline formatter/exporter, guidance text helpers
 ├── scanner/         Pure telemetry emitters (app, device, accessibility, app-ops, file artifacts, process, usage stats, receivers, device-admin-grant, install event)
-│   └── bugreport/   Bug-report ZIP parser and per-section modules
+│   ├── bugreport/   Bug-report ZIP parser and per-section modules
+│   └── intrusionlog/ Intrusion log ZIP parser and per-event handlers
 ├── sigma/           SIGMA rule engine: parser, evaluator, engine, correlation, rule feeds, telemetry field maps
 └── ui/              Jetpack Compose screens
     ├── apps/          Apps screen + ViewModel
@@ -462,6 +463,44 @@ The pipeline runs in six ordered stages:
 ### 8.4 Privacy handling
 
 Android bug reports are among the most sensitive files a device can produce — they contain process lists, network state, installed-app histories, and system logs from all apps on the device. AndroDR's handling follows a strict "your device, your choice" model: the user explicitly selects the file, it is analyzed locally and immediately, and the raw ZIP is never retained. Sharing a bug-report analysis result follows the same user-initiated share-sheet path as any other export.
+
+### 8.5 Intrusion log import (#342)
+
+Android 16's Advanced Protection → Intrusion Logging writes DNS, connection,
+and security events that the user can export from Settings as a ZIP of
+per-day `YYYY-MM-DD.txt` JSONL files. There is no app-read API — the logs
+are E2E-encrypted and reachable only by user-initiated download — so AndroDR
+supports them strictly as an import, through the same accept flow as bug
+reports: `ArtifactSniffer` classifies the ZIP by entry names and routes to
+`BugReportAnalyzer` (dumpstate entries) or `IntrusionLogAnalyzer` (per-day
+entries, top-level or one directory deep).
+
+`IntrusionLogAnalyzer` streams all matching entries as one line sequence,
+dedups on the type-shared monotonic `event_id` (first-seen, across files),
+counts malformed lines instead of failing, and maps records to typed
+telemetry: `dns_event` → transient `DnsEvent` values evaluated through the
+existing `dns_monitor` service (existing rules fire unchanged — including on
+DNS-over-TLS resolutions the VPN monitor cannot observe), `connect_event` →
+`NetworkTelemetry` (`network_monitor`, activated by this feature), and
+`security_event` → `SecurityLogEvent` with a `SecurityLog` tag registry
+(`security_log` service; unknown tags are emitted verbatim as
+`unknown_<tag>`). Rules evaluate the complete parsed stream; only timeline
+persistence is capped (`ScanOrchestrator.DNS_PERSIST_CAP` /
+`CONNECT_PERSIST_CAP`, surfaced in the results UI). Rows persist as
+`ForensicTimelineEvent` with `telemetrySource = INTRUSION_LOG_IMPORT`,
+`source = "intrusion_log"` (raw) / `"intrusion_log_analysis"` (findings),
+and correlation ids `dns:<domain>` / `net:<ip>:<port>` / `sec:<tag>`; each
+import first deletes the previous import's rows (replace-on-reimport). The
+raw ZIP is never retained.
+
+**Relation to D3 (parked IP filtering):** D3 rejected *live VPN-based IP
+inspection* (battery, MITM, breakage). This feature is offline import of
+logs the platform already wrote — zero battery, no interception, no
+allow/deny decisions — and was approved on its own merits; see
+`docs/superpowers/specs/2026-08-22-intrusion-log-import-design.md` and
+`docs/plans/2026-08-22-cellular-telemetry-tier1-spec.md` §11.
+
+---
 
 ## 9. AI rule-authoring pipeline
 

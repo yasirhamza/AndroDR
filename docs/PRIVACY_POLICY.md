@@ -114,6 +114,17 @@ Bug report files are among the most sensitive files on an Android device. AndroD
 
 ---
 
+## Intrusion log imports
+
+**Intrusion log imports.** If you choose to import an Android Advanced
+Protection intrusion log export, AndroDR analyzes it entirely on your
+device. The imported ZIP is read once and never stored; parsed events are
+kept in the app's local database for at most 30 days from the import (or
+until you import a newer export, which replaces them) and are never
+transmitted anywhere.
+
+---
+
 ## What Exported Reports Contain
 
 When you export a security report, it includes:
