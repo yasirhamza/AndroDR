@@ -43,6 +43,17 @@
         android:name="android.permission.MANAGE_EXTERNAL_STORAGE"
         tools:ignore="ScopedStorage" />
 
+    <!-- Research branch only (cellular Tier 1). NEVER merged to main: the
+         Play build must not declare location, or the Data Safety
+         declaration changes for the whole fleet. -->
+    <!-- Android 12+ requires COARSE alongside FINE: the runtime dialog lets the
+         user grant approximate-only, so FINE cannot be requested on its own.
+         CellularMonitor still checks for FINE specifically, because coarse-only
+         does not yield full CellInfo. -->
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.READ_PHONE_STATE" />
+
     <application
         android:name=".AndroDRApplication"
         android:allowBackup="false"
