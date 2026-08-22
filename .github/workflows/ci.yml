@@ -368,7 +368,12 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     if: always()
+    # `changes` is gated too (#329.1.1): if the paths-filter job fails, its
+    # downstream jobs skip, and without `changes` in needs this job would go
+    # green with nothing built or tested. ci-success is the ONLY required
+    # branch-protection check, so a vacuous green defeats the whole gate.
     needs:
+      - changes
       - build-and-test
       - lint-and-detekt
       - apk-analyze
@@ -379,6 +384,28 @@ jobs:
       - dependency-submission
       - dependency-review
     steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          persist-credentials: false
+      - name: Assert ci-success waits on every job (no silent gap) (#329.1.3)
+        env:
+          NEEDS: ${{ toJSON(needs) }}
+        run: |
+          set -euo pipefail
+          # Every job in ci.yml must appear in ci-success.needs, or a failing
+          # new job would not block merge (ci-success is the only required
+          # check). Exempt: ci-success itself, and `instrumented` (advisory,
+          # continue-on-error, deliberately not gating).
+          awk '/^jobs:/{f=1;next} f&&/^  [A-Za-z0-9_-]+:/{sub(/:.*/,"");gsub(/ /,"");print}' \
+            .github/workflows/ci.yml | grep -vxE 'ci-success|instrumented' | sort > /tmp/expected
+          jq -r 'keys[]' <<<"$NEEDS" | sort > /tmp/have
+          missing="$(comm -23 /tmp/expected /tmp/have)"
+          if [ -n "$missing" ]; then
+            echo "::error::ci-success.needs is stale — these jobs would NOT block merge:" >&2
+            echo "$missing" >&2
+            exit 1
+          fi
+          echo "ci-success gates all $(wc -l < /tmp/expected) non-exempt jobs."
       - name: Verify all required gates passed (belt-and-braces)
         run: |
           # `skipped` is a PASS here — the path-filter job intentionally
@@ -386,6 +413,7 @@ jobs:
           # on a Kotlin-only PR). `failure` and `cancelled` are still fails.
           if [[ "${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') }}" == "true" ]]; then
             echo "A required gate failed or was cancelled" >&2
+            echo "needs.changes.result:          ${{ needs.changes.result }}" >&2
             echo "needs.build-and-test.result:   ${{ needs.build-and-test.result }}" >&2
             echo "needs.lint-and-detekt.result:  ${{ needs.lint-and-detekt.result }}" >&2
             echo "needs.apk-analyze.result:      ${{ needs.apk-analyze.result }}" >&2
