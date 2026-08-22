@@ -1,0 +1,31 @@
+title: Implausibly narrow cell bandwidth
+id: androdr-101
+status: experimental
+description: >-
+    The cell this device is registered to reports a 1.4 or 3 MHz channel.
+    Software-defined fake base stations commonly transmit narrow because the
+    hardware is cheap and the coverage area intentionally small; production
+    macro cells normally run 10, 15 or 20 MHz. Suggestive rather than
+    conclusive on its own — narrow carriers do exist in legitimate networks.
+author: AndroDR
+date: 2026/08/22
+category: incident
+logsource:
+    product: androdr
+    service: cellular_monitor
+detection:
+    selection:
+        is_registered: true
+        bandwidth_khz:
+            - 1400
+            - 3000
+    condition: selection
+level: low
+tags:
+    - attack.t1430
+falsepositives:
+    - Legitimate narrowband or rural LTE deployments
+    - NB-IoT and machine-to-machine carriers
+    - Private or campus networks
+remediation:
+    - "Note where and when this appeared. On its own this is weak evidence — corroborate with other cellular findings from the same place and time before drawing conclusions."
