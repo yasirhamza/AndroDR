@@ -360,54 +360,69 @@ private fun CellularCard(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-
             if (snapshot == null) {
-                // "No data" and "not allowed to look" are indistinguishable from
-                // the API, so say which one this is rather than showing a blank.
-                Text(
-                    "Waiting for a radio update. Needs the VPN running and " +
-                        "location permission; updates arrive only when the " +
-                        "serving cell changes.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                return@Column
-            }
-
-            Text(
-                "${snapshot.rat} · ${snapshot.operatorAlphaLong ?: "unknown operator"}" +
-                    " · ${snapshot.mcc ?: "?"}/${snapshot.mnc ?: "?"}",
-                style = MaterialTheme.typography.bodyMedium,
-            )
-            Text(
-                "TAC ${snapshot.tac ?: "—"} · CI ${snapshot.ci ?: "—"} · " +
-                    "PCI ${snapshot.pci ?: "—"} · EARFCN ${snapshot.earfcn ?: "—"}",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Text(
-                "${snapshot.neighborCount} neighbour(s) · " +
-                    "RSRP ${snapshot.servingRsrp?.let { "$it dBm" } ?: "—"} · " +
-                    "TAC changes (5m): ${snapshot.tacChangesLast5m}",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-
-            if (findings.isEmpty()) {
-                Text(
-                    "No cellular findings.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+                CellularWaitingText()
             } else {
-                findings.forEach { f ->
-                    Text(
-                        "\u26A0 ${f.title} (${f.level})",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.error,
-                    )
-                }
+                CellularSnapshotLines(snapshot)
+                CellularFindingLines(findings)
             }
         }
+    }
+}
+
+/**
+ * An empty card is ambiguous here: getAllCellInfo returns an empty list rather
+ * than an error when the caller is not allowed to look, so say which state
+ * this is instead of showing nothing.
+ */
+@Composable
+private fun CellularWaitingText() {
+    Text(
+        "Waiting for a radio update. Needs the VPN running and location " +
+            "permission; updates arrive only when the serving cell changes.",
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+}
+
+@Composable
+private fun CellularSnapshotLines(snapshot: com.androdr.data.model.CellularSnapshot) {
+    val muted = MaterialTheme.colorScheme.onSurfaceVariant
+    Text(
+        "${snapshot.rat} \u00B7 ${snapshot.operatorAlphaLong ?: "unknown operator"}" +
+            " \u00B7 ${snapshot.mcc ?: "?"}/${snapshot.mnc ?: "?"}",
+        style = MaterialTheme.typography.bodyMedium,
+    )
+    Text(
+        "TAC ${snapshot.tac ?: "\u2014"} \u00B7 CI ${snapshot.ci ?: "\u2014"} \u00B7 " +
+            "PCI ${snapshot.pci ?: "\u2014"} \u00B7 EARFCN ${snapshot.earfcn ?: "\u2014"}",
+        style = MaterialTheme.typography.bodySmall,
+        color = muted,
+    )
+    Text(
+        "${snapshot.neighborCount} neighbour(s) \u00B7 " +
+            "RSRP ${snapshot.servingRsrp?.let { "$it dBm" } ?: "\u2014"} \u00B7 " +
+            "TAC changes (5m): ${snapshot.tacChangesLast5m}",
+        style = MaterialTheme.typography.bodySmall,
+        color = muted,
+    )
+}
+
+@Composable
+private fun CellularFindingLines(findings: List<com.androdr.sigma.Finding>) {
+    if (findings.isEmpty()) {
+        Text(
+            "No cellular findings.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        return
+    }
+    findings.forEach { f ->
+        Text(
+            "\u26A0 ${f.title} (${f.level})",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.error,
+        )
     }
 }
