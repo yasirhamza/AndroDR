@@ -488,9 +488,13 @@ DNS-over-TLS resolutions the VPN monitor cannot observe), `connect_event` →
 persistence is capped (`ScanOrchestrator.DNS_PERSIST_CAP` /
 `CONNECT_PERSIST_CAP`, surfaced in the results UI). Rows persist as
 `ForensicTimelineEvent` with `telemetrySource = INTRUSION_LOG_IMPORT`,
-`source = "intrusion_log"` (raw) / `"intrusion_log_analysis"` (findings),
-and correlation ids `dns:<domain>` / `net:<ip>:<port>` / `sec:<tag>`; each
-import first deletes the previous import's rows (replace-on-reimport). The
+`source = "intrusion_log"` (raw) / `"intrusion_log_analysis"` (findings). Raw
+imported rows carry **no** correlation id: the finding↔raw-evidence join for the
+new `network_monitor` / `security_log` services is deferred to #352 (to be
+decided with the first starter rules). Stamping a per-type key like `sec:<tag>`
+unconditionally would collapse hundreds of identical events into one meaningless
+`TimelineClusters` cluster, so raw rows stay unlinked until that design lands.
+Each import first deletes the previous import's rows (replace-on-reimport). The
 raw ZIP is never retained.
 
 **Relation to D3 (parked IP filtering):** D3 rejected *live VPN-based IP
