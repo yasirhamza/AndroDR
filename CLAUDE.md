@@ -53,6 +53,17 @@ The project uses the default Android Lint configuration.  Run
 `./gradlew lintDebug` before submitting changes; treat warnings as errors
 in release builds.
 
+## Regression policy
+
+**Every mistake fixed becomes a durable deterministic test.** When a bug or
+review finding is fixed, the fix lands *with* a check that deterministically
+fails on the original mistake — a unit test, cross-check test, or an enabled
+detekt/lint rule — wired into both the local gates (`./gradlew
+testDebugUnitTest`, `./gradlew detekt`, `./gradlew lintDebug`) and GitHub CI.
+A fix without a regression gate is not done. Non-behavioral mistakes map to
+the nearest enforceable gate (e.g. activating the detekt rule that would have
+caught them) rather than being skipped.
+
 ## Running on a physical device
 1. Enable **Developer Options** and **USB Debugging** on the device.
 2. `adb devices` — confirm the device is listed.
