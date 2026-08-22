@@ -383,6 +383,7 @@ class SigmaRuleEngine @Inject constructor(
             R.raw.sigma_androdr_089_sms_notification_otp_theft,
             R.raw.sigma_androdr_092_webapk_brand_impersonation,
             R.raw.sigma_androdr_093_sideloaded_brand_impersonation,
+            R.raw.sigma_androdr_094_badbox_admoyu_component,
             // Atom rules — pass-through matchers for raw timeline event categories.
             // Referenced by sprint-75 correlation rules (Task 9); tagged
             // level: informational so they are filtered out of the user-facing
