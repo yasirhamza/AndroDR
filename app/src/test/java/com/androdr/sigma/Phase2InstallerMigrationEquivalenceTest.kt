@@ -30,10 +30,7 @@ class Phase2InstallerMigrationEquivalenceTest {
         val candidates = listOf(
             File("app/src/main/res/raw/$fileName"),
             File("src/main/res/raw/$fileName"),
-            File(
-                "/home/yasir/AndroDR/.claude/worktrees/phase2-from-trusted-store/" +
-                    "app/src/main/res/raw/$fileName"
-            ),
+            File("/home/yasir/AndroDR/app/src/main/res/raw/$fileName"),
         )
         val file = candidates.firstOrNull { it.isFile }
             ?: error("$fileName not found; tried: ${candidates.map { it.absolutePath }}")

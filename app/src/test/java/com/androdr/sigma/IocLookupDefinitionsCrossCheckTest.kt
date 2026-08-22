@@ -120,10 +120,8 @@ class IocLookupDefinitionsCrossCheckTest {
             ["lookups"] as Map<String, Any?>).keys
         val ruleDir = listOf(
             File("app/src/main/res/raw"),
-            File(
-                "/home/yasir/AndroDR/.claude/worktrees/phase2-from-trusted-store/" +
-                    "app/src/main/res/raw",
-            ),
+            File("src/main/res/raw"),
+            File("/home/yasir/AndroDR/app/src/main/res/raw"),
         ).firstOrNull { it.isDirectory } ?: error("res/raw not found")
         val ruleFiles = ruleDir.listFiles { f ->
             f.name.startsWith("sigma_androdr_") && f.name.endsWith(".yml")

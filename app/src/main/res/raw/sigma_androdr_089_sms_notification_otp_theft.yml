@@ -43,7 +43,7 @@ detection:
     condition: selection and not filter_known_good
 level: high
 falsepositives:
-    - "Sideloaded but legitimate apps that genuinely combine SMS receipt with notification access: alternative SMS/messaging clients with notification sync, call/SMS backup tools, and automation suites (e.g. Tasker-style) that react to both texts and notifications. filter_known_good here is an impersonation backstop, not a noise filter — because selection requires is_sideloaded (which implies not from_trusted_store), the known-good exemption is never reached, so every sideloaded app with this SMS+notification combo trips this and needs user judgement."
+    - "Sideloaded but legitimate apps that genuinely combine SMS receipt with notification access: alternative SMS/messaging clients with notification sync, call/SMS backup tools, and automation suites (e.g. Tasker-style) that react to both texts and notifications. filter_known_good here is an impersonation backstop, not a noise filter — because selection requires is_sideloaded (installer not a trusted store), the known-good exemption is never reached, so every sideloaded app with this SMS+notification combo trips this and needs user judgement."
 display:
     category: app_risk
     icon: sms

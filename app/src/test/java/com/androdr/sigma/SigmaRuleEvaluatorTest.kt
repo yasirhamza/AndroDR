@@ -286,8 +286,10 @@ class SigmaRuleEvaluatorTest {
             impersonatorFindings.any { it.triggered }
         )
 
-        // Genuinely store-installed: package matches allowlist AND installer is trusted →
-        // filter SHOULD exempt → rule must NOT fire.
+        // Genuinely store-installed (installer = a trusted store) → the negated
+        // `store_installed` selection suppresses the rule first (before filter_known_good
+        // is even decisive) → rule must NOT fire. This asserts the trusted-installer
+        // exemption path, not the package-name filter.
         val genuine = impersonator + mapOf("installer" to "com.android.vending")
         val genuineFindings = SigmaRuleEvaluator.evaluate(
             listOf(rule), listOf(genuine), "app_scanner", iocLookups

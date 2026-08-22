@@ -48,6 +48,7 @@ detection:
 level: high
 falsepositives:
     - "Sideloaded but legitimate apps that combine an accessibility service with nearby-device radios: accessibility suites that sync to companion hardware, switch-access/assistive tools driving Bluetooth peripherals, and automation apps granted accessibility that also manage Wi-Fi Direct transfers. There is deliberately no known-good exemption: a genuinely sideloaded app can never reach a trusted-installer-gated exemption, so every match needs user judgement."
+    - "A non-system OEM preload that also declared an accessibility service and this radio cluster would match — the sibling migrated rules exclude such apps with `is_known_oem_app: false`, but that field is a kind:judgment field the #136 emitter contract forbids NEW rules from using, so androdr-095 deliberately omits it. The residual intersection (a non-system, accessibility-holding OEM preload requesting Wi-Fi Direct + Bluetooth proximity) is vanishingly rare and genuine Manic is never an OEM preload; revisit if a pure-emitter OEM lookup becomes available."
 display:
     category: app_risk
     icon: wifi_tethering
