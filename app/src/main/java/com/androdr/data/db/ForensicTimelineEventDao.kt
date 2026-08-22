@@ -76,6 +76,23 @@ interface ForensicTimelineEventDao {
     @Query("DELETE FROM forensic_timeline WHERE scanResultId = :scanResultId")
     suspend fun deleteByScanId(scanResultId: Long)
 
+    /**
+     * Scan ids that own at least one row with the given [source] (#342).
+     *
+     * Used by the intrusion-log import's replace-on-reimport sweep: deleting by
+     * source alone would strand the correlation-signal rows the engine writes
+     * with `source = "sigma_correlation_engine"`, leaving clusters whose
+     * `member_event_ids` point at deleted rows. Deleting by the ids this
+     * returns removes a prior import's raw rows, finding rows, and signals
+     * together — without touching live-scan or bug-report signals, which carry
+     * their own scan ids.
+     *
+     * `scanResultId != -1` filters the "not associated with any scan" sentinel
+     * ([ForensicTimelineEvent.scanResultId] default), which must never be swept.
+     */
+    @Query("SELECT DISTINCT scanResultId FROM forensic_timeline WHERE source = :source AND scanResultId != -1")
+    suspend fun getDistinctScanIdsBySource(source: String): List<Long>
+
     @Query("DELETE FROM forensic_timeline")
     suspend fun deleteAll()
 }

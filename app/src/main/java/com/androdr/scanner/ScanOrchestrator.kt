@@ -3,6 +3,7 @@ package com.androdr.scanner
 import android.content.Context
 import android.net.Uri
 import android.util.Log
+import androidx.annotation.VisibleForTesting
 import com.androdr.data.db.DnsEventDao
 import com.androdr.data.db.ForensicTimelineEventDao
 import com.androdr.data.db.toForensicTimelineEvent
@@ -682,11 +683,10 @@ class ScanOrchestrator @Inject constructor(
         val allEvents = buildIntrusionLogTimelineEvents(result, scanResult)
 
         // Replace-on-reimport, then persist with correlation (same transaction
-        // shape as the bug-report path). The two deletes run before the save so
-        // a re-import of the same (or a corrected) export replaces the previous
+        // shape as the bug-report path). The sweep runs before the save so a
+        // re-import of the same (or a corrected) export replaces the previous
         // import's rows instead of stacking a second copy of every event.
-        forensicTimelineEventDao.deleteBySource("intrusion_log")
-        forensicTimelineEventDao.deleteBySource("intrusion_log_analysis")
+        deletePriorIntrusionLogRows()
         val corrRules = sigmaRuleEngine.getCorrelationRules()
         runCatching {
             scanRepository.saveScanWithCorrelation(
@@ -710,6 +710,31 @@ class ScanOrchestrator @Inject constructor(
     }
 
     /**
+     * Replace-on-reimport sweep (#342 spec §4.2): removes EVERY row a previous
+     * intrusion-log import left behind, before the new import is persisted.
+     *
+     * Deleting by source alone is not enough. The correlation engine persists
+     * its signals with `source = "sigma_correlation_engine"` (shared with the
+     * live-scan and bug-report paths, so that source must never be deleted
+     * wholesale) and each signal's `member_event_ids` points at the raw rows
+     * that produced it. Sweeping only "intrusion_log" / "intrusion_log_analysis"
+     * would therefore strand one signal cluster per prior import, expanding to
+     * nothing in the Timeline UI and accumulating forever.
+     *
+     * Every row of one import — raw, finding, and signal — carries that
+     * import's `scanResultId`, so the ids owning "intrusion_log" rows identify
+     * the whole set. The two source deletes still run afterwards as
+     * belt-and-braces for rows written without a scan id.
+     */
+    private suspend fun deletePriorIntrusionLogRows() {
+        forensicTimelineEventDao.getDistinctScanIdsBySource("intrusion_log").forEach { priorScanId ->
+            forensicTimelineEventDao.deleteByScanId(priorScanId)
+        }
+        forensicTimelineEventDao.deleteBySource("intrusion_log")
+        forensicTimelineEventDao.deleteBySource("intrusion_log_analysis")
+    }
+
+    /**
      * Builds the timeline rows for one intrusion-log import: one row per
      * triggered finding (`source = "intrusion_log_analysis"`) followed by the
      * raw imported evidence (`source = "intrusion_log"`).
@@ -721,7 +746,8 @@ class ScanOrchestrator @Inject constructor(
      * COMPLETE parsed stream, so a capped event can still have produced a
      * finding row here.
      */
-    private fun buildIntrusionLogTimelineEvents(
+    @VisibleForTesting
+    internal fun buildIntrusionLogTimelineEvents(
         result: IntrusionLogAnalysisResult,
         scanResult: ScanResult
     ): List<ForensicTimelineEvent> {
