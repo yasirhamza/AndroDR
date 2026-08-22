@@ -439,6 +439,46 @@ and is explicitly deferred**, exactly as the product note left it.
 **Persistence.** Every finding stores its full triggering snapshot, because §10
 depends on being able to adjudicate each flag after the fact.
 
+## 8a. Logging constraint — never log the cell identity tuple
+
+**Standing rule, added 2026-08-22 after a security review caught a violation
+in the first implementation.**
+
+`(mcc, mnc, tac, ci)` is a globally unique tower identifier and is **directly
+geolocatable** — resolving it to coordinates is exactly what OpenCelliD does,
+and §6 names OpenCelliD as the intended lookup for the deferred H5. Emitting
+that tuple on every callback delivery therefore writes a **continuous,
+timestamped location trail** to logcat, which is readable over adb and captured
+in bugreports.
+
+Three reasons this matters more here than the generic "don't log PII":
+
+1. **The threat model is the whole point.** This code runs on a device assumed
+   to be a target in a high-surveillance region. A location trail in a shared
+   log is precisely the artifact the project exists to avoid creating.
+2. **It inverts the product.** AndroDR ships `androdr-079`–`083` to flag apps
+   that harvest location. An AndroDR component logging tower identity makes it
+   one of them.
+3. **Retention was never the problem.** The full snapshot is deliberately
+   persisted to the app-private findings store — §10's methodology depends on
+   it. The defect was the *exposure surface*, not the data.
+
+**Rule:** logs carry **shape only** — whether a field arrived populated or
+blanked, plus non-identifying state (`rat`, neighbour count, `tacChanged`,
+churn count). Never raw `ci`, `tac`, `pci`, `mcc`, `mnc`, or operator name.
+
+This costs nothing diagnostically. The two findings the logging existed to
+establish both survive redaction: `bw=null` still demonstrates the bandwidth
+sentinel that killed `androdr-101`, and `neighbours=11` still demonstrates that
+neighbours are visible.
+
+Verified form:
+
+```
+snapshot rat=LTE tac=set ci=set pci=set earfcn=set bw=null plmn=set
+op=set neighbours=11 rsrp=set tacChanged=false churn5m=0 ratChanged=false
+```
+
 ## 9. Taxonomy, CI gates, and rule-repo mirroring
 
 ### The bidirectional constraint that drives this section
