@@ -7,6 +7,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.androdr.data.model.TimelineEvent
 import com.androdr.reporting.TimelineFormatter
+import com.androdr.scanner.IntrusionLogStats
 import com.androdr.scanner.ScanOrchestrator
 import com.androdr.sigma.Finding
 import com.androdr.util.appVersion
@@ -35,6 +36,10 @@ class BugReportViewModel @Inject constructor(
 
     private val _timeline = MutableStateFlow<List<TimelineEvent>>(emptyList())
     val timeline: StateFlow<List<TimelineEvent>> = _timeline.asStateFlow()
+
+    /** Non-null when the most recently analyzed artifact was an intrusion-log import (#342). */
+    private val _intrusionLogSummary = MutableStateFlow<IntrusionLogStats?>(null)
+    val intrusionLogSummary: StateFlow<IntrusionLogStats?> = _intrusionLogSummary.asStateFlow()
 
     private val _isAnalyzing = MutableStateFlow(false)
     val isAnalyzing: StateFlow<Boolean> = _isAnalyzing.asStateFlow()
@@ -87,10 +92,12 @@ class BugReportViewModel @Inject constructor(
     """.trimIndent()
 
     /**
-     * Analyzes the bug report zip at the given [uri].
-     * Updates [isAnalyzing], [findings], and [timeline] reactively.
+     * Analyzes the imported artifact zip at the given [uri] — either a bug report
+     * or an Advanced Protection Intrusion Logging export (#342); [ScanOrchestrator.analyzeArtifact]
+     * sniffs which one it is.
+     * Updates [isAnalyzing], [findings], [timeline], and [intrusionLogSummary] reactively.
      */
-    @Suppress("TooGenericExceptionCaught") // Bug-report analysis surfaces any IO/parse error to the user.
+    @Suppress("TooGenericExceptionCaught") // Artifact analysis surfaces any IO/parse error to the user.
     fun analyzeUri(uri: Uri) {
         viewModelScope.launch {
             _isAnalyzing.value = true
@@ -99,9 +106,18 @@ class BugReportViewModel @Inject constructor(
             _findings.value = emptyList()
             _timeline.value = emptyList()
             try {
-                val result = orchestrator.analyzeBugReport(uri)
-                _findings.value = result.findings
-                _timeline.value = result.timeline
+                _intrusionLogSummary.value = null
+                when (val analysis = orchestrator.analyzeArtifact(uri)) {
+                    is ScanOrchestrator.ArtifactAnalysis.BugReport -> {
+                        _findings.value = analysis.result.findings
+                        _timeline.value = analysis.result.timeline
+                    }
+                    is ScanOrchestrator.ArtifactAnalysis.IntrusionLog -> {
+                        _findings.value = analysis.result.findings.filter { it.triggered }
+                        _timeline.value = emptyList()
+                        _intrusionLogSummary.value = analysis.result.stats
+                    }
+                }
                 _analysisFinished.value = true
             } catch (e: kotlinx.coroutines.CancellationException) {
                 throw e

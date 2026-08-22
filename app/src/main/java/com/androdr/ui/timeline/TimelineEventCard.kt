@@ -22,11 +22,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Error
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -51,9 +49,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Surface
 import com.androdr.R
 import com.androdr.data.model.ForensicTimelineEvent
+import com.androdr.data.model.TelemetrySource
 import com.androdr.sigma.FindingCategory
 import com.androdr.ui.common.SeverityChip
-import com.androdr.ui.theme.ExtendedColors
 import com.androdr.ui.theme.androdrColors
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -447,7 +445,10 @@ fun ScanGroupHeader(
     val displayDate = dateStr.ifEmpty { unknownStr }
     val typeLabel = when {
         group.scanId == -1L -> stringResource(R.string.timeline_scan_unassociated)
-        group.isFromBugreport -> stringResource(R.string.timeline_scan_bugreport)
+        group.importSource == TelemetrySource.BUGREPORT_IMPORT ->
+            stringResource(R.string.timeline_scan_bugreport)
+        group.importSource == TelemetrySource.INTRUSION_LOG_IMPORT ->
+            stringResource(R.string.timeline_scan_intrusion_log)
         else -> stringResource(R.string.timeline_scan_runtime)
     }
 

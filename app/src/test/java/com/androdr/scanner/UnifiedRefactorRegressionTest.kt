@@ -2,7 +2,6 @@ package com.androdr.scanner
 
 import com.androdr.scanner.bugreport.TombstoneParser
 import com.androdr.scanner.bugreport.WakelockParser
-import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test

@@ -1,6 +1,5 @@
 package com.androdr.ioc
 
-import com.androdr.data.db.KnownAppDbEntry
 import com.androdr.data.db.KnownAppEntryDao
 import com.androdr.data.model.KnownAppCategory
 import com.androdr.data.model.KnownAppEntry

@@ -87,7 +87,8 @@ Current package tree under `app/src/main/java/com/androdr/`:
 ├── network/         DnsVpnService (local DNS interception) + UnderlyingDnsTracker (the device's own non-VPN resolvers) + DNS event capture
 ├── reporting/       ReportFormatter, ReportExporter, timeline formatter/exporter, guidance text helpers
 ├── scanner/         Pure telemetry emitters (app, device, accessibility, app-ops, file artifacts, process, usage stats, receivers, device-admin-grant, install event)
-│   └── bugreport/   Bug-report ZIP parser and per-section modules
+│   ├── bugreport/   Bug-report ZIP parser and per-section modules
+│   └── intrusionlog/ Intrusion log ZIP parser and per-event handlers
 ├── sigma/           SIGMA rule engine: parser, evaluator, engine, correlation, rule feeds, telemetry field maps
 └── ui/              Jetpack Compose screens
     ├── apps/          Apps screen + ViewModel
@@ -125,7 +126,7 @@ Keeping these responsibilities separated means each concern can change independe
 
 ---
 
-### 4.1 Telemetry emitters (`scanner/`, `network/`, `scanner/bugreport/`)
+### 4.1 Telemetry emitters (`scanner/`, `network/`, `scanner/bugreport/`, `scanner/intrusionlog/`)
 
 A telemetry emitter is a pure function of device state: given the current state of one device subsystem (installed packages, running processes, accessibility grants, etc.), it returns a list of typed, structured records. Emitters perform no rule evaluation, no IOC lookups, and produce no display text. They are the eyes of the pipeline, not the brain.
 
@@ -143,11 +144,15 @@ A telemetry emitter is a pure function of device state: given the current state 
 
 **Network / DNS**
 
-- `DnsVpnService` (in `network/`) — Intercepts DNS queries via a local VPN loopback and emits `DnsEvent` records, each carrying the queried domain and the requesting app's UID. These records are the telemetry input for the `dns_monitor` rule service.
+- `DnsVpnService` (in `network/`) — Intercepts DNS queries via a local VPN loopback and emits `DnsEvent` records, each carrying the queried domain and the requesting app's UID. These records are one telemetry input for the `dns_monitor` rule service; imported Advanced Protection Intrusion Logging DNS events are a second input (including DNS-over-TLS resolutions the VPN cannot observe — see **Intrusion log import** below and §8.5).
 
 **Bug-report analysis** (`scanner/bugreport/`)
 
 Bug-report ZIP parsers are a separate family of emitters that extract structured telemetry from Android bug reports rather than from live device state. Modules include `TombstoneParser` (native crash tombstones → `TombstoneEvent`), `WakelockParser` (`WakelockAcquisition`), `BatteryDailyModule` (`BatteryDailyEvent`), `InstallTimeModule` (`PackageInstallHistoryEntry`), `PlatformCompatModule` (`PlatformCompatChange`), `DbInfoModule` (`DatabasePathObservation`), `AccessibilityModule`, `ActivityModule`, `AdbKeysModule`, `AppOpsModule`, `ReceiverModule`, and `GetpropParser`/`DumpsysSectionParser` for raw section extraction. The overarching coordinator is `BugreportModule` / `BugReportAnalyzer`.
+
+**Intrusion log import** (`scanner/intrusionlog/`)
+
+A third emitter family parses Android 16 Advanced Protection → Intrusion Logging exports (offline import, no live device access). `IntrusionLogParser` is a pure emitter over the per-day JSONL: `dns_event` → `DnsEvent` (fed to the `dns_monitor` service), `connect_event` → `NetworkTelemetry` (`network_monitor`), `security_event` → `SecurityLogEvent` (`security_log`). `IntrusionLogAnalyzer` coordinates the ZIP stream; `ArtifactSniffer` routes an imported ZIP to this family or to bug-report analysis. See §8.5 for the full flow.
 
 **Purity contract**
 
@@ -177,7 +182,7 @@ The rule engine is the single place detection logic runs. It is stateless relati
 
 A detection rule is a YAML document with these sections:
 
-- `logsource.service` — names the telemetry type the rule targets. Supported services (verified in `SigmaRuleEngine`): `app_scanner`, `device_auditor`, `process_monitor`, `dns_monitor`, `file_scanner`, `accessibility_audit`, `receiver_audit`, `appops_audit`, `tombstone_parser`, `wakelock_parser`, `battery_daily`, `package_install_history`, `platform_compat`, `db_info`.
+- `logsource.service` — names the telemetry type the rule targets. Supported services (verified in `SigmaRuleEngine`; the taxonomy↔engine wiring is gated by `ServiceActivationCrossCheckTest`): `app_scanner`, `device_auditor`, `process_monitor`, `dns_monitor`, `file_scanner`, `accessibility_audit`, `receiver_audit`, `appops_audit`, `tombstone_parser`, `wakelock_parser`, `battery_daily`, `package_install_history`, `platform_compat`, `db_info`, `network_monitor`, `security_log` (the last two activated by the intrusion-log import, §8.5).
 - `detection` — one or more named selections, each mapping field names (with optional modifiers) to match values, plus a `condition` expression combining selection names with `and`, `or`, `not`.
 - `category` — required top-level field, must be `incident` or `device_posture`. Missing or invalid category raises `SigmaRuleParseException` and fails the build.
 - `level` — severity string (`informational`, `low`, `medium`, `high`, `critical`). The `SeverityCapPolicy` caps `device_posture` rules at `medium`.
@@ -411,6 +416,8 @@ Full IP-level packet filtering was evaluated and parked. The reasons:
 - **DNS-level matching covers the majority of observed mobile C2 patterns.** Stalkerware and mercenary spyware consistently use distinct C2 domains; a domain blocklist catches these reliably without packet inspection.
 - **Broader filtering materially expands the review burden.** IP-level filtering would require AndroDR to make allow/deny decisions for all traffic, raising the risk of false-positive network breaks.
 
+The offline intrusion-log import (§8.5) puts destination IPs and ports on the timeline, but it changes none of the above: there is no interception, no allow/deny, and no capture-scope change — it reads logs the platform already wrote.
+
 The formal architecture decision entry is in Chapter 11.
 
 ---
@@ -462,6 +469,48 @@ The pipeline runs in six ordered stages:
 ### 8.4 Privacy handling
 
 Android bug reports are among the most sensitive files a device can produce — they contain process lists, network state, installed-app histories, and system logs from all apps on the device. AndroDR's handling follows a strict "your device, your choice" model: the user explicitly selects the file, it is analyzed locally and immediately, and the raw ZIP is never retained. Sharing a bug-report analysis result follows the same user-initiated share-sheet path as any other export.
+
+### 8.5 Intrusion log import (#342)
+
+Android 16's Advanced Protection → Intrusion Logging writes DNS, connection,
+and security events that the user can export from Settings as a ZIP of
+per-day `YYYY-MM-DD.txt` JSONL files. There is no app-read API — the logs
+are E2E-encrypted and reachable only by user-initiated download — so AndroDR
+supports them strictly as an import, through the same accept flow as bug
+reports: `ArtifactSniffer` classifies the ZIP by entry names and routes to
+`BugReportAnalyzer` (dumpstate entries) or `IntrusionLogAnalyzer` (per-day
+entries, top-level or one directory deep).
+
+`IntrusionLogAnalyzer` streams all matching entries as one line sequence,
+dedups on the type-shared monotonic `event_id` (first-seen, across files),
+counts malformed lines instead of failing, and maps records to typed
+telemetry: `dns_event` → transient `DnsEvent` values evaluated through the
+existing `dns_monitor` service (existing rules fire unchanged — including on
+DNS-over-TLS resolutions the VPN monitor cannot observe), `connect_event` →
+`NetworkTelemetry` (`network_monitor`, activated by this feature), and
+`security_event` → `SecurityLogEvent` with a `SecurityLog` tag registry
+(`security_log` service; unknown tags are emitted verbatim as
+`unknown_<tag>`). Rules evaluate the complete parsed stream; only timeline
+persistence is capped (`ScanOrchestrator.DNS_PERSIST_CAP` /
+`CONNECT_PERSIST_CAP`, surfaced in the results UI). Rows persist as
+`ForensicTimelineEvent` with `telemetrySource = INTRUSION_LOG_IMPORT`,
+`source = "intrusion_log"` (raw) / `"intrusion_log_analysis"` (findings). Raw
+imported rows carry **no** correlation id: the finding↔raw-evidence join for the
+new `network_monitor` / `security_log` services is deferred to #352 (to be
+decided with the first starter rules). Stamping a per-type key like `sec:<tag>`
+unconditionally would collapse hundreds of identical events into one meaningless
+`TimelineClusters` cluster, so raw rows stay unlinked until that design lands.
+Each import first deletes the previous import's rows (replace-on-reimport). The
+raw ZIP is never retained.
+
+**Relation to D3 (parked IP filtering):** D3 rejected *live VPN-based IP
+inspection* (battery, MITM, breakage). This feature is offline import of
+logs the platform already wrote — zero battery, no interception, no
+allow/deny decisions — and was approved on its own merits; see
+`docs/superpowers/specs/2026-08-22-intrusion-log-import-design.md` and
+`docs/plans/2026-08-22-cellular-telemetry-tier1-spec.md` §11.
+
+---
 
 ## 9. AI rule-authoring pipeline
 
@@ -562,7 +611,7 @@ Threat indicators (package names, certificate hashes, C2 domains, IP ranges) cha
 
 ### D3. DNS-only VPN scope; full IP filtering parked indefinitely
 
-Full IP-level packet inspection was evaluated and rejected. TLS SNI handling would conflict with the privacy-by-design posture (the app would need to intercept and re-sign TLS, acting as a local MITM). DNS matching covers the large majority of mobile C2 traffic, and DNS interception is non-invasive — only the DNS query hostname is inspected, not the payload. Broader IP filtering would also materially expand the review burden and raise the risk of false-positive network breaks for legitimate apps.
+Full IP-level packet inspection was evaluated and rejected. TLS SNI handling would conflict with the privacy-by-design posture (the app would need to intercept and re-sign TLS, acting as a local MITM). DNS matching covers the large majority of mobile C2 traffic, and DNS interception is non-invasive — only the DNS query hostname is inspected, not the payload. Broader IP filtering would also materially expand the review burden and raise the risk of false-positive network breaks for legitimate apps. The offline intrusion-log import (§8.5) does surface destination IPs/ports on the timeline, but it introduces no interception, allow/deny, or capture-scope change — it only reads logs the platform already wrote — so it does not reopen this decision.
 
 ### D4. Pure-emitter telemetry/findings contract
 

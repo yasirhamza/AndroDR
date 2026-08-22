@@ -17,6 +17,7 @@ import io.mockk.mockkStatic
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -194,6 +195,86 @@ class SaveScanWithCorrelationTest {
 
         assertEquals("duplicate (id = -1) row must be dropped", 2, seenCount)
         assertEquals(listOf(10L, 11L), seenIds)
+    }
+
+    // ---------- #342 B1: atomic pre-delete ----------
+
+    /**
+     * The optional `preDelete` (used by the intrusion-log replace-on-reimport
+     * sweep) must run as the FIRST step INSIDE the transaction, before any
+     * insert. If it ran after the inserts — or outside the transaction — a
+     * failed save could not roll it back. Catches a mutation that moves the
+     * `preDelete?.invoke()` below `scanResultDao.insert`.
+     */
+    @Test
+    fun `preDelete runs first, inside the transaction, before any insert`() = runTest {
+        val scan = ScanResult(
+            id = 4L, timestamp = 1_700_000_000_003L, findings = emptyList(),
+            bugReportFindings = emptyList(), riskySideloadCount = 0, knownMalwareCount = 0
+        )
+        val raw = listOf(event(cat = "permission_use", ts = 1000, pkg = "com.test"))
+        val calls = mutableListOf<String>()
+        coEvery { scanResultDao.insert(any()) } answers { calls.add("insertScan") }
+        coEvery { timelineDao.insertAll(any()) } answers {
+            calls.add("insertAll")
+            List(firstArg<List<ForensicTimelineEvent>>().size) { it.toLong() + 1 }
+        }
+
+        repo.saveScanWithCorrelation(
+            scan = scan,
+            findingTimelineEvents = raw,
+            replaceUsageStatsEvents = null,
+            lookbackEvents = emptyList(),
+            preDelete = { calls.add("preDelete") }
+        ) { emptyList() }
+
+        assertEquals("preDelete must be the very first step", "preDelete", calls.first())
+        assertTrue(
+            "preDelete must precede the scan insert: $calls",
+            calls.indexOf("preDelete") < calls.indexOf("insertScan")
+        )
+        assertTrue(
+            "scan insert must precede the finding insertAll: $calls",
+            calls.indexOf("insertScan") < calls.indexOf("insertAll")
+        )
+    }
+
+    /**
+     * When an insert throws AFTER preDelete has run, the exception must
+     * propagate out of `saveScanWithCorrelation`. Room's `withTransaction`
+     * rethrows on failure and rolls the whole block back — INCLUDING the
+     * preDelete — so a failed save can never leave the prior import destroyed
+     * and the new one unwritten (#342 B1, the merge-blocking finding). Catches a
+     * mutation that wraps the transaction body in a swallowing `runCatching`.
+     */
+    @Test
+    fun `an insert failure propagates so preDelete rolls back with the transaction`() = runTest {
+        val scan = ScanResult(
+            id = 5L, timestamp = 1_700_000_000_004L, findings = emptyList(),
+            bugReportFindings = emptyList(), riskySideloadCount = 0, knownMalwareCount = 0
+        )
+        val raw = listOf(event(cat = "permission_use", ts = 1000, pkg = "com.test"))
+        var preDeleteRan = false
+        coEvery { timelineDao.insertAll(any()) } throws RuntimeException("db full — insert failed")
+
+        var thrown: Throwable? = null
+        try {
+            repo.saveScanWithCorrelation(
+                scan = scan,
+                findingTimelineEvents = raw,
+                replaceUsageStatsEvents = null,
+                lookbackEvents = emptyList(),
+                preDelete = { preDeleteRan = true }
+            ) { emptyList() }
+        } catch (e: Exception) {
+            thrown = e
+        }
+
+        assertTrue("preDelete must have run inside the transaction body", preDeleteRan)
+        assertNotNull(
+            "the persistence failure must propagate (not be swallowed) so the tx rolls back",
+            thrown
+        )
     }
 
     private fun event(cat: String, ts: Long, pkg: String) = ForensicTimelineEvent(

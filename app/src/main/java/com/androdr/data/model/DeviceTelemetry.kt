@@ -1,6 +1,5 @@
 package com.androdr.data.model
 
-import com.androdr.data.model.CveEntity
 
 data class DeviceTelemetry(
     val checkId: String,

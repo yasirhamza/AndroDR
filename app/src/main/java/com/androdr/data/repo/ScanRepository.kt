@@ -101,15 +101,27 @@ class ScanRepository @Inject constructor(
      * @param lookbackEvents events already persisted from prior scans that
      *   should participate in this scan's correlation evaluation (e.g. the
      *   last 90 days of events for cross-scan chains).
+     * @param preDelete optional cleanup run as the FIRST statement inside the
+     *   transaction, before any insert. It exists so a caller that must delete
+     *   rows before persisting the new scan (e.g. the intrusion-log import's
+     *   replace-on-reimport sweep, #342) does so ATOMICALLY with the save: if
+     *   the save then throws, Room rolls back the deletes too, so a failed
+     *   persist can never leave the prior data destroyed and the new data
+     *   unwritten. Default `null` ⇒ the live-scan and bug-report paths are
+     *   unchanged (no pre-delete). Mirrors where the `usage_stats` delete runs.
      */
     suspend fun saveScanWithCorrelation(
         scan: ScanResult,
         findingTimelineEvents: List<ForensicTimelineEvent>,
         replaceUsageStatsEvents: List<ForensicTimelineEvent>? = null,
         lookbackEvents: List<ForensicTimelineEvent> = emptyList(),
+        preDelete: (suspend () -> Unit)? = null,
         correlator: suspend (List<ForensicTimelineEvent>) -> List<ForensicTimelineEvent>
     ) {
         database.withTransaction {
+            // Run any caller-supplied pre-delete FIRST and inside the tx, so a
+            // subsequent insert failure rolls the deletes back with it (#342 B1).
+            preDelete?.invoke()
             scanResultDao.insert(scan)
 
             val persistedUsage: List<ForensicTimelineEvent> = if (replaceUsageStatsEvents != null) {

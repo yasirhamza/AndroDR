@@ -5,12 +5,14 @@ import android.net.Uri
 import android.util.Log
 import androidx.core.content.FileProvider
 import com.androdr.data.db.DnsEventDao
+import com.androdr.data.db.ForensicTimelineEventDao
 import com.androdr.data.model.ScanResult
 import com.androdr.scanner.AppScanner
 import com.androdr.scanner.ScanOrchestrator
 import com.androdr.util.appVersion
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.text.SimpleDateFormat
@@ -42,7 +44,8 @@ class ReportExporter @Inject constructor(
     @ApplicationContext private val context: Context,
     private val dnsEventDao: DnsEventDao,
     private val scanOrchestrator: ScanOrchestrator,
-    private val appScanner: AppScanner
+    private val appScanner: AppScanner,
+    private val forensicTimelineEventDao: ForensicTimelineEventDao
 ) {
     private val filenameFmt = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US)
 
@@ -61,6 +64,14 @@ class ReportExporter @Inject constructor(
         val accessibilityTelemetry = scanOrchestrator.lastAccessibilityTelemetry
         val receiverTelemetry = scanOrchestrator.lastReceiverTelemetry
         val appOpsTelemetry = scanOrchestrator.lastAppOpsTelemetry
+        // #342 C4: scope imported intrusion-log evidence to THIS scan. The
+        // unscoped query embedded up to 500 imported rows into every report —
+        // including live-scan reports and historical scans predating any import
+        // (wrong forensic provenance, widened disclosure). An intrusion-log
+        // import's rows carry that import's scanResultId, so a report keyed by
+        // scan.id embeds them only when it is the report for that import.
+        val intrusionEvents = forensicTimelineEventDao
+            .getEventsBySourceForScan("intrusion_log", scan.id, 500).first()
         val displayNames = inventory
             .associate { it.packageName to it.appName }
             .filterValues { it.isNotEmpty() }
@@ -72,6 +83,7 @@ class ReportExporter @Inject constructor(
             accessibilityTelemetry = accessibilityTelemetry,
             receiverTelemetry = receiverTelemetry,
             appOpsTelemetry = appOpsTelemetry,
+            intrusionEvents = intrusionEvents,
             versionName = context.appVersion().name,
         )
 

@@ -14,6 +14,7 @@ import com.androdr.data.model.PackageInstallHistoryEntry
 import com.androdr.data.model.PlatformCompatChange
 import com.androdr.data.model.ProcessTelemetry
 import com.androdr.data.model.ReceiverTelemetry
+import com.androdr.data.model.SecurityLogEvent
 import com.androdr.data.model.TelemetrySource
 import com.androdr.data.model.TombstoneEvent
 import com.androdr.data.model.WakelockAcquisition
@@ -126,8 +127,9 @@ class LogsourceTaxonomyCrossCheckTest {
         ).toFieldMap().keys,
 
         "network_monitor" to NetworkTelemetry(
-            destinationIp = "x", destinationPort = 0, protocol = "TCP",
+            destinationIp = "x", destinationPort = 0, protocol = null,
             appUid = 0, appName = null, timestamp = 0L,
+            source = TelemetrySource.LIVE_SCAN, capturedAt = 0L,
         ).toFieldMap().keys,
     )
 
@@ -166,6 +168,11 @@ class LogsourceTaxonomyCrossCheckTest {
             filePath = "x", processName = null, packageName = null,
             observationTimestamp = 0L, source = TelemetrySource.BUGREPORT_IMPORT,
             capturedAt = 0L,
+        ).toFieldMap().keys,
+
+        "security_log" to SecurityLogEvent(
+            timestamp = 0L, tag = 0, tagName = "x", securityData = emptyList(),
+            source = TelemetrySource.INTRUSION_LOG_IMPORT, capturedAt = 0L,
         ).toFieldMap().keys,
     )
 

@@ -7,6 +7,7 @@ import com.androdr.data.model.AppTelemetry
 import com.androdr.data.model.DeviceTelemetry
 import com.androdr.data.model.DnsEvent
 import com.androdr.data.model.FileArtifactTelemetry
+import com.androdr.data.model.ForensicTimelineEvent
 import com.androdr.data.model.ProcessTelemetry
 import com.androdr.data.model.ReceiverTelemetry
 import com.androdr.data.model.ScanResult
@@ -39,6 +40,7 @@ object ReportFormatter {
         accessibilityTelemetry: List<AccessibilityTelemetry> = emptyList(),
         receiverTelemetry: List<ReceiverTelemetry> = emptyList(),
         appOpsTelemetry: List<AppOpsTelemetry> = emptyList(),
+        intrusionEvents: List<ForensicTimelineEvent> = emptyList(),
         versionName: String,
     ): String = buildString {
         val includeFindings = mode != ExportMode.TELEMETRY_ONLY
@@ -94,7 +96,8 @@ object ReportFormatter {
             appendTelemetrySections(
                 dnsEvents, logLines, appInventory, displayNames,
                 deviceTelemetry, processTelemetry, fileTelemetry,
-                accessibilityTelemetry, receiverTelemetry, appOpsTelemetry
+                accessibilityTelemetry, receiverTelemetry, appOpsTelemetry,
+                intrusionEvents
             )
         }
 
@@ -214,6 +217,7 @@ object ReportFormatter {
         accessibilityTelemetry: List<AccessibilityTelemetry> = emptyList(),
         receiverTelemetry: List<ReceiverTelemetry> = emptyList(),
         appOpsTelemetry: List<AppOpsTelemetry> = emptyList(),
+        intrusionEvents: List<ForensicTimelineEvent> = emptyList(),
     ) {
         val dnsFmt = SimpleDateFormat("HH:mm:ss", Locale.US)
 
@@ -234,6 +238,17 @@ object ReportFormatter {
                 if (event.reason != null) {
                     appendLine("           reason: ${event.reason}")
                 }
+            }
+        }
+
+        // -- Intrusion log (imported, #342) --------------------------------------
+        if (intrusionEvents.isNotEmpty()) {
+            section("INTRUSION LOG (imported, ${intrusionEvents.size} events)")
+            val fullFmt = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US)
+            intrusionEvents.take(500).forEach { ev ->
+                val time = fullFmt.format(Date(ev.startTimestamp))
+                val app = ev.packageName.ifEmpty { "unknown" }
+                appendLine("  $time  ${ev.description.padEnd(50)}  <- $app")
             }
         }
 

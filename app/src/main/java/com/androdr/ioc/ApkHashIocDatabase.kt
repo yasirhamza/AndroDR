@@ -1,7 +1,6 @@
 package com.androdr.ioc
 
 import android.content.Context
-import android.util.Log
 import com.androdr.R
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.serialization.Serializable

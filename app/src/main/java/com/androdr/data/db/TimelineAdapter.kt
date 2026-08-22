@@ -2,8 +2,12 @@ package com.androdr.data.db
 
 import com.androdr.data.model.DnsEvent
 import com.androdr.data.model.ForensicTimelineEvent
+import com.androdr.data.model.NetworkTelemetry
 import com.androdr.data.model.ScanResult
+import com.androdr.data.model.SecurityLogEvent
+import com.androdr.data.model.TelemetrySource
 import com.androdr.data.model.TimelineEvent
+import com.androdr.data.model.ImportedDnsEvent
 import com.androdr.sigma.Evidence
 import com.androdr.sigma.Finding
 import com.androdr.sigma.FindingCategory
@@ -149,6 +153,56 @@ fun TimelineEvent.toForensicTimelineEvent(scanResultId: Long = -1): ForensicTime
         timestampPrecision = "estimated",
         scanResultId = scanResultId,
         telemetrySource = com.androdr.data.model.TelemetrySource.BUGREPORT_IMPORT
+    )
+
+// #342 C2: imported RAW rows carry NO correlationId. The earlier design stamped
+// dns:/net:/sec: ids unconditionally on every raw imported row, but those are
+// cluster-forming keys for TimelineClusters Pass-2: 400 identical
+// keyguard_dismissed security events collapsed into one meaningless 400-member
+// PRE_LINKED cluster (sec:$tag is a TYPE-level key), every twice-resolved domain
+// formed a dns: cluster, etc. The finding↔raw-evidence join for these new
+// services (network_monitor / security_log) is DEFERRED to #352, to be decided
+// alongside the first starter rules; until then raw rows are left with the empty
+// default so they never spuriously pre-link.
+
+/** #342: imported Intrusion Logging dns_event → timeline row. No correlation id
+ *  (raw-row correlation-join deferred to #352 — see file note above). */
+fun ImportedDnsEvent.toForensicTimelineEvent(scanResultId: Long): ForensicTimelineEvent =
+    event.toForensicTimelineEvent().copy(
+        source = "intrusion_log",
+        details = if (resolvedIps.isEmpty()) "" else "resolved: ${resolvedIps.joinToString(", ")}",
+        correlationId = "",
+        scanResultId = scanResultId,
+        telemetrySource = TelemetrySource.INTRUSION_LOG_IMPORT
+    )
+
+/** #342: imported Intrusion Logging connect_event → timeline row. No correlation
+ *  id (raw-row correlation-join deferred to #352 — see file note above). */
+fun NetworkTelemetry.toForensicTimelineEvent(scanResultId: Long): ForensicTimelineEvent =
+    ForensicTimelineEvent(
+        startTimestamp = timestamp,
+        source = "intrusion_log",
+        category = "network_connect",
+        description = "Connect: $destinationIp:$destinationPort",
+        packageName = appName ?: "",
+        processUid = appUid,
+        correlationId = "",
+        scanResultId = scanResultId,
+        telemetrySource = source
+    )
+
+/** #342: imported Intrusion Logging security_event → timeline row. No correlation
+ *  id (raw-row correlation-join deferred to #352 — see file note above). */
+fun SecurityLogEvent.toForensicTimelineEvent(scanResultId: Long): ForensicTimelineEvent =
+    ForensicTimelineEvent(
+        startTimestamp = timestamp,
+        source = "intrusion_log",
+        category = "security_event",
+        description = "Security: $tagName",
+        details = securityData.joinToString(", "),
+        correlationId = "",
+        scanResultId = scanResultId,
+        telemetrySource = source
     )
 
 /** Extracts the campaign name from DNS event reason strings like "IOC: Pegasus" */

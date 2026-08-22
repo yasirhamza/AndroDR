@@ -5,7 +5,6 @@ import androidx.room.Ignore
 import androidx.room.PrimaryKey
 import androidx.room.TypeConverters
 import com.androdr.data.db.Converters
-import com.androdr.sigma.Evidence
 import com.androdr.sigma.Finding
 import com.androdr.sigma.FindingCategory
 import kotlinx.serialization.Serializable
