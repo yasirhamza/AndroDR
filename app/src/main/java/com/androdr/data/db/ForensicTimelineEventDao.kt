@@ -47,6 +47,17 @@ interface ForensicTimelineEventDao {
     @Query("SELECT DISTINCT packageName FROM forensic_timeline WHERE category = 'device_admin_grant'")
     suspend fun getAdminGrantedPackagesAlreadyEmitted(): List<String>
 
+    /**
+     * One-shot snapshot of one source's events, newest first, for report
+     * export. Cellular findings live here rather than on a ScanResult because
+     * the radio emitter is event-driven and has no scan to attach to.
+     */
+    @Query(
+        "SELECT * FROM forensic_timeline WHERE source = :source " +
+            "ORDER BY startTimestamp DESC LIMIT :limit"
+    )
+    suspend fun getBySourceSnapshot(source: String, limit: Int = 200): List<ForensicTimelineEvent>
+
     @Query("SELECT * FROM forensic_timeline ORDER BY startTimestamp ASC LIMIT 10000")
     suspend fun getAllForExport(): List<ForensicTimelineEvent>
 

@@ -5,7 +5,9 @@ import com.androdr.data.model.AccessibilityTelemetry
 import com.androdr.data.model.AppOpsTelemetry
 import com.androdr.data.model.AppTelemetry
 import com.androdr.data.model.DeviceTelemetry
+import com.androdr.cellular.CellularRedaction
 import com.androdr.data.model.DnsEvent
+import com.androdr.data.model.ForensicTimelineEvent
 import com.androdr.data.model.FileArtifactTelemetry
 import com.androdr.data.model.ProcessTelemetry
 import com.androdr.data.model.ReceiverTelemetry
@@ -39,6 +41,7 @@ object ReportFormatter {
         accessibilityTelemetry: List<AccessibilityTelemetry> = emptyList(),
         receiverTelemetry: List<ReceiverTelemetry> = emptyList(),
         appOpsTelemetry: List<AppOpsTelemetry> = emptyList(),
+        cellularEvents: List<ForensicTimelineEvent> = emptyList(),
         versionName: String,
     ): String = buildString {
         val includeFindings = mode != ExportMode.TELEMETRY_ONLY
@@ -75,6 +78,7 @@ object ReportFormatter {
             appendLine()
             section("FINDINGS SECTION")
             appendFindingsSections(scan, dnsEvents, appInventory, displayNames)
+            appendCellularSection(cellularEvents)
 
             // Intentionally inside the includeFindings branch: a capability skip is a
             // caveat ON the findings ("this list is missing these rules"), so it rides
@@ -103,6 +107,36 @@ object ReportFormatter {
         appendLine(RULE)
         appendLine("  End of report / AndroDR / scan id ${scan.id}")
         appendLine(RULE)
+    }
+
+    /**
+     * Tier 1 cellular findings.
+     *
+     * These come from the forensic timeline rather than [ScanResult.findings]:
+     * the radio emitter is event-driven and continuous, so a finding is not
+     * produced by any particular scan. Each row carries the full radio context
+     * it fired on, because a cellular finding cannot be judged true or false
+     * after the fact without the snapshot that produced it.
+     */
+    private fun StringBuilder.appendCellularSection(events: List<ForensicTimelineEvent>) {
+        if (events.isEmpty()) return
+        val fmt = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US)
+        section("CELLULAR (TIER 1)")
+        appendLine("  ${events.size} finding(s) from radio telemetry.")
+        appendLine()
+        events.forEach { e ->
+            appendLine("  [${fmt.format(Date(e.startTimestamp))}] ${e.description}")
+            if (e.ruleId.isNotEmpty()) appendLine("    rule: ${e.ruleId}")
+            if (e.attackTechniqueId.isNotEmpty()) {
+                appendLine("    technique: ${e.attackTechniqueId}")
+            }
+            // Redacted: a report is a handoff artifact and must not carry a
+            // tower-level location trail. Full context stays on-device.
+            if (e.details.isNotEmpty()) {
+                appendLine("    context: ${CellularRedaction.redact(e.details)}")
+            }
+            appendLine()
+        }
     }
 
     // Legacy inline body replaced by section helpers below. Original code is

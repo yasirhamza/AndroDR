@@ -1,6 +1,7 @@
 package com.androdr.reporting
 
 import android.os.Build
+import com.androdr.cellular.CellularRedaction
 import com.androdr.data.model.ForensicTimelineEvent
 import com.androdr.data.model.effectiveCorrelationId
 import com.androdr.data.model.effectivePackageFromDescription
@@ -118,7 +119,7 @@ object TimelineExporter {
                 appendLine("             APK SHA-256: ${event.apkHash}")
             }
             if (event.details.isNotEmpty()) {
-                appendLine("             ${event.details}")
+                appendLine("             ${exportableDetails(event)}")
             }
         }
 
@@ -182,7 +183,7 @@ object TimelineExporter {
             val campaign = csvEscape(event.campaignName)
             val mitre = csvEscape(event.attackTechniqueId)
             val hash = csvEscape(event.apkHash)
-            val details = csvEscape(event.details)
+            val details = csvEscape(exportableDetails(event))
             @Suppress("MaxLineLength") // CSV row must be a single appendLine call
             appendLine("$ts,$iso,$endTs,$endIso,$kind,$module,$eventType,$data,$pkg,$sev,$ruleId,$correlationId,$scanId,$ioc,$iocType,$iocSrc,$campaign,$mitre,$hash,$details")
         }
@@ -190,6 +191,19 @@ object TimelineExporter {
 
     private fun guidancePriority(guidance: String): Int =
         GuidanceUtils.guidancePriority(guidance)
+
+
+    /**
+     * Cellular rows carry tower identity in `details`. Exports are handoff
+     * artifacts, so that is stripped here; the full context stays on-device
+     * for adjudication. Other sources are returned untouched.
+     */
+    private fun exportableDetails(event: ForensicTimelineEvent): String =
+        if (event.source == "cellular_monitor") {
+            CellularRedaction.redact(event.details)
+        } else {
+            event.details
+        }
 
     private fun csvEscape(value: String): String {
         // Prevent CSV formula injection (cells starting with =, +, -, @, \t, \r)
