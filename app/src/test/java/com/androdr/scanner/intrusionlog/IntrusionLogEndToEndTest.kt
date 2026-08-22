@@ -7,6 +7,7 @@ import com.androdr.sigma.SigmaRule
 import com.androdr.sigma.SigmaRuleEngine
 import com.androdr.sigma.SigmaRuleEvaluator
 import com.androdr.sigma.SigmaRuleParser
+import com.androdr.sigma.toFieldMap
 import io.mockk.every
 import io.mockk.mockk
 import org.junit.Assert.assertEquals
@@ -84,7 +85,7 @@ class IntrusionLogEndToEndTest {
         val engine = mockEngine(dnsRule, netRule, secRule)
 
         val result = IntrusionLogAnalyzer(mockk(relaxed = true), engine).analyzeEntries(
-            zipEntries(exportZip()), uidResolver = { -1 }, capturedAt = 0L
+            zipEntries(exportZip()), uidResolver = { -1 }, capturedAt = 1_787_400_400_000L
         )
 
         // dnsEventCount is 2: the top-level flexispy event AND the one-dir-deep
@@ -186,19 +187,13 @@ class IntrusionLogEndToEndTest {
         every { engine.evaluateSecurityLog(any()) } answers {
             SigmaRuleEvaluator.evaluate(
                 listOf(secRule),
-                firstArg<List<com.androdr.data.model.SecurityLogEvent>>().map {
-                    // extension toFieldMap is internal to com.androdr.sigma —
-                    // call through the mirror helper below
-                    securityFieldMap(it)
-                },
+                // SecurityLogEvent.toFieldMap() is internal to com.androdr.sigma,
+                // but the unit-test source set is a friend module, so the real
+                // extension is directly callable — no hand-copied mirror needed.
+                firstArg<List<com.androdr.data.model.SecurityLogEvent>>().map { it.toFieldMap() },
                 "security_log", emptyMap(), emptyMap()
             )
         }
         return engine
     }
-
-    private fun securityFieldMap(e: com.androdr.data.model.SecurityLogEvent): Map<String, Any?> = mapOf(
-        "timestamp" to e.timestamp, "tag" to e.tag, "tag_name" to e.tagName,
-        "security_data" to e.securityData, "source" to e.source.name, "captured_at" to e.capturedAt,
-    )
 }
