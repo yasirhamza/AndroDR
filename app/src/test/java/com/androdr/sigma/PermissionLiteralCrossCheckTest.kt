@@ -168,69 +168,82 @@ class PermissionLiteralCrossCheckTest {
             ?.toSet()
 
         val failures = mutableListOf<String>()
-
         bundledRuleFiles().forEach { file ->
             @Suppress("UNCHECKED_CAST")
             val root = yamlLoader.loadFromString(file.readText()) as? Map<String, Any?> ?: return@forEach
             val detection = root["detection"] as? Map<*, *> ?: return@forEach
-
-            // Negation guard: `not` binds to exactly the next whitespace token in
-            // the evaluator's condition grammar (SigmaRuleEvaluator.evaluateAndGroup).
-            val conditionTokens = (detection["condition"] as? String)
-                ?.trim()?.split(Regex("\\s+")) ?: emptyList()
-            conditionTokens.forEachIndexed { i, token ->
-                if (token.equals("not", ignoreCase = true) && i + 1 < conditionTokens.size) {
-                    val negated = mutableListOf<Pair<String, List<String>>>()
-                    collectRequestedPermissionMatchers(detection[conditionTokens[i + 1]], negated)
-                    if (negated.isNotEmpty()) {
-                        failures += "${file.name}: selection \"${conditionTokens[i + 1]}\" matches " +
-                            "requested_permissions and is referenced under `not` — on builds that " +
-                            "predate the field, the matcher is always false and negation inverts it " +
-                            "to always-true, defeating the exemption and over-firing on the old " +
-                            "fleet. Gate this exemption on a field old builds emit, or wait for " +
-                            "the fleet floor to cover the emitter."
-                    }
-                }
-            }
-
-            val matchers = mutableListOf<Pair<String, List<String>>>()
-            collectRequestedPermissionMatchers(detection, matchers)
-            matchers.forEach { (key, literals) ->
-                if (fieldName(key) != "requested_permissions") {
-                    failures += "${file.name}: matcher key \"$key\" — the field key must be exactly " +
-                        "lowercase requested_permissions (the runtime record lookup is " +
-                        "case-sensitive; a case-variant key is a dead matcher)."
-                } else if (key != "requested_permissions" && key != "requested_permissions|all") {
-                    failures += "${file.name}: matcher \"$key\" — requested_permissions allows only " +
-                        "exact element-wise equals (bare key) or the |all combiner. Substring " +
-                        "modifiers false-positive: android.permission.NFC is a substring of " +
-                        "android.permission.NFC_TRANSACTION_EVENT."
-                }
-                if (literals.isEmpty()) {
-                    failures += "${file.name}: matcher \"$key\" has no literal values — an empty " +
-                        "|all list evaluates vacuously TRUE on emitting builds."
-                }
-                literals.forEach { literal ->
-                    if ('.' !in literal) {
-                        failures += "${file.name}: requested_permissions literal \"$literal\" is not " +
-                            "fully qualified — the scanner emits verbatim manifest strings like " +
-                            "\"android.permission.NEARBY_WIFI_DEVICES\", so a short name can never match."
-                    } else if (
-                        knownShortNames != null &&
-                        literal.lowercase().startsWith("android.permission.") &&
-                        literal.substringAfterLast('.').uppercase() !in knownShortNames
-                    ) {
-                        failures += "${file.name}: requested_permissions literal \"$literal\" is not in " +
-                            "the submodule's validation/android-permissions.txt — likely a typo; add the " +
-                            "permission there (with a rules-repo PR) if it is real."
-                    }
-                }
-            }
+            checkRequestedPermissionRule(file.name, detection, knownShortNames, failures)
         }
 
         assertTrue(
             "requested_permissions matching-discipline guard failed:\n" + failures.joinToString("\n"),
             failures.isEmpty(),
         )
+    }
+
+    private fun checkRequestedPermissionRule(
+        fileName: String,
+        detection: Map<*, *>,
+        knownShortNames: Set<String>?,
+        failures: MutableList<String>,
+    ) {
+        // Negation guard: `not` binds to exactly the next whitespace token in
+        // the evaluator's condition grammar (SigmaRuleEvaluator.evaluateAndGroup).
+        val conditionTokens = (detection["condition"] as? String)?.trim()?.split(Regex("\\s+")) ?: emptyList()
+        conditionTokens.forEachIndexed { i, token ->
+            if (!token.equals("not", ignoreCase = true) || i + 1 >= conditionTokens.size) return@forEachIndexed
+            val negated = mutableListOf<Pair<String, List<String>>>()
+            collectRequestedPermissionMatchers(detection[conditionTokens[i + 1]], negated)
+            if (negated.isNotEmpty()) {
+                failures += "$fileName: selection \"${conditionTokens[i + 1]}\" matches " +
+                    "requested_permissions and is referenced under `not` — on builds that predate the " +
+                    "field, the matcher is always false and negation inverts it to always-true, defeating " +
+                    "the exemption and over-firing on the old fleet. Gate the exemption on a field old " +
+                    "builds emit, or wait for the fleet floor to cover the emitter."
+            }
+        }
+
+        val matchers = mutableListOf<Pair<String, List<String>>>()
+        collectRequestedPermissionMatchers(detection, matchers)
+        matchers.forEach { (key, literals) ->
+            checkRequestedPermissionMatcher(fileName, key, literals, knownShortNames, failures)
+        }
+    }
+
+    private fun checkRequestedPermissionMatcher(
+        fileName: String,
+        key: String,
+        literals: List<String>,
+        knownShortNames: Set<String>?,
+        failures: MutableList<String>,
+    ) {
+        if (fieldName(key) != "requested_permissions") {
+            failures += "$fileName: matcher key \"$key\" — the field key must be exactly lowercase " +
+                "requested_permissions (the runtime record lookup is case-sensitive; a case-variant key " +
+                "is a dead matcher)."
+        } else if (key != "requested_permissions" && key != "requested_permissions|all") {
+            failures += "$fileName: matcher \"$key\" — requested_permissions allows only exact " +
+                "element-wise equals (bare key) or the |all combiner. Substring modifiers false-positive: " +
+                "android.permission.NFC is a substring of android.permission.NFC_TRANSACTION_EVENT."
+        }
+        if (literals.isEmpty()) {
+            failures += "$fileName: matcher \"$key\" has no literal values — an empty |all list " +
+                "evaluates vacuously TRUE on emitting builds."
+        }
+        literals.forEach { literal ->
+            if ('.' !in literal) {
+                failures += "$fileName: requested_permissions literal \"$literal\" is not fully " +
+                    "qualified — the scanner emits verbatim manifest strings like " +
+                    "\"android.permission.NEARBY_WIFI_DEVICES\", so a short name can never match."
+            } else if (
+                knownShortNames != null &&
+                literal.lowercase().startsWith("android.permission.") &&
+                literal.substringAfterLast('.').uppercase() !in knownShortNames
+            ) {
+                failures += "$fileName: requested_permissions literal \"$literal\" is not in the " +
+                    "submodule's validation/android-permissions.txt — likely a typo; add the permission " +
+                    "there (with a rules-repo PR) if it is real."
+            }
+        }
     }
 }
