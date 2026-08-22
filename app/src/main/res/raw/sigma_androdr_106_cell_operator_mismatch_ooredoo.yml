@@ -1,0 +1,32 @@
+title: Operator name inconsistent with PLMN (Ooredoo Qatar)
+id: androdr-106
+status: experimental
+description: >-
+    A cell advertising Qatar MCC 427 with Ooredoo's MNC 01 is broadcasting an
+    operator name other than "Ooredoo". The operator name is chosen freely by
+    whatever is transmitting, so it is never proof of identity — which is exactly
+    what makes an inconsistency between the name and the PLMN worth checking. A
+    fake cell that clones the PLMN but not the exact name string trips this.
+author: AndroDR
+date: 2026/08/22
+category: incident
+logsource:
+    product: androdr
+    service: cellular_monitor
+detection:
+    selection:
+        is_registered: true
+        mcc: '427'
+        mnc: '01'
+    filter_expected_name:
+        operator_alpha_long: 'Ooredoo'
+    condition: selection and not filter_expected_name
+level: low
+tags:
+    - attack.t1430
+falsepositives:
+    - MVNOs reselling the host network under their own branding
+    - Roaming partners displaying an alternate name
+    - Firmware or locale variations in the operator name string
+remediation:
+    - "Check the operator name shown in Settings against your carrier. A name that differs from the network identity it claims is worth noting alongside other cellular findings."

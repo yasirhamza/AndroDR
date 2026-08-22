@@ -76,7 +76,8 @@ class PureEmitterContractTest {
         // Verified real set via the toFieldMapDeclarationPattern below
         // (2026-08-14). Re-verify at implementation time; do not trust blindly.
         "AccessibilityTelemetry.kt", "AppOpsTelemetry.kt", "AppTelemetry.kt",
-        "DeviceTelemetry.kt", "DnsEvent.kt", "FileArtifactTelemetry.kt",
+        "CellularSnapshot.kt", "DeviceTelemetry.kt", "DnsEvent.kt",
+        "FileArtifactTelemetry.kt",
         "NetworkTelemetry.kt", "ProcessTelemetry.kt", "ReceiverTelemetry.kt",
         // extension emitters
         "TelemetryFieldMaps.kt",

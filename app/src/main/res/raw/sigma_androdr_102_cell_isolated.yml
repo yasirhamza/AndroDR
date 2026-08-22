@@ -1,0 +1,31 @@
+title: Serving cell reports no neighbours
+id: androdr-102
+status: experimental
+description: >-
+    The device is registered to a cell that advertises no neighbouring cells at
+    all. Real macro cells are deployed in overlapping grids and normally report
+    several neighbours; a cell standing entirely alone is characteristic of a
+    single fake base station with no surrounding network. Measured baseline on
+    the reference device is 13 neighbours, so zero is a strong departure rather
+    than a marginal one. Isolated cells do occur legitimately indoors, in rural
+    coverage, and in private deployments.
+author: AndroDR
+date: 2026/08/22
+category: incident
+logsource:
+    product: androdr
+    service: cellular_monitor
+detection:
+    selection:
+        is_registered: true
+        neighbor_count: 0
+    condition: selection
+level: low
+tags:
+    - attack.t1430
+falsepositives:
+    - Rural or otherwise isolated coverage
+    - Indoor small cells, femtocells and private networks
+    - Brief moments during handover when the neighbour list is empty
+remediation:
+    - "Note where and when this appeared. Corroborate with other cellular findings from the same time and place before drawing conclusions."

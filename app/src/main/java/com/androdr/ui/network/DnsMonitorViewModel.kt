@@ -6,6 +6,9 @@ import android.content.Intent
 import android.net.VpnService
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.androdr.cellular.CellularState
+import com.androdr.data.model.CellularSnapshot
+import com.androdr.sigma.Finding
 import com.androdr.data.model.DnsEvent
 import com.androdr.data.repo.ScanRepository
 import com.androdr.network.DnsVpnService
@@ -31,6 +34,13 @@ class DnsMonitorViewModel @Inject constructor(
     /** Whether the DNS VPN service is currently active. */
     val isVpnRunning: StateFlow<Boolean> = DnsVpnService.isRunning
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
+
+    /** Tier 1 radio telemetry (research build). Null until the first delivery. */
+    val cellularLatest: StateFlow<CellularSnapshot?> = CellularState.latest
+    val cellularFindings: StateFlow<List<Finding>> = CellularState.triggered
+    val cellularDeliveries: StateFlow<Int> = CellularState.deliveries
+    val cellularHistory: StateFlow<List<CellularSnapshot>> = CellularState.history
+    val cellularStatus: StateFlow<CellularState.Status> = CellularState.status
 
     /**
      * Starts or stops [DnsVpnService] depending on the current [isVpnRunning] state.

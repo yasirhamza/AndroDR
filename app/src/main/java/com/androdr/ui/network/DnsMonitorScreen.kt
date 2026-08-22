@@ -3,6 +3,7 @@ package com.androdr.ui.network
 import android.content.Intent
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -30,6 +31,7 @@ import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
@@ -43,6 +45,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.androdr.R
+import com.androdr.network.DnsVpnService
 import com.androdr.ui.settings.SettingsViewModel
 import com.androdr.data.model.DnsEvent
 import com.androdr.ui.theme.androdrColors
@@ -61,17 +64,62 @@ fun DnsMonitorScreen(
     val recentEvents by viewModel.recentEvents.collectAsStateWithLifecycle()
     val matchedEvents by viewModel.matchedEvents.collectAsStateWithLifecycle()
     val isVpnRunning by viewModel.isVpnRunning.collectAsStateWithLifecycle()
+    val cellular by viewModel.cellularLatest.collectAsStateWithLifecycle()
+    val cellularFindings by viewModel.cellularFindings.collectAsStateWithLifecycle()
+    val cellularDeliveries by viewModel.cellularDeliveries.collectAsStateWithLifecycle()
+    val cellularHistory by viewModel.cellularHistory.collectAsStateWithLifecycle()
+    val cellularStatus by viewModel.cellularStatus.collectAsStateWithLifecycle()
+
+
     val blocklistBlockMode by settingsViewModel.blocklistBlockMode.collectAsStateWithLifecycle()
     val domainIocBlockMode by settingsViewModel.domainIocBlockMode.collectAsStateWithLifecycle()
     val context = LocalContext.current
 
+    // The app had no runtime permission request at all. The manifest declared
+    // location, but nothing ever asked for it, so on a normal install the
+    // cellular monitor was permanently inert — it only ever worked on a device
+    // where the grant had been forced with `adb shell pm grant`.
+    var locationGranted by remember {
+        mutableStateOf(
+            com.androdr.cellular.CellularMonitor.hasRequiredPermissions(context)
+        )
+    }
+    val locationPermissionLauncher = rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.RequestMultiplePermissions()
+    ) { result ->
+        // Re-read the real permission state rather than trusting the result
+        // map: the button must disappear only when EVERY requirement the
+        // monitor checks is satisfied, not just the one the dialog was about.
+        locationGranted =
+            com.androdr.cellular.CellularMonitor.hasRequiredPermissions(context)
+        // Only poke the service if it is ALREADY running. Sending this while
+        // the VPN is off would start a service that never calls
+        // startForeground() — a background start the platform restricts on
+        // Android 14+ — and it would be a no-op anyway, because the monitor is
+        // only constructed by startVpn(). When the VPN is off the card already
+        // says "Monitor not running", which is the accurate next step.
+        if (locationGranted && isVpnRunning) {
+            context.startService(
+                android.content.Intent(context, DnsVpnService::class.java)
+                    .setAction(DnsVpnService.ACTION_RETRY_CELLULAR)
+            )
+        }
+    }
+
     var selectedTab by remember { mutableIntStateOf(0) }
     val tabs = listOf(
         stringResource(R.string.tab_all_events),
-        stringResource(R.string.tab_matched_only)
+        stringResource(R.string.tab_matched_only),
+        stringResource(R.string.tab_cellular),
     )
 
-    Column(modifier = Modifier.fillMaxSize()) {
+    // One scrolling list: the status/policy cards are ITEMS, not a fixed header,
+    // so they scroll away and the event list gets the full screen. Previously
+    // three stacked cards sat above the tabs and the list was squeezed into
+    // whatever was left — the events are the primary content here, not a
+    // footnote under the controls.
+    LazyColumn(modifier = Modifier.fillMaxSize()) {
+        item {
         // VPN status card
         Card(
             modifier = Modifier
@@ -167,6 +215,9 @@ fun DnsMonitorScreen(
             }
         }
 
+        }
+
+        item {
         // Policy toggles
         Card(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
             Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -189,7 +240,9 @@ fun DnsMonitorScreen(
             }
         }
 
-        // Tab row
+        }
+
+        item {
         TabRow(selectedTabIndex = selectedTab) {
             tabs.forEachIndexed { index, title ->
                 Tab(
@@ -200,12 +253,44 @@ fun DnsMonitorScreen(
             }
         }
 
+        }
+
+        // Cellular gets its own list, alongside the two DNS lists.
+        if (selectedTab == 2) {
+            item {
+                CellularSummary(
+                    snapshot = cellular,
+                    findings = cellularFindings,
+                    deliveries = cellularDeliveries,
+                    status = cellularStatus,
+                    locationGranted = locationGranted,
+                    onGrantLocation = {
+                        locationPermissionLauncher.launch(
+                            com.androdr.cellular.CellularMonitor.REQUESTED_PERMISSIONS
+                        )
+                    },
+                )
+            }
+            // No empty-state item here: CellularSummary already renders the
+            // waiting text when there is no snapshot, and adding a second one
+            // printed the same paragraph twice.
+            if (cellularHistory.isNotEmpty()) {
+                items(cellularHistory) { snap ->
+                    Box(modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
+                        CellularHistoryItem(snap)
+                    }
+                }
+            }
+            return@LazyColumn
+        }
+
         // Events list
         val displayEvents = if (selectedTab == 0) recentEvents else matchedEvents
 
         if (displayEvents.isEmpty()) {
+            item {
             Box(
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier.fillMaxWidth().padding(vertical = 48.dp),
                 contentAlignment = Alignment.Center
             ) {
                 Column(
@@ -228,13 +313,10 @@ fun DnsMonitorScreen(
                     )
                 }
             }
+            }
         } else {
-            LazyColumn(
-                modifier = Modifier.fillMaxSize(),
-                contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                items(displayEvents) { event ->
+            items(displayEvents) { event ->
+                Box(modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
                     DnsEventItem(event = event)
                 }
             }
@@ -305,6 +387,186 @@ private fun DnsEventItem(event: DnsEvent) {
                     labelColor = if (isMatched) MaterialTheme.androdrColors.critical
                     else MaterialTheme.colorScheme.primary
                 )
+            )
+        }
+    }
+}
+
+@Composable
+private fun CellularSummary(
+    snapshot: com.androdr.data.model.CellularSnapshot?,
+    findings: List<com.androdr.sigma.Finding>,
+    deliveries: Int,
+    status: com.androdr.cellular.CellularState.Status,
+    locationGranted: Boolean,
+    onGrantLocation: () -> Unit,
+) {
+    Card(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
+        Column(
+            modifier = Modifier.padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Text(
+                    "Cellular (Tier 1)",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Text(
+                    // Wall-clock time of the last delivery, not just a count.
+                    // Re-registering to the SAME cell leaves every identity
+                    // field unchanged, so without a timestamp a live card is
+                    // indistinguishable from a frozen one — which is exactly
+                    // how this looked after an airplane-mode cycle.
+                    if (snapshot == null) {
+                        "$deliveries update(s)"
+                    } else {
+                        "$deliveries update(s) \u00B7 ${
+                            java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.US)
+                                .format(java.util.Date(snapshot.capturedAt))
+                        }"
+                    },
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            if (snapshot == null) {
+                CellularWaitingText(status)
+                if (!locationGranted) {
+                    Button(onClick = onGrantLocation, modifier = Modifier.fillMaxWidth()) {
+                        Text("Grant location permission")
+                    }
+                }
+            } else {
+                CellularSnapshotLines(snapshot)
+                CellularFindingLines(findings)
+            }
+        }
+    }
+}
+
+/**
+ * An empty card is ambiguous here: getAllCellInfo returns an empty list rather
+ * than an error when the caller is not allowed to look, so say which state
+ * this is instead of showing nothing.
+ */
+@Composable
+private fun CellularWaitingText(status: com.androdr.cellular.CellularState.Status) {
+    val (headline, hint) = when (status) {
+        com.androdr.cellular.CellularState.Status.NOT_STARTED ->
+            "Monitor not running" to
+                "Turn on the Network Monitor above. Cellular telemetry is " +
+                    "collected by the same foreground service."
+        com.androdr.cellular.CellularState.Status.UNSUPPORTED_API ->
+            "Not supported on this Android version" to
+                "Cellular telemetry needs Android 12 or newer."
+        com.androdr.cellular.CellularState.Status.MISSING_PERMISSION ->
+            "Location permission required" to
+                "Grant Location and choose Precise. Approximate location does " +
+                    "not return cell information."
+        com.androdr.cellular.CellularState.Status.NO_TELEPHONY ->
+            "No cellular radio" to "This device has no telephony service."
+        com.androdr.cellular.CellularState.Status.READ_REFUSED ->
+            "The system refused the cell read" to
+                "Location is granted but the platform denied access. Check that " +
+                    "Location is set to Precise and is allowed while the app is in use."
+        com.androdr.cellular.CellularState.Status.AWAITING_FIRST_UPDATE ->
+            "Waiting for the first radio update" to
+                "The monitor is running and the system returned no cells yet."
+        com.androdr.cellular.CellularState.Status.ACTIVE ->
+            "Waiting for the first radio update" to "The monitor is running."
+    }
+    Text(headline, style = MaterialTheme.typography.bodyMedium)
+    Text(
+        hint,
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+}
+
+@Composable
+private fun CellularSnapshotLines(snapshot: com.androdr.data.model.CellularSnapshot) {
+    val muted = MaterialTheme.colorScheme.onSurfaceVariant
+    Text(
+        "${snapshot.rat} \u00B7 ${snapshot.operatorAlphaLong ?: "unknown operator"}" +
+            " \u00B7 ${snapshot.mcc ?: "?"}/${snapshot.mnc ?: "?"}",
+        style = MaterialTheme.typography.bodyMedium,
+    )
+    Text(
+        "TAC ${snapshot.tac ?: "\u2014"} \u00B7 CI ${snapshot.ci ?: "\u2014"} \u00B7 " +
+            "PCI ${snapshot.pci ?: "\u2014"} \u00B7 EARFCN ${snapshot.earfcn ?: "\u2014"}",
+        style = MaterialTheme.typography.bodySmall,
+        color = muted,
+    )
+    Text(
+        "${snapshot.neighborCount} neighbour(s) \u00B7 " +
+            "RSRP ${snapshot.servingRsrp?.let { "$it dBm" } ?: "\u2014"} \u00B7 " +
+            "TAC changes (5m): ${snapshot.tacChangesLast5m}",
+        style = MaterialTheme.typography.bodySmall,
+        color = muted,
+    )
+}
+
+@Composable
+private fun CellularFindingLines(findings: List<com.androdr.sigma.Finding>) {
+    if (findings.isEmpty()) {
+        Text(
+            "No cellular findings.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        return
+    }
+    findings.forEach { f ->
+        Text(
+            "\u26A0 ${f.title} (${f.level})",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.error,
+        )
+    }
+}
+
+/**
+ * One radio update. The timestamp is the point: consecutive updates on a
+ * stationary device are otherwise identical, so a list of them is the only
+ * thing that makes the monitor visibly alive.
+ */
+@Composable
+private fun CellularHistoryItem(snapshot: com.androdr.data.model.CellularSnapshot) {
+    val time = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.US)
+        .format(java.util.Date(snapshot.capturedAt))
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(
+            modifier = Modifier.padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(2.dp),
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    "$time \u00B7 ${snapshot.rat}",
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                if (snapshot.tacChanged || snapshot.ratChanged) {
+                    Text(
+                        if (snapshot.ratChanged) "RAT CHANGED" else "TAC CHANGED",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                }
+            }
+            Text(
+                "TAC ${snapshot.tac ?: "\u2014"} \u00B7 CI ${snapshot.ci ?: "\u2014"} \u00B7 " +
+                    "${snapshot.neighborCount} neighbour(s) \u00B7 " +
+                    "RSRP ${snapshot.servingRsrp?.let { "$it dBm" } ?: "\u2014"}",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
     }

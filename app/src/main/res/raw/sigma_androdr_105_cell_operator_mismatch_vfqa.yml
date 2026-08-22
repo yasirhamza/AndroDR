@@ -1,0 +1,33 @@
+title: Operator name inconsistent with PLMN (Vodafone Qatar)
+id: androdr-105
+status: experimental
+description: >-
+    A cell advertising Qatar MCC 427 with Vodafone Qatar's MNC 02 is broadcasting
+    an operator name other than "Vodafone Qatar". The operator name is chosen
+    freely by whatever is transmitting, so it is never proof of identity — but
+    that also makes an inconsistency between the name and the PLMN that actually
+    identifies the network a cheap thing to check. A fake cell that copies the
+    PLMN but not the exact name string trips this.
+author: AndroDR
+date: 2026/08/22
+category: incident
+logsource:
+    product: androdr
+    service: cellular_monitor
+detection:
+    selection:
+        is_registered: true
+        mcc: '427'
+        mnc: '02'
+    filter_expected_name:
+        operator_alpha_long: 'Vodafone Qatar'
+    condition: selection and not filter_expected_name
+level: low
+tags:
+    - attack.t1430
+falsepositives:
+    - MVNOs reselling the host network and presenting their own branding
+    - Roaming partners displaying an alternate name
+    - Firmware or locale variations in the operator name string
+remediation:
+    - "Check the operator name shown in Settings against your carrier. A name that differs from the network identity it claims is worth noting alongside any other cellular findings from the same time and place."

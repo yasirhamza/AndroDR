@@ -17,7 +17,9 @@ import android.util.Log
 import androidx.core.app.NotificationCompat
 import com.androdr.R
 import com.androdr.data.model.DnsEvent
+import com.androdr.cellular.CellularMonitor
 import com.androdr.data.repo.ScanRepository
+import com.androdr.sigma.SigmaRuleEngine
 import com.androdr.data.repo.SettingsRepository
 import com.androdr.ioc.IndicatorResolver
 import dagger.hilt.android.AndroidEntryPoint
@@ -81,6 +83,8 @@ class DnsVpnService : VpnService() {
 
         const val ACTION_START = "com.androdr.START_VPN"
         const val ACTION_STOP  = "com.androdr.STOP_VPN"
+        /** Re-arm cellular collection after the user grants location. */
+        const val ACTION_RETRY_CELLULAR = "com.androdr.RETRY_CELLULAR"
 
         /** `true` while the tunnel is established and the read loop is active. */
         val isRunning = MutableStateFlow(false)
@@ -134,6 +138,9 @@ class DnsVpnService : VpnService() {
     @Suppress("LateinitUsage") @Inject lateinit var scanRepository: ScanRepository
     @Suppress("LateinitUsage") @Inject lateinit var indicatorResolver: IndicatorResolver
     @Suppress("LateinitUsage") @Inject lateinit var settingsRepository: SettingsRepository
+    @Suppress("LateinitUsage") @Inject lateinit var sigmaRuleEngine: SigmaRuleEngine
+
+    private var cellularMonitor: CellularMonitor? = null
 
     private var tunFd: ParcelFileDescriptor? = null
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -155,6 +162,11 @@ class DnsVpnService : VpnService() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
             ACTION_STOP  -> stopVpn()
+            // The monitor checks permission once, at start. Granting location
+            // afterwards leaves it inert until something re-arms it, so the UI
+            // pokes the running service rather than making the user toggle the
+            // VPN off and on.
+            ACTION_RETRY_CELLULAR -> cellularMonitor?.start()
             else         -> startVpn()
         }
         return START_STICKY
@@ -239,6 +251,12 @@ class DnsVpnService : VpnService() {
         readLoopJob = serviceScope.launch {
             runPacketLoop(fd, outputStream)
         }
+
+        // Tier 1 radio telemetry. Inert unless the research permissions are
+        // granted; see CellularMonitor.
+        cellularMonitor = CellularMonitor(
+            applicationContext, sigmaRuleEngine, scanRepository, serviceScope
+        ).also { it.start() }
     }
 
     private fun stopVpn() {
@@ -248,6 +266,8 @@ class DnsVpnService : VpnService() {
             // Already stopped — nothing to do (avoids stopForeground/stopSelf churn).
             return
         }
+        cellularMonitor?.stop()
+        cellularMonitor = null
         isRunning.value = false
         readLoopJob?.cancel()
         readLoopJob = null

@@ -4,7 +4,9 @@ import android.content.Context
 import android.net.Uri
 import android.util.Log
 import androidx.core.content.FileProvider
+import com.androdr.cellular.CellularState
 import com.androdr.data.db.DnsEventDao
+import com.androdr.data.db.ForensicTimelineEventDao
 import com.androdr.data.model.ScanResult
 import com.androdr.scanner.AppScanner
 import com.androdr.scanner.ScanOrchestrator
@@ -41,6 +43,7 @@ enum class ExportMode {
 class ReportExporter @Inject constructor(
     @ApplicationContext private val context: Context,
     private val dnsEventDao: DnsEventDao,
+    private val forensicTimelineEventDao: ForensicTimelineEventDao,
     private val scanOrchestrator: ScanOrchestrator,
     private val appScanner: AppScanner
 ) {
@@ -51,6 +54,11 @@ class ReportExporter @Inject constructor(
         mode: ExportMode = ExportMode.BOTH,
     ): Uri = withContext(Dispatchers.IO) {
         val dnsEvents = dnsEventDao.getRecentSnapshot()
+        // Cellular findings live on the forensic timeline, not on the scan:
+        // the radio emitter is continuous and has no scan to attach to.
+        val cellularEvents = runCatching {
+            forensicTimelineEventDao.getBySourceSnapshot("cellular_monitor")
+        }.getOrDefault(emptyList())
         val logLines  = captureLogcat()
         val inventory = scanOrchestrator.lastAppTelemetry.ifEmpty {
             runCatching { appScanner.collectTelemetry() }.getOrDefault(emptyList())
@@ -72,6 +80,9 @@ class ReportExporter @Inject constructor(
             accessibilityTelemetry = accessibilityTelemetry,
             receiverTelemetry = receiverTelemetry,
             appOpsTelemetry = appOpsTelemetry,
+            cellularEvents = cellularEvents,
+            cellularSnapshot = CellularState.latest.value,
+            cellularDeliveries = CellularState.deliveries.value,
             versionName = context.appVersion().name,
         )
 

@@ -5,7 +5,10 @@ import com.androdr.data.model.AccessibilityTelemetry
 import com.androdr.data.model.AppOpsTelemetry
 import com.androdr.data.model.AppTelemetry
 import com.androdr.data.model.DeviceTelemetry
+import com.androdr.cellular.CellularRedaction
+import com.androdr.data.model.CellularSnapshot
 import com.androdr.data.model.DnsEvent
+import com.androdr.data.model.ForensicTimelineEvent
 import com.androdr.data.model.FileArtifactTelemetry
 import com.androdr.data.model.ProcessTelemetry
 import com.androdr.data.model.ReceiverTelemetry
@@ -39,6 +42,9 @@ object ReportFormatter {
         accessibilityTelemetry: List<AccessibilityTelemetry> = emptyList(),
         receiverTelemetry: List<ReceiverTelemetry> = emptyList(),
         appOpsTelemetry: List<AppOpsTelemetry> = emptyList(),
+        cellularEvents: List<ForensicTimelineEvent> = emptyList(),
+        cellularSnapshot: CellularSnapshot? = null,
+        cellularDeliveries: Int = 0,
         versionName: String,
     ): String = buildString {
         val includeFindings = mode != ExportMode.TELEMETRY_ONLY
@@ -75,6 +81,7 @@ object ReportFormatter {
             appendLine()
             section("FINDINGS SECTION")
             appendFindingsSections(scan, dnsEvents, appInventory, displayNames)
+            appendCellularSection(cellularEvents)
 
             // Intentionally inside the includeFindings branch: a capability skip is a
             // caveat ON the findings ("this list is missing these rules"), so it rides
@@ -96,6 +103,7 @@ object ReportFormatter {
                 deviceTelemetry, processTelemetry, fileTelemetry,
                 accessibilityTelemetry, receiverTelemetry, appOpsTelemetry
             )
+            appendCellularTelemetry(cellularSnapshot, cellularDeliveries)
         }
 
         // -- Footer ---------------------------------------------------------------
@@ -103,6 +111,73 @@ object ReportFormatter {
         appendLine(RULE)
         appendLine("  End of report / AndroDR / scan id ${scan.id}")
         appendLine(RULE)
+    }
+
+    /**
+     * Radio state observed at export time.
+     *
+     * Recorded even when nothing fired, for two reasons. A report that shows
+     * only anomalies cannot distinguish "the radio was clean" from "the
+     * monitor was never running" — and on this feature that difference is
+     * real, because cell info comes back EMPTY rather than erroring when the
+     * caller is not permitted to read it. The delivery count is the evidence
+     * the monitor was alive.
+     *
+     * Redacted like every other handoff path: condition, not tower identity.
+     */
+    private fun StringBuilder.appendCellularTelemetry(
+        snapshot: CellularSnapshot?,
+        deliveries: Int,
+    ) {
+        section("CELLULAR TELEMETRY (TIER 1)")
+        if (snapshot == null) {
+            appendLine("  No radio telemetry captured this session.")
+            appendLine("  Either the monitor was not running, or no serving cell was observed.")
+            appendLine()
+            return
+        }
+        appendLine("  Radio updates observed this session: $deliveries")
+        appendLine("  Serving cell at export time:")
+        appendLine("    technology      : ${snapshot.rat}")
+        appendLine("    bandwidth       : ${snapshot.bandwidthKhz?.let { "$it kHz" } ?: "not reported"}")
+        appendLine("    channel (earfcn): ${snapshot.earfcn ?: "not reported"}")
+        appendLine("    neighbour cells : ${snapshot.neighborCount}")
+        appendLine("    serving RSRP    : ${snapshot.servingRsrp?.let { "$it dBm" } ?: "not reported"}")
+        appendLine("    TAC changes (5m): ${snapshot.tacChangesLast5m}")
+        appendLine("    TAC changed     : ${snapshot.tacChanged}")
+        appendLine("    RAT changed     : ${snapshot.ratChanged}")
+        appendLine("  ${CellularRedaction.REDACTION_NOTE}")
+        appendLine()
+    }
+
+    /**
+     * Tier 1 cellular findings.
+     *
+     * These come from the forensic timeline rather than [ScanResult.findings]:
+     * the radio emitter is event-driven and continuous, so a finding is not
+     * produced by any particular scan. Each row carries the full radio context
+     * it fired on, because a cellular finding cannot be judged true or false
+     * after the fact without the snapshot that produced it.
+     */
+    private fun StringBuilder.appendCellularSection(events: List<ForensicTimelineEvent>) {
+        if (events.isEmpty()) return
+        val fmt = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US)
+        section("CELLULAR (TIER 1)")
+        appendLine("  ${events.size} finding(s) from radio telemetry.")
+        appendLine()
+        events.forEach { e ->
+            appendLine("  [${fmt.format(Date(e.startTimestamp))}] ${e.description}")
+            if (e.ruleId.isNotEmpty()) appendLine("    rule: ${e.ruleId}")
+            if (e.attackTechniqueId.isNotEmpty()) {
+                appendLine("    technique: ${e.attackTechniqueId}")
+            }
+            // Redacted: a report is a handoff artifact and must not carry a
+            // tower-level location trail. Full context stays on-device.
+            if (e.details.isNotEmpty()) {
+                appendLine("    context: ${CellularRedaction.redact(e.details)}")
+            }
+            appendLine()
+        }
     }
 
     // Legacy inline body replaced by section helpers below. Original code is

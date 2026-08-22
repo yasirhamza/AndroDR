@@ -1,0 +1,35 @@
+title: Cellular downgrade from LTE/NR to 2G/3G
+id: androdr-103
+status: experimental
+description: >-
+    The device moved from LTE or NR down to GSM or UMTS. Forcing a downgrade to
+    2G, which has no mutual authentication between handset and network, is the
+    classic IMSI-catcher manoeuvre: once the device is on 2G the network can be
+    impersonated and identifiers harvested. Downgrades also happen legitimately
+    at the edge of coverage, so location and repetition matter more than any
+    single occurrence.
+author: AndroDR
+date: 2026/08/22
+category: incident
+logsource:
+    product: androdr
+    service: cellular_monitor
+detection:
+    selection:
+        previous_rat:
+            - LTE
+            - NR
+        rat:
+            - GSM
+            - UMTS
+    condition: selection
+level: medium
+tags:
+    - attack.t1430
+falsepositives:
+    - Genuine loss of LTE/NR coverage at the edge of a cell
+    - Rural areas and roaming onto partner networks with limited coverage
+    - Indoor or underground locations
+remediation:
+    - "Turn off 2G. On Android 12+ this is Settings > Network & internet > SIM > Allow 2G. Advanced Protection (Android 16+) disables it automatically. That removes this attack surface entirely rather than merely detecting it."
+    - "If this repeats in a fixed location that normally has good LTE coverage, treat it as suspicious rather than incidental."
