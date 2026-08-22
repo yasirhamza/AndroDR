@@ -3,6 +3,7 @@ package com.androdr.sigma
 import com.androdr.data.model.AccessibilityTelemetry
 import com.androdr.data.model.AppOpsTelemetry
 import com.androdr.data.model.AppTelemetry
+import com.androdr.data.model.CellularSnapshot
 import com.androdr.data.model.BatteryDailyEvent
 import com.androdr.data.model.DatabasePathObservation
 import com.androdr.data.model.DeviceTelemetry
@@ -80,6 +81,17 @@ class LogsourceTaxonomyCrossCheckTest {
 
     /** Services whose toFieldMap() is a member function on the data class. */
     private fun memberFunctionFieldMaps(): Map<String, Set<String>> = mapOf(
+        "cellular_monitor" to CellularSnapshot(
+            mcc = null, mnc = null, tac = null, ci = null, pci = null,
+            earfcn = null, bands = emptyList(), bandwidthKhz = null, rat = "UNKNOWN",
+            operatorAlphaLong = null, operatorAlphaShort = null,
+            additionalPlmns = emptyList(), neighborCount = 0, servingRsrp = null,
+            isRegistered = false, capturedAt = 0L, source = TelemetrySource.LIVE_SCAN,
+            previousTac = null, previousRat = null, tacChanged = false, ratChanged = false,
+            tacChangesLast5m = 0, servingMinusMaxNeighborRsrpDb = null,
+            locationMovedMLast5m = null,
+        ).toFieldMap().keys,
+
         "app_scanner" to AppTelemetry(
             packageName = "x", appName = "x", certHash = null, certHashSha1 = null, apkHash = null,
             isSystemApp = false, fromTrustedStore = false, installer = null,
