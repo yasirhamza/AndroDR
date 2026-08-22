@@ -126,8 +126,9 @@ class LogsourceTaxonomyCrossCheckTest {
         ).toFieldMap().keys,
 
         "network_monitor" to NetworkTelemetry(
-            destinationIp = "x", destinationPort = 0, protocol = "TCP",
+            destinationIp = "x", destinationPort = 0, protocol = null,
             appUid = 0, appName = null, timestamp = 0L,
+            source = TelemetrySource.LIVE_SCAN, capturedAt = 0L,
         ).toFieldMap().keys,
     )
 

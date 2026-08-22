@@ -34,4 +34,11 @@ enum class TelemetrySource {
      * LIVE_SCAN without checking this field.
      */
     BUGREPORT_IMPORT,
+
+    /**
+     * Produced by parsing an imported Android Advanced Protection
+     * Intrusion Logging export (#342). Import-only — the platform offers
+     * no app-read API for this stream.
+     */
+    INTRUSION_LOG_IMPORT,
 }
