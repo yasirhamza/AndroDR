@@ -82,15 +82,18 @@ class CellularMonitor(
     fun start() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) {
             Log.i(TAG, "TelephonyCallback requires API 31+; cellular monitor inert")
+            CellularState.setStatus(CellularState.Status.UNSUPPORTED_API)
             return
         }
         if (!hasPermissions()) {
             Log.i(TAG, "ACCESS_FINE_LOCATION / READ_PHONE_STATE not granted; cellular monitor inert")
+            CellularState.setStatus(CellularState.Status.MISSING_PERMISSION)
             return
         }
         val tm = context.getSystemService(TelephonyManager::class.java)
         if (tm == null) {
             Log.w(TAG, "No TelephonyManager; cellular monitor inert")
+            CellularState.setStatus(CellularState.Status.NO_TELEPHONY)
             return
         }
         val cb = Callback()
@@ -130,11 +133,15 @@ class CellularMonitor(
             .onSuccess { cells ->
                 if (cells.isEmpty()) {
                     Log.i(TAG, "initial read returned no cells; waiting for a callback")
+                    CellularState.setStatus(CellularState.Status.AWAITING_FIRST_UPDATE)
                 } else {
                     handle(cells)
                 }
             }
-            .onFailure { Log.w(TAG, "initial cell read refused: ${it.message}") }
+            .onFailure {
+                Log.w(TAG, "initial cell read refused: ${it.message}")
+                CellularState.setStatus(CellularState.Status.READ_REFUSED)
+            }
     }
 
     internal fun handle(cellInfo: List<CellInfo>) {

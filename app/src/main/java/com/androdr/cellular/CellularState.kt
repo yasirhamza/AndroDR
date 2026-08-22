@@ -24,6 +24,45 @@ import kotlinx.coroutines.flow.asStateFlow
  */
 object CellularState {
 
+    /**
+     * Why the monitor is or is not producing data.
+     *
+     * Six separate conditions previously left the monitor inert and reported
+     * that only to logcat, so every one of them looked identical in the UI:
+     * an empty card saying "waiting". On a device that cannot be attached to a
+     * debugger, that is not diagnosable — the difference between "the VPN is
+     * off" and "the platform refused the read" matters and was invisible.
+     */
+    enum class Status {
+        /** Monitor has never started — the VPN is not running. */
+        NOT_STARTED,
+
+        /** Platform is below API 31; TelephonyCallback does not exist. */
+        UNSUPPORTED_API,
+
+        /** ACCESS_FINE_LOCATION and/or READ_PHONE_STATE not granted. */
+        MISSING_PERMISSION,
+
+        /** No TelephonyManager — no cellular radio on this device. */
+        NO_TELEPHONY,
+
+        /** Started, but the platform returned no cells yet. */
+        AWAITING_FIRST_UPDATE,
+
+        /** Started, but the platform refused the read (SecurityException). */
+        READ_REFUSED,
+
+        /** Delivering snapshots. */
+        ACTIVE,
+    }
+
+    private val _status = MutableStateFlow(Status.NOT_STARTED)
+    val status: StateFlow<Status> = _status.asStateFlow()
+
+    fun setStatus(value: Status) {
+        _status.value = value
+    }
+
     private val _latest = MutableStateFlow<CellularSnapshot?>(null)
     val latest: StateFlow<CellularSnapshot?> = _latest.asStateFlow()
 
@@ -49,6 +88,7 @@ object CellularState {
     val deliveries: StateFlow<Int> = _deliveries.asStateFlow()
 
     fun record(snapshot: CellularSnapshot, findings: List<Finding>) {
+        _status.value = Status.ACTIVE
         _latest.value = snapshot
         _history.value = (listOf(snapshot) + _history.value).take(MAX_HISTORY)
         _deliveries.value = _deliveries.value + 1
@@ -59,6 +99,7 @@ object CellularState {
     }
 
     fun clear() {
+        _status.value = Status.NOT_STARTED
         _latest.value = null
         _history.value = emptyList()
         _triggered.value = emptyList()

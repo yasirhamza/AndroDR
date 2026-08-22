@@ -65,6 +65,7 @@ fun DnsMonitorScreen(
     val cellularFindings by viewModel.cellularFindings.collectAsStateWithLifecycle()
     val cellularDeliveries by viewModel.cellularDeliveries.collectAsStateWithLifecycle()
     val cellularHistory by viewModel.cellularHistory.collectAsStateWithLifecycle()
+    val cellularStatus by viewModel.cellularStatus.collectAsStateWithLifecycle()
     val blocklistBlockMode by settingsViewModel.blocklistBlockMode.collectAsStateWithLifecycle()
     val domainIocBlockMode by settingsViewModel.domainIocBlockMode.collectAsStateWithLifecycle()
     val context = LocalContext.current
@@ -225,6 +226,7 @@ fun DnsMonitorScreen(
                     snapshot = cellular,
                     findings = cellularFindings,
                     deliveries = cellularDeliveries,
+                    status = cellularStatus,
                 )
             }
             // No empty-state item here: CellularSummary already renders the
@@ -353,6 +355,7 @@ private fun CellularSummary(
     snapshot: com.androdr.data.model.CellularSnapshot?,
     findings: List<com.androdr.sigma.Finding>,
     deliveries: Int,
+    status: com.androdr.cellular.CellularState.Status,
 ) {
     Card(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
         Column(
@@ -388,7 +391,7 @@ private fun CellularSummary(
                 )
             }
             if (snapshot == null) {
-                CellularWaitingText()
+                CellularWaitingText(status)
             } else {
                 CellularSnapshotLines(snapshot)
                 CellularFindingLines(findings)
@@ -403,10 +406,34 @@ private fun CellularSummary(
  * this is instead of showing nothing.
  */
 @Composable
-private fun CellularWaitingText() {
+private fun CellularWaitingText(status: com.androdr.cellular.CellularState.Status) {
+    val (headline, hint) = when (status) {
+        com.androdr.cellular.CellularState.Status.NOT_STARTED ->
+            "Monitor not running" to
+                "Turn on the Network Monitor above. Cellular telemetry is " +
+                    "collected by the same foreground service."
+        com.androdr.cellular.CellularState.Status.UNSUPPORTED_API ->
+            "Not supported on this Android version" to
+                "Cellular telemetry needs Android 12 or newer."
+        com.androdr.cellular.CellularState.Status.MISSING_PERMISSION ->
+            "Location permission required" to
+                "Grant Location and choose Precise. Approximate location does " +
+                    "not return cell information."
+        com.androdr.cellular.CellularState.Status.NO_TELEPHONY ->
+            "No cellular radio" to "This device has no telephony service."
+        com.androdr.cellular.CellularState.Status.READ_REFUSED ->
+            "The system refused the cell read" to
+                "Location is granted but the platform denied access. Check that " +
+                    "Location is set to Precise and is allowed while the app is in use."
+        com.androdr.cellular.CellularState.Status.AWAITING_FIRST_UPDATE ->
+            "Waiting for the first radio update" to
+                "The monitor is running and the system returned no cells yet."
+        com.androdr.cellular.CellularState.Status.ACTIVE ->
+            "Waiting for the first radio update" to "The monitor is running."
+    }
+    Text(headline, style = MaterialTheme.typography.bodyMedium)
     Text(
-        "Waiting for a radio update. Needs the VPN running and location " +
-            "permission; updates arrive only when the serving cell changes.",
+        hint,
         style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
     )

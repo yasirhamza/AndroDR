@@ -143,7 +143,9 @@ class CellularSourceInvariantsTest {
     @Test
     fun `the waiting text has exactly one call site`() {
         // Exclude the declaration ("fun CellularWaitingText()"); count invocations.
-        val calls = Regex("""(?<!fun )CellularWaitingText\(\)""")
+        // Any invocation, not just empty parens — the composable takes a status
+        // argument now, and pinning the exact call shape made this brittle.
+        val calls = Regex("""(?<!fun )CellularWaitingText\(""")
             .findAll(screenSource()).count()
         assertTrue(
             "CellularWaitingText() should be invoked once (found $calls). Two call sites " +
@@ -177,5 +179,50 @@ class CellularSourceInvariantsTest {
             "priming must actually read cell info",
             Regex("""primeFromCurrentState[\s\S]{0,600}?allCellInfo""").containsMatchIn(src),
         )
+    }
+
+    /**
+     * Six conditions leave the monitor inert. Each previously reported only to
+     * logcat, so all six rendered as the same empty "waiting" card — which made
+     * the difference between "the VPN is off" and "the platform refused the
+     * read" invisible on any device that cannot be attached to a debugger.
+     *
+     * Every inert path must set a distinct status.
+     */
+    @Test
+    fun `every inert path reports a distinct status`() {
+        val src = monitorSource()
+        listOf(
+            "Status.UNSUPPORTED_API",
+            "Status.MISSING_PERMISSION",
+            "Status.NO_TELEPHONY",
+            "Status.AWAITING_FIRST_UPDATE",
+            "Status.READ_REFUSED",
+        ).forEach {
+            assertTrue(
+                "CellularMonitor must report $it — otherwise this failure mode is " +
+                    "indistinguishable from every other empty-card cause",
+                src.contains(it),
+            )
+        }
+    }
+
+    /**
+     * The UI must render the reason, not a single generic sentence. A status
+     * the monitor sets but the screen never reads is no better than a log line.
+     */
+    @Test
+    fun `the cellular card renders every status`() {
+        val screen = screenSource()
+        listOf(
+            "Status.NOT_STARTED",
+            "Status.UNSUPPORTED_API",
+            "Status.MISSING_PERMISSION",
+            "Status.NO_TELEPHONY",
+            "Status.READ_REFUSED",
+            "Status.AWAITING_FIRST_UPDATE",
+        ).forEach {
+            assertTrue("the card must handle $it", screen.contains(it))
+        }
     }
 }

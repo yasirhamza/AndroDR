@@ -40,6 +40,7 @@ class DnsMonitorViewModel @Inject constructor(
     val cellularFindings: StateFlow<List<Finding>> = CellularState.triggered
     val cellularDeliveries: StateFlow<Int> = CellularState.deliveries
     val cellularHistory: StateFlow<List<CellularSnapshot>> = CellularState.history
+    val cellularStatus: StateFlow<CellularState.Status> = CellularState.status
 
     /**
      * Starts or stops [DnsVpnService] depending on the current [isVpnRunning] state.
