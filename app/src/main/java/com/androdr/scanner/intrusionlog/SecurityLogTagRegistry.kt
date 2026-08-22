@@ -1,10 +1,19 @@
 package com.androdr.scanner.intrusionlog
 
+import android.annotation.SuppressLint
 import android.app.admin.SecurityLog
 
 /** Maps android.app.admin.SecurityLog numeric tags to stable snake_case names. */
 object SecurityLogTagRegistry {
 
+    // InlinedApi: SecurityLog.TAG_* are compile-time-inlined int constants, so
+    // referencing them is runtime-safe on every API level regardless of when
+    // each tag was introduced (some post-date minSdk 26). This registry never
+    // calls a device SecurityLog API — it only names tags found in imported
+    // Advanced Protection Intrusion Logging export files pulled from Android
+    // 16+ source devices (#342), so the "requires API level N" warning does
+    // not apply to this usage.
+    @SuppressLint("InlinedApi")
     private val names: Map<Int, String> = mapOf(
         SecurityLog.TAG_ADB_SHELL_INTERACTIVE to "adb_shell_interactive",
         SecurityLog.TAG_ADB_SHELL_CMD to "adb_shell_cmd",
