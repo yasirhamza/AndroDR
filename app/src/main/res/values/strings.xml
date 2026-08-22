@@ -66,6 +66,7 @@
     <string name="enable_vpn">Enable VPN</string>
     <string name="tab_all_events">All Events</string>
     <string name="tab_matched_only">Matched Only</string>
+    <string name="tab_cellular">Cellular</string>
     <string name="no_dns_events">No DNS events yet</string>
     <string name="no_matched_events">No matched events</string>
     <string name="status_matched">MATCHED</string>

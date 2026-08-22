@@ -64,6 +64,7 @@ fun DnsMonitorScreen(
     val cellular by viewModel.cellularLatest.collectAsStateWithLifecycle()
     val cellularFindings by viewModel.cellularFindings.collectAsStateWithLifecycle()
     val cellularDeliveries by viewModel.cellularDeliveries.collectAsStateWithLifecycle()
+    val cellularHistory by viewModel.cellularHistory.collectAsStateWithLifecycle()
     val blocklistBlockMode by settingsViewModel.blocklistBlockMode.collectAsStateWithLifecycle()
     val domainIocBlockMode by settingsViewModel.domainIocBlockMode.collectAsStateWithLifecycle()
     val context = LocalContext.current
@@ -71,7 +72,8 @@ fun DnsMonitorScreen(
     var selectedTab by remember { mutableIntStateOf(0) }
     val tabs = listOf(
         stringResource(R.string.tab_all_events),
-        stringResource(R.string.tab_matched_only)
+        stringResource(R.string.tab_matched_only),
+        stringResource(R.string.tab_cellular),
     )
 
     // One scrolling list: the status/policy cards are ITEMS, not a fixed header,
@@ -179,15 +181,6 @@ fun DnsMonitorScreen(
         }
 
         item {
-        CellularCard(
-            snapshot = cellular,
-            findings = cellularFindings,
-            deliveries = cellularDeliveries,
-        )
-
-        }
-
-        item {
         // Policy toggles
         Card(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
             Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -223,6 +216,27 @@ fun DnsMonitorScreen(
             }
         }
 
+        }
+
+        // Cellular gets its own list, alongside the two DNS lists.
+        if (selectedTab == 2) {
+            item {
+                CellularSummary(
+                    snapshot = cellular,
+                    findings = cellularFindings,
+                    deliveries = cellularDeliveries,
+                )
+            }
+            if (cellularHistory.isEmpty()) {
+                item { CellularWaitingText() }
+            } else {
+                items(cellularHistory) { snap ->
+                    Box(modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
+                        CellularHistoryItem(snap)
+                    }
+                }
+            }
+            return@LazyColumn
         }
 
         // Events list
@@ -334,7 +348,7 @@ private fun DnsEventItem(event: DnsEvent) {
 }
 
 @Composable
-private fun CellularCard(
+private fun CellularSummary(
     snapshot: com.androdr.data.model.CellularSnapshot?,
     findings: List<com.androdr.sigma.Finding>,
     deliveries: Int,
@@ -355,7 +369,19 @@ private fun CellularCard(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 Text(
-                    "$deliveries update(s)",
+                    // Wall-clock time of the last delivery, not just a count.
+                    // Re-registering to the SAME cell leaves every identity
+                    // field unchanged, so without a timestamp a live card is
+                    // indistinguishable from a frozen one — which is exactly
+                    // how this looked after an airplane-mode cycle.
+                    if (snapshot == null) {
+                        "$deliveries update(s)"
+                    } else {
+                        "$deliveries update(s) \u00B7 ${
+                            java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.US)
+                                .format(java.util.Date(snapshot.capturedAt))
+                        }"
+                    },
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -424,5 +450,47 @@ private fun CellularFindingLines(findings: List<com.androdr.sigma.Finding>) {
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.error,
         )
+    }
+}
+
+/**
+ * One radio update. The timestamp is the point: consecutive updates on a
+ * stationary device are otherwise identical, so a list of them is the only
+ * thing that makes the monitor visibly alive.
+ */
+@Composable
+private fun CellularHistoryItem(snapshot: com.androdr.data.model.CellularSnapshot) {
+    val time = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.US)
+        .format(java.util.Date(snapshot.capturedAt))
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(
+            modifier = Modifier.padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(2.dp),
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    "$time \u00B7 ${snapshot.rat}",
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                if (snapshot.tacChanged || snapshot.ratChanged) {
+                    Text(
+                        if (snapshot.ratChanged) "RAT CHANGED" else "TAC CHANGED",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                }
+            }
+            Text(
+                "TAC ${snapshot.tac ?: "\u2014"} \u00B7 CI ${snapshot.ci ?: "\u2014"} \u00B7 " +
+                    "${snapshot.neighborCount} neighbour(s) \u00B7 " +
+                    "RSRP ${snapshot.servingRsrp?.let { "$it dBm" } ?: "\u2014"}",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
     }
 }

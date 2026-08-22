@@ -97,6 +97,7 @@ class CellularMonitor(
         callback = cb
         tm.registerTelephonyCallback(context.mainExecutor, cb)
         Log.i(TAG, "Cellular monitor started")
+        recordSessionStart()
     }
 
     fun stop() {
@@ -155,6 +156,34 @@ class CellularMonitor(
                 // the monitor look dead.
                 CellularState.record(snapshot, emptyList())
             }
+    }
+
+    /**
+     * Records that monitoring began.
+     *
+     * Without this, an empty cellular timeline is ambiguous: it reads the same
+     * whether the radio was clean or the monitor never ran. That distinction
+     * is not academic here — cell info comes back EMPTY rather than erroring
+     * when the caller is not permitted to read it, so a silent failure and a
+     * quiet radio look identical. One row per session establishes the coverage
+     * window an analyst needs to interpret the absence of findings.
+     *
+     * One row per monitor start is negligible next to the app_scanner rows
+     * that already dominate the timeline.
+     */
+    private fun recordSessionStart() {
+        val event = ForensicTimelineEvent(
+            startTimestamp = System.currentTimeMillis(),
+            kind = "event",
+            source = TIMELINE_SOURCE,
+            category = "cellular_session",
+            description = "Cellular monitoring started",
+            details = "monitor=active",
+        )
+        scope.launch {
+            runCatching { repository.logCellularTimelineEvents(listOf(event)) }
+                .onFailure { Log.e(TAG, "failed to record session start: ${it.message}") }
+        }
     }
 
     /**
