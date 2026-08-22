@@ -1,0 +1,31 @@
+title: Tracking area churn
+id: androdr-104
+status: experimental
+description: >-
+    Three or more tracking-area changes within five minutes. A fake base station
+    changes tracking area to force the handset into a Tracking Area Update, and
+    that update is the exchange in which the IMSI or TMSI is disclosed. Repeated
+    churn is therefore the most direct Tier 1 signal of a cell trying to make
+    devices re-identify themselves. Travelling quickly across real tracking-area
+    boundaries produces the same pattern, so this is strongest when stationary.
+author: AndroDR
+date: 2026/08/22
+category: incident
+logsource:
+    product: androdr
+    service: cellular_monitor
+detection:
+    selection:
+        is_registered: true
+        tac_changes_last_5m|gte: 3
+    condition: selection
+level: medium
+tags:
+    - attack.t1430
+falsepositives:
+    - Travelling at speed across tracking-area boundaries
+    - Dense urban areas with overlapping cells
+    - Handover between operators while roaming
+remediation:
+    - "Note where this happened and whether you were moving. Repeated churn while stationary is the strongest Tier 1 indicator of a fake base station."
+    - "Correlate with any downgrade findings from the same period."

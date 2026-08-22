@@ -400,6 +400,8 @@ class SigmaRuleEngine @Inject constructor(
             R.raw.sigma_androdr_094_badbox_admoyu_component,
             R.raw.sigma_androdr_095_manic_mesh_relay,
             R.raw.sigma_androdr_101_cell_narrow_bandwidth,
+            R.raw.sigma_androdr_103_cell_rat_downgrade,
+            R.raw.sigma_androdr_104_cell_tac_churn,
             // Atom rules — pass-through matchers for raw timeline event categories.
             // Referenced by sprint-75 correlation rules (Task 9); tagged
             // level: informational so they are filtered out of the user-facing
