@@ -102,8 +102,24 @@ class CellularMonitor(
     }
 
     internal fun handle(cellInfo: List<CellInfo>) {
-        val serving = cellInfo.firstOrNull { it.isRegistered } ?: return
+        val serving = cellInfo.firstOrNull { it.isRegistered }
+        if (serving == null) {
+            // Distinguishing an empty delivery from "no registered cell" matters:
+            // a background caller is handed an empty list rather than an error,
+            // so silence here is ambiguous unless it is logged explicitly.
+            Log.i(TAG, "onCellInfoChanged: ${cellInfo.size} records, none registered")
+            return
+        }
         val snapshot = toSnapshot(serving, cellInfo, System.currentTimeMillis())
+        Log.i(
+            TAG,
+            "snapshot rat=${snapshot.rat} tac=${snapshot.tac} ci=${snapshot.ci} " +
+                "pci=${snapshot.pci} earfcn=${snapshot.earfcn} bw=${snapshot.bandwidthKhz} " +
+                "mcc=${snapshot.mcc} mnc=${snapshot.mnc} op=${snapshot.operatorAlphaLong} " +
+                "neighbours=${snapshot.neighborCount} rsrp=${snapshot.servingRsrp} " +
+                "prevTac=${snapshot.previousTac} tacChanged=${snapshot.tacChanged} " +
+                "churn5m=${snapshot.tacChangesLast5m} ratChanged=${snapshot.ratChanged}"
+        )
         runCatching { engine.evaluateCellular(listOf(snapshot)) }
             .onSuccess { findings ->
                 findings.filter { it.triggered }.forEach {

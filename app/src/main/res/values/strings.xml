@@ -2,7 +2,10 @@
 <resources
     xmlns:tools="http://schemas.android.com/tools">
     <!-- App name -->
-    <string name="app_name">AndroDR</string>
+    <!-- Research branch only (cellular Tier 1): relabelled so the research
+         build cannot be confused with the production app on the same device.
+         NEVER merged to main. -->
+    <string name="app_name">AndroDR RESEARCH</string>
 
     <!-- Accessibility / content descriptions -->
     <string name="cd_shield">Shield icon</string>
