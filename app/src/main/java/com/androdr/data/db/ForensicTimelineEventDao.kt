@@ -5,6 +5,7 @@ import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import com.androdr.data.model.ForensicTimelineEvent
+import com.androdr.data.model.TelemetrySource
 import kotlinx.coroutines.flow.Flow
 
 @Dao
@@ -52,6 +53,30 @@ interface ForensicTimelineEventDao {
 
     @Query("SELECT * FROM forensic_timeline WHERE startTimestamp >= :sinceMs ORDER BY startTimestamp ASC")
     suspend fun getEventsSince(sinceMs: Long): List<ForensicTimelineEvent>
+
+    /**
+     * Like [getEventsSince] but drops rows whose [ForensicTimelineEvent.telemetrySource]
+     * equals [excluded] (#342 B2).
+     *
+     * The live-scan correlation lookback uses this with
+     * `excluded = INTRUSION_LOG_IMPORT`: imported forensic snapshots carry each
+     * event's OWN (historical) timestamp, so a plain time-window query pulls them
+     * into a live scan's correlation input. Any signal they help produce is then
+     * stamped with the LIVE scan's id, which the intrusion-log replace-on-reimport
+     * sweep (keyed on intrusion_log scan ids) can never reach — an orphan signal
+     * accumulating per live scan. Excluding imported rows keeps a live scan's
+     * correlation to live/bug-report evidence. [getEventsSince] is retained
+     * unchanged for any caller that genuinely wants every source.
+     */
+    @Query("""
+        SELECT * FROM forensic_timeline
+        WHERE startTimestamp >= :sinceMs AND telemetrySource != :excluded
+        ORDER BY startTimestamp ASC
+    """)
+    suspend fun getEventsSinceExcludingTelemetrySource(
+        sinceMs: Long,
+        excluded: TelemetrySource
+    ): List<ForensicTimelineEvent>
 
     /**
      * Bulk insert returning the Room-assigned autoincrement IDs, in the same

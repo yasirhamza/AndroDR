@@ -438,7 +438,15 @@ class ScanOrchestrator @Inject constructor(
         val maxRuleWindowMs = correlationRules.maxOfOrNull { it.timespanMs } ?: 0L
         val lookbackEvents = if (maxRuleWindowMs > 0) {
             runCatching {
-                forensicTimelineEventDao.getEventsSince(System.currentTimeMillis() - maxRuleWindowMs)
+                // #342 B2: exclude imported intrusion-log rows from a LIVE scan's
+                // correlation lookback. They carry their own historical event time
+                // (so a plain time-window query would sweep them in), and any signal
+                // they helped produce would be stamped with this live scan's id —
+                // unreachable by the intrusion-log sweep, i.e. an orphan signal.
+                forensicTimelineEventDao.getEventsSinceExcludingTelemetrySource(
+                    System.currentTimeMillis() - maxRuleWindowMs,
+                    TelemetrySource.INTRUSION_LOG_IMPORT
+                )
             }.getOrDefault(emptyList())
         } else emptyList()
 
@@ -622,6 +630,17 @@ class ScanOrchestrator @Inject constructor(
             "Advanced Protection intrusion log export (per-day YYYY-MM-DD.txt files)."
     )
 
+    /**
+     * Thrown by [analyzeIntrusionLog] when the analysis succeeded but persisting
+     * it failed (#342 B1). The user-visible message is intentionally honest: the
+     * import was analyzed but not saved, so nothing was imported. Carries the
+     * underlying persistence [cause] for logs/diagnostics.
+     */
+    class IntrusionLogPersistException(cause: Throwable) : Exception(
+        "Intrusion log analyzed, but saving it failed — nothing was imported.",
+        cause
+    )
+
     /** Result of [analyzeArtifact], carrying whichever analysis actually ran. */
     sealed interface ArtifactAnalysis {
         data class BugReport(val result: BugReportAnalyzer.BugReportAnalysisResult) : ArtifactAnalysis
@@ -660,19 +679,34 @@ class ScanOrchestrator @Inject constructor(
 
     /**
      * #342: analyze an Advanced Protection Intrusion Logging export and persist
-     * it. Replace-on-reimport: each import first deletes the previous import's
-     * rows by source (spec §4.2). Rules saw the COMPLETE stream inside the
-     * analyzer; only timeline persistence is capped (spec §7).
+     * it. Replace-on-reimport: the previous import's rows are swept
+     * ATOMICALLY with the save (spec §4.2, B1). Rules saw the COMPLETE stream
+     * inside the analyzer; only timeline persistence is capped (spec §7, B3/B4).
+     *
+     * Persistence-failure honesty (B1): the analysis genuinely ran, but if the
+     * save throws, nothing was written — so this rethrows [IntrusionLogPersistException]
+     * rather than returning normally. Returning the result on a failed save would
+     * let [com.androdr.ui.bugreport.BugReportViewModel] render the "Intrusion log
+     * analyzed — N events" summary card for data that is NOT in the database
+     * (silent evidence loss in a forensic tool). The ViewModel already routes any
+     * thrown exception to its error card, so the honest "import failed to save"
+     * message reaches the user via the existing path.
      */
+    @Suppress("TooGenericExceptionCaught")
     suspend fun analyzeIntrusionLog(uri: Uri): IntrusionLogAnalysisResult {
         initRuleEngine()
         val result = intrusionLogAnalyzer.analyze(uri)
 
         val now = System.currentTimeMillis()
+        // B3: cap the triggered findings persisted into ScanResult.findings (a
+        // single JSON TEXT column read via Room's ~2 MB CursorWindow for EVERY
+        // history row). The SAME capped set feeds the finding timeline rows in
+        // buildIntrusionLogTimelineEvents, so the two never diverge.
+        val persistedFindings = capTriggeredFindings(result.findings)
         val scanResult = ScanResult(
             id = now,
             timestamp = now,
-            findings = result.findings,
+            findings = persistedFindings,
             bugReportFindings = emptyList(),
             riskySideloadCount = 0,
             knownMalwareCount = result.findings.count {
@@ -682,18 +716,30 @@ class ScanOrchestrator @Inject constructor(
         )
         val allEvents = buildIntrusionLogTimelineEvents(result, scanResult)
 
-        // Replace-on-reimport, then persist with correlation (same transaction
-        // shape as the bug-report path). The sweep runs before the save so a
-        // re-import of the same (or a corrected) export replaces the previous
-        // import's rows instead of stacking a second copy of every event.
-        deletePriorIntrusionLogRows()
+        val triggeredTotal = result.findings.count { it.triggered }
+        val findingsDropped = triggeredTotal - persistedFindings.size
+        val securityDropped = (result.securityEvents.size - SECURITY_PERSIST_CAP).coerceAtLeast(0)
+        if (findingsDropped > 0 || securityDropped > 0) {
+            Log.w(TAG, "Intrusion-log persistence caps dropped rows: " +
+                "$findingsDropped of $triggeredTotal findings (cap $FINDINGS_PERSIST_CAP), " +
+                "$securityDropped of ${result.securityEvents.size} security events " +
+                "(cap $SECURITY_PERSIST_CAP). Detection saw the full stream; only " +
+                "persistence is bounded.")
+        }
+
+        // Replace-on-reimport, persisted atomically with the save (B1): the sweep
+        // runs as the transaction's first step via preDelete, so a failed save
+        // rolls the deletes back and the prior import survives. A re-import of the
+        // same (or a corrected) export still replaces the previous import's rows
+        // instead of stacking a second copy of every event.
         val corrRules = sigmaRuleEngine.getCorrelationRules()
-        runCatching {
+        try {
             scanRepository.saveScanWithCorrelation(
                 scan = scanResult,
                 findingTimelineEvents = allEvents,
                 replaceUsageStatsEvents = null,
-                lookbackEvents = emptyList()
+                lookbackEvents = emptyList(),
+                preDelete = ::deletePriorIntrusionLogRows
             ) { eventsWithIds ->
                 if (corrRules.isEmpty() || eventsWithIds.isEmpty()) emptyList()
                 else {
@@ -704,7 +750,15 @@ class ScanOrchestrator @Inject constructor(
                 }
             }
             Log.i(TAG, "Persisted intrusion-log import ${scanResult.id} with ${allEvents.size} events")
-        }.onFailure { Log.e(TAG, "Failed to persist intrusion log import", it) }
+        } catch (c: CancellationException) {
+            throw c
+        } catch (e: Exception) {
+            // Do NOT swallow: a swallowed failure here (the original behavior)
+            // left the prior import deleted, the new one unwritten, and the UI
+            // still reporting success — silent evidence destruction.
+            Log.e(TAG, "Failed to persist intrusion log import", e)
+            throw IntrusionLogPersistException(e)
+        }
 
         return result
     }
@@ -739,19 +793,37 @@ class ScanOrchestrator @Inject constructor(
      * triggered finding (`source = "intrusion_log_analysis"`) followed by the
      * raw imported evidence (`source = "intrusion_log"`).
      *
-     * Persistence caps (spec §7): security events are uncapped — they are the
-     * rarest and highest-signal records — while DNS and connect events are kept
-     * newest-first up to [DNS_PERSIST_CAP] / [CONNECT_PERSIST_CAP]. Detection is
-     * unaffected: [IntrusionLogAnalyzer] already evaluated the rules over the
-     * COMPLETE parsed stream, so a capped event can still have produced a
-     * finding row here.
+     * Persistence caps (spec §7, B3/B4). Detection is unaffected:
+     * [IntrusionLogAnalyzer] already evaluated the rules over the COMPLETE parsed
+     * stream, so a capped-away event can still have produced a finding row here.
+     * Only what is WRITTEN is bounded:
+     *  - findings: [FINDINGS_PERSIST_CAP], highest-severity-then-newest first
+     *    (see [capTriggeredFindings]); an uncapped stream of
+     *    (record × matching rule) findings would bloat the ScanResult JSON
+     *    column past Room's CursorWindow and brick history for every scan;
+     *  - DNS: [DNS_PERSIST_CAP], newest-first;
+     *  - connect: [CONNECT_PERSIST_CAP], newest-first;
+     *  - security: [SECURITY_PERSIST_CAP], newest-first. Previously uncapped —
+     *    an attacker-crafted export of millions of `security_event` lines would
+     *    otherwise persist millions of rows surviving the 30-day retention
+     *    (storage DoS, security L1).
+     *
+     * PER-IMPORT PERSISTED-ROW BUDGET vs. export limit: the worst-case rows one
+     * import writes is FINDINGS_PERSIST_CAP + DNS_PERSIST_CAP + CONNECT_PERSIST_CAP
+     * + SECURITY_PERSIST_CAP (= 1000 + 10000 + 5000 + 5000 = 21000). That exceeds
+     * [ForensicTimelineEventDao.getAllForExport]'s `LIMIT 10000`, so a single
+     * maximal import can already fill the export window, and the export truncates
+     * newest-first. getAllForExport is a SHARED export path and is deliberately
+     * NOT changed here; the caps above bound on-disk growth and keep the highest-
+     * signal rows, and reconciling the budget with the export limit is tracked as
+     * follow-up polish in issue #353.
      */
     @VisibleForTesting
     internal fun buildIntrusionLogTimelineEvents(
         result: IntrusionLogAnalysisResult,
         scanResult: ScanResult
     ): List<ForensicTimelineEvent> {
-        val findingEvents = result.findings.filter { it.triggered }.map { finding ->
+        val findingEvents = capTriggeredFindings(result.findings).map { finding ->
             finding.toForensicTimelineEvent(scanResult, isBugreport = true).copy(
                 source = "intrusion_log_analysis",
                 telemetrySource = TelemetrySource.INTRUSION_LOG_IMPORT,
@@ -760,8 +832,7 @@ class ScanOrchestrator @Inject constructor(
                 // strings, so a finding inherits its own event's time. DNS
                 // records carry no timestamp field — those fall back to 0L,
                 // which the Timeline renders as "Unknown".
-                startTimestamp = finding.matchContext["timestamp"]?.toLongOrNull()
-                    ?.takeIf { it > 0L } ?: 0L
+                startTimestamp = findingEventTimeMs(finding)
             )
         }
         val cappedDns = result.dnsEvents
@@ -770,10 +841,31 @@ class ScanOrchestrator @Inject constructor(
         val cappedNet = result.networkEvents
             .sortedByDescending { it.timestamp }
             .take(CONNECT_PERSIST_CAP)
+        val cappedSec = result.securityEvents
+            .sortedByDescending { it.timestamp }
+            .take(SECURITY_PERSIST_CAP)
         return findingEvents +
             cappedDns.map { it.toForensicTimelineEvent(scanResult.id) } +
             cappedNet.map { it.toForensicTimelineEvent(scanResult.id) } +
-            result.securityEvents.map { it.toForensicTimelineEvent(scanResult.id) }
+            cappedSec.map { it.toForensicTimelineEvent(scanResult.id) }
+    }
+
+    /**
+     * The triggered findings to PERSIST for one import (#342 B3), capped at
+     * [FINDINGS_PERSIST_CAP]. Below the cap the input order is preserved (no
+     * reshuffle); above it, findings are ranked highest-severity first and, for
+     * equal severity, most-recent first (by the finding's own event time), so the
+     * rows most worth keeping survive the cut. Only triggered findings are ever
+     * persisted — untriggered ones were never written as rows.
+     */
+    @VisibleForTesting
+    internal fun capTriggeredFindings(findings: List<Finding>): List<Finding> {
+        val triggered = findings.filter { it.triggered }
+        if (triggered.size <= FINDINGS_PERSIST_CAP) return triggered
+        return triggered.sortedWith(
+            compareByDescending<Finding> { severityRank(it.level) }
+                .thenByDescending { findingEventTimeMs(it) }
+        ).take(FINDINGS_PERSIST_CAP)
     }
 
     /**
@@ -885,6 +977,46 @@ class ScanOrchestrator @Inject constructor(
         /** #342 spec §7: timeline persistence caps; rules always see the full stream. */
         const val DNS_PERSIST_CAP = 10_000
         const val CONNECT_PERSIST_CAP = 5_000
+
+        /**
+         * Cap on triggered findings PERSISTED per import (#342 B3). One Finding is
+         * emitted per (record × matching rule) over the uncapped parsed stream, so
+         * a single beaconing domain resolved thousands of times can produce
+         * thousands of findings; persisting them all bloats the ScanResult JSON
+         * column past Room's ~2 MB CursorWindow and throws
+         * SQLiteBlobTooBigException on EVERY subsequent history read. 1000 is far
+         * above any real intrusion log's distinct-finding count while bounding the
+         * pathological/hostile case. Detection is unaffected — rules already ran
+         * over everything; this bounds only what is stored.
+         */
+        const val FINDINGS_PERSIST_CAP = 1_000
+
+        /**
+         * Cap on `security_event` rows PERSISTED per import (#342 B4, security L1).
+         * Security events are the rarest, highest-signal records, so this was
+         * originally uncapped — but that let an attacker-crafted export of millions
+         * of `security_event` lines persist millions of rows surviving the 30-day
+         * retention (storage DoS). 5000 (matching [CONNECT_PERSIST_CAP]) is far
+         * above any legitimate export's security-event volume while bounding abuse.
+         */
+        const val SECURITY_PERSIST_CAP = 5_000
+
+        /**
+         * Orders severity strings for the [FINDINGS_PERSIST_CAP] cut (B3): higher
+         * wins. Unknown/blank levels rank lowest so they are dropped first.
+         */
+        private fun severityRank(level: String): Int = when (level.lowercase()) {
+            "critical" -> 5
+            "high" -> 4
+            "medium" -> 3
+            "low" -> 2
+            "info", "informational" -> 1
+            else -> 0
+        }
+
+        /** Event time a finding inherits from its matched record, or 0L ("Unknown"). */
+        private fun findingEventTimeMs(finding: Finding): Long =
+            finding.matchContext["timestamp"]?.toLongOrNull()?.takeIf { it > 0L } ?: 0L
 
         /** App categories treated as trusted by the known_good_app_db IOC lookup. */
         private val TRUSTED_CATEGORIES = setOf(

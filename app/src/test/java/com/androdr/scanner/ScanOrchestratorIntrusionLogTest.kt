@@ -9,13 +9,19 @@ import com.androdr.data.model.SecurityLogEvent
 import com.androdr.data.model.TelemetrySource
 import com.androdr.data.repo.ScanRepository
 import com.androdr.data.model.ImportedDnsEvent
+import com.androdr.sigma.CorrelationRule
+import com.androdr.sigma.CorrelationType
 import com.androdr.sigma.Finding
+import com.androdr.sigma.SigmaRuleEngine
 import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.coVerifyOrder
 import io.mockk.mockk
+import io.mockk.slot
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -34,6 +40,7 @@ class ScanOrchestratorIntrusionLogTest {
     private lateinit var forensicTimelineEventDao: ForensicTimelineEventDao
     private lateinit var scanRepository: ScanRepository
     private lateinit var intrusionLogAnalyzer: IntrusionLogAnalyzer
+    private lateinit var sigmaRuleEngine: SigmaRuleEngine
     private lateinit var orchestrator: ScanOrchestrator
 
     @Before
@@ -41,6 +48,7 @@ class ScanOrchestratorIntrusionLogTest {
         forensicTimelineEventDao = mockk(relaxed = true)
         scanRepository = mockk(relaxed = true)
         intrusionLogAnalyzer = mockk(relaxed = true)
+        sigmaRuleEngine = mockk(relaxed = true)
 
         orchestrator = ScanOrchestrator(
             appScanner = mockk(relaxed = true),
@@ -58,7 +66,7 @@ class ScanOrchestratorIntrusionLogTest {
             forensicTimelineEventDao = forensicTimelineEventDao,
             installEventEmitter = mockk(relaxed = true),
             deviceAdminGrantEmitter = mockk(relaxed = true),
-            sigmaRuleEngine = mockk(relaxed = true),
+            sigmaRuleEngine = sigmaRuleEngine,
             sigmaCorrelationEngine = mockk(relaxed = true),
             indicatorResolver = mockk(relaxed = true),
             sigmaRuleFeed = mockk(relaxed = true),
@@ -112,13 +120,28 @@ class ScanOrchestratorIntrusionLogTest {
     private fun finding(
         ruleId: String,
         triggered: Boolean = true,
+        level: String = "high",
         matchContext: Map<String, String> = emptyMap()
     ) = Finding(
-        ruleId = ruleId, title = ruleId, level = "high",
+        ruleId = ruleId, title = ruleId, level = level,
         triggered = triggered, matchContext = matchContext
     )
 
-    // ---------- replace-on-reimport ----------
+    /**
+     * Stubs the (mocked) repository's save to invoke the caller-supplied
+     * `preDelete` lambda, the way the real transaction does — so tests can
+     * observe the replace-on-reimport sweep that now runs INSIDE the save
+     * (#342 B1). preDelete is positional arg 4; correlator is arg 5.
+     */
+    private fun saveInvokesPreDelete() {
+        coEvery {
+            scanRepository.saveScanWithCorrelation(any(), any(), any(), any(), any(), any())
+        } coAnswers {
+            arg<(suspend () -> Unit)?>(4)?.invoke()
+        }
+    }
+
+    // ---------- replace-on-reimport (now atomic with the save, #342 B1) ----------
 
     /**
      * A prior import's correlation signals live under
@@ -128,14 +151,19 @@ class ScanOrchestratorIntrusionLogTest {
      * finding, and signal) carries that import's scanResultId. Without this
      * sweep each re-import stranded one signal cluster whose member ids point
      * at deleted rows, forever.
+     *
+     * B1: the sweep now runs via `preDelete` INSIDE the save transaction. Here
+     * the mocked save invokes that lambda (as the real transaction would), so
+     * we can still assert the sweep order.
      */
     @Test
-    fun `reimport sweeps every prior import scan id before persisting`() = runTest {
+    fun `reimport sweeps every prior import scan id via preDelete inside the save`() = runTest {
         val uri = mockk<Uri>(relaxed = true)
         coEvery { intrusionLogAnalyzer.analyze(uri) } returns analysis()
         coEvery {
             forensicTimelineEventDao.getDistinctScanIdsBySource("intrusion_log")
         } returns listOf(11L, 22L)
+        saveInvokesPreDelete()
 
         orchestrator.analyzeIntrusionLog(uri)
 
@@ -146,19 +174,18 @@ class ScanOrchestratorIntrusionLogTest {
             // Belt-and-braces for rows written without a scan id.
             forensicTimelineEventDao.deleteBySource("intrusion_log")
             forensicTimelineEventDao.deleteBySource("intrusion_log_analysis")
-            // The new import is written only after the old one is gone.
-            scanRepository.saveScanWithCorrelation(any(), any(), any(), any(), any())
         }
     }
 
     /** No prior import: the sweep degenerates to the two source deletes. */
     @Test
-    fun `first import still runs the source deletes`() = runTest {
+    fun `first import still runs the source deletes via preDelete`() = runTest {
         val uri = mockk<Uri>(relaxed = true)
         coEvery { intrusionLogAnalyzer.analyze(uri) } returns analysis()
         coEvery {
             forensicTimelineEventDao.getDistinctScanIdsBySource("intrusion_log")
         } returns emptyList()
+        saveInvokesPreDelete()
 
         orchestrator.analyzeIntrusionLog(uri)
 
@@ -166,17 +193,70 @@ class ScanOrchestratorIntrusionLogTest {
             forensicTimelineEventDao.getDistinctScanIdsBySource("intrusion_log")
             forensicTimelineEventDao.deleteBySource("intrusion_log")
             forensicTimelineEventDao.deleteBySource("intrusion_log_analysis")
-            scanRepository.saveScanWithCorrelation(any(), any(), any(), any(), any())
         }
+    }
+
+    /**
+     * #342 B1 (merge-blocking): if the save fails, the prior import must NOT be
+     * deleted (the sweep is inside the rolled-back transaction, so it never runs
+     * when the mocked save throws before invoking preDelete), and the failure
+     * must be SURFACED — not swallowed into a false success. The original code
+     * deleted first, outside the save, and swallowed the failure with
+     * `runCatching {}.onFailure { Log.e }`, so both assertions below fail on it.
+     */
+    @Test
+    fun `a failed save deletes nothing and surfaces the failure`() = runTest {
+        val uri = mockk<Uri>(relaxed = true)
+        coEvery { intrusionLogAnalyzer.analyze(uri) } returns analysis()
+        coEvery {
+            forensicTimelineEventDao.getDistinctScanIdsBySource("intrusion_log")
+        } returns listOf(11L)
+        // The save throws WITHOUT invoking preDelete — mirroring a transaction
+        // that rolls back before/while committing.
+        coEvery {
+            scanRepository.saveScanWithCorrelation(any(), any(), any(), any(), any(), any())
+        } throws RuntimeException("db write failed")
+
+        var thrown: Throwable? = null
+        try {
+            orchestrator.analyzeIntrusionLog(uri)
+        } catch (e: Throwable) {
+            thrown = e
+        }
+
+        assertNotNull("a failed persist must be surfaced, not swallowed as success", thrown)
+        assertTrue(
+            "failure must be the honest IntrusionLogPersistException: $thrown",
+            thrown is ScanOrchestrator.IntrusionLogPersistException
+        )
+        coVerify(exactly = 0) { forensicTimelineEventDao.deleteByScanId(any()) }
+        coVerify(exactly = 0) { forensicTimelineEventDao.deleteBySource(any()) }
+    }
+
+    /** The import's save is wired with a non-null preDelete (the sweep). */
+    @Test
+    fun `analyzeIntrusionLog passes a preDelete sweep to the save`() = runTest {
+        val uri = mockk<Uri>(relaxed = true)
+        coEvery { intrusionLogAnalyzer.analyze(uri) } returns analysis()
+        val preDelete = slot<suspend () -> Unit>()
+        coEvery {
+            scanRepository.saveScanWithCorrelation(
+                any(), any(), any(), any(), capture(preDelete), any()
+            )
+        } returns Unit
+
+        orchestrator.analyzeIntrusionLog(uri)
+
+        assertTrue("save must receive a non-null preDelete sweep", preDelete.isCaptured)
     }
 
     // ---------- persistence caps ----------
 
     @Test
-    fun `dns and connect events are capped newest-first and security events are not`() {
+    fun `dns and connect events are capped newest-first and security stays under its cap`() {
         val dnsTotal = ScanOrchestrator.DNS_PERSIST_CAP + 5
         val netTotal = ScanOrchestrator.CONNECT_PERSIST_CAP + 3
-        val secTotal = 25
+        val secTotal = 25 // well below SECURITY_PERSIST_CAP, so kept in full
         // Oldest-first input, so a cap that ignored ordering would keep the
         // WRONG (oldest) events and fail the boundary assertions below.
         val result = analysis(
@@ -193,7 +273,7 @@ class ScanOrchestratorIntrusionLogTest {
 
         assertEquals(ScanOrchestrator.DNS_PERSIST_CAP, dnsTimes.size)
         assertEquals(ScanOrchestrator.CONNECT_PERSIST_CAP, netTimes.size)
-        assertEquals("security events are uncapped", secTotal, secTimes.size)
+        assertEquals("security below the cap is kept in full", secTotal, secTimes.size)
 
         // Boundary: newest kept, the events just past the cap dropped.
         assertTrue("newest dns kept", dnsTotal.toLong() in dnsTimes)
@@ -202,6 +282,81 @@ class ScanOrchestratorIntrusionLogTest {
         assertTrue("newest connect kept", netTotal.toLong() in netTimes)
         assertEquals("oldest kept connect is exactly at the cap boundary", 4L, netTimes.min())
         assertFalse("connect just outside the cap dropped", 3L in netTimes)
+    }
+
+    /**
+     * #342 B4 / security L1: security events are no longer persisted uncapped.
+     * A crafted export of millions of `security_event` lines would otherwise
+     * persist millions of rows surviving the 30-day retention. They are kept
+     * newest-first up to [ScanOrchestrator.SECURITY_PERSIST_CAP].
+     */
+    @Test
+    fun `security events beyond the cap are dropped newest-first`() {
+        val secTotal = ScanOrchestrator.SECURITY_PERSIST_CAP + 7
+        // Oldest-first input, so an order-blind cap keeps the wrong events.
+        val result = analysis(sec = (1L..secTotal.toLong()).map { sec(it) })
+
+        val rows = orchestrator.buildIntrusionLogTimelineEvents(result, scanResult())
+        val secTimes = rows.filter { it.category == "security_event" }.map { it.startTimestamp }
+
+        assertEquals(ScanOrchestrator.SECURITY_PERSIST_CAP, secTimes.size)
+        assertTrue("newest security kept", secTotal.toLong() in secTimes)
+        assertEquals("oldest kept security is exactly at the cap boundary", 8L, secTimes.min())
+        assertFalse("security just outside the cap dropped", 7L in secTimes)
+    }
+
+    // ---------- findings persistence cap (#342 B3) ----------
+
+    /**
+     * #342 B3 (SEVERE): one Finding is emitted per (record × matching rule) over
+     * the uncapped stream, so a beaconing domain can produce thousands. Persisting
+     * them all bloats the ScanResult JSON column past Room's CursorWindow and
+     * bricks history app-wide. Only [ScanOrchestrator.FINDINGS_PERSIST_CAP] rows
+     * are persisted, keeping the highest-severity ones.
+     */
+    @Test
+    fun `triggered findings beyond the cap are dropped, keeping highest severity`() {
+        val cap = ScanOrchestrator.FINDINGS_PERSIST_CAP
+        val criticalIds = listOf("crit-1", "crit-2", "crit-3")
+        // cap+50 lows plus 3 criticals — the criticals must survive the cut and
+        // the total must be exactly the cap.
+        val findings = buildList {
+            repeat(cap + 50) { add(finding("low-$it", level = "low")) }
+            criticalIds.forEach { add(finding(it, level = "critical")) }
+        }
+        val result = analysis(findings = findings)
+
+        val rows = orchestrator.buildIntrusionLogTimelineEvents(result, scanResult())
+        val findingRows = rows.filter { it.source == "intrusion_log_analysis" }
+
+        assertEquals("finding rows are capped", cap, findingRows.size)
+        val keptIds = findingRows.map { it.ruleId }.toSet()
+        assertTrue("all critical findings survive the cut", keptIds.containsAll(criticalIds))
+        assertTrue("some low findings were dropped", findingRows.size < findings.size)
+    }
+
+    /** The SAME cap applies to what lands in ScanResult.findings (the JSON column). */
+    @Test
+    fun `persisted ScanResult keeps only the capped triggered findings`() = runTest {
+        val cap = ScanOrchestrator.FINDINGS_PERSIST_CAP
+        val uri = mockk<Uri>(relaxed = true)
+        val findings = buildList {
+            repeat(cap + 30) { add(finding("t-$it", level = "high")) }
+            add(finding("untriggered", triggered = false))
+        }
+        coEvery { intrusionLogAnalyzer.analyze(uri) } returns analysis(findings = findings)
+        val scan = slot<ScanResult>()
+        coEvery {
+            scanRepository.saveScanWithCorrelation(capture(scan), any(), any(), any(), any(), any())
+        } returns Unit
+
+        orchestrator.analyzeIntrusionLog(uri)
+
+        assertEquals("ScanResult.findings is capped", cap, scan.captured.findings.size)
+        assertTrue(
+            "only triggered findings are persisted",
+            scan.captured.findings.all { it.triggered }
+        )
     }
 
     // ---------- composition ----------
@@ -252,5 +407,37 @@ class ScanOrchestratorIntrusionLogTest {
         assertEquals(0L, rows.first { it.ruleId == "androdr-none" }.startTimestamp)
         assertEquals(0L, rows.first { it.ruleId == "androdr-zero" }.startTimestamp)
         assertEquals(0L, rows.first { it.ruleId == "androdr-junk" }.startTimestamp)
+    }
+
+    // ---------- live-scan correlation lookback excludes imports (#342 B2) ----------
+
+    /**
+     * #342 B2: a LIVE scan's correlation lookback must NOT pull imported
+     * intrusion-log rows. They carry their own historical event time, so a plain
+     * `getEventsSince` time-window query sweeps them in; any resulting signal is
+     * stamped with the LIVE scan's id, which the intrusion sweep can never reach
+     * (an orphan signal accumulating per live scan). The live path must use the
+     * scoped query that excludes INTRUSION_LOG_IMPORT, and must NOT call the
+     * unscoped [ForensicTimelineEventDao.getEventsSince]. Reverting the call site
+     * to `getEventsSince` fails this test.
+     */
+    @Test
+    fun `live scan lookback uses the query that excludes imported rows`() = runTest {
+        coEvery { sigmaRuleEngine.getCorrelationRules() } returns listOf(
+            CorrelationRule(
+                id = "corr-1", title = "t", type = CorrelationType.TEMPORAL,
+                referencedRuleIds = listOf("a", "b"), timespanMs = 3_600_000L,
+                groupBy = emptyList(), minEvents = 1, severity = "high", displayLabel = "l"
+            )
+        )
+
+        orchestrator.runFullScan()
+
+        coVerify(exactly = 1) {
+            forensicTimelineEventDao.getEventsSinceExcludingTelemetrySource(
+                any(), TelemetrySource.INTRUSION_LOG_IMPORT
+            )
+        }
+        coVerify(exactly = 0) { forensicTimelineEventDao.getEventsSince(any()) }
     }
 }
