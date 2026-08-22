@@ -2,10 +2,27 @@ title: CVE exploited by Pegasus spyware
 id: androdr-048
 status: production
 description: >
-    Device has unpatched CVEs known to be exploited by NSO Group's
-    Pegasus mercenary spyware.
+    Device has unpatched CVEs attributed to NSO Group's Pegasus mercenary
+    spyware on Android. CVE-2019-2215 ("Bad Binder", Android kernel binder
+    use-after-free) — Google Project Zero/TAG received information that NSO
+    held a 0-day exploit for it in a Pegasus install chain, and Google TAG's
+    "Buying Spying" report lists it in NSO Group's known-0-day row (also
+    reused by other vendors). CVE-2023-7024 (Chromium WebRTC heap overflow)
+    — TAG: "used by an NSO Group customer"; matched here via the device
+    patch level as a software-staleness proxy, consistent with how the KEV
+    feed imports Chromium entries. NSO's WhatsApp zero-click CVE-2019-3568
+    ("Eden") is deliberately NOT matched: it is fixed by WhatsApp app
+    versions, not the OS security patch level, so a patch-level match would
+    be a dead or misleading condition. The original Chrysaor-era Pegasus
+    for Android used pre-CVE Framaroot rooting exploits (Google/Lookout,
+    2017), so no CVE can represent that generation.
 author: AndroDR
 date: 2026/03/27
+references:
+    - https://projectzero.google/2019/11/bad-binder-android-in-wild-exploit.html
+    - https://storage.googleapis.com/gweb-uniblog-publish-prod/documents/Buying_Spying_-_Insights_into_Commercial_Surveillance_Vendors_-_TAG_report.pdf
+    - https://android-developers.googleblog.com/2017/04/an-investigation-of-chrysaor-malware-on.html
+    - https://www.cisa.gov/known-exploited-vulnerabilities-catalog
 tags:
     - attack.t1404
     - campaign.pegasus
@@ -15,9 +32,8 @@ logsource:
 detection:
     selection:
         unpatched_cve_id|contains:
-            - "CVE-2023-41064"
-            - "CVE-2021-30860"
-            - "CVE-2023-41061"
+            - "CVE-2019-2215"
+            - "CVE-2023-7024"
     condition: selection
 display:
     category: device_posture
@@ -29,5 +45,9 @@ display:
 level: medium
 category: device_posture
 report_safe_state: true
+falsepositives:
+    - "CVE-2019-2215 is also reported in non-NSO exploit chains (CISA KEV cites AbstractEmu) and in other commercial vendors' toolkits (TAG lists it under Intellexa and Wintego too) — an unpatched device is exposed to the vulnerability class, not proof of NSO targeting."
+    - "CVE-2023-7024 lives in the Chrome/WebRTC app layer; the OS patch level is a staleness proxy, and a device with an updated Chrome but old patch level is flagged conservatively."
 remediation:
     - "Go to Settings > Software Update > Download and Install immediately. Also check Play Store > Settings > About > Google Play system update. Your phone has vulnerabilities used by Pegasus spyware."
+    - "Update Chrome and your other browsers from the Play Store — one of these vulnerabilities is fixed by browser updates, not only system updates."
