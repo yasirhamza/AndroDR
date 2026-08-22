@@ -28,7 +28,12 @@
 
 These are the highest-risk part of this plan. Both are all-or-nothing within a single commit.
 
-**A. Taxonomy ↔ model parity.** `LogsourceTaxonomyCrossCheckTest` asserts `untested = taxonomy.keys - actual.keys` is empty *and* `assertEquals(actual.size, taxonomy.size)`. Therefore the taxonomy service entry, the Kotlin `toFieldMap()`, **and** the test's own hardcoded service map must all land **in the same commit**. Adding any one alone fails the build.
+**A. Taxonomy ↔ model parity — FOUR files, not three.** Two independent tests pin the emitter surface, and both must be satisfied in the same commit:
+
+- `LogsourceTaxonomyCrossCheckTest` asserts `untested = taxonomy.keys - actual.keys` is empty *and* `assertEquals(actual.size, taxonomy.size)`.
+- `PureEmitterContractTest` pins the emitter **file set** by set equality: `expectedEmitterFiles`. Any new type declaring a `toFieldMap()` fails with *"Emitter set changed — classify the new/removed toFieldMap type here AND in logsource-taxonomy.yml"*.
+
+So a new logsource requires **all four** in one commit: the taxonomy entry, the model's `toFieldMap()`, the hardcoded map in `LogsourceTaxonomyCrossCheckTest`, and the filename in `PureEmitterContractTest.expectedEmitterFiles`. Discovered the hard way during Task 2 execution — the original plan listed only three and the full suite failed.
 
 **B. Rule packaging.** `BundledMirrorParityTest` asserts every `res/raw/sigma_*.yml` has a byte-equal mirror counterpart **and** a `rules.txt` entry. `BundledRulesManifestCompletenessTest` asserts every `res/raw/*.yml` is registered in `SigmaRuleEngine`'s `R.raw` list. Therefore each rule addition must, in one commit: add the bundled YAML, register it in `BUNDLED_RULE_IDS`, copy it byte-identically to the mirror, append to `rules.txt`, and regenerate `rules.sha256`.
 
@@ -221,6 +226,7 @@ Sentinel handling is a deliberate refinement of spec §5: Android reports unavai
 - Create: `app/src/test/java/com/androdr/cellular/CellularSnapshotTest.kt`
 - Modify: `third-party/android-sigma-rules/validation/logsource-taxonomy.yml`
 - Modify: `app/src/test/java/com/androdr/sigma/LogsourceTaxonomyCrossCheckTest.kt`
+- Modify: `app/src/test/java/com/androdr/sigma/PureEmitterContractTest.kt` (add `"CellularSnapshot.kt"` to `expectedEmitterFiles`)
 
 **Interfaces:**
 - Consumes: `TelemetrySource` (existing enum, `LIVE_SCAN` / `BUGREPORT_IMPORT`).
