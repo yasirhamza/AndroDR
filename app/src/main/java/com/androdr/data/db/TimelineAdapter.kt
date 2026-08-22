@@ -2,8 +2,12 @@ package com.androdr.data.db
 
 import com.androdr.data.model.DnsEvent
 import com.androdr.data.model.ForensicTimelineEvent
+import com.androdr.data.model.NetworkTelemetry
 import com.androdr.data.model.ScanResult
+import com.androdr.data.model.SecurityLogEvent
+import com.androdr.data.model.TelemetrySource
 import com.androdr.data.model.TimelineEvent
+import com.androdr.scanner.intrusionlog.ImportedDnsEvent
 import com.androdr.sigma.Evidence
 import com.androdr.sigma.Finding
 import com.androdr.sigma.FindingCategory
@@ -149,6 +153,45 @@ fun TimelineEvent.toForensicTimelineEvent(scanResultId: Long = -1): ForensicTime
         timestampPrecision = "estimated",
         scanResultId = scanResultId,
         telemetrySource = com.androdr.data.model.TelemetrySource.BUGREPORT_IMPORT
+    )
+
+/** #342: imported Intrusion Logging dns_event → timeline row. Correlation id is
+ *  stamped unconditionally (unlike the live path, which stamps only IOC matches)
+ *  so dns_monitor findings on imported hostnames can join their raw evidence. */
+fun ImportedDnsEvent.toForensicTimelineEvent(scanResultId: Long): ForensicTimelineEvent =
+    event.toForensicTimelineEvent().copy(
+        source = "intrusion_log",
+        details = if (resolvedIps.isEmpty()) "" else "resolved: ${resolvedIps.joinToString(", ")}",
+        correlationId = "dns:${event.domain}",
+        scanResultId = scanResultId,
+        telemetrySource = TelemetrySource.INTRUSION_LOG_IMPORT
+    )
+
+/** #342: imported Intrusion Logging connect_event → timeline row. */
+fun NetworkTelemetry.toForensicTimelineEvent(scanResultId: Long): ForensicTimelineEvent =
+    ForensicTimelineEvent(
+        startTimestamp = timestamp,
+        source = "intrusion_log",
+        category = "network_connect",
+        description = "Connect: $destinationIp:$destinationPort",
+        packageName = appName ?: "",
+        processUid = appUid,
+        correlationId = "net:$destinationIp:$destinationPort",
+        scanResultId = scanResultId,
+        telemetrySource = source
+    )
+
+/** #342: imported Intrusion Logging security_event → timeline row. */
+fun SecurityLogEvent.toForensicTimelineEvent(scanResultId: Long): ForensicTimelineEvent =
+    ForensicTimelineEvent(
+        startTimestamp = timestamp,
+        source = "intrusion_log",
+        category = "security_event",
+        description = "Security: $tagName",
+        details = securityData.joinToString(", "),
+        correlationId = "sec:$tag",
+        scanResultId = scanResultId,
+        telemetrySource = source
     )
 
 /** Extracts the campaign name from DNS event reason strings like "IOC: Pegasus" */
