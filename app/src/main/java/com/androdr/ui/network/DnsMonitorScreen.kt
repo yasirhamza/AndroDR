@@ -74,7 +74,13 @@ fun DnsMonitorScreen(
         stringResource(R.string.tab_matched_only)
     )
 
-    Column(modifier = Modifier.fillMaxSize()) {
+    // One scrolling list: the status/policy cards are ITEMS, not a fixed header,
+    // so they scroll away and the event list gets the full screen. Previously
+    // three stacked cards sat above the tabs and the list was squeezed into
+    // whatever was left — the events are the primary content here, not a
+    // footnote under the controls.
+    LazyColumn(modifier = Modifier.fillMaxSize()) {
+        item {
         // VPN status card
         Card(
             modifier = Modifier
@@ -170,15 +176,18 @@ fun DnsMonitorScreen(
             }
         }
 
-        // Tier 1 cellular telemetry (research build). Placed above the policy
-        // toggles because in the field the live radio state is the thing being
-        // watched, not a detail below the fold.
+        }
+
+        item {
         CellularCard(
             snapshot = cellular,
             findings = cellularFindings,
             deliveries = cellularDeliveries,
         )
 
+        }
+
+        item {
         // Policy toggles
         Card(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
             Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -201,7 +210,9 @@ fun DnsMonitorScreen(
             }
         }
 
-        // Tab row
+        }
+
+        item {
         TabRow(selectedTabIndex = selectedTab) {
             tabs.forEachIndexed { index, title ->
                 Tab(
@@ -212,12 +223,15 @@ fun DnsMonitorScreen(
             }
         }
 
+        }
+
         // Events list
         val displayEvents = if (selectedTab == 0) recentEvents else matchedEvents
 
         if (displayEvents.isEmpty()) {
+            item {
             Box(
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier.fillMaxWidth().padding(vertical = 48.dp),
                 contentAlignment = Alignment.Center
             ) {
                 Column(
@@ -240,13 +254,10 @@ fun DnsMonitorScreen(
                     )
                 }
             }
+            }
         } else {
-            LazyColumn(
-                modifier = Modifier.fillMaxSize(),
-                contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                items(displayEvents) { event ->
+            items(displayEvents) { event ->
+                Box(modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
                     DnsEventItem(event = event)
                 }
             }
