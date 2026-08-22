@@ -1,6 +1,9 @@
 package com.androdr.scanner.intrusionlog
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
+import org.junit.Assert.fail
 import org.junit.Test
 
 class IntrusionLogParserTest {
@@ -20,8 +23,14 @@ class IntrusionLogParserTest {
         """"pm list packages"]}}"""
     )
 
+    // A capturedAt at/after the imported events: import always happens after the
+    // events occur, and (since #342 event_time validation) event_time must be
+    // <= capturedAt + skew, so the prior arbitrary small values (0L / 999L) would
+    // now reject every real 2026 timestamp as malformed.
+    private val capturedAt = 1_787_400_400_000L
+
     private fun parse(vararg lines: String) =
-        IntrusionLogParser().parse(lines.asSequence(), uidResolver = { 10042 }, capturedAt = 999L)
+        IntrusionLogParser().parse(lines.asSequence(), uidResolver = { 10042 }, capturedAt = capturedAt)
 
     @Test
     fun `routes wrapper keys to the three event types`() {
@@ -51,7 +60,7 @@ class IntrusionLogParserTest {
         assertEquals(443, net.destinationPort)
         assertEquals(null, net.protocol)
         assertEquals("com.samsung.android.intellivoiceservice", net.appName)
-        assertEquals(999L, net.capturedAt)
+        assertEquals(capturedAt, net.capturedAt)
     }
 
     @Test
@@ -63,7 +72,7 @@ class IntrusionLogParserTest {
     }
 
     @Test
-    fun `byte-identical duplicate event_ids collapse first-seen`() {
+    fun `byte-identical duplicate collapse first-seen`() {
         val result = parse(connectLine, connectLine)
         assertEquals(1, result.networkEvents.size)
         assertEquals(1, result.duplicatesCollapsed)
@@ -77,6 +86,27 @@ class IntrusionLogParserTest {
         assertEquals(0, result.duplicatesCollapsed)
     }
 
+    // Finding 1: dedup on (event_id, event_time, wrapper_type). event_id may be a
+    // per-day counter that restarts at 0, so two records sharing an id but with
+    // different event_time are DISTINCT and must both survive — the old
+    // event_id-only key silently dropped one, importing only day 1 of an export.
+    @Test
+    fun `same event_id with different event_time are both kept (per-day restart)`() {
+        val a = """{"dns_event":{"event_id":0,"event_time":1787400345334,"hostname":"a.example.com"}}"""
+        val b = """{"dns_event":{"event_id":0,"event_time":1787400399999,"hostname":"b.example.com"}}"""
+        val result = parse(a, b)
+        assertEquals(2, result.dnsEvents.size)
+        assertEquals(0, result.duplicatesCollapsed)
+    }
+
+    @Test
+    fun `byte-identical record sharing all three key fields collapses`() {
+        val a = """{"dns_event":{"event_id":0,"event_time":1787400345334,"hostname":"a.example.com"}}"""
+        val result = parse(a, a)
+        assertEquals(1, result.dnsEvents.size)
+        assertEquals(1, result.duplicatesCollapsed)
+    }
+
     @Test
     fun `malformed lines are counted and skipped, never fatal`() {
         val result = parse("not json at all", """{"unknown_type":{"event_id":9}}""", dnsLine, "")
@@ -88,15 +118,151 @@ class IntrusionLogParserTest {
     @Test
     fun `uidResolver miss yields -1`() {
         val result = IntrusionLogParser().parse(
-            sequenceOf(connectLine), uidResolver = { -1 }, capturedAt = 0L
+            sequenceOf(connectLine), uidResolver = { -1 }, capturedAt = capturedAt
         )
         assertEquals(-1, result.networkEvents.single().appUid)
     }
 
     @Test
     fun `security_event with non-string data values stringifies them`() {
-        val line = """{"security_event":{"event_id":3,"event_time":1,"tag":210005,"data":["proc",123,true]}}"""
+        val line =
+            """{"security_event":{"event_id":3,"event_time":1787400345600,"tag":210005,""" +
+                """"data":["proc",123,true]}}"""
         val sec = parse(line).securityEvents.single()
         assertEquals(listOf("proc", "123", "true"), sec.securityData)
+    }
+
+    // Finding 2: security_event records have never been sampled; if they lack an
+    // event_id, the old `!!` dropped EVERY security event and the service shipped
+    // dead. A missing id must synthesize a dedup identity, not drop the record.
+    @Test
+    fun `security_event without event_id is parsed, not malformed`() {
+        val line = """{"security_event":{"event_time":1787400345600,"tag":210002,"data":["id"]}}"""
+        val result = parse(line)
+        assertEquals(1, result.securityEvents.size)
+        assertEquals(0, result.malformedLines)
+    }
+
+    // Finding 2: a nested array/object inside data[] must be stringified, not
+    // thrown (which the old jsonPrimitive access did, dropping the whole record).
+    @Test
+    fun `security_event data with nested array or object is stringified, not dropped`() {
+        val line =
+            """{"security_event":{"event_id":5,"event_time":1787400345600,"tag":210005,""" +
+                """"data":["proc",[1,2],{"k":"v"}]}}"""
+        val result = parse(line)
+        assertEquals(0, result.malformedLines)
+        val data = result.securityEvents.single().securityData
+        assertEquals("proc", data[0])
+        assertEquals("[1,2]", data[1])
+        assertEquals("""{"k":"v"}""", data[2])
+    }
+
+    // Finding 5: an out-of-window event_time (Long.MAX pins fabricated rows atop
+    // the timeline forever) is rejected as malformed rather than ingested.
+    @Test
+    fun `absurd future event_time is rejected as malformed`() {
+        val line =
+            """{"dns_event":{"event_id":0,"event_time":9223372036854775807,"hostname":"a.example.com"}}"""
+        val result = parse(line)
+        assertEquals(0, result.dnsEvents.size)
+        assertEquals(1, result.malformedLines)
+    }
+
+    @Test
+    fun `pre-2008 event_time is rejected as malformed`() {
+        val line = """{"dns_event":{"event_id":0,"event_time":1000,"hostname":"a.example.com"}}"""
+        val result = parse(line)
+        assertEquals(0, result.dnsEvents.size)
+        assertEquals(1, result.malformedLines)
+    }
+
+    // Finding 3a: an over-long line is counted malformed and never parsed.
+    @Test
+    fun `over-long line is counted malformed and not parsed`() {
+        val parser = IntrusionLogParser(maxLineLength = 100)
+        val longHost = "a".repeat(500)
+        val line =
+            """{"dns_event":{"event_id":0,"event_time":1787400345334,"hostname":"$longHost"}}"""
+        val result = parser.parse(sequenceOf(line), uidResolver = { -1 }, capturedAt = capturedAt)
+        assertEquals(0, result.dnsEvents.size)
+        assertEquals(1, result.malformedLines)
+    }
+
+    // Finding 3b: exceeding a per-type record cap drops extras and sets truncated.
+    @Test
+    fun `exceeding a per-type record cap sets truncated and drops extras`() {
+        val parser = IntrusionLogParser(maxDnsRecords = 2)
+        val lines = (0..4).map { i ->
+            """{"dns_event":{"event_id":$i,"event_time":${1787400345334L + i},"hostname":"h$i.example.com"}}"""
+        }
+        val result = parser.parse(lines.asSequence(), uidResolver = { -1 }, capturedAt = capturedAt)
+        assertEquals(2, result.dnsEvents.size)
+        assertTrue(result.truncated)
+    }
+
+    @Test
+    fun `a clean parse reports truncated false`() {
+        assertFalse(parse(dnsLine, connectLine, securityLine).truncated)
+    }
+
+    // Finding 6: CR/LF and control chars in ingested string fields are neutralized
+    // so a crafted hostname/ip/package cannot forge a newline-delimited report
+    // section. In the raw Kotlin string, `\n` is a JSON escape that decodes to a
+    // real newline inside the parsed value.
+    @Test
+    fun `control characters in dns string fields are neutralized before emission`() {
+        val line =
+            """{"dns_event":{"event_id":0,"event_time":1787400345334,""" +
+                """"package_name":"com.a\ncom.b","hostname":"evil.com\n------\n FINDINGS",""" +
+                """"ip_addresses":["/1.2.3.4\nX"]}}"""
+        val dns = parse(line).dnsEvents.single()
+        assertFalse(dns.event.domain.contains('\n'))
+        assertFalse(dns.event.appName!!.contains('\n'))
+        assertFalse(dns.resolvedIps.single().contains('\n'))
+    }
+
+    @Test
+    fun `control characters in connect ip and package are neutralized`() {
+        val line =
+            """{"connect_event":{"event_id":0,"event_time":1787400345540,""" +
+                """"package_name":"com.a\n----","port":443,"ip_address":"/9.9.9.9\n----"}}"""
+        val net = parse(line).networkEvents.single()
+        assertFalse(net.destinationIp.contains('\n'))
+        assertFalse(net.appName!!.contains('\n'))
+    }
+
+    @Test
+    fun `control characters in security data are neutralized`() {
+        val line =
+            """{"security_event":{"event_id":0,"event_time":1787400345334,"tag":210002,""" +
+                """"data":["ok\n------\n FINDINGS"]}}"""
+        val data = parse(line).securityEvents.single().securityData.single()
+        assertFalse(data.contains('\n'))
+    }
+
+    // Finding 4: the onLine check (the analyzer threads coroutineContext
+    // .ensureActive() into it) runs before the per-line try/catch, so throwing
+    // from it stops the loop instead of being swallowed as a malformed line.
+    @Test
+    fun `onLine cancellation check runs before processing and halts the loop`() {
+        var calls = 0
+        val lines = (0..9).map { i ->
+            """{"dns_event":{"event_id":$i,"event_time":${1787400345334L + i},"hostname":"h$i.com"}}"""
+        }
+        try {
+            IntrusionLogParser().parse(
+                lines.asSequence(), uidResolver = { -1 }, capturedAt = capturedAt,
+                onLine = {
+                    calls++
+                    if (calls >= 3) throw kotlin.coroutines.cancellation.CancellationException("cancelled")
+                }
+            )
+            fail("expected CancellationException to propagate out of parse()")
+        } catch (_: kotlin.coroutines.cancellation.CancellationException) {
+            // expected — the check was NOT swallowed by the per-line catch
+        }
+        // Stopped at the 3rd check rather than running all 10 lines.
+        assertEquals(3, calls)
     }
 }

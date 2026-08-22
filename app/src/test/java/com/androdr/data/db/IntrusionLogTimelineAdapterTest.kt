@@ -4,7 +4,7 @@ import com.androdr.data.model.DnsEvent
 import com.androdr.data.model.NetworkTelemetry
 import com.androdr.data.model.SecurityLogEvent
 import com.androdr.data.model.TelemetrySource
-import com.androdr.scanner.intrusionlog.ImportedDnsEvent
+import com.androdr.data.model.ImportedDnsEvent
 import org.junit.Assert.assertEquals
 import org.junit.Test
 

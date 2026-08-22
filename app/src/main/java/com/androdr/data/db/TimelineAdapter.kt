@@ -7,7 +7,7 @@ import com.androdr.data.model.ScanResult
 import com.androdr.data.model.SecurityLogEvent
 import com.androdr.data.model.TelemetrySource
 import com.androdr.data.model.TimelineEvent
-import com.androdr.scanner.intrusionlog.ImportedDnsEvent
+import com.androdr.data.model.ImportedDnsEvent
 import com.androdr.sigma.Evidence
 import com.androdr.sigma.Finding
 import com.androdr.sigma.FindingCategory

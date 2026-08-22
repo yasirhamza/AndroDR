@@ -8,7 +8,7 @@ import com.androdr.data.model.ScanResult
 import com.androdr.data.model.SecurityLogEvent
 import com.androdr.data.model.TelemetrySource
 import com.androdr.data.repo.ScanRepository
-import com.androdr.scanner.intrusionlog.ImportedDnsEvent
+import com.androdr.data.model.ImportedDnsEvent
 import com.androdr.sigma.Finding
 import io.mockk.coEvery
 import io.mockk.coVerifyOrder
