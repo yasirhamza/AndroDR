@@ -156,6 +156,16 @@
     <string name="cd_collapse">Collapse</string>
     <string name="cd_expand">Expand</string>
 
+    <!-- Intrusion Log Import summary card (#342) — externalized -->
+    <string name="intrusion_log_summary_title">Intrusion log analyzed</string>
+    <!-- PluralsCandidate: compact multi-count summary; matches bugreport_finding_count style -->
+    <string name="intrusion_log_summary_counts" tools:ignore="PluralsCandidate">%1$d DNS events \u00b7 %2$d connections \u00b7 %3$d security events</string>
+    <!-- PluralsCandidate: compact multi-count summary; matches bugreport_finding_count style -->
+    <string name="intrusion_log_summary_collapsed" tools:ignore="PluralsCandidate">%1$d duplicates collapsed \u00b7 %2$d malformed lines skipped</string>
+    <!-- PluralsCandidate: compact cap-truncation notice -->
+    <string name="intrusion_log_summary_capped" tools:ignore="PluralsCandidate">Timeline keeps the newest %1$d of %2$d DNS and %3$d of %4$d connection events.</string>
+    <string name="intrusion_log_summary_range">Covers %1$s \u2192 %2$s</string>
+
     <!-- Timeline — externalized -->
     <string name="timeline_title">Timeline</string>
     <string name="cd_view_report">View report</string>
@@ -176,6 +186,7 @@
     <string name="timeline_detail_mitre">MITRE ATT\&amp;CK</string>
     <string name="timeline_scan_unassociated">Unassociated Events</string>
     <string name="timeline_scan_bugreport">Deep Device Scan</string>
+    <string name="timeline_scan_intrusion_log">Intrusion log import</string>
     <string name="timeline_scan_runtime">Runtime Scan</string>
     <string name="timeline_scan_unknown">Unknown</string>
     <!-- PluralsCandidate: shorthand for compact event count -->

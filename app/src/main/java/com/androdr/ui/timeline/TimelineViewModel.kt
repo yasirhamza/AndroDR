@@ -47,7 +47,7 @@ data class DateGroup(
 data class ScanGroup(
     val scanId: Long,
     val timestamp: Long,
-    val isFromBugreport: Boolean,
+    val importSource: com.androdr.data.model.TelemetrySource?,
     val eventCount: Int,
     val maxSeverity: String,
     val clusters: List<EventCluster>,
@@ -236,9 +236,9 @@ class TimelineViewModel @Inject constructor(
                     // the scan run time in milliseconds — we can use it
                     // directly without going back to the ScanResult table.
                     timestamp = scanId,
-                    isFromBugreport = scanEvents.any {
-                        it.telemetrySource == com.androdr.data.model.TelemetrySource.BUGREPORT_IMPORT
-                    },
+                    importSource = scanEvents.firstOrNull {
+                        it.telemetrySource != com.androdr.data.model.TelemetrySource.LIVE_SCAN
+                    }?.telemetrySource,
                     eventCount = scanEvents.size,
                     // Scan group max-severity rollup derives from findings
                     // that share a ruleId with any event in this group.
@@ -258,7 +258,7 @@ class TimelineViewModel @Inject constructor(
                 timestamp = ungrouped.filter { it.startTimestamp > 0L }
                     .minOfOrNull { it.startTimestamp }
                     ?: 0L,
-                isFromBugreport = false,
+                importSource = null,
                 eventCount = ungrouped.size,
                 maxSeverity = rollupSeverity(ungrouped),
                 clusters = ungroupedClusters,

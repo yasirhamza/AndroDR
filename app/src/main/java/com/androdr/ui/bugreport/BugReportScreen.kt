@@ -53,6 +53,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.androdr.R
+import com.androdr.scanner.ScanOrchestrator
 import com.androdr.ui.common.FindingCard
 import com.androdr.ui.theme.ExtendedColors
 import com.androdr.ui.theme.androdrColors
@@ -67,6 +68,7 @@ fun BugReportScreen(
 ) {
     val findings by viewModel.findings.collectAsStateWithLifecycle()
     val timeline by viewModel.timeline.collectAsStateWithLifecycle()
+    val intrusionSummary by viewModel.intrusionLogSummary.collectAsStateWithLifecycle()
     val isAnalyzing by viewModel.isAnalyzing.collectAsStateWithLifecycle()
     val analysisFinished by viewModel.analysisFinished.collectAsStateWithLifecycle()
     val errorMessage by viewModel.errorMessage.collectAsStateWithLifecycle()
@@ -279,6 +281,81 @@ fun BugReportScreen(
                                     maxLines = 6,
                                     overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                                 )
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Intrusion log summary card — shown whenever the imported artifact was an
+            // Advanced Protection Intrusion Logging export (#342), independent of whether
+            // any SIGMA rule triggered, so the user always sees what was actually analyzed.
+            if (!isAnalyzing) {
+                intrusionSummary?.let { s ->
+                    item {
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.surfaceContainerHighest
+                            )
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(16.dp),
+                                verticalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Text(
+                                    text = stringResource(R.string.intrusion_log_summary_title),
+                                    style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                Text(
+                                    text = stringResource(
+                                        R.string.intrusion_log_summary_counts,
+                                        s.dnsEventCount,
+                                        s.connectEventCount,
+                                        s.securityEventCount
+                                    ),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Text(
+                                    text = stringResource(
+                                        R.string.intrusion_log_summary_collapsed,
+                                        s.duplicatesCollapsed,
+                                        s.malformedLines
+                                    ),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                val dnsCap = ScanOrchestrator.DNS_PERSIST_CAP
+                                val netCap = ScanOrchestrator.CONNECT_PERSIST_CAP
+                                if (s.dnsEventCount > dnsCap || s.connectEventCount > netCap) {
+                                    Text(
+                                        text = stringResource(
+                                            R.string.intrusion_log_summary_capped,
+                                            minOf(s.dnsEventCount, dnsCap),
+                                            s.dnsEventCount,
+                                            minOf(s.connectEventCount, netCap),
+                                            s.connectEventCount
+                                        ),
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                                if (s.earliestEventMs != null && s.latestEventMs != null) {
+                                    val fmt =
+                                        java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.US)
+                                    Text(
+                                        text = stringResource(
+                                            R.string.intrusion_log_summary_range,
+                                            fmt.format(java.util.Date(s.earliestEventMs)),
+                                            fmt.format(java.util.Date(s.latestEventMs))
+                                        ),
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
                             }
                         }
                     }
