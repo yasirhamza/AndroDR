@@ -140,41 +140,39 @@ class ServiceActivationCrossCheckTest {
         val engineSrc = engineSource()
         val literals = evaluateMethodLiterals(engineSrc)
 
-        val failures = mutableListOf<String>()
-        var checked = 0
-        for ((service, entry) in taxonomy!!) {
-            // `timeline` is engine-matched (field_map: none): its atoms bind via
-            // computeAtomBindings, not an evaluate* path, so it has no evaluate
-            // method by design. Excluded explicitly.
-            if (service == TIMELINE_SERVICE) continue
-            // Non-active services (unwired/staging) are ALLOWED to lack an
-            // evaluator — that is exactly what the lifecycle status expresses.
-            if (entry.status != STATUS_ACTIVE) continue
-            checked++
+        // `timeline` is engine-matched (field_map: none): its atoms bind via
+        // computeAtomBindings, not an evaluate* path, so it has no evaluate method
+        // by design — excluded explicitly. Non-active services (unwired/staging)
+        // are ALLOWED to lack an evaluator: that is exactly what the lifecycle
+        // status expresses, so they are filtered out here rather than checked.
+        val activeServices = taxonomy!!
+            .filterKeys { it != TIMELINE_SERVICE }
+            .filterValues { it.status == STATUS_ACTIVE }
+            .keys
 
+        val failures = mutableListOf<String>()
+        for (service in activeServices) {
             val methods = methodsForService(literals, service)
             val genericRoute = genericRouteAvailable(service)
-
-            // (a) WIRED.
-            if (methods.isEmpty() && !genericRoute) {
-                failures += "$service (active): NOT WIRED — no evaluate path in " +
-                    "SigmaRuleEngine.kt passes the \"$service\" literal to " +
-                    "SigmaRuleEvaluator.evaluate, and no generic route feeds it. " +
-                    "A rule targeting this service is dead. Add fun evaluate$service " +
-                    "(or flip the taxonomy status back to unwired)."
-                continue
-            }
-
-            // (b) CALLED.
             val called = methods.any { referencedInMainOutsideEngine(it) } || genericRoute
-            if (!called) {
-                failures += "$service (active): WIRED but NEVER CALLED — evaluate " +
-                    "method(s) $methods exist in SigmaRuleEngine.kt but are referenced " +
-                    "nowhere under app/src/main outside it, and the generic route is " +
-                    "not live. A rule targeting this service can never fire. Add a " +
-                    "production call site (orchestrator/analyzer)."
+            when {
+                // (a) WIRED.
+                methods.isEmpty() && !genericRoute ->
+                    failures += "$service (active): NOT WIRED — no evaluate path in " +
+                        "SigmaRuleEngine.kt passes the \"$service\" literal to " +
+                        "SigmaRuleEvaluator.evaluate, and no generic route feeds it. " +
+                        "A rule targeting this service is dead. Add fun evaluate$service " +
+                        "(or flip the taxonomy status back to unwired)."
+                // (b) CALLED.
+                !called ->
+                    failures += "$service (active): WIRED but NEVER CALLED — evaluate " +
+                        "method(s) $methods exist in SigmaRuleEngine.kt but are referenced " +
+                        "nowhere under app/src/main outside it, and the generic route is " +
+                        "not live. A rule targeting this service can never fire. Add a " +
+                        "production call site (orchestrator/analyzer)."
             }
         }
+        val checked = activeServices.size
 
         // Guard against a vacuous pass: the shipped taxonomy has ~16 active
         // non-timeline services; if the loop checked almost none, the load or
