@@ -12,10 +12,12 @@ import com.androdr.data.model.DeviceTelemetry
 import com.androdr.data.model.DnsEvent
 import com.androdr.data.model.FileArtifactTelemetry
 import com.androdr.data.model.ForensicTimelineEvent
+import com.androdr.data.model.NetworkTelemetry
 import com.androdr.data.model.PackageInstallHistoryEntry
 import com.androdr.data.model.PlatformCompatChange
 import com.androdr.data.model.ProcessTelemetry
 import com.androdr.data.model.ReceiverTelemetry
+import com.androdr.data.model.SecurityLogEvent
 import com.androdr.data.model.TombstoneEvent
 import com.androdr.data.model.WakelockAcquisition
 import com.androdr.R
@@ -292,6 +294,20 @@ class SigmaRuleEngine @Inject constructor(
         val records = telemetry.map { it.toFieldMap() }
         return SigmaRuleEvaluator.evaluate(
             effectiveRules(), records, "db_info", iocLookups, evidenceProviders
+        )
+    }
+
+    fun evaluateNetwork(telemetry: List<NetworkTelemetry>): List<Finding> {
+        val records = telemetry.map { it.toFieldMap() }
+        return SigmaRuleEvaluator.evaluate(
+            effectiveRules(), records, "network_monitor", iocLookups, evidenceProviders
+        )
+    }
+
+    fun evaluateSecurityLog(telemetry: List<SecurityLogEvent>): List<Finding> {
+        val records = telemetry.map { it.toFieldMap() }
+        return SigmaRuleEvaluator.evaluate(
+            effectiveRules(), records, "security_log", iocLookups, evidenceProviders
         )
     }
 
