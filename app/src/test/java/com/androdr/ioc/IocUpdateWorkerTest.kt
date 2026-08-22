@@ -1,7 +1,6 @@
 package com.androdr.ioc
 
 import com.androdr.data.db.IndicatorDao
-import com.androdr.data.model.Indicator
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk

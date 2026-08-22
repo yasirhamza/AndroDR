@@ -10,8 +10,6 @@ import android.content.pm.ActivityInfo
 import android.content.pm.ProviderInfo
 import android.content.res.Resources
 import com.androdr.R
-import com.androdr.data.model.KnownAppCategory
-import com.androdr.data.model.KnownAppEntry
 import com.androdr.ioc.KnownAppResolver
 import com.androdr.ioc.OemPrefixResolver
 import io.mockk.every

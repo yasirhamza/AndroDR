@@ -29,6 +29,8 @@ style:
     active: false   # too noisy for Android UI code
   ReturnCount:
     max: 3   # parser early-return guards are clearer than flag variables
+  UnusedImports:
+    active: true
 
 exceptions:
   active: true

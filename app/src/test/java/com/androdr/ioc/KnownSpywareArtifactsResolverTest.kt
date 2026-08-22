@@ -2,7 +2,6 @@ package com.androdr.ioc
 
 import android.content.Context
 import android.content.res.Resources
-import com.androdr.R
 import io.mockk.every
 import io.mockk.mockk
 import org.junit.Assert.assertEquals
