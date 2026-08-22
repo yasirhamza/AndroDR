@@ -1,12 +1,15 @@
 package com.androdr.scanner
 
+import android.content.Context
 import android.net.Uri
 import android.util.Log
 import com.androdr.data.db.DnsEventDao
 import com.androdr.data.db.ForensicTimelineEventDao
 import com.androdr.data.db.toForensicTimelineEvent
+import com.androdr.data.model.ForensicTimelineEvent
 import com.androdr.data.model.ScanResult
 import com.androdr.data.model.ScannerFailure
+import com.androdr.data.model.TelemetrySource
 import com.androdr.data.model.UNREGISTERED_IOC_LOOKUP
 import com.androdr.data.repo.ScanRepository
 import com.androdr.ioc.IndicatorResolver
@@ -16,9 +19,11 @@ import com.androdr.sigma.FindingCategory
 import com.androdr.sigma.SigmaCorrelationEngine
 import com.androdr.sigma.SigmaRuleFeed
 import com.androdr.sigma.SigmaRuleEngine
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -27,7 +32,9 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 import java.util.Collections
+import java.util.zip.ZipInputStream
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -48,6 +55,7 @@ class ScanOrchestrator @Inject constructor(
     private val appOpsScanner: AppOpsScanner,
     private val usageStatsScanner: UsageStatsScanner,
     private val bugReportAnalyzer: BugReportAnalyzer,
+    private val intrusionLogAnalyzer: IntrusionLogAnalyzer,
     private val scanRepository: ScanRepository,
     private val dnsEventDao: DnsEventDao,
     private val forensicTimelineEventDao: ForensicTimelineEventDao,
@@ -59,7 +67,11 @@ class ScanOrchestrator @Inject constructor(
     private val sigmaRuleFeed: SigmaRuleFeed,
     private val knownAppResolver: com.androdr.ioc.KnownAppResolver,
     private val oemPrefixResolver: com.androdr.ioc.OemPrefixResolver,
-    private val brandImpersonationResolver: com.androdr.ioc.BrandImpersonationResolver
+    private val brandImpersonationResolver: com.androdr.ioc.BrandImpersonationResolver,
+    // #342: the orchestrator itself reads one imported ZIP's entry NAMES to
+    // route it (see [sniffArtifact]); the artifact bodies are still read only
+    // by the analyzers, which own their own Context.
+    @ApplicationContext private val context: Context
 ) {
 
     private val initMutex = Mutex()
@@ -603,6 +615,141 @@ class ScanOrchestrator @Inject constructor(
         return result
     }
 
+    /** Thrown by [analyzeArtifact] when the imported ZIP is neither supported artifact. */
+    class UnrecognizedArtifactException : Exception(
+        "Not a recognized artifact: expected a bug report ZIP (dumpstate) or an " +
+            "Advanced Protection intrusion log export (per-day YYYY-MM-DD.txt files)."
+    )
+
+    /** Result of [analyzeArtifact], carrying whichever analysis actually ran. */
+    sealed interface ArtifactAnalysis {
+        data class BugReport(val result: BugReportAnalyzer.BugReportAnalysisResult) : ArtifactAnalysis
+        data class IntrusionLog(val result: IntrusionLogAnalysisResult) : ArtifactAnalysis
+    }
+
+    /** #342: single import entry point — sniff the ZIP, route to the right analyzer. */
+    suspend fun analyzeArtifact(uri: Uri): ArtifactAnalysis = when (sniffArtifact(uri)) {
+        ArtifactType.BUG_REPORT -> ArtifactAnalysis.BugReport(analyzeBugReport(uri))
+        ArtifactType.INTRUSION_LOG -> ArtifactAnalysis.IntrusionLog(analyzeIntrusionLog(uri))
+        ArtifactType.UNRECOGNIZED -> throw UnrecognizedArtifactException()
+    }
+
+    /**
+     * Classifies an imported ZIP by its entry names alone (#342 spec §4.1) —
+     * entry bodies are never read here, so this stays cheap on a multi-hundred-MB
+     * bug report. The analyzer then re-opens the URI to read the content.
+     */
+    private suspend fun sniffArtifact(uri: Uri): ArtifactType = withContext(Dispatchers.IO) {
+        val stream = context.contentResolver.openInputStream(uri)
+            ?: return@withContext ArtifactType.UNRECOGNIZED
+        stream.use { s ->
+            ZipInputStream(s.buffered()).use { zip ->
+                val names = sequence {
+                    var entry = zip.nextEntry
+                    while (entry != null) {
+                        if (!entry.isDirectory) yield(entry.name)
+                        try { zip.closeEntry() } catch (_: Exception) { /* ignore */ }
+                        entry = try { zip.nextEntry } catch (_: Exception) { null }
+                    }
+                }
+                ArtifactSniffer.classify(names)
+            }
+        }
+    }
+
+    /**
+     * #342: analyze an Advanced Protection Intrusion Logging export and persist
+     * it. Replace-on-reimport: each import first deletes the previous import's
+     * rows by source (spec §4.2). Rules saw the COMPLETE stream inside the
+     * analyzer; only timeline persistence is capped (spec §7).
+     */
+    suspend fun analyzeIntrusionLog(uri: Uri): IntrusionLogAnalysisResult {
+        initRuleEngine()
+        val result = intrusionLogAnalyzer.analyze(uri)
+
+        val now = System.currentTimeMillis()
+        val scanResult = ScanResult(
+            id = now,
+            timestamp = now,
+            findings = result.findings,
+            bugReportFindings = emptyList(),
+            riskySideloadCount = 0,
+            knownMalwareCount = result.findings.count {
+                it.level == "critical" && "known_malware" in it.impliesFlags
+            },
+            scannerErrors = emptyList()
+        )
+        val allEvents = buildIntrusionLogTimelineEvents(result, scanResult)
+
+        // Replace-on-reimport, then persist with correlation (same transaction
+        // shape as the bug-report path). The two deletes run before the save so
+        // a re-import of the same (or a corrected) export replaces the previous
+        // import's rows instead of stacking a second copy of every event.
+        forensicTimelineEventDao.deleteBySource("intrusion_log")
+        forensicTimelineEventDao.deleteBySource("intrusion_log_analysis")
+        val corrRules = sigmaRuleEngine.getCorrelationRules()
+        runCatching {
+            scanRepository.saveScanWithCorrelation(
+                scan = scanResult,
+                findingTimelineEvents = allEvents,
+                replaceUsageStatsEvents = null,
+                lookbackEvents = emptyList()
+            ) { eventsWithIds ->
+                if (corrRules.isEmpty() || eventsWithIds.isEmpty()) emptyList()
+                else {
+                    val bindings = sigmaRuleEngine.computeAtomBindings(eventsWithIds)
+                    val atomRulesById = sigmaRuleEngine.getEnabledRules().associateBy { it.id }
+                    sigmaCorrelationEngine.evaluate(corrRules, eventsWithIds, bindings, atomRulesById)
+                        .map { it.copy(scanResultId = scanResult.id) }
+                }
+            }
+            Log.i(TAG, "Persisted intrusion-log import ${scanResult.id} with ${allEvents.size} events")
+        }.onFailure { Log.e(TAG, "Failed to persist intrusion log import", it) }
+
+        return result
+    }
+
+    /**
+     * Builds the timeline rows for one intrusion-log import: one row per
+     * triggered finding (`source = "intrusion_log_analysis"`) followed by the
+     * raw imported evidence (`source = "intrusion_log"`).
+     *
+     * Persistence caps (spec §7): security events are uncapped — they are the
+     * rarest and highest-signal records — while DNS and connect events are kept
+     * newest-first up to [DNS_PERSIST_CAP] / [CONNECT_PERSIST_CAP]. Detection is
+     * unaffected: [IntrusionLogAnalyzer] already evaluated the rules over the
+     * COMPLETE parsed stream, so a capped event can still have produced a
+     * finding row here.
+     */
+    private fun buildIntrusionLogTimelineEvents(
+        result: IntrusionLogAnalysisResult,
+        scanResult: ScanResult
+    ): List<ForensicTimelineEvent> {
+        val findingEvents = result.findings.filter { it.triggered }.map { finding ->
+            finding.toForensicTimelineEvent(scanResult, isBugreport = true).copy(
+                source = "intrusion_log_analysis",
+                telemetrySource = TelemetrySource.INTRUSION_LOG_IMPORT,
+                // The network/security field maps carry "timestamp" and the
+                // evaluator copies scalar record fields into matchContext as
+                // strings, so a finding inherits its own event's time. DNS
+                // records carry no timestamp field — those fall back to 0L,
+                // which the Timeline renders as "Unknown".
+                startTimestamp = finding.matchContext["timestamp"]?.toLongOrNull()
+                    ?.takeIf { it > 0L } ?: 0L
+            )
+        }
+        val cappedDns = result.dnsEvents
+            .sortedByDescending { it.event.timestamp }
+            .take(DNS_PERSIST_CAP)
+        val cappedNet = result.networkEvents
+            .sortedByDescending { it.timestamp }
+            .take(CONNECT_PERSIST_CAP)
+        return findingEvents +
+            cappedDns.map { it.toForensicTimelineEvent(scanResult.id) } +
+            cappedNet.map { it.toForensicTimelineEvent(scanResult.id) } +
+            result.securityEvents.map { it.toForensicTimelineEvent(scanResult.id) }
+    }
+
     /**
      * Computes a diff between two [ScanResult] snapshots.
      *
@@ -708,6 +855,10 @@ class ScanOrchestrator @Inject constructor(
          * installations or updates.
          */
         private const val APP_TELEMETRY_CACHE_MAX_AGE_MS = 5L * 60_000L // 5 minutes
+
+        /** #342 spec §7: timeline persistence caps; rules always see the full stream. */
+        const val DNS_PERSIST_CAP = 10_000
+        const val CONNECT_PERSIST_CAP = 5_000
 
         /** App categories treated as trusted by the known_good_app_db IOC lookup. */
         private val TRUSTED_CATEGORIES = setOf(

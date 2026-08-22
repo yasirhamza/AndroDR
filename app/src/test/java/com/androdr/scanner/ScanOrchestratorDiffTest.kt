@@ -54,6 +54,7 @@ class ScanOrchestratorDiffTest {
             appOpsScanner = mockk(relaxed = true),
             usageStatsScanner = mockk(relaxed = true),
             bugReportAnalyzer = mockk(relaxed = true),
+            intrusionLogAnalyzer = mockk(relaxed = true),
             scanRepository = mockk(relaxed = true),
             dnsEventDao = mockk(relaxed = true),
             forensicTimelineEventDao = mockk(relaxed = true),
@@ -65,7 +66,8 @@ class ScanOrchestratorDiffTest {
             sigmaRuleFeed = mockk(relaxed = true),
             knownAppResolver = mockk(relaxed = true),
             oemPrefixResolver = mockk(relaxed = true),
-            brandImpersonationResolver = mockk(relaxed = true)
+            brandImpersonationResolver = mockk(relaxed = true),
+            context = mockk(relaxed = true)
         )
     }
 

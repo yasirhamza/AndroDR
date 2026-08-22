@@ -140,6 +140,7 @@ class ScanOrchestratorErrorHandlingTest {
             appOpsScanner = appOpsScanner,
             usageStatsScanner = usageStatsScanner,
             bugReportAnalyzer = bugReportAnalyzer,
+            intrusionLogAnalyzer = mockk(relaxed = true),
             scanRepository = scanRepository,
             dnsEventDao = dnsEventDao,
             forensicTimelineEventDao = mockk(relaxed = true),
@@ -151,7 +152,8 @@ class ScanOrchestratorErrorHandlingTest {
             sigmaRuleFeed = sigmaRuleFeed,
             knownAppResolver = knownAppResolver,
             oemPrefixResolver = oemPrefixResolver,
-            brandImpersonationResolver = mockk(relaxed = true)
+            brandImpersonationResolver = mockk(relaxed = true),
+            context = mockk(relaxed = true)
         )
     }
 
