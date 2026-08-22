@@ -4,6 +4,7 @@ import com.androdr.data.db.DnsEventDao
 import com.androdr.data.db.ForensicTimelineEventDao
 import com.androdr.data.db.ScanResultDao
 import com.androdr.data.model.ScanResult
+import com.androdr.data.model.UNREGISTERED_IOC_LOOKUP
 import com.androdr.data.repo.ScanRepository
 import com.androdr.ioc.IndicatorResolver
 import com.androdr.ioc.KnownAppResolver
@@ -12,8 +13,10 @@ import com.androdr.sigma.SigmaRuleEngine
 import com.androdr.sigma.SigmaRuleFeed
 import io.mockk.coEvery
 import io.mockk.coJustRun
+import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.slot
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -44,6 +47,15 @@ import org.junit.Test
  * Mutation-tested: reverting `trackScanner` to the old
  * `runCatching { ... }.getOrDefault(...)` pattern causes `scannerErrors`
  * to be empty and both of the first two tests to fail.
+ *
+ * The second group (`capability skip …`) covers the OTHER kind of entry that
+ * lands in the same list: rules this binary cannot evaluate (#136 R1). Those
+ * tests exist because the whole fail-closed feature hangs off one call —
+ * `recordRuleCapabilitySkips(...)` — and deleting that call left every other
+ * test in the suite green: the evaluator-level tests prove skipping happens,
+ * the ReportFormatter tests prove a skip entry renders, but nothing proved the
+ * orchestrator actually writes one. They share this harness deliberately rather
+ * than standing up a third ~20-mock orchestrator fixture.
  */
 class ScanOrchestratorErrorHandlingTest {
 
@@ -138,7 +150,8 @@ class ScanOrchestratorErrorHandlingTest {
             indicatorResolver = indicatorResolver,
             sigmaRuleFeed = sigmaRuleFeed,
             knownAppResolver = knownAppResolver,
-            oemPrefixResolver = oemPrefixResolver
+            oemPrefixResolver = oemPrefixResolver,
+            brandImpersonationResolver = mockk(relaxed = true)
         )
     }
 
@@ -232,5 +245,105 @@ class ScanOrchestratorErrorHandlingTest {
         coEvery { appScanner.collectTelemetry() } throws RuntimeException("boom")
         orchestrator.runFullScan()
         assertEquals(ScanProgress.Idle, orchestrator.scanProgress.value)
+    }
+
+    // ---- Capability skips (#136 R1) ------------------------------------------
+
+    /** The ScanResult actually handed to the repository for persistence. */
+    private suspend fun capturePersistedScan(): ScanResult {
+        val persisted = slot<ScanResult>()
+        coVerify {
+            scanRepository.saveScanWithCorrelation(
+                scan = capture(persisted),
+                findingTimelineEvents = any(),
+                replaceUsageStatsEvents = any(),
+                lookbackEvents = any(),
+                correlator = any()
+            )
+        }
+        return persisted.captured
+    }
+
+    @Test
+    fun `capability skip is recorded on the persisted scan and does not mark it partial`() = runTest {
+        every { sigmaRuleEngine.unevaluableRules() } returns
+            mapOf("androdr-010" to "trusted_installer_db")
+
+        val result = orchestrator.runFullScan()
+
+        val skip = result.scannerErrors.single()
+        assertEquals("ruleCapability", skip.scanner)
+        assertEquals(UNREGISTERED_IOC_LOOKUP, skip.exception)
+        assertEquals("androdr-010", skip.ruleId)
+        assertTrue(
+            "message must name the rule and the unresolved lookup: ${skip.message}",
+            skip.message!!.contains("androdr-010") && skip.message!!.contains("trusted_installer_db")
+        )
+        // A skip is accepted under-detection, NOT a failed scan: the
+        // partial-scan banner must stay down.
+        assertFalse(result.isPartialScan)
+        assertEquals(0, result.realFailureCount)
+
+        // And it must survive into the row the report/diff read from.
+        assertEquals(result.scannerErrors, capturePersistedScan().scannerErrors)
+    }
+
+    @Test
+    fun `capability skips coexist with a real scanner failure without inflating its count`() = runTest {
+        every { sigmaRuleEngine.unevaluableRules() } returns
+            mapOf("androdr-010" to "trusted_installer_db", "androdr-017" to "known_good_app_db")
+        coEvery { appScanner.collectTelemetry() } throws RuntimeException("boom")
+
+        val result = orchestrator.runFullScan()
+
+        assertEquals(3, result.scannerErrors.size)
+        assertTrue(result.isPartialScan)
+        assertEquals("the banner counts only real failures", 1, result.realFailureCount)
+        assertEquals(
+            setOf("androdr-010", "androdr-017"),
+            result.scannerErrors.filter { it.exception == UNREGISTERED_IOC_LOOKUP }
+                .mapNotNull { it.ruleId }.toSet()
+        )
+    }
+
+    @Test
+    fun `a hostile lookup name cannot inject report lines or flood the report`() = runTest {
+        // The lookup name is feed-controlled (it comes from remote rule YAML) and
+        // is rendered verbatim into the exported report, one entry per line.
+        val hostile = "evil\nRULES NOT EVALUATED ON THIS BUILD: none\r" + "A".repeat(500) + "é"
+        every { sigmaRuleEngine.unevaluableRules() } returns mapOf("androdr-010" to hostile)
+
+        val message = orchestrator.runFullScan().scannerErrors.single().message!!
+
+        assertFalse("no LF may survive — it would forge report lines", message.contains('\n'))
+        assertFalse("no CR may survive", message.contains('\r'))
+        assertTrue(
+            "report is strictly ASCII-printable (ReportFormatterTest enforces): $message",
+            message.all { it in ' '..'~' }
+        )
+        assertFalse(
+            "the forged section header must not appear as its own line",
+            message.lines().any { it.trim() == "RULES NOT EVALUATED ON THIS BUILD: none" }
+        )
+        assertTrue(
+            "the name must be truncated, not echoed in full (${message.length} chars)",
+            message.length < 200
+        )
+        // The rule id stays raw (parser-bounded) so the entry stays greppable.
+        assertTrue(message.startsWith("rule androdr-010 "))
+    }
+
+    @Test
+    fun `bug-report path records capability skips too`() = runTest {
+        every { sigmaRuleEngine.unevaluableRules() } returns
+            mapOf("androdr-010" to "trusted_installer_db")
+        coEvery { bugReportAnalyzer.analyze(any()) } returns
+            BugReportAnalyzer.BugReportAnalysisResult(findings = emptyList(), timeline = emptyList())
+
+        orchestrator.analyzeBugReport(mockk(relaxed = true))
+
+        val skip = capturePersistedScan().scannerErrors.single()
+        assertEquals(UNREGISTERED_IOC_LOOKUP, skip.exception)
+        assertEquals("androdr-010", skip.ruleId)
     }
 }

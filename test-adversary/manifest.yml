@@ -475,7 +475,11 @@ scenarios:
     source: adb_inject
     inject: []
     # Depends on device patch level being old enough that Pegasus CVEs are unpatched.
-    # On emulator with 2025-03-01 patch, CVE-2023-41064 (fixed 2023-12-05) should be patched.
+    # Rule CVEs (Android NSO set since #319): CVE-2019-2215 (KEV 2021-11-03) and
+    # CVE-2023-7024 (KEV 2024-01-02) — an emulator patched after 2024-01-02 shows
+    # the safe state. NOTE: the "Pegasus" pattern matches the safe-state line
+    # ("No Pegasus-linked CVEs") too, so this scenario verifies report presence,
+    # not a firing — a patch-gated true-positive needs an old-patch-level image.
     # This scenario validates campaign attribution appears in the report when applicable.
     attack: [T1404]
     expected_patterns:

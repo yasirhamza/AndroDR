@@ -36,6 +36,11 @@ class AppScanner @Inject constructor(
 
     companion object {
         private const val TAG = "AppScanner"
+        private const val WEBAPK_PACKAGE_PREFIX = "org.chromium.webapk."
+        private const val WEBAPK_META_SCOPE = "org.chromium.webapk.shell_apk.scope"
+        // A URL cannot legitimately need this many chars; the cap bounds
+        // memory and report size against a hostile meta-data value.
+        private const val MAX_WEBAPK_SCOPE_CHARS = 2048
 
         /**
          * Maximum number of concurrent per-package workers in
@@ -96,6 +101,11 @@ class AppScanner @Inject constructor(
          * The exact set of short-named permissions the scanner places in
          * [AppTelemetry.permissions]. This is the SINGLE SOURCE OF TRUTH for which
          * permissions a SIGMA rule can match via `permissions|contains`.
+         *
+         * FROZEN: `permissions` is a compat surface for the fleet's shipped rules.
+         * New rules should match [AppTelemetry.requestedPermissions]
+         * (`requested_permissions` — every requested permission, verbatim FQN,
+         * exact-equals matching) instead of growing this curated set.
          * `PermissionLiteralCrossCheckTest` asserts every bundled rule's permission
          * literal is a member — closing the dead-rule class that silently killed
          * androdr-069 (a rule referenced a permission the scanner never emitted; #225).
@@ -257,9 +267,11 @@ class AppScanner @Inject constructor(
         val isSideloaded = !isSystemApp && !fromTrustedStore && !isKnownOemApp
 
         // Surveillance permissions
-        val grantedPermissions = pkg.requestedPermissions?.toList() ?: emptyList()
-        val matchedSurveillancePerms = grantedPermissions.filter { it in SURVEILLANCE_PERMISSIONS }
-        val matchedHighRiskPerms = grantedPermissions.filter { it in HIGH_RISK_PERMISSIONS }
+        // Manifest-REQUESTED permissions (PackageInfo.requestedPermissions), not
+        // runtime-granted — the historical name `grantedPermissions` was a misnomer.
+        val manifestRequestedPermissions = pkg.requestedPermissions?.toList() ?: emptyList()
+        val matchedSurveillancePerms = manifestRequestedPermissions.filter { it in SURVEILLANCE_PERMISSIONS }
+        val matchedHighRiskPerms = manifestRequestedPermissions.filter { it in HIGH_RISK_PERMISSIONS }
 
         // Accessibility service
         val hasAccessibilityService = pkg.services?.any { svc ->
@@ -301,6 +313,8 @@ class AppScanner @Inject constructor(
         val embeddedComponentClasses = extractComponentClassNames(pkg, pkgDetail)
         val embeddedNativeLibs = extractNativeLibFileNames(appInfo)
 
+        val webapkScope = extractWebApkScope(pm, packageName)
+
         return AppTelemetry(
             packageName = packageName,
             appName = appName,
@@ -314,6 +328,13 @@ class AppScanner @Inject constructor(
             isKnownOemApp = isKnownOemApp,
             permissions = (matchedSurveillancePerms + matchedHighRiskPerms)
                 .map { it.substringAfterLast('.') },
+            // Deliberately UNCAPPED, diverging from the embedded_* cap precedent:
+            // a sorted-truncation cap would let a hostile app push its real
+            // permissions past the cap with junk declarations, silently blinding
+            // every requested_permissions rule for exactly the apps that matter.
+            // Cost is retention of an already-materialized list, bounded by
+            // manifest size.
+            requestedPermissions = manifestRequestedPermissions,
             surveillancePermissionCount = matchedSurveillancePerms.size,
             hasAccessibilityService = hasAccessibilityService,
             hasDeviceAdmin = hasDeviceAdmin,
@@ -326,7 +347,39 @@ class AppScanner @Inject constructor(
             source = TelemetrySource.LIVE_SCAN,
             embeddedComponentClasses = embeddedComponentClasses,
             embeddedNativeLibs = embeddedNativeLibs,
+            webapkScope = webapkScope,
         )
+    }
+
+    /**
+     * WebAPK web scope from shell-manifest meta-data (#299), or null for a
+     * non-WebAPK package or an unreadable/absent value. Targeted per-package
+     * read: the bulk getInstalledPackages call deliberately omits
+     * GET_META_DATA (Binder size pressure), and only org.chromium.webapk.*
+     * packages can satisfy the WebAPK rules' selection anyway.
+     *
+     * The value is an ATTACKER-CONTROLLED manifest string (any app may adopt
+     * the prefix and declare the key), so it is length-capped and stripped of
+     * control characters before it can reach findings, matchContext, and the
+     * line-oriented report export.
+     */
+    @Suppress("TooGenericExceptionCaught")
+    private fun extractWebApkScope(pm: PackageManager, packageName: String): String? {
+        if (!packageName.startsWith(WEBAPK_PACKAGE_PREFIX)) return null
+        return try {
+            pm.getApplicationInfo(packageName, PackageManager.GET_META_DATA)
+                .metaData?.getString(WEBAPK_META_SCOPE)
+                // Printable-ASCII only, then cap. URLs are ASCII (IDN hosts are
+                // punycode), and the forensic report is strictly ASCII and
+                // line-oriented (cf. ScanOrchestrator sanitisation, ReportFormatter)
+                // — this drops control chars, bidi overrides, and non-ASCII that
+                // would forge report lines or spoof the displayed URL.
+                ?.filter { it in ' '..'~' }
+                ?.take(MAX_WEBAPK_SCOPE_CHARS)
+        } catch (e: Exception) {
+            Log.w(TAG, "collectTelemetry: WebAPK meta-data read failed for $packageName: ${e.message}")
+            null
+        }
     }
 
     /**

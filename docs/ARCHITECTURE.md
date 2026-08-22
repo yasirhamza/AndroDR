@@ -56,7 +56,7 @@ The following six principles are non-negotiables that constrain every module. A 
 
 2. **IOC data lives in the external `android-sigma-rules` repository, not bundled in the APK.** Indicator lists refresh at runtime so new indicators reach users within hours, not weeks.
 
-3. **Telemetry emitters are pure and stateless.** `scanner/` and `network/` modules produce structured events; they do NOT decide what counts as a finding — the rule engine does. Static enforcement of this contract is tracked in [#136] and the machine-readable schema in [#137].
+3. **Telemetry emitters are pure and stateless.** `scanner/` and `network/` modules produce structured events; they do NOT decide what counts as a finding — the rule engine does. This contract is statically enforced by `PureEmitterContractTest` (a build gate: no `Finding` construction or severity `.copy()` outside `SigmaRuleEvaluator`, and no severity-shaped field on any `toFieldMap()` emitter — [#136] B1/B2). The machine-readable schema remains tracked in [#137].
 
 4. **All processing happens on the device.** No backend, no cloud, no accounts, no analytics SDK. Report sharing is user-initiated only, via the Android share sheet.
 
@@ -84,7 +84,7 @@ Current package tree under `app/src/main/java/com/androdr/`:
 ├── di/              Hilt modules
 ├── ioc/             IOC resolver, dispatcher, feeds, STIX2 serialization, periodic update worker
 │   └── feeds/       Feed-specific ingesters (stalkerware, MVT, MalwareBazaar, ThreatFox, UAD, Plexus, cert-hash)
-├── network/         DnsVpnService (local DNS interception) + DNS event capture
+├── network/         DnsVpnService (local DNS interception) + UnderlyingDnsTracker (the device's own non-VPN resolvers) + DNS event capture
 ├── reporting/       ReportFormatter, ReportExporter, timeline formatter/exporter, guidance text helpers
 ├── scanner/         Pure telemetry emitters (app, device, accessibility, app-ops, file artifacts, process, usage stats, receivers, device-admin-grant, install event)
 │   └── bugreport/   Bug-report ZIP parser and per-section modules
@@ -131,7 +131,7 @@ A telemetry emitter is a pure function of device state: given the current state 
 
 **App-layer scanners**
 
-- `AppScanner` — Enumerates every installed package via `PackageManager` and emits one `AppTelemetry` record per app. Fields include `packageName`, `appName`, `certHash` (SHA-256), `certHashSha1` (SHA-1), `apkHash` (SHA-256 of the APK file), `isSystemApp`, `isSideloaded`, `fromTrustedStore`, `installer`, `isKnownOemApp`, `permissions` (security-relevant: surveillance perms plus curated high-risk perms such as `SYSTEM_ALERT_WINDOW`, short-named), `surveillancePermissionCount` (surveillance perms only), `hasAccessibilityService`, `hasDeviceAdmin`, `knownAppCategory`, `servicePermissions`, `receiverPermissions`, `hasLauncherActivity`, `firstInstallTime`, and `lastUpdateTime`. Hashing runs in a bounded parallel pool (up to 16 concurrent workers) to keep wall time acceptable on devices with many installed packages.
+- `AppScanner` — Enumerates every installed package via `PackageManager` and emits one `AppTelemetry` record per app. Fields include `packageName`, `appName`, `certHash` (SHA-256), `certHashSha1` (SHA-1), `apkHash` (SHA-256 of the APK file), `isSystemApp`, `isSideloaded`, `fromTrustedStore`, `installer`, `isKnownOemApp`, `permissions` (security-relevant: surveillance perms plus curated high-risk perms such as `SYSTEM_ALERT_WINDOW`, short-named — a frozen compat surface for shipped rules), `requestedPermissions` (every requested permission verbatim, fully-qualified — the all-facts field new rules should match with exact equals), `surveillancePermissionCount` (surveillance perms only), `hasAccessibilityService`, `hasDeviceAdmin`, `knownAppCategory`, `servicePermissions`, `receiverPermissions`, `hasLauncherActivity`, `firstInstallTime`, and `lastUpdateTime`. Hashing runs in a bounded parallel pool (up to 16 concurrent workers) to keep wall time acceptable on devices with many installed packages.
 - `AccessibilityAuditScanner` — Emits `AccessibilityTelemetry` for every enabled accessibility service.
 - `AppOpsScanner` — Emits `AppOpsTelemetry` records for sensitive app-op grants (microphone, camera, package installation).
 - `ReceiverAuditScanner` — Emits `ReceiverTelemetry` for broadcast receivers matching sensitive permission patterns (SMS, call interception).
@@ -151,7 +151,7 @@ Bug-report ZIP parsers are a separate family of emitters that extract structured
 
 **Purity contract**
 
-The purity contract — emitters produce structured records, period — is enforced by convention today, with static enforcement and a machine-readable schema tracked in [#136].
+The purity contract — emitters produce structured records, period — is statically enforced by `PureEmitterContractTest` ([#136] B1/B2), which fails the build on `Finding` construction or level-mutation outside the evaluator and on any severity-shaped field declared or emitted by a `toFieldMap()` type. A machine-readable telemetry schema remains tracked in [#137].
 
 ---
 
@@ -189,6 +189,10 @@ A detection rule is a YAML document with these sections:
 `contains`, `startswith`, `endswith`, `re` (regex, ReDoS-protected: length cap 500 chars, 1-second timeout, cache-bounded at 256 entries), `gte`, `lte`, `gt`, `lt`, `ioc_lookup`, `all`.
 
 All string modifiers support list-valued fields element-wise; the `|all` combiner flips the default `any` quantifier to `all`.
+
+**`ioc_lookup` is fail-closed** ([#136] R1). The modifier names a lookup registered in `ScanOrchestrator.initRuleEngine()`'s `iocLookups` map. If the name is not registered on the running binary — or the matcher names no lookup at all — the evaluator does NOT evaluate that matcher as false: it **skips the whole rule** (`SigmaRuleEvaluator.unevaluableRules()` computes the skip set, and `evaluate()` filters the rule out). Matcher-false was a fail-OPEN hole: under `condition: selection and not store_installed` a false matcher makes the negated gate true, so an unresolvable lookup would over-fire on every record instead of under-detecting. The same skip set gates `SigmaRuleEngine.computeAtomBindings()`, so a skipped rule cannot bind timeline events into correlations either.
+
+A skipped rule is surfaced, never silent: `ScanOrchestrator` records one capability-skip entry per skipped rule per scan (a `ScannerFailure` with `exception = UNREGISTERED_IOC_LOOKUP`, carrying the `ruleId`). Those entries are deliberately NOT scanner failures — they are excluded from `ScanResult.isPartialScan` / `realFailureCount` (accepted under-detection is not a crashed scan), they are excluded from `computeDiff`'s `resolvedFindings` (rendering a skipped CRITICAL as "resolved" would be affirmative false reassurance), and they render as their own report section (§6.1). Build gates keep the registration honest: `IocLookupDefinitionsCrossCheckTest` reads the registered names straight out of `ScanOrchestrator.kt` and asserts no bundled or delivered rule names a lookup this build cannot resolve.
 
 **Bundled rules**
 
@@ -347,7 +351,7 @@ STIX2 serialization lives in `StixBundle.kt` (in `ioc/`). The extension function
 
 The report is split into two independently selectable sections via the `ExportMode` enum:
 
-- `FINDINGS_ONLY` — verdict, device checks, campaign detections, per-app findings, bug-report findings.
+- `FINDINGS_ONLY` — verdict, device checks, campaign detections, per-app findings, bug-report findings. When the scan recorded capability skips, a `RULES NOT EVALUATED ON THIS BUILD (missing capability -- update the app)` section lists them, one line per skipped rule: the findings list above it is incomplete in a known, named way rather than silently short. The section rides `FINDINGS_ONLY` because it is a caveat on the findings list; the feed-controlled lookup name in each line is sanitized to printable ASCII and length-capped before it reaches the report.
 - `TELEMETRY_ONLY` — DNS activity, app hash inventory, extended telemetry, application log. Intended for analyst handoff: the recipient can run their own rules against raw telemetry without being biased by the device's current ruleset.
 - `BOTH` — default; produces the full report.
 
@@ -383,7 +387,11 @@ All sharing is user-initiated: the user taps "Export" in the history or bug-repo
 
 `DnsVpnService` (in `network/`) extends Android's `VpnService` and implements a local loopback tunnel that intercepts DNS traffic only. When started, it establishes a virtual TUN interface addressed at `10.0.0.2/32`, with a virtual DNS server at `10.0.0.1`. All outbound traffic is routed through the tunnel, but the service only reads and acts on UDP packets whose destination port is 53; all other packets are forwarded without inspection.
 
-The service parses each DNS query, resolves it via a single shared upstream socket (currently Google's `8.8.8.8:53`), and injects the response back into the TUN interface for the querying app. Matched queries (blocklist or IOC domain hit) receive an NXDOMAIN response in place of a real resolution. DNS events are batched via a `DnsLogBuffer` and flushed to `ScanRepository.logDnsEventsBatch()` periodically, rather than one Room transaction per query, to keep battery impact minimal.
+The service parses each DNS query, resolves it via a single shared upstream socket, and injects the response back into the TUN interface for the querying app. Matched queries (blocklist or IOC domain hit) receive an NXDOMAIN response in place of a real resolution. DNS events are batched via a `DnsLogBuffer` and flushed to `ScanRepository.logDnsEventsBatch()` periodically, rather than one Room transaction per query, to keep battery impact minimal.
+
+The upstream address is **the device's own configured resolvers** (issue #303, app version 0.9.0.612+) — never a hardcoded third-party server. `UnderlyingDnsTracker` (same package) answers "what are the device's real, non-VPN DNS resolvers right now?": it takes a synchronous `ConnectivityManager` snapshot at VPN start (so there is no startup blind window) and then follows a `NetworkCallback` restricted to `INTERNET` + `NOT_VPN` + `VALIDATED` networks, so a network Android itself refused to use cannot become the monitor's upstream. It publishes the winning `(network, ordered resolvers)` pair; the most recently reported live network wins and IPv4 entries order before IPv6.
+
+`UpstreamResolver` consumes that pair. Its channel identity is `(network, address)`: the socket is `protect()`ed, bound to the selected network with `Network.bindSocket()`, and `connect()`ed to the resolver, so it is reopened whenever either the network or the address changes (a connected UDP socket pins its source address at `connect()` time). A failed reopen retries with backoff until the selection changes. If no resolvers are known the monitor **aborts at start** or drops queries mid-session — there is no fallback resolver anywhere in the code. The transport is plaintext UDP/53, matching Android's own default when Private DNS is off; with Private DNS (DoT) enabled, queries inside the monitor are still sent in plaintext to those resolvers (see `docs/PRIVACY_POLICY.md`).
 
 IOC enrichment happens at flush time: `ScanRepository.logDnsEventsBatch()` performs a `IndicatorDao.lookup()` for each matched domain to attach campaign name, severity, and description before writing the `ForensicTimelineEvent` row. The bloom-filter path that runs on the VPN hot path returns a lightweight stub; full metadata lives only in the Room `indicators` table.
 
@@ -558,7 +566,7 @@ Full IP-level packet inspection was evaluated and rejected. TLS SNI handling wou
 
 ### D4. Pure-emitter telemetry/findings contract
 
-Emitters (scanner modules, VPN service, bug-report parsers) produce typed telemetry records and are forbidden from making detection decisions. The rule engine is the sole decision-maker. This separation keeps emitters independently testable, makes the engine deterministic given a fixed rule set, and ensures that detection behavior lives in exactly one place. Static enforcement of the contract is tracked in [#136]; a machine-readable telemetry schema is tracked in [#137].
+Emitters (scanner modules, VPN service, bug-report parsers) produce typed telemetry records and are forbidden from making detection decisions. The rule engine is the sole decision-maker. This separation keeps emitters independently testable, makes the engine deterministic given a fixed rule set, and ensures that detection behavior lives in exactly one place. The contract is statically enforced by `PureEmitterContractTest` ([#136] B1/B2 — source-scanning build gates over the `main` source set); a machine-readable telemetry schema is tracked in [#137].
 
 ### D5. SIGMA compatibility where practical
 
@@ -573,7 +581,7 @@ All scanning and rule evaluation happens on the device. Indicator updates are un
 The rule engine supports the following verified capabilities, derived from `SigmaRuleParser` and `SigmaRuleEvaluator`:
 
 - **Field matching with modifiers:** `contains`, `startswith`, `endswith`, `re` (regex, ReDoS-protected with a 500-character cap, 1-second timeout, and a 256-entry LRU cache), `gte`, `lte`, `gt`, `lt`, `ioc_lookup`. The `all` combiner flips the default any-of quantifier to all-of for a selection.
-- **IOC lookups:** the `ioc_lookup` modifier calls a named lookup lambda (e.g. `package_ioc_db`, `domain_ioc_db`, `cert_hash_ioc_db`) registered in the evaluator's `iocLookups` map. Lookup databases are typed and independently updatable.
+- **IOC lookups:** the `ioc_lookup` modifier calls a named lookup lambda (e.g. `package_ioc_db`, `domain_ioc_db`, `cert_hash_ioc_db`) registered in the evaluator's `iocLookups` map. Lookup databases are typed and independently updatable. An unregistered or nameless lookup skips the whole rule (fail-closed — see §4.2).
 - **Evidence providers:** rules can reference named evidence providers (e.g. CVE lists with campaign attribution) that are injected alongside IOC databases. This allows a rule to surface structured remediation evidence rather than a bare match.
 - **Display metadata:** `title`, `severity`, `category`, `evidence_type`, `triggered_title`, `safe_title`, `icon`, `summary_template`, and `guidance` are embedded directly in the rule YAML and surfaced in the UI without any Kotlin changes.
 - **Correlation rules:** a rule may span multiple telemetry services in its condition, correlating findings across the app scanner, DNS monitor, and bug-report analysis pipeline.
@@ -582,7 +590,7 @@ The rule engine supports the following verified capabilities, derived from `Sigm
 ### Open architecture work
 
 - Persist all telemetry types to Room for complete forensic export: [#96]
-- Static enforcement of the pure-emitter contract: [#136]
+- Migration of the remaining judgment-kind emitter fields onto rule-computed lookups: [#136] (static enforcement itself is done — `PureEmitterContractTest`)
 - Machine-readable telemetry schema contract: [#137]
 - Rule-lineage tooling for the rule-author agent: [#139]
 

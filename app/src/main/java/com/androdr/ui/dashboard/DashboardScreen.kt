@@ -597,7 +597,7 @@ private fun PartialScanBanner(scan: ScanResult) {
                 Text(
                     text = stringResource(
                         R.string.partial_scan_banner_body,
-                        scan.scannerErrors.size
+                        scan.realFailureCount
                     ),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurface
