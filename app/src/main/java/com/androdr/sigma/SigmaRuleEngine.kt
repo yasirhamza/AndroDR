@@ -6,6 +6,7 @@ import android.util.Log
 import com.androdr.data.model.AccessibilityTelemetry
 import com.androdr.data.model.AppOpsTelemetry
 import com.androdr.data.model.AppTelemetry
+import com.androdr.data.model.CellularSnapshot
 import com.androdr.data.model.BatteryDailyEvent
 import com.androdr.data.model.DatabasePathObservation
 import com.androdr.data.model.DeviceTelemetry
@@ -224,6 +225,19 @@ class SigmaRuleEngine @Inject constructor(
     fun evaluateProcesses(telemetry: List<ProcessTelemetry>): List<Finding> {
         val records = telemetry.map { it.toFieldMap() }
         return SigmaRuleEvaluator.evaluate(effectiveRules(), records, "process_monitor", iocLookups, evidenceProviders)
+    }
+
+    /**
+     * Tier 1 radio telemetry. A live caller is mandatory: `network_monitor`
+     * is dead on-device precisely because it has a toFieldMap() but no
+     * evaluate method, so nothing ever reaches the evaluator with that
+     * service string. CellularMonitor invokes this on every snapshot.
+     */
+    fun evaluateCellular(telemetry: List<CellularSnapshot>): List<Finding> {
+        val records = telemetry.map { it.toFieldMap() }
+        return SigmaRuleEvaluator.evaluate(
+            effectiveRules(), records, "cellular_monitor", iocLookups, evidenceProviders
+        )
     }
 
     fun evaluateDns(events: List<DnsEvent>): List<Finding> {
