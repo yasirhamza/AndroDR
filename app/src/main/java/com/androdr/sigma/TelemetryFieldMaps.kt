@@ -4,6 +4,7 @@ import com.androdr.data.model.BatteryDailyEvent
 import com.androdr.data.model.DatabasePathObservation
 import com.androdr.data.model.PackageInstallHistoryEntry
 import com.androdr.data.model.PlatformCompatChange
+import com.androdr.data.model.SecurityLogEvent
 import com.androdr.data.model.TombstoneEvent
 import com.androdr.data.model.WakelockAcquisition
 
@@ -67,6 +68,15 @@ internal fun DatabasePathObservation.toFieldMap(): Map<String, Any?> = mapOf(
     "process_name" to processName,
     "package_name" to packageName,
     "observation_timestamp" to observationTimestamp,
+    "source" to source.name,
+    "captured_at" to capturedAt,
+)
+
+internal fun SecurityLogEvent.toFieldMap(): Map<String, Any?> = mapOf(
+    "timestamp" to timestamp,
+    "tag" to tag,
+    "tag_name" to tagName,
+    "security_data" to securityData,
     "source" to source.name,
     "captured_at" to capturedAt,
 )
