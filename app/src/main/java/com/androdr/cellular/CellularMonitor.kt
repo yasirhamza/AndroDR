@@ -31,6 +31,28 @@ import com.androdr.sigma.SigmaRuleEngine
  *
  * Inert unless BOTH permissions are granted and the platform is API 31+.
  * Research branch only: these permissions are never declared on main.
+ *
+ * FOREGROUND GATING — measured on SM-F916B / Android 13, 2026-08-22, and the
+ * single most important constraint on this whole feature:
+ *
+ *  - Called with location permission but the app in the BACKGROUND,
+ *    getAllCellInfo() returns an EMPTY list. Not an error, not stale data —
+ *    silently nothing.
+ *  - Called with NO location permission it throws
+ *    SecurityException("Not allowed to access cell info").
+ *  - With an activity visible it returns the full list (14 records: 1 serving
+ *    plus 13 neighbours).
+ *
+ * So a background caller cannot distinguish "no cells nearby" from "not
+ * allowed to look" — which is why DnsVpnService declares
+ * foregroundServiceType="specialUse|location" plus
+ * FOREGROUND_SERVICE_LOCATION. A specialUse-only service does not confer
+ * location access on Android 10+.
+ *
+ * UNVERIFIED: whether TelephonyCallback deliveries inside that
+ * location-typed foreground service actually carry a populated list. That
+ * needs a VPN session on the device to confirm, and until it is confirmed
+ * this feature cannot be assumed to work in the field.
  */
 class CellularMonitor(
     private val context: Context,
