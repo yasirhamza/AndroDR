@@ -13,7 +13,10 @@ class SecurityLogTagRegistryTest {
         assertEquals("adb_shell_interactive", SecurityLogTagRegistry.nameFor(SecurityLog.TAG_ADB_SHELL_INTERACTIVE))
         assertEquals("app_process_start", SecurityLogTagRegistry.nameFor(SecurityLog.TAG_APP_PROCESS_START))
         assertEquals("keyguard_dismissed", SecurityLogTagRegistry.nameFor(SecurityLog.TAG_KEYGUARD_DISMISSED))
-        assertEquals("cert_authority_installed", SecurityLogTagRegistry.nameFor(SecurityLog.TAG_CERT_AUTHORITY_INSTALLED))
+        assertEquals(
+            "cert_authority_installed",
+            SecurityLogTagRegistry.nameFor(SecurityLog.TAG_CERT_AUTHORITY_INSTALLED)
+        )
     }
 
     @Test
