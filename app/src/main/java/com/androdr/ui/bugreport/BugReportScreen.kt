@@ -343,6 +343,30 @@ fun BugReportScreen(
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
                                 }
+                                val secCap = ScanOrchestrator.SECURITY_PERSIST_CAP
+                                if (s.securityEventCount > secCap) {
+                                    Text(
+                                        text = stringResource(
+                                            R.string.intrusion_log_summary_capped_security,
+                                            secCap,
+                                            s.securityEventCount
+                                        ),
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                                val findingsCap = ScanOrchestrator.FINDINGS_PERSIST_CAP
+                                if (s.triggeredFindingCount > findingsCap) {
+                                    Text(
+                                        text = stringResource(
+                                            R.string.intrusion_log_summary_capped_findings,
+                                            findingsCap,
+                                            s.triggeredFindingCount
+                                        ),
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
                                 if (s.earliestEventMs != null && s.latestEventMs != null) {
                                     val fmt =
                                         java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.US)

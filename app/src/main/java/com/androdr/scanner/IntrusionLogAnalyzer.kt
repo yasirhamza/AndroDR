@@ -35,7 +35,15 @@ data class IntrusionLogStats(
      * record during parsing (#342 hardening). Surfaced so callers never
      * silently assume detection saw the complete stream for a pathological file.
      */
-    val truncated: Boolean = false
+    val truncated: Boolean = false,
+    /**
+     * Total number of TRIGGERED findings the analysis produced, before the
+     * persistence cap ([ScanOrchestrator.FINDINGS_PERSIST_CAP], #342 B3). The
+     * UI/report derive "kept N of M" from this and the cap constant — mirroring
+     * how the DNS/connect capped line is derived from the total event counts —
+     * so a truncated finding set is never silently hidden.
+     */
+    val triggeredFindingCount: Int = 0
 )
 
 data class IntrusionLogAnalysisResult(
@@ -165,7 +173,8 @@ class IntrusionLogAnalyzer @Inject constructor(
                 malformedLines = parsed.malformedLines,
                 earliestEventMs = tsList.minOrNull(),
                 latestEventMs = tsList.maxOrNull(),
-                truncated = parsed.truncated
+                truncated = parsed.truncated,
+                triggeredFindingCount = findings.count { it.triggered }
             )
         )
     }

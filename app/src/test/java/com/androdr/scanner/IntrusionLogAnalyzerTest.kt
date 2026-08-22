@@ -3,6 +3,7 @@ package com.androdr.scanner
 import android.content.ContentResolver
 import android.content.Context
 import android.net.Uri
+import com.androdr.sigma.Finding
 import com.androdr.sigma.SigmaRuleEngine
 import io.mockk.every
 import io.mockk.mockk
@@ -72,6 +73,33 @@ class IntrusionLogAnalyzerTest {
         verify(exactly = 1) { engine.evaluateDns(match { it.size == 1 }) }
         verify(exactly = 1) { engine.evaluateNetwork(match { it.size == 1 }) }
         verify(exactly = 1) { engine.evaluateSecurityLog(match { it.size == 1 }) }
+    }
+
+    /**
+     * #342 B3: the stats must surface the TOTAL triggered-finding count so the
+     * UI/report can show "kept N of M" once the persistence cap
+     * ([ScanOrchestrator.FINDINGS_PERSIST_CAP]) truncates the set. Only triggered
+     * findings count — untriggered ones are never persisted as rows.
+     */
+    @Test
+    fun `stats surface the triggered finding count for the persistence cap`() {
+        val e = mockk<SigmaRuleEngine>(relaxed = true) {
+            every { evaluateDns(any()) } returns emptyList()
+            every { evaluateNetwork(any()) } returns emptyList()
+            every { evaluateSecurityLog(any()) } returns listOf(
+                Finding(ruleId = "androdr-1", title = "t", level = "high", triggered = true),
+                Finding(ruleId = "androdr-2", title = "t", level = "high", triggered = true),
+                Finding(ruleId = "androdr-3", title = "t", level = "high", triggered = false),
+            )
+        }
+        val result = IntrusionLogAnalyzer(mockk(relaxed = true), e).analyzeEntries(
+            sequenceOf(entry("2026-08-22.txt", day2Sec)),
+            uidResolver = { -1 }, capturedAt = capturedAt,
+        )
+        assertEquals(
+            "only triggered findings count toward the cap",
+            2, result.stats.triggeredFindingCount
+        )
     }
 
     // Finding 3c: a crafted ZIP can raise an Error (OOM/StackOverflow), which no
