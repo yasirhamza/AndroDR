@@ -1,3 +1,4 @@
+import org.gradle.api.tasks.PathSensitivity
 buildscript {
     dependencies {
         constraints {
@@ -174,6 +175,33 @@ android {
         // renaming it would require manifest + AAPT reference updates with no functional benefit
         // since the adaptive icon is only drawn on API 26+ devices anyway.
         disable += setOf("GradleDependency", "AndroidGradlePluginVersion", "ObsoleteSdkInt")
+    }
+}
+
+// Several unit tests are repo gates: they read files directly rather than
+// through the compiled classpath — the manifest, the bundled rule YAML, and
+// the android-sigma-rules submodule. Gradle does not know that, so it treats
+// testDebugUnitTest as up-to-date when ONLY those files change and the gate
+// silently does not run.
+//
+// That is a false green in exactly the case the gate exists for. CI never sees
+// it, because a fresh checkout has nothing cached — which is what makes it easy
+// to miss and worth pinning here. Demonstrated: removing `location` from the
+// service's foregroundServiceType left the guarding test reporting PASS until
+// --rerun-tasks forced it.
+tasks.withType<Test>().configureEach {
+    inputs.file(layout.projectDirectory.file("src/main/AndroidManifest.xml"))
+        .withPathSensitivity(PathSensitivity.RELATIVE)
+        .withPropertyName("androidManifestForGateTests")
+    inputs.dir(layout.projectDirectory.dir("src/main/res/raw"))
+        .withPathSensitivity(PathSensitivity.RELATIVE)
+        .withPropertyName("bundledRulesForGateTests")
+
+    val rulesSubmodule = rootProject.layout.projectDirectory.dir("third-party/android-sigma-rules")
+    if (rulesSubmodule.asFile.isDirectory) {
+        inputs.dir(rulesSubmodule)
+            .withPathSensitivity(PathSensitivity.RELATIVE)
+            .withPropertyName("rulesSubmoduleForGateTests")
     }
 }
 
