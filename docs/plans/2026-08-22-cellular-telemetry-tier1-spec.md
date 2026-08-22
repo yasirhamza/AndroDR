@@ -79,6 +79,43 @@ already verified, do not re-run):
 The load-bearing result is the absence of `Integer.MAX_VALUE`: the platform is
 not silently blanking the fields the heuristics depend on.
 
+### Correction to the evidence above (measured 2026-08-22, during implementation)
+
+**The "zero `Integer.MAX_VALUE`" result does not hold universally.** Re-reading
+`dumpsys telephony.registry` on the same SM-F916B during implementation, with
+**no SIM inserted** (`gsm.sim.state = ABSENT,NOT_READY`, every registration
+`OUT_OF_SERVICE`):
+
+| Field | Observed |
+|---|---|
+| `mBandwidth` | `2147483647` in **34 of 35** records (`0` in the remaining one) |
+| `mEarfcn` | `2147483647` in **34 of 35** records |
+| `mAlphaLong` | `Vodafone Qatar` in 34 |
+
+So the original table describes the **registered** case, not the general one.
+That is not a contradiction — an unregistered radio has nothing to report — but
+it must not be quoted as "the platform never blanks these fields". Two
+consequences:
+
+1. **Sentinel normalization is mandatory, not defensive.** Every integer field
+   is nullable and `Integer.MAX_VALUE` is mapped to `null` at the emitter
+   boundary. Without it, rules would match `2147483647` as if it were a real
+   measurement.
+2. **Heuristic 2 (narrow bandwidth) is unproven and may be inert.** It requires
+   `bandwidth_khz` ∈ {1400, 3000}. Bandwidth was never once observed as a
+   plausible real value on this device. Every v1 cellular rule requires
+   `is_registered: true`, so the unregistered case cannot produce false
+   positives — but whether bandwidth is populated *while registered* on this
+   hardware is **still unmeasured**, and H2 may simply never fire.
+
+**The spike is currently blocked: the device has no SIM.** Nothing in §10 can be
+measured until one is inserted. This gates H1, H2, H4 and H6 validation
+entirely.
+
+**Operator correction.** The device reports `gsm.operator.numeric = 42702` and
+`mAlphaLong = "Vodafone Qatar"` — MCC 427, **MNC 02**. Earlier drafts assumed
+Ooredoo (MNC 01). The shipped operator-mismatch rule targets Vodafone Qatar.
+
 **Caveat carried forward — this evidence is necessary but not sufficient.**
 `dumpsys` runs as the `shell` user and observes the *unredacted framework view*.
 It does not prove that an **unprivileged app** holding `ACCESS_FINE_LOCATION`
