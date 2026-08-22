@@ -35,7 +35,6 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.util.Collections
-import java.util.zip.ZipInputStream
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -655,26 +654,19 @@ class ScanOrchestrator @Inject constructor(
     }
 
     /**
-     * Classifies an imported ZIP by its entry names alone (#342 spec §4.1) —
-     * entry bodies are never read here, so this stays cheap on a multi-hundred-MB
-     * bug report. The analyzer then re-opens the URI to read the content.
+     * Classifies an imported ZIP by its entry names (#342 spec §4.1). Reaching a
+     * ZIP entry's NAME via `ZipInputStream` inflates the PRECEDING entry's body
+     * (`closeEntry()`/`getNextEntry()` decompress and discard it), so this is not
+     * free on a large or crafted archive. [ArtifactSniffer.classifyZip] therefore
+     * (a) short-circuits on the first `dumpstate` entry — a well-formed bug report
+     * is classified without draining bodies — and (b) caps total decompressed
+     * bytes so a deflate bomb cannot inflate unboundedly here (security M5). The
+     * analyzer then re-opens the URI to read the content.
      */
     private suspend fun sniffArtifact(uri: Uri): ArtifactType = withContext(Dispatchers.IO) {
         val stream = context.contentResolver.openInputStream(uri)
             ?: return@withContext ArtifactType.UNRECOGNIZED
-        stream.use { s ->
-            ZipInputStream(s.buffered()).use { zip ->
-                val names = sequence {
-                    var entry = zip.nextEntry
-                    while (entry != null) {
-                        if (!entry.isDirectory) yield(entry.name)
-                        try { zip.closeEntry() } catch (_: Exception) { /* ignore */ }
-                        entry = try { zip.nextEntry } catch (_: Exception) { null }
-                    }
-                }
-                ArtifactSniffer.classify(names)
-            }
-        }
+        stream.use { s -> ArtifactSniffer.classifyZip(s).type }
     }
 
     /**
