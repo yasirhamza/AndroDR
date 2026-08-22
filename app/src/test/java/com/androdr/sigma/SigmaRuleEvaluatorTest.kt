@@ -246,31 +246,35 @@ class SigmaRuleEvaluatorTest {
         // Regression: rule 011 used `package_name|ioc_lookup: known_good_app_db` alone in
         // filter_known_good. A sideloaded impersonator (e.g. com.android.chrome installed from
         // an untrusted source) could be silently exempted because the allowlist match was
-        // package-name-only. Fix: require `from_trusted_store: true` in the filter clause so
-        // sideloaded apps can never reach the exemption.
+        // package-name-only. Fix: require the app to ALSO be genuinely store-installed
+        // (installer|ioc_lookup: trusted_installer_db, post-#136 migration) in the filter
+        // clause so sideloaded apps can never reach the exemption.
         val rule = makeRule(
             selections = mapOf(
                 "selection" to SigmaSelection(listOf(
                     SigmaFieldMatcher("is_system_app", SigmaModifier.EQUALS, listOf(false)),
-                    SigmaFieldMatcher("from_trusted_store", SigmaModifier.EQUALS, listOf(false)),
                     SigmaFieldMatcher("surveillance_permission_count", SigmaModifier.GTE, listOf(2))
+                )),
+                "store_installed" to SigmaSelection(listOf(
+                    SigmaFieldMatcher("installer", SigmaModifier.IOC_LOOKUP, listOf("trusted_installer_db"))
                 )),
                 "filter_known_good" to SigmaSelection(listOf(
                     SigmaFieldMatcher("package_name", SigmaModifier.IOC_LOOKUP, listOf("known_good_db")),
-                    SigmaFieldMatcher("from_trusted_store", SigmaModifier.EQUALS, listOf(true))
+                    SigmaFieldMatcher("installer", SigmaModifier.IOC_LOOKUP, listOf("trusted_installer_db"))
                 ))
             ),
-            condition = "selection and not filter_known_good"
+            condition = "selection and not store_installed and not filter_known_good"
         )
         val iocLookups = mapOf<String, (Any) -> Boolean>(
-            "known_good_db" to { pkg -> pkg.toString() == "com.android.chrome" }
+            "known_good_db" to { pkg -> pkg.toString() == "com.android.chrome" },
+            "trusted_installer_db" to { v -> v.toString() == "com.android.vending" }
         )
 
-        // Sideloaded impersonator: package matches allowlist BUT not from trusted store →
-        // filter must NOT exempt → rule SHOULD fire.
+        // Sideloaded impersonator: package matches allowlist BUT installer is not a trusted
+        // store → filter must NOT exempt → rule SHOULD fire.
         val impersonator = mapOf<String, Any?>(
             "is_system_app" to false,
-            "from_trusted_store" to false,
+            "installer" to null,
             "surveillance_permission_count" to 3,
             "package_name" to "com.android.chrome"
         )
@@ -280,6 +284,19 @@ class SigmaRuleEvaluatorTest {
         assertTrue(
             "Sideloaded impersonator must not be exempted by package-name allowlist",
             impersonatorFindings.any { it.triggered }
+        )
+
+        // Genuinely store-installed (installer = a trusted store) → the negated
+        // `store_installed` selection suppresses the rule first (before filter_known_good
+        // is even decisive) → rule must NOT fire. This asserts the trusted-installer
+        // exemption path, not the package-name filter.
+        val genuine = impersonator + mapOf("installer" to "com.android.vending")
+        val genuineFindings = SigmaRuleEvaluator.evaluate(
+            listOf(rule), listOf(genuine), "app_scanner", iocLookups
+        )
+        assertTrue(
+            "Genuinely store-installed known-good app must be exempted",
+            genuineFindings.none { it.triggered }
         )
     }
 

@@ -12,12 +12,13 @@ logsource:
 detection:
     selection:
         is_system_app: false
-        from_trusted_store: false
         is_known_oem_app: false
         has_accessibility_service: true
+    store_installed:
+        installer|ioc_lookup: trusted_installer_db
     filter_known_good:
         package_name|ioc_lookup: known_good_app_db
-    condition: selection and not filter_known_good
+    condition: selection and not store_installed and not filter_known_good
 level: high
 category: incident
 display:

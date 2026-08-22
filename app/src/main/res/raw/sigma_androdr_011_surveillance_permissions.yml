@@ -15,13 +15,14 @@ logsource:
 detection:
     selection:
         is_system_app: false
-        from_trusted_store: false
         is_known_oem_app: false
         surveillance_permission_count|gte: 2
+    store_installed:
+        installer|ioc_lookup: trusted_installer_db
     filter_known_good:
         package_name|ioc_lookup: known_good_app_db
-        from_trusted_store: true
-    condition: selection and not filter_known_good
+        installer|ioc_lookup: trusted_installer_db
+    condition: selection and not store_installed and not filter_known_good
 level: high
 category: incident
 display:

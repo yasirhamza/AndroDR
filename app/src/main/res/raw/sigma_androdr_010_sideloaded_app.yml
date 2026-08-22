@@ -12,8 +12,9 @@ logsource:
 detection:
     selection:
         is_system_app: false
-        from_trusted_store: false
         is_known_oem_app: false
+    store_installed:
+        installer|ioc_lookup: trusted_installer_db
     filter_known_good:
         package_name|ioc_lookup: known_good_app_db
     # Chrome-minted WebAPKs (org.chromium.webapk.*) are deliberately NOT
@@ -23,14 +24,16 @@ detection:
     #      e.g. the documented PKO Bank Polski WebAPK) ships as a genuine
     #      Google-signed WebAPK. "Minted" does not mean "benign", so a
     #      reviewable Sideloaded-Application finding is the correct posture.
-    #   2. No safe exemption was achievable anyway: the minter uses per-app
-    #      leaf signing certs (only the leaf is emitted; the constant CA
-    #      co-signer is not), and the install-channel signal (installer) is
-    #      unmeasurable across the fleet and forgeable in a rule.
+    #   2. No WEBAPK-SPECIFIC exemption was achievable anyway: the minter
+    #      uses per-app leaf signing certs (only the leaf is emitted; the
+    #      constant CA co-signer is not), so a WebAPK cannot be singled out
+    #      by signature. (This is distinct from the general store gate below,
+    #      which keys on the installer via trusted_installer_db.)
     # WebAPKs installed via Play (com.android.vending, older Android) are
-    # still exempt via the from_trusted_store selection above; the rest
+    # still exempt via the negated store_installed exemption above
+    # (installer|ioc_lookup: trusted_installer_db, #136 Phase 2); the rest
     # correctly surface as REVIEW-level sideloads.
-    condition: selection and not filter_known_good
+    condition: selection and not store_installed and not filter_known_good
 level: medium
 category: incident
 display:

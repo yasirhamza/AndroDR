@@ -1,0 +1,61 @@
+# Fixture for androdr-095: Manic mesh-relay exfiltration (accessibility +
+# nearby-device radios on a non-trusted-store install). Ships with #136
+# Phase 2 (trusted_installer_db). Exercises the requested_permissions
+# all-facts field (#317) with exact-equals FQN matching, and the negated
+# store_installed exemption.
+rule_file: sigma_androdr_095_manic_mesh_relay.yml
+service: app_scanner
+ioc_stubs:
+  trusted_installer_db:
+    - "com.android.vending"
+true_positives:
+  # Sideloaded (installer not trusted), accessibility + Wi-Fi Direct + one BT perm
+  - package_name: "com.evil.manic"
+    is_system_app: false
+    installer: "com.evil.dropper"
+    has_accessibility_service: true
+    requested_permissions:
+      - "android.permission.NEARBY_WIFI_DEVICES"
+      - "android.permission.BLUETOOTH_CONNECT"
+  # The other BT permission satisfies selection_bluetooth (OR over the list)
+  - package_name: "com.evil.manic2"
+    is_system_app: false
+    installer: null
+    has_accessibility_service: true
+    requested_permissions:
+      - "android.permission.NEARBY_WIFI_DEVICES"
+      - "android.permission.BLUETOOTH_ADVERTISE"
+true_negatives:
+  # Trusted-store install — negated store_installed exemption suppresses
+  - package_name: "com.evil.manic"
+    is_system_app: false
+    installer: "com.android.vending"
+    has_accessibility_service: true
+    requested_permissions:
+      - "android.permission.NEARBY_WIFI_DEVICES"
+      - "android.permission.BLUETOOTH_CONNECT"
+  # No accessibility service — selection incomplete
+  - package_name: "com.share.nearby"
+    is_system_app: false
+    installer: null
+    has_accessibility_service: false
+    requested_permissions:
+      - "android.permission.NEARBY_WIFI_DEVICES"
+      - "android.permission.BLUETOOTH_CONNECT"
+  # Accessibility + BT but NO Wi-Fi Direct term — selection incomplete
+  - package_name: "com.assist.tool"
+    is_system_app: false
+    installer: null
+    has_accessibility_service: true
+    requested_permissions:
+      - "android.permission.BLUETOOTH_CONNECT"
+      - "android.permission.BLUETOOTH_ADVERTISE"
+  # Substring hazard guard: a longer permission CONTAINING the target name
+  # must NOT match under exact-equals semantics
+  - package_name: "com.near.miss"
+    is_system_app: false
+    installer: null
+    has_accessibility_service: true
+    requested_permissions:
+      - "android.permission.NEARBY_WIFI_DEVICES_EXTRA"
+      - "android.permission.BLUETOOTH_CONNECT"

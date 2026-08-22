@@ -4,17 +4,19 @@ service: app_scanner
 ioc_stubs:
   known_good_app_db:
     - "com.google.android.gm"
+  trusted_installer_db:
+    - "com.android.vending"
 true_positives:
   - package_name: "com.shady.sideload"
     is_system_app: false
-    from_trusted_store: false
     is_known_oem_app: false
+    installer: null
 true_negatives:
   - package_name: "com.google.android.gm"
     is_system_app: false
-    from_trusted_store: false
     is_known_oem_app: false
+    installer: null
   - package_name: "com.example.legitimate"
     is_system_app: false
-    from_trusted_store: true
     is_known_oem_app: false
+    installer: "com.android.vending"

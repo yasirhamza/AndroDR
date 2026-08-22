@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import com.networknt.schema.SchemaRegistry
 import com.networknt.schema.SpecificationVersion
 import org.junit.Assume.assumeTrue
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
 import org.junit.Test
@@ -165,7 +166,9 @@ class BundledRulesSchemaCrossCheckTest {
      *
      *   2. A block referenced negatively (`not <name>`) in `condition` declares
      *      `from_trusted_store: true` or `is_sideloaded: false`
-     *      (the negation makes the property hold)
+     *      (the negation makes the property hold), or the Phase 2 migrated
+     *      equivalent `installer|ioc_lookup: trusted_installer_db` (a negated
+     *      "installer is a trusted store" block also establishes sideloaded)
      *
      * Without this gate, a rule author could add the annotation to a rule that
      * fires on Play Store apps and the Flag would silently lie.
@@ -206,6 +209,38 @@ class BundledRulesSchemaCrossCheckTest {
         }
     }
 
+    @Test
+    fun `migrated rule using negated trusted_installer_db establishes sideloaded (#136)`() {
+        val doc = mapOf<String, Any?>(
+            "implies_flags" to listOf("sideloaded"),
+            "detection" to mapOf<String, Any?>(
+                "selection" to mapOf("is_system_app" to false, "is_known_oem_app" to false),
+                "store_installed" to mapOf("installer|ioc_lookup" to "trusted_installer_db"),
+                "condition" to "selection and not store_installed",
+            ),
+        )
+        assertEquals(null, sideloadedStructuralViolation("synthetic-migrated.yml", doc))
+    }
+
+    @Test
+    fun `migrated filter-swap using negated trusted_installer_db establishes sideloaded (#136)`() {
+        // `selection` is deliberately NEUTRAL (no from_trusted_store/is_sideloaded) so the
+        // ONLY possible sideload evidence is the negated filter_known_good block's
+        // installer|ioc_lookup: trusted_installer_db. If that clause were removed from
+        // blockEstablishesSideload, this test must go RED (see task-2-report.md for proof).
+        val doc = mapOf<String, Any?>(
+            "implies_flags" to listOf("sideloaded"),
+            "detection" to mapOf<String, Any?>(
+                "selection" to mapOf("is_system_app" to false, "is_known_oem_app" to false),
+                "filter_known_good" to mapOf(
+                    "package_name|ioc_lookup" to "known_good_app_db",
+                    "installer|ioc_lookup" to "trusted_installer_db"),
+                "condition" to "selection and not filter_known_good",
+            ),
+        )
+        assertEquals(null, sideloadedStructuralViolation("synthetic-filterswap.yml", doc))
+    }
+
     private fun sideloadedStructuralViolation(fileName: String, doc: Map<String, Any?>): String? {
         @Suppress("UNCHECKED_CAST")
         val detection = doc["detection"] as? Map<String, Any?> ?: return null
@@ -225,7 +260,8 @@ class BundledRulesSchemaCrossCheckTest {
         else "$fileName: declares `implies_flags: [sideloaded]` but no detection clause " +
             "establishes it. Need either a positive block with `from_trusted_store: false` / " +
             "`is_sideloaded: true`, or a negated block (`not <name>` in condition) with " +
-            "`from_trusted_store: true` / `is_sideloaded: false`."
+            "`from_trusted_store: true` / `is_sideloaded: false` / " +
+            "`installer|ioc_lookup: trusted_installer_db`."
     }
 
     /** Split a flat SIGMA condition string into (positively-referenced, negatively-referenced) block names. */
@@ -246,7 +282,11 @@ class BundledRulesSchemaCrossCheckTest {
      * True iff the named detection block, considered with its polarity in the condition,
      * establishes the sideloaded property:
      *   positive: block has `from_trusted_store: false` or `is_sideloaded: true`
-     *   negated:  block has `from_trusted_store: true` or `is_sideloaded: false`
+     *   negated:  block has `from_trusted_store: true` or `is_sideloaded: false`, or the
+     *             Phase 2 migrated equivalent `installer|ioc_lookup: trusted_installer_db`
+     *             (negating "installer is a trusted store" establishes sideloaded; the
+     *             lookup is intentionally NOT accepted in the positive case, since a
+     *             positive "is trusted store" block asserts the opposite of sideloaded)
      */
     private fun blockEstablishesSideload(
         detection: Map<String, Any?>, name: String, negated: Boolean
@@ -256,6 +296,7 @@ class BundledRulesSchemaCrossCheckTest {
         val trustedExpected = if (negated) true else false
         val sideloadedExpected = if (negated) false else true
         return (block["from_trusted_store"] == trustedExpected) ||
-            (block["is_sideloaded"] == sideloadedExpected)
+            (block["is_sideloaded"] == sideloadedExpected) ||
+            (negated && block["installer|ioc_lookup"] == "trusted_installer_db")
     }
 }

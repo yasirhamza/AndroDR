@@ -436,6 +436,20 @@ scenarios:
       - "Notification Listener"
       - "Hidden App (No Launcher Icon)"
 
+  - id: manic_mesh_relay
+    track: 3
+    risk: high
+    technique: T1639
+    tactic: exfiltration
+    description: "Sideloaded app combining an accessibility service with the Wi-Fi Direct + Bluetooth proximity radios Manic uses for store-and-forward mesh exfiltration — androdr-095 (ships with #136 Phase 2)"
+    source: fixture
+    fixture: fixtures/mercenary/manic-mesh-relay.apk
+    sha256: "260470eb959b077dd5e4ba17ba75b02a054819a130cb1f5a2d00bf1fc8b99e66"
+    tags: [android, manic, mesh-relay, accessibility, nearby-devices]
+    attack: [T1639, T1417.001]
+    expected_patterns:
+      - "Nearby-Device Relay"
+
   - id: firmware_implant_sim
     track: 3
     risk: medium

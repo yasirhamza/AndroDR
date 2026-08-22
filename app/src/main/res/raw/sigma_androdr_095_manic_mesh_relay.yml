@@ -1,0 +1,61 @@
+title: Sideloaded app with accessibility service and nearby-device relay permissions (mesh exfiltration)
+id: androdr-095
+status: experimental
+category: incident
+description: >
+    An app installed outside the device's trusted stores declares an
+    accessibility service and simultaneously requests the Wi-Fi Direct
+    discovery permission (NEARBY_WIFI_DEVICES) plus Bluetooth proximity
+    permissions (BLUETOOTH_CONNECT / BLUETOOTH_ADVERTISE). The Manic
+    banking-malware/spyware hybrid (ThreatFabric, 2026-08) introduced a
+    store-and-forward mesh relay that exfiltrates AES-GCM-encrypted stolen
+    data from offline devices through nearby infected devices over Wi-Fi
+    Direct, Bluetooth RFCOMM, or BLE GATT, up to four hops. Screen-reading
+    accessibility access combined with a device-to-device radio cluster on
+    an unvetted app matches this mesh-relay exfiltration pattern —
+    legitimate nearby-share or peripheral-companion utilities do not also
+    need accessibility access. COVERAGE BOUND: NEARBY_WIFI_DEVICES exists
+    only on API 33+; a variant targeting API <= 32 does Wi-Fi Direct
+    discovery under ACCESS_FINE_LOCATION, and a Bluetooth-only relay needs
+    no Wi-Fi permission at all — both evade the mandatory
+    NEARBY_WIFI_DEVICES term (loosening it would explode false positives;
+    this is a deliberate precision trade, not full Manic coverage).
+    ACTIVATION: matches only on app builds emitting requested_permissions
+    (AndroDR #317+) with the trusted-installer lookup wired (#136 Phase 2);
+    older binaries fail closed and silently skip.
+author: AndroDR AI Pipeline
+date: 2026/08/22
+references:
+    - https://www.threatfabric.com/blogs/manic-blend-between-banking-malware-and-spyware
+tags:
+    - attack.t1639
+    - attack.t1417.001
+logsource:
+    product: androdr
+    service: app_scanner
+detection:
+    selection:
+        is_system_app: false
+        has_accessibility_service: true
+        requested_permissions: "android.permission.NEARBY_WIFI_DEVICES"
+    selection_bluetooth:
+        requested_permissions:
+            - "android.permission.BLUETOOTH_CONNECT"
+            - "android.permission.BLUETOOTH_ADVERTISE"
+    store_installed:
+        installer|ioc_lookup: trusted_installer_db
+    condition: selection and selection_bluetooth and not store_installed
+level: high
+falsepositives:
+    - "Sideloaded but legitimate apps that combine an accessibility service with nearby-device radios: accessibility suites that sync to companion hardware, switch-access/assistive tools driving Bluetooth peripherals, and automation apps granted accessibility that also manage Wi-Fi Direct transfers. There is deliberately no known-good exemption: a genuinely sideloaded app can never reach a trusted-installer-gated exemption, so every match needs user judgement."
+    - "A non-system OEM preload that also declared an accessibility service and this radio cluster would match — the sibling migrated rules exclude such apps with `is_known_oem_app: false`, but that field is a kind:judgment field the #136 emitter contract forbids NEW rules from using, so androdr-095 deliberately omits it. The residual intersection (a non-system, accessibility-holding OEM preload requesting Wi-Fi Direct + Bluetooth proximity) is vanishingly rare and genuine Manic is never an OEM preload; revisit if a pure-emitter OEM lookup becomes available."
+display:
+    category: app_risk
+    icon: wifi_tethering
+    triggered_title: "Accessibility + Nearby-Device Relay (Sideloaded)"
+    evidence_type: none
+remediation:
+    - "This sideloaded app can read and control your screen (accessibility) AND talk directly to nearby devices over Wi-Fi Direct and Bluetooth — the combination the Manic malware uses to steal what you type and smuggle it out through other infected phones nearby, even when your device is offline."
+    - "If you did not knowingly install an assistive or automation tool that needs both capabilities, uninstall it: Settings > Apps > [this app] > Uninstall, and revoke its access under Settings > Accessibility and Settings > Apps > [this app] > Permissions > Nearby devices."
+implies_flags:
+    - sideloaded
