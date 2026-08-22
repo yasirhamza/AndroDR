@@ -111,14 +111,27 @@ class CellularMonitor(
             return
         }
         val snapshot = toSnapshot(serving, cellInfo, System.currentTimeMillis())
+        // PRIVACY: never log the cell identity tuple. (mcc, mnc, tac, ci) is a
+        // globally unique tower identifier and is directly geolocatable — that
+        // is exactly what OpenCelliD does, and what this feature's own
+        // data-broker rules (androdr-079..083) exist to catch other apps doing.
+        // Logging it every delivery would write a timestamped location trail
+        // into logcat, which is readable via adb and captured in bugreports —
+        // on a device whose whole threat model is that it may be targeted.
+        //
+        // The full snapshot IS retained, in the app-private findings store,
+        // which is the access-controlled place for it. Logs carry SHAPE ONLY:
+        // enough to tell "the field arrived populated" from "the field was
+        // blanked", which is the diagnostic that matters.
         Log.i(
             TAG,
-            "snapshot rat=${snapshot.rat} tac=${snapshot.tac} ci=${snapshot.ci} " +
-                "pci=${snapshot.pci} earfcn=${snapshot.earfcn} bw=${snapshot.bandwidthKhz} " +
-                "mcc=${snapshot.mcc} mnc=${snapshot.mnc} op=${snapshot.operatorAlphaLong} " +
-                "neighbours=${snapshot.neighborCount} rsrp=${snapshot.servingRsrp} " +
-                "prevTac=${snapshot.previousTac} tacChanged=${snapshot.tacChanged} " +
-                "churn5m=${snapshot.tacChangesLast5m} ratChanged=${snapshot.ratChanged}"
+            "snapshot rat=${snapshot.rat} tac=${present(snapshot.tac)} " +
+                "ci=${present(snapshot.ci)} pci=${present(snapshot.pci)} " +
+                "earfcn=${present(snapshot.earfcn)} bw=${present(snapshot.bandwidthKhz)} " +
+                "plmn=${present(snapshot.mcc)} op=${present(snapshot.operatorAlphaLong)} " +
+                "neighbours=${snapshot.neighborCount} rsrp=${present(snapshot.servingRsrp)} " +
+                "tacChanged=${snapshot.tacChanged} churn5m=${snapshot.tacChangesLast5m} " +
+                "ratChanged=${snapshot.ratChanged}"
         )
         runCatching { engine.evaluateCellular(listOf(snapshot)) }
             .onSuccess { findings ->
@@ -131,6 +144,13 @@ class CellularMonitor(
 
     /** Android reports unavailable integers as Integer.MAX_VALUE. */
     private fun sentinel(value: Int): Int? = if (value == Int.MAX_VALUE) null else value
+
+    /**
+     * Log-safe field summary: reports whether a value arrived, never the value.
+     * Used so logs can answer "is the platform blanking this field?" without
+     * emitting anything that identifies a cell, and therefore a location.
+     */
+    private fun present(value: Any?): String = if (value == null) "null" else "set"
 
     @SuppressLint("NewApi")
     internal fun toSnapshot(serving: CellInfo, all: List<CellInfo>, now: Long): CellularSnapshot {
