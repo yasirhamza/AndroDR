@@ -206,9 +206,32 @@ consequences:
    positives — but whether bandwidth is populated *while registered* on this
    hardware is **still unmeasured**, and H2 may simply never fire.
 
-**The spike is currently blocked: the device has no SIM.** Nothing in §10 can be
-measured until one is inserted. This gates H1, H2, H4 and H6 validation
-entirely.
+**CORRECTED 2026-08-22 — a SIM is NOT required.** The claim that the spike was
+blocked without a SIM was wrong, and the correction matters operationally.
+
+Measured on the SM-F916B with `gsm.sim.state = ABSENT,NOT_READY`,
+`mVoiceRegState = OUT_OF_SERVICE`, `mIsEmergencyOnly = true` — the app still
+captured a complete snapshot:
+
+```
+rat=LTE tac=set ci=set pci=set earfcn=set plmn=set op=set neighbours=11 rsrp=set
+```
+
+rendering as `Vodafone Qatar · 427/02 · TAC 171 · CI 3046670 · PCI 45 ·
+EARFCN 425`, with 11 neighbours. **A handset with no SIM camps on nearby cells
+for emergency service and reports their real identities**, and `isRegistered`
+is true for the camped cell, so every v1 rule still evaluates.
+
+Two consequences:
+
+1. **The earlier "all sentinels when unregistered" reading was not about the
+   SIM.** Those `Integer.MAX_VALUE` values came from a radio that was still
+   searching and had not yet camped. Camped-without-SIM is a different state
+   and yields full data.
+2. **This is a materially better posture for the travel/honeypot use case.** A
+   SIM-less handset still detects fake base stations while presenting no IMSI
+   to harvest and no subscriber identity to correlate. Tier 1 does not need a
+   subscription — only a radio.
 
 **Operator correction.** The device reports `gsm.operator.numeric = 42702` and
 `mAlphaLong = "Vodafone Qatar"` — MCC 427, **MNC 02**. Earlier drafts assumed
