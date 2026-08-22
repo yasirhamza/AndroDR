@@ -79,6 +79,75 @@ already verified, do not re-run):
 The load-bearing result is the absence of `Integer.MAX_VALUE`: the platform is
 not silently blanking the fields the heuristics depend on.
 
+### SPIKE RESULTS — measured 2026-08-22 with a registered SIM
+
+**This section supersedes both the original evidence table and the no-SIM
+correction below it.** Measured from an instrumented test in the app process on
+SM-F916B / Android 13, SIM loaded (Ooredoo, `42701`), radio `IN_SERVICE`.
+
+#### 1. Foreground gating is real — the biggest single constraint
+
+| Caller state | `getAllCellInfo()` result |
+|---|---|
+| Background, location granted | **empty list** (0 records) |
+| No location permission | `SecurityException: Not allowed to access cell info` |
+| Activity visible (foreground) | **14 records** — 1 serving + 13 neighbours |
+
+**A background caller cannot distinguish "no cells nearby" from "not allowed to
+look".** It gets silence, not an error. This is the risk §10 named as the single
+biggest feasibility question, and the answer is that it is real and total.
+
+Consequence: `DnsVpnService` was `foregroundServiceType="specialUse"`, which
+confers **no** location access on Android 10+. The monitor would have collected
+nothing and reported nothing wrong. It now declares `"specialUse|location"` plus
+`FOREGROUND_SERVICE_LOCATION`.
+
+**Still unverified:** whether `TelephonyCallback` deliveries *inside* that
+location-typed foreground service actually carry a populated list. That needs a
+VPN session on the device. **Until it is confirmed, this feature cannot be
+assumed to work in the field.**
+
+#### 2. Field richness — mixed, and it kills one heuristic
+
+| Field | Serving cell | Neighbours | Verdict |
+|---|---|---|---|
+| `bandwidth` | `2147483647` | `2147483647` (14/14) | **never populated — H2 is dead** |
+| `earfcn` | 1600 | 101 / 2850 / 6400 (0/14 sentinel) | fully populated — H3 viable |
+| `pci` | 167 | 108–467 (0/14 sentinel) | fully populated |
+| `tac` | 1437 | `2147483647` (13/14 sentinel) | serving only — enough for H1 |
+| `ci` | 192816407 | sentinel | serving only |
+| `mcc`/`mnc` | 427 / 01 | null | serving only |
+| `rsrp` | −84 | −76 … −104 | fully populated |
+
+#### 3. Rule consequences
+
+- **androdr-101 (narrow bandwidth) REMOVED as a dead rule.** `bandwidth` is the
+  sentinel in 14/14 app-visible records and 105/106 at the framework layer. It
+  could never fire. Restore only if bandwidth is ever observed populated.
+- **androdr-102 (isolated cell) ADDED.** Neighbours *are* visible — 13 of them —
+  so `neighbor_count: 0` is a real departure. Had they been invisible the field
+  would be 0 always and the rule would have fired on every snapshot; this is why
+  it was held back until measurement.
+- **androdr-106 (Ooredoo, MCC 427 / MNC 01) ADDED.** The loaded SIM is Ooredoo.
+  androdr-105 targets Vodafone Qatar (MNC 02) and is kept for that SIM.
+- **androdr-103 / 104 unaffected.** RAT comes from the `CellInfo` subtype, and
+  serving-cell TAC is populated, which is all the churn rule reads.
+
+#### 4. Correction to my own earlier correction
+
+The no-SIM reading below reported `Vodafone Qatar` / MNC 02. That was **stale
+registry history from a previously used SIM**, not the current one. With a SIM
+loaded the device is Ooredoo, MNC 01. A measurement taken while the radio is
+unregistered is not evidence about the registered case.
+
+#### 5. Still unmeasured
+
+Callback frequency — how often `onCellInfoChanged` actually fires while moving
+between cells — is **not** measured. It requires physically moving. Until it is,
+the H1 threshold of 3 changes per 5 minutes remains an unvalidated default.
+
+---
+
 ### Correction to the evidence above (measured 2026-08-22, during implementation)
 
 **The "zero `Integer.MAX_VALUE`" result does not hold universally.** Re-reading
