@@ -98,7 +98,25 @@ object CellularState {
         }
     }
 
-    fun clear() {
+    /**
+     * Marks the monitor stopped WITHOUT discarding what it observed.
+     *
+     * Stopping collection does not un-observe the radio. The previous version
+     * wiped latest/history/findings here, so toggling the VPN erased a
+     * session's worth of real observations — and a report exported afterwards
+     * said "No radio telemetry captured this session" while the same data was
+     * still visible on screen a moment earlier. The report was not wrong; the
+     * state had been destroyed underneath it.
+     *
+     * Observations persist until the process dies, which is the honest
+     * lifetime for an in-memory view.
+     */
+    fun markStopped() {
+        _status.value = Status.NOT_STARTED
+    }
+
+    /** Full reset. Only for tests and an explicit user-initiated wipe. */
+    fun reset() {
         _status.value = Status.NOT_STARTED
         _latest.value = null
         _history.value = emptyList()

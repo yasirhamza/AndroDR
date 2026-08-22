@@ -133,7 +133,7 @@ class CellularMonitor(
             context.getSystemService(TelephonyManager::class.java)?.unregisterTelephonyCallback(cb)
         }
         callback = null
-        CellularState.clear()
+        CellularState.markStopped()
         Log.i(TAG, "Cellular monitor stopped")
     }
 
