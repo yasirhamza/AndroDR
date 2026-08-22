@@ -209,6 +209,21 @@ class ScanRepository @Inject constructor(
      * Deletes DNS events with a [DnsEvent.timestamp] older than [cutoff].
      * Call periodically (e.g. from WorkManager) to keep the database lean.
      */
+    /**
+     * Persists Tier 1 cellular findings as forensic timeline events.
+     *
+     * Cellular telemetry is event-driven and continuous, so it has no scan to
+     * attach to — but the findings must still be durable: the field
+     * methodology adjudicates each Tier 1 flag against Tier 2 ground truth
+     * after the fact, which is impossible if they only ever lived in memory.
+     * Writing them straight to the timeline also puts them into the timeline
+     * CSV/plaintext exports for free.
+     */
+    suspend fun logCellularTimelineEvents(events: List<ForensicTimelineEvent>) {
+        if (events.isEmpty()) return
+        forensicTimelineEventDao.insertAll(events)
+    }
+
     suspend fun pruneOldDnsEvents(cutoff: Long) {
         dnsEventDao.deleteOlderThan(cutoff)
     }

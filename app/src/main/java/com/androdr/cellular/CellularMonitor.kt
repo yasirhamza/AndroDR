@@ -16,8 +16,13 @@ import android.util.Log
 import androidx.annotation.RequiresApi
 import androidx.core.content.ContextCompat
 import com.androdr.data.model.CellularSnapshot
+import com.androdr.data.model.ForensicTimelineEvent
+import com.androdr.data.repo.ScanRepository
 import com.androdr.data.model.TelemetrySource
+import com.androdr.sigma.Finding
 import com.androdr.sigma.SigmaRuleEngine
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.launch
 
 /**
  * Tier 1 radio telemetry: the live caller that makes `cellular_monitor` rules
@@ -57,6 +62,8 @@ import com.androdr.sigma.SigmaRuleEngine
 class CellularMonitor(
     private val context: Context,
     private val engine: SigmaRuleEngine,
+    private val repository: ScanRepository,
+    private val scope: CoroutineScope,
     private val store: RadioStateStore = RadioStateStore(),
 ) {
     private var callback: TelephonyCallback? = null
@@ -98,6 +105,7 @@ class CellularMonitor(
             context.getSystemService(TelephonyManager::class.java)?.unregisterTelephonyCallback(cb)
         }
         callback = null
+        CellularState.clear()
         Log.i(TAG, "Cellular monitor stopped")
     }
 
@@ -135,11 +143,61 @@ class CellularMonitor(
         )
         runCatching { engine.evaluateCellular(listOf(snapshot)) }
             .onSuccess { findings ->
-                findings.filter { it.triggered }.forEach {
-                    Log.w(TAG, "Cellular finding: ${it.ruleId}")
-                }
+                val triggered = findings.filter { it.triggered }
+                triggered.forEach { Log.w(TAG, "Cellular finding: ${it.ruleId}") }
+                CellularState.record(snapshot, triggered)
+                persist(triggered, snapshot)
             }
-            .onFailure { Log.e(TAG, "evaluateCellular failed: ${it.message}") }
+            .onFailure {
+                Log.e(TAG, "evaluateCellular failed: ${it.message}")
+                // Still surface the snapshot: the radio view stays live even if
+                // rule evaluation fails, so a broken rule cannot silently make
+                // the monitor look dead.
+                CellularState.record(snapshot, emptyList())
+            }
+    }
+
+    /**
+     * Writes triggered findings to the forensic timeline so they survive the
+     * process. The live [CellularState] view is deliberately in-memory; this
+     * is the durable record the field methodology adjudicates against, and it
+     * is what puts cellular findings into the timeline UI and its exports.
+     *
+     * The full radio context goes in `details` because a finding without its
+     * snapshot cannot be judged true or false after the fact.
+     */
+    private fun persist(triggered: List<Finding>, snapshot: CellularSnapshot) {
+        if (triggered.isEmpty()) return
+        val events = triggered.map { f ->
+            ForensicTimelineEvent(
+                startTimestamp = snapshot.capturedAt,
+                kind = "event",
+                source = TIMELINE_SOURCE,
+                category = "network_anomaly",
+                description = f.title,
+                details = buildString {
+                    append("rat=").append(snapshot.rat)
+                    append(" tac=").append(snapshot.tac ?: "-")
+                    append(" ci=").append(snapshot.ci ?: "-")
+                    append(" pci=").append(snapshot.pci ?: "-")
+                    append(" earfcn=").append(snapshot.earfcn ?: "-")
+                    append(" plmn=").append(snapshot.mcc ?: "-").append('/')
+                    append(snapshot.mnc ?: "-")
+                    append(" op=").append(snapshot.operatorAlphaLong ?: "-")
+                    append(" neighbours=").append(snapshot.neighborCount)
+                    append(" rsrp=").append(snapshot.servingRsrp ?: "-")
+                    append(" prevTac=").append(snapshot.previousTac ?: "-")
+                    append(" churn5m=").append(snapshot.tacChangesLast5m)
+                },
+                ruleId = f.ruleId,
+                attackTechniqueId = f.tags.firstOrNull { it.startsWith("attack.") }.orEmpty(),
+                telemetrySource = snapshot.source,
+            )
+        }
+        scope.launch {
+            runCatching { repository.logCellularTimelineEvents(events) }
+                .onFailure { Log.e(TAG, "failed to persist cellular findings: ${it.message}") }
+        }
     }
 
     /** Android reports unavailable integers as Integer.MAX_VALUE. */
@@ -207,5 +265,6 @@ class CellularMonitor(
 
     private companion object {
         const val TAG = "CellularMonitor"
+        const val TIMELINE_SOURCE = "cellular_monitor"
     }
 }

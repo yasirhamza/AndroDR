@@ -61,6 +61,9 @@ fun DnsMonitorScreen(
     val recentEvents by viewModel.recentEvents.collectAsStateWithLifecycle()
     val matchedEvents by viewModel.matchedEvents.collectAsStateWithLifecycle()
     val isVpnRunning by viewModel.isVpnRunning.collectAsStateWithLifecycle()
+    val cellular by viewModel.cellularLatest.collectAsStateWithLifecycle()
+    val cellularFindings by viewModel.cellularFindings.collectAsStateWithLifecycle()
+    val cellularDeliveries by viewModel.cellularDeliveries.collectAsStateWithLifecycle()
     val blocklistBlockMode by settingsViewModel.blocklistBlockMode.collectAsStateWithLifecycle()
     val domainIocBlockMode by settingsViewModel.domainIocBlockMode.collectAsStateWithLifecycle()
     val context = LocalContext.current
@@ -166,6 +169,15 @@ fun DnsMonitorScreen(
                 }
             }
         }
+
+        // Tier 1 cellular telemetry (research build). Placed above the policy
+        // toggles because in the field the live radio state is the thing being
+        // watched, not a detail below the fold.
+        CellularCard(
+            snapshot = cellular,
+            findings = cellularFindings,
+            deliveries = cellularDeliveries,
+        )
 
         // Policy toggles
         Card(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
@@ -306,6 +318,85 @@ private fun DnsEventItem(event: DnsEvent) {
                     else MaterialTheme.colorScheme.primary
                 )
             )
+        }
+    }
+}
+
+@Composable
+private fun CellularCard(
+    snapshot: com.androdr.data.model.CellularSnapshot?,
+    findings: List<com.androdr.sigma.Finding>,
+    deliveries: Int,
+) {
+    Card(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
+        Column(
+            modifier = Modifier.padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Text(
+                    "Cellular (Tier 1)",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Text(
+                    "$deliveries update(s)",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+
+            if (snapshot == null) {
+                // "No data" and "not allowed to look" are indistinguishable from
+                // the API, so say which one this is rather than showing a blank.
+                Text(
+                    "Waiting for a radio update. Needs the VPN running and " +
+                        "location permission; updates arrive only when the " +
+                        "serving cell changes.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                return@Column
+            }
+
+            Text(
+                "${snapshot.rat} · ${snapshot.operatorAlphaLong ?: "unknown operator"}" +
+                    " · ${snapshot.mcc ?: "?"}/${snapshot.mnc ?: "?"}",
+                style = MaterialTheme.typography.bodyMedium,
+            )
+            Text(
+                "TAC ${snapshot.tac ?: "—"} · CI ${snapshot.ci ?: "—"} · " +
+                    "PCI ${snapshot.pci ?: "—"} · EARFCN ${snapshot.earfcn ?: "—"}",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Text(
+                "${snapshot.neighborCount} neighbour(s) · " +
+                    "RSRP ${snapshot.servingRsrp?.let { "$it dBm" } ?: "—"} · " +
+                    "TAC changes (5m): ${snapshot.tacChangesLast5m}",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+
+            if (findings.isEmpty()) {
+                Text(
+                    "No cellular findings.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            } else {
+                findings.forEach { f ->
+                    Text(
+                        "\u26A0 ${f.title} (${f.level})",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                }
+            }
         }
     }
 }

@@ -247,7 +247,9 @@ class DnsVpnService : VpnService() {
 
         // Tier 1 radio telemetry. Inert unless the research permissions are
         // granted; see CellularMonitor.
-        cellularMonitor = CellularMonitor(applicationContext, sigmaRuleEngine).also { it.start() }
+        cellularMonitor = CellularMonitor(
+            applicationContext, sigmaRuleEngine, scanRepository, serviceScope
+        ).also { it.start() }
     }
 
     private fun stopVpn() {
