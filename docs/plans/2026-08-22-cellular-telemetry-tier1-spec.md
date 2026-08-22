@@ -102,10 +102,39 @@ confers **no** location access on Android 10+. The monitor would have collected
 nothing and reported nothing wrong. It now declares `"specialUse|location"` plus
 `FOREGROUND_SERVICE_LOCATION`.
 
-**Still unverified:** whether `TelephonyCallback` deliveries *inside* that
-location-typed foreground service actually carry a populated list. That needs a
-VPN session on the device. **Until it is confirmed, this feature cannot be
-assumed to work in the field.**
+**RESOLVED 2026-08-22 — the production path works.** With the VPN running and
+no visible activity, `TelephonyCallback` inside the location-typed foreground
+service delivered a fully populated list:
+
+```
+snapshot rat=LTE tac=1437 ci=192816407 pci=167 earfcn=1600 bw=null
+mcc=427 mnc=01 op=Ooredoo neighbours=13 rsrp=-84
+```
+
+13 neighbours, real TAC/CI/PCI/EARFCN and operator — from a background
+foreground-service context. **The `specialUse|location` type was both necessary
+and sufficient.** Without it the identical code path yields an empty list and no
+error.
+
+Confirmed at the same time, in the production path rather than a test harness:
+`bandwidth` normalizes to `null` (androdr-101 would indeed have been dead),
+`neighbor_count` is populated so androdr-102 cannot over-fire, and
+`RadioStateStore` tracks prior state correctly (`prevTac=1437`,
+`tacChanged=false` on a same-cell delivery).
+
+**Callback frequency is low, and this is the remaining risk to H1.** Across a
+forced airplane-mode cycle — a full radio de-registration and re-registration —
+only **one** delivery arrived in roughly 60 seconds. A stationary device on one
+cell genuinely has little to report, so this is not yet evidence that the rate
+is too low while moving; but "3 TAC changes in 5 minutes" needs at least three
+deliveries in that window, and nothing measured so far demonstrates that rate is
+achievable. **Movement between cells remains the one unmeasured input**, and it
+gates the H1 threshold.
+
+**State does not survive a VPN restart.** `RadioStateStore` is per-monitor, so
+toggling the VPN resets `previousTac` to null and the churn window to zero.
+Expected, but it means H1 cannot fire across a restart and a long field session
+should avoid toggling.
 
 #### 2. Field richness — mixed, and it kills one heuristic
 
