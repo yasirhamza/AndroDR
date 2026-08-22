@@ -22,6 +22,23 @@ interface ForensicTimelineEventDao {
     """)
     fun getEventsBySource(source: String, limit: Int = 500): Flow<List<ForensicTimelineEvent>>
 
+    /**
+     * Rows of one source belonging to ONE scan (#342 C4). A report embeds
+     * imported intrusion-log evidence only when it is the report FOR that import,
+     * identified by the scan's id — a live-scan report (or a historical one from
+     * before any import) matches no intrusion-log rows and embeds none.
+     */
+    @Query("""
+        SELECT * FROM forensic_timeline
+        WHERE source = :source AND scanResultId = :scanResultId
+        ORDER BY startTimestamp DESC LIMIT :limit
+    """)
+    fun getEventsBySourceForScan(
+        source: String,
+        scanResultId: Long,
+        limit: Int = 500,
+    ): Flow<List<ForensicTimelineEvent>>
+
     @Query("""
         SELECT * FROM forensic_timeline
         WHERE packageName = :packageName

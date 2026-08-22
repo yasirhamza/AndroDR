@@ -64,8 +64,14 @@ class ReportExporter @Inject constructor(
         val accessibilityTelemetry = scanOrchestrator.lastAccessibilityTelemetry
         val receiverTelemetry = scanOrchestrator.lastReceiverTelemetry
         val appOpsTelemetry = scanOrchestrator.lastAppOpsTelemetry
+        // #342 C4: scope imported intrusion-log evidence to THIS scan. The
+        // unscoped query embedded up to 500 imported rows into every report —
+        // including live-scan reports and historical scans predating any import
+        // (wrong forensic provenance, widened disclosure). An intrusion-log
+        // import's rows carry that import's scanResultId, so a report keyed by
+        // scan.id embeds them only when it is the report for that import.
         val intrusionEvents = forensicTimelineEventDao
-            .getEventsBySource("intrusion_log", 500).first()
+            .getEventsBySourceForScan("intrusion_log", scan.id, 500).first()
         val displayNames = inventory
             .associate { it.packageName to it.appName }
             .filterValues { it.isNotEmpty() }
