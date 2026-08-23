@@ -36,6 +36,13 @@ data class AppTelemetry(
     val surveillancePermissionCount: Int,
     val hasAccessibilityService: Boolean,
     val hasDeviceAdmin: Boolean,
+    // True if the app has a receiver registered for BOOT_COMPLETED /
+    // LOCKED_BOOT_COMPLETED (via queryBroadcastReceivers). FLEET SAFETY:
+    // rules may reference this field in POSITIVE selections only until the
+    // fleet floor covers this emitter (#331) — a matcher on the missing
+    // field evaluates false, which INVERTS under `not` on older builds.
+    // See logsource-taxonomy.yml.
+    val hasBootReceiver: Boolean = false,
     val knownAppCategory: String?,
     // Raw component lists — enable manifest-based detections as pure SIGMA rule updates
     val servicePermissions: List<String> = emptyList(),
@@ -76,6 +83,7 @@ data class AppTelemetry(
         "surveillance_permission_count" to surveillancePermissionCount,
         "has_accessibility_service" to hasAccessibilityService,
         "has_device_admin" to hasDeviceAdmin,
+        "has_boot_receiver" to hasBootReceiver,
         "known_app_category" to knownAppCategory,
         "service_permissions" to servicePermissions,
         "receiver_permissions" to receiverPermissions,

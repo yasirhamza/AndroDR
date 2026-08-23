@@ -1,54 +1,55 @@
-# Fixture for androdr-066: non-system app registered for boot-completed broadcast
+# Fixture for androdr-066 after the #331 sideload gate: the rule moved from
+# receiver_audit (fired on ANY non-system boot receiver — six store-installed
+# false positives on a clean device) to app_scanner, and fires only when
+# has_boot_receiver co-occurs with a sideload signal (#136 Phase 2
+# trusted_installer_db store gate, mirroring androdr-010).
 rule_file: sigma_androdr_066_boot_persistence.yml
-service: receiver_audit
+service: app_scanner
 ioc_stubs:
+  trusted_installer_db:
+    - "com.android.vending"
   known_good_app_db:
     - "com.whatsapp"
     - "com.google.android.gms"
 
 true_positives:
-  # BOOT_COMPLETED selection
+  # Sideloaded (no installer) with a boot receiver — the gated detection.
   - package_name: "com.shady.stalkerware"
-    intent_action: "android.intent.action.BOOT_COMPLETED"
+    installer: null
+    has_boot_receiver: true
     is_system_app: false
-  # LOCKED_BOOT_COMPLETED selection
+  # Untrusted install channel with a boot receiver.
   - package_name: "com.shady.persistence"
-    intent_action: "android.intent.action.LOCKED_BOOT_COMPLETED"
-    is_system_app: false
-  # Genuine boot persistence via the app's OWN receiver component must still
-  # fire even though component_name is present (guards filter_framework_component
-  # against over-matching).
-  - package_name: "com.shady.malware"
-    intent_action: "android.intent.action.BOOT_COMPLETED"
-    component_name: "com.shady.malware.BootReceiver"
+    installer: "com.evil.sideloader"
+    has_boot_receiver: true
     is_system_app: false
 
 true_negatives:
-  # WorkManager's reschedule receiver (androidx.work) — present in nearly every
-  # modern app; filtered by filter_framework_component. This is the false
-  # positive the filter exists to suppress (AndroDR itself flagged on it).
-  - package_name: "com.benign.app"
-    intent_action: "android.intent.action.BOOT_COMPLETED"
-    component_name: "androidx.work.impl.background.systemalarm.RescheduleReceiver"
+  # The #331 false-positive class: store-installed app with a boot receiver
+  # (Amex, AdGuard, MS Family Safety, ... were all this shape) — exempt via
+  # the negated trusted_installer_db store gate.
+  - package_name: "com.AmexApp"
+    installer: "com.android.vending"
+    has_boot_receiver: true
     is_system_app: false
-  # Play-services boot receiver — also filtered by framework-component prefix.
-  - package_name: "com.benign.gmsapp"
-    intent_action: "android.intent.action.LOCKED_BOOT_COMPLETED"
-    component_name: "com.google.android.gms.measurement.AppMeasurementReceiver"
-    is_system_app: false
-  # System app — filtered by is_system_app
+  # System app with a boot receiver — filtered by is_system_app.
   - package_name: "com.android.phone"
-    intent_action: "android.intent.action.BOOT_COMPLETED"
+    installer: null
+    has_boot_receiver: true
     is_system_app: true
-  # System app with LOCKED_BOOT_COMPLETED
-  - package_name: "com.android.settings"
-    intent_action: "android.intent.action.LOCKED_BOOT_COMPLETED"
-    is_system_app: true
-  # Known-good non-system app — filtered by known_good_app_db
+  # Known-good non-system app — filtered by known_good_app_db.
   - package_name: "com.whatsapp"
-    intent_action: "android.intent.action.BOOT_COMPLETED"
+    installer: null
+    has_boot_receiver: true
     is_system_app: false
-  # Non-system app with unrelated broadcast action
-  - package_name: "com.shady.otheraction"
-    intent_action: "android.intent.action.ACTION_POWER_CONNECTED"
+  # Sideloaded but no boot receiver — selection does not match.
+  - package_name: "com.random.sideload"
+    installer: null
+    has_boot_receiver: false
+    is_system_app: false
+  # FLEET SAFETY (#331): a record from an old binary that does not emit
+  # has_boot_receiver at all must stay silent — the field appears only in a
+  # POSITIVE selection, so its absence no-ops the rule rather than inverting.
+  - package_name: "com.old.fleet.sideload"
+    installer: null
     is_system_app: false

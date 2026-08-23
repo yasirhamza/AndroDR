@@ -2,6 +2,7 @@ package com.androdr.scanner
 
 import android.Manifest
 import android.content.Context
+import android.content.Intent
 import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
 import android.os.Build
@@ -53,6 +54,12 @@ class AppScanner @Inject constructor(
          * thrashing the storage queue or saturating the CPU schedulers.
          */
         private const val TELEMETRY_PARALLELISM = 16
+
+        // Boot-persistence intent actions (#331) — mirrors ReceiverAuditScanner.
+        private val BOOT_ACTIONS = listOf(
+            "android.intent.action.BOOT_COMPLETED",
+            "android.intent.action.LOCKED_BOOT_COMPLETED",
+        )
 
         // NEW (#168):
         private const val MAX_COMPONENTS_PER_APP = 1024
@@ -174,10 +181,25 @@ class AppScanner @Inject constructor(
         @Suppress("OPT_IN_USAGE")
         val workerDispatcher = Dispatchers.IO.limitedParallelism(TELEMETRY_PARALLELISM)
 
+        // Packages with a BOOT_COMPLETED / LOCKED_BOOT_COMPLETED receiver
+        // (#331). PackageInfo.receivers carries no intent filters, so this is
+        // resolved once per scan via queryBroadcastReceivers — the same query
+        // ReceiverAuditScanner uses — and threaded into the per-app builder.
+        @Suppress("TooGenericExceptionCaught", "SwallowedException")
+        val bootReceiverPackages: Set<String> = try {
+            BOOT_ACTIONS.flatMap { action ->
+                @Suppress("QueryPermissionsNeeded")
+                pm.queryBroadcastReceivers(Intent(action), PackageManager.GET_META_DATA)
+                    .mapNotNull { it.activityInfo?.packageName }
+            }.toSet()
+        } catch (e: Exception) {
+            emptySet()
+        }
+
         val telemetryList = coroutineScope {
             installedPackages
                 .map { pkg ->
-                    async(workerDispatcher) { buildTelemetryForPackage(pm, pkg) }
+                    async(workerDispatcher) { buildTelemetryForPackage(pm, pkg, bootReceiverPackages) }
                 }
                 .awaitAll()
                 .filterNotNull()
@@ -206,7 +228,8 @@ class AppScanner @Inject constructor(
     @Suppress("LongMethod", "CyclomaticComplexMethod", "ReturnCount")
     private fun buildTelemetryForPackage(
         pm: PackageManager,
-        pkg: PackageInfo
+        pkg: PackageInfo,
+        bootReceiverPackages: Set<String>
     ): AppTelemetry? {
         val packageName = pkg.packageName ?: return null
         if (packageName == "com.androdr" || packageName == "com.androdr.debug") return null
@@ -338,6 +361,7 @@ class AppScanner @Inject constructor(
             surveillancePermissionCount = matchedSurveillancePerms.size,
             hasAccessibilityService = hasAccessibilityService,
             hasDeviceAdmin = hasDeviceAdmin,
+            hasBootReceiver = packageName in bootReceiverPackages,
             knownAppCategory = knownApp?.category?.name,
             servicePermissions = servicePermissions,
             receiverPermissions = receiverPermissions,
