@@ -1,49 +1,49 @@
-title: App registered for boot-completed broadcast
+title: Sideloaded app registered for boot-completed broadcast
 id: androdr-066
 status: experimental
 category: incident
 description: >
-    A non-system app is registered to start automatically when the device
-    boots. While many legitimate apps use this (messaging apps, security
-    software), malware and stalkerware commonly register for BOOT_COMPLETED
-    to maintain persistence across reboots.
+    A sideloaded (non-store, non-OEM) app is registered to start automatically
+    when the device boots. A boot receiver alone is ubiquitous in legitimate
+    apps and carries near-zero signal — the original receiver_audit shape of
+    this rule flagged six store-installed apps on a clean device (#331) — so
+    this rule fires only when the persistence mechanism co-occurs with a
+    sideload signal. Malware and stalkerware commonly register for
+    BOOT_COMPLETED to survive reboots after being installed outside any store.
 author: AndroDR (AI-generated)
 date: 2026/04/02
 references:
     - https://attack.mitre.org/techniques/T1624/
+    - https://github.com/yasirhamza/AndroDR/issues/331
 tags:
     - attack.t1624
 logsource:
     product: androdr
-    service: receiver_audit
+    service: app_scanner
 detection:
+    # FLEET SAFETY (#331): has_boot_receiver is emitted only by app builds
+    # after #331, and it appears here in a POSITIVE selection — on older
+    # builds the missing field evaluates false and the rule is simply silent,
+    # which is the intended fleet-wide off-switch for the old noisy shape.
+    # Never move this field into a negated filter until the fleet floor
+    # covers the emitter.
+    # is_known_oem_app is deliberately absent: it is a judgment-kind field and
+    # the #136 emitter contract forbids new rule references. OEM preloads are
+    # exempt via filter_known_good below (the known-good DB classifies OEM and
+    # partner preloads); an OEM-prefixed app that is neither system, store-
+    # installed, nor DB-known firing at level low is intended (cf. #328
+    # prefix-squatting).
     selection:
-        intent_action:
-            - "android.intent.action.BOOT_COMPLETED"
-            - "android.intent.action.LOCKED_BOOT_COMPLETED"
+        has_boot_receiver: true
         is_system_app: false
+    # #136 Phase 2 store gate: the trusted-store exemption keys on the
+    # installer via trusted_installer_db (fail-closed ioc_lookup), not the
+    # from_trusted_store boolean — same shape as androdr-010.
+    store_installed:
+        installer|ioc_lookup: trusted_installer_db
     filter_known_good:
         package_name|ioc_lookup: known_good_app_db
-    # Jetpack/Play-services libraries register their own boot receivers in
-    # virtually every modern app (e.g. androidx.work's RescheduleReceiver for
-    # WorkManager, which is the receiver this rule was firing on for AndroDR
-    # itself). The receiving *component* being a well-known framework class
-    # carries no persistence signal on its own, so exclude those to avoid
-    # flagging essentially every app. Prefixes are scoped to the specific
-    # framework packages that ship boot receivers — not a blanket "androidx." —
-    # to keep the exclusion narrow.
-    #
-    # Tradeoff: component_name is attacker-controllable, so a determined threat
-    # could name its receiver e.g. "androidx.work.Evil" to evade this filter.
-    # That is acceptable for a level:low informational rule whose unfiltered
-    # signal is near-zero (almost every app has a boot receiver); do NOT promote
-    # this rule above low while this component-prefix filter stands.
-    filter_framework_component:
-        component_name|startswith:
-            - "androidx.work."
-            - "com.google.android.gms."
-            - "com.google.firebase."
-    condition: selection and not filter_known_good and not filter_framework_component
+    condition: selection and not store_installed and not filter_known_good
 level: low
 display:
     category: app_risk
@@ -51,4 +51,4 @@ display:
     triggered_title: "Boot Persistence"
     evidence_type: none
 remediation:
-    - "This app starts automatically when your phone boots. If you did not install it intentionally, consider uninstalling it from Settings > Apps."
+    - "This app was installed from outside a trusted store and starts automatically when your phone boots. If you did not install it intentionally, consider uninstalling it from Settings > Apps."

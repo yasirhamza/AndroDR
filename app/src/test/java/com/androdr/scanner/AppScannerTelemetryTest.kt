@@ -591,4 +591,42 @@ class AppScannerTelemetryTest {
         val scope = scanner.collectTelemetry()[0].webapkScope
         assertTrue("scope not capped: ${scope?.length}", (scope?.length ?: 0) <= 2048)
     }
+
+    // ── has_boot_receiver (#331) ────────────────────────────────────────────
+
+    @Test
+    fun `boot receiver membership sets hasBootReceiver per package`() = runTest {
+        val withBoot = buildPackageInfo(pkgName = "com.boot.app")
+        val withoutBoot = buildPackageInfo(pkgName = "com.quiet.app")
+        installPackages(withBoot, withoutBoot)
+
+        val resolveInfo = android.content.pm.ResolveInfo().apply {
+            activityInfo = ActivityInfo().apply { packageName = "com.boot.app" }
+        }
+        every {
+            pm.queryBroadcastReceivers(any(), any<Int>())
+        } returns listOf(resolveInfo)
+
+        val byPkg = scanner.collectTelemetry().associateBy { it.packageName }
+        assertTrue(
+            "expected hasBootReceiver = true for com.boot.app",
+            byPkg.getValue("com.boot.app").hasBootReceiver
+        )
+        assertFalse(
+            "expected hasBootReceiver = false for com.quiet.app",
+            byPkg.getValue("com.quiet.app").hasBootReceiver
+        )
+    }
+
+    @Test
+    fun `boot receiver query failure degrades to false, not a crash`() = runTest {
+        installPackages(buildPackageInfo(pkgName = "com.any.app"))
+        every {
+            pm.queryBroadcastReceivers(any(), any<Int>())
+        } throws SecurityException("query denied")
+
+        val telemetry = scanner.collectTelemetry()
+        assertEquals(1, telemetry.size)
+        assertFalse(telemetry[0].hasBootReceiver)
+    }
 }
