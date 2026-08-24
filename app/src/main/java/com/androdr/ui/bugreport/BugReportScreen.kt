@@ -4,6 +4,7 @@ import android.content.Intent
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.annotation.StringRes
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -53,6 +54,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.androdr.R
+import com.androdr.scanner.ArtifactType
 import com.androdr.scanner.ScanOrchestrator
 import com.androdr.ui.common.FindingCard
 import com.androdr.ui.theme.ExtendedColors
@@ -69,6 +71,7 @@ import java.util.Locale
 fun BugReportScreen(
     viewModel: BugReportViewModel = hiltViewModel()
 ) {
+    val analyzedArtifact by viewModel.analyzedArtifact.collectAsStateWithLifecycle()
     val findings by viewModel.findings.collectAsStateWithLifecycle()
     val timeline by viewModel.timeline.collectAsStateWithLifecycle()
     val intrusionSummary by viewModel.intrusionLogSummary.collectAsStateWithLifecycle()
@@ -81,6 +84,7 @@ fun BugReportScreen(
     val context = LocalContext.current
 
     var instructionsExpanded by remember { mutableStateOf(false) }
+    var intrusionInstructionsExpanded by remember { mutableStateOf(false) }
 
     // Launch share intent when a report URI is ready
     LaunchedEffect(shareUri) {
@@ -112,61 +116,25 @@ fun BugReportScreen(
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             item {
-                // Instructions card (expandable)
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceContainer
-                    )
-                ) {
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Filled.Info,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.primary
-                                )
-                                Text(
-                                    text = stringResource(R.string.bugreport_instructions_title),
-                                    style = MaterialTheme.typography.titleSmall,
-                                    fontWeight = FontWeight.SemiBold
-                                )
-                            }
-                            IconButton(onClick = { instructionsExpanded = !instructionsExpanded }) {
-                                Icon(
-                                    imageVector = if (instructionsExpanded)
-                                        Icons.Filled.ExpandLess
-                                    else
-                                        Icons.Filled.ExpandMore,
-                                    contentDescription = if (instructionsExpanded) {
-                                        stringResource(R.string.cd_collapse)
-                                    } else {
-                                        stringResource(R.string.cd_expand)
-                                    }
-                                )
-                            }
-                        }
+                // How to create a bug report (expandable)
+                InstructionsCard(
+                    title = stringResource(R.string.bugreport_instructions_title),
+                    body = viewModel.instructions,
+                    expanded = instructionsExpanded,
+                    onToggle = { instructionsExpanded = !instructionsExpanded }
+                )
+            }
 
-                        if (instructionsExpanded) {
-                            Spacer(modifier = Modifier.height(12.dp))
-                            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                            Spacer(modifier = Modifier.height(12.dp))
-                            Text(
-                                text = viewModel.instructions,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    }
-                }
+            item {
+                // #356: the same screen also accepts an Advanced Protection
+                // intrusion log export, which is reachable from a completely
+                // different Settings path — undiscoverable without this card.
+                InstructionsCard(
+                    title = stringResource(R.string.intrusion_log_instructions_title),
+                    body = stringResource(R.string.intrusion_log_instructions_body),
+                    expanded = intrusionInstructionsExpanded,
+                    onToggle = { intrusionInstructionsExpanded = !intrusionInstructionsExpanded }
+                )
             }
 
             item {
@@ -421,13 +389,18 @@ fun BugReportScreen(
                                     color = MaterialTheme.colorScheme.onSurface
                                 )
                                 Text(
-                                    text = if (timeline.isNotEmpty()) {
-                                        stringResource(
+                                    // #356: name the artifact that was ACTUALLY
+                                    // analyzed — telling an intrusion-log importer
+                                    // "your system diagnostic was analyzed"
+                                    // misidentifies their evidence.
+                                    text = when {
+                                        timeline.isNotEmpty() -> stringResource(
                                             R.string.bugreport_complete_timeline_only,
                                             timeline.size
                                         )
-                                    } else {
-                                        stringResource(R.string.bugreport_complete_clean_hint)
+                                        analyzedArtifact == ArtifactType.INTRUSION_LOG ->
+                                            stringResource(R.string.intrusion_log_complete_clean_hint)
+                                        else -> stringResource(R.string.bugreport_complete_clean_hint)
                                     },
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -476,6 +449,16 @@ fun BugReportScreen(
 
             // Analysis results — at least one triggered SIGMA finding
             if (!isAnalyzing && hasResults) {
+                // Results header names the detected artifact type (#356).
+                analyzedArtifactLabel(analyzedArtifact)?.let { labelRes ->
+                    item {
+                        Text(
+                            text = stringResource(labelRes),
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
                 // Export button
                 item {
                     Row(
@@ -545,6 +528,72 @@ fun BugReportScreen(
     }
 }
 
+/**
+ * One collapsible "how to obtain this artifact" card. Extracted (#356) so the
+ * bug-report and intrusion-log instructions are the same component rather than
+ * two copies of the header/divider/expand plumbing.
+ */
+@Composable
+private fun InstructionsCard(
+    title: String,
+    body: String,
+    expanded: Boolean,
+    onToggle: () -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainer
+        )
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Row(
+                    modifier = Modifier.weight(1f),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.Info,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                    Text(
+                        text = title,
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
+                IconButton(onClick = onToggle) {
+                    Icon(
+                        imageVector = if (expanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
+                        contentDescription = if (expanded) {
+                            stringResource(R.string.cd_collapse)
+                        } else {
+                            stringResource(R.string.cd_expand)
+                        }
+                    )
+                }
+            }
+
+            if (expanded) {
+                Spacer(modifier = Modifier.height(12.dp))
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                Spacer(modifier = Modifier.height(12.dp))
+                Text(
+                    text = body,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+    }
+}
+
 @Composable
 private fun TimelineEventCard(event: com.androdr.data.model.TimelineEvent) {
     val (icon, color) = findingIconAndColor(event.severity, MaterialTheme.androdrColors)
@@ -594,6 +643,18 @@ private fun TimelineEventCard(event: com.androdr.data.model.TimelineEvent) {
             }
         }
     }
+}
+
+/**
+ * The results-header string for the artifact the sniffer routed to (#356), or
+ * null when no analysis has completed. UNRECOGNIZED never reaches the results
+ * list — [BugReportViewModel] only records the two analyzed types.
+ */
+@StringRes
+private fun analyzedArtifactLabel(type: ArtifactType?): Int? = when (type) {
+    ArtifactType.BUG_REPORT -> R.string.bugreport_analyzed_bug_report
+    ArtifactType.INTRUSION_LOG -> R.string.bugreport_analyzed_intrusion_log
+    ArtifactType.UNRECOGNIZED, null -> null
 }
 
 private fun findingIconAndColor(
