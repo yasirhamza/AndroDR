@@ -128,10 +128,13 @@ class IntrusionLogParser(
 
         // event_time is the one required numeric field; a missing/non-numeric or
         // out-of-window value marks the whole line malformed (throws -> caught).
-        val eventTime = body["event_time"]?.jsonPrimitive?.longOrNull
+        // Real exports mix UNITS across wrapper types, so normalize first and
+        // validate the normalized value (#356).
+        val rawEventTime = body["event_time"]?.jsonPrimitive?.longOrNull
             ?: throw IllegalArgumentException("missing event_time")
+        val eventTime = normalizeToMillis(rawEventTime)
         require(eventTime in MIN_EVENT_TIME_MS..(capturedAt + MAX_CLOCK_SKEW_MS)) {
-            "event_time $eventTime out of window"
+            "event_time $rawEventTime out of window"
         }
 
         // Cap BEFORE dedup so a truncated type never pollutes the seen-set.
@@ -234,27 +237,77 @@ class IntrusionLogParser(
         )
     }
 
+    /**
+     * Two shapes reach here (#356):
+     *
+     *  - the MVT-documented one, `{"tag":210002,"data":["…"]}` — a numeric tag
+     *    plus a positional array. No sampled Samsung/Pixel export emits it, but
+     *    another OEM may, so it stays as the fallback path;
+     *  - the shape a REAL Android 16 export emits: no `tag`, no `data`. The one
+     *    key besides `event_id`/`event_time` IS the tag name in snake_case, and
+     *    its value is an object of NAMED fields (sometimes empty `{}`), e.g.
+     *    `"app_process_start":{"process":"…","uid":99219,…}`.
+     *
+     * The named fields are rendered as sorted `key=value` strings so the shared
+     * [SecurityLogEvent.securityData] stays a `List<String>` for both shapes and
+     * rules can match on `key=` prefixes deterministically. An unregistered tag
+     * name keeps its name with tag [SecurityLogTagRegistry.UNKNOWN_TAG]; a body
+     * with no payload key at all is still EMITTED (emitters emit all facts —
+     * dropping it would hide the fact that an event occurred at all).
+     */
     private fun parseSecurityEvent(
         body: JsonObject,
         eventTime: Long,
         capturedAt: Long
     ): SecurityLogEvent {
-        val tag = body["tag"]?.jsonPrimitive?.intOrNull ?: -1
-        val dataEl = body["data"]
-        val securityData = when {
-            dataEl is JsonArray -> dataEl.map { sanitize(stringify(it)) }
-            dataEl == null || dataEl is JsonNull -> emptyList()
-            else -> listOf(sanitize(stringify(dataEl)))
+        val numericTag = body["tag"]?.jsonPrimitive?.intOrNull
+        val tag: Int
+        val tagName: String
+        val securityData: List<String>
+        if (numericTag != null) {
+            tag = numericTag
+            tagName = SecurityLogTagRegistry.nameFor(numericTag)
+            val dataEl = body["data"]
+            securityData = when {
+                dataEl is JsonArray -> dataEl.map { sanitize(stringify(it)) }
+                dataEl == null || dataEl is JsonNull -> emptyList()
+                else -> listOf(sanitize(stringify(dataEl)))
+            }
+        } else {
+            val payload = body.entries.firstOrNull { it.key !in EVENT_META_KEYS }
+            tag = payload?.let { SecurityLogTagRegistry.idFor(it.key) }
+                ?: SecurityLogTagRegistry.UNKNOWN_TAG
+            tagName = payload?.key ?: SecurityLogTagRegistry.nameFor(SecurityLogTagRegistry.UNKNOWN_TAG)
+            securityData = when (val value = payload?.value) {
+                null, is JsonNull -> emptyList()
+                is JsonObject -> value.entries
+                    .map { (key, el) -> sanitize("$key=${stringify(el)}") }
+                    .sorted()
+                else -> listOf(sanitize(stringify(value)))
+            }
         }
         return SecurityLogEvent(
             timestamp = eventTime,
             tag = tag,
-            tagName = SecurityLogTagRegistry.nameFor(tag),
+            tagName = tagName,
             securityData = securityData,
             source = TelemetrySource.INTRUSION_LOG_IMPORT,
             capturedAt = capturedAt
         )
     }
+
+    /**
+     * Normalizes an `event_time` to epoch MILLISECONDS. Real exports mix units:
+     * `security_event` stamps epoch NANOSECONDS (~1.79e18) while `dns_event` /
+     * `connect_event` stamp epoch milliseconds (~1.79e12) (#356). A value at or
+     * above [NANOSECOND_FLOOR] (1e15 ms would be the year 33658 — unreachable as
+     * a real epoch-ms value, and every epoch-ns value since 2001 exceeds it) is
+     * therefore nanoseconds and is divided down. Applied per RECORD, so a file
+     * mixing both units normalizes line by line; the sanity window then runs on
+     * the normalized value, so an absurd timestamp is still rejected.
+     */
+    private fun normalizeToMillis(raw: Long): Long =
+        if (raw >= NANOSECOND_FLOOR) raw / NANOS_PER_MILLI else raw
 
     /** Reads a string field, sanitized; null when the key is absent or JSON null. */
     private fun JsonObject.sanitizedString(key: String): String? =
@@ -290,6 +343,13 @@ class IntrusionLogParser(
 
     private companion object {
         val KNOWN_WRAPPERS = setOf("dns_event", "connect_event", "security_event")
+
+        /** Wrapper-body keys that are envelope metadata, never the tag-name payload key. */
+        val EVENT_META_KEYS = setOf("event_id", "event_time")
+
+        /** At/above this an `event_time` is nanoseconds, not milliseconds (1e15). */
+        const val NANOSECOND_FLOOR = 1_000_000_000_000_000L
+        const val NANOS_PER_MILLI = 1_000_000L
 
         /** 1 MiB. A single JSONL record is far smaller; anything larger is crafted. */
         const val MAX_LINE_LENGTH = 1_048_576

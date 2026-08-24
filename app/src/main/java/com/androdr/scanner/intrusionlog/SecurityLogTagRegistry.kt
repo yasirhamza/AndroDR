@@ -59,7 +59,22 @@ object SecurityLogTagRegistry {
         SecurityLog.TAG_PACKAGE_UNINSTALLED to "package_uninstalled",
     )
 
+    /** Reverse of [names]; built once. Names are unique (SecurityLogTagRegistryTest). */
+    private val ids: Map<String, Int> = names.entries.associate { (id, name) -> name to id }
+
     fun nameFor(tag: Int): String = names[tag] ?: "unknown_$tag"
 
+    /**
+     * Reverse lookup: the numeric tag for a snake_case name, or [UNKNOWN_TAG]
+     * when the name is not registered. Real Android 16 Advanced Protection
+     * exports NAME the tag instead of numbering it (#356), so the parser resolves
+     * ids this way; an unregistered name keeps its name and this sentinel rather
+     * than dropping the record (emitters emit all facts).
+     */
+    fun idFor(name: String): Int = ids[name] ?: UNKNOWN_TAG
+
     fun allNames(): Collection<String> = names.values
+
+    /** Sentinel tag for a name this registry does not know. */
+    const val UNKNOWN_TAG = -1
 }

@@ -29,4 +29,30 @@ class SecurityLogTagRegistryTest {
         val names = SecurityLogTagRegistry.allNames()
         assertTrue(names.size == names.toSet().size)
     }
+
+    // #356: real Android 16 exports name the tag instead of numbering it, so the
+    // parser needs the reverse lookup. Without it every real security_event lands
+    // as tag -1 and no tag-keyed rule can ever match.
+    @Test
+    fun `idFor reverses the name map`() {
+        assertEquals(SecurityLog.TAG_APP_PROCESS_START, SecurityLogTagRegistry.idFor("app_process_start"))
+        assertEquals(
+            SecurityLog.TAG_USER_RESTRICTION_ADDED,
+            SecurityLogTagRegistry.idFor("user_restriction_added")
+        )
+        assertEquals(SecurityLog.TAG_KEYGUARD_DISMISSED, SecurityLogTagRegistry.idFor("keyguard_dismissed"))
+    }
+
+    @Test
+    fun `idFor returns -1 for an unknown name`() {
+        assertEquals(-1, SecurityLogTagRegistry.idFor("future_event"))
+        assertEquals(-1, SecurityLogTagRegistry.idFor(""))
+    }
+
+    @Test
+    fun `every registered name round-trips through idFor and nameFor`() {
+        for (name in SecurityLogTagRegistry.allNames()) {
+            assertEquals(name, SecurityLogTagRegistry.nameFor(SecurityLogTagRegistry.idFor(name)))
+        }
+    }
 }
