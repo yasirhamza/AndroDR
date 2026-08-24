@@ -64,10 +64,7 @@ object ArtifactSniffer {
             val isDumpstate = base == "dumpstate.txt" ||
                 (base.startsWith("bugreport-") && base.endsWith(".txt"))
             if (isDumpstate) return ArtifactType.BUG_REPORT
-            // Top level or one directory deep (covers androidqf's intrusion-logs/).
-            if (intrusionLogEntry.matches(base) && name.count { it == '/' } <= 1) {
-                sawIntrusionLog = true
-            }
+            if (isPerDayLogEntry(name)) sawIntrusionLog = true
         }
         return if (sawIntrusionLog) ArtifactType.INTRUSION_LOG else ArtifactType.UNRECOGNIZED
     }
