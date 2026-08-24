@@ -63,6 +63,36 @@ class IntrusionLogAnalyzerTest {
         assertEquals(1787400350000L, result.stats.latestEventMs)
     }
 
+    /**
+     * #356: a day rolls over into "(N)" continuation chunks every 8,192 lines —
+     * roughly half of a real Z Fold8 export lives in them. The analyzer's own
+     * copy of the per-day regex matched only the exact basename, so every chunk
+     * was skipped silently: the events were never parsed and nothing said so.
+     * Both the analyzer and the sniffer now share [ArtifactSniffer.isPerDayLogEntry].
+     */
+    @Test
+    fun `continuation chunk entries are parsed, not skipped`() {
+        val result = IntrusionLogAnalyzer(mockk(relaxed = true), engine).analyzeEntries(
+            sequenceOf(
+                entry("2026-08-22.txt", day1Dns),
+                entry("2026-08-22(1).txt", day1Net),
+                entry("2026-08-23(10).txt", day2Sec),
+                entry("intrusion-logs/2026-08-21(2).txt"),   // one dir deep chunk: included (empty)
+                // Too deep: still ignored. A DISTINCT dns line, so parsing it
+                // would raise dnsEventCount to 2 rather than collapsing as a dupe.
+                entry(
+                    "a/b/2026-08-20(1).txt",
+                    """{"dns_event":{"event_id":9,"event_time":1787400346000,"hostname":"deep.example.com"}}"""
+                ),
+            ),
+            uidResolver = { -1 }, capturedAt = capturedAt,
+        )
+        assertEquals(1, result.stats.dnsEventCount)
+        assertEquals(1, result.stats.connectEventCount)
+        assertEquals(1, result.stats.securityEventCount)
+        assertEquals(0, result.stats.malformedLines)
+    }
+
     @Test
     fun `evaluates all three streams through the engine`() {
         val analyzer = IntrusionLogAnalyzer(mockk(relaxed = true), engine)

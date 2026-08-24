@@ -129,9 +129,10 @@ class IntrusionLogAnalyzer @Inject constructor(
         // cross-file event dedup inherent to a single parse() call.
         val lines = sequence {
             for ((name, input) in entries) {
-                val base = name.substringAfterLast('/').lowercase()
-                val matches = PER_DAY_ENTRY.matches(base) && name.count { it == '/' } <= 1
-                if (!matches) continue
+                // Shared with the sniffer (#356) so a ZIP the sniffer accepts can
+                // never be one this loop then reads nothing out of — the two
+                // copies of this rule had already drifted on "(N)" chunks.
+                if (!ArtifactSniffer.isPerDayLogEntry(name)) continue
                 // The ZipInputStream positions the shared stream at this
                 // entry; consume it fully before the caller advances. A bounded
                 // reader guarantees a crafted unterminated "line" is never
@@ -187,7 +188,6 @@ class IntrusionLogAnalyzer @Inject constructor(
 
     private companion object {
         private const val TAG = "IntrusionLogAnalyzer"
-        private val PER_DAY_ENTRY = Regex("""\d{4}-\d{2}-\d{2}\.txt""")
     }
 }
 
