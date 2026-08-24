@@ -359,6 +359,25 @@ class ScanOrchestratorIntrusionLogTest {
         )
     }
 
+    /**
+     * #356: the persisted scan must carry the import's identity, otherwise
+     * History renders an intrusion-log import exactly like a live device scan
+     * and the user cannot tell which device state they are looking at.
+     */
+    @Test
+    fun `persisted ScanResult is stamped INTRUSION_LOG_IMPORT`() = runTest {
+        val uri = mockk<Uri>(relaxed = true)
+        coEvery { intrusionLogAnalyzer.analyze(uri) } returns analysis()
+        val scan = slot<ScanResult>()
+        coEvery {
+            scanRepository.saveScanWithCorrelation(capture(scan), any(), any(), any(), any(), any())
+        } returns Unit
+
+        orchestrator.analyzeIntrusionLog(uri)
+
+        assertEquals(TelemetrySource.INTRUSION_LOG_IMPORT, scan.captured.source)
+    }
+
     // ---------- composition ----------
 
     @Test

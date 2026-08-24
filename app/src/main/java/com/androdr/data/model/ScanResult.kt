@@ -76,7 +76,17 @@ data class ScanResult(
      * Default empty for backward compatibility with data persisted before the
      * column existed (see MIGRATION_10_11 — old rows are populated with `[]`).
      */
-    val scannerErrors: List<ScannerFailure> = emptyList()
+    val scannerErrors: List<ScannerFailure> = emptyList(),
+    /**
+     * What produced this scan: a live device scan, an imported bug report, or an
+     * imported Advanced Protection intrusion log (#356). Without it, History
+     * rendered all three identically, so a user could not tell an import apart
+     * from a scan of the device in front of them — and neither could a report
+     * reader. Stamped by [com.androdr.scanner.ScanOrchestrator] on the import
+     * paths; [TelemetrySource.LIVE_SCAN] is the default, which is also what rows
+     * written before the column existed read back as (see MIGRATION_17_18).
+     */
+    val source: TelemetrySource = TelemetrySource.LIVE_SCAN
 ) {
     /**
      * Number of entries in [scannerErrors] that are real scanner failures —

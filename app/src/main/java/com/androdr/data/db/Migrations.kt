@@ -542,3 +542,19 @@ val MIGRATION_16_17 = object : Migration(16, 17) {
         )
     }
 }
+
+/**
+ * v18: what produced a scan (#356). Adds `ScanResult.source`
+ * ([com.androdr.data.model.TelemetrySource]); imports stamp
+ * BUGREPORT_IMPORT / INTRUSION_LOG_IMPORT so History can label them instead of
+ * showing every row as if the device had been scanned live. Old rows are
+ * backfilled with LIVE_SCAN, which is what they were.
+ */
+@Suppress("MagicNumber")
+val MIGRATION_17_18 = object : Migration(17, 18) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            "ALTER TABLE ScanResult ADD COLUMN source TEXT NOT NULL DEFAULT 'LIVE_SCAN'"
+        )
+    }
+}
