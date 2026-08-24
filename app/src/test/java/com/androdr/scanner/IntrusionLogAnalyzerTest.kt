@@ -63,6 +63,36 @@ class IntrusionLogAnalyzerTest {
         assertEquals(1787400350000L, result.stats.latestEventMs)
     }
 
+    /**
+     * #356: a day rolls over into "(N)" continuation chunks every 8,192 lines —
+     * roughly half of a real Z Fold8 export lives in them. The analyzer's own
+     * copy of the per-day regex matched only the exact basename, so every chunk
+     * was skipped silently: the events were never parsed and nothing said so.
+     * Both the analyzer and the sniffer now share [ArtifactSniffer.isPerDayLogEntry].
+     */
+    @Test
+    fun `continuation chunk entries are parsed, not skipped`() {
+        val result = IntrusionLogAnalyzer(mockk(relaxed = true), engine).analyzeEntries(
+            sequenceOf(
+                entry("2026-08-22.txt", day1Dns),
+                entry("2026-08-22(1).txt", day1Net),
+                entry("2026-08-23(10).txt", day2Sec),
+                entry("intrusion-logs/2026-08-21(2).txt"),   // one dir deep chunk: included (empty)
+                // Too deep: still ignored. A DISTINCT dns line, so parsing it
+                // would raise dnsEventCount to 2 rather than collapsing as a dupe.
+                entry(
+                    "a/b/2026-08-20(1).txt",
+                    """{"dns_event":{"event_id":9,"event_time":1787400346000,"hostname":"deep.example.com"}}"""
+                ),
+            ),
+            uidResolver = { -1 }, capturedAt = capturedAt,
+        )
+        assertEquals(1, result.stats.dnsEventCount)
+        assertEquals(1, result.stats.connectEventCount)
+        assertEquals(1, result.stats.securityEventCount)
+        assertEquals(0, result.stats.malformedLines)
+    }
+
     @Test
     fun `evaluates all three streams through the engine`() {
         val analyzer = IntrusionLogAnalyzer(mockk(relaxed = true), engine)
@@ -102,11 +132,19 @@ class IntrusionLogAnalyzerTest {
         )
     }
 
-    // Finding 3c: a crafted ZIP can raise an Error (OOM/StackOverflow), which no
-    // `catch (Exception)` stops. analyze(uri) must catch Throwable and return a
-    // graceful empty result rather than crashing the process.
+    /**
+     * Finding 3c: a crafted ZIP can raise an Error (OOM/StackOverflow), which no
+     * `catch (Exception)` stops. analyze(uri) must still contain it — the process
+     * must not die — but #356: it must REPORT the failure instead of answering
+     * with an empty result.
+     *
+     * An empty result is indistinguishable from a genuinely empty log, so the
+     * orchestrator persisted an empty import and ran its replace-on-reimport
+     * sweep, deleting the PREVIOUS import's rows while the UI reported success.
+     * A failed read must never destroy evidence or masquerade as an empty one.
+     */
     @Test
-    fun `analyze contains a Throwable raised mid-read and returns empty`() {
+    fun `analyze contains a Throwable raised mid-read and reports it as a failure`() {
         val boomStream = object : InputStream() {
             override fun read(): Int = throw OutOfMemoryError("boom")
             override fun read(b: ByteArray, off: Int, len: Int): Int = throw OutOfMemoryError("boom")
@@ -117,11 +155,42 @@ class IntrusionLogAnalyzerTest {
         val context = mockk<Context> {
             every { contentResolver } returns resolver
         }
-        val result = runBlocking {
-            IntrusionLogAnalyzer(context, engine).analyze(mockk<Uri>(relaxed = true))
+
+        val thrown = runCatching {
+            runBlocking { IntrusionLogAnalyzer(context, engine).analyze(mockk<Uri>(relaxed = true)) }
+        }.exceptionOrNull()
+
+        assertTrue(
+            "an Error must be contained (no process crash) but surfaced as a failure: $thrown",
+            thrown is IntrusionLogAnalyzer.IntrusionLogAnalysisException
+        )
+        // Walk the chain: kotlinx-coroutines' stack-trace recovery re-creates the
+        // thrown exception (it has a single-Throwable constructor) with the
+        // original as its cause, so the Error can sit one link deeper.
+        assertTrue(
+            "the underlying Error must be kept in the cause chain for diagnostics: $thrown",
+            generateSequence(thrown!!.cause) { it.cause }.any { it is OutOfMemoryError }
+        )
+    }
+
+    /** An unreadable file is a failed import, not an empty one (#356). */
+    @Test
+    fun `analyze reports an unopenable uri as a failure rather than an empty import`() {
+        val resolver = mockk<ContentResolver> {
+            every { openInputStream(any()) } returns null
         }
-        assertEquals(0, result.stats.dnsEventCount)
-        assertTrue(result.findings.isEmpty())
+        val context = mockk<Context> {
+            every { contentResolver } returns resolver
+        }
+
+        val thrown = runCatching {
+            runBlocking { IntrusionLogAnalyzer(context, engine).analyze(mockk<Uri>(relaxed = true)) }
+        }.exceptionOrNull()
+
+        assertTrue(
+            "a null stream means the file could not be read: $thrown",
+            thrown is IntrusionLogAnalyzer.IntrusionLogAnalysisException
+        )
     }
 
     // Finding 7: package-name-shape validation rejects junk with NO resolver call.

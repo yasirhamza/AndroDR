@@ -4,6 +4,7 @@ import com.androdr.data.db.DnsEventDao
 import com.androdr.data.db.ForensicTimelineEventDao
 import com.androdr.data.db.ScanResultDao
 import com.androdr.data.model.ScanResult
+import com.androdr.data.model.TelemetrySource
 import com.androdr.data.model.UNREGISTERED_IOC_LOOKUP
 import com.androdr.data.repo.ScanRepository
 import com.androdr.ioc.IndicatorResolver
@@ -333,6 +334,28 @@ class ScanOrchestratorErrorHandlingTest {
         )
         // The rule id stays raw (parser-bounded) so the entry stays greppable.
         assertTrue(message.startsWith("rule androdr-010 "))
+    }
+
+    /**
+     * #356: an imported artifact must not be persisted as if the device had been
+     * scanned live — History has no other way to tell the two apart, and a
+     * bug-report import describes a device state that may be days old.
+     */
+    @Test
+    fun `bug-report import is stamped BUGREPORT_IMPORT`() = runTest {
+        coEvery { bugReportAnalyzer.analyze(any()) } returns
+            BugReportAnalyzer.BugReportAnalysisResult(findings = emptyList(), timeline = emptyList())
+
+        orchestrator.analyzeBugReport(mockk(relaxed = true))
+
+        assertEquals(TelemetrySource.BUGREPORT_IMPORT, capturePersistedScan().source)
+    }
+
+    @Test
+    fun `a live scan keeps the LIVE_SCAN default`() = runTest {
+        orchestrator.runFullScan()
+
+        assertEquals(TelemetrySource.LIVE_SCAN, capturePersistedScan().source)
     }
 
     @Test

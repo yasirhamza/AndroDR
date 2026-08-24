@@ -553,7 +553,10 @@ class ScanOrchestrator @Inject constructor(
             knownMalwareCount = result.findings.count {
                 it.level == "critical" && "known_malware" in it.impliesFlags
             },
-            scannerErrors = bugReportScannerErrors
+            scannerErrors = bugReportScannerErrors,
+            // #356: an imported artifact is not a scan of the device in front of
+            // the user; History labels it from this field.
+            source = TelemetrySource.BUGREPORT_IMPORT
         )
         // Phase 1: finding-derived events. Each triggered finding becomes
         // one ForensicTimelineEvent. Bug-report findings may inherit a
@@ -704,7 +707,10 @@ class ScanOrchestrator @Inject constructor(
             knownMalwareCount = result.findings.count {
                 it.level == "critical" && "known_malware" in it.impliesFlags
             },
-            scannerErrors = emptyList()
+            scannerErrors = emptyList(),
+            // #356: see analyzeBugReport — imports are labeled, not passed off
+            // as live scans of this device.
+            source = TelemetrySource.INTRUSION_LOG_IMPORT
         )
         val allEvents = buildIntrusionLogTimelineEvents(result, scanResult)
 

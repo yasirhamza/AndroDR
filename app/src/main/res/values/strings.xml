@@ -76,21 +76,32 @@
     <string name="diff_new_risks">New Risks</string>
     <string name="diff_resolved">Resolved</string>
     <string name="diff_no_changes">No changes since previous scan</string>
+    <!-- Labels a history row that came from an imported artifact rather than a live scan (#356) -->
+    <string name="history_source_bugreport_import">Bug report import</string>
+    <string name="history_source_intrusion_log_import">Intrusion log import</string>
 
-    <!-- Bug Report / Deep Device Scan -->
+    <!-- Artifact import: bug report (system diagnostic) or intrusion log export -->
     <string name="bugreport_instructions_title">How to create a system diagnostic</string>
-    <string name="bugreport_select_file">Select Diagnostic File (.zip)</string>
-    <string name="bugreport_analyzing">Analyzing system diagnostic\u2026</string>
+    <string name="intrusion_log_instructions_title">How to download intrusion logs (Android 16+)</string>
+    <string name="intrusion_log_instructions_body">Available on Android 16 and later with Advanced Protection enabled.\n\n1. Open Settings \u2192 Security &amp; privacy \u2192 Advanced Protection \u2192 Intrusion Logging\n\n2. Tap \"Access logs\" and download the .zip export\n\n3. Come back here, tap the button above, and select the downloaded .zip\n\nIntrusion logs record DNS lookups, network connections, and system security events from your device. AndroDR analyzes the export entirely on your device \u2014 nothing is uploaded to external servers.</string>
+    <!-- Artifact-neutral: this screen accepts a bug report OR an intrusion log export (#356) -->
+    <string name="bugreport_select_file">Select file to analyze (.zip)</string>
+    <string name="bugreport_analyzing">Analyzing file\u2026</string>
     <string name="bugreport_empty_state">No analysis yet</string>
-    <string name="bugreport_empty_hint">Select a system diagnostic .zip file to scan for threats</string>
+    <string name="bugreport_empty_hint">Select a system diagnostic or intrusion log .zip file to scan for threats</string>
     <string name="bugreport_complete_clean_title">Scan complete — no security signals detected</string>
-    <string name="bugreport_complete_clean_hint">Your system diagnostic was analyzed against AndroDR\'s detection rules and no triggered findings were produced.</string>
+    <string name="bugreport_complete_clean_hint">Your system diagnostic (bug report) was analyzed against AndroDR\'s detection rules and no triggered findings were produced.</string>
+    <string name="intrusion_log_complete_clean_hint">Your intrusion log export was analyzed against AndroDR\'s detection rules and no triggered findings were produced.</string>
+    <!-- Names which artifact the sniffer actually routed to, above the findings list -->
+    <string name="bugreport_analyzed_bug_report">Analyzed: system diagnostic (bug report)</string>
+    <string name="bugreport_analyzed_intrusion_log">Analyzed: intrusion log export</string>
     <!-- PluralsCandidate: compact completion summary; matches bugreport_finding_count style -->
     <string name="bugreport_complete_timeline_only" tools:ignore="PluralsCandidate">Scan complete — %1$d timeline event(s), no triggered findings</string>
     <string name="bugreport_error_title">Analysis failed</string>
     <string name="bugreport_error_hint">Reason: %1$s</string>
-    <string name="dashboard_bugreport_title">Deep Device Scan</string>
-    <string name="dashboard_bugreport_hint">Analyze a system diagnostic for hidden threats</string>
+    <!-- Entry point for BOTH import forks (bug report / intrusion log export), #356 -->
+    <string name="dashboard_bugreport_title">Analyze a File</string>
+    <string name="dashboard_bugreport_hint">Scan a bug report or intrusion log export for hidden threats</string>
 
     <!-- Report export -->
     <string name="report_export_label">Export Report</string>

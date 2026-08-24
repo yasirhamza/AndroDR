@@ -13,8 +13,28 @@ enum class ArtifactType { BUG_REPORT, INTRUSION_LOG, UNRECOGNIZED }
  */
 object ArtifactSniffer {
 
-    /** Advanced Protection per-day export file, e.g. 2026-08-22.txt. */
-    private val intrusionLogEntry = Regex("""\d{4}-\d{2}-\d{2}\.txt""")
+    /**
+     * Advanced Protection per-day export file — `2026-08-22.txt` and the
+     * `2026-08-22(1).txt` continuation chunks the exporter rolls over to every
+     * 8,192 lines (#356; ~47% of a real Z Fold8 export lives in chunks).
+     */
+    private val intrusionLogEntry = Regex("""\d{4}-\d{2}-\d{2}(\(\d+\))?\.txt""")
+
+    /**
+     * True when [entryName] is an Advanced Protection per-day log entry: a
+     * `YYYY-MM-DD.txt` basename or one of its `(N)` continuation chunks
+     * (case-insensitive), at the top level or one directory deep (which covers
+     * androidqf's `intrusion-logs/` layout).
+     *
+     * THE single definition of "is this a per-day log entry", shared by
+     * [classify] and [com.androdr.scanner.IntrusionLogAnalyzer] (#356). They
+     * previously each carried a copy of the regex, so a fix to one — such as
+     * accepting `(N)` chunks — silently left the other refusing the same file.
+     */
+    fun isPerDayLogEntry(entryName: String): Boolean {
+        val base = entryName.substringAfterLast('/').lowercase()
+        return intrusionLogEntry.matches(base) && entryName.count { it == '/' } <= 1
+    }
 
     /**
      * Decompressed-byte budget for one sniff (#342 C3, security M5). Classifying
@@ -44,10 +64,7 @@ object ArtifactSniffer {
             val isDumpstate = base == "dumpstate.txt" ||
                 (base.startsWith("bugreport-") && base.endsWith(".txt"))
             if (isDumpstate) return ArtifactType.BUG_REPORT
-            // Top level or one directory deep (covers androidqf's intrusion-logs/).
-            if (intrusionLogEntry.matches(base) && name.count { it == '/' } <= 1) {
-                sawIntrusionLog = true
-            }
+            if (isPerDayLogEntry(name)) sawIntrusionLog = true
         }
         return if (sawIntrusionLog) ArtifactType.INTRUSION_LOG else ArtifactType.UNRECOGNIZED
     }

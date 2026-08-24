@@ -7,6 +7,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.androdr.data.model.TimelineEvent
 import com.androdr.reporting.TimelineFormatter
+import com.androdr.scanner.ArtifactType
 import com.androdr.scanner.IntrusionLogStats
 import com.androdr.scanner.ScanOrchestrator
 import com.androdr.sigma.Finding
@@ -40,6 +41,18 @@ class BugReportViewModel @Inject constructor(
     /** Non-null when the most recently analyzed artifact was an intrusion-log import (#342). */
     private val _intrusionLogSummary = MutableStateFlow<IntrusionLogStats?>(null)
     val intrusionLogSummary: StateFlow<IntrusionLogStats?> = _intrusionLogSummary.asStateFlow()
+
+    /**
+     * Which artifact the sniffer actually routed the last import to (#356), or
+     * null while none has completed. One screen accepts both a bug report and an
+     * intrusion log export, so its result copy must name what was ACTUALLY
+     * analyzed — "your system diagnostic was analyzed" over an intrusion log
+     * import is not a cosmetic slip in a forensic tool, it misidentifies the
+     * evidence. Reset at the start of every analysis, so a failed import cannot
+     * leave the previous artifact's label standing.
+     */
+    private val _analyzedArtifact = MutableStateFlow<ArtifactType?>(null)
+    val analyzedArtifact: StateFlow<ArtifactType?> = _analyzedArtifact.asStateFlow()
 
     private val _isAnalyzing = MutableStateFlow(false)
     val isAnalyzing: StateFlow<Boolean> = _isAnalyzing.asStateFlow()
@@ -105,17 +118,20 @@ class BugReportViewModel @Inject constructor(
             _errorMessage.value = null
             _findings.value = emptyList()
             _timeline.value = emptyList()
+            _analyzedArtifact.value = null
             try {
                 _intrusionLogSummary.value = null
                 when (val analysis = orchestrator.analyzeArtifact(uri)) {
                     is ScanOrchestrator.ArtifactAnalysis.BugReport -> {
                         _findings.value = analysis.result.findings
                         _timeline.value = analysis.result.timeline
+                        _analyzedArtifact.value = ArtifactType.BUG_REPORT
                     }
                     is ScanOrchestrator.ArtifactAnalysis.IntrusionLog -> {
                         _findings.value = analysis.result.findings.filter { it.triggered }
                         _timeline.value = emptyList()
                         _intrusionLogSummary.value = analysis.result.stats
+                        _analyzedArtifact.value = ArtifactType.INTRUSION_LOG
                     }
                 }
                 _analysisFinished.value = true

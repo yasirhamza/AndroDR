@@ -1,6 +1,7 @@
 package com.androdr.scanner
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.ByteArrayInputStream
@@ -109,6 +110,39 @@ class ArtifactSnifferTest {
             ArtifactType.UNRECOGNIZED,
             ArtifactSniffer.classify(sequenceOf("a/b/2026-08-21.txt"))
         )
+    }
+
+    // ── #356: "(N)" continuation chunks ───────────────────────────────────
+    //
+    // The exporter rolls a day over into 2026-08-22(1).txt, (2)… every 8,192
+    // lines. The old exact-basename regex skipped every chunk — ~47% of the real
+    // Z Fold8 export — and a ZIP whose only entries are chunks classified as
+    // UNRECOGNIZED, so the import was refused outright.
+
+    @Test
+    fun `a zip containing only a continuation chunk is an intrusion log`() {
+        val zip = zipOf("2026-08-22(1).txt" to "x".repeat(100).toByteArray())
+        val outcome = ArtifactSniffer.classifyZip(ByteArrayInputStream(zip))
+
+        assertEquals(ArtifactType.INTRUSION_LOG, outcome.type)
+    }
+
+    @Test
+    fun `continuation chunk names match the shared per-day predicate`() {
+        assertTrue(ArtifactSniffer.isPerDayLogEntry("2026-08-22.txt"))
+        assertTrue(ArtifactSniffer.isPerDayLogEntry("2026-08-22(1).txt"))
+        assertTrue(ArtifactSniffer.isPerDayLogEntry("2026-08-23(10).txt"))
+        assertTrue("case-insensitive", ArtifactSniffer.isPerDayLogEntry("2026-08-22(2).TXT"))
+        assertTrue("one directory deep", ArtifactSniffer.isPerDayLogEntry("intrusion-logs/2026-08-22(1).txt"))
+    }
+
+    @Test
+    fun `the shared per-day predicate rejects lookalike names`() {
+        assertFalse(ArtifactSniffer.isPerDayLogEntry("2026-08-22x.txt"))
+        assertFalse(ArtifactSniffer.isPerDayLogEntry("foo(1).txt"))
+        assertFalse(ArtifactSniffer.isPerDayLogEntry("2026-08-22().txt"))
+        assertFalse(ArtifactSniffer.isPerDayLogEntry("2026-08-22(1).txt.bak"))
+        assertFalse("nested deeper than one directory", ArtifactSniffer.isPerDayLogEntry("a/b/2026-08-22(1).txt"))
     }
 
     @Test

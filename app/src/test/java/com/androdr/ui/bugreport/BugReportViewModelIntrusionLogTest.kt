@@ -1,7 +1,10 @@
 package com.androdr.ui.bugreport
 
 import android.net.Uri
+import com.androdr.scanner.ArtifactType
+import com.androdr.scanner.BugReportAnalyzer
 import com.androdr.scanner.IntrusionLogAnalysisResult
+import com.androdr.scanner.IntrusionLogAnalyzer
 import com.androdr.scanner.IntrusionLogStats
 import com.androdr.scanner.ScanOrchestrator
 import io.mockk.coEvery
@@ -80,5 +83,92 @@ class BugReportViewModelIntrusionLogTest {
         assertNotNull("a successful import must render the summary card", vm.intrusionLogSummary.value)
         assertEquals(3, vm.intrusionLogSummary.value!!.dnsEventCount)
         assertNull("no error on success", vm.errorMessage.value)
+    }
+
+    /**
+     * #356: an analysis failure (unreadable/crafted ZIP) must render the error
+     * card with NO summary — the same honest treatment as a failed persist.
+     * Before the fix the analyzer answered a failed read with an empty result,
+     * so this path rendered "Intrusion log analyzed — 0 events" for an import
+     * that had in fact deleted the previous one.
+     */
+    @Test
+    fun `a failed analysis surfaces an error and no summary card`() = runTest {
+        val orchestrator = mockk<ScanOrchestrator>()
+        coEvery { orchestrator.analyzeArtifact(any()) } throws
+            IntrusionLogAnalyzer.IntrusionLogAnalysisException(RuntimeException("unreadable zip"))
+        val vm = BugReportViewModel(mockk(relaxed = true), orchestrator)
+
+        vm.analyzeUri(mockk<Uri>(relaxed = true))
+
+        assertNull("no summary card may render for an analysis that failed", vm.intrusionLogSummary.value)
+        assertNull("no artifact label may be claimed", vm.analyzedArtifact.value)
+        assertNotNull("the analysis failure must be surfaced", vm.errorMessage.value)
+        assertTrue(
+            "the message must say it failed: ${vm.errorMessage.value}",
+            vm.errorMessage.value!!.contains("failed", ignoreCase = true)
+        )
+        assertTrue("no findings render on a failed analysis", vm.findings.value.isEmpty())
+        assertTrue(vm.analysisFinished.value)
+    }
+
+    // ── #356: the screen must name the artifact that was ACTUALLY analyzed ──
+    //
+    // One screen accepts both artifacts, so its result copy has to follow the
+    // sniffer's routing decision. Without this flow the UI called every import a
+    // "system diagnostic", which misidentifies an intrusion log importer's
+    // evidence, and a stale label could survive a later failed import.
+
+    @Test
+    fun `an intrusion log import records INTRUSION_LOG as the analyzed artifact`() = runTest {
+        val orchestrator = mockk<ScanOrchestrator>()
+        val result = IntrusionLogAnalysisResult(
+            findings = emptyList(), dnsEvents = emptyList(),
+            networkEvents = emptyList(), securityEvents = emptyList(), stats = stats()
+        )
+        coEvery { orchestrator.analyzeArtifact(any()) } returns
+            ScanOrchestrator.ArtifactAnalysis.IntrusionLog(result)
+        val vm = BugReportViewModel(mockk(relaxed = true), orchestrator)
+
+        vm.analyzeUri(mockk<Uri>(relaxed = true))
+
+        assertEquals(ArtifactType.INTRUSION_LOG, vm.analyzedArtifact.value)
+    }
+
+    @Test
+    fun `a bug report import records BUG_REPORT as the analyzed artifact`() = runTest {
+        val orchestrator = mockk<ScanOrchestrator>()
+        coEvery { orchestrator.analyzeArtifact(any()) } returns
+            ScanOrchestrator.ArtifactAnalysis.BugReport(
+                BugReportAnalyzer.BugReportAnalysisResult(findings = emptyList(), timeline = emptyList())
+            )
+        val vm = BugReportViewModel(mockk(relaxed = true), orchestrator)
+
+        vm.analyzeUri(mockk<Uri>(relaxed = true))
+
+        assertEquals(ArtifactType.BUG_REPORT, vm.analyzedArtifact.value)
+    }
+
+    @Test
+    fun `a failed analysis clears the previous artifact label`() = runTest {
+        val orchestrator = mockk<ScanOrchestrator>()
+        val result = IntrusionLogAnalysisResult(
+            findings = emptyList(), dnsEvents = emptyList(),
+            networkEvents = emptyList(), securityEvents = emptyList(), stats = stats()
+        )
+        coEvery { orchestrator.analyzeArtifact(any()) } returns
+            ScanOrchestrator.ArtifactAnalysis.IntrusionLog(result)
+        val vm = BugReportViewModel(mockk(relaxed = true), orchestrator)
+        vm.analyzeUri(mockk<Uri>(relaxed = true))
+        assertEquals(ArtifactType.INTRUSION_LOG, vm.analyzedArtifact.value)
+
+        coEvery { orchestrator.analyzeArtifact(any()) } throws
+            ScanOrchestrator.UnrecognizedArtifactException()
+        vm.analyzeUri(mockk<Uri>(relaxed = true))
+
+        assertNull(
+            "a stale label would attribute the old artifact's identity to a failed import",
+            vm.analyzedArtifact.value
+        )
     }
 }
