@@ -378,6 +378,33 @@ class ScanOrchestratorIntrusionLogTest {
         assertEquals(TelemetrySource.INTRUSION_LOG_IMPORT, scan.captured.source)
     }
 
+    /**
+     * #356: an ANALYSIS failure must never reach the persistence step. The sweep
+     * (`deletePriorIntrusionLogRows`) runs as the save's first act, so an empty
+     * result returned for a failed read used to delete the previous import's
+     * rows and write an empty one in its place — evidence destroyed, success
+     * reported. With the analyzer throwing, nothing is deleted, nothing is
+     * saved, and the error reaches the ViewModel's error card.
+     */
+    @Test
+    fun `an analysis failure never sweeps or persists anything`() = runTest {
+        val uri = mockk<Uri>(relaxed = true)
+        coEvery { intrusionLogAnalyzer.analyze(uri) } throws
+            IntrusionLogAnalyzer.IntrusionLogAnalysisException(RuntimeException("unreadable zip"))
+
+        val thrown = runCatching { orchestrator.analyzeIntrusionLog(uri) }.exceptionOrNull()
+
+        assertTrue(
+            "the failure must propagate to the caller, not be swallowed: $thrown",
+            thrown is IntrusionLogAnalyzer.IntrusionLogAnalysisException
+        )
+        coVerify(exactly = 0) { forensicTimelineEventDao.deleteByScanId(any()) }
+        coVerify(exactly = 0) { forensicTimelineEventDao.deleteBySource(any()) }
+        coVerify(exactly = 0) {
+            scanRepository.saveScanWithCorrelation(any(), any(), any(), any(), any(), any())
+        }
+    }
+
     // ---------- composition ----------
 
     @Test

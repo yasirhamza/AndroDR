@@ -4,6 +4,7 @@ import android.net.Uri
 import com.androdr.scanner.ArtifactType
 import com.androdr.scanner.BugReportAnalyzer
 import com.androdr.scanner.IntrusionLogAnalysisResult
+import com.androdr.scanner.IntrusionLogAnalyzer
 import com.androdr.scanner.IntrusionLogStats
 import com.androdr.scanner.ScanOrchestrator
 import io.mockk.coEvery
@@ -82,6 +83,33 @@ class BugReportViewModelIntrusionLogTest {
         assertNotNull("a successful import must render the summary card", vm.intrusionLogSummary.value)
         assertEquals(3, vm.intrusionLogSummary.value!!.dnsEventCount)
         assertNull("no error on success", vm.errorMessage.value)
+    }
+
+    /**
+     * #356: an analysis failure (unreadable/crafted ZIP) must render the error
+     * card with NO summary — the same honest treatment as a failed persist.
+     * Before the fix the analyzer answered a failed read with an empty result,
+     * so this path rendered "Intrusion log analyzed — 0 events" for an import
+     * that had in fact deleted the previous one.
+     */
+    @Test
+    fun `a failed analysis surfaces an error and no summary card`() = runTest {
+        val orchestrator = mockk<ScanOrchestrator>()
+        coEvery { orchestrator.analyzeArtifact(any()) } throws
+            IntrusionLogAnalyzer.IntrusionLogAnalysisException(RuntimeException("unreadable zip"))
+        val vm = BugReportViewModel(mockk(relaxed = true), orchestrator)
+
+        vm.analyzeUri(mockk<Uri>(relaxed = true))
+
+        assertNull("no summary card may render for an analysis that failed", vm.intrusionLogSummary.value)
+        assertNull("no artifact label may be claimed", vm.analyzedArtifact.value)
+        assertNotNull("the analysis failure must be surfaced", vm.errorMessage.value)
+        assertTrue(
+            "the message must say it failed: ${vm.errorMessage.value}",
+            vm.errorMessage.value!!.contains("failed", ignoreCase = true)
+        )
+        assertTrue("no findings render on a failed analysis", vm.findings.value.isEmpty())
+        assertTrue(vm.analysisFinished.value)
     }
 
     // ── #356: the screen must name the artifact that was ACTUALLY analyzed ──

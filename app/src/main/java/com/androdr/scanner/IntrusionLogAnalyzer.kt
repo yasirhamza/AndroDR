@@ -16,6 +16,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
+import java.io.IOException
 import java.io.InputStream
 import java.io.Reader
 import java.util.zip.ZipInputStream
@@ -69,6 +70,25 @@ class IntrusionLogAnalyzer @Inject constructor(
     // JVM unit tests construct this with a relaxed MockK Context — only
     // analyze(uri) touches it; analyzeEntries() is context-free by design.
 
+    /**
+     * Thrown by [analyze] when the export could not be analyzed at all (#356).
+     *
+     * The Throwable catch below still exists to stop a crafted ZIP's
+     * OutOfMemoryError / StackOverflowError from killing the process (#342
+     * security M1) — but it no longer answers with an EMPTY RESULT. An empty
+     * result is indistinguishable from a genuinely empty log, so
+     * [com.androdr.scanner.ScanOrchestrator.analyzeIntrusionLog] went on to
+     * persist an empty import AND run its replace-on-reimport sweep, wiping the
+     * previous import's rows while the UI reported success: a failed read
+     * destroyed good evidence and said nothing. A failure is now loud, and
+     * because it propagates out before the save, the prior import survives
+     * untouched.
+     */
+    class IntrusionLogAnalysisException(cause: Throwable) : Exception(
+        "Intrusion log analysis failed — nothing was imported.",
+        cause
+    )
+
     // Catching Throwable at the import boundary is deliberate (finding 3c): a
     // crafted ZIP can raise an Error, which must not crash the process.
     @Suppress("TooGenericExceptionCaught")
@@ -87,8 +107,10 @@ class IntrusionLogAnalyzer @Inject constructor(
             }
         })
         try {
+            // A null stream means "could not read the selected file", which is a
+            // failed import, not an empty one — same loud treatment (#356).
             val stream = context.contentResolver.openInputStream(uri)
-                ?: return@withContext emptyResult()
+                ?: throw IOException("content resolver returned no stream for the selected file")
             stream.use { s ->
                 ZipInputStream(s.buffered()).use { zip ->
                     val entrySequence = sequence {
@@ -112,10 +134,12 @@ class IntrusionLogAnalyzer @Inject constructor(
             throw c
         } catch (t: Throwable) {
             // A crafted ZIP can trigger OutOfMemoryError / StackOverflowError,
-            // which are Errors (not Exceptions); catching Throwable here turns a
-            // would-be process crash into a graceful empty import (security M1).
-            Log.w(TAG, "Intrusion log import failed; returning empty result", t)
-            emptyResult()
+            // which are Errors (not Exceptions); catching Throwable here still
+            // turns a would-be process crash into a handled failure (security
+            // M1) — but it is now reported as one, never as an empty import
+            // (#356; see IntrusionLogAnalysisException).
+            Log.w(TAG, "Intrusion log import failed", t)
+            throw IntrusionLogAnalysisException(t)
         }
     }
 
@@ -179,12 +203,6 @@ class IntrusionLogAnalyzer @Inject constructor(
             )
         )
     }
-
-    private fun emptyResult() = IntrusionLogAnalysisResult(
-        findings = emptyList(), dnsEvents = emptyList(), networkEvents = emptyList(),
-        securityEvents = emptyList(),
-        stats = IntrusionLogStats(0, 0, 0, 0, 0, null, null)
-    )
 
     private companion object {
         private const val TAG = "IntrusionLogAnalyzer"
