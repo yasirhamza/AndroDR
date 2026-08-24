@@ -5,6 +5,7 @@ import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.widget.Toast
+import androidx.annotation.StringRes
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.shrinkVertically
@@ -65,6 +66,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.androdr.R
 import com.androdr.data.model.ScanResult
+import com.androdr.data.model.TelemetrySource
 import com.androdr.scanner.ScanOrchestrator
 import com.androdr.ui.common.ExportModeDialog
 import com.androdr.ui.common.severityColor
@@ -277,6 +279,9 @@ private fun ScanReportBottomSheet(
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
+                    // Same label as the list row, so opening a report cannot lose
+                    // the fact that it describes an imported artifact (#356).
+                    ImportSourceLabel(scan.source)
                 }
                 SuggestionChip(
                     onClick = {},
@@ -421,6 +426,9 @@ private fun ScanHistoryItem(
                         style = MaterialTheme.typography.titleSmall,
                         fontWeight = FontWeight.SemiBold
                     )
+                    // #356: an imported artifact is not a scan of this device;
+                    // say so, or the row reads as live device state.
+                    ImportSourceLabel(scan.source)
                     Text(
                         text = "${scan.appRisks.count { it.triggered }} app risk(s) \u00b7 " +
                             "${scan.deviceFlags.count { it.triggered }} device flag(s)",
@@ -592,4 +600,29 @@ private fun DiffSection(diff: ScanOrchestrator.ScanDiff) {
             )
         }
     }
+}
+
+/**
+ * Small "this row came from an import" label (#356). Renders nothing for a live
+ * scan — the common case stays visually unchanged — and names the artifact for
+ * the two import sources, which otherwise look identical to a scan of the
+ * device the user is holding.
+ */
+@Composable
+private fun ImportSourceLabel(source: TelemetrySource) {
+    importSourceLabel(source)?.let { labelRes ->
+        Text(
+            text = stringResource(labelRes),
+            style = MaterialTheme.typography.labelSmall,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.primary
+        )
+    }
+}
+
+@StringRes
+private fun importSourceLabel(source: TelemetrySource): Int? = when (source) {
+    TelemetrySource.LIVE_SCAN -> null
+    TelemetrySource.BUGREPORT_IMPORT -> R.string.history_source_bugreport_import
+    TelemetrySource.INTRUSION_LOG_IMPORT -> R.string.history_source_intrusion_log_import
 }

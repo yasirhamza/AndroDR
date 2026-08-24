@@ -76,6 +76,9 @@
     <string name="diff_new_risks">New Risks</string>
     <string name="diff_resolved">Resolved</string>
     <string name="diff_no_changes">No changes since previous scan</string>
+    <!-- Labels a history row that came from an imported artifact rather than a live scan (#356) -->
+    <string name="history_source_bugreport_import">Bug report import</string>
+    <string name="history_source_intrusion_log_import">Intrusion log import</string>
 
     <!-- Bug Report / Deep Device Scan -->
     <string name="bugreport_instructions_title">How to create a system diagnostic</string>
