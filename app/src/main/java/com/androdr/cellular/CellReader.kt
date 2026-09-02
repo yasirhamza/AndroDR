@@ -31,8 +31,10 @@ import com.androdr.data.model.ServingSignal
  * (EARFCN / NRARFCN / UARFCN / ARFCN). `rat` says which reading applies.
  *
  * Only reached on API 31+ (the monitor does not arm below that), so every
- * accessor used here exists. The JVM tests run with SDK_INT = 0 against
- * mocks, which is why nothing here consults Build.VERSION at runtime.
+ * accessor used here exists on the platform. The one reading that arrived
+ * later (NR timing advance, API 34) is gated on an SDK level passed in as a
+ * parameter, so the JVM tests — which run with SDK_INT = 0 against mocks —
+ * can exercise both sides of the gate.
  */
 @RequiresApi(Build.VERSION_CODES.S)
 internal object CellReader {
@@ -85,9 +87,10 @@ internal object CellReader {
      * (and RSRQ/SINR on NR); `dbm` is the platform's technology-generic
      * level and is read on every recognised RAT.
      *
-     * Timing advance is the one to watch: it is the round-trip distance to
-     * the serving tower in ~78 m units, so a serving cell that is suddenly
-     * very close is visible here and nowhere else in Tier 1.
+     * Timing advance is the one to watch: one LTE TA step is 0.52 us of
+     * round-trip time, ~78 m of one-way distance to the serving tower, so a
+     * serving cell that is suddenly very close is visible here and nowhere
+     * else in Tier 1.
      *
      * Dispatches on the record type, like [rsrp], rather than on the signal
      * object: each subtype's `getCellSignalStrength()` is a covariant
@@ -152,9 +155,13 @@ internal object CellReader {
         return if (sameCarrier.isEmpty()) null else serving.pci in sameCarrier
     }
 
-    /** NR timing advance arrived in API 34; below that the platform has no such reading. */
-    private fun nrTimingAdvanceMicros(ss: CellSignalStrengthNr): Int? =
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) sentinel(ss.timingAdvanceMicros) else null
+    /**
+     * NR timing advance arrived in API 34; below that the platform has no
+     * such reading and the accessor must not be touched. [sdkInt] is a
+     * parameter so both sides are testable on a JVM where SDK_INT is 0.
+     */
+    internal fun nrTimingAdvanceMicros(ss: CellSignalStrengthNr, sdkInt: Int = Build.VERSION.SDK_INT): Int? =
+        if (sdkInt >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) sentinel(ss.timingAdvanceMicros) else null
 
     private fun lte(id: CellIdentityLte) = Identity(
         rat = "LTE",

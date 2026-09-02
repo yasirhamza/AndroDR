@@ -42,7 +42,7 @@ internal object CellularReportSection {
     ) {
         section("CELLULAR TELEMETRY (TIER 1)")
         if (snapshot == null) {
-            appendLine("  No radio telemetry captured this session.")
+            appendLine("  No radio telemetry captured since the app started.")
             appendLine("  Either the monitor was not running, or no serving cell was observed.")
             appendLine()
             return
@@ -55,7 +55,7 @@ internal object CellularReportSection {
         } else {
             ""
         }
-        appendLine("  Radio updates delivered this session: $deliveries$suppressed")
+        appendLine("  Radio updates delivered since the app started: $deliveries$suppressed")
         appendLine("  Serving cell at export time:")
         appendLine("    technology      : ${snapshot.rat}")
         appendLine("    bandwidth       : ${snapshot.bandwidthKhz?.let { "$it kHz" } ?: "not reported"}")
@@ -86,9 +86,10 @@ internal object CellularReportSection {
     }
 
     /**
-     * Timing advance with its rough meaning. One LTE TA step is ~78 m of
-     * round-trip distance to the serving tower, which is what a reader needs
-     * to judge "the tower is suddenly very close".
+     * Timing advance with its rough meaning. One LTE TA step is 0.52 us of
+     * round-trip time, i.e. ~78 m of one-way distance to the serving tower,
+     * which is what a reader needs to judge "the tower is suddenly very
+     * close".
      */
     private fun timingAdvanceLine(ta: Int?): String =
         ta?.let { "$it (~${it * TA_METERS} m)" } ?: "not reported"
@@ -104,6 +105,9 @@ internal object CellularReportSection {
      * went, when the RAT moved, how RSRP tracked — and that time series is
      * the actual Tier 1 evidence. Oldest first so it reads as a timeline.
      *
+     * "Since the app started", not "this session": [CellularState] outlives
+     * the monitor, so the list spans every VPN on/off cycle of this process.
+     *
      * Same redaction as everything else that leaves the device: condition,
      * never tower identity.
      */
@@ -115,7 +119,7 @@ internal object CellularReportSection {
         } else {
             ""
         }
-        appendLine("  Observations this session, oldest first: ${history.size}$retained")
+        appendLine("  Observations since the app started, oldest first: ${history.size}$retained")
         history.asReversed().forEach { s ->
             appendLine("    [${fmt.format(Date(s.capturedAt))}] ${CellularDetails.exportable(s)}")
         }

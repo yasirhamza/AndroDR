@@ -249,7 +249,7 @@ class CellularReportSectionTest {
             snapshot().copy(capturedAt = 1_000L, neighborCount = 13),
         )
         val out = renderHistory(history)
-        assertTrue("observation count missing", out.contains("Observations this session, oldest first: 3"))
+        assertTrue("observation count missing", out.contains("Observations since the app started, oldest first: 3"))
         val first = out.indexOf("neighbours=13")
         val second = out.indexOf("neighbours=0 ")
         val third = out.indexOf("neighbours=6")
@@ -293,7 +293,7 @@ class CellularReportSectionTest {
             cellularDuplicates = 2,
             versionName = "test",
         )
-        assertTrue(out.contains("delivered this session: 46"))
+        assertTrue(out.contains("delivered since the app started: 46"))
         assertTrue(out.contains("2 duplicate deliveries not recorded; 44 distinct"))
         assertFalse(
             "no duplicates means no caveat",

@@ -121,6 +121,10 @@ data class CellularSnapshot(
          * the same physical observation: the clock, the read's circumstances
          * (prime vs callback, screen state), and everything computed against
          * previous observations rather than read from the radio.
+         *
+         * `raw_record_count` is deliberately NOT here although it sits in
+         * [CaptureContext]: it is the size of what the radio delivered, and
+         * a list of a different length is a different observation.
          */
         val NON_OBSERVATION_KEYS: Set<String> = setOf(
             "captured_at",
@@ -150,7 +154,7 @@ data class ServingSignal(
     val sinr: Int? = null,
     /** Channel quality indicator, LTE only. */
     val cqi: Int? = null,
-    /** LTE timing advance in TA units (0..1282, ~78 m each). */
+    /** LTE timing advance in TA units (0..1282; each is ~78 m of one-way distance to the tower). */
     val timingAdvance: Int? = null,
     /** NR timing advance in microseconds (API 34+). */
     val timingAdvanceUs: Int? = null,

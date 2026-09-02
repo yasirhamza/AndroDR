@@ -82,6 +82,16 @@ class DuplicateDeliveryFilterTest {
     }
 
     @Test
+    fun `a delivery of a different length is a new observation`() {
+        // raw_record_count lives in CaptureContext next to the circumstance
+        // fields, but it is what the radio delivered, not how it was read.
+        val filter = DuplicateDeliveryFilter(windowMillis = 2_000L)
+        filter.isDuplicate(snapshot(at = 1_000L))
+        val longer = snapshot(at = 1_001L).let { it.copy(capture = it.capture.copy(rawRecordCount = 15)) }
+        assertFalse(filter.isDuplicate(longer))
+    }
+
+    @Test
     fun `every excluded key is a real field-map key`() {
         // A renamed field would otherwise silently stop being excluded and
         // every repeat would look new again.

@@ -1,6 +1,7 @@
 package com.androdr.cellular
 
 import android.telephony.CellInfo
+import android.telephony.CellSignalStrengthNr
 import com.androdr.data.model.ServingSignal
 import io.mockk.every
 import io.mockk.mockk
@@ -128,6 +129,22 @@ class CellReaderTest {
         assertNull("CQI is an LTE reading", s.cqi)
         assertNull("LTE timing advance is not NR's", s.timingAdvance)
         assertNull("NR timing advance needs API 34; the JVM reports SDK_INT 0", s.timingAdvanceUs)
+    }
+
+    @Test
+    fun `NR timing advance is read on API 34 and the sentinel still means absent`() {
+        val ss = mockk<CellSignalStrengthNr> { every { timingAdvanceMicros } returns 1_240 }
+        assertEquals(1_240, CellReader.nrTimingAdvanceMicros(ss, sdkInt = 34))
+        val blank = mockk<CellSignalStrengthNr> { every { timingAdvanceMicros } returns CellInfoFixtures.UNAVAILABLE }
+        assertNull(CellReader.nrTimingAdvanceMicros(blank, sdkInt = 34))
+    }
+
+    @Test
+    fun `NR timing advance is not even asked for below API 34`() {
+        // The accessor does not exist on API 33; a strict mock throws if it
+        // is touched, which is exactly the crash this gate guards against.
+        val ss = mockk<CellSignalStrengthNr>()
+        assertNull(CellReader.nrTimingAdvanceMicros(ss, sdkInt = 33))
     }
 
     @Test

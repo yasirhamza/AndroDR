@@ -190,7 +190,7 @@ class CellularMonitorHandleTest {
         assertEquals(false, CellularState.latest.value!!.sim.operatorNameMatchesSim)
 
         sim = null
-        now += DuplicateDeliveryFilter.DEFAULT_WINDOW_MILLIS + 1
+        // A fresh monitor: the duplicate filter is per instance, so no window to wait out.
         monitor().handle(lteCell(), CaptureOrigin.PRIME)
         assertNull(CellularState.latest.value!!.sim.plmnMatchesSim)
     }

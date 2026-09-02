@@ -56,12 +56,16 @@ class CellularSnapshotTest {
             s.signal.toFieldMap(), s.neighbors.toFieldMap(), s.capture.toFieldMap(),
             s.sim.toFieldMap(), s.service.toFieldMap(),
         )
-        val top = expectedKeys - parts.sumOf { it.size }
-        assertEquals("merged size must equal the sum of the parts", top + parts.sumOf { it.size }, s.toFieldMap().size)
+        val merged = s.toFieldMap()
         assertEquals(
             "sub-maps must not share a key",
             parts.sumOf { it.size }, parts.flatMap { it.keys }.toSet().size,
         )
+        parts.forEach { part ->
+            part.forEach { (key, value) ->
+                assertEquals("$key must reach the merged map with the sub-map's value", value, merged[key])
+            }
+        }
     }
 
     @Test
