@@ -68,6 +68,12 @@ class CellularRedactionTest {
     }
 
     @Test
+    fun `the registration state survives redaction`() {
+        val out = CellularRedaction.redact("$realistic svc=IN_SERVICE roaming=false dnt=LTE")
+        listOf("svc=IN_SERVICE", "roaming=false", "dnt=LTE").forEach { assertTrue("dropped: $it", out.contains(it)) }
+    }
+
+    @Test
     fun `redaction is an allowlist, so unknown fields are dropped`() {
         // The point of the allowlist: a field added later must be consciously
         // cleared for export rather than leaking by default.

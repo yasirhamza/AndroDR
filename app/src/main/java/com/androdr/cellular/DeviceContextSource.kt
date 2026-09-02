@@ -5,9 +5,11 @@ import android.app.ActivityManager
 import android.content.Context
 import android.location.LocationManager
 import android.os.PowerManager
+import android.telephony.ServiceState
 import android.telephony.TelephonyManager
 import com.androdr.data.model.CaptureContext
 import com.androdr.data.model.CaptureOrigin
+import com.androdr.data.model.ServiceContext
 
 /**
  * The circumstances of a capture, read from the platform alongside the cell
@@ -25,6 +27,9 @@ interface DeviceContextSource {
 
     /** The SIM's home operator; null when there is no SIM or it cannot be read. */
     fun sim(): SimIdentity?
+
+    /** Registration state, roaming and the data bearer; every field null when unreadable. */
+    fun service(): ServiceContext
 }
 
 /** Both null when the device has no usable fix; see [LocationTrail]. */
@@ -90,6 +95,29 @@ class PlatformDeviceContext(
     }.getOrNull()
 
     /**
+     * The registration side of the radio, which the cell list does not
+     * carry: whether the UE is actually in service, whether it is roaming
+     * (a mismatch between the serving PLMN and the SIM is expected then,
+     * and the PLMN rule must not fire on it), and which bearer carries data.
+     *
+     * RegistrationFailed and BarringInfo, the two callbacks that would show
+     * a rejected attach, need READ_PRECISE_PHONE_STATE and are out of reach
+     * for an unprivileged app; this is the part of ServiceState that is not.
+     */
+    // READ_PHONE_STATE is a preflight condition for arming the monitor; a
+    // refused read lands in runCatching and reads as "unknown".
+    @SuppressLint("MissingPermission")
+    override fun service(): ServiceContext {
+        val tm = telephony ?: return ServiceContext()
+        val state = runCatching { tm.serviceState }.getOrNull()
+        return ServiceContext(
+            state = state?.let { serviceStateName(it.state) },
+            isRoaming = state?.roaming,
+            dataNetworkType = runCatching { networkTypeName(tm.dataNetworkType) }.getOrNull(),
+        )
+    }
+
+    /**
      * The monitor lives in a foreground service, so process importance is
      * FOREGROUND_SERVICE (125) whenever no activity is showing; only
      * FOREGROUND (100) and VISIBLE (200) mean the user can see the app.
@@ -108,5 +136,40 @@ class PlatformDeviceContext(
         TelephonyManager.DATA_ACTIVITY_INOUT -> "INOUT"
         TelephonyManager.DATA_ACTIVITY_DORMANT -> "DORMANT"
         else -> "UNKNOWN"
+    }
+
+    private fun serviceStateName(value: Int): String = when (value) {
+        ServiceState.STATE_IN_SERVICE -> "IN_SERVICE"
+        ServiceState.STATE_OUT_OF_SERVICE -> "OUT_OF_SERVICE"
+        ServiceState.STATE_EMERGENCY_ONLY -> "EMERGENCY_ONLY"
+        ServiceState.STATE_POWER_OFF -> "POWER_OFF"
+        else -> "UNKNOWN"
+    }
+
+    private fun networkTypeName(value: Int): String = NETWORK_TYPE_NAMES[value] ?: "UNKNOWN"
+
+    private companion object {
+        /** TelephonyManager.NETWORK_TYPE_* by value; the platform offers no public name lookup. */
+        val NETWORK_TYPE_NAMES: Map<Int, String> = mapOf(
+            TelephonyManager.NETWORK_TYPE_GPRS to "GPRS",
+            TelephonyManager.NETWORK_TYPE_EDGE to "EDGE",
+            TelephonyManager.NETWORK_TYPE_UMTS to "UMTS",
+            TelephonyManager.NETWORK_TYPE_CDMA to "CDMA",
+            TelephonyManager.NETWORK_TYPE_EVDO_0 to "EVDO_0",
+            TelephonyManager.NETWORK_TYPE_EVDO_A to "EVDO_A",
+            TelephonyManager.NETWORK_TYPE_1xRTT to "1xRTT",
+            TelephonyManager.NETWORK_TYPE_HSDPA to "HSDPA",
+            TelephonyManager.NETWORK_TYPE_HSUPA to "HSUPA",
+            TelephonyManager.NETWORK_TYPE_HSPA to "HSPA",
+            TelephonyManager.NETWORK_TYPE_IDEN to "IDEN",
+            TelephonyManager.NETWORK_TYPE_EVDO_B to "EVDO_B",
+            TelephonyManager.NETWORK_TYPE_LTE to "LTE",
+            TelephonyManager.NETWORK_TYPE_EHRPD to "EHRPD",
+            TelephonyManager.NETWORK_TYPE_HSPAP to "HSPAP",
+            TelephonyManager.NETWORK_TYPE_GSM to "GSM",
+            TelephonyManager.NETWORK_TYPE_TD_SCDMA to "TD_SCDMA",
+            TelephonyManager.NETWORK_TYPE_IWLAN to "IWLAN",
+            TelephonyManager.NETWORK_TYPE_NR to "NR",
+        )
     }
 }

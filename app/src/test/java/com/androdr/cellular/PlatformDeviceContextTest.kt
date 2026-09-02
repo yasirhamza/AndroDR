@@ -5,8 +5,10 @@ import android.content.Context
 import android.location.Location
 import android.location.LocationManager
 import android.os.PowerManager
+import android.telephony.ServiceState
 import android.telephony.TelephonyManager
 import com.androdr.data.model.CaptureOrigin
+import com.androdr.data.model.ServiceContext
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.mockkStatic
@@ -121,6 +123,61 @@ class PlatformDeviceContextTest {
         assertNull(PlatformDeviceContext(context).sim())
         every { context.getSystemService(TelephonyManager::class.java) } returns null
         assertNull(PlatformDeviceContext(context).sim())
+    }
+
+    @Test
+    fun `registration state, roaming and the data bearer are read from ServiceState`() {
+        val state = mockk<ServiceState> {
+            every { this@mockk.state } returns ServiceState.STATE_IN_SERVICE
+            every { roaming } returns false
+        }
+        every { telephony.serviceState } returns state
+        every { telephony.dataNetworkType } returns TelephonyManager.NETWORK_TYPE_LTE
+
+        val s = PlatformDeviceContext(context).service()
+        assertEquals("IN_SERVICE", s.state)
+        assertEquals(false, s.isRoaming)
+        assertEquals("LTE", s.dataNetworkType)
+    }
+
+    @Test
+    fun `every service state and the common bearers have names`() {
+        every { telephony.dataNetworkType } returns TelephonyManager.NETWORK_TYPE_UNKNOWN
+        val states = listOf(
+            ServiceState.STATE_OUT_OF_SERVICE to "OUT_OF_SERVICE",
+            ServiceState.STATE_EMERGENCY_ONLY to "EMERGENCY_ONLY",
+            ServiceState.STATE_POWER_OFF to "POWER_OFF",
+            99 to "UNKNOWN",
+        )
+        for ((value, name) in states) {
+            every { telephony.serviceState } returns mockk {
+                every { state } returns value
+                every { roaming } returns true
+            }
+            assertEquals(name, PlatformDeviceContext(context).service().state)
+        }
+        val bearers = listOf(
+            TelephonyManager.NETWORK_TYPE_NR to "NR",
+            TelephonyManager.NETWORK_TYPE_UMTS to "UMTS",
+            TelephonyManager.NETWORK_TYPE_GSM to "GSM",
+            TelephonyManager.NETWORK_TYPE_IWLAN to "IWLAN",
+            TelephonyManager.NETWORK_TYPE_UNKNOWN to "UNKNOWN",
+        )
+        for ((value, name) in bearers) {
+            every { telephony.dataNetworkType } returns value
+            assertEquals(name, PlatformDeviceContext(context).service().dataNetworkType)
+        }
+    }
+
+    @Test
+    fun `an unreadable ServiceState is unknown on every field, not out of service`() {
+        // "cannot tell" must never read as a registration problem.
+        every { telephony.serviceState } throws SecurityException("no")
+        every { telephony.dataNetworkType } throws SecurityException("no")
+        assertEquals(ServiceContext(), PlatformDeviceContext(context).service())
+
+        every { context.getSystemService(TelephonyManager::class.java) } returns null
+        assertEquals(ServiceContext(), PlatformDeviceContext(context).service())
     }
 
     @Test

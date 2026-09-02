@@ -6,6 +6,7 @@ import com.androdr.data.model.CellularSnapshot
 import com.androdr.data.model.ForensicTimelineEvent
 import com.androdr.data.model.NeighborDetail
 import com.androdr.data.model.ScanResult
+import com.androdr.data.model.ServiceContext
 import com.androdr.data.model.ServingSignal
 import com.androdr.data.model.SimContext
 import com.androdr.data.model.TelemetrySource
@@ -148,6 +149,7 @@ class CellularReportSectionTest {
             mcc = "427", mnc = "01", operatorName = "Ooredoo",
             plmnMatchesSim = true, operatorNameMatchesSim = false,
         ),
+        service = ServiceContext(state = "IN_SERVICE", isRoaming = true, dataNetworkType = "NR"),
     )
 
     @Test
@@ -158,11 +160,14 @@ class CellularReportSectionTest {
         assertTrue(out.contains("records in read : 14"))
         assertTrue(out.contains("PLMN = SIM      : true"))
         assertTrue(out.contains("name = SIM      : false"))
+        assertTrue(out.contains("service state   : IN_SERVICE"))
+        assertTrue(out.contains("roaming         : true"))
+        assertTrue(out.contains("data bearer     : NR"))
 
         val rows = renderHistory(listOf(contextual()))
         listOf(
             "moved5m=640", "fixAge=12", "origin=PRIME", "records=14", "screen=false",
-            "simPlmn=true", "simName=false",
+            "simPlmn=true", "simName=false", "svc=IN_SERVICE", "roaming=true", "dnt=NR",
         ).forEach { assertTrue("observation row missing $it", rows.contains(it)) }
     }
 

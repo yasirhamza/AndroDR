@@ -217,7 +217,8 @@ class CellularMonitor(
                 "fixAge=${present(snapshot.locationFixAgeS)} records=${snapshot.capture.rawRecordCount} " +
                 "screen=${snapshot.capture.screenInteractive} fg=${snapshot.capture.appForeground} " +
                 "data=${snapshot.capture.dataActivity} simPlmn=${snapshot.sim.plmnMatchesSim} " +
-                "simName=${snapshot.sim.operatorNameMatchesSim}"
+                "simName=${snapshot.sim.operatorNameMatchesSim} svc=${snapshot.service.state} " +
+                "roaming=${snapshot.service.isRoaming} dnt=${snapshot.service.dataNetworkType}"
         )
         runCatching { engine.evaluateCellular(listOf(snapshot)) }
             .onSuccess { findings ->
@@ -331,6 +332,9 @@ class CellularMonitor(
         append(" data=").append(snapshot.capture.dataActivity ?: "-")
         append(" simPlmn=").append(snapshot.sim.plmnMatchesSim ?: "-")
         append(" simName=").append(snapshot.sim.operatorNameMatchesSim ?: "-")
+        append(" svc=").append(snapshot.service.state ?: "-")
+        append(" roaming=").append(snapshot.service.isRoaming ?: "-")
+        append(" dnt=").append(snapshot.service.dataNetworkType ?: "-")
     }
 
     /**
@@ -391,6 +395,7 @@ class CellularMonitor(
             sim = deviceContext.sim()
                 ?.compare(id.mcc, id.mnc, id.operatorAlphaLong, id.operatorAlphaShort)
                 ?: SimContext(),
+            service = deviceContext.service(),
         )
     }
 

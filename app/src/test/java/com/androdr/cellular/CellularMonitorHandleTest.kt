@@ -5,6 +5,7 @@ import android.telephony.CellInfo
 import com.androdr.data.model.CaptureContext
 import com.androdr.data.model.CaptureOrigin
 import com.androdr.data.model.CellularSnapshot
+import com.androdr.data.model.ServiceContext
 import com.androdr.data.repo.ScanRepository
 import com.androdr.sigma.Finding
 import com.androdr.sigma.SigmaRuleEngine
@@ -40,6 +41,7 @@ class CellularMonitorHandleTest {
     private var screenInteractive: Boolean? = true
     private var movement = Movement()
     private var sim: SimIdentity? = SimIdentity(mcc = "427", mnc = "01", operatorName = "Ooredoo")
+    private var service = ServiceContext(state = "IN_SERVICE", isRoaming = false, dataNetworkType = "LTE")
 
     /** Circumstances under the test's control; no platform reads. */
     private val deviceContext = object : DeviceContextSource {
@@ -54,6 +56,8 @@ class CellularMonitorHandleTest {
         override fun movement(now: Long) = movement
 
         override fun sim() = sim
+
+        override fun service() = service
     }
 
     private fun monitor() = CellularMonitor(
@@ -212,6 +216,23 @@ class CellularMonitorHandleTest {
         assertEquals("a neighbour repeats the serving PCI", true, s.neighbors.servingPciInNeighbors)
         assertEquals("the margin is derived from the same list", -84 - (-95), s.servingMinusMaxNeighborRsrpDb)
         assertEquals(2, s.neighborCount)
+    }
+
+    @Test
+    fun `the registration state reaches the snapshot and a change of it is a new observation`() {
+        val m = monitor()
+        m.handle(lteCell(), CaptureOrigin.PRIME)
+        assertEquals("IN_SERVICE", CellularState.latest.value!!.service.state)
+        assertEquals(false, CellularState.latest.value!!.service.isRoaming)
+        assertEquals("LTE", CellularState.latest.value!!.service.dataNetworkType)
+
+        // Roaming is a fact about the radio, not the read: the same cell
+        // list seen while roaming is a different observation.
+        now += 300
+        service = service.copy(isRoaming = true)
+        m.handle(lteCell(), CaptureOrigin.CALLBACK)
+        assertEquals(2, CellularState.history.value.size)
+        assertEquals(true, CellularState.latest.value!!.service.isRoaming)
     }
 
     @Test

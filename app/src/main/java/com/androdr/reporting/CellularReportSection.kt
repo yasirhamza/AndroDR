@@ -76,6 +76,9 @@ internal object CellularReportSection {
         appendLine("    records in read : ${snapshot.capture.rawRecordCount}")
         appendLine("    PLMN = SIM      : ${snapshot.sim.plmnMatchesSim ?: "unknown"}")
         appendLine("    name = SIM      : ${snapshot.sim.operatorNameMatchesSim ?: "unknown"}")
+        appendLine("    service state   : ${snapshot.service.state ?: "unknown"}")
+        appendLine("    roaming         : ${snapshot.service.isRoaming ?: "unknown"}")
+        appendLine("    data bearer     : ${snapshot.service.dataNetworkType ?: "unknown"}")
         appendLine("  ${CellularRedaction.REDACTION_NOTE}")
         appendLine()
         appendCellularObservations(history)
@@ -147,6 +150,9 @@ internal object CellularReportSection {
         append(" data=").append(s.capture.dataActivity ?: "-")
         append(" simPlmn=").append(s.sim.plmnMatchesSim ?: "-")
         append(" simName=").append(s.sim.operatorNameMatchesSim ?: "-")
+        append(" svc=").append(s.service.state ?: "-")
+        append(" roaming=").append(s.service.isRoaming ?: "-")
+        append(" dnt=").append(s.service.dataNetworkType ?: "-")
     }
 
     /**

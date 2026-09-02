@@ -62,6 +62,10 @@ object CellularRedaction {
         // are never written into details in the first place.
         "simPlmn",
         "simName",
+        // Registration side of the radio: a state, a flag and a bearer name.
+        "svc",
+        "roaming",
+        "dnt",
     ) - setOf("prevTac")
 
     const val REDACTION_NOTE =
