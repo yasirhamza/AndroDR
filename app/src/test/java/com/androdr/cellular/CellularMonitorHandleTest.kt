@@ -5,6 +5,7 @@ import android.telephony.CellInfo
 import com.androdr.data.model.CaptureContext
 import com.androdr.data.model.CaptureOrigin
 import com.androdr.data.model.CellularSnapshot
+import com.androdr.data.model.ForensicTimelineEvent
 import com.androdr.data.model.ServiceContext
 import com.androdr.data.repo.ScanRepository
 import com.androdr.sigma.Finding
@@ -15,13 +16,16 @@ import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.just
 import io.mockk.mockk
+import io.mockk.slot
 import io.mockk.verify
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.CoroutineScope
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 
@@ -216,6 +220,24 @@ class CellularMonitorHandleTest {
         assertEquals("a neighbour repeats the serving PCI", true, s.neighbors.servingPciInNeighbors)
         assertEquals("the margin is derived from the same list", -84 - (-95), s.servingMinusMaxNeighborRsrpDb)
         assertEquals(2, s.neighborCount)
+    }
+
+    @Test
+    fun `a network-chosen operator name cannot forge a pair in the persisted row`() {
+        // The operator name is the one free-text string in a cell record.
+        // A fake cell that broadcasts "Evil rsrp=-1\nsvc=FORGED" must not
+        // end up with a second rsrp= in the timeline row or a second line
+        // in the CSV that is exported from it.
+        val persisted = slot<List<ForensicTimelineEvent>>()
+        coEvery { repository.logCellularTimelineEvents(capture(persisted)) } just Runs
+        val serving = CellInfoFixtures.lte(operatorName = "Evil rsrp=-1\nsvc=FORGED")
+        monitor().handle(listOf(serving), CaptureOrigin.PRIME)
+
+        val details = persisted.captured.single().details.orEmpty()
+        assertFalse("a line break reached the timeline row", details.contains('\n'))
+        assertEquals("exactly one rsrp pair", 1, Regex("(^| )rsrp=").findAll(details).count())
+        assertFalse("a forged pair reached the timeline row", details.contains(" svc=FORGED"))
+        assertTrue("the name itself is kept, folded", details.contains("op=Evil_rsrp=-1_svc=FORGED"))
     }
 
     @Test

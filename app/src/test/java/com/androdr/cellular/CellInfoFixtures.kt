@@ -42,6 +42,7 @@ object CellInfoFixtures {
         rssnr: Int = 10,
         cqi: Int = UNAVAILABLE,
         timingAdvance: Int = UNAVAILABLE,
+        operatorName: String? = "Ooredoo",
     ): CellInfoLte {
         val identity = mockk<CellIdentityLte> {
             every { mccString } returns "427"
@@ -52,8 +53,8 @@ object CellInfoFixtures {
             every { this@mockk.earfcn } returns earfcn
             every { this@mockk.bands } returns bands
             every { this@mockk.bandwidth } returns bandwidth
-            every { operatorAlphaLong } returns "Ooredoo"
-            every { operatorAlphaShort } returns "Ooredoo"
+            every { operatorAlphaLong } returns operatorName
+            every { operatorAlphaShort } returns operatorName
             every { additionalPlmns } returns emptySet()
         }
         val signal = mockk<CellSignalStrengthLte> {

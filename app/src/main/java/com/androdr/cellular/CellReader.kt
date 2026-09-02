@@ -154,8 +154,8 @@ internal object CellReader {
         earfcn = sentinel(id.earfcn),
         bands = id.bands.toList(),
         bandwidthKhz = sentinel(id.bandwidth),
-        operatorAlphaLong = id.operatorAlphaLong?.toString(),
-        operatorAlphaShort = id.operatorAlphaShort?.toString(),
+        operatorAlphaLong = name(id.operatorAlphaLong),
+        operatorAlphaShort = name(id.operatorAlphaShort),
         additionalPlmns = id.additionalPlmns.toList(),
     )
 
@@ -170,8 +170,8 @@ internal object CellReader {
         bands = id.bands.toList(),
         // NR carrier bandwidth is not exposed by CellIdentityNr.
         bandwidthKhz = null,
-        operatorAlphaLong = id.operatorAlphaLong?.toString(),
-        operatorAlphaShort = id.operatorAlphaShort?.toString(),
+        operatorAlphaLong = name(id.operatorAlphaLong),
+        operatorAlphaShort = name(id.operatorAlphaShort),
         additionalPlmns = id.additionalPlmns.toList(),
     )
 
@@ -185,8 +185,8 @@ internal object CellReader {
         earfcn = sentinel(id.uarfcn),
         bands = emptyList(),
         bandwidthKhz = null,
-        operatorAlphaLong = id.operatorAlphaLong?.toString(),
-        operatorAlphaShort = id.operatorAlphaShort?.toString(),
+        operatorAlphaLong = name(id.operatorAlphaLong),
+        operatorAlphaShort = name(id.operatorAlphaShort),
         additionalPlmns = id.additionalPlmns.toList(),
     )
 
@@ -201,10 +201,27 @@ internal object CellReader {
         earfcn = sentinel(id.arfcn),
         bands = emptyList(),
         bandwidthKhz = null,
-        operatorAlphaLong = id.operatorAlphaLong?.toString(),
-        operatorAlphaShort = id.operatorAlphaShort?.toString(),
+        operatorAlphaLong = name(id.operatorAlphaLong),
+        operatorAlphaShort = name(id.operatorAlphaShort),
         additionalPlmns = id.additionalPlmns.toList(),
     )
+
+    /**
+     * The operator name is the one string in a cell record that the NETWORK
+     * chooses, and a fake cell chooses it freely. It is written into the
+     * timeline row as `op=<name>` and shown in the UI, so before it becomes
+     * data it is folded to one whitespace-free token: every run of
+     * whitespace or control characters becomes `_` and the length is
+     * capped. Unicode is kept — a real operator may well use it, and the
+     * name never leaves the device (see CellularRedaction).
+     */
+    internal fun name(raw: CharSequence?): String? = raw?.toString()
+        ?.replace(UNSAFE, "_")
+        ?.take(MAX_NAME_LENGTH)
+        ?.takeIf { it.isNotEmpty() }
+
+    private val UNSAFE = Regex("[\\s\\p{Cntrl}\\p{Cf}]+")
+    private const val MAX_NAME_LENGTH = 64
 
     private fun unknown(rat: String) = Identity(
         rat = rat,

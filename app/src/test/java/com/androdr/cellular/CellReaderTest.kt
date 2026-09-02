@@ -140,6 +140,25 @@ class CellReaderTest {
         assertNull(gsm.rsrq)
     }
 
+    // ---- the network-chosen string ----------------------------------------
+
+    @Test
+    fun `the operator name is folded to one token before it becomes data`() {
+        // A fake cell chooses this string. Written as `op=<name>` into a
+        // whitespace-separated row, whitespace inside it would forge pairs.
+        val id = CellReader.identity(CellInfoFixtures.lte(operatorName = "Evil rsrp=-1\nsvc=FORGED\u0000x"))
+        assertEquals("Evil_rsrp=-1_svc=FORGED_x", id.operatorAlphaLong)
+        assertEquals(id.operatorAlphaLong, id.operatorAlphaShort)
+    }
+
+    @Test
+    fun `the operator name keeps Unicode, is capped, and an empty one is absent`() {
+        assertEquals("Ooredoo \u0642\u0637\u0631".replace(' ', '_'), CellReader.name("Ooredoo \u0642\u0637\u0631"))
+        assertEquals(64, CellReader.name("x".repeat(500))!!.length)
+        assertNull(CellReader.name(""))
+        assertNull(CellReader.name(null))
+    }
+
     // ---- neighbour list ---------------------------------------------------
 
     private fun neighbour(pci: Int, earfcn: Int, rsrp: Int) =
