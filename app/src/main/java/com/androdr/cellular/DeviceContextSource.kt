@@ -22,6 +22,9 @@ interface DeviceContextSource {
 
     /** Movement over the churn window and how fresh the fix behind it is. */
     fun movement(now: Long): Movement
+
+    /** The SIM's home operator; null when there is no SIM or it cannot be read. */
+    fun sim(): SimIdentity?
 }
 
 /** Both null when the device has no usable fix; see [LocationTrail]. */
@@ -81,6 +84,10 @@ class PlatformDeviceContext(
             fixAgeSeconds = trail.fixAgeSeconds(now),
         )
     }
+
+    override fun sim(): SimIdentity? = runCatching {
+        telephony?.let { SimIdentity.fromSimOperator(it.simOperator, it.simOperatorName) }
+    }.getOrNull()
 
     /**
      * The monitor lives in a foreground service, so process importance is

@@ -64,6 +64,12 @@ internal object CellularReportSection {
         appendLine("    TAC changes (5m): ${snapshot.tacChangesLast5m}")
         appendLine("    TAC changed     : ${snapshot.tacChanged}")
         appendLine("    RAT changed     : ${snapshot.ratChanged}")
+        appendLine("    moved (5m)      : ${snapshot.locationMovedMLast5m?.let { "$it m" } ?: "unknown"}" +
+            (snapshot.locationFixAgeS?.let { " (fix ${it}s old)" } ?: ""))
+        appendLine("    screen on       : ${snapshot.capture.screenInteractive ?: "unknown"}")
+        appendLine("    records in read : ${snapshot.capture.rawRecordCount}")
+        appendLine("    PLMN = SIM      : ${snapshot.sim.plmnMatchesSim ?: "unknown"}")
+        appendLine("    name = SIM      : ${snapshot.sim.operatorNameMatchesSim ?: "unknown"}")
         appendLine("  ${CellularRedaction.REDACTION_NOTE}")
         appendLine()
         appendCellularObservations(history)
@@ -114,6 +120,8 @@ internal object CellularReportSection {
         append(" screen=").append(s.capture.screenInteractive ?: "-")
         append(" fg=").append(s.capture.appForeground ?: "-")
         append(" data=").append(s.capture.dataActivity ?: "-")
+        append(" simPlmn=").append(s.sim.plmnMatchesSim ?: "-")
+        append(" simName=").append(s.sim.operatorNameMatchesSim ?: "-")
     }
 
     /**

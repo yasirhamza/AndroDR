@@ -14,6 +14,7 @@ import androidx.core.content.ContextCompat
 import com.androdr.data.model.CaptureOrigin
 import com.androdr.data.model.CellularSnapshot
 import com.androdr.data.model.ForensicTimelineEvent
+import com.androdr.data.model.SimContext
 import com.androdr.data.repo.ScanRepository
 import com.androdr.data.model.TelemetrySource
 import com.androdr.sigma.Finding
@@ -212,7 +213,8 @@ class CellularMonitor(
                 "ratChanged=${snapshot.ratChanged} moved5m=${present(snapshot.locationMovedMLast5m)} " +
                 "fixAge=${present(snapshot.locationFixAgeS)} records=${snapshot.capture.rawRecordCount} " +
                 "screen=${snapshot.capture.screenInteractive} fg=${snapshot.capture.appForeground} " +
-                "data=${snapshot.capture.dataActivity}"
+                "data=${snapshot.capture.dataActivity} simPlmn=${snapshot.sim.plmnMatchesSim} " +
+                "simName=${snapshot.sim.operatorNameMatchesSim}"
         )
         runCatching { engine.evaluateCellular(listOf(snapshot)) }
             .onSuccess { findings ->
@@ -296,6 +298,8 @@ class CellularMonitor(
                     append(" screen=").append(snapshot.capture.screenInteractive ?: "-")
                     append(" fg=").append(snapshot.capture.appForeground ?: "-")
                     append(" data=").append(snapshot.capture.dataActivity ?: "-")
+                    append(" simPlmn=").append(snapshot.sim.plmnMatchesSim ?: "-")
+                    append(" simName=").append(snapshot.sim.operatorNameMatchesSim ?: "-")
                 },
                 ruleId = f.ruleId,
                 attackTechniqueId = f.tags.firstOrNull { it.startsWith("attack.") }.orEmpty(),
@@ -361,6 +365,9 @@ class CellularMonitor(
             locationMovedMLast5m = movement.movedMetersLast5m,
             locationFixAgeS = movement.fixAgeSeconds,
             capture = deviceContext.capture(origin, all.size),
+            sim = deviceContext.sim()
+                ?.compare(id.mcc, id.mnc, id.operatorAlphaLong, id.operatorAlphaShort)
+                ?: SimContext(),
         )
     }
 

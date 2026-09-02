@@ -1,9 +1,12 @@
 package com.androdr.cellular
 
+import com.androdr.data.model.CaptureContext
+import com.androdr.data.model.CaptureOrigin
 import com.androdr.data.model.CellularSnapshot
 import com.androdr.data.model.ForensicTimelineEvent
 import com.androdr.data.model.TelemetrySource
 import com.androdr.data.model.ScanResult
+import com.androdr.data.model.SimContext
 import com.androdr.reporting.ReportFormatter
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -129,6 +132,47 @@ class CellularReportSectionTest {
         assertFalse("CI leaked", out.contains("192816407"))
         assertFalse("PCI leaked", out.contains("PCI 167"))
         assertTrue("must state what was withheld", out.contains("withheld"))
+    }
+
+    /** Populated context: the SIM record and the circumstances of the read. */
+    private fun contextual() = snapshot().copy(
+        locationMovedMLast5m = 640,
+        locationFixAgeS = 12,
+        capture = CaptureContext(
+            origin = CaptureOrigin.PRIME, appForeground = false, screenInteractive = false,
+            dataActivity = "NONE", rawRecordCount = 14,
+        ),
+        sim = SimContext(
+            mcc = "427", mnc = "01", operatorName = "Ooredoo",
+            plmnMatchesSim = true, operatorNameMatchesSim = false,
+        ),
+    )
+
+    @Test
+    fun `the circumstances of the read and the SIM agreement are reported`() {
+        val out = renderTelemetry(contextual(), deliveries = 12)
+        assertTrue(out.contains("moved (5m)      : 640 m (fix 12s old)"))
+        assertTrue(out.contains("screen on       : false"))
+        assertTrue(out.contains("records in read : 14"))
+        assertTrue(out.contains("PLMN = SIM      : true"))
+        assertTrue(out.contains("name = SIM      : false"))
+
+        val rows = renderHistory(listOf(contextual()))
+        listOf(
+            "moved5m=640", "fixAge=12", "origin=PRIME", "records=14", "screen=false",
+            "simPlmn=true", "simName=false",
+        ).forEach { assertTrue("observation row missing $it", rows.contains(it)) }
+    }
+
+    @Test
+    fun `the SIM's own identity never reaches the report`() {
+        // The comparison result is exportable; what the SIM says about the
+        // subscriber's home operator is not.
+        val sim = SimContext(mcc = "262", mnc = "07", operatorName = "Telekom-Testnetz")
+        val out = renderTelemetry(snapshot().copy(sim = sim), deliveries = 1) +
+            renderHistory(listOf(snapshot().copy(sim = sim)))
+        assertFalse("SIM MCC leaked", out.contains("262"))
+        assertFalse("SIM name leaked", out.contains("Telekom-Testnetz"))
     }
 
     private fun renderHistory(history: List<CellularSnapshot>) =

@@ -20,6 +20,7 @@ import kotlinx.coroutines.CoroutineScope
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Before
 import org.junit.Test
 
@@ -38,6 +39,7 @@ class CellularMonitorHandleTest {
     private var now = 1_000L
     private var screenInteractive: Boolean? = true
     private var movement = Movement()
+    private var sim: SimIdentity? = SimIdentity(mcc = "427", mnc = "01", operatorName = "Ooredoo")
 
     /** Circumstances under the test's control; no platform reads. */
     private val deviceContext = object : DeviceContextSource {
@@ -50,6 +52,8 @@ class CellularMonitorHandleTest {
         )
 
         override fun movement(now: Long) = movement
+
+        override fun sim() = sim
     }
 
     private fun monitor() = CellularMonitor(
@@ -157,6 +161,30 @@ class CellularMonitorHandleTest {
         val s = CellularState.latest.value!!
         assertEquals(640, s.locationMovedMLast5m)
         assertEquals(12, s.locationFixAgeS)
+    }
+
+    @Test
+    fun `the serving cell is compared against the SIM`() {
+        // The fixtures broadcast 427/01 "Ooredoo", the same as the SIM.
+        val m = monitor()
+        m.handle(lteCell(), CaptureOrigin.PRIME)
+        val s = CellularState.latest.value!!.sim
+        assertEquals(true, s.plmnMatchesSim)
+        assertEquals(true, s.operatorNameMatchesSim)
+        assertEquals("427", s.mcc)
+    }
+
+    @Test
+    fun `a different SIM mismatches and no SIM compares to nothing`() {
+        sim = SimIdentity(mcc = "427", mnc = "02", operatorName = "Vodafone")
+        monitor().handle(lteCell(), CaptureOrigin.PRIME)
+        assertEquals(false, CellularState.latest.value!!.sim.plmnMatchesSim)
+        assertEquals(false, CellularState.latest.value!!.sim.operatorNameMatchesSim)
+
+        sim = null
+        now += DuplicateDeliveryFilter.DEFAULT_WINDOW_MILLIS + 1
+        monitor().handle(lteCell(), CaptureOrigin.PRIME)
+        assertNull(CellularState.latest.value!!.sim.plmnMatchesSim)
     }
 
     @Test

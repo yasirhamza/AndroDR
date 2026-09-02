@@ -109,6 +109,21 @@ class PlatformDeviceContextTest {
     }
 
     @Test
+    fun `the SIM's operator code and name are read from telephony`() {
+        every { telephony.simOperator } returns "42701"
+        every { telephony.simOperatorName } returns "Ooredoo"
+        assertEquals(SimIdentity("427", "01", "Ooredoo"), PlatformDeviceContext(context).sim())
+    }
+
+    @Test
+    fun `an unreadable SIM is no identity`() {
+        every { telephony.simOperator } throws SecurityException("no")
+        assertNull(PlatformDeviceContext(context).sim())
+        every { context.getSystemService(TelephonyManager::class.java) } returns null
+        assertNull(PlatformDeviceContext(context).sim())
+    }
+
+    @Test
     fun `a failed read is null and does not stop the capture`() {
         every { power.isInteractive } throws SecurityException("no")
         every { context.getSystemService(TelephonyManager::class.java) } returns null

@@ -44,6 +44,11 @@ object CellularRedaction {
         "screen",     // screen interactive at the read
         "fg",         // an activity was visible at the read
         "data",       // data activity direction at the read
+        // Agreement between the serving cell and the SIM — booleans only.
+        // The SIM's own MCC/MNC/name (sim_mcc, sim_mnc, sim_operator_name)
+        // are never written into details in the first place.
+        "simPlmn",
+        "simName",
     ) - setOf("prevTac")
 
     const val REDACTION_NOTE =
