@@ -209,6 +209,9 @@ class CellularMonitor(
                 "earfcn=${present(snapshot.earfcn)} bw=${present(snapshot.bandwidthKhz)} " +
                 "plmn=${present(snapshot.mcc)} op=${present(snapshot.operatorAlphaLong)} " +
                 "neighbours=${snapshot.neighborCount} rsrp=${present(snapshot.servingRsrp)} " +
+                "rsrq=${present(snapshot.signal.rsrq)} sinr=${present(snapshot.signal.sinr)} " +
+                "cqi=${present(snapshot.signal.cqi)} ta=${present(snapshot.signal.timingAdvance)} " +
+                "nRsrps=${snapshot.neighbors.rsrps.size} nPcis=${snapshot.neighbors.pcis.size} " +
                 "tacChanged=${snapshot.tacChanged} churn5m=${snapshot.tacChangesLast5m} " +
                 "ratChanged=${snapshot.ratChanged} moved5m=${present(snapshot.locationMovedMLast5m)} " +
                 "fixAge=${present(snapshot.locationFixAgeS)} records=${snapshot.capture.rawRecordCount} " +
@@ -278,29 +281,7 @@ class CellularMonitor(
                 source = TIMELINE_SOURCE,
                 category = "network_anomaly",
                 description = f.title,
-                details = buildString {
-                    append("rat=").append(snapshot.rat)
-                    append(" tac=").append(snapshot.tac ?: "-")
-                    append(" ci=").append(snapshot.ci ?: "-")
-                    append(" pci=").append(snapshot.pci ?: "-")
-                    append(" earfcn=").append(snapshot.earfcn ?: "-")
-                    append(" plmn=").append(snapshot.mcc ?: "-").append('/')
-                    append(snapshot.mnc ?: "-")
-                    append(" op=").append(snapshot.operatorAlphaLong ?: "-")
-                    append(" neighbours=").append(snapshot.neighborCount)
-                    append(" rsrp=").append(snapshot.servingRsrp ?: "-")
-                    append(" prevTac=").append(snapshot.previousTac ?: "-")
-                    append(" churn5m=").append(snapshot.tacChangesLast5m)
-                    append(" moved5m=").append(snapshot.locationMovedMLast5m ?: "-")
-                    append(" fixAge=").append(snapshot.locationFixAgeS ?: "-")
-                    append(" origin=").append(snapshot.capture.origin.name)
-                    append(" records=").append(snapshot.capture.rawRecordCount)
-                    append(" screen=").append(snapshot.capture.screenInteractive ?: "-")
-                    append(" fg=").append(snapshot.capture.appForeground ?: "-")
-                    append(" data=").append(snapshot.capture.dataActivity ?: "-")
-                    append(" simPlmn=").append(snapshot.sim.plmnMatchesSim ?: "-")
-                    append(" simName=").append(snapshot.sim.operatorNameMatchesSim ?: "-")
-                },
+                details = detailsOf(snapshot),
                 ruleId = f.ruleId,
                 attackTechniqueId = f.tags.firstOrNull { it.startsWith("attack.") }.orEmpty(),
                 telemetrySource = snapshot.source,
@@ -310,6 +291,46 @@ class CellularMonitor(
             runCatching { repository.logCellularTimelineEvents(events) }
                 .onFailure { Log.e(TAG, "failed to persist cellular findings: ${it.message}") }
         }
+    }
+
+    /**
+     * The radio context a finding fired on, as `key=value` pairs for the
+     * timeline row. Tower identity is included — this row stays in the
+     * app-private database — and [CellularRedaction] decides what leaves.
+     * Neighbour PCIs and the SIM's own identity are deliberately absent:
+     * the counts and comparison results carry the evidence.
+     */
+    private fun detailsOf(snapshot: CellularSnapshot): String = buildString {
+        append("rat=").append(snapshot.rat)
+        append(" tac=").append(snapshot.tac ?: "-")
+        append(" ci=").append(snapshot.ci ?: "-")
+        append(" pci=").append(snapshot.pci ?: "-")
+        append(" earfcn=").append(snapshot.earfcn ?: "-")
+        append(" plmn=").append(snapshot.mcc ?: "-").append('/')
+        append(snapshot.mnc ?: "-")
+        append(" op=").append(snapshot.operatorAlphaLong ?: "-")
+        append(" neighbours=").append(snapshot.neighborCount)
+        append(" rsrp=").append(snapshot.servingRsrp ?: "-")
+        append(" rsrq=").append(snapshot.signal.rsrq ?: "-")
+        append(" sinr=").append(snapshot.signal.sinr ?: "-")
+        append(" cqi=").append(snapshot.signal.cqi ?: "-")
+        append(" ta=").append(snapshot.signal.timingAdvance ?: "-")
+        append(" taUs=").append(snapshot.signal.timingAdvanceUs ?: "-")
+        append(" dbm=").append(snapshot.signal.dbm ?: "-")
+        append(" nMaxRsrp=").append(snapshot.neighbors.maxRsrp ?: "-")
+        append(" nEarfcns=").append(snapshot.neighbors.distinctEarfcnCount)
+        append(" pciInN=").append(snapshot.neighbors.servingPciInNeighbors ?: "-")
+        append(" prevTac=").append(snapshot.previousTac ?: "-")
+        append(" churn5m=").append(snapshot.tacChangesLast5m)
+        append(" moved5m=").append(snapshot.locationMovedMLast5m ?: "-")
+        append(" fixAge=").append(snapshot.locationFixAgeS ?: "-")
+        append(" origin=").append(snapshot.capture.origin.name)
+        append(" records=").append(snapshot.capture.rawRecordCount)
+        append(" screen=").append(snapshot.capture.screenInteractive ?: "-")
+        append(" fg=").append(snapshot.capture.appForeground ?: "-")
+        append(" data=").append(snapshot.capture.dataActivity ?: "-")
+        append(" simPlmn=").append(snapshot.sim.plmnMatchesSim ?: "-")
+        append(" simName=").append(snapshot.sim.operatorNameMatchesSim ?: "-")
     }
 
     /**
@@ -329,8 +350,8 @@ class CellularMonitor(
         val id = CellReader.identity(serving)
         val derived = store.record(id.tac, id.rat, now)
         val servingRsrp = CellReader.rsrp(serving)
-        val neighbours = all.filter { !it.isRegistered }
-        val maxNeighborRsrp = neighbours.mapNotNull { CellReader.rsrp(it) }.maxOrNull()
+        val neighbours = CellReader.neighbors(id, all.filter { !it.isRegistered })
+        val maxNeighborRsrp = neighbours.maxRsrp
         val movement = deviceContext.movement(now)
 
         return CellularSnapshot(
@@ -346,7 +367,7 @@ class CellularMonitor(
             operatorAlphaLong = id.operatorAlphaLong,
             operatorAlphaShort = id.operatorAlphaShort,
             additionalPlmns = id.additionalPlmns,
-            neighborCount = neighbours.size,
+            neighborCount = neighbours.rats.size,
             servingRsrp = servingRsrp,
             isRegistered = true,
             capturedAt = now,
@@ -364,6 +385,8 @@ class CellularMonitor(
                 },
             locationMovedMLast5m = movement.movedMetersLast5m,
             locationFixAgeS = movement.fixAgeSeconds,
+            signal = CellReader.signal(serving),
+            neighbors = neighbours,
             capture = deviceContext.capture(origin, all.size),
             sim = deviceContext.sim()
                 ?.compare(id.mcc, id.mnc, id.operatorAlphaLong, id.operatorAlphaShort)

@@ -12,6 +12,8 @@ import android.telephony.CellInfoNr
 import android.telephony.CellInfoWcdma
 import android.telephony.CellSignalStrengthNr
 import androidx.annotation.RequiresApi
+import com.androdr.data.model.NeighborDetail
+import com.androdr.data.model.ServingSignal
 
 /**
  * Reads identity and signal out of a [CellInfo] of any technology.
@@ -77,6 +79,70 @@ internal object CellReader {
         is CellInfoLte -> sentinel(cell.cellSignalStrength.rsrp)
         else -> null
     }
+
+    /**
+     * Signal quality beyond RSRP. RSRQ/SINR/CQI/timing advance exist on LTE
+     * (and RSRQ/SINR on NR); `dbm` is the platform's technology-generic
+     * level and is read on every recognised RAT.
+     *
+     * Timing advance is the one to watch: it is the round-trip distance to
+     * the serving tower in ~78 m units, so a serving cell that is suddenly
+     * very close is visible here and nowhere else in Tier 1.
+     *
+     * Dispatches on the record type, like [rsrp], rather than on the signal
+     * object: each subtype's `getCellSignalStrength()` is a covariant
+     * override, and only the typed accessor is what the fixtures stub.
+     */
+    fun signal(cell: CellInfo): ServingSignal = when (cell) {
+        is CellInfoLte -> cell.cellSignalStrength.let { ss ->
+            ServingSignal(
+                rsrq = sentinel(ss.rsrq),
+                sinr = sentinel(ss.rssnr),
+                cqi = sentinel(ss.cqi),
+                timingAdvance = sentinel(ss.timingAdvance),
+                dbm = sentinel(ss.dbm),
+            )
+        }
+        is CellInfoNr -> (cell.cellSignalStrength as? CellSignalStrengthNr)?.let { ss ->
+            ServingSignal(
+                rsrq = sentinel(ss.ssRsrq),
+                sinr = sentinel(ss.ssSinr),
+                timingAdvanceUs = nrTimingAdvanceMicros(ss),
+                dbm = sentinel(ss.dbm),
+            )
+        } ?: ServingSignal()
+        is CellInfoWcdma -> ServingSignal(dbm = sentinel(cell.cellSignalStrength.dbm))
+        is CellInfoGsm -> ServingSignal(dbm = sentinel(cell.cellSignalStrength.dbm))
+        else -> ServingSignal()
+    }
+
+    /**
+     * The neighbour list as parallel scalar lists plus the scalars a rule
+     * needs but cannot derive (the evaluator has no cross-list reasoning).
+     * Each list holds only the values that were available, in report order.
+     */
+    fun neighbors(serving: Identity, neighbours: List<CellInfo>): NeighborDetail {
+        val ids = neighbours.map(::identity)
+        val pcis = ids.mapNotNull { it.pci }
+        val earfcns = ids.mapNotNull { it.earfcn }
+        val rsrps = neighbours.mapNotNull(::rsrp)
+        return NeighborDetail(
+            pcis = pcis,
+            earfcns = earfcns,
+            rsrps = rsrps,
+            rats = ids.map { it.rat },
+            maxRsrp = rsrps.maxOrNull(),
+            // A serving PCI that also appears as a neighbour is two cells
+            // claiming one physical-layer id — but only decidable when the
+            // serving PCI is known and at least one neighbour reported one.
+            servingPciInNeighbors = if (serving.pci == null || pcis.isEmpty()) null else serving.pci in pcis,
+            distinctEarfcnCount = earfcns.distinct().size,
+        )
+    }
+
+    /** NR timing advance arrived in API 34; below that the platform has no such reading. */
+    private fun nrTimingAdvanceMicros(ss: CellSignalStrengthNr): Int? =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) sentinel(ss.timingAdvanceMicros) else null
 
     private fun lte(id: CellIdentityLte) = Identity(
         rat = "LTE",

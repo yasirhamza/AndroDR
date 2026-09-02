@@ -38,6 +38,10 @@ object CellInfoFixtures {
         rsrp: Int = -84,
         bandwidth: Int = UNAVAILABLE,
         bands: IntArray = intArrayOf(3),
+        rsrq: Int = -11,
+        rssnr: Int = 10,
+        cqi: Int = UNAVAILABLE,
+        timingAdvance: Int = UNAVAILABLE,
     ): CellInfoLte {
         val identity = mockk<CellIdentityLte> {
             every { mccString } returns "427"
@@ -52,7 +56,14 @@ object CellInfoFixtures {
             every { operatorAlphaShort } returns "Ooredoo"
             every { additionalPlmns } returns emptySet()
         }
-        val signal = mockk<CellSignalStrengthLte> { every { this@mockk.rsrp } returns rsrp }
+        val signal = mockk<CellSignalStrengthLte> {
+            every { this@mockk.rsrp } returns rsrp
+            every { this@mockk.rsrq } returns rsrq
+            every { this@mockk.rssnr } returns rssnr
+            every { this@mockk.cqi } returns cqi
+            every { this@mockk.timingAdvance } returns timingAdvance
+            every { dbm } returns rsrp
+        }
         return mockk {
             every { isRegistered } returns registered
             every { cellIdentity } returns identity
@@ -67,6 +78,8 @@ object CellInfoFixtures {
         pci: Int = 301,
         nrarfcn: Int = 640_000,
         ssRsrp: Int = -90,
+        ssRsrq: Int = -12,
+        ssSinr: Int = 15,
     ): CellInfoNr {
         val identity = mockk<CellIdentityNr> {
             every { mccString } returns "427"
@@ -80,7 +93,14 @@ object CellInfoFixtures {
             every { operatorAlphaShort } returns "Ooredoo"
             every { additionalPlmns } returns emptySet()
         }
-        val signal = mockk<CellSignalStrengthNr> { every { this@mockk.ssRsrp } returns ssRsrp }
+        // timingAdvanceMicros is not stubbed: the reader consults it only on
+        // API 34+, and these tests run with SDK_INT = 0.
+        val signal = mockk<CellSignalStrengthNr> {
+            every { this@mockk.ssRsrp } returns ssRsrp
+            every { this@mockk.ssRsrq } returns ssRsrq
+            every { this@mockk.ssSinr } returns ssSinr
+            every { dbm } returns ssRsrp
+        }
         return mockk {
             every { isRegistered } returns registered
             every { cellIdentity } returns identity

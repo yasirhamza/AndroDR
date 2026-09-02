@@ -188,6 +188,33 @@ class CellularMonitorHandleTest {
     }
 
     @Test
+    fun `signal quality and the neighbour list reach the snapshot`() {
+        // The 0.9.0.638 report carried RSRP and a neighbour COUNT and nothing
+        // else about the radio's quality or who the neighbours were.
+        val m = monitor()
+        val serving = CellInfoFixtures.lte(pci = 167, earfcn = 1600, rsrq = -9, rssnr = 12, timingAdvance = 4)
+        val neighbours = listOf(
+            CellInfoFixtures.lte(registered = false, pci = 12, earfcn = 1600, rsrp = -95),
+            CellInfoFixtures.lte(registered = false, pci = 167, earfcn = 1850, rsrp = -101),
+        )
+        m.handle(listOf(serving) + neighbours, CaptureOrigin.PRIME)
+
+        val s = CellularState.latest.value!!
+        assertEquals(-9, s.signal.rsrq)
+        assertEquals(12, s.signal.sinr)
+        assertEquals(4, s.signal.timingAdvance)
+        assertEquals(-84, s.signal.dbm)
+        assertEquals(listOf(12, 167), s.neighbors.pcis)
+        assertEquals(listOf(1600, 1850), s.neighbors.earfcns)
+        assertEquals(listOf(-95, -101), s.neighbors.rsrps)
+        assertEquals(-95, s.neighbors.maxRsrp)
+        assertEquals(2, s.neighbors.distinctEarfcnCount)
+        assertEquals("a neighbour repeats the serving PCI", true, s.neighbors.servingPciInNeighbors)
+        assertEquals("the margin is derived from the same list", -84 - (-95), s.servingMinusMaxNeighborRsrpDb)
+        assertEquals(2, s.neighborCount)
+    }
+
+    @Test
     fun `a change of circumstances alone is still the same observation`() {
         val m = monitor()
         screenInteractive = true

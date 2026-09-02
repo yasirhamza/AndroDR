@@ -61,6 +61,12 @@ internal object CellularReportSection {
         appendLine("    channel (earfcn): ${snapshot.earfcn ?: "not reported"}")
         appendLine("    neighbour cells : ${snapshot.neighborCount}")
         appendLine("    serving RSRP    : ${snapshot.servingRsrp?.let { "$it dBm" } ?: "not reported"}")
+        appendLine("    serving RSRQ    : ${snapshot.signal.rsrq?.let { "$it dB" } ?: "not reported"}")
+        appendLine("    serving SINR    : ${snapshot.signal.sinr?.let { "$it dB" } ?: "not reported"}")
+        appendLine("    timing advance  : ${timingAdvanceLine(snapshot.signal.timingAdvance)}")
+        appendLine("    strongest nbr   : ${snapshot.neighbors.maxRsrp?.let { "$it dBm" } ?: "not reported"}")
+        appendLine("    nbr channels    : ${snapshot.neighbors.distinctEarfcnCount}")
+        appendLine("    PCI in nbrs     : ${snapshot.neighbors.servingPciInNeighbors ?: "unknown"}")
         appendLine("    TAC changes (5m): ${snapshot.tacChangesLast5m}")
         appendLine("    TAC changed     : ${snapshot.tacChanged}")
         appendLine("    RAT changed     : ${snapshot.ratChanged}")
@@ -74,6 +80,16 @@ internal object CellularReportSection {
         appendLine()
         appendCellularObservations(history)
     }
+
+    /**
+     * Timing advance with its rough meaning. One LTE TA step is ~78 m of
+     * round-trip distance to the serving tower, which is what a reader needs
+     * to judge "the tower is suddenly very close".
+     */
+    private fun timingAdvanceLine(ta: Int?): String =
+        ta?.let { "$it (~${it * TA_METERS} m)" } ?: "not reported"
+
+    private const val TA_METERS = 78
 
     /**
      * Every retained observation, not just the last one.
@@ -110,6 +126,15 @@ internal object CellularReportSection {
         append(" bw=").append(s.bandwidthKhz ?: "-")
         append(" neighbours=").append(s.neighborCount)
         append(" rsrp=").append(s.servingRsrp ?: "-")
+        append(" rsrq=").append(s.signal.rsrq ?: "-")
+        append(" sinr=").append(s.signal.sinr ?: "-")
+        append(" cqi=").append(s.signal.cqi ?: "-")
+        append(" ta=").append(s.signal.timingAdvance ?: "-")
+        append(" taUs=").append(s.signal.timingAdvanceUs ?: "-")
+        append(" dbm=").append(s.signal.dbm ?: "-")
+        append(" nMaxRsrp=").append(s.neighbors.maxRsrp ?: "-")
+        append(" nEarfcns=").append(s.neighbors.distinctEarfcnCount)
+        append(" pciInN=").append(s.neighbors.servingPciInNeighbors ?: "-")
         append(" tacChanged=").append(s.tacChanged)
         append(" ratChanged=").append(s.ratChanged)
         append(" churn5m=").append(s.tacChangesLast5m)

@@ -4,9 +4,11 @@ import com.androdr.data.model.CaptureContext
 import com.androdr.data.model.CaptureOrigin
 import com.androdr.data.model.CellularSnapshot
 import com.androdr.data.model.ForensicTimelineEvent
-import com.androdr.data.model.TelemetrySource
+import com.androdr.data.model.NeighborDetail
 import com.androdr.data.model.ScanResult
+import com.androdr.data.model.ServingSignal
 import com.androdr.data.model.SimContext
+import com.androdr.data.model.TelemetrySource
 import com.androdr.reporting.ReportFormatter
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -162,6 +164,48 @@ class CellularReportSectionTest {
             "moved5m=640", "fixAge=12", "origin=PRIME", "records=14", "screen=false",
             "simPlmn=true", "simName=false",
         ).forEach { assertTrue("observation row missing $it", rows.contains(it)) }
+    }
+
+    /** Signal quality and a neighbour list with a PCI clash and two channels. */
+    private fun measured() = snapshot().copy(
+        signal = ServingSignal(rsrq = -11, sinr = 10, cqi = null, timingAdvance = 4, dbm = -84),
+        neighbors = NeighborDetail(
+            pcis = listOf(12, 167), earfcns = listOf(1600, 1850), rsrps = listOf(-95, -101),
+            rats = listOf("LTE", "LTE"), maxRsrp = -95, servingPciInNeighbors = true, distinctEarfcnCount = 2,
+        ),
+    )
+
+    @Test
+    fun `signal quality and the neighbour scalars are reported`() {
+        val out = renderTelemetry(measured(), deliveries = 1)
+        assertTrue(out.contains("serving RSRQ    : -11 dB"))
+        assertTrue(out.contains("serving SINR    : 10 dB"))
+        assertTrue("timing advance must carry its rough distance", out.contains("timing advance  : 4 (~312 m)"))
+        assertTrue(out.contains("strongest nbr   : -95 dBm"))
+        assertTrue(out.contains("nbr channels    : 2"))
+        assertTrue(out.contains("PCI in nbrs     : true"))
+
+        val rows = renderHistory(listOf(measured()))
+        listOf("rsrq=-11", "sinr=10", "cqi=-", "ta=4", "dbm=-84", "nMaxRsrp=-95", "nEarfcns=2", "pciInN=true")
+            .forEach { assertTrue("observation row missing $it", rows.contains(it)) }
+    }
+
+    @Test
+    fun `an unmeasured radio says so rather than inventing a value`() {
+        val out = renderTelemetry(snapshot(), deliveries = 1)
+        assertTrue(out.contains("timing advance  : not reported"))
+        assertTrue(out.contains("strongest nbr   : not reported"))
+        assertTrue(out.contains("PCI in nbrs     : unknown"))
+    }
+
+    @Test
+    fun `the neighbours' identities never reach the report`() {
+        // Each neighbour's PCI and channel is a tower identifier like the
+        // serving cell's; only the scalars derived from the list are exported.
+        val out = renderTelemetry(measured(), deliveries = 1) + renderHistory(listOf(measured()))
+        assertFalse("neighbour PCI list leaked", out.contains("12, 167") || out.contains("12,167"))
+        assertFalse("neighbour channel list leaked", out.contains("1600, 1850") || out.contains("1600,1850"))
+        assertFalse("neighbour RSRP list leaked", out.contains("-95, -101") || out.contains("-95,-101"))
     }
 
     @Test

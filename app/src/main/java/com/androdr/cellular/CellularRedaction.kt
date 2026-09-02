@@ -31,6 +31,19 @@ object CellularRedaction {
         "bw",         // bandwidth
         "neighbours", // count only
         "rsrp",       // signal strength
+        // Signal quality of the serving cell: measurements, not identity.
+        "rsrq",
+        "sinr",
+        "cqi",
+        "ta",         // timing advance — distance to the tower, not its position
+        "taUs",
+        "dbm",
+        // Neighbour list, reduced to scalars. The neighbours' PCIs and
+        // channels stay on-device; a count of distinct channels and the
+        // strongest level do not identify a tower.
+        "nMaxRsrp",
+        "nEarfcns",
+        "pciInN",     // the serving PCI also appears among the neighbours
         "prevTac",    // REDACTED below — listed here only to be explicit it is not exportable
         "churn5m",    // count of changes, not the values
         "tacChanged",

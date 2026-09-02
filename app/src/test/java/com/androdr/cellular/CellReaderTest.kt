@@ -1,10 +1,13 @@
 package com.androdr.cellular
 
 import android.telephony.CellInfo
+import com.androdr.data.model.ServingSignal
 import io.mockk.every
 import io.mockk.mockk
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
@@ -95,5 +98,118 @@ class CellReaderTest {
         assertEquals("UNKNOWN", id.rat)
         assertNull(id.tac); assertNull(id.ci); assertNull(id.earfcn); assertNull(id.mcc)
         assertNull(CellReader.rsrp(other))
+        assertEquals("no signal reading is invented either", ServingSignal(), CellReader.signal(other))
+    }
+
+    // ---- signal quality --------------------------------------------------
+
+    @Test
+    fun `LTE signal quality is read in full, with the sentinel honoured per field`() {
+        val s = CellReader.signal(CellInfoFixtures.lte(rsrq = -11, rssnr = 10, cqi = 9, timingAdvance = 12))
+        assertEquals(-11, s.rsrq)
+        assertEquals(10, s.sinr)
+        assertEquals(9, s.cqi)
+        assertEquals(12, s.timingAdvance)
+        assertEquals("dbm is the generic level; the fixture reports RSRP there", -84, s.dbm)
+        assertNull("NR-only", s.timingAdvanceUs)
+
+        val idle = CellReader.signal(CellInfoFixtures.lte())
+        assertEquals(-11, idle.rsrq)
+        assertNull("CQI is Integer.MAX_VALUE when the modem is idle", idle.cqi)
+        assertNull("so is timing advance on the F971B capture", idle.timingAdvance)
+    }
+
+    @Test
+    fun `NR reads SS-RSRQ and SS-SINR under the shared names and no LTE-only fields`() {
+        val s = CellReader.signal(CellInfoFixtures.nr())
+        assertEquals(-12, s.rsrq)
+        assertEquals(15, s.sinr)
+        assertEquals(-90, s.dbm)
+        assertNull("CQI is an LTE reading", s.cqi)
+        assertNull("LTE timing advance is not NR's", s.timingAdvance)
+        assertNull("NR timing advance needs API 34; the JVM reports SDK_INT 0", s.timingAdvanceUs)
+    }
+
+    @Test
+    fun `3G and 2G carry only the generic level`() {
+        val umts = CellReader.signal(CellInfoFixtures.wcdma())
+        assertEquals(-79, umts.dbm)
+        assertNull(umts.rsrq); assertNull(umts.sinr); assertNull(umts.cqi); assertNull(umts.timingAdvance)
+        val gsm = CellReader.signal(CellInfoFixtures.gsm())
+        assertEquals(-71, gsm.dbm)
+        assertNull(gsm.rsrq)
+    }
+
+    // ---- neighbour list ---------------------------------------------------
+
+    private fun neighbour(pci: Int, earfcn: Int, rsrp: Int) =
+        CellInfoFixtures.lte(registered = false, pci = pci, earfcn = earfcn, rsrp = rsrp)
+
+    @Test
+    fun `neighbours become parallel lists plus the scalars a rule cannot derive`() {
+        val serving = CellReader.identity(CellInfoFixtures.lte(pci = 167, earfcn = 1600))
+        val n = CellReader.neighbors(
+            serving,
+            listOf(neighbour(12, 1600, -95), neighbour(45, 1850, -101), neighbour(78, 1600, -88)),
+        )
+        assertEquals(listOf(12, 45, 78), n.pcis)
+        assertEquals(listOf(1600, 1850, 1600), n.earfcns)
+        assertEquals(listOf(-95, -101, -88), n.rsrps)
+        assertEquals(listOf("LTE", "LTE", "LTE"), n.rats)
+        assertEquals(-88, n.maxRsrp)
+        assertEquals(2, n.distinctEarfcnCount)
+        assertEquals(false, n.servingPciInNeighbors)
+    }
+
+    @Test
+    fun `a neighbour that repeats the serving PCI is flagged`() {
+        val serving = CellReader.identity(CellInfoFixtures.lte(pci = 167))
+        val n = CellReader.neighbors(serving, listOf(neighbour(12, 1600, -95), neighbour(167, 1850, -90)))
+        assertEquals(true, n.servingPciInNeighbors)
+    }
+
+    @Test
+    fun `the PCI clash is undecidable, not false, when either side has no PCI`() {
+        val lte = CellReader.identity(CellInfoFixtures.lte(pci = 167))
+        assertNull("no neighbours at all", CellReader.neighbors(lte, emptyList()).servingPciInNeighbors)
+        assertNull(
+            "neighbours without a PCI (GSM) cannot clash",
+            CellReader.neighbors(lte, listOf(CellInfoFixtures.gsm(registered = false))).servingPciInNeighbors,
+        )
+        val gsmServing = CellReader.identity(CellInfoFixtures.gsm())
+        assertNull(
+            "a serving cell without a PCI cannot clash either",
+            CellReader.neighbors(gsmServing, listOf(neighbour(12, 1600, -95))).servingPciInNeighbors,
+        )
+    }
+
+    @Test
+    fun `the lists hold only what was available, so an unavailable value is skipped not zeroed`() {
+        val serving = CellReader.identity(CellInfoFixtures.lte())
+        val n = CellReader.neighbors(
+            serving,
+            listOf(
+                neighbour(CellInfoFixtures.UNAVAILABLE, CellInfoFixtures.UNAVAILABLE, CellInfoFixtures.UNAVAILABLE),
+                neighbour(45, 1850, -101),
+            ),
+        )
+        assertEquals(listOf(45), n.pcis)
+        assertEquals(listOf(1850), n.earfcns)
+        assertEquals(listOf(-101), n.rsrps)
+        assertEquals("the RAT of every record is known even when its numbers are not", 2, n.rats.size)
+        assertEquals(-101, n.maxRsrp)
+    }
+
+    @Test
+    fun `a mixed-technology neighbour list keeps every record's RAT and only LTE and NR levels`() {
+        val serving = CellReader.identity(CellInfoFixtures.lte())
+        val n = CellReader.neighbors(
+            serving,
+            listOf(CellInfoFixtures.nr(registered = false), CellInfoFixtures.wcdma(registered = false)),
+        )
+        assertEquals(listOf("NR", "UMTS"), n.rats)
+        assertEquals("3G has no RSRP", listOf(-90), n.rsrps)
+        assertTrue(n.pcis.containsAll(listOf(301, 77)))
+        assertFalse("the serving LTE PCI is not among them", n.servingPciInNeighbors == true)
     }
 }

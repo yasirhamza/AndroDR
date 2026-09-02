@@ -48,6 +48,26 @@ class CellularRedactionTest {
     }
 
     @Test
+    fun `signal quality and the neighbour scalars survive redaction`() {
+        // Measurements, not identity: a reader judging "the tower is suddenly
+        // very close" needs the timing advance, not the tower's name.
+        val out = CellularRedaction.redact(
+            "$realistic rsrq=-11 sinr=10 cqi=9 ta=4 taUs=- dbm=-84 nMaxRsrp=-95 nEarfcns=2 pciInN=true",
+        )
+        listOf("rsrq=-11", "sinr=10", "cqi=9", "ta=4", "dbm=-84", "nMaxRsrp=-95", "nEarfcns=2", "pciInN=true")
+            .forEach { assertTrue("dropped: $it", out.contains(it)) }
+    }
+
+    @Test
+    fun `neighbour identities are dropped even if a future writer emits them`() {
+        // Defence in depth: the monitor never puts neighbour PCIs or channels
+        // in details, and the allowlist would drop them if it did.
+        val out = CellularRedaction.redact("$realistic nPcis=12,167 nEarfcnList=1600,1850")
+        assertFalse(out.contains("12,167"))
+        assertFalse(out.contains("1600,1850"))
+    }
+
+    @Test
     fun `redaction is an allowlist, so unknown fields are dropped`() {
         // The point of the allowlist: a field added later must be consciously
         // cleared for export rather than leaking by default.
