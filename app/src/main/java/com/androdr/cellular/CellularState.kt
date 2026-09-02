@@ -87,6 +87,21 @@ object CellularState {
     /** Count of callback deliveries this session — shows the monitor is alive. */
     val deliveries: StateFlow<Int> = _deliveries.asStateFlow()
 
+    private val _duplicates = MutableStateFlow(0)
+
+    /**
+     * Deliveries that repeated the previous observation and were not recorded.
+     * Counted so the report can say "46 delivered, 2 duplicate" rather than
+     * silently showing fewer observations than deliveries.
+     */
+    val duplicates: StateFlow<Int> = _duplicates.asStateFlow()
+
+    /** A delivery arrived but repeated the last observation — see [DuplicateDeliveryFilter]. */
+    fun recordDuplicate() {
+        _deliveries.value = _deliveries.value + 1
+        _duplicates.value = _duplicates.value + 1
+    }
+
     fun record(snapshot: CellularSnapshot, findings: List<Finding>) {
         _status.value = Status.ACTIVE
         _latest.value = snapshot
@@ -122,6 +137,7 @@ object CellularState {
         _history.value = emptyList()
         _triggered.value = emptyList()
         _deliveries.value = 0
+        _duplicates.value = 0
     }
 
     private const val MAX_FINDINGS = 20

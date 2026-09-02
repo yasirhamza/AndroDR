@@ -69,9 +69,20 @@ class CellularStateLifecycleTest {
     @Test
     fun `reset really does clear everything`() {
         CellularState.record(snapshot(1_000L), emptyList())
+        CellularState.recordDuplicate()
         CellularState.reset()
         assertNull(CellularState.latest.value)
         assertEquals(0, CellularState.history.value.size)
         assertEquals(0, CellularState.deliveries.value)
+        assertEquals(0, CellularState.duplicates.value)
+    }
+
+    @Test
+    fun `a duplicate counts as a delivery but not as an observation`() {
+        CellularState.record(snapshot(1_000L), emptyList())
+        CellularState.recordDuplicate()
+        assertEquals(2, CellularState.deliveries.value)
+        assertEquals(1, CellularState.duplicates.value)
+        assertEquals(1, CellularState.history.value.size)
     }
 }

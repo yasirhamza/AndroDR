@@ -188,6 +188,27 @@ class CellularReportSectionTest {
     }
 
     @Test
+    fun `the report accounts for deliveries that were not recorded`() {
+        // 46 delivered but 44 rows would read as two lost observations
+        // unless the report says they were repeats.
+        val out = ReportFormatter.formatScanReport(
+            scan = scan(),
+            dnsEvents = emptyList(),
+            logLines = emptyList(),
+            cellularSnapshot = snapshot(),
+            cellularDeliveries = 46,
+            cellularDuplicates = 2,
+            versionName = "test",
+        )
+        assertTrue(out.contains("delivered this session: 46"))
+        assertTrue(out.contains("2 duplicate deliveries not recorded; 44 distinct"))
+        assertFalse(
+            "no duplicates means no caveat",
+            renderTelemetry(snapshot(), deliveries = 12).contains("duplicate"),
+        )
+    }
+
+    @Test
     fun `telemetry section says so when the monitor produced nothing`() {
         val out = renderTelemetry(null, deliveries = 0)
         assertTrue(out.contains("No radio telemetry captured"))

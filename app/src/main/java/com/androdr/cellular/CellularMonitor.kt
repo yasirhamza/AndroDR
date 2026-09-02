@@ -15,6 +15,7 @@ import android.telephony.TelephonyManager
 import android.util.Log
 import androidx.annotation.RequiresApi
 import androidx.core.content.ContextCompat
+import com.androdr.data.model.CaptureOrigin
 import com.androdr.data.model.CellularSnapshot
 import com.androdr.data.model.ForensicTimelineEvent
 import com.androdr.data.repo.ScanRepository
@@ -65,6 +66,8 @@ class CellularMonitor(
     private val repository: ScanRepository,
     private val scope: CoroutineScope,
     private val store: RadioStateStore = RadioStateStore(),
+    private val duplicates: DuplicateDeliveryFilter = DuplicateDeliveryFilter(),
+    private val clock: () -> Long = System::currentTimeMillis,
 ) {
     private var callback: TelephonyCallback? = null
 
@@ -72,7 +75,8 @@ class CellularMonitor(
 
     @RequiresApi(Build.VERSION_CODES.S)
     private inner class Callback : TelephonyCallback(), TelephonyCallback.CellInfoListener {
-        override fun onCellInfoChanged(cellInfo: MutableList<CellInfo>) = handle(cellInfo)
+        override fun onCellInfoChanged(cellInfo: MutableList<CellInfo>) =
+            handle(cellInfo, CaptureOrigin.CALLBACK)
     }
 
     fun start() {
@@ -158,7 +162,7 @@ class CellularMonitor(
                     Log.i(TAG, "initial read returned no cells; waiting for a callback")
                     CellularState.setStatus(CellularState.Status.AWAITING_FIRST_UPDATE)
                 } else {
-                    handle(cells)
+                    handle(cells, CaptureOrigin.PRIME)
                 }
             }
             .onFailure {
@@ -167,16 +171,25 @@ class CellularMonitor(
             }
     }
 
-    internal fun handle(cellInfo: List<CellInfo>) {
+    internal fun handle(cellInfo: List<CellInfo>, origin: CaptureOrigin) {
         val serving = cellInfo.firstOrNull { it.isRegistered }
         if (serving == null) {
             // Distinguishing an empty delivery from "no registered cell" matters:
             // a background caller is handed an empty list rather than an error,
             // so silence here is ambiguous unless it is logged explicitly.
-            Log.i(TAG, "onCellInfoChanged: ${cellInfo.size} records, none registered")
+            Log.i(TAG, "$origin: ${cellInfo.size} records, none registered")
             return
         }
-        val snapshot = toSnapshot(serving, cellInfo, System.currentTimeMillis())
+        val snapshot = toSnapshot(serving, cellInfo, clock())
+        if (duplicates.isDuplicate(snapshot)) {
+            // Prime plus the registration callback hand over the same list
+            // twice at session start. It counts as a delivery — the monitor is
+            // alive — but is not recorded, evaluated or persisted: one physical
+            // observation must yield one observation and at most one finding.
+            Log.i(TAG, "$origin: repeated the previous observation; not recorded")
+            CellularState.recordDuplicate()
+            return
+        }
         // PRIVACY: never log the cell identity tuple. (mcc, mnc, tac, ci) is a
         // globally unique tower identifier and is directly geolocatable — that
         // is exactly what OpenCelliD does, and what this feature's own
@@ -191,7 +204,7 @@ class CellularMonitor(
         // blanked", which is the diagnostic that matters.
         Log.i(
             TAG,
-            "snapshot rat=${snapshot.rat} tac=${present(snapshot.tac)} " +
+            "snapshot origin=$origin rat=${snapshot.rat} tac=${present(snapshot.tac)} " +
                 "ci=${present(snapshot.ci)} pci=${present(snapshot.pci)} " +
                 "earfcn=${present(snapshot.earfcn)} bw=${present(snapshot.bandwidthKhz)} " +
                 "plmn=${present(snapshot.mcc)} op=${present(snapshot.operatorAlphaLong)} " +

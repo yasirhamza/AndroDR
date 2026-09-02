@@ -66,4 +66,30 @@ data class CellularSnapshot(
         "serving_minus_max_neighbor_rsrp_db" to servingMinusMaxNeighborRsrpDb,
         "location_moved_m_last_5m" to locationMovedMLast5m,
     )
+
+    /**
+     * The raw radio facts of this observation: what the platform reported,
+     * minus WHEN it reported it and what the emitter derived from earlier
+     * observations. Two deliveries with equal keys describe the same physical
+     * radio state, which is how a repeated delivery is told apart from a new
+     * one. See `DuplicateDeliveryFilter`.
+     */
+    fun observationKey(): Map<String, Any?> = toFieldMap() - NON_OBSERVATION_KEYS
+
+    companion object {
+        /**
+         * Field-map keys that legitimately differ between two deliveries of
+         * the same physical observation: the clock, and everything computed
+         * against previous observations rather than read from the radio.
+         */
+        val NON_OBSERVATION_KEYS: Set<String> = setOf(
+            "captured_at",
+            "previous_tac",
+            "previous_rat",
+            "tac_changed",
+            "rat_changed",
+            "tac_changes_last_5m",
+            "location_moved_m_last_5m",
+        )
+    }
 }
