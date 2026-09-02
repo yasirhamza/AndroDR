@@ -241,6 +241,34 @@ class CellularMonitorHandleTest {
     }
 
     @Test
+    fun `a finding title that names the tower is not persisted as the description`() {
+        // The description is exported unredacted. A remote rule whose
+        // triggeredTitle interpolates {tac} or {ci} would put the tower into
+        // a shared report; the monitor falls back to the rule's static title,
+        // and to a bare label when it has no rule to ask.
+        val persisted = slot<List<ForensicTimelineEvent>>()
+        coEvery { repository.logCellularTimelineEvents(capture(persisted)) } just Runs
+        every { engine.evaluateCellular(any()) } returns listOf(
+            Finding(ruleId = "androdr-999", title = "Cell 192816407 in TAC 1437 vanished", level = "low"),
+        )
+        every { engine.getRules() } returns emptyList()
+        monitor().handle(lteCell(), CaptureOrigin.PRIME)
+
+        val description = persisted.captured.single().description
+        assertFalse("CI in the exported description", description.contains("192816407"))
+        assertFalse("TAC in the exported description", description.contains("1437"))
+        assertEquals("Cellular finding androdr-999", description)
+    }
+
+    @Test
+    fun `a finding title without identity is persisted as it is`() {
+        val persisted = slot<List<ForensicTimelineEvent>>()
+        coEvery { repository.logCellularTimelineEvents(capture(persisted)) } just Runs
+        monitor().handle(lteCell(), CaptureOrigin.PRIME)
+        assertEquals("Serving cell has no neighbours", persisted.captured.single().description)
+    }
+
+    @Test
     fun `the registration state reaches the snapshot and a change of it is a new observation`() {
         val m = monitor()
         m.handle(lteCell(), CaptureOrigin.PRIME)

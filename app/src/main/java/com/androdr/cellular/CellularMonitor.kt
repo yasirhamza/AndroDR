@@ -281,7 +281,7 @@ class CellularMonitor(
                 kind = "event",
                 source = TIMELINE_SOURCE,
                 category = "network_anomaly",
-                description = f.title,
+                description = safeDescription(f, snapshot),
                 details = CellularDetails.format(snapshot),
                 ruleId = f.ruleId,
                 attackTechniqueId = f.tags.firstOrNull { it.startsWith("attack.") }.orEmpty(),
@@ -292,6 +292,25 @@ class CellularMonitor(
             runCatching { repository.logCellularTimelineEvents(events) }
                 .onFailure { Log.e(TAG, "failed to persist cellular findings: ${it.message}") }
         }
+    }
+
+    /**
+     * The timeline row's description is the finding's title, and the
+     * exporters print it as it is: only `details` passes through
+     * [CellularRedaction]. A rule whose `triggeredTitle` interpolates `{tac}`
+     * would therefore put the tower straight into a shared report. The
+     * bundled rules are tested not to; this is the guard for a remote or
+     * custom rule that does. The rule's static title is tried next, and a
+     * bare label last.
+     */
+    private fun safeDescription(f: Finding, snapshot: CellularSnapshot): String {
+        val identity = snapshot.identityValues()
+        val candidates = sequenceOf(
+            { f.title },
+            { engine.getRules().firstOrNull { it.id == f.ruleId }?.title },
+            { "Cellular finding ${f.ruleId}" },
+        )
+        return candidates.mapNotNull { it() }.firstOrNull { c -> identity.none(c::contains) } ?: "Cellular finding"
     }
 
     /**

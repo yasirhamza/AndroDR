@@ -94,7 +94,28 @@ data class CellularSnapshot(
      */
     fun observationKey(): Map<String, Any?> = toFieldMap() - NON_OBSERVATION_KEYS
 
+    /**
+     * Every string that would locate the tower if it appeared in free text:
+     * the serving identity, the network's names, the previous tracking area,
+     * the SIM's operator and the neighbours' PCIs. A finding's TITLE is
+     * exported unredacted, and this is what it is checked against. Values
+     * shorter than three characters are left out — a PCI of "7" is in too
+     * many innocent words to be a usable test.
+     */
+    fun identityValues(): Set<String> = buildSet {
+        listOfNotNull(tac, ci, pci, previousTac, mcc, mnc, operatorAlphaLong, operatorAlphaShort, sim.operatorName)
+            .forEach { add(it.toString()) }
+        if (mcc != null && mnc != null) {
+            add(mcc + mnc)
+            add("$mcc/$mnc")
+        }
+        addAll(additionalPlmns)
+        neighbors.pcis.forEach { add(it.toString()) }
+    }.filterTo(mutableSetOf()) { it.length >= MIN_IDENTITY_LENGTH }
+
     companion object {
+        private const val MIN_IDENTITY_LENGTH = 3
+
         /**
          * Field-map keys that legitimately differ between two deliveries of
          * the same physical observation: the clock, the read's circumstances
