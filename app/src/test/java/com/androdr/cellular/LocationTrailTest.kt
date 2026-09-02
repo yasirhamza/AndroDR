@@ -73,6 +73,28 @@ class LocationTrailTest {
     }
 
     @Test
+    fun `a fix older than the newest is ignored`() {
+        // The passive provider can hand back an older fix after a fresher
+        // one; appended blindly it would become "the newest" by position.
+        val t = LocationTrail()
+        t.record(lat, lon, timeMillis = 60_000)
+        t.record(oneKmNorth, lon, timeMillis = 30_000)
+        assertNull("still only one fix", t.movedMetersLast(window, now = 70_000))
+        assertEquals("age is from the fix that is actually newest", 10, t.fixAgeSeconds(now = 70_000))
+    }
+
+    @Test
+    fun `a fix stamped a few seconds ahead of the clock still counts`() {
+        // Fix times come from the location subsystem, now from the monitor.
+        val t = LocationTrail()
+        t.record(lat, lon, timeMillis = 0)
+        t.record(oneKmNorth, lon, timeMillis = 63_000)
+        val moved = t.movedMetersLast(window, now = 60_000)
+        assertTrue("expected ~1000 m, got $moved", moved != null && moved in 990..1010)
+        assertEquals(0, t.fixAgeSeconds(now = 60_000))
+    }
+
+    @Test
     fun `no fix means no age`() {
         assertNull(LocationTrail().fixAgeSeconds(now = 5_000))
     }

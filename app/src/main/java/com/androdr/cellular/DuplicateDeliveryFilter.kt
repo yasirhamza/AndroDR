@@ -33,7 +33,9 @@ class DuplicateDeliveryFilter(private val windowMillis: Long = DEFAULT_WINDOW_MI
     @Synchronized
     fun isDuplicate(snapshot: CellularSnapshot): Boolean {
         val key = snapshot.observationKey()
-        val duplicate = key == lastKey && snapshot.capturedAt - lastAcceptedAt <= windowMillis
+        // A delivery stamped BEFORE the last accepted one (the clock moved)
+        // is outside the window too, not inside it by an arithmetic accident.
+        val duplicate = key == lastKey && snapshot.capturedAt - lastAcceptedAt in 0..windowMillis
         if (!duplicate) {
             lastKey = key
             lastAcceptedAt = snapshot.capturedAt

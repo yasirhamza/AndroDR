@@ -73,6 +73,15 @@ class DuplicateDeliveryFilterTest {
     }
 
     @Test
+    fun `a delivery stamped before the last accepted one is not a duplicate`() {
+        // A negative delta is trivially <= the window; it must not read as
+        // "inside" it.
+        val f = DuplicateDeliveryFilter(windowMillis = 2_000)
+        assertFalse(f.isDuplicate(snapshot(at = 10_000)))
+        assertFalse("the clock went backwards; that is not a repeat", f.isDuplicate(snapshot(at = 5_000)))
+    }
+
+    @Test
     fun `every excluded key is a real field-map key`() {
         // A renamed field would otherwise silently stop being excluded and
         // every repeat would look new again.
