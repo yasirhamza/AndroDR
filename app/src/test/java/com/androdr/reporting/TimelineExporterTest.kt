@@ -195,7 +195,14 @@ class TimelineExporterTest {
 
     @Test
     fun `output is ASCII only`() {
-        val text = TimelineExporter.formatPlaintext(events, versionName = "test")
+        // A cellular row brings the redaction note with it; it shipped with an
+        // em dash once.
+        val cellular = ForensicTimelineEvent(
+            id = 3, startTimestamp = 1711900900000, source = "cellular_monitor",
+            category = "network_anomaly", description = "Tracking area churn",
+            details = "rat=LTE tac=1437 churn5m=4", ruleId = "androdr-104",
+        )
+        val text = TimelineExporter.formatPlaintext(events + cellular, versionName = "test")
         val nonAscii = text.filter { it.code > 127 }
         assertTrue("Non-ASCII characters found: $nonAscii", nonAscii.isEmpty())
     }

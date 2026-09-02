@@ -21,13 +21,21 @@ package com.androdr.cellular
  *
  * Allowlist rather than denylist: a new emitted field must be consciously
  * cleared for export instead of leaking because nobody remembered to ban it.
+ * Every key [CellularDetails] emits is in exactly one of [EXPORTABLE_KEYS] and
+ * [WITHHELD_KEYS]; a test enforces that, so adding a key without deciding is a
+ * build failure rather than a leak.
  */
 object CellularRedaction {
 
+    /** The timeline `source` of every row this object is responsible for. */
+    const val SOURCE = "cellular_monitor"
+
     /** Keys safe to hand off — radio condition, never tower identity. */
-    private val EXPORTABLE_KEYS = setOf(
+    internal val EXPORTABLE_KEYS: Set<String> = setOf(
         "rat",        // radio access technology
+        "reg",        // registered on the serving cell, or camped with none
         "earfcn",     // channel number; network-wide, not cell-specific
+        "bands",      // frequency bands; a property of the channel, not the tower
         "bw",         // bandwidth
         "neighbours", // count only
         "rsrp",       // signal strength
@@ -44,10 +52,12 @@ object CellularRedaction {
         "nMaxRsrp",
         "nEarfcns",
         "pciInN",     // the serving PCI also appears among the neighbours
-        "prevTac",    // REDACTED below — listed here only to be explicit it is not exportable
-        "churn5m",    // count of changes, not the values
+        "margin",     // serving RSRP minus the strongest neighbour
+        // Change since the previous observation — what happened, not where.
+        "prevRat",
         "tacChanged",
         "ratChanged",
+        "churn5m",    // count of changes, not the values
         // Movement is a distance, never a position: how far, not where.
         "moved5m",
         "fixAge",
@@ -66,21 +76,56 @@ object CellularRedaction {
         "svc",
         "roaming",
         "dnt",
-    ) - setOf("prevTac")
+        // The session-start row carries this key alone.
+        "monitor",
+    )
+
+    /**
+     * Keys that stay on-device: each one locates the tower, and with it the
+     * device. Named rather than implied so that a reader of the allowlist
+     * can see what was decided against, not just what was decided for.
+     */
+    internal val WITHHELD_KEYS: Set<String> = setOf(
+        "tac",        // tracking area
+        "ci",         // cell identity
+        "pci",        // physical cell id
+        "plmn",       // serving network code
+        "op",         // serving network name, as broadcast
+        "prevTac",    // the previous tracking area is a location too
+    )
+
+    /** Keys emitted by no observation; they belong to other timeline rows. */
+    internal val SESSION_KEYS: Set<String> = setOf("monitor")
 
     const val REDACTION_NOTE =
-        "[cell identity (tac/ci/pci/plmn/operator) withheld — location-identifying; " +
+        "[cell identity (tac/ci/pci/plmn/operator) withheld -- location-identifying; " +
             "retained on-device for adjudication]"
+
+    fun isExportable(key: String): Boolean = key in EXPORTABLE_KEYS
 
     /**
      * Returns [details] with only exportable `key=value` pairs kept, followed
      * by a note saying what was withheld and why. Silence would read as "there
      * was nothing more", which is the wrong impression for a forensic artifact.
+     *
+     * The row is trusted only as far as its shape: it is split on ANY
+     * whitespace (a newline inside a value must not carry a forged pair onto
+     * the next line of a CSV), a token that is not `key=value` is dropped, and
+     * a key that appears more than once is dropped entirely — a value that
+     * smuggled in a second `rsrp=` is indistinguishable from the real one, so
+     * neither can be believed.
      */
     fun redact(details: String): String {
         if (details.isBlank()) return details
-        val kept = details.trim().split(' ')
-            .filter { it.substringBefore('=') in EXPORTABLE_KEYS }
+        val pairs = details.trim().split(WHITESPACE).filter { PAIR.matches(it) }
+        val occurrences = pairs.groupingBy { it.substringBefore('=') }.eachCount()
+        val kept = pairs.filter { token ->
+            val key = token.substringBefore('=')
+            isExportable(key) && occurrences[key] == 1
+        }
         return if (kept.isEmpty()) REDACTION_NOTE else kept.joinToString(" ") + " " + REDACTION_NOTE
     }
+
+    private val WHITESPACE = Regex("\\s+")
+    private val PAIR = Regex("[A-Za-z0-9]+=[^\\s=]*")
 }

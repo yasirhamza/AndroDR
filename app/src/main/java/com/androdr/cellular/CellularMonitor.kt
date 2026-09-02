@@ -282,7 +282,7 @@ class CellularMonitor(
                 source = TIMELINE_SOURCE,
                 category = "network_anomaly",
                 description = f.title,
-                details = detailsOf(snapshot),
+                details = CellularDetails.format(snapshot),
                 ruleId = f.ruleId,
                 attackTechniqueId = f.tags.firstOrNull { it.startsWith("attack.") }.orEmpty(),
                 telemetrySource = snapshot.source,
@@ -292,49 +292,6 @@ class CellularMonitor(
             runCatching { repository.logCellularTimelineEvents(events) }
                 .onFailure { Log.e(TAG, "failed to persist cellular findings: ${it.message}") }
         }
-    }
-
-    /**
-     * The radio context a finding fired on, as `key=value` pairs for the
-     * timeline row. Tower identity is included — this row stays in the
-     * app-private database — and [CellularRedaction] decides what leaves.
-     * Neighbour PCIs and the SIM's own identity are deliberately absent:
-     * the counts and comparison results carry the evidence.
-     */
-    private fun detailsOf(snapshot: CellularSnapshot): String = buildString {
-        append("rat=").append(snapshot.rat)
-        append(" tac=").append(snapshot.tac ?: "-")
-        append(" ci=").append(snapshot.ci ?: "-")
-        append(" pci=").append(snapshot.pci ?: "-")
-        append(" earfcn=").append(snapshot.earfcn ?: "-")
-        append(" plmn=").append(snapshot.mcc ?: "-").append('/')
-        append(snapshot.mnc ?: "-")
-        append(" op=").append(snapshot.operatorAlphaLong ?: "-")
-        append(" neighbours=").append(snapshot.neighborCount)
-        append(" rsrp=").append(snapshot.servingRsrp ?: "-")
-        append(" rsrq=").append(snapshot.signal.rsrq ?: "-")
-        append(" sinr=").append(snapshot.signal.sinr ?: "-")
-        append(" cqi=").append(snapshot.signal.cqi ?: "-")
-        append(" ta=").append(snapshot.signal.timingAdvance ?: "-")
-        append(" taUs=").append(snapshot.signal.timingAdvanceUs ?: "-")
-        append(" dbm=").append(snapshot.signal.dbm ?: "-")
-        append(" nMaxRsrp=").append(snapshot.neighbors.maxRsrp ?: "-")
-        append(" nEarfcns=").append(snapshot.neighbors.distinctEarfcnCount)
-        append(" pciInN=").append(snapshot.neighbors.servingPciInNeighbors ?: "-")
-        append(" prevTac=").append(snapshot.previousTac ?: "-")
-        append(" churn5m=").append(snapshot.tacChangesLast5m)
-        append(" moved5m=").append(snapshot.locationMovedMLast5m ?: "-")
-        append(" fixAge=").append(snapshot.locationFixAgeS ?: "-")
-        append(" origin=").append(snapshot.capture.origin.name)
-        append(" records=").append(snapshot.capture.rawRecordCount)
-        append(" screen=").append(snapshot.capture.screenInteractive ?: "-")
-        append(" fg=").append(snapshot.capture.appForeground ?: "-")
-        append(" data=").append(snapshot.capture.dataActivity ?: "-")
-        append(" simPlmn=").append(snapshot.sim.plmnMatchesSim ?: "-")
-        append(" simName=").append(snapshot.sim.operatorNameMatchesSim ?: "-")
-        append(" svc=").append(snapshot.service.state ?: "-")
-        append(" roaming=").append(snapshot.service.isRoaming ?: "-")
-        append(" dnt=").append(snapshot.service.dataNetworkType ?: "-")
     }
 
     /**
@@ -434,6 +391,6 @@ class CellularMonitor(
                 ContextCompat.checkSelfPermission(context, it) ==
                     PackageManager.PERMISSION_GRANTED
             }
-        const val TIMELINE_SOURCE = "cellular_monitor"
+        const val TIMELINE_SOURCE = CellularRedaction.SOURCE
     }
 }

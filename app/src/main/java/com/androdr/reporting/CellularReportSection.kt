@@ -1,5 +1,6 @@
 package com.androdr.reporting
 
+import com.androdr.cellular.CellularDetails
 import com.androdr.cellular.CellularRedaction
 import com.androdr.cellular.CellularState
 import com.androdr.data.model.CellularSnapshot
@@ -116,43 +117,9 @@ internal object CellularReportSection {
         }
         appendLine("  Observations this session, oldest first: ${history.size}$retained")
         history.asReversed().forEach { s ->
-            appendLine("    [${fmt.format(Date(s.capturedAt))}] ${cellularObservationLine(s)}")
+            appendLine("    [${fmt.format(Date(s.capturedAt))}] ${CellularDetails.exportable(s)}")
         }
         appendLine()
-    }
-
-    /** One observation as `key=value` pairs. Exportable keys only — see [CellularRedaction]. */
-    private fun cellularObservationLine(s: CellularSnapshot): String = buildString {
-        append("rat=").append(s.rat)
-        append(" earfcn=").append(s.earfcn ?: "-")
-        append(" bands=").append(s.bands.joinToString(",").ifEmpty { "-" })
-        append(" bw=").append(s.bandwidthKhz ?: "-")
-        append(" neighbours=").append(s.neighborCount)
-        append(" rsrp=").append(s.servingRsrp ?: "-")
-        append(" rsrq=").append(s.signal.rsrq ?: "-")
-        append(" sinr=").append(s.signal.sinr ?: "-")
-        append(" cqi=").append(s.signal.cqi ?: "-")
-        append(" ta=").append(s.signal.timingAdvance ?: "-")
-        append(" taUs=").append(s.signal.timingAdvanceUs ?: "-")
-        append(" dbm=").append(s.signal.dbm ?: "-")
-        append(" nMaxRsrp=").append(s.neighbors.maxRsrp ?: "-")
-        append(" nEarfcns=").append(s.neighbors.distinctEarfcnCount)
-        append(" pciInN=").append(s.neighbors.servingPciInNeighbors ?: "-")
-        append(" tacChanged=").append(s.tacChanged)
-        append(" ratChanged=").append(s.ratChanged)
-        append(" churn5m=").append(s.tacChangesLast5m)
-        append(" moved5m=").append(s.locationMovedMLast5m ?: "-")
-        append(" fixAge=").append(s.locationFixAgeS ?: "-")
-        append(" origin=").append(s.capture.origin.name)
-        append(" records=").append(s.capture.rawRecordCount)
-        append(" screen=").append(s.capture.screenInteractive ?: "-")
-        append(" fg=").append(s.capture.appForeground ?: "-")
-        append(" data=").append(s.capture.dataActivity ?: "-")
-        append(" simPlmn=").append(s.sim.plmnMatchesSim ?: "-")
-        append(" simName=").append(s.sim.operatorNameMatchesSim ?: "-")
-        append(" svc=").append(s.service.state ?: "-")
-        append(" roaming=").append(s.service.isRoaming ?: "-")
-        append(" dnt=").append(s.service.dataNetworkType ?: "-")
     }
 
     /**

@@ -91,6 +91,43 @@ class CellularRedactionTest {
     }
 
     @Test
+    fun `a newline inside a value cannot carry a forged pair onto the next line`() {
+        // The operator name is network-chosen. Were it to reach details
+        // unfolded, a CSV reader would see the second line as its own row,
+        // and a forged `rsrp=` would shadow the real one. The redactor
+        // cannot tell a forged pair with a fresh key from a real one — that
+        // is the writer's job (CellularDetailsTest) — but it never lets a
+        // line break or a shadowed key through.
+        val out = CellularRedaction.redact("rat=LTE op=Evil\nrsrp=-1 rsrp=-84")
+        assertFalse("newline survived", out.contains('\n'))
+        assertFalse("a shadowed key survived", out.contains("rsrp="))
+        assertTrue(out.contains("rat=LTE"))
+    }
+
+    @Test
+    fun `a key that appears twice is dropped both times`() {
+        // A smuggled second `rsrp=` is indistinguishable from the real one,
+        // so neither can be believed; the row says so by omission.
+        val out = CellularRedaction.redact("rat=LTE rsrp=-1 op=x rsrp=-84")
+        assertFalse("a duplicated key survived", out.contains("rsrp="))
+        assertTrue(out.contains("rat=LTE"))
+    }
+
+    @Test
+    fun `a token that is not a pair is dropped`() {
+        val out = CellularRedaction.redact("rat=LTE garbage rsrp=-84=-1 svc==x")
+        assertTrue(out.contains("rat=LTE"))
+        assertFalse(out.contains("garbage"))
+        assertFalse(out.contains("rsrp="))
+        assertFalse(out.contains("svc="))
+    }
+
+    @Test
+    fun `the note is plain ASCII like the rest of the report`() {
+        assertTrue(CellularRedaction.REDACTION_NOTE.all { it.code < 128 })
+    }
+
+    @Test
     fun `blank details stay blank`() {
         assertTrue(CellularRedaction.redact("").isBlank())
     }

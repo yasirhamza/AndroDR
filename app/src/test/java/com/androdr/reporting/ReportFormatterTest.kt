@@ -1,5 +1,6 @@
 package com.androdr.reporting
 
+import com.androdr.data.model.ForensicTimelineEvent
 import com.androdr.data.model.ScanResult
 import com.androdr.data.model.ScannerFailure
 import com.androdr.data.model.UNREGISTERED_IOC_LOOKUP
@@ -141,7 +142,16 @@ class ReportFormatterTest {
             knownMalwareCount = 1,
             riskySideloadCount = 1
         )
-        val text = ReportFormatter.formatScanReport(scan, emptyList(), emptyList(), versionName = "test")
+        // A cellular row brings the redaction note with it; it shipped with an
+        // em dash once.
+        val cellular = ForensicTimelineEvent(
+            startTimestamp = 1711900800000, source = "cellular_monitor",
+            category = "network_anomaly", description = "Tracking area churn",
+            details = "rat=LTE tac=1437 churn5m=4", ruleId = "androdr-104",
+        )
+        val text = ReportFormatter.formatScanReport(
+            scan, emptyList(), emptyList(), cellularEvents = listOf(cellular), versionName = "test",
+        )
         val nonAscii = text.filter { it.code > 127 }
         assertTrue("Non-ASCII characters found: $nonAscii", nonAscii.isEmpty())
     }

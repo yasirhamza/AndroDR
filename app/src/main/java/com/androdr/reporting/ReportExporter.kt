@@ -4,6 +4,7 @@ import android.content.Context
 import android.net.Uri
 import android.util.Log
 import androidx.core.content.FileProvider
+import com.androdr.cellular.CellularRedaction
 import com.androdr.cellular.CellularState
 import com.androdr.data.db.DnsEventDao
 import com.androdr.data.db.ForensicTimelineEventDao
@@ -57,7 +58,7 @@ class ReportExporter @Inject constructor(
         // Cellular findings live on the forensic timeline, not on the scan:
         // the radio emitter is continuous and has no scan to attach to.
         val cellularEvents = runCatching {
-            forensicTimelineEventDao.getBySourceSnapshot("cellular_monitor")
+            forensicTimelineEventDao.getBySourceSnapshot(CellularRedaction.SOURCE)
         }.getOrDefault(emptyList())
         val logLines  = captureLogcat()
         val inventory = scanOrchestrator.lastAppTelemetry.ifEmpty {

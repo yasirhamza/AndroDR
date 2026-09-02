@@ -199,7 +199,7 @@ object TimelineExporter {
      * for adjudication. Other sources are returned untouched.
      */
     private fun exportableDetails(event: ForensicTimelineEvent): String =
-        if (event.source == "cellular_monitor") {
+        if (event.source == CellularRedaction.SOURCE) {
             CellularRedaction.redact(event.details)
         } else {
             event.details
