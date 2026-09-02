@@ -123,21 +123,33 @@ internal object CellReader {
      */
     fun neighbors(serving: Identity, neighbours: List<CellInfo>): NeighborDetail {
         val ids = neighbours.map(::identity)
-        val pcis = ids.mapNotNull { it.pci }
         val earfcns = ids.mapNotNull { it.earfcn }
         val rsrps = neighbours.mapNotNull(::rsrp)
         return NeighborDetail(
-            pcis = pcis,
+            pcis = ids.mapNotNull { it.pci },
             earfcns = earfcns,
             rsrps = rsrps,
             rats = ids.map { it.rat },
             maxRsrp = rsrps.maxOrNull(),
-            // A serving PCI that also appears as a neighbour is two cells
-            // claiming one physical-layer id — but only decidable when the
-            // serving PCI is known and at least one neighbour reported one.
-            servingPciInNeighbors = if (serving.pci == null || pcis.isEmpty()) null else serving.pci in pcis,
+            servingPciInNeighbors = servingPciInNeighbors(serving, ids),
             distinctEarfcnCount = earfcns.distinct().size,
         )
+    }
+
+    /**
+     * Two cells claiming one physical-layer id ON THE SAME CARRIER. A PCI is
+     * only unique per frequency: the same number on another EARFCN is a
+     * different, perfectly ordinary cell, and comparing across carriers
+     * would flag nearly every dense deployment. Decidable only when the
+     * serving PCI and channel are known and at least one neighbour on that
+     * channel reported a PCI; null otherwise.
+     */
+    private fun servingPciInNeighbors(serving: Identity, neighbours: List<Identity>): Boolean? {
+        if (serving.pci == null || serving.earfcn == null) return null
+        val sameCarrier = neighbours
+            .filter { it.rat == serving.rat && it.earfcn == serving.earfcn }
+            .mapNotNull { it.pci }
+        return if (sameCarrier.isEmpty()) null else serving.pci in sameCarrier
     }
 
     /** NR timing advance arrived in API 34; below that the platform has no such reading. */

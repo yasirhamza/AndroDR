@@ -330,7 +330,8 @@ class CellularMonitor(
         val id = CellReader.identity(serving)
         val derived = store.record(id.tac, id.rat, now)
         val servingRsrp = CellReader.rsrp(serving)
-        val neighbours = CellReader.neighbors(id, all.filter { !it.isRegistered })
+        val neighbourCells = all.filter { !it.isRegistered }
+        val neighbours = CellReader.neighbors(id, neighbourCells)
         val maxNeighborRsrp = neighbours.maxRsrp
         val movement = deviceContext.movement(now)
 
@@ -347,7 +348,7 @@ class CellularMonitor(
             operatorAlphaLong = id.operatorAlphaLong,
             operatorAlphaShort = id.operatorAlphaShort,
             additionalPlmns = id.additionalPlmns,
-            neighborCount = neighbours.rats.size,
+            neighborCount = neighbourCells.size,
             servingRsrp = servingRsrp,
             isRegistered = true,
             capturedAt = now,

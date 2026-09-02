@@ -204,6 +204,7 @@ class CellularMonitorHandleTest {
         val neighbours = listOf(
             CellInfoFixtures.lte(registered = false, pci = 12, earfcn = 1600, rsrp = -95),
             CellInfoFixtures.lte(registered = false, pci = 167, earfcn = 1850, rsrp = -101),
+            CellInfoFixtures.lte(registered = false, pci = 167, earfcn = 1600, rsrp = -97),
         )
         m.handle(listOf(serving) + neighbours, CaptureOrigin.PRIME)
 
@@ -212,14 +213,14 @@ class CellularMonitorHandleTest {
         assertEquals(12, s.signal.sinr)
         assertEquals(4, s.signal.timingAdvance)
         assertEquals(-84, s.signal.dbm)
-        assertEquals(listOf(12, 167), s.neighbors.pcis)
-        assertEquals(listOf(1600, 1850), s.neighbors.earfcns)
-        assertEquals(listOf(-95, -101), s.neighbors.rsrps)
+        assertEquals(listOf(12, 167, 167), s.neighbors.pcis)
+        assertEquals(listOf(1600, 1850, 1600), s.neighbors.earfcns)
+        assertEquals(listOf(-95, -101, -97), s.neighbors.rsrps)
         assertEquals(-95, s.neighbors.maxRsrp)
         assertEquals(2, s.neighbors.distinctEarfcnCount)
-        assertEquals("a neighbour repeats the serving PCI", true, s.neighbors.servingPciInNeighbors)
+        assertEquals("a neighbour on the serving channel repeats the serving PCI", true, s.neighbors.servingPciInNeighbors)
         assertEquals("the margin is derived from the same list", -84 - (-95), s.servingMinusMaxNeighborRsrpDb)
-        assertEquals(2, s.neighborCount)
+        assertEquals(3, s.neighborCount)
     }
 
     @Test

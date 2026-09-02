@@ -181,10 +181,23 @@ class CellReaderTest {
     }
 
     @Test
-    fun `a neighbour that repeats the serving PCI is flagged`() {
-        val serving = CellReader.identity(CellInfoFixtures.lte(pci = 167))
-        val n = CellReader.neighbors(serving, listOf(neighbour(12, 1600, -95), neighbour(167, 1850, -90)))
+    fun `a neighbour that repeats the serving PCI on the serving channel is flagged`() {
+        val serving = CellReader.identity(CellInfoFixtures.lte(pci = 167, earfcn = 1600))
+        val n = CellReader.neighbors(serving, listOf(neighbour(12, 1600, -95), neighbour(167, 1600, -90)))
         assertEquals(true, n.servingPciInNeighbors)
+    }
+
+    @Test
+    fun `the same PCI on another channel is an ordinary cell, not a clash`() {
+        // A PCI is unique per carrier only. Comparing across carriers flagged
+        // nearly every dense deployment.
+        val serving = CellReader.identity(CellInfoFixtures.lte(pci = 167, earfcn = 1600))
+        val n = CellReader.neighbors(serving, listOf(neighbour(12, 1600, -95), neighbour(167, 1850, -90)))
+        assertEquals(false, n.servingPciInNeighbors)
+        assertNull(
+            "no neighbour on the serving channel at all: undecidable",
+            CellReader.neighbors(serving, listOf(neighbour(167, 1850, -90))).servingPciInNeighbors,
+        )
     }
 
     @Test
@@ -229,6 +242,6 @@ class CellReaderTest {
         assertEquals(listOf("NR", "UMTS"), n.rats)
         assertEquals("3G has no RSRP", listOf(-90), n.rsrps)
         assertTrue(n.pcis.containsAll(listOf(301, 77)))
-        assertFalse("the serving LTE PCI is not among them", n.servingPciInNeighbors == true)
+        assertNull("no LTE neighbour on the serving channel: undecidable", n.servingPciInNeighbors)
     }
 }
