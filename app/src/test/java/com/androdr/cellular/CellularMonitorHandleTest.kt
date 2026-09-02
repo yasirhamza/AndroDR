@@ -218,7 +218,10 @@ class CellularMonitorHandleTest {
         assertEquals(listOf(-95, -101, -97), s.neighbors.rsrps)
         assertEquals(-95, s.neighbors.maxRsrp)
         assertEquals(2, s.neighbors.distinctEarfcnCount)
-        assertEquals("a neighbour on the serving channel repeats the serving PCI", true, s.neighbors.servingPciInNeighbors)
+        assertEquals(
+            "a neighbour on the serving channel repeats the serving PCI",
+            true, s.neighbors.servingPciInNeighbors,
+        )
         assertEquals("the margin is derived from the same list", -84 - (-95), s.servingMinusMaxNeighborRsrpDb)
         assertEquals(3, s.neighborCount)
     }

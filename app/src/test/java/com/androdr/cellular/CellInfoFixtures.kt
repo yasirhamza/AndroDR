@@ -29,6 +29,7 @@ object CellInfoFixtures {
     const val UNAVAILABLE = Int.MAX_VALUE
     const val UNAVAILABLE_LONG = Long.MAX_VALUE
 
+    @Suppress("LongParameterList") // one named default per stubbed accessor is the fixture's whole point
     fun lte(
         registered: Boolean = true,
         tac: Int = 1437,

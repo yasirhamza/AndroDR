@@ -1,5 +1,6 @@
 package com.androdr.cellular
 
+import android.annotation.SuppressLint
 import android.os.Build
 import android.telephony.CellIdentityGsm
 import android.telephony.CellIdentityLte
@@ -69,7 +70,7 @@ internal object CellReader {
         is CellInfoWcdma -> wcdma(cell.cellIdentity)
         is CellInfoGsm -> gsm(cell.cellIdentity)
         else -> null
-    } ?: unknown(rat(cell))
+    } ?: NO_CELL.copy(rat = rat(cell))
 
     /**
      * Reference-signal received power of the cell. LTE RSRP and NR SS-RSRP
@@ -159,7 +160,11 @@ internal object CellReader {
      * NR timing advance arrived in API 34; below that the platform has no
      * such reading and the accessor must not be touched. [sdkInt] is a
      * parameter so both sides are testable on a JVM where SDK_INT is 0.
+     * Lint cannot see an injected level, hence the suppression: the gate
+     * is real (it defaults to the device's SDK_INT) and CellReaderTest
+     * proves the accessor is untouched below 34.
      */
+    @SuppressLint("NewApi")
     internal fun nrTimingAdvanceMicros(ss: CellSignalStrengthNr, sdkInt: Int = Build.VERSION.SDK_INT): Int? =
         if (sdkInt >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) sentinel(ss.timingAdvanceMicros) else null
 
@@ -242,11 +247,12 @@ internal object CellReader {
     private val UNSAFE = Regex("[\\s\\p{Cntrl}\\p{Cf}]+")
     private const val MAX_NAME_LENGTH = 64
 
-    /** The identity of no cell at all: what a delivery with no registered record describes. */
-    internal val NO_CELL: Identity = unknown("UNKNOWN")
-
-    private fun unknown(rat: String) = Identity(
-        rat = rat,
+    /**
+     * The identity of no cell at all: what a delivery with no registered
+     * record describes, and the template for an unrecognised record type.
+     */
+    internal val NO_CELL = Identity(
+        rat = "UNKNOWN",
         mcc = null, mnc = null, tac = null, ci = null, pci = null, earfcn = null,
         bands = emptyList(), bandwidthKhz = null,
         operatorAlphaLong = null, operatorAlphaShort = null, additionalPlmns = emptyList(),
