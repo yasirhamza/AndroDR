@@ -6,6 +6,7 @@ import com.androdr.data.model.AppOpsTelemetry
 import com.androdr.data.model.AppTelemetry
 import com.androdr.data.model.DeviceTelemetry
 import com.androdr.cellular.CellularRedaction
+import com.androdr.cellular.CellularState
 import com.androdr.data.model.CellularSnapshot
 import com.androdr.data.model.DnsEvent
 import com.androdr.data.model.ForensicTimelineEvent
@@ -45,6 +46,7 @@ object ReportFormatter {
         cellularEvents: List<ForensicTimelineEvent> = emptyList(),
         cellularSnapshot: CellularSnapshot? = null,
         cellularDeliveries: Int = 0,
+        cellularHistory: List<CellularSnapshot> = emptyList(),
         versionName: String,
     ): String = buildString {
         val includeFindings = mode != ExportMode.TELEMETRY_ONLY
@@ -103,7 +105,7 @@ object ReportFormatter {
                 deviceTelemetry, processTelemetry, fileTelemetry,
                 accessibilityTelemetry, receiverTelemetry, appOpsTelemetry
             )
-            appendCellularTelemetry(cellularSnapshot, cellularDeliveries)
+            appendCellularTelemetry(cellularSnapshot, cellularDeliveries, cellularHistory)
         }
 
         // -- Footer ---------------------------------------------------------------
@@ -128,6 +130,7 @@ object ReportFormatter {
     private fun StringBuilder.appendCellularTelemetry(
         snapshot: CellularSnapshot?,
         deliveries: Int,
+        history: List<CellularSnapshot>,
     ) {
         section("CELLULAR TELEMETRY (TIER 1)")
         if (snapshot == null) {
@@ -148,6 +151,48 @@ object ReportFormatter {
         appendLine("    RAT changed     : ${snapshot.ratChanged}")
         appendLine("  ${CellularRedaction.REDACTION_NOTE}")
         appendLine()
+        appendCellularObservations(history)
+    }
+
+    /**
+     * Every retained observation, not just the last one.
+     *
+     * The monitor held 46 snapshots in memory while the report printed one:
+     * the export read `latest` and never `history`. A single end-state cannot
+     * show a radio's behaviour over a session — whether neighbours came and
+     * went, when the RAT moved, how RSRP tracked — and that time series is
+     * the actual Tier 1 evidence. Oldest first so it reads as a timeline.
+     *
+     * Same redaction as everything else that leaves the device: condition,
+     * never tower identity.
+     */
+    private fun StringBuilder.appendCellularObservations(history: List<CellularSnapshot>) {
+        if (history.isEmpty()) return
+        val fmt = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US)
+        val retained = if (history.size >= CellularState.MAX_HISTORY) {
+            " (most recent ${CellularState.MAX_HISTORY} retained)"
+        } else {
+            ""
+        }
+        appendLine("  Observations this session, oldest first: ${history.size}$retained")
+        history.asReversed().forEach { s ->
+            appendLine("    [${fmt.format(Date(s.capturedAt))}] ${cellularObservationLine(s)}")
+        }
+        appendLine()
+    }
+
+    /** One observation as `key=value` pairs. Exportable keys only — see [CellularRedaction]. */
+    private fun cellularObservationLine(s: CellularSnapshot): String = buildString {
+        append("rat=").append(s.rat)
+        append(" earfcn=").append(s.earfcn ?: "-")
+        append(" bands=").append(s.bands.joinToString(",").ifEmpty { "-" })
+        append(" bw=").append(s.bandwidthKhz ?: "-")
+        append(" neighbours=").append(s.neighborCount)
+        append(" rsrp=").append(s.servingRsrp ?: "-")
+        append(" tacChanged=").append(s.tacChanged)
+        append(" ratChanged=").append(s.ratChanged)
+        append(" churn5m=").append(s.tacChangesLast5m)
+        append(" moved5m=").append(s.locationMovedMLast5m ?: "-")
     }
 
     /**

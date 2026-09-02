@@ -125,5 +125,7 @@ object CellularState {
     }
 
     private const val MAX_FINDINGS = 20
-    private const val MAX_HISTORY = 100
+
+    /** Bound on [history]. The report states it so a full list is not misread as the whole session. */
+    const val MAX_HISTORY = 100
 }

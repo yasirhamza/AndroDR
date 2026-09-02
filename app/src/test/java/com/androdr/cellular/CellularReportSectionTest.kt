@@ -131,6 +131,62 @@ class CellularReportSectionTest {
         assertTrue("must state what was withheld", out.contains("withheld"))
     }
 
+    private fun renderHistory(history: List<CellularSnapshot>) =
+        ReportFormatter.formatScanReport(
+            scan = scan(),
+            dnsEvents = emptyList(),
+            logLines = emptyList(),
+            cellularSnapshot = history.firstOrNull(),
+            cellularDeliveries = history.size,
+            cellularHistory = history,
+            versionName = "test",
+        )
+
+    /**
+     * The monitor retained 46 observations while the report printed one — the
+     * export read `latest` and never `history`. The time series IS the Tier 1
+     * evidence, so every retained observation must reach the report.
+     */
+    @Test
+    fun `every retained observation reaches the report, oldest first`() {
+        // history is newest-first, as CellularState keeps it.
+        val history = listOf(
+            snapshot().copy(capturedAt = 3_000L, neighborCount = 6),
+            snapshot().copy(capturedAt = 2_000L, neighborCount = 0),
+            snapshot().copy(capturedAt = 1_000L, neighborCount = 13),
+        )
+        val out = renderHistory(history)
+        assertTrue("observation count missing", out.contains("Observations this session, oldest first: 3"))
+        val first = out.indexOf("neighbours=13")
+        val second = out.indexOf("neighbours=0 ")
+        val third = out.indexOf("neighbours=6")
+        assertTrue("all three observations must be present", first >= 0 && second >= 0 && third >= 0)
+        assertTrue("observations must be rendered oldest first", first < second && second < third)
+    }
+
+    @Test
+    fun `observation rows never carry tower identity`() {
+        val out = renderHistory(listOf(snapshot(), snapshot().copy(capturedAt = 2_000L)))
+        assertFalse("TAC leaked in an observation row", out.contains("1437"))
+        assertFalse("CI leaked in an observation row", out.contains("192816407"))
+        assertFalse("PCI leaked in an observation row", out.contains("167"))
+        assertFalse("PLMN leaked in an observation row", out.contains("427"))
+        assertFalse("operator leaked in an observation row", out.contains("Ooredoo"))
+    }
+
+    @Test
+    fun `the report says when the retained window is full`() {
+        val full = (1..CellularState.MAX_HISTORY).map { snapshot().copy(capturedAt = it * 1_000L) }
+        assertTrue(
+            "a full history must say it is bounded, or 100 rows read as the whole session",
+            renderHistory(full).contains("most recent ${CellularState.MAX_HISTORY} retained"),
+        )
+        assertFalse(
+            "a partial history must not claim to be bounded",
+            renderHistory(full.take(5)).contains("retained)"),
+        )
+    }
+
     @Test
     fun `telemetry section says so when the monitor produced nothing`() {
         val out = renderTelemetry(null, deliveries = 0)

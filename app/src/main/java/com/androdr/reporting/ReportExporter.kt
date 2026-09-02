@@ -83,6 +83,7 @@ class ReportExporter @Inject constructor(
             cellularEvents = cellularEvents,
             cellularSnapshot = CellularState.latest.value,
             cellularDeliveries = CellularState.deliveries.value,
+            cellularHistory = CellularState.history.value,
             versionName = context.appVersion().name,
         )
 
