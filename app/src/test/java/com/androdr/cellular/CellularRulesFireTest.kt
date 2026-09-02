@@ -158,14 +158,24 @@ class CellularRulesFireTest {
 
     @Test
     fun `no cellular rule fires on an unregistered snapshot`() {
-        // Every v1 rule requires is_registered: true, which is what keeps the
-        // blanked-field case from producing false positives.
+        // The monitor now RECORDS a delivery with no registered cell (rat
+        // UNKNOWN, identity null, is_registered false, previous_* from the
+        // last registered read) instead of dropping it. Every bundled rule
+        // must stay quiet on that shape: the ones gated on is_registered by
+        // the gate, the RAT-downgrade rule because UNKNOWN is not a 2G/3G
+        // technology even when the previous read was LTE.
         val unregistered = benign().copy(
-            isRegistered = false, tac = null, ci = null, neighborCount = 0,
+            isRegistered = false, rat = "UNKNOWN", mcc = null, mnc = null, tac = null, ci = null, pci = null,
+            earfcn = null, operatorAlphaLong = null, operatorAlphaShort = null, servingRsrp = null,
+            neighborCount = 0, previousTac = 1437, previousRat = "LTE", tacChangesLast5m = 4,
+            sim = SimContext(mcc = "427", mnc = "01", operatorName = "Ooredoo"),
+            service = ServiceContext(state = "OUT_OF_SERVICE", isRoaming = false, dataNetworkType = "UNKNOWN"),
         )
         listOf(
             "sigma_androdr_102_cell_isolated.yml",
+            "sigma_androdr_103_cell_rat_downgrade.yml",
             "sigma_androdr_104_cell_tac_churn.yml",
+            "sigma_androdr_105_cell_operator_mismatch_vfqa.yml",
             "sigma_androdr_106_cell_operator_mismatch_ooredoo.yml",
             "sigma_androdr_107_cell_name_sim_mismatch.yml",
         ).forEach { f ->

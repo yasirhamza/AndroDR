@@ -67,4 +67,32 @@ class RadioStateStoreTest {
         assertTrue("null -> 100 is a change", fromNull.tacChanged)
         assertEquals(2, fromNull.tacChangesLast5m)
     }
+
+    @Test
+    fun `peek reads the derived view without recording a change`() {
+        // An unregistered read has no TAC to compare. It must neither count
+        // as a change nor make the next registered read look like one.
+        val store = RadioStateStore()
+        store.record(100, "LTE", 0L)
+        store.record(101, "LTE", 1_000L)
+
+        val unregistered = store.peek(atMillis = 2_000L)
+        assertEquals(101, unregistered.previousTac)
+        assertEquals("LTE", unregistered.previousRat)
+        assertFalse(unregistered.tacChanged)
+        assertEquals("the window is still counted", 1, unregistered.tacChangesLast5m)
+
+        val back = store.record(101, "LTE", 3_000L)
+        assertFalse("the same cell as before the gap is not a change", back.tacChanged)
+        assertEquals(1, back.tacChangesLast5m)
+    }
+
+    @Test
+    fun `peek prunes the window like record does`() {
+        val store = RadioStateStore(windowMillis = 1_000L)
+        store.record(100, "LTE", 0L)
+        store.record(101, "LTE", 500L)
+        assertEquals(1, store.peek(atMillis = 1_000L).tacChangesLast5m)
+        assertEquals(0, store.peek(atMillis = 2_000L).tacChangesLast5m)
+    }
 }

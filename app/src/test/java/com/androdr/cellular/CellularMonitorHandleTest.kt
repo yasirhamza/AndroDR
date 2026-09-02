@@ -270,6 +270,58 @@ class CellularMonitorHandleTest {
     }
 
     @Test
+    fun `a delivery with no registered cell is an observation, not a dropped one`() {
+        // The radio sees towers and is camped on none — the state a fake
+        // cell forcing a detach leaves the phone in. It used to be dropped
+        // here, leaving a gap in the timeline where the evidence was.
+        every { engine.evaluateCellular(any()) } returns emptyList()
+        val m = monitor()
+        m.handle(lteCell(), CaptureOrigin.PRIME)
+        now += 5_000
+        service = ServiceContext(state = "OUT_OF_SERVICE", isRoaming = false, dataNetworkType = "UNKNOWN")
+        m.handle(CellInfoFixtures.lteList(neighbours = 3).drop(1), CaptureOrigin.CALLBACK)
+
+        assertEquals(2, CellularState.history.value.size)
+        val s = CellularState.latest.value!!
+        assertEquals(false, s.isRegistered)
+        assertEquals("UNKNOWN", s.rat)
+        assertNull(s.tac)
+        assertNull(s.ci)
+        assertNull(s.servingRsrp)
+        assertEquals("the neighbours the radio can see are still counted", 3, s.neighborCount)
+        assertEquals("the registration side is what makes this judgeable", "OUT_OF_SERVICE", s.service.state)
+        assertEquals("the last registered TAC is still the previous one", 1437, s.previousTac)
+        assertFalse("losing the cell is not a tracking-area change", s.tacChanged)
+        assertEquals(0, s.tacChangesLast5m)
+        verify(exactly = 2) { engine.evaluateCellular(any<List<CellularSnapshot>>()) }
+    }
+
+    @Test
+    fun `an unregistered read does not make the next registered one look like a change`() {
+        every { engine.evaluateCellular(any()) } returns emptyList()
+        val m = monitor()
+        m.handle(lteCell(), CaptureOrigin.PRIME)
+        now += 5_000
+        m.handle(CellInfoFixtures.lteList(neighbours = 3).drop(1), CaptureOrigin.CALLBACK)
+        now += 5_000
+        m.handle(lteCell(), CaptureOrigin.CALLBACK)
+
+        val s = CellularState.latest.value!!
+        assertEquals(true, s.isRegistered)
+        assertFalse("back on the same cell: no change", s.tacChanged)
+        assertFalse(s.ratChanged)
+        assertEquals(0, s.tacChangesLast5m)
+    }
+
+    @Test
+    fun `an empty delivery is logged and nothing else`() {
+        val m = monitor()
+        m.handle(emptyList(), CaptureOrigin.CALLBACK)
+        assertEquals(0, CellularState.history.value.size)
+        verify(exactly = 0) { engine.evaluateCellular(any<List<CellularSnapshot>>()) }
+    }
+
+    @Test
     fun `the registration state reaches the snapshot and a change of it is a new observation`() {
         val m = monitor()
         m.handle(lteCell(), CaptureOrigin.PRIME)

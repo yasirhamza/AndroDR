@@ -48,6 +48,20 @@ class RadioStateStore(private val windowMillis: Long = DEFAULT_WINDOW_MILLIS) {
         return Derived(prevTac, prevRat, tacChanged, ratChanged, tacChangeTimes.size)
     }
 
+    /**
+     * The derived view at [atMillis] WITHOUT recording an observation: the
+     * last values seen, no change, and the change count with the window
+     * pruned. For a read that has no serving cell to compare — it is not a
+     * change, and it must not make the next registered read look like one.
+     */
+    @Synchronized
+    fun peek(atMillis: Long): Derived {
+        while (tacChangeTimes.isNotEmpty() && atMillis - tacChangeTimes.first() > windowMillis) {
+            tacChangeTimes.removeFirst()
+        }
+        return Derived(lastTac, lastRat, tacChanged = false, ratChanged = false, tacChangesLast5m = tacChangeTimes.size)
+    }
+
     companion object {
         /** The "last 5 minutes" behind tac_changes_last_5m and location_moved_m_last_5m. */
         const val DEFAULT_WINDOW_MILLIS = 300_000L

@@ -235,6 +235,9 @@ internal object CellReader {
     private val UNSAFE = Regex("[\\s\\p{Cntrl}\\p{Cf}]+")
     private const val MAX_NAME_LENGTH = 64
 
+    /** The identity of no cell at all: what a delivery with no registered record describes. */
+    internal val NO_CELL: Identity = unknown("UNKNOWN")
+
     private fun unknown(rat: String) = Identity(
         rat = rat,
         mcc = null, mnc = null, tac = null, ci = null, pci = null, earfcn = null,

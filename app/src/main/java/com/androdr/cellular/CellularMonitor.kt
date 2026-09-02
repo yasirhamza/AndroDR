@@ -14,6 +14,7 @@ import androidx.core.content.ContextCompat
 import com.androdr.data.model.CaptureOrigin
 import com.androdr.data.model.CellularSnapshot
 import com.androdr.data.model.ForensicTimelineEvent
+import com.androdr.data.model.ServingSignal
 import com.androdr.data.model.SimContext
 import com.androdr.data.repo.ScanRepository
 import com.androdr.data.model.TelemetrySource
@@ -172,13 +173,22 @@ class CellularMonitor(
 
     @RequiresApi(Build.VERSION_CODES.S)
     internal fun handle(cellInfo: List<CellInfo>, origin: CaptureOrigin) {
+        if (cellInfo.isEmpty()) {
+            // An empty delivery is what a caller without permission, or in
+            // the background, is handed instead of an error. There is nothing
+            // to observe in it, but it must be logged or the silence is
+            // indistinguishable from the monitor being dead.
+            Log.i(TAG, "$origin: empty delivery; nothing to observe")
+            return
+        }
         val serving = cellInfo.firstOrNull { it.isRegistered }
         if (serving == null) {
-            // Distinguishing an empty delivery from "no registered cell" matters:
-            // a background caller is handed an empty list rather than an error,
-            // so silence here is ambiguous unless it is logged explicitly.
-            Log.i(TAG, "$origin: ${cellInfo.size} records, none registered")
-            return
+            // Records with no registered cell are an observation, not a
+            // failure: the radio can see towers and is camped on none. That
+            // is exactly the state a fake cell forcing a detach leaves the
+            // phone in, and it used to be dropped here, so the timeline
+            // showed a gap where the evidence was.
+            Log.i(TAG, "$origin: ${cellInfo.size} records, none registered; recording as unregistered")
         }
         val snapshot = toSnapshot(serving, cellInfo, clock(), origin)
         if (duplicates.isDuplicate(snapshot)) {
@@ -320,16 +330,25 @@ class CellularMonitor(
      */
     private fun present(value: Any?): String = if (value == null) "null" else "set"
 
+    /**
+     * One observation from one delivery. With no registered cell ([serving]
+     * null) the identity is empty, `rat` is UNKNOWN, `is_registered` is
+     * false and the change history is read without being advanced: an
+     * unregistered read is not a tracking-area change, and the next
+     * registered one is still compared with the last registered one.
+     * Everything else — the neighbours the radio can see, the
+     * circumstances, the SIM and the service state — is captured as usual.
+     */
     @RequiresApi(Build.VERSION_CODES.S)
     internal fun toSnapshot(
-        serving: CellInfo,
+        serving: CellInfo?,
         all: List<CellInfo>,
         now: Long,
         origin: CaptureOrigin = CaptureOrigin.CALLBACK,
     ): CellularSnapshot {
-        val id = CellReader.identity(serving)
-        val derived = store.record(id.tac, id.rat, now)
-        val servingRsrp = CellReader.rsrp(serving)
+        val id = if (serving == null) CellReader.NO_CELL else CellReader.identity(serving)
+        val derived = if (serving == null) store.peek(now) else store.record(id.tac, id.rat, now)
+        val servingRsrp = serving?.let(CellReader::rsrp)
         val neighbourCells = all.filter { !it.isRegistered }
         val neighbours = CellReader.neighbors(id, neighbourCells)
         val maxNeighborRsrp = neighbours.maxRsrp
@@ -350,7 +369,7 @@ class CellularMonitor(
             additionalPlmns = id.additionalPlmns,
             neighborCount = neighbourCells.size,
             servingRsrp = servingRsrp,
-            isRegistered = true,
+            isRegistered = serving != null,
             capturedAt = now,
             source = TelemetrySource.LIVE_SCAN,
             previousTac = derived.previousTac,
@@ -366,7 +385,7 @@ class CellularMonitor(
                 },
             locationMovedMLast5m = movement.movedMetersLast5m,
             locationFixAgeS = movement.fixAgeSeconds,
-            signal = CellReader.signal(serving),
+            signal = serving?.let(CellReader::signal) ?: ServingSignal(),
             neighbors = neighbours,
             capture = deviceContext.capture(origin, all.size),
             sim = deviceContext.sim()
