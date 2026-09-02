@@ -48,7 +48,8 @@ class RadioStateStore(private val windowMillis: Long = DEFAULT_WINDOW_MILLIS) {
         return Derived(prevTac, prevRat, tacChanged, ratChanged, tacChangeTimes.size)
     }
 
-    private companion object {
+    companion object {
+        /** The "last 5 minutes" behind tac_changes_last_5m and location_moved_m_last_5m. */
         const val DEFAULT_WINDOW_MILLIS = 300_000L
     }
 }

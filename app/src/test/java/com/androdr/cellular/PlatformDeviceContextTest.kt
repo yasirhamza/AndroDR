@@ -2,6 +2,8 @@ package com.androdr.cellular
 
 import android.app.ActivityManager
 import android.content.Context
+import android.location.Location
+import android.location.LocationManager
 import android.os.PowerManager
 import android.telephony.TelephonyManager
 import com.androdr.data.model.CaptureOrigin
@@ -77,6 +79,33 @@ class PlatformDeviceContextTest {
             every { telephony.dataActivity } returns value
             assertEquals(name, PlatformDeviceContext(context).capture(CaptureOrigin.CALLBACK, 1).dataActivity)
         }
+    }
+
+    @Test
+    fun `a passive fix feeds the trail and only distance and age come out`() {
+        val locations = mockk<LocationManager>()
+        every { context.getSystemService(LocationManager::class.java) } returns locations
+        val fix = mockk<Location> {
+            every { latitude } returns 25.2854
+            every { longitude } returns 51.5310
+            every { time } returns 100_000L
+        }
+        every { locations.getLastKnownLocation(LocationManager.PASSIVE_PROVIDER) } returns fix
+
+        val m = PlatformDeviceContext(context).movement(now = 130_000L)
+        assertNull("one fix: movement unknown", m.movedMetersLast5m)
+        assertEquals(30, m.fixAgeSeconds)
+    }
+
+    @Test
+    fun `no location manager or no fix means no movement data`() {
+        every { context.getSystemService(LocationManager::class.java) } returns null
+        assertEquals(Movement(), PlatformDeviceContext(context).movement(now = 1L))
+
+        val locations = mockk<LocationManager>()
+        every { context.getSystemService(LocationManager::class.java) } returns locations
+        every { locations.getLastKnownLocation(any()) } throws SecurityException("no location")
+        assertEquals(Movement(), PlatformDeviceContext(context).movement(now = 1L))
     }
 
     @Test

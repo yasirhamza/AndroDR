@@ -37,6 +37,7 @@ class CellularMonitorHandleTest {
     private val repository = mockk<ScanRepository>()
     private var now = 1_000L
     private var screenInteractive: Boolean? = true
+    private var movement = Movement()
 
     /** Circumstances under the test's control; no platform reads. */
     private val deviceContext = object : DeviceContextSource {
@@ -47,6 +48,8 @@ class CellularMonitorHandleTest {
             dataActivity = "NONE",
             rawRecordCount = rawRecordCount,
         )
+
+        override fun movement(now: Long) = movement
     }
 
     private fun monitor() = CellularMonitor(
@@ -141,6 +144,19 @@ class CellularMonitorHandleTest {
         assertEquals(false, c.appForeground)
         assertEquals("NONE", c.dataActivity)
         assertEquals("serving cell only", 1, c.rawRecordCount)
+    }
+
+    @Test
+    fun `movement and fix age reach the snapshot`() {
+        // location_moved_m_last_5m was hard-coded null, so androdr-104's
+        // "while stationary" could never be applied.
+        val m = monitor()
+        movement = Movement(movedMetersLast5m = 640, fixAgeSeconds = 12)
+        m.handle(lteCell(), CaptureOrigin.PRIME)
+
+        val s = CellularState.latest.value!!
+        assertEquals(640, s.locationMovedMLast5m)
+        assertEquals(12, s.locationFixAgeS)
     }
 
     @Test

@@ -209,7 +209,8 @@ class CellularMonitor(
                 "plmn=${present(snapshot.mcc)} op=${present(snapshot.operatorAlphaLong)} " +
                 "neighbours=${snapshot.neighborCount} rsrp=${present(snapshot.servingRsrp)} " +
                 "tacChanged=${snapshot.tacChanged} churn5m=${snapshot.tacChangesLast5m} " +
-                "ratChanged=${snapshot.ratChanged} records=${snapshot.capture.rawRecordCount} " +
+                "ratChanged=${snapshot.ratChanged} moved5m=${present(snapshot.locationMovedMLast5m)} " +
+                "fixAge=${present(snapshot.locationFixAgeS)} records=${snapshot.capture.rawRecordCount} " +
                 "screen=${snapshot.capture.screenInteractive} fg=${snapshot.capture.appForeground} " +
                 "data=${snapshot.capture.dataActivity}"
         )
@@ -288,6 +289,8 @@ class CellularMonitor(
                     append(" rsrp=").append(snapshot.servingRsrp ?: "-")
                     append(" prevTac=").append(snapshot.previousTac ?: "-")
                     append(" churn5m=").append(snapshot.tacChangesLast5m)
+                    append(" moved5m=").append(snapshot.locationMovedMLast5m ?: "-")
+                    append(" fixAge=").append(snapshot.locationFixAgeS ?: "-")
                     append(" origin=").append(snapshot.capture.origin.name)
                     append(" records=").append(snapshot.capture.rawRecordCount)
                     append(" screen=").append(snapshot.capture.screenInteractive ?: "-")
@@ -324,6 +327,7 @@ class CellularMonitor(
         val servingRsrp = CellReader.rsrp(serving)
         val neighbours = all.filter { !it.isRegistered }
         val maxNeighborRsrp = neighbours.mapNotNull { CellReader.rsrp(it) }.maxOrNull()
+        val movement = deviceContext.movement(now)
 
         return CellularSnapshot(
             mcc = id.mcc,
@@ -354,7 +358,8 @@ class CellularMonitor(
                 } else {
                     null
                 },
-            locationMovedMLast5m = null,
+            locationMovedMLast5m = movement.movedMetersLast5m,
+            locationFixAgeS = movement.fixAgeSeconds,
             capture = deviceContext.capture(origin, all.size),
         )
     }

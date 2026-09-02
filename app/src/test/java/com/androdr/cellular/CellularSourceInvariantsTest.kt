@@ -58,6 +58,43 @@ class CellularSourceInvariantsTest {
         }
     }
 
+    private fun cellularSources(): List<File> =
+        listOf("app/src/main/java/com/androdr/cellular", "src/main/java/com/androdr/cellular")
+            .map(::File).firstOrNull { it.isDirectory }
+            ?.listFiles { f -> f.extension == "kt" }?.toList()
+            ?: error("cellular source directory not found")
+
+    /**
+     * The movement reader borrows passive location fixes. The coordinates
+     * exist to be reduced to a distance and an age; a coordinate in a log
+     * line, a timeline row or a field map would be the location trail the
+     * cell-identity redaction exists to prevent — at higher resolution.
+     *
+     * Two shapes are banned across the whole package: interpolating or
+     * appending `latitude`/`longitude`, and any `Log.` call whose line
+     * mentions them.
+     */
+    @Test
+    fun `coordinates are never logged, interpolated or emitted`() {
+        val banned = listOf(
+            Regex("""\$\{[^}]*(latitude|longitude)[^}]*}"""),
+            Regex("""\$(latitude|longitude)\b"""),
+            Regex("""append\([^)]*(latitude|longitude)"""),
+            Regex("""Log\.[a-z]\([^\n]*(latitude|longitude)"""),
+            Regex("""to\s+[a-zA-Z.]*(latitude|longitude)"""),
+        )
+        cellularSources().forEach { file ->
+            val src = file.readText()
+            banned.forEach { pattern ->
+                assertFalse(
+                    "${file.name}: a coordinate reaches a string, log or field map (${pattern.pattern}); " +
+                        "only the derived distance and fix age may leave LocationTrail",
+                    pattern.containsMatchIn(src),
+                )
+            }
+        }
+    }
+
     /**
      * getAllCellInfo() returns an EMPTY LIST — not an error — when the caller
      * is not foreground. A foreground service only confers location access if

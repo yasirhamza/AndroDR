@@ -108,6 +108,7 @@ internal object CellularReportSection {
         append(" ratChanged=").append(s.ratChanged)
         append(" churn5m=").append(s.tacChangesLast5m)
         append(" moved5m=").append(s.locationMovedMLast5m ?: "-")
+        append(" fixAge=").append(s.locationFixAgeS ?: "-")
         append(" origin=").append(s.capture.origin.name)
         append(" records=").append(s.capture.rawRecordCount)
         append(" screen=").append(s.capture.screenInteractive ?: "-")

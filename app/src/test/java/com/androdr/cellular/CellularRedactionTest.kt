@@ -41,9 +41,9 @@ class CellularRedactionTest {
         // They are facts about the device, not the tower, and a reader needs
         // them to tell an idle-radio "no neighbours" from a real one.
         val out = CellularRedaction.redact(
-            "$realistic origin=PRIME records=14 screen=false fg=false data=NONE",
+            "$realistic moved5m=640 fixAge=12 origin=PRIME records=14 screen=false fg=false data=NONE",
         )
-        listOf("origin=PRIME", "records=14", "screen=false", "fg=false", "data=NONE")
+        listOf("moved5m=640", "fixAge=12", "origin=PRIME", "records=14", "screen=false", "fg=false", "data=NONE")
             .forEach { assertTrue("dropped: $it", out.contains(it)) }
     }
 

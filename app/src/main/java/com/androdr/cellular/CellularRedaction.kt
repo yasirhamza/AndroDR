@@ -35,6 +35,9 @@ object CellularRedaction {
         "churn5m",    // count of changes, not the values
         "tacChanged",
         "ratChanged",
+        // Movement is a distance, never a position: how far, not where.
+        "moved5m",
+        "fixAge",
         // Circumstances of the read — facts about the device, not the tower.
         "origin",     // PRIME or CALLBACK
         "records",    // how many records the platform handed over
