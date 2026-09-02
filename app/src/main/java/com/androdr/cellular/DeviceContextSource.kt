@@ -149,7 +149,13 @@ class PlatformDeviceContext(
     private fun networkTypeName(value: Int): String = NETWORK_TYPE_NAMES[value] ?: "UNKNOWN"
 
     private companion object {
-        /** TelephonyManager.NETWORK_TYPE_* by value; the platform offers no public name lookup. */
+        /**
+         * TelephonyManager.NETWORK_TYPE_* by value; the platform offers no
+         * public name lookup. NETWORK_TYPE_NR (API 29) is a compile-time
+         * constant copied into this table; a platform older than 29 never
+         * reports it, so the entry is never hit rather than unsafe.
+         */
+        @SuppressLint("InlinedApi")
         val NETWORK_TYPE_NAMES: Map<Int, String> = mapOf(
             TelephonyManager.NETWORK_TYPE_GPRS to "GPRS",
             TelephonyManager.NETWORK_TYPE_EDGE to "EDGE",
