@@ -32,10 +32,15 @@ data class SimIdentity(
      * conflates the theoretical "01" ≠ "001" case; a mismatch detector
      * prefers that to a false alarm on every device with a padded SIM.
      *
-     * The name comparison is case-insensitive containment either way — the
-     * network's long name is often the SIM's name plus a suffix ("Ooredoo"
-     * against "Ooredoo Qatar"). Null when either side is blank: an absent
-     * name is not a mismatching one.
+     * The name comparison is containment either way on the letters and
+     * digits alone, case-folded — the network's long name is often the
+     * SIM's name plus a suffix ("Ooredoo" against "Ooredoo Qatar"), and the
+     * two records space and punctuate differently ("Ooredoo_Qatar"). Null
+     * when no comparable name exists on either side: an absent name is not
+     * a mismatching one, and a name that is all digits (some networks
+     * broadcast the PLMN code as their "name") or shorter than three
+     * characters is too little to contain, or be contained by, anything
+     * meaningfully — "O" is in every operator.
      */
     fun compare(
         servingMcc: String?,
@@ -58,14 +63,20 @@ data class SimIdentity(
     }
 
     private fun nameMatches(alphaLong: String?, alphaShort: String?): Boolean? {
-        val spn = operatorName?.trim().orEmpty()
-        val names = listOfNotNull(alphaLong, alphaShort).map { it.trim() }.filter { it.isNotEmpty() }
-        if (spn.isEmpty() || names.isEmpty()) return null
-        return names.any { it.contains(spn, ignoreCase = true) || spn.contains(it, ignoreCase = true) }
+        val spn = comparable(operatorName) ?: return null
+        val names = listOfNotNull(alphaLong, alphaShort).mapNotNull(::comparable)
+        if (names.isEmpty()) return null
+        return names.any { it.contains(spn) || spn.contains(it) }
     }
+
+    private fun comparable(name: String?): String? = name
+        ?.lowercase()
+        ?.filter(Char::isLetterOrDigit)
+        ?.takeIf { it.length >= MIN_NAME_LENGTH && !it.all(Char::isDigit) }
 
     companion object {
         private const val MCC_DIGITS = 3
+        private const val MIN_NAME_LENGTH = 3
 
         /**
          * Splits a `getSimOperator()` value ("42701", "310260") into MCC and

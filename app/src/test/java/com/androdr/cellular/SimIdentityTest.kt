@@ -64,6 +64,24 @@ class SimIdentityTest {
     }
 
     @Test
+    fun `spacing and punctuation do not make two spellings of one name differ`() {
+        // The reader folds whitespace in the broadcast name to '_'.
+        val spn = SimIdentity("427", "01", "Ooredoo Qatar")
+        assertEquals(true, spn.compare("427", "01", "Ooredoo_Qatar", null).operatorNameMatchesSim)
+        assertEquals(true, spn.compare("427", "01", "OOREDOO-QATAR", null).operatorNameMatchesSim)
+    }
+
+    @Test
+    fun `a numeric or one-letter name is not comparable, so the answer is unknown`() {
+        // "42701" is a PLMN code broadcast as a name; "O" is in every operator.
+        // Neither can be said to match or mismatch anything.
+        assertNull(ooredoo.compare("427", "01", "42701", null).operatorNameMatchesSim)
+        assertNull(SimIdentity("427", "01", "42701").compare("427", "01", "Ooredoo", null).operatorNameMatchesSim)
+        assertNull(ooredoo.compare("427", "01", "O", null).operatorNameMatchesSim)
+        assertNull(SimIdentity("427", "01", "O").compare("427", "01", "Ooredoo", null).operatorNameMatchesSim)
+    }
+
+    @Test
     fun `missing sides compare to null rather than false`() {
         assertNull(ooredoo.compare(null, "01", "Ooredoo", null).plmnMatchesSim)
         assertNull(ooredoo.compare("427", null, "Ooredoo", null).plmnMatchesSim)
