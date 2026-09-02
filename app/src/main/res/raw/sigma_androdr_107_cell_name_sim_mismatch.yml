@@ -1,0 +1,37 @@
+title: Serving cell name contradicts the SIM on the home network
+id: androdr-107
+status: experimental
+description: >-
+    The serving cell broadcasts the SIM's own network code but a name that does
+    not match the service provider name on the SIM. The code is what the handset
+    selects on, so a fake cell must clone it; the name is a free-text string the
+    transmitter chooses, and one that clones the code but not the name string
+    trips this. Unlike androdr-105 and androdr-106 this needs no per-operator
+    string: the SIM says what the name should be, on any network anywhere.
+
+    Not raised while roaming, where a visited network legitimately shows its own
+    name, nor when either side cannot be read — a missing SIM name is "cannot
+    compare", not a mismatch.
+author: AndroDR
+date: 2026/09/02
+category: incident
+logsource:
+    product: androdr
+    service: cellular_monitor
+detection:
+    selection:
+        is_registered: true
+        plmn_matches_sim: true
+        operator_name_matches_sim: false
+    filter_roaming:
+        is_roaming: true
+    condition: selection and not filter_roaming
+level: low
+tags:
+    - attack.t1430
+falsepositives:
+    - MVNOs whose SIM carries the host network's code but the MVNO's own name
+    - Operators that have rebranded since the SIM was issued
+    - Firmware or locale variations in the broadcast name string
+remediation:
+    - "Compare the network name shown in Settings with the operator that issued your SIM. A name that differs on your own network is worth noting alongside other cellular findings."

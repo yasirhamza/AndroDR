@@ -1,6 +1,9 @@
 package com.androdr.cellular
 
+import com.androdr.data.model.CaptureContext
 import com.androdr.data.model.CellularSnapshot
+import com.androdr.data.model.ServiceContext
+import com.androdr.data.model.SimContext
 import com.androdr.data.model.TelemetrySource
 import com.androdr.sigma.SigmaRuleEvaluator
 import com.androdr.sigma.SigmaRuleParser
@@ -58,6 +61,20 @@ class CellularRulesFireTest {
     }
 
     @Test
+    fun `androdr-102 does not count a read taken on a dark screen, but counts an unknown one`() {
+        // Six of the 0.9.0.638 findings were idle-radio reads: a UE in
+        // RRC_IDLE measures no neighbours, and nothing recorded that the
+        // screen was off. Unknown screen state must not suppress.
+        val f = "sigma_androdr_102_cell_isolated.yml"
+        val isolated = benign().copy(neighborCount = 0)
+        assertTrue("screen off: an idle radio, not isolation", !fires(f, isolated.copy(capture = screen(false))))
+        assertTrue("screen on: counts", fires(f, isolated.copy(capture = screen(true))))
+        assertTrue("screen unknown: still counts", fires(f, isolated.copy(capture = screen(null))))
+    }
+
+    private fun screen(interactive: Boolean?) = CaptureContext(screenInteractive = interactive)
+
+    @Test
     fun `androdr-103 fires on an LTE to GSM downgrade only`() {
         val f = "sigma_androdr_103_cell_rat_downgrade.yml"
         assertTrue(
@@ -84,6 +101,19 @@ class CellularRulesFireTest {
     }
 
     @Test
+    fun `androdr-104 is suppressed by proven travel and by nothing less`() {
+        // "Strongest when stationary" was prose until location_moved_m_last_5m
+        // was populated. The gate must only suppress what it can prove:
+        // unknown movement (null) fires, as does a short walk.
+        val f = "sigma_androdr_104_cell_tac_churn.yml"
+        val churning = benign().copy(tacChangesLast5m = 4)
+        assertTrue("moved 2 km: travel, not a fake cell", !fires(f, churning.copy(locationMovedMLast5m = 2_000)))
+        assertTrue("moved exactly 500 m: travel", !fires(f, churning.copy(locationMovedMLast5m = 500)))
+        assertTrue("moved 120 m: stationary enough", fires(f, churning.copy(locationMovedMLast5m = 120)))
+        assertTrue("movement unknown: still fires", fires(f, churning.copy(locationMovedMLast5m = null)))
+    }
+
+    @Test
     fun `androdr-106 fires when the operator name contradicts the PLMN`() {
         val f = "sigma_androdr_106_cell_operator_mismatch_ooredoo.yml"
         assertTrue(
@@ -91,6 +121,39 @@ class CellularRulesFireTest {
             fires(f, benign().copy(operatorAlphaLong = "Not Ooredoo"))
         )
         assertTrue("must not fire on the genuine name", !fires(f, benign()))
+    }
+
+    @Test
+    fun `androdr-107 fires when the home network's name contradicts the SIM, on any operator`() {
+        // 105 and 106 each hard-code one operator's strings; 107 asks the SIM.
+        val f = "sigma_androdr_107_cell_name_sim_mismatch.yml"
+        val home = benign().copy(sim = SimContext(plmnMatchesSim = true, operatorNameMatchesSim = true))
+        val spoofedName = home.copy(sim = home.sim.copy(operatorNameMatchesSim = false))
+        assertTrue("must fire when the code matches but the name does not", fires(f, spoofedName))
+        assertTrue("must not fire when both agree", !fires(f, home))
+        assertTrue(
+            "a different network is not a name spoof",
+            !fires(f, home.copy(sim = SimContext(plmnMatchesSim = false, operatorNameMatchesSim = false))),
+        )
+    }
+
+    @Test
+    fun `androdr-107 stays quiet while roaming and when either side is unreadable`() {
+        val f = "sigma_androdr_107_cell_name_sim_mismatch.yml"
+        val spoofedName = benign().copy(sim = SimContext(plmnMatchesSim = true, operatorNameMatchesSim = false))
+        assertTrue(
+            "a visited network shows its own name",
+            !fires(f, spoofedName.copy(service = ServiceContext(isRoaming = true))),
+        )
+        assertTrue(
+            "roaming unknown: the mismatch stands",
+            fires(f, spoofedName.copy(service = ServiceContext(isRoaming = null))),
+        )
+        assertTrue("no SIM: nothing to compare", !fires(f, benign().copy(sim = SimContext())))
+        assertTrue(
+            "blank SIM name: cannot compare, not a mismatch",
+            !fires(f, benign().copy(sim = SimContext(plmnMatchesSim = true, operatorNameMatchesSim = null))),
+        )
     }
 
     @Test
@@ -104,6 +167,7 @@ class CellularRulesFireTest {
             "sigma_androdr_102_cell_isolated.yml",
             "sigma_androdr_104_cell_tac_churn.yml",
             "sigma_androdr_106_cell_operator_mismatch_ooredoo.yml",
+            "sigma_androdr_107_cell_name_sim_mismatch.yml",
         ).forEach { f ->
             assertTrue("$f must not fire when unregistered", !fires(f, unregistered))
         }

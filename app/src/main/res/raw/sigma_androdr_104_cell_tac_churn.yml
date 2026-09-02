@@ -7,7 +7,10 @@ description: >-
     that update is the exchange in which the IMSI or TMSI is disclosed. Repeated
     churn is therefore the most direct Tier 1 signal of a cell trying to make
     devices re-identify themselves. Travelling quickly across real tracking-area
-    boundaries produces the same pattern, so this is strongest when stationary.
+    boundaries produces the same pattern, so this is strongest when stationary:
+    a device that moved 500 m or more in the same five minutes, by the passive
+    location fixes other apps obtained, is not counted. Unknown movement — no
+    fix, or a single one — still is; the gate only suppresses proven travel.
 author: AndroDR
 date: 2026/08/22
 category: incident
@@ -18,12 +21,14 @@ detection:
     selection:
         is_registered: true
         tac_changes_last_5m|gte: 3
-    condition: selection
+    filter_moving:
+        location_moved_m_last_5m|gte: 500
+    condition: selection and not filter_moving
 level: medium
 tags:
     - attack.t1430
 falsepositives:
-    - Travelling at speed across tracking-area boundaries
+    - Travelling at speed across tracking-area boundaries when no other app has obtained a location fix, so movement cannot be seen
     - Dense urban areas with overlapping cells
     - Handover between operators while roaming
 remediation:

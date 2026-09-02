@@ -9,6 +9,12 @@ description: >-
     the reference device is 13 neighbours, so zero is a strong departure rather
     than a marginal one. Isolated cells do occur legitimately indoors, in rural
     coverage, and in private deployments.
+
+    A handset in RRC_IDLE with a strong serving cell measures no neighbours at
+    all (3GPP 36.304), and the platform hands over an empty list; the screen
+    being off is the best unprivileged sign of that state, so a read taken on a
+    dark screen is not counted. A read where the screen state is unknown still
+    is.
 author: AndroDR
 date: 2026/08/22
 category: incident
@@ -19,7 +25,9 @@ detection:
     selection:
         is_registered: true
         neighbor_count: 0
-    condition: selection
+    filter_idle_read:
+        screen_interactive: false
+    condition: selection and not filter_idle_read
 level: low
 tags:
     - attack.t1430
@@ -27,5 +35,6 @@ falsepositives:
     - Rural or otherwise isolated coverage
     - Indoor small cells, femtocells and private networks
     - Brief moments during handover when the neighbour list is empty
+    - An idle radio with the screen on, or a read whose screen state could not be determined
 remediation:
     - "Note where and when this appeared. Corroborate with other cellular findings from the same time and place before drawing conclusions."
