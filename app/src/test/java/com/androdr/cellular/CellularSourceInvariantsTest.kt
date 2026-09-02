@@ -40,20 +40,39 @@ class CellularSourceInvariantsTest {
      *
      * Interpolating an identity field into a string is how that happened, so
      * that exact shape is banned. Log lines report SHAPE (`present(...)`), not
-     * values.
+     * values. Whole-object interpolation (`"$snapshot"`, `"$id"`) is banned
+     * with it: a data class's toString() prints every field.
+     *
+     * This is the shape-level backstop; [CellularMonitorLogPrivacyTest] is
+     * the behavioural gate that sees what actually reaches the log.
      */
     @Test
     fun `the monitor never interpolates cell identity into a string`() {
         val src = monitorSource()
         listOf(
             "\${snapshot.tac}", "\${snapshot.ci}", "\${snapshot.pci}",
-            "\${snapshot.mcc}", "\${snapshot.mnc}",
-            "\${snapshot.operatorAlphaLong}", "\${snapshot.previousTac}",
+            "\${snapshot.mcc}", "\${snapshot.mnc}", "\${snapshot.additionalPlmns}",
+            "\${snapshot.operatorAlphaLong}", "\${snapshot.operatorAlphaShort}",
+            "\${snapshot.previousTac}",
+            "\${snapshot.neighbors.pcis}", "\${snapshot.neighbors.earfcns}", "\${snapshot.neighbors}",
+            "\${snapshot.sim.mcc}", "\${snapshot.sim.mnc}", "\${snapshot.sim.operatorName}", "\${snapshot.sim}",
+            "\${snapshot}", "\${id}",
         ).forEach {
             assertFalse(
                 "cell identity interpolated into a string in CellularMonitor: $it — " +
                     "log shape via present(), never values",
                 src.contains(it),
+            )
+        }
+        listOf(
+            Regex("""${'$'}snapshot(?![\w.])"""),
+            Regex("""${'$'}id(?![\w.])"""),
+            Regex("""\$\{id\.(mcc|mnc|tac|ci|pci|operatorAlphaLong|operatorAlphaShort|additionalPlmns)}"""),
+        ).forEach { pattern ->
+            assertFalse(
+                "a whole identity object, or one of its fields, interpolated into a string in " +
+                    "CellularMonitor (${pattern.pattern}) — its toString() prints the tuple",
+                pattern.containsMatchIn(src),
             )
         }
     }
