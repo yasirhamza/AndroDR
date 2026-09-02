@@ -272,4 +272,27 @@ class CellularSourceInvariantsTest {
             ).readText().contains("ACTION_RETRY_CELLULAR ->"),
         )
     }
+
+    /**
+     * A started service that never calls startForeground() is killed by the
+     * platform after a few seconds — and on Android 12+ throws in the
+     * process. The retry action is sent from the UI whenever the user grants
+     * location, including when the VPN is OFF; with no monitor to re-arm, the
+     * service must stop itself rather than sit started-but-not-foreground.
+     */
+    @Test
+    fun `the retry action stops the service when there is no monitor to re-arm`() {
+        val src = repoFile(
+            "app/src/main/java/com/androdr/network/DnsVpnService.kt",
+            "src/main/java/com/androdr/network/DnsVpnService.kt",
+        ).readText()
+        val branch = Regex("""ACTION_RETRY_CELLULAR\s*->[\s\S]*?(?=\n\s*else\s*->)""")
+            .find(src)?.value
+        assertTrue("ACTION_RETRY_CELLULAR branch not found in onStartCommand", branch != null)
+        assertTrue(
+            "the retry branch must stopSelf(startId) when cellularMonitor is null; " +
+                "otherwise the service lingers started-but-not-foreground",
+            branch!!.contains("stopSelf(startId)"),
+        )
+    }
 }

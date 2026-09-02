@@ -166,7 +166,11 @@ class DnsVpnService : VpnService() {
             // afterwards leaves it inert until something re-arms it, so the UI
             // pokes the running service rather than making the user toggle the
             // VPN off and on.
-            ACTION_RETRY_CELLULAR -> cellularMonitor?.start()
+            // Defensive: if the VPN is not running there is no monitor to
+            // re-arm, and this service must not linger without going
+            // foreground. Stop rather than sit idle.
+            ACTION_RETRY_CELLULAR ->
+                if (cellularMonitor != null) cellularMonitor?.start() else stopSelf(startId)
             else         -> startVpn()
         }
         return START_STICKY
