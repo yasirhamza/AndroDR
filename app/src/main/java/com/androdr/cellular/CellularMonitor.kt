@@ -64,6 +64,7 @@ class CellularMonitor(
     private val store: RadioStateStore = RadioStateStore(),
     private val duplicates: DuplicateDeliveryFilter = DuplicateDeliveryFilter(),
     private val clock: () -> Long = System::currentTimeMillis,
+    private val deviceContext: DeviceContextSource = PlatformDeviceContext(context),
 ) {
     private var callback: TelephonyCallback? = null
 
@@ -178,7 +179,7 @@ class CellularMonitor(
             Log.i(TAG, "$origin: ${cellInfo.size} records, none registered")
             return
         }
-        val snapshot = toSnapshot(serving, cellInfo, clock())
+        val snapshot = toSnapshot(serving, cellInfo, clock(), origin)
         if (duplicates.isDuplicate(snapshot)) {
             // Prime plus the registration callback hand over the same list
             // twice at session start. It counts as a delivery — the monitor is
@@ -208,7 +209,9 @@ class CellularMonitor(
                 "plmn=${present(snapshot.mcc)} op=${present(snapshot.operatorAlphaLong)} " +
                 "neighbours=${snapshot.neighborCount} rsrp=${present(snapshot.servingRsrp)} " +
                 "tacChanged=${snapshot.tacChanged} churn5m=${snapshot.tacChangesLast5m} " +
-                "ratChanged=${snapshot.ratChanged}"
+                "ratChanged=${snapshot.ratChanged} records=${snapshot.capture.rawRecordCount} " +
+                "screen=${snapshot.capture.screenInteractive} fg=${snapshot.capture.appForeground} " +
+                "data=${snapshot.capture.dataActivity}"
         )
         runCatching { engine.evaluateCellular(listOf(snapshot)) }
             .onSuccess { findings ->
@@ -285,6 +288,11 @@ class CellularMonitor(
                     append(" rsrp=").append(snapshot.servingRsrp ?: "-")
                     append(" prevTac=").append(snapshot.previousTac ?: "-")
                     append(" churn5m=").append(snapshot.tacChangesLast5m)
+                    append(" origin=").append(snapshot.capture.origin.name)
+                    append(" records=").append(snapshot.capture.rawRecordCount)
+                    append(" screen=").append(snapshot.capture.screenInteractive ?: "-")
+                    append(" fg=").append(snapshot.capture.appForeground ?: "-")
+                    append(" data=").append(snapshot.capture.dataActivity ?: "-")
                 },
                 ruleId = f.ruleId,
                 attackTechniqueId = f.tags.firstOrNull { it.startsWith("attack.") }.orEmpty(),
@@ -305,7 +313,12 @@ class CellularMonitor(
     private fun present(value: Any?): String = if (value == null) "null" else "set"
 
     @RequiresApi(Build.VERSION_CODES.S)
-    internal fun toSnapshot(serving: CellInfo, all: List<CellInfo>, now: Long): CellularSnapshot {
+    internal fun toSnapshot(
+        serving: CellInfo,
+        all: List<CellInfo>,
+        now: Long,
+        origin: CaptureOrigin = CaptureOrigin.CALLBACK,
+    ): CellularSnapshot {
         val id = CellReader.identity(serving)
         val derived = store.record(id.tac, id.rat, now)
         val servingRsrp = CellReader.rsrp(serving)
@@ -342,6 +355,7 @@ class CellularMonitor(
                     null
                 },
             locationMovedMLast5m = null,
+            capture = deviceContext.capture(origin, all.size),
         )
     }
 

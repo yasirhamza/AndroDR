@@ -15,7 +15,7 @@ import org.junit.Test
 class CellularSnapshotTest {
 
     /** 24 v1 keys + location_fix_age_s + 6 signal + 7 neighbour + 5 capture + 5 SIM + 3 service. */
-    private val EXPECTED_KEYS = 51
+    private val expectedKeys = 51
 
     private fun sample() = CellularSnapshot(
         mcc = "427", mnc = "01", tac = 4100, ci = 12345L, pci = 77,
@@ -44,7 +44,7 @@ class CellularSnapshotTest {
         assertEquals(2, f["tac_changes_last_5m"])
         assertEquals(12, f["serving_minus_max_neighbor_rsrp_db"])
         assertEquals(40, f["location_moved_m_last_5m"])
-        assertEquals(EXPECTED_KEYS, f.size)
+        assertEquals(expectedKeys, f.size)
     }
 
     @Test
@@ -56,7 +56,7 @@ class CellularSnapshotTest {
             s.signal.toFieldMap(), s.neighbors.toFieldMap(), s.capture.toFieldMap(),
             s.sim.toFieldMap(), s.service.toFieldMap(),
         )
-        val top = EXPECTED_KEYS - parts.sumOf { it.size }
+        val top = expectedKeys - parts.sumOf { it.size }
         assertEquals("merged size must equal the sum of the parts", top + parts.sumOf { it.size }, s.toFieldMap().size)
         assertEquals(
             "sub-maps must not share a key",
@@ -68,9 +68,18 @@ class CellularSnapshotTest {
     fun `grouped fields reach the flat map under their taxonomy names`() {
         val f = sample().copy(
             signal = ServingSignal(rsrq = -11, sinr = 14, cqi = 9, timingAdvance = 3, dbm = -84),
-            neighbors = NeighborDetail(pcis = listOf(1, 2), earfcns = listOf(1600), rsrps = listOf(-90), rats = listOf("LTE", "LTE"), maxRsrp = -90, servingPciInNeighbors = false, distinctEarfcnCount = 1),
-            capture = CaptureContext(origin = CaptureOrigin.PRIME, appForeground = true, screenInteractive = false, dataActivity = "IN", rawRecordCount = 3),
-            sim = SimContext(mcc = "427", mnc = "01", operatorName = "Ooredoo", plmnMatchesSim = true, operatorNameMatchesSim = true),
+            neighbors = NeighborDetail(
+                pcis = listOf(1, 2), earfcns = listOf(1600), rsrps = listOf(-90), rats = listOf("LTE", "LTE"),
+                maxRsrp = -90, servingPciInNeighbors = false, distinctEarfcnCount = 1,
+            ),
+            capture = CaptureContext(
+                origin = CaptureOrigin.PRIME, appForeground = true, screenInteractive = false,
+                dataActivity = "IN", rawRecordCount = 3,
+            ),
+            sim = SimContext(
+                mcc = "427", mnc = "01", operatorName = "Ooredoo",
+                plmnMatchesSim = true, operatorNameMatchesSim = true,
+            ),
             service = ServiceContext(state = "IN_SERVICE", isRoaming = false, dataNetworkType = "LTE"),
         ).toFieldMap()
         assertEquals(-11, f["serving_rsrq"])

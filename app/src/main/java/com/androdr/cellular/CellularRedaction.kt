@@ -35,6 +35,12 @@ object CellularRedaction {
         "churn5m",    // count of changes, not the values
         "tacChanged",
         "ratChanged",
+        // Circumstances of the read — facts about the device, not the tower.
+        "origin",     // PRIME or CALLBACK
+        "records",    // how many records the platform handed over
+        "screen",     // screen interactive at the read
+        "fg",         // an activity was visible at the read
+        "data",       // data activity direction at the read
     ) - setOf("prevTac")
 
     const val REDACTION_NOTE =

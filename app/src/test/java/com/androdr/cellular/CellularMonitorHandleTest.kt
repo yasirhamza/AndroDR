@@ -2,6 +2,7 @@ package com.androdr.cellular
 
 import android.content.Context
 import android.telephony.CellInfo
+import com.androdr.data.model.CaptureContext
 import com.androdr.data.model.CaptureOrigin
 import com.androdr.data.model.CellularSnapshot
 import com.androdr.data.repo.ScanRepository
@@ -35,6 +36,18 @@ class CellularMonitorHandleTest {
     private val engine = mockk<SigmaRuleEngine>()
     private val repository = mockk<ScanRepository>()
     private var now = 1_000L
+    private var screenInteractive: Boolean? = true
+
+    /** Circumstances under the test's control; no platform reads. */
+    private val deviceContext = object : DeviceContextSource {
+        override fun capture(origin: CaptureOrigin, rawRecordCount: Int) = CaptureContext(
+            origin = origin,
+            appForeground = false,
+            screenInteractive = screenInteractive,
+            dataActivity = "NONE",
+            rawRecordCount = rawRecordCount,
+        )
+    }
 
     private fun monitor() = CellularMonitor(
         context = mockk<Context>(relaxed = true),
@@ -42,6 +55,7 @@ class CellularMonitorHandleTest {
         repository = repository,
         scope = CoroutineScope(Dispatchers.Unconfined),
         clock = { now },
+        deviceContext = deviceContext,
     )
 
     private fun lteCell(neighbours: Int = 13): List<CellInfo> = CellInfoFixtures.lteList(neighbours)
@@ -110,6 +124,36 @@ class CellularMonitorHandleTest {
         assertEquals(-90, s.servingRsrp)
         assertEquals("neighbour RSRP is read across technologies", -90 - (-95), s.servingMinusMaxNeighborRsrpDb)
         assertEquals(2, s.neighborCount)
+    }
+
+    @Test
+    fun `the circumstances of the read reach the snapshot`() {
+        // Six "no neighbours" findings in the 0.9.0.638 report could not be
+        // told from an idle radio: nothing recorded whether the screen was on
+        // or how many records the platform handed over.
+        val m = monitor()
+        screenInteractive = false
+        m.handle(lteCell(neighbours = 0), CaptureOrigin.PRIME)
+
+        val c = CellularState.latest.value!!.capture
+        assertEquals(CaptureOrigin.PRIME, c.origin)
+        assertEquals(false, c.screenInteractive)
+        assertEquals(false, c.appForeground)
+        assertEquals("NONE", c.dataActivity)
+        assertEquals("serving cell only", 1, c.rawRecordCount)
+    }
+
+    @Test
+    fun `a change of circumstances alone is still the same observation`() {
+        val m = monitor()
+        screenInteractive = true
+        m.handle(lteCell(), CaptureOrigin.PRIME)
+        now += 300
+        screenInteractive = false
+        m.handle(lteCell(), CaptureOrigin.CALLBACK)
+
+        assertEquals("the radio did not change; the screen did", 1, CellularState.history.value.size)
+        assertEquals(1, CellularState.duplicates.value)
     }
 
     @Test

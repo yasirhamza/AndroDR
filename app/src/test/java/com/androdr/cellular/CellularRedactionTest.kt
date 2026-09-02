@@ -37,6 +37,17 @@ class CellularRedactionTest {
     }
 
     @Test
+    fun `the circumstances of the read survive redaction`() {
+        // They are facts about the device, not the tower, and a reader needs
+        // them to tell an idle-radio "no neighbours" from a real one.
+        val out = CellularRedaction.redact(
+            "$realistic origin=PRIME records=14 screen=false fg=false data=NONE",
+        )
+        listOf("origin=PRIME", "records=14", "screen=false", "fg=false", "data=NONE")
+            .forEach { assertTrue("dropped: $it", out.contains(it)) }
+    }
+
+    @Test
     fun `redaction is an allowlist, so unknown fields are dropped`() {
         // The point of the allowlist: a field added later must be consciously
         // cleared for export rather than leaking by default.
