@@ -1,10 +1,7 @@
 package com.androdr.cellular
 
 import android.content.Context
-import android.telephony.CellIdentityLte
 import android.telephony.CellInfo
-import android.telephony.CellInfoLte
-import android.telephony.CellSignalStrengthLte
 import com.androdr.data.model.CaptureOrigin
 import com.androdr.data.model.CellularSnapshot
 import com.androdr.data.repo.ScanRepository
@@ -21,6 +18,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.CoroutineScope
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Before
 import org.junit.Test
 
@@ -46,29 +44,7 @@ class CellularMonitorHandleTest {
         clock = { now },
     )
 
-    private fun lteCell(neighbours: Int = 13): List<CellInfo> {
-        val identity = mockk<CellIdentityLte> {
-            every { tac } returns 1437
-            every { ci } returns 192816407
-            every { pci } returns 167
-            every { earfcn } returns 1600
-            every { mccString } returns "427"
-            every { mncString } returns "01"
-            every { operatorAlphaLong } returns "Ooredoo"
-            every { operatorAlphaShort } returns "Ooredoo"
-        }
-        val signal = mockk<CellSignalStrengthLte> { every { rsrp } returns -84 }
-        val serving = mockk<CellInfoLte> {
-            every { isRegistered } returns true
-            every { cellIdentity } returns identity
-            every { cellSignalStrength } returns signal
-        }
-        val neighbour = mockk<CellInfoLte> {
-            every { isRegistered } returns false
-            every { cellSignalStrength } returns mockk { every { rsrp } returns -95 }
-        }
-        return listOf(serving) + List(neighbours) { neighbour }
-    }
+    private fun lteCell(neighbours: Int = 13): List<CellInfo> = CellInfoFixtures.lteList(neighbours)
 
     private fun finding() = Finding(ruleId = "androdr-102", title = "Serving cell has no neighbours", level = "low")
 
@@ -116,6 +92,24 @@ class CellularMonitorHandleTest {
         assertEquals(2, CellularState.history.value.size)
         assertEquals(0, CellularState.duplicates.value)
         verify(exactly = 2) { engine.evaluateCellular(any<List<CellularSnapshot>>()) }
+    }
+
+    @Test
+    fun `an NR serving cell produces a snapshot with a cell in it`() {
+        // The LTE-only reader left every identity field null on NR while
+        // rat said "NR" — a downgrade finding would have had no cell to judge.
+        val m = monitor()
+        m.handle(listOf(CellInfoFixtures.nr()) + CellInfoFixtures.lteList(neighbours = 2).drop(1), CaptureOrigin.PRIME)
+
+        val s = CellularState.latest.value
+        assertNotNull(s)
+        assertEquals("NR", s!!.rat)
+        assertEquals(1437, s.tac)
+        assertEquals(3_456_789_012L, s.ci)
+        assertEquals(640_000, s.earfcn)
+        assertEquals(-90, s.servingRsrp)
+        assertEquals("neighbour RSRP is read across technologies", -90 - (-95), s.servingMinusMaxNeighborRsrpDb)
+        assertEquals(2, s.neighborCount)
     }
 
     @Test

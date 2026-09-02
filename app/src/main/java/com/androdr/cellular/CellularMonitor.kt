@@ -6,10 +6,6 @@ import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
 import android.telephony.CellInfo
-import android.telephony.CellInfoGsm
-import android.telephony.CellInfoLte
-import android.telephony.CellInfoNr
-import android.telephony.CellInfoWcdma
 import android.telephony.TelephonyCallback
 import android.telephony.TelephonyManager
 import android.util.Log
@@ -155,6 +151,7 @@ class CellularMonitor(
      * empty read only means the first update arrives later.
      */
     @SuppressLint("MissingPermission")
+    @RequiresApi(Build.VERSION_CODES.S)
     private fun primeFromCurrentState(tm: TelephonyManager) {
         runCatching { tm.allCellInfo.orEmpty() }
             .onSuccess { cells ->
@@ -171,6 +168,7 @@ class CellularMonitor(
             }
     }
 
+    @RequiresApi(Build.VERSION_CODES.S)
     internal fun handle(cellInfo: List<CellInfo>, origin: CaptureOrigin) {
         val serving = cellInfo.firstOrNull { it.isRegistered }
         if (serving == null) {
@@ -299,9 +297,6 @@ class CellularMonitor(
         }
     }
 
-    /** Android reports unavailable integers as Integer.MAX_VALUE. */
-    private fun sentinel(value: Int): Int? = if (value == Int.MAX_VALUE) null else value
-
     /**
      * Log-safe field summary: reports whether a value arrived, never the value.
      * Used so logs can answer "is the platform blanking this field?" without
@@ -309,39 +304,27 @@ class CellularMonitor(
      */
     private fun present(value: Any?): String = if (value == null) "null" else "set"
 
-    @SuppressLint("NewApi")
+    @RequiresApi(Build.VERSION_CODES.S)
     internal fun toSnapshot(serving: CellInfo, all: List<CellInfo>, now: Long): CellularSnapshot {
-        val rat = when (serving) {
-            is CellInfoNr -> "NR"
-            is CellInfoLte -> "LTE"
-            is CellInfoWcdma -> "UMTS"
-            is CellInfoGsm -> "GSM"
-            else -> "UNKNOWN"
-        }
-        val lte = serving as? CellInfoLte
-        val id = lte?.cellIdentity
-        val tac = id?.tac?.let { sentinel(it) }
-        val derived = store.record(tac, rat, now)
-        val servingRsrp = lte?.cellSignalStrength?.rsrp?.let { sentinel(it) }
+        val id = CellReader.identity(serving)
+        val derived = store.record(id.tac, id.rat, now)
+        val servingRsrp = CellReader.rsrp(serving)
         val neighbours = all.filter { !it.isRegistered }
-        val maxNeighborRsrp = neighbours.filterIsInstance<CellInfoLte>()
-            .mapNotNull { sentinel(it.cellSignalStrength.rsrp) }
-            .maxOrNull()
-        val apiR = Build.VERSION.SDK_INT >= Build.VERSION_CODES.R
+        val maxNeighborRsrp = neighbours.mapNotNull { CellReader.rsrp(it) }.maxOrNull()
 
         return CellularSnapshot(
-            mcc = id?.mccString,
-            mnc = id?.mncString,
-            tac = tac,
-            ci = id?.ci?.let { sentinel(it) }?.toLong(),
-            pci = id?.pci?.let { sentinel(it) },
-            earfcn = id?.earfcn?.let { sentinel(it) },
-            bands = if (apiR) id?.bands?.toList().orEmpty() else emptyList(),
-            bandwidthKhz = if (apiR) id?.bandwidth?.let { sentinel(it) } else null,
-            rat = rat,
-            operatorAlphaLong = id?.operatorAlphaLong?.toString(),
-            operatorAlphaShort = id?.operatorAlphaShort?.toString(),
-            additionalPlmns = if (apiR) id?.additionalPlmns?.toList().orEmpty() else emptyList(),
+            mcc = id.mcc,
+            mnc = id.mnc,
+            tac = id.tac,
+            ci = id.ci,
+            pci = id.pci,
+            earfcn = id.earfcn,
+            bands = id.bands,
+            bandwidthKhz = id.bandwidthKhz,
+            rat = id.rat,
+            operatorAlphaLong = id.operatorAlphaLong,
+            operatorAlphaShort = id.operatorAlphaShort,
+            additionalPlmns = id.additionalPlmns,
             neighborCount = neighbours.size,
             servingRsrp = servingRsrp,
             isRegistered = true,
