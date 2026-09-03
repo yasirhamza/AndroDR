@@ -157,6 +157,37 @@ class CellularRulesFireTest {
     }
 
     @Test
+    fun `every operator name a bundled rule expects survives the reader unchanged`() {
+        // The reader normalises the network-chosen name before it becomes
+        // data. If that normalisation touches a name a rule filters on, the
+        // filter can never match and the rule fires on the genuine network:
+        // androdr-105 did exactly that on a Vodafone Qatar cell when the
+        // reader folded spaces. Read the expectations from the rules
+        // themselves so a new rule is covered without anyone remembering.
+        val nameFields = setOf("operator_alpha_long", "operator_alpha_short", "sim_operator_name")
+        val files = rawDir().listFiles { f -> f.name.startsWith("sigma_androdr_") && f.name.endsWith(".yml") }!!
+        val expected = files.flatMap { f ->
+            val r = SigmaRuleParser.parse(f.readText()) ?: return@flatMap emptyList()
+            if (r.service != "cellular_monitor") return@flatMap emptyList()
+            r.detection.selections.values.flatMap { sel ->
+                sel.fieldMatchers
+                    .filter { it.fieldName in nameFields }
+                    .flatMap { m -> m.values.map { f.name to it.toString() } }
+            }
+        }
+        assertTrue(
+            "no bundled cellular rule filters on an operator name -- is the field list stale?",
+            expected.isNotEmpty(),
+        )
+        expected.forEach { (file, name) ->
+            assertTrue(
+                "$file expects operator name '$name' but the reader turns it into '${CellReader.name(name)}'",
+                CellReader.name(name) == name,
+            )
+        }
+    }
+
+    @Test
     fun `no cellular rule fires on an unregistered snapshot`() {
         // The monitor now RECORDS a delivery with no registered cell (rat
         // UNKNOWN, identity null, is_registered false, previous_* from the

@@ -241,7 +241,7 @@ class CellularMonitorHandleTest {
         assertFalse("a line break reached the timeline row", details.contains('\n'))
         assertEquals("exactly one rsrp pair", 1, Regex("(^| )rsrp=").findAll(details).count())
         assertFalse("a forged pair reached the timeline row", details.contains(" svc=FORGED"))
-        assertTrue("the name itself is kept, folded", details.contains("op=Evil_rsrp=-1_svc=FORGED"))
+        assertTrue("the name itself is kept, folded by the row writer", details.contains("op=Evil_rsrp=-1_svc=FORGED"))
     }
 
     @Test

@@ -160,19 +160,31 @@ class CellReaderTest {
     // ---- the network-chosen string ----------------------------------------
 
     @Test
-    fun `the operator name is folded to one token before it becomes data`() {
-        // A fake cell chooses this string. Written as `op=<name>` into a
-        // whitespace-separated row, whitespace inside it would forge pairs.
-        val id = CellReader.identity(CellInfoFixtures.lte(operatorName = "Evil rsrp=-1\nsvc=FORGED\u0000x"))
-        assertEquals("Evil_rsrp=-1_svc=FORGED_x", id.operatorAlphaLong)
+    fun `control and format characters in the operator name are folded before it becomes data`() {
+        // A fake cell chooses this string. A line break inside it would
+        // start a new row in an exported CSV; a NUL or a zero-width joiner
+        // would hide in a comparison.
+        val id = CellReader.identity(CellInfoFixtures.lte(operatorName = "Evil rsrp=-1\nsvc=FORGED\u0000x\u200dy"))
+        assertEquals("Evil rsrp=-1_svc=FORGED_x_y", id.operatorAlphaLong)
         assertEquals(id.operatorAlphaLong, id.operatorAlphaShort)
+        assertEquals("Vodafone_Qatar", CellReader.name("Vodafone\u2028Qatar"))
     }
 
     @Test
-    fun `the operator name keeps Unicode, is capped, and an empty one is absent`() {
-        assertEquals("Ooredoo \u0642\u0637\u0631".replace(' ', '_'), CellReader.name("Ooredoo \u0642\u0637\u0631"))
+    fun `ordinary spaces in the operator name are kept, so a rule can match the real name`() {
+        // androdr-105 filters on `operator_alpha_long: 'Vodafone Qatar'`.
+        // A reader that folded the space made the filter miss and the rule
+        // fire on every genuine Vodafone Qatar cell — caught on a device.
+        assertEquals("Vodafone Qatar", CellReader.name("Vodafone Qatar"))
+        assertEquals("a trailing space is not part of the name", "Vodafone Qatar", CellReader.name(" Vodafone Qatar "))
+        assertEquals("Ooredoo \u0642\u0637\u0631", CellReader.name("Ooredoo \u0642\u0637\u0631"))
+    }
+
+    @Test
+    fun `the operator name is capped and an empty one is absent`() {
         assertEquals(64, CellReader.name("x".repeat(500))!!.length)
         assertNull(CellReader.name(""))
+        assertNull("whitespace alone is no name", CellReader.name("  \n "))
         assertNull(CellReader.name(null))
     }
 

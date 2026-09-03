@@ -232,19 +232,26 @@ internal object CellReader {
 
     /**
      * The operator name is the one string in a cell record that the NETWORK
-     * chooses, and a fake cell chooses it freely. It is written into the
-     * timeline row as `op=<name>` and shown in the UI, so before it becomes
-     * data it is folded to one whitespace-free token: every run of
-     * whitespace or control characters becomes `_` and the length is
-     * capped. Unicode is kept — a real operator may well use it, and the
-     * name never leaves the device (see CellularRedaction).
+     * chooses, and a fake cell chooses it freely. Before it becomes data it
+     * is trimmed (so a name that is only whitespace is no name), every run
+     * of control, format or line-separator characters becomes `_`, and the
+     * length is capped. Unicode is kept — a real operator may well use it,
+     * and the name never leaves the device (see CellularRedaction).
+     *
+     * ORDINARY SPACES ARE KEPT. The rules match the network's real name
+     * (`operator_alpha_long: 'Vodafone Qatar'`), and an earlier version
+     * that folded spaces too made androdr-105 fire on every genuine
+     * Vodafone Qatar cell — found on a device, not by a test. The
+     * whitespace-separated timeline row is protected where it is written
+     * instead: [CellularDetails] folds whitespace as it renders each value.
      */
     internal fun name(raw: CharSequence?): String? = raw?.toString()
+        ?.trim()
         ?.replace(UNSAFE, "_")
         ?.take(MAX_NAME_LENGTH)
         ?.takeIf { it.isNotEmpty() }
 
-    private val UNSAFE = Regex("[\\s\\p{Cntrl}\\p{Cf}]+")
+    private val UNSAFE = Regex("[\\p{Cntrl}\\p{Cf}\\p{Zl}\\p{Zp}]+")
     private const val MAX_NAME_LENGTH = 64
 
     /**
