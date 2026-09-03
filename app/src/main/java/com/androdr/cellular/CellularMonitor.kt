@@ -264,7 +264,7 @@ class CellularMonitor(
             startTimestamp = System.currentTimeMillis(),
             kind = "event",
             source = TIMELINE_SOURCE,
-            category = "cellular_session",
+            category = SESSION_CATEGORY,
             description = "Cellular monitoring started",
             details = "monitor=active",
         )
@@ -290,7 +290,7 @@ class CellularMonitor(
                 startTimestamp = snapshot.capturedAt,
                 kind = "event",
                 source = TIMELINE_SOURCE,
-                category = "network_anomaly",
+                category = FINDING_CATEGORY,
                 description = safeDescription(f, snapshot),
                 details = CellularDetails.format(snapshot),
                 ruleId = f.ruleId,
@@ -431,5 +431,11 @@ class CellularMonitor(
                     PackageManager.PERMISSION_GRANTED
             }
         const val TIMELINE_SOURCE = CellularRedaction.SOURCE
+
+        /** The coverage row written once per monitor start; not a finding. */
+        const val SESSION_CATEGORY = "cellular_session"
+
+        /** A rule that fired on a radio observation. */
+        const val FINDING_CATEGORY = "network_anomaly"
     }
 }

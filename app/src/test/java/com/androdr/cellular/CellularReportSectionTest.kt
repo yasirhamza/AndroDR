@@ -94,6 +94,31 @@ class CellularReportSectionTest {
         )
     }
 
+    /** The coverage row the monitor writes once per start, as the DB holds it. */
+    private fun sessionEvent() = ForensicTimelineEvent(
+        startTimestamp = 1_700_000_000_000L,
+        source = "cellular_monitor",
+        category = "cellular_session",
+        description = "Cellular monitoring started",
+        details = "monitor=active",
+    )
+
+    @Test
+    fun `a monitor start is reported as coverage, not as a finding`() {
+        // The exporter fetches every cellular_monitor row. Seen on a device:
+        // "1 finding(s) from radio telemetry -- Cellular monitoring started".
+        val out = render(listOf(sessionEvent()))
+        assertTrue("coverage must still open the section", out.contains("CELLULAR (TIER 1)"))
+        assertTrue("the coverage window is missing", out.contains("Monitoring started 1 time(s)"))
+        assertTrue("an absence of findings must be stated", out.contains("No findings from radio telemetry."))
+        assertFalse("a monitor start was counted as a finding", out.contains("finding(s) from radio telemetry"))
+
+        val both = render(listOf(sessionEvent(), cellularEvent()))
+        assertTrue(both.contains("Monitoring started 1 time(s)"))
+        assertTrue("the real finding must still be counted", both.contains("1 finding(s) from radio telemetry."))
+        assertTrue(both.contains("Tracking area churn"))
+    }
+
     private fun snapshot() = CellularSnapshot(
         mcc = "427", mnc = "01", tac = 1437, ci = 192816407L, pci = 167,
         earfcn = 1600, bands = listOf(3), bandwidthKhz = null, rat = "LTE",

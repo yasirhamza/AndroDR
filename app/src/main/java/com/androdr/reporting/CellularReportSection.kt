@@ -1,6 +1,7 @@
 package com.androdr.reporting
 
 import com.androdr.cellular.CellularDetails
+import com.androdr.cellular.CellularMonitor
 import com.androdr.cellular.CellularRedaction
 import com.androdr.cellular.CellularState
 import com.androdr.data.model.CellularSnapshot
@@ -127,21 +128,39 @@ internal object CellularReportSection {
     }
 
     /**
-     * Tier 1 cellular findings.
+     * Tier 1 cellular findings, preceded by the monitor's coverage.
      *
      * These come from the forensic timeline rather than [ScanResult.findings]:
      * the radio emitter is event-driven and continuous, so a finding is not
      * produced by any particular scan. Each row carries the full radio context
      * it fired on, because a cellular finding cannot be judged true or false
      * after the fact without the snapshot that produced it.
+     *
+     * The timeline also holds one row per monitor start
+     * ([CellularMonitor.SESSION_CATEGORY]). It is coverage, not a finding: an
+     * exported report once read "1 finding(s) from radio telemetry --
+     * Cellular monitoring started", seen on a device. Here it says when the
+     * radio was being watched, which is what a reader needs to interpret an
+     * absence of findings.
      */
     internal fun StringBuilder.appendCellularSection(events: List<ForensicTimelineEvent>) {
         if (events.isEmpty()) return
         val fmt = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US)
+        val (sessions, findings) = events.partition { it.category == CellularMonitor.SESSION_CATEGORY }
         section("CELLULAR (TIER 1)")
-        appendLine("  ${events.size} finding(s) from radio telemetry.")
+        if (sessions.isNotEmpty()) {
+            appendLine("  Monitoring started ${sessions.size} time(s):")
+            sessions.forEach { appendLine("    [${fmt.format(Date(it.startTimestamp))}]") }
+            appendLine()
+        }
+        if (findings.isEmpty()) {
+            appendLine("  No findings from radio telemetry.")
+            appendLine()
+            return
+        }
+        appendLine("  ${findings.size} finding(s) from radio telemetry.")
         appendLine()
-        events.forEach { e ->
+        findings.forEach { e ->
             appendLine("  [${fmt.format(Date(e.startTimestamp))}] ${e.description}")
             if (e.ruleId.isNotEmpty()) appendLine("    rule: ${e.ruleId}")
             if (e.attackTechniqueId.isNotEmpty()) {
