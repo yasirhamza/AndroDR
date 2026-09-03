@@ -107,6 +107,9 @@ object CellularRedaction {
      * Returns [details] with only exportable `key=value` pairs kept, followed
      * by a note saying what was withheld and why. Silence would read as "there
      * was nothing more", which is the wrong impression for a forensic artifact.
+     * The converse holds too: a row from which nothing was dropped (the
+     * session-start row is `monitor=active` and no more) carries no note,
+     * because "withheld" on it would read as "there was more".
      *
      * The row is trusted only as far as its shape: it is split on ANY
      * whitespace (a newline inside a value must not carry a forged pair onto
@@ -117,13 +120,18 @@ object CellularRedaction {
      */
     fun redact(details: String): String {
         if (details.isBlank()) return details
-        val pairs = details.trim().split(WHITESPACE).filter { PAIR.matches(it) }
+        val tokens = details.trim().split(WHITESPACE)
+        val pairs = tokens.filter { PAIR.matches(it) }
         val occurrences = pairs.groupingBy { it.substringBefore('=') }.eachCount()
         val kept = pairs.filter { token ->
             val key = token.substringBefore('=')
             isExportable(key) && occurrences[key] == 1
         }
-        return if (kept.isEmpty()) REDACTION_NOTE else kept.joinToString(" ") + " " + REDACTION_NOTE
+        return when {
+            kept.size == tokens.size -> kept.joinToString(" ")
+            kept.isEmpty() -> REDACTION_NOTE
+            else -> kept.joinToString(" ") + " " + REDACTION_NOTE
+        }
     }
 
     private val WHITESPACE = Regex("\\s+")

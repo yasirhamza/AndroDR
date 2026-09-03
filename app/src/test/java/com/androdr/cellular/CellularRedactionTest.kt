@@ -2,6 +2,7 @@ package com.androdr.cellular
 
 import com.androdr.data.model.ForensicTimelineEvent
 import com.androdr.reporting.TimelineExporter
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -88,6 +89,15 @@ class CellularRedactionTest {
         // Silence would read as "there was nothing more" in a forensic artifact.
         assertTrue(CellularRedaction.redact(realistic).contains("withheld"))
         assertTrue(CellularRedaction.redact("tac=1 ci=2").contains("withheld"))
+    }
+
+    @Test
+    fun `a row from which nothing was withheld carries no note`() {
+        // The session-start row never held identity. Seen on a device: the
+        // exported timeline said "withheld" under "monitor=active", which a
+        // reader takes as "there was more".
+        assertEquals("monitor=active", CellularRedaction.redact("monitor=active"))
+        assertEquals("rat=LTE rsrp=-84", CellularRedaction.redact("rat=LTE rsrp=-84"))
     }
 
     @Test
