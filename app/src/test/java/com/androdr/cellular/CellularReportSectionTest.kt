@@ -119,6 +119,18 @@ class CellularReportSectionTest {
         assertTrue(both.contains("Tracking area churn"))
     }
 
+    @Test
+    fun `monitor starts are listed oldest first, like the observations`() {
+        // The DAO returns rows newest first; a coverage list reads as a timeline.
+        val later = sessionEvent().copy(startTimestamp = 1_700_000_000_000L + 3_600_000L)
+        val out = render(listOf(later, sessionEvent()))
+        val fmt = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.US)
+        val first = out.indexOf(fmt.format(java.util.Date(sessionEvent().startTimestamp)))
+        val second = out.indexOf(fmt.format(java.util.Date(later.startTimestamp)))
+        assertTrue("both starts must be listed", first >= 0 && second >= 0)
+        assertTrue("the earlier start must come first", first < second)
+    }
+
     private fun snapshot() = CellularSnapshot(
         mcc = "427", mnc = "01", tac = 1437, ci = 192816407L, pci = 167,
         earfcn = 1600, bands = listOf(3), bandwidthKhz = null, rat = "LTE",

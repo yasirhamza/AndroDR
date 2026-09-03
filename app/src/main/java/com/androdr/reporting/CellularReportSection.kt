@@ -149,8 +149,11 @@ internal object CellularReportSection {
         val (sessions, findings) = events.partition { it.category == CellularMonitor.SESSION_CATEGORY }
         section("CELLULAR (TIER 1)")
         if (sessions.isNotEmpty()) {
+            // Oldest first, like the observations: the DAO hands rows back
+            // newest first, and a coverage list reads as a timeline.
             appendLine("  Monitoring started ${sessions.size} time(s):")
-            sessions.forEach { appendLine("    [${fmt.format(Date(it.startTimestamp))}]") }
+            sessions.sortedBy { it.startTimestamp }
+                .forEach { appendLine("    [${fmt.format(Date(it.startTimestamp))}]") }
             appendLine()
         }
         if (findings.isEmpty()) {
