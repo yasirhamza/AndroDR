@@ -4,6 +4,7 @@ import android.content.Context
 import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.androdr.cellular.CellularState
 import com.androdr.data.db.DnsEventDao
 import com.androdr.data.model.ScanResult
 import com.androdr.data.repo.ScanRepository
@@ -80,7 +81,15 @@ class HistoryViewModel @Inject constructor(
         _selectedScan.value = scan
     }
 
-    /** Opens the detail bottom sheet for [scan] and generates the report text. */
+    /**
+     * Opens the detail bottom sheet for [scan] and generates the report text.
+     *
+     * A lighter render than [ReportExporter.export] (no logcat, no device
+     * telemetry), but the radio telemetry is in-process and free, and without
+     * it the sheet said "No radio telemetry captured since the app started"
+     * while the Cellular card a tab away showed the observation. Seen on a
+     * device.
+     */
     fun openSheet(scan: ScanResult) {
         _sheetScan.value = scan
         viewModelScope.launch {
@@ -88,6 +97,10 @@ class HistoryViewModel @Inject constructor(
             val inventory = orchestrator.lastAppTelemetry
             _sheetReportText.value = ReportFormatter.formatScanReport(
                 scan, dnsEvents, emptyList(), inventory,
+                cellularSnapshot = CellularState.latest.value,
+                cellularDeliveries = CellularState.deliveries.value,
+                cellularDuplicates = CellularState.duplicates.value,
+                cellularHistory = CellularState.history.value,
                 versionName = appContext.appVersion().name
             )
         }
