@@ -56,6 +56,11 @@ jobs:
           distribution: 'temurin'
           cache: 'gradle'
       - uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407 # v3.2.2
+        with:
+          # v3.2.2 defaults to 'tools platform-tools'. Google removed the
+          # long-deprecated 'tools' package, so sdkmanager exits 1 and every
+          # Gradle job dies at setup. platform-tools is all we actually use.
+          packages: 'platform-tools'
       - uses: gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a # v4.4.3
       - name: Wait for ci-success on this SHA
         uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7.1.0
