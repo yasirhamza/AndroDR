@@ -97,6 +97,11 @@ jobs:
           distribution: 'temurin'
           cache: 'gradle'
       - uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407 # v3.2.2
+        with:
+          # v3.2.2 defaults to 'tools platform-tools'. Google removed the
+          # long-deprecated 'tools' package, so sdkmanager exits 1 and every
+          # Gradle job dies at setup. platform-tools is all we actually use.
+          packages: 'platform-tools'
       - uses: gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a # v4.4.3
         with:
           cache-read-only: ${{ github.ref != 'refs/heads/main' }}
@@ -133,6 +138,11 @@ jobs:
           distribution: 'temurin'
           cache: 'gradle'
       - uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407 # v3.2.2
+        with:
+          # v3.2.2 defaults to 'tools platform-tools'. Google removed the
+          # long-deprecated 'tools' package, so sdkmanager exits 1 and every
+          # Gradle job dies at setup. platform-tools is all we actually use.
+          packages: 'platform-tools'
       - uses: gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a # v4.4.3
         with:
           cache-read-only: ${{ github.ref != 'refs/heads/main' }}
@@ -161,6 +171,11 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407 # v3.2.2
+        with:
+          # v3.2.2 defaults to 'tools platform-tools'. Google removed the
+          # long-deprecated 'tools' package, so sdkmanager exits 1 and every
+          # Gradle job dies at setup. platform-tools is all we actually use.
+          packages: 'platform-tools'
       - name: Download debug APK
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
@@ -264,6 +279,11 @@ jobs:
           distribution: 'temurin'
           cache: 'gradle'
       - uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407 # v3.2.2
+        with:
+          # v3.2.2 defaults to 'tools platform-tools'. Google removed the
+          # long-deprecated 'tools' package, so sdkmanager exits 1 and every
+          # Gradle job dies at setup. platform-tools is all we actually use.
+          packages: 'platform-tools'
       - uses: gradle/actions/dependency-submission@ed408507eac070d1f99cc633dbcf757c94c7933a # v4.4.3
         with:
           # Graph telemetry only — nothing built here ships. Verification
