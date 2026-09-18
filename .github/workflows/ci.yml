@@ -55,6 +55,10 @@ jobs:
               - 'app/src/main/res/raw/known_oem_prefixes.yml'
             python:
               - 'scripts/**'
+              # Adversary harness: selector + report-assertion unit tests.
+              # Without this the directory matched no bucket, so a PR
+              # touching only the harness merged on a vacuous green.
+              - 'test-adversary/**'
             code:
               # Kotlin / Java sources across all source sets
               - 'app/src/**/*.kt'
@@ -329,7 +333,7 @@ jobs:
         # Only pyyaml is needed: merge-ioc-data.py imports yaml at module
         # scope, so --help fails without it. Keep this minimal — the smoke
         # test is meant to exercise argparse, not run the full pipeline.
-        run: python3 -m pip install --quiet pyyaml
+        run: python3 -m pip install --quiet pyyaml pytest
       - name: Syntax-check tracked Python scripts
         run: |
           set -euo pipefail
@@ -344,6 +348,11 @@ jobs:
         run: python3 scripts/merge-ioc-data.py --help
       - name: Smoke-test generate_known_good_apps.py arg parsing
         run: python3 scripts/generate_known_good_apps.py --help || true
+      - name: Adversary-harness unit tests
+        # Covers scenario selection and check-patterns.sh, including the
+        # clean-device baseline that asserts a benign scan does not escalate
+        # (#332). Runs without a device, so it gates every PR.
+        run: python3 -m pytest test-adversary/ -q
   instrumented:
     runs-on: ubuntu-latest
     needs: changes

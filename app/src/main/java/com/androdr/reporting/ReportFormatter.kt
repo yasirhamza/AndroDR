@@ -61,17 +61,16 @@ object ReportFormatter {
         appendLine("  Patch     : ${Build.VERSION.SECURITY_PATCH}")
         appendLine(RULE)
         appendLine()
-        // Overall risk driven by app threats with rule guidance. Device posture is a
-        // condition (not an incident) so it caps at MEDIUM -- nothing has happened yet.
-        val maxAppGuidancePriority = scan.appRisks
-            .filter { it.triggered && it.guidance.isNotEmpty() }
-            .maxOfOrNull { guidancePriority(it.guidance) } ?: 0
-        val reportedRisk = when {
-            maxAppGuidancePriority >= 3 -> "CRITICAL"
-            maxAppGuidancePriority >= 1 -> "HIGH"
-            scan.deviceFlags.any { it.triggered } -> "MEDIUM"
-            else -> "LOW"
-        }
+        // One overall-risk calculation, shared with every UI surface (dashboard,
+        // history). This header used to run a second ladder that scored the first word
+        // of each rule's prose `display.guidance` instead of its severity. Guidance is
+        // advice text, not a validated enum, so the two drifted apart as the corpus
+        // grew and the header was wrong in both directions (#332): one medium
+        // "REVIEW --" finding printed HIGH, while critical rules whose guidance is
+        // ordinary prose (androdr-094) or absent (androdr-089) printed LOW.
+        // Device posture still caps at MEDIUM -- that rule lives in overallRiskLevel,
+        // which is where #70 intended it. Pinned by OverallRiskConsistencyTest.
+        val reportedRisk = scan.overallRiskLevel.name
         if (includeFindings) {
             appendLine("  OVERALL RISK: $reportedRisk")
             appendLine()

@@ -550,3 +550,19 @@ scenarios:
     inject: []
     expected_patterns:
       - "Graphite"
+
+  # ── Track 5: Benign baseline ───────────────────────────────────────────
+  # Nothing installed, nothing injected. Asserts what the report says when the
+  # device is clean — the question the other 37 scenarios cannot ask, because
+  # on every one of them an escalated verdict is the correct answer. #332
+  # shipped through that blind spot.
+  - id: clean_device
+    track: 5
+    risk: none
+    description: "Clean device — report must not escalate with nothing to escalate on"
+    source: baseline
+    tags: [android, baseline, false-positive]
+    expected_patterns:
+      - "SUMMARY:"
+      - "!OVERALL RISK: HIGH"
+      - "!OVERALL RISK: CRITICAL"

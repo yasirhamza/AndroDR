@@ -302,6 +302,11 @@ run_scenario() {
         adb_inject)
             # No APK to install
             ;;
+        baseline)
+            # Nothing installed, nothing injected — the device as-is. Asserts what
+            # the report says when there is no threat, which every other scenario
+            # by construction cannot (#332).
+            ;;
         *)
             echo "  FAIL — unknown source: $source"
             RESULTS[$id]="FAIL"
@@ -393,20 +398,10 @@ run_scenario() {
     # Step 9: DIFF
     local patterns_file="$EXPECTED_DIR/${id}.patterns"
     local fail=false
-    if [ ! -f "$report" ]; then
-        echo "  Could not pull report — no file at expected path"
+    # Assertions live in check-patterns.sh so they are unit-testable without a
+    # device (test_check_patterns.py) — a `!`-prefixed line asserts absence.
+    if ! bash "$SCRIPT_DIR/check-patterns.sh" "$report" "$patterns_file"; then
         fail=true
-    elif [ ! -f "$patterns_file" ]; then
-        echo "  No patterns file: $patterns_file"
-        fail=true
-    else
-        while IFS= read -r pattern || [ -n "$pattern" ]; do
-            [ -z "$pattern" ] && continue
-            if ! grep -qF "$pattern" "$report"; then
-                echo "  MISS: pattern not found: '$pattern'"
-                fail=true
-            fi
-        done < "$patterns_file"
     fi
 
     # Step 10: RESULT
@@ -595,9 +590,10 @@ if [ "$MODE" = "load" ] || [ "$MODE" = "guided" ]; then
     TRACK_CATS[2]="Stalkerware"
     TRACK_CATS[3]="Mercenary Simulation"
     TRACK_CATS[4]="CVE Detection"
+    TRACK_CATS[5]="Benign Baseline"
 
     cat_num=2
-    for track_num in 1 2 3 4; do
+    for track_num in 1 2 3 4 5; do
         cat_name="${TRACK_CATS[$track_num]}"
         has_scenarios=false
 
@@ -623,16 +619,39 @@ if [ "$MODE" = "load" ] || [ "$MODE" = "guided" ]; then
 
             echo "  Scenario: $scenario_id"
             while IFS= read -r pattern || [ -n "$pattern" ]; do
+                pattern="${pattern%$'\r'}"
                 [ -z "$pattern" ] && continue
-                if grep -qF "$pattern" "$REPORT" 2>/dev/null; then
-                    echo "    ✓ \"$pattern\""
+                case "$pattern" in '#'*) continue ;; esac
+                # A `!`-prefixed line asserts ABSENCE — present is the failure.
+                # Same sigils as check-patterns.sh, which the non-guided path uses.
+                want_absent=false
+                case "$pattern" in
+                    '!'*) want_absent=true; pattern="${pattern#!}" ;;
+                esac
+                [ -z "$pattern" ] && continue
+
+                if grep -qF -- "$pattern" "$REPORT" 2>/dev/null; then
+                    present=true
+                else
+                    present=false
+                fi
+                if [ "$want_absent" = true ]; then
+                    label="absent: $pattern"
+                    $present && satisfied=false || satisfied=true
+                else
+                    label="$pattern"
+                    satisfied=$present
+                fi
+
+                if [ "$satisfied" = true ]; then
+                    echo "    ✓ \"$label\""
                     ((GUIDED_PASS++)) || true
                 else
                     if [ -n "$roadmap" ] && [ "$roadmap" != "None" ] && [ "$roadmap" != "" ]; then
-                        echo "    ○ \"$pattern\" (expected fail — roadmap #$roadmap)"
+                        echo "    ○ \"$label\" (expected fail — roadmap #$roadmap)"
                         ((GUIDED_EXPECTED++)) || true
                     else
-                        echo "    ✗ \"$pattern\" MISS"
+                        echo "    ✗ \"$label\" MISS"
                         ((GUIDED_FAIL++)) || true
                     fi
                 fi
