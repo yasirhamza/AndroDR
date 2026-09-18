@@ -18,6 +18,13 @@ app/build/
 *.jks
 *.keystore
 
+# Built app binaries — never committed. Debug/research builds can declare
+# permissions that main's manifest does not (e.g. the cellular research
+# build's ACCESS_FINE_LOCATION), so a stray APK at the repo root is an
+# outbound leak, not just bulk. Mirrored in .github/tracked-path-denylist.txt.
+*.apk
+*.aab
+
 # IntelliJ / Android Studio
 *.idea/
 *.iws
