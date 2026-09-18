@@ -44,6 +44,10 @@ node_modules/
 *.class
 .kotlin/
 
+# Python bytecode (the adversary-harness tests are run by CI now)
+__pycache__/
+*.pyc
+
 # Exported reports (may contain real device data)
 docs/play-store/androdr_*.txt
 

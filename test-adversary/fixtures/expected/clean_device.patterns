@@ -1,0 +1,10 @@
+# Clean-device baseline: nothing installed, nothing injected.
+#
+# The report must state that it scanned, and must NOT escalate. Before #332 a
+# benign device printed OVERALL RISK: HIGH off one review-grade WebAPK plus
+# boot-persistence noise, which no attack scenario could ever have caught.
+SUMMARY:
+OVERALL RISK:
+!OVERALL RISK: HIGH
+!OVERALL RISK: CRITICAL
+!Known Malicious Package
