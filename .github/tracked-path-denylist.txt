@@ -14,6 +14,8 @@
 **/.memsearch/**
 **/.superpowers/**
 **/.claude/settings.local.json
+**/*.apk
+**/*.aab
 **/*.jks
 **/*.keystore
 **/*.p12
