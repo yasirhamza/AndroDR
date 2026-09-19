@@ -32,6 +32,10 @@ class PureEmitterContractTest {
     // moving the declaration means revisiting this gate, not allowlisting).
     private val findingConstructionAllowlist = setOf(
         "com/androdr/sigma/SigmaRuleEvaluator.kt",
+        // #350: the correlation engine's own mapper. A Finding derived from a
+        // correlation rule's signal, by the second rule engine -- still "derived
+        // only by the rule engines", never by a scanner, view model or exporter.
+        "com/androdr/sigma/CorrelationFindings.kt",
     )
 
     /**

@@ -41,6 +41,8 @@ object SigmaRuleParser {
         val id = root["id"] as? String
             ?: throw CorrelationParseException.InvalidGrammar("<unknown>", "missing id")
         val title = root["title"] as? String ?: id
+        val description = (root["description"] as? String)?.trim().orEmpty()
+        val tags = (root["tags"] as? List<*>)?.map { it.toString() } ?: emptyList()
 
         val corr = root["correlation"].asStringMap(id, "correlation")
 
@@ -98,7 +100,9 @@ object SigmaRuleParser {
             minEvents = minEvents,
             severity = severity,
             displayLabel = label,
-            displayCategory = category
+            displayCategory = category,
+            description = description,
+            tags = tags
         )
     }
 

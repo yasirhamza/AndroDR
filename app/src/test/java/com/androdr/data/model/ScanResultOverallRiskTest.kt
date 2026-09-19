@@ -93,6 +93,14 @@ class ScanResultOverallRiskTest {
         assertEquals(RiskLevel.MEDIUM, scanOf(adb).overallRiskLevel)
     }
 
+    /** A chain of events is a finding like any other: it raises the number with no special casing (#350). */
+    @Test
+    fun `a correlation finding raises overall risk like any other finding`() {
+        val chain = finding("high", FindingCategory.CORRELATION, ruleId = "androdr-corr-001")
+
+        assertEquals(RiskLevel.HIGH, scanOf(chain).overallRiskLevel)
+    }
+
     @Test
     fun `overall risk is the maximum across all triggered findings`() {
         val scan = scanOf(

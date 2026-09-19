@@ -87,12 +87,16 @@ class ScanRepository @Inject constructor(
      * as a string of zeros, which broke the expand-cluster UI.
      *
      * Flow inside the transaction:
-     *  1. Insert [scan].
-     *  2. Replace usage-stats events (if provided), then collect them with IDs.
-     *  3. Insert [findingTimelineEvents] and collect them with assigned IDs.
-     *  4. Call [correlator] with the union (findings + usage + lookback events
+     *  1. Replace usage-stats events (if provided), then collect them with IDs.
+     *  2. Insert [findingTimelineEvents] and collect them with assigned IDs.
+     *  3. Call [correlator] with the union (findings + usage + lookback events
      *     the caller supplies). It returns signal rows to persist.
-     *  5. Insert the returned signals.
+     *  4. Insert the returned signals.
+     *  5. Ask [findingsForSignals] for the findings those signals become (#350).
+     *  6. Insert [scan] LAST, carrying those findings, and return it. The scan
+     *     row can go last because `forensic_timeline` declares no foreign key on
+     *     `scanResultId` and [ScanResult.id] is assigned by the caller, so nothing
+     *     above needs the row to exist first.
      *
      * @param correlator receives events-with-real-IDs (findings + replaced
      *   usage-stats, in that order) plus any [lookbackEvents] the caller passes
@@ -116,13 +120,13 @@ class ScanRepository @Inject constructor(
         replaceUsageStatsEvents: List<ForensicTimelineEvent>? = null,
         lookbackEvents: List<ForensicTimelineEvent> = emptyList(),
         preDelete: (suspend () -> Unit)? = null,
+        findingsForSignals: (List<ForensicTimelineEvent>) -> List<com.androdr.sigma.Finding> = { emptyList() },
         correlator: suspend (List<ForensicTimelineEvent>) -> List<ForensicTimelineEvent>
-    ) {
-        database.withTransaction {
+    ): ScanResult {
+        return database.withTransaction {
             // Run any caller-supplied pre-delete FIRST and inside the tx, so a
             // subsequent insert failure rolls the deletes back with it (#342 B1).
             preDelete?.invoke()
-            scanResultDao.insert(scan)
 
             val persistedUsage: List<ForensicTimelineEvent> = if (replaceUsageStatsEvents != null) {
                 forensicTimelineEventDao.deleteBySource("usage_stats")
@@ -137,6 +141,13 @@ class ScanRepository @Inject constructor(
             if (signals.isNotEmpty()) {
                 forensicTimelineEventDao.insertAll(signals)
             }
+            // The scan row goes LAST so it can carry the findings the correlation
+            // pass produced (#350) -- one complete write, no update.
+            val persisted =
+                if (signals.isEmpty()) scan
+                else scan.copy(findings = scan.findings + findingsForSignals(signals))
+            scanResultDao.insert(persisted)
+            persisted
         }
     }
 

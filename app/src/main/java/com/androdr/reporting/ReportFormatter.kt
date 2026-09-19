@@ -120,6 +120,10 @@ object ReportFormatter {
         // -- Verdict + Summary + Action Guidance ----------------------------------
         appendVerdict(scan, dnsEvents, appInventory)
 
+        // -- Suspicious activity chains ------------------------------------------
+        // First, because a chain of events is the strongest evidence in the report.
+        appendActivityChains(scan)
+
         // -- Device checks --------------------------------------------------------
         val allDeviceFlags = scan.deviceFlags
         if (allDeviceFlags.isNotEmpty()) {
@@ -427,6 +431,11 @@ object ReportFormatter {
 
         // Device posture issues (all severity levels — these are conditions, not incidents)
         val triggeredDeviceFlags = scan.deviceFlags.filter { it.triggered }
+        val chains = scan.activityChains.filter { it.triggered }
+        if (chains.isNotEmpty()) {
+            val labels = chains.map { it.title }.distinct().joinToString(", ")
+            appendLine("    Suspicious activity chains: ${chains.size} ($labels)")
+        }
         if (triggeredDeviceFlags.isNotEmpty()) {
             val titles = triggeredDeviceFlags.take(3).map { it.title }
             val suffix = if (triggeredDeviceFlags.size > 3) ", ..." else ""
@@ -463,6 +472,11 @@ object ReportFormatter {
         // Sort so CRITICAL-prefixed items come first
         appGuidance.sortedByDescending { guidancePriority(it) }.forEach { actions.add(it) }
 
+        // Chains of events: one line each, naming the app so the reader knows where to look.
+        scan.activityChains.filter { it.triggered }.forEach { chain ->
+            val pkg = chain.matchContext["package_name"]?.takeIf { it.isNotEmpty() } ?: "this device"
+            actions.add("CHAIN: ${chain.title} ($pkg) -- review what this app has been doing recently")
+        }
         // Device posture issues (summarized, not per-rule)
         val deviceIssues = scan.deviceFlags.filter { it.triggered }
         if (deviceIssues.isNotEmpty()) {
@@ -475,6 +489,27 @@ object ReportFormatter {
             appendLine("  ACTION REQUIRED:")
             actions.forEach { appendLine("    $it") }
             appendLine()
+        }
+    }
+
+    // A chain of events -- several things that look minor on their own but add up.
+    // Rendered first, and never again under APP RISKS or DEVICE CHECKS.
+    private fun StringBuilder.appendActivityChains(scan: ScanResult) {
+        section(CHAINS_SECTION)
+        val chains = scan.activityChains.filter { it.triggered }
+        if (chains.isEmpty()) {
+            appendLine("  No suspicious activity chains detected.")
+            return
+        }
+        appendLine("  ${chains.size} chain(s) detected -- events that look minor on their own but add up together")
+        appendLine()
+        chains.sortedByDescending { severityOrdinal(it.level) }.forEach { chain ->
+            appendFinding(chain)
+            val pkg = chain.matchContext["package_name"].orEmpty()
+            val members = chain.matchContext["member_event_ids"].orEmpty()
+                .split(',').count { it.isNotBlank() }
+            val where = if (pkg.isNotEmpty()) "App: $pkg" else "Device-wide"
+            appendLine("           $where -- $members linked event(s); open the Timeline to see them")
         }
     }
 
@@ -564,6 +599,12 @@ object ReportFormatter {
         "medium" -> 1
         else -> 0
     }
+
+    /**
+     * What people see correlation findings called. Deliberately not "correlation" --
+     * that is the internal category (FindingCategory.CORRELATION). One place to change.
+     */
+    const val CHAINS_SECTION = "SUSPICIOUS ACTIVITY CHAINS"
 
     private const val RULE = "============================================================"
     private const val THIN = "------------------------------------------------------------"

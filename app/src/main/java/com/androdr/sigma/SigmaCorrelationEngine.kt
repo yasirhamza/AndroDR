@@ -25,6 +25,25 @@ import javax.inject.Singleton
 @Singleton
 class SigmaCorrelationEngine @Inject constructor() {
 
+    /**
+     * The [Finding]s to record on the scan for [signals] produced by [evaluate] (#350).
+     * Each signal maps to its rule by id; severity is capped by the chain's effective
+     * category exactly as [evaluate] caps the signal's own severity.
+     */
+    fun findingsFor(
+        signals: List<ForensicTimelineEvent>,
+        rules: List<CorrelationRule>,
+        atomRulesById: Map<String, SigmaRule> = emptyMap(),
+    ): List<Finding> {
+        val byId = rules.associateBy { it.id }
+        return signals.mapNotNull { signal ->
+            val rule = byId[signal.ruleId] ?: return@mapNotNull null
+            CorrelationFindings.fromSignal(
+                signal, rule, computeEffectiveCategory(rule.referencedRuleIds, atomRulesById)
+            )
+        }
+    }
+
     fun evaluate(
         rules: List<CorrelationRule>,
         events: List<ForensicTimelineEvent>,

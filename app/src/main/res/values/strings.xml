@@ -143,7 +143,8 @@
     <string name="dashboard_overall_risk">Overall Risk</string>
     <string name="dashboard_no_scan_yet">No scan performed yet. Tap \"Run Scan\" to analyse your device.</string>
     <!-- PluralsCandidate: shorthand for compact dashboard display -->
-    <string name="dashboard_risk_summary" tools:ignore="PluralsCandidate">%1$d app risk(s) \u00b7 %2$d device flag(s) triggered</string>
+    <string name="dashboard_risk_summary" tools:ignore="PluralsCandidate">%1$d app risk(s) \u00b7 %2$d device flag(s) \u00b7 %3$d activity chain(s)</string>
+    <string name="guidance_chains">Several events that look minor on their own add up to a suspicious pattern. Open the report to see which app and what it did.</string>
     <!-- PluralsCandidate: shorthand for compact diff banner display -->
     <string name="dashboard_new_risks" tools:ignore="PluralsCandidate">%1$d new risk(s) since last scan</string>
     <string name="cd_settings">Settings</string>
