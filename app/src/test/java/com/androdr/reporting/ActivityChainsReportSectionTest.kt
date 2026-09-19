@@ -11,7 +11,8 @@ import org.junit.Test
  * Correlation findings get their own report section, ahead of device checks and app
  * risks, because a chain of events is the strongest evidence the app produces (#350).
  * The user-facing name is deliberately not "correlation": that is the internal
- * category. See [ReportFormatter.CHAINS_SECTION].
+ * category. People see "Warning signs that add up" -- it says why the section exists:
+ * events that look minor on their own mean something together.
  */
 class ActivityChainsReportSectionTest {
 
@@ -49,7 +50,7 @@ class ActivityChainsReportSectionTest {
     fun `chains section is rendered before device checks and app risks`() {
         val text = report(scanOf(chain, appRisk, posture))
 
-        val chains = text.indexOf(ReportFormatter.CHAINS_SECTION)
+        val chains = text.indexOf(ReportFormatter.WARNING_SIGNS_SECTION)
         val device = text.indexOf("DEVICE CHECKS")
         val apps = text.indexOf("APP RISKS")
         assertTrue("chains section missing", chains >= 0)
@@ -60,7 +61,7 @@ class ActivityChainsReportSectionTest {
     @Test
     fun `a chain is rendered in its section with its label, package and severity`() {
         val text = report(scanOf(chain))
-        val section = text.substring(text.indexOf(ReportFormatter.CHAINS_SECTION), text.indexOf("DEVICE CHECKS"))
+        val section = text.substring(text.indexOf(ReportFormatter.WARNING_SIGNS_SECTION), text.indexOf("DEVICE CHECKS"))
 
         assertTrue(section.contains("Install then device admin grant"))
         assertTrue(section.contains("com.evil.app"))
@@ -80,21 +81,23 @@ class ActivityChainsReportSectionTest {
     fun `the section says so when there are no chains`() {
         val text = report(scanOf(appRisk))
 
-        assertTrue(text.contains(ReportFormatter.CHAINS_SECTION))
-        assertTrue(text.contains("No suspicious activity chains detected"))
+        assertTrue(text.contains(ReportFormatter.WARNING_SIGNS_SECTION))
+        assertTrue(text.contains("No warning signs that add up were detected"))
     }
 
     @Test
     fun `the summary names the chains and the action list points at the app`() {
         val text = report(scanOf(chain))
-        val summary = text.substring(0, text.indexOf(ReportFormatter.CHAINS_SECTION))
+        val summary = text.substring(0, text.indexOf(ReportFormatter.WARNING_SIGNS_SECTION))
 
-        assertTrue("summary should count the chains", summary.contains("Suspicious activity chains: 1"))
+        assertTrue("summary should count the chains", summary.contains("Warning signs that add up: 1"))
         assertTrue("action guidance should name the app", summary.contains("com.evil.app"))
     }
 
     @Test
     fun `the user-facing name is not the internal category`() {
-        assertTrue(!ReportFormatter.CHAINS_SECTION.contains("CORRELATION"))
+        assertEquals("WARNING SIGNS THAT ADD UP", ReportFormatter.WARNING_SIGNS_SECTION)
+        assertTrue(!ReportFormatter.WARNING_SIGNS_SECTION.contains("CORRELATION"))
+        assertTrue(!ReportFormatter.WARNING_SIGNS_SECTION.contains("CHAIN"))
     }
 }

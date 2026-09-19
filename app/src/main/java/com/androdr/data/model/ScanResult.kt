@@ -152,7 +152,7 @@ data class ScanResult(
     val appRisks: List<Finding>
         get() = findings.filter { it.category == FindingCategory.APP_RISK }
 
-    /** Chains of events from the correlation engine -- "suspicious activity chains" to the reader (#350). */
+    /** Chains of events from the correlation engine -- "Warning signs that add up" to the reader (#350). */
     @get:Ignore
     @Transient
     val activityChains: List<Finding>
