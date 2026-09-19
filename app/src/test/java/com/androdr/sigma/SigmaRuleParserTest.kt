@@ -27,6 +27,8 @@ class SigmaRuleParserTest {
             level: medium
             remediation:
                 - "Uninstall the app"
+            display:
+                category: app_risk
         """.trimIndent()
 
         val rule = SigmaRuleParser.parse(yaml)
@@ -55,6 +57,8 @@ class SigmaRuleParserTest {
                         - Google
                 condition: selection
             level: high
+            display:
+                category: app_risk
         """.trimIndent()
 
         val rule = SigmaRuleParser.parse(yaml)
@@ -81,6 +85,8 @@ class SigmaRuleParserTest {
                     app_name|contains: System
                 condition: sel_untrusted and sel_name
             level: high
+            display:
+                category: app_risk
         """.trimIndent()
 
         val rule = SigmaRuleParser.parse(yaml)
@@ -122,7 +128,7 @@ class SigmaRuleParserTest {
 
         val rule = SigmaRuleParser.parse(yaml)
         assertNotNull(rule)
-        assertEquals("device_posture", rule!!.display.category)
+        assertEquals(FindingCategory.DEVICE_POSTURE, rule!!.display.category)
         assertEquals("usb", rule.display.icon)
         assertEquals("USB Debugging Enabled", rule.display.triggeredTitle)
         assertEquals("USB Debugging Disabled", rule.display.safeTitle)
@@ -130,7 +136,10 @@ class SigmaRuleParserTest {
     }
 
     @Test
-    fun `display block is optional`() {
+    fun `display block is required for a finding-producing rule`() {
+        // Until #367 a missing display block defaulted to device_posture, filing the
+        // rule's findings under device settings silently. It is now a parse error --
+        // only display.suppress_finding: true (the timeline atoms) may omit it.
         val yaml = """
             title: No display
             id: test-no-display
@@ -145,11 +154,12 @@ class SigmaRuleParserTest {
             level: medium
         """.trimIndent()
 
-        val rule = SigmaRuleParser.parse(yaml)
-        assertNotNull(rule)
-        assertEquals("device_posture", rule!!.display.category)
-        assertEquals("none", rule.display.evidenceType)
-        assertEquals("", rule.display.triggeredTitle)
+        try {
+            SigmaRuleParser.parse(yaml)
+            org.junit.Assert.fail("Expected SigmaRuleParseException for a rule with no display block")
+        } catch (e: SigmaRuleParseException) {
+            org.junit.Assert.assertTrue(e.message!!.contains("display.category"))
+        }
     }
 
     @Test
@@ -170,6 +180,8 @@ class SigmaRuleParserTest {
                 - attack.t1404
                 - campaign.pegasus
                 - campaign.predator
+            display:
+                category: device_posture
         """.trimIndent()
 
         val rule = SigmaRuleParser.parse(yaml)
@@ -195,6 +207,8 @@ class SigmaRuleParserTest {
                         - android.permission.SEND_SMS
                 condition: selection
             level: medium
+            display:
+                category: app_risk
         """.trimIndent()
 
         val ex = assertThrows(SigmaRuleParseException::class.java) {
@@ -225,6 +239,8 @@ class SigmaRuleParserTest {
                 - attack.t1418
             falsepositives:
                 - Developer tools
+            display:
+                category: app_risk
         """.trimIndent()
 
         val rule = SigmaRuleParser.parse(yaml)
@@ -251,6 +267,8 @@ class SigmaRuleParserTest {
             implies_flags:
                 - sideloaded
                 - known_malware
+            display:
+                category: app_risk
         """.trimIndent()
 
         val rule = SigmaRuleParser.parse(yaml)
@@ -272,6 +290,8 @@ class SigmaRuleParserTest {
                     is_sideloaded: true
                 condition: selection
             level: medium
+            display:
+                category: app_risk
         """.trimIndent()
 
         val rule = SigmaRuleParser.parse(yaml)

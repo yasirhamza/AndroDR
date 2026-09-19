@@ -4,6 +4,7 @@ import com.androdr.data.model.ScanResult
 import com.androdr.data.model.ScannerFailure
 import com.androdr.data.model.UNREGISTERED_IOC_LOOKUP
 import com.androdr.sigma.Finding
+import com.androdr.sigma.FindingCategory
 import com.androdr.sigma.SigmaRuleEngine
 import io.mockk.every
 import io.mockk.mockk
@@ -72,7 +73,10 @@ class ScanOrchestratorDiffTest {
     }
 
     private fun finding(ruleId: String, triggered: Boolean = true): Finding =
-        Finding(ruleId = ruleId, title = ruleId, level = "critical", triggered = triggered)
+        Finding(
+            ruleId = ruleId, title = ruleId, level = "critical",
+            category = FindingCategory.APP_RISK, triggered = triggered,
+        )
 
     /** A capability-skip entry exactly as `recordRuleCapabilitySkips` writes it. */
     private fun skip(ruleId: String?): ScannerFailure =

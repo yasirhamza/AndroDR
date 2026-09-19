@@ -44,6 +44,8 @@ class NetworkEvaluationTest {
             level: medium
             tags:
                 - attack.t1021
+            display:
+                category: app_risk
         """.trimIndent()
         val rule = SigmaRuleParser.parse(ruleYaml)!!
         val records = listOf(
@@ -80,6 +82,8 @@ class NetworkEvaluationTest {
             level: medium
             tags:
                 - attack.t1021
+            display:
+                category: app_risk
             """.trimIndent()
         )!!
         val secRule = SigmaRuleParser.parse(
@@ -99,6 +103,8 @@ class NetworkEvaluationTest {
             level: low
             tags:
                 - attack.t1059
+            display:
+                category: app_risk
             """.trimIndent()
         )!!
         val engine = SigmaRuleEngine(mockContext)

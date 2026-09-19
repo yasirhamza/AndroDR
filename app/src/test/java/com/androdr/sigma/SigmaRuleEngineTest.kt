@@ -22,7 +22,8 @@ class SigmaRuleEngineTest {
         category = category,
         tags = emptyList(),
         detection = SigmaDetection(emptyMap(), "selection"),
-        falsepositives = emptyList(), remediation = emptyList()
+        falsepositives = emptyList(), remediation = emptyList(),
+        display = SigmaDisplay(category = FindingCategory.APP_RISK)
     )
 
     @Before

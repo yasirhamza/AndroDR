@@ -268,15 +268,35 @@ object SigmaRuleParser {
     }
 
     private fun parseDisplay(displayMap: Map<*, *>?): SigmaDisplay {
-        if (displayMap == null) return SigmaDisplay()
+        // display.category is the report/UI SECTION a finding lands in. It used to
+        // default to "device_posture" when absent or unrecognised, so a rule that
+        // forgot the field -- or misspelt it -- filed its findings under device
+        // settings without anyone noticing (#367). Fail closed instead, exactly as
+        // the top-level category does. Only a rule that produces no findings at all
+        // (display.suppress_finding: true -- the timeline atoms) may omit it.
+        val allowed = FindingCategory.values().joinToString { it.name.lowercase() }
+        val suppressFinding = displayMap?.get("suppress_finding") == true
+        val categoryString = displayMap?.get("category")?.toString()
+        val category = when {
+            categoryString == null && suppressFinding -> null
+            categoryString == null -> throw SigmaRuleParseException(
+                "display.category is required (which report section the finding " +
+                    "belongs in: $allowed) unless display.suppress_finding is true"
+            )
+            else -> FindingCategory.values().firstOrNull { it.name.equals(categoryString, ignoreCase = true) }
+                ?: throw SigmaRuleParseException(
+                    "Invalid display.category '$categoryString'. Must be one of: $allowed"
+                )
+        }
         return SigmaDisplay(
-            category = displayMap["category"]?.toString() ?: "device_posture",
-            icon = displayMap["icon"]?.toString() ?: "",
-            triggeredTitle = displayMap["triggered_title"]?.toString() ?: "",
-            safeTitle = displayMap["safe_title"]?.toString() ?: "",
-            evidenceType = displayMap["evidence_type"]?.toString() ?: "none",
-            summaryTemplate = displayMap["summary_template"]?.toString() ?: "",
-            guidance = displayMap["guidance"]?.toString() ?: ""
+            category = category,
+            suppressFinding = suppressFinding,
+            icon = displayMap?.get("icon")?.toString() ?: "",
+            triggeredTitle = displayMap?.get("triggered_title")?.toString() ?: "",
+            safeTitle = displayMap?.get("safe_title")?.toString() ?: "",
+            evidenceType = displayMap?.get("evidence_type")?.toString() ?: "none",
+            summaryTemplate = displayMap?.get("summary_template")?.toString() ?: "",
+            guidance = displayMap?.get("guidance")?.toString() ?: ""
         )
     }
 

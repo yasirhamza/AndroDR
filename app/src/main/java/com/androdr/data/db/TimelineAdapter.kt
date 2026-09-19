@@ -112,7 +112,6 @@ fun Finding.toForensicTimelineEvent(
         category = when (this.category) {
             FindingCategory.APP_RISK -> "app_risk"
             FindingCategory.DEVICE_POSTURE -> "device_posture"
-            FindingCategory.NETWORK -> "network_anomaly"
         },
         // For DNS findings, append the matched domain to the title so the
         // Timeline card shows "Graphite/Paragon Spyware: 0-38.com" instead

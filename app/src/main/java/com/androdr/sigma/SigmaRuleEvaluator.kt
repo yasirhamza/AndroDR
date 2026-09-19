@@ -25,7 +25,8 @@ data class Finding(
     val title: String,
     val description: String = "",
     val level: String,
-    val category: FindingCategory = FindingCategory.DEVICE_POSTURE,
+    // No default: a finding must say which section it belongs in (#367).
+    val category: FindingCategory,
     val tags: List<String> = emptyList(),
     val remediation: List<String> = emptyList(),
     val iconHint: String = "",
@@ -138,7 +139,11 @@ object SigmaRuleEvaluator {
         iocLookups: Map<String, (Any) -> Boolean> = emptyMap(),
         evidenceProviders: Map<String, EvidenceProvider> = emptyMap()
     ): List<Finding> {
-        val matchingRules = rules.filter { it.service == service }
+        // A suppressed rule (display.suppress_finding: true -- the timeline atoms)
+        // produces no findings by construction. Before #367 nothing honoured the
+        // field; atoms stayed out of the findings list only because no code path
+        // happened to feed timeline-service records here.
+        val matchingRules = rules.filter { it.service == service && !it.display.suppressFinding }
         val skipped = unevaluableRules(matchingRules, iocLookups).keys
         val evaluableRules = if (skipped.isEmpty()) matchingRules
         else matchingRules.filter { it.id !in skipped }
@@ -146,7 +151,9 @@ object SigmaRuleEvaluator {
         for (record in records) {
             for (rule in evaluableRules) {
                 val matched = evaluateCondition(rule.detection, record, iocLookups)
-                val category = parseCategory(rule.display.category)
+                val category = checkNotNull(rule.display.category) {
+                    "rule ${rule.id}: no display.category on a finding-producing rule (parser invariant)"
+                }
                 if (matched) {
                     val evidenceType = rule.display.evidenceType
                     val provider = evidenceProviders[evidenceType]
@@ -205,12 +212,6 @@ object SigmaRuleEvaluator {
         )
     }
 
-    private fun parseCategory(category: String): FindingCategory = when (category.lowercase()) {
-        "device_posture" -> FindingCategory.DEVICE_POSTURE
-        "app_risk" -> FindingCategory.APP_RISK
-        "network" -> FindingCategory.NETWORK
-        else -> FindingCategory.DEVICE_POSTURE
-    }
 
     private fun evaluateCondition(
         detection: SigmaDetection,

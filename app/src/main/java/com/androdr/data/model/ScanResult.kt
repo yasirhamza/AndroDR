@@ -126,8 +126,8 @@ data class ScanResult(
      * is shown in -- and is presentation only. Reading it here (#364) ceilinged any
      * incident that happened to be displayed under device posture: a critical
      * spyware artifact on disk (androdr-020) reported MEDIUM while the same report
-     * listed it as CRITICAL, and correlation findings -- which parseCategory maps to
-     * DEVICE_POSTURE -- were floored the same way. Pinned by ScanResultOverallRiskTest.
+     * listed it as CRITICAL, and low incidents shown under device posture
+     * (androdr-072..076) were floored up to MEDIUM. Pinned by ScanResultOverallRiskTest.
      */
     val overallRiskLevel: RiskLevel
         get() {

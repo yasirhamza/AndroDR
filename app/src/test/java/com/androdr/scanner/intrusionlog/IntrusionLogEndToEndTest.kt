@@ -125,6 +125,8 @@ class IntrusionLogEndToEndTest {
             level: high
             tags:
                 - attack.t1437
+            display:
+                category: app_risk
         """.trimIndent()
     )!!
 
@@ -145,6 +147,8 @@ class IntrusionLogEndToEndTest {
             level: medium
             tags:
                 - attack.t1021
+            display:
+                category: app_risk
         """.trimIndent()
     )!!
 
@@ -165,6 +169,8 @@ class IntrusionLogEndToEndTest {
             level: low
             tags:
                 - attack.t1059
+            display:
+                category: app_risk
         """.trimIndent()
     )!!
 

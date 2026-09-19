@@ -42,6 +42,8 @@ class DnsEvaluationTest {
             level: high
             tags:
                 - attack.t1437
+            display:
+                category: app_risk
         """.trimIndent()
 
         val rule = SigmaRuleParser.parse(ruleYaml)!!
@@ -84,6 +86,8 @@ class DnsEvaluationTest {
             level: high
             tags:
                 - attack.t1437
+            display:
+                category: app_risk
         """.trimIndent()
 
         val rule = SigmaRuleParser.parse(ruleYaml)!!

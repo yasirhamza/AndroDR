@@ -35,6 +35,8 @@ class SecurityLogEvaluationTest {
             level: low
             tags:
                 - attack.t1059
+            display:
+                category: app_risk
         """.trimIndent()
         val rule = SigmaRuleParser.parse(ruleYaml)!!
         val records = listOf(

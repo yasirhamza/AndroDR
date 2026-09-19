@@ -14,7 +14,7 @@ data class SigmaRule(
     val detection: SigmaDetection,
     val falsepositives: List<String>,
     val remediation: List<String>,
-    val display: SigmaDisplay = SigmaDisplay(),
+    val display: SigmaDisplay,
     val enabled: Boolean = true,
     val reportSafeState: Boolean = false,
     // Orthogonal subject-level properties the detection structurally guarantees.
@@ -61,12 +61,30 @@ enum class SigmaModifier {
     ALL
 }
 
+/**
+ * Presentation metadata for a rule's findings.
+ *
+ * [category] is the report/UI SECTION a finding is shown in -- presentation only;
+ * severity semantics come from the rule's top-level `category:` via the cap policy.
+ * It has no default on purpose: it used to fall back to device_posture, so a rule
+ * that forgot the field filed its findings under device settings silently (#367).
+ * The only rules allowed to omit it are those that produce no findings at all --
+ * [suppressFinding], declared by the timeline atoms -- and the `init` block holds
+ * that invariant for every construction site, not just the parser.
+ */
 data class SigmaDisplay(
-    val category: String = "device_posture",
+    val category: FindingCategory?,
+    val suppressFinding: Boolean = false,
     val icon: String = "",
     val triggeredTitle: String = "",
     val safeTitle: String = "",
     val evidenceType: String = "none",
     val summaryTemplate: String = "",
     val guidance: String = ""
-)
+) {
+    init {
+        require(suppressFinding || category != null) {
+            "display.category is required unless display.suppress_finding is true"
+        }
+    }
+}

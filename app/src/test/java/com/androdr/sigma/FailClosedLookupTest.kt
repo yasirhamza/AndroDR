@@ -28,6 +28,8 @@ class FailClosedLookupTest {
           filter_known_good:
             package_name|ioc_lookup: known_good_app_db
           condition: selection and not store_installed and not filter_known_good
+        display:
+            category: app_risk
     """.trimIndent()
 
     private val filterLookupRule = """
@@ -43,6 +45,8 @@ class FailClosedLookupTest {
           filter_trusted:
             installer|ioc_lookup: trusted_installer_db
           condition: selection and not filter_trusted
+        display:
+            category: app_risk
     """.trimIndent()
 
     private val namelessLookupRule = """
@@ -58,6 +62,8 @@ class FailClosedLookupTest {
           store_installed:
             installer|ioc_lookup:
           condition: selection and not store_installed
+        display:
+            category: app_risk
     """.trimIndent()
 
     private val noLookupRule = """
@@ -71,6 +77,8 @@ class FailClosedLookupTest {
           selection:
             has_device_admin: true
           condition: selection
+        display:
+            category: app_risk
     """.trimIndent()
 
     private fun parse(yaml: String): SigmaRule =
@@ -102,6 +110,8 @@ class FailClosedLookupTest {
             category: package_install
             installer|ioc_lookup: trusted_installer_db
           condition: selection
+        display:
+            suppress_finding: true
     """.trimIndent()
 
     private fun timelineEvent(id: Long, category: String): ForensicTimelineEvent =

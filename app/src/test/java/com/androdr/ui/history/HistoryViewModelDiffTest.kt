@@ -4,6 +4,7 @@ import com.androdr.data.model.ScanResult
 import com.androdr.data.repo.ScanRepository
 import com.androdr.scanner.ScanOrchestrator
 import com.androdr.sigma.Finding
+import com.androdr.sigma.FindingCategory
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.slot
@@ -53,7 +54,12 @@ class HistoryViewModelDiffTest {
     private fun scan(id: Long, ruleId: String): ScanResult = ScanResult(
         id = id,
         timestamp = id,
-        findings = listOf(Finding(ruleId = ruleId, title = ruleId, level = "critical", triggered = true)),
+        findings = listOf(
+            Finding(
+                ruleId = ruleId, title = ruleId, level = "critical",
+                category = FindingCategory.APP_RISK, triggered = true,
+            ),
+        ),
         bugReportFindings = emptyList(),
         riskySideloadCount = 0,
         knownMalwareCount = 0

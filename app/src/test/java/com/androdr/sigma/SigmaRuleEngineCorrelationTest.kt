@@ -95,7 +95,8 @@ class SigmaRuleEngineCorrelationTest {
             condition = "selection"
         ),
         falsepositives = emptyList(),
-        remediation = emptyList()
+        remediation = emptyList(),
+        display = SigmaDisplay(category = null, suppressFinding = true)
     )
 
     private fun event(id: Long, category: String): ForensicTimelineEvent =

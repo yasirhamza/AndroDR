@@ -22,7 +22,9 @@ class SigmaRuleEvaluatorTest {
         category = category,
         tags = emptyList(), detection = SigmaDetection(selections, condition),
         falsepositives = emptyList(), remediation = listOf("Fix it"),
-        display = SigmaDisplay(category = if (service == "device_auditor") "device_posture" else "app_risk"),
+        display = SigmaDisplay(
+            category = if (service == "device_auditor") FindingCategory.DEVICE_POSTURE else FindingCategory.APP_RISK
+        ),
         reportSafeState = reportSafeState
     )
 
@@ -309,7 +311,7 @@ class SigmaRuleEvaluatorTest {
                 SigmaFieldMatcher("adb_enabled", SigmaModifier.EQUALS, listOf(true))
             )))
         ).copy(display = SigmaDisplay(
-            category = "device_posture",
+            category = FindingCategory.DEVICE_POSTURE,
             triggeredTitle = "ADB Enabled",
             safeTitle = "ADB Disabled",
             evidenceType = "none"
@@ -331,7 +333,7 @@ class SigmaRuleEvaluatorTest {
                 SigmaFieldMatcher("adb_enabled", SigmaModifier.EQUALS, listOf(true))
             )))
         ).copy(display = SigmaDisplay(
-            category = "device_posture",
+            category = FindingCategory.DEVICE_POSTURE,
             triggeredTitle = "ADB Enabled",
             safeTitle = "ADB Disabled",
             evidenceType = "none"
@@ -350,7 +352,7 @@ class SigmaRuleEvaluatorTest {
                 SigmaFieldMatcher("adb_enabled", SigmaModifier.EQUALS, listOf(true))
             )))
         ).copy(display = SigmaDisplay(
-            category = "device_posture",
+            category = FindingCategory.DEVICE_POSTURE,
             triggeredTitle = "ADB Enabled",
             safeTitle = "ADB Disabled",
             evidenceType = "none"
@@ -366,7 +368,7 @@ class SigmaRuleEvaluatorTest {
     fun `app_risk rule does not emit when not matched`() {
         val rule = makeRule(selections = mapOf("selection" to SigmaSelection(listOf(
             SigmaFieldMatcher("is_sideloaded", SigmaModifier.EQUALS, listOf(true))
-        )))).copy(display = SigmaDisplay(category = "app_risk"))
+        )))).copy(display = SigmaDisplay(category = FindingCategory.APP_RISK))
         val record = mapOf<String, Any?>("is_sideloaded" to false)
         val findings = SigmaRuleEvaluator.evaluate(listOf(rule), listOf(record), "app_scanner")
         assertEquals(0, findings.size)
@@ -382,7 +384,7 @@ class SigmaRuleEvaluatorTest {
             ))), level = "critical"
         ).copy(
             display = SigmaDisplay(
-                category = "device_posture",
+                category = FindingCategory.DEVICE_POSTURE,
                 triggeredTitle = "{count} Unpatched CVEs",
                 evidenceType = "cve_list"
             ),
@@ -603,6 +605,8 @@ class SigmaRuleEvaluatorTest {
                         - SEND_SMS
                 condition: selection
             level: medium
+            display:
+                category: app_risk
         """.trimIndent()
 
         val rule = SigmaRuleParser.parse(yaml)!!
@@ -644,6 +648,8 @@ class SigmaRuleEvaluatorTest {
                         - android.permission.SEND_SMS
                 condition: selection
             level: medium
+            display:
+                category: app_risk
         """.trimIndent()
 
         val rule = SigmaRuleParser.parse(yaml)!!

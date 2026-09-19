@@ -34,6 +34,7 @@ class SigmaRuleEngineDisabledRuleTest {
             condition = "selection",
         ),
         falsepositives = emptyList(), remediation = emptyList(),
+        display = SigmaDisplay(category = FindingCategory.APP_RISK),
         enabled = enabled,
     )
 
@@ -129,6 +130,7 @@ class SigmaRuleEngineDisabledRuleTest {
             ),
             falsepositives = emptyList(),
             remediation = emptyList(),
+            display = SigmaDisplay(category = null, suppressFinding = true),
             enabled = false,
         )
 
