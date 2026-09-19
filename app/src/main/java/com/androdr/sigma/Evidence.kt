@@ -19,7 +19,7 @@ enum class FindingCategory {
 
     /**
      * A chain of events from the correlation engine (#350). Internal name only --
-     * people see it as "suspicious activity chains" (ReportFormatter.CHAINS_SECTION).
+     * people see it as "Warning signs that add up" (ReportFormatter.WARNING_SIGNS_SECTION).
      */
     CORRELATION
 }

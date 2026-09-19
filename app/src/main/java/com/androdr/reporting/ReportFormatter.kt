@@ -120,7 +120,7 @@ object ReportFormatter {
         // -- Verdict + Summary + Action Guidance ----------------------------------
         appendVerdict(scan, dnsEvents, appInventory)
 
-        // -- Suspicious activity chains ------------------------------------------
+        // -- Warning signs that add up -------------------------------------------
         // First, because a chain of events is the strongest evidence in the report.
         appendActivityChains(scan)
 
@@ -434,7 +434,7 @@ object ReportFormatter {
         val chains = scan.activityChains.filter { it.triggered }
         if (chains.isNotEmpty()) {
             val labels = chains.map { it.title }.distinct().joinToString(", ")
-            appendLine("    Suspicious activity chains: ${chains.size} ($labels)")
+            appendLine("    Warning signs that add up: ${chains.size} ($labels)")
         }
         if (triggeredDeviceFlags.isNotEmpty()) {
             val titles = triggeredDeviceFlags.take(3).map { it.title }
@@ -475,7 +475,7 @@ object ReportFormatter {
         // Chains of events: one line each, naming the app so the reader knows where to look.
         scan.activityChains.filter { it.triggered }.forEach { chain ->
             val pkg = chain.matchContext["package_name"]?.takeIf { it.isNotEmpty() } ?: "this device"
-            actions.add("CHAIN: ${chain.title} ($pkg) -- review what this app has been doing recently")
+            actions.add("WARNING SIGNS: ${chain.title} ($pkg) -- review what this app has been doing recently")
         }
         // Device posture issues (summarized, not per-rule)
         val deviceIssues = scan.deviceFlags.filter { it.triggered }
@@ -495,13 +495,16 @@ object ReportFormatter {
     // A chain of events -- several things that look minor on their own but add up.
     // Rendered first, and never again under APP RISKS or DEVICE CHECKS.
     private fun StringBuilder.appendActivityChains(scan: ScanResult) {
-        section(CHAINS_SECTION)
+        section(WARNING_SIGNS_SECTION)
         val chains = scan.activityChains.filter { it.triggered }
         if (chains.isEmpty()) {
-            appendLine("  No suspicious activity chains detected.")
+            appendLine("  No warning signs that add up were detected.")
             return
         }
-        appendLine("  ${chains.size} chain(s) detected -- events that look minor on their own but add up together")
+        appendLine(
+            "  ${chains.size} pattern(s) found -- separate events that look minor alone " +
+                "but mean something together"
+        )
         appendLine()
         chains.sortedByDescending { severityOrdinal(it.level) }.forEach { chain ->
             appendFinding(chain)
@@ -602,9 +605,12 @@ object ReportFormatter {
 
     /**
      * What people see correlation findings called. Deliberately not "correlation" --
-     * that is the internal category (FindingCategory.CORRELATION). One place to change.
+     * that is the internal category (FindingCategory.CORRELATION) -- and not "chain",
+     * the engineering term. "Warning signs that add up" tells the reader why the
+     * section exists: events that look minor on their own mean something together.
+     * One place to change.
      */
-    const val CHAINS_SECTION = "SUSPICIOUS ACTIVITY CHAINS"
+    const val WARNING_SIGNS_SECTION = "WARNING SIGNS THAT ADD UP"
 
     private const val RULE = "============================================================"
     private const val THIN = "------------------------------------------------------------"
