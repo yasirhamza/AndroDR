@@ -105,6 +105,17 @@ class OverallRiskConsistencyTest {
             scanOf(appRisk("androdr-010", "medium", "REVIEW -- sideloaded app")),
             scanOf(appRisk("androdr-066", "low", "Review whether this preload is expected")),
             scanOf(appRisk("androdr-001", "critical", "UNINSTALL IMMEDIATELY -- known malware")),
+            // androdr-020: a critical INCIDENT whose display bucket is device posture (#364).
+            scanOf(
+                Finding(
+                    ruleId = "androdr-020",
+                    title = "Spyware artifact: /data/local/tmp/.raptor",
+                    level = "critical",
+                    category = FindingCategory.DEVICE_POSTURE,
+                    triggered = true,
+                    remediation = listOf("Do NOT delete it yet -- it may be needed as evidence.")
+                )
+            ),
             scanOf(
                 Finding(
                     ruleId = "androdr-040",
