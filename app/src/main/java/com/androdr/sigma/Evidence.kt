@@ -15,7 +15,13 @@ import kotlinx.serialization.Serializable
  */
 enum class FindingCategory {
     DEVICE_POSTURE,
-    APP_RISK
+    APP_RISK,
+
+    /**
+     * A chain of events from the correlation engine (#350). Internal name only --
+     * people see it as "suspicious activity chains" (ReportFormatter.CHAINS_SECTION).
+     */
+    CORRELATION
 }
 
 @Serializable

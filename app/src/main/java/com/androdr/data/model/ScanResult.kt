@@ -151,6 +151,12 @@ data class ScanResult(
     @Transient
     val appRisks: List<Finding>
         get() = findings.filter { it.category == FindingCategory.APP_RISK }
+
+    /** Chains of events from the correlation engine -- "suspicious activity chains" to the reader (#350). */
+    @get:Ignore
+    @Transient
+    val activityChains: List<Finding>
+        get() = findings.filter { it.category == FindingCategory.CORRELATION }
 }
 
 private fun levelToScore(level: String): Int = when (level.lowercase()) {

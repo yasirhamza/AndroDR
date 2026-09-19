@@ -111,3 +111,62 @@ class SigmaRuleParserCorrelationTest {
         assertEquals(86400_000L * 7, span("7d"))
     }
 }
+
+/**
+ * A correlation rule's `description` and `tags` reach the finding it produces (#350),
+ * so the report can explain the chain and show its ATT&CK techniques like any other
+ * finding. Until now the parser dropped both.
+ */
+class SigmaRuleParserCorrelationMetadataTest {
+
+    private val yaml = """
+        title: Sideloaded install followed by device admin grant
+        id: androdr-corr-001
+        status: experimental
+        description: |
+          Detects an install event followed by a device admin grant on the same package
+          within one hour.
+        tags:
+            - attack.t1626
+            - attack.t1098
+        correlation:
+            type: temporal_ordered
+            rules:
+                - androdr-atom-package-install
+                - androdr-atom-device-admin-grant
+            timespan: 1h
+            group-by:
+                - package_name
+        display:
+            category: correlation
+            severity: high
+            label: "Install then device admin grant"
+    """.trimIndent()
+
+    @org.junit.Test
+    fun `parses description and tags`() {
+        val rule = SigmaRuleParser.parseCorrelation(yaml)
+
+        org.junit.Assert.assertTrue(rule.description.startsWith("Detects an install event"))
+        org.junit.Assert.assertEquals(listOf("attack.t1626", "attack.t1098"), rule.tags)
+    }
+
+    @org.junit.Test
+    fun `description and tags default to empty when absent`() {
+        val bare = """
+            title: Bare rule
+            id: androdr-corr-009
+            correlation:
+                type: temporal_ordered
+                rules:
+                    - androdr-atom-package-install
+                    - androdr-atom-device-admin-grant
+                timespan: 1h
+        """.trimIndent()
+
+        val rule = SigmaRuleParser.parseCorrelation(bare)
+
+        org.junit.Assert.assertEquals("", rule.description)
+        org.junit.Assert.assertEquals(emptyList<String>(), rule.tags)
+    }
+}

@@ -105,6 +105,17 @@ class OverallRiskConsistencyTest {
             scanOf(appRisk("androdr-010", "medium", "REVIEW -- sideloaded app")),
             scanOf(appRisk("androdr-066", "low", "Review whether this preload is expected")),
             scanOf(appRisk("androdr-001", "critical", "UNINSTALL IMMEDIATELY -- known malware")),
+            // A correlation chain, now a finding on the scan (#350).
+            scanOf(
+                Finding(
+                    ruleId = "androdr-corr-004",
+                    title = "Multiple permissions accessed rapidly",
+                    level = "high",
+                    category = FindingCategory.CORRELATION,
+                    triggered = true,
+                    matchContext = mapOf("package_name" to "com.example.burst")
+                )
+            ),
             // androdr-020: a critical INCIDENT whose display bucket is device posture (#364).
             scanOf(
                 Finding(

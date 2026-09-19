@@ -450,20 +450,22 @@ class ScanOrchestrator @Inject constructor(
         } else emptyList()
 
         var correlationSignalCount = 0
-        runCatching {
-            scanRepository.saveScanWithCorrelation(
+        // Only enabled rules contribute to correlation category propagation (and to the
+        // severity of the findings the chains become, #350). Including disabled rules
+        // would let their category influence classifications even though they produce
+        // no bindings.
+        val atomRulesById = sigmaRuleEngine.getEnabledRules().associateBy { it.id }
+        val persisted = runCatching {
+            val saved = scanRepository.saveScanWithCorrelation(
                 scan = result,
                 findingTimelineEvents = installEvents + adminGrantEvents + findingTimelineEvents,
                 replaceUsageStatsEvents = taggedUsageEvents,
-                lookbackEvents = lookbackEvents
+                lookbackEvents = lookbackEvents,
+                findingsForSignals = { sigmaCorrelationEngine.findingsFor(it, correlationRules, atomRulesById) },
             ) { eventsWithIds ->
                 if (correlationRules.isEmpty() || eventsWithIds.isEmpty()) emptyList()
                 else {
                     val bindings = sigmaRuleEngine.computeAtomBindings(eventsWithIds)
-                    // Only enabled rules contribute to correlation category propagation.
-                    // Including disabled rules here would let their category influence
-                    // correlation classifications even though they produce no bindings.
-                    val atomRulesById = sigmaRuleEngine.getEnabledRules().associateBy { it.id }
                     val signals = sigmaCorrelationEngine
                         .evaluate(correlationRules, eventsWithIds, bindings, atomRulesById)
                         .map { it.copy(scanResultId = result.id) }
@@ -475,11 +477,15 @@ class ScanOrchestrator @Inject constructor(
                 "${installEvents.size} install, ${adminGrantEvents.size} admin_grant, " +
                 "$correlationSignalCount signal, " +
                 "${taggedUsageEvents.size} usage events (single transaction)")
-        }.onFailure { Log.e(TAG, "Failed to persist scan results", it) }
+            saved
+        }.getOrElse {
+            Log.e(TAG, "Failed to persist scan results", it)
+            result
+        }
 
         // Progress is reset to Idle by the outer runFullScan() in its
         // `finally` block, which also handles the exception path.
-        result
+        persisted
     }
 
     /**
@@ -605,18 +611,23 @@ class ScanOrchestrator @Inject constructor(
         // `id` was still the default 0L, so every signal's member_event_ids
         // serialized as "0,0,0" and the Timeline UI couldn't expand clusters.
         // Bug reports are snapshots — no historical lookback query.
+        // Only enabled rules contribute to correlation category propagation (and to the
+        // severity of the findings the chains become, #350). Including disabled rules
+        // would let their category influence classifications even though they produce
+        // no bindings.
+        val atomRulesById = sigmaRuleEngine.getEnabledRules().associateBy { it.id }
         val brCorrelationRules = sigmaRuleEngine.getCorrelationRules()
         runCatching {
             scanRepository.saveScanWithCorrelation(
                 scan = scanResult,
                 findingTimelineEvents = baseBugReportEvents,
                 replaceUsageStatsEvents = null,
-                lookbackEvents = emptyList()
+                lookbackEvents = emptyList(),
+                findingsForSignals = { sigmaCorrelationEngine.findingsFor(it, brCorrelationRules, atomRulesById) },
             ) { eventsWithIds ->
                 if (brCorrelationRules.isEmpty() || eventsWithIds.isEmpty()) emptyList()
                 else {
                     val bindings = sigmaRuleEngine.computeAtomBindings(eventsWithIds)
-                    val atomRulesById = sigmaRuleEngine.getEnabledRules().associateBy { it.id }
                     sigmaCorrelationEngine.evaluate(brCorrelationRules, eventsWithIds, bindings, atomRulesById)
                         .map { it.copy(scanResultId = scanResult.id) }
                 }
@@ -730,6 +741,11 @@ class ScanOrchestrator @Inject constructor(
         // rolls the deletes back and the prior import survives. A re-import of the
         // same (or a corrected) export still replaces the previous import's rows
         // instead of stacking a second copy of every event.
+        // Only enabled rules contribute to correlation category propagation (and to the
+        // severity of the findings the chains become, #350). Including disabled rules
+        // would let their category influence classifications even though they produce
+        // no bindings.
+        val atomRulesById = sigmaRuleEngine.getEnabledRules().associateBy { it.id }
         val corrRules = sigmaRuleEngine.getCorrelationRules()
         try {
             scanRepository.saveScanWithCorrelation(
@@ -737,12 +753,12 @@ class ScanOrchestrator @Inject constructor(
                 findingTimelineEvents = allEvents,
                 replaceUsageStatsEvents = null,
                 lookbackEvents = emptyList(),
-                preDelete = ::deletePriorIntrusionLogRows
+                preDelete = ::deletePriorIntrusionLogRows,
+                findingsForSignals = { sigmaCorrelationEngine.findingsFor(it, corrRules, atomRulesById) },
             ) { eventsWithIds ->
                 if (corrRules.isEmpty() || eventsWithIds.isEmpty()) emptyList()
                 else {
                     val bindings = sigmaRuleEngine.computeAtomBindings(eventsWithIds)
-                    val atomRulesById = sigmaRuleEngine.getEnabledRules().associateBy { it.id }
                     sigmaCorrelationEngine.evaluate(corrRules, eventsWithIds, bindings, atomRulesById)
                         .map { it.copy(scanResultId = scanResult.id) }
                 }

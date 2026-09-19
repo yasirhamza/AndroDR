@@ -26,4 +26,8 @@ data class CorrelationRule(
     val severity: String,
     val displayLabel: String,
     val displayCategory: String = "correlation",
+    /** Reaches the finding's description so the report can explain the chain (#350). */
+    val description: String = "",
+    /** ATT&CK tags, rendered on the finding like any other rule's. */
+    val tags: List<String> = emptyList(),
 )

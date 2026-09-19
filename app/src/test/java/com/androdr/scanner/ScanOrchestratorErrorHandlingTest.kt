@@ -94,6 +94,12 @@ class ScanOrchestratorErrorHandlingTest {
         usageStatsScanner = mockk(relaxed = true)
         bugReportAnalyzer = mockk(relaxed = true)
         scanRepository = mockk(relaxed = true)
+        // #350: saveScanWithCorrelation returns the persisted scan, which runFullScan
+        // now hands back to its caller. A relaxed mock would return a hollow
+        // ScanResult, so model the real contract: give back the scan it was given.
+        coEvery {
+            scanRepository.saveScanWithCorrelation(any(), any(), any(), any(), any(), any(), any())
+        } coAnswers { firstArg() }
         dnsEventDao = mockk(relaxed = true)
         forensicTimelineEventDao = mockk(relaxed = true)
         sigmaRuleEngine = mockk(relaxed = true)
@@ -261,6 +267,7 @@ class ScanOrchestratorErrorHandlingTest {
                 findingTimelineEvents = any(),
                 replaceUsageStatsEvents = any(),
                 lookbackEvents = any(),
+                findingsForSignals = any(),
                 correlator = any()
             )
         }

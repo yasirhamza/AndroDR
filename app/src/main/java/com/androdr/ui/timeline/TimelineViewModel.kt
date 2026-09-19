@@ -126,7 +126,7 @@ class TimelineViewModel @Inject constructor(
             // Only triggered findings belong in the timeline. Non-triggered
             // "safe state" findings (e.g. "Unknown Sources Disabled") are for
             // the Device Audit screen and report, not the timeline.
-            scans.firstOrNull()?.findings.orEmpty().filter { it.triggered }
+            timelineFindingRows(scans.firstOrNull()?.findings.orEmpty())
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 

@@ -182,3 +182,12 @@ fun buildDateGroups(rows: List<TimelineRow>): List<DateGroup> {
         maxOf(maxFinding, maxCluster, maxStandalone)
     }
 }
+
+/**
+ * The scan findings the timeline shows as [TimelineRow.FindingRow]s. Untriggered
+ * ("safe state") findings belong to the Device Audit screen, and correlation findings
+ * are already on the timeline as their signal row -- the cluster head that expands
+ * into the member events -- so listing them again would show every chain twice (#350).
+ */
+fun timelineFindingRows(findings: List<Finding>): List<Finding> =
+    findings.filter { it.triggered && it.category != com.androdr.sigma.FindingCategory.CORRELATION }

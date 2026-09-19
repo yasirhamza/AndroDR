@@ -233,10 +233,15 @@ class SaveScanWithCorrelationTest {
             "preDelete must precede the scan insert: $calls",
             calls.indexOf("preDelete") < calls.indexOf("insertScan")
         )
+        // #350: the scan row is written LAST so it can carry the findings the
+        // correlation pass produced. forensic_timeline has no foreign key on
+        // scanResultId and ScanResult.id is caller-assigned, so nothing needs the
+        // scan row first; what matters is that it is inside the same transaction.
         assertTrue(
-            "scan insert must precede the finding insertAll: $calls",
-            calls.indexOf("insertScan") < calls.indexOf("insertAll")
+            "finding insertAll must precede the scan insert: $calls",
+            calls.indexOf("insertAll") < calls.indexOf("insertScan")
         )
+        assertEquals("the scan row is the last write of the transaction", "insertScan", calls.last())
     }
 
     /**
@@ -285,4 +290,70 @@ class SaveScanWithCorrelationTest {
         description = "evt",
         packageName = pkg
     )
+
+    @Test
+    fun `findings for the correlation signals are written on the persisted scan and returned`() = runTest {
+        // #350: the scan row is written LAST, carrying the findings the chains became,
+        // and the persisted scan is what the caller gets back.
+        val scan = ScanResult(
+            id = 3L,
+            timestamp = 1_700_000_000_002L,
+            findings = emptyList(),
+            bugReportFindings = emptyList(),
+            riskySideloadCount = 0,
+            knownMalwareCount = 0
+        )
+        val raw = listOf(event(cat = "permission_use", ts = 1000, pkg = "com.test"))
+        coEvery { timelineDao.insertAll(any()) } answers {
+            List(firstArg<List<ForensicTimelineEvent>>().size) { it.toLong() + 1 }
+        }
+        val inserted = io.mockk.slot<ScanResult>()
+        coEvery { scanResultDao.insert(capture(inserted)) } returns Unit
+        val chain = com.androdr.sigma.Finding(
+            ruleId = "androdr-corr-004",
+            title = "Multiple permissions accessed rapidly",
+            level = "high",
+            category = com.androdr.sigma.FindingCategory.CORRELATION,
+            triggered = true
+        )
+        val signal = ForensicTimelineEvent(
+            startTimestamp = 1000, endTimestamp = 1000, kind = "signal", category = "correlation",
+            source = "test", description = chain.title, ruleId = chain.ruleId, scanResultId = 3L
+        )
+
+        val persisted = repo.saveScanWithCorrelation(
+            scan = scan,
+            findingTimelineEvents = raw,
+            replaceUsageStatsEvents = null,
+            lookbackEvents = emptyList(),
+            findingsForSignals = { signals -> if (signals.isEmpty()) emptyList() else listOf(chain) }
+        ) { listOf(signal) }
+
+        assertEquals("the chain must be on the scan row that was written", listOf(chain), inserted.captured.findings)
+        assertEquals("the persisted scan is returned", inserted.captured, persisted)
+    }
+
+    @Test
+    fun `with no signals the scan is written unchanged`() = runTest {
+        val scan = ScanResult(
+            id = 4L, timestamp = 1_700_000_000_003L, findings = emptyList(),
+            bugReportFindings = emptyList(), riskySideloadCount = 0, knownMalwareCount = 0
+        )
+        coEvery { timelineDao.insertAll(any()) } answers {
+            List(firstArg<List<ForensicTimelineEvent>>().size) { it.toLong() + 1 }
+        }
+        val inserted = io.mockk.slot<ScanResult>()
+        coEvery { scanResultDao.insert(capture(inserted)) } returns Unit
+
+        val persisted = repo.saveScanWithCorrelation(
+            scan = scan,
+            findingTimelineEvents = listOf(event(cat = "permission_use", ts = 1000, pkg = "com.test")),
+            replaceUsageStatsEvents = null,
+            lookbackEvents = emptyList(),
+            findingsForSignals = { error("must not be asked when there are no signals") }
+        ) { emptyList() }
+
+        assertEquals(scan, inserted.captured)
+        assertEquals(scan, persisted)
+    }
 }

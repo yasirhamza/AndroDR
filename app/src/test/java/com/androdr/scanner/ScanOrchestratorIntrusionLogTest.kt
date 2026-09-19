@@ -133,13 +133,14 @@ class ScanOrchestratorIntrusionLogTest {
      * Stubs the (mocked) repository's save to invoke the caller-supplied
      * `preDelete` lambda, the way the real transaction does — so tests can
      * observe the replace-on-reimport sweep that now runs INSIDE the save
-     * (#342 B1). preDelete is positional arg 4; correlator is arg 5.
+     * (#342 B1). preDelete is positional arg 4; findingsForSignals is arg 5; correlator is arg 6.
      */
     private fun saveInvokesPreDelete() {
         coEvery {
-            scanRepository.saveScanWithCorrelation(any(), any(), any(), any(), any(), any())
+            scanRepository.saveScanWithCorrelation(any(), any(), any(), any(), any(), any(), any())
         } coAnswers {
             arg<(suspend () -> Unit)?>(4)?.invoke()
+            firstArg()
         }
     }
 
@@ -216,7 +217,7 @@ class ScanOrchestratorIntrusionLogTest {
         // The save throws WITHOUT invoking preDelete — mirroring a transaction
         // that rolls back before/while committing.
         coEvery {
-            scanRepository.saveScanWithCorrelation(any(), any(), any(), any(), any(), any())
+            scanRepository.saveScanWithCorrelation(any(), any(), any(), any(), any(), any(), any())
         } throws RuntimeException("db write failed")
 
         var thrown: Throwable? = null
@@ -243,9 +244,9 @@ class ScanOrchestratorIntrusionLogTest {
         val preDelete = slot<suspend () -> Unit>()
         coEvery {
             scanRepository.saveScanWithCorrelation(
-                any(), any(), any(), any(), capture(preDelete), any()
+                any(), any(), any(), any(), capture(preDelete), any(), any()
             )
-        } returns Unit
+        } coAnswers { firstArg() }
 
         orchestrator.analyzeIntrusionLog(uri)
 
@@ -349,8 +350,8 @@ class ScanOrchestratorIntrusionLogTest {
         coEvery { intrusionLogAnalyzer.analyze(uri) } returns analysis(findings = findings)
         val scan = slot<ScanResult>()
         coEvery {
-            scanRepository.saveScanWithCorrelation(capture(scan), any(), any(), any(), any(), any())
-        } returns Unit
+            scanRepository.saveScanWithCorrelation(capture(scan), any(), any(), any(), any(), any(), any())
+        } coAnswers { firstArg() }
 
         orchestrator.analyzeIntrusionLog(uri)
 
@@ -372,8 +373,8 @@ class ScanOrchestratorIntrusionLogTest {
         coEvery { intrusionLogAnalyzer.analyze(uri) } returns analysis()
         val scan = slot<ScanResult>()
         coEvery {
-            scanRepository.saveScanWithCorrelation(capture(scan), any(), any(), any(), any(), any())
-        } returns Unit
+            scanRepository.saveScanWithCorrelation(capture(scan), any(), any(), any(), any(), any(), any())
+        } coAnswers { firstArg() }
 
         orchestrator.analyzeIntrusionLog(uri)
 
@@ -403,7 +404,7 @@ class ScanOrchestratorIntrusionLogTest {
         coVerify(exactly = 0) { forensicTimelineEventDao.deleteByScanId(any()) }
         coVerify(exactly = 0) { forensicTimelineEventDao.deleteBySource(any()) }
         coVerify(exactly = 0) {
-            scanRepository.saveScanWithCorrelation(any(), any(), any(), any(), any(), any())
+            scanRepository.saveScanWithCorrelation(any(), any(), any(), any(), any(), any(), any())
         }
     }
 

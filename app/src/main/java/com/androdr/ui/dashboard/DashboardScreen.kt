@@ -289,6 +289,8 @@ private fun PostScanGuidance(riskLevel: RiskLevel?, latestScan: ScanResult?) {
     val hasCriticalAppRisks = latestScan?.appRisks?.any {
         it.triggered && it.level.lowercase() == "critical"
     } ?: false
+    // A chain of events is the strongest evidence a scan produces; say so (#350).
+    val hasChains = latestScan?.activityChains?.any { it.triggered } ?: false
 
     val (message, icon, color) = when (riskLevel) {
         RiskLevel.CRITICAL -> Triple(
@@ -301,7 +303,7 @@ private fun PostScanGuidance(riskLevel: RiskLevel?, latestScan: ScanResult?) {
             colors.critical
         )
         RiskLevel.HIGH -> Triple(
-            stringResource(R.string.guidance_high),
+            if (hasChains) stringResource(R.string.guidance_chains) else stringResource(R.string.guidance_high),
             Icons.Filled.Warning,
             colors.high
         )
@@ -400,7 +402,8 @@ private fun RiskLevelCard(latestScan: ScanResult?) {
                     text = stringResource(
                         R.string.dashboard_risk_summary,
                         latestScan.appRisks.count { it.triggered && it.level.lowercase() != "informational" },
-                        latestScan.deviceFlags.count { it.triggered }
+                        latestScan.deviceFlags.count { it.triggered },
+                        latestScan.activityChains.count { it.triggered }
                     ),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
