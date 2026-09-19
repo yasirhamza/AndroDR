@@ -116,17 +116,28 @@ data class ScanResult(
     // include them here.
     @get:Ignore
     @Transient
+    /**
+     * Overall risk is the highest severity among triggered findings -- nothing else.
+     *
+     * The incident-vs-condition distinction is the rule's `category:`, and it is
+     * applied exactly once, by SeverityCapPolicy at finding creation: a posture
+     * condition arrives here already clamped to medium, so it cannot out-shout an
+     * incident. [Finding.category] is `display.category` -- which SECTION a finding
+     * is shown in -- and is presentation only. Reading it here (#364) ceilinged any
+     * incident that happened to be displayed under device posture: a critical
+     * spyware artifact on disk (androdr-020) reported MEDIUM while the same report
+     * listed it as CRITICAL, and correlation findings -- which parseCategory maps to
+     * DEVICE_POSTURE -- were floored the same way. Pinned by ScanResultOverallRiskTest.
+     */
     val overallRiskLevel: RiskLevel
         get() {
-            val appMax = findings
-                .filter { it.triggered && it.category != FindingCategory.DEVICE_POSTURE }
+            val max = findings
+                .filter { it.triggered }
                 .maxOfOrNull { levelToScore(it.level) } ?: 0
-            val hasDeviceIssues = findings
-                .any { it.triggered && it.category == FindingCategory.DEVICE_POSTURE }
             return when {
-                appMax >= RiskLevel.CRITICAL.score -> RiskLevel.CRITICAL
-                appMax >= RiskLevel.HIGH.score -> RiskLevel.HIGH
-                appMax >= RiskLevel.MEDIUM.score || hasDeviceIssues -> RiskLevel.MEDIUM
+                max >= RiskLevel.CRITICAL.score -> RiskLevel.CRITICAL
+                max >= RiskLevel.HIGH.score -> RiskLevel.HIGH
+                max >= RiskLevel.MEDIUM.score -> RiskLevel.MEDIUM
                 else -> RiskLevel.LOW
             }
         }
