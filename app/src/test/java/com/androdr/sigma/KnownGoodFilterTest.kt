@@ -29,7 +29,7 @@ class KnownGoodFilterTest {
                 condition = "selection and not filter_known_good"
             ),
             falsepositives = emptyList(), remediation = emptyList(),
-            display = SigmaDisplay(category = "app_risk")
+            display = SigmaDisplay(category = FindingCategory.APP_RISK)
         )
 
         val iocLookups = mapOf<String, (Any) -> Boolean>(

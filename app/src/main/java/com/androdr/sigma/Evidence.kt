@@ -4,10 +4,18 @@ package com.androdr.sigma
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
+/**
+ * The report/UI SECTION a finding is shown in. Presentation only -- never an input
+ * to severity or overall risk (see ScanResult.overallRiskLevel).
+ *
+ * Must equal the `display.category` enum in the rule schema exactly, and every
+ * value must have a renderer: DisplayCategoryCrossCheckTest and
+ * ReportRendersEveryFindingCategoryTest fail the build otherwise. `NETWORK` was
+ * removed for having neither a rule nor a renderer (#367).
+ */
 enum class FindingCategory {
     DEVICE_POSTURE,
-    APP_RISK,
-    NETWORK
+    APP_RISK
 }
 
 @Serializable

@@ -4,6 +4,7 @@ import android.content.ContentResolver
 import android.content.Context
 import android.net.Uri
 import com.androdr.sigma.Finding
+import com.androdr.sigma.FindingCategory
 import com.androdr.sigma.SigmaRuleEngine
 import io.mockk.every
 import io.mockk.mockk
@@ -117,9 +118,18 @@ class IntrusionLogAnalyzerTest {
             every { evaluateDns(any()) } returns emptyList()
             every { evaluateNetwork(any()) } returns emptyList()
             every { evaluateSecurityLog(any()) } returns listOf(
-                Finding(ruleId = "androdr-1", title = "t", level = "high", triggered = true),
-                Finding(ruleId = "androdr-2", title = "t", level = "high", triggered = true),
-                Finding(ruleId = "androdr-3", title = "t", level = "high", triggered = false),
+                Finding(
+                    ruleId = "androdr-1", title = "t", level = "high",
+                    category = FindingCategory.DEVICE_POSTURE, triggered = true,
+                ),
+                Finding(
+                    ruleId = "androdr-2", title = "t", level = "high",
+                    category = FindingCategory.DEVICE_POSTURE, triggered = true,
+                ),
+                Finding(
+                    ruleId = "androdr-3", title = "t", level = "high",
+                    category = FindingCategory.DEVICE_POSTURE, triggered = false,
+                ),
             )
         }
         val result = IntrusionLogAnalyzer(mockk(relaxed = true), e).analyzeEntries(

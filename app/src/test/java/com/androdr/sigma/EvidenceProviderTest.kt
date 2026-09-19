@@ -17,7 +17,7 @@ class EvidenceProviderTest {
         detection = SigmaDetection(emptyMap(), "selection"),
         falsepositives = emptyList(),
         remediation = listOf("Update to {target_patch_level} or later."),
-        display = SigmaDisplay(evidenceType = evidenceType)
+        display = SigmaDisplay(category = FindingCategory.DEVICE_POSTURE, evidenceType = evidenceType)
     )
 
     private fun makeCampaignRule(
@@ -34,7 +34,7 @@ class EvidenceProviderTest {
             )), "selection"
         ),
         falsepositives = emptyList(), remediation = emptyList(),
-        display = SigmaDisplay(evidenceType = "cve_list")
+        display = SigmaDisplay(category = FindingCategory.DEVICE_POSTURE, evidenceType = "cve_list")
     )
 
     @Test

@@ -12,6 +12,7 @@ import com.androdr.data.model.ImportedDnsEvent
 import com.androdr.sigma.CorrelationRule
 import com.androdr.sigma.CorrelationType
 import com.androdr.sigma.Finding
+import com.androdr.sigma.FindingCategory
 import com.androdr.sigma.SigmaRuleEngine
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -124,6 +125,7 @@ class ScanOrchestratorIntrusionLogTest {
         matchContext: Map<String, String> = emptyMap()
     ) = Finding(
         ruleId = ruleId, title = ruleId, level = level,
+        category = FindingCategory.DEVICE_POSTURE,
         triggered = triggered, matchContext = matchContext
     )
 

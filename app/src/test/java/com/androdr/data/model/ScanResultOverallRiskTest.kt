@@ -60,12 +60,15 @@ class ScanResultOverallRiskTest {
     @Test
     fun `display category does not influence overall risk`() {
         for (level in listOf("critical", "high", "medium", "low", "informational")) {
-            val asAppRisk = scanOf(finding(level, FindingCategory.APP_RISK)).overallRiskLevel
-            val asPosture = scanOf(finding(level, FindingCategory.DEVICE_POSTURE)).overallRiskLevel
-            val asNetwork = scanOf(finding(level, FindingCategory.NETWORK)).overallRiskLevel
+            val byBucket = FindingCategory.values().associateWith { bucket ->
+                scanOf(finding(level, bucket)).overallRiskLevel
+            }
 
-            assertEquals("level=$level: app_risk vs device_posture", asAppRisk, asPosture)
-            assertEquals("level=$level: app_risk vs network", asAppRisk, asNetwork)
+            assertEquals(
+                "level=$level: overall risk varies by display bucket: $byBucket",
+                1,
+                byBucket.values.toSet().size,
+            )
         }
     }
 

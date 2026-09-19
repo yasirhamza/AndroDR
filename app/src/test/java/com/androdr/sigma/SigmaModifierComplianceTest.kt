@@ -31,6 +31,8 @@ class SigmaModifierComplianceTest {
                 package_name|$modifier: $value
             condition: selection
         level: medium
+        display:
+            category: app_risk
     """.trimIndent()
 
     // ------------------------- SUPPORTED MODIFIERS -------------------------
@@ -88,6 +90,8 @@ class SigmaModifierComplianceTest {
                     patch_age_days|lte: 365
                 condition: too_old
             level: medium
+            display:
+                category: device_posture
         """.trimIndent()
         val rule = SigmaRuleParser.parse(yaml)!!
         val record = mapOf("patch_age_days" to 120)
@@ -111,6 +115,8 @@ class SigmaModifierComplianceTest {
                         - android.permission.SEND_SMS
                 condition: selection
             level: medium
+            display:
+                category: app_risk
         """.trimIndent()
         val rule = SigmaRuleParser.parse(yaml)!!
         val matching = mapOf("permissions" to listOf(
@@ -137,6 +143,8 @@ class SigmaModifierComplianceTest {
                         - SEND_SMS
                 condition: selection
             level: medium
+            display:
+                category: app_risk
         """.trimIndent()
         val rule = SigmaRuleParser.parse(yaml)!!
         val matching = mapOf("permissions" to listOf(
@@ -161,6 +169,8 @@ class SigmaModifierComplianceTest {
                     package_name|ioc_lookup: malware_packages
                 condition: selection
             level: high
+            display:
+                category: app_risk
         """.trimIndent()
         val rule = SigmaRuleParser.parse(yaml)!!
         val record = mapOf("package_name" to "com.evil.client")
