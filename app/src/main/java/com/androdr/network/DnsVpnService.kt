@@ -144,6 +144,10 @@ class DnsVpnService : VpnService() {
 
     private var logBuffer: DnsLogBuffer? = null
     private var resolver: UpstreamResolver? = null
+
+    // Who made each query: the platform tells the active VPN which uid owns the
+    // socket a packet came from (API 29+); below that, every event stays unknown.
+    private val connectionOwner by lazy { ConnectionOwnerResolver.fromSystem(applicationContext) }
     private var dnsTracker: UnderlyingDnsTracker? = null
 
     /** Lock for tun-fd writes — both the read loop (NXDOMAIN responses) and the
@@ -424,19 +428,20 @@ class DnsVpnService : VpnService() {
 
         val isBlocklisted = blocklistManager.isBlocked(hostname)
         val iocHit = if (!isBlocklisted) indicatorResolver.isKnownBadDomain(hostname) else null
+        val owner = DnsQueryAttribution.ownerOf(packet, connectionOwner)
         val now = System.currentTimeMillis()
 
         when {
             isBlocklisted && blocklistBlockMode.value -> {
                 logBuffer?.add(DnsEvent(
-                    timestamp = now, domain = hostname, appUid = -1, appName = null,
+                    timestamp = now, domain = hostname, appUid = owner.uid, appName = owner.packageName,
                     isBlocked = true, reason = "blocklist"
                 ))
                 writeNxdomain(dnsPayload, txId, srcIpBytes, srcPort, outputStream)
             }
             isBlocklisted -> {
                 logBuffer?.add(DnsEvent(
-                    timestamp = now, domain = hostname, appUid = -1, appName = null,
+                    timestamp = now, domain = hostname, appUid = owner.uid, appName = owner.packageName,
                     isBlocked = false, reason = "blocklist_detect"
                 ))
                 resolver?.send(dnsPayload, srcIpBytes, srcPort)
@@ -446,21 +451,21 @@ class DnsVpnService : VpnService() {
                 // is no longer populated on the hot path; the matched label (a parent
                 // of `hostname`) is the most useful signal to record here.
                 logBuffer?.add(DnsEvent(
-                    timestamp = now, domain = hostname, appUid = -1, appName = null,
+                    timestamp = now, domain = hostname, appUid = owner.uid, appName = owner.packageName,
                     isBlocked = true, reason = "IOC: ${iocHit.value}"
                 ))
                 writeNxdomain(dnsPayload, txId, srcIpBytes, srcPort, outputStream)
             }
             iocHit != null -> {
                 logBuffer?.add(DnsEvent(
-                    timestamp = now, domain = hostname, appUid = -1, appName = null,
+                    timestamp = now, domain = hostname, appUid = owner.uid, appName = owner.packageName,
                     isBlocked = false, reason = "IOC_detect: ${iocHit.value}"
                 ))
                 resolver?.send(dnsPayload, srcIpBytes, srcPort)
             }
             else -> {
                 logBuffer?.add(DnsEvent(
-                    timestamp = now, domain = hostname, appUid = -1, appName = null,
+                    timestamp = now, domain = hostname, appUid = owner.uid, appName = owner.packageName,
                     isBlocked = false, reason = null
                 ))
                 resolver?.send(dnsPayload, srcIpBytes, srcPort)
