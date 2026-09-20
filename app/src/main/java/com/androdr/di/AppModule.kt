@@ -41,6 +41,7 @@ import com.androdr.ioc.feeds.PlexusKnownAppFeed
 import com.androdr.ioc.feeds.StalkerwareCertHashFeed
 import com.androdr.ioc.feeds.StalkerwareIndicatorsFeed
 import com.androdr.ioc.feeds.ThreatFoxDomainFeed
+import com.androdr.network.AppLabelResolver
 import com.androdr.ioc.feeds.UadKnownAppFeed
 import dagger.Module
 import dagger.Provides
@@ -75,6 +76,12 @@ object AppModule {
 
     @Provides
     fun provideDnsEventDao(db: AppDatabase): DnsEventDao = db.dnsEventDao()
+
+    /** Package -> app display name for the Network Monitor; caches per package. */
+    @Provides
+    @Singleton
+    fun provideAppLabelResolver(@ApplicationContext ctx: Context): AppLabelResolver =
+        AppLabelResolver.fromSystem(ctx)
 
     @Provides
     fun provideKnownAppEntryDao(db: AppDatabase): KnownAppEntryDao = db.knownAppEntryDao()

@@ -1,6 +1,5 @@
 package com.androdr.ui.network
 
-import com.androdr.network.DnsQueryAttribution
 import android.content.Intent
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -43,7 +42,6 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.androdr.R
 import com.androdr.ui.settings.SettingsViewModel
-import com.androdr.data.model.DnsEvent
 import com.androdr.ui.theme.androdrColors
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -233,8 +231,8 @@ fun DnsMonitorScreen(
                 contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                items(displayEvents) { event ->
-                    DnsEventItem(event = event)
+                items(displayEvents) { row ->
+                    DnsEventItem(row = row)
                 }
             }
         }
@@ -244,7 +242,8 @@ fun DnsMonitorScreen(
 @Suppress("LongMethod") // DNS event item displays timestamp, domain, block status, app name,
 // and reason badge together; all are needed for triage context in a single glance.
 @Composable
-private fun DnsEventItem(event: DnsEvent) {
+private fun DnsEventItem(row: DnsEventRow) {
+    val event = row.event
     val timeFormatter = remember { SimpleDateFormat("HH:mm:ss", Locale.getDefault()) }
     val timeString = timeFormatter.format(Date(event.timestamp))
 
@@ -273,7 +272,7 @@ private fun DnsEventItem(event: DnsEvent) {
                     else MaterialTheme.colorScheme.onSurface
                 )
                 Text(
-                    text = DnsQueryAttribution.label(event.appUid, event.appName),
+                    text = row.appLabel,
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
