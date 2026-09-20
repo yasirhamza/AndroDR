@@ -8,25 +8,40 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.androdr.data.model.DnsEvent
 import com.androdr.data.repo.ScanRepository
+import com.androdr.network.AppLabelResolver
 import com.androdr.network.DnsVpnService
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import javax.inject.Inject
 
 @HiltViewModel
 class DnsMonitorViewModel @Inject constructor(
-    private val repository: ScanRepository
+    private val repository: ScanRepository,
+    private val appLabels: AppLabelResolver,
 ) : ViewModel() {
 
-    /** Up to 200 most recent DNS events, newest first. */
-    val recentEvents: StateFlow<List<DnsEvent>> = repository.recentDnsEvents
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+    /** Up to 200 most recent DNS events, newest first, each labelled with its app. */
+    val recentEvents: StateFlow<List<DnsEventRow>> = repository.recentDnsEvents.asRows()
 
-    /** All DNS events that matched an IOC or blocklist, newest first. */
-    val matchedEvents: StateFlow<List<DnsEvent>> = repository.matchedDnsEvents
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+    /** All DNS events that matched an IOC or blocklist, newest first, each labelled with its app. */
+    val matchedEvents: StateFlow<List<DnsEventRow>> = repository.matchedDnsEvents.asRows()
+
+    /**
+     * Resolves each event's package to a display name so a row reads
+     * `Chrome (com.android.chrome)`, the same text the report prints for the
+     * same event. Off the main thread: the label lookup is a binder call per
+     * package the first time it is seen.
+     */
+    private fun Flow<List<DnsEvent>>.asRows(): StateFlow<List<DnsEventRow>> =
+        map { events -> dnsEventRows(events, appLabels.labels(packagesNeedingLabels(events))) }
+            .flowOn(Dispatchers.Default)
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     /** Whether the DNS VPN service is currently active. */
     val isVpnRunning: StateFlow<Boolean> = DnsVpnService.isRunning
