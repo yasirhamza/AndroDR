@@ -12,6 +12,7 @@ import com.androdr.data.model.ProcessTelemetry
 import com.androdr.data.model.ReceiverTelemetry
 import com.androdr.data.model.ScanResult
 import com.androdr.data.model.UNREGISTERED_IOC_LOOKUP
+import com.androdr.network.DnsQueryAttribution
 import com.androdr.sigma.Finding
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -189,7 +190,10 @@ object ReportFormatter {
         } else {
             // Group findings by package name for a clean per-app display
             val byPackage = appRisks.groupBy {
-                it.matchContext["package_name"]?.toString() ?: "unknown"
+                // A DNS-rule finding's app key is source_package: the app that made the query.
+                it.matchContext["package_name"]?.toString()
+                    ?: it.matchContext["source_package"]?.toString()
+                    ?: "unknown"
             }
             appendLine("  ${byPackage.size} application(s) flagged")
             appendLine("  ${scan.knownMalwareCount} known malware / ${scan.riskySideloadCount} risky sideloads")
@@ -235,8 +239,7 @@ object ReportFormatter {
             dnsEvents.take(500).forEach { event ->
                 val time = dnsFmt.format(Date(event.timestamp))
                 val state = if (event.reason != null) "[MATCHED]" else "[ALLOWED]"
-                val app = event.appName
-                    ?: if (event.appUid == -1) "unknown" else "uid:${event.appUid}"
+                val app = DnsQueryAttribution.label(event.appUid, event.appName, displayNames)
                 appendLine("  $state  $time  ${event.domain.padEnd(50)}  <- $app")
                 if (event.reason != null) {
                     appendLine("           reason: ${event.reason}")

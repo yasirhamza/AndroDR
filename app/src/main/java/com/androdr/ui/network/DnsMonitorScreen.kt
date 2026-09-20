@@ -1,5 +1,6 @@
 package com.androdr.ui.network
 
+import com.androdr.network.DnsQueryAttribution
 import android.content.Intent
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -272,7 +273,7 @@ private fun DnsEventItem(event: DnsEvent) {
                     else MaterialTheme.colorScheme.onSurface
                 )
                 Text(
-                    text = event.appName ?: "UID: ${event.appUid}",
+                    text = DnsQueryAttribution.label(event.appUid, event.appName),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
