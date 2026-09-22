@@ -12,10 +12,17 @@ import javax.inject.Singleton
 
 /**
  * Checks the filesystem for known spyware artifact paths derived from MVT indicators
- * and Citizen Lab research. Returns one [FileArtifactTelemetry] record per path checked.
+ * and Citizen Lab research. Returns one [FileArtifactTelemetry] record **per path in
+ * the list**, whether or not the path could be read.
  *
- * Most paths require root to read; without root, [File.exists] returns false for
- * inaccessible paths, which is the expected baseline on a clean device.
+ * Most of these paths are unreadable by an unprivileged app. The scanner used to drop
+ * those silently, so a device where nothing could be checked produced exactly the same
+ * evidence as a device that was checked and found clean: no telemetry, no evaluation of
+ * the only CRITICAL artifact rule, and a report that mentioned none of it (#366).
+ * Now an unreadable path is reported with `accessible = false`, which is what lets the
+ * report say what it could not check. `fileExists = false` on such a row means "not
+ * looked at", never "looked at and absent" -- only [FileArtifactTelemetry.accessible]
+ * separates the two, so callers that feed rules must filter on it.
  *
  * The path list is sourced from [KnownSpywareArtifactsResolver], which loads
  * `res/raw/known_spyware_artifacts.yml`. The scanner itself stays simple: for each
@@ -27,41 +34,49 @@ class FileArtifactScanner @Inject constructor(
 ) {
 
     /**
-     * Checks each known artifact path and returns telemetry about whether the file exists
-     * and its metadata (size, modification time) when accessible.
+     * Probes every known artifact path and returns one record per path: the file's
+     * metadata when it could be read, and an `accessible = false` record when it
+     * could not.
      */
-    @Suppress("TooGenericExceptionCaught")
     suspend fun collectTelemetry(): List<FileArtifactTelemetry> = withContext(Dispatchers.IO) {
-        var skipped = 0
-        val results = knownSpywareArtifactsResolver.paths.mapNotNull { path ->
-            try {
-                val file = File(path)
-                val parentReadable = file.parentFile?.canRead() ?: false
-                if (!parentReadable) {
-                    Log.d(TAG, "Skipping inaccessible path: $path")
-                    skipped++
-                    return@mapNotNull null
-                }
-                val exists = file.exists()
-                FileArtifactTelemetry(
-                    filePath = path,
-                    fileExists = exists,
-                    fileSize = if (exists) file.length() else null,
-                    fileModified = if (exists) file.lastModified() else null,
-                    source = TelemetrySource.LIVE_SCAN,
-                    accessible = true,
-                )
-            } catch (e: Exception) {
-                // SecurityException or other access errors — skip entirely
-                Log.d(TAG, "Cannot access $path: ${e.message}")
-                skipped++
-                null
-            }
-        }
-        Log.d(TAG, "Checked ${results.size} accessible paths, " +
-            "${results.count { t -> t.fileExists }} found, $skipped skipped (inaccessible)")
+        val results = knownSpywareArtifactsResolver.paths.map { path -> probe(path) }
+        val unreadable = results.count { !it.accessible }
+        Log.d(TAG, "Probed ${results.size} paths, " +
+            "${results.count { t -> t.fileExists }} found, $unreadable unreadable")
         results
     }
+
+    @Suppress("TooGenericExceptionCaught") // a refused path is evidence, not a reason to stop
+    private fun probe(path: String): FileArtifactTelemetry = try {
+        val file = File(path)
+        if (file.parentFile?.canRead() == true) {
+            val exists = file.exists()
+            FileArtifactTelemetry(
+                filePath = path,
+                fileExists = exists,
+                fileSize = if (exists) file.length() else null,
+                fileModified = if (exists) file.lastModified() else null,
+                source = TelemetrySource.LIVE_SCAN,
+                accessible = true,
+            )
+        } else {
+            unreadable(path)
+        }
+    } catch (e: Exception) {
+        // SecurityException or any other refusal: record that we could not look.
+        Log.d(TAG, "Cannot access $path: ${e.message}")
+        unreadable(path)
+    }
+
+    /** A path the app was not allowed to look at: no claim either way about its contents. */
+    private fun unreadable(path: String) = FileArtifactTelemetry(
+        filePath = path,
+        fileExists = false,
+        fileSize = null,
+        fileModified = null,
+        source = TelemetrySource.LIVE_SCAN,
+        accessible = false,
+    )
 
     companion object {
         private const val TAG = "FileArtifactScanner"

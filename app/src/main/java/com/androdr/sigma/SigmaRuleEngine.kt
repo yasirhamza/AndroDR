@@ -202,6 +202,16 @@ class SigmaRuleEngine @Inject constructor(
      */
     fun getEnabledRules(): List<SigmaRule> = effectiveRules()
 
+    /**
+     * Atom rule id -> the timeline event category it binds to.
+     *
+     * The same mapping [computeAtomBindings] uses, exposed so coverage can tell which
+     * legs of a chain rule had no events to bind to at all (#370).
+     */
+    fun atomCategories(): Map<String, String> = effectiveRules()
+        .mapNotNull { rule -> extractAtomCategory(rule)?.let { rule.id to it } }
+        .toMap()
+
     /** Returns only rules that are enabled. Used internally by all evaluate* methods. */
     private fun effectiveRules(): List<SigmaRule> = getRules().filter { it.enabled }
 
@@ -233,8 +243,16 @@ class SigmaRuleEngine @Inject constructor(
         return SigmaRuleEvaluator.evaluate(effectiveRules(), records, "dns_monitor", iocLookups, evidenceProviders)
     }
 
+    /**
+     * Rules see only the paths that were actually read.
+     *
+     * A path the app was refused arrives with `fileExists = false` because nothing
+     * was observed, not because the file is known to be absent (#366). Letting such
+     * a row reach a rule turns "not allowed to look" into a clean pass. What went
+     * unread is declared instead, by [RuleCoverage.unreadableArtifactSkips].
+     */
     fun evaluateFiles(telemetry: List<FileArtifactTelemetry>): List<Finding> {
-        val records = telemetry.map { it.toFieldMap() }
+        val records = telemetry.filter { it.accessible }.map { it.toFieldMap() }
         return SigmaRuleEvaluator.evaluate(effectiveRules(), records, "file_scanner", iocLookups, evidenceProviders)
     }
 

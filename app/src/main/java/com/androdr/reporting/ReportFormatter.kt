@@ -11,8 +11,8 @@ import com.androdr.data.model.ForensicTimelineEvent
 import com.androdr.data.model.ProcessTelemetry
 import com.androdr.data.model.ReceiverTelemetry
 import com.androdr.data.model.ScanResult
-import com.androdr.data.model.UNREGISTERED_IOC_LOOKUP
-import com.androdr.network.DnsQueryAttribution
+import com.androdr.data.model.NotEvaluatedReason
+import com.androdr.data.model.TelemetrySource
 import com.androdr.sigma.Finding
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -81,14 +81,7 @@ object ReportFormatter {
             // Intentionally inside the includeFindings branch: a capability skip is a
             // caveat ON the findings ("this list is missing these rules"), so it rides
             // the same flag — a telemetry-only export has no findings list to caveat.
-            val capabilitySkips = scan.scannerErrors.filter { it.exception == UNREGISTERED_IOC_LOOKUP }
-            if (capabilitySkips.isNotEmpty()) {
-                appendLine()
-                // ASCII-only per class doc: em dash replaced with the file's existing
-                // "--" convention (see e.g. appendVerdict's "Flagged:" line).
-                appendLine("RULES NOT EVALUATED ON THIS BUILD (missing capability -- update the app):")
-                capabilitySkips.forEach { appendLine("  - ${it.message}") }
-            }
+            appendNotChecked(scan)
         }
 
         if (includeTelemetry) {
@@ -97,7 +90,7 @@ object ReportFormatter {
                 dnsEvents, logLines, appInventory, displayNames,
                 deviceTelemetry, processTelemetry, fileTelemetry,
                 accessibilityTelemetry, receiverTelemetry, appOpsTelemetry,
-                intrusionEvents
+                intrusionEvents, scan.source
             )
         }
 
@@ -225,26 +218,19 @@ object ReportFormatter {
         receiverTelemetry: List<ReceiverTelemetry> = emptyList(),
         appOpsTelemetry: List<AppOpsTelemetry> = emptyList(),
         intrusionEvents: List<ForensicTimelineEvent> = emptyList(),
+        scanSource: TelemetrySource = TelemetrySource.LIVE_SCAN,
     ) {
         val dnsFmt = SimpleDateFormat("HH:mm:ss", Locale.US)
 
         // -- DNS activity ---------------------------------------------------------
+        // Whose DNS? The live tunnel's log belongs to the scan that captured it. An
+        // imported file's report shows the import's own queries or none at all --
+        // never the phone's unrelated tunnel history under an import's header (#375).
         section("DNS ACTIVITY")
-        if (dnsEvents.isEmpty()) {
-            appendLine("  No DNS events recorded.")
+        if (scanSource == TelemetrySource.LIVE_SCAN) {
+            appendLiveDns(dnsEvents, displayNames, dnsFmt)
         } else {
-            val matched = dnsEvents.count { it.reason != null }
-            appendLine("  ${dnsEvents.size} events / $matched matched")
-            appendLine()
-            dnsEvents.take(500).forEach { event ->
-                val time = dnsFmt.format(Date(event.timestamp))
-                val state = if (event.reason != null) "[MATCHED]" else "[ALLOWED]"
-                val app = DnsQueryAttribution.label(event.appUid, event.appName, displayNames)
-                appendLine("  $state  $time  ${event.domain.padEnd(50)}  <- $app")
-                if (event.reason != null) {
-                    appendLine("           reason: ${event.reason}")
-                }
-            }
+            appendImportedDns(intrusionEvents, displayNames, dnsFmt)
         }
 
         // -- Intrusion log (imported, #342) --------------------------------------
@@ -391,6 +377,33 @@ object ReportFormatter {
 
     // -- Private helpers ----------------------------------------------------------
 
+    /**
+     * Checks that produced no verdict, and why.
+     *
+     * A rule the build could not evaluate, a path the device refused (#366), a chain
+     * whose legs had no events (#370): each is accepted under-detection, and each used
+     * to be invisible. A report that omits them reads exactly like one where everything
+     * was checked and found clean. Grouped by [NotEvaluatedReason] in enum order so the
+     * output is stable whatever order the scanners recorded them in.
+     */
+    private fun StringBuilder.appendNotChecked(scan: ScanResult) {
+        val byReason = scan.scannerErrors
+            .mapNotNull { failure -> NotEvaluatedReason.fromSentinel(failure.exception)?.to(failure) }
+            .groupBy({ it.first }, { it.second })
+        if (byReason.isEmpty()) return
+        appendLine()
+        // ASCII-only per class doc: em dash replaced with the file's existing
+        // "--" convention (see e.g. appendVerdict's "Flagged:" line).
+        appendLine("$NOT_CHECKED_SECTION:")
+        NotEvaluatedReason.entries.forEach { reason ->
+            val failures = byReason[reason].orEmpty()
+            if (failures.isNotEmpty()) {
+                appendLine("  ${reason.heading}:")
+                failures.forEach { appendLine("    - ${it.message}") }
+            }
+        }
+    }
+
     private fun StringBuilder.section(title: String) {
         appendLine(THIN)
         appendLine("  $title")
@@ -500,8 +513,19 @@ object ReportFormatter {
     private fun StringBuilder.appendActivityChains(scan: ScanResult) {
         section(WARNING_SIGNS_SECTION)
         val chains = scan.activityChains.filter { it.triggered }
+        // A pattern with no events to bind to was not checked at all; saying only
+        // "none detected" would make silence sound like a result (#370).
+        val unchecked = scan.scannerErrors.count {
+            it.exception == NotEvaluatedReason.NO_EVENTS_TO_CHECK.sentinel
+        }
         if (chains.isEmpty()) {
             appendLine("  No warning signs that add up were detected.")
+            if (unchecked > 0) {
+                appendLine(
+                    "  $unchecked pattern(s) could not be checked on this scan -- " +
+                        "see $NOT_CHECKED_SECTION."
+                )
+            }
             return
         }
         appendLine(
@@ -509,6 +533,13 @@ object ReportFormatter {
                 "but mean something together"
         )
         appendLine()
+        if (unchecked > 0) {
+            appendLine(
+                "  $unchecked further pattern(s) could not be checked on this scan -- " +
+                    "see $NOT_CHECKED_SECTION."
+            )
+            appendLine()
+        }
         chains.sortedByDescending { severityOrdinal(it.level) }.forEach { chain ->
             appendFinding(chain)
             val pkg = chain.matchContext["package_name"].orEmpty()
@@ -614,6 +645,10 @@ object ReportFormatter {
      * One place to change.
      */
     const val WARNING_SIGNS_SECTION = "WARNING SIGNS THAT ADD UP"
+
+    /** Heading for the checks that produced no verdict (#366, #370). */
+    const val NOT_CHECKED_SECTION = "WHAT THIS SCAN COULD NOT CHECK"
+
 
     private const val RULE = "============================================================"
     private const val THIN = "------------------------------------------------------------"

@@ -53,6 +53,40 @@ data class ScannerFailure(
  */
 const val UNREGISTERED_IOC_LOOKUP = "UnregisteredIocLookup"
 
+/**
+ * Why a rule produced no verdict.
+ *
+ * A rule that was never evaluated is not a scanner that crashed: it is accepted,
+ * declared under-detection, and the report has to say so rather than let the reader
+ * assume the check ran and passed. Each reason carries the string persisted in
+ * [ScannerFailure.exception] and the heading the report groups it under.
+ *
+ * Enumerated rather than compared string by string, because every hand-written
+ * comparison is a chance to miss one and turn a known limit into a "scan failed"
+ * banner ([realFailureCount] derives from these entries).
+ */
+enum class NotEvaluatedReason(val sentinel: String, val heading: String) {
+    /** The rule names an ioc_lookup this binary does not register. */
+    MISSING_CAPABILITY(UNREGISTERED_IOC_LOOKUP, "Missing capability -- update the app"),
+
+    /** Every path the rule inspects is unreadable without root (#366). */
+    UNREADABLE_PATHS("UnreadableArtifactPaths", "Not permitted on this device -- root required"),
+
+    /** No event of the kind the rule needs was recorded, so it had nothing to match (#370). */
+    NO_EVENTS_TO_CHECK("NoEventsToCheck", "Nothing of that kind was recorded to check"),
+    ;
+
+    companion object {
+        private val BY_SENTINEL = entries.associateBy { it.sentinel }
+
+        /** The reason behind a persisted [ScannerFailure.exception], or null for a real crash. */
+        fun fromSentinel(value: String): NotEvaluatedReason? = BY_SENTINEL[value]
+
+        /** Every persisted string that marks a skip rather than a failure. */
+        val SENTINELS: Set<String> = entries.map { it.sentinel }.toSet()
+    }
+}
+
 @Entity
 @Serializable
 @TypeConverters(Converters::class)
@@ -89,21 +123,21 @@ data class ScanResult(
     val source: TelemetrySource = TelemetrySource.LIVE_SCAN
 ) {
     /**
-     * Number of entries in [scannerErrors] that are real scanner failures —
-     * capability skips ([UNREGISTERED_IOC_LOOKUP]) excluded. The single
-     * definition of "how many scanners actually failed", so the partial-scan
-     * banner's count and [isPartialScan] can never disagree.
+     * Number of entries in [scannerErrors] that are real scanner failures — every
+     * [NotEvaluatedReason] excluded. The single definition of "how many scanners
+     * actually failed", so the partial-scan banner's count and [isPartialScan] can
+     * never disagree.
      */
     @get:Ignore
     @Transient
     val realFailureCount: Int
-        get() = scannerErrors.count { it.exception != UNREGISTERED_IOC_LOOKUP }
+        get() = scannerErrors.count { it.exception !in NotEvaluatedReason.SENTINELS }
 
     /**
-     * True if any scanner failed to complete during this scan. Capability
-     * skips ([UNREGISTERED_IOC_LOOKUP]) are excluded — a rule this binary
-     * cannot evaluate is accepted under-detection, not a failed scanner,
-     * and must not raise the partial-scan banner.
+     * True if any scanner failed to complete during this scan. Rules that were
+     * not evaluated ([NotEvaluatedReason]) are excluded — a check the build or the
+     * device could not run is accepted under-detection, not a failed scanner, and
+     * must not raise the partial-scan banner. It is reported in its own right.
      */
     @get:Ignore
     @Transient

@@ -1,5 +1,6 @@
 package com.androdr.reporting
 
+import com.androdr.data.model.NotEvaluatedReason
 import com.androdr.data.model.ScanResult
 import com.androdr.data.model.ScannerFailure
 import com.androdr.data.model.UNREGISTERED_IOC_LOOKUP
@@ -285,8 +286,12 @@ class ReportFormatterTest {
         val scan = buildScan(scannerErrors = listOf(capabilitySkip))
         val text = ReportFormatter.formatScanReport(scan, emptyList(), emptyList(), versionName = "test")
         assertTrue(
-            "Capability skip section header must appear",
-            text.contains("RULES NOT EVALUATED ON THIS BUILD")
+            // Was "RULES NOT EVALUATED ON THIS BUILD": one reason had a section of its
+            // own. Two more reasons existed and were silent (#366, #370), so all three
+            // now share one section, grouped by reason.
+            "The not-checked section and this reason's heading must appear",
+            text.contains(ReportFormatter.NOT_CHECKED_SECTION) &&
+                text.contains(NotEvaluatedReason.MISSING_CAPABILITY.heading)
         )
         assertTrue(
             "Capability skip message must appear",

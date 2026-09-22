@@ -12,6 +12,7 @@ import com.androdr.data.model.ScanResult
 import com.androdr.data.model.ScannerFailure
 import com.androdr.data.model.TelemetrySource
 import com.androdr.data.model.UNREGISTERED_IOC_LOOKUP
+import com.androdr.sigma.RuleCoverage
 import com.androdr.data.repo.ScanRepository
 import com.androdr.ioc.IndicatorResolver
 import com.androdr.sigma.CveEvidenceProvider
@@ -348,6 +349,13 @@ class ScanOrchestrator @Inject constructor(
         allFindings.addAll(sigmaRuleEngine.evaluateDevice(deviceTelemetry))
         allFindings.addAll(sigmaRuleEngine.evaluateProcesses(processTelemetry))
         allFindings.addAll(sigmaRuleEngine.evaluateFiles(fileTelemetry))
+        // #366: the engine judges only the paths it could read. What went unread is
+        // declared, so the report states the limit instead of reading like a clean check.
+        synchronized(scannerErrors) {
+            scannerErrors.addAll(
+                RuleCoverage.unreadableArtifactSkips(sigmaRuleEngine.getEnabledRules(), fileTelemetry)
+            )
+        }
         allFindings.addAll(sigmaRuleEngine.evaluateAccessibility(accessibilityTelemetry))
         allFindings.addAll(sigmaRuleEngine.evaluateReceivers(receiverTelemetry))
         allFindings.addAll(sigmaRuleEngine.evaluateAppOps(appOpsTelemetry))
@@ -455,9 +463,16 @@ class ScanOrchestrator @Inject constructor(
         // would let their category influence classifications even though they produce
         // no bindings.
         val atomRulesById = sigmaRuleEngine.getEnabledRules().associateBy { it.id }
+        // #370: a chain rule fires only where every leg has events to bind to. Legs with
+        // nothing recorded are declared, so "no warning signs" never stands in for
+        // "three of these patterns could not be checked at all".
+        val chainSkips = RuleCoverage.noEventSkipsFor(
+            correlationRules, sigmaRuleEngine.atomCategories(),
+            installEvents + adminGrantEvents + findingTimelineEvents + taggedUsageEvents + lookbackEvents,
+        )
         val persisted = runCatching {
             val saved = scanRepository.saveScanWithCorrelation(
-                scan = result,
+                scan = result.copy(scannerErrors = result.scannerErrors + chainSkips),
                 findingTimelineEvents = installEvents + adminGrantEvents + findingTimelineEvents,
                 replaceUsageStatsEvents = taggedUsageEvents,
                 lookbackEvents = lookbackEvents,
@@ -617,9 +632,12 @@ class ScanOrchestrator @Inject constructor(
         // no bindings.
         val atomRulesById = sigmaRuleEngine.getEnabledRules().associateBy { it.id }
         val brCorrelationRules = sigmaRuleEngine.getCorrelationRules()
+        val brChainSkips = RuleCoverage.noEventSkipsFor(
+            brCorrelationRules, sigmaRuleEngine.atomCategories(), baseBugReportEvents,
+        )
         runCatching {
             scanRepository.saveScanWithCorrelation(
-                scan = scanResult,
+                scan = scanResult.copy(scannerErrors = scanResult.scannerErrors + brChainSkips),
                 findingTimelineEvents = baseBugReportEvents,
                 replaceUsageStatsEvents = null,
                 lookbackEvents = emptyList(),
@@ -747,9 +765,11 @@ class ScanOrchestrator @Inject constructor(
         // no bindings.
         val atomRulesById = sigmaRuleEngine.getEnabledRules().associateBy { it.id }
         val corrRules = sigmaRuleEngine.getCorrelationRules()
+        val ilChainSkips =
+            RuleCoverage.noEventSkipsFor(corrRules, sigmaRuleEngine.atomCategories(), allEvents)
         try {
             scanRepository.saveScanWithCorrelation(
-                scan = scanResult,
+                scan = scanResult.copy(scannerErrors = scanResult.scannerErrors + ilChainSkips),
                 findingTimelineEvents = allEvents,
                 replaceUsageStatsEvents = null,
                 lookbackEvents = emptyList(),
