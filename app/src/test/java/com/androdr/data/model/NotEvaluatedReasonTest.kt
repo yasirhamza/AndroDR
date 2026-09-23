@@ -53,10 +53,12 @@ class NotEvaluatedReasonTest {
     }
 
     @Test
-    fun `the ioc-lookup sentinel keeps the string it has always been persisted as`() {
-        // Scans on disk carry the old literal; changing it would silently turn
-        // every stored capability skip back into a "scan failed" banner.
+    fun `every sentinel keeps the string it is persisted as`() {
+        // These strings live in the scannerErrors JSON of every stored scan. Renaming
+        // one turns stored skips back into "scan failed" banners on old rows.
         assertEquals("UnregisteredIocLookup", NotEvaluatedReason.MISSING_CAPABILITY.sentinel)
+        assertEquals("UnreadableArtifactPaths", NotEvaluatedReason.UNREADABLE_PATHS.sentinel)
+        assertEquals("NoEventsToCheck", NotEvaluatedReason.NO_EVENTS_TO_CHECK.sentinel)
         assertEquals(UNREGISTERED_IOC_LOOKUP, NotEvaluatedReason.MISSING_CAPABILITY.sentinel)
     }
 

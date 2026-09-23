@@ -2,6 +2,7 @@ package com.androdr.scanner
 
 import com.androdr.data.model.ScanResult
 import com.androdr.data.model.ScannerFailure
+import com.androdr.data.model.NotEvaluatedReason
 import com.androdr.data.model.UNREGISTERED_IOC_LOOKUP
 import com.androdr.sigma.Finding
 import com.androdr.sigma.FindingCategory
@@ -101,6 +102,54 @@ class ScanOrchestratorDiffTest {
             knownMalwareCount = 0,
             scannerErrors = scannerErrors
         )
+
+    /** Every reason a rule produced no verdict, not just the one this filter began with. */
+    private fun notEvaluated(reason: NotEvaluatedReason, ruleId: String) = ScannerFailure(
+        scanner = "coverage", exception = reason.sentinel, message = "$ruleId", ruleId = ruleId,
+    )
+
+    @Test
+    fun `a rule whose paths the device refused is not resolved`() {
+        // Scan A read the artifact and fired CRITICAL. Scan B was refused the path.
+        // Nothing was fixed; calling it resolved is the false reassurance this
+        // function's contract forbids (#366).
+        val older = scan(1L, listOf(finding("androdr-020")))
+        val newer = scan(2L, emptyList(), listOf(notEvaluated(NotEvaluatedReason.UNREADABLE_PATHS, "androdr-020")))
+
+        val diff = orchestrator.computeDiff(newer, older)
+
+        assertFalse(
+            "a path that could not be read does not resolve a critical finding",
+            diff.resolvedFindings.any { it.ruleId == "androdr-020" },
+        )
+    }
+
+    @Test
+    fun `a chain rule with no events to bind to is not resolved`() {
+        // A bug-report import fires corr-002; the next live scan records no
+        // permission_use at all, so the rule was not checked, not cleared (#370).
+        val older = scan(1L, listOf(finding("androdr-corr-002")))
+        val newer = scan(
+            2L, emptyList(), listOf(notEvaluated(NotEvaluatedReason.NO_EVENTS_TO_CHECK, "androdr-corr-002")),
+        )
+
+        val diff = orchestrator.computeDiff(newer, older)
+
+        assertFalse(diff.resolvedFindings.any { it.ruleId == "androdr-corr-002" })
+    }
+
+    @Test
+    fun `a rule that really did stop triggering is still resolved`() {
+        val older = scan(1L, listOf(finding("androdr-010")))
+        val newer = scan(2L, emptyList())
+
+        val diff = orchestrator.computeDiff(newer, older)
+
+        assertTrue(
+            "suppressing every resolution would be its own lie",
+            diff.resolvedFindings.any { it.ruleId == "androdr-010" },
+        )
+    }
 
     @Test
     fun `a rule that triggered previously and is now skipped is never reported as resolved`() {

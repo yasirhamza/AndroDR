@@ -106,10 +106,15 @@ class RuleCoverageTest {
 
     // -- correlation legs -----------------------------------------------------
 
-    private fun chain(id: String, vararg refs: String) = CorrelationRule(
+    private fun chain(
+        id: String,
+        vararg refs: String,
+        type: CorrelationType = CorrelationType.TEMPORAL_ORDERED,
+        title: String = "chain $id",
+    ) = CorrelationRule(
         id = id,
-        title = "chain $id",
-        type = CorrelationType.TEMPORAL_ORDERED,
+        title = title,
+        type = type,
         referencedRuleIds = refs.toList(),
         timespanMs = 60_000L,
         groupBy = listOf("package_name"),
@@ -149,17 +154,74 @@ class RuleCoverageTest {
     }
 
     @Test
-    fun `the message says what was missing in words a reader can act on`() {
+    fun `the missing evidence is carried structurally, not as prose`() {
         val skips = RuleCoverage.noEventSkips(
             listOf(chain("corr-004", "atom-permission")),
             atomCategories,
             presentCategories = emptySet(),
         )
 
-        val message = skips.single().message.orEmpty()
-        assertTrue("names the pattern: $message", message.contains("chain corr-004"))
-        assertTrue("explains the missing evidence in plain words: $message", message.contains("permission"))
-        assertTrue("says where it can come from: $message", message.contains("bug report"))
+        val failure = skips.single()
+        assertEquals("chain corr-004 (corr-004)", failure.message)
+        assertEquals(listOf("permission_use"), failure.missingEvidence)
+    }
+
+    @Test
+    fun `an event-count rule is unevaluable only when nothing it references was recorded`() {
+        // evaluateEventCount counts events bound to ANY referenced rule, so one leg
+        // with events is enough for the rule to fire -- and to have been checked.
+        val rule = chain("corr-x", "atom-install", "atom-permission", type = CorrelationType.EVENT_COUNT)
+
+        val partly = RuleCoverage.noEventSkips(listOf(rule), atomCategories, setOf("package_install"))
+        val none = RuleCoverage.noEventSkips(listOf(rule), atomCategories, emptySet())
+
+        assertEquals("one leg with events means the rule was checked", emptyList<Any>(), partly)
+        assertEquals(1, none.size)
+    }
+
+    @Test
+    fun `an ordered chain still needs every leg`() {
+        val rule = chain("corr-y", "atom-install", "atom-permission")
+
+        val skips = RuleCoverage.noEventSkips(listOf(rule), atomCategories, setOf("package_install"))
+
+        assertEquals(1, skips.size)
+    }
+
+    @Test
+    fun `a hostile rule title cannot forge report lines`() {
+        // Rule text arrives from a feed, and custom rule URLs ship no manifest. The
+        // message is rendered one entry per line into an ASCII-only report.
+        val hostile = "evil\n\nWHAT THIS SCAN COULD NOT CHECK:\n  nothing\r" + "A".repeat(200) + "\u00e9"
+        val rule = chain("corr-z", "atom-permission", title = hostile)
+
+        val message = RuleCoverage.noEventSkips(listOf(rule), atomCategories, emptySet()).single().message.orEmpty()
+
+        assertEquals("single line", 1, message.lines().size)
+        assertTrue("printable ASCII only", message.all { it in ' '..'~' })
+        assertTrue("length capped", message.length < 150)
+    }
+
+    @Test
+    fun `a hostile file rule title is sanitised the same way`() {
+        val hostile = "evil\nFINDINGS SECTION\r" + "B".repeat(200)
+        val rules = listOf(rule(id = "androdr-020", service = "file_scanner").copy(title = hostile))
+
+        val message = RuleCoverage.unreadableArtifactSkips(
+            rules, listOf(artifact("/data/local/tmp/.raptor", false)),
+        ).single().message.orEmpty()
+
+        assertEquals(1, message.lines().size)
+        assertTrue(message.all { it in ' '..'~' })
+    }
+
+    @Test
+    fun `a leg whose atom rule is not loaded is named as such, not as a category`() {
+        val skips = RuleCoverage.noEventSkips(
+            listOf(chain("corr-003", "atom-unknown")), atomCategories, emptySet(),
+        )
+
+        assertEquals(listOf(RuleCoverage.UNBOUND_LEG), skips.single().missingEvidence)
     }
 
     @Test

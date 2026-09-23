@@ -399,7 +399,13 @@ object ReportFormatter {
             val failures = byReason[reason].orEmpty()
             if (failures.isNotEmpty()) {
                 appendLine("  ${reason.heading}:")
-                failures.forEach { appendLine("    - ${it.message}") }
+                failures.forEach { failure ->
+                    val needs = failure.missingEvidence
+                        .joinToString(" and ") { evidenceName(it) }
+                        .ifEmpty { "" }
+                    val tail = if (needs.isEmpty()) "" else ": needs $needs, none recorded in this scan"
+                    appendLine("    - ${failure.message}$tail")
+                }
             }
         }
     }
@@ -432,6 +438,12 @@ object ReportFormatter {
                 "$appRiskCount app issue(s) and $deviceIssueCount device setting(s) found."
         }
         appendLine("  $verdict")
+        // The line every reader reads must not stand alone when some checks never
+        // ran: "your phone appears secure" is exactly the sentence an omission
+        // turns into a false reassurance (#366, #370).
+        if (scan.hasUnevaluatedRules) {
+            appendLine("  Some checks did not run on this scan -- see $NOT_CHECKED_SECTION below.")
+        }
         appendLine()
 
         // Summary block

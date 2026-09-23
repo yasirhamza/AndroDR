@@ -38,9 +38,8 @@ class NotEvaluatedReportSectionTest {
     )
     private val noEvents = ScannerFailure(
         "correlation", NotEvaluatedReason.NO_EVENTS_TO_CHECK.sentinel,
-        "Surveillance burst (androdr-corr-004): needs records of apps using sensitive permissions " +
-            "(only an imported bug report carries these), none recorded in this scan",
-        "androdr-corr-004",
+        "Surveillance burst (androdr-corr-004)", "androdr-corr-004",
+        missingEvidence = listOf("permission_use"),
     )
 
     @Test
@@ -67,6 +66,10 @@ class NotEvaluatedReportSectionTest {
         assertTrue(text.contains(ReportFormatter.NOT_CHECKED_SECTION))
         assertTrue(text.contains(NotEvaluatedReason.NO_EVENTS_TO_CHECK.heading))
         assertTrue(text.contains("androdr-corr-004"))
+        assertTrue(
+            "the missing evidence is named in words, from the structured field",
+            text.contains("needs records of apps using sensitive permissions"),
+        )
         assertTrue("the reader needs to know an import supplies it", text.contains("bug report"))
     }
 
@@ -81,6 +84,34 @@ class NotEvaluatedReportSectionTest {
         assertTrue("every reason must have a heading", capability >= 0 && unreadable >= 0 && nothing >= 0)
         assertTrue("order follows the enum, not the error list", capability < unreadable)
         assertTrue("order follows the enum, not the error list", unreadable < nothing)
+    }
+
+    @Test
+    fun `an entry with no structured evidence still renders, without a dangling sentence`() {
+        // Reasons other than NO_EVENTS_TO_CHECK carry no categories; the composed
+        // tail must simply be absent rather than "needs , none recorded".
+        val text = report(scanWith(unreadablePaths))
+
+        assertTrue(text.contains("13 of 13"))
+        assertFalse("no empty needs-clause", text.contains("needs ,"))
+    }
+
+    @Test
+    fun `the headline verdict points at the section instead of standing alone`() {
+        val text = report(scanWith(unreadablePaths))
+
+        val verdict = text.substringAfter("No threats detected").substringBefore("SUMMARY:")
+        assertTrue(
+            "a clean verdict must not stand alone when checks did not run: $verdict",
+            verdict.contains("did not run"),
+        )
+    }
+
+    @Test
+    fun `a clean scan with every check run keeps its verdict unqualified`() {
+        val text = report(scanWith())
+
+        assertFalse(text.contains("did not run"))
     }
 
     @Test

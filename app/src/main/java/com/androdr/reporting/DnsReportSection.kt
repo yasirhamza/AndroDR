@@ -46,8 +46,16 @@ internal fun StringBuilder.appendLiveDns(
 }
 
 /**
- * The DNS an imported file carried, attributed to the app that made each query.
- * The embedded sample is capped; the Timeline holds the import in full.
+ * The DNS rows an import carried, attributed to the app that made each query.
+ *
+ * No allowed/matched verdict is printed here, unlike the live tunnel's rows: an
+ * imported row has no block decision to report (the import parser records none),
+ * so a `[ALLOWED]` stamp would say a threat-list domain was permitted when the
+ * same report's FINDINGS section names it. What was detected in an import is in
+ * FINDINGS; this section is the queries themselves.
+ *
+ * The rows are what this report embeds, not the import's whole log -- the import
+ * in full is on the Timeline -- so nothing here claims a total.
  */
 internal fun StringBuilder.appendImportedDns(
     intrusionEvents: List<ForensicTimelineEvent>,
@@ -56,21 +64,23 @@ internal fun StringBuilder.appendImportedDns(
 ) {
     val imported = intrusionEvents.filter { it.category in DNS_CATEGORIES }
     if (imported.isEmpty()) {
-        appendLine("  This scan analysed an imported file, which carried no DNS log.")
-        appendLine("  The live DNS monitor's own events belong to a different scan; see the Timeline.")
+        appendLine("  No DNS rows from the import are included in this report.")
+        appendLine("  The import's own log is on the Timeline; the live DNS monitor's")
+        appendLine("  events belong to a different scan and are not shown here.")
         return
     }
-    val matched = imported.count { it.category == "ioc_match" }
-    appendLine("  ${imported.size} event(s) from the import / $matched matched")
-    appendLine("  (sample embedded in this report; the import in full is on the Timeline)")
+    appendLine("  ${imported.size} DNS row(s) from the import, shown below.")
+    appendLine("  (what this report embeds, not the import's whole log -- see the Timeline)")
     appendLine()
-    imported.forEach { event ->
+    imported.take(MAX_DNS_ROWS).forEach { event ->
         val time = dnsFmt.format(Date(event.startTimestamp))
-        val state = if (event.category == "ioc_match") "[MATCHED]" else "[ALLOWED]"
         val app = DnsQueryAttribution.label(
             event.processUid, event.packageName.ifEmpty { null }, displayNames,
         )
-        val domain = event.description.removePrefix("DNS: ")
-        appendLine("  $state  $time  ${domain.padEnd(DOMAIN_COLUMN)}  <- $app")
+        val domain = event.iocIndicator.ifEmpty { event.description.removePrefix("DNS: ") }
+        appendLine("  $time  ${domain.padEnd(DOMAIN_COLUMN)}  <- $app")
+    }
+    if (imported.size > MAX_DNS_ROWS) {
+        appendLine("  ... ${imported.size - MAX_DNS_ROWS} more row(s) not shown")
     }
 }

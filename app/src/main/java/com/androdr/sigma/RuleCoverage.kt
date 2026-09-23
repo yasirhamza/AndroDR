@@ -4,6 +4,7 @@ import com.androdr.data.model.FileArtifactTelemetry
 import com.androdr.data.model.ForensicTimelineEvent
 import com.androdr.data.model.NotEvaluatedReason
 import com.androdr.data.model.ScannerFailure
+import com.androdr.util.reportSafe
 
 /**
  * Which rules had nothing to judge, and why.
@@ -22,6 +23,12 @@ object RuleCoverage {
 
     /** Logsource service of the rules that inspect filesystem artifacts. */
     const val FILE_SERVICE = "file_scanner"
+
+    /**
+     * Stands in for a leg whose atom rule is not loaded, or binds to nothing. The
+     * report turns it into words; keeping it a constant means no caller invents one.
+     */
+    const val UNBOUND_LEG = "(no rule loaded for this leg)"
 
     private const val FILE_SCANNER = "fileArtifactScanner"
     private const val CORRELATION = "correlation"
@@ -42,8 +49,11 @@ object RuleCoverage {
             ScannerFailure(
                 scanner = FILE_SCANNER,
                 exception = NotEvaluatedReason.UNREADABLE_PATHS.sentinel,
-                message = "${rule.title} (${rule.id}): $unreadable of ${telemetry.size} " +
-                    "path(s) could not be read on this device",
+                // Feed-controlled text on a report line: same sanitiser the sibling
+                // capability skip applies, for the same reason (a CR/LF in a title
+                // forges report content).
+                message = "${reportSafe(rule.title)} (${reportSafe(rule.id)}): $unreadable of " +
+                    "${telemetry.size} path(s) could not be read on this device",
                 ruleId = rule.id,
             )
         }
@@ -59,19 +69,27 @@ object RuleCoverage {
         atomCategoryByRuleId: Map<String, String>,
         presentCategories: Set<String>,
     ): List<ScannerFailure> = rules.mapNotNull { rule ->
-        val missing = rule.referencedRuleIds
-            .map { atomCategoryByRuleId[it] }
-            .filter { it == null || it !in presentCategories }
-            .distinct()
-        if (missing.isEmpty()) {
+        val legs = rule.referencedRuleIds.map { atomCategoryByRuleId[it] }.distinct()
+        val missing = legs.filter { it == null || it !in presentCategories }
+        // How many legs a rule needs decides when it is unevaluable. An ordered or
+        // unordered chain needs every leg; an event-count rule counts events bound to
+        // ANY of its referenced rules (SigmaCorrelationEngine.evaluateEventCount), so
+        // it is only unevaluable when nothing it references was recorded at all.
+        val unevaluable = when (rule.type) {
+            CorrelationType.EVENT_COUNT -> missing.size == legs.size
+            CorrelationType.TEMPORAL_ORDERED, CorrelationType.TEMPORAL -> missing.isNotEmpty()
+        }
+        if (!unevaluable) {
             null
         } else {
             ScannerFailure(
                 scanner = CORRELATION,
                 exception = NotEvaluatedReason.NO_EVENTS_TO_CHECK.sentinel,
-                message = "${rule.title} (${rule.id}): needs ${missing.joinToString(" and ") { plain(it) }}, " +
-                    "none recorded in this scan",
+                // The sentence belongs to the reader, so it is composed at render time
+                // from [missingEvidence]; the message carries only what names the rule.
+                message = "${reportSafe(rule.title)} (${reportSafe(rule.id)})",
                 ruleId = rule.id,
+                missingEvidence = missing.map { it ?: UNBOUND_LEG },
             )
         }
     }
@@ -84,20 +102,4 @@ object RuleCoverage {
     ): List<ScannerFailure> =
         noEventSkips(rules, atomCategoryByRuleId, events.mapTo(HashSet()) { it.category })
 
-    /** What an event category is called in a sentence a reader can act on. */
-    private fun plain(category: String?): String = when (category) {
-        null -> "events of a kind nothing in this build records"
-        "permission_use" ->
-            "records of apps using sensitive permissions (only an imported bug report carries these)"
-        "package_install" -> "app installations"
-        "package_uninstall" -> "app removals"
-        "package_update" -> "app updates"
-        "device_admin_grant" -> "device-administrator grants"
-        "app_foreground" -> "app launches"
-        "dns_query" -> "DNS lookups"
-        "ioc_match", "dns_match" -> "DNS lookups matched against a threat list"
-        "network_connect" -> "network connections"
-        "security_event" -> "device security events"
-        else -> "a kind of event this build does not record"
-    }
 }

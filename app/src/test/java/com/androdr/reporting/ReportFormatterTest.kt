@@ -312,6 +312,6 @@ class ReportFormatterTest {
     @Test
     fun `no capability skip section when there are no skips`() {
         val text = ReportFormatter.formatScanReport(cleanScan, emptyList(), emptyList(), versionName = "test")
-        assertFalse(text.contains("RULES NOT EVALUATED ON THIS BUILD"))
+        assertFalse(text.contains(ReportFormatter.NOT_CHECKED_SECTION))
     }
 }

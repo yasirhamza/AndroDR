@@ -13,5 +13,7 @@ WHAT THIS SCAN COULD NOT CHECK
 Not permitted on this device
 androdr-020
 could not be read on this device
-# ...and a path that was never read must never be reported as clear.
-!No artifact at /data/local/tmp/.raptor
+# ...and a path that was never read must never be reported as clear. The report
+# renders a checked-and-empty path as "<path> : clear" (ReportFormatter FILE
+# ARTIFACTS), so that exact line is what must never appear for a refused path.
+!/data/local/tmp/.raptor : clear
