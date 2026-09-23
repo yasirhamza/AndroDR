@@ -11,7 +11,10 @@ import com.androdr.data.model.ForensicTimelineEvent
 import com.androdr.data.model.ScanResult
 import com.androdr.data.model.ScannerFailure
 import com.androdr.data.model.TelemetrySource
+import com.androdr.data.model.NotEvaluatedReason
 import com.androdr.data.model.UNREGISTERED_IOC_LOOKUP
+import com.androdr.sigma.RuleCoverage
+import com.androdr.util.reportSafe
 import com.androdr.data.repo.ScanRepository
 import com.androdr.ioc.IndicatorResolver
 import com.androdr.sigma.CveEvidenceProvider
@@ -236,7 +239,7 @@ class ScanOrchestrator @Inject constructor(
      * this message is rendered verbatim into the exported report, so it is
      * sanitized before interpolation: non-printable / non-ASCII characters are
      * dropped so a name carrying newlines cannot forge report lines, and the
-     * remainder is truncated to [MAX_LOOKUP_NAME_CHARS] so it cannot flood the
+     * remainder is truncated to [MAX_REPORT_TEXT_CHARS] so it cannot flood the
      * report. The rule id is parser-bounded (`androdr-\d+`-shaped, validated
      * upstream) and is kept raw so it stays greppable.
      */
@@ -348,6 +351,13 @@ class ScanOrchestrator @Inject constructor(
         allFindings.addAll(sigmaRuleEngine.evaluateDevice(deviceTelemetry))
         allFindings.addAll(sigmaRuleEngine.evaluateProcesses(processTelemetry))
         allFindings.addAll(sigmaRuleEngine.evaluateFiles(fileTelemetry))
+        // #366: the engine judges only the paths it could read. What went unread is
+        // declared, so the report states the limit instead of reading like a clean check.
+        synchronized(scannerErrors) {
+            scannerErrors.addAll(
+                RuleCoverage.unreadableArtifactSkips(sigmaRuleEngine.getEnabledRules(), fileTelemetry)
+            )
+        }
         allFindings.addAll(sigmaRuleEngine.evaluateAccessibility(accessibilityTelemetry))
         allFindings.addAll(sigmaRuleEngine.evaluateReceivers(receiverTelemetry))
         allFindings.addAll(sigmaRuleEngine.evaluateAppOps(appOpsTelemetry))
@@ -455,9 +465,17 @@ class ScanOrchestrator @Inject constructor(
         // would let their category influence classifications even though they produce
         // no bindings.
         val atomRulesById = sigmaRuleEngine.getEnabledRules().associateBy { it.id }
+        // #370: a chain rule fires only where every leg has events to bind to. Legs with
+        // nothing recorded are declared, so "no warning signs" never stands in for
+        // "three of these patterns could not be checked at all".
+        val chainSkips = RuleCoverage.noEventSkipsFor(
+            correlationRules, sigmaRuleEngine.atomCategories(),
+            installEvents + adminGrantEvents + findingTimelineEvents + taggedUsageEvents + lookbackEvents,
+        )
+        val resultWithCoverage = result.copy(scannerErrors = result.scannerErrors + chainSkips)
         val persisted = runCatching {
             val saved = scanRepository.saveScanWithCorrelation(
-                scan = result,
+                scan = resultWithCoverage,
                 findingTimelineEvents = installEvents + adminGrantEvents + findingTimelineEvents,
                 replaceUsageStatsEvents = taggedUsageEvents,
                 lookbackEvents = lookbackEvents,
@@ -480,7 +498,10 @@ class ScanOrchestrator @Inject constructor(
             saved
         }.getOrElse {
             Log.e(TAG, "Failed to persist scan results", it)
-            result
+            // Keep the coverage declarations: a save that failed does not make the
+            // unevaluable chains evaluable, and the in-memory result is what the UI
+            // renders.
+            resultWithCoverage
         }
 
         // Progress is reset to Idle by the outer runFullScan() in its
@@ -617,9 +638,12 @@ class ScanOrchestrator @Inject constructor(
         // no bindings.
         val atomRulesById = sigmaRuleEngine.getEnabledRules().associateBy { it.id }
         val brCorrelationRules = sigmaRuleEngine.getCorrelationRules()
+        val brChainSkips = RuleCoverage.noEventSkipsFor(
+            brCorrelationRules, sigmaRuleEngine.atomCategories(), baseBugReportEvents,
+        )
         runCatching {
             scanRepository.saveScanWithCorrelation(
-                scan = scanResult,
+                scan = scanResult.copy(scannerErrors = scanResult.scannerErrors + brChainSkips),
                 findingTimelineEvents = baseBugReportEvents,
                 replaceUsageStatsEvents = null,
                 lookbackEvents = emptyList(),
@@ -747,9 +771,11 @@ class ScanOrchestrator @Inject constructor(
         // no bindings.
         val atomRulesById = sigmaRuleEngine.getEnabledRules().associateBy { it.id }
         val corrRules = sigmaRuleEngine.getCorrelationRules()
+        val ilChainSkips =
+            RuleCoverage.noEventSkipsFor(corrRules, sigmaRuleEngine.atomCategories(), allEvents)
         try {
             scanRepository.saveScanWithCorrelation(
-                scan = scanResult,
+                scan = scanResult.copy(scannerErrors = scanResult.scannerErrors + ilChainSkips),
                 findingTimelineEvents = allEvents,
                 replaceUsageStatsEvents = null,
                 lookbackEvents = emptyList(),
@@ -913,8 +939,12 @@ class ScanOrchestrator @Inject constructor(
         newer: ScanResult,
         older: ScanResult
     ): ScanDiff {
+        // Every reason a rule produced no verdict, not just the one this filter was
+        // written for. A rule the newer scan could not evaluate has not been fixed,
+        // and "resolved" on a CRITICAL nobody checked is the false reassurance this
+        // function's contract forbids.
         val skippedRuleIds = newer.scannerErrors
-            .filter { it.exception == UNREGISTERED_IOC_LOOKUP }
+            .filter { it.exception in NotEvaluatedReason.SENTINELS }
             .mapNotNull { it.ruleId }
             .toSet()
         val olderTriggeredIds = older.findings
@@ -957,17 +987,13 @@ class ScanOrchestrator @Inject constructor(
          * (`trusted_installer_db` is 20 chars), so this is generous while still
          * bounding a hostile rule's contribution to one report line.
          */
-        private const val MAX_LOOKUP_NAME_CHARS = 64
-
         /**
-         * Reduces a feed-controlled lookup name to printable ASCII, then caps
-         * its length. Printable-ASCII-only is not cosmetic: the report is
-         * strictly ASCII (enforced by ReportFormatterTest) and is rendered
-         * line-per-entry, so a name containing CR/LF could otherwise inject
-         * lines that read as additional report content.
+         * Reduces a feed-controlled lookup name to printable ASCII, then caps its
+         * length. Delegates to [reportSafe], which every path writing feed text into
+         * a report now shares -- including [RuleCoverage], which writes rule titles
+         * into the same section.
          */
-        private fun sanitizeLookupName(name: String): String =
-            name.filter { it in ' '..'~' }.take(MAX_LOOKUP_NAME_CHARS)
+        private fun sanitizeLookupName(name: String): String = reportSafe(name)
 
         /**
          * Number of parallel scanners tracked by the progress indicator.

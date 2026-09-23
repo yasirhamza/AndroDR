@@ -5,6 +5,7 @@ import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.androdr.data.db.DnsEventDao
+import kotlinx.coroutines.flow.first
 import com.androdr.data.model.ScanResult
 import com.androdr.data.repo.ScanRepository
 import com.androdr.reporting.ExportMode
@@ -29,6 +30,7 @@ class HistoryViewModel @Inject constructor(
     private val orchestrator: ScanOrchestrator,
     private val reportExporter: ReportExporter,
     private val dnsEventDao: DnsEventDao,
+    private val forensicTimelineEventDao: com.androdr.data.db.ForensicTimelineEventDao,
     @ApplicationContext private val appContext: Context
 ) : ViewModel() {
 
@@ -86,9 +88,14 @@ class HistoryViewModel @Inject constructor(
         viewModelScope.launch {
             val dnsEvents = dnsEventDao.getRecentSnapshot()
             val inventory = orchestrator.lastAppTelemetry
+            // Scoped to THIS scan, like ReportExporter: without them an imported
+            // scan's DNS section would report that the import carried no DNS at all.
+            val intrusionEvents = forensicTimelineEventDao
+                .getEventsBySourceForScan("intrusion_log", scan.id, INTRUSION_ROW_LIMIT).first()
             _sheetReportText.value = ReportFormatter.formatScanReport(
                 scan, dnsEvents, emptyList(), inventory,
-                versionName = appContext.appVersion().name
+                versionName = appContext.appVersion().name,
+                intrusionEvents = intrusionEvents,
             )
         }
     }
@@ -142,5 +149,10 @@ class HistoryViewModel @Inject constructor(
         _showClearAllConfirm.value = false
         _selectedScan.value = null
         viewModelScope.launch { repository.deleteAllScans() }
+    }
+
+    private companion object {
+        /** Same cap ReportExporter embeds, so the sheet and the export agree. */
+        const val INTRUSION_ROW_LIMIT = 500
     }
 }

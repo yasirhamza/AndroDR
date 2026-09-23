@@ -122,17 +122,7 @@ class SigmaRuleEngine @Inject constructor(
      * not silently bind timeline events into correlations either.
      */
     fun computeAtomBindings(events: List<ForensicTimelineEvent>): Map<Long, Set<String>> {
-        val skippedRuleIds = unevaluableRules().keys
-        val atomCategoryByRuleId: Map<String, String> = rules
-            .asSequence()
-            .filter { it.enabled }
-            .filter { it.level == "informational" }
-            .filter { it.id !in skippedRuleIds }
-            .mapNotNull { rule ->
-                val cat = extractAtomCategory(rule) ?: return@mapNotNull null
-                rule.id to cat
-            }
-            .toMap()
+        val atomCategoryByRuleId = atomCategories()
         if (atomCategoryByRuleId.isEmpty() || events.isEmpty()) return emptyMap()
         return events.associate { event ->
             event.id to atomCategoryByRuleId
@@ -202,6 +192,31 @@ class SigmaRuleEngine @Inject constructor(
      */
     fun getEnabledRules(): List<SigmaRule> = effectiveRules()
 
+    /**
+     * Atom rule id -> the timeline event category it binds to.
+     *
+     * The one definition of "atom rule", used both to bind events
+     * ([computeAtomBindings]) and to tell which legs of a chain rule had nothing to
+     * bind to (#370, via [com.androdr.sigma.RuleCoverage]). Two definitions would
+     * drift, and the drift is invisible in the direction that matters: a rule the
+     * binder rejects but coverage accepts is a chain that silently never fires while
+     * the report calls it checked -- the exact silence #370 is about.
+     *
+     * An atom rule is enabled, `informational` (it observes, it does not judge), and
+     * evaluable on this build -- a rule dropped by [unevaluableRules] binds nothing.
+     * Pinned by AtomCategoriesMatchBindingsTest.
+     */
+    fun atomCategories(): Map<String, String> {
+        val skippedRuleIds = unevaluableRules().keys
+        return rules
+            .asSequence()
+            .filter { it.enabled }
+            .filter { it.level == "informational" }
+            .filter { it.id !in skippedRuleIds }
+            .mapNotNull { rule -> extractAtomCategory(rule)?.let { rule.id to it } }
+            .toMap()
+    }
+
     /** Returns only rules that are enabled. Used internally by all evaluate* methods. */
     private fun effectiveRules(): List<SigmaRule> = getRules().filter { it.enabled }
 
@@ -233,8 +248,16 @@ class SigmaRuleEngine @Inject constructor(
         return SigmaRuleEvaluator.evaluate(effectiveRules(), records, "dns_monitor", iocLookups, evidenceProviders)
     }
 
+    /**
+     * Rules see only the paths that were actually read.
+     *
+     * A path the app was refused arrives with `fileExists = false` because nothing
+     * was observed, not because the file is known to be absent (#366). Letting such
+     * a row reach a rule turns "not allowed to look" into a clean pass. What went
+     * unread is declared instead, by [RuleCoverage.unreadableArtifactSkips].
+     */
     fun evaluateFiles(telemetry: List<FileArtifactTelemetry>): List<Finding> {
-        val records = telemetry.map { it.toFieldMap() }
+        val records = telemetry.filter { it.accessible }.map { it.toFieldMap() }
         return SigmaRuleEvaluator.evaluate(effectiveRules(), records, "file_scanner", iocLookups, evidenceProviders)
     }
 

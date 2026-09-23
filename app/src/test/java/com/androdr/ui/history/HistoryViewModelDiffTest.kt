@@ -86,6 +86,7 @@ class HistoryViewModelDiffTest {
                 orchestrator = orchestrator,
                 reportExporter = mockk(relaxed = true),
                 dnsEventDao = mockk(relaxed = true),
+                forensicTimelineEventDao = mockk(relaxed = true),
                 appContext = mockk(relaxed = true)
             )
 

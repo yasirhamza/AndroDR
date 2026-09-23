@@ -7,118 +7,109 @@ import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
-import org.junit.Before
 import org.junit.Test
 import java.io.File
+import java.nio.file.Files
 
+/**
+ * The artifact scanner probes known implant paths. Almost none of them are
+ * readable by an unprivileged app, and it used to drop those paths silently:
+ * the scan produced no telemetry, the CRITICAL artifact rule was never
+ * evaluated, and the report was indistinguishable from a device that had been
+ * checked and found clean (#366).
+ *
+ * The contract pinned here is that the scanner reports **one row per path,
+ * always**, and says which of them it could not read. Curation belongs to the
+ * rules and to the report, never to an emitter that quietly shortens its own
+ * evidence.
+ */
 class FileArtifactScannerTest {
 
-    private lateinit var scanner: FileArtifactScanner
-
-    // Mirrors the 5 paths historically hardcoded in FileArtifactScanner.kt before the
-    // migration to known_spyware_artifacts.yml. The scanner no longer owns this list —
-    // it delegates to KnownSpywareArtifactsResolver, which we mock here.
-    private val fakePaths = listOf(
+    /** Paths whose parent no unprivileged process can read (nor this JVM). */
+    private val unreadablePaths = listOf(
         "/data/local/tmp/.raptor",
         "/data/local/tmp/.stat",
-        "/data/local/tmp/.mobilesoftwareupdate",
         "/sdcard/.hidden_config",
-        "/sdcard/Android/data/.system_update",
     )
 
-    @Before
-    fun setUp() {
+    private fun scannerFor(paths: List<String>): FileArtifactScanner {
         val resolver = mockk<KnownSpywareArtifactsResolver>()
-        every { resolver.paths } returns fakePaths
-        scanner = FileArtifactScanner(resolver)
+        every { resolver.paths } returns paths
+        return FileArtifactScanner(resolver)
     }
 
-    // ── 1. Only accessible paths produce telemetry ──────────────────────────
+    @Test
+    fun `every known path produces exactly one row, readable or not`() = runTest {
+        val readableDir = Files.createTempDirectory("artifacts").toFile()
+        val absent = File(readableDir, "absent-artifact").absolutePath
+        val paths = unreadablePaths + absent
+
+        val result = scannerFor(paths).collectTelemetry()
+
+        assertEquals("one row per probed path", paths.size, result.size)
+        assertEquals(paths.toSet(), result.map { it.filePath }.toSet())
+    }
 
     @Test
-    fun `only accessible paths produce telemetry`() = runTest {
-        val result = scanner.collectTelemetry()
+    fun `a path the app cannot read is reported as inaccessible, not dropped`() = runTest {
+        val result = scannerFor(unreadablePaths).collectTelemetry()
 
-        // Count how many fake paths have a readable parent directory on this JVM
-        val accessibleCount = fakePaths.count { path ->
-            File(path).parentFile?.canRead() ?: false
-        }
-
-        assertEquals(
-            "Expected one entry per accessible resolver path",
-            accessibleCount,
-            result.size
-        )
-
-        // Every returned entry must have accessible = true
+        assertEquals(unreadablePaths.size, result.size)
         result.forEach { telemetry ->
-            assertTrue(
-                "Returned telemetry must have accessible = true",
-                telemetry.accessible
-            )
+            assertFalse("${telemetry.filePath} must be marked inaccessible", telemetry.accessible)
         }
     }
 
-    // ── 2. Non-existent path returns fileExists false ────────────────────────
-
     @Test
-    fun `non-existent path returns fileExists false`() = runTest {
-        val result = scanner.collectTelemetry()
+    fun `an inaccessible path is never claimed to be absent`() = runTest {
+        // fileExists = false on an unreadable path means "we could not look",
+        // which only `accessible` can distinguish from "we looked and it is gone".
+        val result = scannerFor(unreadablePaths).collectTelemetry()
 
-        // On the test JVM (not a rooted Android device) none of the IOC paths
-        // exist, so every entry should have fileExists = false.
+        assertEquals(unreadablePaths.size, result.size)
         result.forEach { telemetry ->
-            assertFalse(
-                "Expected fileExists = false for non-existent path: ${telemetry.filePath}",
-                telemetry.fileExists
-            )
+            assertFalse(telemetry.fileExists)
+            assertFalse(telemetry.accessible)
+            assertNull(telemetry.fileSize)
+            assertNull(telemetry.fileModified)
         }
     }
 
-    // ── 3. All entries have correct source metadata ──────────────────────────
-
     @Test
-    fun `all entries have correct source metadata`() = runTest {
-        val result = scanner.collectTelemetry()
+    fun `a readable path that holds nothing is a real negative`() = runTest {
+        val readableDir = Files.createTempDirectory("artifacts").toFile()
+        val absent = File(readableDir, "absent-artifact").absolutePath
 
-        result.forEach { telemetry ->
-            // filePath must be a non-blank absolute path
-            assertNotNull("filePath must not be null", telemetry.filePath)
-            assertFalse("filePath must not be blank", telemetry.filePath.isBlank())
-            assert(telemetry.filePath.startsWith("/")) {
-                "filePath must be absolute, was: ${telemetry.filePath}"
-            }
+        val telemetry = scannerFor(listOf(absent)).collectTelemetry().single()
 
-            // For non-existent files, size and modified time must be null
-            if (!telemetry.fileExists) {
-                assertEquals(
-                    "fileSize must be null when file does not exist",
-                    null,
-                    telemetry.fileSize
-                )
-                assertEquals(
-                    "fileModified must be null when file does not exist",
-                    null,
-                    telemetry.fileModified
-                )
-            }
-        }
+        assertTrue("a readable parent means the check actually ran", telemetry.accessible)
+        assertFalse(telemetry.fileExists)
+        assertNull(telemetry.fileSize)
+        assertNull(telemetry.fileModified)
     }
 
-    // ── 4. Inaccessible paths are skipped entirely ──────────────────────────
+    @Test
+    fun `a readable path that holds an artifact keeps its metadata`() = runTest {
+        val readableDir = Files.createTempDirectory("artifacts").toFile()
+        val planted = File(readableDir, ".raptor").apply { writeText("implant") }
+
+        val telemetry = scannerFor(listOf(planted.absolutePath)).collectTelemetry().single()
+
+        assertTrue(telemetry.accessible)
+        assertTrue(telemetry.fileExists)
+        assertEquals(planted.length(), telemetry.fileSize)
+        assertNotNull(telemetry.fileModified)
+    }
 
     @Test
-    fun `inaccessible paths are skipped entirely`() = runTest {
-        val result = scanner.collectTelemetry()
+    fun `paths keep their absolute form`() = runTest {
+        val result = scannerFor(unreadablePaths).collectTelemetry()
 
-        // Verify that no returned path has an unreadable parent
+        assertEquals(unreadablePaths.size, result.size)
         result.forEach { telemetry ->
-            val parentReadable = File(telemetry.filePath).parentFile?.canRead() ?: false
-            assertTrue(
-                "Returned path ${telemetry.filePath} should have a readable parent",
-                parentReadable
-            )
+            assertTrue("expected an absolute path: ${telemetry.filePath}", telemetry.filePath.startsWith("/"))
         }
     }
 }

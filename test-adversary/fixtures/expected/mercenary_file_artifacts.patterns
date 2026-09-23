@@ -1,1 +1,19 @@
-spyware file artifact
+# Known spyware artifact paths injected via ADB into /data/local/tmp.
+#
+# An unprivileged app cannot read that directory (SELinux), so androdr-020 can
+# never fire here, on any device this product targets. The scenario used to
+# assert "spyware file artifact" and fail as EXPECTED FAIL (#8) -- against an
+# issue that closed long ago, so the harness excused a silence nobody
+# re-examined (#366). Detection is not what to demand here.
+#
+# What is required is that the report says it could not look. A report that
+# renders identically to a device where the paths WERE checked and found clean
+# is the actual defect.
+WHAT THIS SCAN COULD NOT CHECK
+Not permitted on this device
+androdr-020
+could not be read on this device
+# ...and a path that was never read must never be reported as clear. The report
+# renders a checked-and-empty path as "<path> : clear" (ReportFormatter FILE
+# ARTIFACTS), so that exact line is what must never appear for a refused path.
+!/data/local/tmp/.raptor : clear

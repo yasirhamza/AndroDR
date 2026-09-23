@@ -330,9 +330,11 @@ scenarios:
         adb_cmd: "shell touch /data/local/tmp/.stat"
         cleanup: "shell rm -f /data/local/tmp/.stat"
     attack: [T1533]
+    # No detection is possible without root: /data/local/tmp is unreadable to an
+    # unprivileged app. What the report must do instead is say so (#366) -- see
+    # fixtures/expected/mercenary_file_artifacts.patterns.
     expected_patterns:
-      - "file_artifact"
-    roadmap_issue: 8
+      - "WHAT THIS SCAN COULD NOT CHECK"
 
   - id: mercenary_dns_c2
     track: 3
