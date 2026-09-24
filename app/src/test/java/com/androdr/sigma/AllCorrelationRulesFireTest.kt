@@ -1,9 +1,11 @@
 package com.androdr.sigma
 
+import android.content.Context
 import com.androdr.data.model.ForensicTimelineEvent
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
+import io.mockk.mockk
 import org.junit.Test
 import java.io.File
 
@@ -33,12 +35,23 @@ class AllCorrelationRulesFireTest {
         "sigma_androdr_corr_004_surveillance_burst.yml"
     )
 
-    private val atomFor = mapOf(
-        "package_install"    to "androdr-atom-package-install",
-        "device_admin_grant" to "androdr-atom-device-admin-grant",
-        "permission_use"     to "androdr-atom-permission-use",
-        "ioc_match"          to "androdr-atom-dns-lookup"
+    /** The bundled atom rules, bound by the engine exactly as in production. */
+    private val atomFiles = listOf(
+        "sigma_androdr_atom_package_install.yml",
+        "sigma_androdr_atom_device_admin_grant.yml",
+        "sigma_androdr_atom_permission_use.yml",
+        "sigma_androdr_atom_dns_lookup.yml",
     )
+
+    private fun engineWithAtoms(): SigmaRuleEngine {
+        val atoms = atomFiles.mapNotNull { SigmaRuleParser.parse(loadYaml(it)) }
+        assertEquals("every atom must parse", atomFiles.size, atoms.size)
+        val engine = SigmaRuleEngine(mockk<Context>(relaxed = true))
+        for (field in listOf("bundledRules", "rules")) {
+            SigmaRuleEngine::class.java.getDeclaredField(field).apply { isAccessible = true }.set(engine, atoms)
+        }
+        return engine
+    }
 
     @Test
     @Suppress("LongMethod") // end-to-end demo: all 4 rules + fixture + signal output
@@ -79,14 +92,11 @@ class AllCorrelationRulesFireTest {
         add("permission_use",      t0 + 30 * min + 30_000, "com.burst")
         add("permission_use",      t0 + 30 * min + 60_000, "com.burst")
 
-        // 3. Compute bindings (eventId -> set of atom rule ids that match it).
-        // SigmaRuleEngine.computeAtomBindings does this in production by reading
-        // each detection rule's selection.category. The test version is the same
-        // mapping table, hand-built so the test is independent of engine state.
-        val bindings: Map<Long, Set<String>> = events.associate { ev ->
-            val atomId = atomFor[ev.category]
-            ev.id to (if (atomId != null) setOf(atomId) else emptySet())
-        }
+        // 3. Compute bindings with the engine and the real bundled atoms. This test
+        // used to hand-build the binding table, which is how androdr-corr-003 stayed
+        // "green" for five months while its DNS atom bound to nothing in production
+        // (#378): the table said ioc_match, the atom said dns_match.
+        val bindings: Map<Long, Set<String>> = engineWithAtoms().computeAtomBindings(events)
 
         // 4. Run the engine.
         val engine = SigmaCorrelationEngine()
