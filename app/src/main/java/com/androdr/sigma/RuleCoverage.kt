@@ -31,6 +31,10 @@ object RuleCoverage {
     const val UNBOUND_LEG = "(no rule loaded for this leg)"
 
     private const val FILE_SCANNER = "fileArtifactScanner"
+    private const val RULE_FEED = "ruleFeed"
+
+    /** A parser message can be long; the report needs the gist, not the stack. */
+    private const val MAX_REJECTION_REASON_CHARS = 160
     private const val CORRELATION = "correlation"
 
     /**
@@ -92,6 +96,37 @@ object RuleCoverage {
                 missingEvidence = missing.map { it ?: UNBOUND_LEG },
             )
         }
+    }
+
+    /**
+     * Remote rule files the last fetch verified but this build could not read (#288).
+     *
+     * The usual cause is a rule written against a newer rules schema, so the reader's
+     * remedy is the same as for an unregistered lookup: update the app. With no
+     * built-in copy the rule is not evaluated at all, and carries its id so History
+     * never renders it resolved. With a built-in copy the older version still runs
+     * (`setRemoteRules` replaces a bundled rule only when the remote one loaded), so
+     * it is stated as an update not applied and carries no id: tying it to the rule
+     * would suppress a genuine resolution of a rule that is still checked. File name,
+     * id and reason are feed-controlled, hence [reportSafe].
+     */
+    fun rejectedRuleSkips(
+        rejected: List<SigmaRuleFeed.RejectedRuleFile>,
+        builtInIds: Set<String>,
+    ): List<ScannerFailure> = rejected.map { file ->
+        val id = file.ruleId?.let { reportSafe(it) }
+        val stillRuns = file.ruleId != null && file.ruleId in builtInIds
+        val what = if (id != null) "rule $id" else "rule file ${reportSafe(file.file)}"
+        ScannerFailure(
+            scanner = RULE_FEED,
+            exception = NotEvaluatedReason.MISSING_CAPABILITY.sentinel,
+            message = if (stillRuns) {
+                "an update to $what could not be read by this build; the built-in version is still checked"
+            } else {
+                "$what could not be read by this build: ${reportSafe(file.reason, MAX_REJECTION_REASON_CHARS)}"
+            },
+            ruleId = if (stillRuns) null else id,
+        )
     }
 
     /** As [noEventSkips], reading the recorded categories off the events themselves. */

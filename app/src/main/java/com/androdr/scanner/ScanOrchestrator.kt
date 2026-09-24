@@ -244,6 +244,12 @@ class ScanOrchestrator @Inject constructor(
      * upstream) and is kept raw so it stays greppable.
      */
     private fun recordRuleCapabilitySkips(errors: MutableList<ScannerFailure>) {
+        // #288: remote rules this build verified but could not read.
+        errors.addAll(
+            RuleCoverage.rejectedRuleSkips(
+                sigmaRuleFeed.lastRejected, sigmaRuleEngine.getRules().mapTo(HashSet()) { it.id },
+            )
+        )
         sigmaRuleEngine.unevaluableRules().forEach { (ruleId, lookupName) ->
             val safeName = sanitizeLookupName(lookupName)
             errors.add(

@@ -19,12 +19,28 @@ class SigmaRuleFeed @Inject constructor(
     private val settingsRepository: SettingsRepository
 ) {
 
+    /**
+     * Remote rule files the most recent [fetch] verified but could not read (#288).
+     *
+     * Each one is a rule this build is missing -- usually a rule written against a
+     * newer rules schema than this binary understands. Kept so a scan can say so in
+     * its report instead of the loss living only in a log line. Replaced wholesale
+     * by every fetch that completes.
+     */
+    @Volatile
+    var lastRejected: List<RejectedRuleFile> = emptyList()
+        private set
+
     @Suppress("TooGenericExceptionCaught")
     suspend fun fetch(): List<SigmaRule> = withContext(Dispatchers.IO) {
         val allRules = mutableListOf<SigmaRule>()
+        val allRejected = mutableListOf<RejectedRuleFile>()
 
         // Default public repo — manifest REQUIRED (fail closed if absent).
-        allRules.addAll(fetchFromRepo(DEFAULT_BASE_URL, requireManifest = true))
+        fetchFromRepo(DEFAULT_BASE_URL, requireManifest = true).let {
+            allRules.addAll(it.rules)
+            allRejected.addAll(it.rejected)
+        }
 
         // Custom rule URLs from settings
         @Suppress("TooGenericExceptionCaught", "SwallowedException")
@@ -38,23 +54,27 @@ class SigmaRuleFeed @Inject constructor(
         for (url in customUrls) {
             val baseUrl = if (url.endsWith("/")) url else "$url/"
             // Custom feeds are user-chosen and may not ship a hash manifest; stay lenient.
-            val rules = fetchFromRepo(baseUrl, requireManifest = false)
-            if (rules.isEmpty()) failedUrls.add(url)
-            allRules.addAll(rules)
+            val fetched = fetchFromRepo(baseUrl, requireManifest = false)
+            if (fetched.rules.isEmpty()) failedUrls.add(url)
+            allRules.addAll(fetched.rules)
+            allRejected.addAll(fetched.rejected)
         }
 
         if (failedUrls.isNotEmpty()) {
             Log.e(TAG, "Failed to fetch from ${failedUrls.size} custom rule URL(s): $failedUrls")
         }
-        Log.i(TAG, "Fetched ${allRules.size} remote SIGMA rules from ${1 + customUrls.size} source(s)")
+        Log.i(TAG, "Fetched ${allRules.size} remote SIGMA rules from ${1 + customUrls.size} source(s)" +
+            if (allRejected.isEmpty()) "" else ", ${allRejected.size} rejected")
+        lastRejected = allRejected
         allRules
     }
 
     @Suppress("TooGenericExceptionCaught")
-    private fun fetchFromRepo(baseUrl: String, requireManifest: Boolean): List<SigmaRule> {
+    private fun fetchFromRepo(baseUrl: String, requireManifest: Boolean): RuleFetch {
         val rules = mutableListOf<SigmaRule>()
+        val rejected = mutableListOf<RejectedRuleFile>()
         try {
-            val manifest = fetchUrl("${baseUrl}rules.txt") ?: return emptyList()
+            val manifest = fetchUrl("${baseUrl}rules.txt") ?: return RuleFetch(emptyList(), emptyList())
             val ruleFiles = parseManifest(manifest)
 
             val hashManifest = fetchUrl("${baseUrl}rules.sha256")
@@ -68,20 +88,17 @@ class SigmaRuleFeed @Inject constructor(
             if (expectedHashes.isEmpty() && requireManifest) {
                 Log.e(TAG, "No usable hash manifest (rules.sha256) for $baseUrl — " +
                     "refusing to load unverified rules (fail closed)")
-                return emptyList()
+                return RuleFetch(emptyList(), emptyList())
             }
 
-            for (file in ruleFiles) {
-                val yaml = fetchUrl("$baseUrl$file") ?: continue
-                when (val decision = decideRuleFile(file, yaml, expectedHashes, requireManifest)) {
-                    is RuleFileDecision.Accept -> SigmaRuleParser.parse(yaml)?.let { rules.add(it) }
-                    is RuleFileDecision.Skip -> Log.e(TAG, decision.reason)
-                }
-            }
+            val fetched = ruleFiles.mapNotNull { file -> fetchUrl("$baseUrl$file")?.let { file to it } }
+            val loaded = loadRuleFiles(fetched, expectedHashes, requireManifest)
+            rules.addAll(loaded.rules)
+            rejected.addAll(loaded.rejected)
         } catch (e: Exception) {
             Log.w(TAG, "Failed to fetch rules from $baseUrl: ${e.message}")
         }
-        return rules
+        return RuleFetch(rules, rejected)
     }
 
     @Suppress("TooGenericExceptionCaught")
@@ -119,6 +136,17 @@ class SigmaRuleFeed @Inject constructor(
         object Accept : RuleFileDecision
         data class Skip(val reason: String) : RuleFileDecision
     }
+
+    /** A remote rule file that passed integrity checks and could not be read by this build. */
+    data class RejectedRuleFile(
+        val file: String,
+        /** The `id:` the file declares, when it can be read without parsing the rule. */
+        val ruleId: String?,
+        val reason: String,
+    )
+
+    /** What one repository yielded: the rules it loaded and the files it could not. */
+    data class RuleFetch(val rules: List<SigmaRule>, val rejected: List<RejectedRuleFile>)
 
     companion object {
         private const val TAG = "SigmaRuleFeed"
@@ -166,6 +194,44 @@ class SigmaRuleFeed @Inject constructor(
          * is empty and a manifest is required; this function stays correct on its
          * own regardless of that caller guard.
          */
+        /**
+         * Verifies and parses each fetched file, independently (#288).
+         *
+         * The parser throws [SigmaRuleParseException] for a rule it refuses to guess
+         * about. That used to escape the loop into the fetch's outer catch, so one
+         * unreadable file silently dropped every rule after it -- fleet-wide, since
+         * rules ship from the rules repo without an app release. Now it costs that one
+         * file, which is reported. A file the parser returns null for (not a rule at
+         * all) is dropped quietly, as it always was; a file failing the integrity
+         * check is dropped and logged -- a publishing error, gated in CI, not a gap in
+         * what this build can read.
+         */
+        fun loadRuleFiles(
+            files: List<Pair<String, String>>,
+            expectedHashes: Map<String, String>,
+            requireManifest: Boolean,
+        ): RuleFetch {
+            val rules = mutableListOf<SigmaRule>()
+            val rejected = mutableListOf<RejectedRuleFile>()
+            for ((file, yaml) in files) {
+                when (val decision = decideRuleFile(file, yaml, expectedHashes, requireManifest)) {
+                    is RuleFileDecision.Skip -> Log.e(TAG, decision.reason)
+                    is RuleFileDecision.Accept -> try {
+                        SigmaRuleParser.parse(yaml)?.let { rules.add(it) }
+                    } catch (e: SigmaRuleParseException) {
+                        Log.e(TAG, "Rejected remote rule $file: ${e.message}")
+                        rejected.add(RejectedRuleFile(file, declaredId(yaml), e.message ?: "unreadable"))
+                    }
+                }
+            }
+            return RuleFetch(rules, rejected)
+        }
+
+        private val DECLARED_ID = Regex("""(?m)^id:\s*['"]?([A-Za-z0-9._-]+)""")
+
+        /** The rule id a file declares, read without trusting the rest of it. */
+        internal fun declaredId(yaml: String): String? = DECLARED_ID.find(yaml)?.groupValues?.get(1)
+
         fun decideRuleFile(
             file: String,
             yaml: String,
