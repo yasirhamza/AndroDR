@@ -164,7 +164,7 @@ class IntelRefresher @Inject constructor(
             succeeded = { it.isNotEmpty() },
         ) { sigmaRuleFeed.fetch() }
         if (remoteRules != null && remoteRules.isNotEmpty()) {
-            sigmaRuleEngine.setRemoteRules(remoteRules)
+            sigmaRuleEngine.setRemoteRules(remoteRules, sigmaRuleFeed.lastRejected)
             Log.i(TAG, "SIGMA rules refreshed: ${remoteRules.size} remote rules loaded")
         }
         return remoteRules?.size ?: 0

@@ -252,4 +252,17 @@ class RuleCoverageTest {
 
         assertEquals(listOf("corr-002", "corr-004"), skips.map { it.ruleId })
     }
+
+    // -- #288: rejected remote rules ------------------------------------------
+
+    @Test
+    fun `a feed that rejects thousands of files cannot flood the report`() {
+        // A custom feed is lenient by design; every file it lists could fail to parse.
+        val rejected = (1..5_000).map { SigmaRuleFeed.RejectedRuleFile("f$it.yml", "androdr-$it", "bad") }
+
+        val skips = RuleCoverage.rejectedRuleSkips(rejected, builtInIds = emptySet())
+
+        assertEquals("capped entries plus one summary line", RuleCoverage.MAX_REJECTED_ENTRIES + 1, skips.size)
+        assertTrue("the summary counts the rest: ${skips.last().message}", skips.last().message!!.contains("4980 more"))
+    }
 }

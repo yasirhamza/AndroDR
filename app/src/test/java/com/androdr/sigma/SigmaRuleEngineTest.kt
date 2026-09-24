@@ -92,4 +92,24 @@ class SigmaRuleEngineTest {
             f.set(engine, rules)
         }
     }
+
+    // -- #288: rejections belong to the rule set they were fetched with ----------
+
+    @Test
+    fun `rejected remote rules are stored with the rules they came with`() {
+        val rejected = listOf(SigmaRuleFeed.RejectedRuleFile("x.yml", "androdr-950", "unknown field"))
+
+        engine.setRemoteRules(emptyList(), rejected)
+
+        assertEquals(rejected, engine.rejectedRemoteRules())
+    }
+
+    @Test
+    fun `a later update replaces the rejections along with the rules`() {
+        engine.setRemoteRules(emptyList(), listOf(SigmaRuleFeed.RejectedRuleFile("x.yml", "androdr-950", "r")))
+
+        engine.setRemoteRules(emptyList(), emptyList())
+
+        assertEquals(emptyList<SigmaRuleFeed.RejectedRuleFile>(), engine.rejectedRemoteRules())
+    }
 }
