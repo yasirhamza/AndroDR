@@ -91,7 +91,9 @@ class SigmaRuleFeed @Inject constructor(
                 return RuleFetch(emptyList(), emptyList())
             }
 
-            val fetched = ruleFiles.mapNotNull { file -> fetchUrl("$baseUrl$file")?.let { file to it } }
+            // Streamed: each body is verified, parsed and released before the next is
+            // fetched, so peak memory is one file, not the whole feed.
+            val fetched = ruleFiles.asSequence().mapNotNull { file -> fetchUrl("$baseUrl$file")?.let { file to it } }
             val loaded = loadRuleFiles(fetched, expectedHashes, requireManifest)
             rules.addAll(loaded.rules)
             rejected.addAll(loaded.rejected)
@@ -179,22 +181,6 @@ class SigmaRuleFeed @Inject constructor(
         }
 
         /**
-         * Pure integrity decision for a single fetched rule file. Kept separate
-         * from the network glue so the fail-closed behaviour is unit-tested.
-         *
-         * Three cases:
-         *  1. File has a hash in the map → content must match it (else Skip),
-         *     independent of [requireManifest].
-         *  2. File is not in the map — either the map is empty (missing or corrupt
-         *     rules.sha256) or the manifest lists other files but not this one →
-         *     Skip when [requireManifest] (default repo: unverified is untrusted),
-         *     Accept when not (custom feeds may ship no manifest at all).
-         *
-         * fetchFromRepo additionally aborts the whole repo up front when the map
-         * is empty and a manifest is required; this function stays correct on its
-         * own regardless of that caller guard.
-         */
-        /**
          * Verifies and parses each fetched file, independently (#288).
          *
          * The parser throws [SigmaRuleParseException] for a rule it refuses to guess
@@ -207,7 +193,7 @@ class SigmaRuleFeed @Inject constructor(
          * what this build can read.
          */
         fun loadRuleFiles(
-            files: List<Pair<String, String>>,
+            files: Sequence<Pair<String, String>>,
             expectedHashes: Map<String, String>,
             requireManifest: Boolean,
         ): RuleFetch {
@@ -232,6 +218,22 @@ class SigmaRuleFeed @Inject constructor(
         /** The rule id a file declares, read without trusting the rest of it. */
         internal fun declaredId(yaml: String): String? = DECLARED_ID.find(yaml)?.groupValues?.get(1)
 
+        /**
+         * Pure integrity decision for a single fetched rule file. Kept separate
+         * from the network glue so the fail-closed behaviour is unit-tested.
+         *
+         * Three cases:
+         *  1. File has a hash in the map → content must match it (else Skip),
+         *     independent of [requireManifest].
+         *  2. File is not in the map — either the map is empty (missing or corrupt
+         *     rules.sha256) or the manifest lists other files but not this one →
+         *     Skip when [requireManifest] (default repo: unverified is untrusted),
+         *     Accept when not (custom feeds may ship no manifest at all).
+         *
+         * fetchFromRepo additionally aborts the whole repo up front when the map
+         * is empty and a manifest is required; this function stays correct on its
+         * own regardless of that caller guard.
+         */
         fun decideRuleFile(
             file: String,
             yaml: String,

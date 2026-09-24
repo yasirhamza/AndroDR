@@ -220,7 +220,7 @@ class ScanOrchestrator @Inject constructor(
         try {
             val remoteRules = sigmaRuleFeed.fetch()
             if (remoteRules.isNotEmpty()) {
-                sigmaRuleEngine.setRemoteRules(remoteRules)
+                sigmaRuleEngine.setRemoteRules(remoteRules, sigmaRuleFeed.lastRejected)
             }
         } catch (e: Exception) {
             Log.w(TAG, "Remote SIGMA rule fetch failed: ${e.message}")
@@ -247,7 +247,7 @@ class ScanOrchestrator @Inject constructor(
         // #288: remote rules this build verified but could not read.
         errors.addAll(
             RuleCoverage.rejectedRuleSkips(
-                sigmaRuleFeed.lastRejected, sigmaRuleEngine.getRules().mapTo(HashSet()) { it.id },
+                sigmaRuleEngine.rejectedRemoteRules(), sigmaRuleEngine.getEnabledRules().mapTo(HashSet()) { it.id },
             )
         )
         sigmaRuleEngine.unevaluableRules().forEach { (ruleId, lookupName) ->

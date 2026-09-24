@@ -36,6 +36,7 @@ class SigmaRuleEngine @Inject constructor(
     @Volatile private var iocLookups: Map<String, (Any) -> Boolean> = emptyMap()
     @Volatile private var evidenceProviders: Map<String, EvidenceProvider> = emptyMap()
     @Volatile private var remoteRulesLoaded = false
+    private var rejectedRemote: List<SigmaRuleFeed.RejectedRuleFile> = emptyList()
     @Volatile private var correlationRules: List<CorrelationRule> = emptyList()
 
     fun getCorrelationRules(): List<CorrelationRule> = correlationRules
@@ -141,7 +142,21 @@ class SigmaRuleEngine @Inject constructor(
         return matcher.values.firstOrNull()?.toString()
     }
 
-    fun setRemoteRules(remoteRules: List<SigmaRule>) = synchronized(ruleLock) {
+    /**
+     * Installs a fetch's rules, and the files that same fetch could not read (#288).
+     *
+     * Stored together, under one lock, because they describe one rule set. Kept on
+     * the feed instead, a later fetch that loads nothing (offline, feed down) would
+     * clear the rejections while the engine kept the rule set they described --
+     * the rule would stay missing, stop being reported, and History would call it
+     * resolved. Callers install only a non-empty fetch, so both halves change
+     * together or not at all.
+     */
+    fun setRemoteRules(
+        remoteRules: List<SigmaRule>,
+        rejected: List<SigmaRuleFeed.RejectedRuleFile> = emptyList(),
+    ) = synchronized(ruleLock) {
+        rejectedRemote = rejected
         val remoteById = remoteRules.associateBy { it.id }
         val merged = bundledRules.map { remoteById[it.id] ?: it }.toMutableList()
         val existingIds = merged.map { it.id }.toSet()
@@ -154,6 +169,9 @@ class SigmaRuleEngine @Inject constructor(
     }
 
     fun hasRemoteRules(): Boolean = remoteRulesLoaded
+
+    /** Remote rule files the installed fetch verified but could not read. */
+    fun rejectedRemoteRules(): List<SigmaRuleFeed.RejectedRuleFile> = synchronized(ruleLock) { rejectedRemote }
 
     // Signature is (fieldValue) -> Boolean. If a future lookup needs the full telemetry
     // record for cross-field correlation, widen to (Any, Map<String, Any?>) -> Boolean.

@@ -67,7 +67,10 @@ class ScanBroadcastReceiver : BroadcastReceiver() {
         val a = async { indicatorUpdater.update() }
         val b = async { knownAppUpdater.update() }
         a.await(); b.await()
-        try { sigmaRuleEngine.setRemoteRules(sigmaRuleFeed.fetch()) } catch (_: Exception) {}
+        try {
+            val remote = sigmaRuleFeed.fetch()
+            if (remote.isNotEmpty()) sigmaRuleEngine.setRemoteRules(remote, sigmaRuleFeed.lastRejected)
+        } catch (_: Exception) {}
         cveRepository.refresh()
         Log.i(TAG, "CVE DB: ${cveRepository.getActivelyExploitedCount()} actively exploited CVEs loaded")
     }

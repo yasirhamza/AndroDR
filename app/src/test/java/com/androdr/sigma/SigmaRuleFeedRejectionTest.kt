@@ -50,7 +50,7 @@ class SigmaRuleFeedRejectionTest {
 
     @Test
     fun `a rule this build cannot read does not take the rules after it down`() {
-        val result = SigmaRuleFeed.loadRuleFiles(files, hashes, requireManifest = true)
+        val result = SigmaRuleFeed.loadRuleFiles(files.asSequence(), hashes, requireManifest = true)
 
         assertEquals(
             "the rule listed after the broken one must still load",
@@ -61,7 +61,7 @@ class SigmaRuleFeedRejectionTest {
 
     @Test
     fun `the rejected file is reported, with the rule id it declared`() {
-        val result = SigmaRuleFeed.loadRuleFiles(files, hashes, requireManifest = true)
+        val result = SigmaRuleFeed.loadRuleFiles(files.asSequence(), hashes, requireManifest = true)
 
         val rejected = result.rejected.single()
         assertEquals("b.yml", rejected.file)
@@ -71,7 +71,7 @@ class SigmaRuleFeedRejectionTest {
 
     @Test
     fun `a broken first file does not stop the list`() {
-        val result = SigmaRuleFeed.loadRuleFiles(listOf(broken, good1, good2), hashes, requireManifest = true)
+        val result = SigmaRuleFeed.loadRuleFiles(sequenceOf(broken, good1, good2), hashes, requireManifest = true)
 
         assertEquals(2, result.rules.size)
         assertEquals(1, result.rejected.size)
@@ -84,7 +84,7 @@ class SigmaRuleFeedRejectionTest {
         // so it must not be surfaced to the reader as "update the app".
         val tampered = hashes + ("a.yml" to "deadbeef")
 
-        val result = SigmaRuleFeed.loadRuleFiles(listOf(good1, good2), tampered, requireManifest = true)
+        val result = SigmaRuleFeed.loadRuleFiles(sequenceOf(good1, good2), tampered, requireManifest = true)
 
         assertEquals(listOf("androdr-903"), result.rules.map { it.id })
         assertEquals(emptyList<Any>(), result.rejected)
@@ -97,7 +97,7 @@ class SigmaRuleFeedRejectionTest {
         val junk = "d.yml" to "just: a scalar map\n"
         val allHashes = hashes + ("d.yml" to sha(junk.second))
 
-        val result = SigmaRuleFeed.loadRuleFiles(listOf(junk, good1), allHashes, requireManifest = true)
+        val result = SigmaRuleFeed.loadRuleFiles(sequenceOf(junk, good1), allHashes, requireManifest = true)
 
         assertEquals(listOf("androdr-901"), result.rules.map { it.id })
     }

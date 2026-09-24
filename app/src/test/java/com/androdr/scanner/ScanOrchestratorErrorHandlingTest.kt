@@ -321,7 +321,7 @@ class ScanOrchestratorErrorHandlingTest {
 
     @Test
     fun `a rejected remote rule with no built-in copy is declared not evaluated, by id`() = runTest {
-        every { sigmaRuleFeed.lastRejected } returns listOf(
+        every { sigmaRuleEngine.rejectedRemoteRules() } returns listOf(
             SigmaRuleFeed.RejectedRuleFile("new_rule.yml", "androdr-950", "missing display.category"),
         )
 
@@ -334,27 +334,45 @@ class ScanOrchestratorErrorHandlingTest {
     }
 
     @Test
-    fun `a rejected update to a built-in rule says the built-in version still runs`() = runTest {
+    fun `a rejected update to a rule that still runs says an earlier version is checked`() = runTest {
         // setRemoteRules only replaces a bundled rule when the remote copy loaded; a
         // rejected update leaves the built-in version evaluating. Claiming "not
         // evaluated" would be false, and a ruleId would stop History from ever
         // showing a genuine resolution of that rule.
         val builtIn = mockk<com.androdr.sigma.SigmaRule>(relaxed = true)
         every { builtIn.id } returns "androdr-010"
-        every { sigmaRuleEngine.getRules() } returns listOf(builtIn)
-        every { sigmaRuleFeed.lastRejected } returns listOf(
+        every { sigmaRuleEngine.getEnabledRules() } returns listOf(builtIn)
+        every { sigmaRuleEngine.rejectedRemoteRules() } returns listOf(
             SigmaRuleFeed.RejectedRuleFile("androdr_010.yml", "androdr-010", "unknown field"),
         )
 
         val skip = orchestrator.runFullScan().scannerErrors.single()
 
         assertEquals(null, skip.ruleId)
-        assertTrue("says the older version still runs: ${skip.message}", skip.message!!.contains("built-in"))
+        assertTrue(
+            "says an earlier version still runs: ${skip.message}",
+            skip.message!!.contains("an earlier version is still checked"),
+        )
+    }
+
+    @Test
+    fun `a rejected update to a disabled rule is not claimed to still run`() = runTest {
+        // A disabled built-in copy is checked by nothing; saying an earlier version
+        // runs would be false. getEnabledRules is the set that actually evaluates.
+        every { sigmaRuleEngine.getEnabledRules() } returns emptyList()
+        every { sigmaRuleEngine.rejectedRemoteRules() } returns listOf(
+            SigmaRuleFeed.RejectedRuleFile("androdr_010.yml", "androdr-010", "unknown field"),
+        )
+
+        val skip = orchestrator.runFullScan().scannerErrors.single()
+
+        assertEquals("androdr-010", skip.ruleId)
+        assertFalse(skip.message!!.contains("still checked"))
     }
 
     @Test
     fun `a hostile rejected file name and reason cannot forge report lines`() = runTest {
-        every { sigmaRuleFeed.lastRejected } returns listOf(
+        every { sigmaRuleEngine.rejectedRemoteRules() } returns listOf(
             SigmaRuleFeed.RejectedRuleFile(
                 "x.yml\nFINDINGS SECTION", "androdr-951", "bad\r\nNo threats detected." + "C".repeat(500),
             ),

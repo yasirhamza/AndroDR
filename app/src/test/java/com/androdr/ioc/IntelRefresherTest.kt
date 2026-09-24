@@ -7,6 +7,8 @@ import com.androdr.sigma.SigmaRule
 import com.androdr.sigma.SigmaRuleEngine
 import com.androdr.sigma.SigmaRuleFeed
 import io.mockk.coEvery
+import io.mockk.verify
+import io.mockk.every
 import io.mockk.coVerify
 import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
@@ -54,6 +56,7 @@ class IntelRefresherTest {
         coEvery { oemPrefixResolver.refresh() } returns 10
         coEvery { brandImpersonationResolver.refresh() } returns 25
         coEvery { sigmaRuleFeed.fetch() } returns listOf(mockk<SigmaRule>(), mockk<SigmaRule>())
+        every { sigmaRuleFeed.lastRejected } returns emptyList()
         coEvery { cveRepository.refresh() } returns 5
     }
 
@@ -128,5 +131,19 @@ class IntelRefresherTest {
         // The skip must record nothing: only the first refresh's 7 rows exist,
         // so a regressed skip guard that re-ran the feeds would push this past 7.
         coVerify(exactly = 7) { dao.upsert(any()) }
+    }
+
+    @Test
+    fun `the rules a fetch loaded reach the engine together with the files it rejected`() = runTest {
+        // #288: the rejections describe the rule set they were fetched with. Handing
+        // them over separately would let a later empty fetch clear them while the
+        // engine kept the rule set, and a still-missing rule would read as resolved.
+        allFeedsSucceed()
+        val rejected = listOf(SigmaRuleFeed.RejectedRuleFile("x.yml", "androdr-950", "unknown field"))
+        every { sigmaRuleFeed.lastRejected } returns rejected
+
+        refresher().refreshAll()
+
+        verify { sigmaRuleEngine.setRemoteRules(any(), rejected) }
     }
 }

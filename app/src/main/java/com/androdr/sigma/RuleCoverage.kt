@@ -35,6 +35,9 @@ object RuleCoverage {
 
     /** A parser message can be long; the report needs the gist, not the stack. */
     private const val MAX_REJECTION_REASON_CHARS = 160
+
+    /** Rejected rule files named individually before the rest are summarised. */
+    const val MAX_REJECTED_ENTRIES = 20
     private const val CORRELATION = "correlation"
 
     /**
@@ -113,19 +116,30 @@ object RuleCoverage {
     fun rejectedRuleSkips(
         rejected: List<SigmaRuleFeed.RejectedRuleFile>,
         builtInIds: Set<String>,
-    ): List<ScannerFailure> = rejected.map { file ->
-        val id = file.ruleId?.let { reportSafe(it) }
-        val stillRuns = file.ruleId != null && file.ruleId in builtInIds
-        val what = if (id != null) "rule $id" else "rule file ${reportSafe(file.file)}"
-        ScannerFailure(
+    ): List<ScannerFailure> {
+        val shown = rejected.take(MAX_REJECTED_ENTRIES).map { file ->
+            val id = file.ruleId?.let { reportSafe(it) }
+            val stillRuns = file.ruleId != null && file.ruleId in builtInIds
+            val what = if (id != null) "rule $id" else "rule file ${reportSafe(file.file)}"
+            ScannerFailure(
+                scanner = RULE_FEED,
+                exception = NotEvaluatedReason.MISSING_CAPABILITY.sentinel,
+                message = if (stillRuns) {
+                    "an update to $what could not be read by this build; an earlier version is still checked"
+                } else {
+                    "$what could not be read by this build: ${reportSafe(file.reason, MAX_REJECTION_REASON_CHARS)}"
+                },
+                ruleId = if (stillRuns) null else id,
+            )
+        }
+        val hidden = rejected.size - shown.size
+        // A lenient custom feed may list thousands of files; the report needs the
+        // count, not the list. The ids beyond the cap are unnamed, so History may
+        // call one of them resolved -- accepted for a feed the user chose.
+        return if (hidden <= 0) shown else shown + ScannerFailure(
             scanner = RULE_FEED,
             exception = NotEvaluatedReason.MISSING_CAPABILITY.sentinel,
-            message = if (stillRuns) {
-                "an update to $what could not be read by this build; the built-in version is still checked"
-            } else {
-                "$what could not be read by this build: ${reportSafe(file.reason, MAX_REJECTION_REASON_CHARS)}"
-            },
-            ruleId = if (stillRuns) null else id,
+            message = "... and $hidden more rule file(s) this build could not read",
         )
     }
 
