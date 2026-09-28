@@ -15,7 +15,7 @@ buildscript {
             // This constraint reaches it because CycloneDX is applied in this
             // project's plugins{} block. Drop once the plugin ships a patched
             // jackson itself (still 3.3.0 as of 2026-07-16).
-            classpath("com.fasterxml.jackson.core:jackson-databind:2.21.5")
+            classpath("com.fasterxml.jackson.core:jackson-databind:2.21.6")
 
             // NOTE: the bcprov-jdk18on 1.77 critical (GHSA-574f-3g2m-x479) is
             // NOT fixable here — it is a transitive of the Android Gradle
