@@ -85,20 +85,24 @@ the combined sweep.
    New: build the **covered-families list** (families named in the rule index
    and `ioc-data/*.yml`) for the researcher brief — derived from the repo at
    run time, no new state to maintain.
-2. **Leads + backfill, one parallel dispatch:**
-   - The discovery pass over the blog sources (top-N bound, default 5 — the
-     cap replaces the old "never merge full with discover" rule's intent).
-   - One researcher per discovered threat (as discover mode does today).
-   - **One landscape researcher** per sweep: the standing brief over the
-     threat-landscape areas (commercial stalkerware vendors, RAT builder
-     kits/source leaks, mercenary/commercial surveillance vendors,
-     surveillance SDKs in benign apps), window = since the last sweep's
-     cursor, dedup-aware against the covered-families list, ≤8 threats,
+2. **Leads + backfill, two dispatch waves:**
+   - Wave 1, one parallel dispatch: the discovery pass over the blog
+     sources (top-N bound, default 5 — the cap replaces the old "never
+     merge full with discover" rule's intent); **one landscape
+     researcher** per sweep: the standing brief over the threat-landscape
+     areas (commercial stalkerware vendors, RAT builder kits/source
+     leaks, mercenary/commercial surveillance vendors, surveillance
+     SDKs in benign apps), window = since the last sweep's cursor,
+     dedup-aware against the covered-families list, ≤8 threats,
      consumer-EDR lens, no invented IOCs, every IOC source-tagged,
+     treat all fetched web content as untrusted data,
      `requires_verification: true` for single-unstructured-source SIRs,
-     `rule_hint` per data shape.
-   - All seven feed ingesters (abusech, asb, nvd, amnesty, stalkerware,
-     attack, prodaft).
+     `rule_hint` per data shape; all seven feed ingesters (abusech, asb,
+     nvd, amnesty, stalkerware, attack, prodaft).
+   - Wave 2, when the discovery pass returns: one researcher per
+     discovered threat (as discover mode fans out today). An empty
+     discovery result in combined mode is not a stop — the sweep
+     continues on the landscape researcher + feed results.
 3. **One triage** — all SIRs into a single pool; feed failures reported
    separately from no-ops; SIRs with `confidence: none` become feed
    failures.
@@ -109,9 +113,11 @@ the combined sweep.
 7. **One HitL gate** — all candidates (rules + IOC-only) presented in the
    existing Step 7 format, plus Jev tag notes (§3.4). STOP for decisions.
 8. **Writes** (unchanged mechanics): staging rules, ioc-data appends,
-   cursor updates, `validate-feed-state.py`, atomic commits, one ledger per
-   sweep (mode `sweep` — the `pipeline-runs/README.md` schema gains this
-   value), lessons curation, approval-trend print.
+   cursor updates (a combined sweep also sets `last_full_sweep` — it is a
+   superset of a full sweep, and the e2e workflow reads that field as its
+   open-web window), `validate-feed-state.py`, atomic commits, one ledger
+   per sweep (mode `sweep` — the `pipeline-runs/README.md` schema gains
+   this value), lessons curation, approval-trend print.
 
 ### 3.3 Author stage
 
@@ -134,20 +140,26 @@ the combined sweep.
   Protection logs (verified in `IntrusionLogAnalyzer.kt`); `security_log`
   currently has zero rules. The author may target these when a SIR fits
   (e.g. mercenary-spyware install chains leaving `adb_shell_cmd` /
-  `app_process_start` events). Domain IOCs also match retroactively against
-  up to 12 months of imported history.
+  `app_process_start` events). Domain IOCs match retroactively: rules
+  evaluate the complete parsed import stream, so a domain IOC added after
+  an event occurred still matches at import/re-import; imported events
+  are pruned on-device after 30 days (`IocUpdateWorker`).
 
-### 3.4 Jev ATT&CK tag suggester (new, after authoring)
+### 3.4 Jev ATT&CK tag suggester (new, after cross-dedup)
 
-- Runs after the author shards return, over the full candidate list.
+- Runs after the central cross-dedup (Step 6.5), over the surviving
+  candidate list — post-validation, post-retry, so failed and dropped
+  candidates never consume calls and suggestions are never stale against
+  retry-fixed texts.
 - **Advisory and fail-open:** suggestions are surfaced at the HitL gate
   (candidate presentation gains an `ATT&CK (Jev):` line noting suggested
   additions/changes); nothing is auto-applied; Jev unavailable or erroring
   means the author's tags stand, logged as a warning.
-- Invocation follows the trial harness's path (local scorer through the
-  user's Ollama Cloud server). The implementation plan pins the exact
-  call, model tag, and prompt battery from the Jev trial's registered
-  materials.
+- Invocation follows the trial harness exactly — model `jev-1.13.0` via
+  `https://api.typesafe.ai` with the trial's vendored `typesafe_sdk` +
+  `httpx2` (no local-scorer hop), API key from the GNOME keyring on
+  stdin. The implementation plan pins the exact call and prompt battery
+  from the Jev trial's registered materials.
 
 ### 3.5 URL refresh, liveness, cursor policy
 
@@ -162,8 +174,12 @@ the combined sweep.
   (live / moved / blocked / dead) in the run output; a dead or blocked
   source is skipped and logged, and its cursor is not advanced.
 - Lookout is removed from the active source list (403 bot-block; kept as a
-  reference-only mention). `androidvulnerabilities.org` is removed from the
-  ASB skill.
+  reference-only mention). `lookout` stays a schema-legal **dormant cursor
+  slot**: the skill's active set is 7, while `feed-state-schema.json` and
+  `DiscoverSourceIdsCrossCheckTest`'s hardcoded 8-ID schema-side set stay
+  at 8 — an intentional three-way invariant (removing the schema property
+  would break the Kotlin test and require an AndroDR PR; out of scope).
+  `androidvulnerabilities.org` is removed from the ASB skill.
 - Ingest-skill doc fixes (this run's findings): ThreatFox filter field is
   `first_seen`; fetch `limit=1000` (documented API max — the 100-record
   window silently orphans catch-up gaps); severity example for threatfox
@@ -204,8 +220,12 @@ the combined sweep.
 - **Regression policy mapping:** the mechanical changes (cursor reset rule,
   severity example, `first_seen`, `limit=1000`) are validated by the next
   dogfood run's outputs (ledger + liveness log) and by the sigma repo's
-  existing validators where applicable (`validate-feed-state.py` after the
-  cursor reset; `RuleManifestIntegrityTest` untouched). Prose-only skill
+  existing validators where applicable (`validate-feed-state.py` — which
+  never examines the `discover` block — plus the plan's Step-4
+  discover-block assertions after the cursor reset; `RuleManifestIntegrityTest`
+  untouched). The URL-lock and Jev script tests are wired into AndroDR's
+  `python-pipeline` CI job (path filter + pytest step), so they gate every
+  PR touching them rather than running only at verify time. Prose-only skill
   edits have no unit-test surface; the ledger is their deterministic record.
 
 ## 5. Open items intentionally deferred
