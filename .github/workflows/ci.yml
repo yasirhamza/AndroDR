@@ -59,6 +59,10 @@ jobs:
               # Without this the directory matched no bucket, so a PR
               # touching only the harness merged on a vacuous green.
               - 'test-adversary/**'
+              # Pipeline companion-script tests (exact-URL lock, Jev
+              # suggester) — same vacuous-green class: without this entry,
+              # PRs touching only these tests never ran them.
+              - '.claude/commands/scripts/**'
             code:
               # Kotlin / Java sources across all source sets
               - 'app/src/**/*.kt'
@@ -353,6 +357,11 @@ jobs:
         # clean-device baseline that asserts a benign scan does not escalate
         # (#332). Runs without a device, so it gates every PR.
         run: python3 -m pytest test-adversary/ -q
+      - name: Pipeline companion-script tests
+        # Exact-URL lock (Task 2) + Jev suggester contract tests (Task 5).
+        # All stdlib-only at test time: the fail-open paths exit before
+        # the SDK import.
+        run: python3 -m pytest .claude/commands/scripts/ -q
   instrumented:
     runs-on: ubuntu-latest
     needs: changes
