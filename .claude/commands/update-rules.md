@@ -322,6 +322,44 @@ survivors form the **approved delta** that proceeds to Step 7.
   WARN — this is typically a normalization mismatch worth investigating
   (the entry is in upstream under a different normalization).
 
+## Step 6.6: Jev ATT&CK tag suggester (advisory, fail-open)
+
+After Step 6.5's cross-dedup filter, write every SURVIVING CandidateRule
+(post-validation, post-retry — candidates that failed validation twice
+or were dropped at 6.5 never reach Jev) to `/tmp/jev-candidates-<runid>.jsonl`
+(one JSON object per line: `id`, `title`, `description`, `detection` —
+the rule's detection block as text — `service`; create the file with
+0600 permissions — `umask 077` before the redirect — and delete it
+immediately after the script exits, on every path), then run:
+
+```bash
+secret-tool lookup service jev-androdr account typesafe \
+  | /home/yasir/projects/jev-androdr-eval/.venv/bin/python -I \
+      .claude/commands/scripts/jev_suggest.py \
+      --candidates /tmp/jev-candidates-<runid>.jsonl
+```
+
+The eval repo is the frozen trial harness (`jev-androdr-eval` @ `d89e1b3`);
+its `.venv` python provides the `typesafe_sdk` + `httpx2` the script
+imports (the same interpreter `scripts/jev` pins). The script loads the
+registered B1 battery (`criteria/B1_nouls.json`) from that repo; the
+`JEV_EVAL_REPO` env var can override the repo path (default
+`/home/yasir/projects/jev-androdr-eval`). The script calls model
+`jev-1.13.0` via `https://api.typesafe.ai` and emits each candidate's
+top-3 ATT&CK Mobile techniques with scores.
+
+**Fail-open is mandatory.** Exit 3 (no key / missing-or-corrupt battery),
+exit 4 (all candidates errored, or the key is dead), or a script crash →
+log a WARN ("Jev unavailable — author tags stand") and continue to Step
+7. NEVER block the pipeline on Jev, NEVER retry it inside the run, NEVER
+auto-apply a suggestion — the trial verdict adopted it as an advisory
+suggester only (Recall@3 0.971; scores stay non-gating — miscalibration
+persists, ECE ≈ 0.2). Delete the /tmp candidates file immediately after
+the script exits — on every path (success, exit 3/4, crash); the gate
+presentation uses only the captured stdout, never the file. At Step 7,
+each candidate's block gains the `ATT&CK (Jev):` line showing the top-3
+suggestions with the author's own tags marked.
+
 ## Step 7: Present Results
 
 Format the output as follows:

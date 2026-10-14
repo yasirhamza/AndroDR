@@ -358,12 +358,13 @@ jobs:
         # (#332). Runs without a device, so it gates every PR.
         run: python3 -m pytest test-adversary/ -q
       - name: Pipeline companion-script tests
-        # Plan-owned pipeline tests only: the exact-URL lock now; the Jev
-        # suggester contract tests join this line in Task 5. Scoped on
+        # Plan-owned pipeline tests only: the exact-URL lock and the Jev
+        # suggester contract tests (both stdlib-only at test time — the
+        # fail-open paths exit before the SDK import). Scoped on
         # purpose: other tests in this directory subprocess-invoke
         # discover_extract.py, which needs defusedxml at module scope —
         # not installed here (the plan's Step-8b scoping contingency).
-        run: python3 -m pytest .claude/commands/scripts/test_discover_source_urls.py -q
+        run: python3 -m pytest .claude/commands/scripts/test_discover_source_urls.py .claude/commands/scripts/test_jev_suggest.py -q
   instrumented:
     runs-on: ubuntu-latest
     needs: changes
