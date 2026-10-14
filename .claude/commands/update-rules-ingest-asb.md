@@ -18,7 +18,6 @@ You receive the `asb` cursor with:
 2. If the latest bulletin date is newer than `last_bulletin` (or last_bulletin is null), process it:
    a. Fetch the bulletin page (e.g., `https://source.android.com/docs/security/bulletin/2026-03-01`)
    b. Extract CVE entries from the HTML tables. Each entry has: CVE ID, references, type, severity, updated AOSP versions
-   c. Also check `https://androidvulnerabilities.org/` for structured JSON data on the same CVEs
 3. For CVEs flagged as "limited, targeted exploitation" in the bulletin, set confidence to `"high"` — these are actively exploited
 4. Group CVEs by patch level date (bulletins have two patch levels: YYYY-MM-01 and YYYY-MM-05)
 

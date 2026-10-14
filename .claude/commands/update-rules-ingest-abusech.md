@@ -29,10 +29,10 @@ You receive:
    curl -s -X POST https://threatfox-api.abuse.ch/api/v1/ \
      -H "Auth-Key: $MALWAREBAZAAR_API_KEY" \
      -H "Content-Type: application/json" \
-     -d '{"query": "taginfo", "tag": "Android", "limit": 100}'
+     -d '{"query": "taginfo", "tag": "Android", "limit": 1000}'
    ```
-2. Parse the JSON response. Each IOC has: `id`, `ioc`, `ioc_type`, `threat_type`, `malware`, `tags`, `first_seen_utc`, `reference`
-3. Filter to IOCs with `first_seen_utc` after `last_seen_timestamp` (or take all if null)
+2. Parse the JSON response. Each IOC has: `id`, `ioc`, `ioc_type`, `threat_type`, `malware`, `tags`, `first_seen`, `reference`
+3. Filter to IOCs with `first_seen` after `last_seen_timestamp` (or take all if null)
 4. Group IOCs by `malware` family name
 5. For each family group, build one SIR:
    - `source.feed`: `"threatfox"`
@@ -101,7 +101,7 @@ Emit a JSON object extending the existing SIR array:
         "indicator": "c2.example.com",
         "family": "ExampleMalware",
         "category": "MALWARE",
-        "severity": "CRITICAL",
+        "severity": "HIGH",
         "source": "threatfox",
         "description": "..."
       }
