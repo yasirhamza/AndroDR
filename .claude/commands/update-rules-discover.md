@@ -190,19 +190,11 @@ Failed sources appear in `log` but NOT in `updated_cursors`.
 - NEVER skip the token-shape validator on LLM output — it's the structural XPIA defense
 - NEVER batch multiple posts into a single LLM extraction call — per-post isolation is the XPIA containment boundary
 
-## Dependencies (rule-repo, separate PR)
+## Dependencies
 
-The three web sources added for the banking-fraud gap (`threatfabric`,
-`cleafy`, `group-ib`) need a matching entry in the android-sigma-rules
-submodule before their cursors can persist, on its own PR + submodule pointer
-bump (per CLAUDE.md submodule protocol):
-
-- `validation/feed-state-schema.json`: add `threatfabric`, `cleafy`, and
-  `group-ib` as `DiscoverSourceCursor` properties under `discover.sources`
-  (the object is `additionalProperties: false`).
-
-Until it lands, the same failure mode as the PRODAFT cursor applies: the
-dispatcher's Step 8 "strip keys not in schema" will **silently drop** any new
-`threatfabric`/`cleafy`/`group-ib` cursor, so those sources re-scan from
-scratch each run. Discovery itself still works and the threat names still
-reach a human — only cursor persistence is gated.
+None outstanding. The three banking-fraud web sources (`threatfabric`,
+`cleafy`, `group-ib`) are declared as `DiscoverSourceCursor` properties in
+the submodule's `validation/feed-state-schema.json` (rules PR #36), so
+their cursors persist through Step 8's strip-undeclared-keys pass. A NEW
+source added here still needs that schema entry first (rule-repo PR +
+submodule bump), or its cursor is silently stripped every run.

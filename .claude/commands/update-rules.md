@@ -38,7 +38,7 @@ Note: `virustotal` is listed in `allowed-sources.json` as a valid provenance lab
 
 1. Read `feed-state.json` from the sigma repo root to get feed cursors
 2. Build an index of existing rules (IDs, titles, IOCs referenced). Production rules live in **service-named directories at the sigma repo root** (`app_scanner/`, `device_auditor/`, `dns_monitor/`, `file_scanner/`, `process_monitor/`, `receiver_audit/`, `accessibility_audit/`, `appops_audit/`, ...); staged rules live under `staging/<service>/`. Glob `<service>/**/*.yml` and `staging/**/*.yml` — there is no `rules/` prefix directory.
-3. Determine the next available rule ID by finding the highest `androdr-NNN` across all existing rules and incrementing. Never reuse an ID that previously existed and was later removed (check `git log` in the sigma repo if in doubt).
+3. Determine the next available rule ID: 1 + the highest `androdr-NNN` that has EVER existed as a rule file on ANY ref of the sigma repo (`git log --all`, not just the checked-out branch). This never reuses an ID that was removed, nor one that lives only on an unmerged branch. IDs in `validation/retired-rule-ids.txt` are never reused either (`validate-rule.py` enforces that list).
 4. Build the **covered-families list** for the landscape researcher brief:
    the union of family names appearing in the rule index (rule titles and
    descriptions) and in `ioc-data/*.yml` (`family:` values), deduplicated,
@@ -141,9 +141,11 @@ never aborts the sweep — log it and continue. The run's ledger mode is
 5. Collect SIRs from successful subagents. Log subagent failures
    (Cloudflare 429, network errors) but never abort the whole run for a
    single subagent failure.
-6. Proceed to Step 3 (Triage SIRs) with the collected union. SIRs flow
-   through Rule Author → Validator → Step 6.5 cross-dedup → Step 7
-   approval → Step 8.1 write unchanged.
+6. Proceed to Step 3 (Triage SIRs) with the collected union. Rule-shaped
+   SIRs flow through the Rule Author shards (Step 4.2) → Validator →
+   Step 6.5 cross-dedup → Step 6.6 Jev tag suggestions → Step 7 approval
+   → Step 8.1 write; IOC-only SIRs bypass the author (Step 4.1) and join
+   at Step 6.5.
 
 Each ingester returns a JSON array of SIR objects (or an empty array if nothing new).
 
@@ -180,9 +182,7 @@ NO author agent — by one of two paths:
   `indicators` itself (package names → `ioc-data/package-names.yml`,
   domains → `c2-domains.yml`, hashes → `malware-hashes.yml`, cert hashes
   → `cert-hashes.yml`) using the ingester entry shape and the target
-  file's existing severity/category conventions, and records an
-  `ioc_confidence` decision per indicator when the SIR sets
-  `requires_verification: true`.
+  file's existing severity/category conventions.
 
 A SIR with ANY behavioral signal — even one that also carries indicators
 (`rule_hint: hybrid`) — goes to the author. When in doubt, author it:
@@ -308,7 +308,9 @@ by the `parser` field. Take the union with `U_ingesters` → `U_authoritative`.
 ### 6.5.3 Filter candidates
 
 For each candidate across all ingesters — **plus any `ioc_data` entries
-emitted by the Rule Author** from research/discover SIRs (Step 4 output) —
+emitted by the Rule Author** from research/discover SIRs (Step 4 output),
+**plus any `candidate_ioc_entries` the dispatcher constructed itself** from
+bypassed SIRs' `indicators` (Step 4.1) —
 drop it if `(type, normalized_value)` is in `U_authoritative`. The
 survivors form the **approved delta** that proceeds to Step 7.
 
@@ -426,7 +428,7 @@ For each passing candidate, ask the user to:
 - **Reject** — discard, log reason
 
 After all decisions:
-- Update `feed-state.json` with new cursors from ingesters. A combined sweep ALSO sets `last_full_sweep` to the run timestamp — it is a superset of a full sweep, and the e2e workflow reads this field as its open-web window, so it must track the pipeline's real cadence. Strip any extra keys that aren't declared in `third-party/android-sigma-rules/validation/feed-state-schema.json` — the schema uses `additionalProperties: false`.
+- Update `feed-state.json` with new cursors from ingesters, and — in discover or combined-sweep mode — merge the discover skill's `updated_cursors` block into `discover.sources` (it already omits sources whose fetch or parse failed). A combined sweep ALSO sets `last_full_sweep` to the run timestamp — it is a superset of a full sweep, and the e2e workflow reads this field as its open-web window, so it must track the pipeline's real cadence. Strip any extra keys that aren't declared in `third-party/android-sigma-rules/validation/feed-state-schema.json` — the schema uses `additionalProperties: false`.
 - **Validate the updated feed-state.json before committing:** run `python3 third-party/android-sigma-rules/validation/validate-feed-state.py`. If it exits non-zero, abort the run and report the errors. Do not commit a state that fails validation.
 - Update `ioc-data/*.yml` files if ingesters found new indicators
 - Commit all changes to the sigma repo with descriptive messages
@@ -519,10 +521,5 @@ and move on.
 - NEVER advance a per-source cursor when that source's fetch or parse
   failed. The `updated_cursors` block from the discover skill already
   excludes failed sources.
-- NEVER dispatch the combined sweep's discovery pass without a top-N
-  bound. The default (5) IS the cap — the combined sweep inherits it. A
-  pathologically noisy extraction run must not spawn dozens of research
-  subagents inside a sweep that already carries a landscape researcher
-  and seven feed ingesters.
 - NEVER skip the token-shape validator on LLM fallback output in the
   discover skill — it's the structural XPIA defense.

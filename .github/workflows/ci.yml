@@ -63,6 +63,10 @@ jobs:
               # suggester) — same vacuous-green class: without this entry,
               # PRs touching only these tests never ran them.
               - '.claude/commands/scripts/**'
+              # The discover skill owns the exact source URLs that
+              # test_discover_source_urls.py locks; a skill-only edit
+              # must run that lock.
+              - '.claude/commands/update-rules-discover.md'
             code:
               # Kotlin / Java sources across all source sets
               - 'app/src/**/*.kt'
@@ -314,15 +318,12 @@ jobs:
         with:
           config-file: './.github/dependency-review-config.yml'
           retry-on-snapshot-warnings: true
-          # TEMPORARY (remove in the auto-regen follow-up PR): the current
-          # main tip (94c8049, a merge that skipped the deps bucket) has no
-          # graph snapshot, so the default base compare reports the whole
-          # tree as "added". Pin the base to the last snapshot-bearing main
-          # commit; the push-rule on dependency-submission above guarantees
-          # every FUTURE main tip has a snapshot, after which this override
-          # must go (a stale pin would accumulate false deltas).
-          base-ref: d0fc8945a9bafe3438c7b6cbf4af5a3974308d4c
-          head-ref: ${{ github.event.pull_request.head.sha }}
+          # No base-ref/head-ref override: every main tip gets a graph
+          # snapshot from dependency-submission's push rule, so the default
+          # PR base compare is exact. A pinned base-ref goes stale and
+          # reports main's own later dependency changes as PR-introduced
+          # deltas (it blocked #385) — test_pipeline_conventions.py fails
+          # the build if a pin comes back.
   python-pipeline:
     runs-on: ubuntu-latest
     needs: changes
@@ -358,13 +359,14 @@ jobs:
         # (#332). Runs without a device, so it gates every PR.
         run: python3 -m pytest test-adversary/ -q
       - name: Pipeline companion-script tests
-        # Plan-owned pipeline tests only: the exact-URL lock and the Jev
-        # suggester contract tests (both stdlib-only at test time — the
-        # fail-open paths exit before the SDK import). Scoped on
+        # Plan-owned pipeline tests only: the exact-URL lock, the Jev
+        # suggester contract tests (stdlib-only at test time — the
+        # fail-open paths exit before the SDK import), the discover
+        # denylist and the pipeline-convention locks (pyyaml). Scoped on
         # purpose: other tests in this directory subprocess-invoke
         # discover_extract.py, which needs defusedxml at module scope —
         # not installed here (the plan's Step-8b scoping contingency).
-        run: python3 -m pytest .claude/commands/scripts/test_discover_source_urls.py .claude/commands/scripts/test_jev_suggest.py -q
+        run: python3 -m pytest .claude/commands/scripts/test_discover_source_urls.py .claude/commands/scripts/test_jev_suggest.py .claude/commands/scripts/test_discover_denylist.py .claude/commands/scripts/test_pipeline_conventions.py -q
   instrumented:
     runs-on: ubuntu-latest
     needs: changes
