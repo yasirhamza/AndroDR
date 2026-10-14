@@ -161,25 +161,103 @@ For each SIR:
 
 ## Step 4: Generate Rules
 
-**Before dispatching the Rule Author**, read the logsource field taxonomy:
-1. Read `third-party/android-sigma-rules/validation/logsource-taxonomy.yml`
-2. Identify which services are relevant based on the SIRs' `rule_hint` values:
-   - `ioc_lookup` → `app_scanner` (package names), `dns_monitor` (domains)
-   - `behavioral` → `app_scanner`, `accessibility_audit`, `appops_audit`, `receiver_audit`
-   - `device_posture` → `device_auditor`
-   - `network` → `dns_monitor` (skip `network_monitor` — `status: unwired` per taxonomy)
-   - `hybrid` → include all of the above
-3. **Filter out services with `status: unwired`** before extracting fields — rules targeting them cannot fire. The Rule Author will record a `telemetry_gap` decision if the SIR requires such a service.
-4. Extract the `fields:` blocks for the remaining services
+Split the SIR pool by shape BEFORE dispatching any author.
 
-Pass all valid SIRs to the Rule Author agent (`update-rules-author`) along with:
-- The next available rule ID
-- 5 existing production rules as style examples (pick diverse services/types)
-- The existing rule index (for dedup awareness)
-- **The extracted taxonomy field lists for relevant services** (injected into the prompt context so the Rule Author doesn't need to read the file itself)
-- **The contents of `third-party/android-sigma-rules/validation/authoring-lessons.yml`** (curated guidance from past human rejections). If the file is missing or unparseable, dispatch without it and log a warning — never fail the run over lessons.
+### 4.1 IOC-only SIRs bypass the author
 
-The Rule Author returns a list of CandidateRule objects (YAML + decision manifest).
+A SIR is **IOC-only** when its actionable content is purely indicators —
+package names, domains, hashes, cert hashes — with NO behavioral signal
+(`rule_hint: ioc_lookup` and no `behavioral_signals`). The author's own
+Decision Gate would emit IOC data for it and no rule; dispatching an
+author is pure cost. Route it straight to Step 6.5 and the HitL gate —
+NO author agent — by one of two paths:
+
+- **Feed SIRs** already carry pre-packaged `candidate_ioc_entries`
+  (a sibling key of `sirs` in ingester output) — route those entries
+  straight to Step 6.5 as today.
+- **Research / discover / landscape SIRs carry `indicators`, not
+  entries** — the dispatcher constructs `candidate_ioc_entries` from
+  `indicators` itself (package names → `ioc-data/package-names.yml`,
+  domains → `c2-domains.yml`, hashes → `malware-hashes.yml`, cert hashes
+  → `cert-hashes.yml`) using the ingester entry shape and the target
+  file's existing severity/category conventions, and records an
+  `ioc_confidence` decision per indicator when the SIR sets
+  `requires_verification: true`.
+
+A SIR with ANY behavioral signal — even one that also carries indicators
+(`rule_hint: hybrid`) — goes to the author. When in doubt, author it:
+any `requires_verification: true` research SIR goes through the author
+regardless of shape — the author's per-IOC decision contract exists for
+exactly that class. Log the bypass in the run summary (count + SIR ids).
+
+### 4.2 Author shards for rule-shaped SIRs
+
+1. Read the logsource field taxonomy first:
+   1. Read `third-party/android-sigma-rules/validation/logsource-taxonomy.yml`
+   2. Map the SIRs' `rule_hint` values to services:
+      - `ioc_lookup` → `app_scanner` (package names), `dns_monitor` (domains)
+      - `behavioral` → `app_scanner`, `accessibility_audit`, `appops_audit`, `receiver_audit`
+      - `device_posture` → `device_auditor`
+      - `network` → `dns_monitor`, `network_monitor`
+      - `hybrid` → all of the above
+   3. **Filter out services with `status: unwired`** before extracting fields — rules targeting them cannot fire. The Rule Author will record a `telemetry_gap` decision if the SIR requires such a service. (As of 2026-10-14 every service in the taxonomy is `active`; the filter stays as the guard for future unwired services.)
+   4. Extract the `fields:` blocks for the remaining services.
+
+2. **Intrusion-log surfaces — give the author this context verbatim:**
+
+   > `dns_monitor`, `network_monitor`, and `security_log` all evaluate
+   > imported Android Advanced Protection logs on-device:
+   > `IntrusionLogAnalyzer.kt` runs `evaluateDns` + `evaluateNetwork` +
+   > `evaluateSecurityLog` over the COMPLETE parsed stream. `security_log`
+   > currently has ZERO rules — it is an open surface. Available fields:
+   > dns_monitor: `domain`, `app_uid`, `source_package`, `is_blocked`,
+   > `reason`. network_monitor: `destination_ip`, `destination_port`,
+   > `protocol`, `app_uid`, `app_name`, `timestamp`, `source`,
+   > `captured_at`. security_log: `timestamp`, `tag`, `tag_name`,
+   > `security_data`, `source`, `captured_at`. Domain IOCs match
+   > retroactively: rules evaluate the complete parsed import stream, so
+   > a domain IOC added after an event occurred still matches at
+   > import/re-import; imported events are pruned on-device after 30
+   > days (`IocUpdateWorker`). A SIR
+   > that fits these surfaces may target them (e.g. a mercenary-spyware
+   > install chain leaving `adb_shell_cmd` / `app_process_start` security
+   > events).
+
+3. Shard the rule-shaped SIRs into batches of ~3-5 and dispatch ONE
+   author agent (`update-rules-author`) per shard in a single message
+   (multiple Agent tool uses for true parallelism). The dispatcher
+   pre-assigns each shard a provisional rule-ID range from the next
+   available ID so shards cannot collide. Compute the next available ID
+   per the existing Step 1 rule — highest existing AND highest
+   ever-used-then-removed (`git log`), +1, never reusing a removed ID:
+   `androdr-101` through `androdr-107` are dead (removed cellular_monitor
+   spike rules, commit 04277f9), so the next available ID today is
+   **androdr-108** (e.g. shard 1: 108-112, shard 2: 113-117). Each shard
+   receives:
+   - Its batch of SIRs
+   - Its assigned ID range (provisional — the dispatcher renumbers after)
+   - The next available rule ID context, 5 existing production rules as
+     style examples (pick diverse services/types), the existing rule
+     index (semantic dedup against PRODUCTION rules stays — that is
+     judgment, not bookkeeping), the extracted taxonomy field blocks,
+     and `validation/authoring-lessons.yml` (missing/unparseable →
+     dispatch without it and log a warning — never fail the run over
+     lessons)
+
+   Cross-shard dedup is NOT the author's job — Step 6.5 is the only
+   dedup gate for IOC data, and cross-shard semantic duplicates surface
+   at Step 7 (below).
+
+4. After all shards return: **renumber** all CandidateRules into one
+   sequential block starting at the next available ID (the author skill's
+   "Rule IDs are provisional" paragraph documents this contract). While
+   renumbering, flag any two candidates with the same service whose
+   selection blocks overlap substantially — present the overlap as a
+   REVIEW NOTE at Step 7 and let the human decide. NEVER silently drop
+   either.
+
+Each author shard returns a list of CandidateRule objects (YAML + decision
+manifest); the dispatcher merges the shard outputs before Step 5.
 
 ## Step 5: Validate Rules
 
@@ -250,6 +328,7 @@ Source:      [feed name], retrieved [date]
 Service:     [service]
 Level:       [level]
 ATT&CK:      [technique IDs]
+ATT&CK (Jev): [top-3 suggested techniques with the author's tags marked; or "(unavailable — logged)"]
 IOCs:        [counts by type]
 Validation:  [gate results: checkmark or X per gate]
 
