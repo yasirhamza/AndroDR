@@ -1,0 +1,28 @@
+# Fixture for androdr-109: Midnight Mimosa preinstalled enabler.
+# The rule keys on package identity AND is_system_app: true — the enabler
+# ships platform-signed on firmware, which androdr-001 deliberately skips.
+# A sideloaded copy of the same name is androdr-001's job (package IOC), so
+# it is a true negative here. Mirrors the on-device check on an SM-F916B
+# (2026-10-14): silent on a sideloaded com.android.sys.prot.
+rule_file: sigma_androdr_109_midnight_mimosa_enabler.yml
+service: app_scanner
+true_positives:
+  # Primary enabler on infected firmware
+  - package_name: "com.android.system.lite"
+    is_system_app: true
+  # Annotated enabler variant
+  - package_name: "com.android.sys.gmsprot"
+    is_system_app: true
+true_negatives:
+  # Same enabler name sideloaded — androdr-001's job, not 109's
+  - package_name: "com.android.sys.prot"
+    is_system_app: false
+  # Held-back unannotated family name (#388) must NOT fire until added
+  - package_name: "com.android.weiapps"
+    is_system_app: true
+  # Legitimate OEM preload
+  - package_name: "com.sec.android.app.launcher"
+    is_system_app: true
+  # Near-miss prefix guard: exact match only, no prefix/suffix spill
+  - package_name: "com.android.sys.protect"
+    is_system_app: true
