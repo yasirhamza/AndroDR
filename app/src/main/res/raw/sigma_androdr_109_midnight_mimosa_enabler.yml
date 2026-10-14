@@ -1,0 +1,65 @@
+title: Midnight Mimosa preinstalled enabler (fake system app on firmware)
+id: androdr-109
+status: experimental
+category: incident
+description: >
+    A system app installed from device firmware matches one of four
+    package names Bitdefender Labs documented (2026-10-08) as Midnight
+    Mimosa enabler builds (the four annotated ones; four unannotated
+    family members are held back pending a second source): platform-signed fake 'System' apps preinstalled on low-cost
+    MediaTek Android devices (genuine budget models such as Doogee S200 X
+    and Cubot KINGKONG X, plus counterfeits) across 150+ countries. The
+    enabler silently installs 30+ disguised payload apps, grants itself
+    Accessibility/Notification/SMS permissions, disables the Google Play
+    Store around payload installs to evade Play Protect, fetches remote
+    code from a C2 disguised as a weather API, runs ad/click fraud, and
+    enrolls the device as a residential-proxy node on TCP port 6000. The
+    generic package-IOC rule (androdr-001) deliberately excludes system
+    apps - so on infected firmware the primary implant is invisible to
+    it; this rule closes exactly that gap, mirroring androdr-094's
+    rationale for the BADBOX platform-firmware analogue. A non-system app
+    carrying one of these names is instead caught by androdr-001 via the
+    package IOC entries. The 27 dropped payload/cover apps and the 13
+    Play apps observed communicating with the same C2 are covered by
+    package-name IOC entries, not this rule. COVERAGE BOUND: the enabler
+    rotates names (sys.prot / sys.gmsprot / sys.bcprot variants observed);
+    a firmware build with an unpublished enabler name evades this rule -
+    the platform-signed-preinstall genre stays the residual gap, and
+    matching 'is a system app' generically would false-positive on every
+    legitimate OEM preload (cf. androdr-015), so package identity, not
+    system-app status, keys the detection.
+author: AndroDR AI Pipeline
+date: 2026/10/14
+references:
+    - https://www.bitdefender.com/en-us/blog/labs/midnight-mimosa-malware
+tags:
+    - attack.t1407
+    - campaign.midnight-mimosa
+logsource:
+    product: androdr
+    service: app_scanner
+detection:
+    selection:
+        is_system_app: true
+        package_name:
+            - "com.android.system.lite"
+            - "com.android.sys.prot"
+            - "com.android.sys.gmsprot"
+            - "com.android.sys.dts"
+    condition: selection
+level: critical
+falsepositives:
+    - "None known: all four names are malware-built fake-system packages observed by Bitdefender on infected firmware - they are not legitimate AOSP/OEM package names, and Google Play does not accept third-party com.android.* uploads. A hypothetical OEM firmware shipping one of these exact names would collide; no such app is known. Single-vendor sourcing stands noted: corroborating press covers the campaign facts but not the IOC values."
+remediation:
+    - "This preinstalled 'System' app is the Midnight Mimosa enabler: it silently installs disguised apps, disables the Play Store around installs to evade Play Protect, runs ad fraud, and sells your device's connection as a proxy node. It cannot be removed by a normal uninstall."
+    - "Update the device firmware if the vendor ships a fixed build; otherwise consider replacing the device, and avoid signing in to sensitive accounts on it."
+    - "Review the AndroDR DNS log for contact with the campaign infrastructure (api.weatherlive.world, oss.showtimetool.com)."
+display:
+    category: app_risk
+    icon: warning
+    triggered_title: "Midnight Mimosa Enabler (Preinstalled)"
+    evidence_type: ioc_match
+    summary_template: "Midnight Mimosa preinstalled enabler: {matched_value}"
+    guidance: "CRITICAL -- device firmware carries preinstalled malware; consider the device compromised"
+implies_flags:
+    - known_malware

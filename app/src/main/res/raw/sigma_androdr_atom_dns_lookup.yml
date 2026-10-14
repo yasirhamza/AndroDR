@@ -9,7 +9,7 @@ logsource:
     service: timeline
 detection:
     selection:
-        category: dns_match
+        category: ioc_match
     condition: selection
 level: informational
 category: incident
