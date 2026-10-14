@@ -402,15 +402,18 @@ And in the `python-pipeline` job, directly after the adversary-harness pytest st
 ```yaml
         run: python3 -m pytest test-adversary/ -q
 ```
-append:
+append the step in its FINAL form (Task 5's tests join the same line):
 ```yaml
       - name: Pipeline companion-script tests
-        # Exact-URL lock (Task 2) + Jev suggester contract tests (Task 5).
-        # All stdlib-only at test time: the fail-open paths exit before
-        # the SDK import.
-        run: python3 -m pytest .claude/commands/scripts/ -q
+        # Plan-owned pipeline tests only: the exact-URL lock and the Jev
+        # suggester contract tests (both stdlib-only at test time — the
+        # fail-open paths exit before the SDK import). Scoped on
+        # purpose: other tests in this directory subprocess-invoke
+        # discover_extract.py, which needs defusedxml at module scope —
+        # not installed here (the plan's Step-8b scoping contingency).
+        run: python3 -m pytest .claude/commands/scripts/test_discover_source_urls.py .claude/commands/scripts/test_jev_suggest.py -q
 ```
-(If other pre-existing tests in that directory have unmet dependencies on CI, scope the invocation to the two test files rather than adding dependencies.)
+(Correction at execution review: the original plan specified a directory-wide invocation; it was red-on-arrival — `test_discover_extract.py`/`test_discover_xpia.py` subprocess-invoke `discover_extract.py`, which hard-requires `defusedxml` at module scope, a package the job does not install — so the scoping contingency above was applied.)
 
 - [ ] **Step 9: Verify**
 
@@ -730,12 +733,17 @@ exactly that class. Log the bypass in the run summary (count + SIR ids).
    (multiple Agent tool uses for true parallelism). The dispatcher
    pre-assigns each shard a provisional rule-ID range from the next
    available ID so shards cannot collide. Compute the next available ID
-   per the existing Step 1 rule — highest existing AND highest
-   ever-used-then-removed (`git log`), +1, never reusing a removed ID:
-   `androdr-101` through `androdr-107` are dead (removed cellular_monitor
-   spike rules, commit 04277f9), so the next available ID today is
-   **androdr-108** (e.g. shard 1: 108-112, shard 2: 113-117). Each shard
-   receives:
+   as 1 + the highest rule ID that has ever existed as a rule file on
+   any git ref (`git log --all`) — extending Step 1's never-reuse rule
+   to IDs that exist only on unmerged branches, so a later merge cannot
+   collide. Never hardcode the figure; recompute at run time.
+   (Reserved as of 2026-10: `androdr-101`, removed at commit 04277f9,
+   and `androdr-102` through `androdr-107`, cellular_monitor spike
+   rules live on the unmerged `origin/research/cellular-monitor`
+   branch. Ledger-recorded candidate numbers from rejected runs do NOT
+   reserve IDs — they were never rule files. At 2026-10-14 the figure
+   computes to androdr-108, e.g. shard 1: 108-112, shard 2: 113-117.)
+   Each shard receives:
    - Its batch of SIRs
    - Its assigned ID range (provisional — the dispatcher renumbers after)
    - The next available rule ID context, 5 existing production rules as
@@ -1119,7 +1127,7 @@ grep -rn "secret-tool" .claude/ --include="*.md" | grep -v "stdin\|lookup"  # ex
 - [ ] **Step 7: Commit**
 
 ```bash
-git add .claude/commands/scripts/jev_suggest.py .claude/commands/scripts/test_jev_suggest.py .claude/commands/update-rules.md
+git add .claude/commands/scripts/jev_suggest.py .claude/commands/scripts/test_jev_suggest.py .claude/commands/update-rules.md .github/workflows/ci.yml
 git commit -m "feat(jev): advisory ATT&CK tag suggester wired as fail-open Step 6.6
 
 Runs after validation + retry + the 6.5 cross-dedup filter, over the
