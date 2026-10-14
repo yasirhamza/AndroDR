@@ -52,10 +52,17 @@ def test_python_bucket_covers_discover_skill():
     )
 
 
+def _list_items(section):
+    """Split markdown into list items with whitespace collapsed, so a
+    semantics-preserving rewrap never changes what the tests see."""
+    items = re.split(r"\n(?=\s*(?:-|\d+\.) )", section)
+    return [" ".join(item.split()) for item in items]
+
+
 def test_rule_id_allocation_scans_all_refs():
     text = DISPATCHER_PATH.read_text()
     step1 = text[text.index("## Step 1:"):text.index("## Step 2")]
-    alloc = [line for line in step1.splitlines() if "next available rule ID" in line]
+    alloc = [i for i in _list_items(step1) if "next available rule ID" in i]
     assert len(alloc) == 1, "Step 1 must state the rule-ID allocation exactly once"
     assert "git log --all" in alloc[0], (
         "rule-ID allocation must scan every ref (git log --all) so IDs on "
@@ -65,8 +72,9 @@ def test_rule_id_allocation_scans_all_refs():
 
 
 def test_top_n_never_rule_stated_once():
-    text = DISPATCHER_PATH.read_text()
-    hits = re.findall(r"^- NEVER dispatch .*discovery pass", text, re.MULTILINE)
+    hits = [i for i in _list_items(DISPATCHER_PATH.read_text())
+            if i.startswith("- NEVER dispatch") and "discovery pass" in i
+            and "top-N" in i]
     assert len(hits) == 1, f"top-N NEVER rule appears {len(hits)} times"
 
 
