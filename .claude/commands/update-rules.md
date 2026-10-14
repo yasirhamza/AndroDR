@@ -228,11 +228,16 @@ exactly that class. Log the bypass in the run summary (count + SIR ids).
    (multiple Agent tool uses for true parallelism). The dispatcher
    pre-assigns each shard a provisional rule-ID range from the next
    available ID so shards cannot collide. Compute the next available ID
-   per the existing Step 1 rule — highest existing AND highest
-   ever-used-then-removed (`git log`), +1, never reusing a removed ID:
-   `androdr-101` through `androdr-107` are dead (removed cellular_monitor
-   spike rules, commit 04277f9), so the next available ID today is
-   **androdr-108** (e.g. shard 1: 108-112, shard 2: 113-117). Each shard
+   as 1 + the highest rule ID that has ever existed as a rule file on
+   any git ref (`git log --all`) — this extends Step 1's never-reuse
+   rule to IDs that exist only on unmerged branches, so a later merge
+   cannot collide. Never hardcode the figure; recompute at run time.
+   (Reserved as of 2026-10: `androdr-101`, removed at commit 04277f9,
+   and `androdr-102` through `androdr-107`, cellular_monitor spike
+   rules live on the unmerged `origin/research/cellular-monitor`
+   branch. Ledger-recorded candidate numbers from rejected runs do NOT
+   reserve IDs — they were never rule files.) E.g. with next available
+   ID N: shard 1 gets N..N+4, shard 2 gets N+5..N+9. Each shard
    receives:
    - Its batch of SIRs
    - Its assigned ID range (provisional — the dispatcher renumbers after)
