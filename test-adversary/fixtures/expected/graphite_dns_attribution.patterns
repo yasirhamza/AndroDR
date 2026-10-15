@@ -1,0 +1,3 @@
+~\[MATCHED\].*forti\.external-muki\.com
+!~\[MATCHED\].*paragon-graphite\.net
+!Graphite/Paragon Spyware

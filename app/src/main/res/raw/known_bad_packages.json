@@ -184,14 +184,6 @@
     "source": "stalkerware-indicators"
   },
   {
-    "packageName": "com.android.bsp",
-    "name": "Pegasus Disguise (BSP)",
-    "category": "MERCENARY",
-    "severity": "CRITICAL",
-    "description": "Package name used by NSO Group Pegasus spyware to disguise itself as an Android system component.",
-    "source": "amnesty-investigations"
-  },
-  {
     "packageName": "com.serv.services",
     "name": "NoviSpy",
     "category": "NATION_STATE_SPYWARE",

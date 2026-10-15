@@ -48,6 +48,7 @@ MODULES=(
     "firmware-implant-sim"
     "notification-listener-abuse"
     "sms-notification-otp-theft"
+    "removed-fake-package"
 )
 
 echo ""

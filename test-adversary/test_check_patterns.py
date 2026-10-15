@@ -124,3 +124,34 @@ def test_clean_device_baseline_rejects_escalation(tmp_path, risk):
         text=True,
     )
     assert result.returncode == 1, f"a clean device reporting {risk} must fail the baseline"
+
+
+DNS_REPORT = """DNS ACTIVITY
+  [MATCHED]  12:00:01  forti.external-muki.com                             <- shell
+           reason: blocklist
+  [ALLOWED]  12:00:02  paragon-graphite.net                                <- shell
+"""
+
+
+def test_regex_requires_a_matching_line(tmp_path):
+    result = run_check(tmp_path, DNS_REPORT, "~\\[MATCHED\\].*forti\\.external-muki\\.com\n")
+    assert result.returncode == 0, result.stdout
+
+
+def test_regex_miss_fails(tmp_path):
+    result = run_check(tmp_path, DNS_REPORT, "~\\[MATCHED\\].*paragon-graphite\\.net\n")
+    assert result.returncode == 1
+    assert "MISS: regex not matched" in result.stdout
+
+
+def test_negated_regex_fails_when_a_line_matches(tmp_path):
+    result = run_check(tmp_path, DNS_REPORT, "!~\\[MATCHED\\].*forti\\.external-muki\\.com\n")
+    assert result.returncode == 1
+    assert "UNEXPECTED: forbidden regex matched" in result.stdout
+
+
+def test_negated_regex_ties_both_facts_to_one_line(tmp_path):
+    # Literal checks would pass "[MATCHED]" and "paragon-graphite.net" separately;
+    # the regex only fails if the same line carries both.
+    result = run_check(tmp_path, DNS_REPORT, "!~\\[MATCHED\\].*paragon-graphite\\.net\n")
+    assert result.returncode == 0, result.stdout

@@ -625,12 +625,15 @@ if [ "$MODE" = "load" ] || [ "$MODE" = "guided" ]; then
                 # A `!`-prefixed line asserts ABSENCE — present is the failure.
                 # Same sigils as check-patterns.sh, which the non-guided path uses.
                 want_absent=false
+                grep_mode=-qF
                 case "$pattern" in
+                    '!~'*) want_absent=true; grep_mode=-qE; pattern="${pattern:2}" ;;
+                    '~'*) grep_mode=-qE; pattern="${pattern:1}" ;;
                     '!'*) want_absent=true; pattern="${pattern#!}" ;;
                 esac
                 [ -z "$pattern" ] && continue
 
-                if grep -qF -- "$pattern" "$REPORT" 2>/dev/null; then
+                if grep "$grep_mode" -- "$pattern" "$REPORT" 2>/dev/null; then
                     present=true
                 else
                     present=false

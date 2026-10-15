@@ -4,6 +4,8 @@
 # "com.<vendor>.spyware") and carried back-filled, unverified `source` labels.
 # BundledIocPlaceholderTest fails if any of these returns to res/raw or to the
 # pinned android-sigma-rules ioc-data. Append here when removing another entry.
+# com.android.bsp was added in 0c0789a only to make a harness scenario pass;
+# no Pegasus/Chrysaor source lists it.
 # Sections: [domains] [packages] [certs] [apk_hashes]
 [domains]
 adobeflashupdate.biz
@@ -210,6 +212,7 @@ zelle-secure-login.net
 zeroday-android-drop.xyz
 
 [packages]
+com.android.bsp
 com.thetruthspy
 com.adobe.flash.player
 com.ahmyth.android

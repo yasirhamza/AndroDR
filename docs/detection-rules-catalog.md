@@ -105,8 +105,9 @@ remediation:
 ### ANDRODR-005: Graphite/Paragon domain IOC match [RETIRED 2026-10-15]
 Retired: it only re-labelled androdr-003 hits and its two domains were invented
 placeholders. Paragon Graphite domains published by Citizen Lab (March 2025) now
-live in `ioc-data/c2-domains.yml` with family `Graphite (Paragon)`, so androdr-003
-reports them with that attribution.
+live in `ioc-data/c2-domains.yml` with family `Graphite (Paragon)`, and androdr-003
+detects them (verified on-device 2026-10-15). Its findings do not yet show the
+family name: domain IOC hits carry no campaign attribution on the current path.
 
 ---
 
