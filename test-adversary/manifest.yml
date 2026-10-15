@@ -330,11 +330,12 @@ scenarios:
         adb_cmd: "shell touch /data/local/tmp/.stat"
         cleanup: "shell rm -f /data/local/tmp/.stat"
     attack: [T1533]
-    # No detection is possible without root: /data/local/tmp is unreadable to an
-    # unprivileged app. What the report must do instead is say so (#366) -- see
-    # fixtures/expected/mercenary_file_artifacts.patterns.
+    # /data/local/tmp is rwxrwx--x: apps cannot list it but can look up an exact
+    # name, which the scanner does since #387. Full patterns, including the
+    # "never clear" guards, are in fixtures/expected/mercenary_file_artifacts.patterns.
     expected_patterns:
-      - "WHAT THIS SCAN COULD NOT CHECK"
+      - "Spyware artifact: /data/local/tmp/.raptor"
+      - "Spyware artifact: /data/local/tmp/.stat"
 
   - id: mercenary_dns_c2
     track: 3
