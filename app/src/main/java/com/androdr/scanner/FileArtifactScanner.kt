@@ -6,7 +6,10 @@ import com.androdr.data.model.TelemetrySource
 import com.androdr.ioc.KnownSpywareArtifactsResolver
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import java.io.File
+import java.nio.file.Files
+import java.nio.file.NoSuchFileException
+import java.nio.file.Paths
+import java.nio.file.attribute.BasicFileAttributes
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -23,6 +26,13 @@ import javax.inject.Singleton
  * report say what it could not check. `fileExists = false` on such a row means "not
  * looked at", never "looked at and absent" -- only [FileArtifactTelemetry.accessible]
  * separates the two, so callers that feed rules must filter on it.
+ *
+ * The scanner looks up each exact path rather than first asking whether the folder can
+ * be listed. `/data/local/tmp` is `rwxrwx--x`: an app may not list it but may look up a
+ * name inside it, so gating on the folder being listable skipped checks the system
+ * allows (#387). The system's answer decides the row: "no such file" is a completed
+ * check that found nothing; "permission denied", or any other refusal, is a check that
+ * could not be made.
  *
  * The path list is sourced from [KnownSpywareArtifactsResolver], which loads
  * `res/raw/known_spyware_artifacts.yml`. The scanner itself stays simple: for each
@@ -48,22 +58,27 @@ class FileArtifactScanner @Inject constructor(
 
     @Suppress("TooGenericExceptionCaught") // a refused path is evidence, not a reason to stop
     private fun probe(path: String): FileArtifactTelemetry = try {
-        val file = File(path)
-        if (file.parentFile?.canRead() == true) {
-            val exists = file.exists()
-            FileArtifactTelemetry(
-                filePath = path,
-                fileExists = exists,
-                fileSize = if (exists) file.length() else null,
-                fileModified = if (exists) file.lastModified() else null,
-                source = TelemetrySource.LIVE_SCAN,
-                accessible = true,
-            )
-        } else {
-            unreadable(path)
-        }
+        val attrs = Files.readAttributes(Paths.get(path), BasicFileAttributes::class.java)
+        FileArtifactTelemetry(
+            filePath = path,
+            fileExists = true,
+            fileSize = attrs.size(),
+            fileModified = attrs.lastModifiedTime().toMillis(),
+            source = TelemetrySource.LIVE_SCAN,
+            accessible = true,
+        )
+    } catch (expected: NoSuchFileException) {
+        // The lookup ran and the system answered: nothing by that name.
+        FileArtifactTelemetry(
+            filePath = path,
+            fileExists = false,
+            fileSize = null,
+            fileModified = null,
+            source = TelemetrySource.LIVE_SCAN,
+            accessible = true,
+        )
     } catch (e: Exception) {
-        // SecurityException or any other refusal: record that we could not look.
+        // Permission denied, SecurityException or any other refusal: record that we could not look.
         Log.d(TAG, "Cannot access $path: ${e.message}")
         unreadable(path)
     }
