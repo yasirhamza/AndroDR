@@ -77,10 +77,13 @@ class FileArtifactScannerTest {
         return dir
     }
 
-    private fun scannerFor(paths: List<String>): FileArtifactScanner {
+    private fun scannerFor(
+        paths: List<String>,
+        sharedStorageRoots: List<String> = emptyList(),
+    ): FileArtifactScanner {
         val resolver = mockk<KnownSpywareArtifactsResolver>()
         every { resolver.paths } returns paths
-        return FileArtifactScanner(resolver)
+        return FileArtifactScanner(resolver, sharedStorageRoots)
     }
 
     @Test
@@ -191,5 +194,44 @@ class FileArtifactScannerTest {
 
         assertTrue(telemetry.accessible)
         assertFalse(telemetry.fileExists)
+    }
+
+    @Test
+    fun `on shared storage, no such file under a folder the app cannot list is not a negative`() = runTest {
+        // Shared storage answers "no such file" for whatever it hides from this app:
+        // a file planted in /sdcard/Android/data/ reads as absent on Android 17 (#387).
+        // Only a folder the app can list makes that answer trustworthy there.
+        val dir = searchOnlyDir()
+        val hidden = File(dir, ".system_update").absolutePath
+
+        val telemetry = scannerFor(listOf(hidden), sharedStorageRoots = listOf(dir.parent))
+            .collectTelemetry().single()
+
+        assertFalse("a hidden answer must not be reported as a completed check", telemetry.accessible)
+        assertFalse(telemetry.fileExists)
+    }
+
+    @Test
+    fun `on shared storage, a listable folder still gives a real negative`() = runTest {
+        val readableDir = Files.createTempDirectory("shared").toFile()
+        val absent = File(readableDir, ".hidden_config").absolutePath
+
+        val telemetry = scannerFor(listOf(absent), sharedStorageRoots = listOf(readableDir.parent))
+            .collectTelemetry().single()
+
+        assertTrue(telemetry.accessible)
+        assertFalse(telemetry.fileExists)
+    }
+
+    @Test
+    fun `on shared storage, a file found under a folder the app cannot list is still found`() = runTest {
+        val dir = searchOnlyDir(".system_update")
+        val planted = File(dir, ".system_update").absolutePath
+
+        val telemetry = scannerFor(listOf(planted), sharedStorageRoots = listOf(dir.parent))
+            .collectTelemetry().single()
+
+        assertTrue(telemetry.accessible)
+        assertTrue(telemetry.fileExists)
     }
 }

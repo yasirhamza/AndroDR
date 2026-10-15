@@ -1,11 +1,13 @@
 package com.androdr.scanner
 
+import android.annotation.SuppressLint
 import android.util.Log
 import com.androdr.data.model.FileArtifactTelemetry
 import com.androdr.data.model.TelemetrySource
 import com.androdr.ioc.KnownSpywareArtifactsResolver
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import java.io.File
 import java.nio.file.Files
 import java.nio.file.NoSuchFileException
 import java.nio.file.Paths
@@ -32,16 +34,23 @@ import javax.inject.Singleton
  * name inside it, so gating on the folder being listable skipped checks the system
  * allows (#387). The system's answer decides the row: "no such file" is a completed
  * check that found nothing; "permission denied", or any other refusal, is a check that
- * could not be made.
+ * could not be made. Shared storage is the exception: it answers "no such file" for
+ * whatever it hides from this app (another app's `Android/data`, for one), so there that
+ * answer only counts when the folder can be listed.
  *
  * The path list is sourced from [KnownSpywareArtifactsResolver], which loads
  * `res/raw/known_spyware_artifacts.yml`. The scanner itself stays simple: for each
  * resolved path, probe the filesystem and emit telemetry.
  */
 @Singleton
-class FileArtifactScanner @Inject constructor(
+class FileArtifactScanner internal constructor(
     private val knownSpywareArtifactsResolver: KnownSpywareArtifactsResolver,
+    private val sharedStorageRoots: List<String>,
 ) {
+
+    @Inject
+    constructor(knownSpywareArtifactsResolver: KnownSpywareArtifactsResolver) :
+        this(knownSpywareArtifactsResolver, SHARED_STORAGE_ROOTS)
 
     /**
      * Probes every known artifact path and returns one record per path: the file's
@@ -68,20 +77,32 @@ class FileArtifactScanner @Inject constructor(
             accessible = true,
         )
     } catch (expected: NoSuchFileException) {
-        // The lookup ran and the system answered: nothing by that name.
-        FileArtifactTelemetry(
-            filePath = path,
-            fileExists = false,
-            fileSize = null,
-            fileModified = null,
-            source = TelemetrySource.LIVE_SCAN,
-            accessible = true,
-        )
+        if (isOnSharedStorage(path) && File(path).parentFile?.canRead() != true) {
+            // Shared storage answers "no such file" for what it hides from this app, so
+            // the answer is only a real check when the folder can be listed.
+            unreadable(path)
+        } else {
+            // The lookup ran and the system answered: nothing by that name.
+            checkedAbsent(path)
+        }
     } catch (e: Exception) {
         // Permission denied, SecurityException or any other refusal: record that we could not look.
         Log.d(TAG, "Cannot access $path: ${e.message}")
         unreadable(path)
     }
+
+    private fun isOnSharedStorage(path: String) =
+        sharedStorageRoots.any { root -> path == root || path.startsWith(root.trimEnd('/') + "/") }
+
+    /** A path the system said does not exist: a completed check that found nothing. */
+    private fun checkedAbsent(path: String) = FileArtifactTelemetry(
+        filePath = path,
+        fileExists = false,
+        fileSize = null,
+        fileModified = null,
+        source = TelemetrySource.LIVE_SCAN,
+        accessible = true,
+    )
 
     /** A path the app was not allowed to look at: no claim either way about its contents. */
     private fun unreadable(path: String) = FileArtifactTelemetry(
@@ -95,5 +116,13 @@ class FileArtifactScanner @Inject constructor(
 
     companion object {
         private const val TAG = "FileArtifactScanner"
+
+        /**
+         * Shared (external) storage, where per-app visibility filtering answers "no such
+         * file" for files it hides. `/sdcard` and `/mnt/user` are aliases of `/storage`.
+         * These prefixes only classify paths; nothing is opened through them.
+         */
+        @SuppressLint("SdCardPath")
+        private val SHARED_STORAGE_ROOTS = listOf("/storage", "/sdcard", "/mnt")
     }
 }
