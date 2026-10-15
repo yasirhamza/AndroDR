@@ -46,8 +46,11 @@ class ScanBroadcastReceiver : BroadcastReceiver() {
                     val scan = scanOrchestrator.runFullScan()
                     val dns = dnsEventDao.getRecentSnapshot()
                     val inventory = scanOrchestrator.lastAppTelemetry
+                    // The file checks must reach this report too: without them the
+                    // harness's "<path> : clear" guards match nothing and pass vacuously.
                     val report = ReportFormatter.formatScanReport(
                         scan, dns, emptyList(), inventory,
+                        fileTelemetry = scanOrchestrator.lastFileArtifactTelemetry,
                         versionName = context.appVersion().name
                     )
                     val outDir = context.getExternalFilesDir(null) ?: return@launch
