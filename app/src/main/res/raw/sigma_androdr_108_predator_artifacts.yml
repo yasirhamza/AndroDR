@@ -1,0 +1,70 @@
+title: Mercenary spyware artifacts at Cytrox Predator drop paths
+id: androdr-108
+status: experimental
+category: incident
+description: >
+    A file exists at a path Amnesty International forensics tie to the
+    Cytrox Predator mercenary-spyware ecosystem: the payload directory
+    /data/local/tmp/wd and its fs.db payload file were documented by the
+    December 2021 Egypt investigation (dissidents targeted with Predator
+    alongside Pegasus), and /data/local/tmp/dropbox was the implant drop
+    artifact of the March 2023 Android campaign Amnesty documented with
+    Google TAG. Predator is commercial mercenary surveillance ware sold
+    to government clients - a match means the device was likely operated
+    on by a skilled attacker, not infected by commodity malware.
+    Companion to androdr-020 (generic bundled spyware-artifact paths);
+    this rule owns the Predator-specific paths so the attribution and
+    remediation are Predator-specific (androdr-020 still fires on the
+    same telemetry - the deliberate double-fire follows the
+    androdr-003/androdr-005 generic-plus-attributed precedent). The
+    campaigns' 336 + 2183 domain indicators are deliberately NOT emitted
+    to ioc-data: MVT's intellexa_predator and campaign STIX2 feeds are
+    direct-fetched by the app (mvt-indicators mirror), and file paths are
+    never delivered by that mirror - rule-side paths are the only net-new
+    coverage. ACTIVATION: FileArtifactScanner probes only the paths in
+    the app's res/raw/known_spyware_artifacts.yml, so this rule fires
+    only on app builds whose artifact list contains these three paths
+    byte-for-byte. An unprivileged app cannot list /data/local/tmp but
+    can look up an exact name in it (the folder is rwxrwx--x); since
+    AndroDR #387 the scanner does that lookup, verified on stock Play
+    user images and a physical device. A nested path such as wd/fs.db
+    is checked only when its folder is searchable by other users;
+    otherwise the scan reports it as not checked, never as clean. The
+    Amnesty STIX directory value carries a trailing slash
+    ('/data/local/tmp/wd/'); the literal here normalizes it - the app
+    artifact list and this rule must use the identical string.
+author: AndroDR AI Pipeline
+date: 2026/10/15
+references:
+    - https://github.com/AmnestyTech/investigations/tree/master/2021-12-16_cytrox
+    - https://citizenlab.ca/2021/12/pegasus-vs-predator-dissidents-doubly-infected-iphone-reveals-cytrox-mercenary-spyware/
+    - https://www.amnesty.org/en/latest/news/2023/03/new-android-hacking-campaign-linked-to-mercenary-spyware-company/
+    - https://blog.google/threat-analysis-group/spyware-vendors-use-0-days-and-n-days-against-popular-platforms/
+tags:
+    - attack.t1533
+    - campaign.predator
+logsource:
+    product: androdr
+    service: file_scanner
+detection:
+    selection:
+        file_exists: true
+        file_path:
+            - "/data/local/tmp/wd"
+            - "/data/local/tmp/wd/fs.db"
+            - "/data/local/tmp/dropbox"
+    condition: selection
+level: critical
+falsepositives:
+    - "A developer or power user who manually created a file or directory at one of these exact paths via adb (scratch storage under /data/local/tmp) would match; the paths are otherwise distinctive of the Predator campaigns per Amnesty's published indicators."
+    - "Inert on app builds whose bundled artifact list does not yet include these paths (see ACTIVATION): the scanner never emits these file_path values, so the positive selection simply never matches - it cannot fire spuriously on old binaries."
+remediation:
+    - "A file associated with the Cytrox Predator mercenary spyware was found at {file_path}. Your device shows evidence of targeted commercial surveillance."
+    - "Do NOT delete the artifact - it may be needed as evidence. Stop using the device for sensitive communication and seek expert help: Amnesty International's Security Lab or a digital-safety helpline can advise on verification and next steps."
+    - "Predator is deployed with physical access or deep technical control of the device; a factory reset removes the implant but not the actor - change passwords from a clean device and re-secure accounts afterward."
+display:
+    category: device_posture
+    icon: shield_alert
+    triggered_title: "Predator artifact: {file_path}"
+    safe_title: "No artifact at {file_path}"
+    evidence_type: none

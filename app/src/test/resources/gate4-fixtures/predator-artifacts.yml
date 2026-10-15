@@ -1,0 +1,31 @@
+# Fixture for androdr-108: Cytrox Predator drop paths under /data/local/tmp.
+# The rule keys on file_exists AND an exact path. A path the scanner could not
+# check arrives with file_exists: false (accessible: false is filtered upstream),
+# so it must never fire. Mirrors the on-device checks (2026-10-15) where planted
+# /data/local/tmp/wd, wd/fs.db and dropbox were found through the search-only
+# folder.
+rule_file: sigma_androdr_108_predator_artifacts.yml
+service: file_scanner
+true_positives:
+  - file_path: "/data/local/tmp/wd"
+    file_exists: true
+  - file_path: "/data/local/tmp/wd/fs.db"
+    file_exists: true
+  - file_path: "/data/local/tmp/dropbox"
+    file_exists: true
+true_negatives:
+  # Checked and absent
+  - file_path: "/data/local/tmp/dropbox"
+    file_exists: false
+  # Pegasus path: androdr-020's job, not 108's
+  - file_path: "/data/local/tmp/.raptor"
+    file_exists: true
+  # Trailing-slash form from the STIX source: exact match only
+  - file_path: "/data/local/tmp/wd/"
+    file_exists: true
+  # Near-miss sibling
+  - file_path: "/data/local/tmp/wd/fs.db-journal"
+    file_exists: true
+  # Same name elsewhere
+  - file_path: "/storage/emulated/0/dropbox"
+    file_exists: true

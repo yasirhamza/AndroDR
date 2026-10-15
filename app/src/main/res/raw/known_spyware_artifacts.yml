@@ -9,13 +9,14 @@
 # Sources:
 # - mvt: Amnesty International's Mobile Verification Toolkit
 # - citizen-lab: The Citizen Lab (University of Toronto)
+# - amnesty: Amnesty International Security Lab investigations
 # - androdr-research: AndroDR's own threat research
 #
 # See docs/superpowers/specs/2026-04-09-unified-telemetry-findings-refactor-design.md §9
 # for the migration from hardcoded Kotlin constants to this YAML resource.
 
 version: "2026-04-09"
-last_reviewed: "2026-04-09"
+last_reviewed: "2026-10-15"
 
 artifacts:
   - path: "/data/local/tmp/.raptor"
@@ -30,6 +31,23 @@ artifacts:
   - path: "/data/local/tmp/.mobilesoftwareupdate"
     family: "pegasus"
     source: "mvt"
+
+  # Cytrox Predator (androdr-108). Amnesty 2021-12-16_cytrox and the March 2023
+  # Android campaign (Amnesty + Google TAG).
+  - path: "/data/local/tmp/wd"
+    family: "predator"
+    source: "amnesty"
+    first_observed: "2021-12-16"
+
+  - path: "/data/local/tmp/wd/fs.db"
+    family: "predator"
+    source: "amnesty"
+    first_observed: "2021-12-16"
+
+  - path: "/data/local/tmp/dropbox"
+    family: "predator"
+    source: "amnesty"
+    first_observed: "2023-03-28"
 
   - path: "{ext_storage}/.hidden_config"
     family: "generic_stalkerware"

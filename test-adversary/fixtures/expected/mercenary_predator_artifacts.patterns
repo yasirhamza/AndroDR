@@ -1,0 +1,12 @@
+# Cytrox Predator drop paths injected via ADB into /data/local/tmp (androdr-108).
+# The scanner looks these up by exact name through the search-only folder (#387).
+# wd is made world-searchable here, so wd/fs.db is checkable too.
+Predator artifact: /data/local/tmp/wd/fs.db
+Predator artifact: /data/local/tmp/dropbox
+/data/local/tmp/wd : FOUND
+/data/local/tmp/wd/fs.db : FOUND
+/data/local/tmp/dropbox : FOUND
+# A planted path must never be reported as clear.
+!/data/local/tmp/wd : clear
+!/data/local/tmp/wd/fs.db : clear
+!/data/local/tmp/dropbox : clear
