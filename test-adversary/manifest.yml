@@ -7,7 +7,7 @@ profiles:
 
   predator:
     description: "Intellexa Predator mercenary spyware"
-    scenarios: [cve_predator_campaign, surveillance_permissions]
+    scenarios: [cve_predator_campaign, surveillance_permissions, mercenary_predator_artifacts]
 
   graphite:
     description: "Paragon Graphite mercenary spyware"
@@ -336,6 +336,25 @@ scenarios:
     expected_patterns:
       - "Spyware artifact: /data/local/tmp/.raptor"
       - "Spyware artifact: /data/local/tmp/.stat"
+
+  - id: mercenary_predator_artifacts
+    track: 3
+    risk: medium
+    technique: T1533
+    tactic: collection
+    description: "Cytrox Predator drop paths injected via ADB (androdr-108)"
+    source: adb_inject
+    inject:
+      - type: file
+        adb_cmd: "shell mkdir -p /data/local/tmp/wd && chmod 777 /data/local/tmp/wd && touch /data/local/tmp/wd/fs.db"
+        cleanup: "shell rm -rf /data/local/tmp/wd"
+      - type: file
+        adb_cmd: "shell touch /data/local/tmp/dropbox"
+        cleanup: "shell rm -f /data/local/tmp/dropbox"
+    attack: [T1533]
+    expected_patterns:
+      - "Predator artifact: /data/local/tmp/wd"
+      - "Predator artifact: /data/local/tmp/dropbox"
 
   - id: mercenary_dns_c2
     track: 3
