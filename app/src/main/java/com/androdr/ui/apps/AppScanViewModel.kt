@@ -26,7 +26,7 @@ class AppScanViewModel @Inject constructor(
      *
      * A finding appears here only if it carries a `package_name` in its
      * matchContext — i.e. some SIGMA rule matched on an `AppTelemetry`
-     * record. DNS-sourced rules (androdr-005 Graphite/Paragon, Malicious
+     * record. DNS-sourced rules (androdr-003 Malicious
      * Domain, etc.) fire on `DnsEvent` records that have no associated
      * package (UID = -1 on the VPN path), so they are filtered out of the
      * Apps screen and remain visible on the Timeline + Network screens.

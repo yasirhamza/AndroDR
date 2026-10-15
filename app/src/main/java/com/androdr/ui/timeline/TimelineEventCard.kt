@@ -271,8 +271,8 @@ fun TimelineEventDetailSheet(
             }
 
             // Linked Evidence: other timeline rows that share this event's
-            // correlationId. For DNS-sourced findings (e.g. androdr-005
-            // Graphite/Paragon) this lets the user jump from a finding card
+            // correlationId. For DNS-sourced findings (e.g. androdr-003
+            // Malicious Domain) this lets the user jump from a finding card
             // to the underlying ioc_match row that triggered it, and vice
             // versa — closes the "unlinked alerts" gap surfaced during
             // Sprint #75 real-device validation.
