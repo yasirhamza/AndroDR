@@ -8,6 +8,7 @@ import com.androdr.ioc.KnownSpywareArtifactsResolver
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.NoSuchFileException
 import java.nio.file.Paths
@@ -91,8 +92,24 @@ class FileArtifactScanner internal constructor(
         unreadable(path)
     }
 
-    private fun isOnSharedStorage(path: String) =
-        sharedStorageRoots.any { root -> path == root || path.startsWith(root.trimEnd('/') + "/") }
+    /**
+     * Whether the kernel would resolve [path] onto shared storage. The written text is not
+     * enough: `..` or a symlink can reach shared storage from a path that does not start
+     * with a shared root, and would skip the guard (fail open). So both the path with `..`
+     * removed and the real location of its folder are checked, whole components at a time.
+     */
+    private fun isOnSharedStorage(path: String): Boolean {
+        val normalized = Paths.get(path).normalize()
+        val resolvedParent = try {
+            normalized.parent?.toRealPath()
+        } catch (expected: IOException) {
+            null // the folder itself cannot be resolved; the normalized text still counts
+        }
+        val roots = sharedStorageRoots.map { Paths.get(it).normalize() }
+        return listOfNotNull(normalized, resolvedParent).any { candidate ->
+            roots.any { root -> candidate.startsWith(root) }
+        }
+    }
 
     /** A path the system said does not exist: a completed check that found nothing. */
     private fun checkedAbsent(path: String) = FileArtifactTelemetry(

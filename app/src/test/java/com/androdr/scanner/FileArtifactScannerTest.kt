@@ -60,6 +60,15 @@ class FileArtifactScannerTest {
         restricted += dir
     }
 
+    /** A search-only folder inside its own temp "shared storage" root, like `Android/data`. */
+    private fun hiddenSharedDir(): File {
+        val sharedRoot = Files.createTempDirectory("shared-root").toFile()
+        val hiddenDir = File(sharedRoot, "Android-data").apply { mkdir() }
+        restrict(hiddenDir, "--x------")
+        assumeFalse("running as root: permissions are not enforced", hiddenDir.canRead())
+        return hiddenDir
+    }
+
     @After
     fun restorePermissions() {
         restricted.forEach { dir ->
@@ -233,5 +242,44 @@ class FileArtifactScannerTest {
 
         assertTrue(telemetry.accessible)
         assertTrue(telemetry.fileExists)
+    }
+
+    @Test
+    fun `a path that climbs into shared storage with dot-dot is still guarded`() = runTest {
+        val hiddenDir = hiddenSharedDir()
+        val sharedRoot = hiddenDir.parentFile
+        val elsewhere = Files.createTempDirectory("elsewhere").toFile()
+        // Written as <elsewhere>/../<shared-root>/<hidden>/x: the text does not start with
+        // the shared root, but the path the kernel resolves does.
+        val climbing = "${elsewhere.absolutePath}/../${sharedRoot.name}/${hiddenDir.name}/.system_update"
+
+        val telemetry = scannerFor(listOf(climbing), sharedStorageRoots = listOf(sharedRoot.absolutePath))
+            .collectTelemetry().single()
+
+        assertFalse("the guard must classify the path the kernel resolves", telemetry.accessible)
+    }
+
+    @Test
+    fun `a path that reaches shared storage through a symlink is still guarded`() = runTest {
+        val hiddenDir = hiddenSharedDir()
+        val sharedRoot = hiddenDir.parentFile
+        val link = Files.createTempDirectory("elsewhere").resolve("link")
+        Files.createSymbolicLink(link, hiddenDir.toPath())
+
+        val telemetry = scannerFor(listOf("$link/.system_update"), sharedStorageRoots = listOf(sharedRoot.absolutePath))
+            .collectTelemetry().single()
+
+        assertFalse("a symlink into shared storage must not escape the guard", telemetry.accessible)
+    }
+
+    @Test
+    fun `a sibling that merely shares a name prefix is not shared storage`() = runTest {
+        val dir = searchOnlyDir()
+        val absent = File(dir, ".stat").absolutePath
+
+        val telemetry = scannerFor(listOf(absent), sharedStorageRoots = listOf(dir.absolutePath.dropLast(1)))
+            .collectTelemetry().single()
+
+        assertTrue("prefixes match whole path components only", telemetry.accessible)
     }
 }
