@@ -357,4 +357,23 @@ class IndicatorResolverTest {
         assertEquals("Fresh", resolver.isKnownBadCert("cc")!!.family)
         assertEquals("Fresh", resolver.isKnownBadApkHash("aa")!!.family)
     }
+
+    @Test
+    fun `feedCoverage asks for rules-repo rows by source and MVT rows by prefix`() = runTest {
+        coEvery { dao.count() } returns 7
+        coEvery { dao.hasSource("androdr_public_repo") } returns false
+        coEvery { dao.hasSourcePrefix("mvt_") } returns true
+        assertEquals(FeedCoverage(7, rulesRepoLoaded = false, mvtLoaded = true), resolver.feedCoverage())
+    }
+
+    @Test
+    fun `feedCoverage over the fake DAO sees rules-repo and per-collection MVT sources`() = runTest {
+        val fake = FakeIndicatorDao()
+        val r = IndicatorResolver(fake, bundledPackages, bundledCerts, bundledApkHashes, bundledDomains)
+        fake.upsertAll(listOf(Indicator("domain", "a.com", source = "hagezi_tif", fetchedAt = 1L)))
+        assertEquals(FeedCoverage(1, rulesRepoLoaded = false, mvtLoaded = false), r.feedCoverage())
+        fake.upsertAll(listOf(Indicator("domain", "b.com", source = "mvt_predator", fetchedAt = 1L),
+            Indicator("domain", "c.com", source = "androdr_public_repo", fetchedAt = 1L)))
+        assertEquals(FeedCoverage(3, rulesRepoLoaded = true, mvtLoaded = true), r.feedCoverage())
+    }
 }

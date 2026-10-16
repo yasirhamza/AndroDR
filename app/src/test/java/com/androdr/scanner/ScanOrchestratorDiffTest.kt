@@ -50,7 +50,7 @@ class ScanOrchestratorDiffTest {
         indicatorResolver = mockk(relaxed = true)
         // B6: an empty indicator table adds a FeedsNotLoaded entry; these tests are about
         // other things. DnsVpnService.isRunning (JVM-global, defaults false) likewise adds DnsMonitorOff.
-        coEvery { indicatorResolver.count() } returns 1
+        coEvery { indicatorResolver.feedCoverage() } returns com.androdr.ioc.FeedCoverage(1, true, true)
         DnsVpnService.isRunning.value = true
         sigmaRuleEngine = mockk(relaxed = true)
         // Cold start: the engine knows of no skips. Every test below relies on

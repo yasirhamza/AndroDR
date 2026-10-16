@@ -267,7 +267,17 @@ class IndicatorResolver @Inject constructor(
         }
     }
 
-    suspend fun count(): Int = dao.count()
+    /**
+     * Row count plus whether each campaign-key source has rows, for the scan's visibility
+     * gaps. Three cheap queries (COUNT and two EXISTS); throws if the DAO does.
+     */
+    suspend fun feedCoverage(): FeedCoverage = withContext(Dispatchers.IO) {
+        FeedCoverage(
+            rows = dao.count(),
+            rulesRepoLoaded = dao.hasSource(SourceRank.RULES_REPO),
+            mvtLoaded = dao.hasSourcePrefix(SourceRank.MVT_PREFIX),
+        )
+    }
 
     private class IndicatorCache(private val map: Map<String, Indicator>) {
         fun lookup(type: String, value: String): Indicator? = map["$type:$value"]

@@ -58,4 +58,8 @@ class FakeIndicatorDao : IndicatorDao {
     override suspend fun lastFetchTimeGlobal(): Long? = store.values.maxOfOrNull { it.fetchedAt }
 
     override suspend fun allSources(): List<String> = store.values.map { it.source }.distinct().sorted()
+
+    override suspend fun hasSource(source: String): Boolean = store.values.any { it.source == source }
+
+    override suspend fun hasSourcePrefix(prefix: String): Boolean = store.values.any { it.source.startsWith(prefix) }
 }

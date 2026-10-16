@@ -58,6 +58,14 @@ interface IndicatorDao {
     @Query("SELECT MAX(fetchedAt) FROM indicators")
     suspend fun lastFetchTimeGlobal(): Long?
 
+    /** Whether any row comes from [source]; EXISTS stops at the first match. */
+    @Query("SELECT EXISTS(SELECT 1 FROM indicators WHERE source = :source)")
+    suspend fun hasSource(source: String): Boolean
+
+    /** Whether any row's source starts with [prefix] (exact prefix, no LIKE wildcards). */
+    @Query("SELECT EXISTS(SELECT 1 FROM indicators WHERE substr(source, 1, length(:prefix)) = :prefix)")
+    suspend fun hasSourcePrefix(prefix: String): Boolean
+
     @Query("SELECT DISTINCT source FROM indicators ORDER BY source")
     suspend fun allSources(): List<String>
 }

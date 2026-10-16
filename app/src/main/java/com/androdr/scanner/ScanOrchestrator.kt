@@ -300,7 +300,7 @@ class ScanOrchestrator @Inject constructor(
             Collections.synchronizedList(mutableListOf())
         recordRuleCapabilitySkips(scannerErrors)
         scannerErrors.addAll(
-            visibilityGapsOrFailure({ indicatorResolver.count() }, DnsVpnService.isRunning.value)
+            visibilityGapsOrFailure({ indicatorResolver.feedCoverage() }, DnsVpnService.isRunning.value)
         )
 
         // Initialize progress for phase 1 — 8 parallel scanners to track.

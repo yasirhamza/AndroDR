@@ -113,7 +113,10 @@ internal fun campaignVerdicts(
     }.sortedBy { it.state.ordinal }
 }
 
-/** The MERCENARY SPYWARE CHECK rows, then (live scans) the scope note that says what "not detected" covers. */
+/**
+ * The MERCENARY SPYWARE CHECK rows, then (live scans) the scope note that says what "not detected"
+ * covers, then (live scans and imports) the could-not-run pointer and the failed-scanner line.
+ */
 internal fun StringBuilder.appendCampaignRows(
     verdicts: List<CampaignVerdict>,
     scan: ScanResult,
@@ -141,15 +144,16 @@ internal fun StringBuilder.appendCampaignRows(
             CampaignVerdict.State.NOT_DETECTED -> appendLine("  [OK]  ${v.label}: not detected")
         }
     }
-    if (live) {
-        appendLine("  \"not detected\" means none of the checks that ran in this scan matched.")
-        val notRun = scan.scannerErrors.count { NotEvaluatedReason.fromSentinel(it.exception) != null }
-        if (notRun > 0) {
-            appendLine("  $notRun check(s) could not run -- see ${ReportFormatter.NOT_CHECKED_SECTION} below.")
-        }
-        if (scan.realFailureCount > 0) {
-            appendLine("  ${scan.realFailureCount} scanner(s) failed on this scan; their checks did not run.")
-        }
+    // The scope note is live-only (an import has no "not detected" row). The pointer and the
+    // failed-check line apply to imports too: a failed attribution prefetch on an import
+    // (IntrusionLogAnalysisResult.scannerErrors) means a campaign hit may be missing its key.
+    if (live) appendLine("  \"not detected\" means none of the checks that ran in this scan matched.")
+    val notRun = scan.scannerErrors.count { NotEvaluatedReason.fromSentinel(it.exception) != null }
+    if (notRun > 0) {
+        appendLine("  $notRun check(s) could not run -- see ${ReportFormatter.NOT_CHECKED_SECTION} below.")
+    }
+    if (scan.realFailureCount > 0) {
+        appendLine("  ${scan.realFailureCount} scanner(s) failed on this scan; their checks did not run.")
     }
     appendLine()
 }

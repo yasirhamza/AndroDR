@@ -9,7 +9,7 @@ import com.androdr.ioc.feeds.ThreatFoxDomainFeed
 /** Single source of truth for "which feed's attribution wins" for a shared (type, value). */
 object SourceRank {
     const val RULES_REPO = "androdr_public_repo"
-    private const val MVT_PREFIX = "mvt_"
+    const val MVT_PREFIX = "mvt_"
     // Higher wins. Unknown sources rank LOWEST, so an unranked feed can never overwrite a ranked one.
     private val RANKS = mapOf(
         RULES_REPO to 100,

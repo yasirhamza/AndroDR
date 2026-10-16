@@ -80,8 +80,10 @@ class MercenaryCheckReportTest {
         intrusionEvents: List<ForensicTimelineEvent> = emptyList(),
         campaigns: List<Campaign>,
         source: TelemetrySource = TelemetrySource.INTRUSION_LOG_IMPORT,
+        scannerErrors: List<ScannerFailure> = emptyList(),
     ) = ReportFormatter.formatScanReport(
-        buildScan(appRisks = appRisks, deviceFlags = deviceFlags).copy(source = source),
+        buildScan(appRisks = appRisks, deviceFlags = deviceFlags, scannerErrors = scannerErrors)
+            .copy(source = source),
         emptyList(), emptyList(), intrusionEvents = intrusionEvents, versionName = "test",
         campaigns = campaigns,
         ruleCategoryById = emptyMap(),
@@ -204,6 +206,32 @@ class MercenaryCheckReportTest {
         assertFalse(live.contains("scanner(s) failed"))
         val import = formatImportReportWith(appRisks = emptyList(), campaigns = listOf(campaign("pegasus")))
         assertFalse(import.contains("\"not detected\" means"))
+    }
+
+    /** Final review item 2(b): an import's failed checks are said under its campaign rows. */
+    @Test
+    fun `import with a failed attribution prefetch says so under the campaign rows`() {
+        val report = formatImportReportWith(appRisks = emptyList(), campaigns = listOf(campaign("pegasus")),
+            scannerErrors = listOf(ScannerFailure(scanner = "attribution", exception = "SQLiteException",
+                message = "family unavailable: domain prefetch failed")))
+        val row = "  [--]  ${campaign("pegasus").label}: no hit in the imported log (device checks not run)"
+        val lines = report.lines()
+        val at = lines.indexOf(row)
+        assertTrue(report, at >= 0) // import row wording unchanged
+        assertEquals("  1 scanner(s) failed on this scan; their checks did not run.", lines[at + 1])
+        assertFalse(report.contains("\"not detected\" means"))
+    }
+
+    @Test
+    fun `import with a could-not-run entry points at the could-not-check section`() {
+        val report = formatImportReportWith(appRisks = emptyList(), campaigns = listOf(campaign("pegasus")),
+            scannerErrors = listOf(ScannerFailure(scanner = "threat_intel",
+                exception = NotEvaluatedReason.FEEDS_NOT_LOADED.sentinel,
+                message = "threat-intel feeds not loaded yet")))
+        val lines = report.lines()
+        val at = lines.indexOf(
+            "  [--]  ${campaign("pegasus").label}: no hit in the imported log (device checks not run)")
+        assertEquals("  1 check(s) could not run -- see ${ReportFormatter.NOT_CHECKED_SECTION} below.", lines[at + 1])
     }
 
     @Test

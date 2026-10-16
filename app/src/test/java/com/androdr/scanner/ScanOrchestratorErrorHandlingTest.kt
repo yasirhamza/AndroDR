@@ -109,7 +109,7 @@ class ScanOrchestratorErrorHandlingTest {
         indicatorResolver = mockk(relaxed = true)
         // B6: an empty indicator table adds a FeedsNotLoaded entry; these tests are about
         // other things. DnsVpnService.isRunning (JVM-global, defaults false) likewise adds DnsMonitorOff.
-        coEvery { indicatorResolver.count() } returns 1
+        coEvery { indicatorResolver.feedCoverage() } returns com.androdr.ioc.FeedCoverage(1, true, true)
         DnsVpnService.isRunning.value = true
         sigmaRuleFeed = mockk(relaxed = true)
         knownAppResolver = mockk(relaxed = true)
@@ -547,7 +547,7 @@ class ScanOrchestratorErrorHandlingTest {
 
     @Test
     fun `an empty indicator table records a FeedsNotLoaded entry that is not a failure`() = runTest {
-        coEvery { indicatorResolver.count() } returns 0
+        coEvery { indicatorResolver.feedCoverage() } returns com.androdr.ioc.FeedCoverage(0, false, false)
 
         val result = orchestrator.runFullScan()
 
@@ -558,11 +558,23 @@ class ScanOrchestratorErrorHandlingTest {
 
     @Test
     fun `a populated indicator table records no FeedsNotLoaded entry`() = runTest {
-        coEvery { indicatorResolver.count() } returns 5
+        coEvery { indicatorResolver.feedCoverage() } returns com.androdr.ioc.FeedCoverage(5, true, true)
 
         val result = orchestrator.runFullScan()
 
         assertTrue(result.scannerErrors.none { it.scanner == "threat_intel" })
+    }
+
+    @Test
+    fun `rules-repo rows missing at scan start record a FeedsNotLoaded entry naming the source`() = runTest {
+        coEvery { indicatorResolver.feedCoverage() } returns com.androdr.ioc.FeedCoverage(5, false, true)
+
+        val result = orchestrator.runFullScan()
+
+        val entry = result.scannerErrors.single { it.scanner == "threat_intel" }
+        assertEquals(NotEvaluatedReason.FEEDS_NOT_LOADED.sentinel, entry.exception)
+        assertTrue(entry.message.orEmpty().contains("AndroDR's own indicator list did not load"))
+        assertEquals(0, result.realFailureCount)
     }
 
     @Test
@@ -587,7 +599,7 @@ class ScanOrchestratorErrorHandlingTest {
 
     @Test
     fun `an indicator count failure does not end the scan and claims no feed gap`() = runTest {
-        coEvery { indicatorResolver.count() } throws android.database.sqlite.SQLiteException("disk")
+        coEvery { indicatorResolver.feedCoverage() } throws android.database.sqlite.SQLiteException("disk")
         every { indicatorResolver.attributionMisses } returns
             java.util.concurrent.atomic.AtomicReference<Set<String>>(emptySet())
         val finding = com.androdr.sigma.Finding(ruleId = "androdr-003", title = "Malicious Domain",
