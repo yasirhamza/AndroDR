@@ -235,4 +235,26 @@ class IntrusionLogAnalyzerTest {
         resolver("com.app.a") // evicted -> call 4
         assertEquals(4, calls)
     }
+
+    /** B5 fix round 1: a failing attribution prefetch must not fail the whole import. */
+    @Test
+    fun `a failing domain prefetch keeps the findings and records an attribution failure`() {
+        val finding = Finding(ruleId = "androdr-003", title = "Malicious Domain", level = "critical",
+            category = FindingCategory.APP_RISK)
+        val e = mockk<SigmaRuleEngine>(relaxed = true) {
+            every { evaluateDns(any()) } returns listOf(finding)
+            every { evaluateNetwork(any()) } returns emptyList()
+            every { evaluateSecurityLog(any()) } returns emptyList()
+        }
+        val resolver = mockk<com.androdr.ioc.IndicatorResolver>(relaxed = true)
+        io.mockk.coEvery { resolver.prefetchDomainIndicators(any()) } throws
+            android.database.sqlite.SQLiteException("database disk image is malformed")
+
+        val result = IntrusionLogAnalyzer(mockk(relaxed = true), e, resolver).analyzeEntries(
+            sequenceOf(entry("2026-08-22.txt", day1Dns)), uidResolver = { -1 }, capturedAt = capturedAt,
+        )
+
+        assertEquals(listOf(finding), result.findings)
+        assertEquals("SQLiteException", result.scannerErrors.single { it.scanner == "attribution" }.exception)
+    }
 }

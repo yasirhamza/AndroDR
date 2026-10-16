@@ -6,6 +6,7 @@ import android.net.Uri
 import android.util.Log
 import com.androdr.data.model.ImportedDnsEvent
 import com.androdr.data.model.NetworkTelemetry
+import com.androdr.data.model.ScannerFailure
 import com.androdr.data.model.SecurityLogEvent
 import com.androdr.ioc.IndicatorResolver
 import com.androdr.scanner.intrusionlog.IntrusionLogParser
@@ -54,7 +55,9 @@ data class IntrusionLogAnalysisResult(
     val dnsEvents: List<ImportedDnsEvent>,
     val networkEvents: List<NetworkTelemetry>,
     val securityEvents: List<SecurityLogEvent>,
-    val stats: IntrusionLogStats
+    val stats: IntrusionLogStats,
+    /** Non-fatal problems during analysis (e.g. attribution unavailable); persisted on the import's scan. */
+    val scannerErrors: List<ScannerFailure> = emptyList()
 )
 
 /**
@@ -170,8 +173,22 @@ class IntrusionLogAnalyzer @Inject constructor(
         val parsed = IntrusionLogParser().parse(lines, uidResolver, capturedAt, onLine)
 
         // Rows behind domain hits, so ioc_match findings name their family. analyzeEntries
-        // is synchronous and already runs on Dispatchers.IO via analyze().
-        runBlocking { indicatorResolver.prefetchDomainIndicators(parsed.dnsEvents.map { it.event.domain }) }
+        // is synchronous and already runs on Dispatchers.IO via analyze(). A failure costs
+        // the attribution only: findings still fire, and the import says what it lacked.
+        val analysisErrors = mutableListOf<ScannerFailure>()
+        @Suppress("TooGenericExceptionCaught")
+        try {
+            runBlocking { indicatorResolver.prefetchDomainIndicators(parsed.dnsEvents.map { it.event.domain }) }
+        } catch (c: CancellationException) {
+            throw c
+        } catch (e: Exception) {
+            Log.w(TAG, "Domain attribution prefetch failed; findings keep no family", e)
+            analysisErrors += ScannerFailure(
+                scanner = "attribution",
+                exception = e.javaClass.simpleName,
+                message = "family unavailable: domain prefetch failed"
+            )
+        }
         val findings = buildList {
             addAll(sigmaRuleEngine.evaluateDns(parsed.dnsEvents.map { it.event }))
             addAll(sigmaRuleEngine.evaluateNetwork(parsed.networkEvents))
@@ -196,6 +213,7 @@ class IntrusionLogAnalyzer @Inject constructor(
             dnsEvents = parsed.dnsEvents,
             networkEvents = parsed.networkEvents,
             securityEvents = parsed.securityEvents,
+            scannerErrors = analysisErrors,
             stats = IntrusionLogStats(
                 dnsEventCount = parsed.dnsEvents.size,
                 connectEventCount = parsed.networkEvents.size,

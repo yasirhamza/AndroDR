@@ -482,4 +482,22 @@ class ScanOrchestratorErrorHandlingTest {
 
         assertTrue(result.scannerErrors.none { it.scanner == "attribution" })
     }
+
+    @Test
+    fun `a failing domain prefetch keeps the findings and records an attribution failure`() = runTest {
+        val dnsFinding = com.androdr.sigma.Finding(ruleId = "androdr-003", title = "Malicious Domain",
+            level = "critical", category = com.androdr.sigma.FindingCategory.APP_RISK)
+        coEvery { dnsEventDao.getRecentSnapshot() } returns listOf(dnsEvent())
+        coEvery { indicatorResolver.prefetchDomainIndicators(any()) } throws
+            android.database.sqlite.SQLiteException("database disk image is malformed")
+        every { indicatorResolver.attributionMisses } returns
+            java.util.concurrent.atomic.AtomicReference(emptySet())
+        coEvery { sigmaRuleEngine.evaluateDns(any()) } returns listOf(dnsFinding)
+
+        val result = orchestrator.runFullScan()
+
+        assertTrue("the DNS finding still fires", result.findings.any { it.ruleId == "androdr-003" })
+        val attribution = result.scannerErrors.single { it.scanner == "attribution" }
+        assertEquals("SQLiteException", attribution.exception)
+    }
 }

@@ -4,6 +4,7 @@ import android.util.Log
 import com.androdr.data.db.IndicatorDao
 import com.androdr.data.model.Indicator
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 import java.util.Locale
 import java.util.concurrent.atomic.AtomicReference
@@ -35,7 +36,12 @@ class IndicatorResolver @Inject constructor(
     private val cache = AtomicReference<IndicatorCache?>(null)
     private val domainIndex = AtomicReference<DomainBloomIndex>(DomainBloomIndex.empty())
 
-    /** Full rows behind domain hits, keyed by the queried hostname; see [prefetchDomainIndicators]. */
+    /**
+     * Full rows behind domain hits, keyed by the MATCHED indicator value (the bloom
+     * candidate or the bundled key), never by the queried hostname -- so the cache is
+     * bounded by the number of indicators however many distinct subdomains an imported
+     * log queries. See [prefetchDomainIndicators] and [cachedDomainIndicator].
+     */
     private val domainRows = AtomicReference<Map<String, Indicator>>(emptyMap())
 
     /**
@@ -136,14 +142,22 @@ class IndicatorResolver @Inject constructor(
     suspend fun prefetchDomainIndicators(domains: Collection<String>) = withContext(Dispatchers.IO) {
         attributionMisses.set(emptySet())
         val rows = HashMap<String, Indicator>()
+        // One DAO lookup per distinct matched value, however many hosts share it.
+        val stored = HashMap<String, Indicator?>()
         for (domain in domains.toSet()) {
-            val row = resolveDomainRow(domain)
-            if (row != null) rows[domain] = row
+            ensureActive() // an imported log can hold 200k hosts; leaving the screen stops it
+            val (key, row) = resolveDomainMatch(domain) { k ->
+                if (k in stored) stored[k] else dao.lookup(TYPE_DOMAIN, k).also { stored[k] = it }
+            } ?: continue
+            if (row != null) rows[key] = row
         }
+        // A bloom key whose stored row is gone (and has no bundled entry) is dropped, so
+        // a stale row can never be read back as evidence.
+        val gone = stored.filterValues { it == null }.keys - rows.keys
         // Merge, never replace: a scan and an intrusion-log import can prefetch
         // concurrently; replacing would wipe the other caller's rows mid-evaluation.
         // Not cleared by refreshCache() either, for the same reason.
-        domainRows.updateAndGet { it + rows }
+        domainRows.updateAndGet { (it - gone) + rows }
     }
 
     /**
@@ -153,10 +167,50 @@ class IndicatorResolver @Inject constructor(
      * and by the timeline enrichment in ScanRepository.logDnsEventsBatch.
      */
     suspend fun resolveDomainRow(domain: String): Indicator? = withContext(Dispatchers.IO) {
-        isKnownBadDomain(domain)?.let { dao.lookup(TYPE_DOMAIN, it.value) } ?: bundledDomainWalk(domain)
+        resolveDomainMatch(domain) { dao.lookup(TYPE_DOMAIN, it) }?.second
     }
 
-    fun cachedDomainIndicator(domain: String): Indicator? = domainRows.get()[domain]
+    /**
+     * (matched key, row) for [domain]: the bloom candidate with its stored row, else the
+     * bundled key with its entry. A bloom key whose row is gone and has no bundled
+     * fallback comes back as (key, null). Null when nothing matches.
+     */
+    private suspend fun resolveDomainMatch(
+        domain: String,
+        storedRow: suspend (String) -> Indicator?
+    ): Pair<String, Indicator?>? {
+        val bloomKey = isKnownBadDomain(domain)?.value
+        val stored = bloomKey?.let { storedRow(it) }
+        return when {
+            stored != null -> bloomKey to stored
+            else -> bundledDomainMatch(domain) ?: bloomKey?.let { it to null }
+        }
+    }
+
+    /**
+     * The prefetched row for [domain]: walks its labels in memory and returns the row of
+     * the first label that is cached AND still matches live (bloom or bundle). A cached
+     * row whose key no longer matches is never returned (B2 carry-over). No Room access.
+     */
+    @Suppress("ReturnCount")
+    fun cachedDomainIndicator(domain: String): Indicator? {
+        val rows = domainRows.get()
+        if (rows.isEmpty() || domain.isBlank()) return null
+        val index = domainIndex.get()
+        var c = domain.trim().trimEnd('.').lowercase(Locale.ROOT)
+        while (c.isNotEmpty()) {
+            val row = rows[c]
+            if (row != null && (index.contains(c) || bundledDomains.lookup(c) != null)) return row
+            val dot = c.indexOf('.')
+            if (dot < 0) break
+            c = c.substring(dot + 1)
+        }
+        return null
+    }
+
+    /** Keys currently held by the domain-row cache (tests: the cache stays bounded). */
+    @androidx.annotation.VisibleForTesting
+    internal fun domainCacheKeys(): Set<String> = domainRows.get().keys
 
     /**
      * Cold start: before the first feed sync the bloom index is empty, so a bundled
@@ -168,12 +222,13 @@ class IndicatorResolver @Inject constructor(
      * is still BlocklistManager's blockedDomains() set.
      */
     fun isKnownBadDomainWithBundle(domain: String): Indicator? =
-        isKnownBadDomain(domain) ?: bundledDomainWalk(domain)
+        isKnownBadDomain(domain) ?: bundledDomainMatch(domain)?.second
 
-    private fun bundledDomainWalk(domain: String): Indicator? {
+    /** (bundled key, sanitised entry) for the first label of [domain] in the bundled list. */
+    private fun bundledDomainMatch(domain: String): Pair<String, Indicator>? {
         var c = domain.trim().trimEnd('.').lowercase(Locale.ROOT)
         while (c.isNotEmpty()) {
-            bundledDomains.lookup(c)?.let { return IocSanitizer.sanitize(it) }
+            bundledDomains.lookup(c)?.let { return c to IocSanitizer.sanitize(it) }
             val dot = c.indexOf('.')
             if (dot < 0) break
             c = c.substring(dot + 1)

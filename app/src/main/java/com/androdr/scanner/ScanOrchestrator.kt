@@ -383,10 +383,30 @@ class ScanOrchestrator @Inject constructor(
         if (recentDnsEvents.isNotEmpty()) {
             // Load the rows behind domain hits so ioc_match findings can name their family;
             // the provider reads them from this cache, never from Room on the VPN path (#71).
-            indicatorResolver.prefetchDomainIndicators(recentDnsEvents.map { it.domain })
+            // A failure costs the attribution only: findings still fire, and the scan says so.
+            var prefetchFailed = false
+            @Suppress("TooGenericExceptionCaught")
+            try {
+                indicatorResolver.prefetchDomainIndicators(recentDnsEvents.map { it.domain })
+            } catch (c: CancellationException) {
+                throw c
+            } catch (e: Exception) {
+                Log.w(TAG, "Domain attribution prefetch failed; findings keep no family", e)
+                prefetchFailed = true
+                synchronized(scannerErrors) {
+                    scannerErrors.add(
+                        ScannerFailure(
+                            scanner = "attribution",
+                            exception = e.javaClass.simpleName,
+                            message = "family unavailable: domain prefetch failed"
+                        )
+                    )
+                }
+            }
             allFindings.addAll(sigmaRuleEngine.evaluateDns(recentDnsEvents))
             val misses = indicatorResolver.attributionMisses.getAndSet(emptySet())
-            if (misses.isNotEmpty()) {
+            // After a failed prefetch every live hit is a miss; that failure already says so.
+            if (misses.isNotEmpty() && !prefetchFailed) {
                 synchronized(scannerErrors) {
                     scannerErrors.add(
                         ScannerFailure(
@@ -772,7 +792,7 @@ class ScanOrchestrator @Inject constructor(
             knownMalwareCount = result.findings.count {
                 it.level == "critical" && "known_malware" in it.impliesFlags
             },
-            scannerErrors = emptyList(),
+            scannerErrors = result.scannerErrors,
             // #356: see analyzeBugReport — imports are labeled, not passed off
             // as live scans of this device.
             source = TelemetrySource.INTRUSION_LOG_IMPORT

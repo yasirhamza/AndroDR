@@ -13,7 +13,6 @@ import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -58,7 +57,7 @@ class IocEvidenceRegistrationTest {
         dao.upsertAll(listOf(row)); resolver.refreshCache()
         resolver.prefetchDomainIndicators(listOf(host))
         dao.deleteStaleEntries("androdr_public_repo", Long.MAX_VALUE); resolver.refreshCache()
-        assertNotNull("precondition: the stale row is still cached", resolver.cachedDomainIndicator(host))
+        assertEquals("precondition: the stale row is still cached", setOf(host), resolver.domainCacheKeys())
         assertNull(resolver.isKnownBadDomainWithBundle(host))
 
         assertNull(ScanOrchestrator.iocRow(resolver, "domain_ioc_db", host))

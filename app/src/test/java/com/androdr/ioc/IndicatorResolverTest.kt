@@ -11,6 +11,7 @@ import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 
@@ -229,5 +230,48 @@ class IndicatorResolverTest {
         resolver.prefetchDomainIndicators(listOf("a.com"))
         resolver.refreshCache()
         assertEquals("A", resolver.cachedDomainIndicator("a.com")!!.family)
+    }
+
+    // ── B5 fix round 1: the cache is keyed by the MATCHED indicator, not the queried
+    // hostname, so an imported log of distinct subdomains cannot grow it unbounded.
+
+    @Test
+    fun `ten thousand subdomains of one IOC cost one cache entry and one DAO lookup`() = runTest {
+        coEvery { dao.getValuesByType("domain") } returns listOf("evil.com")
+        coEvery { dao.lookup("domain", "evil.com") } returns
+            Indicator("domain", "evil.com", family = "F", source = "s", fetchedAt = 1L)
+        resolver.refreshCache()
+        resolver.prefetchDomainIndicators((0 until 10_000).map { "s$it.evil.com" })
+        assertEquals(setOf("evil.com"), resolver.domainCacheKeys())
+        coVerify(atMost = 1) { dao.lookup(any(), any()) }
+        assertEquals("F", resolver.cachedDomainIndicator("s9999.evil.com")!!.family)
+    }
+
+    @Test
+    fun `a matched value that no longer resolves is removed from the cache`() = runTest {
+        coEvery { dao.getValuesByType("domain") } returns listOf("a.com")
+        coEvery { dao.lookup("domain", "a.com") } returns
+            Indicator("domain", "a.com", family = "A", source = "s", fetchedAt = 1L)
+        resolver.refreshCache()
+        resolver.prefetchDomainIndicators(listOf("x.a.com"))
+        assertEquals(setOf("a.com"), resolver.domainCacheKeys())
+        // Row deleted (feed eviction) while the bloom index still says a.com.
+        coEvery { dao.lookup("domain", "a.com") } returns null
+        resolver.prefetchDomainIndicators(listOf("y.a.com"))
+        assertTrue(resolver.domainCacheKeys().isEmpty())
+        assertNull(resolver.cachedDomainIndicator("y.a.com"))
+    }
+
+    @Test
+    fun `a cached row whose key no longer matches live is not returned`() = runTest {
+        coEvery { dao.getValuesByType("domain") } returns listOf("a.com")
+        coEvery { dao.lookup("domain", "a.com") } returns
+            Indicator("domain", "a.com", family = "A", source = "s", fetchedAt = 1L)
+        resolver.refreshCache()
+        resolver.prefetchDomainIndicators(listOf("a.com"))
+        coEvery { dao.getValuesByType("domain") } returns emptyList()
+        resolver.refreshCache()
+        assertEquals("refreshCache keeps the row (B2)", setOf("a.com"), resolver.domainCacheKeys())
+        assertNull(resolver.cachedDomainIndicator("a.com"))
     }
 }

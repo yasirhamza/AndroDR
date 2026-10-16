@@ -316,4 +316,17 @@ class IntrusionLogParserTest {
         // Stopped at the 3rd check rather than running all 10 lines.
         assertEquals(3, calls)
     }
+
+    /** RFC 1035: a hostname is at most 253 characters; longer is malformed (B5 fix round 1). */
+    @Test
+    fun `hostname longer than 253 characters is dropped as malformed`() {
+        val long = "a".repeat(250) + ".com" // 254 chars
+        val ok = "a".repeat(249) + ".com"   // 253 chars
+        val result = parse(
+            """{"dns_event":{"event_id":1,"event_time":1787400345334,"hostname":"$long"}}""",
+            """{"dns_event":{"event_id":2,"event_time":1787400345334,"hostname":"$ok"}}""",
+        )
+        assertEquals(listOf(ok), result.dnsEvents.map { it.event.domain })
+        assertEquals(1, result.malformedLines)
+    }
 }
