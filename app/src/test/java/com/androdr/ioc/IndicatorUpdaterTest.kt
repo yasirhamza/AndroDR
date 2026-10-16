@@ -199,4 +199,20 @@ class IndicatorUpdaterTest {
         u.update()
         assertEquals("Pegasus", fake.lookup("domain", "evil.com")!!.family)
     }
+
+    @Test
+    fun `DomainIocEntry toIndicator carries the campaign key`() {
+        val ind = DomainIocEntry("evil.com", "Pegasus", "CRITICAL", mvtPegasus, 100, campaignKey = "pegasus")
+            .toIndicator()
+        assertEquals("pegasus", ind.campaignKey)
+    }
+
+    @Test
+    fun `campaign key survives the MVT entry to indicator write`() = runBlocking {
+        val fake = FakeIndicatorDao()
+        val mvt = DomainFeedFake("mvt_indicators")
+        mvt.rows = listOf(DomainIocEntry("evil.com", "Pegasus", "CRITICAL", mvtPegasus, 100, campaignKey = "pegasus"))
+        updater(fake, listOf(mvt)).update()
+        assertEquals("pegasus", fake.lookup("domain", "evil.com")!!.campaignKey)
+    }
 }

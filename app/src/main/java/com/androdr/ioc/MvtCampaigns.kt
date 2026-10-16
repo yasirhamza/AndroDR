@@ -16,6 +16,9 @@ object MvtCampaigns {
     )
     fun keyFor(name: String, url: String): String? = EXACT[name to url]
     fun allKeys(): Set<String> = EXACT.values.toSet()
-    /** For the rules-repo CI check, which reads the same tuples from `validation/mvt-campaign-map.json`. */
+    /**
+     * Used by the app's cross-check unit test (MvtCampaignsTest) against the rules
+     * repo's `validation/mvt-campaign-map.json`.
+     */
     fun entries(): Map<Pair<String, String>, String> = EXACT
 }
