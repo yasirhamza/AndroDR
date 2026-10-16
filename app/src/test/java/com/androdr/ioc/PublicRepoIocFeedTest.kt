@@ -1,6 +1,11 @@
 // app/src/test/java/com/androdr/ioc/PublicRepoIocFeedTest.kt
 package com.androdr.ioc
 
+import io.mockk.every
+import io.mockk.mockkObject
+import io.mockk.unmockkObject
+import kotlinx.coroutines.runBlocking
+import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -113,5 +118,75 @@ class PublicRepoIocFeedTest {
 
         val entries = feed.parsePopularAppsYaml(yaml)
         assertTrue(entries.isEmpty())
+    }
+
+    // ── Writers populate the v19 layout; campaign key retraction ──
+
+    private fun yaml(vararg entries: String) = "version: \"1\"\nentries:\n" + entries.joinToString("\n")
+
+    private fun stubFetch(files: Map<String, String>) {
+        mockkObject(SafeHttpFetch)
+        every { SafeHttpFetch.fetch(any(), any(), any()) } returns null
+        files.forEach { (suffix, body) ->
+            every { SafeHttpFetch.fetch(match { it.endsWith(suffix) }, any(), any()) } returns body
+        }
+    }
+
+    @After
+    fun unmock() = unmockkObject(SafeHttpFetch)
+
+    @Test
+    fun `every writer populates family, category and reference`() = runBlocking {
+        val entry = { ind: String -> """
+              - indicator: "$ind"
+                family: "Fam"
+                category: "SPYWARE"
+                severity: "HIGH"
+                description: "d"
+                source: "s"
+                reference: "https://example.org/r"
+                campaign: "predator"
+        """.trimIndent() }
+        stubFetch(mapOf(
+            "package-names.yml" to yaml(entry("com.x.y")),
+            "c2-domains.yml" to yaml(entry("Evil.Example")),
+            "cert-hashes.yml" to yaml(entry("ABCD")),
+            "malware-hashes.yml" to yaml(entry("EF01")),
+        ))
+        val dao = FakeIndicatorDao()
+        PublicRepoIocFeed(dao, io.mockk.mockk(relaxed = true)).update()
+        for ((type, value) in listOf("package" to "com.x.y", "domain" to "evil.example",
+            "cert_hash" to "abcd", "apk_hash" to "ef01")) {
+            val row = dao.lookup(type, value)!!
+            assertEquals("$type family", "Fam", row.family)
+            assertEquals("$type category", "SPYWARE", row.category)
+            assertEquals("$type reference", "https://example.org/r", row.reference)
+            assertEquals("$type campaignKey", "predator", row.campaignKey)
+        }
+    }
+
+    @Test
+    fun `campaign key is retracted when ioc-data drops it and does not come back`() = runBlocking {
+        val withKey = yaml("""
+              - indicator: "pegasus.example"
+                family: "Pegasus"
+                category: "NATION_STATE_SPYWARE"
+                severity: "CRITICAL"
+                source: "s"
+                reference: "https://example.org/r"
+                campaign: "pegasus"
+        """.trimIndent())
+        val withoutKey = withKey.replace("                campaign: \"pegasus\"\n", "").trimEnd()
+            .let { if (it.contains("campaign:")) it.substringBeforeLast("\n") else it }
+        val dao = FakeIndicatorDao()
+        val feed = PublicRepoIocFeed(dao, io.mockk.mockk(relaxed = true))
+        stubFetch(mapOf("c2-domains.yml" to withKey))
+        feed.update()
+        assertEquals("pegasus", dao.lookup("domain", "pegasus.example")!!.campaignKey)
+        stubFetch(mapOf("c2-domains.yml" to withoutKey))
+        feed.update()
+        assertEquals("", dao.lookup("domain", "pegasus.example")!!.campaignKey)
+        feed.update()
+        assertEquals("", dao.lookup("domain", "pegasus.example")!!.campaignKey)
     }
 }

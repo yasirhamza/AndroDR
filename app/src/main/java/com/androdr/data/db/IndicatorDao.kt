@@ -39,7 +39,18 @@ interface IndicatorDao {
     suspend fun countByType(type: String): Int
 
     @Query("DELETE FROM indicators WHERE source = :source AND fetchedAt < :olderThan")
-    suspend fun deleteStaleEntries(source: String, olderThan: Long)
+    suspend fun deleteStaleEntries(source: String, olderThan: Long): Int
+
+    /** Rows deleted (feeds UpdateResult.evicted). */
+    @Query("DELETE FROM indicators WHERE source = :source AND type = :type AND fetchedAt < :olderThan")
+    suspend fun deleteStaleEntriesOfType(source: String, type: String, olderThan: Long): Int
+
+    /** Values of [type] owned by any of [sources] (or by MVT collections when [includeMvt]). */
+    @Query(
+        "SELECT value FROM indicators WHERE type = :type AND " +
+            "(source IN (:sources) OR (:includeMvt = 1 AND source LIKE 'mvt_%'))"
+    )
+    suspend fun ownedValues(type: String, sources: List<String>, includeMvt: Boolean): List<String>
 
     @Query("SELECT MAX(fetchedAt) FROM indicators WHERE source = :source")
     suspend fun lastFetchTime(source: String): Long?

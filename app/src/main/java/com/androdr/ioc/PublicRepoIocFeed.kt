@@ -23,8 +23,9 @@ class PublicRepoIocFeed @Inject constructor(
 ) {
 
     @Suppress("TooGenericExceptionCaught")
-    suspend fun update(): Int = withContext(Dispatchers.IO) {
+    suspend fun update(): UpdateResult = withContext(Dispatchers.IO) {
         var total = 0
+        evicted = 0
         val now = System.currentTimeMillis()
 
         try {
@@ -38,8 +39,12 @@ class PublicRepoIocFeed @Inject constructor(
             Log.w(TAG, "Public repo IOC feed failed: ${e.message}")
         }
 
-        total
+        UpdateResult(written = total, evicted = evicted)
     }
+
+    /** Rows evicted during the current [update] run (single-flighted by IntelRefresher). */
+    @Volatile
+    private var evicted = 0
 
     @Suppress("TooGenericExceptionCaught", "SwallowedException")
     private suspend fun fetchAndUpsertPackages(fetchedAt: Long): Int {
@@ -50,17 +55,19 @@ class PublicRepoIocFeed @Inject constructor(
             val indicator = entry["indicator"]?.toString() ?: return@mapNotNull null
             Indicator(
                 type = IndicatorResolver.TYPE_PACKAGE, value = indicator,
-                name = entry["family"]?.toString() ?: "",
-                campaign = entry["category"]?.toString() ?: "MALWARE",
+                family = entry["family"]?.toString() ?: "",
+                category = entry["category"]?.toString() ?: "MALWARE",
+                campaignKey = entry["campaign"]?.toString() ?: "",
                 severity = entry["severity"]?.toString() ?: "CRITICAL",
                 description = entry["description"]?.toString() ?: "",
+                reference = entry["reference"]?.toString() ?: "",
                 source = SOURCE_ID, fetchedAt = fetchedAt
-            )
+            ).let(IocSanitizer::sanitize)
         }
 
         if (indicators.isNotEmpty()) {
             indicatorDao.upsertAll(indicators)
-            indicatorDao.deleteStaleEntries(SOURCE_ID, fetchedAt - 1)
+            evicted += indicatorDao.deleteStaleEntries(SOURCE_ID, fetchedAt - 1)
         }
         return indicators.size
     }
@@ -74,10 +81,13 @@ class PublicRepoIocFeed @Inject constructor(
             val domain = entry["indicator"]?.toString()?.lowercase() ?: return@mapNotNull null
             Indicator(
                 type = IndicatorResolver.TYPE_DOMAIN, value = domain,
-                name = "", campaign = entry["family"]?.toString() ?: "",
+                family = entry["family"]?.toString() ?: "",
+                category = entry["category"]?.toString() ?: "",
+                campaignKey = entry["campaign"]?.toString() ?: "",
                 severity = entry["severity"]?.toString() ?: "CRITICAL",
-                description = "", source = SOURCE_ID, fetchedAt = fetchedAt
-            )
+                description = "", reference = entry["reference"]?.toString() ?: "",
+                source = SOURCE_ID, fetchedAt = fetchedAt
+            ).let(IocSanitizer::sanitize)
         }
 
         if (indicators.isNotEmpty()) {
@@ -95,12 +105,14 @@ class PublicRepoIocFeed @Inject constructor(
             val hash = entry["indicator"]?.toString()?.lowercase() ?: return@mapNotNull null
             Indicator(
                 type = IndicatorResolver.TYPE_CERT_HASH, value = hash,
-                name = entry["family"]?.toString() ?: "",
-                campaign = entry["category"]?.toString() ?: "MALWARE",
+                family = entry["family"]?.toString() ?: "",
+                category = entry["category"]?.toString() ?: "MALWARE",
+                campaignKey = entry["campaign"]?.toString() ?: "",
                 severity = entry["severity"]?.toString() ?: "CRITICAL",
                 description = entry["description"]?.toString() ?: "",
+                reference = entry["reference"]?.toString() ?: "",
                 source = SOURCE_ID, fetchedAt = fetchedAt
-            )
+            ).let(IocSanitizer::sanitize)
         }
 
         if (indicators.isNotEmpty()) {
@@ -118,12 +130,14 @@ class PublicRepoIocFeed @Inject constructor(
             val hash = entry["indicator"]?.toString()?.lowercase() ?: return@mapNotNull null
             Indicator(
                 type = IndicatorResolver.TYPE_APK_HASH, value = hash,
-                name = entry["family"]?.toString() ?: "",
-                campaign = entry["category"]?.toString() ?: "MALWARE",
+                family = entry["family"]?.toString() ?: "",
+                category = entry["category"]?.toString() ?: "MALWARE",
+                campaignKey = entry["campaign"]?.toString() ?: "",
                 severity = entry["severity"]?.toString() ?: "CRITICAL",
                 description = entry["description"]?.toString() ?: "",
+                reference = entry["reference"]?.toString() ?: "",
                 source = SOURCE_ID, fetchedAt = fetchedAt
-            )
+            ).let(IocSanitizer::sanitize)
         }
 
         if (indicators.isNotEmpty()) {
@@ -198,3 +212,6 @@ class PublicRepoIocFeed @Inject constructor(
         private const val TIMEOUT_MS = 15_000
     }
 }
+
+/** Outcome of one rules-repo feed run: rows written and rows evicted. */
+data class UpdateResult(val written: Int, val evicted: Int)

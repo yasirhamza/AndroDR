@@ -47,12 +47,14 @@ class IndicatorResolverTest {
     @Test
     fun `cert hash lookup works after cache refresh`() = runTest {
         coEvery { dao.getAllByType("cert_hash") } returns listOf(
-            Indicator("cert_hash", "abc123", "TestMalware", "", "CRITICAL", "", "test", 1000L)
+            Indicator(type = "cert_hash", value = "abc123", family = "TestMalware",
+                severity = "CRITICAL", source = "test",
+                fetchedAt = 1000L)
         )
         resolver.refreshCache()
         val result = resolver.isKnownBadCert("abc123")
         assertNotNull(result)
-        assertEquals("TestMalware", result!!.name)
+        assertEquals("TestMalware", result!!.family)
     }
 
     @Test
@@ -94,13 +96,14 @@ class IndicatorResolverTest {
         every { bundledCerts.isKnownBadCert("bundled123") } returns bundledCert
         val result = resolver.isKnownBadCert("bundled123")
         assertNotNull(result)
-        assertEquals("BundledMalware", result!!.name)
+        assertEquals("BundledMalware", result!!.family)
     }
 
     @Test
     fun `apk hash lookup works`() = runTest {
         coEvery { dao.getAllByType("apk_hash") } returns listOf(
-            Indicator("apk_hash", "deadbeef", "Trojan", "", "CRITICAL", "", "test", 1000L)
+            Indicator(type = "apk_hash", value = "deadbeef", family = "Trojan", severity = "CRITICAL", source = "test",
+                fetchedAt = 1000L)
         )
         resolver.refreshCache()
         assertNotNull(resolver.isKnownBadApkHash("deadbeef"))
@@ -110,7 +113,9 @@ class IndicatorResolverTest {
     @Test
     fun `normalizes cert hash to lowercase`() = runTest {
         coEvery { dao.getAllByType("cert_hash") } returns listOf(
-            Indicator("cert_hash", "abc123def456", "TestMalware", "", "CRITICAL", "", "test", 1000L)
+            Indicator(type = "cert_hash", value = "abc123def456", family = "TestMalware",
+                severity = "CRITICAL", source = "test",
+                fetchedAt = 1000L)
         )
         resolver.refreshCache()
         assertNotNull(resolver.isKnownBadCert("ABC123DEF456"))

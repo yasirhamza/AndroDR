@@ -24,7 +24,7 @@ fun DnsEvent.toForensicTimelineEvent(): ForensicTimelineEvent =
  */
 fun DnsEvent.toForensicTimelineEvent(indicator: com.androdr.data.model.Indicator?): ForensicTimelineEvent {
     val isMatched = this.reason != null
-    val realCampaign = indicator?.campaign?.takeIf { it.isNotBlank() }
+    val realCampaign = indicator?.family?.takeIf { it.isNotBlank() }
     val realSource = indicator?.source?.takeIf { it.isNotBlank() }
     val realDescription = indicator?.description?.takeIf { it.isNotBlank() }
     return ForensicTimelineEvent(

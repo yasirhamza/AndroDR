@@ -8,6 +8,7 @@ import com.androdr.data.model.IocEntry
 import com.androdr.data.model.Indicator
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.withContext
@@ -29,59 +30,77 @@ class IndicatorUpdater @Inject constructor(
 ) {
     private val updateMutex = Mutex()
 
-    suspend fun update(): Int {
+    /**
+     * @param refreshCache rebuild [IndicatorResolver]'s cache and bloom index after the write.
+     * [IntelRefresher] passes false and rebuilds once itself after the rules-repo feed, so the
+     * ~540k-domain bloom index is not built twice per refresh.
+     */
+    suspend fun update(refreshCache: Boolean = true): Int {
         if (!updateMutex.tryLock()) {
             Log.d(TAG, "Update already in progress — skipping")
             return 0
         }
-        return try { doUpdate() } finally { updateMutex.unlock() }
+        return try { doUpdate(refreshCache) } finally { updateMutex.unlock() }
     }
 
+    private class FeedRows(val sourceId: String, val rows: List<Indicator>)
+
     @Suppress("TooGenericExceptionCaught")
-    private suspend fun doUpdate(): Int = withContext(Dispatchers.IO) {
+    private suspend fun doUpdate(refreshCache: Boolean): Int = withContext(Dispatchers.IO) {
         var total = 0
         coroutineScope {
-            // Package feeds
-            val pkgJobs = packageFeeds.map { feed ->
-                async { runFeed(feed.sourceId) { feed.fetch().map { it.toIndicator() } } }
+            // Fetch every feed in parallel...
+            val jobs = packageFeeds.map { feed ->
+                async { fetchFeed(feed.sourceId) { feed.fetch().map { it.toIndicator() } } }
+            } + domainFeeds.map { feed ->
+                async { fetchFeed(feed.sourceId) { feed.fetch().map { it.toIndicator() } } }
+            } + certHashFeeds.map { feed ->
+                async { fetchFeed(feed.sourceId) { feed.fetch().map { it.toIndicator() } } }
             }
-            // Domain feeds
-            val domJobs = domainFeeds.map { feed ->
-                async { runFeed(feed.sourceId) { feed.fetch().map { it.toIndicator() } } }
-            }
-            // Cert hash feeds
-            val certJobs = certHashFeeds.map { feed ->
-                async { runFeed(feed.sourceId) { feed.fetch().map { it.toIndicator() } } }
-            }
-            total = (pkgJobs + domJobs + certJobs).sumOf { it.await() }
+            val fetched = jobs.awaitAll()
+            // ...then write sequentially in ascending precedence (HaGeZi first). Order only keeps the
+            // write sequence deterministic; the owned-values filter in writeFeed guarantees precedence.
+            fetched.sortedBy { SourceRank.of(it.sourceId) }.forEach { total += writeFeed(it) }
         }
-        resolver.refreshCache()
+        if (refreshCache) resolver.refreshCache()
         Log.i(TAG, "Indicator update complete — fetched: $total, DB: ${dao.count()}")
         total
     }
 
-    private suspend fun runFeed(sourceId: String, fetch: suspend () -> List<Indicator>): Int {
-        val entries = fetch()
-        if (entries.isNotEmpty()) {
-            // Upsert in bounded chunks rather than one giant transaction. A single
-            // `upsertAll` of a large feed (e.g. hagezi_tif ~540k rows) holds the
-            // sole write connection for the entire run, starving reader threads on
-            // the connection pool for tens of seconds (observed ~28s) and stalling
-            // the UI. Each chunk is its own transaction, so the write lock is
-            // released between batches and readers can interleave.
-            //
-            // Tradeoff: the feed write is no longer atomic with the
-            // deleteStaleEntries below — a crash mid-feed leaves new + old rows
-            // coexisting. That is benign for an IOC cache (PK is (type,value)
-            // with REPLACE, and the next successful sync self-heals), and is the
-            // intended price for not holding one long write lock.
-            entries.chunked(UPSERT_CHUNK_SIZE).forEach { chunk -> dao.upsertAll(chunk) }
-            val runStart = entries.minOf { it.fetchedAt } - 1
-            dao.deleteStaleEntries(sourceId, runStart)
-            Log.i(TAG, "Feed '$sourceId': ${entries.size} indicators upserted")
-        } else {
-            Log.w(TAG, "Feed '$sourceId': no entries returned")
+    private suspend fun fetchFeed(sourceId: String, fetch: suspend () -> List<Indicator>): FeedRows =
+        FeedRows(sourceId, fetch())
+
+    private suspend fun writeFeed(feed: FeedRows): Int {
+        val entries = feed.rows
+        if (entries.isEmpty()) {
+            Log.w(TAG, "Feed '${feed.sourceId}': no entries returned")
+            return 0
         }
+        // A lower-ranked feed never overwrites a value a higher-ranked source owns (spec R18).
+        val (above, mvt) = SourceRank.above(feed.sourceId)
+        val toWrite = entries.groupBy { it.type }.flatMap { (type, rows) ->
+            val owned = dao.ownedValues(type, above, mvt).toHashSet()
+            if (owned.isEmpty()) rows else rows.filter { it.value !in owned }
+        }
+        // Upsert in bounded chunks rather than one giant transaction. A single
+        // `upsertAll` of a large feed (e.g. hagezi_tif ~540k rows) holds the
+        // sole write connection for the entire run, starving reader threads on
+        // the connection pool for tens of seconds (observed ~28s) and stalling
+        // the UI. Each chunk is its own transaction, so the write lock is
+        // released between batches and readers can interleave.
+        //
+        // Tradeoff: the feed write is no longer atomic with the eviction below —
+        // a crash mid-feed leaves new + old rows coexisting. That is benign for an
+        // IOC cache (PK is (type,value) with REPLACE, and the next successful sync
+        // self-heals), and is the intended price for not holding one long write lock.
+        toWrite.chunked(UPSERT_CHUNK_SIZE).forEach { chunk -> dao.upsertAll(chunk) }
+        // Evict per (source, type) among the rows this feed returned: a collection whose
+        // download failed contributes no rows, so it is never evicted.
+        val runStart = entries.minOf { it.fetchedAt } - 1
+        entries.map { it.source to it.type }.distinct().forEach { (source, type) ->
+            dao.deleteStaleEntriesOfType(source, type, runStart)
+        }
+        Log.i(TAG, "Feed '${feed.sourceId}': ${toWrite.size}/${entries.size} indicators upserted")
         return entries.size
     }
 
@@ -102,21 +121,22 @@ class IndicatorUpdater @Inject constructor(
     }
 }
 
-// Conversion functions from per-type entities to unified Indicator
-internal fun IocEntry.toIndicator() = Indicator(
+// Conversion functions from per-type entities to unified Indicator.
+// Mirror-feed rows store reference = "": attribution() derives feed:<source>#<family> at read time.
+internal fun IocEntry.toIndicator() = IocSanitizer.sanitize(Indicator(
     type = IndicatorResolver.TYPE_PACKAGE, value = packageName,
-    name = name, campaign = category, severity = severity,
+    family = name, category = category, severity = severity,
     description = description, source = source, fetchedAt = fetchedAt
-)
+))
 
-internal fun DomainIocEntry.toIndicator() = Indicator(
+internal fun DomainIocEntry.toIndicator() = IocSanitizer.sanitize(Indicator(
     type = IndicatorResolver.TYPE_DOMAIN, value = domain.lowercase(),
-    name = "", campaign = campaignName, severity = severity,
-    description = "", source = source, fetchedAt = fetchedAt
-)
+    family = campaignName, category = "", severity = severity,
+    source = source, fetchedAt = fetchedAt
+))
 
-internal fun CertHashIocEntry.toIndicator() = Indicator(
+internal fun CertHashIocEntry.toIndicator() = IocSanitizer.sanitize(Indicator(
     type = IndicatorResolver.TYPE_CERT_HASH, value = certHash,
-    name = familyName, campaign = category, severity = severity,
+    family = familyName, category = category, severity = severity,
     description = description, source = source, fetchedAt = fetchedAt
-)
+))

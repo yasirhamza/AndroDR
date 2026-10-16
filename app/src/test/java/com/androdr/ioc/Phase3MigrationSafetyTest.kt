@@ -1,6 +1,5 @@
 package com.androdr.ioc
 
-import com.androdr.data.db.IndicatorDao
 import com.androdr.data.model.Indicator
 import com.androdr.data.model.IocEntry
 import io.mockk.mockk
@@ -77,8 +76,8 @@ class Phase3MigrationSafetyTest {
             Indicator(
                 type = IndicatorResolver.TYPE_PACKAGE,
                 value = pkg,
-                name = "PreexistingFamily",
-                campaign = "STALKERWARE",
+                family = "PreexistingFamily",
+                category = "STALKERWARE",
                 severity = "CRITICAL",
                 description = "Pre-prune entry",
                 source = PublicRepoIocFeed.SOURCE_ID, // "androdr_public_repo"
@@ -112,18 +111,16 @@ class Phase3MigrationSafetyTest {
         )
         updater.update()
 
-        // After Step 1: the 13 rows now have source=stalkerware_indicators
-        // (REPLACE semantics — the PK (type,value) collision overwrites the
-        // previous androdr_public_repo entry).
+        // After Step 1 (R18): the rules repo outranks stalkerware-indicators and still owns the
+        // 13 rows, so the stalkerware feed must NOT overwrite them this cycle.
         val afterStalkerware = dao.snapshot()
         assertEquals(13, afterStalkerware.size)
         afterStalkerware.values.forEach { row ->
             assertEquals(
-                "Stalkerware feed should have taken ownership of row ${row.value}",
-                "stalkerware_indicators",
+                "Higher-ranked rules-repo row ${row.value} must not be overwritten",
+                PublicRepoIocFeed.SOURCE_ID,
                 row.source
             )
-            assertEquals(newTime, row.fetchedAt)
         }
 
         // Step 2: Simulate PublicRepoIocFeed.fetchAndUpsertPackages running
@@ -140,8 +137,8 @@ class Phase3MigrationSafetyTest {
                 Indicator(
                     type = IndicatorResolver.TYPE_PACKAGE,
                     value = "com.unrelated.newentry",
-                    name = "Unrelated",
-                    campaign = "STALKERWARE",
+                    family = "Unrelated",
+                    category = "STALKERWARE",
                     severity = "CRITICAL",
                     description = "Unrelated post-prune entry",
                     source = PublicRepoIocFeed.SOURCE_ID,
@@ -151,6 +148,14 @@ class Phase3MigrationSafetyTest {
         )
         // Mirror PublicRepoIocFeed.fetchAndUpsertPackages: stale-prune own source.
         dao.deleteStaleEntries(PublicRepoIocFeed.SOURCE_ID, publicRepoFetchedAt - 1)
+
+        // The rules repo evicted the 13 rows (they are no longer in its ioc-data). Under R18
+        // the stalkerware rows were filtered as owned during the same cycle, so the values are
+        // absent until the NEXT updater cycle restores them (the accepted one-cycle gap).
+        assertTrue("rows are evicted this cycle", dao.snapshot().keys.none { it.second in prunedPackages })
+        FakeStalkerwareFeed(prunedPackages, publicRepoFetchedAt + 1_000L).let {
+            IndicatorUpdater(dao, resolver, emptyList(), emptyList(), listOf(it)).update()
+        }
 
         // ── Invariant check ──────────────────────────────────────────────────
         val postSnapshot = dao.snapshot()
@@ -192,12 +197,12 @@ class Phase3MigrationSafetyTest {
         dao.upsertAll(
             listOf(
                 Indicator(
-                    type = "package", value = "com.stalker.a", name = "", campaign = "",
+                    type = "package", value = "com.stalker.a", family = "", category = "",
                     severity = "CRITICAL", description = "",
                     source = "stalkerware_indicators", fetchedAt = oldTime
                 ),
                 Indicator(
-                    type = "package", value = "com.publicrepo.a", name = "", campaign = "",
+                    type = "package", value = "com.publicrepo.a", family = "", category = "",
                     severity = "CRITICAL", description = "",
                     source = "androdr_public_repo", fetchedAt = oldTime
                 )
@@ -216,53 +221,6 @@ class Phase3MigrationSafetyTest {
     }
 
     // ── Fakes ──────────────────────────────────────────────────────────────
-
-    /**
-     * In-memory IndicatorDao honoring only the operations IndicatorUpdater +
-     * PublicRepoIocFeed exercise: upsertAll (REPLACE semantics keyed by
-     * (type,value)) and deleteStaleEntries(source, olderThan).
-     */
-    private class FakeIndicatorDao : IndicatorDao {
-        private val store: MutableMap<Pair<String, String>, Indicator> = mutableMapOf()
-
-        fun snapshot(): Map<Pair<String, String>, Indicator> = store.toMap()
-
-        override suspend fun upsertAll(entries: List<Indicator>) {
-            entries.forEach { store[it.type to it.value] = it }
-        }
-
-        override suspend fun deleteStaleEntries(source: String, olderThan: Long) {
-            val victims = store.entries
-                .filter { it.value.source == source && it.value.fetchedAt < olderThan }
-                .map { it.key }
-            victims.forEach { store.remove(it) }
-        }
-
-        override suspend fun lookup(type: String, value: String): Indicator? =
-            store[type to value]
-
-        override suspend fun getAllByType(type: String): List<Indicator> =
-            store.values.filter { it.type == type }
-
-        override suspend fun getValuesByType(type: String): List<String> =
-            store.values.filter { it.type == type }.map { it.value }
-
-        override suspend fun getAll(): List<Indicator> = store.values.toList()
-
-        override suspend fun count(): Int = store.size
-
-        override suspend fun countByType(type: String): Int =
-            store.values.count { it.type == type }
-
-        override suspend fun lastFetchTime(source: String): Long? =
-            store.values.filter { it.source == source }.maxOfOrNull { it.fetchedAt }
-
-        override suspend fun lastFetchTimeGlobal(): Long? =
-            store.values.maxOfOrNull { it.fetchedAt }
-
-        override suspend fun allSources(): List<String> =
-            store.values.map { it.source }.distinct().sorted()
-    }
 
     /**
      * Minimal IocFeed fake that simulates StalkerwareIndicatorsFeed returning

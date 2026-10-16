@@ -42,7 +42,7 @@ fun List<Indicator>.toStixBundle(): String {
             id = "indicator--${UUID.randomUUID()}",
             created = ts,
             modified = ts,
-            name = ind.name.ifEmpty { "${ind.type}: ${ind.value}" },
+            name = ind.family.ifEmpty { "${ind.type}: ${ind.value}" },
             description = ind.description,
             pattern = ind.toStixPattern(),
             patternType = "stix",
@@ -81,12 +81,12 @@ fun parseStixBundle(json: String, source: String): List<Indicator> {
         .mapNotNull { obj ->
             val (type, value) = extractIndicator(obj.pattern) ?: return@mapNotNull null
             if (!isValidIndicatorValue(type, value)) return@mapNotNull null
-            Indicator(
+            IocSanitizer.sanitize(Indicator(
                 type = type, value = value,
-                name = obj.name, campaign = "",
+                family = obj.name, category = "",
                 severity = "HIGH", description = obj.description,
                 source = source, fetchedAt = now
-            )
+            ))
         }
 }
 

@@ -74,7 +74,7 @@ class IndicatorResolver @Inject constructor(
      *
      * Returns a synthetic [Indicator] on hit: only `value` (the matched domain)
      * is authoritative. Other fields are placeholders:
-     *   - `campaign` is empty — callers should not depend on it for branching,
+     *   - `family` is empty — callers should not depend on it for branching,
      *     but may log it via the matched-domain `value` instead.
      *   - `severity` is `UNKNOWN` rather than a guessed `HIGH`, so downstream
      *     severity rollups are not poisoned by synthetic hits. If a caller
@@ -91,8 +91,6 @@ class IndicatorResolver @Inject constructor(
                 return Indicator(
                     type = TYPE_DOMAIN,
                     value = candidate,
-                    name = "",
-                    campaign = "",
                     severity = "UNKNOWN",
                     description = "",
                     source = "bloom",
@@ -113,7 +111,7 @@ class IndicatorResolver @Inject constructor(
         val bundledHit = bundledCerts.isKnownBadCert(normalized) ?: return null
         return Indicator(
             type = TYPE_CERT_HASH, value = bundledHit.certHash,
-            name = bundledHit.familyName, campaign = "",
+            family = bundledHit.familyName, category = bundledHit.category,
             severity = bundledHit.severity, description = bundledHit.description,
             source = "bundled", fetchedAt = 0L
         )
@@ -126,7 +124,7 @@ class IndicatorResolver @Inject constructor(
         val bundledHit = bundledApkHashes.isKnownBadApkHash(normalized) ?: return null
         return Indicator(
             type = TYPE_APK_HASH, value = bundledHit.apkHash,
-            name = bundledHit.familyName, campaign = bundledHit.category,
+            family = bundledHit.familyName, category = bundledHit.category,
             severity = bundledHit.severity, description = bundledHit.description,
             source = "bundled", fetchedAt = 0L
         )
@@ -148,6 +146,6 @@ class IndicatorResolver @Inject constructor(
 }
 
 private fun Indicator.toBadPackageInfo() = BadPackageInfo(
-    packageName = value, name = name, category = campaign.ifEmpty { "MALWARE" },
+    packageName = value, name = family, category = category.ifEmpty { "MALWARE" },
     severity = severity, description = description
 )
