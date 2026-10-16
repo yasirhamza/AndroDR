@@ -265,10 +265,12 @@ class PublicRepoIocFeedTest {
         Thread.sleep(2)
         remote = FakeRemote(mapOf("ioc-data/c2-domains.yml" to domainYaml("new.example"),
             "ioc-data/package-names.yml" to pkgYaml("com.x.z")))
-        remote.set("ioc-data/c2-domains.yml", "tampered")
+        // Valid YAML whose hash differs from the manifest, so only the hash check can reject it.
+        remote.set("ioc-data/c2-domains.yml", domainYaml("tampered.example"))
         val result = PublicRepoIocFeed(dao, io.mockk.mockk(relaxed = true), IocDataManifest(remote)).update()
         assertNotNull("old domain survives", dao.lookup("domain", "old.example"))
         assertNull(dao.lookup("domain", "new.example"))
+        assertNull("the hash check, not the parser, rejected it", dao.lookup("domain", "tampered.example"))
         assertNull("package type evicted its own stale row", dao.lookup("package", "com.x.y"))
         assertNotNull(dao.lookup("package", "com.x.z"))
         assertEquals(1, result.evicted)

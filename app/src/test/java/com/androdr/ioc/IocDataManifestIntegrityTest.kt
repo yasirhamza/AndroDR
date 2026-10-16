@@ -27,7 +27,9 @@ class IocDataManifestIntegrityTest {
         assumeTrue("android-sigma-rules submodule not checked out - skipping", root != null)
         requireNotNull(root)
         val manifestFile = File(root, "ioc-data.sha256")
-        assumeTrue("ioc-data.sha256 missing - skipping", manifestFile.isFile)
+        // A hard failure, not a skip: Plan A A7 shipped the manifest, and without it devices
+        // drop every remote ioc-data file (fail-closed).
+        assertTrue("ioc-data.sha256 missing - devices would drop all remote ioc-data", manifestFile.isFile)
 
         val expected = ManifestVerifier.parse(manifestFile.readText())
         val onDisk = File(root, "ioc-data").listFiles { f -> f.name.endsWith(".yml") }.orEmpty()

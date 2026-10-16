@@ -98,4 +98,24 @@ class IocDataManifestTest {
         val remote = FakeRemote(mapOf(path to "0123456789"))
         assertNull(IocDataManifest(remote).verified(path, maxChars = 5))
     }
+
+    // Final review item 8: a cancelled fetch must cancel, not read as "unusable manifest".
+
+    @Test(expected = kotlinx.coroutines.CancellationException::class)
+    fun `cancellation during the manifest fetch is rethrown`(): Unit = runBlocking {
+        val remote = RemoteText { throw kotlinx.coroutines.CancellationException("stop") }
+        IocDataManifest(remote).verified(path)
+        Unit
+    }
+
+    @Test(expected = kotlinx.coroutines.CancellationException::class)
+    fun `cancellation during the file fetch is rethrown`(): Unit = runBlocking {
+        val good = FakeRemote(mapOf(path to "a: 1"))
+        val remote = RemoteText { url ->
+            if (url.endsWith("ioc-data.sha256")) good.get(url)
+            else throw kotlinx.coroutines.CancellationException("stop")
+        }
+        IocDataManifest(remote).verified(path)
+        Unit
+    }
 }

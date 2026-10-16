@@ -58,6 +58,8 @@ jobs:
               - 'scripts/merge-ioc-data.py'
               - 'scripts/test_merge_ioc_data.py'
               - 'scripts/requirements-ci.txt'
+              - 'scripts/requirements-ci.in'
+              - '.github/workflows/ci.yml'
             rules:
               - 'app/src/main/res/raw/sigma_*.yml'
               - 'app/src/main/res/raw/known_oem_prefixes.yml'

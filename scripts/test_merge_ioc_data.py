@@ -57,3 +57,24 @@ def test_removed_entries_disappear(tmp_path):
     (r / "ioc-data" / "c2-domains.yml").write_text("entries: []\n")
     m.generate(r, out)
     assert json.loads((out / "known_bad_domains.json").read_text()) == []
+
+
+REPO_ROOT = HERE.parent
+
+
+def test_bundle_ci_filter_covers_every_input():
+    """The bundle gate must run when its workflow or its pinned requirements change (final review item 5)."""
+    import yaml
+    jobs = yaml.safe_load((REPO_ROOT / ".github" / "workflows" / "ci.yml").read_text())["jobs"]
+    bundle = yaml.safe_load(jobs["changes"]["steps"][1]["with"]["filters"])["bundle"]
+    for path in (".github/workflows/ci.yml", "scripts/requirements-ci.in", "scripts/requirements-ci.txt",
+                 "scripts/merge-ioc-data.py", "scripts/test_merge_ioc_data.py"):
+        assert path in bundle, f"{path} missing from the bundle path filter"
+
+
+def test_no_compiled_python_is_tracked():
+    """Bytecode is ignored (.gitignore) and must not be committed (final review item 4)."""
+    import subprocess
+    tracked = subprocess.run(["git", "ls-files", "*.pyc", "**/__pycache__/**"], cwd=REPO_ROOT,
+                             capture_output=True, text=True, check=True).stdout.split()
+    assert tracked == [], f"compiled Python is tracked: {tracked}"

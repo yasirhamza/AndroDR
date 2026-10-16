@@ -23,6 +23,18 @@ class Migration18To19SqlTest {
     }
 
     @Test
+    fun `migration CREATE TABLE equals the schema 19 createSql`() {
+        val sql = mutableListOf<String>()
+        val db = mockk<SupportSQLiteDatabase>(relaxed = true)
+        every { db.execSQL(capture(sql)) } returns Unit
+        MIGRATION_18_19.migrate(db)
+        val v19 = JSONObject(schema("19.json").readText()).getJSONObject("database")
+        val e = (0 until v19.getJSONArray("entities").length())
+            .map { v19.getJSONArray("entities").getJSONObject(it) }.single { it.getString("tableName") == "indicators" }
+        assertEquals(e.getString("createSql").replace("\${TABLE_NAME}", "indicators"), sql[1])
+    }
+
+    @Test
     fun `schema 19 indicators columns`() {
         val v19 = JSONObject(schema("19.json").readText()).getJSONObject("database")
         val e = (0 until v19.getJSONArray("entities").length())

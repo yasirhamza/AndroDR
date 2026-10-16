@@ -2,6 +2,7 @@ package com.androdr.ioc
 
 import android.util.Log
 import com.androdr.integrity.ManifestVerifier
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import javax.inject.Inject
@@ -73,6 +74,8 @@ class IocDataManifest(
     @Suppress("TooGenericExceptionCaught")
     private suspend fun fetchBody(path: String): String? = try {
         remote.get("$RULES_REPO_BASE_URL$path")
+    } catch (c: CancellationException) {
+        throw c
     } catch (e: Exception) {
         Log.w(TAG, "Fetch failed for $path: ${e.message}")
         null
@@ -83,6 +86,8 @@ class IocDataManifest(
         cached?.let { if (clock() - cachedAt < TTL_MS) return it }
         val parsed = try {
             remote.get("${RULES_REPO_BASE_URL}ioc-data.sha256")?.let(ManifestVerifier::parse).orEmpty()
+        } catch (c: CancellationException) {
+            throw c
         } catch (e: Exception) {
             Log.w(TAG, "Manifest fetch failed: ${e.message}")
             emptyMap()
