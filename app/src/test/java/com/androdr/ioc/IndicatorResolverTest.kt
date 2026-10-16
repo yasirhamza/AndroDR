@@ -2,7 +2,9 @@ package com.androdr.ioc
 
 import com.androdr.data.db.IndicatorDao
 import com.androdr.data.model.Indicator
+import io.mockk.clearMocks
 import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
@@ -18,6 +20,7 @@ class IndicatorResolverTest {
     private lateinit var bundledPackages: IocDatabase
     private lateinit var bundledCerts: CertHashIocDatabase
     private lateinit var bundledApkHashes: ApkHashIocDatabase
+    private lateinit var bundledDomains: BundledDomainDatabase
     private lateinit var resolver: IndicatorResolver
 
     @Before
@@ -26,6 +29,8 @@ class IndicatorResolverTest {
         bundledPackages = mockk()
         bundledCerts = mockk()
         bundledApkHashes = mockk()
+        bundledDomains = mockk()
+        every { bundledDomains.lookup(any()) } returns null
         every { bundledPackages.isKnownBadPackage(any()) } returns null
         every { bundledCerts.isKnownBadCert(any()) } returns null
         every { bundledApkHashes.isKnownBadApkHash(any()) } returns null
@@ -33,7 +38,7 @@ class IndicatorResolverTest {
         coEvery { dao.getAllByType(any()) } returns emptyList()
         coEvery { dao.getValuesByType(any()) } returns emptyList()
         coEvery { dao.lookup(any(), any()) } returns null
-        resolver = IndicatorResolver(dao, bundledPackages, bundledCerts, bundledApkHashes)
+        resolver = IndicatorResolver(dao, bundledPackages, bundledCerts, bundledApkHashes, bundledDomains)
     }
 
     @Test
@@ -120,4 +125,86 @@ class IndicatorResolverTest {
         resolver.refreshCache()
         assertNotNull(resolver.isKnownBadCert("ABC123DEF456"))
     }
+
+    @Test
+    fun `prefetched domain hit returns the stored row`() = runTest {
+        coEvery { dao.getValuesByType("domain") } returns listOf("forti.external-muki.com")
+        coEvery { dao.lookup("domain", "forti.external-muki.com") } returns Indicator("domain",
+            "forti.external-muki.com", family = "Graphite (Paragon)", category = "NATION_STATE_SPYWARE",
+            campaignKey = "graphite", source = "androdr_public_repo", fetchedAt = 1L)
+        resolver.refreshCache()
+        resolver.prefetchDomainIndicators(listOf("forti.external-muki.com", "example.org"))
+        assertEquals("Graphite (Paragon)", resolver.cachedDomainIndicator("forti.external-muki.com")!!.family)
+        assertNull(resolver.cachedDomainIndicator("example.org"))
+    }
+
+    @Test
+    fun `subdomain hit resolves to the listed parent row`() = runTest {
+        coEvery { dao.getValuesByType("domain") } returns listOf("evil.com")
+        coEvery { dao.lookup("domain", "evil.com") } returns Indicator("domain", "evil.com",
+            family = "Predator Spyware Indicators of Compromise", source = "mvt", fetchedAt = 1L)
+        resolver.refreshCache()
+        resolver.prefetchDomainIndicators(listOf("c2.evil.com"))
+        assertEquals("evil.com", resolver.cachedDomainIndicator("c2.evil.com")!!.value)
+    }
+
+    @Test
+    fun `cold start falls back to the bundled domain entry`() = runTest {
+        every { bundledDomains.lookup("forti.external-muki.com") } returns Indicator("domain",
+            "forti.external-muki.com", family = "Graphite (Paragon)", source = "bundled", fetchedAt = 0L)
+        resolver.prefetchDomainIndicators(listOf("forti.external-muki.com"))
+        assertEquals("Graphite (Paragon)", resolver.cachedDomainIndicator("forti.external-muki.com")!!.family)
+    }
+
+    @Test
+    fun `cold start matches a bundled domain without Room`() = runTest {
+        every { bundledDomains.lookup("forti.external-muki.com") } returns Indicator("domain",
+            "forti.external-muki.com", family = "Graphite (Paragon)", source = "bundled", fetchedAt = 0L)
+        val hit = resolver.isKnownBadDomainWithBundle("sub.forti.external-muki.com")
+        assertEquals("forti.external-muki.com", hit!!.value)
+        coVerify(exactly = 0) { dao.lookup(any(), any()) }
+    }
+
+    @Test
+    fun `concurrent prefetches merge rather than replace`() = runTest {
+        coEvery { dao.getValuesByType("domain") } returns listOf("a.com", "b.com")
+        coEvery { dao.lookup("domain", "a.com") } returns
+            Indicator("domain", "a.com", family = "A", source = "s", fetchedAt = 1L)
+        coEvery { dao.lookup("domain", "b.com") } returns
+            Indicator("domain", "b.com", family = "B", source = "s", fetchedAt = 1L)
+        resolver.refreshCache()
+        resolver.prefetchDomainIndicators(listOf("a.com"))
+        resolver.prefetchDomainIndicators(listOf("b.com"))
+        assertEquals("A", resolver.cachedDomainIndicator("a.com")!!.family)
+        assertEquals("B", resolver.cachedDomainIndicator("b.com")!!.family)
+    }
+
+    @Test
+    fun `isKnownBadDomain never touches the DAO`() = runTest {
+        coEvery { dao.getValuesByType("domain") } returns listOf("evil.com")
+        resolver.refreshCache()
+        clearMocks(dao, answers = false, recordedCalls = true)
+        resolver.isKnownBadDomain("c2.evil.com")
+        coVerify(exactly = 0) { dao.lookup(any(), any()) }
+        coVerify(exactly = 0) { dao.getAllByType(any()) }
+    }
+
+    @Test
+    fun `package indicator keeps family and source`() = runTest {
+        coEvery { dao.getAllByType("package") } returns listOf(Indicator("package", "com.serv.services",
+            family = "NoviSpy", category = "NATION_STATE_SPYWARE", source = "androdr_public_repo", fetchedAt = 1L))
+        resolver.refreshCache()
+        assertEquals("NoviSpy", resolver.packageIndicator("com.serv.services")!!.family)
+    }
+
+    @Test
+    fun `bundled hits never carry a raw out-of-enum category`() {
+        every { bundledPackages.isKnownBadPackage("com.bad.bank") } returns
+            BadPackageInfo("com.bad.bank", "Bank", "BANKER", "HIGH", "d")
+        every { bundledDomains.lookup("bad.example") } returns Indicator("domain", "bad.example",
+            family = "F", category = "RAT", source = "bundled", fetchedAt = 0L)
+        assertEquals("", resolver.packageIndicator("com.bad.bank")!!.category)
+        assertEquals("", resolver.isKnownBadDomainWithBundle("bad.example")!!.category)
+    }
+
 }

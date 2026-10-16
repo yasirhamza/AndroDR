@@ -29,10 +29,14 @@ class IndicatorResolver @Inject constructor(
     private val dao: IndicatorDao,
     private val bundledPackages: IocDatabase,
     private val bundledCerts: CertHashIocDatabase,
-    private val bundledApkHashes: ApkHashIocDatabase
+    private val bundledApkHashes: ApkHashIocDatabase,
+    private val bundledDomains: BundledDomainDatabase
 ) {
     private val cache = AtomicReference<IndicatorCache?>(null)
     private val domainIndex = AtomicReference<DomainBloomIndex>(DomainBloomIndex.empty())
+
+    /** Full rows behind domain hits, keyed by the queried hostname; see [prefetchDomainIndicators]. */
+    private val domainRows = AtomicReference<Map<String, Indicator>>(emptyMap())
 
     suspend fun refreshCache() = withContext(Dispatchers.IO) {
         val nonDomain = dao.getAllByType(TYPE_PACKAGE) +
@@ -104,17 +108,68 @@ class IndicatorResolver @Inject constructor(
         return null
     }
 
+    fun packageIndicator(packageName: String): Indicator? {
+        cache.get()?.lookup(TYPE_PACKAGE, packageName)?.let { return it }
+        val b = bundledPackages.isKnownBadPackage(packageName) ?: return null
+        return IocSanitizer.sanitize(
+            Indicator(TYPE_PACKAGE, b.packageName, family = b.name, category = b.category,
+                severity = b.severity, description = b.description, source = "bundled", fetchedAt = 0L)
+        )
+    }
+
+    /**
+     * Load the stored rows behind domain hits so findings can name the family.
+     * [isKnownBadDomain] answers from the bloom index on the VPN packet thread and
+     * must stay off Room (#71); attribution is only needed when a scan or import
+     * evaluates DNS events, so callers resolve the matched hostnames here first.
+     * Falls back to the bundled entry when the feeds have not loaded (cold start).
+     */
+    suspend fun prefetchDomainIndicators(domains: Collection<String>) = withContext(Dispatchers.IO) {
+        val rows = HashMap<String, Indicator>()
+        for (domain in domains.toSet()) {
+            val hit = isKnownBadDomain(domain)
+            val row = hit?.let { dao.lookup(TYPE_DOMAIN, it.value) } ?: bundledDomainWalk(domain)
+            if (row != null) rows[domain] = row
+        }
+        // Merge, never replace: a scan and an intrusion-log import can prefetch
+        // concurrently; replacing would wipe the other caller's rows mid-evaluation.
+        // Not cleared by refreshCache() either, for the same reason.
+        domainRows.updateAndGet { it + rows }
+    }
+
+    fun cachedDomainIndicator(domain: String): Indicator? = domainRows.get()[domain]
+
+    /**
+     * Cold start: before the first feed sync the bloom index is empty, so a bundled
+     * domain would never match androdr-003. Fall back to the bundled list — an
+     * in-memory HashMap, safe on the VPN packet thread (#71). Detection only; what
+     * the VPN blocks is still BlocklistManager's blockedDomains() set.
+     */
+    fun isKnownBadDomainWithBundle(domain: String): Indicator? =
+        isKnownBadDomain(domain) ?: bundledDomainWalk(domain)
+
+    private fun bundledDomainWalk(domain: String): Indicator? {
+        var c = domain.trim().trimEnd('.').lowercase(Locale.ROOT)
+        while (c.isNotEmpty()) {
+            bundledDomains.lookup(c)?.let { return IocSanitizer.sanitize(it) }
+            val dot = c.indexOf('.')
+            if (dot < 0) break
+            c = c.substring(dot + 1)
+        }
+        return null
+    }
+
     fun isKnownBadCert(certHash: String): Indicator? {
         val normalized = certHash.lowercase()
         val hit = cache.get()?.lookup(TYPE_CERT_HASH, normalized)
         if (hit != null) return hit
         val bundledHit = bundledCerts.isKnownBadCert(normalized) ?: return null
-        return Indicator(
+        return IocSanitizer.sanitize(Indicator(
             type = TYPE_CERT_HASH, value = bundledHit.certHash,
             family = bundledHit.familyName, category = bundledHit.category,
             severity = bundledHit.severity, description = bundledHit.description,
             source = "bundled", fetchedAt = 0L
-        )
+        ))
     }
 
     fun isKnownBadApkHash(hash: String): Indicator? {
@@ -122,12 +177,12 @@ class IndicatorResolver @Inject constructor(
         val hit = cache.get()?.lookup(TYPE_APK_HASH, normalized)
         if (hit != null) return hit
         val bundledHit = bundledApkHashes.isKnownBadApkHash(normalized) ?: return null
-        return Indicator(
+        return IocSanitizer.sanitize(Indicator(
             type = TYPE_APK_HASH, value = bundledHit.apkHash,
             family = bundledHit.familyName, category = bundledHit.category,
             severity = bundledHit.severity, description = bundledHit.description,
             source = "bundled", fetchedAt = 0L
-        )
+        ))
     }
 
     suspend fun count(): Int = dao.count()

@@ -164,7 +164,9 @@ class IntelRefresherTest {
         val fakeDao = FakeIndicatorDao()
         val bundledPackages = mockk<IocDatabase>()
         every { bundledPackages.isKnownBadPackage(any()) } returns null
-        val resolver = IndicatorResolver(fakeDao, bundledPackages, mockk(relaxed = true), mockk(relaxed = true))
+        val resolver = IndicatorResolver(
+            fakeDao, bundledPackages, mockk(relaxed = true), mockk(relaxed = true), mockk(relaxed = true)
+        )
         coEvery { publicRepoIocFeed.update() } coAnswers {
             fakeDao.upsertAll(listOf(
                 Indicator(type = "package", value = "com.rules.only", family = "RulesFam",
