@@ -174,7 +174,8 @@ class IndicatorResolver @Inject constructor(
     /**
      * (matched key, row) for [domain]: the bloom candidate with its stored row when that row
      * ranks at or above the rules repo, else the bundled key with its entry (the bundle IS
-     * rules-repo content, see [outranksBundle]), else the lower-ranked stored row. A bloom
+     * rules-repo content, see [outranksBundle]) -- unless the stored match is more specific,
+     * names a campaign, and the bundled match does not -- else the lower-ranked stored row. A bloom
      * key whose row is gone and has no bundled fallback comes back as (key, null). Null when
      * nothing matches.
      */
@@ -185,7 +186,16 @@ class IndicatorResolver @Inject constructor(
         val bloomKey = isKnownBadDomain(domain)?.value
         val stored = bloomKey?.let { storedRow(it) }
         if (stored != null && outranksBundle(stored)) return bloomKey to stored
-        return bundledDomainMatch(domain) ?: bloomKey?.let { it to stored }
+        val bundled = bundledDomainMatch(domain)
+        // A more specific stored row that names a campaign keeps it over a campaign-less
+        // bundled parent (MVT x.evil.com/pegasus under a bundled evil.com): the bundle
+        // would otherwise drop a key it has no replacement for.
+        if (stored != null && bundled != null && bloomKey.length > bundled.first.length &&
+            stored.campaignKey.isNotBlank() && bundled.second.campaignKey.isBlank()
+        ) {
+            return bloomKey to stored
+        }
+        return bundled ?: bloomKey?.let { it to stored }
     }
 
     /**

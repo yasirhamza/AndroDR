@@ -376,4 +376,56 @@ class IndicatorResolverTest {
             Indicator("domain", "c.com", source = "androdr_public_repo", fetchedAt = 1L)))
         assertEquals(FeedCoverage(3, rulesRepoLoaded = true, mvtLoaded = true), r.feedCoverage())
     }
+
+    // ── Re-review residual (b): a bundled parent without a campaign must not drop the
+    // campaign key of a more specific stored row (MVT pegasus under a bundled evil.com).
+
+    @Test
+    fun `a more specific MVT row keeps its campaign over a campaign-less bundled parent`() = runTest {
+        coEvery { dao.getValuesByType("domain") } returns listOf("x.evil.com")
+        coEvery { dao.lookup("domain", "x.evil.com") } returns Indicator("domain", "x.evil.com",
+            family = "Pegasus", campaignKey = "pegasus", source = "mvt_pegasus", fetchedAt = 1L)
+        every { bundledDomains.lookup("evil.com") } returns Indicator("domain", "evil.com",
+            family = "Generic", source = "bundled", fetchedAt = 0L)
+        resolver.refreshCache()
+        resolver.prefetchDomainIndicators(listOf("c2.x.evil.com"))
+        assertEquals("pegasus", resolver.cachedDomainIndicator("c2.x.evil.com")!!.campaignKey)
+        assertEquals("pegasus", resolver.resolveDomainRow("c2.x.evil.com")!!.campaignKey)
+    }
+
+    @Test
+    fun `a bundled parent beats a stored generic subdomain without a campaign`() = runTest {
+        coEvery { dao.getValuesByType("domain") } returns listOf("c2.evil.com")
+        coEvery { dao.lookup("domain", "c2.evil.com") } returns Indicator("domain", "c2.evil.com",
+            family = "HaGeZi TIF", source = "hagezi_tif", fetchedAt = 1L)
+        every { bundledDomains.lookup("evil.com") } returns Indicator("domain", "evil.com",
+            family = "Graphite (Paragon)", campaignKey = "graphite", source = "bundled", fetchedAt = 0L)
+        resolver.refreshCache()
+        resolver.prefetchDomainIndicators(listOf("c2.evil.com"))
+        assertEquals("graphite", resolver.cachedDomainIndicator("c2.evil.com")!!.campaignKey)
+    }
+
+    @Test
+    fun `a more specific stored campaign row does not beat a bundled parent that has its own campaign`() = runTest {
+        coEvery { dao.getValuesByType("domain") } returns listOf("x.evil.com")
+        coEvery { dao.lookup("domain", "x.evil.com") } returns Indicator("domain", "x.evil.com",
+            family = "Pegasus", campaignKey = "pegasus", source = "mvt_pegasus", fetchedAt = 1L)
+        every { bundledDomains.lookup("evil.com") } returns Indicator("domain", "evil.com",
+            family = "Graphite (Paragon)", campaignKey = "graphite", source = "bundled", fetchedAt = 0L)
+        resolver.refreshCache()
+        resolver.prefetchDomainIndicators(listOf("x.evil.com"))
+        assertEquals("graphite", resolver.cachedDomainIndicator("x.evil.com")!!.campaignKey)
+    }
+
+    @Test
+    fun `same value with a campaign-carrying generic row and a campaign-less bundle stays bundled`() = runTest {
+        coEvery { dao.getValuesByType("domain") } returns listOf("evil.com")
+        coEvery { dao.lookup("domain", "evil.com") } returns Indicator("domain", "evil.com",
+            family = "Pegasus", campaignKey = "pegasus", source = "mvt_pegasus", fetchedAt = 1L)
+        every { bundledDomains.lookup("evil.com") } returns Indicator("domain", "evil.com",
+            family = "Bundled", source = "bundled", fetchedAt = 0L)
+        resolver.refreshCache()
+        resolver.prefetchDomainIndicators(listOf("evil.com"))
+        assertEquals("Bundled", resolver.cachedDomainIndicator("evil.com")!!.family)
+    }
 }

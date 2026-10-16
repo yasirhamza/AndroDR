@@ -566,14 +566,14 @@ class ScanOrchestratorErrorHandlingTest {
     }
 
     @Test
-    fun `rules-repo rows missing at scan start record a FeedsNotLoaded entry naming the source`() = runTest {
+    fun `rules-repo rows missing at scan start record a CampaignSourcesNotLoaded entry`() = runTest {
         coEvery { indicatorResolver.feedCoverage() } returns com.androdr.ioc.FeedCoverage(5, false, true)
 
         val result = orchestrator.runFullScan()
 
         val entry = result.scannerErrors.single { it.scanner == "threat_intel" }
-        assertEquals(NotEvaluatedReason.FEEDS_NOT_LOADED.sentinel, entry.exception)
-        assertTrue(entry.message.orEmpty().contains("AndroDR's own indicator list did not load"))
+        assertEquals(NotEvaluatedReason.CAMPAIGN_SOURCES_NOT_LOADED.sentinel, entry.exception)
+        assertTrue(entry.message.orEmpty().contains("the rules-repo threat lists did not load"))
         assertEquals(0, result.realFailureCount)
     }
 

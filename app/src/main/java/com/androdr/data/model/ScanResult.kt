@@ -86,13 +86,20 @@ enum class NotEvaluatedReason(val sentinel: String, val heading: String) {
     /** No event of the kind the rule needs was recorded, so it had nothing to match (#370). */
     NO_EVENTS_TO_CHECK("NoEventsToCheck", "Nothing of that kind was recorded to check"),
 
-    /**
-     * The indicator table was empty at scan start, or a campaign-key source (the rules-repo
-     * ioc-data or the MVT collections) had no rows: the entry's message names which.
-     */
+    /** The indicator table was empty at scan start: only the bundled lists were checked. */
     FEEDS_NOT_LOADED(
         "FeedsNotLoaded",
         "Threat-intel feeds not loaded yet -- only the bundled lists were checked",
+    ),
+
+    /**
+     * The table had rows, but a campaign-key source (the rules-repo threat lists or the MVT
+     * collections) had none: campaign attribution may be incomplete. The entry's message
+     * names which source is missing. Per-campaign check state is follow-up #394.
+     */
+    CAMPAIGN_SOURCES_NOT_LOADED(
+        "CampaignSourcesNotLoaded",
+        "Campaign sources not loaded yet -- campaign attribution may be incomplete",
     ),
 
     /** The DNS tunnel was off at scan start. */
