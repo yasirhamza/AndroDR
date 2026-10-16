@@ -8,8 +8,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.snakeyaml.engine.v2.api.Load
 import org.snakeyaml.engine.v2.api.LoadSettings
-import java.net.HttpURLConnection
-import java.net.URL
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicReference
 import javax.inject.Inject
@@ -39,6 +37,7 @@ import javax.inject.Singleton
 @Singleton
 class OemPrefixResolver @Inject constructor(
     @ApplicationContext private val context: Context,
+    private val manifest: IocDataManifest = IocDataManifest(),
 ) {
 
     private val data = AtomicReference<ParsedOemData>(loadBundledData())
@@ -120,7 +119,7 @@ class OemPrefixResolver @Inject constructor(
     @Suppress("TooGenericExceptionCaught", "ReturnCount")
     suspend fun refresh(): Int = withContext(Dispatchers.IO) {
         try {
-            val yaml = fetchUrl(PREFIXES_URL) ?: return@withContext 0
+            val yaml = manifest.verified(PREFIXES_PATH, MAX_RESPONSE_SIZE) ?: return@withContext 0
             val parsed = parseOemPrefixYaml(yaml)
 
             // Sanity checks — reject obviously malicious remote data
@@ -313,34 +312,9 @@ class OemPrefixResolver @Inject constructor(
             ?.take(MAX_INSTALLER_COUNT)
             ?.toSet() ?: emptySet()
 
-    // ─── HTTP fetch (unchanged) ────────────────────────────────────────────
-
-    @Suppress("TooGenericExceptionCaught", "SwallowedException")
-    private fun fetchUrl(url: String): String? {
-        val conn = try {
-            URL(url).openConnection() as HttpURLConnection
-        } catch (e: Exception) { return null }
-        return try {
-            conn.connectTimeout = TIMEOUT_MS
-            conn.readTimeout = TIMEOUT_MS
-            conn.setRequestProperty("User-Agent", "AndroDR/1.0")
-            if (conn.responseCode == HttpURLConnection.HTTP_OK) {
-                val body = conn.inputStream.bufferedReader().use { it.readText() }
-                if (body.length > MAX_RESPONSE_SIZE) {
-                    Log.w(TAG, "Response too large: ${body.length} bytes")
-                    return null
-                }
-                body
-            } else null
-        } catch (e: Exception) { null }
-        finally { conn.disconnect() }
-    }
-
     companion object {
         private const val TAG = "OemPrefixResolver"
-        private const val PREFIXES_URL =
-            "https://raw.githubusercontent.com/android-sigma-rules/rules/main/ioc-data/known-oem-prefixes.yml"
-        private const val TIMEOUT_MS = 10_000
+        private const val PREFIXES_PATH = "ioc-data/known-oem-prefixes.yml"
         private const val MAX_RESPONSE_SIZE = 100_000
         private const val MAX_INSTALLER_COUNT = 50
         private const val MAX_TOTAL_INSTALLER_COUNT = 100

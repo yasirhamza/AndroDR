@@ -1,12 +1,10 @@
 // app/src/test/java/com/androdr/ioc/PublicRepoIocFeedTest.kt
 package com.androdr.ioc
 
-import io.mockk.every
-import io.mockk.mockkObject
-import io.mockk.unmockkObject
 import kotlinx.coroutines.runBlocking
-import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -124,16 +122,15 @@ class PublicRepoIocFeedTest {
 
     private fun yaml(vararg entries: String) = "version: \"1\"\nentries:\n" + entries.joinToString("\n")
 
+    private var remote = FakeRemote(emptyMap())
+
+    /** Serves [files] (keyed by file name) with a matching, valid manifest. */
     private fun stubFetch(files: Map<String, String>) {
-        mockkObject(SafeHttpFetch)
-        every { SafeHttpFetch.fetch(any(), any(), any()) } returns null
-        files.forEach { (suffix, body) ->
-            every { SafeHttpFetch.fetch(match { it.endsWith(suffix) }, any(), any()) } returns body
-        }
+        remote = FakeRemote(files.mapKeys { "ioc-data/${it.key}" })
     }
 
-    @After
-    fun unmock() = unmockkObject(SafeHttpFetch)
+    private fun feedOf(dao: FakeIndicatorDao) =
+        PublicRepoIocFeed(dao, io.mockk.mockk(relaxed = true), IocDataManifest(remote))
 
     @Test
     fun `every writer populates family, category and reference`() = runBlocking {
@@ -154,7 +151,7 @@ class PublicRepoIocFeedTest {
             "malware-hashes.yml" to yaml(entry("EF01")),
         ))
         val dao = FakeIndicatorDao()
-        PublicRepoIocFeed(dao, io.mockk.mockk(relaxed = true)).update()
+        feedOf(dao).update()
         for ((type, value) in listOf("package" to "com.x.y", "domain" to "evil.example",
             "cert_hash" to "abcd", "apk_hash" to "ef01")) {
             val row = dao.lookup(type, value)!!
@@ -179,14 +176,101 @@ class PublicRepoIocFeedTest {
         val withoutKey = withKey.replace("                campaign: \"pegasus\"\n", "").trimEnd()
             .let { if (it.contains("campaign:")) it.substringBeforeLast("\n") else it }
         val dao = FakeIndicatorDao()
-        val feed = PublicRepoIocFeed(dao, io.mockk.mockk(relaxed = true))
         stubFetch(mapOf("c2-domains.yml" to withKey))
-        feed.update()
+        feedOf(dao).update()
         assertEquals("pegasus", dao.lookup("domain", "pegasus.example")!!.campaignKey)
         stubFetch(mapOf("c2-domains.yml" to withoutKey))
-        feed.update()
+        feedOf(dao).update()
         assertEquals("", dao.lookup("domain", "pegasus.example")!!.campaignKey)
-        feed.update()
+        feedOf(dao).update()
         assertEquals("", dao.lookup("domain", "pegasus.example")!!.campaignKey)
+    }
+
+    // ── B9: ioc-data verified against ioc-data.sha256, fail-closed ──
+
+    private fun domainYaml(vararg d: String) = yaml(*d.map { """
+              - indicator: "$it"
+                family: "Fam"
+                category: "SPYWARE"
+                severity: "HIGH"
+                source: "s"
+        """.trimIndent() }.toTypedArray())
+
+    private fun pkgYaml(p: String) = yaml("""
+              - indicator: "$p"
+                family: "Fam"
+                severity: "HIGH"
+                source: "s"
+        """.trimIndent())
+
+    @Test
+    fun `verified file is upserted`() = runBlocking {
+        stubFetch(mapOf("c2-domains.yml" to domainYaml("a.example")))
+        val dao = FakeIndicatorDao()
+        feedOf(dao).update()
+        assertEquals("Fam", dao.lookup("domain", "a.example")!!.family)
+    }
+
+    @Test
+    fun `altered file is skipped and others still load`() = runBlocking {
+        stubFetch(mapOf("c2-domains.yml" to domainYaml("a.example"), "package-names.yml" to pkgYaml("com.x.y")))
+        remote.set("ioc-data/c2-domains.yml", domainYaml("a.example", "evil.example"))
+        val dao = FakeIndicatorDao()
+        feedOf(dao).update()
+        assertNull(dao.lookup("domain", "a.example"))
+        assertNull(dao.lookup("domain", "evil.example"))
+        assertNotNull(dao.lookup("package", "com.x.y"))
+    }
+
+    @Test
+    fun `missing manifest upserts nothing`() = runBlocking {
+        stubFetch(mapOf("c2-domains.yml" to domainYaml("a.example"), "package-names.yml" to pkgYaml("com.x.y")))
+        remote.setManifest(null)
+        val dao = FakeIndicatorDao()
+        val result = feedOf(dao).update()
+        assertEquals(0, result.written)
+        assertTrue(dao.snapshot().isEmpty())
+    }
+
+    @Test
+    fun `empty or corrupt manifest upserts nothing`() = runBlocking {
+        for (body in listOf("", "not a manifest")) {
+            stubFetch(mapOf("c2-domains.yml" to domainYaml("a.example")))
+            remote.setManifest(body)
+            val dao = FakeIndicatorDao()
+            feedOf(dao).update()
+            assertTrue(dao.snapshot().isEmpty())
+        }
+    }
+
+    @Test
+    fun `domain removed from c2-domains between updates is evicted`() = runBlocking {
+        val dao = FakeIndicatorDao()
+        stubFetch(mapOf("c2-domains.yml" to domainYaml("keep.example", "gone.example")))
+        val feed = feedOf(dao)
+        feed.update()
+        Thread.sleep(2)
+        remote = FakeRemote(mapOf("ioc-data/c2-domains.yml" to domainYaml("keep.example")))
+        val result = PublicRepoIocFeed(dao, io.mockk.mockk(relaxed = true), IocDataManifest(remote)).update()
+        assertNotNull(dao.lookup("domain", "keep.example"))
+        assertNull(dao.lookup("domain", "gone.example"))
+        assertEquals(1, result.evicted)
+    }
+
+    @Test
+    fun `packages verify but domains mismatch - previous domain rows survive`() = runBlocking {
+        val dao = FakeIndicatorDao()
+        stubFetch(mapOf("c2-domains.yml" to domainYaml("old.example"), "package-names.yml" to pkgYaml("com.x.y")))
+        feedOf(dao).update()
+        Thread.sleep(2)
+        remote = FakeRemote(mapOf("ioc-data/c2-domains.yml" to domainYaml("new.example"),
+            "ioc-data/package-names.yml" to pkgYaml("com.x.z")))
+        remote.set("ioc-data/c2-domains.yml", "tampered")
+        val result = PublicRepoIocFeed(dao, io.mockk.mockk(relaxed = true), IocDataManifest(remote)).update()
+        assertNotNull("old domain survives", dao.lookup("domain", "old.example"))
+        assertNull(dao.lookup("domain", "new.example"))
+        assertNull("package type evicted its own stale row", dao.lookup("package", "com.x.y"))
+        assertNotNull(dao.lookup("package", "com.x.z"))
+        assertEquals(1, result.evicted)
     }
 }

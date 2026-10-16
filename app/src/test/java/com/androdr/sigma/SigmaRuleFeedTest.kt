@@ -51,7 +51,7 @@ class SigmaRuleFeedTest {
             # comment
         """.trimIndent()
 
-        val hashes = SigmaRuleFeed.parseHashManifest(manifest)
+        val hashes = com.androdr.integrity.ManifestVerifier.parse(manifest)
 
         assertEquals(2, hashes.size)
         assertEquals("abc123def456", hashes["app_scanner/androdr_010.yml"])
@@ -60,7 +60,7 @@ class SigmaRuleFeedTest {
 
     @Test
     fun `parseHashManifest returns empty for blank input`() {
-        assertEquals(0, SigmaRuleFeed.parseHashManifest("").size)
+        assertEquals(0, com.androdr.integrity.ManifestVerifier.parse("").size)
     }
 
     // --- Integrity decision (fail-closed for the default repo) — #238 ---

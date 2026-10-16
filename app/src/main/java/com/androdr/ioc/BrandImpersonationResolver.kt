@@ -42,6 +42,7 @@ import javax.inject.Singleton
 @Singleton
 class BrandImpersonationResolver @Inject constructor(
     @ApplicationContext private val context: Context,
+    private val manifest: IocDataManifest = IocDataManifest(),
 ) {
 
     /** Pure matching core — constructible without a Context for tests. */
@@ -112,8 +113,8 @@ class BrandImpersonationResolver @Inject constructor(
      * contract, cf. OemPrefixResolver.refresh).
      */
     suspend fun refresh(): Int = withContext(Dispatchers.IO) {
-        val namesYaml = SafeHttpFetch.fetch(NAMES_URL, maxBytes = MAX_FETCH_BYTES, timeoutMs = TIMEOUT_MS)
-        val domainsYaml = SafeHttpFetch.fetch(DOMAINS_URL, maxBytes = MAX_FETCH_BYTES, timeoutMs = TIMEOUT_MS)
+        val namesYaml = manifest.verified(NAMES_PATH, MAX_FETCH_BYTES)
+        val domainsYaml = manifest.verified(DOMAINS_PATH, MAX_FETCH_BYTES)
         if (namesYaml == null || domainsYaml == null) {
             Log.w(
                 TAG,
@@ -151,11 +152,8 @@ class BrandImpersonationResolver @Inject constructor(
         private const val MIN_NAME_VARIANT_LEN = 2
         private const val MAX_NAME_VARIANT_LEN = 128
         private const val MAX_FETCH_BYTES = 262_144
-        private const val TIMEOUT_MS = 15_000
-        private const val NAMES_URL =
-            "https://raw.githubusercontent.com/android-sigma-rules/rules/main/ioc-data/brand-names.yml"
-        private const val DOMAINS_URL =
-            "https://raw.githubusercontent.com/android-sigma-rules/rules/main/ioc-data/brand-domains.yml"
+        private const val NAMES_PATH = "ioc-data/brand-names.yml"
+        private const val DOMAINS_PATH = "ioc-data/brand-domains.yml"
 
         private val CF_REGEX = Regex("\\p{Cf}")
 
