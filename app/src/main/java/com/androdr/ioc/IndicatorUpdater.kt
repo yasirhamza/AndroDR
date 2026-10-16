@@ -131,7 +131,7 @@ internal fun IocEntry.toIndicator() = IocSanitizer.sanitize(Indicator(
 
 internal fun DomainIocEntry.toIndicator() = IocSanitizer.sanitize(Indicator(
     type = IndicatorResolver.TYPE_DOMAIN, value = domain.lowercase(),
-    family = campaignName, category = "", severity = severity,
+    family = campaignName, category = "", campaignKey = campaignKey, severity = severity,
     source = source, fetchedAt = fetchedAt
 ))
 

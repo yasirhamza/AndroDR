@@ -3,6 +3,7 @@ package com.androdr.ioc.feeds
 import android.util.Log
 import com.androdr.data.model.DomainIocEntry
 import com.androdr.ioc.DomainIocFeed
+import com.androdr.ioc.MvtCampaigns
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
@@ -36,7 +37,7 @@ class MvtIndicatorsFeed : DomainIocFeed {
                     async {
                         try {
                             val stix2 = httpGet(campaign.url) ?: return@async emptyList()
-                            parseStix2(stix2, campaign.name, toSlug(campaign.name), now)
+                            entriesFor(campaign, stix2, now)
                         } catch (e: Exception) {
                             Log.w(TAG, "Failed to fetch campaign '${campaign.name}': ${e.message}")
                             emptyList()
@@ -95,6 +96,11 @@ class MvtIndicatorsFeed : DomainIocFeed {
         return results
     }
 
+    /** Rows for one collection, stamped with its compiled campaign key (or none). */
+    internal fun entriesFor(ref: CampaignRef, stix: String, now: Long): List<DomainIocEntry> =
+        parseStix2(stix, ref.name, toSlug(ref.name), now,
+            campaignKey = MvtCampaigns.keyFor(ref.name, ref.url).orEmpty())
+
     /**
      * Parses a STIX2 bundle JSON string and returns one [DomainIocEntry] per domain found
      * in `indicator` objects with `pattern_type == "stix"`.
@@ -107,7 +113,8 @@ class MvtIndicatorsFeed : DomainIocFeed {
         json: String,
         campaignName: String,
         source: String,
-        fetchedAt: Long
+        fetchedAt: Long,
+        campaignKey: String = ""
     ): List<DomainIocEntry> {
         return try {
             val objects: JSONArray = JSONObject(json).optJSONArray("objects") ?: return emptyList()
@@ -122,6 +129,7 @@ class MvtIndicatorsFeed : DomainIocFeed {
                     results.add(DomainIocEntry(
                         domain = match.groupValues[1].lowercase(),
                         campaignName = campaignName,
+                        campaignKey = campaignKey,
                         severity = "CRITICAL",
                         source = source,
                         fetchedAt = fetchedAt
