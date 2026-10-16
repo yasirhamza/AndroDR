@@ -6,7 +6,6 @@ import androidx.room.withTransaction
 import com.androdr.data.db.AppDatabase
 import com.androdr.data.db.DnsEventDao
 import com.androdr.data.db.ForensicTimelineEventDao
-import com.androdr.data.db.IndicatorDao
 import com.androdr.data.db.ScanResultDao
 import com.androdr.data.model.ForensicTimelineEvent
 import com.androdr.data.model.ScanResult
@@ -38,7 +37,6 @@ class SaveScanWithCorrelationTest {
     private val scanResultDao = mockk<ScanResultDao>(relaxed = true)
     private val dnsEventDao = mockk<DnsEventDao>(relaxed = true)
     private val timelineDao = mockk<ForensicTimelineEventDao>(relaxed = true)
-    private val indicatorDao = mockk<IndicatorDao>(relaxed = true)
     private val database = mockk<AppDatabase>()
     private lateinit var repo: ScanRepository
 
@@ -62,7 +60,7 @@ class SaveScanWithCorrelationTest {
             scanResultDao = scanResultDao,
             dnsEventDao = dnsEventDao,
             forensicTimelineEventDao = timelineDao,
-            indicatorDao = indicatorDao
+            indicatorResolver = mockk(relaxed = true)
         )
     }
 

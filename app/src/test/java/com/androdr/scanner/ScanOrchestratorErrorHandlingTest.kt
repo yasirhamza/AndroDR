@@ -447,4 +447,39 @@ class ScanOrchestratorErrorHandlingTest {
         assertEquals(UNREGISTERED_IOC_LOOKUP, skip.exception)
         assertEquals("androdr-010", skip.ruleId)
     }
+
+    // ── Attribution misses (B5): a live domain hit evaluated without its prefetched
+    // row cannot name its family; the scan says so instead of staying silent.
+
+    private fun dnsEvent() = com.androdr.data.model.DnsEvent(timestamp = 1L, domain = "a.com", appUid = 1,
+        appName = null, isBlocked = false, reason = null)
+
+    @Test
+    fun `attribution misses become one scanner failure and are cleared`() = runTest {
+        val misses = java.util.concurrent.atomic.AtomicReference<Set<String>>(emptySet())
+        every { indicatorResolver.attributionMisses } returns misses
+        coEvery { dnsEventDao.getRecentSnapshot() } returns listOf(dnsEvent())
+        coEvery { sigmaRuleEngine.evaluateDns(any()) } answers {
+            misses.set(setOf("a.com", "b.com")); emptyList()
+        }
+
+        val result = orchestrator.runFullScan()
+
+        val attribution = result.scannerErrors.filter { it.scanner == "attribution" }
+        assertEquals(1, attribution.size)
+        assertEquals("MissingPrefetch", attribution.single().exception)
+        assertTrue(attribution.single().message!!.contains("2 domain(s)"))
+        assertTrue("misses are cleared after the scan reads them", misses.get().isEmpty())
+    }
+
+    @Test
+    fun `no attribution misses means no attribution failure`() = runTest {
+        val misses = java.util.concurrent.atomic.AtomicReference<Set<String>>(emptySet())
+        every { indicatorResolver.attributionMisses } returns misses
+        coEvery { dnsEventDao.getRecentSnapshot() } returns listOf(dnsEvent())
+
+        val result = orchestrator.runFullScan()
+
+        assertTrue(result.scannerErrors.none { it.scanner == "attribution" })
+    }
 }

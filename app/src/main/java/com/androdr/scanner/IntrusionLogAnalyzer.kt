@@ -7,6 +7,7 @@ import android.util.Log
 import com.androdr.data.model.ImportedDnsEvent
 import com.androdr.data.model.NetworkTelemetry
 import com.androdr.data.model.SecurityLogEvent
+import com.androdr.ioc.IndicatorResolver
 import com.androdr.scanner.intrusionlog.IntrusionLogParser
 import com.androdr.sigma.Finding
 import com.androdr.sigma.SigmaRuleEngine
@@ -15,6 +16,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import java.io.IOException
 import java.io.InputStream
@@ -65,7 +67,8 @@ data class IntrusionLogAnalysisResult(
 @Singleton
 class IntrusionLogAnalyzer @Inject constructor(
     @ApplicationContext private val context: Context,
-    private val sigmaRuleEngine: SigmaRuleEngine
+    private val sigmaRuleEngine: SigmaRuleEngine,
+    private val indicatorResolver: IndicatorResolver
 ) {
     // JVM unit tests construct this with a relaxed MockK Context — only
     // analyze(uri) touches it; analyzeEntries() is context-free by design.
@@ -166,6 +169,9 @@ class IntrusionLogAnalyzer @Inject constructor(
         }
         val parsed = IntrusionLogParser().parse(lines, uidResolver, capturedAt, onLine)
 
+        // Rows behind domain hits, so ioc_match findings name their family. analyzeEntries
+        // is synchronous and already runs on Dispatchers.IO via analyze().
+        runBlocking { indicatorResolver.prefetchDomainIndicators(parsed.dnsEvents.map { it.event.domain }) }
         val findings = buildList {
             addAll(sigmaRuleEngine.evaluateDns(parsed.dnsEvents.map { it.event }))
             addAll(sigmaRuleEngine.evaluateNetwork(parsed.networkEvents))

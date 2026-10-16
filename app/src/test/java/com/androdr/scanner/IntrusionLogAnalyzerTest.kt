@@ -45,7 +45,7 @@ class IntrusionLogAnalyzerTest {
 
     @Test
     fun `parses matching entries only, dedups across files, computes stats`() {
-        val result = IntrusionLogAnalyzer(mockk(relaxed = true), engine).analyzeEntries(
+        val result = IntrusionLogAnalyzer(mockk(relaxed = true), engine, mockk(relaxed = true)).analyzeEntries(
             sequenceOf(
                 entry("2026-08-21.txt", day1Dns, day1Net),
                 entry("2026-08-22.txt", day2NetDupe, day2Sec),
@@ -73,7 +73,7 @@ class IntrusionLogAnalyzerTest {
      */
     @Test
     fun `continuation chunk entries are parsed, not skipped`() {
-        val result = IntrusionLogAnalyzer(mockk(relaxed = true), engine).analyzeEntries(
+        val result = IntrusionLogAnalyzer(mockk(relaxed = true), engine, mockk(relaxed = true)).analyzeEntries(
             sequenceOf(
                 entry("2026-08-22.txt", day1Dns),
                 entry("2026-08-22(1).txt", day1Net),
@@ -96,7 +96,7 @@ class IntrusionLogAnalyzerTest {
 
     @Test
     fun `evaluates all three streams through the engine`() {
-        val analyzer = IntrusionLogAnalyzer(mockk(relaxed = true), engine)
+        val analyzer = IntrusionLogAnalyzer(mockk(relaxed = true), engine, mockk(relaxed = true))
         analyzer.analyzeEntries(
             sequenceOf(entry("2026-08-22.txt", day1Dns, day1Net, day2Sec)),
             uidResolver = { -1 }, capturedAt = capturedAt,
@@ -132,7 +132,7 @@ class IntrusionLogAnalyzerTest {
                 ),
             )
         }
-        val result = IntrusionLogAnalyzer(mockk(relaxed = true), e).analyzeEntries(
+        val result = IntrusionLogAnalyzer(mockk(relaxed = true), e, mockk(relaxed = true)).analyzeEntries(
             sequenceOf(entry("2026-08-22.txt", day2Sec)),
             uidResolver = { -1 }, capturedAt = capturedAt,
         )
@@ -167,7 +167,9 @@ class IntrusionLogAnalyzerTest {
         }
 
         val thrown = runCatching {
-            runBlocking { IntrusionLogAnalyzer(context, engine).analyze(mockk<Uri>(relaxed = true)) }
+            runBlocking {
+                IntrusionLogAnalyzer(context, engine, mockk(relaxed = true)).analyze(mockk<Uri>(relaxed = true))
+            }
         }.exceptionOrNull()
 
         assertTrue(
@@ -194,7 +196,9 @@ class IntrusionLogAnalyzerTest {
         }
 
         val thrown = runCatching {
-            runBlocking { IntrusionLogAnalyzer(context, engine).analyze(mockk<Uri>(relaxed = true)) }
+            runBlocking {
+                IntrusionLogAnalyzer(context, engine, mockk(relaxed = true)).analyze(mockk<Uri>(relaxed = true))
+            }
         }.exceptionOrNull()
 
         assertTrue(

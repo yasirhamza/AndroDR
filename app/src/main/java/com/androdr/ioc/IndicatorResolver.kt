@@ -38,6 +38,14 @@ class IndicatorResolver @Inject constructor(
     /** Full rows behind domain hits, keyed by the queried hostname; see [prefetchDomainIndicators]. */
     private val domainRows = AtomicReference<Map<String, Indicator>>(emptyMap())
 
+    /**
+     * Hostnames that matched live during a DNS evaluation but had no prefetched row,
+     * so their findings could not name a family. Recorded by the scan's ioc_match
+     * lookup, read-and-cleared by the scan (reported as a ScannerFailure), and
+     * cleared by [prefetchDomainIndicators].
+     */
+    val attributionMisses = AtomicReference<Set<String>>(emptySet())
+
     suspend fun refreshCache() = withContext(Dispatchers.IO) {
         val nonDomain = dao.getAllByType(TYPE_PACKAGE) +
             dao.getAllByType(TYPE_CERT_HASH) +
@@ -126,16 +134,26 @@ class IndicatorResolver @Inject constructor(
      * Falls back to the bundled entry when the feeds have not loaded (cold start).
      */
     suspend fun prefetchDomainIndicators(domains: Collection<String>) = withContext(Dispatchers.IO) {
+        attributionMisses.set(emptySet())
         val rows = HashMap<String, Indicator>()
         for (domain in domains.toSet()) {
-            val hit = isKnownBadDomain(domain)
-            val row = hit?.let { dao.lookup(TYPE_DOMAIN, it.value) } ?: bundledDomainWalk(domain)
+            val row = resolveDomainRow(domain)
             if (row != null) rows[domain] = row
         }
         // Merge, never replace: a scan and an intrusion-log import can prefetch
         // concurrently; replacing would wipe the other caller's rows mid-evaluation.
         // Not cleared by refreshCache() either, for the same reason.
         domainRows.updateAndGet { it + rows }
+    }
+
+    /**
+     * The one label-walk from a queried hostname to its full row: the stored row
+     * behind the bloom hit, else the bundled entry (cold start). Touches Room, so
+     * never call it on the VPN packet thread (#71); used by [prefetchDomainIndicators]
+     * and by the timeline enrichment in ScanRepository.logDnsEventsBatch.
+     */
+    suspend fun resolveDomainRow(domain: String): Indicator? = withContext(Dispatchers.IO) {
+        isKnownBadDomain(domain)?.let { dao.lookup(TYPE_DOMAIN, it.value) } ?: bundledDomainWalk(domain)
     }
 
     fun cachedDomainIndicator(domain: String): Indicator? = domainRows.get()[domain]
