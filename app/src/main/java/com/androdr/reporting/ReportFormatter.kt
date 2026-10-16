@@ -13,6 +13,7 @@ import com.androdr.data.model.ReceiverTelemetry
 import com.androdr.data.model.ScanResult
 import com.androdr.data.model.NotEvaluatedReason
 import com.androdr.data.model.TelemetrySource
+import com.androdr.ioc.Campaign
 import com.androdr.sigma.Evidence
 import com.androdr.sigma.Finding
 import java.text.SimpleDateFormat
@@ -44,6 +45,8 @@ object ReportFormatter {
         appOpsTelemetry: List<AppOpsTelemetry> = emptyList(),
         intrusionEvents: List<ForensicTimelineEvent> = emptyList(),
         versionName: String,
+        campaigns: List<Campaign> = emptyList(),
+        ruleCategoryById: Map<String, String> = emptyMap(),
     ): String = buildString {
         val includeFindings = mode != ExportMode.TELEMETRY_ONLY
         val includeTelemetry = mode != ExportMode.FINDINGS_ONLY
@@ -77,7 +80,10 @@ object ReportFormatter {
             appendLine("  OVERALL RISK: $reportedRisk")
             appendLine()
             section("FINDINGS SECTION")
-            appendFindingsSections(scan, dnsEvents, appInventory, displayNames, scan.source)
+            val verdicts = campaignVerdicts(
+                scan, campaigns, campaignReferenceTime(scan, intrusionEvents), ruleCategoryById,
+            )
+            appendFindingsSections(scan, dnsEvents, appInventory, displayNames, verdicts)
 
             // Intentionally inside the includeFindings branch: a capability skip is a
             // caveat ON the findings ("this list is missing these rules"), so it rides
@@ -111,10 +117,11 @@ object ReportFormatter {
         dnsEvents: List<DnsEvent>,
         appInventory: List<AppTelemetry>,
         displayNames: Map<String, String>,
-        scanSource: TelemetrySource,
+        campaignVerdicts: List<CampaignVerdict>,
     ) {
+        val scanSource = scan.source
         // -- Verdict + Summary + Action Guidance ----------------------------------
-        appendVerdict(scan, dnsEvents, appInventory)
+        appendVerdict(scan, dnsEvents, appInventory, campaignVerdicts)
 
         // -- Warning signs that add up -------------------------------------------
         // First, because a chain of events is the strongest evidence in the report.
@@ -145,26 +152,15 @@ object ReportFormatter {
         }
 
         // -- Campaign check -------------------------------------------------------
-        val campaignFindings = scan.deviceFlags.filter { f ->
-            f.tags.any { it.startsWith("campaign.") }
-        }
-        if (campaignFindings.isNotEmpty()) {
+        // One row per campaign (registry + rule-tag keys), from campaignVerdicts -- the
+        // same list the summary's campaign lines render from, so the two never disagree.
+        if (campaignVerdicts.isNotEmpty()) {
             section("MERCENARY SPYWARE CHECK")
-            val clear = campaignFindings.filter { !it.triggered }
-            val detected = campaignFindings.filter { it.triggered }
-
-            clear.forEach { finding ->
-                appendLine("  [OK]  ${campaignLabel(finding)}: not detected")
-            }
-            detected.forEach { finding ->
-                appendLine("  [!!]  ${campaignLabel(finding)}: DETECTED -- ${finding.title}")
-            }
-
-            appendLine()
+            appendCampaignRows(campaignVerdicts, scan)
         }
 
         val dnsIocRows = dnsIocRows(scan, dnsEvents)
-        if (dnsIocRows.isNotEmpty() && campaignFindings.isEmpty()) section("DNS IOC MATCHES")
+        if (dnsIocRows.isNotEmpty() && campaignVerdicts.isEmpty()) section("DNS IOC MATCHES")
         appendDnsIocMatches(dnsIocRows)
 
         // -- App risks ------------------------------------------------------------
@@ -414,7 +410,8 @@ object ReportFormatter {
     private fun StringBuilder.appendVerdict(
         scan: ScanResult,
         dnsEvents: List<DnsEvent>,
-        appInventory: List<AppTelemetry>
+        appInventory: List<AppTelemetry>,
+        campaignVerdicts: List<CampaignVerdict>,
     ) {
         val appRiskCount = scan.appRisks.count {
             it.triggered && it.level.lowercase() != "informational"
@@ -463,13 +460,8 @@ object ReportFormatter {
             appendLine("    Device posture: ${titles.joinToString(", ")}$suffix")
         }
 
-        // Campaign detections
-        val campaigns = scan.deviceFlags
-            .filter { f -> f.triggered && f.tags.any { it.startsWith("campaign.") } }
-        if (campaigns.isNotEmpty()) {
-            val labels = campaigns.map { campaignLabel(it) }.distinct()
-            appendLine("    Campaign detections: ${labels.joinToString(", ")}")
-        }
+        // Campaign detections (DETECTED only) and exposure (EXPOSED), from campaignVerdicts
+        appendCampaignSummary(campaignVerdicts)
 
         // DNS IOC
         val dnsIocCount = dnsIocRows(scan, dnsEvents).size
@@ -639,12 +631,6 @@ object ReportFormatter {
         }
         appendLine()
     }
-
-    private fun campaignLabel(finding: Finding): String =
-        finding.tags.filter { it.startsWith("campaign.") }
-            .joinToString(" / ") { tag ->
-                tag.removePrefix("campaign.").replaceFirstChar { c -> c.uppercase() }
-            }
 
     private fun guidancePriority(guidance: String): Int =
         GuidanceUtils.guidancePriority(guidance)

@@ -4,6 +4,7 @@ import com.androdr.data.model.NotEvaluatedReason
 import com.androdr.data.model.ScanResult
 import com.androdr.data.model.ScannerFailure
 import com.androdr.data.model.UNREGISTERED_IOC_LOOKUP
+import com.androdr.ioc.Campaign
 import com.androdr.sigma.Finding
 import com.androdr.sigma.FindingCategory
 import org.junit.Assert.assertEquals
@@ -339,8 +340,18 @@ class ReportFormatterTest {
         ),
     )
 
-    private fun formatReportWith(appRisks: List<Finding>, scan: ScanResult = buildScan(appRisks = appRisks)) =
-        ReportFormatter.formatScanReport(scan, emptyList(), emptyList(), versionName = "test")
+    @Suppress("LongParameterList")
+    private fun formatReportWith(
+        appRisks: List<Finding> = emptyList(),
+        deviceFlags: List<Finding> = emptyList(),
+        campaigns: List<Campaign> = emptyList(),
+        scannerErrors: List<ScannerFailure> = emptyList(),
+        ruleCategoryById: Map<String, String> = emptyMap(),
+        scan: ScanResult = buildScan(appRisks = appRisks, deviceFlags = deviceFlags, scannerErrors = scannerErrors),
+    ) = ReportFormatter.formatScanReport(
+        scan, emptyList(), emptyList(), versionName = "test",
+        campaigns = campaigns, ruleCategoryById = ruleCategoryById,
+    )
 
     @Test
     fun `IOC finding shows its family and block state`() {
@@ -412,7 +423,7 @@ class ReportFormatterTest {
         val f = iocFinding("d.example", "Fam", "", "false")
         val scan = buildScan(appRisks = listOf(f))
             .copy(source = com.androdr.data.model.TelemetrySource.BUGREPORT_IMPORT)
-        val report = formatReportWith(listOf(f), scan)
+        val report = formatReportWith(listOf(f), scan = scan)
         assertTrue(report.contains("Matched : d.example -> Fam"))
         assertFalse(report.contains("Blocked :"))
     }
@@ -422,7 +433,7 @@ class ReportFormatterTest {
         val entry = ScannerFailure("threat_intel", NotEvaluatedReason.FEEDS_NOT_LOADED.sentinel,
             "threat-intel feeds not loaded yet")
         val scan = buildScan(scannerErrors = listOf(entry))
-        val report = formatReportWith(emptyList(), scan)
+        val report = formatReportWith(emptyList(), scan = scan)
         assertFalse(scan.isPartialScan)
         assertTrue(report.contains(ReportFormatter.NOT_CHECKED_SECTION))
         assertTrue(report.contains(NotEvaluatedReason.FEEDS_NOT_LOADED.heading))
@@ -432,7 +443,7 @@ class ReportFormatterTest {
     fun `DnsMonitorOff says earlier lookups were checked`() {
         val entry = ScannerFailure("dns_monitor", NotEvaluatedReason.DNS_MONITOR_OFF.sentinel, "DNS monitoring was off")
         val f = iocFinding("d.example", "Fam", "", "false")
-        val report = formatReportWith(listOf(f), buildScan(appRisks = listOf(f), scannerErrors = listOf(entry)))
+        val report = formatReportWith(listOf(f), scan = buildScan(appRisks = listOf(f), scannerErrors = listOf(entry)))
         assertTrue(report.contains("the most recent recorded lookups were checked"))
     }
 

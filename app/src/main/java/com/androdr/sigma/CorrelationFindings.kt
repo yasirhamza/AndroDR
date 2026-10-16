@@ -33,6 +33,7 @@ object CorrelationFindings {
             category = FindingCategory.CORRELATION,
             tags = rule.tags,
             triggered = true,
+            ruleCategory = effectiveCategory.name,
             matchContext = mapOf(
                 "package_name" to signal.packageName,
                 "correlation_id" to signal.correlationId,

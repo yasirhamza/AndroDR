@@ -273,4 +273,35 @@ class PublicRepoIocFeedTest {
         assertNotNull(dao.lookup("package", "com.x.z"))
         assertEquals(1, result.evicted)
     }
+
+    // ── campaigns.yml: verified fetch, bundled fallback (B7) ──
+
+    @get:org.junit.Rule val tmp = org.junit.rules.TemporaryFolder()
+
+    private val bundledCampaignsJson: String by lazy {
+        listOf(java.io.File("src/main/res/raw/known_campaigns.json"),
+            java.io.File("app/src/main/res/raw/known_campaigns.json")).first { it.isFile }.readText()
+    }
+
+    private val campaignsYaml = "campaigns:\n  - key: remoteonly\n    label: Remote Only\n"
+
+    @Test
+    fun `verified campaigns yml is cached for the registry`() = runBlocking {
+        val cache = java.io.File(tmp.root, "campaigns.yml")
+        val registry = CampaignRegistry(cache) { bundledCampaignsJson }
+        val r = FakeRemote(mapOf("ioc-data/campaigns.yml" to campaignsYaml))
+        PublicRepoIocFeed(FakeIndicatorDao(), io.mockk.mockk(relaxed = true), IocDataManifest(r), registry).update()
+        assertEquals(listOf(Campaign("remoteonly", "Remote Only")), registry.campaigns())
+    }
+
+    @Test
+    fun `campaigns yml hash mismatch falls back to the bundled list`() = runBlocking {
+        val cache = java.io.File(tmp.root, "campaigns.yml")
+        val registry = CampaignRegistry(cache) { bundledCampaignsJson }
+        val r = FakeRemote(mapOf("ioc-data/campaigns.yml" to campaignsYaml))
+        r.set("ioc-data/campaigns.yml", campaignsYaml + "  - key: injected\n    label: Injected\n")
+        PublicRepoIocFeed(FakeIndicatorDao(), io.mockk.mockk(relaxed = true), IocDataManifest(r), registry).update()
+        assertTrue("unverified campaigns.yml must not be cached", !cache.exists())
+        assertEquals(CampaignRegistry.parseBundled(bundledCampaignsJson), registry.campaigns())
+    }
 }

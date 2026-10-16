@@ -21,6 +21,8 @@ class PublicRepoIocFeed @Inject constructor(
     private val indicatorDao: IndicatorDao,
     private val knownAppEntryDao: KnownAppEntryDao,
     private val manifest: IocDataManifest = IocDataManifest(),
+    /** Null only in tests that do not exercise the campaign vocabulary. */
+    private val campaignRegistry: CampaignRegistry? = null,
 ) {
 
     /** One ioc-data file feeding one indicator type. */
@@ -45,6 +47,7 @@ class PublicRepoIocFeed @Inject constructor(
                 evicted += gone
             }
             total += fetchAndUpsertPopularApps(now)
+            fetchCampaigns()
             Log.i(TAG, "Public repo IOC feed: $total entries upserted, $evicted evicted")
         } catch (e: Exception) {
             Log.w(TAG, "Public repo IOC feed failed: ${e.message}")
@@ -77,6 +80,16 @@ class PublicRepoIocFeed @Inject constructor(
         indicatorDao.upsertAll(indicators)
         val gone = indicatorDao.deleteStaleEntriesOfType(SOURCE_ID, file.type, fetchedAt - 1)
         return indicators.size to gone
+    }
+
+    /**
+     * Caches `campaigns.yml` for [CampaignRegistry] only when it verifies against the manifest
+     * (fail-closed, B9); otherwise the registry keeps its last good copy or the bundled list.
+     */
+    private suspend fun fetchCampaigns() {
+        val registry = campaignRegistry ?: return
+        val yaml = manifest.verified(CAMPAIGNS_PATH, MAX_FILE_CHARS) ?: return
+        if (!registry.storeVerified(yaml)) Log.w(TAG, "campaigns.yml verified but held no valid campaigns")
     }
 
     @Suppress("TooGenericExceptionCaught", "SwallowedException")
@@ -138,6 +151,7 @@ class PublicRepoIocFeed @Inject constructor(
         private const val TAG = "PublicRepoIocFeed"
         const val SOURCE_ID = "androdr_public_repo"
         private const val MAX_FILE_CHARS = 1_000_000
+        private const val CAMPAIGNS_PATH = "ioc-data/campaigns.yml"
         private val IOC_FILES = listOf(
             IocFile("ioc-data/package-names.yml", IndicatorResolver.TYPE_PACKAGE, false, "MALWARE", true),
             IocFile("ioc-data/c2-domains.yml", IndicatorResolver.TYPE_DOMAIN, true, "", false),
