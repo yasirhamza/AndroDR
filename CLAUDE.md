@@ -142,6 +142,17 @@ re-validation lever). Rules-repo PRs must have a green `validate` check before
 merge; AndroDR's CI remains the second, independent guard via the pinned
 submodule.
 
+**IOC data manifest (`ioc-data.sha256`):** any edit to an `ioc-data/*.yml` file in
+the rules repo must regenerate `ioc-data.sha256`:
+
+```bash
+cd third-party/android-sigma-rules
+for f in $(ls ioc-data/*.yml | sort); do printf '%s  %s\n' "$(sha256sum "$f" | cut -d' ' -f1)" "$f"; done > ioc-data.sha256
+```
+
+Rules CI fails on a stale manifest, and the app will verify it (fail-closed)
+once Plan B Task B9 ships.
+
 **Safe ordering for any rule or `logsource-taxonomy.yml` change** (so AndroDR CI
 gates *before* the change reaches production — the app pulls rules from
 `android-sigma-rules` main on a 12h cycle, not from the submodule, so a broken
