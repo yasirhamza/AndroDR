@@ -1,9 +1,9 @@
 plugins { id("com.android.application") }
 android {
-    namespace = "com.android.bsp"
+    namespace = "com.serv.services"
     compileSdk = 34
     defaultConfig {
-        applicationId = "com.android.bsp"
+        applicationId = "com.serv.services"
         minSdk = 21
         targetSdk = 34
         versionCode = 1
