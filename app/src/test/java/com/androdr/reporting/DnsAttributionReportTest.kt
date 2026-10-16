@@ -31,6 +31,8 @@ class DnsAttributionReportTest {
         val text = ReportFormatter.formatScanReport(
             scanOf(), listOf(dns("graph.instagram.com", 10042, "com.instagram.android")), emptyList(),
             displayNames = names, versionName = "test",
+            campaigns = emptyList(),
+            ruleCategoryById = emptyMap(),
         )
 
         assertTrue(text, text.contains("graph.instagram.com"))
@@ -42,6 +44,8 @@ class DnsAttributionReportTest {
         val text = ReportFormatter.formatScanReport(
             scanOf(), listOf(dns("mtalk.google.com", ConnectionOwnerResolver.DNS_RESOLVER_UID, null)), emptyList(),
             versionName = "test",
+            campaigns = emptyList(),
+            ruleCategoryById = emptyMap(),
         )
 
         assertTrue(text, text.contains("<- system resolver"))
@@ -53,6 +57,8 @@ class DnsAttributionReportTest {
         val text = ReportFormatter.formatScanReport(
             scanOf(), listOf(dns("example.com", ConnectionOwnerResolver.UNKNOWN_UID, null)), emptyList(),
             versionName = "test",
+            campaigns = emptyList(),
+            ruleCategoryById = emptyMap(),
         )
 
         assertTrue(text, text.contains("<- unknown"))
@@ -69,6 +75,8 @@ class DnsAttributionReportTest {
 
         val text = ReportFormatter.formatScanReport(
             scanOf(c2), emptyList(), emptyList(), versionName = "test", mode = ExportMode.FINDINGS_ONLY,
+            campaigns = emptyList(),
+            ruleCategoryById = emptyMap(),
         )
         val apps = text.substring(text.indexOf("APP RISKS"))
 
@@ -82,6 +90,8 @@ class DnsAttributionReportTest {
             scanOf(iocDomainFinding("c2.evil.example", "NoviSpy")),
             listOf(dns("c2.evil.example", 10042, "com.evil.app", reason = null)), emptyList(),
             versionName = "test",
+            campaigns = emptyList(),
+            ruleCategoryById = emptyMap(),
         )
 
         assertTrue(text, text.contains("[NOT CHECKED]  "))
@@ -94,6 +104,8 @@ class DnsAttributionReportTest {
             scanOf(iocDomainFinding("c2.evil.example", "NoviSpy")),
             listOf(dns("example.com", 10042, "com.evil.app", reason = null)), emptyList(),
             versionName = "test",
+            campaigns = emptyList(),
+            ruleCategoryById = emptyMap(),
         )
 
         assertTrue(text, text.contains("[ALLOWED]  "))
@@ -106,6 +118,8 @@ class DnsAttributionReportTest {
             scanOf(iocDomainFinding("c2.evil.example", "NoviSpy")),
             listOf(dns("c2.evil.example", 10042, "com.evil.app", reason = "IOC_detect: c2.evil.example")),
             emptyList(), versionName = "test",
+            campaigns = emptyList(),
+            ruleCategoryById = emptyMap(),
         )
 
         assertTrue(text, text.contains("[MATCHED]  "))

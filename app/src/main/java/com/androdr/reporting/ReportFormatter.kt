@@ -45,8 +45,8 @@ object ReportFormatter {
         appOpsTelemetry: List<AppOpsTelemetry> = emptyList(),
         intrusionEvents: List<ForensicTimelineEvent> = emptyList(),
         versionName: String,
-        campaigns: List<Campaign> = emptyList(),
-        ruleCategoryById: Map<String, String> = emptyMap(),
+        campaigns: List<Campaign>,
+        ruleCategoryById: Map<String, String>,
     ): String = buildString {
         val includeFindings = mode != ExportMode.TELEMETRY_ONLY
         val includeTelemetry = mode != ExportMode.FINDINGS_ONLY

@@ -84,6 +84,7 @@ class MercenaryCheckReportTest {
         buildScan(appRisks = appRisks, deviceFlags = deviceFlags).copy(source = source),
         emptyList(), emptyList(), intrusionEvents = intrusionEvents, versionName = "test",
         campaigns = campaigns,
+        ruleCategoryById = emptyMap(),
     )
 
     private fun importedEvent(at: Long) = ForensicTimelineEvent(

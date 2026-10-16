@@ -83,7 +83,10 @@ class ReportFormatterTest {
 
     @Test
     fun `verdict shows no threats when clean`() {
-        val text = ReportFormatter.formatScanReport(cleanScan, emptyList(), emptyList(), versionName = "test")
+        val text = ReportFormatter.formatScanReport(
+            cleanScan, emptyList(), emptyList(), versionName = "test",
+            campaigns = emptyList(), ruleCategoryById = emptyMap(),
+        )
         assertTrue(text.contains("No threats detected"))
         assertTrue(text.contains("SUMMARY:"))
         assertTrue(text.contains("Flagged: 0"))
@@ -92,7 +95,10 @@ class ReportFormatterTest {
     @Test
     fun `verdict shows device settings when only device issues`() {
         val scan = buildScan(deviceFlags = listOf(deviceFinding))
-        val text = ReportFormatter.formatScanReport(scan, emptyList(), emptyList(), versionName = "test")
+        val text = ReportFormatter.formatScanReport(
+            scan, emptyList(), emptyList(), versionName = "test",
+            campaigns = emptyList(), ruleCategoryById = emptyMap(),
+        )
         assertTrue(text.contains("device setting(s) need attention"))
         assertTrue(text.contains("Device posture: USB Debugging Enabled"))
     }
@@ -100,7 +106,10 @@ class ReportFormatterTest {
     @Test
     fun `action guidance from rule guidance field for malware`() {
         val scan = buildScan(appRisks = listOf(malwareFinding), knownMalwareCount = 1)
-        val text = ReportFormatter.formatScanReport(scan, emptyList(), emptyList(), versionName = "test")
+        val text = ReportFormatter.formatScanReport(
+            scan, emptyList(), emptyList(), versionName = "test",
+            campaigns = emptyList(), ruleCategoryById = emptyMap(),
+        )
         assertTrue(text.contains("ACTION REQUIRED:"))
         assertTrue("Guidance from rule", text.contains("UNINSTALL IMMEDIATELY"))
     }
@@ -108,7 +117,10 @@ class ReportFormatterTest {
     @Test
     fun `action guidance from rule guidance field for sideloads`() {
         val scan = buildScan(appRisks = listOf(sideloadFinding), riskySideloadCount = 1)
-        val text = ReportFormatter.formatScanReport(scan, emptyList(), emptyList(), versionName = "test")
+        val text = ReportFormatter.formatScanReport(
+            scan, emptyList(), emptyList(), versionName = "test",
+            campaigns = emptyList(), ruleCategoryById = emptyMap(),
+        )
         assertTrue("Guidance from rule", text.contains("REVIEW -- sideloaded app"))
     }
 
@@ -118,7 +130,9 @@ class ReportFormatterTest {
         val names = mapOf("com.unknown.app" to "Mystery App")
         val text = ReportFormatter.formatScanReport(
             scan, emptyList(), emptyList(), displayNames = names,
-            versionName = "test"
+            versionName = "test",
+            campaigns = emptyList(),
+            ruleCategoryById = emptyMap(),
         )
         assertTrue("Display name should appear", text.contains("Mystery App"))
     }
@@ -130,7 +144,10 @@ class ReportFormatterTest {
             knownMalwareCount = 1,
             riskySideloadCount = 1
         )
-        val text = ReportFormatter.formatScanReport(scan, emptyList(), emptyList(), versionName = "test")
+        val text = ReportFormatter.formatScanReport(
+            scan, emptyList(), emptyList(), versionName = "test",
+            campaigns = emptyList(), ruleCategoryById = emptyMap(),
+        )
         assertTrue(text.contains("UNINSTALL IMMEDIATELY"))
         assertTrue(text.contains("REVIEW -- sideloaded app"))
     }
@@ -143,14 +160,20 @@ class ReportFormatterTest {
             knownMalwareCount = 1,
             riskySideloadCount = 1
         )
-        val text = ReportFormatter.formatScanReport(scan, emptyList(), emptyList(), versionName = "test")
+        val text = ReportFormatter.formatScanReport(
+            scan, emptyList(), emptyList(), versionName = "test",
+            campaigns = emptyList(), ruleCategoryById = emptyMap(),
+        )
         val nonAscii = text.filter { it.code > 127 }
         assertTrue("Non-ASCII characters found: $nonAscii", nonAscii.isEmpty())
     }
 
     @Test
     fun `no action block when scan is clean`() {
-        val text = ReportFormatter.formatScanReport(cleanScan, emptyList(), emptyList(), versionName = "test")
+        val text = ReportFormatter.formatScanReport(
+            cleanScan, emptyList(), emptyList(), versionName = "test",
+            campaigns = emptyList(), ruleCategoryById = emptyMap(),
+        )
         assertFalse(text.contains("ACTION REQUIRED:"))
     }
 
@@ -165,7 +188,9 @@ class ReportFormatterTest {
     fun `BOTH mode contains both section markers`() {
         val text = ReportFormatter.formatScanReport(
             richScan(), emptyList(), listOf("log line"),
-            mode = ExportMode.BOTH, versionName = "test"
+            mode = ExportMode.BOTH, versionName = "test",
+            campaigns = emptyList(),
+            ruleCategoryById = emptyMap(),
         )
         assertTrue(text.contains("FINDINGS SECTION"))
         assertTrue(text.contains("TELEMETRY SECTION"))
@@ -177,7 +202,9 @@ class ReportFormatterTest {
     fun `TELEMETRY_ONLY writes only telemetry section`() {
         val text = ReportFormatter.formatScanReport(
             richScan(), emptyList(), listOf("log line"),
-            mode = ExportMode.TELEMETRY_ONLY, versionName = "test"
+            mode = ExportMode.TELEMETRY_ONLY, versionName = "test",
+            campaigns = emptyList(),
+            ruleCategoryById = emptyMap(),
         )
         assertTrue(text.contains("TELEMETRY SECTION"))
         assertTrue(text.contains("DNS ACTIVITY"))
@@ -191,7 +218,9 @@ class ReportFormatterTest {
     fun `FINDINGS_ONLY writes only findings section`() {
         val text = ReportFormatter.formatScanReport(
             richScan(), emptyList(), listOf("log line"),
-            mode = ExportMode.FINDINGS_ONLY, versionName = "test"
+            mode = ExportMode.FINDINGS_ONLY, versionName = "test",
+            campaigns = emptyList(),
+            ruleCategoryById = emptyMap(),
         )
         assertTrue(text.contains("FINDINGS SECTION"))
         assertTrue(text.contains("DEVICE CHECKS"))
@@ -203,7 +232,10 @@ class ReportFormatterTest {
 
     @Test
     fun `format version line is present`() {
-        val text = ReportFormatter.formatScanReport(cleanScan, emptyList(), emptyList(), versionName = "test")
+        val text = ReportFormatter.formatScanReport(
+            cleanScan, emptyList(), emptyList(), versionName = "test",
+            campaigns = emptyList(), ruleCategoryById = emptyMap(),
+        )
         assertTrue(text.contains("Format    : v${ReportExporter.EXPORT_FORMAT_VERSION}"))
     }
 
@@ -217,7 +249,10 @@ class ReportFormatterTest {
         // The Sideloaded flag must still surface from the impersonation
         // rule's own implies_flags declaration.
         val scan = buildScan(appRisks = listOf(impersonationFinding))
-        val text = ReportFormatter.formatScanReport(scan, emptyList(), emptyList(), versionName = "test")
+        val text = ReportFormatter.formatScanReport(
+            scan, emptyList(), emptyList(), versionName = "test",
+            campaigns = emptyList(), ruleCategoryById = emptyMap(),
+        )
         assertTrue("Flags line should appear", text.contains("Flags   :"))
         assertTrue("Sideloaded flag must render", text.contains("Flags   : Sideloaded"))
     }
@@ -228,7 +263,10 @@ class ReportFormatterTest {
             matchContext = impersonationFinding.matchContext + ("package_name" to "com.unknown.app")
         ))
         val scan = buildScan(appRisks = both)
-        val text = ReportFormatter.formatScanReport(scan, emptyList(), emptyList(), versionName = "test")
+        val text = ReportFormatter.formatScanReport(
+            scan, emptyList(), emptyList(), versionName = "test",
+            campaigns = emptyList(), ruleCategoryById = emptyMap(),
+        )
         val flagsLine = text.lineSequence().first { it.trimStart().startsWith("Flags   :") }
         assertEquals("Flags   : Sideloaded", flagsLine.trim())
     }
@@ -236,7 +274,10 @@ class ReportFormatterTest {
     @Test
     fun `known malware finding renders Known Malware flag via impliesFlags`() {
         val scan = buildScan(appRisks = listOf(malwareFinding), knownMalwareCount = 1)
-        val text = ReportFormatter.formatScanReport(scan, emptyList(), emptyList(), versionName = "test")
+        val text = ReportFormatter.formatScanReport(
+            scan, emptyList(), emptyList(), versionName = "test",
+            campaigns = emptyList(), ruleCategoryById = emptyMap(),
+        )
         assertTrue("Known Malware flag must render",
             text.contains("Flags   : [!] Known Malware"))
     }
@@ -247,7 +288,10 @@ class ReportFormatterTest {
             matchContext = mapOf("package_name" to "com.unknown.app")
         ), sideloadFinding)
         val scan = buildScan(appRisks = both, knownMalwareCount = 1, riskySideloadCount = 1)
-        val text = ReportFormatter.formatScanReport(scan, emptyList(), emptyList(), versionName = "test")
+        val text = ReportFormatter.formatScanReport(
+            scan, emptyList(), emptyList(), versionName = "test",
+            campaigns = emptyList(), ruleCategoryById = emptyMap(),
+        )
         assertTrue("Both flags must render",
             text.contains("Flags   : [!] Known Malware / Sideloaded"))
     }
@@ -264,7 +308,10 @@ class ReportFormatterTest {
             // impliesFlags defaults to empty
         )
         val scan = buildScan(appRisks = listOf(orphan))
-        val text = ReportFormatter.formatScanReport(scan, emptyList(), emptyList(), versionName = "test")
+        val text = ReportFormatter.formatScanReport(
+            scan, emptyList(), emptyList(), versionName = "test",
+            campaigns = emptyList(), ruleCategoryById = emptyMap(),
+        )
         assertFalse("No Flags line expected when no implies_flags", text.contains("Flags   :"))
     }
 
@@ -285,7 +332,10 @@ class ReportFormatterTest {
     @Test
     fun `capability skip renders its own section, not a partial-scan alarm`() {
         val scan = buildScan(scannerErrors = listOf(capabilitySkip))
-        val text = ReportFormatter.formatScanReport(scan, emptyList(), emptyList(), versionName = "test")
+        val text = ReportFormatter.formatScanReport(
+            scan, emptyList(), emptyList(), versionName = "test",
+            campaigns = emptyList(), ruleCategoryById = emptyMap(),
+        )
         assertTrue(
             // Was "RULES NOT EVALUATED ON THIS BUILD": one reason had a section of its
             // own. Two more reasons existed and were silent (#366, #370), so all three
@@ -312,7 +362,10 @@ class ReportFormatterTest {
 
     @Test
     fun `no capability skip section when there are no skips`() {
-        val text = ReportFormatter.formatScanReport(cleanScan, emptyList(), emptyList(), versionName = "test")
+        val text = ReportFormatter.formatScanReport(
+            cleanScan, emptyList(), emptyList(), versionName = "test",
+            campaigns = emptyList(), ruleCategoryById = emptyMap(),
+        )
         assertFalse(text.contains(ReportFormatter.NOT_CHECKED_SECTION))
     }
 
@@ -453,7 +506,9 @@ class ReportFormatterTest {
         val dns = listOf(com.androdr.data.model.DnsEvent(
             timestamp = 1L, domain = "d.example", appUid = 1, appName = null, isBlocked = false, reason = null))
         val report = ReportFormatter.formatScanReport(
-            buildScan(appRisks = listOf(f)), dns, emptyList(), versionName = "test")
+            buildScan(appRisks = listOf(f)), dns, emptyList(), versionName = "test",
+            campaigns = emptyList(),
+            ruleCategoryById = emptyMap(),)
         assertTrue(report, report.contains("DNS IOC matches: 1"))
         val listed = report.lines().dropWhile { !it.contains("DNS IOC matches linked to:") }
             .drop(1).takeWhile { it.trim().startsWith("[!!]") }
@@ -466,7 +521,9 @@ class ReportFormatterTest {
             timestamp = 1L, domain = "d.example", appUid = 1, appName = null, isBlocked = true,
             reason = "IOC: Pegasus"))
         val report = ReportFormatter.formatScanReport(
-            buildScan(), dns, emptyList(), versionName = "test")
+            buildScan(), dns, emptyList(), versionName = "test",
+            campaigns = emptyList(),
+            ruleCategoryById = emptyMap(),)
         assertTrue(report, report.lines().any { it.trim() == "[!!]  Pegasus (domain indicator)" })
         assertTrue(report, report.contains("DNS IOC matches: 1"))
     }

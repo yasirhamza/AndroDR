@@ -52,6 +52,8 @@ class ImportDnsSectionTest {
     ) = ReportFormatter.formatScanReport(
         scan, dns, emptyList(), versionName = "test", mode = ExportMode.TELEMETRY_ONLY,
         intrusionEvents = imported,
+        campaigns = emptyList(),
+        ruleCategoryById = emptyMap(),
     )
 
     @Test
