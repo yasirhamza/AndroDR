@@ -299,7 +299,9 @@ class ScanOrchestrator @Inject constructor(
         val scannerErrors: MutableList<ScannerFailure> =
             Collections.synchronizedList(mutableListOf())
         recordRuleCapabilitySkips(scannerErrors)
-        scannerErrors.addAll(scanVisibilityGaps(indicatorResolver.count(), DnsVpnService.isRunning.value))
+        scannerErrors.addAll(
+            visibilityGapsOrFailure({ indicatorResolver.count() }, DnsVpnService.isRunning.value)
+        )
 
         // Initialize progress for phase 1 — 8 parallel scanners to track.
         _scanProgress.value = ScanProgress.Running(

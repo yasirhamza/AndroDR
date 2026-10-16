@@ -156,6 +156,11 @@ class ScanOrchestratorIntrusionLogTest {
 
     // ---------- replace-on-reimport (now atomic with the save, #342 B1) ----------
 
+    @After
+    fun resetVpnState() {
+        DnsVpnService.isRunning.value = false
+    }
+
     /**
      * A prior import's correlation signals live under
      * `source = "sigma_correlation_engine"` — a source shared with the
@@ -169,11 +174,6 @@ class ScanOrchestratorIntrusionLogTest {
      * the mocked save invokes that lambda (as the real transaction would), so
      * we can still assert the sweep order.
      */
-    @After
-    fun resetVpnState() {
-        DnsVpnService.isRunning.value = false
-    }
-
     @Test
     fun `reimport sweeps every prior import scan id via preDelete inside the save`() = runTest {
         val uri = mockk<Uri>(relaxed = true)

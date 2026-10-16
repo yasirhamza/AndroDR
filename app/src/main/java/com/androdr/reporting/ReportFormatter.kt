@@ -163,7 +163,9 @@ object ReportFormatter {
             appendLine()
         }
 
-        appendDnsIocMatches(scan, dnsEvents)
+        val dnsIocRows = dnsIocRows(scan, dnsEvents)
+        if (dnsIocRows.isNotEmpty() && campaignFindings.isEmpty()) section("DNS IOC MATCHES")
+        appendDnsIocMatches(dnsIocRows)
 
         // -- App risks ------------------------------------------------------------
         section("APP RISKS")
@@ -470,7 +472,7 @@ object ReportFormatter {
         }
 
         // DNS IOC
-        val dnsIocCount = dnsEvents.count { it.reason != null }
+        val dnsIocCount = dnsIocRows(scan, dnsEvents).size
         appendLine("    DNS IOC matches: $dnsIocCount")
         appendLine()
 

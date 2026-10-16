@@ -35,17 +35,17 @@ internal fun iocDomainsOf(scan: ScanResult): Set<String> =
         .filter { it.iocType == "domain" }.map { it.matchedIndicator }.toSet()
 
 /**
- * "DNS IOC matches linked to:", in its own block so a domain hit on a device with no
- * campaign-tagged flag is still listed. Falls back to the tunnel's reason strings for
- * scans whose findings carry no IOC evidence.
+ * The rows of "DNS IOC matches linked to:": distinct domains from the scan's domain IOC
+ * findings, else (scans whose findings carry no IOC evidence) the tunnel's reason strings.
+ * The summary count and the list both come from here so they cannot disagree.
  */
-internal fun StringBuilder.appendDnsIocMatches(scan: ScanResult, dnsEvents: List<DnsEvent>) {
+internal fun dnsIocRows(scan: ScanResult, dnsEvents: List<DnsEvent>): List<String> {
     val fromEvidence = scan.appRisks.filter { it.triggered }
         .mapNotNull { it.evidence as? Evidence.IocMatch }
         .filter { it.iocType == "domain" }
         .map { iocMatchLabel(it) }
         .distinct()
-    val rows = fromEvidence.ifEmpty {
+    return fromEvidence.ifEmpty {
         dnsEvents
             .mapNotNull { it.reason }
             .filter { it.startsWith("IOC:") || it.startsWith("IOC_detect:") }
@@ -54,6 +54,10 @@ internal fun StringBuilder.appendDnsIocMatches(scan: ScanResult, dnsEvents: List
             .distinct()
             .map { "$it (domain indicator)" }
     }
+}
+
+/** "DNS IOC matches linked to:", in its own block so a domain hit with no campaign flag is listed. */
+internal fun StringBuilder.appendDnsIocMatches(rows: List<String>) {
     if (rows.isEmpty()) return
     appendLine("  DNS IOC matches linked to:")
     rows.forEach { appendLine("  [!!]  $it") }

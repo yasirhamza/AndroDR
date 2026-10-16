@@ -435,4 +435,34 @@ class ReportFormatterTest {
         val report = formatReportWith(listOf(f), buildScan(appRisks = listOf(f), scannerErrors = listOf(entry)))
         assertTrue(report.contains("the most recent recorded lookups were checked"))
     }
+
+    @Test
+    fun `DNS IOC summary count equals the list size when the tunnel never matched`() {
+        val f = iocFinding("d.example", "Fam", "", "false", reason = "")
+        val dns = listOf(com.androdr.data.model.DnsEvent(
+            timestamp = 1L, domain = "d.example", appUid = 1, appName = null, isBlocked = false, reason = null))
+        val report = ReportFormatter.formatScanReport(
+            buildScan(appRisks = listOf(f)), dns, emptyList(), versionName = "test")
+        assertTrue(report, report.contains("DNS IOC matches: 1"))
+        val listed = report.lines().dropWhile { !it.contains("DNS IOC matches linked to:") }
+            .drop(1).takeWhile { it.trim().startsWith("[!!]") }
+        assertEquals(1, listed.size)
+    }
+
+    @Test
+    fun `fallback list from tunnel reasons renders with the domain indicator suffix`() {
+        val dns = listOf(com.androdr.data.model.DnsEvent(
+            timestamp = 1L, domain = "d.example", appUid = 1, appName = null, isBlocked = true,
+            reason = "IOC: Pegasus"))
+        val report = ReportFormatter.formatScanReport(
+            buildScan(), dns, emptyList(), versionName = "test")
+        assertTrue(report, report.lines().any { it.trim() == "[!!]  Pegasus (domain indicator)" })
+        assertTrue(report, report.contains("DNS IOC matches: 1"))
+    }
+
+    @Test
+    fun `without a campaign section the DNS IOC list has its own heading`() {
+        val report = formatReportWith(listOf(iocFinding("d.example", "Fam", "", "false")))
+        assertTrue(report, report.contains("  DNS IOC MATCHES\n"))
+    }
 }

@@ -584,4 +584,21 @@ class ScanOrchestratorErrorHandlingTest {
 
         assertTrue(result.scannerErrors.none { it.scanner == "dns_monitor" })
     }
+
+    @Test
+    fun `an indicator count failure does not end the scan and claims no feed gap`() = runTest {
+        coEvery { indicatorResolver.count() } throws android.database.sqlite.SQLiteException("disk")
+        every { indicatorResolver.attributionMisses } returns
+            java.util.concurrent.atomic.AtomicReference<Set<String>>(emptySet())
+        val finding = com.androdr.sigma.Finding(ruleId = "androdr-003", title = "Malicious Domain",
+            level = "critical", category = com.androdr.sigma.FindingCategory.APP_RISK)
+        coEvery { dnsEventDao.getRecentSnapshot() } returns listOf(dnsEvent())
+        coEvery { sigmaRuleEngine.evaluateDns(any()) } returns listOf(finding)
+
+        val result = orchestrator.runFullScan()
+
+        assertTrue(result.findings.any { it.ruleId == "androdr-003" })
+        assertTrue(result.scannerErrors.none { it.scanner == "threat_intel" })
+        assertEquals("SQLiteException", result.scannerErrors.single { it.scanner == "visibility_gaps" }.exception)
+    }
 }
