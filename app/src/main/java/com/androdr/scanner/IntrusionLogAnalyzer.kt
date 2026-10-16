@@ -16,6 +16,7 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
@@ -24,6 +25,7 @@ import java.io.InputStream
 import java.io.Reader
 import java.util.zip.ZipInputStream
 import javax.inject.Inject
+import kotlin.coroutines.EmptyCoroutineContext
 import javax.inject.Singleton
 
 data class IntrusionLogStats(
@@ -131,7 +133,8 @@ class IntrusionLogAnalyzer @Inject constructor(
                         entrySequence,
                         uidResolver,
                         System.currentTimeMillis(),
-                        onLine = { analysisScope.ensureActive() }
+                        onLine = { analysisScope.ensureActive() },
+                        parentJob = analysisScope.coroutineContext[Job]
                     )
                 }
             }
@@ -153,7 +156,8 @@ class IntrusionLogAnalyzer @Inject constructor(
         entries: Sequence<Pair<String, InputStream>>,
         uidResolver: (String) -> Int,
         capturedAt: Long,
-        onLine: () -> Unit = {}
+        onLine: () -> Unit = {},
+        parentJob: Job? = null
     ): IntrusionLogAnalysisResult {
         // One concatenated line sequence across all matching entries makes
         // cross-file event dedup inherent to a single parse() call.
@@ -175,10 +179,15 @@ class IntrusionLogAnalyzer @Inject constructor(
         // Rows behind domain hits, so ioc_match findings name their family. analyzeEntries
         // is synchronous and already runs on Dispatchers.IO via analyze(). A failure costs
         // the attribution only: findings still fire, and the import says what it lacked.
+        // runBlocking is made a child of the caller's Job ([parentJob]) so cancelling the
+        // import reaches the prefetch; a bare runBlocking is a top-level Job and would run
+        // one DAO lookup per host to the end.
         val analysisErrors = mutableListOf<ScannerFailure>()
         @Suppress("TooGenericExceptionCaught")
         try {
-            runBlocking { indicatorResolver.prefetchDomainIndicators(parsed.dnsEvents.map { it.event.domain }) }
+            runBlocking(parentJob ?: EmptyCoroutineContext) {
+                indicatorResolver.prefetchDomainIndicators(parsed.dnsEvents.map { it.event.domain })
+            }
         } catch (c: CancellationException) {
             throw c
         } catch (e: Exception) {

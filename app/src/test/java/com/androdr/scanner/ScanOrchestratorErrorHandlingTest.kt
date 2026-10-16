@@ -500,4 +500,37 @@ class ScanOrchestratorErrorHandlingTest {
         val attribution = result.scannerErrors.single { it.scanner == "attribution" }
         assertEquals("SQLiteException", attribution.exception)
     }
+
+    @Test
+    fun `a cancelled domain prefetch propagates instead of becoming a scanner failure`() = runTest {
+        coEvery { dnsEventDao.getRecentSnapshot() } returns listOf(dnsEvent())
+        coEvery { indicatorResolver.prefetchDomainIndicators(any()) } throws CancellationException("left screen")
+
+        var caught: Throwable? = null
+        try {
+            orchestrator.runFullScan()
+        } catch (e: CancellationException) {
+            caught = e
+        }
+
+        assertNotNull("CancellationException from the prefetch must propagate", caught)
+        coVerify(exactly = 0) { sigmaRuleEngine.evaluateDns(any()) }
+    }
+
+    @Test
+    fun `a failed prefetch records exactly one attribution failure even with misses`() = runTest {
+        val misses = java.util.concurrent.atomic.AtomicReference<Set<String>>(emptySet())
+        every { indicatorResolver.attributionMisses } returns misses
+        coEvery { dnsEventDao.getRecentSnapshot() } returns listOf(dnsEvent())
+        coEvery { indicatorResolver.prefetchDomainIndicators(any()) } throws
+            android.database.sqlite.SQLiteException("database is locked")
+        // After a failed prefetch every live hit is a miss.
+        coEvery { sigmaRuleEngine.evaluateDns(any()) } answers { misses.set(setOf("a.com")); emptyList() }
+
+        val result = orchestrator.runFullScan()
+
+        val attribution = result.scannerErrors.filter { it.scanner == "attribution" }
+        assertEquals(listOf("SQLiteException"), attribution.map { it.exception })
+        assertTrue("misses still cleared", misses.get().isEmpty())
+    }
 }

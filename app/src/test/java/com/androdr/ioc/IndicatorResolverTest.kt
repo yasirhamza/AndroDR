@@ -274,4 +274,17 @@ class IndicatorResolverTest {
         assertEquals("refreshCache keeps the row (B2)", setOf("a.com"), resolver.domainCacheKeys())
         assertNull(resolver.cachedDomainIndicator("a.com"))
     }
+
+    @Test
+    fun `the most specific cached live label wins`() = runTest {
+        coEvery { dao.getValuesByType("domain") } returns listOf("a.com", "b.a.com")
+        coEvery { dao.lookup("domain", "a.com") } returns
+            Indicator("domain", "a.com", family = "Parent", source = "s", fetchedAt = 1L)
+        coEvery { dao.lookup("domain", "b.a.com") } returns
+            Indicator("domain", "b.a.com", family = "Child", source = "s", fetchedAt = 1L)
+        resolver.refreshCache()
+        resolver.prefetchDomainIndicators(listOf("x.b.a.com", "a.com"))
+        assertEquals(setOf("a.com", "b.a.com"), resolver.domainCacheKeys())
+        assertEquals("Child", resolver.cachedDomainIndicator("x.b.a.com")!!.family)
+    }
 }

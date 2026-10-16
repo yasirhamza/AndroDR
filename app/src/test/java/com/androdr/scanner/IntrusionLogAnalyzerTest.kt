@@ -250,11 +250,57 @@ class IntrusionLogAnalyzerTest {
         io.mockk.coEvery { resolver.prefetchDomainIndicators(any()) } throws
             android.database.sqlite.SQLiteException("database disk image is malformed")
 
+        // Linked to the import's Job (fix round 2): a failing prefetch must not cancel the import.
+        val importJob = kotlinx.coroutines.Job()
         val result = IntrusionLogAnalyzer(mockk(relaxed = true), e, resolver).analyzeEntries(
             sequenceOf(entry("2026-08-22.txt", day1Dns)), uidResolver = { -1 }, capturedAt = capturedAt,
+            parentJob = importJob,
         )
 
+        assertTrue("a prefetch failure leaves the import's Job active", importJob.isActive)
         assertEquals(listOf(finding), result.findings)
         assertEquals("SQLiteException", result.scannerErrors.single { it.scanner == "attribution" }.exception)
+    }
+
+    /**
+     * B5 fix round 2: cancelling an import must reach the attribution prefetch. The
+     * prefetch used to run under a top-level runBlocking with no link to analyze()'s
+     * Job, so a cancelled import kept doing one DAO lookup per host to the end.
+     */
+    @Test
+    fun `cancelling the import stops the attribution prefetch early`() {
+        val hosts = 200
+        val dao = mockk<com.androdr.data.db.IndicatorDao>()
+        val lookups = java.util.concurrent.atomic.AtomicInteger()
+        val firstLookup = java.util.concurrent.CountDownLatch(1)
+        io.mockk.coEvery { dao.getAllByType(any()) } returns emptyList()
+        io.mockk.coEvery { dao.getValuesByType("domain") } returns (0 until hosts).map { "d$it.example" }
+        io.mockk.coEvery { dao.getValuesByType(neq("domain")) } returns emptyList()
+        io.mockk.coEvery { dao.lookup(any(), any()) } coAnswers {
+            lookups.incrementAndGet(); firstLookup.countDown(); kotlinx.coroutines.delay(20); null
+        }
+        val resolver = com.androdr.ioc.IndicatorResolver(dao, mockk(relaxed = true), mockk(relaxed = true),
+            mockk(relaxed = true), mockk { every { lookup(any()) } returns null })
+        runBlocking { resolver.refreshCache() }
+        val lines = (0 until hosts).map {
+            """{"dns_event":{"event_id":$it,"event_time":${1787400345334L + it},"hostname":"d$it.example"}}"""
+        }
+        val job = kotlinx.coroutines.Job()
+        var outcome: Result<IntrusionLogAnalysisResult>? = null
+        val worker = kotlin.concurrent.thread {
+            outcome = runCatching {
+                IntrusionLogAnalyzer(mockk(relaxed = true), engine, resolver).analyzeEntries(
+                    sequenceOf(entry("2026-08-22.txt", *lines.toTypedArray())),
+                    uidResolver = { -1 }, capturedAt = capturedAt, parentJob = job,
+                )
+            }
+        }
+        assertTrue(firstLookup.await(10, java.util.concurrent.TimeUnit.SECONDS))
+        job.cancel()
+        worker.join(30_000)
+
+        assertTrue("prefetch stopped early: ${lookups.get()} of $hosts lookups", lookups.get() < hosts / 2)
+        assertTrue("cancellation propagates: $outcome",
+            outcome?.exceptionOrNull() is kotlinx.coroutines.CancellationException)
     }
 }
