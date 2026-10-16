@@ -78,8 +78,8 @@ class IndicatorResolver @Inject constructor(
 
     fun isKnownBadPackage(packageName: String): BadPackageInfo? {
         val hit = cache.get()?.lookup(TYPE_PACKAGE, packageName)
-        if (hit != null) return hit.toBadPackageInfo()
-        return bundledPackages.isKnownBadPackage(packageName)
+        if (hit != null && outranksBundle(hit)) return hit.toBadPackageInfo()
+        return bundledPackages.isKnownBadPackage(packageName) ?: hit?.toBadPackageInfo()
     }
 
     /**
@@ -122,15 +122,16 @@ class IndicatorResolver @Inject constructor(
         return null
     }
 
-    fun packageIndicator(packageName: String): Indicator? {
-        cache.get()?.lookup(TYPE_PACKAGE, packageName)?.let { return it }
-        val b = bundledPackages.isKnownBadPackage(packageName) ?: return null
-        return IocSanitizer.sanitize(
-            Indicator(TYPE_PACKAGE, b.packageName, family = b.name, category = b.category,
-                campaignKey = b.campaign, severity = b.severity, description = b.description,
-                source = "bundled", reference = b.reference, fetchedAt = 0L)
-        )
-    }
+    fun packageIndicator(packageName: String): Indicator? =
+        preferred(cache.get()?.lookup(TYPE_PACKAGE, packageName)) {
+            bundledPackages.isKnownBadPackage(packageName)?.let { b ->
+                IocSanitizer.sanitize(
+                    Indicator(TYPE_PACKAGE, b.packageName, family = b.name, category = b.category,
+                        campaignKey = b.campaign, severity = b.severity, description = b.description,
+                        source = "bundled", reference = b.reference, fetchedAt = 0L)
+                )
+            }
+        }
 
     /**
      * Load the stored rows behind domain hits so findings can name the family.
@@ -171,9 +172,11 @@ class IndicatorResolver @Inject constructor(
     }
 
     /**
-     * (matched key, row) for [domain]: the bloom candidate with its stored row, else the
-     * bundled key with its entry. A bloom key whose row is gone and has no bundled
-     * fallback comes back as (key, null). Null when nothing matches.
+     * (matched key, row) for [domain]: the bloom candidate with its stored row when that row
+     * ranks at or above the rules repo, else the bundled key with its entry (the bundle IS
+     * rules-repo content, see [outranksBundle]), else the lower-ranked stored row. A bloom
+     * key whose row is gone and has no bundled fallback comes back as (key, null). Null when
+     * nothing matches.
      */
     private suspend fun resolveDomainMatch(
         domain: String,
@@ -181,10 +184,8 @@ class IndicatorResolver @Inject constructor(
     ): Pair<String, Indicator?>? {
         val bloomKey = isKnownBadDomain(domain)?.value
         val stored = bloomKey?.let { storedRow(it) }
-        return when {
-            stored != null -> bloomKey to stored
-            else -> bundledDomainMatch(domain) ?: bloomKey?.let { it to null }
-        }
+        if (stored != null && outranksBundle(stored)) return bloomKey to stored
+        return bundledDomainMatch(domain) ?: bloomKey?.let { it to stored }
     }
 
     /**
@@ -238,30 +239,32 @@ class IndicatorResolver @Inject constructor(
 
     fun isKnownBadCert(certHash: String): Indicator? {
         val normalized = certHash.lowercase()
-        val hit = cache.get()?.lookup(TYPE_CERT_HASH, normalized)
-        if (hit != null) return hit
-        val bundledHit = bundledCerts.isKnownBadCert(normalized) ?: return null
-        return IocSanitizer.sanitize(Indicator(
-            type = TYPE_CERT_HASH, value = bundledHit.certHash,
-            family = bundledHit.familyName, category = bundledHit.category,
-            campaignKey = bundledHit.campaign, severity = bundledHit.severity,
-            description = bundledHit.description, source = "bundled",
-            reference = bundledHit.reference, fetchedAt = 0L
-        ))
+        return preferred(cache.get()?.lookup(TYPE_CERT_HASH, normalized)) {
+            bundledCerts.isKnownBadCert(normalized)?.let { b ->
+                IocSanitizer.sanitize(Indicator(
+                    type = TYPE_CERT_HASH, value = b.certHash,
+                    family = b.familyName, category = b.category,
+                    campaignKey = b.campaign, severity = b.severity,
+                    description = b.description, source = "bundled",
+                    reference = b.reference, fetchedAt = 0L
+                ))
+            }
+        }
     }
 
     fun isKnownBadApkHash(hash: String): Indicator? {
         val normalized = hash.lowercase()
-        val hit = cache.get()?.lookup(TYPE_APK_HASH, normalized)
-        if (hit != null) return hit
-        val bundledHit = bundledApkHashes.isKnownBadApkHash(normalized) ?: return null
-        return IocSanitizer.sanitize(Indicator(
-            type = TYPE_APK_HASH, value = bundledHit.apkHash,
-            family = bundledHit.familyName, category = bundledHit.category,
-            campaignKey = bundledHit.campaign, severity = bundledHit.severity,
-            description = bundledHit.description, source = "bundled",
-            reference = bundledHit.reference, fetchedAt = 0L
-        ))
+        return preferred(cache.get()?.lookup(TYPE_APK_HASH, normalized)) {
+            bundledApkHashes.isKnownBadApkHash(normalized)?.let { b ->
+                IocSanitizer.sanitize(Indicator(
+                    type = TYPE_APK_HASH, value = b.apkHash,
+                    family = b.familyName, category = b.category,
+                    campaignKey = b.campaign, severity = b.severity,
+                    description = b.description, source = "bundled",
+                    reference = b.reference, fetchedAt = 0L
+                ))
+            }
+        }
     }
 
     suspend fun count(): Int = dao.count()
@@ -278,6 +281,20 @@ class IndicatorResolver @Inject constructor(
         const val TYPE_APK_HASH = "apk_hash"
     }
 }
+
+/**
+ * The bundled lists ARE the rules-repo ioc-data (the highest [SourceRank]) as of the build.
+ * A stored row wins over the bundled entry only when its source ranks at or above the rules
+ * repo (fresher rules-repo data). Otherwise a generic feed row (HaGeZi, ThreatFox, MVT...)
+ * that loaded while the rules-repo ioc-data did not would shadow the bundled entry and drop
+ * its campaign key, so the report said "not detected" beside the hit.
+ */
+private fun outranksBundle(stored: Indicator): Boolean =
+    SourceRank.of(stored.source) >= SourceRank.of(SourceRank.RULES_REPO)
+
+/** [stored] when it [outranksBundle], else the bundled entry, else the lower-ranked [stored]. */
+private inline fun preferred(stored: Indicator?, bundled: () -> Indicator?): Indicator? =
+    if (stored != null && outranksBundle(stored)) stored else bundled() ?: stored
 
 private fun Indicator.toBadPackageInfo() = BadPackageInfo(
     packageName = value, name = family, category = category.ifEmpty { "MALWARE" },

@@ -287,4 +287,74 @@ class IndicatorResolverTest {
         assertEquals(setOf("a.com", "b.a.com"), resolver.domainCacheKeys())
         assertEquals("Child", resolver.cachedDomainIndicator("x.b.a.com")!!.family)
     }
+
+    // ── Final review item 1: the bundle IS rules-repo content (top SourceRank), so a
+    // lower-ranked stored row must not shadow it when the rules-repo ioc-data did not load.
+
+    @Test
+    fun `bundled Graphite domain outranks a HaGeZi row for the same value`() = runTest {
+        val host = "forti.external-muki.com"
+        coEvery { dao.getValuesByType("domain") } returns listOf(host)
+        coEvery { dao.lookup("domain", host) } returns Indicator("domain", host, family = "HaGeZi TIF",
+            source = "hagezi_tif", fetchedAt = 1L)
+        every { bundledDomains.lookup(host) } returns Indicator("domain", host, family = "Graphite (Paragon)",
+            category = "NATION_STATE_SPYWARE", campaignKey = "graphite", source = "bundled", fetchedAt = 0L)
+        resolver.refreshCache()
+        resolver.prefetchDomainIndicators(listOf(host))
+        assertEquals("graphite", resolver.cachedDomainIndicator(host)!!.campaignKey)
+        assertEquals("graphite", resolver.resolveDomainRow(host)!!.campaignKey)
+    }
+
+    @Test
+    fun `a stored rules-repo domain row wins over the bundled entry`() = runTest {
+        val host = "forti.external-muki.com"
+        coEvery { dao.getValuesByType("domain") } returns listOf(host)
+        coEvery { dao.lookup("domain", host) } returns Indicator("domain", host, family = "Graphite (fresh)",
+            campaignKey = "graphite", source = "androdr_public_repo", fetchedAt = 1L)
+        every { bundledDomains.lookup(host) } returns Indicator("domain", host, family = "Graphite (Paragon)",
+            campaignKey = "graphite", source = "bundled", fetchedAt = 0L)
+        resolver.refreshCache()
+        resolver.prefetchDomainIndicators(listOf(host))
+        assertEquals("Graphite (fresh)", resolver.cachedDomainIndicator(host)!!.family)
+    }
+
+    @Test
+    fun `bundled package cert and apk hash entries outrank lower-ranked stored rows`() = runTest {
+        coEvery { dao.getAllByType("package") } returns listOf(Indicator("package", "com.mm.enabler",
+            family = "Generic", source = "stalkerware_indicators", fetchedAt = 1L))
+        coEvery { dao.getAllByType("cert_hash") } returns listOf(Indicator("cert_hash", "cc",
+            family = "Generic", source = "malwarebazaar_certs", fetchedAt = 1L))
+        coEvery { dao.getAllByType("apk_hash") } returns listOf(Indicator("apk_hash", "aa",
+            family = "Generic", source = "mvt_indicators", fetchedAt = 1L))
+        every { bundledPackages.isKnownBadPackage("com.mm.enabler") } returns BadPackageInfo("com.mm.enabler",
+            "Midnight Mimosa", "NATION_STATE_SPYWARE", "CRITICAL", "d", campaign = "midnight-mimosa")
+        every { bundledCerts.isKnownBadCert("cc") } returns
+            CertHashInfo("cc", "Midnight Mimosa", "NATION_STATE_SPYWARE", "HIGH", "d", campaign = "midnight-mimosa")
+        every { bundledApkHashes.isKnownBadApkHash("aa") } returns
+            ApkHashInfo("aa", "Midnight Mimosa", "NATION_STATE_SPYWARE", "HIGH", "d", campaign = "midnight-mimosa")
+        resolver.refreshCache()
+        assertEquals("midnight-mimosa", resolver.packageIndicator("com.mm.enabler")!!.campaignKey)
+        assertEquals("Midnight Mimosa", resolver.isKnownBadPackage("com.mm.enabler")!!.name)
+        assertEquals("midnight-mimosa", resolver.isKnownBadCert("cc")!!.campaignKey)
+        assertEquals("midnight-mimosa", resolver.isKnownBadApkHash("aa")!!.campaignKey)
+    }
+
+    @Test
+    fun `stored rules-repo package cert and apk hash rows win over the bundle`() = runTest {
+        coEvery { dao.getAllByType("package") } returns listOf(Indicator("package", "com.mm.enabler",
+            family = "Fresh", source = "androdr_public_repo", fetchedAt = 1L))
+        coEvery { dao.getAllByType("cert_hash") } returns listOf(Indicator("cert_hash", "cc",
+            family = "Fresh", source = "androdr_public_repo", fetchedAt = 1L))
+        coEvery { dao.getAllByType("apk_hash") } returns listOf(Indicator("apk_hash", "aa",
+            family = "Fresh", source = "androdr_public_repo", fetchedAt = 1L))
+        every { bundledPackages.isKnownBadPackage("com.mm.enabler") } returns
+            BadPackageInfo("com.mm.enabler", "Old", "MALWARE", "HIGH", "d")
+        every { bundledCerts.isKnownBadCert("cc") } returns CertHashInfo("cc", "Old", "MALWARE", "HIGH", "d")
+        every { bundledApkHashes.isKnownBadApkHash("aa") } returns ApkHashInfo("aa", "Old", "MALWARE", "HIGH", "d")
+        resolver.refreshCache()
+        assertEquals("Fresh", resolver.packageIndicator("com.mm.enabler")!!.family)
+        assertEquals("Fresh", resolver.isKnownBadPackage("com.mm.enabler")!!.name)
+        assertEquals("Fresh", resolver.isKnownBadCert("cc")!!.family)
+        assertEquals("Fresh", resolver.isKnownBadApkHash("aa")!!.family)
+    }
 }
