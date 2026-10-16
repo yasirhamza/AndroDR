@@ -47,10 +47,18 @@ class PublicRepoIocFeed @Inject constructor(
                 evicted += gone
             }
             total += fetchAndUpsertPopularApps(now)
-            fetchCampaigns()
             Log.i(TAG, "Public repo IOC feed: $total entries upserted, $evicted evicted")
         } catch (e: Exception) {
             Log.w(TAG, "Public repo IOC feed failed: ${e.message}")
+        }
+
+        // Its own try: a failed indicator or popular-apps step must not skip the vocabulary.
+        try {
+            fetchCampaigns()
+        } catch (c: kotlinx.coroutines.CancellationException) {
+            throw c
+        } catch (e: Exception) {
+            Log.w(TAG, "campaigns.yml update failed: ${e.message}")
         }
 
         UpdateResult(written = total, evicted = evicted)

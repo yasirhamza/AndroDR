@@ -83,7 +83,10 @@ object ReportFormatter {
             val verdicts = campaignVerdicts(
                 scan, campaigns, campaignReferenceTime(scan, intrusionEvents), ruleCategoryById,
             )
-            appendFindingsSections(scan, dnsEvents, appInventory, displayNames, verdicts)
+            appendFindingsSections(
+                scan, dnsEvents, appInventory, displayNames, verdicts,
+                referenceFromLog = scan.source != TelemetrySource.LIVE_SCAN && intrusionEvents.isNotEmpty(),
+            )
 
             // Intentionally inside the includeFindings branch: a capability skip is a
             // caveat ON the findings ("this list is missing these rules"), so it rides
@@ -118,6 +121,7 @@ object ReportFormatter {
         appInventory: List<AppTelemetry>,
         displayNames: Map<String, String>,
         campaignVerdicts: List<CampaignVerdict>,
+        referenceFromLog: Boolean,
     ) {
         val scanSource = scan.source
         // -- Verdict + Summary + Action Guidance ----------------------------------
@@ -156,11 +160,13 @@ object ReportFormatter {
         // same list the summary's campaign lines render from, so the two never disagree.
         if (campaignVerdicts.isNotEmpty()) {
             section("MERCENARY SPYWARE CHECK")
-            appendCampaignRows(campaignVerdicts, scan)
+            appendCampaignRows(campaignVerdicts, scan, referenceFromLog)
         }
 
         val dnsIocRows = dnsIocRows(scan, dnsEvents)
-        if (dnsIocRows.isNotEmpty() && campaignVerdicts.isEmpty()) section("DNS IOC MATCHES")
+        // Always its own heading: generic-feed hits (HaGeZi, ThreatFox) must never read as
+        // rows of the mercenary check above (R7).
+        if (dnsIocRows.isNotEmpty()) section("DNS IOC MATCHES")
         appendDnsIocMatches(dnsIocRows)
 
         // -- App risks ------------------------------------------------------------

@@ -376,6 +376,67 @@ class MercenaryCheckReportTest {
         assertTrue(report.contains("Campaign detections: none"))
     }
 
+    // -- Fix round 1 -------------------------------------------------------------
+
+    @Test
+    fun `import package hit with no observation time is dated and windowed at the log's latest event`() {
+        val logLatest = scanTime - 45 * DAY
+        val report = formatImportReportWith(
+            appRisks = listOf(iocFinding("com.client.appA", "Cellebrite", "", "", campaign = "cellebrite",
+                observedAt = 0L, iocType = "package")),
+            intrusionEvents = listOf(importedEvent(at = logLatest)), campaigns = listOf(campaign("cellebrite")))
+        val date = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).format(java.util.Date(logLatest))
+        assertTrue(report, report.contains("[!!]  Cellebrite: DETECTED -- package com.client.appA (Cellebrite), $date"))
+    }
+
+    @Test
+    fun `import earlier hit without log events does not claim the log's latest event`() {
+        val report = formatImportReportWith(
+            appRisks = listOf(
+                iocFinding("forti.external-muki.com", "Graphite (Paragon)", "", "false", campaign = "graphite",
+                    observedAt = scanTime - 40 * DAY),
+                iocFinding("p.example", "Pegasus", "", "false", campaign = "pegasus", observedAt = scanTime),
+            ),
+            campaigns = listOf(campaign("graphite"), campaign("pegasus")))
+        assertTrue(report, report.contains("Graphite (Paragon): earlier hit only -- "))
+        assertFalse(report, report.contains("the log's latest event"))
+        assertTrue(report, report.contains("(over 30 days before the latest dated hit in this import)"))
+    }
+
+    @Test
+    fun `a hit exactly 30 days old still counts, one millisecond more does not`() {
+        val at30 = formatReportWith(
+            appRisks = listOf(iocFinding("p.example", "Pegasus", "", "false", campaign = "pegasus",
+                observedAt = scanTime - 30 * DAY)),
+            campaigns = listOf(campaign("pegasus")))
+        assertTrue(at30.contains("[!!]  Pegasus: DETECTED -- "))
+        val over = formatReportWith(
+            appRisks = listOf(iocFinding("p.example", "Pegasus", "", "false", campaign = "pegasus",
+                observedAt = scanTime - 30 * DAY - 1)),
+            campaigns = listOf(campaign("pegasus")))
+        assertTrue(over.contains("[--]  Pegasus: earlier hit only -- "))
+    }
+
+    @Test
+    fun `a DETECTED row comes before an alphabetically earlier not-detected row`() {
+        val report = formatReportWith(
+            appRisks = listOf(iocFinding("p.example", "Pegasus", "", "false", campaign = "pegasus")),
+            campaigns = REGISTRY)
+        val detected = report.indexOf("[!!]  Pegasus: DETECTED")
+        val cellebrite = report.indexOf("[OK]  Cellebrite: not detected")
+        assertTrue(detected in 0 until cellebrite)
+    }
+
+    @Test
+    fun `an untriggered finding with a campaign key does not mark the campaign detected`() {
+        val report = formatReportWith(
+            appRisks = listOf(
+                iocFinding("p.example", "Pegasus", "", "false", campaign = "pegasus").copy(triggered = false)),
+            campaigns = listOf(campaign("pegasus")))
+        assertFalse(report.contains("DETECTED"))
+        assertTrue(report.contains("[OK]  Pegasus: not detected"))
+    }
+
     private companion object {
         const val DAY = 86_400_000L
     }

@@ -304,4 +304,18 @@ class PublicRepoIocFeedTest {
         assertTrue("unverified campaigns.yml must not be cached", !cache.exists())
         assertEquals(CampaignRegistry.parseBundled(bundledCampaignsJson), registry.campaigns())
     }
+
+    @Test
+    fun `campaigns yml is still cached when an earlier feed step throws`() = runBlocking {
+        val cache = java.io.File(tmp.root, "campaigns.yml")
+        val registry = CampaignRegistry(cache) { bundledCampaignsJson }
+        val r = FakeRemote(mapOf(
+            "ioc-data/package-names.yml" to "entries:\n  - indicator: com.x.y\n",
+            "ioc-data/campaigns.yml" to campaignsYaml,
+        ))
+        val dao = io.mockk.mockk<com.androdr.data.db.IndicatorDao>(relaxed = true)
+        io.mockk.coEvery { dao.upsertAll(any()) } throws IllegalStateException("db down")
+        PublicRepoIocFeed(dao, io.mockk.mockk(relaxed = true), IocDataManifest(r), registry).update()
+        assertEquals(listOf(Campaign("remoteonly", "Remote Only")), registry.campaigns())
+    }
 }

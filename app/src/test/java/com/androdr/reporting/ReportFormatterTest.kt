@@ -472,8 +472,16 @@ class ReportFormatterTest {
     }
 
     @Test
-    fun `without a campaign section the DNS IOC list has its own heading`() {
-        val report = formatReportWith(listOf(iocFinding("d.example", "Fam", "", "false")))
+    fun `the DNS IOC list has its own heading, never under the mercenary check`() {
+        // A non-empty campaign list, as in production (the registry is never empty): a generic
+        // feed hit must not render under MERCENARY SPYWARE CHECK (R7).
+        val report = formatReportWith(listOf(iocFinding("0--4.com", "HaGeZi TIF", "", "false")),
+            campaigns = listOf(Campaign("pegasus", "Pegasus")))
         assertTrue(report, report.contains("  DNS IOC MATCHES\n"))
+        val mercenary = report.substringAfter("  MERCENARY SPYWARE CHECK\n")
+            .substringAfter("------------------------------------------------------------\n")
+            .substringBefore("------------------------------------------------------------")
+        assertFalse(mercenary, mercenary.contains("HaGeZi"))
+        assertFalse(mercenary, mercenary.contains("DNS IOC matches linked to"))
     }
 }

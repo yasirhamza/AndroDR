@@ -87,7 +87,9 @@ internal fun campaignVerdicts(
         .mapNotNull { it.evidence as? Evidence.IocMatch }
         .filter { it.campaign in known }
         .groupBy({ it.campaign }) { m ->
-            val time = m.observedAt.takeIf { it > 0 } ?: scan.timestamp
+            // No observation time (package/cert/hash hits: present now) -> the reference time,
+            // which is scan.timestamp on a live scan and the log's time on an import.
+            val time = m.observedAt.takeIf { it > 0 } ?: referenceTime
             val family = if (m.family.isBlank()) "" else " (${m.family})"
             CampaignHit(time, "${m.iocType} ${m.matchedIndicator}$family, ${dateFmt.format(Date(time))}")
         }
@@ -112,9 +114,19 @@ internal fun campaignVerdicts(
 }
 
 /** The MERCENARY SPYWARE CHECK rows, then (live scans) the scope note that says what "not detected" covers. */
-internal fun StringBuilder.appendCampaignRows(verdicts: List<CampaignVerdict>, scan: ScanResult) {
+internal fun StringBuilder.appendCampaignRows(
+    verdicts: List<CampaignVerdict>,
+    scan: ScanResult,
+    referenceFromLog: Boolean,
+) {
     val live = scan.source == TelemetrySource.LIVE_SCAN
-    val before = if (live) "this scan" else "the log's latest event"
+    // What the 30-day window was measured from (campaignReferenceTime): on an import without
+    // imported events it is the latest dated hit, so "the log's latest event" would be untrue.
+    val before = when {
+        live -> "this scan"
+        referenceFromLog -> "the log's latest event"
+        else -> "the latest dated hit in this import"
+    }
     verdicts.forEach { v ->
         when (v.state) {
             CampaignVerdict.State.DETECTED -> appendLine("  [!!]  ${v.label}: DETECTED -- ${v.detail}")
