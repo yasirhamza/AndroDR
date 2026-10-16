@@ -1,0 +1,6 @@
+# Detect-only is the default for threat-list domains (domainIocBlockMode = false), so
+# the tunnel logs reason "IOC_detect: ..." and the APP RISKS Blocked line says so.
+# Precondition (Q6-3): the MVT rows must be loaded before the ping, or the tunnel
+# never matches and there is no Blocked line at all.
+Blocked : 2y4nothing.xyz no (blocking is off for threat-list domains)
+!Blocked : 2y4nothing.xyz yes

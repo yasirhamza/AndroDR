@@ -1,1 +1,8 @@
-Predator
+# androdr-049 is a patch-level (device_posture) rule: EXPOSED, never DETECTED (Q9-3).
+# Requires a patch level old enough that the rule's CVEs are unpatched. In a --load run
+# with mercenary_predator_artifacts or mercenary_dns_c2 the Predator row is DETECTED
+# (DETECTED outranks EXPOSED), so the EXPOSED lines can only hold without them.
+[!!]  Predator: EXPOSED --
+~\[!!\]  Predator: EXPOSED -- [0-9]+ CVEs linked to Predator \(unpatched; not evidence of infection\)
+# A CVE rule must never read as DETECTED.
+!~Predator: DETECTED -- .*CVEs linked to

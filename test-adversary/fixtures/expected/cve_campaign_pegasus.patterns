@@ -1,1 +1,9 @@
-Pegasus
+# androdr-048 is a patch-level (device_posture) rule: it says the device is EXPOSED,
+# never that Pegasus is DETECTED (owner decision Q9-3). Requires a patch level old
+# enough that the rule's CVEs are unpatched; a current emulator shows "not detected".
+[!!]  Pegasus: EXPOSED --
+~\[!!\]  Pegasus: EXPOSED -- [0-9]+ CVEs linked to Pegasus \(unpatched; not evidence of infection\)
+~Campaign exposure \(unpatched\): .*Pegasus
+# A CVE rule must never read as DETECTED. Tied to the CVE title so another scenario's
+# real Pegasus hit in the same --load report does not trip it.
+!~Pegasus: DETECTED -- .*CVEs linked to
