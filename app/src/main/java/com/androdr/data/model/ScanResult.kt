@@ -85,6 +85,19 @@ enum class NotEvaluatedReason(val sentinel: String, val heading: String) {
 
     /** No event of the kind the rule needs was recorded, so it had nothing to match (#370). */
     NO_EVENTS_TO_CHECK("NoEventsToCheck", "Nothing of that kind was recorded to check"),
+
+    /** The indicator table was empty at scan start: only the bundled lists were checked. */
+    FEEDS_NOT_LOADED(
+        "FeedsNotLoaded",
+        "Threat-intel feeds not loaded yet -- only the bundled lists were checked",
+    ),
+
+    /** The DNS tunnel was off at scan start. */
+    DNS_MONITOR_OFF(
+        "DnsMonitorOff",
+        "DNS monitoring was off at scan time -- lookups made while it is off are not recorded; " +
+            "the most recent recorded lookups were checked",
+    ),
     ;
 
     companion object {

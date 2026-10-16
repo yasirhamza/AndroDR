@@ -125,7 +125,7 @@ fun Finding.toForensicTimelineEvent(
         iocIndicator = dnsIndicator,
         iocType = dnsIocType,
         iocSource = dnsIocSource,
-        campaignName = campaignTag ?: "",
+        campaignName = iocEvidence?.family?.takeIf { it.isNotBlank() } ?: campaignTag ?: "",
         // For DNS findings, use the matched domain as a linkage key. The
         // Timeline UI can join on correlationId to find the underlying
         // ioc_match row (which has iocIndicator = same domain). This gives

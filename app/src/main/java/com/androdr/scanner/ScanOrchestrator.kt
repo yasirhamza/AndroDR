@@ -18,6 +18,7 @@ import com.androdr.util.reportSafe
 import com.androdr.data.repo.ScanRepository
 import com.androdr.ioc.IndicatorResolver
 import com.androdr.data.model.Indicator
+import com.androdr.network.DnsVpnService
 import com.androdr.sigma.CveEvidenceProvider
 import com.androdr.sigma.EvidenceProvider
 import com.androdr.sigma.IocMatchEvidenceProvider
@@ -298,6 +299,7 @@ class ScanOrchestrator @Inject constructor(
         val scannerErrors: MutableList<ScannerFailure> =
             Collections.synchronizedList(mutableListOf())
         recordRuleCapabilitySkips(scannerErrors)
+        scannerErrors.addAll(scanVisibilityGaps(indicatorResolver.count(), DnsVpnService.isRunning.value))
 
         // Initialize progress for phase 1 — 8 parallel scanners to track.
         _scanProgress.value = ScanProgress.Running(

@@ -26,6 +26,7 @@ internal fun StringBuilder.appendLiveDns(
     dnsEvents: List<DnsEvent>,
     displayNames: Map<String, String>,
     dnsFmt: SimpleDateFormat,
+    iocDomains: Set<String> = emptySet(),
 ) {
     if (dnsEvents.isEmpty()) {
         appendLine("  No DNS events recorded.")
@@ -36,10 +37,20 @@ internal fun StringBuilder.appendLiveDns(
     appendLine()
     dnsEvents.take(MAX_DNS_ROWS).forEach { event ->
         val time = dnsFmt.format(Date(event.timestamp))
-        val state = if (event.reason != null) "[MATCHED]" else "[ALLOWED]"
+        // reason == null means the tunnel never matched it. If the scan itself named this
+        // domain malicious, the tunnel could not have checked it (threat list not yet loaded),
+        // so "[ALLOWED]" would contradict the FINDINGS.
+        val unchecked = event.reason == null && event.domain in iocDomains
+        val state = when {
+            unchecked -> "[NOT CHECKED]"
+            event.reason != null -> "[MATCHED]"
+            else -> "[ALLOWED]"
+        }
         val app = DnsQueryAttribution.label(event.appUid, event.appName, displayNames)
         appendLine("  $state  $time  ${event.domain.padEnd(DOMAIN_COLUMN)}  <- $app")
-        if (event.reason != null) {
+        if (unchecked) {
+            appendLine("           reason: threat list not yet loaded when queried; matched at scan time")
+        } else if (event.reason != null) {
             appendLine("           reason: ${event.reason}")
         }
     }

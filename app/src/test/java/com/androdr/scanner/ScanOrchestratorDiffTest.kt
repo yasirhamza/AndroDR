@@ -1,5 +1,8 @@
 package com.androdr.scanner
 
+import org.junit.After
+import com.androdr.network.DnsVpnService
+import com.androdr.ioc.IndicatorResolver
 import com.androdr.data.model.ScanResult
 import com.androdr.data.model.ScannerFailure
 import com.androdr.data.model.NotEvaluatedReason
@@ -7,6 +10,7 @@ import com.androdr.data.model.UNREGISTERED_IOC_LOOKUP
 import com.androdr.sigma.Finding
 import com.androdr.sigma.FindingCategory
 import com.androdr.sigma.SigmaRuleEngine
+import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
@@ -39,8 +43,15 @@ class ScanOrchestratorDiffTest {
     private lateinit var sigmaRuleEngine: SigmaRuleEngine
     private lateinit var orchestrator: ScanOrchestrator
 
+    private lateinit var indicatorResolver: IndicatorResolver
+
     @Before
     fun setUp() {
+        indicatorResolver = mockk(relaxed = true)
+        // B6: an empty indicator table adds a FeedsNotLoaded entry; these tests are about
+        // other things. DnsVpnService.isRunning (JVM-global, defaults false) likewise adds DnsMonitorOff.
+        coEvery { indicatorResolver.count() } returns 1
+        DnsVpnService.isRunning.value = true
         sigmaRuleEngine = mockk(relaxed = true)
         // Cold start: the engine knows of no skips. Every test below relies on
         // the persisted snapshots alone, so this stub must never matter.
@@ -64,7 +75,7 @@ class ScanOrchestratorDiffTest {
             deviceAdminGrantEmitter = mockk(relaxed = true),
             sigmaRuleEngine = sigmaRuleEngine,
             sigmaCorrelationEngine = mockk(relaxed = true),
-            indicatorResolver = mockk(relaxed = true),
+            indicatorResolver = indicatorResolver,
             sigmaRuleFeed = mockk(relaxed = true),
             knownAppResolver = mockk(relaxed = true),
             oemPrefixResolver = mockk(relaxed = true),
@@ -107,6 +118,11 @@ class ScanOrchestratorDiffTest {
     private fun notEvaluated(reason: NotEvaluatedReason, ruleId: String) = ScannerFailure(
         scanner = "coverage", exception = reason.sentinel, message = "$ruleId", ruleId = ruleId,
     )
+
+    @After
+    fun resetVpnState() {
+        DnsVpnService.isRunning.value = false
+    }
 
     @Test
     fun `a rule whose paths the device refused is not resolved`() {

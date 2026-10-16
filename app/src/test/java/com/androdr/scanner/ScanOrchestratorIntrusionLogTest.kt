@@ -1,5 +1,8 @@
 package com.androdr.scanner
 
+import org.junit.After
+import com.androdr.network.DnsVpnService
+import com.androdr.ioc.IndicatorResolver
 import android.net.Uri
 import com.androdr.data.db.ForensicTimelineEventDao
 import com.androdr.data.model.DnsEvent
@@ -44,8 +47,15 @@ class ScanOrchestratorIntrusionLogTest {
     private lateinit var sigmaRuleEngine: SigmaRuleEngine
     private lateinit var orchestrator: ScanOrchestrator
 
+    private lateinit var indicatorResolver: IndicatorResolver
+
     @Before
     fun setUp() {
+        indicatorResolver = mockk(relaxed = true)
+        // B6: an empty indicator table adds a FeedsNotLoaded entry; these tests are about
+        // other things. DnsVpnService.isRunning (JVM-global, defaults false) likewise adds DnsMonitorOff.
+        coEvery { indicatorResolver.count() } returns 1
+        DnsVpnService.isRunning.value = true
         forensicTimelineEventDao = mockk(relaxed = true)
         scanRepository = mockk(relaxed = true)
         intrusionLogAnalyzer = mockk(relaxed = true)
@@ -69,7 +79,7 @@ class ScanOrchestratorIntrusionLogTest {
             deviceAdminGrantEmitter = mockk(relaxed = true),
             sigmaRuleEngine = sigmaRuleEngine,
             sigmaCorrelationEngine = mockk(relaxed = true),
-            indicatorResolver = mockk(relaxed = true),
+            indicatorResolver = indicatorResolver,
             sigmaRuleFeed = mockk(relaxed = true),
             knownAppResolver = mockk(relaxed = true),
             oemPrefixResolver = mockk(relaxed = true),
@@ -159,6 +169,11 @@ class ScanOrchestratorIntrusionLogTest {
      * the mocked save invokes that lambda (as the real transaction would), so
      * we can still assert the sweep order.
      */
+    @After
+    fun resetVpnState() {
+        DnsVpnService.isRunning.value = false
+    }
+
     @Test
     fun `reimport sweeps every prior import scan id via preDelete inside the save`() = runTest {
         val uri = mockk<Uri>(relaxed = true)

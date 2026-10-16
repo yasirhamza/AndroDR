@@ -314,4 +314,125 @@ class ReportFormatterTest {
         val text = ReportFormatter.formatScanReport(cleanScan, emptyList(), emptyList(), versionName = "test")
         assertFalse(text.contains(ReportFormatter.NOT_CHECKED_SECTION))
     }
+
+    // -- IOC attribution (B6) --------------------------------------------------
+
+    private fun iocFinding(
+        domain: String,
+        family: String,
+        category: String,
+        isBlocked: String,
+        reason: String = "IOC_detect: $domain",
+        campaign: String = "",
+        observedAt: Long = 1711900800000,
+        iocType: String = "domain",
+        ruleId: String = "androdr-003",
+    ) = Finding(
+        ruleId = ruleId, title = "Malicious Domain", level = "critical",
+        category = FindingCategory.APP_RISK,
+        evidence = com.androdr.sigma.Evidence.IocMatch(
+            domain, iocType, "src", family, category, campaign = campaign, observedAt = observedAt,
+        ),
+        matchContext = mapOf(
+            "domain" to domain, "source_package" to "com.android.shell",
+            "is_blocked" to isBlocked, "reason" to reason,
+        ),
+    )
+
+    private fun formatReportWith(appRisks: List<Finding>, scan: ScanResult = buildScan(appRisks = appRisks)) =
+        ReportFormatter.formatScanReport(scan, emptyList(), emptyList(), versionName = "test")
+
+    @Test
+    fun `IOC finding shows its family and block state`() {
+        val f = iocFinding(domain = "forti.external-muki.com", family = "Graphite (Paragon)",
+            category = "NATION_STATE_SPYWARE", isBlocked = "false")
+        val report = formatReportWith(appRisks = listOf(f))
+        assertTrue(
+            report.contains("Matched : forti.external-muki.com -> Graphite (Paragon) (NATION_STATE_SPYWARE)")
+        )
+        assertTrue(report.contains("Blocked : forti.external-muki.com no (blocking is off for threat-list domains)"))
+    }
+
+    @Test
+    fun `blocklist-caught domain is listed with its family`() {
+        val f = iocFinding(domain = "forti.external-muki.com", family = "Graphite (Paragon)",
+            category = "", isBlocked = "true", reason = "blocklist")
+        val report = formatReportWith(appRisks = listOf(f))
+        // The "DNS IOC matches linked to:" row itself, not the Matched line (which also contains the text)
+        assertTrue(report.lines().any { it.trim() == "[!!]  forti.external-muki.com -> Graphite (Paragon)" })
+        assertTrue(report.contains("Blocked : forti.external-muki.com yes"))
+    }
+
+    @Test
+    fun `older stored finding without family renders without a Matched line`() {
+        val f = iocFinding(domain = "x.com", family = "", category = "", isBlocked = "true")
+        assertFalse(formatReportWith(appRisks = listOf(f)).contains("Matched :"))
+    }
+
+    private fun blockedLine(reason: String): String? =
+        formatReportWith(listOf(iocFinding("d.example", "Fam", "", "x", reason = reason)))
+            .lines().firstOrNull { it.contains("Blocked :") }?.trim()
+
+    @Test
+    fun `Blocked line covers every reason`() {
+        assertEquals("Blocked : d.example yes", blockedLine("IOC: d.example"))
+        assertEquals("Blocked : d.example yes", blockedLine("blocklist"))
+        assertEquals("Blocked : d.example no (blocking is off for threat-list domains)",
+            blockedLine("IOC_detect: d.example"))
+        assertEquals("Blocked : d.example no (blocklist blocking is off)", blockedLine("blocklist_detect"))
+        val cold = "Blocked : d.example no (not checked by the tunnel: the threat list was not loaded " +
+            "when queried; matched at scan time)"
+        assertEquals(cold, blockedLine(""))
+    }
+
+    @Test
+    fun `a domain finding from a different rule id still gets the Blocked line`() {
+        val f = iocFinding("d.example", "Fam", "", "true", reason = "IOC: d.example", ruleId = "androdr-999")
+        assertTrue(formatReportWith(listOf(f)).contains("Blocked : d.example yes"))
+    }
+
+    @Test
+    fun `a DDNS finding without IocMatch evidence renders no Blocked line`() {
+        val ddns = Finding(
+            ruleId = "androdr-070", title = "Dynamic DNS", level = "medium",
+            category = FindingCategory.APP_RISK,
+            matchContext = mapOf("domain" to "x.duckdns.org", "source_package" to "com.a.b", "is_blocked" to "false"),
+        )
+        assertFalse(formatReportWith(listOf(ddns)).contains("Blocked :"))
+    }
+
+    @Test
+    fun `an IOC domain list is printed even with no campaign-tagged device flag`() {
+        val f = iocFinding("d.example", "Fam", "", "false")
+        assertTrue(formatReportWith(listOf(f)).contains("DNS IOC matches linked to:"))
+    }
+
+    @Test
+    fun `an imported scan renders no Blocked line`() {
+        val f = iocFinding("d.example", "Fam", "", "false")
+        val scan = buildScan(appRisks = listOf(f))
+            .copy(source = com.androdr.data.model.TelemetrySource.BUGREPORT_IMPORT)
+        val report = formatReportWith(listOf(f), scan)
+        assertTrue(report.contains("Matched : d.example -> Fam"))
+        assertFalse(report.contains("Blocked :"))
+    }
+
+    @Test
+    fun `FeedsNotLoaded prints under not-checked and raises no partial-scan banner`() {
+        val entry = ScannerFailure("threat_intel", NotEvaluatedReason.FEEDS_NOT_LOADED.sentinel,
+            "threat-intel feeds not loaded yet")
+        val scan = buildScan(scannerErrors = listOf(entry))
+        val report = formatReportWith(emptyList(), scan)
+        assertFalse(scan.isPartialScan)
+        assertTrue(report.contains(ReportFormatter.NOT_CHECKED_SECTION))
+        assertTrue(report.contains(NotEvaluatedReason.FEEDS_NOT_LOADED.heading))
+    }
+
+    @Test
+    fun `DnsMonitorOff says earlier lookups were checked`() {
+        val entry = ScannerFailure("dns_monitor", NotEvaluatedReason.DNS_MONITOR_OFF.sentinel, "DNS monitoring was off")
+        val f = iocFinding("d.example", "Fam", "", "false")
+        val report = formatReportWith(listOf(f), buildScan(appRisks = listOf(f), scannerErrors = listOf(entry)))
+        assertTrue(report.contains("the most recent recorded lookups were checked"))
+    }
 }

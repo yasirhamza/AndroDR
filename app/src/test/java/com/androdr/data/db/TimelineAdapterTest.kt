@@ -78,4 +78,32 @@ class TimelineAdapterTest {
         assertEquals(9000L, event.scanResultId)
         assertTrue(event.telemetrySource == TelemetrySource.BUGREPORT_IMPORT)
     }
+
+    private fun iocFindingWith(family: String, tags: List<String> = emptyList()) = Finding(
+        ruleId = "androdr-003", title = "Malicious Domain", level = "critical",
+        category = FindingCategory.APP_RISK, tags = tags,
+        evidence = com.androdr.sigma.Evidence.IocMatch(
+            matchedIndicator = "x.example", iocType = "domain", source = "src", family = family,
+        ),
+        matchContext = mapOf("domain" to "x.example"),
+    )
+
+    private val timelineScan = ScanResult(
+        id = 1L, timestamp = 1L, findings = emptyList(), bugReportFindings = emptyList(),
+        riskySideloadCount = 0, knownMalwareCount = 0,
+    )
+
+    @Test
+    fun `IocMatch family becomes the timeline campaign name`() {
+        val event = iocFindingWith("NoviSpy", tags = listOf("campaign.pegasus"))
+            .toForensicTimelineEvent(timelineScan)
+        assertEquals("NoviSpy", event.campaignName)
+    }
+
+    @Test
+    fun `without a family the campaign tag is the campaign name`() {
+        val event = iocFindingWith("", tags = listOf("campaign.pegasus"))
+            .toForensicTimelineEvent(timelineScan)
+        assertEquals("Pegasus", event.campaignName)
+    }
 }

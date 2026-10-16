@@ -1,5 +1,7 @@
 package com.androdr.scanner
 
+import org.junit.After
+import com.androdr.network.DnsVpnService
 import com.androdr.data.db.DnsEventDao
 import com.androdr.data.db.ForensicTimelineEventDao
 import com.androdr.data.db.ScanResultDao
@@ -105,6 +107,10 @@ class ScanOrchestratorErrorHandlingTest {
         forensicTimelineEventDao = mockk(relaxed = true)
         sigmaRuleEngine = mockk(relaxed = true)
         indicatorResolver = mockk(relaxed = true)
+        // B6: an empty indicator table adds a FeedsNotLoaded entry; these tests are about
+        // other things. DnsVpnService.isRunning (JVM-global, defaults false) likewise adds DnsMonitorOff.
+        coEvery { indicatorResolver.count() } returns 1
+        DnsVpnService.isRunning.value = true
         sigmaRuleFeed = mockk(relaxed = true)
         knownAppResolver = mockk(relaxed = true)
         oemPrefixResolver = mockk(relaxed = true)
@@ -163,6 +169,11 @@ class ScanOrchestratorErrorHandlingTest {
             brandImpersonationResolver = mockk(relaxed = true),
             context = mockk(relaxed = true)
         )
+    }
+
+    @After
+    fun resetVpnState() {
+        DnsVpnService.isRunning.value = false
     }
 
     @Test
@@ -532,5 +543,45 @@ class ScanOrchestratorErrorHandlingTest {
         val attribution = result.scannerErrors.filter { it.scanner == "attribution" }
         assertEquals(listOf("SQLiteException"), attribution.map { it.exception })
         assertTrue("misses still cleared", misses.get().isEmpty())
+    }
+
+    @Test
+    fun `an empty indicator table records a FeedsNotLoaded entry that is not a failure`() = runTest {
+        coEvery { indicatorResolver.count() } returns 0
+
+        val result = orchestrator.runFullScan()
+
+        val entry = result.scannerErrors.single { it.scanner == "threat_intel" }
+        assertEquals(NotEvaluatedReason.FEEDS_NOT_LOADED.sentinel, entry.exception)
+        assertEquals(0, result.realFailureCount)
+    }
+
+    @Test
+    fun `a populated indicator table records no FeedsNotLoaded entry`() = runTest {
+        coEvery { indicatorResolver.count() } returns 5
+
+        val result = orchestrator.runFullScan()
+
+        assertTrue(result.scannerErrors.none { it.scanner == "threat_intel" })
+    }
+
+    @Test
+    fun `DNS monitor off records a DnsMonitorOff entry that is not a failure`() = runTest {
+        DnsVpnService.isRunning.value = false
+
+        val result = orchestrator.runFullScan()
+
+        val entry = result.scannerErrors.single { it.scanner == "dns_monitor" }
+        assertEquals(NotEvaluatedReason.DNS_MONITOR_OFF.sentinel, entry.exception)
+        assertEquals(0, result.realFailureCount)
+    }
+
+    @Test
+    fun `DNS monitor on records no DnsMonitorOff entry`() = runTest {
+        DnsVpnService.isRunning.value = true
+
+        val result = orchestrator.runFullScan()
+
+        assertTrue(result.scannerErrors.none { it.scanner == "dns_monitor" })
     }
 }

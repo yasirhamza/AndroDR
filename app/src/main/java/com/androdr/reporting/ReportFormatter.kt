@@ -13,6 +13,7 @@ import com.androdr.data.model.ReceiverTelemetry
 import com.androdr.data.model.ScanResult
 import com.androdr.data.model.NotEvaluatedReason
 import com.androdr.data.model.TelemetrySource
+import com.androdr.sigma.Evidence
 import com.androdr.sigma.Finding
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -76,7 +77,7 @@ object ReportFormatter {
             appendLine("  OVERALL RISK: $reportedRisk")
             appendLine()
             section("FINDINGS SECTION")
-            appendFindingsSections(scan, dnsEvents, appInventory, displayNames)
+            appendFindingsSections(scan, dnsEvents, appInventory, displayNames, scan.source)
 
             // Intentionally inside the includeFindings branch: a capability skip is a
             // caveat ON the findings ("this list is missing these rules"), so it rides
@@ -90,7 +91,7 @@ object ReportFormatter {
                 dnsEvents, logLines, appInventory, displayNames,
                 deviceTelemetry, processTelemetry, fileTelemetry,
                 accessibilityTelemetry, receiverTelemetry, appOpsTelemetry,
-                intrusionEvents, scan.source
+                intrusionEvents, scan.source, iocDomainsOf(scan)
             )
         }
 
@@ -109,7 +110,8 @@ object ReportFormatter {
         scan: ScanResult,
         dnsEvents: List<DnsEvent>,
         appInventory: List<AppTelemetry>,
-        displayNames: Map<String, String>
+        displayNames: Map<String, String>,
+        scanSource: TelemetrySource,
     ) {
         // -- Verdict + Summary + Action Guidance ----------------------------------
         appendVerdict(scan, dnsEvents, appInventory)
@@ -158,22 +160,10 @@ object ReportFormatter {
                 appendLine("  [!!]  ${campaignLabel(finding)}: DETECTED -- ${finding.title}")
             }
 
-            // DNS-based campaign hits from IOC domain matches
-            val dnsCampaigns = dnsEvents
-                .mapNotNull { it.reason }
-                .filter { it.startsWith("IOC:") || it.startsWith("IOC_detect:") }
-                .map { it.removePrefix("IOC:").removePrefix("IOC_detect:").trim() }
-                .filter { it.isNotEmpty() }
-                .distinct()
-            if (dnsCampaigns.isNotEmpty()) {
-                appendLine()
-                appendLine("  DNS IOC matches linked to:")
-                dnsCampaigns.forEach { campaign ->
-                    appendLine("  [!!]  $campaign (domain indicator)")
-                }
-            }
             appendLine()
         }
+
+        appendDnsIocMatches(scan, dnsEvents)
 
         // -- App risks ------------------------------------------------------------
         section("APP RISKS")
@@ -194,7 +184,7 @@ object ReportFormatter {
             byPackage.entries
                 .sortedByDescending { (_, findings) -> findings.maxOf { severityOrdinal(it.level) } }
                 .forEach { (pkg, findings) ->
-                    appendGroupedAppFindings(pkg, findings, displayNames)
+                    appendGroupedAppFindings(pkg, findings, displayNames, scanSource)
                 }
         }
 
@@ -219,6 +209,7 @@ object ReportFormatter {
         appOpsTelemetry: List<AppOpsTelemetry> = emptyList(),
         intrusionEvents: List<ForensicTimelineEvent> = emptyList(),
         scanSource: TelemetrySource = TelemetrySource.LIVE_SCAN,
+        iocDomains: Set<String> = emptySet(),
     ) {
         val dnsFmt = SimpleDateFormat("HH:mm:ss", Locale.US)
 
@@ -228,7 +219,7 @@ object ReportFormatter {
         // never the phone's unrelated tunnel history under an import's header (#375).
         section("DNS ACTIVITY")
         if (scanSource == TelemetrySource.LIVE_SCAN) {
-            appendLiveDns(dnsEvents, displayNames, dnsFmt)
+            appendLiveDns(dnsEvents, displayNames, dnsFmt, iocDomains)
         } else {
             appendImportedDns(intrusionEvents, displayNames, dnsFmt)
         }
@@ -582,7 +573,8 @@ object ReportFormatter {
     private fun StringBuilder.appendGroupedAppFindings(
         pkg: String,
         findings: List<Finding>,
-        displayNames: Map<String, String>
+        displayNames: Map<String, String>,
+        scanSource: TelemetrySource,
     ) {
         val highest = findings.maxByOrNull { severityOrdinal(it.level) } ?: return
         val risk = highest.level.uppercase().padEnd(8)
@@ -613,6 +605,19 @@ object ReportFormatter {
         }
         val reasons = findings.map { it.title }.distinct()
         appendLine("     Reasons : ${reasons.joinToString("; ")}")
+        findings.mapNotNull { it.evidence as? Evidence.IocMatch }.filter { it.family.isNotBlank() }
+            .distinctBy { it.matchedIndicator }.forEach { appendLine("     Matched : ${iocMatchLabel(it)}") }
+        if (scanSource == TelemetrySource.LIVE_SCAN) { // imports: AndroDR was never in the path
+            // Only IOC-lookup domain findings: other DNS rules (e.g. androdr-070 DDNS) also carry
+            // is_blocked in matchContext but say nothing about threat-list blocking. Keyed on the
+            // evidence, not a rule id, so a future rules-repo IOC domain rule gets the line too.
+            findings.filter {
+                (it.evidence as? Evidence.IocMatch)?.iocType == "domain" && it.matchContext.containsKey("domain")
+            }.distinctBy { it.matchContext["domain"] }.forEach { f ->
+                val state = blockedText(f.matchContext["reason"]) ?: return@forEach
+                appendLine("     Blocked : ${f.matchContext["domain"]} $state")
+            }
+        }
         val mitreTechniques = findings.flatMap { it.tags }
             .filter { it.startsWith("attack.t") }
             .map { it.removePrefix("attack.").uppercase() }
