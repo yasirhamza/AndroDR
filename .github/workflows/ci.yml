@@ -67,6 +67,12 @@ jobs:
               # Without this the directory matched no bucket, so a PR
               # touching only the harness merged on a vacuous green.
               - 'test-adversary/**'
+              # Inputs of test-adversary/test_run_sh_seed.py besides run.sh: a PR
+              # that changes only the Room schema or the category enum must still
+              # run the gate that pins run.sh's seeding SQL and cache-refresh wait to them.
+              - 'app/schemas/**'
+              - 'app/src/main/java/com/androdr/ioc/IocSanitizer.kt'
+              - 'app/src/main/java/com/androdr/ioc/IndicatorResolver.kt'
             code:
               # Kotlin / Java sources across all source sets
               - 'app/src/**/*.kt'

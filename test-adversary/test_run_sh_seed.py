@@ -1,11 +1,17 @@
-"""Pins run.sh's IOC-seeding SQL to the app's Room schema.
+"""Pins run.sh's IOC seeding to the app code it depends on.
 
 Schema 19 renamed the `indicators` columns (name/campaign -> family/category/
 campaignKey/reference) and an earlier migration dropped `cert_hash_ioc_entries`.
 run.sh's INSERTs still used the old layout, and their errors went to /dev/null, so
 mercenary_cert_hash seeded nothing and failed on the device for setup reasons that
 no CI check could see. These tests read the INSERTs out of run.sh and check them
-against the exported schema JSON, so the next schema change fails here instead.
+against the exported Room schema JSON and IocSanitizer's category enum, and check
+that the cache-refresh line run.sh waits for is the one IndicatorResolver logs.
+
+CI: the `python-pipeline` job runs this file. Its path filter (`python` in
+.github/workflows/ci.yml) includes app/schemas/**, IocSanitizer.kt and
+IndicatorResolver.kt, so a PR that changes only one of those still runs it
+(test_ci_path_filter_covers_every_input pins that).
 """
 
 import json
@@ -18,6 +24,8 @@ HERE = Path(__file__).parent
 REPO = HERE.parent
 RUN_SH = HERE / "run.sh"
 SCHEMA_DIR = REPO / "app" / "schemas" / "com.androdr.data.db.AppDatabase"
+RESOLVER = REPO / "app" / "src" / "main" / "java" / "com" / "androdr" / "ioc" / "IndicatorResolver.kt"
+CI_YML = REPO / ".github" / "workflows" / "ci.yml"
 SANITIZER = REPO / "app" / "src" / "main" / "java" / "com" / "androdr" / "ioc" / "IocSanitizer.kt"
 
 INSERT_RE = re.compile(r"INSERT\s+OR\s+REPLACE\s+INTO\s+(\w+)\s*\(([^)]*)\)\s*VALUES\s*\(")
@@ -115,3 +123,39 @@ def test_the_check_rejects_the_pre_19_inserts(old, expected):
     """The two INSERTs run.sh carried before this fix: both must fail the check."""
     problems = check(old, latest_schema())
     assert any(expected in p for p in problems), problems
+
+
+def shell_var(name):
+    m = re.search(rf'^{name}="([^"]*)"', RUN_SH.read_text(), re.MULTILINE)
+    assert m, f"{name} not set in run.sh"
+    return m.group(1)
+
+
+def test_cache_refresh_wait_matches_indicator_resolver():
+    """run.sh waits for refreshCache()'s own log line, under IndicatorResolver's tag.
+
+    The receiver's "Update complete" is also logged when IndicatorUpdater.update()
+    skips because another update holds its lock, without refreshing the cache.
+    """
+    src = RESOLVER.read_text()
+    tag = re.search(r'TAG\s*=\s*"([^"]+)"', src).group(1)
+    assert shell_var("CACHE_REFRESH_TAG") == tag
+    line = shell_var("CACHE_REFRESH_LINE")
+    refresh = src[src.index("suspend fun refreshCache"):]
+    refresh = refresh[: refresh.index("\n    }\n")]
+    assert f'"{line}' in refresh, f"{line!r} is not logged by refreshCache()"
+    body = RUN_SH.read_text().split("seed_cert_hash()", 1)[1].split("\n}\n", 1)[0]
+    code = [ln for ln in body.splitlines() if not ln.lstrip().startswith("#")]
+    assert not any("Update complete" in ln for ln in code)
+
+
+def test_ci_path_filter_covers_every_input():
+    """The seed gate must run when any file it reads changes, not only run.sh."""
+    import yaml
+    jobs = yaml.safe_load(CI_YML.read_text())["jobs"]
+    filters = yaml.safe_load(jobs["changes"]["steps"][1]["with"]["filters"])
+    python = filters["python"]
+    assert "python" in jobs["python-pipeline"]["if"]
+    for path in ("test-adversary/**", "app/schemas/**",
+                 str(SANITIZER.relative_to(REPO)), str(RESOLVER.relative_to(REPO))):
+        assert path in python, f"{path} missing from the python path filter"

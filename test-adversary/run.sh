@@ -245,6 +245,9 @@ sideload_install() {
 # errors went to /dev/null and the scenario simply never detected anything.
 SEED_DB="/data/data/com.androdr.debug/databases/androdr.db"
 SEED_UPDATE_TIMEOUT=300
+# Logged only by IndicatorResolver.refreshCache(); see seed_cert_hash.
+CACHE_REFRESH_TAG="IndicatorResolver"
+CACHE_REFRESH_LINE="Indicator cache: "
 
 seed_cert_hash() {
     local apk="$1" cert_hash n before after waited
@@ -267,15 +270,20 @@ seed_cert_hash() {
     # IndicatorResolver answers cert lookups from an in-memory cache built at app start
     # and after a feed update, never from Room directly. A threat-DB update ends in
     # refreshCache() and, unlike a force-stop, leaves the VPN running for DNS scenarios.
-    before=$($ADB logcat -d -s ScanBroadcastReceiver:I </dev/null 2>/dev/null | grep -c "Update complete" || true)
+    # Wait for refreshCache()'s own line (IndicatorResolver "Indicator cache: ..."), not
+    # the receiver's "Update complete": when another update holds IndicatorUpdater's
+    # lock, update() returns without refreshing and the receiver still logs that. Any
+    # refresh logged after the INSERT above has read the seeded row, including the
+    # one that ends a concurrent update. Pinned by test_run_sh_seed.py.
+    before=$($ADB logcat -d -s "$CACHE_REFRESH_TAG:I" </dev/null 2>/dev/null | grep -c "$CACHE_REFRESH_LINE" || true)
     $ADB shell am broadcast -a com.androdr.ACTION_UPDATE -n com.androdr.debug/com.androdr.debug.ScanBroadcastReceiver </dev/null >/dev/null 2>&1
     waited=0
     while [ $waited -lt $SEED_UPDATE_TIMEOUT ]; do
-        after=$($ADB logcat -d -s ScanBroadcastReceiver:I </dev/null 2>/dev/null | grep -c "Update complete" || true)
+        after=$($ADB logcat -d -s "$CACHE_REFRESH_TAG:I" </dev/null 2>/dev/null | grep -c "$CACHE_REFRESH_LINE" || true)
         [ "${after:-0}" -gt "${before:-0}" ] && return 0
         sleep 3; waited=$((waited + 3))
     done
-    echo "  indicator cache not reloaded: no 'Update complete' within ${SEED_UPDATE_TIMEOUT}s"
+    echo "  indicator cache not reloaded: no '$CACHE_REFRESH_TAG: $CACHE_REFRESH_LINE' line within ${SEED_UPDATE_TIMEOUT}s"
     return 1
 }
 
