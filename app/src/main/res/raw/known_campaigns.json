@@ -1,0 +1,44 @@
+[
+  {
+    "key": "cellebrite",
+    "label": "Cellebrite",
+    "aliases": []
+  },
+  {
+    "key": "graphite",
+    "label": "Graphite (Paragon)",
+    "aliases": [
+      "paragon"
+    ]
+  },
+  {
+    "key": "landfall",
+    "label": "LANDFALL",
+    "aliases": []
+  },
+  {
+    "key": "massistant",
+    "label": "Massistant",
+    "aliases": []
+  },
+  {
+    "key": "midnight-mimosa",
+    "label": "Midnight Mimosa",
+    "aliases": []
+  },
+  {
+    "key": "pegasus",
+    "label": "Pegasus",
+    "aliases": [
+      "nso"
+    ]
+  },
+  {
+    "key": "predator",
+    "label": "Predator",
+    "aliases": [
+      "cytrox",
+      "intellexa"
+    ]
+  }
+]

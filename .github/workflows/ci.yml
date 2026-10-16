@@ -35,6 +35,7 @@ jobs:
       rules: ${{ steps.filter.outputs.rules }}
       python: ${{ steps.filter.outputs.python }}
       deps: ${{ steps.filter.outputs.deps }}
+      bundle: ${{ steps.filter.outputs.bundle }}
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
       - uses: dorny/paths-filter@d1c1ffe0248fe513906c8e24db8ea791d46f8590 # v3.0.3
@@ -50,6 +51,13 @@ jobs:
               - '.github/workflows/ci.yml'
               - '.github/dependency-review-config.yml'
               - 'buildSrc/**'
+            bundle:
+              - 'app/src/main/res/raw/known_bad_*.json'
+              - 'app/src/main/res/raw/known_campaigns.json'
+              - 'third-party/android-sigma-rules'
+              - 'scripts/merge-ioc-data.py'
+              - 'scripts/test_merge_ioc_data.py'
+              - 'scripts/requirements-ci.txt'
             rules:
               - 'app/src/main/res/raw/sigma_*.yml'
               - 'app/src/main/res/raw/known_oem_prefixes.yml'
@@ -393,6 +401,25 @@ jobs:
           path: app/build/reports/androidTests/connected/
           retention-days: 14
           if-no-files-found: warn
+  bundle-provenance:
+    runs-on: ubuntu-latest
+    needs: changes
+    if: ${{ needs.changes.outputs.bundle == 'true' }}
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          submodules: true
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: '3.12'
+      # Exact versions with hashes, transitive deps included (supply-chain pinning; round 6, S6-8).
+      - run: python3 -m pip install --quiet --require-hashes -r scripts/requirements-ci.txt
+      - name: Bundled IOC lists are exactly what ioc-data generates
+        run: python3 scripts/merge-ioc-data.py --check
+      - name: Merge script tests
+        run: python3 -m pytest scripts/test_merge_ioc_data.py -q
   ci-success:
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -410,6 +437,7 @@ jobs:
       - submodule-check
       - tracked-path-denylist
       - python-pipeline
+      - bundle-provenance
       - dependency-submission
       - dependency-review
     steps:
@@ -450,6 +478,7 @@ jobs:
             echo "needs.submodule-check.result:  ${{ needs.submodule-check.result }}" >&2
             echo "needs.tracked-path-denylist.result: ${{ needs.tracked-path-denylist.result }}" >&2
             echo "needs.python-pipeline.result:  ${{ needs.python-pipeline.result }}" >&2
+            echo "needs.bundle-provenance.result: ${{ needs.bundle-provenance.result }}" >&2
             echo "needs.dependency-submission.result: ${{ needs.dependency-submission.result }}" >&2
             echo "needs.dependency-review.result:     ${{ needs.dependency-review.result }}" >&2
             exit 1

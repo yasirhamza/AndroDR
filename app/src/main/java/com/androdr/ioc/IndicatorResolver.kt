@@ -113,7 +113,8 @@ class IndicatorResolver @Inject constructor(
         val b = bundledPackages.isKnownBadPackage(packageName) ?: return null
         return IocSanitizer.sanitize(
             Indicator(TYPE_PACKAGE, b.packageName, family = b.name, category = b.category,
-                severity = b.severity, description = b.description, source = "bundled", fetchedAt = 0L)
+                campaignKey = b.campaign, severity = b.severity, description = b.description,
+                source = "bundled", reference = b.reference, fetchedAt = 0L)
         )
     }
 
@@ -142,8 +143,11 @@ class IndicatorResolver @Inject constructor(
     /**
      * Cold start: before the first feed sync the bloom index is empty, so a bundled
      * domain would never match androdr-003. Fall back to the bundled list — an
-     * in-memory HashMap, safe on the VPN packet thread (#71). Detection only; what
-     * the VPN blocks is still BlocklistManager's blockedDomains() set.
+     * in-memory HashMap, safe on the VPN packet thread (#71) once loaded. The first
+     * bundled lookup of the process reads the raw resource (one-off; on the VPN path
+     * BlocklistManager.isBlocked(), which shares the same BundledDomainDatabase, runs
+     * first for every packet and pays that cost). Detection only; what the VPN blocks
+     * is still BlocklistManager's blockedDomains() set.
      */
     fun isKnownBadDomainWithBundle(domain: String): Indicator? =
         isKnownBadDomain(domain) ?: bundledDomainWalk(domain)
@@ -167,8 +171,9 @@ class IndicatorResolver @Inject constructor(
         return IocSanitizer.sanitize(Indicator(
             type = TYPE_CERT_HASH, value = bundledHit.certHash,
             family = bundledHit.familyName, category = bundledHit.category,
-            severity = bundledHit.severity, description = bundledHit.description,
-            source = "bundled", fetchedAt = 0L
+            campaignKey = bundledHit.campaign, severity = bundledHit.severity,
+            description = bundledHit.description, source = "bundled",
+            reference = bundledHit.reference, fetchedAt = 0L
         ))
     }
 
@@ -180,8 +185,9 @@ class IndicatorResolver @Inject constructor(
         return IocSanitizer.sanitize(Indicator(
             type = TYPE_APK_HASH, value = bundledHit.apkHash,
             family = bundledHit.familyName, category = bundledHit.category,
-            severity = bundledHit.severity, description = bundledHit.description,
-            source = "bundled", fetchedAt = 0L
+            campaignKey = bundledHit.campaign, severity = bundledHit.severity,
+            description = bundledHit.description, source = "bundled",
+            reference = bundledHit.reference, fetchedAt = 0L
         ))
     }
 
