@@ -194,7 +194,9 @@ class IndicatorResolverTest {
         coEvery { dao.getAllByType("package") } returns listOf(Indicator("package", "com.serv.services",
             family = "NoviSpy", category = "NATION_STATE_SPYWARE", source = "androdr_public_repo", fetchedAt = 1L))
         resolver.refreshCache()
-        assertEquals("NoviSpy", resolver.packageIndicator("com.serv.services")!!.family)
+        val got = resolver.packageIndicator("com.serv.services")!!
+        assertEquals("NoviSpy", got.family)
+        assertEquals("androdr_public_repo", got.source)
     }
 
     @Test
@@ -207,4 +209,25 @@ class IndicatorResolverTest {
         assertEquals("", resolver.isKnownBadDomainWithBundle("bad.example")!!.category)
     }
 
+
+    @Test
+    fun `bundled cert and apk hash hits are sanitised`() {
+        every { bundledApkHashes.isKnownBadApkHash("aa") } returns
+            ApkHashInfo("aa", "Fam", "BANKER", "HIGH", "d")
+        every { bundledCerts.isKnownBadCert("bb") } returns
+            CertHashInfo("bb", "Fam", "RAT", "HIGH", "d")
+        assertEquals("", resolver.isKnownBadApkHash("aa")!!.category)
+        assertEquals("", resolver.isKnownBadCert("bb")!!.category)
+    }
+
+    @Test
+    fun `refreshCache leaves prefetched domain rows intact`() = runTest {
+        coEvery { dao.getValuesByType("domain") } returns listOf("a.com")
+        coEvery { dao.lookup("domain", "a.com") } returns
+            Indicator("domain", "a.com", family = "A", source = "s", fetchedAt = 1L)
+        resolver.refreshCache()
+        resolver.prefetchDomainIndicators(listOf("a.com"))
+        resolver.refreshCache()
+        assertEquals("A", resolver.cachedDomainIndicator("a.com")!!.family)
+    }
 }
