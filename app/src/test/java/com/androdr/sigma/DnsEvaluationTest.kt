@@ -20,6 +20,8 @@ class DnsEvaluationTest {
         assertEquals("com.vvt.android.syncmanager", fields["source_package"])
         assertEquals(10042, fields["app_uid"])
         assertEquals(false, fields["is_blocked"])
+        assertTrue("timestamp must be exposed (dns_monitor taxonomy field)", fields.containsKey("timestamp"))
+        assertEquals(0L, fields["timestamp"])
     }
 
     @Test

@@ -22,6 +22,7 @@ data class DnsEvent(
     val reason: String?
 ) {
     fun toFieldMap(): Map<String, Any?> = mapOf(
+        "timestamp" to timestamp,
         "domain" to domain,
         "app_uid" to appUid,
         "source_package" to appName,
