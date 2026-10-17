@@ -4,6 +4,10 @@ import com.androdr.data.model.NotEvaluatedReason
 import com.androdr.data.model.ScannerFailure
 import com.androdr.ioc.FeedCoverage
 
+/** [ScannerFailure.missingSources] values for CAMPAIGN_SOURCES_NOT_LOADED (#394). */
+internal const val MISSING_SOURCE_RULES_REPO = "rules_repo"
+internal const val MISSING_SOURCE_MVT = "mvt"
+
 /**
  * Sentinel entries for gaps in what a scan could see: no threat-intel feed rows yet (offline
  * first run, after the v19 table reset: FEEDS_NOT_LOADED), rows present but a campaign-key
@@ -33,7 +37,11 @@ internal fun scanVisibilityGaps(coverage: FeedCoverage, dnsMonitorRunning: Boole
                 ScannerFailure(
                     scanner = "threat_intel",
                     exception = NotEvaluatedReason.CAMPAIGN_SOURCES_NOT_LOADED.sentinel,
-                    message = missing.joinToString("; ")
+                    message = missing.joinToString("; "),
+                    missingSources = listOfNotNull(
+                        if (coverage.rulesRepoLoaded) null else MISSING_SOURCE_RULES_REPO,
+                        if (coverage.mvtLoaded) null else MISSING_SOURCE_MVT,
+                    ),
                 )
             )
         }

@@ -50,7 +50,14 @@ data class ScannerFailure(
      * wording can change (or be translated) without a data migration or old rows
      * rendering in the old words.
      */
-    val missingEvidence: List<String> = emptyList()
+    val missingEvidence: List<String> = emptyList(),
+    /**
+     * For [NotEvaluatedReason.CAMPAIGN_SOURCES_NOT_LOADED] only: which sources did not load
+     * ("rules_repo", "mvt"), so the mercenary check can tell a missing MVT list (domains only)
+     * from a missing rules-repo list (domains and packages) without parsing [message] (#394).
+     * Empty on rows saved before this field existed: readers must then assume both.
+     */
+    val missingSources: List<String> = emptyList(),
 )
 
 /**
