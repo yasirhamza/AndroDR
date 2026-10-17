@@ -11,6 +11,7 @@ import com.androdr.ioc.CampaignRegistry
 import com.androdr.data.model.ScanResult
 import com.androdr.reporting.ReportFormatter
 import com.androdr.sigma.Evidence
+import com.androdr.sigma.IocMatchEvidenceProvider
 import com.androdr.sigma.SigmaRuleEvaluator
 import com.androdr.sigma.SigmaRuleParser
 import io.mockk.every
@@ -128,5 +129,31 @@ class IocEvidenceRegistrationTest {
         val row = ScanOrchestrator.iocRow(resolver, "domain_ioc_db", host)!!
         assertEquals("Graphite (fresh)", row.family)
         assertEquals("androdr_public_repo", row.source)
+    }
+
+    private fun bundledRule(name: String) = SigmaRuleParser.parse(File(listOf(File("app/src/main/res/raw"),
+        File("src/main/res/raw")).first { it.isDirectory }, name).readText())!!
+
+    /** Rules task A6: an APK-hash hit names the matched family, like package/cert/domain hits do. */
+    @Test
+    fun `androdr-004 apk hash hit names its family`() {
+        val rule004 = bundledRule("sigma_androdr_004_apk_hash_ioc.yml")
+        assertEquals("ioc_match", rule004.display.evidenceType)
+        val hash = "a".repeat(64)
+        val hashRow = Indicator("apk_hash", hash, family = "Anubis", category = "MALWARE",
+            source = "androdr_public_repo", fetchedAt = 1L)
+        val provider = IocMatchEvidenceProvider { db, v -> if (db == "apk_hash_ioc_db" && v == hash) hashRow else null }
+        val ev = provider.provide(rule004, mapOf("apk_hash" to hash)).single().evidence as Evidence.IocMatch
+        assertEquals("Anubis", ev.family)
+    }
+
+    /**
+     * Rules task A6: androdr-003 fires on every match, blocked or not, so its text must not claim the
+     * connection was blocked; the app renders a separate Blocked line (Plan B).
+     */
+    @Test
+    fun `androdr-003 remediation never claims the connection was blocked`() {
+        val text = rule003.remediation.joinToString(" ")
+        assertFalse(text, text.contains("blocked", ignoreCase = true))
     }
 }
