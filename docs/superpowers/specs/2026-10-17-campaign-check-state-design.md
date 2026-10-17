@@ -216,3 +216,15 @@ These override the sections above where they disagree.
 4. **MVT derivation** credits the service of the `ioc_match` rule that uses `domain_ioc_db` (today `dns_monitor`), rather than a hard-coded `dns_monitor`.
 5. **Scope note** prints on live scans only, and only when a NOT_DETECTED row has `coverage == null`.
 6. **`missingSources`.** `ScannerFailure` gains `missingSources: List<String> = emptyList()`, which `ScanVisibilityGaps` sets to `rules_repo` and/or `mvt` on `CAMPAIGN_SOURCES_NOT_LOADED`. A missing MVT list marks only `dns_monitor` BUILT_IN_LISTS_ONLY; a missing rules-repo list marks `dns_monitor` and `app_scanner`. Empty (rows saved earlier) is read as both. This closes the per-service residual for new scans. `missingEvidence` is not reused, because the report renders it as "needs X, none recorded in this scan".
+
+## Amendments from execution review (2026-10-17, controller rulings; owner skipped the plan gate)
+
+7. **Skipped rules count against their campaigns.** `campaignCoverage` takes `rules: Map<String, RuleScope(service, campaigns, carriesIocCampaign)>`, built by `ReportInputs.ruleScopes()` from the *enabled* loaded rules. A `MISSING_CAPABILITY` entry whose rule covers the service and the campaign gives `PARTLY_SKIPPED` ("only partly checked (some of its rules could not run on this app version)" / "Update the app."). `UNREADABLE_PATHS` matching works the same way. An entry naming a rule this build never loaded counts for no campaign; it stays in the global count line.
+8. **Failed DNS attribution:** a real `attribution` failure makes `dns_monitor` BLIND/`ATTRIBUTION_FAILED` ("checked, but hits could not be matched to campaigns (that step failed on this scan)").
+9. **Unknown feed state:** a real `visibility_gaps` failure makes the list services `LISTS_UNKNOWN` ("checked, but it is not known whether the threat lists had loaded" / "Scan again in a few minutes.").
+10. **A loaded detector is required:** a service counts as CHECKED only if some enabled rule covers it for this campaign (tagged with it, or an `ioc_match` lookup rule). Otherwise `NO_DETECTOR` ("not checked (the rule that detects it was not loaded)" / "Scan again later; if it persists, update the app."). An empty or broken scope wiring therefore fails closed.
+11. **Invalid `detected_by` values** become `unknown` and render as UNKNOWN_SERVICE (fail closed). JSON non-strings are treated the same way.
+12. **Rules CI cannot under-claim:** guards fail on an `ioc_match` lookup not mapped to an ioc-data file, and on a campaign-bearing ioc-data file that isn't mapped. The shape check has negative fixtures.
+13. **Producer scanner names** (`dnsSnapshot`, `attribution`, `visibility_gaps`) are constants, pinned by a cross-check test.
+
+**Open (owner decision, I2):** scans saved by builds older than 0.9.0.688 carry no DNS-off or feeds-not-loaded markers. Reopened from History, they render `[OK]` rows without the old global caveat, which contradicts "This holds for scans saved before the change too".
