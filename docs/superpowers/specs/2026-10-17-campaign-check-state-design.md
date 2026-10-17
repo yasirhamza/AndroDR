@@ -10,7 +10,7 @@ The report's MERCENARY SPYWARE CHECK prints `[OK]  <Campaign>: not detected` for
 - The person scanning their own phone needs a fix they can act on ("turn on DNS monitoring and scan again").
 - An analyst or helper reading someone else's report needs to know exactly what evidence the scan covered, to weigh "not detected".
 
-**Success:** `[OK]` appears only when every infection check for that campaign ran in full. Every other no-hit row says which checks were missing, why, and the fix. This holds for scans saved before the change too.
+**Success:** `[OK]` appears only when every infection check for that campaign ran in full. Every other no-hit row says which checks were missing, why, and the fix. This holds for scans saved before the change too, back to 0.9.0.688, the first build that recorded the DNS-off and feeds-not-loaded markers (amendment I2).
 
 ## Why the previous design did not converge, and what changes
 
@@ -227,4 +227,4 @@ These override the sections above where they disagree.
 12. **Rules CI cannot under-claim:** guards fail on an `ioc_match` lookup not mapped to an ioc-data file, and on a campaign-bearing ioc-data file that isn't mapped. The shape check has negative fixtures.
 13. **Producer scanner names** (`dnsSnapshot`, `attribution`, `visibility_gaps`) are constants, pinned by a cross-check test.
 
-**Open (owner decision, I2):** scans saved by builds older than 0.9.0.688 carry no DNS-off or feeds-not-loaded markers. Reopened from History, they render `[OK]` rows without the old global caveat, which contradicts "This holds for scans saved before the change too".
+**I2, owner decision 2026-10-17 (option c): accepted residual.** Scans saved by builds older than 0.9.0.688 carry no DNS-off or feeds-not-loaded markers, so when reopened from History they render `[OK]` rows without the old global caveat. A new scan gives accurate rows. The Success line is narrowed accordingly: per-campaign reasons hold for scans saved by 0.9.0.688 or later.
