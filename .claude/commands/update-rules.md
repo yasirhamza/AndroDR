@@ -223,6 +223,13 @@ Indicator(s): <count>
 User actions for an IOC-only candidate: same as for a rule candidate —
 **Approve**, **Modify** (edit entries), or **Reject**.
 
+Reference check (Gate 2b) for IOC-only candidates: (a) run
+`fetch-feed-dumps.sh` once per run into `<run-dir>/feeds`; (b) have the author
+write each candidate IOC file to `<run-dir>/candidates/<ioc-data file name>`,
+then pass that directory and `<run-dir>/feeds` to the validator (see
+`update-rules-validate.md`, Gate 2b); (c) add a "Reference check" column
+(status + snippet) to the HitL candidate table.
+
 ## Step 8: Process User Decisions
 
 For each passing candidate, ask the user to:
@@ -242,7 +249,9 @@ For each approved candidate (rule OR IOC-only):
 
 1. Append approved IOC entries to the target `ioc-data/<file>.yml` file.
    Preserve the file's header; append entries under the existing
-   `entries:` list.
+   `entries:` list. Never auto-merge an entry whose Gate 2b status is not
+   FOUND; it may be appended only with a reviewer's `# verified manually`
+   comment (see 8.2 safety rules).
 
 2. Run validators on every touched file. Abort the commit on any failure:
    ```bash
@@ -272,6 +281,9 @@ For each approved candidate (rule OR IOC-only):
   only.
 - NEVER modify `kotlin-mirror-feeds.yml` in the same commit as an
   ioc-data write.
+- NEVER commit an ioc-data entry whose Gate 2b status is not FOUND
+  unless a reviewer has added a `# verified manually: <who>, <date>, <how>`
+  comment above it.
 
 ### 8.3 Run ledger (Phase 2, candidate-accuracy spec)
 
