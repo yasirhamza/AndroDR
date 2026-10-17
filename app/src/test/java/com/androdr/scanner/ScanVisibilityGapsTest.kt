@@ -78,7 +78,7 @@ class ScanVisibilityGapsTest {
         val registry = CampaignRegistry.parseBundled(listOf(File("src/main/res/raw/known_campaigns.json"),
             File("app/src/main/res/raw/known_campaigns.json")).first { it.isFile }.readText())
         return ReportFormatter.formatScanReport(scan, emptyList(), emptyList(), versionName = "test",
-            campaigns = registry, ruleCategoryById = emptyMap())
+            campaigns = registry, ruleScopes = emptyMap(), ruleCategoryById = emptyMap())
     }
 
     @Test

@@ -81,6 +81,7 @@ class ReportExporterScopeTest {
             reportInputs = mockk {
                 every { campaigns() } returns emptyList()
                 every { ruleCategoryById() } returns emptyMap()
+                every { ruleScopes() } returns emptyMap()
             },
         )
     }

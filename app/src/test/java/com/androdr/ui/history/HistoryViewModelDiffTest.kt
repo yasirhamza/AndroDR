@@ -90,6 +90,7 @@ class HistoryViewModelDiffTest {
                 reportInputs = mockk {
                     every { campaigns() } returns emptyList()
                     every { ruleCategoryById() } returns emptyMap()
+                every { ruleScopes() } returns emptyMap()
                 },
                 appContext = mockk(relaxed = true)
             )

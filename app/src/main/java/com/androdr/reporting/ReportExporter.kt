@@ -87,6 +87,7 @@ class ReportExporter @Inject constructor(
             intrusionEvents = intrusionEvents,
             versionName = context.appVersion().name,
             campaigns = reportInputs.campaigns(),
+            ruleScopes = reportInputs.ruleScopes(),
             ruleCategoryById = reportInputs.ruleCategoryById(),
         )
 

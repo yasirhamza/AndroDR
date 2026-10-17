@@ -46,6 +46,7 @@ object ReportFormatter {
         intrusionEvents: List<ForensicTimelineEvent> = emptyList(),
         versionName: String,
         campaigns: List<Campaign>,
+        ruleScopes: Map<String, RuleScope>,
         ruleCategoryById: Map<String, String>,
     ): String = buildString {
         val includeFindings = mode != ExportMode.TELEMETRY_ONLY
@@ -81,7 +82,7 @@ object ReportFormatter {
             appendLine()
             section("FINDINGS SECTION")
             val verdicts = campaignVerdicts(
-                scan, campaigns, campaignReferenceTime(scan, intrusionEvents), ruleCategoryById,
+                scan, campaigns, campaignReferenceTime(scan, intrusionEvents), ruleCategoryById, ruleScopes,
             )
             appendFindingsSections(
                 scan, dnsEvents, appInventory, displayNames, verdicts,

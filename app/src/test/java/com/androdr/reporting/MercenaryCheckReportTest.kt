@@ -69,9 +69,10 @@ class MercenaryCheckReportTest {
         campaigns: List<Campaign> = emptyList(),
         scannerErrors: List<ScannerFailure> = emptyList(),
         ruleCategoryById: Map<String, String> = emptyMap(),
+        ruleScopes: Map<String, RuleScope> = emptyMap(),
     ) = ReportFormatter.formatScanReport(
         buildScan(appRisks, deviceFlags, scannerErrors), emptyList(), emptyList(), versionName = "test",
-        campaigns = campaigns, ruleCategoryById = ruleCategoryById,
+        campaigns = campaigns, ruleScopes = ruleScopes, ruleCategoryById = ruleCategoryById,
     )
 
     private fun formatImportReportWith(
@@ -86,7 +87,7 @@ class MercenaryCheckReportTest {
             .copy(source = source),
         emptyList(), emptyList(), intrusionEvents = intrusionEvents, versionName = "test",
         campaigns = campaigns,
-        ruleCategoryById = emptyMap(),
+        ruleScopes = emptyMap(), ruleCategoryById = emptyMap(),
     )
 
     private fun importedEvent(at: Long) = ForensicTimelineEvent(
@@ -187,14 +188,13 @@ class MercenaryCheckReportTest {
     }
 
     @Test
-    fun `not detected carries the scope note`() {
-        val cve = cveCampaignFinding(
-            tags = listOf("campaign.pegasus"), triggered = false, ruleCategory = "DEVICE_POSTURE")
-        val report = formatReportWith(deviceFlags = listOf(cve), campaigns = listOf(campaign("pegasus")),
+    fun `legacy campaign without detected_by keeps today's row and the note`() {
+        val legacy = Campaign("pegasus", "Pegasus")
+        val report = formatReportWith(campaigns = listOf(legacy),
             scannerErrors = listOf(ScannerFailure(scanner = "threat_intel",
                 exception = NotEvaluatedReason.FEEDS_NOT_LOADED.sentinel,
                 message = "threat-intel feeds not loaded yet")))
-        assertTrue(report.contains("[OK]  ${campaign("pegasus").label}: not detected"))
+        assertTrue(report.contains("[OK]  Pegasus: not detected"))
         assertTrue(report.contains("\"not detected\" means none of the checks that ran in this scan matched."))
         assertTrue(report.contains("1 check(s) could not run -- see ${ReportFormatter.NOT_CHECKED_SECTION} below."))
     }
@@ -399,10 +399,127 @@ class MercenaryCheckReportTest {
     }
 
     @Test
-    fun `clean live device lists every registry campaign as not detected`() {
+    fun `clean live device - fully checked campaigns are OK, LANDFALL has no infection check`() {
         val report = formatReportWith(campaigns = REGISTRY)
-        REGISTRY.forEach { assertTrue(it.key, report.contains("[OK]  ${it.label}: not detected")) }
+        REGISTRY.filter { it.key != "landfall" }
+            .forEach { assertTrue(it.key, report.contains("  [OK]  ${it.label}: not detected")) }
+        assertTrue(report.contains("  [--]  LANDFALL: no infection check exists for a live scan; patch level only"))
+        assertFalse("every row carries its own reason", report.contains("\"not detected\" means"))
         assertTrue(report.contains("Campaign detections: none"))
+    }
+
+    private val dnsOff = ScannerFailure(scanner = "dns_monitor",
+        exception = NotEvaluatedReason.DNS_MONITOR_OFF.sentinel, message = "DNS monitoring was off")
+    private val dnsOffClause =
+        "DNS lookups not monitored (DNS monitoring was off; only lookups recorded earlier were checked)"
+    private val dnsOffFix = "        Turn on DNS monitoring, use the phone as usual, then scan again."
+
+    @Test
+    fun `dns off - a dns-only campaign is not fully checked and says how to fix it`() {
+        val lines = formatReportWith(campaigns = listOf(campaign("pegasus")), scannerErrors = listOf(dnsOff)).lines()
+        val at = lines.indexOf("  [--]  Pegasus: $dnsOffClause")
+        assertTrue(lines.joinToString("\n"), at >= 0)
+        assertEquals(dnsOffFix, lines[at + 1])
+    }
+
+    @Test
+    fun `dns off - a two-service campaign names what was checked and what was not`() {
+        val report = formatReportWith(campaigns = listOf(campaign("midnight-mimosa")), scannerErrors = listOf(dnsOff))
+        assertTrue(report, report.contains("  [--]  Midnight Mimosa: no hit in installed apps; $dnsOffClause"))
+    }
+
+    @Test
+    fun `a crashed scanner says the check failed`() {
+        val report = formatReportWith(campaigns = listOf(campaign("massistant")),
+            scannerErrors = listOf(ScannerFailure("appScanner", "IllegalStateException", "boom")))
+        assertTrue(report, report.contains(
+            "  [--]  Massistant: installed apps not checked (that check failed on this scan)"))
+        assertTrue(report, report.contains(
+            "        Scan again; if it keeps failing, export the report and send it to us."))
+    }
+
+    @Test
+    fun `this campaign's unreadable file paths leave it partly checked`() {
+        val report = formatReportWith(campaigns = listOf(campaign("predator")),
+            ruleScopes = mapOf("androdr-108" to RuleScope("file_scanner", setOf("predator"), false)),
+            scannerErrors = listOf(ScannerFailure("file_scanner", NotEvaluatedReason.UNREADABLE_PATHS.sentinel,
+                "Predator (androdr-108): 3 of 5 path(s) could not be read", ruleId = "androdr-108")))
+        assertTrue(report, report.contains(
+            "  [--]  Predator: no hit in DNS lookups; files only partly checked (some paths could not be read)"))
+    }
+
+    @Test
+    fun `a shared fix is printed once`() {
+        val report = formatReportWith(campaigns = listOf(campaign("midnight-mimosa")),
+            scannerErrors = listOf(ScannerFailure("threat_intel", NotEvaluatedReason.FEEDS_NOT_LOADED.sentinel, "x")))
+        assertTrue(report, report.contains(
+            "  [--]  Midnight Mimosa: installed apps checked against the built-in list " +
+            "only (threat lists had not finished loading); DNS lookups checked against the built-in list only " +
+            "(threat lists had not finished loading)"))
+        assertEquals(1, Regex("Scan again in a few minutes\\.").findAll(report).count())
+    }
+
+    @Test
+    fun `unknown service fails closed`() {
+        val future = Campaign("pegasus", "Pegasus", detectedBy = listOf("usage_stats"))
+        val report = formatReportWith(campaigns = listOf(future))
+        assertTrue(report, report.contains(
+            "  [--]  Pegasus: usage_stats not checked (this app version does not know that check)"))
+        assertTrue(report, report.contains("        Update the app."))
+    }
+
+    @Test
+    fun `skipped rules leave a service partly checked`() {
+        val report = formatReportWith(campaigns = listOf(campaign("pegasus")),
+            ruleScopes = mapOf("androdr-003" to RuleScope("dns_monitor", emptySet(), true)),
+            scannerErrors = listOf(ScannerFailure("x", NotEvaluatedReason.MISSING_CAPABILITY.sentinel, "m",
+                ruleId = "androdr-003")))
+        val lines = report.lines()
+        val at = lines.indexOf(
+            "  [--]  Pegasus: DNS lookups only partly checked (some of its rules could not run on this app version)")
+        assertTrue(report, at >= 0)
+        assertEquals("        Update the app.", lines[at + 1])
+    }
+
+    @Test
+    fun `a failed attribution step says hits could not be matched to campaigns`() {
+        val report = formatReportWith(campaigns = listOf(campaign("pegasus")),
+            scannerErrors = listOf(ScannerFailure("attribution", "MissingPrefetch", "m")))
+        val lines = report.lines()
+        val at = lines.indexOf("  [--]  Pegasus: DNS lookups checked, but hits could not be matched to campaigns " +
+            "(that step failed on this scan)")
+        assertTrue(report, at >= 0)
+        assertEquals("        Scan again; if it keeps failing, export the report and send it to us.", lines[at + 1])
+    }
+
+    @Test
+    fun `unknown feed state says it is not known whether threat lists had loaded`() {
+        val report = formatReportWith(campaigns = listOf(campaign("massistant")),
+            scannerErrors = listOf(ScannerFailure("visibility_gaps", "SQLiteException", "m")))
+        val lines = report.lines()
+        val at = lines.indexOf(
+            "  [--]  Massistant: installed apps checked, but it is not known whether the threat lists had loaded")
+        assertTrue(report, at >= 0)
+        assertEquals("        Scan again in a few minutes.", lines[at + 1])
+    }
+
+    @Test
+    fun `exposed carries the infection-check summary`() {
+        val cve = cveCampaignFinding(
+            tags = listOf("campaign.pegasus"), triggered = true, ruleCategory = "DEVICE_POSTURE")
+        val report = formatReportWith(deviceFlags = listOf(cve), campaigns = listOf(campaign("pegasus")),
+            scannerErrors = listOf(dnsOff))
+        assertTrue(report, report.contains("  [!!]  Pegasus: EXPOSED -- Unpatched exploited CVE (unpatched; not " +
+            "evidence of infection); infection check: $dnsOffClause"))
+        val clean = formatReportWith(deviceFlags = listOf(cve), campaigns = listOf(campaign("pegasus")))
+        assertTrue(clean, clean.contains("(unpatched; not evidence of infection); infection check: not detected"))
+    }
+
+    @Test
+    fun `import rows are unchanged even with detected_by`() {
+        val report = formatImportReportWith(appRisks = emptyList(), campaigns = listOf(campaign("pegasus")))
+        assertTrue(report, report.contains("  [--]  Pegasus: no hit in the imported log (device checks not run)"))
+        assertFalse(report, report.contains("infection check"))
     }
 
     // -- Fix round 1 -------------------------------------------------------------
