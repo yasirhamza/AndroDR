@@ -35,8 +35,13 @@ class ServiceScannerMapCrossCheckTest {
     fun `every mapped scanner name is one the orchestrator records`() {
         val source = file("src/main/java/com/androdr/scanner/ScanOrchestrator.kt",
             "app/src/main/java/com/androdr/scanner/ScanOrchestrator.kt").readText()
-        val recorded = Regex("""trackedAsync\(\s*"(\w+)"""").findAll(source).map { it.groupValues[1] }.toSet() +
-            (if ("scanner = DNS_SNAPSHOT_SCANNER" in source) setOf(DNS_SNAPSHOT_SCANNER) else emptySet())
+        // Comment lines are dropped so a mention in a KDoc or comment cannot satisfy the DNS check.
+        val code = source.lines().filterNot { line ->
+            line.trimStart().let { it.startsWith("//") || it.startsWith("*") }
+        }.joinToString("\n")
+        val recorded = Regex("""trackedAsync\(\s*"(\w+)"""").findAll(code).map { it.groupValues[1] }.toSet() +
+            (if (Regex("""scanner\s*=\s*DNS_SNAPSHOT_SCANNER""").containsMatchIn(code)) setOf(DNS_SNAPSHOT_SCANNER)
+            else emptySet())
         assertTrue("not recorded by ScanOrchestrator: ${SCANNER_FOR_SERVICE.values.toSet() - recorded}",
             recorded.containsAll(SCANNER_FOR_SERVICE.values))
     }

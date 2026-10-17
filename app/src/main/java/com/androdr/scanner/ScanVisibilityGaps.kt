@@ -1,12 +1,10 @@
 package com.androdr.scanner
 
+import com.androdr.data.model.MISSING_SOURCE_MVT
+import com.androdr.data.model.MISSING_SOURCE_RULES_REPO
 import com.androdr.data.model.NotEvaluatedReason
 import com.androdr.data.model.ScannerFailure
 import com.androdr.ioc.FeedCoverage
-
-/** [ScannerFailure.missingSources] values for CAMPAIGN_SOURCES_NOT_LOADED (#394). */
-internal const val MISSING_SOURCE_RULES_REPO = "rules_repo"
-internal const val MISSING_SOURCE_MVT = "mvt"
 
 /**
  * Sentinel entries for gaps in what a scan could see: no threat-intel feed rows yet (offline

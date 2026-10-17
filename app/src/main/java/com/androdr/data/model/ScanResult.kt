@@ -60,6 +60,10 @@ data class ScannerFailure(
     val missingSources: List<String> = emptyList(),
 )
 
+/** [ScannerFailure.missingSources] values for CAMPAIGN_SOURCES_NOT_LOADED (#394). */
+const val MISSING_SOURCE_RULES_REPO = "rules_repo"
+const val MISSING_SOURCE_MVT = "mvt"
+
 /**
  * [ScannerFailure.exception] value marking a capability skip — a rule this
  * binary build cannot evaluate (unresolvable ioc_lookup) — as opposed to a

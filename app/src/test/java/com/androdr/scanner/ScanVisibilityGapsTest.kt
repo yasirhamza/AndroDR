@@ -1,5 +1,7 @@
 package com.androdr.scanner
 
+import com.androdr.data.model.MISSING_SOURCE_MVT
+import com.androdr.data.model.MISSING_SOURCE_RULES_REPO
 import com.androdr.data.model.NotEvaluatedReason
 import com.androdr.data.model.ScanResult
 import com.androdr.data.model.ScannerFailure

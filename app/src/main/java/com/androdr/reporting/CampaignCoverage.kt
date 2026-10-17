@@ -1,20 +1,45 @@
 package com.androdr.reporting
 
+import com.androdr.data.model.MISSING_SOURCE_MVT
+import com.androdr.data.model.MISSING_SOURCE_RULES_REPO
 import com.androdr.data.model.NotEvaluatedReason
 import com.androdr.data.model.ScannerFailure
-import com.androdr.scanner.MISSING_SOURCE_MVT
-import com.androdr.scanner.MISSING_SOURCE_RULES_REPO
 
-/** How fully a scan covered one service a campaign is detected by (#394). */
-enum class ServiceCoverage { CHECKED, BUILT_IN_LISTS_ONLY, PARTLY_UNREADABLE, BLIND, NEEDS_IMPORT }
+/**
+ * How fully a scan covered one service a campaign is detected by (#394). Declared in the order
+ * the rows are read from least to most trouble; [campaignCoverage] applies them by precedence.
+ */
+enum class ServiceCoverage {
+    CHECKED,
+    BUILT_IN_LISTS_ONLY,
+    LISTS_UNKNOWN,
+    PARTLY_UNREADABLE,
+    PARTLY_SKIPPED,
+    BLIND,
+    NEEDS_IMPORT,
+}
 
 /** Why a [ServiceCoverage.BLIND] service did not run; each has its own row text and fix. */
-enum class BlindReason { DNS_OFF, CHECK_FAILED, UNKNOWN_SERVICE }
+enum class BlindReason { DNS_OFF, CHECK_FAILED, ATTRIBUTION_FAILED, UNKNOWN_SERVICE }
 
 data class ServiceStatus(val service: String, val coverage: ServiceCoverage, val reason: BlindReason? = null)
 
+/**
+ * What one loaded rule can detect, for matching its "could not run" entries to campaigns (#394):
+ * its logsource [service], the campaigns its `campaign.*` tags name (aliases folded), and whether
+ * it can attribute ANY campaign through an IOC row ([carriesIocCampaign]: `evidence_type: ioc_match`
+ * with an `ioc_lookup` matcher, e.g. androdr-001/003). Built by ReportInputs (Task A4).
+ */
+data class RuleScope(val service: String, val campaigns: Set<String>, val carriesIocCampaign: Boolean)
+
 /** The scanner name the orchestrator records when the DNS snapshot read fails. */
 internal const val DNS_SNAPSHOT_SCANNER = "dnsSnapshot"
+
+/** The scanner name the orchestrator records when the DNS domain attribution prefetch fails or misses. */
+internal const val ATTRIBUTION_SCANNER = "attribution"
+
+/** The scanner name [visibilityGapsOrFailure] records when the feed-coverage query itself fails. */
+internal const val VISIBILITY_GAPS_SCANNER = "visibility_gaps"
 
 /**
  * Live-scan service -> the scanner name a crash of it is recorded under. Pinned against the
@@ -39,19 +64,21 @@ internal val IMPORT_ONLY_SERVICES: Set<String> = setOf(
 
 /** Services whose matches come from threat lists that may still be loading. */
 private val LIST_SERVICES = setOf("dns_monitor", "app_scanner")
-private const val FILE_SERVICE = "file_scanner"
 private const val DNS_SERVICE = "dns_monitor"
 
 /**
- * One status per service in [detectedBy], from what the scan stored: the first that applies of
- * import-only, blind (DNS off, a crash of its scanner, or a service this build doesn't know),
- * files partly unreadable for this campaign's own rule, built-in lists only, else checked.
+ * One status per service in [detectedBy], from what the scan stored, by precedence: import-only;
+ * blind (DNS off, service unknown to this build, its scanner crashed, failed DNS attribution);
+ * partly skipped (a "could not run" rule that could detect this campaign on this service); partly
+ * unreadable (same, for unreadable paths); lists unknown; built-in lists only; else checked.
+ * A "could not run" entry counts only when [rules] knows its rule (see [RuleScope]). Rules a build
+ * cannot parse are an accepted residual: the report still lists them, but they count for no campaign.
  */
 internal fun campaignCoverage(
     detectedBy: List<String>,
     campaignKey: String,
     scannerErrors: List<ScannerFailure>,
-    ruleCampaigns: Map<String, Set<String>>,
+    rules: Map<String, RuleScope>,
 ): List<ServiceStatus> {
     val reasons = scannerErrors.mapNotNull { e -> NotEvaluatedReason.fromSentinel(e.exception)?.let { it to e } }
     val crashed = scannerErrors
@@ -59,6 +86,12 @@ internal fun campaignCoverage(
         .map { it.scanner }
         .toSet()
     fun has(r: NotEvaluatedReason) = reasons.any { it.first == r }
+    fun counts(e: ScannerFailure, service: String): Boolean {
+        val scope = e.ruleId?.let { rules[it] } ?: return false
+        return scope.service == service && (campaignKey in scope.campaigns || scope.carriesIocCampaign)
+    }
+    fun skippedFor(service: String, reason: NotEvaluatedReason) =
+        reasons.any { (r, e) -> r == reason && counts(e, service) }
     // Which list services ran on the built-in lists only. FEEDS_NOT_LOADED: both. CAMPAIGN_SOURCES_NOT_LOADED:
     // a missing MVT list touches domains only; a missing rules-repo list, or a row saved before
     // missingSources existed (empty), touches both (owner addition, #394).
@@ -70,9 +103,8 @@ internal fun campaignCoverage(
             if (MISSING_SOURCE_MVT in src) add(DNS_SERVICE)
         }
     }
-    val ownPathsUnreadable = reasons.any { (r, e) ->
-        r == NotEvaluatedReason.UNREADABLE_PATHS && campaignKey in e.ruleId?.let { ruleCampaigns[it] }.orEmpty()
-    }
+    val feedsUnknown = VISIBILITY_GAPS_SCANNER in crashed
+    val attributionFailed = ATTRIBUTION_SCANNER in crashed
     return detectedBy.map { service ->
         when {
             service in IMPORT_ONLY_SERVICES -> ServiceStatus(service, ServiceCoverage.NEEDS_IMPORT)
@@ -82,7 +114,13 @@ internal fun campaignCoverage(
                 ServiceStatus(service, ServiceCoverage.BLIND, BlindReason.UNKNOWN_SERVICE)
             SCANNER_FOR_SERVICE.getValue(service) in crashed ->
                 ServiceStatus(service, ServiceCoverage.BLIND, BlindReason.CHECK_FAILED)
-            service == FILE_SERVICE && ownPathsUnreadable -> ServiceStatus(service, ServiceCoverage.PARTLY_UNREADABLE)
+            service == DNS_SERVICE && attributionFailed ->
+                ServiceStatus(service, ServiceCoverage.BLIND, BlindReason.ATTRIBUTION_FAILED)
+            skippedFor(service, NotEvaluatedReason.MISSING_CAPABILITY) ->
+                ServiceStatus(service, ServiceCoverage.PARTLY_SKIPPED)
+            skippedFor(service, NotEvaluatedReason.UNREADABLE_PATHS) ->
+                ServiceStatus(service, ServiceCoverage.PARTLY_UNREADABLE)
+            feedsUnknown && service in LIST_SERVICES -> ServiceStatus(service, ServiceCoverage.LISTS_UNKNOWN)
             service in builtInOnly -> ServiceStatus(service, ServiceCoverage.BUILT_IN_LISTS_ONLY)
             else -> ServiceStatus(service, ServiceCoverage.CHECKED)
         }
