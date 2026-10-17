@@ -31,9 +31,13 @@ Ask: "Would adding this threat's indicators to the IOC database and relying on t
 ### Examples
 
 **IOC data (do NOT create a rule):**
-- "FlexiSpy uses package name com.flexispy.android" → add to `ioc-data/package-names.yml`
-- "Cerberus C2 domain cerberusapp.com" → add to `ioc-data/c2-domains.yml`
-- "TheTruthSpy cert hash abc123..." → add to `ioc-data/cert-hashes.yml`
+- "TheTruthSpy uses package name com.ttsapp.catchcheating" (stalkerware-indicators) → add to `ioc-data/package-names.yml`
+- "Graphite infrastructure certificate name forti.external-muki.com" (Citizen Lab, March 2025) → add to `ioc-data/c2-domains.yml`
+- "ToSpy developer certificate de90f6899eec315f4ed05c2aa052d4fe8b71125a" (ESET) → add to `ioc-data/cert-hashes.yml`
+
+Examples are real, sourced indicators. Never write an illustrative indicator
+that is not in a cited source — an invented example is how invented entries
+entered the bundle in 2026.
 
 **SIGMA rule (DO create):**
 - "Sideloaded app with 4+ surveillance permissions + accessibility service" → behavioral pattern
@@ -325,19 +329,31 @@ decisions:
 - NEVER use a `family` value containing: test, fixture, simulation, sample, example (and there is no `familyName` field — the schema rejects unknown keys)
 - If a SIR has only IPs and AndroDR doesn't monitor raw IP connections, flag as skip
 
-### Mandatory `source` field
+### Mandatory provenance fields
 
-Every IOC data entry MUST include a `source` field tracing to a verified feed:
+Every IOC data entry MUST carry `family`, `source` and `reference`:
 
 ```yaml
 entries:
-  - indicator: "com.flexispy.android"
-    family: "FlexiSPY"
-    category: "STALKERWARE"
+  - indicator: "forti.external-muki.com"
+    family: "Graphite (Paragon)"
+    category: "NATION_STATE_SPYWARE"
+    campaign: "graphite"            # only for a known campaign key
     severity: "CRITICAL"
-    description: "..."
-    source: "stalkerware-indicators"   # ← MANDATORY
+    description: "Paragon Graphite infrastructure certificate name (Citizen Lab, March 2025)"
+    source: "threat_research"
+    reference: "https://citizenlab.ca/2025/03/a-first-look-at-paragons-proliferating-spyware-operations/"
 ```
+
+- `family`: the name a finding will show. Required, non-empty.
+- `reference`: for research/discover SIRs, the SIR's `source.url` — the primary
+  report that lists the indicator, not a search page or news summary. For
+  feed-ingester SIRs, `feed:<source-id>#<family>`.
+- Copy the indicator exactly as the reference writes it (re-fanged, lower case
+  for domains and hashes). Gate 2b fetches the reference and rejects the entry
+  if the indicator is not in it.
+- If the SIR has no `source.url` that lists the indicator, do not emit the entry;
+  flag it in the candidate's notes instead.
 
 Allowed sources (authoritative list: `validation/allowed-sources.json`):
 `stalkerware-indicators`, `malwarebazaar`, `threatfox`,
