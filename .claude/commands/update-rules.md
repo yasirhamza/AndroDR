@@ -37,7 +37,8 @@ Note: `virustotal` is listed in `allowed-sources.json` as a valid provenance lab
 
 1. Read `feed-state.json` from the sigma repo root to get feed cursors
 2. Build an index of existing rules (IDs, titles, IOCs referenced). Production rules live in **service-named directories at the sigma repo root** (`app_scanner/`, `device_auditor/`, `dns_monitor/`, `file_scanner/`, `process_monitor/`, `receiver_audit/`, `accessibility_audit/`, `appops_audit/`, ...); staged rules live under `staging/<service>/`. Glob `<service>/**/*.yml` and `staging/**/*.yml` — there is no `rules/` prefix directory.
-3. Determine the next available rule ID by finding the highest `androdr-NNN` across all existing rules and incrementing. Never reuse an ID that previously existed and was later removed (check `git log` in the sigma repo if in doubt).
+3. Create the per-run scratch directory `<run-dir>` (made with `mktemp -d "${TMPDIR:-/tmp}/update-rules-XXXXXX"`, which works when `TMPDIR` is unset; never a fixed shared `/tmp` name) with `candidates/` and `feeds/` inside it. Every later reference to `<run-dir>` means this directory.
+4. Determine the next available rule ID by finding the highest `androdr-NNN` across all existing rules and incrementing. Never reuse an ID that previously existed and was later removed (check `git log` in the sigma repo if in doubt).
 
 The sigma repo is the git submodule at `third-party/android-sigma-rules/` (see CLAUDE.md). If the submodule is not initialized, run `git submodule update --init` rather than asking the user for a path.
 
@@ -216,12 +217,46 @@ Type:         <type>
 Source:       <source-id>
 Indicator(s): <count>
   - <indicator 1>  (<family>, <severity>)
+      reference: <reference>
+      Gate 2b status: <status: snippet>
   - <indicator 2>  ...
   [...]
 ```
 
 User actions for an IOC-only candidate: same as for a rule candidate —
 **Approve**, **Modify** (edit entries), or **Reject**.
+
+Reference check (Gate 2b) for IOC-only candidates, in this order:
+
+(a) **Write the candidate files.** Every candidate that survived Step 6.5.3
+goes into `<run-dir>/candidates/<ioc-data file name>` (the `entries:` list, one
+file per target): both the ingesters' `candidate_ioc_entries` (their `entry`
+objects, grouped by `file`) and the Rule Author's `ioc_data`, not only the
+author's. Write them with the Write tool or Python `yaml.safe_dump`, never a
+heredoc, `echo` or `printf`, because the indicators and references come from
+scraped pages. Write only the schema fields: `indicator`, `family`,
+`category`, `severity`, `description`, `source`, `reference`, and `campaign`
+when set. Strip pipeline-only keys (`type`, `source_sir`, and similar) and
+every null value first: `ioc-entry-schema.json` has `additionalProperties:
+false`. Confirm each file with
+`python3 -I third-party/android-sigma-rules/validation/validate-ioc-data.py <file>`.
+
+(b) **Fetch the feed dumps**, once per run, after (a):
+`bash third-party/android-sigma-rules/scripts/fetch-feed-dumps.sh <run-dir>/feeds <run-dir>/candidates`.
+The second argument makes it query MalwareBazaar for the candidate hashes too.
+Without `MALWAREBAZAAR_API_KEY` every `malwarebazaar` entry comes back
+NOT_FOUND: show it on the HitL list as "needs MALWAREBAZAAR_API_KEY rerun" and
+never commit it.
+
+(c) **Run Gate 2b** on each IOC candidate file (see `update-rules-validate.md`,
+Gate 2b), requiring one JSON line per entry. IOC candidate files are named
+after their `ioc-data` file (`c2-domains.yml`, …); the rule files
+`rule-<id>.yml` share `candidates/` and never go to Gate 2b.
+
+(d) Add a "Reference check" column (status + snippet) to the HitL candidate
+table. BAD_INPUT entries (reference missing, a campaign entry that needs a
+curated feed or a report, an ambiguous campaign) go on the HitL list with the
+checker's detail; they are not fixed by quoting.
 
 ## Step 8: Process User Decisions
 
@@ -242,7 +277,10 @@ For each approved candidate (rule OR IOC-only):
 
 1. Append approved IOC entries to the target `ioc-data/<file>.yml` file.
    Preserve the file's header; append entries under the existing
-   `entries:` list.
+   `entries:` list. Never auto-merge an entry whose Gate 2b status is not
+   FOUND. A CAPPED, FETCH_UNSUPPORTED or FETCH_FAILED entry may be appended
+   only with a reviewer's `# verified manually` comment (see 8.2 safety
+   rules); every other non-FOUND status is fixed and re-checked, or rejected. BAD_INPUT goes on the HitL list with the detail; the fix is correcting the entry's data (never quoting it), then re-running Gate 2b.
 
 2. Run validators on every touched file. Abort the commit on any failure:
    ```bash
@@ -272,6 +310,12 @@ For each approved candidate (rule OR IOC-only):
   only.
 - NEVER modify `kotlin-mirror-feeds.yml` in the same commit as an
   ioc-data write.
+- NEVER commit an ioc-data entry whose Gate 2b status is not FOUND, except a
+  CAPPED, FETCH_UNSUPPORTED or FETCH_FAILED entry that a reviewer has verified
+  by hand and marked with a `# verified manually: <who>, <date>, <how>`
+  comment above it. NOT_FOUND, WEAK_FOUND, SECTION_CITED, FAMILY_MISMATCH,
+  BAD_INPUT and BLOCKED_URL entries are never committed as-is: fix the entry's
+  data (never by quoting), re-run Gate 2b, or reject it.
 
 ### 8.3 Run ledger (Phase 2, candidate-accuracy spec)
 
@@ -281,7 +325,7 @@ Record per candidate: `id` (rule ID or indicator), `verdict`
 (`approved` / `approved_with_modification` / `rejected`), the reviewer's
 `reason` (required unless approved), and a `failure_class`
 (`severity_judgment`, `fp_risk`, `duplicate_semantics`, `weak_sourcing`,
-`category_choice`, `other`, or `null`). Compute `totals` including
+`category_choice`, `unverifiable_provenance`, `other`, or `null`). Compute `totals` including
 `approval_without_modification_rate` (approved ÷ candidates, 2 decimal
 places). Show the ledger to the user before committing (normal HitL gate).
 
