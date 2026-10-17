@@ -24,6 +24,15 @@ private val REGISTRY: List<Campaign> by lazy {
 }
 private fun campaign(key: String) = REGISTRY.single { it.key == key }
 
+/** What the real bundle's campaign detectors can see, as ReportInputs.ruleScopes() builds it. */
+private val BUNDLE_SCOPES: Map<String, RuleScope> = mapOf(
+    "androdr-001" to RuleScope("app_scanner", emptySet(), true),
+    "androdr-003" to RuleScope("dns_monitor", emptySet(), true),
+    "androdr-078" to RuleScope("app_scanner", setOf("massistant"), false),
+    "androdr-108" to RuleScope("file_scanner", setOf("predator"), false),
+    "androdr-109" to RuleScope("app_scanner", setOf("midnight-mimosa"), false),
+)
+
 /**
  * The report's MERCENARY SPYWARE CHECK (B7): one row per campaign, attributed IOC hits counted
  * within 30 days, DETECTED / EXPOSED / earlier hit / import / not detected. Split from
@@ -69,7 +78,7 @@ class MercenaryCheckReportTest {
         campaigns: List<Campaign> = emptyList(),
         scannerErrors: List<ScannerFailure> = emptyList(),
         ruleCategoryById: Map<String, String> = emptyMap(),
-        ruleScopes: Map<String, RuleScope> = emptyMap(),
+        ruleScopes: Map<String, RuleScope> = BUNDLE_SCOPES,
     ) = ReportFormatter.formatScanReport(
         buildScan(appRisks, deviceFlags, scannerErrors), emptyList(), emptyList(), versionName = "test",
         campaigns = campaigns, ruleScopes = ruleScopes, ruleCategoryById = ruleCategoryById,
@@ -441,7 +450,7 @@ class MercenaryCheckReportTest {
     @Test
     fun `this campaign's unreadable file paths leave it partly checked`() {
         val report = formatReportWith(campaigns = listOf(campaign("predator")),
-            ruleScopes = mapOf("androdr-108" to RuleScope("file_scanner", setOf("predator"), false)),
+            ruleScopes = BUNDLE_SCOPES + mapOf("androdr-108" to RuleScope("file_scanner", setOf("predator"), false)),
             scannerErrors = listOf(ScannerFailure("file_scanner", NotEvaluatedReason.UNREADABLE_PATHS.sentinel,
                 "Predator (androdr-108): 3 of 5 path(s) could not be read", ruleId = "androdr-108")))
         assertTrue(report, report.contains(
@@ -501,6 +510,16 @@ class MercenaryCheckReportTest {
             "  [--]  Massistant: installed apps checked, but it is not known whether the threat lists had loaded")
         assertTrue(report, at >= 0)
         assertEquals("        Scan again in a few minutes.", lines[at + 1])
+    }
+
+    @Test
+    fun `no loaded detector - no campaign reads OK and the row says the rule was not loaded`() {
+        val report = formatReportWith(campaigns = REGISTRY, ruleScopes = emptyMap())
+        assertFalse(report, report.contains("[OK]"))
+        val lines = report.lines()
+        val at = lines.indexOf("  [--]  Pegasus: DNS lookups not checked (the rule that detects it was not loaded)")
+        assertTrue(report, at >= 0)
+        assertEquals("        Scan again later; if it persists, update the app.", lines[at + 1])
     }
 
     @Test

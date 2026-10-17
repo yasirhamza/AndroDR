@@ -27,17 +27,19 @@ class ReportInputs @Inject constructor(
         sigmaRuleEngine.getRules().associate { it.id to it.category.name }
 
     /**
-     * What each loaded rule can detect: its service, the campaigns its `campaign.*` tags name
+     * What each loaded, enabled rule can detect: its service, the campaigns its `campaign.*` tags name
      * (aliases folded, unknown names dropped), and whether it can attribute any campaign through an
      * IOC row (`evidence_type: ioc_match` with an `ioc_lookup` matcher). Matches a rule's
-     * "could not run" entries to campaigns (#394). Reads a small file: off the main thread.
+     * "could not run" entries to campaigns, and decides whether a campaign's service has any detector
+     * at all: a disabled rule ran on no scan, so it is left out (#394). Reads a small file: off the
+     * main thread.
      */
     fun ruleScopes(): Map<String, RuleScope> {
         val campaigns = campaignRegistry.campaigns()
         val keyByName = HashMap<String, String>()
         campaigns.forEach { keyByName[it.key] = it.key }
         campaigns.forEach { c -> c.aliases.forEach { keyByName.putIfAbsent(it, c.key) } }
-        return sigmaRuleEngine.getRules().associate { rule ->
+        return sigmaRuleEngine.getEnabledRules().associate { rule ->
             val tagged = rule.tags.filter { it.startsWith(CAMPAIGN_TAG) }
                 .mapNotNull { keyByName[it.removePrefix(CAMPAIGN_TAG).lowercase()] }.toSet()
             val iocCampaign = rule.display.evidenceType == "ioc_match" &&

@@ -13,6 +13,7 @@ enum class ServiceCoverage {
     CHECKED,
     BUILT_IN_LISTS_ONLY,
     LISTS_UNKNOWN,
+    NO_DETECTOR,
     PARTLY_UNREADABLE,
     PARTLY_SKIPPED,
     BLIND,
@@ -70,7 +71,10 @@ private const val DNS_SERVICE = "dns_monitor"
  * One status per service in [detectedBy], from what the scan stored, by precedence: import-only;
  * blind (DNS off, service unknown to this build, its scanner crashed, failed DNS attribution);
  * partly skipped (a "could not run" rule that could detect this campaign on this service); partly
- * unreadable (same, for unreadable paths); lists unknown; built-in lists only; else checked.
+ * unreadable (same, for unreadable paths); no detector (no rule in [rules] can detect this campaign
+ * on this service: a campaign rule dropped by a hash mismatch, a failed fetch, a disabled rule or an
+ * older build); lists unknown; built-in lists only; else checked. [rules] must hold only the loaded,
+ * enabled rules, so a service never reads checked without a rule that could have matched there.
  * A "could not run" entry counts only when [rules] knows its rule (see [RuleScope]). Rules a build
  * cannot parse are an accepted residual: the report still lists them, but they count for no campaign.
  */
@@ -86,10 +90,13 @@ internal fun campaignCoverage(
         .map { it.scanner }
         .toSet()
     fun has(r: NotEvaluatedReason) = reasons.any { it.first == r }
+    fun detects(scope: RuleScope, service: String) =
+        scope.service == service && (campaignKey in scope.campaigns || scope.carriesIocCampaign)
     fun counts(e: ScannerFailure, service: String): Boolean {
         val scope = e.ruleId?.let { rules[it] } ?: return false
-        return scope.service == service && (campaignKey in scope.campaigns || scope.carriesIocCampaign)
+        return detects(scope, service)
     }
+    fun hasDetector(service: String) = rules.values.any { detects(it, service) }
     fun skippedFor(service: String, reason: NotEvaluatedReason) =
         reasons.any { (r, e) -> r == reason && counts(e, service) }
     // Which list services ran on the built-in lists only. FEEDS_NOT_LOADED: both. CAMPAIGN_SOURCES_NOT_LOADED:
@@ -120,6 +127,7 @@ internal fun campaignCoverage(
                 ServiceStatus(service, ServiceCoverage.PARTLY_SKIPPED)
             skippedFor(service, NotEvaluatedReason.UNREADABLE_PATHS) ->
                 ServiceStatus(service, ServiceCoverage.PARTLY_UNREADABLE)
+            !hasDetector(service) -> ServiceStatus(service, ServiceCoverage.NO_DETECTOR)
             feedsUnknown && service in LIST_SERVICES -> ServiceStatus(service, ServiceCoverage.LISTS_UNKNOWN)
             service in builtInOnly -> ServiceStatus(service, ServiceCoverage.BUILT_IN_LISTS_ONLY)
             else -> ServiceStatus(service, ServiceCoverage.CHECKED)

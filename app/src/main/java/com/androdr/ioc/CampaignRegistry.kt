@@ -84,6 +84,12 @@ class CampaignRegistry internal constructor(
         private val SERVICE = Regex("^[a-z_]{1,32}$")
         private const val MAX_LABEL = 40
 
+        /**
+         * What an invalid `detected_by` value becomes. It matches [SERVICE] but names no service this
+         * build knows, so the row reads "not checked" instead of the list silently narrowing (#394).
+         */
+        internal const val UNKNOWN_SERVICE = "unknown"
+
         private data class RawCampaign(
             val key: String?, val label: String?, val aliases: List<String>, val detectedBy: List<String>?,
         )
@@ -98,7 +104,9 @@ class CampaignRegistry internal constructor(
                     (o["key"] as? JsonPrimitive)?.content,
                     (o["label"] as? JsonPrimitive)?.content,
                     (o["aliases"] as? JsonArray)?.mapNotNull { (it as? JsonPrimitive)?.content }.orEmpty(),
-                    detectedBy = (o["detected_by"] as? JsonArray)?.mapNotNull { (it as? JsonPrimitive)?.content },
+                    detectedBy = (o["detected_by"] as? JsonArray)?.map { v ->
+                        (v as? JsonPrimitive)?.takeIf { it.isString }?.content ?: UNKNOWN_SERVICE
+                    },
                 )
             })
         } catch (e: Exception) {
@@ -118,7 +126,7 @@ class CampaignRegistry internal constructor(
                     m["key"]?.toString(),
                     m["label"]?.toString(),
                     (m["aliases"] as? List<*>)?.mapNotNull { it?.toString() }.orEmpty(),
-                    detectedBy = (m["detected_by"] as? List<*>)?.mapNotNull { it?.toString() },
+                    detectedBy = (m["detected_by"] as? List<*>)?.map { it as? String ?: UNKNOWN_SERVICE },
                 )
             })
         } catch (e: Exception) {
@@ -135,7 +143,8 @@ class CampaignRegistry internal constructor(
                     key = key,
                     label = clean.ifEmpty { key.replaceFirstChar { it.uppercase() } },
                     aliases = r.aliases.filter { KEY.matches(it) && it != key }.distinct().sorted(),
-                    detectedBy = r.detectedBy?.filter { SERVICE.matches(it) }?.distinct()?.sorted(),
+                    detectedBy = r.detectedBy?.map { if (SERVICE.matches(it)) it else UNKNOWN_SERVICE }
+                        ?.distinct()?.sorted(),
                 )
             }.distinctBy { it.key }.sortedBy { it.key } // same row order whichever source loaded
 

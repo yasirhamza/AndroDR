@@ -133,6 +133,7 @@ private const val FIX_FAILED = "Scan again; if it keeps failing, export the repo
 private const val FIX_LISTS = "Scan again in a few minutes."
 private const val FIX_IMPORT = "Import one to check this."
 private const val FIX_UPDATE = "Update the app."
+private const val FIX_RELOAD = "Scan again later; if it persists, update the app."
 private const val NO_INFECTION_CHECK = "no infection check exists for a live scan; patch level only"
 
 /** One clause and its fix (or null) for a service that was not fully checked. Exhaustive: no `else`. */
@@ -154,6 +155,7 @@ private fun clause(s: ServiceStatus): Pair<String, String?> {
             "$w checked against the built-in list only (threat lists had not finished loading)" to FIX_LISTS
         ServiceCoverage.LISTS_UNKNOWN ->
             "$w checked, but it is not known whether the threat lists had loaded" to FIX_LISTS
+        ServiceCoverage.NO_DETECTOR -> "$w not checked (the rule that detects it was not loaded)" to FIX_RELOAD
         ServiceCoverage.NEEDS_IMPORT -> "$w need a bug report or intrusion log" to FIX_IMPORT
         ServiceCoverage.CHECKED -> "" to null
     }

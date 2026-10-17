@@ -57,7 +57,7 @@ class ReportInputsTest {
     @Test
     fun `ruleScopes resolves campaign tags through aliases and drops unknown ones`() {
         val engine = mockk<SigmaRuleEngine> {
-            every { getRules() } returns listOf(
+            every { getEnabledRules() } returns listOf(
                 rule("androdr-108", RuleCategory.INCIDENT, tags = listOf("attack.t1", "campaign.cytrox")),
                 rule("androdr-200", RuleCategory.INCIDENT, tags = listOf("campaign.nobody")),
             )
@@ -79,7 +79,7 @@ class ReportInputsTest {
             "selection",
         )
         val engine = mockk<SigmaRuleEngine> {
-            every { getRules() } returns listOf(
+            every { getEnabledRules() } returns listOf(
                 rule("androdr-003", RuleCategory.INCIDENT, service = "dns_monitor", detection = iocDetection,
                     evidenceType = "ioc_match"),
                 rule("androdr-300", RuleCategory.INCIDENT, service = "dns_monitor", detection = iocDetection,
@@ -90,5 +90,19 @@ class ReportInputsTest {
         val scopes = ReportInputs(registry, engine).ruleScopes()
         assertEquals(RuleScope("dns_monitor", emptySet(), true), scopes["androdr-003"])
         assertEquals(false, scopes.getValue("androdr-300").carriesIocCampaign)
+    }
+
+    @Test
+    fun `ruleScopes leaves out a disabled rule`() {
+        val enabled = rule("androdr-108", RuleCategory.INCIDENT, tags = listOf("campaign.predator"))
+        val disabled = rule("androdr-109", RuleCategory.INCIDENT, tags = listOf("campaign.predator"))
+        val engine = mockk<SigmaRuleEngine> {
+            every { getRules() } returns listOf(enabled, disabled)
+            every { getEnabledRules() } returns listOf(enabled)
+        }
+        val registry = mockk<CampaignRegistry> {
+            every { campaigns() } returns listOf(Campaign("predator", "Predator"))
+        }
+        assertEquals(setOf("androdr-108"), ReportInputs(registry, engine).ruleScopes().keys)
     }
 }

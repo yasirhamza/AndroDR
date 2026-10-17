@@ -114,23 +114,30 @@ class CampaignRegistryTest {
               - key: e
                 label: E
                 detected_by: [file_scanner, "Bad Value", "x;y"]
+              - key: f
+                label: F
+                detected_by: [app_scanner, ~, true, 3]
         """.trimIndent()
         val byKey = CampaignRegistry.parseYaml(yaml).associate { it.key to it.detectedBy }
         assertEquals(listOf("app_scanner", "dns_monitor"), byKey["a"])
         assertEquals(emptyList<String>(), byKey["b"])
         assertNull(byKey["c"])
         assertNull(byKey["d"]) // not a list: treated as absent
-        assertEquals(listOf("file_scanner"), byKey["e"])
+        // An invalid value fails closed: it becomes "unknown" (renders as a check this build lacks), never dropped.
+        assertEquals(listOf("file_scanner", "unknown"), byKey["e"])
+        assertEquals(listOf("app_scanner", "unknown"), byKey["f"]) // only strings are service names
     }
 
     @Test
     fun `detected_by is read from the bundled json`() {
         val json = """[{"key":"a","label":"A","aliases":[],"detected_by":["dns_monitor"]},
-            {"key":"b","label":"B","aliases":[]},{"key":"c","label":"C","aliases":[],"detected_by":"x"}]"""
+            {"key":"b","label":"B","aliases":[]},{"key":"c","label":"C","aliases":[],"detected_by":"x"},
+            {"key":"d","label":"D","aliases":[],"detected_by":["dns_monitor",null,true,3,"Bad Value"]}]"""
         val byKey = CampaignRegistry.parseBundled(json).associate { it.key to it.detectedBy }
         assertEquals(listOf("dns_monitor"), byKey["a"])
         assertNull(byKey["b"])
         assertNull(byKey["c"])
+        assertEquals(listOf("dns_monitor", "unknown"), byKey["d"])
     }
 
     @Test
