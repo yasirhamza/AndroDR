@@ -195,6 +195,26 @@ class ScanOrchestratorErrorHandlingTest {
     }
 
     @Test
+    fun `a failed DNS snapshot read is recorded as dnsSnapshot and the scan completes`() = runTest {
+        coEvery { dnsEventDao.getRecentSnapshot() } throws IllegalStateException("database is locked")
+
+        val result: ScanResult = orchestrator.runFullScan()
+
+        val failure = result.scannerErrors.single { it.scanner == "dnsSnapshot" }
+        assertEquals("IllegalStateException", failure.exception)
+        assertEquals("database is locked", failure.message)
+        assertTrue("DNS rules did not run: the scan is partial", result.isPartialScan)
+    }
+
+    @Test
+    fun `cancellation during the DNS snapshot read propagates`() = runTest {
+        coEvery { dnsEventDao.getRecentSnapshot() } throws CancellationException("user cancelled")
+        var caught: Throwable? = null
+        try { orchestrator.runFullScan() } catch (e: CancellationException) { caught = e }
+        assertNotNull(caught)
+    }
+
+    @Test
     fun `one scanner failing does not cascade — other scanners still run and get recorded`() = runTest {
         coEvery { fileArtifactScanner.collectTelemetry() } throws RuntimeException("file scanner dead")
 

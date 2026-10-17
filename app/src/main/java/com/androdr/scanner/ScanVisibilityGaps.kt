@@ -5,6 +5,7 @@ import com.androdr.data.model.MISSING_SOURCE_RULES_REPO
 import com.androdr.data.model.NotEvaluatedReason
 import com.androdr.data.model.ScannerFailure
 import com.androdr.ioc.FeedCoverage
+import com.androdr.reporting.VISIBILITY_GAPS_SCANNER
 
 /**
  * Sentinel entries for gaps in what a scan could see: no threat-intel feed rows yet (offline
@@ -71,7 +72,7 @@ internal suspend fun visibilityGapsOrFailure(
 } catch (e: Exception) {
     listOf(
         ScannerFailure(
-            scanner = "visibility_gaps",
+            scanner = VISIBILITY_GAPS_SCANNER,
             exception = e::class.simpleName ?: "Exception",
             message = "could not tell whether threat-intel feeds are loaded"
         )

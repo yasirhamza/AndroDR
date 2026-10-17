@@ -1,6 +1,7 @@
 package com.androdr.reporting
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.snakeyaml.engine.v2.api.Load
@@ -44,5 +45,22 @@ class ServiceScannerMapCrossCheckTest {
             else emptySet())
         assertTrue("not recorded by ScanOrchestrator: ${SCANNER_FOR_SERVICE.values.toSet() - recorded}",
             recorded.containsAll(SCANNER_FOR_SERVICE.values))
+    }
+
+    @Test
+    fun `every coverage producer scanner name is recorded`() {
+        // Comment lines are dropped, as in the DNS check above, so a mention cannot satisfy the pin.
+        fun code(name: String): String = file("src/main/java/com/androdr/scanner/$name",
+            "app/src/main/java/com/androdr/scanner/$name").readText().lines().filterNot { line ->
+            line.trimStart().let { it.startsWith("//") || it.startsWith("*") }
+        }.joinToString("\n")
+        val orchestrator = code("ScanOrchestrator.kt")
+        val visibility = code("ScanVisibilityGaps.kt")
+        assertTrue("attribution must be recorded via ATTRIBUTION_SCANNER",
+            Regex("""scanner\s*=\s*ATTRIBUTION_SCANNER""").containsMatchIn(orchestrator))
+        assertTrue("visibility gaps must be recorded via VISIBILITY_GAPS_SCANNER",
+            Regex("""scanner\s*=\s*VISIBILITY_GAPS_SCANNER""").containsMatchIn(visibility))
+        assertFalse(Regex("""scanner\s*=\s*"attribution"""").containsMatchIn(orchestrator))
+        assertFalse(Regex("""scanner\s*=\s*"visibility_gaps"""").containsMatchIn(visibility))
     }
 }

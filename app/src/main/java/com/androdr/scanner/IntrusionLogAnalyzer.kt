@@ -8,6 +8,7 @@ import com.androdr.data.model.ImportedDnsEvent
 import com.androdr.data.model.NetworkTelemetry
 import com.androdr.data.model.ScannerFailure
 import com.androdr.data.model.SecurityLogEvent
+import com.androdr.reporting.ATTRIBUTION_SCANNER
 import com.androdr.ioc.IndicatorResolver
 import com.androdr.scanner.intrusionlog.IntrusionLogParser
 import com.androdr.sigma.Finding
@@ -193,7 +194,7 @@ class IntrusionLogAnalyzer @Inject constructor(
         } catch (e: Exception) {
             Log.w(TAG, "Domain attribution prefetch failed; findings keep no family", e)
             analysisErrors += ScannerFailure(
-                scanner = "attribution",
+                scanner = ATTRIBUTION_SCANNER,
                 exception = e.javaClass.simpleName,
                 message = "family unavailable: domain prefetch failed"
             )
