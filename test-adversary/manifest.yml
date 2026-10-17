@@ -685,3 +685,17 @@ scenarios:
     expected_patterns:
       - "Blocked : 2y4nothing.xyz no (blocking is off for threat-list domains)"
       - "!Blocked : 2y4nothing.xyz yes"
+
+  # ── 2026-10-17: per-campaign check state (#394) ─────────────────────────
+  - id: campaign_rows_dns_off
+    track: 5
+    risk: none
+    # Needs the VPN OFF (the opposite of the DNS scenarios): run it with --only after
+    # stopping the debug VPN. Pegasus is DNS-only, so it cannot read [OK] with DNS off.
+    description: "DNS monitoring off: DNS-only campaign rows say not monitored, with the fix"
+    source: baseline
+    tags: [android, baseline, report-wording]
+    expected_patterns:
+      - "[--]  Pegasus: DNS lookups not monitored (DNS monitoring was off; only lookups recorded earlier were checked)"
+      - "Turn on DNS monitoring, use the phone as usual, then scan again."
+      - "![OK]  Pegasus: not detected"

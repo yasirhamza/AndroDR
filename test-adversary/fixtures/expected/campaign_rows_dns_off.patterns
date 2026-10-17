@@ -1,0 +1,8 @@
+# DNS monitoring OFF (#394): a DNS-only campaign must not read [OK]; the row says why and how to fix it.
+# Precondition: stop the debug app's VPN before the scan.
+MERCENARY SPYWARE CHECK
+[--]  Pegasus: DNS lookups not monitored (DNS monitoring was off; only lookups recorded earlier were checked)
+Turn on DNS monitoring, use the phone as usual, then scan again.
+[--]  LANDFALL: no infection check exists for a live scan; patch level only
+![OK]  Pegasus: not detected
+!: DETECTED --
