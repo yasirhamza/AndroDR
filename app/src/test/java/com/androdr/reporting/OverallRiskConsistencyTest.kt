@@ -34,7 +34,10 @@ class OverallRiskConsistencyTest {
     )
 
     private fun headerRiskOf(scan: ScanResult): String =
-        ReportFormatter.formatScanReport(scan, emptyList(), emptyList(), versionName = "test")
+        ReportFormatter.formatScanReport(
+            scan, emptyList(), emptyList(), versionName = "test",
+            campaigns = emptyList(), ruleCategoryById = emptyMap(),
+        )
             .lineSequence()
             .first { it.contains("OVERALL RISK:") }
             .substringAfter("OVERALL RISK:")

@@ -9,6 +9,7 @@ import com.androdr.data.repo.CveRepository
 import com.androdr.ioc.IndicatorUpdater
 import com.androdr.ioc.KnownAppUpdater
 import com.androdr.reporting.ReportFormatter
+import com.androdr.reporting.ReportInputs
 import com.androdr.scanner.ScanOrchestrator
 import com.androdr.sigma.SigmaRuleEngine
 import com.androdr.sigma.SigmaRuleFeed
@@ -32,6 +33,7 @@ class ScanBroadcastReceiver : BroadcastReceiver() {
     @Inject lateinit var knownAppUpdater: KnownAppUpdater
     @Inject lateinit var sigmaRuleFeed: SigmaRuleFeed
     @Inject lateinit var sigmaRuleEngine: SigmaRuleEngine
+    @Inject lateinit var reportInputs: ReportInputs
 
     override fun onReceive(context: Context, intent: Intent) {
         val action = intent.action
@@ -51,7 +53,9 @@ class ScanBroadcastReceiver : BroadcastReceiver() {
                     val report = ReportFormatter.formatScanReport(
                         scan, dns, emptyList(), inventory,
                         fileTelemetry = scanOrchestrator.lastFileArtifactTelemetry,
-                        versionName = context.appVersion().name
+                        versionName = context.appVersion().name,
+                        campaigns = reportInputs.campaigns(),
+                        ruleCategoryById = reportInputs.ruleCategoryById()
                     )
                     val outDir = context.getExternalFilesDir(null) ?: return@launch
                     File(outDir, "androdr_last_report.txt").writeText(report)

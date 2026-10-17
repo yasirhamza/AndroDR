@@ -45,7 +45,8 @@ class ReportExporter @Inject constructor(
     private val dnsEventDao: DnsEventDao,
     private val scanOrchestrator: ScanOrchestrator,
     private val appScanner: AppScanner,
-    private val forensicTimelineEventDao: ForensicTimelineEventDao
+    private val forensicTimelineEventDao: ForensicTimelineEventDao,
+    private val reportInputs: ReportInputs,
 ) {
     private val filenameFmt = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US)
 
@@ -85,6 +86,8 @@ class ReportExporter @Inject constructor(
             appOpsTelemetry = appOpsTelemetry,
             intrusionEvents = intrusionEvents,
             versionName = context.appVersion().name,
+            campaigns = reportInputs.campaigns(),
+            ruleCategoryById = reportInputs.ruleCategoryById(),
         )
 
         val reportsDir = File(context.cacheDir, "reports").apply { mkdirs() }

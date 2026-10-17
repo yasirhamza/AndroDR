@@ -44,6 +44,8 @@ class ActivityChainsReportSectionTest {
     private fun report(scan: ScanResult) =
         ReportFormatter.formatScanReport(
             scan, emptyList(), emptyList(), versionName = "test", mode = ExportMode.FINDINGS_ONLY,
+            campaigns = emptyList(),
+            ruleCategoryById = emptyMap(),
         )
 
     @Test

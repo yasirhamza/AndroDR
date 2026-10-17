@@ -112,18 +112,76 @@ def test_fails_when_the_patterns_file_is_missing(tmp_path):
     assert "patterns" in result.stdout.lower()
 
 
-@pytest.mark.parametrize("risk", ["HIGH", "CRITICAL"])
-def test_clean_device_baseline_rejects_escalation(tmp_path, risk):
-    """Exactly what test-adversary/fixtures/expected/clean_device.patterns asserts."""
-    baseline = Path(__file__).parent / "fixtures" / "expected" / "clean_device.patterns"
+# The shape ReportFormatter prints for a clean live device (summary + MERCENARY
+# SPYWARE CHECK, as rendered in MercenaryCheckReportTest's clean-device case).
+CLEAN_DEVICE_REPORT = """  OVERALL RISK: LOW
+
+  No threats detected. Your phone appears secure.
+
+  SUMMARY:
+    Apps scanned: 212 -- Flagged: 0
+    Campaign detections: none
+    DNS IOC matches: 0
+
+------------------------------------------------------------
+  MERCENARY SPYWARE CHECK
+------------------------------------------------------------
+  [OK]  Cellebrite: not detected
+  [OK]  Graphite (Paragon): not detected
+  [OK]  LANDFALL: not detected
+  [OK]  Massistant: not detected
+  [OK]  Midnight Mimosa: not detected
+  [OK]  Pegasus: not detected
+  [OK]  Predator: not detected
+  "not detected" means none of the checks that ran in this scan matched.
+"""
+
+BASELINE = Path(__file__).parent / "fixtures" / "expected" / "clean_device.patterns"
+
+
+def run_baseline(tmp_path, report_text):
     report = tmp_path / "report.txt"
-    report.write_text(CLEAN_REPORT.replace("OVERALL RISK: MEDIUM", f"OVERALL RISK: {risk}"))
-    result = subprocess.run(
-        ["bash", str(SCRIPT), str(report), str(baseline)],
+    report.write_text(report_text)
+    return subprocess.run(
+        ["bash", str(SCRIPT), str(report), str(BASELINE)],
         capture_output=True,
         text=True,
     )
+
+
+def test_clean_device_baseline_accepts_a_clean_report(tmp_path):
+    """Without this, the rejection tests below would pass on any report at all."""
+    result = run_baseline(tmp_path, CLEAN_DEVICE_REPORT)
+    assert result.returncode == 0, result.stdout
+
+
+@pytest.mark.parametrize("risk", ["HIGH", "CRITICAL"])
+def test_clean_device_baseline_rejects_escalation(tmp_path, risk):
+    """Exactly what test-adversary/fixtures/expected/clean_device.patterns asserts."""
+    report = CLEAN_DEVICE_REPORT.replace("OVERALL RISK: LOW", f"OVERALL RISK: {risk}")
+    result = run_baseline(tmp_path, report)
     assert result.returncode == 1, f"a clean device reporting {risk} must fail the baseline"
+    assert f"forbidden pattern present: 'OVERALL RISK: {risk}'" in result.stdout
+
+
+def test_clean_device_baseline_rejects_a_detected_campaign(tmp_path):
+    report = CLEAN_DEVICE_REPORT.replace(
+        "  [OK]  Pegasus: not detected",
+        "  [!!]  Pegasus: DETECTED -- domain p.example (Pegasus), 2025-10-15",
+    )
+    result = run_baseline(tmp_path, report)
+    assert result.returncode == 1
+    assert "forbidden pattern present: ': DETECTED --'" in result.stdout
+
+
+def test_clean_device_baseline_allows_patch_level_exposure(tmp_path):
+    # An old emulator patch level leaves campaign CVEs unpatched: EXPOSED is not an escalation.
+    report = CLEAN_DEVICE_REPORT.replace(
+        "  [OK]  Pegasus: not detected",
+        "  [!!]  Pegasus: EXPOSED -- 2 CVEs linked to Pegasus (unpatched; not evidence of infection)",
+    )
+    result = run_baseline(tmp_path, report)
+    assert result.returncode == 0, result.stdout
 
 
 DNS_REPORT = """DNS ACTIVITY

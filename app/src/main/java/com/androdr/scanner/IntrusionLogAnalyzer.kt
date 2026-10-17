@@ -6,7 +6,9 @@ import android.net.Uri
 import android.util.Log
 import com.androdr.data.model.ImportedDnsEvent
 import com.androdr.data.model.NetworkTelemetry
+import com.androdr.data.model.ScannerFailure
 import com.androdr.data.model.SecurityLogEvent
+import com.androdr.ioc.IndicatorResolver
 import com.androdr.scanner.intrusionlog.IntrusionLogParser
 import com.androdr.sigma.Finding
 import com.androdr.sigma.SigmaRuleEngine
@@ -14,13 +16,16 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import java.io.IOException
 import java.io.InputStream
 import java.io.Reader
 import java.util.zip.ZipInputStream
 import javax.inject.Inject
+import kotlin.coroutines.EmptyCoroutineContext
 import javax.inject.Singleton
 
 data class IntrusionLogStats(
@@ -52,7 +57,9 @@ data class IntrusionLogAnalysisResult(
     val dnsEvents: List<ImportedDnsEvent>,
     val networkEvents: List<NetworkTelemetry>,
     val securityEvents: List<SecurityLogEvent>,
-    val stats: IntrusionLogStats
+    val stats: IntrusionLogStats,
+    /** Non-fatal problems during analysis (e.g. attribution unavailable); persisted on the import's scan. */
+    val scannerErrors: List<ScannerFailure> = emptyList()
 )
 
 /**
@@ -65,7 +72,8 @@ data class IntrusionLogAnalysisResult(
 @Singleton
 class IntrusionLogAnalyzer @Inject constructor(
     @ApplicationContext private val context: Context,
-    private val sigmaRuleEngine: SigmaRuleEngine
+    private val sigmaRuleEngine: SigmaRuleEngine,
+    private val indicatorResolver: IndicatorResolver
 ) {
     // JVM unit tests construct this with a relaxed MockK Context — only
     // analyze(uri) touches it; analyzeEntries() is context-free by design.
@@ -125,7 +133,8 @@ class IntrusionLogAnalyzer @Inject constructor(
                         entrySequence,
                         uidResolver,
                         System.currentTimeMillis(),
-                        onLine = { analysisScope.ensureActive() }
+                        onLine = { analysisScope.ensureActive() },
+                        parentJob = analysisScope.coroutineContext[Job]
                     )
                 }
             }
@@ -147,7 +156,8 @@ class IntrusionLogAnalyzer @Inject constructor(
         entries: Sequence<Pair<String, InputStream>>,
         uidResolver: (String) -> Int,
         capturedAt: Long,
-        onLine: () -> Unit = {}
+        onLine: () -> Unit = {},
+        parentJob: Job? = null
     ): IntrusionLogAnalysisResult {
         // One concatenated line sequence across all matching entries makes
         // cross-file event dedup inherent to a single parse() call.
@@ -166,6 +176,28 @@ class IntrusionLogAnalyzer @Inject constructor(
         }
         val parsed = IntrusionLogParser().parse(lines, uidResolver, capturedAt, onLine)
 
+        // Rows behind domain hits, so ioc_match findings name their family. analyzeEntries
+        // is synchronous and already runs on Dispatchers.IO via analyze(). A failure costs
+        // the attribution only: findings still fire, and the import says what it lacked.
+        // runBlocking is made a child of the caller's Job ([parentJob]) so cancelling the
+        // import reaches the prefetch; a bare runBlocking is a top-level Job and would run
+        // one DAO lookup per host to the end.
+        val analysisErrors = mutableListOf<ScannerFailure>()
+        @Suppress("TooGenericExceptionCaught")
+        try {
+            runBlocking(parentJob ?: EmptyCoroutineContext) {
+                indicatorResolver.prefetchDomainIndicators(parsed.dnsEvents.map { it.event.domain })
+            }
+        } catch (c: CancellationException) {
+            throw c
+        } catch (e: Exception) {
+            Log.w(TAG, "Domain attribution prefetch failed; findings keep no family", e)
+            analysisErrors += ScannerFailure(
+                scanner = "attribution",
+                exception = e.javaClass.simpleName,
+                message = "family unavailable: domain prefetch failed"
+            )
+        }
         val findings = buildList {
             addAll(sigmaRuleEngine.evaluateDns(parsed.dnsEvents.map { it.event }))
             addAll(sigmaRuleEngine.evaluateNetwork(parsed.networkEvents))
@@ -190,6 +222,7 @@ class IntrusionLogAnalyzer @Inject constructor(
             dnsEvents = parsed.dnsEvents,
             networkEvents = parsed.networkEvents,
             securityEvents = parsed.securityEvents,
+            scannerErrors = analysisErrors,
             stats = IntrusionLogStats(
                 dnsEventCount = parsed.dnsEvents.size,
                 connectEventCount = parsed.networkEvents.size,

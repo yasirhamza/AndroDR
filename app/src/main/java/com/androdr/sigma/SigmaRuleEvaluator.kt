@@ -38,7 +38,11 @@ data class Finding(
     // Propagated from the rule. Subject-level properties the detection
     // guarantees (e.g. "sideloaded", "known_malware"). The presentation
     // layer aggregates the union across same-subject findings.
-    val impliesFlags: List<String> = emptyList()
+    val impliesFlags: List<String> = emptyList(),
+    // The rule's [RuleCategory] name ("INCIDENT" / "DEVICE_POSTURE"). [category] is the display
+    // section and can't tell: androdr-108 is an incident rule displayed under device posture.
+    // "" on findings stored before this field existed (the report then looks the rule up).
+    val ruleCategory: String = "",
 )
 
 /**
@@ -208,7 +212,8 @@ object SigmaRuleEvaluator {
             evidence = evidenceResult?.evidence ?: Evidence.None,
             matchContext = record.filterValues { it !is List<*> && it !is Map<*, *> }
                 .mapValues { (_, v) -> v?.toString() ?: "" },
-            impliesFlags = rule.impliesFlags
+            impliesFlags = rule.impliesFlags,
+            ruleCategory = rule.category.name,
         )
     }
 

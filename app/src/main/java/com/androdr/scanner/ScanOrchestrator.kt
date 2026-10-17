@@ -17,7 +17,12 @@ import com.androdr.sigma.RuleCoverage
 import com.androdr.util.reportSafe
 import com.androdr.data.repo.ScanRepository
 import com.androdr.ioc.IndicatorResolver
+import com.androdr.data.model.Indicator
+import com.androdr.network.DnsVpnService
 import com.androdr.sigma.CveEvidenceProvider
+import com.androdr.sigma.EvidenceProvider
+import com.androdr.sigma.IocMatchEvidenceProvider
+import com.androdr.sigma.SigmaRule
 import com.androdr.sigma.Finding
 import com.androdr.sigma.FindingCategory
 import com.androdr.sigma.SigmaCorrelationEngine
@@ -181,7 +186,8 @@ class ScanOrchestrator @Inject constructor(
         sigmaRuleEngine.setIocLookups(mapOf(
             "package_ioc_db" to { v -> indicatorResolver.isKnownBadPackage(v.toString()) != null },
             "cert_hash_ioc_db" to { v -> indicatorResolver.isKnownBadCert(v.toString()) != null },
-            "domain_ioc_db" to { v -> indicatorResolver.isKnownBadDomain(v.toString()) != null },
+            // Bundle fallback: a bundled domain still matches before the first feed sync (cold start).
+            "domain_ioc_db" to { v -> indicatorResolver.isKnownBadDomainWithBundle(v.toString()) != null },
             "apk_hash_ioc_db" to { v -> indicatorResolver.isKnownBadApkHash(v.toString()) != null },
             // ADR: package-name-only lookup, no cert verification. The trusted installer
             // (from_trusted_store) is the trust anchor — Android enforces signature consistency
@@ -225,9 +231,12 @@ class ScanOrchestrator @Inject constructor(
         } catch (e: Exception) {
             Log.w(TAG, "Remote SIGMA rule fetch failed: ${e.message}")
         }
-        sigmaRuleEngine.setEvidenceProviders(mapOf(
-            "cve_list" to CveEvidenceProvider(sigmaRuleEngine.getRules())
-        ))
+        val providers: Map<String, EvidenceProvider> =
+            buildEvidenceProviders(sigmaRuleEngine.getRules()) { db, value -> iocRow(indicatorResolver, db, value) }
+        check(providers.keys == REGISTERED_EVIDENCE_TYPES) {
+            "providers ${providers.keys} != $REGISTERED_EVIDENCE_TYPES"
+        }
+        sigmaRuleEngine.setEvidenceProviders(providers)
         ruleEngineInitialized = true
     }
 
@@ -290,6 +299,9 @@ class ScanOrchestrator @Inject constructor(
         val scannerErrors: MutableList<ScannerFailure> =
             Collections.synchronizedList(mutableListOf())
         recordRuleCapabilitySkips(scannerErrors)
+        scannerErrors.addAll(
+            visibilityGapsOrFailure({ indicatorResolver.feedCoverage() }, DnsVpnService.isRunning.value)
+        )
 
         // Initialize progress for phase 1 — 8 parallel scanners to track.
         _scanProgress.value = ScanProgress.Running(
@@ -373,7 +385,43 @@ class ScanOrchestrator @Inject constructor(
             dnsEventDao.getRecentSnapshot()
         }.getOrDefault(emptyList())
         if (recentDnsEvents.isNotEmpty()) {
+            // Load the rows behind domain hits so ioc_match findings can name their family;
+            // the provider reads them from this cache, never from Room on the VPN path (#71).
+            // A failure costs the attribution only: findings still fire, and the scan says so.
+            var prefetchFailed = false
+            @Suppress("TooGenericExceptionCaught")
+            try {
+                indicatorResolver.prefetchDomainIndicators(recentDnsEvents.map { it.domain })
+            } catch (c: CancellationException) {
+                throw c
+            } catch (e: Exception) {
+                Log.w(TAG, "Domain attribution prefetch failed; findings keep no family", e)
+                prefetchFailed = true
+                synchronized(scannerErrors) {
+                    scannerErrors.add(
+                        ScannerFailure(
+                            scanner = "attribution",
+                            exception = e.javaClass.simpleName,
+                            message = "family unavailable: domain prefetch failed"
+                        )
+                    )
+                }
+            }
             allFindings.addAll(sigmaRuleEngine.evaluateDns(recentDnsEvents))
+            val misses = indicatorResolver.attributionMisses.getAndSet(emptySet())
+            // After a failed prefetch every live hit is a miss; that failure already says so.
+            if (misses.isNotEmpty() && !prefetchFailed) {
+                synchronized(scannerErrors) {
+                    scannerErrors.add(
+                        ScannerFailure(
+                            scanner = "attribution",
+                            exception = "MissingPrefetch",
+                            message = "family unavailable for ${misses.size} domain(s): " +
+                                "DNS evaluated without prefetch"
+                        )
+                    )
+                }
+            }
         }
 
         val sideloadedCount = allFindings.count {
@@ -748,7 +796,7 @@ class ScanOrchestrator @Inject constructor(
             knownMalwareCount = result.findings.count {
                 it.level == "critical" && "known_malware" in it.impliesFlags
             },
-            scannerErrors = emptyList(),
+            scannerErrors = result.scannerErrors,
             // #356: see analyzeBugReport — imports are labeled, not passed off
             // as live scans of this device.
             source = TelemetrySource.INTRUSION_LOG_IMPORT
@@ -986,6 +1034,46 @@ class ScanOrchestrator @Inject constructor(
 
     companion object {
         private const val TAG = "ScanOrchestrator"
+
+        /**
+         * Every `display.evidence_type` (other than `none`) a rule may declare must have a
+         * provider here. From March to October 2026 androdr-001..003 declared `ioc_match`
+         * with no provider registered, so the evaluator silently fell back to no evidence
+         * and IOC findings never named the matched family. EvidenceProviderCoverageTest
+         * fails the build on a declared type missing from this set; initRuleEngine checks
+         * the provider map against it at runtime.
+         */
+        val REGISTERED_EVIDENCE_TYPES: Set<String> = setOf("cve_list", "ioc_match")
+
+        internal fun buildEvidenceProviders(
+            rules: List<SigmaRule>,
+            iocRow: (lookupDb: String, value: String) -> Indicator?
+        ): Map<String, EvidenceProvider> = mapOf(
+            "cve_list" to CveEvidenceProvider(rules),
+            "ioc_match" to IocMatchEvidenceProvider(iocRow),
+        )
+
+        /**
+         * The stored row behind an `ioc_lookup` match, for the ioc_match provider.
+         *
+         * Domains: the prefetched row is read ONLY when [value] matches live (bloom or
+         * bundle) right now. Prefetched rows are never evicted, so a stale one can outlive
+         * its indicator; it is never evidence that a domain is an IOC. A live match with
+         * no prefetched row is recorded in [IndicatorResolver.attributionMisses].
+         */
+        internal fun iocRow(resolver: IndicatorResolver, lookupDb: String, value: String): Indicator? =
+            when (lookupDb) {
+                "package_ioc_db" -> resolver.packageIndicator(value)
+                "cert_hash_ioc_db" -> resolver.isKnownBadCert(value)
+                "apk_hash_ioc_db" -> resolver.isKnownBadApkHash(value)
+                "domain_ioc_db" -> if (resolver.isKnownBadDomainWithBundle(value) == null) {
+                    null
+                } else {
+                    resolver.cachedDomainIndicator(value)
+                        ?: null.also { resolver.attributionMisses.updateAndGet { it + value } }
+                }
+                else -> null
+            }
 
         /**
          * Cap on the feed-controlled `ioc_lookup` name echoed into a

@@ -16,7 +16,7 @@ import com.androdr.data.model.ScanResult
         CveEntity::class, ForensicTimelineEvent::class, Indicator::class,
         FeedHealth::class
     ],
-    version = 18,
+    version = 19,
     exportSchema = true
 )
 @TypeConverters(Converters::class)

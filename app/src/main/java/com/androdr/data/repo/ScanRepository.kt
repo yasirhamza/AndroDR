@@ -4,13 +4,12 @@ import androidx.room.withTransaction
 import com.androdr.data.db.AppDatabase
 import com.androdr.data.db.DnsEventDao
 import com.androdr.data.db.ForensicTimelineEventDao
-import com.androdr.data.db.IndicatorDao
 import com.androdr.data.db.ScanResultDao
 import com.androdr.data.db.toForensicTimelineEvent
 import com.androdr.data.model.DnsEvent
 import com.androdr.data.model.ForensicTimelineEvent
-import com.androdr.data.model.Indicator
 import com.androdr.data.model.ScanResult
+import com.androdr.ioc.IndicatorResolver
 import kotlinx.coroutines.flow.Flow
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -21,7 +20,7 @@ class ScanRepository @Inject constructor(
     private val scanResultDao: ScanResultDao,
     private val dnsEventDao: DnsEventDao,
     private val forensicTimelineEventDao: ForensicTimelineEventDao,
-    private val indicatorDao: IndicatorDao
+    private val indicatorResolver: IndicatorResolver
 ) {
 
     // ── Scan results ───────────────────────────────────────────────────────────
@@ -194,7 +193,9 @@ class ScanRepository @Inject constructor(
      * drain source. Matched events are also batched into the forensic timeline.
      *
      * Matched events are enriched here (off the VPN hot path) with real
-     * campaign/severity/description metadata via `indicatorDao.lookup`. The
+     * family/severity/description metadata via [IndicatorResolver.resolveDomainRow],
+     * looked up by the queried domain for EVERY matched event -- including
+     * `blocklist` / `blocklist_detect` hits, whose reason string names no value. The
      * VPN bloom-filter path in `IndicatorResolver.isKnownBadDomain` returns a
      * stub `Indicator` with empty `campaign` / `severity = "UNKNOWN"` because
      * the bloom filter only stores the domain set, not the metadata. Without
@@ -209,23 +210,12 @@ class ScanRepository @Inject constructor(
         if (matched.isNotEmpty()) {
             runCatching {
                 val enrichedRows = matched.map { dnsEvent ->
-                    val lookupKey = extractMatchedValue(dnsEvent.reason)
-                    val indicator: Indicator? = lookupKey?.let { key ->
-                        runCatching { indicatorDao.lookup("domain", key) }.getOrNull()
-                    }
+                    val indicator = runCatching { indicatorResolver.resolveDomainRow(dnsEvent.domain) }.getOrNull()
                     dnsEvent.toForensicTimelineEvent(indicator)
                 }
                 forensicTimelineEventDao.insertAll(enrichedRows)
             }
         }
-    }
-
-    /** Parses "IOC: <val>" / "IOC_detect: <val>" reason strings to extract the matched value. */
-    private fun extractMatchedValue(reason: String?): String? = when {
-        reason == null -> null
-        reason.startsWith("IOC_detect: ") -> reason.removePrefix("IOC_detect: ")
-        reason.startsWith("IOC: ") -> reason.removePrefix("IOC: ")
-        else -> null
     }
 
     /**

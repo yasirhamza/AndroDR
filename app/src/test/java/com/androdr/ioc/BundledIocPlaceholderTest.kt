@@ -56,11 +56,7 @@ class BundledIocPlaceholderTest {
         sections
     }
 
-    private fun bundledDomains(): Set<String> =
-        File(rawDir, "domain_blocklist.txt").readLines()
-            .map { it.trim().lowercase() }
-            .filter { it.isNotEmpty() && !it.startsWith("#") }
-            .toSet()
+    private fun bundledDomains(): Set<String> = bundledJsonField("known_bad_domains.json", "domain")
 
     private fun bundledJsonField(file: String, field: String): Set<String> {
         val entries = JSONArray(File(rawDir, file).readText())
@@ -81,7 +77,7 @@ class BundledIocPlaceholderTest {
 
     @Test
     fun `removed domains stay out of the blocklist and ioc-data`() {
-        assertNoneRemoved("domains", bundledDomains(), "domain_blocklist.txt")
+        assertNoneRemoved("domains", bundledDomains(), "known_bad_domains.json")
         assertNoneRemoved("domains", iocDataIndicators("c2-domains.yml"), "ioc-data/c2-domains.yml")
     }
 
@@ -109,6 +105,58 @@ class BundledIocPlaceholderTest {
             "known_bad_apk_hashes.json",
         )
         assertNoneRemoved("apk_hashes", iocDataIndicators("malware-hashes.yml"), "ioc-data/malware-hashes.yml")
+    }
+
+    private val familyKey = mapOf(
+        "known_bad_domains.json" to "familyName",
+        "known_bad_packages.json" to "name",
+        "known_bad_certs.json" to "familyName",
+        "known_bad_apk_hashes.json" to "familyName",
+    )
+
+    private fun schemaCategories(): Set<String> {
+        val schema = firstDirectory(
+            "third-party/android-sigma-rules/validation", "../third-party/android-sigma-rules/validation",
+        ).resolve("ioc-entry-schema.json")
+        val enum = org.json.JSONObject(schema.readText()).getJSONObject("\$defs")
+            .getJSONObject("threatIocEntry").getJSONObject("properties").getJSONObject("category")
+            .getJSONArray("enum")
+        return (0 until enum.length()).map { enum.getString(it) }.toSet()
+    }
+
+    @Test
+    fun `every bundled entry has a family and a reference`() {
+        for ((file, fam) in familyKey) {
+            val arr = JSONArray(File(rawDir, file).readText())
+            val bad = (0 until arr.length()).map { arr.getJSONObject(it) }
+                .filter { it.optString(fam).isBlank() || it.optString("reference").isBlank() }
+            assertTrue("$file: ${bad.size} entries lack a family or reference: ${bad.take(5)}", bad.isEmpty())
+        }
+    }
+
+    @Test
+    fun `every bundled entry has a category in the schema enum`() {
+        val allowed = schemaCategories()
+        assertTrue("schema enum not read: $allowed", "MALWARE" in allowed)
+        for (file in familyKey.keys) {
+            val arr = JSONArray(File(rawDir, file).readText())
+            val bad = (0 until arr.length()).map { arr.getJSONObject(it).optString("category") }
+                .filter { it !in allowed }.toSet()
+            assertTrue("$file has categories outside the schema enum: $bad", bad.isEmpty())
+        }
+    }
+
+    @Test
+    fun `every cold-start seed is bundled`() {
+        val seeds = mutableSetOf<String>()
+        var last = ""
+        File(iocDataDir, "package-names.yml").forEachLine { l ->
+            Regex("""indicator:\s*"?([^"\s]+)""").find(l)?.let { last = it.groupValues[1] }
+            if (Regex("""^\s*cold_start_seed:\s*true""").containsMatchIn(l)) seeds += last
+        }
+        assertTrue("expected 12 cold-start seeds in package-names.yml, found $seeds", seeds.size == 12)
+        val missing = seeds - bundledJsonField("known_bad_packages.json", "packageName")
+        assertTrue("cold-start seeds missing from the bundle: $missing", missing.isEmpty())
     }
 
     @Test

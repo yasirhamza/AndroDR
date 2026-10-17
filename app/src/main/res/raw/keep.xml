@@ -1,4 +1,4 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Prevent resource shrinking from removing SIGMA rule YAML files (loaded via explicit R.raw IDs) -->
+<!-- Prevent resource shrinking from removing SIGMA rule YAML files (loaded via explicit R.raw IDs) ; known_campaigns is read by CampaignRegistry (Plan B Task B4) -->
 <resources xmlns:tools="http://schemas.android.com/tools"
-    tools:keep="@raw/sigma_*" />
+    tools:keep="@raw/sigma_*,@raw/known_campaigns" />

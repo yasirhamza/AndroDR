@@ -1,872 +1,1482 @@
 [
   {
-    "packageName": "com.eyezy.android",
-    "name": "Eyezy",
-    "category": "STALKERWARE",
-    "severity": "HIGH",
-    "description": "Commercial stalkerware marketed as parental monitoring. Captures keystrokes, reads encrypted messages, and tracks location.",
-    "source": "stalkerware-indicators"
-  },
-  {
-    "packageName": "com.ttsapp",
-    "name": "TheTruthSpy",
-    "category": "STALKERWARE",
-    "severity": "CRITICAL",
-    "description": "TheTruthSpy stalkerware alias \u2014 if not self-installed, contact a DV hotline",
-    "source": "stalkerware-indicators"
-  },
-  {
-    "packageName": "com.ispyoo",
-    "name": "TheTruthSpy",
-    "category": "STALKERWARE",
-    "severity": "CRITICAL",
-    "description": "TheTruthSpy/iSpyoo stalkerware \u2014 if not self-installed, contact a DV hotline",
-    "source": "stalkerware-indicators"
-  },
-  {
-    "packageName": "com.mxspy",
-    "name": "TheTruthSpy",
-    "category": "STALKERWARE",
-    "severity": "CRITICAL",
-    "description": "TheTruthSpy/MxSpy stalkerware \u2014 if not self-installed, contact a DV hotline",
-    "source": "stalkerware-indicators"
-  },
-  {
-    "packageName": "com.spyzee",
-    "name": "TheTruthSpy",
-    "category": "STALKERWARE",
-    "severity": "CRITICAL",
-    "description": "TheTruthSpy/Spyzee stalkerware \u2014 if not self-installed, contact a DV hotline",
-    "source": "stalkerware-indicators"
-  },
-  {
-    "packageName": "com.apspy",
-    "name": "TheTruthSpy",
-    "category": "STALKERWARE",
-    "severity": "CRITICAL",
-    "description": "TheTruthSpy/ApSpy stalkerware \u2014 if not self-installed, contact a DV hotline",
-    "source": "stalkerware-indicators"
-  },
-  {
-    "packageName": "com.vvt.android",
-    "name": "FlexiSpy",
-    "category": "STALKERWARE",
-    "severity": "CRITICAL",
-    "description": "FlexiSpy stalkerware \u2014 if not self-installed, contact a DV hotline",
-    "source": "stalkerware-indicators"
-  },
-  {
-    "packageName": "com.fp.backup",
-    "name": "FlexiSpy",
-    "category": "STALKERWARE",
-    "severity": "CRITICAL",
-    "description": "FlexiSpy stalkerware disguised as backup \u2014 if not self-installed, contact a DV hotline",
-    "source": "stalkerware-indicators"
-  },
-  {
-    "packageName": "com.lsdroid.cerberus",
-    "name": "Cerberus",
-    "category": "STALKERWARE",
-    "severity": "CRITICAL",
-    "description": "Cerberus anti-theft app abused as stalkerware \u2014 if not self-installed, contact a DV hotline",
-    "source": "stalkerware-indicators"
-  },
-  {
-    "packageName": "com.surebrec",
-    "name": "Cerberus",
-    "category": "STALKERWARE",
-    "severity": "CRITICAL",
-    "description": "Cerberus stalkerware alias \u2014 if not self-installed, contact a DV hotline",
-    "source": "stalkerware-indicators"
-  },
-  {
-    "packageName": "com.mspy",
-    "name": "mSpy",
-    "category": "STALKERWARE",
-    "severity": "CRITICAL",
-    "description": "mSpy stalkerware \u2014 if not self-installed, contact a DV hotline",
-    "source": "stalkerware-indicators"
-  },
-  {
-    "packageName": "com.eyezy",
-    "name": "mSpy",
-    "category": "STALKERWARE",
-    "severity": "CRITICAL",
-    "description": "Eyezy/mSpy stalkerware \u2014 if not self-installed, contact a DV hotline",
-    "source": "stalkerware-indicators"
-  },
-  {
-    "packageName": "med.mspy",
-    "name": "mSpy",
-    "category": "STALKERWARE",
-    "severity": "CRITICAL",
-    "description": "mSpy stalkerware variant \u2014 if not self-installed, contact a DV hotline",
-    "source": "stalkerware-indicators"
-  },
-  {
-    "packageName": "update.service.android",
-    "name": "mSpy",
-    "category": "STALKERWARE",
-    "severity": "CRITICAL",
-    "description": "mSpy stalkerware disguised as system update \u2014 if not self-installed, contact a DV hotline",
-    "source": "stalkerware-indicators"
-  },
-  {
-    "packageName": "core.update.framework",
-    "name": "mSpy",
-    "category": "STALKERWARE",
-    "severity": "CRITICAL",
-    "description": "mSpy stalkerware disguised as framework update \u2014 if not self-installed, contact a DV hotline",
-    "source": "stalkerware-indicators"
-  },
-  {
-    "packageName": "com.cocospy",
-    "name": "Cocospy",
-    "category": "STALKERWARE",
-    "severity": "CRITICAL",
-    "description": "Cocospy stalkerware \u2014 if not self-installed, contact a DV hotline",
-    "source": "stalkerware-indicators"
-  },
-  {
-    "packageName": "com.duiyun",
-    "name": "Cocospy",
-    "category": "STALKERWARE",
-    "severity": "CRITICAL",
-    "description": "Cocospy/Duiyun stalkerware \u2014 if not self-installed, contact a DV hotline",
-    "source": "stalkerware-indicators"
-  },
-  {
-    "packageName": "com.sc.cocospy",
-    "name": "Cocospy",
-    "category": "STALKERWARE",
-    "severity": "CRITICAL",
-    "description": "Cocospy stalkerware variant \u2014 if not self-installed, contact a DV hotline",
-    "source": "stalkerware-indicators"
-  },
-  {
-    "packageName": "com.sc.fonemonitor",
-    "name": "Cocospy",
-    "category": "STALKERWARE",
-    "severity": "CRITICAL",
-    "description": "Cocospy/FoneMonitor stalkerware \u2014 if not self-installed, contact a DV hotline",
-    "source": "stalkerware-indicators"
-  },
-  {
-    "packageName": "com.sc.spyic",
-    "name": "Cocospy",
-    "category": "STALKERWARE",
-    "severity": "CRITICAL",
-    "description": "Cocospy/Spyic stalkerware \u2014 if not self-installed, contact a DV hotline",
-    "source": "stalkerware-indicators"
-  },
-  {
-    "packageName": "com.sc.spyzie",
-    "name": "Cocospy",
-    "category": "STALKERWARE",
-    "severity": "CRITICAL",
-    "description": "Cocospy/Spyzie stalkerware \u2014 if not self-installed, contact a DV hotline",
-    "source": "stalkerware-indicators"
-  },
-  {
-    "packageName": "com.spyic",
-    "name": "Cocospy",
-    "category": "STALKERWARE",
-    "severity": "CRITICAL",
-    "description": "Spyic stalkerware (Cocospy cluster) \u2014 if not self-installed, contact a DV hotline",
-    "source": "stalkerware-indicators"
-  },
-  {
-    "packageName": "com.minspy",
-    "name": "Cocospy",
-    "category": "STALKERWARE",
-    "severity": "CRITICAL",
-    "description": "Minspy stalkerware (Cocospy cluster) \u2014 if not self-installed, contact a DV hotline",
-    "source": "stalkerware-indicators"
-  },
-  {
-    "packageName": "com.serv.services",
-    "name": "NoviSpy",
-    "category": "NATION_STATE_SPYWARE",
-    "severity": "CRITICAL",
-    "description": "NoviSpy spyware \u2014 deployed by Serbian intelligence against journalists"
-  },
-  {
-    "packageName": "com.accesibilityservice",
-    "name": "NoviSpy",
-    "category": "NATION_STATE_SPYWARE",
-    "severity": "CRITICAL",
-    "description": "NoviSpy spyware \u2014 disguised as accessibility service"
-  },
-  {
-    "packageName": "com.li.activity",
-    "name": "NoviSpy",
-    "category": "NATION_STATE_SPYWARE",
-    "severity": "CRITICAL",
-    "description": "NoviSpy spyware variant"
-  },
-  {
-    "packageName": "com.gu.activity",
-    "name": "NoviSpy",
-    "category": "NATION_STATE_SPYWARE",
-    "severity": "CRITICAL",
-    "description": "NoviSpy spyware variant"
-  },
-  {
-    "packageName": "com.google.android.service",
-    "name": "ResidentBat",
-    "category": "NATION_STATE_SPYWARE",
-    "severity": "CRITICAL",
-    "description": "ResidentBat spyware \u2014 targets Belarusian journalists, disguised as Google service"
-  },
-  {
-    "packageName": "com.google.bat",
-    "name": "ResidentBat",
-    "category": "NATION_STATE_SPYWARE",
-    "severity": "CRITICAL",
-    "description": "ResidentBat spyware"
-  },
-  {
-    "packageName": "com.huaweisettingsapp.mkz",
-    "name": "ResidentBat",
-    "category": "NATION_STATE_SPYWARE",
-    "severity": "CRITICAL",
-    "description": "ResidentBat spyware \u2014 disguised as Huawei settings"
-  },
-  {
-    "packageName": "com.linkedln.service",
-    "name": "ResidentBat",
-    "category": "NATION_STATE_SPYWARE",
-    "severity": "CRITICAL",
-    "description": "ResidentBat spyware \u2014 typosquats LinkedIn"
-  },
-  {
-    "packageName": "com.oneplussync.bat",
-    "name": "ResidentBat",
-    "category": "NATION_STATE_SPYWARE",
-    "severity": "CRITICAL",
-    "description": "ResidentBat spyware \u2014 disguised as OnePlus sync"
-  },
-  {
-    "packageName": "cm.google.android.apps.assistant",
-    "name": "ResidentBat",
-    "category": "NATION_STATE_SPYWARE",
-    "severity": "CRITICAL",
-    "description": "ResidentBat spyware \u2014 typosquats Google (cm. not com.)"
-  },
-  {
-    "packageName": "com.android.framework.safety",
-    "name": "ResidentBat",
-    "category": "NATION_STATE_SPYWARE",
-    "severity": "CRITICAL",
-    "description": "ResidentBat spyware \u2014 disguised as Android framework"
-  },
-  {
-    "packageName": "com.hihonor.core.service",
-    "name": "ResidentBat",
-    "category": "NATION_STATE_SPYWARE",
-    "severity": "CRITICAL",
-    "description": "ResidentBat spyware \u2014 disguised as Honor service"
-  },
-  {
-    "packageName": "com.client.appA",
-    "name": "Cellebrite",
-    "category": "FORENSIC_TOOL",
-    "severity": "HIGH",
-    "description": "Cellebrite UFED agent \u2014 presence indicates physical device extraction occurred"
-  },
-  {
-    "packageName": "org.lgvvfj.pluscqpuj",
-    "name": "Mirax Bot",
-    "category": "MALWARE",
-    "severity": "CRITICAL",
-    "description": "Mirax Bot Android banking RAT \u2014 masquerades as video player (Meta-ads distribution, 2025-12+)"
-  },
-  {
-    "packageName": "org.yjeiwd.plusdc71",
-    "name": "Mirax Bot",
-    "category": "MALWARE",
-    "severity": "CRITICAL",
-    "description": "Mirax Bot Android banking RAT variant"
-  },
-  {
-    "packageName": "org.dawme.secure5ny",
-    "name": "Mirax Bot",
-    "category": "MALWARE",
-    "severity": "CRITICAL",
-    "description": "Mirax Bot Android banking RAT variant"
-  },
-  {
-    "packageName": "org.azgaw.managergst1d",
-    "name": "Mirax Bot",
-    "category": "MALWARE",
-    "severity": "CRITICAL",
-    "description": "Mirax Bot Android banking RAT variant"
-  },
-  {
-    "packageName": "com.oblivion.client",
-    "name": "Oblivion RAT",
-    "category": "SPYWARE",
-    "severity": "CRITICAL",
-    "description": "Oblivion RAT Android MaaS \u2014 masquerades as Google Play update (2026-03)"
-  },
-  {
-    "packageName": "com.oblivion.dropper",
-    "name": "Oblivion RAT",
-    "category": "SPYWARE",
-    "severity": "CRITICAL",
-    "description": "Oblivion RAT dropper APK"
-  },
-  {
-    "packageName": "com.yandexxxx.update",
-    "name": "Oblivion RAT",
-    "category": "SPYWARE",
-    "severity": "CRITICAL",
-    "description": "Oblivion RAT \u2014 typosquats Yandex update"
-  },
-  {
-    "packageName": "ru.y34tuy.t8595",
-    "name": "TaxiSpy",
-    "category": "MALWARE",
-    "severity": "CRITICAL",
-    "description": "TaxiSpy Android banking RAT \u2014 hijacks default SMS handler, Firebase C2 (Russian banking targets, 2026-03)"
-  },
-  {
-    "packageName": "net.ustexas.myavlive",
-    "name": "PromptSpy",
-    "category": "MALWARE",
-    "severity": "CRITICAL",
-    "description": "PromptSpy \u2014 first Android malware to abuse Google Gemini at runtime; JPMorgan Chase impersonation in Argentina (2026-03)"
-  },
-  {
     "packageName": "calldetaila.ndcallhisto.rytogetan.ynumber",
     "name": "CallPhantom",
     "category": "MALWARE",
+    "campaign": "",
     "severity": "CRITICAL",
-    "description": "CallPhantom premium-SMS fraud app (top variant, 3M+ downloads)"
-  },
-  {
-    "packageName": "com.pixelxinnovation.manager",
-    "name": "CallPhantom",
-    "category": "MALWARE",
-    "severity": "CRITICAL",
-    "description": "CallPhantom premium-SMS fraud app"
-  },
-  {
-    "packageName": "sc.call.ofany.mobiledetail",
-    "name": "CallPhantom",
-    "category": "MALWARE",
-    "severity": "CRITICAL",
-    "description": "CallPhantom premium-SMS fraud app"
-  },
-  {
-    "packageName": "com.cddhaduk.callerid.block.contact",
-    "name": "CallPhantom",
-    "category": "MALWARE",
-    "severity": "CRITICAL",
-    "description": "CallPhantom premium-SMS fraud app"
-  },
-  {
-    "packageName": "com.basehistory.historydownloading",
-    "name": "CallPhantom",
-    "category": "MALWARE",
-    "severity": "CRITICAL",
-    "description": "CallPhantom premium-SMS fraud app"
-  },
-  {
-    "packageName": "com.call.of.any.number",
-    "name": "CallPhantom",
-    "category": "MALWARE",
-    "severity": "CRITICAL",
-    "description": "CallPhantom premium-SMS fraud app"
-  },
-  {
-    "packageName": "com.rajni.callhistory",
-    "name": "CallPhantom",
-    "category": "MALWARE",
-    "severity": "CRITICAL",
-    "description": "CallPhantom premium-SMS fraud app"
-  },
-  {
-    "packageName": "com.callhistory.calldetails.callerids.callerhistory.callhostoryanynumber.getcall.history.callhistorymanager",
-    "name": "CallPhantom",
-    "category": "MALWARE",
-    "severity": "CRITICAL",
-    "description": "CallPhantom premium-SMS fraud app"
-  },
-  {
-    "packageName": "com.callinformative.instantcallhistory.callhistorybluethem.callinfo",
-    "name": "CallPhantom",
-    "category": "MALWARE",
-    "severity": "CRITICAL",
-    "description": "CallPhantom premium-SMS fraud app"
-  },
-  {
-    "packageName": "com.call.detail.caller.history",
-    "name": "CallPhantom",
-    "category": "MALWARE",
-    "severity": "CRITICAL",
-    "description": "CallPhantom premium-SMS fraud app"
-  },
-  {
-    "packageName": "com.anycallinformation.datadetailswho.callinfo.numberfinder",
-    "name": "CallPhantom",
-    "category": "MALWARE",
-    "severity": "CRITICAL",
-    "description": "CallPhantom premium-SMS fraud app"
-  },
-  {
-    "packageName": "com.callhistory.callhistoryyourgf",
-    "name": "CallPhantom",
-    "category": "MALWARE",
-    "severity": "CRITICAL",
-    "description": "CallPhantom premium-SMS fraud app"
-  },
-  {
-    "packageName": "com.calldetails.smshistory.callhistoryofanynumber",
-    "name": "CallPhantom",
-    "category": "MALWARE",
-    "severity": "CRITICAL",
-    "description": "CallPhantom premium-SMS fraud app"
-  },
-  {
-    "packageName": "com.callhistory.anynumber.chapfvor.history",
-    "name": "CallPhantom",
-    "category": "MALWARE",
-    "severity": "CRITICAL",
-    "description": "CallPhantom premium-SMS fraud app"
-  },
-  {
-    "packageName": "com.callhistory.callhistoryany.call",
-    "name": "CallPhantom",
-    "category": "MALWARE",
-    "severity": "CRITICAL",
-    "description": "CallPhantom premium-SMS fraud app"
-  },
-  {
-    "packageName": "com.getanynumberofcallhistory.callhistoryofanynumber.findcalldetailsofanynumber",
-    "name": "CallPhantom",
-    "category": "MALWARE",
-    "severity": "CRITICAL",
-    "description": "CallPhantom premium-SMS fraud app"
-  },
-  {
-    "packageName": "com.easyranktools.callhistoryforanynumber",
-    "name": "CallPhantom",
-    "category": "MALWARE",
-    "severity": "CRITICAL",
-    "description": "CallPhantom premium-SMS fraud app"
-  },
-  {
-    "packageName": "com.sbpinfotech.findlocationofanynumber",
-    "name": "CallPhantom",
-    "category": "MALWARE",
-    "severity": "CRITICAL",
-    "description": "CallPhantom premium-SMS fraud app"
+    "description": "CallPhantom premium-SMS fraud app (top variant, 3M+ downloads)",
+    "source": "threat_research",
+    "reference": "https://www.welivesecurity.com/en/eset-research/fake-call-logs-real-payments-how-callphantom-tricks-android-users/"
   },
   {
     "packageName": "callhistoryeditor.callhistory.numberdetails.calleridlocator",
     "name": "CallPhantom",
     "category": "MALWARE",
+    "campaign": "",
     "severity": "CRITICAL",
-    "description": "CallPhantom premium-SMS fraud app"
+    "description": "CallPhantom premium-SMS fraud app",
+    "source": "threat_research",
+    "reference": "https://www.welivesecurity.com/en/eset-research/fake-call-logs-real-payments-how-callphantom-tricks-android-users/"
   },
   {
-    "packageName": "com.all_historydownload.anynumber.callhistorybackup",
-    "name": "CallPhantom",
-    "category": "MALWARE",
-    "severity": "CRITICAL",
-    "description": "CallPhantom premium-SMS fraud app"
-  },
-  {
-    "packageName": "com.earth.earth_vpn",
-    "name": "DCHSpy",
+    "packageName": "cm.google.android.apps.assistant",
+    "name": "ResidentBat",
     "category": "NATION_STATE_SPYWARE",
+    "campaign": "",
     "severity": "CRITICAL",
-    "description": "DCHSpy MuddyWater Earth VPN lure"
+    "description": "ResidentBat spyware \u2014 typosquats Google (cm. not com.)",
+    "source": "mvt-indicators",
+    "reference": "feed:mvt-indicators#ResidentBat"
   },
   {
-    "packageName": "com.comodoapp.comodovpn",
-    "name": "DCHSpy",
+    "packageName": "com.abc.nexus",
+    "name": "MoYu",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "HIGH",
+    "description": "MoYu Group malicious app observed on Android TV set-top boxes (contains AdmoyuService; Kaspersky 2026-08-21, same actor as the head-unit JarService chain). Remediation: remove the app or reflash the device firmware.",
+    "source": "threat_research",
+    "reference": "https://securelist.com/android-head-unit-malware/121106/"
+  },
+  {
+    "packageName": "com.accesibilityservice",
+    "name": "NoviSpy",
     "category": "NATION_STATE_SPYWARE",
+    "campaign": "",
     "severity": "CRITICAL",
-    "description": "DCHSpy MuddyWater Comodo VPN lure"
-  },
-  {
-    "packageName": "com.hv.hide_vpn",
-    "name": "DCHSpy",
-    "category": "NATION_STATE_SPYWARE",
-    "severity": "CRITICAL",
-    "description": "DCHSpy MuddyWater Hide VPN lure"
-  },
-  {
-    "packageName": "com.meyapico.massistant",
-    "name": "Massistant",
-    "category": "FORENSIC_TOOL",
-    "severity": "CRITICAL",
-    "description": "Massistant Chinese mobile forensics by Meiya Pico"
-  },
-  {
-    "packageName": "com.app16330.core20461",
-    "name": "TrickMo",
-    "category": "MALWARE",
-    "severity": "HIGH",
-    "description": "TrickMo Android banking trojan package name"
-  },
-  {
-    "packageName": "com.app15318.core1173",
-    "name": "TrickMo",
-    "category": "MALWARE",
-    "severity": "HIGH",
-    "description": "TrickMo Android banking trojan package name"
-  },
-  {
-    "packageName": "uncle.collop416.wifekin78",
-    "name": "TrickMo",
-    "category": "MALWARE",
-    "severity": "HIGH",
-    "description": "TrickMo Android banking trojan package name"
-  },
-  {
-    "packageName": "nibong.lida531.butler836",
-    "name": "TrickMo",
-    "category": "MALWARE",
-    "severity": "HIGH",
-    "description": "TrickMo Android banking trojan package name"
-  },
-  {
-    "packageName": "com.onetower.defense.idle",
-    "name": "Android.MagicAd",
-    "category": "MALWARE",
-    "severity": "MEDIUM",
-    "description": "Android.MagicAd adware trojan package (Doctor Web Q2 2026); displays intrusive background ads via OEM-specific bypasses. Uninstall."
-  },
-  {
-    "packageName": "com.funbees.pighub",
-    "name": "Android.MagicAd",
-    "category": "MALWARE",
-    "severity": "MEDIUM",
-    "description": "Android.MagicAd app package name (threat research, 2026-07-03 sweep)"
-  },
-  {
-    "packageName": "com.ultimate.highway.racer",
-    "name": "Android.MagicAd",
-    "category": "MALWARE",
-    "severity": "MEDIUM",
-    "description": "Android.MagicAd app package name (threat research, 2026-07-03 sweep)"
-  },
-  {
-    "packageName": "com.anime.wallpapers.aesthetic",
-    "name": "Android.MagicAd",
-    "category": "MALWARE",
-    "severity": "MEDIUM",
-    "description": "Android.MagicAd app package name (threat research, 2026-07-03 sweep)"
-  },
-  {
-    "packageName": "com.simple.pdfviewer.reader.app",
-    "name": "Android.MagicAd",
-    "category": "MALWARE",
-    "severity": "MEDIUM",
-    "description": "Android.MagicAd app package name (threat research, 2026-07-03 sweep)"
-  },
-  {
-    "packageName": "com.fruit.blender.maker",
-    "name": "Android.MagicAd",
-    "category": "MALWARE",
-    "severity": "MEDIUM",
-    "description": "Android.MagicAd app package name (threat research, 2026-07-03 sweep)"
-  },
-  {
-    "packageName": "com.quickcommander.filehome.manager",
-    "name": "Android.MagicAd",
-    "category": "MALWARE",
-    "severity": "MEDIUM",
-    "description": "Android.MagicAd app package name (threat research, 2026-07-03 sweep)"
-  },
-  {
-    "packageName": "com.gamesland.platform",
-    "name": "Android.MagicAd",
-    "category": "MALWARE",
-    "severity": "MEDIUM",
-    "description": "Android.MagicAd app package name (threat research, 2026-07-03 sweep)"
-  },
-  {
-    "packageName": "com.rhythmball.music.runner",
-    "name": "Android.MagicAd",
-    "category": "MALWARE",
-    "severity": "MEDIUM",
-    "description": "Android.MagicAd app package name (threat research, 2026-07-03 sweep)"
-  },
-  {
-    "packageName": "com.uptwo.cleanup.master",
-    "name": "Android.MagicAd",
-    "category": "MALWARE",
-    "severity": "MEDIUM",
-    "description": "Android.MagicAd app package name (threat research, 2026-07-03 sweep)"
-  },
-  {
-    "packageName": "com.heartrate.healthtrack.rate.analyzer",
-    "name": "Android.MagicAd",
-    "category": "MALWARE",
-    "severity": "MEDIUM",
-    "description": "Android.MagicAd app package name (threat research, 2026-07-03 sweep)"
-  },
-  {
-    "packageName": "com.power.cleanup.pro",
-    "name": "Android.MagicAd",
-    "category": "MALWARE",
-    "severity": "MEDIUM",
-    "description": "Android.MagicAd app package name (threat research, 2026-07-03 sweep)"
-  },
-  {
-    "packageName": "com.track.app.base",
-    "name": "Android.MagicAd",
-    "category": "MALWARE",
-    "severity": "MEDIUM",
-    "description": "Android.MagicAd app package name (threat research, 2026-07-03 sweep)"
-  },
-  {
-    "packageName": "com.bp.logandiary.life",
-    "name": "Android.MagicAd",
-    "category": "MALWARE",
-    "severity": "MEDIUM",
-    "description": "Android.MagicAd app package name (threat research, 2026-07-03 sweep)"
-  },
-  {
-    "packageName": "com.line.protection.puppyrescue",
-    "name": "Android.MagicAd",
-    "category": "MALWARE",
-    "severity": "MEDIUM",
-    "description": "Android.MagicAd app package name (threat research, 2026-07-03 sweep)"
-  },
-  {
-    "packageName": "com.playall.video4k",
-    "name": "Android.MagicAd",
-    "category": "MALWARE",
-    "severity": "MEDIUM",
-    "description": "Android.MagicAd app package name (threat research, 2026-07-03 sweep)"
-  },
-  {
-    "packageName": "com.paperhub.festivals",
-    "name": "Android.MagicAd",
-    "category": "MALWARE",
-    "severity": "MEDIUM",
-    "description": "Android.MagicAd app package name (threat research, 2026-07-03 sweep)"
-  },
-  {
-    "packageName": "com.bloodp.recorder.pressure",
-    "name": "Android.MagicAd",
-    "category": "MALWARE",
-    "severity": "MEDIUM",
-    "description": "Android.MagicAd app package name (threat research, 2026-07-03 sweep)"
-  },
-  {
-    "packageName": "com.pekRacingTraffice.OffroadJeep",
-    "name": "Android.MagicAd",
-    "category": "MALWARE",
-    "severity": "MEDIUM",
-    "description": "Android.MagicAd app package name (threat research, 2026-07-03 sweep)"
-  },
-  {
-    "packageName": "com.snakearena.survival",
-    "name": "Android.MagicAd",
-    "category": "MALWARE",
-    "severity": "MEDIUM",
-    "description": "Android.MagicAd app package name (threat research, 2026-07-03 sweep)"
-  },
-  {
-    "packageName": "com.weathersense.livenow",
-    "name": "Android.MagicAd",
-    "category": "MALWARE",
-    "severity": "MEDIUM",
-    "description": "Android.MagicAd app package name (threat research, 2026-07-03 sweep)"
-  },
-  {
-    "packageName": "com.bp.bloodpressure.healthtraker",
-    "name": "Android.MagicAd",
-    "category": "MALWARE",
-    "severity": "MEDIUM",
-    "description": "Android.MagicAd app package name (threat research, 2026-07-03 sweep)"
-  },
-  {
-    "packageName": "com.jump.boy.funplay",
-    "name": "Android.MagicAd",
-    "category": "MALWARE",
-    "severity": "MEDIUM",
-    "description": "Android.MagicAd app package name (threat research, 2026-07-03 sweep)"
-  },
-  {
-    "packageName": "com.water.sorting.funpuzzle",
-    "name": "Android.MagicAd",
-    "category": "MALWARE",
-    "severity": "MEDIUM",
-    "description": "Android.MagicAd app package name (threat research, 2026-07-03 sweep)"
-  },
-  {
-    "packageName": "com.dogbee.linesaver",
-    "name": "Android.MagicAd",
-    "category": "MALWARE",
-    "severity": "MEDIUM",
-    "description": "Android.MagicAd app package name (threat research, 2026-07-03 sweep)"
-  },
-  {
-    "packageName": "com.billhub.apps",
-    "name": "Android.MagicAd",
-    "category": "MALWARE",
-    "severity": "MEDIUM",
-    "description": "Android.MagicAd app package name (threat research, 2026-07-03 sweep)"
-  },
-  {
-    "packageName": "com.utility.localweather",
-    "name": "Android.MagicAd",
-    "category": "MALWARE",
-    "severity": "MEDIUM",
-    "description": "Android.MagicAd app package name (threat research, 2026-07-03 sweep)"
-  },
-  {
-    "packageName": "com.supermax.clenauppro",
-    "name": "Android.MagicAd",
-    "category": "MALWARE",
-    "severity": "MEDIUM",
-    "description": "Android.MagicAd app package name (threat research, 2026-07-03 sweep)"
-  },
-  {
-    "packageName": "com.pekRacingTraffice.RacerATV",
-    "name": "Android.MagicAd",
-    "category": "MALWARE",
-    "severity": "MEDIUM",
-    "description": "Android.MagicAd app package name (threat research, 2026-07-03 sweep)"
+    "description": "NoviSpy spyware \u2014 disguised as accessibility service",
+    "source": "amnesty-investigations",
+    "reference": "feed:amnesty-investigations#NoviSpy"
   },
   {
     "packageName": "com.aerovia.mobile",
     "name": "Android.MagicAd",
     "category": "MALWARE",
+    "campaign": "",
     "severity": "MEDIUM",
-    "description": "Android.MagicAd app package name (threat research, 2026-07-03 sweep)"
+    "description": "Android.MagicAd app package name (threat research, 2026-07-03 sweep)",
+    "source": "threat_research",
+    "reference": "https://raw.githubusercontent.com/DoctorWebLtd/malware-iocs/master/Android.MagicAd.1/README.adoc"
+  },
+  {
+    "packageName": "com.all_historydownload.anynumber.callhistorybackup",
+    "name": "CallPhantom",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "CallPhantom premium-SMS fraud app",
+    "source": "threat_research",
+    "reference": "https://www.welivesecurity.com/en/eset-research/fake-call-logs-real-payments-how-callphantom-tricks-android-users/"
+  },
+  {
+    "packageName": "com.android.framework.safety",
+    "name": "ResidentBat",
+    "category": "NATION_STATE_SPYWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "ResidentBat spyware \u2014 disguised as Android framework",
+    "source": "mvt-indicators",
+    "reference": "feed:mvt-indicators#ResidentBat"
+  },
+  {
+    "packageName": "com.android.mioplus",
+    "name": "MoYu tigertv",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "MEDIUM",
+    "description": "MoYu Group (BADBOX 2.0) IPTV delivery-vehicle app (MIO_Plus brand, tigertv family); clean at install, fetches the zhima proxy/ad-fraud chain at runtime. Single source (Deepfield ipmoyu).",
+    "source": "threat_research",
+    "reference": "https://raw.githubusercontent.com/deepfield/public-research/main/ipmoyu/report.md"
+  },
+  {
+    "packageName": "com.android.miosport",
+    "name": "MoYu tigertv",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "MEDIUM",
+    "description": "MoYu Group (BADBOX 2.0) IPTV delivery-vehicle app (tigertv family); clean at install, fetches the zhima proxy/ad-fraud chain at runtime. Single source (Deepfield ipmoyu).",
+    "source": "threat_research",
+    "reference": "https://raw.githubusercontent.com/deepfield/public-research/main/ipmoyu/report.md"
+  },
+  {
+    "packageName": "com.android.sys.dts",
+    "name": "Midnight Mimosa",
+    "category": "MALWARE",
+    "campaign": "midnight-mimosa",
+    "severity": "CRITICAL",
+    "description": "Midnight Mimosa related fake-system build (Bitdefender)",
+    "source": "threat_research",
+    "reference": "https://www.bitdefender.com/en-us/blog/labs/midnight-mimosa-malware"
+  },
+  {
+    "packageName": "com.android.sys.gmsprot",
+    "name": "Midnight Mimosa",
+    "category": "MALWARE",
+    "campaign": "midnight-mimosa",
+    "severity": "CRITICAL",
+    "description": "Midnight Mimosa preinstalled enabler variant (versionCode 100000; Bitdefender)",
+    "source": "threat_research",
+    "reference": "https://www.bitdefender.com/en-us/blog/labs/midnight-mimosa-malware"
+  },
+  {
+    "packageName": "com.android.sys.prot",
+    "name": "Midnight Mimosa",
+    "category": "MALWARE",
+    "campaign": "midnight-mimosa",
+    "severity": "CRITICAL",
+    "description": "Midnight Mimosa preinstalled enabler variant (versionCode 900014; Bitdefender)",
+    "source": "threat_research",
+    "reference": "https://www.bitdefender.com/en-us/blog/labs/midnight-mimosa-malware"
+  },
+  {
+    "packageName": "com.android.system.lite",
+    "name": "Midnight Mimosa",
+    "category": "MALWARE",
+    "campaign": "midnight-mimosa",
+    "severity": "CRITICAL",
+    "description": "Midnight Mimosa preinstalled enabler - platform-signed fake 'System' app (primary enabler, versionCode 900000; Bitdefender)",
+    "source": "threat_research",
+    "reference": "https://www.bitdefender.com/en-us/blog/labs/midnight-mimosa-malware"
+  },
+  {
+    "packageName": "com.android.tigersport",
+    "name": "MoYu tigertv",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "MEDIUM",
+    "description": "MoYu Group (BADBOX 2.0) IPTV delivery-vehicle app (tigertv family); clean at install, fetches the zhima proxy/ad-fraud chain at runtime. Single source (Deepfield ipmoyu).",
+    "source": "threat_research",
+    "reference": "https://raw.githubusercontent.com/deepfield/public-research/main/ipmoyu/report.md"
+  },
+  {
+    "packageName": "com.android.tigertv",
+    "name": "MoYu tigertv",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "MEDIUM",
+    "description": "Grey-market VLC-based IPTV app (TIGER_TV brand) used by MoYu Group (BADBOX 2.0) as a delivery vehicle: clean at install, at runtime calls a rotating getDomainList pool and fetches the zhima proxy/ad-fraud chain from BADBOX a1./t1. C2. Presence indicates the device is in the MoYu delivery path. Single source (Nokia Deepfield ipmoyu). Uninstall the IPTV app and check DNS logs for a1./t1. C2 contact.",
+    "source": "threat_research",
+    "reference": "https://raw.githubusercontent.com/deepfield/public-research/main/ipmoyu/report.md"
+  },
+  {
+    "packageName": "com.android.vo_fixture",
+    "name": "MoYu tigertv",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "MEDIUM",
+    "description": "MoYu Group (BADBOX 2.0) IPTV delivery-vehicle app (tigertv family; genuine upstream package name from Deepfield, 'fixture' refers to sports fixtures); clean at install, fetches the zhima proxy/ad-fraud chain at runtime. Single source (Deepfield ipmoyu).",
+    "source": "threat_research",
+    "reference": "https://raw.githubusercontent.com/deepfield/public-research/main/ipmoyu/report.md"
+  },
+  {
+    "packageName": "com.android.vo_vivo",
+    "name": "MoYu tigertv",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "MEDIUM",
+    "description": "MoYu Group (BADBOX 2.0) IPTV delivery-vehicle app (Vo_Vivo brand, tigertv family); clean at install, fetches the zhima proxy/ad-fraud chain at runtime. Single source (Deepfield ipmoyu).",
+    "source": "threat_research",
+    "reference": "https://raw.githubusercontent.com/deepfield/public-research/main/ipmoyu/report.md"
+  },
+  {
+    "packageName": "com.anime.wallpapers.aesthetic",
+    "name": "Android.MagicAd",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "MEDIUM",
+    "description": "Android.MagicAd app package name (threat research, 2026-07-03 sweep)",
+    "source": "threat_research",
+    "reference": "https://raw.githubusercontent.com/DoctorWebLtd/malware-iocs/master/Android.MagicAd.1/README.adoc"
+  },
+  {
+    "packageName": "com.anycallinformation.datadetailswho.callinfo.numberfinder",
+    "name": "CallPhantom",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "CallPhantom premium-SMS fraud app",
+    "source": "threat_research",
+    "reference": "https://www.welivesecurity.com/en/eset-research/fake-call-logs-real-payments-how-callphantom-tricks-android-users/"
+  },
+  {
+    "packageName": "com.app.mz.jaguarn",
+    "name": "Mzmess",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "HIGH",
+    "description": "Mzmess 'Jaguar' proxy plugin delivered onto Vo1d-infected TV boxes (Xlab; package name corroborated by The Hacker News).",
+    "source": "threat_research",
+    "reference": "https://thehackernews.com/2025/03/vo1d-botnets-peak-surpasses-159m.html"
+  },
+  {
+    "packageName": "com.app.mz.lxhwdgn",
+    "name": "Mzmess",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "HIGH",
+    "description": "Mzmess 'Lxhwdg' plugin (purpose unknown; WSS RPC C2 on port 2345) delivered onto Vo1d-infected TV boxes (Xlab; package name corroborated by The Hacker News).",
+    "source": "threat_research",
+    "reference": "https://thehackernews.com/2025/03/vo1d-botnets-peak-surpasses-159m.html"
+  },
+  {
+    "packageName": "com.app.mz.popan",
+    "name": "Mzmess",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "HIGH",
+    "description": "Mzmess 'Popa' proxy plugin delivered onto Vo1d-infected TV boxes; turns the device into a proxy exit node (Xlab; package name corroborated by The Hacker News).",
+    "source": "threat_research",
+    "reference": "https://thehackernews.com/2025/03/vo1d-botnets-peak-surpasses-159m.html"
+  },
+  {
+    "packageName": "com.app.mz.spiritn",
+    "name": "Mzmess",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "HIGH",
+    "description": "Mzmess 'Spirit' ad-promotion / traffic-inflation plugin delivered onto Vo1d-infected TV boxes (Xlab; package name corroborated by The Hacker News).",
+    "source": "threat_research",
+    "reference": "https://thehackernews.com/2025/03/vo1d-botnets-peak-surpasses-159m.html"
+  },
+  {
+    "packageName": "com.app15318.core1173",
+    "name": "TrickMo",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "HIGH",
+    "description": "TrickMo Android banking trojan package name",
+    "source": "threat_research",
+    "reference": "https://www.threatfabric.com/blogs/new-trickmo-variant-device-take-over-malware-targeting-banking-fintech-wallet-auth-app"
+  },
+  {
+    "packageName": "com.app16330.core20461",
+    "name": "TrickMo",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "HIGH",
+    "description": "TrickMo Android banking trojan package name",
+    "source": "threat_research",
+    "reference": "https://www.threatfabric.com/blogs/new-trickmo-variant-device-take-over-malware-targeting-banking-fintech-wallet-auth-app"
+  },
+  {
+    "packageName": "com.awht.zfip.zfyg",
+    "name": "Midnight Mimosa",
+    "category": "MALWARE",
+    "campaign": "midnight-mimosa",
+    "severity": "CRITICAL",
+    "description": "Midnight Mimosa dropped payload - fake weather cover app installed by the preinstalled enabler (Bitdefender)",
+    "source": "threat_research",
+    "reference": "https://www.bitdefender.com/en-us/blog/labs/midnight-mimosa-malware"
+  },
+  {
+    "packageName": "com.basehistory.historydownloading",
+    "name": "CallPhantom",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "CallPhantom premium-SMS fraud app",
+    "source": "threat_research",
+    "reference": "https://www.welivesecurity.com/en/eset-research/fake-call-logs-real-payments-how-callphantom-tricks-android-users/"
+  },
+  {
+    "packageName": "com.billhub.apps",
+    "name": "Android.MagicAd",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "MEDIUM",
+    "description": "Android.MagicAd app package name (threat research, 2026-07-03 sweep)",
+    "source": "threat_research",
+    "reference": "https://raw.githubusercontent.com/DoctorWebLtd/malware-iocs/master/Android.MagicAd.1/README.adoc"
   },
   {
     "packageName": "com.blockstorm.puzzle.adventure",
     "name": "Android.MagicAd",
     "category": "MALWARE",
+    "campaign": "",
     "severity": "MEDIUM",
-    "description": "Android.MagicAd app package name (threat research, 2026-07-03 sweep)"
+    "description": "Android.MagicAd app package name (threat research, 2026-07-03 sweep)",
+    "source": "threat_research",
+    "reference": "https://raw.githubusercontent.com/DoctorWebLtd/malware-iocs/master/Android.MagicAd.1/README.adoc"
   },
   {
-    "packageName": "com.finaldefense.Undeadman",
+    "packageName": "com.bloodp.recorder.pressure",
     "name": "Android.MagicAd",
     "category": "MALWARE",
+    "campaign": "",
     "severity": "MEDIUM",
-    "description": "Android.MagicAd app package name (threat research, 2026-07-03 sweep)"
+    "description": "Android.MagicAd app package name (threat research, 2026-07-03 sweep)",
+    "source": "threat_research",
+    "reference": "https://raw.githubusercontent.com/DoctorWebLtd/malware-iocs/master/Android.MagicAd.1/README.adoc"
   },
   {
-    "packageName": "com.pekRacingTraffice.Offroad",
+    "packageName": "com.bp.bloodpressure.healthtraker",
     "name": "Android.MagicAd",
     "category": "MALWARE",
+    "campaign": "",
     "severity": "MEDIUM",
-    "description": "Android.MagicAd app package name (threat research, 2026-07-03 sweep)"
+    "description": "Android.MagicAd app package name (threat research, 2026-07-03 sweep)",
+    "source": "threat_research",
+    "reference": "https://raw.githubusercontent.com/DoctorWebLtd/malware-iocs/master/Android.MagicAd.1/README.adoc"
   },
   {
-    "packageName": "com.shortdrama.watchhigh",
+    "packageName": "com.bp.logandiary.life",
     "name": "Android.MagicAd",
     "category": "MALWARE",
+    "campaign": "",
     "severity": "MEDIUM",
-    "description": "Android.MagicAd app package name (threat research, 2026-07-03 sweep)"
-  },
-  {
-    "packageName": "com.zombieattack.defense",
-    "name": "Android.MagicAd",
-    "category": "MALWARE",
-    "severity": "MEDIUM",
-    "description": "Android.MagicAd app package name (threat research, 2026-07-03 sweep)"
-  },
-  {
-    "packageName": "com.chatapp.twig",
-    "name": "Android.MagicAd",
-    "category": "MALWARE",
-    "severity": "MEDIUM",
-    "description": "Android.MagicAd app package name (threat research, 2026-07-03 sweep)"
-  },
-  {
-    "packageName": "indianbhabhi.livechat.dating",
-    "name": "Android.MagicAd",
-    "category": "MALWARE",
-    "severity": "MEDIUM",
-    "description": "Android.MagicAd app package name (threat research, 2026-07-03 sweep)"
-  },
-  {
-    "packageName": "com.mobiledeviceinfo.mobiledeviceinfoapp",
-    "name": "Android.MagicAd",
-    "category": "MALWARE",
-    "severity": "MEDIUM",
-    "description": "Android.MagicAd app package name (threat research, 2026-07-03 sweep)"
-  },
-  {
-    "packageName": "com.corepulse.checkapps",
-    "name": "Android.MagicAd",
-    "category": "MALWARE",
-    "severity": "MEDIUM",
-    "description": "Android.MagicAd app package name (threat research, 2026-07-03 sweep)"
-  },
-  {
-    "packageName": "com.chaithu.foodorder",
-    "name": "Android.MagicAd",
-    "category": "MALWARE",
-    "severity": "MEDIUM",
-    "description": "Android.MagicAd app package name (threat research, 2026-07-03 sweep)"
-  },
-  {
-    "packageName": "com.peacecore.apps",
-    "name": "Android.MagicAd",
-    "category": "MALWARE",
-    "severity": "MEDIUM",
-    "description": "Android.MagicAd app package name (threat research, 2026-07-03 sweep)"
+    "description": "Android.MagicAd app package name (threat research, 2026-07-03 sweep)",
+    "source": "threat_research",
+    "reference": "https://raw.githubusercontent.com/DoctorWebLtd/malware-iocs/master/Android.MagicAd.1/README.adoc"
   },
   {
     "packageName": "com.brainularapp.brainular",
     "name": "Android.MagicAd",
     "category": "MALWARE",
+    "campaign": "",
     "severity": "MEDIUM",
-    "description": "Android.MagicAd app package name (threat research, 2026-07-03 sweep)"
+    "description": "Android.MagicAd app package name (threat research, 2026-07-03 sweep)",
+    "source": "threat_research",
+    "reference": "https://raw.githubusercontent.com/DoctorWebLtd/malware-iocs/master/Android.MagicAd.1/README.adoc"
   },
   {
-    "packageName": "com.ytapp.pythonlife",
+    "packageName": "com.call.detail.caller.history",
+    "name": "CallPhantom",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "CallPhantom premium-SMS fraud app",
+    "source": "threat_research",
+    "reference": "https://www.welivesecurity.com/en/eset-research/fake-call-logs-real-payments-how-callphantom-tricks-android-users/"
+  },
+  {
+    "packageName": "com.call.of.any.number",
+    "name": "CallPhantom",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "CallPhantom premium-SMS fraud app",
+    "source": "threat_research",
+    "reference": "https://www.welivesecurity.com/en/eset-research/fake-call-logs-real-payments-how-callphantom-tricks-android-users/"
+  },
+  {
+    "packageName": "com.calldetails.smshistory.callhistoryofanynumber",
+    "name": "CallPhantom",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "CallPhantom premium-SMS fraud app",
+    "source": "threat_research",
+    "reference": "https://www.welivesecurity.com/en/eset-research/fake-call-logs-real-payments-how-callphantom-tricks-android-users/"
+  },
+  {
+    "packageName": "com.callhistory.anynumber.chapfvor.history",
+    "name": "CallPhantom",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "CallPhantom premium-SMS fraud app",
+    "source": "threat_research",
+    "reference": "https://www.welivesecurity.com/en/eset-research/fake-call-logs-real-payments-how-callphantom-tricks-android-users/"
+  },
+  {
+    "packageName": "com.callhistory.calldetails.callerids.callerhistory.callhostoryanynumber.getcall.history.callhistorymanager",
+    "name": "CallPhantom",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "CallPhantom premium-SMS fraud app",
+    "source": "threat_research",
+    "reference": "https://www.welivesecurity.com/en/eset-research/fake-call-logs-real-payments-how-callphantom-tricks-android-users/"
+  },
+  {
+    "packageName": "com.callhistory.callhistoryany.call",
+    "name": "CallPhantom",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "CallPhantom premium-SMS fraud app",
+    "source": "threat_research",
+    "reference": "https://www.welivesecurity.com/en/eset-research/fake-call-logs-real-payments-how-callphantom-tricks-android-users/"
+  },
+  {
+    "packageName": "com.callhistory.callhistoryyourgf",
+    "name": "CallPhantom",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "CallPhantom premium-SMS fraud app",
+    "source": "threat_research",
+    "reference": "https://www.welivesecurity.com/en/eset-research/fake-call-logs-real-payments-how-callphantom-tricks-android-users/"
+  },
+  {
+    "packageName": "com.callinformative.instantcallhistory.callhistorybluethem.callinfo",
+    "name": "CallPhantom",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "CallPhantom premium-SMS fraud app",
+    "source": "threat_research",
+    "reference": "https://www.welivesecurity.com/en/eset-research/fake-call-logs-real-payments-how-callphantom-tricks-android-users/"
+  },
+  {
+    "packageName": "com.cddhaduk.callerid.block.contact",
+    "name": "CallPhantom",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "CallPhantom premium-SMS fraud app",
+    "source": "threat_research",
+    "reference": "https://www.welivesecurity.com/en/eset-research/fake-call-logs-real-payments-how-callphantom-tricks-android-users/"
+  },
+  {
+    "packageName": "com.chaithu.foodorder",
     "name": "Android.MagicAd",
     "category": "MALWARE",
+    "campaign": "",
     "severity": "MEDIUM",
-    "description": "Android.MagicAd app package name (threat research, 2026-07-03 sweep)"
+    "description": "Android.MagicAd app package name (threat research, 2026-07-03 sweep)",
+    "source": "threat_research",
+    "reference": "https://raw.githubusercontent.com/DoctorWebLtd/malware-iocs/master/Android.MagicAd.1/README.adoc"
   },
   {
-    "packageName": "com.weather.reportandforcast",
+    "packageName": "com.chatapp.twig",
     "name": "Android.MagicAd",
     "category": "MALWARE",
+    "campaign": "",
     "severity": "MEDIUM",
-    "description": "Android.MagicAd app package name (threat research, 2026-07-03 sweep)"
+    "description": "Android.MagicAd app package name (threat research, 2026-07-03 sweep)",
+    "source": "threat_research",
+    "reference": "https://raw.githubusercontent.com/DoctorWebLtd/malware-iocs/master/Android.MagicAd.1/README.adoc"
   },
   {
-    "packageName": "com.mushawara.iq",
-    "name": "Android.MagicAd",
-    "category": "MALWARE",
-    "severity": "MEDIUM",
-    "description": "Android.MagicAd app package name (threat research, 2026-07-03 sweep)"
-  },
-  {
-    "packageName": "com.modol.nap",
-    "name": "NFCShare",
-    "category": "MALWARE",
+    "packageName": "com.client.appA",
+    "name": "Cellebrite",
+    "category": "FORENSIC_TOOL",
+    "campaign": "cellebrite",
     "severity": "HIGH",
-    "description": "NFCShare NFC card-data-theft trojan package (D3Lab). Uninstall immediately; contact bank to reissue exposed cards."
+    "description": "Cellebrite UFED agent \u2014 presence indicates physical device extraction occurred",
+    "source": "mvt-indicators",
+    "reference": "feed:mvt-indicators#Cellebrite"
   },
   {
-    "packageName": "com.kit.kitty",
-    "name": "Octagon",
+    "packageName": "com.cocospy",
+    "name": "Cocospy",
+    "category": "STALKERWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "Cocospy stalkerware \u2014 if not self-installed, contact a DV hotline",
+    "source": "stalkerware-indicators",
+    "reference": "feed:stalkerware-indicators#Cocospy"
+  },
+  {
+    "packageName": "com.comodoapp.comodovpn",
+    "name": "DCHSpy",
+    "category": "NATION_STATE_SPYWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "DCHSpy MuddyWater Comodo VPN lure",
+    "source": "threat_research",
+    "reference": "https://thehackernews.com/2025/07/iran-linked-dchspy-android-malware.html"
+  },
+  {
+    "packageName": "com.corepulse.checkapps",
+    "name": "Android.MagicAd",
     "category": "MALWARE",
+    "campaign": "",
+    "severity": "MEDIUM",
+    "description": "Android.MagicAd app package name (threat research, 2026-07-03 sweep)",
+    "source": "threat_research",
+    "reference": "https://raw.githubusercontent.com/DoctorWebLtd/malware-iocs/master/Android.MagicAd.1/README.adoc"
+  },
+  {
+    "packageName": "com.debby.devour",
+    "name": "BADBOX 2.0",
+    "category": "MALWARE",
+    "campaign": "",
     "severity": "HIGH",
-    "description": "Octagon Android RAT stage-1 loader (K7 Security Labs, 2026-08). Disguised as 'Kitty'; hides an RC4-encrypted DEX in a fake font and DexClassLoader-drops the child RAT."
+    "description": "BADBOX 2.0 ad-fraud module app observed auto-installed from file.long.tv (HUMAN Satori).",
+    "source": "threat_research",
+    "reference": "https://www.humansecurity.com/learn/blog/satori-threat-intelligence-disruption-badbox-2-0/"
+  },
+  {
+    "packageName": "com.dogbee.linesaver",
+    "name": "Android.MagicAd",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "MEDIUM",
+    "description": "Android.MagicAd app package name (threat research, 2026-07-03 sweep)",
+    "source": "threat_research",
+    "reference": "https://raw.githubusercontent.com/DoctorWebLtd/malware-iocs/master/Android.MagicAd.1/README.adoc"
+  },
+  {
+    "packageName": "com.earth.earth_vpn",
+    "name": "DCHSpy",
+    "category": "NATION_STATE_SPYWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "DCHSpy MuddyWater Earth VPN lure",
+    "source": "threat_research",
+    "reference": "https://thehackernews.com/2025/07/iran-linked-dchspy-android-malware.html"
+  },
+  {
+    "packageName": "com.easyranktools.callhistoryforanynumber",
+    "name": "CallPhantom",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "CallPhantom premium-SMS fraud app",
+    "source": "threat_research",
+    "reference": "https://www.welivesecurity.com/en/eset-research/fake-call-logs-real-payments-how-callphantom-tricks-android-users/"
+  },
+  {
+    "packageName": "com.eyezy.android",
+    "name": "mSpy",
+    "category": "STALKERWARE",
+    "campaign": "",
+    "severity": "HIGH",
+    "description": "Commercial stalkerware marketed as parental monitoring. Captures keystrokes, reads encrypted messages, and tracks location.",
+    "source": "stalkerware-indicators",
+    "reference": "feed:stalkerware-indicators#mSpy"
+  },
+  {
+    "packageName": "com.fe2bu1.wh",
+    "name": "Midnight Mimosa",
+    "category": "MALWARE",
+    "campaign": "midnight-mimosa",
+    "severity": "CRITICAL",
+    "description": "Midnight Mimosa dropped payload - fake weather cover app installed by the preinstalled enabler (Bitdefender)",
+    "source": "threat_research",
+    "reference": "https://www.bitdefender.com/en-us/blog/labs/midnight-mimosa-malware"
+  },
+  {
+    "packageName": "com.finaldefense.Undeadman",
+    "name": "Android.MagicAd",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "MEDIUM",
+    "description": "Android.MagicAd app package name (threat research, 2026-07-03 sweep)",
+    "source": "threat_research",
+    "reference": "https://raw.githubusercontent.com/DoctorWebLtd/malware-iocs/master/Android.MagicAd.1/README.adoc"
+  },
+  {
+    "packageName": "com.fp.backup",
+    "name": "FlexiSpy",
+    "category": "STALKERWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "FlexiSpy stalkerware disguised as backup \u2014 if not self-installed, contact a DV hotline",
+    "source": "stalkerware-indicators",
+    "reference": "feed:stalkerware-indicators#FlexiSpy"
+  },
+  {
+    "packageName": "com.fruit.blender.maker",
+    "name": "Android.MagicAd",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "MEDIUM",
+    "description": "Android.MagicAd app package name (threat research, 2026-07-03 sweep)",
+    "source": "threat_research",
+    "reference": "https://raw.githubusercontent.com/DoctorWebLtd/malware-iocs/master/Android.MagicAd.1/README.adoc"
+  },
+  {
+    "packageName": "com.funbees.pighub",
+    "name": "Android.MagicAd",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "MEDIUM",
+    "description": "Android.MagicAd app package name (threat research, 2026-07-03 sweep)",
+    "source": "threat_research",
+    "reference": "https://raw.githubusercontent.com/DoctorWebLtd/malware-iocs/master/Android.MagicAd.1/README.adoc"
+  },
+  {
+    "packageName": "com.gamesland.platform",
+    "name": "Android.MagicAd",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "MEDIUM",
+    "description": "Android.MagicAd app package name (threat research, 2026-07-03 sweep)",
+    "source": "threat_research",
+    "reference": "https://raw.githubusercontent.com/DoctorWebLtd/malware-iocs/master/Android.MagicAd.1/README.adoc"
+  },
+  {
+    "packageName": "com.getanynumberofcallhistory.callhistoryofanynumber.findcalldetailsofanynumber",
+    "name": "CallPhantom",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "CallPhantom premium-SMS fraud app",
+    "source": "threat_research",
+    "reference": "https://www.welivesecurity.com/en/eset-research/fake-call-logs-real-payments-how-callphantom-tricks-android-users/"
+  },
+  {
+    "packageName": "com.goog1e.apps",
+    "name": "Vo1d",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "MEDIUM",
+    "description": "Typosquatted Google package used by Vo1d; its data directory is deleted by the new variant's cleanup routine (Xlab; medium confidence, single source).",
+    "source": "threat_research",
+    "reference": "https://blog.xlab.qianxin.com/long-live-the-vo1d_botnet/"
+  },
+  {
+    "packageName": "com.google.android.gms.stable",
+    "name": "Vo1d",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "HIGH",
+    "description": "Vo1d botnet main payload (x.apk) masquerading as Google Play Services; persists via BOOT_COMPLETED with a one-pixel invisible activity (Xlab; corroborated by The Hacker News). Not a Google package. Presence usually indicates firmware-level compromise of an AOSP TV box \u2014 factory reset may not remove system-partition implants.",
+    "source": "threat_research",
+    "reference": "https://blog.xlab.qianxin.com/long-live-the-vo1d_botnet/"
+  },
+  {
+    "packageName": "com.google.android.service",
+    "name": "ResidentBat",
+    "category": "NATION_STATE_SPYWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "ResidentBat spyware \u2014 targets Belarusian journalists, disguised as Google service",
+    "source": "mvt-indicators",
+    "reference": "feed:mvt-indicators#ResidentBat"
+  },
+  {
+    "packageName": "com.google.android.services",
+    "name": "Vo1d",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "HIGH",
+    "description": "Legacy Vo1d APK component (Android.Vo1d.1.origin) masquerading as a Google package (Dr.Web; corroborated by Xlab).",
+    "source": "threat_research",
+    "reference": "https://blog.xlab.qianxin.com/long-live-the-vo1d_botnet/"
+  },
+  {
+    "packageName": "com.google.bat",
+    "name": "ResidentBat",
+    "category": "NATION_STATE_SPYWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "ResidentBat spyware",
+    "source": "mvt-indicators",
+    "reference": "feed:mvt-indicators#ResidentBat"
+  },
+  {
+    "packageName": "com.gu.activity",
+    "name": "NoviSpy",
+    "category": "NATION_STATE_SPYWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "NoviSpy spyware variant",
+    "source": "amnesty-investigations",
+    "reference": "feed:amnesty-investigations#NoviSpy"
+  },
+  {
+    "packageName": "com.heartrate.healthtrack.rate.analyzer",
+    "name": "Android.MagicAd",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "MEDIUM",
+    "description": "Android.MagicAd app package name (threat research, 2026-07-03 sweep)",
+    "source": "threat_research",
+    "reference": "https://raw.githubusercontent.com/DoctorWebLtd/malware-iocs/master/Android.MagicAd.1/README.adoc"
+  },
+  {
+    "packageName": "com.hihonor.core.service",
+    "name": "ResidentBat",
+    "category": "NATION_STATE_SPYWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "ResidentBat spyware \u2014 disguised as Honor service",
+    "source": "mvt-indicators",
+    "reference": "feed:mvt-indicators#ResidentBat"
+  },
+  {
+    "packageName": "com.hs.app",
+    "name": "BADBOX 2.0",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "HIGH",
+    "description": "BB2DOOR (BADBOX 2.0) backdoor loader package (HUMAN Satori; corroborated by Point Wild). BADBOX 2.0 ships preinstalled in firmware or inside rebundled apps from unofficial marketplaces.",
+    "source": "threat_research",
+    "reference": "https://www.humansecurity.com/learn/blog/satori-threat-intelligence-disruption-badbox-2-0/"
+  },
+  {
+    "packageName": "com.hs.cld",
+    "name": "BADBOX 2.0",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "HIGH",
+    "description": "BB2DOOR module \u2014 com.hs.cld.Main in p.jar downloads fraud modules from C2 (HUMAN Satori). Listed by HUMAN as a package indicator; may also appear only as a DEX namespace rather than an installed package.",
+    "source": "threat_research",
+    "reference": "https://www.humansecurity.com/learn/blog/satori-threat-intelligence-disruption-badbox-2-0/"
+  },
+  {
+    "packageName": "com.hs.q",
+    "name": "BADBOX 2.0",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "HIGH",
+    "description": "BB2DOOR removal-resistance module \u2014 com.hs.q.Main in q.jar blocks backdoor removal (HUMAN Satori). May also appear only as a DEX namespace rather than an installed package.",
+    "source": "threat_research",
+    "reference": "https://www.humansecurity.com/learn/blog/satori-threat-intelligence-disruption-badbox-2-0/"
+  },
+  {
+    "packageName": "com.huaweisettingsapp.mkz",
+    "name": "ResidentBat",
+    "category": "NATION_STATE_SPYWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "ResidentBat spyware \u2014 disguised as Huawei settings",
+    "source": "mvt-indicators",
+    "reference": "feed:mvt-indicators#ResidentBat"
+  },
+  {
+    "packageName": "com.hv.hide_vpn",
+    "name": "DCHSpy",
+    "category": "NATION_STATE_SPYWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "DCHSpy MuddyWater Hide VPN lure",
+    "source": "threat_research",
+    "reference": "https://thehackernews.com/2025/07/iran-linked-dchspy-android-malware.html"
+  },
+  {
+    "packageName": "com.ispyoo",
+    "name": "TheTruthSpy",
+    "category": "STALKERWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "TheTruthSpy/iSpyoo stalkerware \u2014 if not self-installed, contact a DV hotline",
+    "source": "stalkerware-indicators",
+    "reference": "feed:stalkerware-indicators#TheTruthSpy"
+  },
+  {
+    "packageName": "com.jump.boy.funplay",
+    "name": "Android.MagicAd",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "MEDIUM",
+    "description": "Android.MagicAd app package name (threat research, 2026-07-03 sweep)",
+    "source": "threat_research",
+    "reference": "https://raw.githubusercontent.com/DoctorWebLtd/malware-iocs/master/Android.MagicAd.1/README.adoc"
   },
   {
     "packageName": "com.kisa.octagonpanel",
     "name": "Octagon",
     "category": "MALWARE",
+    "campaign": "",
     "severity": "HIGH",
-    "description": "Octagon Android RAT child payload ('OctagonPanel'/'Ward') installed by the com.kit.kitty loader (K7 Security Labs, 2026-08)."
+    "description": "Octagon Android RAT child payload ('OctagonPanel'/'Ward') installed by the com.kit.kitty loader (K7 Security Labs, 2026-08).",
+    "source": "threat_research",
+    "reference": "https://labs.k7computing.com/index.php/octagon-technical-analysis-of-a-fake-bahrain-civil-defense-application/"
+  },
+  {
+    "packageName": "com.kit.kitty",
+    "name": "Octagon",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "HIGH",
+    "description": "Octagon Android RAT stage-1 loader (K7 Security Labs, 2026-08). Disguised as 'Kitty'; hides an RC4-encrypted DEX in a fake font and DexClassLoader-drops the child RAT.",
+    "source": "threat_research",
+    "reference": "https://labs.k7computing.com/index.php/octagon-technical-analysis-of-a-fake-bahrain-civil-defense-application/"
+  },
+  {
+    "packageName": "com.li.activity",
+    "name": "NoviSpy",
+    "category": "NATION_STATE_SPYWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "NoviSpy spyware variant",
+    "source": "amnesty-investigations",
+    "reference": "feed:amnesty-investigations#NoviSpy"
+  },
+  {
+    "packageName": "com.line.protection.puppyrescue",
+    "name": "Android.MagicAd",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "MEDIUM",
+    "description": "Android.MagicAd app package name (threat research, 2026-07-03 sweep)",
+    "source": "threat_research",
+    "reference": "https://raw.githubusercontent.com/DoctorWebLtd/malware-iocs/master/Android.MagicAd.1/README.adoc"
+  },
+  {
+    "packageName": "com.linkedln.service",
+    "name": "ResidentBat",
+    "category": "NATION_STATE_SPYWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "ResidentBat spyware \u2014 typosquats LinkedIn",
+    "source": "mvt-indicators",
+    "reference": "feed:mvt-indicators#ResidentBat"
+  },
+  {
+    "packageName": "com.lsdroid.cerberus",
+    "name": "Cerberus",
+    "category": "STALKERWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "Cerberus anti-theft app abused as stalkerware \u2014 if not self-installed, contact a DV hotline",
+    "source": "stalkerware-indicators",
+    "reference": "feed:stalkerware-indicators#Cerberus"
+  },
+  {
+    "packageName": "com.mb.applock.a02",
+    "name": "Midnight Mimosa",
+    "category": "MALWARE",
+    "campaign": "midnight-mimosa",
+    "severity": "CRITICAL",
+    "description": "Midnight Mimosa dropped payload - applock-family cover app (Bitdefender)",
+    "source": "threat_research",
+    "reference": "https://www.bitdefender.com/en-us/blog/labs/midnight-mimosa-malware"
+  },
+  {
+    "packageName": "com.mb.applock.ea",
+    "name": "Midnight Mimosa",
+    "category": "MALWARE",
+    "campaign": "midnight-mimosa",
+    "severity": "CRITICAL",
+    "description": "Midnight Mimosa dropped payload - applock-family cover app (Bitdefender)",
+    "source": "threat_research",
+    "reference": "https://www.bitdefender.com/en-us/blog/labs/midnight-mimosa-malware"
+  },
+  {
+    "packageName": "com.me4dymbu.ysbf4ghb",
+    "name": "DragonDoll",
+    "category": "SPYWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "DragonDoll hidden second-stage spyware payload package, entry class x1 (PT ESC)",
+    "source": "threat_research",
+    "reference": "https://habr.com/en/companies/pt/articles/1073720/"
+  },
+  {
+    "packageName": "com.mobile.applock.en",
+    "name": "Midnight Mimosa",
+    "category": "MALWARE",
+    "campaign": "midnight-mimosa",
+    "severity": "CRITICAL",
+    "description": "Midnight Mimosa dropped payload - TCP proxyware 'Locket' cover app, EnLoaderLib v1.0.6 (Bitdefender)",
+    "source": "threat_research",
+    "reference": "https://www.bitdefender.com/en-us/blog/labs/midnight-mimosa-malware"
+  },
+  {
+    "packageName": "com.mobile.applock.tg",
+    "name": "Midnight Mimosa",
+    "category": "MALWARE",
+    "campaign": "midnight-mimosa",
+    "severity": "CRITICAL",
+    "description": "Midnight Mimosa dropped payload - applock-family cover app (Bitdefender)",
+    "source": "threat_research",
+    "reference": "https://www.bitdefender.com/en-us/blog/labs/midnight-mimosa-malware"
+  },
+  {
+    "packageName": "com.mobile.applock.wg",
+    "name": "Midnight Mimosa",
+    "category": "MALWARE",
+    "campaign": "midnight-mimosa",
+    "severity": "CRITICAL",
+    "description": "Midnight Mimosa dropped payload - applock-family cover app (Bitdefender)",
+    "source": "threat_research",
+    "reference": "https://www.bitdefender.com/en-us/blog/labs/midnight-mimosa-malware"
+  },
+  {
+    "packageName": "com.mobile.applock.wt",
+    "name": "Midnight Mimosa",
+    "category": "MALWARE",
+    "campaign": "midnight-mimosa",
+    "severity": "CRITICAL",
+    "description": "Midnight Mimosa dropped payload - ad-fraud + RCE dropper cover app (Bitdefender)",
+    "source": "threat_research",
+    "reference": "https://www.bitdefender.com/en-us/blog/labs/midnight-mimosa-malware"
+  },
+  {
+    "packageName": "com.mobile.applock.xk1",
+    "name": "Midnight Mimosa",
+    "category": "MALWARE",
+    "campaign": "midnight-mimosa",
+    "severity": "CRITICAL",
+    "description": "Midnight Mimosa dropped payload - applock-family cover app (Bitdefender)",
+    "source": "threat_research",
+    "reference": "https://www.bitdefender.com/en-us/blog/labs/midnight-mimosa-malware"
+  },
+  {
+    "packageName": "com.mobiledeviceinfo.mobiledeviceinfoapp",
+    "name": "Android.MagicAd",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "MEDIUM",
+    "description": "Android.MagicAd app package name (threat research, 2026-07-03 sweep)",
+    "source": "threat_research",
+    "reference": "https://raw.githubusercontent.com/DoctorWebLtd/malware-iocs/master/Android.MagicAd.1/README.adoc"
+  },
+  {
+    "packageName": "com.modol.nap",
+    "name": "NFCShare",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "HIGH",
+    "description": "NFCShare NFC card-data-theft trojan package (D3Lab). Uninstall immediately; contact bank to reissue exposed cards.",
+    "source": "threat_research",
+    "reference": "https://d3lab.net/nfcshare-evolves-from-a-banking-phishing-apk-to-a-github-hosted-android-nfc-fraud-campaign/"
+  },
+  {
+    "packageName": "com.mushawara.iq",
+    "name": "Android.MagicAd",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "MEDIUM",
+    "description": "Android.MagicAd app package name (threat research, 2026-07-03 sweep)",
+    "source": "threat_research",
+    "reference": "https://raw.githubusercontent.com/DoctorWebLtd/malware-iocs/master/Android.MagicAd.1/README.adoc"
+  },
+  {
+    "packageName": "com.mxspy",
+    "name": "TheTruthSpy",
+    "category": "STALKERWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "TheTruthSpy/MxSpy stalkerware \u2014 if not self-installed, contact a DV hotline",
+    "source": "stalkerware-indicators",
+    "reference": "feed:stalkerware-indicators#TheTruthSpy"
+  },
+  {
+    "packageName": "com.mz.sdk",
+    "name": "BADBOX 2.0",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "MEDIUM",
+    "description": "Hidden-WebView ad-fraud SDK namespace embedded inside BADBOX 2.0-infected apps; renders invisible WebViews that fetch fraud playlists from app-goal.com (HUMAN Satori). Namespace indicator \u2014 may not occur as a standalone installed package.",
+    "source": "threat_research",
+    "reference": "https://www.humansecurity.com/learn/blog/satori-threat-intelligence-disruption-badbox-2-0/"
+  },
+  {
+    "packageName": "com.oblivion.client",
+    "name": "Oblivion RAT",
+    "category": "SPYWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "Oblivion RAT Android MaaS \u2014 masquerades as Google Play update (2026-03)",
+    "source": "threat_research",
+    "reference": "https://iverify.io/blog/oblivion-rat-android-spyware-analysis"
+  },
+  {
+    "packageName": "com.oneplussync.bat",
+    "name": "ResidentBat",
+    "category": "NATION_STATE_SPYWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "ResidentBat spyware \u2014 disguised as OnePlus sync",
+    "source": "mvt-indicators",
+    "reference": "feed:mvt-indicators#ResidentBat"
+  },
+  {
+    "packageName": "com.onetower.defense.idle",
+    "name": "Android.MagicAd",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "MEDIUM",
+    "description": "Android.MagicAd adware trojan package (Doctor Web Q2 2026); displays intrusive background ads via OEM-specific bypasses. Uninstall.",
+    "source": "threat_research",
+    "reference": "https://raw.githubusercontent.com/DoctorWebLtd/malware-iocs/master/Android.MagicAd.1/README.adoc"
+  },
+  {
+    "packageName": "com.paperhub.festivals",
+    "name": "Android.MagicAd",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "MEDIUM",
+    "description": "Android.MagicAd app package name (threat research, 2026-07-03 sweep)",
+    "source": "threat_research",
+    "reference": "https://raw.githubusercontent.com/DoctorWebLtd/malware-iocs/master/Android.MagicAd.1/README.adoc"
+  },
+  {
+    "packageName": "com.peacecore.apps",
+    "name": "Android.MagicAd",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "MEDIUM",
+    "description": "Android.MagicAd app package name (threat research, 2026-07-03 sweep)",
+    "source": "threat_research",
+    "reference": "https://raw.githubusercontent.com/DoctorWebLtd/malware-iocs/master/Android.MagicAd.1/README.adoc"
+  },
+  {
+    "packageName": "com.pekRacingTraffice.Offroad",
+    "name": "Android.MagicAd",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "MEDIUM",
+    "description": "Android.MagicAd app package name (threat research, 2026-07-03 sweep)",
+    "source": "threat_research",
+    "reference": "https://raw.githubusercontent.com/DoctorWebLtd/malware-iocs/master/Android.MagicAd.1/README.adoc"
+  },
+  {
+    "packageName": "com.pekRacingTraffice.OffroadJeep",
+    "name": "Android.MagicAd",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "MEDIUM",
+    "description": "Android.MagicAd app package name (threat research, 2026-07-03 sweep)",
+    "source": "threat_research",
+    "reference": "https://raw.githubusercontent.com/DoctorWebLtd/malware-iocs/master/Android.MagicAd.1/README.adoc"
+  },
+  {
+    "packageName": "com.pekRacingTraffice.RacerATV",
+    "name": "Android.MagicAd",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "MEDIUM",
+    "description": "Android.MagicAd app package name (threat research, 2026-07-03 sweep)",
+    "source": "threat_research",
+    "reference": "https://raw.githubusercontent.com/DoctorWebLtd/malware-iocs/master/Android.MagicAd.1/README.adoc"
+  },
+  {
+    "packageName": "com.pixelxinnovation.manager",
+    "name": "CallPhantom",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "CallPhantom premium-SMS fraud app",
+    "source": "threat_research",
+    "reference": "https://www.welivesecurity.com/en/eset-research/fake-call-logs-real-payments-how-callphantom-tricks-android-users/"
+  },
+  {
+    "packageName": "com.playall.video4k",
+    "name": "Android.MagicAd",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "MEDIUM",
+    "description": "Android.MagicAd app package name (threat research, 2026-07-03 sweep)",
+    "source": "threat_research",
+    "reference": "https://raw.githubusercontent.com/DoctorWebLtd/malware-iocs/master/Android.MagicAd.1/README.adoc"
+  },
+  {
+    "packageName": "com.power.cleanup.pro",
+    "name": "Android.MagicAd",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "MEDIUM",
+    "description": "Android.MagicAd app package name (threat research, 2026-07-03 sweep)",
+    "source": "threat_research",
+    "reference": "https://raw.githubusercontent.com/DoctorWebLtd/malware-iocs/master/Android.MagicAd.1/README.adoc"
+  },
+  {
+    "packageName": "com.quickcommander.filehome.manager",
+    "name": "Android.MagicAd",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "MEDIUM",
+    "description": "Android.MagicAd app package name (threat research, 2026-07-03 sweep)",
+    "source": "threat_research",
+    "reference": "https://raw.githubusercontent.com/DoctorWebLtd/malware-iocs/master/Android.MagicAd.1/README.adoc"
+  },
+  {
+    "packageName": "com.rajni.callhistory",
+    "name": "CallPhantom",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "CallPhantom premium-SMS fraud app",
+    "source": "threat_research",
+    "reference": "https://www.welivesecurity.com/en/eset-research/fake-call-logs-real-payments-how-callphantom-tricks-android-users/"
+  },
+  {
+    "packageName": "com.rhythmball.music.runner",
+    "name": "Android.MagicAd",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "MEDIUM",
+    "description": "Android.MagicAd app package name (threat research, 2026-07-03 sweep)",
+    "source": "threat_research",
+    "reference": "https://raw.githubusercontent.com/DoctorWebLtd/malware-iocs/master/Android.MagicAd.1/README.adoc"
+  },
+  {
+    "packageName": "com.sbpinfotech.findlocationofanynumber",
+    "name": "CallPhantom",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "CallPhantom premium-SMS fraud app",
+    "source": "threat_research",
+    "reference": "https://www.welivesecurity.com/en/eset-research/fake-call-logs-real-payments-how-callphantom-tricks-android-users/"
+  },
+  {
+    "packageName": "com.sc.fonemonitor",
+    "name": "Cocospy",
+    "category": "STALKERWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "Cocospy/FoneMonitor stalkerware \u2014 if not self-installed, contact a DV hotline",
+    "source": "stalkerware-indicators",
+    "reference": "feed:stalkerware-indicators#Cocospy"
+  },
+  {
+    "packageName": "com.serv.services",
+    "name": "NoviSpy",
+    "category": "NATION_STATE_SPYWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "NoviSpy spyware \u2014 deployed by Serbian intelligence against journalists",
+    "source": "amnesty-investigations",
+    "reference": "feed:amnesty-investigations#NoviSpy"
+  },
+  {
+    "packageName": "com.shortdrama.watchhigh",
+    "name": "Android.MagicAd",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "MEDIUM",
+    "description": "Android.MagicAd app package name (threat research, 2026-07-03 sweep)",
+    "source": "threat_research",
+    "reference": "https://raw.githubusercontent.com/DoctorWebLtd/malware-iocs/master/Android.MagicAd.1/README.adoc"
+  },
+  {
+    "packageName": "com.simple.pdfviewer.reader.app",
+    "name": "Android.MagicAd",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "MEDIUM",
+    "description": "Android.MagicAd app package name (threat research, 2026-07-03 sweep)",
+    "source": "threat_research",
+    "reference": "https://raw.githubusercontent.com/DoctorWebLtd/malware-iocs/master/Android.MagicAd.1/README.adoc"
+  },
+  {
+    "packageName": "com.snakearena.survival",
+    "name": "Android.MagicAd",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "MEDIUM",
+    "description": "Android.MagicAd app package name (threat research, 2026-07-03 sweep)",
+    "source": "threat_research",
+    "reference": "https://raw.githubusercontent.com/DoctorWebLtd/malware-iocs/master/Android.MagicAd.1/README.adoc"
+  },
+  {
+    "packageName": "com.spyic",
+    "name": "Cocospy",
+    "category": "STALKERWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "Spyic stalkerware (Cocospy cluster) \u2014 if not self-installed, contact a DV hotline",
+    "source": "stalkerware-indicators",
+    "reference": "feed:stalkerware-indicators#Cocospy"
+  },
+  {
+    "packageName": "com.spyzee",
+    "name": "TheTruthSpy",
+    "category": "STALKERWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "TheTruthSpy/Spyzee stalkerware \u2014 if not self-installed, contact a DV hotline",
+    "source": "stalkerware-indicators",
+    "reference": "feed:stalkerware-indicators#TheTruthSpy"
+  },
+  {
+    "packageName": "com.supermax.clenauppro",
+    "name": "Android.MagicAd",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "MEDIUM",
+    "description": "Android.MagicAd app package name (threat research, 2026-07-03 sweep)",
+    "source": "threat_research",
+    "reference": "https://raw.githubusercontent.com/DoctorWebLtd/malware-iocs/master/Android.MagicAd.1/README.adoc"
+  },
+  {
+    "packageName": "com.surebrec",
+    "name": "Cerberus",
+    "category": "STALKERWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "Cerberus stalkerware alias \u2014 if not self-installed, contact a DV hotline",
+    "source": "stalkerware-indicators",
+    "reference": "feed:stalkerware-indicators#Cerberus"
+  },
+  {
+    "packageName": "com.track.app.base",
+    "name": "Android.MagicAd",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "MEDIUM",
+    "description": "Android.MagicAd app package name (threat research, 2026-07-03 sweep)",
+    "source": "threat_research",
+    "reference": "https://raw.githubusercontent.com/DoctorWebLtd/malware-iocs/master/Android.MagicAd.1/README.adoc"
+  },
+  {
+    "packageName": "com.tw.jar1",
+    "name": "JarService",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "HIGH",
+    "description": "JarService stage-1 dropper, silently pushed to DoFun automotive head units via the abused TWCore updater's MQTT channel (MoYu Group / BADBOX-linked campaign; Kaspersky 2026-08-21). UI-less; XOR-decrypts and reflection-loads later stages, ultimately the zhima residential-proxy module. Remediation: reflash/factory-reset affected head-unit firmware and isolate it from untrusted networks.",
+    "source": "threat_research",
+    "reference": "https://securelist.com/android-head-unit-malware/121106/"
+  },
+  {
+    "packageName": "com.ultimate.highway.racer",
+    "name": "Android.MagicAd",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "MEDIUM",
+    "description": "Android.MagicAd app package name (threat research, 2026-07-03 sweep)",
+    "source": "threat_research",
+    "reference": "https://raw.githubusercontent.com/DoctorWebLtd/malware-iocs/master/Android.MagicAd.1/README.adoc"
+  },
+  {
+    "packageName": "com.uptwo.cleanup.master",
+    "name": "Android.MagicAd",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "MEDIUM",
+    "description": "Android.MagicAd app package name (threat research, 2026-07-03 sweep)",
+    "source": "threat_research",
+    "reference": "https://raw.githubusercontent.com/DoctorWebLtd/malware-iocs/master/Android.MagicAd.1/README.adoc"
+  },
+  {
+    "packageName": "com.utility.localweather",
+    "name": "Android.MagicAd",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "MEDIUM",
+    "description": "Android.MagicAd app package name (threat research, 2026-07-03 sweep)",
+    "source": "threat_research",
+    "reference": "https://raw.githubusercontent.com/DoctorWebLtd/malware-iocs/master/Android.MagicAd.1/README.adoc"
+  },
+  {
+    "packageName": "com.water.sorting.funpuzzle",
+    "name": "Android.MagicAd",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "MEDIUM",
+    "description": "Android.MagicAd app package name (threat research, 2026-07-03 sweep)",
+    "source": "threat_research",
+    "reference": "https://raw.githubusercontent.com/DoctorWebLtd/malware-iocs/master/Android.MagicAd.1/README.adoc"
+  },
+  {
+    "packageName": "com.weather.reportandforcast",
+    "name": "Android.MagicAd",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "MEDIUM",
+    "description": "Android.MagicAd app package name (threat research, 2026-07-03 sweep)",
+    "source": "threat_research",
+    "reference": "https://raw.githubusercontent.com/DoctorWebLtd/malware-iocs/master/Android.MagicAd.1/README.adoc"
+  },
+  {
+    "packageName": "com.weathersense.livenow",
+    "name": "Android.MagicAd",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "MEDIUM",
+    "description": "Android.MagicAd app package name (threat research, 2026-07-03 sweep)",
+    "source": "threat_research",
+    "reference": "https://raw.githubusercontent.com/DoctorWebLtd/malware-iocs/master/Android.MagicAd.1/README.adoc"
+  },
+  {
+    "packageName": "com.yandexxxx.update",
+    "name": "Oblivion RAT",
+    "category": "SPYWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "Oblivion RAT \u2014 typosquats Yandex update",
+    "source": "threat_research",
+    "reference": "https://iverify.io/blog/oblivion-rat-android-spyware-analysis"
+  },
+  {
+    "packageName": "com.ytapp.pythonlife",
+    "name": "Android.MagicAd",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "MEDIUM",
+    "description": "Android.MagicAd app package name (threat research, 2026-07-03 sweep)",
+    "source": "threat_research",
+    "reference": "https://raw.githubusercontent.com/DoctorWebLtd/malware-iocs/master/Android.MagicAd.1/README.adoc"
+  },
+  {
+    "packageName": "com.yun.wth.er",
+    "name": "Midnight Mimosa",
+    "category": "MALWARE",
+    "campaign": "midnight-mimosa",
+    "severity": "CRITICAL",
+    "description": "Midnight Mimosa dropped payload - fake weather cover app installed by the preinstalled enabler (Bitdefender)",
+    "source": "threat_research",
+    "reference": "https://www.bitdefender.com/en-us/blog/labs/midnight-mimosa-malware"
+  },
+  {
+    "packageName": "com.zombieattack.defense",
+    "name": "Android.MagicAd",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "MEDIUM",
+    "description": "Android.MagicAd app package name (threat research, 2026-07-03 sweep)",
+    "source": "threat_research",
+    "reference": "https://raw.githubusercontent.com/DoctorWebLtd/malware-iocs/master/Android.MagicAd.1/README.adoc"
+  },
+  {
+    "packageName": "core.update.framework",
+    "name": "mSpy",
+    "category": "STALKERWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "mSpy stalkerware disguised as framework update \u2014 if not self-installed, contact a DV hotline",
+    "source": "stalkerware-indicators",
+    "reference": "feed:stalkerware-indicators#mSpy"
+  },
+  {
+    "packageName": "dev.huawei.media.helper",
+    "name": "Manic",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "Manic implant impersonating a vendor system utility",
+    "source": "threat_research",
+    "reference": "https://www.threatfabric.com/blogs/manic-blend-between-banking-malware-and-spyware"
+  },
+  {
+    "packageName": "indianbhabhi.livechat.dating",
+    "name": "Android.MagicAd",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "MEDIUM",
+    "description": "Android.MagicAd app package name (threat research, 2026-07-03 sweep)",
+    "source": "threat_research",
+    "reference": "https://raw.githubusercontent.com/DoctorWebLtd/malware-iocs/master/Android.MagicAd.1/README.adoc"
+  },
+  {
+    "packageName": "io.motorola.secure.executor",
+    "name": "Manic",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "Manic implant impersonating a vendor system utility",
+    "source": "threat_research",
+    "reference": "https://www.threatfabric.com/blogs/manic-blend-between-banking-malware-and-spyware"
+  },
+  {
+    "packageName": "nibong.lida531.butler836",
+    "name": "TrickMo",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "HIGH",
+    "description": "TrickMo Android banking trojan package name",
+    "source": "threat_research",
+    "reference": "https://www.threatfabric.com/blogs/new-trickmo-variant-device-take-over-malware-targeting-banking-fintech-wallet-auth-app"
+  },
+  {
+    "packageName": "org.azgaw.managergst1d",
+    "name": "Mirax Bot",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "Mirax Bot Android banking RAT variant",
+    "source": "threat_research",
+    "reference": "https://www.cleafy.com/cleafy-labs/mirax-a-new-android-rat-turning-infected-devices-into-potential-residential-proxy-nodes"
+  },
+  {
+    "packageName": "org.dawme.secure5ny",
+    "name": "Mirax Bot",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "Mirax Bot Android banking RAT variant",
+    "source": "threat_research",
+    "reference": "https://www.cleafy.com/cleafy-labs/mirax-a-new-android-rat-turning-infected-devices-into-potential-residential-proxy-nodes"
+  },
+  {
+    "packageName": "org.honor.secure.helper",
+    "name": "Manic",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "Manic wrapper-dropper impersonating a vendor system utility",
+    "source": "threat_research",
+    "reference": "https://www.threatfabric.com/blogs/manic-blend-between-banking-malware-and-spyware"
+  },
+  {
+    "packageName": "org.lenovo.storage.processor",
+    "name": "Manic",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "Manic implant impersonating a vendor system utility",
+    "source": "threat_research",
+    "reference": "https://www.threatfabric.com/blogs/manic-blend-between-banking-malware-and-spyware"
+  },
+  {
+    "packageName": "org.lgvvfj.pluscqpuj",
+    "name": "Mirax Bot",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "Mirax Bot Android banking RAT \u2014 masquerades as video player (Meta-ads distribution, 2025-12+)",
+    "source": "threat_research",
+    "reference": "https://www.cleafy.com/cleafy-labs/mirax-a-new-android-rat-turning-infected-devices-into-potential-residential-proxy-nodes"
+  },
+  {
+    "packageName": "org.yjeiwd.plusdc71",
+    "name": "Mirax Bot",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "Mirax Bot Android banking RAT variant",
+    "source": "threat_research",
+    "reference": "https://www.cleafy.com/cleafy-labs/mirax-a-new-android-rat-turning-infected-devices-into-potential-residential-proxy-nodes"
+  },
+  {
+    "packageName": "ru.y34tuy.t8595",
+    "name": "TaxiSpy",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "TaxiSpy Android banking RAT \u2014 hijacks default SMS handler, Firebase C2 (Russian banking targets, 2026-03)",
+    "source": "threat_research",
+    "reference": "https://www.cyfirma.com/research/taxispy-rat-analysis-of-taxispy-rat-russian-banking-focused-android-malware-with-full-remote-control/"
+  },
+  {
+    "packageName": "sc.call.ofany.mobiledetail",
+    "name": "CallPhantom",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "CallPhantom premium-SMS fraud app",
+    "source": "threat_research",
+    "reference": "https://www.welivesecurity.com/en/eset-research/fake-call-logs-real-payments-how-callphantom-tricks-android-users/"
+  },
+  {
+    "packageName": "tech.apple.dialer.scheduler",
+    "name": "Manic",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "Manic wrapper-dropper impersonating a vendor system utility",
+    "source": "threat_research",
+    "reference": "https://www.threatfabric.com/blogs/manic-blend-between-banking-malware-and-spyware"
+  },
+  {
+    "packageName": "tech.intel.dialer.updater",
+    "name": "Manic",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "Manic banker/spyware hybrid wrapper-dropper impersonating a vendor system utility (ThreatFabric 2026-08; targets Ukraine and Europe)",
+    "source": "threat_research",
+    "reference": "https://www.threatfabric.com/blogs/manic-blend-between-banking-malware-and-spyware"
+  },
+  {
+    "packageName": "uncle.collop416.wifekin78",
+    "name": "TrickMo",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "HIGH",
+    "description": "TrickMo Android banking trojan package name",
+    "source": "threat_research",
+    "reference": "https://www.threatfabric.com/blogs/new-trickmo-variant-device-take-over-malware-targeting-banking-fintech-wallet-auth-app"
+  },
+  {
+    "packageName": "update.service.android",
+    "name": "mSpy",
+    "category": "STALKERWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "mSpy stalkerware disguised as system update \u2014 if not self-installed, contact a DV hotline",
+    "source": "stalkerware-indicators",
+    "reference": "feed:stalkerware-indicators#mSpy"
   }
 ]

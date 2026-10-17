@@ -8,3 +8,9 @@ OVERALL RISK:
 !OVERALL RISK: HIGH
 !OVERALL RISK: CRITICAL
 !Known Malicious Package
+# Every live report lists every campaign. On a clean device none is DETECTED. EXPOSED is
+# NOT forbidden: an old emulator patch level legitimately leaves campaign CVEs unpatched.
+MERCENARY SPYWARE CHECK
+"not detected" means none of the checks that ran in this scan matched.
+Campaign detections: none
+!: DETECTED --

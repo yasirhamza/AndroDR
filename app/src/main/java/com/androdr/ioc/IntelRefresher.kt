@@ -4,10 +4,12 @@ import android.util.Log
 import com.androdr.data.repo.CveRepository
 import com.androdr.sigma.SigmaRuleEngine
 import com.androdr.sigma.SigmaRuleFeed
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -27,6 +29,7 @@ import javax.inject.Singleton
 @Suppress("LongParameterList") // All parameters are Hilt-injected dependencies
 class IntelRefresher @Inject constructor(
     private val indicatorUpdater: IndicatorUpdater,
+    private val indicatorResolver: IndicatorResolver,
     private val knownAppUpdater: KnownAppUpdater,
     private val publicRepoIocFeed: PublicRepoIocFeed,
     private val knownAppResolver: KnownAppResolver,
@@ -102,8 +105,18 @@ class IntelRefresher @Inject constructor(
         // Each feed runs in a fixed order with real network + DB side effects, so
         // they're sequenced as explicit statements (not inline RefreshReport args,
         // whose evaluation order would silently follow field order).
-        val (indicators, knownApps) = runBulkUpdaters()
-        refreshPublicRepoIoc()
+        val (indicators, knownApps) = try {
+            runBulkUpdaters().also { refreshPublicRepoIoc() }
+        } finally {
+            // One rebuild covering the bulk feeds and the rules-repo rows (written or evicted), whatever
+            // either step returned or whether the coroutine was cancelled — a partial write must still become visible.
+            withContext(NonCancellable) {
+                // Guarded like every other step: a failed rebuild must not skip the OEM/brand/SIGMA/CVE
+                // refreshes or lastRefreshAt.
+                runCatching { indicatorResolver.refreshCache() }
+                    .onFailure { Log.e(TAG, "indicator cache rebuild failed", it) }
+            }
+        }
         val oemPrefixes = refreshOemPrefixes()
         val brandRegistry = refreshBrandRegistry()
         val sigmaRemoteRules = refreshSigmaRules()
@@ -122,7 +135,9 @@ class IntelRefresher @Inject constructor(
 
     private suspend fun runBulkUpdaters(): Pair<Int, Int> = coroutineScope {
         val indicators = async {
-            feedHealthRecorder.recordCount(FeedHealthRecorder.FEED_INDICATORS) { indicatorUpdater.update() }
+            feedHealthRecorder.recordCount(FeedHealthRecorder.FEED_INDICATORS) {
+                indicatorUpdater.update(refreshCache = false)
+            }
         }
         val knownApps = async {
             feedHealthRecorder.recordCount(FeedHealthRecorder.FEED_KNOWN_APPS) { knownAppUpdater.update() }
@@ -131,11 +146,12 @@ class IntelRefresher @Inject constructor(
     }
 
     private suspend fun refreshPublicRepoIoc() {
-        val count = feedHealthRecorder.recordCount(FeedHealthRecorder.FEED_PUBLIC_REPO_IOC) {
-            publicRepoIocFeed.update()
-        }
-        if (count > 0) {
-            Log.i(TAG, "Public repo IOC feed: $count entries loaded")
+        val result = feedHealthRecorder.record(
+            FeedHealthRecorder.FEED_PUBLIC_REPO_IOC,
+            succeeded = { it.written > 0 },
+        ) { publicRepoIocFeed.update() }
+        if ((result?.written ?: 0) > 0) {
+            Log.i(TAG, "Public repo IOC feed: ${result?.written} entries loaded")
             knownAppResolver.refreshCache()
         }
     }

@@ -12,6 +12,7 @@ import com.androdr.data.db.IndicatorDao
 import com.androdr.data.repo.CveRepository
 import com.androdr.data.repo.SettingsRepository
 import com.androdr.ioc.CertHashIocDatabase
+import com.androdr.data.model.ForensicTimelineEvent
 import com.androdr.data.model.Indicator
 import com.androdr.ioc.FeedHealthRecorder
 import com.androdr.ioc.IndicatorResolver
@@ -331,14 +332,7 @@ class SettingsViewModel @Inject constructor(
                             IndicatorResolver.TYPE_DOMAIN -> event.iocIndicator
                             else -> event.packageName
                         }
-                        Indicator(
-                            type = type, value = value,
-                            name = event.appName.ifEmpty { event.description },
-                            campaign = event.campaignName,
-                            description = event.details,
-                            source = "androdr_scan",
-                            fetchedAt = event.startTimestamp
-                        )
+                        event.toExportIndicator(type, value)
                     }
                 android.util.Log.i(TAG, "STIX2 export: ${indicators.size} findings")
                 val json = indicators.toStixBundle()
@@ -378,3 +372,13 @@ class SettingsViewModel @Inject constructor(
         )
     }
 }
+
+/** STIX export mapping for a scan finding: the label goes to `family`, never into a category column. */
+internal fun ForensicTimelineEvent.toExportIndicator(type: String, value: String): Indicator = Indicator(
+    type = type, value = value,
+    family = campaignName.ifEmpty { appName.ifEmpty { description } },
+    category = "",
+    description = details,
+    source = "androdr_scan",
+    fetchedAt = startTimestamp
+)

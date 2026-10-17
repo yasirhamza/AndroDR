@@ -220,7 +220,9 @@ The IOC resolver answers point queries: "is this package name / cert hash / APK 
 | Package name | `IndicatorResolver.isKnownBadPackage()` → `indicators` table (Room) | `IocDatabase` (`known_bad_packages.json`) |
 | Cert hash (SHA-256 or SHA-1) | `IndicatorResolver.isKnownBadCert()` → `indicators` table | `CertHashIocDatabase` (`known_bad_certs.json`) |
 | APK file hash (SHA-256) | `IndicatorResolver.isKnownBadApkHash()` → `indicators` table | `ApkHashIocDatabase` (`known_bad_apk_hashes.json`) |
-| C2 domain | `IndicatorResolver.isKnownBadDomain()` → `DomainBloomIndex` | `domain_blocklist.txt` |
+| C2 domain | `IndicatorResolver.isKnownBadDomain()` → `DomainBloomIndex` | `BundledDomainDatabase` (`known_bad_domains.json`) |
+
+**Bundled lists are generated, not edited.** `known_bad_domains.json`, `known_bad_packages.json`, `known_bad_certs.json`, `known_bad_apk_hashes.json` and `known_campaigns.json` under `res/raw/` are produced only from the pinned `third-party/android-sigma-rules/ioc-data` by `python3 scripts/merge-ioc-data.py` (full rewrite, no appends; an entry removed upstream disappears). Each entry carries family, category, campaign, source and reference. Domain entries also carry `blockByDefault`: `BlocklistManager` blocks only that subset (`BundledDomainDatabase.blockedDomains()`); every other bundled domain is for attribution and cold start. The CI job `bundle-provenance` runs `merge-ioc-data.py --check` and fails if a committed list differs from what `ioc-data` generates.
 
 Domain lookups never touch Room on the hot path. `DomainBloomIndex` is a bloom filter over a sorted 64-bit hash array built in memory at cache-refresh time. A query for `c2.evil.com` walks the label hierarchy (`c2.evil.com` → `evil.com`) so a blocklist entry on the parent domain catches all subdomains. The bloom-negative fast path costs approximately 150 ns, keeping the VPN packet-read thread unblocked.
 

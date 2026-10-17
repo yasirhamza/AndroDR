@@ -28,7 +28,9 @@ class IntrusionLogReportSectionTest {
                 row("network_connect", "Connect: 8.8.8.8:853", "com.samsung.wearable.watchuniteplugin"),
                 row("security_event", "Security: adb_shell_cmd", "")
             ),
-            versionName = "test"
+            versionName = "test",
+            campaigns = emptyList(),
+            ruleCategoryById = emptyMap(),
         )
         assertTrue(text.contains("INTRUSION LOG"))
         assertTrue(text.contains("Connect: 8.8.8.8:853"))
@@ -39,7 +41,9 @@ class IntrusionLogReportSectionTest {
     @Test
     fun `no intrusion events - no section`() {
         val text = ReportFormatter.formatScanReport(
-            scan(), dnsEvents = emptyList(), logLines = emptyList(), versionName = "test"
+            scan(), dnsEvents = emptyList(), logLines = emptyList(), versionName = "test",
+            campaigns = emptyList(),
+            ruleCategoryById = emptyMap(),
         )
         assertFalse(text.contains("INTRUSION LOG"))
     }
@@ -50,7 +54,9 @@ class IntrusionLogReportSectionTest {
             scan(), dnsEvents = emptyList(), logLines = emptyList(),
             mode = ExportMode.FINDINGS_ONLY,
             intrusionEvents = listOf(row("network_connect", "Connect: 1.2.3.4:80", "com.a")),
-            versionName = "test"
+            versionName = "test",
+            campaigns = emptyList(),
+            ruleCategoryById = emptyMap(),
         )
         assertFalse(text.contains("INTRUSION LOG"))
     }

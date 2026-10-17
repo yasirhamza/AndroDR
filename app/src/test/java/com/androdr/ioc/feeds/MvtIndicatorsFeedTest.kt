@@ -154,4 +154,38 @@ class MvtIndicatorsFeedTest {
     fun `parseStix2 returns empty list for malformed JSON`() {
         assertTrue(feed.parseStix2("not json", "test", "mvt_test", 0L).isEmpty())
     }
+
+    // ── entriesFor (campaign key stamping) ─────────────────────────────────────
+
+    private val spoofYaml = """
+        indicators:
+          -
+            type: github
+            name: NSO Group Pegasus Indicators of Compromise
+            github:
+              owner: AmnestyTech
+              repo: investigations
+              branch: master
+              path: 2021-07-18_nso/pegasus.stix2
+          -
+            type: github
+            name: NSO Group Pegasus Indicators of Compromise
+            github:
+              owner: attacker
+              repo: x
+              branch: main
+              path: pegasus.stix2
+    """.trimIndent()
+
+    @Test
+    fun `entriesFor stamps the compiled key only on the real Pegasus collection`() {
+        val refs = feed.parseIndicatorsYaml(spoofYaml)
+        assertEquals(2, refs.size)
+        val real = feed.entriesFor(refs[0], singleDomainStix2, 1L)
+        val spoof = feed.entriesFor(refs[1], singleDomainStix2, 1L)
+        assertTrue(real.isNotEmpty())
+        assertTrue(real.all { it.campaignKey == "pegasus" })
+        assertTrue(spoof.isNotEmpty())
+        assertTrue(spoof.all { it.campaignKey == "" })
+    }
 }

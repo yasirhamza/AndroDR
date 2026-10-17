@@ -75,7 +75,14 @@ class ReportExporterScopeTest {
             timelineDao.getEventsBySourceForScan("intrusion_log", liveScanId, any())
         } returns flowOf(emptyList())
 
-        exporter = ReportExporter(context, dnsEventDao, scanOrchestrator, appScanner, timelineDao)
+        exporter = ReportExporter(
+            context = context, dnsEventDao = dnsEventDao, scanOrchestrator = scanOrchestrator,
+            appScanner = appScanner, forensicTimelineEventDao = timelineDao,
+            reportInputs = mockk {
+                every { campaigns() } returns emptyList()
+                every { ruleCategoryById() } returns emptyMap()
+            },
+        )
     }
 
     private fun scan(id: Long) = ScanResult(

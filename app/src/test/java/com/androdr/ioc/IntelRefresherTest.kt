@@ -2,6 +2,7 @@ package com.androdr.ioc
 
 import com.androdr.data.db.FeedHealthDao
 import com.androdr.data.model.FeedHealth
+import com.androdr.data.model.Indicator
 import com.androdr.data.repo.CveRepository
 import com.androdr.sigma.SigmaRule
 import com.androdr.sigma.SigmaRuleEngine
@@ -11,9 +12,16 @@ import io.mockk.verify
 import io.mockk.every
 import io.mockk.coVerify
 import io.mockk.mockk
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.test.advanceUntilIdle
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -25,6 +33,7 @@ import org.junit.Test
  * SettingsViewModel called the updaters directly and wrote no health row; that is
  * now structurally impossible (the updaters are no longer injected there).
  */
+@OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
 class IntelRefresherTest {
 
     private val dao = mockk<FeedHealthDao>(relaxed = true)
@@ -43,16 +52,16 @@ class IntelRefresherTest {
     // relaxed: refreshCveDatabase logs getActivelyExploitedCount() on success.
     private val cveRepository = mockk<CveRepository>(relaxed = true)
 
-    private fun refresher() = IntelRefresher(
-        indicatorUpdater, knownAppUpdater, publicRepoIocFeed, knownAppResolver,
+    private fun refresher(indicatorResolver: IndicatorResolver = mockk(relaxed = true)) = IntelRefresher(
+        indicatorUpdater, indicatorResolver, knownAppUpdater, publicRepoIocFeed, knownAppResolver,
         oemPrefixResolver, brandImpersonationResolver, sigmaRuleFeed, sigmaRuleEngine,
         cveRepository, recorder,
     )
 
     private fun allFeedsSucceed() {
-        coEvery { indicatorUpdater.update() } returns 100
+        coEvery { indicatorUpdater.update(any()) } returns 100
         coEvery { knownAppUpdater.update() } returns 50
-        coEvery { publicRepoIocFeed.update() } returns 200
+        coEvery { publicRepoIocFeed.update() } returns UpdateResult(written = 200, evicted = 0)
         coEvery { oemPrefixResolver.refresh() } returns 10
         coEvery { brandImpersonationResolver.refresh() } returns 25
         coEvery { sigmaRuleFeed.fetch() } returns listOf(mockk<SigmaRule>(), mockk<SigmaRule>())
@@ -145,5 +154,78 @@ class IntelRefresherTest {
         refresher().refreshAll()
 
         verify { sigmaRuleEngine.setRemoteRules(any(), rejected) }
+    }
+
+    // ── One cache rebuild per refresh, after the rules-repo write (plan B1) ──
+
+    @Test
+    fun `rows written only by the rules-repo feed are visible when refreshAll returns`() = runTest {
+        allFeedsSucceed()
+        val fakeDao = FakeIndicatorDao()
+        val bundledPackages = mockk<IocDatabase>()
+        every { bundledPackages.isKnownBadPackage(any()) } returns null
+        val resolver = IndicatorResolver(
+            fakeDao, bundledPackages, mockk(relaxed = true), mockk(relaxed = true), mockk(relaxed = true)
+        )
+        coEvery { publicRepoIocFeed.update() } coAnswers {
+            fakeDao.upsertAll(listOf(
+                Indicator(type = "package", value = "com.rules.only", family = "RulesFam",
+                    source = PublicRepoIocFeed.SOURCE_ID, fetchedAt = 1L),
+                Indicator(type = "domain", value = "rules-only.example", family = "RulesFam",
+                    source = PublicRepoIocFeed.SOURCE_ID, fetchedAt = 1L),
+            ))
+            UpdateResult(written = 2, evicted = 0)
+        }
+
+        refresher(resolver).refreshAll()
+
+        assertNotNull(resolver.isKnownBadPackage("com.rules.only"))
+        assertNotNull(resolver.isKnownBadDomain("rules-only.example"))
+    }
+
+    @Test
+    fun `refreshAll rebuilds the resolver cache exactly once whatever the rules-repo update did`() = runTest {
+        for (result in listOf(
+            UpdateResult(written = 5, evicted = 0),
+            UpdateResult(written = 0, evicted = 3),
+            UpdateResult(written = 0, evicted = 0),
+        )) {
+            allFeedsSucceed()
+            coEvery { publicRepoIocFeed.update() } returns result
+            val resolver = mockk<IndicatorResolver>(relaxed = true)
+
+            refresher(resolver).refreshAll()
+
+            coVerify(exactly = 1) { resolver.refreshCache() }
+            coVerify { indicatorUpdater.update(refreshCache = false) }
+        }
+    }
+
+    @Test
+    fun `a cancelled refresh still rebuilds the cache once`() = runTest {
+        allFeedsSucceed()
+        val started = CompletableDeferred<Unit>()
+        coEvery { knownAppUpdater.update() } coAnswers { started.complete(Unit); awaitCancellation() }
+        val resolver = mockk<IndicatorResolver>(relaxed = true)
+
+        val job = launch(start = CoroutineStart.UNDISPATCHED) { refresher(resolver).refreshAll() }
+        advanceUntilIdle()
+        started.await()
+        job.cancelAndJoin()
+
+        coVerify(exactly = 1) { resolver.refreshCache() }
+    }
+
+    @Test
+    fun `a failing cache rebuild does not stop the later steps`() = runTest {
+        allFeedsSucceed()
+        val resolver = mockk<IndicatorResolver>()
+        coEvery { resolver.refreshCache() } throws IllegalStateException("boom")
+
+        val report = refresher(resolver).refreshAll()
+
+        assertEquals(5, report.cveReachable)
+        assertEquals(10, report.oemPrefixes)
+        coVerify { cveRepository.refresh() }
     }
 }
