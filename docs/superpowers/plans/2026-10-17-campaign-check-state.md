@@ -1,5 +1,7 @@
 # Per-campaign check state (#394) Implementation Plan
 
+> **Plan gate:** skipped for this plan by owner decision (2026-10-17); the per-task reviews and the final whole-branch review are the defect net. **Execution:** subagent-driven (owner, 2026-10-17).
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking. **Execution model:** per owner, chosen at plan handoff — do not assume one.
 
 **Goal:** Each MERCENARY SPYWARE CHECK row says whether its campaign was fully checked and, if not, why and what to do — `[OK]` only when every infection check for that campaign ran in full.
@@ -25,13 +27,14 @@
 - Run everything in the task's worktree path, never in `/home/yasir/AndroDR` (stale checkout with owner WIP).
 - Commit trailers: `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>` and `Claude-Session: https://claude.ai/code/session_01B8H9x5KmTtY8Ejyi2eUdjH`.
 
-### Deviations from the spec found while grounding it in code (owner confirms at plan review)
+### Deviations from the spec found while grounding it in code (owner ACCEPTED all five, 2026-10-17; spec updated to match)
 
 1. **DNS-off wording.** Spec §6 clause "DNS lookups not checked (DNS monitoring was off)" is untrue: with the tunnel off the scan still evaluates the newest 500 *recorded* lookups (`ScanOrchestrator.kt:384-387`; `NotEvaluatedReason.DNS_MONITOR_OFF.heading` says "the most recent recorded lookups were checked"). This plan uses `DNS lookups not monitored (DNS monitoring was off; only lookups recorded earlier were checked)`. Status stays BLIND (row `[--]`).
 2. **Where `detected_by` shape is validated.** Spec §1 says `validate-ioc-data.py`; `campaigns.yml` is actually validated by `validation/test_campaign_vocabulary.py` (validate-ioc-data.py only runs the manual-record pass on it). The shape checks go in the new `test_campaign_detected_by.py`, run by both CI jobs.
 3. **BLIND reasons are typed.** Spec §3 `ServiceStatus.reason: String?`; this plan uses `reason: BlindReason?` (`DNS_OFF`, `CHECK_FAILED`, `UNKNOWN_SERVICE`) so rendering never compares strings.
 4. **MVT derivation** adds the service of the `ioc_match` rule using `domain_ioc_db` (today `dns_monitor`), not a hard-coded `dns_monitor` — same result today, stays true if androdr-003 changes.
 5. **Scope note condition.** Spec: "printed only when some row has `coverage == null`". Plan: live scan AND some NOT_DETECTED row has `coverage == null` (the note explains "not detected"; a DETECTED row without coverage needs no note).
+6. **Owner addition: `missingSources`.** A missing MVT list marks only `dns_monitor` built-in-only (Task A2 Steps 0a/0b).
 
 ## Review Focus
 
@@ -491,7 +494,8 @@ Claude-Session: https://claude.ai/code/session_01B8H9x5KmTtY8Ejyi2eUdjH"
 
 **Files:**
 - Create: `app/src/main/java/com/androdr/reporting/CampaignCoverage.kt`
-- Test: `app/src/test/java/com/androdr/reporting/CampaignCoverageTest.kt`, `app/src/test/java/com/androdr/reporting/ServiceScannerMapCrossCheckTest.kt`
+- Modify: `app/src/main/java/com/androdr/data/model/ScanResult.kt` (`ScannerFailure.missingSources`), `app/src/main/java/com/androdr/scanner/ScanVisibilityGaps.kt`
+- Test: `app/src/test/java/com/androdr/reporting/CampaignCoverageTest.kt`, `app/src/test/java/com/androdr/reporting/ServiceScannerMapCrossCheckTest.kt`, `app/src/test/java/com/androdr/scanner/ScanVisibilityGapsTest.kt`
 
 **Interfaces:**
 - Consumes: `ScannerFailure`, `NotEvaluatedReason` (`data/model/ScanResult.kt`).
@@ -501,6 +505,38 @@ Claude-Session: https://claude.ai/code/session_01B8H9x5KmTtY8Ejyi2eUdjH"
   - `data class ServiceStatus(val service: String, val coverage: ServiceCoverage, val reason: BlindReason? = null)`
   - `internal val SCANNER_FOR_SERVICE: Map<String, String>`, `internal val IMPORT_ONLY_SERVICES: Set<String>`, `internal const val DNS_SNAPSHOT_SCANNER = "dnsSnapshot"`
   - `internal fun campaignCoverage(detectedBy: List<String>, campaignKey: String, scannerErrors: List<ScannerFailure>, ruleCampaigns: Map<String, Set<String>>): List<ServiceStatus>`
+  - `ScannerFailure.missingSources: List<String> = emptyList()` — for `CAMPAIGN_SOURCES_NOT_LOADED` only: `"rules_repo"` and/or `"mvt"` (`MISSING_SOURCE_RULES_REPO`, `MISSING_SOURCE_MVT` constants in `ScanVisibilityGaps.kt`).
+
+**Owner addition (2026-10-17): a missing MVT list affects DNS rows only.** MVT carries domain indicators only, so a `CAMPAIGN_SOURCES_NOT_LOADED` entry naming only `mvt` must not mark `app_scanner` built-in-only. The source is stored structurally in a new `ScannerFailure.missingSources` field: **not** `missingEvidence`, which `appendNotChecked` renders as "needs X, none recorded in this scan" and which belongs to `NO_EVENTS_TO_CHECK`. The field is JSON with a default, so it needs no migration, and old rows decode as empty. An entry with empty `missingSources` (a scan saved before this change) keeps the cautious reading: both list services are built-in-only.
+
+- [ ] **Step 0a: Failing test** — append to `ScanVisibilityGapsTest.kt`:
+
+```kotlin
+    @Test
+    fun `campaign-sources entry records which sources were missing`() {
+        fun sources(rulesRepo: Boolean, mvt: Boolean) = scanVisibilityGaps(
+            FeedCoverage(rows = 10, rulesRepoLoaded = rulesRepo, mvtLoaded = mvt), dnsMonitorRunning = true,
+        ).single().missingSources
+        assertEquals(listOf(MISSING_SOURCE_MVT), sources(rulesRepo = true, mvt = false))
+        assertEquals(listOf(MISSING_SOURCE_RULES_REPO), sources(rulesRepo = false, mvt = true))
+        assertEquals(listOf(MISSING_SOURCE_RULES_REPO, MISSING_SOURCE_MVT), sources(rulesRepo = false, mvt = false))
+    }
+```
+(Add `import org.junit.Assert.assertEquals` if the file lacks it.) Run `JAVA_HOME=/home/yasir/.gradle/jdks/eclipse_adoptium-21-amd64-linux.2 ANDROID_HOME=/home/yasir/Android/Sdk ./gradlew testDebugUnitTest --tests 'com.androdr.scanner.ScanVisibilityGapsTest' -q` → FAIL (unresolved `missingSources` / constants).
+
+- [ ] **Step 0b: Implement.** In `ScanResult.kt`, add to `ScannerFailure` after `missingEvidence`:
+
+```kotlin
+    /**
+     * For [NotEvaluatedReason.CAMPAIGN_SOURCES_NOT_LOADED]: which sources did not load
+     * ("rules_repo", "mvt"), so the mercenary check can tell a missing MVT list (domains only)
+     * from a missing rules-repo list (domains and packages) without parsing [message] (#394).
+     * Empty on rows saved before this field existed: readers must then assume both.
+     */
+    val missingSources: List<String> = emptyList(),
+```
+In `ScanVisibilityGaps.kt`, add top-level `internal const val MISSING_SOURCE_RULES_REPO = "rules_repo"` and `internal const val MISSING_SOURCE_MVT = "mvt"`, and pass `missingSources = listOfNotNull(if (coverage.rulesRepoLoaded) null else MISSING_SOURCE_RULES_REPO, if (coverage.mvtLoaded) null else MISSING_SOURCE_MVT)` to the `CAMPAIGN_SOURCES_NOT_LOADED` `ScannerFailure`. Rerun Step 0a's command → PASS.
+
 
 - [ ] **Step 1: Failing tests** — `CampaignCoverageTest.kt`:
 
@@ -551,6 +587,16 @@ class CampaignCoverageTest {
     fun `crash beats feeds not loaded`() {
         assertEquals(ServiceCoverage.BLIND,
             one("app_scanner", listOf(crash("appScanner"), sentinel(NotEvaluatedReason.FEEDS_NOT_LOADED))).coverage)
+    }
+
+    @Test
+    fun `missing MVT only marks DNS built-in-only, not installed apps`() {
+        val mvtOnly = ScannerFailure("threat_intel", NotEvaluatedReason.CAMPAIGN_SOURCES_NOT_LOADED.sentinel, "m",
+            missingSources = listOf(MISSING_SOURCE_MVT))
+        assertEquals(ServiceCoverage.BUILT_IN_LISTS_ONLY, one("dns_monitor", listOf(mvtOnly)).coverage)
+        assertEquals(ServiceCoverage.CHECKED, one("app_scanner", listOf(mvtOnly)).coverage)
+        val repo = mvtOnly.copy(missingSources = listOf(MISSING_SOURCE_RULES_REPO))
+        assertEquals(ServiceCoverage.BUILT_IN_LISTS_ONLY, one("app_scanner", listOf(repo)).coverage)
     }
 
     @Test
@@ -707,7 +753,17 @@ internal fun campaignCoverage(
     val reasons = scannerErrors.mapNotNull { e -> NotEvaluatedReason.fromSentinel(e.exception)?.let { it to e } }
     val crashed = scannerErrors.filter { NotEvaluatedReason.fromSentinel(it.exception) == null }.map { it.scanner }.toSet()
     fun has(r: NotEvaluatedReason) = reasons.any { it.first == r }
-    val listsPartial = has(NotEvaluatedReason.FEEDS_NOT_LOADED) || has(NotEvaluatedReason.CAMPAIGN_SOURCES_NOT_LOADED)
+    // Which list services ran on the built-in lists only. FEEDS_NOT_LOADED: both. CAMPAIGN_SOURCES_NOT_LOADED:
+    // a missing MVT list touches domains only; a missing rules-repo list, or a row saved before
+    // missingSources existed (empty), touches both (owner addition, #394).
+    val builtInOnly: Set<String> = buildSet {
+        if (has(NotEvaluatedReason.FEEDS_NOT_LOADED)) addAll(LIST_SERVICES)
+        reasons.filter { it.first == NotEvaluatedReason.CAMPAIGN_SOURCES_NOT_LOADED }.forEach { (_, e) ->
+            val src = e.missingSources
+            if (src.isEmpty() || MISSING_SOURCE_RULES_REPO in src) addAll(LIST_SERVICES)
+            if (MISSING_SOURCE_MVT in src) add(DNS_SERVICE)
+        }
+    }
     val ownPathsUnreadable = reasons.any { (r, e) ->
         r == NotEvaluatedReason.UNREADABLE_PATHS && campaignKey in e.ruleId?.let { ruleCampaigns[it] }.orEmpty()
     }
@@ -720,7 +776,7 @@ internal fun campaignCoverage(
             SCANNER_FOR_SERVICE.getValue(service) in crashed ->
                 ServiceStatus(service, ServiceCoverage.BLIND, BlindReason.CHECK_FAILED)
             service == FILE_SERVICE && ownPathsUnreadable -> ServiceStatus(service, ServiceCoverage.PARTLY_UNREADABLE)
-            service in LIST_SERVICES && listsPartial -> ServiceStatus(service, ServiceCoverage.BUILT_IN_LISTS_ONLY)
+            service in builtInOnly -> ServiceStatus(service, ServiceCoverage.BUILT_IN_LISTS_ONLY)
             else -> ServiceStatus(service, ServiceCoverage.CHECKED)
         }
     }
@@ -735,7 +791,7 @@ Expected: `CampaignCoverageTest` all PASS; `ServiceScannerMapCrossCheckTest.ever
 - [ ] **Step 6: Commit**
 
 ```bash
-git add app/src/main/java/com/androdr/reporting/CampaignCoverage.kt app/src/test/java/com/androdr/reporting/CampaignCoverageTest.kt app/src/test/java/com/androdr/reporting/ServiceScannerMapCrossCheckTest.kt
+git add app/src/main/java/com/androdr/reporting/CampaignCoverage.kt app/src/test/java/com/androdr/reporting/CampaignCoverageTest.kt app/src/test/java/com/androdr/reporting/ServiceScannerMapCrossCheckTest.kt app/src/main/java/com/androdr/data/model/ScanResult.kt app/src/main/java/com/androdr/scanner/ScanVisibilityGaps.kt app/src/test/java/com/androdr/scanner/ScanVisibilityGapsTest.kt
 git commit -m "feat(report): campaignCoverage, one status per detected_by service (#394)" -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 Claude-Session: https://claude.ai/code/session_01B8H9x5KmTtY8Ejyi2eUdjH"
 ```
@@ -1243,4 +1299,4 @@ Claude-Session: https://claude.ai/code/session_01B8H9x5KmTtY8Ejyi2eUdjH"
 - **Placeholders:** none; every code step carries code, every run step a command and expected result.
 - **Type consistency:** `Campaign.detectedBy: List<String>?` (A1) → `detectedByKey` (A4); `campaignCoverage(detectedBy, campaignKey, scannerErrors, ruleCampaigns)` (A2) → A4 call; `DNS_SNAPSHOT_SCANNER` (A2) → A3; `ruleCampaigns: Map<String, Set<String>>` in ReportInputs, campaignVerdicts, formatScanReport, both callers and both test helpers.
 - **Review Focus:** each of the 5 lines has its pinning test in A2 or A4.
-- **Known residuals carried from the spec:** BUILT_IN_LISTS_ONLY is per service (a CAMPAIGN_SOURCES_NOT_LOADED entry caused only by MVT also marks `app_scanner` built-in-only, though MVT carries no packages); DNS switched on just before a scan counts as checked; History uses the current registry and rules.
+- **Known residuals carried from the spec:** BUILT_IN_LISTS_ONLY is per service (closed for new scans by `missingSources`, owner addition in A2; scans saved before it keep the cautious reading); DNS switched on just before a scan counts as checked; History uses the current registry and rules.
