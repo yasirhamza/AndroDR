@@ -95,4 +95,55 @@ class CampaignRegistryTest {
         assertEquals(listOf("good"), ok.aliases)
         assertEquals("Nolabel", parsed[0].label)
     }
+
+    @Test
+    fun `detected_by is read from yaml - present, empty, absent, junk`() {
+        val yaml = """
+            campaigns:
+              - key: a
+                label: A
+                detected_by: [dns_monitor, app_scanner, dns_monitor]
+              - key: b
+                label: B
+                detected_by: []
+              - key: c
+                label: C
+              - key: d
+                label: D
+                detected_by: dns_monitor
+              - key: e
+                label: E
+                detected_by: [file_scanner, "Bad Value", "x;y"]
+        """.trimIndent()
+        val byKey = CampaignRegistry.parseYaml(yaml).associate { it.key to it.detectedBy }
+        assertEquals(listOf("app_scanner", "dns_monitor"), byKey["a"])
+        assertEquals(emptyList<String>(), byKey["b"])
+        assertNull(byKey["c"])
+        assertNull(byKey["d"]) // not a list: treated as absent
+        assertEquals(listOf("file_scanner"), byKey["e"])
+    }
+
+    @Test
+    fun `detected_by is read from the bundled json`() {
+        val json = """[{"key":"a","label":"A","aliases":[],"detected_by":["dns_monitor"]},
+            {"key":"b","label":"B","aliases":[]},{"key":"c","label":"C","aliases":[],"detected_by":"x"}]"""
+        val byKey = CampaignRegistry.parseBundled(json).associate { it.key to it.detectedBy }
+        assertEquals(listOf("dns_monitor"), byKey["a"])
+        assertNull(byKey["b"])
+        assertNull(byKey["c"])
+    }
+
+    @Test
+    fun `the bundle declares detected_by for every campaign`() {
+        val byKey = CampaignRegistry.parseBundled(bundledJson).associate { it.key to it.detectedBy }
+        assertEquals(
+            mapOf(
+                "cellebrite" to listOf("app_scanner"), "graphite" to listOf("dns_monitor"),
+                "landfall" to emptyList(), "massistant" to listOf("app_scanner"),
+                "midnight-mimosa" to listOf("app_scanner", "dns_monitor"), "pegasus" to listOf("dns_monitor"),
+                "predator" to listOf("dns_monitor", "file_scanner"),
+            ),
+            byKey,
+        )
+    }
 }

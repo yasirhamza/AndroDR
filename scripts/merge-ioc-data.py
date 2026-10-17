@@ -30,7 +30,7 @@ ALLOWED_SOURCES_PATH = os.path.join(
 )
 
 FILES = {
-    # known_campaigns.json is rendered separately: [{"key", "label", "aliases"}] from campaigns.yml
+    # known_campaigns.json is rendered separately: [{"key", "label", "aliases", "detected_by"?}] from campaigns.yml
     "known_bad_domains.json":    ("c2-domains.yml",     "domain"),
     "known_bad_packages.json":   ("package-names.yml",  "packageName"),
     "known_bad_certs.json":      ("cert-hashes.yml",    "certHash"),
@@ -92,10 +92,13 @@ def render(repo_dir):
         out[fname] = json.dumps(rows, indent=2, ensure_ascii=True) + "\n"
     with open(os.path.join(repo_dir, "ioc-data", "campaigns.yml")) as f:
         camps = (yaml.safe_load(f) or {}).get("campaigns", [])
+    def _campaign(c):
+        row = {"key": c["key"], "label": c["label"], "aliases": sorted(c.get("aliases", []))}
+        if "detected_by" in c:   # absent stays absent: the app renders today's row for it
+            row["detected_by"] = sorted(c["detected_by"])
+        return row
     out["known_campaigns.json"] = json.dumps(
-        sorted(({"key": c["key"], "label": c["label"], "aliases": sorted(c.get("aliases", []))} for c in camps),
-               key=lambda c: c["key"]),
-        indent=2, ensure_ascii=True) + "\n"
+        sorted((_campaign(c) for c in camps), key=lambda c: c["key"]), indent=2, ensure_ascii=True) + "\n"
     return out
 
 

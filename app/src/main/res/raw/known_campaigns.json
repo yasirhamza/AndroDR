@@ -2,35 +2,52 @@
   {
     "key": "cellebrite",
     "label": "Cellebrite",
-    "aliases": []
+    "aliases": [],
+    "detected_by": [
+      "app_scanner"
+    ]
   },
   {
     "key": "graphite",
     "label": "Graphite (Paragon)",
     "aliases": [
       "paragon"
+    ],
+    "detected_by": [
+      "dns_monitor"
     ]
   },
   {
     "key": "landfall",
     "label": "LANDFALL",
-    "aliases": []
+    "aliases": [],
+    "detected_by": []
   },
   {
     "key": "massistant",
     "label": "Massistant",
-    "aliases": []
+    "aliases": [],
+    "detected_by": [
+      "app_scanner"
+    ]
   },
   {
     "key": "midnight-mimosa",
     "label": "Midnight Mimosa",
-    "aliases": []
+    "aliases": [],
+    "detected_by": [
+      "app_scanner",
+      "dns_monitor"
+    ]
   },
   {
     "key": "pegasus",
     "label": "Pegasus",
     "aliases": [
       "nso"
+    ],
+    "detected_by": [
+      "dns_monitor"
     ]
   },
   {
@@ -39,6 +56,10 @@
     "aliases": [
       "cytrox",
       "intellexa"
+    ],
+    "detected_by": [
+      "dns_monitor",
+      "file_scanner"
     ]
   }
 ]
