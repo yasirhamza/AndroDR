@@ -11,14 +11,14 @@ You are the dispatcher for the AndroDR AI-powered SIGMA rule update pipeline. Yo
 The user invokes one of four modes:
 - `/update-rules full` — check all feeds for new threat intel
 - `/update-rules source <id>` — check one feed (valid IDs: `abusech`, `asb`, `nvd`, `amnesty`, `stalkerware`, `attack`, `prodaft`)
-- `/update-rules threat "<name>"` — research a specific threat by name
+- `/update-rules threat "<name>" [--url <primary report URL>]` — research a specific threat by name; `--url` names the report that lists its indicators (optional)
 - `/update-rules discover [--top N]` — autonomously discover up to N (default 5) emerging threats from configured discovery sources and fan out to research subagents
 
 If no argument is given, ask which mode to use.
 
 ## Required environment
 
-Runs from a terminal shell; subagents inherit the parent session's environment via WebFetch. Before dispatching any ingester, verify the required vars are present:
+Runs from a terminal shell; subagents inherit the session's environment (including the env vars below). WebFetch is only for anonymous GET requests; authenticated calls use Bash + curl (see the Tool note below). Before dispatching any ingester, verify the required vars are present:
 
 | Feed | Env var | Requirement |
 |---|---|---|
@@ -57,7 +57,7 @@ Based on the invocation mode:
 
 **Source-focused:** Spawn only the named ingester agent.
 
-**Threat-focused:** Spawn `update-rules-research-threat` with the threat name.
+**Threat-focused:** Spawn `update-rules-research-threat` with the threat name and `<run-dir>`, plus `primary_url` when `--url` was given.
 
 **Discover-focused** (`/update-rules discover [--top N]`, default N=5):
 1. Spawn ONE subagent: `update-rules-discover` with `top_n=N`,
@@ -69,7 +69,8 @@ Based on the invocation mode:
 4. Otherwise fan out: for each threat_name (up to top_n), spawn a
    **parallel** `update-rules-research-threat` subagent via the Agent
    tool (single message with multiple tool uses for true parallelism).
-   Pass threat_name + source_url from the discover output.
+   Pass threat_name, `<run-dir>`, and the name's URL from the discover
+   output's `source_urls` map as `primary_url`.
 5. Collect SIRs from successful subagents. Log subagent failures
    (Cloudflare 429, network errors) but never abort the whole run for a
    single subagent failure.
@@ -141,26 +142,39 @@ Every completed ingester returns `upstream_snapshot_hash_set` alongside its
 SIRs and `candidate_ioc_entries` (see individual ingester skills). Take
 the union of every snapshot as `U_ingesters`.
 
-### 6.5.2 Fetch any missing mirror feeds
+### 6.5.2 Fetch the feed dumps
 
-Read `third-party/android-sigma-rules/validation/kotlin-mirror-feeds.yml`.
-For every feed listed there whose `id` does NOT appear in any completed
-ingester (e.g., only the stalkerware ingester ran but ThreatFox is still
-a Kotlin-mirrored upstream that candidates must be checked against), fetch
-the feed into a `(type, normalized_value)` set using the parser identified
-by the `parser` field. Take the union with `U_ingesters` → `U_authoritative`.
+Fetch the plain-text feed dumps once per run, now:
+`bash third-party/android-sigma-rules/scripts/fetch-feed-dumps.sh <run-dir>/feeds`.
+It writes one file per source id, `<run-dir>/feeds/<id>.txt`. Step 7.1(b) and
+Gate 2b reuse these files; do not fetch them again (except the MalwareBazaar
+case in 7.1(b)).
+
+Read `third-party/android-sigma-rules/validation/kotlin-mirror-feeds.yml`. The
+feeds listed there are the ones the app already pulls on-device. For each
+listed `id`, the dump `<run-dir>/feeds/<id>.txt` is that feed's coverage. A
+listed feed with no dump, or an empty dump, is a fetch failure: report it.
 
 ### 6.5.3 Filter candidates
 
 For each candidate across all ingesters — **plus any `ioc_data` entries
 emitted by the Rule Author** from research/discover SIRs (Step 4 output) —
-drop it if `(type, normalized_value)` is in `U_authoritative`. The
-survivors form the **approved delta** that proceeds to Step 7.
+drop it if it is a duplicate:
+
+- its `(type, normalized_value)` is in `U_ingesters`, or
+- its value appears in a mirror-feed dump from 6.5.2, matched as a whole value
+  (case-insensitive; not as part of a longer name, so `<a>.com` does not match
+  `<b><a>.com`).
+
+For a **domain** candidate, also check every parent label: `<sub>.<x>.com` is a
+duplicate if `<x>.com` is in a mirror feed or in `U_ingesters`. The app matches
+a domain IOC on the domain or any parent label, so a listed parent already
+covers it. The survivors form the **approved delta** that proceeds to Step 7.
 
 ### 6.5.4 Safety checks before Step 7
 
-- If `U_authoritative` is empty (all upstreams failed to fetch), abort the
-  run with a clear error. Do NOT proceed with unfiltered candidates — that
+- If `U_ingesters` is empty AND every mirror-feed dump is missing or empty
+  (all upstreams failed to fetch), abort the run with a clear error. Do NOT proceed with unfiltered candidates — that
   would inject duplicates into ioc-data/*.yml.
 - If any candidate's `source` field corresponds to a feed listed in
   `kotlin-mirror-feeds.yml` but the candidate survives the filter, log a
@@ -180,6 +194,7 @@ Level:       [level]
 ATT&CK:      [technique IDs]
 IOCs:        [counts by type]
 Validation:  [gate results: checkmark or X per gate]
+Reference:   [Gate 2b status + snippet per IOC entry the candidate adds, if any]
 
 FLAGGED DECISIONS: (if any)
   [field]: chose "[value]" over "[alternative]" — [reasoning]
@@ -241,9 +256,12 @@ every null value first: `ioc-entry-schema.json` has `additionalProperties:
 false`. Confirm each file with
 `python3 -I third-party/android-sigma-rules/validation/validate-ioc-data.py <file>`.
 
-(b) **Fetch the feed dumps**, once per run, after (a):
+(b) **Reuse the feed dumps** fetched in Step 6.5.2 (`<run-dir>/feeds`). Only
+when a candidate file holds `source: malwarebazaar` entries, re-run the script
+after (a) with the candidates dir:
 `bash third-party/android-sigma-rules/scripts/fetch-feed-dumps.sh <run-dir>/feeds <run-dir>/candidates`.
-The second argument makes it query MalwareBazaar for the candidate hashes too.
+The second argument makes it query MalwareBazaar for the candidate hashes too
+(a new hash is otherwise never in the dump).
 Without `MALWAREBAZAAR_API_KEY` every `malwarebazaar` entry comes back
 NOT_FOUND: show it on the HitL list as "needs MALWAREBAZAAR_API_KEY rerun" and
 never commit it.
@@ -253,8 +271,9 @@ Gate 2b), requiring one JSON line per entry. IOC candidate files are named
 after their `ioc-data` file (`c2-domains.yml`, …); the rule files
 `rule-<id>.yml` share `candidates/` and never go to Gate 2b.
 
-(d) Add a "Reference check" column (status + snippet) to the HitL candidate
-table. BAD_INPUT entries (reference missing, a campaign entry that needs a
+(d) Show the Reference check (status + snippet) in each candidate's block: the
+`Gate 2b status:` line under each indicator above, or the `Reference:` line of a
+rule candidate. There is no separate summary table. BAD_INPUT entries (reference missing, a campaign entry that needs a
 curated feed or a report, an ambiguous campaign) go on the HitL list with the
 checker's detail; they are not fixed by quoting.
 

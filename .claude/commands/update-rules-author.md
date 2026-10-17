@@ -352,9 +352,27 @@ entries:
 - Copy the indicator exactly as the reference writes it (re-fanged, lower case
   for domains and hashes). Gate 2b fetches the reference and rejects the entry
   if the indicator is not in it.
+- A wildcard domain in the report (`*.<x>.com`): write `<x>.com` only when
+  `<x>.com` is the threat actor's own registered domain (the app's domain match
+  already covers every subdomain of a listed domain). Never turn a wildcard
+  into a shared-hosting or public-suffix parent (`cloudfront.net`,
+  `herokuapp.com`, `cloudapp.azure.com`, `appspot.com`, …): that would flag
+  every site hosted there. A specific actor hostname on shared hosting
+  (`<actor-host>.appspot.com`) is fine as written; a wildcard over shared
+  hosting with no specific hostname is not emitted (flag it in the notes).
 - For research/discover SIRs: if the SIR has no `source.url` that lists the
   indicator, do not emit the entry; flag it in the candidate's notes instead.
   Feed SIRs cite `feed:<id>#<family>` and need no `source.url`.
+
+### What belongs in `c2-domains.yml`
+
+Every `c2-domains.yml` entry fires androdr-003 ("DNS query to known C2
+domain"), which is `level: critical`, whatever the entry's own `severity`. So
+only infrastructure the threat actor controls goes there (C2, exfiltration,
+payload or phishing servers). Ad-tech, tracking, analytics, CDN and
+shared-hosting domains that ordinary users reach never go into `ioc-data`,
+even when a report names them: listing one would raise a critical "known C2"
+alarm on ordinary devices. Record a skip decision instead.
 
 Allowed sources (authoritative list: `validation/allowed-sources.json`):
 `stalkerware-indicators`, `malwarebazaar`, `threatfox`,
