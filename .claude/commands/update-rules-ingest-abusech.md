@@ -98,8 +98,8 @@ Emit a JSON object extending the existing SIR array:
     {
       "file": "ioc-data/c2-domains.yml",
       "entry": {
-        "indicator": "c2.example.com",
-        "family": "ExampleMalware",
+        "indicator": "<domain as the feed lists it>",
+        "family": "<family as the feed lists it>",
         "category": "MALWARE",
         "severity": "CRITICAL",
         "source": "threatfox",
@@ -109,8 +109,8 @@ Emit a JSON object extending the existing SIR array:
     {
       "file": "ioc-data/malware-hashes.yml",
       "entry": {
-        "indicator": "abc123...sha256",
-        "family": "ExampleApk",
+        "indicator": "<sha256 as the feed lists it>",
+        "family": "<family as the feed lists it>",
         "category": "MALWARE",
         "severity": "HIGH",
         "source": "malwarebazaar",
@@ -119,7 +119,7 @@ Emit a JSON object extending the existing SIR array:
     }
   ],
   "upstream_snapshot_hash_set": [
-    ["C2_DOMAIN", "c2.example.com"]
+    ["C2_DOMAIN", "<domain as the feed lists it>"]
   ]
 }
 ```

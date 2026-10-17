@@ -63,7 +63,7 @@ from 60/hr to 5000/hr. The weekly cadence works anonymously.
         `Play Store`, `Smali`, or `Dalvik`, OR
       - a **whole-line** Android package-name indicator: a line that, after
         trimming, matches `^[a-z][a-z0-9_]*(\.[a-z0-9_]+){2,}$` (require ≥3
-        dotted segments to avoid matching bare domains like `evil.example.com`
+        dotted segments to avoid matching bare domains like `<name>.<tld>`
         or file tokens like `bin.exe`), OR appears under a
         `## Package names`-type heading.
 
@@ -187,7 +187,7 @@ to the repo HEAD SHA from step 1.
   ],
   "upstream_snapshot_hash_set": [
     ["C2_DOMAIN", "neuroflux42.com"],
-    ["PACKAGE_NAME", "com.example.antidot"]
+    ["PACKAGE_NAME", "<package name as the feed lists it>"]
   ]
 }
 ```

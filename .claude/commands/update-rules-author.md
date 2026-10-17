@@ -281,7 +281,7 @@ decisions:
     field: "ioc_data"
     type: "ioc_confidence"
     chosen: "skip"
-    alternative: "include domain example.com from single blog post"
+    alternative: "include domain <domain named in a single blog post>"
     reasoning: "Only mentioned in passing, no technical analysis confirming C2 role"
 ```
 
@@ -352,8 +352,9 @@ entries:
 - Copy the indicator exactly as the reference writes it (re-fanged, lower case
   for domains and hashes). Gate 2b fetches the reference and rejects the entry
   if the indicator is not in it.
-- If the SIR has no `source.url` that lists the indicator, do not emit the entry;
-  flag it in the candidate's notes instead.
+- For research/discover SIRs: if the SIR has no `source.url` that lists the
+  indicator, do not emit the entry; flag it in the candidate's notes instead.
+  Feed SIRs cite `feed:<id>#<family>` and need no `source.url`.
 
 Allowed sources (authoritative list: `validation/allowed-sources.json`):
 `stalkerware-indicators`, `malwarebazaar`, `threatfox`,
@@ -389,14 +390,19 @@ Return a JSON object:
   "ioc_data": [
     {
       "type": "package_name",
-      "indicator": "com.example.malware",
-      "family": "MalwareName",
-      "category": "MALWARE",
+      "indicator": "com.ttsapp.catchcheating",
+      "family": "TheTruthSpy",
+      "category": "STALKERWARE",
       "severity": "CRITICAL",
+      "campaign": null,
       "description": "...",
-      "source": "malwarebazaar",
-      "source_sir": "threatfox-android-example"
+      "source": "stalkerware-indicators",
+      "reference": "feed:stalkerware-indicators#TheTruthSpy",
+      "source_sir": "<id of the SIR this entry came from>"
     }
   ]
 }
 ```
+
+`campaign` is optional; when set it must be a key in `ioc-data/campaigns.yml`
+(for example `graphite` for the Graphite entry shown above).

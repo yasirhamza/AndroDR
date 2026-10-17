@@ -67,8 +67,8 @@ Note: per-investigation tracking is still git-based (existing_rule_sources); `la
     {
       "file": "ioc-data/package-names.yml",
       "entry": {
-        "indicator": "com.example.nationstate",
-        "family": "ExampleSpy",
+        "indicator": "<package name as the feed lists it>",
+        "family": "<family as the feed lists it>",
         "category": "NATION_STATE_SPYWARE",
         "severity": "CRITICAL",
         "source": "amnesty-investigations",
@@ -77,7 +77,7 @@ Note: per-investigation tracking is still git-based (existing_rule_sources); `la
     }
   ],
   "upstream_snapshot_hash_set": [
-    ["PACKAGE_NAME", "com.example.nationstate"]
+    ["PACKAGE_NAME", "<package name as the feed lists it>"]
   ]
 }
 ```

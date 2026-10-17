@@ -216,6 +216,8 @@ Type:         <type>
 Source:       <source-id>
 Indicator(s): <count>
   - <indicator 1>  (<family>, <severity>)
+      reference: <reference>
+      Gate 2b status: <status: snippet>
   - <indicator 2>  ...
   [...]
 ```
@@ -224,9 +226,12 @@ User actions for an IOC-only candidate: same as for a rule candidate —
 **Approve**, **Modify** (edit entries), or **Reject**.
 
 Reference check (Gate 2b) for IOC-only candidates: (a) run
-`fetch-feed-dumps.sh` once per run into `<run-dir>/feeds`; (b) have the author
-write each candidate IOC file to `<run-dir>/candidates/<ioc-data file name>`,
-then pass that directory and `<run-dir>/feeds` to the validator (see
+`fetch-feed-dumps.sh` once per run into `<run-dir>/feeds`; (b) the orchestrator
+writes the author's `ioc_data` for each target file into
+`<run-dir>/candidates/<ioc-data file name>` (the `entries:` list, one file per
+target), using the Write tool or Python `yaml.safe_dump` — never a heredoc,
+`echo` or `printf`, because the indicators and references come from scraped
+pages — then passes that directory and `<run-dir>/feeds` to the validator (see
 `update-rules-validate.md`, Gate 2b); (c) add a "Reference check" column
 (status + snippet) to the HitL candidate table.
 
@@ -250,8 +255,9 @@ For each approved candidate (rule OR IOC-only):
 1. Append approved IOC entries to the target `ioc-data/<file>.yml` file.
    Preserve the file's header; append entries under the existing
    `entries:` list. Never auto-merge an entry whose Gate 2b status is not
-   FOUND; it may be appended only with a reviewer's `# verified manually`
-   comment (see 8.2 safety rules).
+   FOUND. A CAPPED, FETCH_UNSUPPORTED or FETCH_FAILED entry may be appended
+   only with a reviewer's `# verified manually` comment (see 8.2 safety
+   rules); every other non-FOUND status is fixed and re-checked, or rejected.
 
 2. Run validators on every touched file. Abort the commit on any failure:
    ```bash
@@ -281,9 +287,12 @@ For each approved candidate (rule OR IOC-only):
   only.
 - NEVER modify `kotlin-mirror-feeds.yml` in the same commit as an
   ioc-data write.
-- NEVER commit an ioc-data entry whose Gate 2b status is not FOUND
-  unless a reviewer has added a `# verified manually: <who>, <date>, <how>`
-  comment above it.
+- NEVER commit an ioc-data entry whose Gate 2b status is not FOUND, except a
+  CAPPED, FETCH_UNSUPPORTED or FETCH_FAILED entry that a reviewer has verified
+  by hand and marked with a `# verified manually: <who>, <date>, <how>`
+  comment above it. NOT_FOUND, WEAK_FOUND, SECTION_CITED, FAMILY_MISMATCH,
+  BAD_INPUT and BLOCKED_URL entries are never committed as-is: fix the entry,
+  re-run Gate 2b, or reject it.
 
 ### 8.3 Run ledger (Phase 2, candidate-accuracy spec)
 
@@ -293,7 +302,7 @@ Record per candidate: `id` (rule ID or indicator), `verdict`
 (`approved` / `approved_with_modification` / `rejected`), the reviewer's
 `reason` (required unless approved), and a `failure_class`
 (`severity_judgment`, `fp_risk`, `duplicate_semantics`, `weak_sourcing`,
-`category_choice`, `other`, or `null`). Compute `totals` including
+`category_choice`, `unverifiable_provenance`, `other`, or `null`). Compute `totals` including
 `approval_without_modification_rate` (approved ÷ candidates, 2 decimal
 places). Show the ledger to the user before committing (normal HitL gate).
 
