@@ -37,7 +37,7 @@ Note: `virustotal` is listed in `allowed-sources.json` as a valid provenance lab
 
 1. Read `feed-state.json` from the sigma repo root to get feed cursors
 2. Build an index of existing rules (IDs, titles, IOCs referenced). Production rules live in **service-named directories at the sigma repo root** (`app_scanner/`, `device_auditor/`, `dns_monitor/`, `file_scanner/`, `process_monitor/`, `receiver_audit/`, `accessibility_audit/`, `appops_audit/`, ...); staged rules live under `staging/<service>/`. Glob `<service>/**/*.yml` and `staging/**/*.yml` — there is no `rules/` prefix directory.
-3. Create the per-run scratch directory `<run-dir>` (for example `$TMPDIR/update-rules-<YYYYMMDD-HHMMSS>`, made with `mktemp -d`; never a fixed shared `/tmp` name) with `candidates/` and `feeds/` inside it. Every later reference to `<run-dir>` means this directory.
+3. Create the per-run scratch directory `<run-dir>` (made with `mktemp -d "${TMPDIR:-/tmp}/update-rules-XXXXXX"`, which works when `TMPDIR` is unset; never a fixed shared `/tmp` name) with `candidates/` and `feeds/` inside it. Every later reference to `<run-dir>` means this directory.
 4. Determine the next available rule ID by finding the highest `androdr-NNN` across all existing rules and incrementing. Never reuse an ID that previously existed and was later removed (check `git log` in the sigma repo if in doubt).
 
 The sigma repo is the git submodule at `third-party/android-sigma-rules/` (see CLAUDE.md). If the submodule is not initialized, run `git submodule update --init` rather than asking the user for a path.
@@ -248,8 +248,10 @@ Without `MALWAREBAZAAR_API_KEY` every `malwarebazaar` entry comes back
 NOT_FOUND: show it on the HitL list as "needs MALWAREBAZAAR_API_KEY rerun" and
 never commit it.
 
-(c) **Run Gate 2b** on each candidate file (see `update-rules-validate.md`,
-Gate 2b), requiring one JSON line per entry.
+(c) **Run Gate 2b** on each IOC candidate file (see `update-rules-validate.md`,
+Gate 2b), requiring one JSON line per entry. IOC candidate files are named
+after their `ioc-data` file (`c2-domains.yml`, …); the rule files
+`rule-<id>.yml` share `candidates/` and never go to Gate 2b.
 
 (d) Add a "Reference check" column (status + snippet) to the HitL candidate
 table. BAD_INPUT entries (reference missing, a campaign entry that needs a
