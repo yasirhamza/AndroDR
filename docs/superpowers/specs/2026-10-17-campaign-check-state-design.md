@@ -1,6 +1,6 @@
 # Per-campaign check state in the mercenary check (#394): design
 
-**Status:** design approved in chat 2026-10-17 (owner chose approach B). Supersedes the unconverged design in `docs/superpowers/specs/2026-10-16-campaign-check-state-followup.md` (branch `docs/ioc-attribution-provenance`, plan-gate rounds 7–13).
+**Status:** design approved in chat 2026-10-17 (owner chose approach B); written spec approved 2026-10-17; amended 2026-10-17 with the plan's five code-grounded corrections and the `missingSources` addition (owner accepted all; see "Amendments" at the end). Supersedes the unconverged design in `docs/superpowers/specs/2026-10-16-campaign-check-state-followup.md` (branch `docs/ioc-attribution-provenance`, plan-gate rounds 7–13).
 
 ## Goal
 
@@ -205,3 +205,14 @@ Either order is safe for devices: until the new app ships the field is ignored, 
 - DNS coverage hours.
 - Per-campaign built-in-list precision.
 - androdr-004 attribution (rules task A6). Once A6 lands, this design's CI gate will require the lists to be updated if hashes carry campaigns.
+
+## Amendments (2026-10-17, owner accepted at plan review)
+
+These override the sections above where they disagree.
+
+1. **DNS off is not "not checked".** With the tunnel off, the scan still evaluates the newest 500 recorded lookups (`ScanOrchestrator.kt:384-387`). The clause becomes `DNS lookups not monitored (DNS monitoring was off; only lookups recorded earlier were checked)`. The fix and the `[--]` status are unchanged.
+2. **Where the shape is validated.** `campaigns.yml` is validated by `validation/test_campaign_vocabulary.py`, not `validate-ioc-data.py`. The `detected_by` shape checks live in `test_campaign_detected_by.py`.
+3. **Typed reasons.** `ServiceStatus.reason` is `BlindReason?` (`DNS_OFF`, `CHECK_FAILED`, `UNKNOWN_SERVICE`), not a string.
+4. **MVT derivation** credits the service of the `ioc_match` rule that uses `domain_ioc_db` (today `dns_monitor`), rather than a hard-coded `dns_monitor`.
+5. **Scope note** prints on live scans only, and only when a NOT_DETECTED row has `coverage == null`.
+6. **`missingSources`.** `ScannerFailure` gains `missingSources: List<String> = emptyList()`, which `ScanVisibilityGaps` sets to `rules_repo` and/or `mvt` on `CAMPAIGN_SOURCES_NOT_LOADED`. A missing MVT list marks only `dns_monitor` BUILT_IN_LISTS_ONLY; a missing rules-repo list marks `dns_monitor` and `app_scanner`. Empty (rows saved earlier) is read as both. This closes the per-service residual for new scans. `missingEvidence` is not reused, because the report renders it as "needs X, none recorded in this scan".
