@@ -394,7 +394,6 @@ Return a JSON object:
       "family": "TheTruthSpy",
       "category": "STALKERWARE",
       "severity": "CRITICAL",
-      "campaign": null,
       "description": "...",
       "source": "stalkerware-indicators",
       "reference": "feed:stalkerware-indicators#TheTruthSpy",
@@ -404,5 +403,8 @@ Return a JSON object:
 }
 ```
 
-`campaign` is optional; when set it must be a key in `ioc-data/campaigns.yml`
-(for example `graphite` for the Graphite entry shown above).
+`campaign` is optional: **leave the key out when there is no campaign** (never
+`null` or an empty string; the entry schema has `additionalProperties: false` and
+`campaign` must be a string). When set it must be a key in `ioc-data/campaigns.yml`
+(for example `graphite` for the Graphite entry shown above). `type` and `source_sir`
+are pipeline-only keys: the orchestrator strips them before writing the candidate file.

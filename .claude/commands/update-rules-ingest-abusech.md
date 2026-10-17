@@ -103,6 +103,7 @@ Emit a JSON object extending the existing SIR array:
         "category": "MALWARE",
         "severity": "CRITICAL",
         "source": "threatfox",
+        "reference": "feed:threatfox#<family as the feed lists it>",
         "description": "..."
       }
     },
@@ -114,6 +115,7 @@ Emit a JSON object extending the existing SIR array:
         "category": "MALWARE",
         "severity": "HIGH",
         "source": "malwarebazaar",
+        "reference": "feed:malwarebazaar#<family as the feed lists it>",
         "description": "..."
       }
     }
@@ -126,6 +128,8 @@ Emit a JSON object extending the existing SIR array:
 
 ### candidate_ioc_entries
 
+- `reference` is always the `feed:<source-id>#<family>` form shown above, never the
+  ThreatFox record's own `reference` field (that is a free-text URL from the submitter).
 - ThreatFox domain entries → `ioc-data/c2-domains.yml`, source `threatfox`.
 - MalwareBazaar APK-hash entries → `ioc-data/malware-hashes.yml`, source
   `malwarebazaar`.

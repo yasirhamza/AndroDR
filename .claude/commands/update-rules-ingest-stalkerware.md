@@ -76,6 +76,7 @@ In addition to SIRs, emit a JSON object with two new fields:
         "category": "STALKERWARE",
         "severity": "CRITICAL",
         "source": "stalkerware-indicators",
+        "reference": "feed:stalkerware-indicators#<family as the feed lists it>",
         "description": "..."
       }
     }

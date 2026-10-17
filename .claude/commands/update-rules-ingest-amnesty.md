@@ -72,6 +72,7 @@ Note: per-investigation tracking is still git-based (existing_rule_sources); `la
         "category": "NATION_STATE_SPYWARE",
         "severity": "CRITICAL",
         "source": "amnesty-investigations",
+        "reference": "feed:amnesty-investigations#<family as the feed lists it>",
         "description": "..."
       }
     }

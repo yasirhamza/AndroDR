@@ -181,6 +181,7 @@ to the repo HEAD SHA from step 1.
         "category": "MALWARE",
         "severity": "CRITICAL",
         "source": "prodaft-malware-ioc",
+        "reference": "feed:prodaft-malware-ioc#AntiDot",
         "description": "AntiDot Android botnet C2 gate (PRODAFT, LARVA-398)"
       }
     }
