@@ -14,8 +14,17 @@ import java.io.File
 import javax.inject.Inject
 import javax.inject.Singleton
 
-/** One mercenary-check row: a `campaigns.yml` key, its display label and the aliases that fold into it. */
-data class Campaign(val key: String, val label: String, val aliases: List<String> = emptyList())
+/**
+ * One mercenary-check row: a `campaigns.yml` key, its display label, the aliases that fold into it,
+ * and the rule services that can make it DETECTED (#394). [detectedBy] null = the source predates
+ * the field (render today's row); empty = patch level only, no infection check exists.
+ */
+data class Campaign(
+    val key: String,
+    val label: String,
+    val aliases: List<String> = emptyList(),
+    val detectedBy: List<String>? = null,
+)
 
 /**
  * The campaign vocabulary (spec section 3.1a): `ioc-data/campaigns.yml`, cached in
@@ -72,18 +81,32 @@ class CampaignRegistry internal constructor(
         private const val TAG = "CampaignRegistry"
         const val CACHE_FILE_NAME = "campaigns.yml"
         private val KEY = Regex("^[a-z0-9_-]{1,32}$")
+        private val SERVICE = Regex("^[a-z_]{1,32}$")
         private const val MAX_LABEL = 40
 
-        /** Parses the bundled `known_campaigns.json` (`[{key, label, aliases}]`). Empty on any error. */
+        /**
+         * What an invalid `detected_by` value becomes. It matches [SERVICE] but names no service this
+         * build knows, so the row reads "not checked" instead of the list silently narrowing (#394).
+         */
+        internal const val UNKNOWN_SERVICE = "unknown"
+
+        private data class RawCampaign(
+            val key: String?, val label: String?, val aliases: List<String>, val detectedBy: List<String>?,
+        )
+
+        /** Parses the bundled `known_campaigns.json` (`[{key, label, aliases, detected_by}]`). Empty on any error. */
         @Suppress("TooGenericExceptionCaught", "SwallowedException")
         internal fun parseBundled(json: String): List<Campaign> = try {
             val entries = Json.parseToJsonElement(json) as? JsonArray ?: JsonArray(emptyList())
             validated(entries.mapNotNull { el ->
                 val o = el as? JsonObject ?: return@mapNotNull null
-                Triple(
+                RawCampaign(
                     (o["key"] as? JsonPrimitive)?.content,
                     (o["label"] as? JsonPrimitive)?.content,
                     (o["aliases"] as? JsonArray)?.mapNotNull { (it as? JsonPrimitive)?.content }.orEmpty(),
+                    detectedBy = (o["detected_by"] as? JsonArray)?.map { v ->
+                        (v as? JsonPrimitive)?.takeIf { it.isString }?.content ?: UNKNOWN_SERVICE
+                    },
                 )
             })
         } catch (e: Exception) {
@@ -91,7 +114,7 @@ class CampaignRegistry internal constructor(
             emptyList()
         }
 
-        /** Parses `campaigns.yml` (`campaigns: [{key, label, aliases}]`). Empty on any error. */
+        /** Parses `campaigns.yml` (`campaigns: [{key, label, aliases, detected_by}]`). Empty on any error. */
         @Suppress("TooGenericExceptionCaught", "SwallowedException")
         internal fun parseYaml(yaml: String): List<Campaign> = try {
             val settings = LoadSettings.builder().setAllowDuplicateKeys(false).setMaxAliasesForCollections(10).build()
@@ -99,10 +122,11 @@ class CampaignRegistry internal constructor(
             val entries = doc?.get("campaigns") as? List<*> ?: emptyList<Any>()
             validated(entries.mapNotNull { el ->
                 val m = el as? Map<*, *> ?: return@mapNotNull null
-                Triple(
+                RawCampaign(
                     m["key"]?.toString(),
                     m["label"]?.toString(),
                     (m["aliases"] as? List<*>)?.mapNotNull { it?.toString() }.orEmpty(),
+                    detectedBy = (m["detected_by"] as? List<*>)?.map { it as? String ?: UNKNOWN_SERVICE },
                 )
             })
         } catch (e: Exception) {
@@ -110,14 +134,17 @@ class CampaignRegistry internal constructor(
             emptyList()
         }
 
-        private fun validated(raw: List<Triple<String?, String?, List<String>>>): List<Campaign> =
-            raw.mapNotNull { (key, label, aliases) ->
+        private fun validated(raw: List<RawCampaign>): List<Campaign> =
+            raw.mapNotNull { r ->
+                val key = r.key
                 if (key == null || !KEY.matches(key)) return@mapNotNull null
-                val clean = IocSanitizer.clean(label.orEmpty()).takeCodePoints(MAX_LABEL).trim()
+                val clean = IocSanitizer.clean(r.label.orEmpty()).takeCodePoints(MAX_LABEL).trim()
                 Campaign(
                     key = key,
                     label = clean.ifEmpty { key.replaceFirstChar { it.uppercase() } },
-                    aliases = aliases.filter { KEY.matches(it) && it != key }.distinct().sorted(),
+                    aliases = r.aliases.filter { KEY.matches(it) && it != key }.distinct().sorted(),
+                    detectedBy = r.detectedBy?.map { if (SERVICE.matches(it)) it else UNKNOWN_SERVICE }
+                        ?.distinct()?.sorted(),
                 )
             }.distinctBy { it.key }.sortedBy { it.key } // same row order whichever source loaded
 

@@ -8,6 +8,7 @@ import com.androdr.data.db.ForensicTimelineEventDao
 import com.androdr.data.model.ForensicTimelineEvent
 import com.androdr.data.model.ScanResult
 import com.androdr.data.model.TelemetrySource
+import com.androdr.ioc.Campaign
 import com.androdr.scanner.AppScanner
 import com.androdr.scanner.ScanOrchestrator
 import com.androdr.util.AppVersion
@@ -79,8 +80,10 @@ class ReportExporterScopeTest {
             context = context, dnsEventDao = dnsEventDao, scanOrchestrator = scanOrchestrator,
             appScanner = appScanner, forensicTimelineEventDao = timelineDao,
             reportInputs = mockk {
-                every { campaigns() } returns emptyList()
+                // A DNS-only campaign reads [OK] only while its detector's scope reaches the formatter.
+                every { campaigns() } returns listOf(Campaign("pegasus", "Pegasus", detectedBy = listOf("dns_monitor")))
                 every { ruleCategoryById() } returns emptyMap()
+                every { ruleScopes() } returns mapOf("androdr-003" to RuleScope("dns_monitor", emptySet(), true))
             },
         )
     }
@@ -105,6 +108,12 @@ class ReportExporterScopeTest {
         val text = reportTextFor(scan(liveScanId))
         assertFalse("live-scan report must NOT contain the intrusion section", text.contains("INTRUSION LOG"))
         assertFalse(text.contains("Connect: 9.9.9.9:853"))
+    }
+
+    @Test
+    fun `export forwards the loaded rules' scopes to the campaign rows`() = runTest {
+        val text = reportTextFor(scan(liveScanId))
+        assertTrue(text, text.contains("  [OK]  Pegasus: not detected"))
     }
 
     @Test

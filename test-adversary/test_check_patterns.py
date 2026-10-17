@@ -128,13 +128,37 @@ CLEAN_DEVICE_REPORT = """  OVERALL RISK: LOW
 ------------------------------------------------------------
   [OK]  Cellebrite: not detected
   [OK]  Graphite (Paragon): not detected
-  [OK]  LANDFALL: not detected
+  [--]  LANDFALL: no infection check exists for a live scan; patch level only
   [OK]  Massistant: not detected
   [OK]  Midnight Mimosa: not detected
   [OK]  Pegasus: not detected
   [OK]  Predator: not detected
-  "not detected" means none of the checks that ran in this scan matched.
 """
+
+DNS_OFF_REPORT = """  MERCENARY SPYWARE CHECK
+  [--]  LANDFALL: no infection check exists for a live scan; patch level only
+  [--]  Pegasus: DNS lookups not monitored (DNS monitoring was off; only lookups recorded earlier were checked)
+        Turn on DNS monitoring, use the phone as usual, then scan again.
+    Campaign detections: none
+"""
+
+DNS_OFF = Path(__file__).parent / "fixtures" / "expected" / "campaign_rows_dns_off.patterns"
+
+
+def test_dns_off_scenario_accepts_the_dns_off_rows(tmp_path):
+    report = tmp_path / "report.txt"
+    report.write_text(DNS_OFF_REPORT)
+    result = subprocess.run(["bash", str(SCRIPT), str(report), str(DNS_OFF)], capture_output=True, text=True)
+    assert result.returncode == 0, result.stdout
+
+
+def test_dns_off_scenario_rejects_an_ok_pegasus_row(tmp_path):
+    report = tmp_path / "report.txt"
+    report.write_text(DNS_OFF_REPORT.replace(
+        "  [--]  Pegasus: DNS lookups not monitored (DNS monitoring was off; only lookups recorded earlier were checked)",
+        "  [OK]  Pegasus: not detected"))
+    result = subprocess.run(["bash", str(SCRIPT), str(report), str(DNS_OFF)], capture_output=True, text=True)
+    assert result.returncode == 1
 
 BASELINE = Path(__file__).parent / "fixtures" / "expected" / "clean_device.patterns"
 

@@ -11,6 +11,7 @@ OVERALL RISK:
 # Every live report lists every campaign. On a clean device none is DETECTED. EXPOSED is
 # NOT forbidden: an old emulator patch level legitimately leaves campaign CVEs unpatched.
 MERCENARY SPYWARE CHECK
-"not detected" means none of the checks that ran in this scan matched.
+# Every row carries its own coverage (#394); LANDFALL has no live infection check.
+[--]  LANDFALL: no infection check exists for a live scan; patch level only
 Campaign detections: none
 !: DETECTED --

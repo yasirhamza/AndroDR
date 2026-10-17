@@ -98,11 +98,13 @@ class HistoryViewModel @Inject constructor(
                 .getEventsBySourceForScan("intrusion_log", scan.id, INTRUSION_ROW_LIMIT).first()
             // Same inputs as ReportExporter, so a History-opened report shows the same campaign rows.
             val campaigns = withContext(Dispatchers.IO) { reportInputs.campaigns() }
+            val ruleScopes = withContext(Dispatchers.IO) { reportInputs.ruleScopes() }
             _sheetReportText.value = ReportFormatter.formatScanReport(
                 scan, dnsEvents, emptyList(), inventory,
                 versionName = appContext.appVersion().name,
                 intrusionEvents = intrusionEvents,
                 campaigns = campaigns,
+                ruleScopes = ruleScopes,
                 ruleCategoryById = reportInputs.ruleCategoryById(),
             )
         }

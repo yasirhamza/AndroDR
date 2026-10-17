@@ -1,8 +1,11 @@
 package com.androdr.scanner
 
+import com.androdr.data.model.MISSING_SOURCE_MVT
+import com.androdr.data.model.MISSING_SOURCE_RULES_REPO
 import com.androdr.data.model.NotEvaluatedReason
 import com.androdr.data.model.ScannerFailure
 import com.androdr.ioc.FeedCoverage
+import com.androdr.reporting.VISIBILITY_GAPS_SCANNER
 
 /**
  * Sentinel entries for gaps in what a scan could see: no threat-intel feed rows yet (offline
@@ -33,7 +36,11 @@ internal fun scanVisibilityGaps(coverage: FeedCoverage, dnsMonitorRunning: Boole
                 ScannerFailure(
                     scanner = "threat_intel",
                     exception = NotEvaluatedReason.CAMPAIGN_SOURCES_NOT_LOADED.sentinel,
-                    message = missing.joinToString("; ")
+                    message = missing.joinToString("; "),
+                    missingSources = listOfNotNull(
+                        if (coverage.rulesRepoLoaded) null else MISSING_SOURCE_RULES_REPO,
+                        if (coverage.mvtLoaded) null else MISSING_SOURCE_MVT,
+                    ),
                 )
             )
         }
@@ -65,7 +72,7 @@ internal suspend fun visibilityGapsOrFailure(
 } catch (e: Exception) {
     listOf(
         ScannerFailure(
-            scanner = "visibility_gaps",
+            scanner = VISIBILITY_GAPS_SCANNER,
             exception = e::class.simpleName ?: "Exception",
             message = "could not tell whether threat-intel feeds are loaded"
         )

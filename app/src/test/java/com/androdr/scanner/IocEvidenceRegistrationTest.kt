@@ -112,7 +112,7 @@ class IocEvidenceRegistrationTest {
         val registry = CampaignRegistry.parseBundled(listOf(File("src/main/res/raw/known_campaigns.json"),
             File("app/src/main/res/raw/known_campaigns.json")).first { it.isFile }.readText())
         val report = ReportFormatter.formatScanReport(scan, emptyList(), emptyList(), versionName = "test",
-            campaigns = registry, ruleCategoryById = emptyMap())
+            campaigns = registry, ruleScopes = emptyMap(), ruleCategoryById = emptyMap())
         assertTrue(report, report.contains("Graphite (Paragon): DETECTED"))
         assertFalse(report, report.contains("Graphite (Paragon): not detected"))
     }

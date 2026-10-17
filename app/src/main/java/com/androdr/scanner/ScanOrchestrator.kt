@@ -19,6 +19,8 @@ import com.androdr.data.repo.ScanRepository
 import com.androdr.ioc.IndicatorResolver
 import com.androdr.data.model.Indicator
 import com.androdr.network.DnsVpnService
+import com.androdr.reporting.ATTRIBUTION_SCANNER
+import com.androdr.reporting.DNS_SNAPSHOT_SCANNER
 import com.androdr.sigma.CveEvidenceProvider
 import com.androdr.sigma.EvidenceProvider
 import com.androdr.sigma.IocMatchEvidenceProvider
@@ -45,6 +47,13 @@ import kotlinx.coroutines.withContext
 import java.util.Collections
 import javax.inject.Inject
 import javax.inject.Singleton
+
+/** A failed DNS snapshot read: the DNS rules did not run, so the scan records it (#394). */
+private fun dnsSnapshotReadFailure(e: Exception) = ScannerFailure(
+    scanner = DNS_SNAPSHOT_SCANNER,
+    exception = e.javaClass.simpleName,
+    message = e.message,
+)
 
 /**
  * Orchestrates all scanning operations.  Runs [AppScanner] and [DeviceAuditor] in parallel,
@@ -381,9 +390,18 @@ class ScanOrchestrator @Inject constructor(
         allFindings.addAll(sigmaRuleEngine.evaluateAppOps(appOpsTelemetry))
 
         // Post-hoc DNS evaluation — SIGMA rules evaluate recent DNS events for reporting
-        val recentDnsEvents = runCatching {
+        // A failed read means the DNS rules did not run: record it (#394) so the report says so
+        // per campaign, instead of reading as "no DNS hits".
+        @Suppress("TooGenericExceptionCaught")
+        val recentDnsEvents = try {
             dnsEventDao.getRecentSnapshot()
-        }.getOrDefault(emptyList())
+        } catch (c: CancellationException) {
+            throw c
+        } catch (e: Exception) {
+            Log.w(TAG, "DNS snapshot read failed; DNS rules not evaluated", e)
+            synchronized(scannerErrors) { scannerErrors.add(dnsSnapshotReadFailure(e)) }
+            emptyList()
+        }
         if (recentDnsEvents.isNotEmpty()) {
             // Load the rows behind domain hits so ioc_match findings can name their family;
             // the provider reads them from this cache, never from Room on the VPN path (#71).
@@ -400,7 +418,7 @@ class ScanOrchestrator @Inject constructor(
                 synchronized(scannerErrors) {
                     scannerErrors.add(
                         ScannerFailure(
-                            scanner = "attribution",
+                            scanner = ATTRIBUTION_SCANNER,
                             exception = e.javaClass.simpleName,
                             message = "family unavailable: domain prefetch failed"
                         )
@@ -414,7 +432,7 @@ class ScanOrchestrator @Inject constructor(
                 synchronized(scannerErrors) {
                     scannerErrors.add(
                         ScannerFailure(
-                            scanner = "attribution",
+                            scanner = ATTRIBUTION_SCANNER,
                             exception = "MissingPrefetch",
                             message = "family unavailable for ${misses.size} domain(s): " +
                                 "DNS evaluated without prefetch"

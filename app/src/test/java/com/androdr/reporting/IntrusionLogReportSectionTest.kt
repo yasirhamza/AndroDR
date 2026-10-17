@@ -30,7 +30,7 @@ class IntrusionLogReportSectionTest {
             ),
             versionName = "test",
             campaigns = emptyList(),
-            ruleCategoryById = emptyMap(),
+            ruleScopes = emptyMap(), ruleCategoryById = emptyMap(),
         )
         assertTrue(text.contains("INTRUSION LOG"))
         assertTrue(text.contains("Connect: 8.8.8.8:853"))
@@ -43,7 +43,7 @@ class IntrusionLogReportSectionTest {
         val text = ReportFormatter.formatScanReport(
             scan(), dnsEvents = emptyList(), logLines = emptyList(), versionName = "test",
             campaigns = emptyList(),
-            ruleCategoryById = emptyMap(),
+            ruleScopes = emptyMap(), ruleCategoryById = emptyMap(),
         )
         assertFalse(text.contains("INTRUSION LOG"))
     }
@@ -56,7 +56,7 @@ class IntrusionLogReportSectionTest {
             intrusionEvents = listOf(row("network_connect", "Connect: 1.2.3.4:80", "com.a")),
             versionName = "test",
             campaigns = emptyList(),
-            ruleCategoryById = emptyMap(),
+            ruleScopes = emptyMap(), ruleCategoryById = emptyMap(),
         )
         assertFalse(text.contains("INTRUSION LOG"))
     }

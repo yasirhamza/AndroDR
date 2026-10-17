@@ -78,3 +78,14 @@ def test_no_compiled_python_is_tracked():
     tracked = subprocess.run(["git", "ls-files", "*.pyc", "**/__pycache__/**"], cwd=REPO_ROOT,
                              capture_output=True, text=True, check=True).stdout.split()
     assert tracked == [], f"compiled Python is tracked: {tracked}"
+
+
+def test_campaign_vocabulary_carries_detected_by(tmp_path):
+    root = repo(tmp_path)
+    (root / "ioc-data" / "campaigns.yml").write_text(
+        "campaigns:\n- key: graphite\n  label: Graphite (Paragon)\n  aliases: [paragon]\n"
+        "  detected_by: [dns_monitor]\n  references: []\n")
+    out = tmp_path / "raw"; out.mkdir()
+    m.generate(root, out)
+    assert json.loads((out / "known_campaigns.json").read_text()) == [
+        {"key": "graphite", "label": "Graphite (Paragon)", "aliases": ["paragon"], "detected_by": ["dns_monitor"]}]

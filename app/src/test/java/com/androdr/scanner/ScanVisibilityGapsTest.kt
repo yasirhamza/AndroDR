@@ -1,5 +1,7 @@
 package com.androdr.scanner
 
+import com.androdr.data.model.MISSING_SOURCE_MVT
+import com.androdr.data.model.MISSING_SOURCE_RULES_REPO
 import com.androdr.data.model.NotEvaluatedReason
 import com.androdr.data.model.ScanResult
 import com.androdr.data.model.ScannerFailure
@@ -76,7 +78,7 @@ class ScanVisibilityGapsTest {
         val registry = CampaignRegistry.parseBundled(listOf(File("src/main/res/raw/known_campaigns.json"),
             File("app/src/main/res/raw/known_campaigns.json")).first { it.isFile }.readText())
         return ReportFormatter.formatScanReport(scan, emptyList(), emptyList(), versionName = "test",
-            campaigns = registry, ruleCategoryById = emptyMap())
+            campaigns = registry, ruleScopes = emptyMap(), ruleCategoryById = emptyMap())
     }
 
     @Test
@@ -111,5 +113,15 @@ class ScanVisibilityGapsTest {
         val report = report(FeedCoverage(0, rulesRepoLoaded = false, mvtLoaded = false))
         assertTrue(report, report.contains("  ${NotEvaluatedReason.FEEDS_NOT_LOADED.heading}:"))
         assertFalse(report, report.contains(NotEvaluatedReason.CAMPAIGN_SOURCES_NOT_LOADED.heading))
+    }
+
+    @Test
+    fun `campaign-sources entry records which sources were missing`() {
+        fun sources(rulesRepo: Boolean, mvt: Boolean) = scanVisibilityGaps(
+            FeedCoverage(rows = 10, rulesRepoLoaded = rulesRepo, mvtLoaded = mvt), dnsMonitorRunning = true,
+        ).single().missingSources
+        assertEquals(listOf(MISSING_SOURCE_MVT), sources(rulesRepo = true, mvt = false))
+        assertEquals(listOf(MISSING_SOURCE_RULES_REPO), sources(rulesRepo = false, mvt = true))
+        assertEquals(listOf(MISSING_SOURCE_RULES_REPO, MISSING_SOURCE_MVT), sources(rulesRepo = false, mvt = false))
     }
 }

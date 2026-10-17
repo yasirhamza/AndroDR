@@ -55,6 +55,7 @@ class ScanBroadcastReceiver : BroadcastReceiver() {
                         fileTelemetry = scanOrchestrator.lastFileArtifactTelemetry,
                         versionName = context.appVersion().name,
                         campaigns = reportInputs.campaigns(),
+                        ruleScopes = reportInputs.ruleScopes(),
                         ruleCategoryById = reportInputs.ruleCategoryById()
                     )
                     val outDir = context.getExternalFilesDir(null) ?: return@launch
