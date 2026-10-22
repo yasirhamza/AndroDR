@@ -14,7 +14,7 @@
 
 **Tech Stack:** Kotlin 2.0; Room 2.6.1 (`room-testing` on the unit-test classpath); AndroidX Paging 3.3.6 (+ `paging-compose`); `androidx.collection` 1.4.0; Jetpack Compose; Hilt; kotlinx.serialization; `java.util.zip`; platform `BiometricPrompt` / `KeyguardManager`; Robolectric 4.14.1 (SDK 35, offline) with `androidx.test:core` 1.6.1; snakeyaml-engine 2.7 (already present).
 
-**Spec:** `docs/superpowers/specs/2026-10-22-telemetry-store-design.md`, revised after plan-gate rounds 1–9. Findings: `docs/superpowers/plans/2026-10-22-telemetry-store-plan-gate-round{1..9}-findings.md`. Lasting correlation alerts: follow-up `docs/superpowers/specs/2026-10-22-lasting-correlation-alerts-followup.md`.
+**Spec:** `docs/superpowers/specs/2026-10-22-telemetry-store-design.md`, revised after plan-gate rounds 1–10. Findings: `docs/superpowers/plans/2026-10-22-telemetry-store-plan-gate-round{1..10}-findings.md`. Lasting correlation alerts: follow-up `docs/superpowers/specs/2026-10-22-lasting-correlation-alerts-followup.md`.
 
 ## Global Constraints
 
@@ -364,7 +364,7 @@ class StoreDirtyFlag @Inject constructor(...) { suspend fun set(); suspend fun c
   - it has an observation whose scan is `COMPLETE`;
   - it has no observation at all, **and** it is pinned.
 
-  The pin test is one SQL fragment, `PinnedFact.SQL`, shared by the readers and by `deleteUnobservedUnpinned`.
+  The pin test is one SQL fragment, `PinnedFact.SQL`, shared by the readers and by `deleteUnobservedUnpinned`. The row visibility rule is one fragment too, `VisibleRow.SQL` (`persistent = 1`, `scanResultId = -1`, or a `COMPLETE` scan), defined here in A5 and used from C2 onward.
 - **Paging:** `KeysetPagingSource`
   - registers an `InvalidationTracker.Observer` on first load and removes it on invalidate, calling `refreshVersionsSync()` before the first load;
   - `getRefreshKey` backs off half a load from the anchor;
@@ -427,9 +427,10 @@ class StoreDirtyFlag @Inject constructor(...) { suspend fun set(); suspend fun c
   - `scanner/InterimTimelineRows.kt` (bounded newest-N heaps per type, plus the findings top-K)
   - `data/store/StoragePreflight.kt`
   - `scanner/StartupSweep.kt`
+  - `data/repo/ScanLock.kt`
 - Modify `data/repo/ScanRepository.kt`: split the transactions used by the writer into a new `data/repo/ScanWriteRepository.kt` (≤ 14 functions). `deleteScan` / `deleteAllScans` set `state = DELETING` first, delete the scan's own `forensic_timeline` rows next (so they stop pinning facts), then call `telemetryStore.deleteScanTelemetry`, and delete the `ScanResult` row last. D3 adds the audit row to the first transaction.
 - Modify `scanner/ScanOrchestrator.kt`:
-  - Create `data/repo/ScanLock.kt`: `@Singleton class ScanLock @Inject constructor() { val mutex = Mutex(); val writerRunning: StateFlow<Boolean> }` (writers set `writerRunning` for the session's lifetime). `scanMutex` in this plan means `ScanLock.mutex`; `ScanOrchestrator`, `ScanRepository`, `StartupSweep`, retention and the backfill inject `ScanLock` (no Hilt cycle through `ScanOrchestrator`). It wraps all three writers. `ScanWriteRepository.finish` sets `COMPLETE` with `UPDATE … SET state = 'COMPLETE' WHERE id = ? AND state = 'IN_PROGRESS'` and throws (rolling back) if no row changed.
+  - Uses `data/repo/ScanLock.kt` (created in this task): `@Singleton class ScanLock @Inject constructor() { val mutex = Mutex(); val writerRunning: StateFlow<Boolean>; suspend fun <T> withWriter(block: suspend () -> T): T }`. `withWriter` takes `mutex`, sets a private `MutableStateFlow` to true, and resets it in `finally`; only live scan and import sessions call it (retention, the backfill, `StartupSweep` and deletes use `mutex` directly and never set the flag). Global rule: `mutex` is acquired outside any Room transaction, never inside. `scanMutex` in this plan means `ScanLock.mutex`; `ScanOrchestrator`, `ScanRepository`, `StartupSweep`, retention and the backfill inject `ScanLock` (no Hilt cycle through `ScanOrchestrator`). It wraps all three writers. `ScanWriteRepository.finish` sets `COMPLETE` with `UPDATE … SET state = 'COMPLETE' WHERE id = ? AND state = 'IN_PROGRESS'` and throws (rolling back) if no row changed.
   - All writers use the session.
   - Live DNS records carry `sourceEventKey = "dns:$id"`.
   - Live `ioc_match` rows written by `logDnsEvent` / `logDnsEventsBatch` set `sourceEventKey = h128("dns:$id")`. `DnsEventDao.insert` and `insertAll` return ids.
@@ -509,6 +510,7 @@ sealed interface Preflight { data object Ok : Preflight; data class Tight(val es
     - A throw inside `finish`, after alert creation, leaves 0 alerts.
     - A simulated kill leaves the scan `IN_PROGRESS`. `StartupSweep` takes the lock only to snapshot the `IN_PROGRESS` and `DELETING` ids, removes those scans, runs `gcUnobservedUnpinned()` only if it swept something or the dirty flag is set, and writes one persistent "import interrupted" row per swept **`IN_PROGRESS`** import (a `DELETING` scan already has its audit row).
     - A scan started during the sweep survives.
+    - `ScanLock`: `writerRunning` is true inside `withWriter` and false after a block that throws; a backfill-style batch (lock, then transaction) run while a writer holds the lock completes after the writer releases it, with no deadlock.
     - Guarded finish: a scan set to `DELETING` before `finish` rolls the finishing transaction back and never becomes `COMPLETE`.
     - Dirty flag: a `deleteScanTelemetry` batch that throws sets `StoreDirtyFlag`; the next `StartupSweep` runs `gcUnobservedUnpinned()` with nothing to sweep and clears the flag.
     - Aborting writes no "scan_deleted" audit row.
@@ -873,7 +875,7 @@ object Watermarks {
 - Modify `ui/history/HistoryViewModel.kt` and the History screen: handle `DeleteResult`, show the refusal message, disable delete from `ScanLock.writerRunning` (test: `ui/history/HistoryViewModelTest.kt` — delete is disabled while `writerRunning` is true and `ScanRunning` shows the message).
 - Modify `data/repo/ScanRepository.kt`:
   - `deleteScan` runs these steps in order:
-    0. If `scanLock.writerRunning.value`, return `DeleteResult.ScanRunning`. Otherwise take `scanMutex` for step 1 only, with `withTimeoutOrNull(2_000) { lock() }`; on timeout return `ScanRunning` and change nothing. `deleteAllScans` does the same. `sealed interface DeleteResult { data object Done; data object ScanRunning }` lives in `ScanRepository.kt`; History shows "A scan is running — try again when it finishes" and disables delete from `writerRunning`.
+    0. If `scanLock.writerRunning.value`, return `DeleteResult.ScanRunning`. Otherwise take `scanMutex` for step 1 only, with `withTimeoutOrNull(2_000) { lock() }`; on timeout return `ScanRunning` and change nothing. `deleteAllScans` does the same. `sealed interface DeleteResult { data object Done : DeleteResult; data object ScanRunning : DeleteResult }` lives in `ScanRepository.kt`; `HistoryViewModel.confirmClearAll` handles `ScanRunning` before clearing the selected scan; History shows "A scan is running — try again when it finishes" and disables delete from `writerRunning`.
     1. **One transaction:** build the capped audit summary from the scan's triggered `scan_finding` rows, insert the persistent audit row (`category = "scan_deleted"`), and set `state = DELETING`.
     2. Delete the scan's signal rows with their `signal_member` rows, its `scan_finding` rows, and its other non-persistent `forensic_timeline` rows. Another scan's signal that listed one of these rows shows the members that remain (today's behaviour). Facts un-pinned by the deleted `signal_member` rows go to `deleteUnobservedUnpinned` in the same transaction (A5 rule).
     3. Run `telemetryStore.deleteScanTelemetry`.
@@ -881,7 +883,7 @@ object Watermarks {
     (The audit row from step 1 holds distinct (rule, level, package) entries with counts, capped at 100 entries plus "and K more".)
 
     It never deletes alerts, or anything an alert references.
-  - `deleteAllScans`: **first transaction** builds one capped audit row from every `COMPLETE` scan's triggered `scan_finding` rows, inserts it, and sets every scan `DELETING`. It remembers the ids it set `DELETING` and `clearStartedAt`. It then runs steps 2–4 for those ids only, and deletes the non-persistent timeline rows whose `scanResultId` is one of them, or is −1 with `timestamp ≤ clearStartedAt` (signal rows with their `signal_member` rows). It replaces today's unfiltered `ForensicTimelineEventDao.deleteAll()` (`:138`). A scan started after the first transaction is untouched. No audit row is written at the end.
+  - `deleteAllScans`: **first transaction** builds one capped audit row from every `COMPLETE` scan's triggered `scan_finding` rows, inserts it, and sets every scan `DELETING`. It remembers the ids it set `DELETING` and `clearMaxRowId = MAX(forensic_timeline.id)`, saving `clearMaxRowId` in DataStore (`pending_clear_max_row_id`) in the same step; `StartupSweep` finishes a pending clear's `-1` rows and removes the key. It then runs steps 2–4 for those ids only, and deletes the non-persistent timeline rows whose `scanResultId` is one of them, or is −1 with `id ≤ clearMaxRowId` (signal rows with their `signal_member` rows). It replaces today's unfiltered `ForensicTimelineEventDao.deleteAll()` (`:138`). A scan started after the first transaction is untouched. No audit row is written at the end.
   - The `abort` and `StartupSweep` cleanup paths use a separate, unaudited delete.
 - Modify `FindingsRepository.close`:
   - Re-check `isDeviceSecure()` when given `NoSecureLock`.
@@ -890,7 +892,7 @@ object Watermarks {
 - The open-alert list groups alerts by rule and matched value, and re-surfaces alerts by `lastActivityAt`.
 - Modify `reporting/ReportFormatter.kt`: FINDINGS lists state, open and closed alerts.
 - Add the new UI strings to `res/values/strings.xml`.
-- Test: `data/repo/AlertCloseTest.kt` (L2), `ui/dashboard/DashboardAlertsViewModelTest.kt`.
+- Test: `data/repo/AlertCloseTest.kt` (L2), `ui/dashboard/DashboardAlertsViewModelTest.kt`, `ui/history/HistoryViewModelTest.kt`; update `ui/history/HistoryViewModelDiffTest.kt` for the new `ScanLock` parameter.
 
 - [ ] **Step 1: Write the failing tests**
   - L2 — confirmation:
@@ -898,10 +900,10 @@ object Watermarks {
     - `NoSecureLock` while `isDeviceSecure()` is true is refused.
   - L2 — deletion:
     - Deleting a scan keeps its alert and writes an audit row that lists the scan's triggered findings.
-    - "Clear all" keeps alerts, closure rows and audit rows, and removes live `scanResultId = -1` `dns_query` / `ioc_match` rows older than `clearStartedAt`.
+    - "Clear all" keeps alerts, closure rows and audit rows, and removes live `scanResultId = -1` `dns_query` / `ioc_match` rows with `id ≤ clearMaxRowId`.
     - The audit row for a 50,000-finding scan stays under 16 KB, and the Timeline and report still load.
     - `deleteScan` and "Clear all" while `writerRunning` is true, or while the lock cannot be taken within 2 s, return `ScanRunning` and change nothing.
-    - A scan that starts after "Clear all"'s first transaction and completes before "Clear all" ends survives intact (its `ScanResult`, timeline rows, signals and `signal_member` rows); no row points at a missing scan and no `signal_member` row lacks its signal.
+    - A scan that starts after "Clear all"'s first transaction and completes before "Clear all" ends survives (its `ScanResult`, timeline rows, signals and `signal_member` rows; members it bound from pre-clear `-1` rows load as missing); no row points at a missing scan and no `signal_member` row lacks its signal.
     - Deleting scan X whose `forensic_timeline` row is a member of scan Y's signal removes the row; no non-persistent row has a `scanResultId` that is neither −1 nor an existing scan; Y's cluster loads the remaining members through `ClusterMembers`.
     - A `deleteScan` killed after its first transaction, and a "Clear all" killed after its first transaction, each leave exactly one audit row with a non-empty summary and no "import interrupted" row; the sweep finishes the delete.
     - After deleting an alert's opening scan, and again after "Clear all", these still hold:
@@ -937,6 +939,7 @@ object Watermarks {
   - P1: import rows, persistent rows (closure, audit, "import interrupted") and rows referenced by a surviving `signal_member` survive the prune.
   - Retention: each keyset batch deletes its observations, the batch's unpinned candidates and their bodies in one transaction; a kill between batches leaves no visible orphan (S3).
   - P2: a 31-day-old live `ioc_match` row with `scanResultId = -1` is pruned.
+  - Dirty flag: a retention batch that throws sets `StoreDirtyFlag`.
 - [ ] **Step 2–4: fail → implement → pass.**
 - [ ] **Step 5: Commit** `feat(store): retention — snapshots by scan count, live events by age, pins respected`
 - [ ] **Step 6:** Open Phase D PR `feat/telemetry-store-d`. Battery:
