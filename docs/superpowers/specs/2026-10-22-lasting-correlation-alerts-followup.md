@@ -46,7 +46,7 @@ These come from the findings above.
 
 ## 5. What the first design already provides
 
-- Correlation runs inside the finishing transaction, over `AtomRef`s (`Row` / `Fact`).
+- Correlation runs inside the finishing transaction, over `AtomRef`s (`Row` / `Fact`). The `AtomRef` kind values (0 = Row, 1 = Fact) stored in `signal_member.kind` are stable.
 - `signal_member` is the single, indexed member store for signals, with a one-time backfill.
 - The correlator has per-(rule, group) budgets and `CORRELATION_INCOMPLETE`.
 - Record alerts, `alert.evidenceJson`, credential-protected close, and audited deletion are in place.
