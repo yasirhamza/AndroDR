@@ -11,7 +11,7 @@
 
 **Tech Stack:** Kotlin 2.0; Room 2.6.1 (`room-testing` on the unit-test classpath); AndroidX Paging 3.3.6 (+ `paging-compose`); `androidx.collection` 1.4.0; Jetpack Compose; Hilt; kotlinx.serialization; `java.util.zip`; platform `BiometricPrompt` / `KeyguardManager`; Robolectric 4.14.1 (SDK 35, offline) with `androidx.test:core` 1.6.1; snakeyaml-engine 2.7 (already present).
 
-**Spec:** `docs/superpowers/specs/2026-10-22-telemetry-store-design.md`, revised after plan-gate rounds 1–3. Findings: `docs/superpowers/plans/2026-10-22-telemetry-store-plan-gate-round{1,2,3}-findings.md`.
+**Spec:** `docs/superpowers/specs/2026-10-22-telemetry-store-design.md`, revised after plan-gate rounds 1–4. Findings: `docs/superpowers/plans/2026-10-22-telemetry-store-plan-gate-round{1,2,3,4}-findings.md`.
 
 ## Global Constraints
 
@@ -51,6 +51,7 @@
 **Taxonomy, branches and detekt**
 - Taxonomy edits follow CLAUDE.md safe ordering.
 - Each phase (0, A–E) is one PR to `main` on branch `feat/telemetry-store-<phase>`, and leaves the app working.
+- Phases A–D form one release train: no Play release is cut between the A and D merges, because retention arrives in D4.
 - detekt reports at `>=` its threshold, so the effective limits are:
   - classes and objects: ≤ 14 functions
   - interfaces: ≤ 10
@@ -266,9 +267,12 @@ class TelemetryDictionaries(load: (String) -> ByteArray) {
 - Modify:
   - `data/db/Migrations.kt`: `MIGRATION_18_19`.
   - `AppDatabase.kt`: `version = 19`.
-  - `data/model/ScanResult.kt`: add `state` and `telemetryState`.
-  - `data/model/ForensicTimelineEvent.kt`: add `recordId`, `sourceEventKey`, `level`. Indices: `recordId`, `sourceEventKey`, `(scanResultId, startTimestamp)`, `(packageName, startTimestamp)`.
-  - `ScanResultDao.kt`: add `insertInProgress`, `complete(...)`, `inProgressIds()`, `deleteById`; every list query filters `state = 'COMPLETE'`.
+  - `data/model/ScanResult.kt`: add `state` (default `COMPLETE` in the entity and in the migration) and `telemetryState`.
+  - `data/model/ForensicTimelineEvent.kt`:
+    - add `recordId`, `sourceEventKey: ByteArray?` (an h128 hash, the same hash as `telemetry_record.sourceKey`), `level`, and `persistent: Boolean = false`;
+    - indices: `recordId`, `sourceEventKey`, `(scanResultId, startTimestamp)`, `(packageName, startTimestamp)`.
+  - `MIGRATION_18_19`: backfill `level` on legacy finding rows from `ScanResult.findings`, matching on (`scanResultId`, `ruleId`).
+  - `ScanResultDao.kt`: add `insertInProgress`, `complete(...)` and `inProgressIds()`. `deleteById` already exists at `:21`. Every list query filters `state = 'COMPLETE'`.
   - DI: register the migration; `onOpen` runs `PRAGMA journal_size_limit = 67108864`.
   - Commit `19.json`.
 - Test: `data/db/Migration18To19Test.kt`, `data/db/StoreDaoTest.kt`.
@@ -294,7 +298,11 @@ class TelemetryDictionaries(load: (String) -> ByteArray) {
 - `deleteUnobservedUnpinned` excludes ids referenced by `forensic_timeline.recordId` or `signal_member` fact refs. Task D2 extends it to `scan_finding` and `alert`.
 
 - [ ] **Step 1: Write the failing tests**
-  - **Migration:** tables, columns and composite indices exist; `validateMigration` passes.
+  - **Migration:**
+    - tables, columns and composite indices exist; `validateMigration` passes;
+    - scans saved before the upgrade read back as `COMPLETE`;
+    - legacy finding rows get `level`.
+  - **J1:** a live DNS fact (`sourceKey = h128("dns:7")`) and an `ioc_match` row (`sourceEventKey = h128("dns:7")`) join in a real DAO query.
   - **Inserts:**
     - A duplicate fact returns `-1`, and `idsFor` finds the original.
     - Unique `(scanId, recordId)` drops a duplicate observation.
@@ -316,7 +324,7 @@ class TelemetryDictionaries(load: (String) -> ByteArray) {
 ```kotlin
 class OccurrenceCounter { fun next(hash: ByteArray): Int }   // androidx.collection.MutableLongIntMap on the first 8 bytes
 data class ChunkResult(val observed: Int, val newFacts: Int, val alreadyStored: Int, val duplicatesDropped: Int,
-    val factIdByOrdinal: LongArray, val isEventByOrdinal: BooleanArray)
+    val factIdByChunkIndex: LongArray, val isEventByChunkIndex: BooleanArray, val observedThisScanByChunkIndex: BooleanArray)  // index = ordinal - firstOrdinal
 data class DecodedRecord(val factId: Long, val scanId: Long, val service: String, val ordinal: Int, val source: TelemetrySource,
     val capturedAt: Long, val eventTime: Long?, val precision: TimePrecision, val category: String?, val fields: Map<String, Any?>?, val summary: String?)
 data class RecordChange(val subjectKey: String, val before: DecodedRecord?, val after: DecodedRecord?)
@@ -342,8 +350,13 @@ abstract class KeysetPagingSource<K : Any, V : Any>(db: RoomDatabase, observed: 
   - with a source key: `factKey = h128("src:"+key+"#"+bodyHashHex)` and `sourceKey = h128(key)`
   - otherwise: `factKey = h128(bodyHashHex+"#"+counter.next(bodyHash))`
 - **Live event rule:** with `liveEvents`, no observation is written for an existing fact that already has a live observation.
-- **Visibility:** reader queries join an observation whose scan is `COMPLETE`.
-- **Paging:** `KeysetPagingSource` uses an inclusive refresh key at the anchor, prepends through a reverse-ordered query, and observes the tables passed in (`ScanResult`, `forensic_timeline`, `alert`).
+- **Visibility:** a fact is visible if it has an observation whose scan is `COMPLETE`, or if it has no observation at all (a pinned orphan).
+- **Paging:** `KeysetPagingSource`
+  - registers an `InvalidationTracker.Observer` on first load and removes it on invalidate, calling `refreshVersionsSync()` before the first load;
+  - `getRefreshKey` backs off half a load from the anchor;
+  - prepends through a reverse-ordered query;
+  - observes only tables that exist in the current schema: `ScanResult` and `forensic_timeline` from schema 19, plus `alert` from schema 20.
+- **Detekt split:** reads are split across `TelemetryReader` (per-scan), `AtomReader` (correlation atoms, Phase C) and `TelemetryExport` (JSONL, Phase E), to stay under the detekt function limit.
 
 - [ ] **Step 1: Write the failing tests**
   - **S1:** the full decoded map equals the original for every service.
@@ -357,7 +370,8 @@ abstract class KeysetPagingSource<K : Any, V : Any>(db: RoomDatabase, observed: 
   - **S4:** deleting import A keeps B's records and any pinned facts.
   - **Visibility:**
     - Records of an `IN_PROGRESS` scan are invisible to every reader method.
-    - The Q1 visibility gate: every DAO query naming `telemetry_record` or `scan_record` also names `ScanResult` with `state = 'COMPLETE'`, or is on the writer/deleter allow-list.
+    - A pinned fact with no remaining observation is still readable through `record(...)` and `history(...)`.
+    - The Q1 visibility gate: every DAO query naming `telemetry_record`, `scan_record`, `scan_finding`, or `forensic_timeline` rows owned by a scan must apply the visibility rule (spec §5.1), or be on the writer/deleter allow-list. The allow-list includes `AtomReader`'s current-scan reads.
   - **Paging:**
     - Scroll position survives an invalidation.
     - No captured SQL contains `OFFSET`.
@@ -400,14 +414,19 @@ abstract class KeysetPagingSource<K : Any, V : Any>(db: RoomDatabase, observed: 
   - `scanner/StartupSweep.kt`
 - Modify `data/repo/ScanRepository.kt`: split the transactions used by the writer into a new `data/repo/ScanWriteRepository.kt` (≤ 14 functions). `deleteScan` / `deleteAllScans` call `telemetryStore.deleteScan`.
 - Modify `scanner/ScanOrchestrator.kt`:
-  - Add `val scanMutex = Mutex()`, which wraps all three writers.
+  - Add `val scanMutex = Mutex()`. It wraps all three writers.
   - All writers use the session.
   - Live DNS records carry `sourceEventKey = "dns:$id"`.
+  - Live `ioc_match` rows written by `logDnsEvent` / `logDnsEventsBatch` set `sourceEventKey = h128("dns:$id")`. `DnsEventDao.insert` and `insertAll` return ids.
   - Catch `Throwable`.
-  - Keep `deletePriorIntrusionLogRows` (forensic rows only).
-  - Finding rows get `recordId` from `factIdByOrdinal`.
+  - Keep `deletePriorIntrusionLogRows` (forensic rows only). It runs inside `finish`'s transaction and excludes the current scan.
+  - Every `forensic_timeline` write happens inside `finish`'s transaction:
+    - finding rows (with `level` and `recordId`);
+    - the interim event rows (which also carry `recordId`).
+    No `ForensicTimelineEventDao` write is reachable from `append`.
   - `UsageStatsScanner` returns `UsageEvent`s, mapped to today's rows until C3.
   - The set of live event services comes from `TaxonomyContract.eventServices`.
+  - Extract `scanner/LiveScanCollector.kt` (telemetry collection and its watermark inputs) to keep `ScanOrchestrator` under the detekt limit.
 - Modify `scanner/intrusionlog/IntrusionLogParser.kt`:
   - Delete `seenKeys` (line 78) and its branch.
   - Push records to a callback per type.
@@ -440,10 +459,11 @@ abstract class KeysetPagingSource<K : Any, V : Any>(db: RoomDatabase, observed: 
 class ChunkedScanWriter @Inject constructor(...) {
     suspend fun begin(scan: ScanResult, liveEvents: Boolean): Session
     inner class Session {
-        suspend fun append(service: String, source: TelemetrySource, capturedAt: Long, chunk: List<StoreRecord>)  // ≤ 5,000; one transaction
+        suspend fun append(service: String, source: TelemetrySource, capturedAt: Long, chunk: List<StoreRecord>)  // ≤ 5,000; evaluate, then one transaction; findings kept only for observedThisScan ordinals
         suspend fun appendAll(service: String, source: TelemetrySource, capturedAt: Long, records: Sequence<StoreRecord>)  // constrainOnce, chunked
-        suspend fun finish(): WriteResult
-        suspend fun abort()                                     // NonCancellable delete
+        suspend fun evaluateStored(service: String, facts: Sequence<Pair<Long, StoreRecord>>)  // re-check: findings get recordId = factId, ordinal = -1; no observations
+        suspend fun finish(): WriteResult      // opens the single finishing transaction; all forensic_timeline writes happen here
+        suspend fun abort()                    // NonCancellable, unaudited cleanup delete
     }
 }
 data class WriteResult(val newFacts: Int, val alreadyStored: Int, val duplicatesDropped: Int, val telemetryState: TelemetryState)
@@ -454,9 +474,15 @@ class StoragePreflight(statFs: () -> StatFs) {
 sealed interface Preflight { data object Ok : Preflight; data class Tight(val estimate: Long?, val free: Long) : Preflight }
 ```
 
-**Live `SQLiteFullException` path:** the session switches to evaluate-only for the rest of the pass. Findings keep `recordId = null`. On `finish`, `telemetryState = FAILED` and no watermark advances.
+**Live `SQLiteFullException` path:**
+1. The session switches to evaluate-only for the rest of the pass.
+2. Findings are buffered in memory with `recordId = null`.
+3. On `finish`, the findings are written, `telemetryState = FAILED` is set, and no watermark advances.
+4. If that write also fails, the in-memory result is returned to the UI and a storage-health flag is written to DataStore.
 
-**Import reserve path:** `reserveOk()` is false before an append → `abort()` and show the message.
+**Import reserve path:** if `reserveOk()` is false before an append, the session switches to evaluate-only for the rest of the import. `finish` sets `telemetryState = FAILED`, and the card states how much space to free.
+
+**`Finding` change:** `Finding` gains `recordId: Long? = null`, set only by `evaluateStored`.
 
 - [ ] **Step 1: Write the failing tests**
   - **E1 (writer half):**
@@ -464,20 +490,27 @@ sealed interface Preflight { data object Ok : Preflight; data class Tight(val es
     - Source gate: no `evaluate[A-Z]` call outside the session and the typed live delegation.
   - **ST1:** an instrumented sequence shows chunk *k* committed before record *(k+1)·5000+1* is pulled.
   - **S3 / Review Focus 5:**
-    - A throw on chunk 3 leaves nothing visible.
-    - A simulated kill leaves `IN_PROGRESS`, and `StartupSweep` (under `scanMutex`, using a snapshot of ids) removes it.
+    - A throw on chunk 3 leaves nothing visible: no facts, no finding rows, no Timeline rows.
+    - A throw inside `finish`, after alert creation, leaves 0 alerts.
+    - A simulated kill leaves the scan `IN_PROGRESS`. `StartupSweep` takes the lock only to snapshot ids, removes the scan, and writes one persistent "import interrupted" row.
     - A scan started during the sweep survives.
+    - Aborting writes no "scan_deleted" audit row.
+  - **Duplicates (S2):** an intrusion log containing the same id-less line twice yields one observation and **one finding**.
   - **M1:**
     - `Tight` when free − estimate < 2 × estimate + 200 MB; "Import anyway" proceeds.
-    - Headers that under-report sizes → the reserve aborts with a clean scan deletion.
-    - A live `SQLiteFullException` on chunk 1 of the first service → findings from every service are present and `FAILED` is set.
+    - Headers that under-report sizes: the reserve trips, and the import finishes evaluate-only with its findings kept and `FAILED` set.
+    - A live `SQLiteFullException` on chunk 1 of the first service: findings from every service are present and `FAILED` is set.
+    - A second failure on the findings write: the result is returned in memory and the DataStore health flag is set.
   - **Interim:**
     - Re-importing the same intrusion log in Phase A shows "0 new" and does not stack event rows (the sweep is kept).
     - Interim capped rows equal today's newest-N.
     - The findings top-K equals today's `capTriggeredFindings` on a 1,500-finding fixture.
-  - **Low heap:** a 200,000-line intrusion log imports under 256 MB (`lowHeapTest`).
+  - **Low heap:** a 200,000-line intrusion log imports under 256 MB (`lowHeapTest`). The `lowHeapTest` task copies `testClassesDirs` and `classpath` from `testDebugUnitTest`, and depends on the Robolectric jar copy task.
   - **B1 part 2:** every module with telemetry is observed.
-  - **F2 (Phase A half):** every triggered finding row on a stored service has a resolvable `recordId`.
+  - **F2 (Phase A half):**
+    - Every triggered finding row on a stored service has a resolvable `recordId` and a non-null `level`.
+    - `FAILED` scans are exempt.
+    - The test uses `firstOrdinal > 0`, so chunk-relative indexing is exercised.
   - **DNS retry:** a failed flush retries with backoff; the buffer stays bounded.
 - [ ] **Step 2–4: fail → implement → pass.**
 - [ ] **Step 5: Commit** `feat(scan): session writer; preflight and reserve; startup sweep; interim bounded rows`
@@ -539,9 +572,9 @@ sealed interface Preflight { data object Ok : Preflight; data class Tight(val es
   - `scanner/ScanOrchestrator.kt`:
     - Collect DNS by id and usage by time, with the 5-minute re-read.
     - Delete the `getRecentSnapshot()` window.
-    - Run the late-IOC re-check: evaluate-only `dns_monitor` over stored live DNS facts from the trailing 24 h, writing finding rows that reference those facts.
+    - Run the late-IOC re-check through `Session.evaluateStored`. It streams stored live DNS facts from the trailing 24 h in keyset chunks; its findings carry `recordId = factId` and `ordinal = -1`.
   - `ScanWriteRepository.finish`: write the watermarks.
-  - `logDnsEvent` / `logDnsEventsBatch`: `ioc_match` rows set `sourceEventKey = "dns:$id"`.
+  - The `ioc_match` link key is already written from Phase A (Task A7).
 - Test: `scanner/EventWatermarkTest.kt` (W1).
 
 **Interfaces:**
@@ -567,7 +600,9 @@ object Watermarks {
     - A `prev` ahead of `now` resets it.
   - **DNS by id:** a late-flushed DNS row (older timestamp, higher id) is collected.
   - **Capability-skipped rule:** across 10 scans with a capability-skipped `dns_monitor` rule, the watermark advances each time and observations equal the distinct events.
-  - **Late-IOC re-check:** a domain added to the IOC set after scan 1 fires on scan 2, from the stored fact, once.
+  - **Late-IOC re-check:**
+    - A domain added to the IOC set after scan 1 fires on scan 2, from the stored fact, once.
+    - That finding's `recordId` is the scan-1 fact, and its `ordinal` is −1.
   - **Serialisation:** a scan and an import are serialised.
 - [ ] **Step 2–4: fail → implement → pass.**
 - [ ] **Step 5: Commit** `feat(scan): per-service watermarks; late-IOC re-check over stored DNS`
@@ -580,19 +615,28 @@ object Watermarks {
   - `sigma/SigmaRuleEngine.kt:125`: `computeAtomBindings(atoms): Map<AtomRef, Set<String>>`.
   - `sigma/SigmaCorrelationEngine.kt`: correlate over atoms; signal details carry `member_fact_ids`; `signal_member` rows are written.
   - `sigma/RuleCoverage.kt`: work over atoms.
-  - `data/store/TelemetryReader.kt`: add `atomsForScan(scanId, categories)` and `atomsBetween(since, until, categories)`. Both return exact-precision facts only, exclude facts referenced by a `forensic_timeline.recordId` or a `sourceKey` matching a row's `sourceEventKey`, and include `COMPLETE` scans plus the current scan.
+  - Create `data/store/AtomReader.kt` with `atomsForScan(scanId, categories)` and `atomsBetween(since, until, categories)`.
+    - Both return exact-precision facts only.
+    - Both exclude facts referenced by a `forensic_timeline.recordId`, or whose `sourceKey` equals a row's `sourceEventKey` (both h128 BLOBs).
+    - Visibility is `(state = 'COMPLETE' OR scanId = :current)`, allow-listed in the Q1 gate.
   - `ScanWriteRepository.finish`: read atoms outside the write transaction. For a live scan, lookback is bounded to `≤ scanStart` and excludes `BUGREPORT_IMPORT` and `INTRUSION_LOG_IMPORT`.
   - Every `member_event_ids` reader: `ui/timeline/TimelineClusters.kt:136-150`, `sigma/CorrelationFindings.kt`, `data/repo/ScanRepository.kt`, `scanner/ScanOrchestrator.kt`, `reporting/ReportFormatter.kt`, `data/db/ForensicTimelineEventDao.kt`.
 - Test: `sigma/CorrelationOverFactsTest.kt` (K1 part 2), `sigma/MemberIdsConsumersGateTest.kt`.
 
 **Interfaces:**
 - `data class TimelineAtom(val ref: AtomRef, val category: String, val timestamp: Long, val packageName: String, val ruleId: String, val telemetrySource: TelemetrySource)`
-- `sealed interface AtomRef : Comparable<AtomRef> { val kind: Int; val id: Long; data class Row(override val id: Long); data class Fact(override val id: Long) }`
+- `sealed interface AtomRef : Comparable<AtomRef> { val kind: Int; val id: Long }`
+- `data class Row(override val id: Long) : AtomRef { override val kind = 0 }`
+- `data class Fact(override val id: Long) : AtomRef { override val kind = 1 }`
+- Ordering is by `(kind, id)`.
+- `signal_member` rows are deleted together with their signal row, by every delete path.
 
 - [ ] **Step 1: Write the failing tests**
   - Mixed atoms: an `event_count` rule over 3 fact atoms plus 1 row atom fires once, and writes `signal_member` rows of both kinds.
   - Distinct ids: a row and a fact with the same numeric id bind separately.
-  - No double binding: a live DNS fact and its `ioc_match` row bind once.
+  - No double binding:
+    - A live DNS fact and its `ioc_match` row bind once.
+    - An interim intrusion-log event row (carrying `recordId`) and its fact bind once, so `IntrusionLogClusterRegressionTest` still passes at the C2 commit.
   - Precision: day-precision facts never become atoms.
   - Lookback boundaries: lookback excludes bug-report facts and future-dated facts.
   - Gate: every `main` file that mentions `member_event_ids` also mentions `member_fact_ids`.
@@ -612,14 +656,18 @@ object Watermarks {
 - Remove `ModuleResult.timeline` (`BugreportModule.kt`) and `timeline` (`BugReportAnalyzer.kt`).
 - `ui/bugreport/*`: link to the Timeline filtered by scan.
 - Delete `reporting/TimelineFormatter.kt` and `data/model/TimelineEvent.kt`.
-- Create `data/db/LegacyEventRowCleanup.kt`, run once at the first launch after upgrade. It deletes `forensic_timeline` rows whose category is in a frozen legacy event-category list, for scans with `telemetryState IN ('STORED', 'PARTIAL_RETENTION')`.
+- Create `data/db/LegacyEventRowCleanup.kt`, run once at the first launch after upgrade.
+  - It deletes `forensic_timeline` rows whose `source` is in a frozen list of the retired event adapters' producers (`intrusion_log`, the bug-report module sources, `usage_stats`), for scans with `telemetryState IN ('STORED', 'PARTIAL_RETENTION')`.
+  - It does not select by category. Live `package_install` / `device_admin_grant` detected-change rows therefore survive.
 - Test: `scanner/EventRowsLiveInStoreTest.kt`, `data/db/LegacyEventRowCleanupTest.kt`.
 
 - [ ] **Step 1: Write the failing tests**
   - Intrusion-log import: on a 7,000-event fixture, `forensic_timeline` gets only finding rows and signals, while the store gets 7,000 observations.
   - No usage rows: a live scan writes no `usage_stats` row.
   - Re-import: importing the same log twice gives one set of facts and two observation sets, with no event rows.
-  - Legacy cleanup: it deletes `STORED` scans' event rows and keeps `NONE` scans' rows.
+  - Legacy cleanup:
+    - It deletes `STORED` scans' event rows and keeps `NONE` scans' rows.
+    - A live `package_install` row from `InstallEventEmitter` in a `STORED` scan survives.
 - [ ] **Step 2–4: fail → implement → pass.** Adapt `IntrusionLogClusterRegressionTest` and `IntrusionLogReportSectionTest`.
 - [ ] **Step 5: Commit** `feat(timeline): event records read in place; legacy event rows cleaned; TimelineEvent retired`
 
@@ -631,7 +679,9 @@ object Watermarks {
   - `data/db/TimelineQueries.kt` (one builder per filter shape)
   - `data/model/TimelineRowEntity.kt`
   - `data/db/TimelineFilter.kt`
-  - `ui/timeline/TimelinePagingSource.kt`, which extends `KeysetPagingSource`, observes `ScanResult`, `forensic_timeline` and `alert`, and keys on `(time, rowKind, id)`.
+  - `ui/timeline/TimelinePagingSource.kt`, which extends `KeysetPagingSource` and keys on `(time, rowKind, id)`.
+    - In Phase C it observes `ScanResult` and `forensic_timeline`.
+    - D2 adds `alert`, because that table does not exist before schema 20.
 - Modify:
   - `data/db/ForensicTimelineEventDao.kt`: delete the six read queries.
   - `ui/timeline/TimelineViewModel.kt`, `TimelineRow.kt` (`EventRow`), `TimelineScreen.kt`.
@@ -641,7 +691,8 @@ object Watermarks {
 **Interfaces:**
 - `TimelineRowEntity`: rowKind, id, scanId, time, category, packageName, level, ruleId, correlationId, kind, telemetrySource, bodyHash.
 - `TimelineFilter`: scanId, packageName, source, from, to, levels, findingsAndEvidenceOnly, zone (`ZoneId`).
-- The fact branch requires `EXISTS` an observation of a `COMPLETE` scan; with a scan filter it reads through `scan_record(scanId, eventTime)`.
+- The fact branch applies the spec §5.1 visibility rule: there is a `COMPLETE` observation, or no observation at all. With a scan filter, it reads through `scan_record(scanId, eventTime)`.
+- The row branch shows rows with `persistent = 1`, rows with `scanResultId = -1`, or rows whose scan is `COMPLETE`.
 
 - [ ] **Step 1: Write the failing tests**
   - **T1 (100,000 event facts plus 50 finding rows):**
@@ -649,8 +700,9 @@ object Watermarks {
     - No row is duplicated, and evidence is nested.
     - No captured SQL contains `OFFSET`.
     - Scroll position survives an invalidation.
-    - An `IN_PROGRESS` import's facts are absent.
-    - Correlation over 5,000 `permission_use` facts completes under `lowHeapTest`.
+    - An `IN_PROGRESS` import's facts and finding rows are absent.
+    - Severity filtering by `HIGH` returns exactly the writer-produced `HIGH` finding rows.
+  - **Low heap:** correlation over 5,000 `permission_use` facts completes, in `TimelineCorrelationLowHeapTest`, which `lowHeapTest` runs.
   - **Query plan:** for every filter shape, no `USE TEMP B-TREE` and no full scan.
   - **C1:**
     - The regex `_PERSIST_CAP|_ROW_LIMIT|\bLIMIT\s+\d+|limit:\s*Int\s*=\s*\d+` finds nothing beyond the Phase C allow-list.
@@ -700,11 +752,16 @@ object Watermarks {
   - `ScanResult.kt`: drop `findings`; add `triggeredCount` and `maxLevel`.
   - `ScanResultDao.kt`: add `latestLive()` and `pagedAfter(afterTimestamp, size)`; delete `getAllScans`.
 - Writer (`ChunkedScanWriter`):
-  - The session writes `scan_finding` rows per chunk, carrying `alertKey`.
-  - `finish` creates alerts set-based and attaches them; correlation goes through `FindingsRepository.recordCorrelation`.
-- Pins: `TelemetryFactDao.deleteUnobservedUnpinned` also excludes facts referenced by triggered `scan_finding.recordId`, `alert.recordId` and `alert_member` fact refs.
+  - The session writes `scan_finding` rows per chunk, carrying `alertKey`, for newly observed ordinals only.
+  - Inside its single finishing transaction, `finish` does three things:
+    - writes this scan's `forensic_timeline` finding rows with `INSERT … SELECT … FROM scan_finding WHERE scanId = ? AND triggered`;
+    - creates alerts set-based and attaches them, with the post-condition that no `alertKey` is left unattached;
+    - runs correlation through `FindingsRepository.recordCorrelation`.
+  - This scan's finding atoms are read from `scan_finding`.
+- Pins: `TelemetryFactDao.deleteUnobservedUnpinned` also excludes facts referenced by triggered `scan_finding.recordId`, by `alert.recordId`, and by `alert_member` fact refs.
 - `ScanOrchestrator.kt`:
   - Delete `FINDINGS_PERSIST_CAP`, `capTriggeredFindings`, the findings top-K and the caps log.
+  - Delete the remaining cap references at `BugReportScreen.kt:334` and in the KDoc at `IntrusionLogAnalyzer.kt:42`.
   - `computeDiff(ScanWithFindings, ScanWithFindings)`.
 - Consumers:
   - `DashboardViewModel` (count plus a paged list)
@@ -716,10 +773,21 @@ object Watermarks {
 - Test: `data/db/Migration19To20Test.kt` (F1 and Review Focus 4), `data/repo/FindingLifecycleTest.kt` (L1), `data/repo/FindingRecordRefTest.kt` (F2), `scanner/NoPersistenceCapsGateTest.kt` (C1 final).
 
 **Interfaces:**
-- Entities: as in spec §5.4. `alert.id` is AUTOINCREMENT; `alertKey` is unique; there is an index on `alert(ruleId, groupKey, status)` and on `alert_member(kind, refId)`.
+- Entities: as in spec §5.4. That includes `alert.lastActivityAt`, `evidenceJson`, `memberCount` and `truncatedBelow`.
+  - `alert.id` is AUTOINCREMENT, and `alertKey` is unique.
+  - Indices: `alert(ruleId, groupKey, status)`, `alert(recordId)`, `alert_member(kind, refId)`, `scan_finding(scanId)`, `scan_finding(recordId)`, `scan_finding(scanId, alertKey)`.
 - `AlertIdentity`:
   - `fun recordKey(ruleId: String, factId: Long, evidence: Evidence): ByteArray` = `h128("$ruleId|$factId|${evidence.type}|${evidence.matchedValue}")`.
-  - `suspend fun resolveCorrelation(ruleId: String, groupKey: String, members: List<AtomRef>, openingScanId: Long): Long`. It joins an OPEN alert whose members overlap. It attaches to a CLOSED alert only when the members form a subset of that alert's members. Otherwise it creates a new alert keyed `h128("$ruleId|$groupKey|$openingScanId|${members.min()}")` and stores the newest 1,000 members.
+  - `suspend fun resolveCorrelation(ruleId: String, groupKey: String, members: List<AtomRef>, openingScanId: Long): Long`:
+    - A ref counts as a member of an alert if it is in `alert_member` or is ≤ `truncatedBelow`.
+    - If the members overlap an OPEN alert, it joins that alert and updates `lastActivityAt`.
+    - Otherwise, if the members are a subset of a CLOSED alert's members, it attaches there.
+    - Otherwise it creates a new alert:
+      - keyed `h128("$ruleId|$groupKey|$openingScanId|${members.min()}")`;
+      - stores the newest 1,000 members, setting `memberCount` and `truncatedBelow`;
+      - copies the opening finding into `evidenceJson`;
+      - sets `persistent = 1` on every `Row` member's `forensic_timeline` row.
+  - Record alerts also copy the opening finding into `evidenceJson`.
 - `FindingsRepository`:
   - `recordChunk(scanId, findings, factIdByOrdinal, isEventByOrdinal)`
   - `createAlertsForScan(scanId)` (set-based)
@@ -730,7 +798,12 @@ object Watermarks {
   - `close(alertIds: List<Long>, reason: String?, result: CredentialResult)`
 - `CurrentFindingsSummary(stateFindings: List<Finding>, openAlertCount: Int)`. `stateFindings` is bounded by rules × live records.
 - `findingJson` drops `matchContext` only when `recordId != null`. Untriggered rows are stored only for snapshot services.
-- Migration 19→20 follows spec §5.4: `substr` reads, a table rebuild, summary backfill, `level` backfill, per-record kind, alerts created OPEN within 30 days, and `matchContext` kept.
+- Migration 19→20 follows spec §5.4:
+  - `substr` reads and a table rebuild;
+  - summary and `level` backfill;
+  - per-record kind, with `recordId` resolution preferred over `(scanId, service, ordinal)`;
+  - alerts created OPEN within 30 days, with `evidenceJson` set;
+  - `matchContext` kept.
 
 - [ ] **Step 1: Write the failing tests**
   - **F1 (migration):**
@@ -739,6 +812,7 @@ object Watermarks {
     - A schema-19 live app-ops finding is STATE.
     - DNS findings become ALERTs: OPEN at 10 days old, CLOSED at 40 days.
     - Migrated findings keep `matchContext`.
+    - A Phase C late-IOC re-check finding migrates to its own fact and alert key, through `recordId`.
   - **L1 (lifecycle):**
     - A state finding follows the latest live scan and survives an import.
     - An alert persists until closed.
@@ -746,9 +820,11 @@ object Watermarks {
     - Correlation chains: {a,b,c} → {a,b,c,d} joins the OPEN alert. Closing {P1,D1} and then seeing {P1,D2} opens a new alert. {P1} ⊂ a closed alert attaches without reopening.
     - Two evidence results yield two alerts.
     - The evidence discriminator is unchanged after an IOC re-sync.
-    - Correlation member facts survive 31 days of live-event retention and deletion of the import.
+    - Correlation member facts survive 31 days of live-event retention and the deletion of the import, and they still decode through `TelemetryReader`.
+    - A closed 1,500-member chain whose window slides with no new facts opens no new alert.
     - A killed mid-import leaves 0 alerts.
   - **F2:** `recordId` resolves for every service.
+  - **Query plan:** the extended `deleteUnobservedUnpinned`, the alert insert and attach, the `INSERT … SELECT` of finding rows, and the summary queries all use indices (`EXPLAIN QUERY PLAN`).
   - **C1:** the allow-list is reduced to the permanent four.
 - [ ] **Step 2–4: fail → implement → pass.**
 - [ ] **Step 5: Commit** `feat(findings): per-scan findings, lasting alerts, migration 19→20; caps removed`
@@ -761,12 +837,15 @@ object Watermarks {
   - Use `ProtectedButton`.
 - Modify `ui/timeline/TimelineEventCard.kt`: add Close on alert rows.
 - Modify `data/repo/ScanRepository.kt`:
-  - `deleteScan` deletes `scan_finding` rows and observations, never alerts, and writes an audit row (`category = "scan_deleted"`, `scanResultId = -1`).
-  - `deleteAllScans` deletes scans and scan-scoped `forensic_timeline` rows (`scanResultId != -1`) only, then writes an audit row.
+  - `deleteScan` deletes `scan_finding` rows, observations, and non-persistent `forensic_timeline` rows of the scan (together with their `signal_member` rows). It never deletes alerts or persistent rows.
+    - It writes a persistent audit row (`category = "scan_deleted"`, `persistent = 1`) that lists the deleted triggered findings (rule, level, package).
+  - `deleteAllScans` deletes scans, observations, `scan_finding` rows, and non-persistent scan-owned `forensic_timeline` rows (with their `signal_member` rows), then writes one persistent audit row.
+  - The `abort` and `StartupSweep` cleanup paths use a separate, unaudited delete.
 - Modify `FindingsRepository.close`:
   - Re-check `isDeviceSecure()` when given `NoSecureLock`.
   - Set `closedWithCredential`.
-  - Write an `alert_closed` row with `scanResultId = -1`.
+  - Write an `alert_closed` row with `persistent = 1`.
+- The open-alert list groups alerts by rule and matched value, and re-surfaces alerts by `lastActivityAt`.
 - Modify `reporting/ReportFormatter.kt`: FINDINGS lists state, open and closed alerts.
 - Add the new UI strings to `res/values/strings.xml`.
 - Test: `data/repo/AlertCloseTest.kt` (L2), `ui/dashboard/DashboardAlertsViewModelTest.kt`.
@@ -776,8 +855,12 @@ object Watermarks {
     - Close and bulk close do nothing without `Confirmed`.
     - `NoSecureLock` while `isDeviceSecure()` is true is refused.
   - L2 — deletion:
-    - Deleting a scan keeps its alert and writes an audit row.
-    - Clear all keeps alerts, closure rows and audit rows.
+    - Deleting a scan keeps its alert and writes an audit row that lists the scan's triggered findings.
+    - "Clear all" keeps alerts, closure rows and audit rows.
+    - After deleting a correlation alert's opening scan, and again after "Clear all", these still hold:
+      - every `alert_member` ref resolves (its `Row` members are persistent);
+      - every pinned fact decodes;
+      - `alert.evidenceJson` is present.
   - Report: lists closed alerts with their credential flag.
 - [ ] **Step 2–4: fail → implement → pass.**
 - [ ] **Step 5: Commit** `feat(ui): open alerts with credential-protected close and bulk close; audited deletion`
@@ -787,10 +870,14 @@ object Watermarks {
 **Files:**
 - Create: `data/store/TelemetryRetention.kt`.
 - Modify:
-  - `ioc/IocUpdateWorker.kt:28-31`: run retention after the IOC fetch under `scanMutex.tryLock()`, skipping the cycle if the lock is held.
+  - `ioc/IocUpdateWorker.kt:28-31`: run retention after the IOC fetch. Each keyset batch takes `scanMutex.tryLock()`; if the lock is held, retention stops for this cycle.
   - `data/repo/SettingsRepository.kt`: add `snapshotRetentionScans` (default 20).
   - `ScanResultDao`: add `setTelemetryState`.
-  - `ForensicTimelineEventDao.kt:112-113`: the prune only deletes rows where `telemetrySource = 'LIVE_SCAN' AND scanResultId != -1`, and that no `alert_member` or `signal_member` row ref points at.
+  - `ForensicTimelineEventDao.kt:112-113`: the prune deletes only rows that meet all of these:
+    - `telemetrySource = 'LIVE_SCAN'`;
+    - `persistent = 0`;
+    - no `signal_member` row ref points at them.
+    This applies whatever their `scanResultId`, so live `ioc_match` rows are trimmed again.
 - Test: `data/store/TelemetryRetentionTest.kt`, `data/db/PruneExemptionsTest.kt` (P1).
 
 - [ ] **Step 1: Write the failing tests**
@@ -798,7 +885,8 @@ object Watermarks {
   - Live-event retention: live events older than 30 days are trimmed, and their scans are marked `PARTIAL_RETENTION`.
   - Kept data: imports stay untouched, and pinned facts (findings, alerts, alert and signal members, timeline refs) survive.
   - Lock skip: retention skips the cycle while a scan holds `scanMutex`.
-  - P1: import rows, closure rows, audit rows and alert-referenced rows survive the prune.
+  - P1: import rows, persistent rows (closure, audit, alert evidence) and rows referenced by `signal_member` survive the prune.
+  - P2: a 31-day-old live `ioc_match` row with `scanResultId = -1` is pruned.
 - [ ] **Step 2–4: fail → implement → pass.**
 - [ ] **Step 5: Commit** `feat(store): retention — snapshots by scan count, live events by age, pins respected`
 - [ ] **Step 6:** Open Phase D PR `feat/telemetry-store-d`. Battery:
