@@ -14,7 +14,7 @@
 
 **Tech Stack:** Kotlin 2.0; Room 2.6.1 (`room-testing` on the unit-test classpath); AndroidX Paging 3.3.6 (+ `paging-compose`); `androidx.collection` 1.4.0; Jetpack Compose; Hilt; kotlinx.serialization; `java.util.zip`; platform `BiometricPrompt` / `KeyguardManager`; Robolectric 4.14.1 (SDK 35, offline) with `androidx.test:core` 1.6.1; snakeyaml-engine 2.7 (already present).
 
-**Spec:** `docs/superpowers/specs/2026-10-22-telemetry-store-design.md`, revised after plan-gate rounds 1–8. Findings: `docs/superpowers/plans/2026-10-22-telemetry-store-plan-gate-round{1..8}-findings.md`. Lasting correlation alerts: follow-up `docs/superpowers/specs/2026-10-22-lasting-correlation-alerts-followup.md`.
+**Spec:** `docs/superpowers/specs/2026-10-22-telemetry-store-design.md`, revised after plan-gate rounds 1–9. Findings: `docs/superpowers/plans/2026-10-22-telemetry-store-plan-gate-round{1..9}-findings.md`. Lasting correlation alerts: follow-up `docs/superpowers/specs/2026-10-22-lasting-correlation-alerts-followup.md`.
 
 ## Global Constraints
 
@@ -299,7 +299,7 @@ class TelemetryDictionaries(load: (String) -> ByteArray) {
     - `deleteForScan(scanId)`
     - `factIdsForOrdinals(scanId, service, ordinals: List<Int>): List<OrdinalFact>`
   - `EventWatermarkDao.get(service)`, `put(EventWatermark)`.
-  - `SignalMemberDao.insertAll(List<SignalMember>)` (`INSERT OR IGNORE`), `forSignal(signalRowId, after: AtomRef?, size: Int)`, `deleteForSignals(ids: List<Long>)`. Unique `(signalRowId, kind, refId)`; index `(kind, refId)`.
+  - `SignalMemberDao.insertAll(List<SignalMember>)` (`INSERT OR IGNORE`), `forSignal(signalRowId, afterKind: Int?, afterRefId: Long?, size: Int)` (plain cursor values; `ClusterMembers` maps them to and from `AtomRef`), `deleteForSignals(ids: List<Long>)`. Unique `(signalRowId, kind, refId)`; index `(kind, refId)`.
 - `deleteUnobservedUnpinned` excludes ids referenced by `forensic_timeline.recordId` or `signal_member` fact refs. Task D2 extends it to `scan_finding` and `alert`.
 
 - [ ] **Step 1: Write the failing tests**
@@ -322,7 +322,7 @@ class TelemetryDictionaries(load: (String) -> ByteArray) {
 
 ### Task A5: `TelemetryStore` and `TelemetryReader`
 
-**Files:** Create `data/store/TelemetryStore.kt`, `data/store/TelemetryReader.kt`, `data/store/OccurrenceCounter.kt`, `data/store/KeysetPagingSource.kt`, `data/store/EventDisplay.kt`, `res/raw/event_display.yml`.
+**Files:** Create `data/store/TelemetryStore.kt`, `data/store/StoreDirtyFlag.kt`, `data/store/TelemetryReader.kt`, `data/store/OccurrenceCounter.kt`, `data/store/KeysetPagingSource.kt`, `data/store/EventDisplay.kt`, `res/raw/event_display.yml`.
 
 **Test:** `data/store/TelemetryStoreTest.kt` (S1, S2, S4), `data/store/KeysetPagingSourceTest.kt`, `data/store/EventDisplayTest.kt`, `data/db/CompleteVisibilityGateTest.kt` (Q1 visibility).
 
@@ -429,7 +429,7 @@ class StoreDirtyFlag @Inject constructor(...) { suspend fun set(); suspend fun c
   - `scanner/StartupSweep.kt`
 - Modify `data/repo/ScanRepository.kt`: split the transactions used by the writer into a new `data/repo/ScanWriteRepository.kt` (≤ 14 functions). `deleteScan` / `deleteAllScans` set `state = DELETING` first, delete the scan's own `forensic_timeline` rows next (so they stop pinning facts), then call `telemetryStore.deleteScanTelemetry`, and delete the `ScanResult` row last. D3 adds the audit row to the first transaction.
 - Modify `scanner/ScanOrchestrator.kt`:
-  - Add `val scanMutex = Mutex()`. It wraps all three writers. `ScanWriteRepository.finish` sets `COMPLETE` with `UPDATE … SET state = 'COMPLETE' WHERE id = ? AND state = 'IN_PROGRESS'` and throws (rolling back) if no row changed.
+  - Create `data/repo/ScanLock.kt`: `@Singleton class ScanLock @Inject constructor() { val mutex = Mutex(); val writerRunning: StateFlow<Boolean> }` (writers set `writerRunning` for the session's lifetime). `scanMutex` in this plan means `ScanLock.mutex`; `ScanOrchestrator`, `ScanRepository`, `StartupSweep`, retention and the backfill inject `ScanLock` (no Hilt cycle through `ScanOrchestrator`). It wraps all three writers. `ScanWriteRepository.finish` sets `COMPLETE` with `UPDATE … SET state = 'COMPLETE' WHERE id = ? AND state = 'IN_PROGRESS'` and throws (rolling back) if no row changed.
   - All writers use the session.
   - Live DNS records carry `sourceEventKey = "dns:$id"`.
   - Live `ioc_match` rows written by `logDnsEvent` / `logDnsEventsBatch` set `sourceEventKey = h128("dns:$id")`. `DnsEventDao.insert` and `insertAll` return ids.
@@ -635,22 +635,22 @@ object Watermarks {
 - Create: `sigma/TimelineAtom.kt`.
 - Modify:
   - `sigma/SigmaRuleEngine.kt:125`: `computeAtomBindings(atoms): Map<AtomRef, Set<String>>`.
-  - `sigma/SigmaCorrelationEngine.kt`: correlate over atoms. Per (rule, group): filter atoms to the rule's steps first, run the largest groups last, and check deadlines (`CorrelationBudget(clock: () -> Long, perGroupMs = 2_000, totalMs = 5_000)`) that return normally — never throw inside the transaction. The total deadline also covers `computeAtomBindings` and grouping. Signals already found are kept, including those found in a group before its cut-off. Every unfinished or unstarted (rule, group) adds `NotEvaluatedReason.CORRELATION_INCOMPLETE` (one entry per rule, at most 20 packages plus "and K more"; excluded from `realFailureCount` automatically, since `SENTINELS` derives from the enum entries). Members are written **only** to `signal_member`; `details` carries no id lists; `correlationId = "$ruleId:" + h128(members sorted by (kind, id), each "kind:id").hex`; `matchContext` carries `member_count`.
+  - `sigma/SigmaCorrelationEngine.kt`: correlate over atoms. Per (rule, group): filter atoms to the rule's steps first, run the largest groups last, and check deadlines (`CorrelationBudget(clock: () -> Long, perGroupMs = 2_000, totalMs = 5_000)`) that return normally — never throw inside the transaction. The total deadline also covers `computeAtomBindings` and grouping. Signals already found are kept, including those found in a group before its cut-off. Every unfinished or unstarted (rule, group) adds `NotEvaluatedReason.CORRELATION_INCOMPLETE` (one entry per rule, at most 20 packages plus "and K more"; a rule not yet run when the total deadline passes during binding or grouping gets a rule-level "not started" entry with no packages; excluded from `realFailureCount` automatically, since `SENTINELS` derives from the enum entries). Members are written **only** to `signal_member`; `details` carries no id lists; `correlationId = "$ruleId:" + h128(members sorted by (kind, id), each "kind:id").hex`; `matchContext` carries `member_count`.
   - `data/model/ScanResult.kt` (`NotEvaluatedReason`): add `CORRELATION_INCOMPLETE`.
   - `ui/dashboard/DashboardViewModel.kt`, `ui/dashboard/DashboardScreen.kt`: a distinct "Correlation incomplete" warning naming the rule and packages (separate from the scanner-failure banner).
   - `ioc/IocUpdateWorker.kt` / `ForensicTimelineEventDao.kt:112-113`: today's time-based prune deletes a pruned signal's `signal_member` rows in the same transaction.
-  - Create `data/db/SignalMemberBackfill.kt`: one-time job run by `StartupSweep` under `scanMutex`, before the Timeline is usable. Selects `kind = 'signal' AND source = 'sigma_correlation_engine'` rows still carrying `member_event_ids`, 200 signals per transaction: confirm the signal row exists, parse with `toLongOrNull`, `insertAll` (`INSERT OR IGNORE` on the unique index), then rewrite `details` without the list (adding `member_count`) and `correlationId` to the canonical hash. A row that fails is caught, logged, counted and left untouched. DataStore flag `signal_member_backfill_done` is set when a pass leaves no convertible row.
+  - Create `data/db/SignalMemberBackfill.kt`: one-time job run by `StartupSweep` (modify `scanner/StartupSweep.kt`), taking `scanMutex` per batch; until it finishes a legacy cluster shows its members as missing (no Timeline gate). Selects `kind = 'signal' AND source = 'sigma_correlation_engine'` rows still carrying `member_event_ids`, keyset by row id, 200 signals per transaction: confirm the signal row exists, parse with `toLongOrNull`, `insertAll` (`INSERT OR IGNORE` on the unique index), then rewrite `details` without the list (adding `member_count`) and `correlationId` to the canonical hash. A row that fails is caught, logged, counted and left untouched. DataStore flag `signal_member_backfill_done` is set when one keyset pass reaches the end; failed rows do not block it.
   - Create `ui/timeline/ClusterMembers.kt`: `suspend fun load(signalRowId: Long, after: AtomRef?, size: Int = 200): ClusterPage` with `data class ClusterPage(val members: List<TimelineMember>, val missing: Int, val next: AtomRef?)` (rows through `ForensicTimelineEventDao` with `VisibleRow.SQL`, facts through `TelemetryReader.records`; refs whose row or fact is gone are skipped and counted in `missing`); `sealed interface TimelineMember { data class RowMember(val row: ForensicTimelineEvent); data class FactMember(val record: DecodedRecord) }`. `EventCluster` holds `TimelineMember`s, loaded page by page when a cluster is expanded; members also remain standalone Timeline entries (as today; the union arrives in C4).
   - `reporting/TimelineExporter.kt`: the CSV `correlation_id` column keeps the hash; a `member_refs` column lists `kind:id` from `signal_member` for members that still exist.
   - `sigma/RuleCoverage.kt`: work over atoms.
   - Create `data/store/AtomReader.kt` with `atomsForScan(scanId, categories)` and `atomsBetween(since, until, categories)`.
     - Both return exact-precision facts only.
     - Both exclude facts referenced by a `forensic_timeline.recordId`, or whose `sourceKey` equals a row's `sourceEventKey` (both h128 BLOBs).
-    - Visibility is `(state = 'COMPLETE' OR scanId = :current)`, allow-listed in the Q1 gate.
+    - Visibility is `(state = 'COMPLETE' OR scanId = :current)` for facts and `VisibleRow.SQL` (or `scanResultId = :current`) for rows, so rows of `DELETING` scans are never bound; allow-listed in the Q1 gate.
   - `ScanWriteRepository.finish`: read the atoms inside the finishing transaction, after this scan's timeline rows are inserted. That way the scan's own rows are `Row(id)` atoms with real ids, as in today's `saveScanWithCorrelation`. For a live scan, lookback is bounded to `≤ scanStart` and excludes `BUGREPORT_IMPORT` and `INTRUSION_LOG_IMPORT`. An import uses `atomsForScan(currentScanId)` only, with no lookback.
   - Every `member_event_ids` reader: `ui/timeline/TimelineClusters.kt:136-150`, `sigma/CorrelationFindings.kt`, `reporting/ReportFormatter.kt` (member count from `member_count`; a legacy chain without it prints "linked events" with no number), `data/db/ForensicTimelineEventDao.kt`; comment-only mentions in `data/repo/ScanRepository.kt` and `scanner/ScanOrchestrator.kt` are updated.
   - Tests asserting `member_event_ids`, updated in this commit: `SaveScanWithCorrelationTest`, `CorrelationMigrationFixturesTest`, `AllCorrelationRulesFireTest`, `SigmaCorrelationEngineTest`, `CorrelationFindingsTest`, `ActivityChainsReportSectionTest`, `TimelineExporterTest`.
-- Test: `sigma/CorrelationOverFactsTest.kt` (K1 part 2), `sigma/MemberIdsConsumersGateTest.kt`.
+- Test: `sigma/CorrelationOverFactsTest.kt` (K1 part 2), `sigma/MemberIdsConsumersGateTest.kt`, `sigma/CorrelationBudgetTest.kt` (density, total deadline, partial signals), `data/db/SignalMemberBackfillTest.kt`, `ui/timeline/ClusterMembersTest.kt`, `ui/dashboard/DashboardViewModelTest.kt`.
 
 **Interfaces:**
 - `data class TimelineAtom(val ref: AtomRef, val category: String, val timestamp: Long, val packageName: String, val ruleId: String, val telemetrySource: TelemetrySource)`
@@ -673,7 +673,7 @@ object Watermarks {
   - Total deadline: 50 dense packages, injected clock — correlation stops at `totalMs`, `finish` returns, and the unstarted (rule, package) pairs are recorded as incomplete (capped list).
   - Dashboard: `DashboardViewModelTest` shows the "Correlation incomplete" warning naming the package, and the scanner-failure banner stays hidden.
   - Import lookback: an import's correlation never binds a `LIVE_SCAN` row or fact.
-  - Backfill: a legacy signal with `member_event_ids = "3,5,8"` gets three `signal_member` rows, `member_count = 3` and a canonical `correlationId`, and its cluster still shows three members. A kill between batches then a re-run gives no duplicates; a signal deleted between read and insert leaves no orphan `signal_member` row; a row with `"3,x,"` gets members 3 only; an unparseable `details` row is left untouched and the launch completes.
+  - Backfill: a legacy signal with `member_event_ids = "3,5,8"` gets three `signal_member` rows, `member_count = 3` and a canonical `correlationId`, and its cluster still shows three members. A kill between batches then a re-run gives no duplicates; a signal deleted between read and insert leaves no orphan `signal_member` row; a row with `"3,x,"` gets members 3 only; an unparseable `details` row is left untouched, the launch completes, and the done flag is still set after one full keyset pass.
   - Legacy report: a pre-upgrade chain finding without `member_count` never prints "0 linked event(s)".
   - Clusters: a dangling `Row` ref is skipped and counted in `missing`; a 1,000-member signal loads in pages of 200.
   - Clusters: a signal with 3 fact members and 1 row member expands to 4 `TimelineMember`s through `ClusterMembers.load`.
@@ -870,9 +870,10 @@ object Watermarks {
   - An open-alerts card with a paged list, multi-select, and Close / Close selected, each going through `ConfirmCredential` then `FindingsRepository.close`.
   - Use `ProtectedButton`.
 - Modify `ui/timeline/TimelineEventCard.kt`: add Close on alert rows.
+- Modify `ui/history/HistoryViewModel.kt` and the History screen: handle `DeleteResult`, show the refusal message, disable delete from `ScanLock.writerRunning` (test: `ui/history/HistoryViewModelTest.kt` — delete is disabled while `writerRunning` is true and `ScanRunning` shows the message).
 - Modify `data/repo/ScanRepository.kt`:
   - `deleteScan` runs these steps in order:
-    0. Take `scanMutex.tryLock()` for step 1 only; if it is held, return `DeleteResult.ScanRunning` and change nothing (History shows "A scan is running — try again when it finishes" and disables delete while a scan runs). `deleteAllScans` does the same.
+    0. If `scanLock.writerRunning.value`, return `DeleteResult.ScanRunning`. Otherwise take `scanMutex` for step 1 only, with `withTimeoutOrNull(2_000) { lock() }`; on timeout return `ScanRunning` and change nothing. `deleteAllScans` does the same. `sealed interface DeleteResult { data object Done; data object ScanRunning }` lives in `ScanRepository.kt`; History shows "A scan is running — try again when it finishes" and disables delete from `writerRunning`.
     1. **One transaction:** build the capped audit summary from the scan's triggered `scan_finding` rows, insert the persistent audit row (`category = "scan_deleted"`), and set `state = DELETING`.
     2. Delete the scan's signal rows with their `signal_member` rows, its `scan_finding` rows, and its other non-persistent `forensic_timeline` rows. Another scan's signal that listed one of these rows shows the members that remain (today's behaviour). Facts un-pinned by the deleted `signal_member` rows go to `deleteUnobservedUnpinned` in the same transaction (A5 rule).
     3. Run `telemetryStore.deleteScanTelemetry`.
@@ -880,7 +881,7 @@ object Watermarks {
     (The audit row from step 1 holds distinct (rule, level, package) entries with counts, capped at 100 entries plus "and K more".)
 
     It never deletes alerts, or anything an alert references.
-  - `deleteAllScans`: **first transaction** builds one capped audit row from every `COMPLETE` scan's triggered `scan_finding` rows, inserts it, and sets every scan `DELETING`. It then runs steps 2–4 per scan and deletes all non-persistent timeline rows, including live `scanResultId = -1` rows, as today. No audit row is written at the end.
+  - `deleteAllScans`: **first transaction** builds one capped audit row from every `COMPLETE` scan's triggered `scan_finding` rows, inserts it, and sets every scan `DELETING`. It remembers the ids it set `DELETING` and `clearStartedAt`. It then runs steps 2–4 for those ids only, and deletes the non-persistent timeline rows whose `scanResultId` is one of them, or is −1 with `timestamp ≤ clearStartedAt` (signal rows with their `signal_member` rows). It replaces today's unfiltered `ForensicTimelineEventDao.deleteAll()` (`:138`). A scan started after the first transaction is untouched. No audit row is written at the end.
   - The `abort` and `StartupSweep` cleanup paths use a separate, unaudited delete.
 - Modify `FindingsRepository.close`:
   - Re-check `isDeviceSecure()` when given `NoSecureLock`.
@@ -897,9 +898,10 @@ object Watermarks {
     - `NoSecureLock` while `isDeviceSecure()` is true is refused.
   - L2 — deletion:
     - Deleting a scan keeps its alert and writes an audit row that lists the scan's triggered findings.
-    - "Clear all" keeps alerts, closure rows and audit rows, and removes live `scanResultId = -1` `dns_query` / `ioc_match` rows that nothing references.
+    - "Clear all" keeps alerts, closure rows and audit rows, and removes live `scanResultId = -1` `dns_query` / `ioc_match` rows older than `clearStartedAt`.
     - The audit row for a 50,000-finding scan stays under 16 KB, and the Timeline and report still load.
-    - `deleteScan` and "Clear all" while a writer holds `scanMutex` return `ScanRunning` and change nothing; "Clear all" during an open session leaves no `COMPLETE` survivor and no row pointing at a missing scan.
+    - `deleteScan` and "Clear all" while `writerRunning` is true, or while the lock cannot be taken within 2 s, return `ScanRunning` and change nothing.
+    - A scan that starts after "Clear all"'s first transaction and completes before "Clear all" ends survives intact (its `ScanResult`, timeline rows, signals and `signal_member` rows); no row points at a missing scan and no `signal_member` row lacks its signal.
     - Deleting scan X whose `forensic_timeline` row is a member of scan Y's signal removes the row; no non-persistent row has a `scanResultId` that is neither −1 nor an existing scan; Y's cluster loads the remaining members through `ClusterMembers`.
     - A `deleteScan` killed after its first transaction, and a "Clear all" killed after its first transaction, each leave exactly one audit row with a non-empty summary and no "import interrupted" row; the sweep finishes the delete.
     - After deleting an alert's opening scan, and again after "Clear all", these still hold:
@@ -915,7 +917,7 @@ object Watermarks {
 **Files:**
 - Create: `data/store/TelemetryRetention.kt`.
 - Modify:
-  - `ioc/IocUpdateWorker.kt:28-31`: run retention after the IOC fetch. Each keyset batch takes `scanMutex.tryLock()`; if the lock is held, retention stops for this cycle.
+  - `ioc/IocUpdateWorker.kt:28-31`: run retention after the IOC fetch. Each keyset batch takes `scanMutex.tryLock()`; if the lock is held, retention stops for this cycle. A batch that throws sets `StoreDirtyFlag`.
   - `data/repo/SettingsRepository.kt`: add `snapshotRetentionScans` (default 20).
   - `ScanResultDao`: add `setTelemetryState`.
   - `ForensicTimelineEventDao.kt:112-113`: the prune deletes only rows that meet all of these:
@@ -942,7 +944,7 @@ object Watermarks {
   - Import an intrusion log that has more than 1,000 findings.
   - Close and bulk-close alerts through the credential prompt.
   - Delete a scan and confirm its alert survives.
-  - Time `finish` on a 100k-finding import: ≤ 2 s on the F916B.
+  - Time `finish` on a typical (non-adversarial) 100k-finding import: ≤ 2 s on the F916B.
 
 ---
 
