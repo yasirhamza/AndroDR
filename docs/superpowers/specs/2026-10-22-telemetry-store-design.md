@@ -2,7 +2,7 @@
 
 **Date:** 2026-10-22
 **Status:** Design approved in-session (all decisions closed 2026-10-22);
-revised after plan-gate round 1 (2026-10-22). Plan gate and implementation are coordinated by a
+revised after plan-gate rounds 1–2 (2026-10-22). Plan gate and implementation are coordinated by a
 separate session (Opus), not the session that wrote this document.
 **Depends on:** `docs/superpowers/specs/2026-04-09-unified-telemetry-findings-refactor-design.md`
 (§4 facts-first naming, provenance as a field); the rule-repo
@@ -92,6 +92,13 @@ Twenty daily scans plus four weekly imports, by storage layout:
 | + Deflate-with-dictionary on event bodies (~5×) | ~8 MB | 5–15 MB | 40–90 MB | **55–115 MB** |
 | (reference) gzip JSONL files, ~7× | — | — | — | ~45–90 MB |
 
+These figures are bodies only. Per-event row and index overhead (fact row,
+observation row, three indexed 16-byte keys) adds roughly 120–150 B per
+event — about 30–65 MB per weekly import at the volumes above — so the
+realistic total for the compressed layout is **~150–380 MB**, still bounded
+by the user's retention and import choices and shown in Settings. The
+release battery measures the real factor (§5.2).
+
 Two conclusions drove the design: **event volume, not snapshot volume,
 dominates on a real phone**, and the parser's 200,000-records-per-type bound
 is one week of a real intrusion log, not a theoretical ceiling. Serialize +
@@ -150,490 +157,524 @@ containing them verbatim; a build gate (§9, V1) enforces the retired phrases.
 
 | Term | Definition |
 |---|---|
-| **Telemetry record** | A typed fact an emitter produced, exactly as produced, before any rule saw it. Source-agnostic; provenance is the `TelemetrySource` of the observation. Every record is one of two time-shapes, decided per record (§4.3). |
+| **Telemetry record** | A typed fact an emitter produced, exactly as produced, before any rule saw it. Source-agnostic; provenance belongs to the observation. Every record is one of two time-shapes, decided per record (§4.3). |
 | **Snapshot record** | State observed *at scan time*: app inventory, live app-ops grants, receivers, processes, accessibility services, file-artifact checks, device posture, system properties, database-path observations, platform-compat changes, ADB trusted keys, and any record whose service declares no event-time field or whose value for it is absent. |
-| **Event record** | Something that happened at a time *T* the record carries: usage transitions, DNS queries, connections, security-log events, tombstones, wakelock acquisitions, package install history, bug-report app-ops accesses, battery-daily package events whose day is known. |
+| **Event record** | Something that happened at a time *T* the record carries: usage transitions, DNS queries, connections, security-log events, tombstones, wakelock acquisitions, package install history, bug-report app-ops accesses, battery-daily package events. An event's time has a precision (`exact` or `day`). |
 | **Fact** | One distinct telemetry record, stored once however many scans or imports observed it (§5.1). |
 | **Observation** | One scan's or import's sighting of a fact, at a position in that scan's emitted list. Provenance and capture time belong to the observation. |
 | **Timeline event** | A timestamped row on the forensic timeline. Comes from (a) every event fact, read in place — never copied; (b) every triggered finding; (c) correlation signals; (d) detected changes (first-seen install, first-seen device-admin grant, live DNS IOC match, alert closure). **Snapshot records never become timeline events.** |
-| **Finding** | Rule output (`Finding`). References the observation it matched. A finding on a snapshot record is a **state finding**; a finding on an event record, or a correlation finding, is an **alert**. |
+| **Finding** | Rule output in one scan (`Finding`), referencing the observation it matched. A finding on a snapshot record is a **state finding**; a finding on an event record, or a correlation finding, belongs to an **alert**. |
+| **Alert** | The lasting record of an incident: opened by the first finding with its identity, kept across scans, closed only by a person (§5.4). |
 | **Provenance** | Where an observation came from: `TelemetrySource` (`LIVE_SCAN`, `BUGREPORT_IMPORT`, `INTRUSION_LOG_IMPORT`). It is not a kind of telemetry. |
 | **Watermark** | Per live event service, the position up to which live events have been collected. The next scan collects from it. |
 
 **Retired phrases.** "Raw telemetry" — every telemetry record is raw by
 definition; the `raw_fact`/`judgment` grading lives at the field level in the
-taxonomy, where it belongs. "Informational telemetry" — the UI switch meant
-"timeline events not referenced by a finding" and will say so. The bug-report
-`TimelineEvent` class — a source-shaped, untyped row — is retired (§5.3).
+taxonomy. "Informational telemetry" — the UI switch meant "timeline events not
+referenced by a finding" and will say so. The bug-report `TimelineEvent`
+class — a source-shaped, untyped row — is retired (§5.3).
 
 Field-level naming keeps the taxonomy's `snake_case`.
 
 ## 4. Architecture
 
 ```
-emitters ─▶ ServiceRecords (field maps, built once) ─┬─▶ SigmaRuleEngine.evaluateRecords ─▶ findings
-                                                     │        (same list, same ordinals)        │
-                                                     ▼                                          ▼
-                     record_body ◀── telemetry_record (fact) ◀── scan_record (observation) ◀── scan_finding
-                                            │                                              (STATE | ALERT, alertKey)
-                                            ├── event facts ──┐
-                                            │                 ▼
-                                            │      Timeline = UNION(event facts, forensic_timeline)
-                                            ▼
-                       Report (streamed) · Telemetry browser · JSONL export · cross-scan history / diff
+emitter ─▶ ServiceRecords (field maps, built once, one-shot Sequence)
+              │  per 5,000-record chunk, one transaction each:
+              ├─▶ store: record_body ◀ telemetry_record (fact) ◀ scan_record (observation)
+              ├─▶ SigmaRuleEngine.evaluateRecords(chunk)  (same maps, same ordinals)
+              └─▶ scan_finding rows ──▶ alert (one per alertKey, outlives scans)
+final transaction: correlation over atom-bound categories → signals → scan row COMPLETE → watermarks
+
+Timeline = keyset-paged UNION(event facts, forensic_timeline rows)
+Report (streamed) · Telemetry browser · JSONL export · cross-scan history / diff
 ```
 
 Persistence surfaces:
 
-- **`record_body`, `telemetry_record`, `scan_record`** (new): content, facts,
-  observations. §5.1.
-- **`scan_finding`** (new): findings as rows with lifecycle, replacing the
-  `ScanResult.findings` JSON column. §5.4.
-- **`event_watermark`** (new): per live event service. §5.2.
-- **`forensic_timeline`** (changed): holds only finding rows, correlation
-  signals and detected changes; gains `recordId` (nullable) and `level`. §6.
-- **`ScanResult`** (changed): loses `findings`; gains `telemetryState`
-  (`NONE` for scans before this feature, `STORED`, `PARTIAL_RETENTION`,
-  `FAILED`) so a report can say *why* telemetry is missing.
+- **`record_body`, `telemetry_record`, `scan_record`** (new; schema 19): content,
+  facts, observations. §5.1.
+- **`event_watermark`** (new; schema 19). §5.2.
+- **`scan_finding`, `alert`, `alert_member`** (new; schema 20): findings per
+  scan, alerts across scans. §5.4.
+- **`forensic_timeline`** (changed): only finding rows, correlation signals and
+  detected changes; gains `recordId`, `sourceEventKey` (schema 19, indexed with
+  `scanResultId`) and `level` (schema 20).
+- **`ScanResult`** (changed): gains `state` (`IN_PROGRESS` | `COMPLETE`) and
+  `telemetryState` (`NONE` | `STORED` | `PARTIAL_RETENTION` | `FAILED`) in
+  schema 19; loses `findings` in schema 20.
 
 ### 4.1 One list, evaluated and stored
 
-Each emitter's output is projected to field maps **once**, into
-`ServiceRecords(service, records)`. The rule engine evaluates exactly that
-list (`SigmaRuleEngine.evaluateRecords(service, records)`; the typed
-`evaluate*` methods delegate to it), and the store persists exactly that
-list. A finding carries the ordinal of its record in that list; any
-engine-side pre-filter (today: `file_scanner` skips inaccessible paths)
-iterates with the original index, so ordinals always address the stored
-list. This makes anti-goal 3 true by construction and is the input shape a
-later "replay stored records through a newer ruleset" needs.
+Each emitter's output is projected to field maps **once**, as
+`ServiceRecords(service, source, capturedAt, records: Sequence<StoreRecord>)`
+— a one-shot sequence (`constrainOnce()`), consumed exactly once by the
+chunked writer (§5.2). Within each chunk the same maps are persisted and
+then evaluated (`SigmaRuleEngine.evaluateRecords(service, chunk,
+firstOrdinal)`; the typed `evaluate*` methods delegate to it and are kept for
+live callers). A finding carries the ordinal of its record in the emitted
+list; engine-side pre-filters (today: `file_scanner` skips inaccessible
+paths) keep the original index. Stored equals evaluated by construction. A
+gate requires every writer to evaluate through `evaluateRecords` on the
+batch it persists.
 
-Records are stored as their `toFieldMap()` projection — the map in taxonomy
-`snake_case` that `SigmaRuleEvaluator` actually evaluates:
+Records are stored as their `toFieldMap()` projection, the map in taxonomy
+`snake_case` that `SigmaRuleEvaluator` evaluates.
 
-- It is exactly what the rules saw.
-- The taxonomy documents every field; the store inherits that schema and
-  advances #137.
-- Apart from `DnsEvent`, the telemetry data classes are not `@Serializable`;
-  the field map is already the compatibility boundary.
+**Field-map completeness.** A field map carries every fact its data class
+holds. Two gaps are closed as positive-only fields:
+`FileArtifactTelemetry.accessible` → `accessible`;
+`ImportedDnsEvent.resolvedIps` → `dns_monitor.resolved_ips`. A gate compares
+each telemetry class's constructor properties with its field-map keys
+(commented allow-list for intentional omissions).
 
-**Field-map completeness.** A field map must carry every fact its data class
-holds, or the stored record is lossy. Two gaps exist today and are closed as
-positive-only fields: `FileArtifactTelemetry.accessible` → `accessible`;
-`ImportedDnsEvent.resolvedIps` → `resolved_ips` on `dns_monitor`. A gate
-compares each telemetry class's constructor properties with its field-map
-keys, with an explicit, commented allow-list for intentional omissions.
-
-**Envelope keys.** `captured_at` and `source` are observation properties,
-not content. They are removed from the map before hashing and stored on the
-observation; decode restores them. Content hashing therefore identifies the
-same fact across imports.
+**Envelope keys.** `source` and `captured_at` are observation properties
+when — and only when — the map's value equals the observation's
+(`source == TelemetrySource.name`, `captured_at == capturedAt`). Such keys
+are removed before hashing, the observation records which it removed
+(`strippedKeys` bitmask), and decode restores exactly those. Keys holding
+content (eight bug-report modules emit `"source" to "bugreport_import"` or
+`"adb_trusted_key"`; rules 071–076 match on it) are left in the body. The
+decoded map equals the evaluated map, keys included.
 
 Services covered: every emitter output — each typed `evaluate*`, the generic
-`evaluateGeneric` bug-report path, `usage_stats`, `system_property`. The
-taxonomy's `timeline` service (atom binding) is not a record stream.
+bug-report path, `usage_stats`, `system_property`. The taxonomy's `timeline`
+service (atom binding) is not a record stream.
 
 ### 4.2 Taxonomy (Phase 0, before anything is stored)
 
-Decided (maintainer, 2026-10-22): the two duplicates collapse into the typed
-services; `adb_audit`, `activity_audit`, `usage_stats`, `system_property`
-are documented as emitter services with no rules.
+Decided (maintainer, 2026-10-22): `dbinfo_audit` / `platform_compat_audit`
+collapse into `db_info` / `platform_compat`; `adb_audit`, `activity_audit`,
+`usage_stats`, `system_property` are documented emitter services with no
+rules.
 
 The rules-repo change adds, per service:
 
 - `status: emitter_only` for services with no evaluate path (`usage_stats`,
-  `system_property`). `validate-rule.py` rejects a rule on an `emitter_only`
-  service outside `staging/`; `ServiceActivationCrossCheckTest` accepts the
-  status. A rule that could never fire on the fleet cannot validate.
-- `event_time_field: <field>` for every service whose records can be events.
-- `key_fields: [..]` — the fields that identify a snapshot's subject
-  (`app_scanner: [package_name]`, `receiver_audit: [package_name,
-  intent_action]`, `appops_audit: [package_name, operation]`,
-  `device_auditor: [check_id]`, `file_scanner: [file_path]`, …) — used for
-  per-subject history and scan-to-scan comparison.
-- `optional: true` on fields only some producers set (`appops_audit.event_time_ms`,
-  set by bug-report records only). The cross-check allows a member field map
-  to omit optional fields.
-- `positive_only: true` on fields old fleet binaries do not emit
-  (`dns_monitor.timestamp`, `dns_monitor.resolved_ips`,
-  `file_scanner.accessible`, `appops_audit.event_time_ms`, and the existing
-  `requested_permissions` / `has_boot_receiver`). `validate-rule.py`'s
+  `system_property`); `validate-rule.py` already rejects rules on non-active
+  services outside `staging/` and keeps doing so; `ServiceActivationCrossCheckTest`
+  accepts the status.
+- `event_time_field` on `usage_stats`, `dns_monitor`, `network_monitor`,
+  `security_log`, `appops_audit` (`event_time_ms`), `tombstone_parser`
+  (`crash_timestamp`), `wakelock_parser` (`acquired_at`), `battery_daily`
+  (`timestamp`), `package_install_history` (`timestamp`). **Not** on
+  `db_info`: the dbinfo section has no per-reference time.
+- `time_precision_field` where precision varies (`battery_daily:
+  timestamp_precision`).
+- `key_fields` on every snapshot-capable service (`app_scanner:
+  [package_name]`, `receiver_audit: [package_name, intent_action]`,
+  `appops_audit: [package_name, operation]`, `device_auditor: [check_id]`,
+  `file_scanner: [file_path]`, …).
+- `package_field` naming the field that identifies the app
+  (`package_name`, `source_package` for `dns_monitor`, `app_name` for
+  `network_monitor`, …).
+- `optional: true` on fields only some producers set
+  (`appops_audit.event_time_ms`). An optional field is also treated as
+  positive-only.
+- `positive_only: true` on every field old fleet binaries do not emit:
+  `dns_monitor.timestamp`, `dns_monitor.resolved_ips`,
+  `file_scanner.accessible`, `appops_audit.event_time_ms`,
+  `battery_daily.timestamp`, `battery_daily.timestamp_precision`,
+  `db_info.db_path`, `db_info.recent_query_count`, and the existing
+  `requested_permissions`, `has_boot_receiver`. `validate-rule.py`'s
   negation guard is generalised from the hard-coded `requested_permissions`
-  to every `positive_only` field.
+  to every `positive_only` (or `optional`) field.
 - Field entries for the facts the typed bug-report records gain (§5.3).
 
-This change follows CLAUDE.md safe ordering and lands before the store, so
-every stored service has a schema from the first record written.
+This change follows CLAUDE.md safe ordering and lands before the store.
 
-### 4.3 Snapshot or event, per record; categories as a contract
+### 4.3 One contract object; categories are a detection contract
 
-A record is an **event record iff its service declares an
-`event_time_field` and the record's value for it is present and > 0**.
-`EventTimeFields` (Kotlin, `sigma/`) is generated from that declaration and
-cross-checked against the taxonomy; it is the single source for storage
-treatment (§5.1), timeline membership (§6) and finding kind (§5.4). There is
-no second list anywhere.
+`TaxonomyContract` (Kotlin, `sigma/`) is the **single** Kotlin mirror of the
+taxonomy facts the store needs: event-time field, precision field, key
+fields, package field, field order and descriptions. One cross-check test
+compares it with the taxonomy in both directions. No other list of
+event-capable services exists anywhere.
 
-**Timeline categories are a detection contract**, because atom rules bind on
-them. `TimelineCategories` (Kotlin, `sigma/`) maps each event service to the
-category its timeline events carry, preserving today's values exactly:
-`usage_stats` → the record's `event_type` (`app_foreground` /
-`app_background`); `appops_audit` → `permission_use`;
-`package_install_history` → `package_install`; `battery_daily` → the
-record's `event_type` (`package_uninstall` / `package_update` /
-`package_downgrade`); `network_monitor` → `network_connect`; `security_log`
-→ `security_event`; `dns_monitor` → today's imported-DNS category
-(`TimelineAdapter`). A gate fails if any category a bundled atom rule binds
-has no producer. Display text (one summary line per event) lives in
-`event_display.yml` and carries no semantics.
+A record is an **event record iff its service declares an `event_time_field`
+and the record's value is present and > 0**.
+
+**Timeline categories** (`TimelineCategories`, `sigma/`) are a detection
+contract, because atom rules bind on them; today's values are preserved
+exactly: `usage_stats` → the record's `event_type`; `appops_audit` →
+`permission_use`; `package_install_history` → `package_install`;
+`battery_daily` → the record's `event_type`; `network_monitor` →
+`network_connect`; `security_log` → `security_event`; `dns_monitor` →
+`ioc_match` when `reason` is set, else `dns_query` (`TimelineAdapter.kt:33`);
+`tombstone_parser`, `wakelock_parser` → the service name. Gate K1: every
+category a bundled atom rule binds has a producer. **Only facts with
+`exact` time precision become correlation atoms**; day-precision events are
+timeline events but never bind 1-hour windows. Summary text lives in
+`event_display.yml`, without semantics.
+
+**Computed columns.** `subjectKey`, `category`, `packageName`,
+`timePrecision` and `eventTime` are computed at write time from
+`TaxonomyContract` and `TimelineCategories`. A test pins a hash of those
+inputs; changing them fails with a message requiring a recompute migration.
 
 ## 5. Persistence
 
 ### 5.1 Content, facts, observations
 
-Room entities (schema 19, Phase A).
+Hashes are stored as 16-byte BLOBs (SHA-256 truncated to 128 bits).
 
-**`record_body`** — distinct content:
+**`record_body`**: `hash` BLOB PK; `encoding` (0 plain JSON, 1 Deflate with
+preset dictionary); `dictVersion`; `body` BLOB; `rawBytes` (bounds inflation).
 
-| column | type | meaning |
-|---|---|---|
-| `hash` | String PK | SHA-256 of the canonical JSON of the field map minus envelope keys |
-| `encoding` | Int | 0 plain JSON; 1 Deflate with preset dictionary |
-| `dictVersion` | Int | which shipped dictionary (0 for plain) |
-| `body` | BLOB | |
-| `rawBytes` | Int | uncompressed size; bounds inflation on decode |
+**`telemetry_record`** (fact): `id` PK AUTOINCREMENT; `service`; `factKey`
+BLOB (unique with `service`); `subjectKey`; `eventTime`; `timePrecision`;
+`category`; `packageName`; `bodyHash` BLOB. Indices: unique `(service,
+factKey)`, `(service, subjectKey)`, `eventTime`, `packageName`, `bodyHash`.
 
-**`telemetry_record`** — one row per fact:
-
-| column | type | meaning |
-|---|---|---|
-| `id` | Long PK auto | the fact id findings and timeline rows reference |
-| `service` | String | |
-| `factKey` | String | unique with `service` (below) |
-| `subjectKey` | String? | from the service's `key_fields`; indexed with `service` |
-| `eventTime` | Long? | indexed; null for snapshots |
-| `category` | String? | event facts only, from `TimelineCategories` |
-| `packageName` | String? | indexed |
-| `bodyHash` | String → `record_body` | indexed |
-
-**`scan_record`** — one row per observation:
-
-| column | type | meaning |
-|---|---|---|
-| `scanId` | Long | `ScanResult.id` |
-| `service` | String | |
-| `ordinal` | Int | position in the emitted list; PK (`scanId`, `service`, `ordinal`) |
-| `recordId` | Long → `telemetry_record` | indexed |
-| `source` | `TelemetrySource` | provenance of this observation |
-| `capturedAt` | Long | |
+**`scan_record`** (observation): `scanId`, `service`, `ordinal` (PK);
+`recordId` (indexed; unique with `scanId`); `source`; `capturedAt`;
+`strippedKeys`.
 
 **Fact identity (`factKey`).**
-- An event whose source supplies an identity carries it in the envelope, not
-  the field map: intrusion-log records carry the parser's existing key
-  `(type, event_id, event_time)`. Never bare `event_id` — the parser
-  documents it can restart daily.
-- Every other record: `bodyHash#n`, where `n` is the occurrence index of
-  that content within the emitted list. Identical-content events in one
-  batch (A and AAAA lookups in the same millisecond) are distinct facts;
-  the same content observed again later (an overlapping export, an
-  unchanged app on the next scan) is the same fact.
+- Event with a source-supplied identity (intrusion-log `(type, event_id,
+  event_time)`; live DNS `dns:<DnsEvent.id>`): `H("src:" + key + "#" +
+  bodyHash)` — identity *and* content. Same key with different content is a
+  different fact.
+- Every other record: `H(bodyHash + "#" + n)`, `n` = occurrence index of that
+  content within the service's emitted list (counted in a primitive
+  long → int map on a 64-bit hash prefix; a prefix collision only bumps a
+  counter, never merges content).
 
-**Write.** Bodies first (`INSERT OR IGNORE`), then facts (`INSERT OR
-IGNORE`; on `-1`, look the id up by `(service, factKey)`), then observations.
-`persist` returns the ordinal → fact-id map for the batch. Records are
-written in chunks of 5,000 from a `Sequence`; no full list of field maps is
-ever built.
+**Observations.** Unique `(scanId, recordId)`: an exact duplicate record
+within one scan or import (repeated export lines) is dropped and counted —
+this replaces the parser's in-memory duplicate set. A **live** event fact
+already observed by an earlier live scan gets no new observation (the
+usage re-read overlap and any re-collection are absorbed). Imports always
+observe the facts they contain.
 
-**Reads** are per scan through `scan_record`, so a scan's report, browser,
-export and timeline filter see every record that scan observed, including
-facts first stored by another scan (G1, G3). Keyset paging on
-`(scanId, service, ordinal)` or fact id; no OFFSET.
+**Write order** per chunk: bodies (`INSERT OR IGNORE`) → facts (`INSERT OR
+IGNORE`; ids of existing facts looked up by `(service, factKey)`) →
+observations. Every list-parameter query goes through `chunkedIn(≤ 900)`
+(API 26–29 SQLite allows 999 variables).
 
-**Delete.** A scan's observations are deleted; then facts with no remaining
-observation; then bodies with no remaining fact — batched, all indexed.
-Deleting import A never removes a fact import B also observed.
+**Reads** go through `scan_record`, so a scan's report, browser, export and
+timeline filter see every record that scan observed, including facts first
+stored by another scan (G1, G3). All paging is keyset (no OFFSET, no
+`COUNT(*)` per page).
 
-**Compression.** Event bodies are Deflate-compressed with a preset
-dictionary; snapshot bodies stay plain JSON, so later features can query
-them with SQLite JSON1. Dictionaries are per service family, ≤ 4 KiB each
-(a 32 KiB dictionary costs 32 KiB of hashing per record), built from the
-taxonomy's field names and fixed vocabularies, shipped in `res/raw/`, and
-**immutable once shipped**: each is pinned by SHA-256 in a test, a changed
-builder output requires a new `dictVersion`, and decoding selects the
-dictionary by `dictVersion`. One `Deflater`/`Inflater` per batch, `reset()`
-between records, `end()` after. A body that fails to inflate, or would
-inflate past `rawBytes`, decodes to a placeholder record marked unreadable —
-never an exception out of paging or the report.
+**Delete.** Candidates are collected from the scan's own observations in
+keyset chunks; observations are deleted; candidate facts with no remaining
+observation and no pin are deleted; then their bodies if unreferenced.
 
-**Cross-scan reads.** `history(service, subjectKey)` — every observation of
-one subject, newest first. `changedBetween(scanA, scanB, service)` — subjects
-whose fact changed, appeared or disappeared, keyed on `subjectKey`.
+**Pins.** A fact referenced by any triggered finding, any alert, or any
+`forensic_timeline` row is never deleted by retention or scan deletion
+(references are plain columns, no FK). Evidence behind a finding outlives
+the observations that produced it.
+
+**Compression.** Event bodies: Deflate with a per-service-family preset
+dictionary ≤ 4 KiB; snapshot bodies plain JSON. Dictionaries are shipped in
+`res/raw/`, **immutable**, pinned by SHA-256 in a test; a changed builder
+output requires a new `dictVersion`; decode selects by `dictVersion`. The
+writer owns one `Deflater` per chunk (`setDictionary` after every `reset()`,
+`end()` after); `decode` allocates its own `Inflater` (thread-safe) and
+returns an unreadable placeholder on any failure or on inflation past
+`rawBytes`. A test checks every event body's zlib header carries the
+dictionary flag and the dictionary's Adler-32.
+
+**Cross-scan reads.** `history(service, subjectKey)` and
+`changedBetween(scanA, scanB, service)` keyed on `subjectKey`.
 
 **Retention** (my call):
-- Snapshot observations: kept for the most recent N live scans (default 20,
-  Settings). Older live scans' snapshot observations are deleted; their
-  `ScanResult.telemetryState` becomes `PARTIAL_RETENTION`.
-- Event observations from live scans: kept 30 days, the same as the
-  timeline today.
-- Import observations: kept until the user deletes the import.
-- Any fact referenced by an OPEN alert is kept regardless.
-- Retention runs from Phase A (logic) in `IocUpdateWorker`; Settings UI in
-  Phase E.
+- Snapshot observations: kept for the newest N live scans (default 20).
+  Older live scans become `PARTIAL_RETENTION`.
+- Live event observations: 30 days.
+- Import observations: until the user deletes the import.
+- Pinned facts: always (above).
+- Runs in `IocUpdateWorker`, serialised with scans by `scanMutex`, in its
+  own transactions.
 
 ### 5.2 Writers, watermarks, failure handling
 
-**Writers.** `runFullScan`, `analyzeBugReport` and `analyzeIntrusionLog`
-build `ServiceRecords` once, evaluate, and hand the same records to the
-store in the save transaction. Order inside the transaction: observations
-and facts → correlation atoms queried → correlator → scan row →
-`scan_finding` rows → watermarks.
+**Chunked single pass.** Every writer (live scan, bug-report import,
+intrusion-log import) runs: insert the `ScanResult` with `state =
+IN_PROGRESS` → for each 5,000-record chunk of each `ServiceRecords`, one
+transaction: persist, evaluate, write `scan_finding` rows (and alert
+upserts, §5.4) → final transaction: correlation, signals, summary columns,
+`state = COMPLETE`, `telemetryState`, watermarks. `IN_PROGRESS` scans are
+invisible to every list, report and current-findings query; a failed writer
+deletes its scan (§5.1 delete), and startup sweeps any leftover
+`IN_PROGRESS` scan. The VPN's DNS writes interleave between chunks; the WAL
+truncates between chunks (`journal_size_limit`). Nothing of a failed import
+is ever visible (the #342 B1 guarantee, kept).
 
-**Live enrichment.** The `last*Telemetry` fields are deleted. Bug-report
-APK-hash and display-name enrichment reads the latest live scan's
-`app_scanner` observations (within `APP_TELEMETRY_CACHE_MAX_AGE_MS`) or
-collects fresh and discards. Live inventory used for enrichment is never
-stored under an import.
+**Correlation memory.** The correlator receives atoms only for the
+categories atom rules bind (`SigmaRuleEngine.atomCategories()`), streamed
+from the database; this is the memory bound for correlation and is gated
+(T1 runs a 100,000-event import whose events include a bound category).
 
-**Replace-on-reimport is removed.** `deletePriorIntrusionLogRows` contradicts
-"imports kept until the user deletes them" and would delete other imports'
-evidence. A re-imported or overlapping export creates its own observations
-of the facts it shares; the import card reports "N new facts, M already
-stored".
+**Live enrichment.** `last*Telemetry` deleted; bug-report enrichment reads
+the latest live scan's `app_scanner` observations within
+`TelemetryReader.APP_ENRICHMENT_MAX_AGE_MS` (5 min, moved from the
+orchestrator) or collects fresh and discards; never stored under an import.
+
+**Replace-on-reimport is removed.** A re-imported or overlapping export
+observes the facts it shares; the import card reports new facts,
+already-stored facts and dropped duplicates.
 
 **Watermarks** (`event_watermark(service, position, scanId)`):
-- `dns_monitor` (live): position = the monotonic `DnsEvent.id`. Late-flushed
-  rows and clock jumps cannot skip events.
-- `usage_stats`: position = event time. Each scan re-reads from
-  `position − 5 min`; the overlap is absorbed by fact identity. Usage access
-  is checked explicitly (`queryEvents` returns empty, not an exception,
-  without it); no access = collection failed.
-- First scan: 24 h floor.
-- The watermark advances only when the save commits, the collection did not
-  fail, and no rule on that service was capability-skipped this scan (a
-  skipped rule would otherwise consume events it never evaluated). It never
-  moves past the scan's start time and resets if it is ahead of `now`.
-- Scans are serialised by a `scanMutex`.
+- Live DNS: position = `DnsEvent.id` (monotonic; immune to late flushes and
+  clock changes). First scan: ids from the last 24 h.
+- Usage stats: position = event time; each scan re-reads from `position −
+  5 min` (absorbed by the live-observation rule). Usage access is checked
+  explicitly; no access = collection failed.
+- Advance on every committed scan whose collection did not fail, **including
+  when rules on that service were capability-skipped** — the skip is
+  recorded (`NotEvaluatedReason`) and the stored facts remain replayable.
+  Never past the scan's start; reset if ahead of `now`. The disk-full
+  fallback (below) does not advance.
+- Scans serialised by `scanMutex`.
 
-**Storage protection (replaces the caps; nothing is truncated silently).**
-- Before an import, a free-space preflight (`StatFs`) against an estimate of
-  its stored size; if it would leave less than a safety margin
-  (500 MB or 10 % of the volume, whichever is larger), the import is refused
-  with a message naming the estimate and the free space.
-- Parser input bounds stay as input validation, raised to 2,000,000 records
-  per type, with the import card naming the bound when it trips. Peak memory
-  is bounded by the 5,000-record chunk, not by the import.
-- `PRAGMA journal_size_limit` set so the WAL is truncated after a large
-  import.
-- Persistence catches `Throwable` (including `OutOfMemoryError`) and
-  surfaces `IntrusionLogPersistException`.
-- If a live scan's telemetry write fails (e.g. `SQLITE_FULL`), the save is
-  retried without telemetry: findings are kept, `telemetryState = FAILED`,
-  and the report says so.
+**Storage protection (nothing is truncated silently).**
+- Every import (bug report and intrusion log) is preflighted from the
+  archive's decompressed entry sizes × a stored-size factor measured in the
+  release battery (initial value 0.6, a named constant). If free space after
+  the estimate would be below `2 × estimate + 200 MB`, the user sees the
+  estimate and free space and may cancel or **import anyway**; a disk that
+  fills mid-import rolls back the current chunk and the writer deletes the
+  `IN_PROGRESS` scan.
+- Parser input bounds stay as input validation (2,000,000 per type for
+  intrusion logs; per-type bounds of the same order added to bug-report
+  modules), each named on the import card when tripped.
+- Writers catch `Throwable`; imports surface it as a persist failure.
+- A live scan whose telemetry write fails (`SQLiteFullException`) is saved
+  without telemetry: findings kept, `telemetryState = FAILED`, watermarks
+  unchanged.
+- `DnsLogBuffer` keeps a batch whose write failed and retries it on the next
+  flush (within its existing buffer bound), recording a health warning.
 
 ### 5.3 Typed bug-report records; `TimelineEvent` retired
 
-Four modules build untyped rows today and must emit typed records that fill
-the `TelemetryBundle` before anything that depended on their rows is
-removed:
+Before any module's timeline rows are removed (Phase C), four modules emit
+typed records that fill the `TelemetryBundle`, each emitting **every fact it
+parses** (emitter-emits-all-facts):
 
-- `InstallTimeModule` → `PackageInstallHistoryEntry` (event; category
-  `package_install`).
-- `DbInfoModule` → `DatabasePathObservation`, extended with `db_path` and
-  `recent_query_count` (taxonomy fields added).
-- `PlatformCompatModule` → `PlatformCompatChange`.
-- `BatteryDailyModule` → `BatteryDailyEvent` with `timestamp` at day
-  precision when the section yields the day's date; otherwise the record is
-  a snapshot.
+- `InstallTimeModule` → `PackageInstallHistoryEntry` (event, `package_install`).
+- `DbInfoModule` → `DatabasePathObservation` with `db_path`,
+  `recent_query_count` (snapshot).
+- `PlatformCompatModule` → `PlatformCompatChange` (snapshot).
+- `BatteryDailyModule` → `BatteryDailyEvent` for every entry it parses today
+  (install, update, uninstall, downgrade) with today's `event_type`, plus
+  `timestamp` at day precision and `timestamp_precision = "day"` when the
+  section yields the date. A parity test compares the old rows with the new
+  records before the rows are removed.
 
-`AdbKeysModule` records are snapshots (a trusted key has no time) and leave
-the timeline; they appear in the browser and report. `AppOpsModule` records
-already carry `event_time_ms`. The hand-built `TimelineEvent` rows,
-`ModuleResult.timeline`, `BugReportAnalysisResult.timeline`,
-`TimelineFormatter` and `TimelineEvent.kt` are then removed. A finding row
-points at its observation; the UI nests evidence under the finding instead
-of the `(packageName, timestamp)` dedup that hid one of them.
+`WakelockParser`'s time base becomes the bug report's own capture time
+(from its header), not the analysis time, so wakelock facts are correct and
+dedup across re-imports. `AdbKeysModule` records are snapshots. The
+hand-built `TimelineEvent` rows, `ModuleResult.timeline`,
+`BugReportAnalysisResult.timeline`, `TimelineFormatter` and `TimelineEvent.kt`
+are then removed.
 
-### 5.4 `scan_finding` — findings as rows with a lifecycle
+### 5.4 Findings, alerts, lifecycle
 
-Schema 20 (Phase C). Columns: `id`, `scanId`, `ruleId`, `triggered`,
-`level`, `category`, `kind` (`STATE` | `ALERT`), `status` (`OPEN` |
-`CLOSED`), `closedAt`, `closedReason`, `recordId` (fact), `service`,
-`ordinal`, `alertKey` (ALERT only, unique), `findingJson`.
+Schema 20 (Phase D).
 
-**Kind** = `ALERT` iff the matched record is an event record (§4.3) or the
-finding is a correlation finding; otherwise `STATE`.
+**`scan_finding`** — one row per finding per scan, always inserted (per-scan
+views stay complete): `id`, `scanId`, `ruleId`, `triggered`, `level`,
+`category`, `kind` (`STATE` | `ALERT`), `recordId` (fact), `service`,
+`ordinal`, `alertId` (nullable), `findingJson` (without `matchContext`,
+which is rebuilt from the pinned fact).
 
-**Alert identity.** `alertKey` = `ruleId:factId` for record findings;
-`ruleId:` + sorted member refs for correlation findings. Unique: a re-fire —
-overlapping import, correlation lookback, re-read overlap — inserts nothing,
-and a closed alert stays closed. A *new* event matching the same rule is a
-new fact and opens a new alert.
+**`alert`** — one row per incident: `id` PK AUTOINCREMENT, `alertKey` BLOB
+unique, `ruleId`, `status` (`OPEN` | `CLOSED`), `openedAt`, `openedScanId`,
+`closedAt`, `closedReason`, `closedWithCredential`, `level`, `recordId`.
+**`alert_member`** (`alertId`, `atomRef`) for correlation alerts, at most
+1,000 refs stored plus a count.
+
+**Kind** = `ALERT` iff the matched record is an event fact or the finding is
+a correlation finding; otherwise `STATE`.
+
+**Alert identity.**
+- Record finding: `alertKey = H(ruleId, factId, evidenceDiscriminator)` —
+  triggered findings only; the discriminator separates multiple evidence
+  results for one record.
+- Correlation finding: a new chain joins an existing alert of the same rule
+  and group key when their member sets overlap (`alert_member`); otherwise a
+  new alert. A growing lookback window therefore never mints a duplicate.
+- Atoms: a fact referenced by a `forensic_timeline` row (`recordId`, or the
+  shared `sourceEventKey` — live DNS `ioc_match` rows) is excluded from the
+  correlator by the same rule `TimelineDao` uses to nest it.
 
 **Lifecycle (maintainer decision, SOC pattern).**
-- State findings are current while the **latest live scan** triggers them
-  (imports never displace live state — the dashboard keeps today's
-  `preferRuntimeScan` semantics).
-- Alerts are current from the scan that opened them until a person closes
-  them.
-- "Current findings" (dashboard, apps/device screens, report) = latest live
-  scan's triggered state findings ∪ every OPEN alert.
-- **Closing is protected.** Close requires device-credential confirmation
-  (`androidx.biometric`, `DEVICE_CREDENTIAL` allowed), the control sets
-  `filterTouchesWhenObscured`, each closure is written as a timeline row,
-  and the report lists closed alerts with time and note. Malware driving the
-  UI through Accessibility cannot silently dismiss evidence.
+- State findings are current while the **latest live scan** triggers them;
+  imports never displace live state (today's `preferRuntimeScan`).
+- Alerts are current from opening until a person closes them; re-fires
+  attach new findings to the existing alert; a closed alert stays closed; a
+  new fact opens a new alert.
+- Current findings = latest live scan's triggered state findings ∪ OPEN
+  alerts. The dashboard reads open alerts as a count plus a paged list.
+- **Protected actions**: closing an alert, deleting a scan that has findings
+  on OPEN alerts, and "Clear all" require device-credential confirmation —
+  platform `BiometricPrompt` with `DEVICE_CREDENTIAL` only on API 30+,
+  `KeyguardManager.createConfirmDeviceCredentialIntent` on API 26–29 (no
+  weak biometrics, no new dependency). Without a secure lock screen the
+  action proceeds and is recorded `closedWithCredential = false`, shown as
+  such in the report. Controls reject touches flagged
+  `FLAG_WINDOW_IS_OBSCURED` / `FLAG_WINDOW_IS_PARTIALLY_OBSCURED`.
+- Deleting a scan deletes its `scan_finding` rows, never an `alert`. Each
+  closure writes a scan-independent timeline row (`scanResultId = -1`).
+- The report lists state findings, open alerts (with the scan that opened
+  them) and closed alerts (time, note, credential flag).
 
-**Migration 19 → 20.** Each `ScanResult.findings` value is read by length
-and `substr` chunks (a row over the 2 MB cursor window must not abort the
-migration); corrupt JSON yields zero findings with the scan row kept. Kind
-comes from a frozen `ruleId → service` table generated from the bundled
-rules at schema 20. Migrated alerts are OPEN only for the latest live scan;
-older ones migrate CLOSED with reason "migrated". `forensic_timeline.level`
-is backfilled from the migrated findings.
+**Migration 19 → 20.** For each `ScanResult` row, `findings` is read by
+`length` and 256 KB `substr` chunks (no row may abort the migration);
+corrupt JSON keeps the scan with zero findings. Kind: findings written at
+schema 19 carry `service`/`ordinal` → resolve the fact through `scan_record`
+and decide per record; older findings → `ALERT` iff `matchContext` holds the
+service's event-time field > 0 or the service is always-event
+(`dns_monitor`, `network_monitor`, `security_log`); unknown rule ids →
+`STATE`. Rule id → service comes from a frozen table generated at schema 20.
+Alerts: keyed from the fact when resolvable, else from `ruleId` + a hash of
+`matchContext`; OPEN if their scan is within the last 30 days, else CLOSED
+"migrated (older than 30 days)". `forensic_timeline.level` is backfilled.
 
 `Finding` gains `service` and `ordinal` at evaluation; `recordId` is
-resolved from the ordinal map at save. `matchContext` stays as the display
-copy.
+resolved per chunk at save.
 
 ### 5.5 Caps removed
 
 Deleted: `FINDINGS_PERSIST_CAP`, `DNS_PERSIST_CAP`, `CONNECT_PERSIST_CAP`,
 `SECURITY_PERSIST_CAP`, `capTriggeredFindings`, the caps log,
 `getAllForExport`'s `LIMIT 10000`, the report's `take(500)`,
-`HistoryViewModel.INTRUSION_ROW_LIMIT`, `getAllScans`'s `LIMIT 50` (History
-pages), the timeline DAO's `limit = 500` defaults, and `getRecentSnapshot()`
-as the scan's DNS window. Allow-listed with a comment naming the gate:
+`HistoryViewModel.INTRUSION_ROW_LIMIT`, `getAllScans`'s `LIMIT 50`, the
+timeline DAO's `limit = 500` defaults, and `getRecentSnapshot()` as the scan
+DNS window. Allow-listed with a comment naming the gate:
 `ScanResultDao.getLatestTwo` (semantic two), `IndicatorDao.lookup`
-(`LIMIT 1`, existence), `DnsEventDao.getRecentEvents` /
-`getRecentSnapshot` (the live DNS monitor screen's display window).
+(`LIMIT 1`), `DnsEventDao.getRecentEvents` / `getRecentSnapshot` (the live
+DNS monitor screen's display window).
 
 ### 5.6 Timeline rows
 
 `forensic_timeline` keeps finding rows, correlation signals and detected
-changes. The 30-day prune applies to `LIVE_SCAN` rows only; import rows are
-kept with their import.
+changes. The 30-day prune applies to `LIVE_SCAN` rows only, never to pinned
+references' targets or to closure rows.
 
 ## 6. Timeline
 
-- **One paged query.** `UNION ALL` of event facts (with the scan filter
-  applied through `scan_record`) and `forensic_timeline` rows, ordered
-  `(time DESC, rowKind, id DESC)`. One `@RawQuery` per filter shape so each
-  branch uses its index; no "`:x IS NULL OR`" predicates. A fact referenced
-  by a `forensic_timeline` row (`recordId`) is rendered nested under that
-  row — finding evidence, live DNS IOC matches — not as a second row.
-- Lives in a dedicated `TimelineDao`; `ForensicTimelineEventDao` keeps
-  writes.
-- **Counts are shown** on every group header and the filter bar. Date groups
-  use the device's local day.
-- **Presentation (my calls):** severity filter is SQL over `level`;
-  cross-page roll-up goes, a finding nests its evidence; finding rows for
-  every scan; the pinned section shows current findings (§5.4).
-- **Switch renamed** to "Show findings and their evidence only";
+- **One keyset-paged query** in a dedicated `TimelineDao`: `UNION ALL` of
+  event facts (scan filter through `scan_record`) and `forensic_timeline`
+  rows, ordered `(time DESC, rowKind, id DESC)`, keyed on that tuple, via a
+  custom `PagingSource` that registers an `InvalidationTracker.Observer`. One
+  SQL builder per filter shape; `COALESCE` for non-null columns in the fact
+  branch. A fact referenced by a `forensic_timeline` row is nested under it.
+- **Counts** on every group header and the filter bar from aggregate
+  queries; date groups use the device's zone (`ZoneId`, DST-correct).
+- **Presentation (my calls):** severity filter in SQL on `level`; no
+  cross-page roll-up; finding rows for every scan; pinned section shows
+  current findings.
+- **Switch renamed** "Show findings and their evidence only";
   `TimelineRow.TelemetryRow` → `TimelineRow.EventRow`.
-- **Correlation** binds atoms from both tables. `computeAtomBindings` and the
-  correlator key atoms by `AtomRef` (`Row(id)` | `Fact(id)`); signal details
-  carry `member_fact_ids` beside `member_event_ids`, and every consumer of
-  the latter reads both (gate).
-- **View telemetry** from History, scan headers, and finding detail.
-- **Imported DNS findings at time 0** fixed by `dns_monitor.timestamp`
-  (Phase 0).
+- **Correlation** keys atoms by `AtomRef` (`Row(id)` | `Fact(id)`); signal
+  details carry `member_fact_ids` beside `member_event_ids` and every
+  consumer reads both (gate).
+- **View telemetry** from History, scan headers, finding detail.
 
 ## 7. Report and export
 
 - One path: `ReportExporter`, streaming to a file `Writer`. The History
-  sheet shows a summary (findings, per-service record counts, telemetry
-  state) and opens the full report as a file. No report is held as one
-  `String`.
-- TELEMETRY sections read only the scan's observations. Missing telemetry
-  says why: `NONE` → "Telemetry was not stored for scans before version X";
-  `PARTIAL_RETENTION` → "Snapshot telemetry for this scan is no longer
-  stored (retention: last N scans)"; `FAILED` → "Telemetry could not be
-  stored for this scan".
-- Device-controlled strings are escaped by the generic renderer (control and
-  non-printable characters rendered visibly, line breaks never emitted from
-  a value).
+  sheet shows a summary (findings, per-service counts, telemetry state) and
+  opens the full report as a file.
+- TELEMETRY sections read only the scan's observations; missing telemetry
+  says why (`NONE` pre-feature, `PARTIAL_RETENTION`, `FAILED`).
+- Device-controlled strings and field keys are escaped: every character in
+  Unicode categories Cc, Cf, Zl, Zp, Co, Cn (covers `\r`, `\n`, U+0085,
+  U+2028/9, bidi overrides) is rendered as `\uXXXX`.
 - Full telemetry stays in `BOTH` and `TELEMETRY_ONLY` (owner intent); the
-  export dialog states the record count and size before sharing.
-- FINDINGS section: state findings, open alerts (with the scan that opened
-  them), closed alerts (time and note).
-- "Export telemetry (JSONL)" streams through `GZIPOutputStream`; stale files
-  in `cache/reports/` are removed on each export. `TimelineExporter` streams
-  and keeps its CSV formula guard.
+  export dialog states record count, size, and the sensitive categories
+  included (DNS history, connections, app usage, installed apps).
+- FINDINGS: state findings, open alerts, closed alerts.
+- JSONL export streams through `GZIPOutputStream`. Every report or export
+  deletes other files in `cache/reports/` older than one hour first.
+  `TimelineExporter` streams and keeps its CSV formula guard.
 
 ## 8. UI
 
 ### 8.1 Telemetry browser
 
-From History, timeline scan headers and finding detail: services with
-counts and sizes → one service's records (paged, debounced search over
-indexed columns) → a record's fields in taxonomy order with descriptions,
-and for snapshot records a History view of the subject across scans with
-changed fields highlighted. Unreadable bodies show as such.
+From History, scan headers and finding detail: services with counts →
+one service's records (keyset paged; search over indexed columns, debounced)
+→ a record's fields in taxonomy order with descriptions; snapshot records
+show their subject's history across scans with changed fields highlighted.
+Unreadable bodies show as such.
 
 ### 8.2 Settings
 
-Telemetry storage size (distinct bodies, split snapshots / live events /
-imports), "Keep snapshot telemetry for the last N scans" (default 20),
-"Delete old snapshot telemetry now".
+Storage size (distinct bodies; snapshots / live events / imports), "Keep
+snapshot telemetry for the last N scans" (default 20), "Delete old snapshot
+telemetry now".
 
 ## 9. Testing and gates (regression policy)
 
-All gates are JVM unit tests (Robolectric 4.14.1 pinned to SDK 35 for Room).
+All gates are JVM unit tests (Robolectric 4.14.1, SDK 35).
 
-- **S1** round-trip per service (compare canonical forms; Int/Long and
-  tagged encodings preserved).
-- **S2** facts stored once: real typed records with different `capturedAt`
-  across two imports share facts; identical-content events in one batch stay
-  distinct; unchanged snapshots share facts across scans.
-- **S3** failed save writes nothing (bodies, facts, observations, watermark).
-- **S4** deleting import A keeps facts import B observed.
-- **S5** dictionary immutability: shipped dictionaries match pinned hashes;
-  a v1 fixture body decodes.
+- **S1** full decoded map equals evaluated map per service (envelope keys
+  restored only where stripped; content `source` values preserved).
+- **S2** facts stored once: real records across two imports with different
+  `capturedAt` share facts; identical-content events in one batch stay
+  distinct; same source key with different content → two facts; unchanged
+  snapshots share facts across scans; exact duplicate lines in one import →
+  one observation, counted.
+- **S3** a failed writer leaves no visible scan and no store rows; startup
+  sweeps `IN_PROGRESS`.
+- **S4** deleting import A keeps facts import B observed and facts pinned
+  by findings.
+- **S5** shipped dictionaries match pinned hashes; v1 fixture decodes; event
+  bodies carry the dictionary flag and id.
 - **S6** a corrupt body decodes to an unreadable placeholder.
-- **E1** stored list equals evaluated list for every evaluate entry point;
-  `file_scanner` ordinal with an inaccessible record ahead.
-- **E2** field-map completeness against constructor properties.
-- **W1** watermarks: no event twice or missed across consecutive scans;
-  no advance on failed collection, missing usage access, or capability-skipped
-  rule; late-flushed DNS row collected; clock-ahead reset.
-- **R1** report provenance per scan, import, retention-trimmed, pre-feature
-  and failed-telemetry scans.
+- **S7** one-shot sequence: a writer consuming a `ServiceRecords` twice fails.
+- **E1** every writer evaluates exactly the chunk it persists; `file_scanner`
+  ordinal with an inaccessible record first.
+- **E2** field-map completeness.
+- **W1** watermarks: consecutive scans observe each live event once; no
+  advance on failed collection, missing usage access, or disk-full fallback;
+  advance despite a capability-skipped rule, observation count linear over N
+  such scans; late-flushed DNS collected; clock-ahead reset.
+- **R1** report provenance per scan, import, retention-trimmed, pre-feature,
+  failed-telemetry.
 - **R2** single report path; no `last*Telemetry`.
-- **R3** a wakelock tag containing `\n== FINDINGS ==` renders escaped.
-- **B1** real `BugReportAnalyzer` on a fixture bug report: every module with
-  telemetry produces store observations, the four converted modules produce
-  typed records.
-- **C1** no persistence caps (regex includes `limit: Int = <n>` defaults;
-  allow-list per §5.5).
-- **T1** 100,000-event import: all rows page; counts match; no
-  `forensic_timeline` row duplicates an event fact; no `TEMP B-TREE` in any
-  filter shape's query plan.
-- **K1** every category a bundled atom binds has a producer.
-- **F1** migration 19→20: 1,200 findings, a corrupt row, a 3 MB row; kinds
-  from the frozen table; only latest live alerts OPEN; `level` backfilled.
-- **F2** a finding's `recordId` resolves to the record it matched, for every
-  service.
-- **L1** lifecycle: state findings follow the latest live scan, not imports;
-  alerts persist until closed; re-fire and overlapping import create no
-  duplicate; closed stays closed; a new event opens a new alert.
-- **L2** closing requires the credential confirmation and writes a timeline
-  row.
-- **V1** vocabulary gate.
-- **P1** import timeline rows survive the 30-day prune.
-- **D1** imported DNS finding carries the record's time.
-- **Q1** DAO SQL uses no feature newer than API 26's SQLite (UPSERT,
-  `RETURNING`, window functions, `NULLS LAST`).
-- **M1** storage preflight refuses an import that would breach the margin;
-  telemetry write failure keeps the live scan's findings.
-- `LogsourceTaxonomyCrossCheckTest`, `DetectionFieldCrossCheckTest`,
-  `ServiceActivationCrossCheckTest` gate Phase 0.
+- **R3** escaping: `\n`, `\r`, U+2028, U+202E in values and keys.
+- **B1** real `BugReportAnalyzer` on a fixture: every module with telemetry
+  observed; the four converted modules emit typed records; battery parity
+  with the old rows; wakelock time from the report header.
+- **C1** no persistence caps (incl. `limit: Int = n` defaults; allow-list §5.5).
+- **T1** 100,000-event import: all rows page; counts match; no duplicated
+  event rows; no `TEMP B-TREE`; captured SQL has no `OFFSET`; correlation
+  over a bound category completes.
+- **K1** every atom-bound category has a producer; day-precision facts never
+  become atoms.
+- **F1** migration 19→20: 1,200 findings; corrupt row; 3 MB row; schema-19
+  findings resolved per record; live app-ops finding stays STATE; DNS finding
+  ALERT; 30-day OPEN/CLOSED split; `level` backfilled.
+- **F2** a finding's `recordId` resolves to its matched record, every service.
+- **L1** lifecycle: state follows latest live scan, not imports; alert
+  persists until closed; overlapping import attaches its finding to the same
+  alert and keeps its own `scan_finding` row; growing correlation window
+  joins the existing alert; closed stays closed; new fact → new alert.
+- **L2** close, delete-scan-with-open-alerts and clear-all require the
+  confirmation; obscured touches rejected; closure rows survive scan
+  deletion.
+- **M1** preflight from decompressed sizes, margin `2 × estimate + 200 MB`,
+  "import anyway"; telemetry write failure keeps live findings; DNS flush
+  retry.
+- **Q1** no post-API-26 SQLite syntax in DAO, migration or timeline SQL;
+  every list-parameter DAO call goes through `chunkedIn`.
+- **X1** computed-column contract hash pinned.
+- **V1** vocabulary gate. **P1** import timeline rows survive the prune.
+  **D1** imported DNS finding carries its record time (lands with Phase 0).
+- Taxonomy cross-checks and `ServiceActivationCrossCheckTest` (re-derived
+  from `evaluateRecords` call sites, vacuity guard kept).
 
 Release battery (standing policy): clean installs on the F916B and
 emulators including API 26 and a low-RAM image; scan twice; bug-report
-import; intrusion-log import twice (overlap); maximal intrusion-log fixture
-on the low-RAM image; browse; close an alert (credential prompt); export
-and compare report telemetry to the browser; note that a Play-track
-downgrade across schemas 19/20 wipes data.
+import; intrusion-log import twice; maximal fixture on the low-RAM image;
+measure the stored-size factor; browse; close an alert and delete a scan
+through the credential prompt; compare report telemetry to the browser;
+note that a Play-track downgrade across schemas 19/20 wipes data.
 
 ## 10. Decisions
 
@@ -649,52 +690,49 @@ downgrade across schemas 19/20 wipes data.
 - Taxonomy: collapse `dbinfo_audit` / `platform_compat_audit`; document the
   four emitter services with no rules.
 
-**Plan-gate round 1 resolutions (my calls; see
-`docs/superpowers/plans/2026-10-22-telemetry-store-plan-gate-round1-findings.md`):**
+**Plan-gate resolutions (my calls; findings files
+`docs/superpowers/plans/2026-10-22-telemetry-store-plan-gate-round{1,2}-findings.md`):**
 
-- Fact / observation split with envelope identity (§5.1).
-- Immutable versioned per-service dictionaries (§5.1).
-- One evaluated-and-stored list (§4.1); field-map completeness (§4.1).
-- Kind per record; alert identity; watermarks before the lifecycle (§5.2, §5.4).
-- Typed records for four bug-report modules before their rows go (§5.3).
-- Categories as a Kotlin contract (§4.3).
-- Storage protection: preflight, chunking, `journal_size_limit`,
-  failed-telemetry fallback (§5.2).
-- Closing alerts requires device credential (§5.4).
-- Report streaming, escaping, telemetry-state messages; full telemetry kept
-  in the report per owner intent, with size shown before sharing (§7).
-- Taxonomy `emitter_only`, `key_fields`, `optional`, `positive_only` (§4.2).
-- Replace-on-reimport removed (§5.2).
-- Retention: snapshots by scan count, live events by age, imports kept, open
-  alerts pinned (§5.1).
+- Fact / observation / content split; content-checked source identity;
+  conditional envelope stripping (§4.1, §5.1).
+- Chunked single-pass writers with `IN_PROGRESS` scans (§5.2).
+- Watermarks always advance; live facts observed once (§5.2).
+- Findings per scan, alerts across scans; overlap-joined correlation alerts;
+  credential-protected close/delete/clear (§5.4).
+- Typed bug-report records emitting every fact; day-precision events never
+  atoms; wakelock time base fixed (§5.3).
+- Immutable versioned dictionaries; 128-bit BLOB keys (§5.1).
+- Preflight with "import anyway" (§5.2).
+- One `TaxonomyContract`; computed-column contract hash (§4.3).
+- Keyset paging everywhere; pins for findings, alerts, timeline refs (§5.1, §6).
+- Report streaming, escaping, sensitive-category notice; full telemetry kept
+  per owner intent (§7).
+- Replace-on-reimport removed; retention snapshots-by-count, events-by-age.
 
-**Earlier calls kept:** stored shape = field map; findings move to rows;
-summary text in `event_display.yml`; paging via `room-paging` +
-`androidx.paging`; switch label; history paged.
-
-**Left to the builder:** Compose structure of the browser; migration batch
-sizes; dictionary-build script and its CI wiring; import-card wording.
+**Left to the builder:** browser Compose structure; dictionary-build script
+wiring; import-card wording.
 
 ## 11. Follow-ups recorded, not scoped
 
-- Differential timeline events from `changedBetween` (uninstall, permission
-  added, cert change) and rules over them.
-- Retroactive matching of stored `dns_monitor` facts when the IOC set
-  changes.
-- Replay of stored records through a newer ruleset (`evaluateRecords` is the
-  entry point).
+- Differential timeline events from `changedBetween` and rules over them.
+- Retroactive matching of stored `dns_monitor` facts when IOCs change (needs
+  an indexed lookup column; cheap to add later).
+- Replay of stored facts through a newer ruleset (`evaluateRecords`), which
+  also recovers capability-skipped evaluation.
 - Full-body search; JSON1 queries over snapshot bodies.
-- #137 machine-readable schema generated from the taxonomy.
-- The live `DnsEvent` table (~70 MB at 30 days on a heavy phone) becoming
-  `dns_monitor` facts outright.
-- Usage-stats all apps, user-selectable.
-- A richer alert case model.
+- #137 machine-readable schema from the taxonomy.
+- The live `DnsEvent` table becoming `dns_monitor` facts (needs facts
+  observed by the VPN, not only scans).
+- `BatteryDailyModule`'s `package_downgrade` is a judgment computed in the
+  emitter; move it to a rule.
+- Usage-stats all apps, user-selectable. A richer alert case model.
 
 ## 12. References
 
 - osquery: snapshot vs. differential (event) query semantics.
 - MVT: per-module results, `timeline.csv`, `*_detected.json`.
-- Elastic Security alerts: ancestor event IDs and open/closed workflow status.
+- Elastic Security alerts: ancestor event IDs; open/closed workflow status.
 - SQLite JSON1; content-addressed storage; Deflate preset dictionaries
-  (zlib checks the dictionary's Adler-32 — hence immutability).
+  (zlib checks the dictionary's Adler-32 — hence immutability); SQLite's
+  999-variable limit before 3.32.
 - Room `CursorWindow` 2 MB row limit (the origin of the #342 caps).
