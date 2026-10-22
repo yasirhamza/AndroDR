@@ -14,7 +14,7 @@
 
 **Tech Stack:** Kotlin 2.0; Room 2.6.1 (`room-testing` on the unit-test classpath); AndroidX Paging 3.3.6 (+ `paging-compose`); `androidx.collection` 1.4.0; Jetpack Compose; Hilt; kotlinx.serialization; `java.util.zip`; platform `BiometricPrompt` / `KeyguardManager`; Robolectric 4.14.1 (SDK 35, offline) with `androidx.test:core` 1.6.1; snakeyaml-engine 2.7 (already present).
 
-**Spec:** `docs/superpowers/specs/2026-10-22-telemetry-store-design.md`, revised after plan-gate rounds 1–6. Findings: `docs/superpowers/plans/2026-10-22-telemetry-store-plan-gate-round{1,2,3,4,5,6}-findings.md`.
+**Spec:** `docs/superpowers/specs/2026-10-22-telemetry-store-design.md`, revised after plan-gate rounds 1–7. Findings: `docs/superpowers/plans/2026-10-22-telemetry-store-plan-gate-round{1..7}-findings.md`. Lasting correlation alerts: follow-up `docs/superpowers/specs/2026-10-22-lasting-correlation-alerts-followup.md`.
 
 ## Global Constraints
 
@@ -618,7 +618,7 @@ object Watermarks {
   - **DNS by id:** a late-flushed DNS row (older timestamp, higher id) is collected.
   - **Capability-skipped rule:** across 10 scans with a capability-skipped `dns_monitor` rule, the watermark advances each time and observations equal the distinct events.
   - **Late-IOC re-check:**
-    - A domain added to the IOC set after scan 1 fires on scan 2, from the stored fact, once; scan 3 inside the 24 h window emits no second finding for it (a triggered `scan_finding` already exists for that `(ruleId, recordId)`).
+    - A domain added to the IOC set after scan 1 fires on scan 2, from the stored fact, once; scan 3 inside the 24 h window emits no second finding for it (Phases A–C: a triggered finding for that `(ruleId, recordId)` exists in a `COMPLETE` scan; from D2: an alert with that record key exists — still true after scan 2 is deleted).
     - The re-check never evaluates the current scan's own facts, and ignores imported DNS facts with recent event times.
     - That finding's `recordId` is the scan-1 fact, and its `ordinal` is −1.
   - **Serialisation:** a scan and an import are serialised.
@@ -631,14 +631,19 @@ object Watermarks {
 - Create: `sigma/TimelineAtom.kt`.
 - Modify:
   - `sigma/SigmaRuleEngine.kt:125`: `computeAtomBindings(atoms): Map<AtomRef, Set<String>>`.
-  - `sigma/SigmaCorrelationEngine.kt`: correlate over atoms with a time budget (`CORRELATION_BUDGET_MS = 10_000`) and cooperative cancellation checks; exceeding it records a `NotEvaluatedReason` "correlation incomplete". Members are written **only** to `signal_member`; signal `details`/`correlationId` carry no id lists (`correlationId = "$ruleId:" + h128(members).hex`).
+  - `sigma/SigmaCorrelationEngine.kt`: correlate over atoms. Per (rule, group): filter atoms to the rule's steps first, run the largest groups last, and check a deadline (`CorrelationBudget(clock: () -> Long, perGroupMs = 2_000)`) that returns normally — never throws inside the transaction. Signals of completed rules are kept; an unfinished (rule, group) adds `NotEvaluatedReason.CORRELATION_INCOMPLETE` (rule + package; excluded from `realFailureCount`; shown in the report and on the dashboard). Members are written **only** to `signal_member`; `details` carries no id lists; `correlationId = "$ruleId:" + h128(members sorted by (kind, id), each "kind:id").hex`; `matchContext` carries `member_count`.
+  - `data/model/ScanResult.kt` (`NotEvaluatedReason`): add `CORRELATION_INCOMPLETE`.
+  - Create `data/db/SignalMemberBackfill.kt`: one-time job at the first launch after upgrade that parses every existing signal row's `details.member_event_ids` into `signal_member` rows of kind `Row`, then rewrites `details` without the list. Idempotent (`INSERT OR IGNORE`).
+  - Create `ui/timeline/ClusterMembers.kt`: `suspend fun load(signalRowId: Long): List<TimelineMember>` (rows through `ForensicTimelineEventDao`, facts decoded through `TelemetryReader`); `sealed interface TimelineMember { data class RowMember(val row: ForensicTimelineEvent); data class FactMember(val record: DecodedRecord) }`. `EventCluster` holds `TimelineMember`s, loaded when a cluster is expanded; members also remain standalone rows in the union (as today).
+  - `reporting/TimelineExporter.kt`: the CSV `correlation_id` column keeps the hash; a `member_refs` column lists `kind:id` from `signal_member`.
   - `sigma/RuleCoverage.kt`: work over atoms.
   - Create `data/store/AtomReader.kt` with `atomsForScan(scanId, categories)` and `atomsBetween(since, until, categories)`.
     - Both return exact-precision facts only.
     - Both exclude facts referenced by a `forensic_timeline.recordId`, or whose `sourceKey` equals a row's `sourceEventKey` (both h128 BLOBs).
     - Visibility is `(state = 'COMPLETE' OR scanId = :current)`, allow-listed in the Q1 gate.
   - `ScanWriteRepository.finish`: read the atoms inside the finishing transaction, after this scan's timeline rows are inserted. That way the scan's own rows are `Row(id)` atoms with real ids, as in today's `saveScanWithCorrelation`. For a live scan, lookback is bounded to `≤ scanStart` and excludes `BUGREPORT_IMPORT` and `INTRUSION_LOG_IMPORT`.
-  - Every `member_event_ids` reader: `ui/timeline/TimelineClusters.kt:136-150`, `sigma/CorrelationFindings.kt`, `data/repo/ScanRepository.kt`, `scanner/ScanOrchestrator.kt`, `reporting/ReportFormatter.kt`, `data/db/ForensicTimelineEventDao.kt`.
+  - Every `member_event_ids` reader: `ui/timeline/TimelineClusters.kt:136-150`, `sigma/CorrelationFindings.kt`, `reporting/ReportFormatter.kt` (member count from `member_count`), `data/db/ForensicTimelineEventDao.kt`; comment-only mentions in `data/repo/ScanRepository.kt` and `scanner/ScanOrchestrator.kt` are updated.
+  - Tests asserting `member_event_ids`, updated in this commit: `SaveScanWithCorrelationTest`, `CorrelationMigrationFixturesTest`, `AllCorrelationRulesFireTest`, `SigmaCorrelationEngineTest`, `CorrelationFindingsTest`, `ActivityChainsReportSectionTest`, `TimelineExporterTest`.
 - Test: `sigma/CorrelationOverFactsTest.kt` (K1 part 2), `sigma/MemberIdsConsumersGateTest.kt`.
 
 **Interfaces:**
@@ -658,7 +663,9 @@ object Watermarks {
   - Precision: day-precision facts never become atoms.
   - Lookback boundaries: lookback excludes bug-report facts and future-dated facts.
   - Gate: no `main` file mentions `member_event_ids`; every former reader resolves members through `SignalMemberDao`.
-  - Adversarial density (C2 gate): 100k `permission_use` atoms for one package in 30 min stop at the budget, record "correlation incomplete", and no `forensic_timeline` row exceeds 64 KB.
+  - Adversarial density (C2 gate): 100k `permission_use` atoms for one package in 30 min — with an injected clock that advances per step — stop at the per-group budget, keep other rules' signals, record `CORRELATION_INCOMPLETE` for that rule and package, and no `forensic_timeline` row exceeds 64 KB.
+  - Backfill: a legacy signal with `member_event_ids = "3,5,8"` gets three `signal_member` rows and its cluster still shows three members.
+  - Clusters: a signal with 3 fact members and 1 row member expands to 4 `TimelineMember`s through `ClusterMembers.load`.
 - [ ] **Step 2–4: fail → implement → pass.**
 - [ ] **Step 5: Commit** `feat(sigma): correlation over fact atoms keyed by AtomRef; signal members`
 
@@ -711,7 +718,7 @@ object Watermarks {
 - `TimelineRowEntity`: rowKind, id, scanId, time, category, packageName, level, ruleId, correlationId, kind, telemetrySource, bodyHash.
 - `TimelineFilter`: scanId, packageName, source, from, to, levels, findingsAndEvidenceOnly, zone (`ZoneId`).
 - The fact branch uses `PinnedFact.SQL`: a `COMPLETE` observation, or no observation **and** pinned. With a scan filter, it reads through `scan_record(scanId, eventTime)`.
-- The row branch uses `VisibleRow.SQL`: `persistent = 1`, `scanResultId = -1` (including rows re-homed by a delete), or a `COMPLETE` scan.
+- The row branch uses `VisibleRow.SQL`: `persistent = 1`, `scanResultId = -1`, or a `COMPLETE` scan.
 
 - [ ] **Step 1: Write the failing tests**
   - **T1 (100,000 event facts plus 50 finding rows):**
@@ -775,10 +782,10 @@ object Watermarks {
   - Inside its single finishing transaction, `finish` does three things:
     - writes this scan's `forensic_timeline` finding rows with `INSERT … SELECT … FROM scan_finding WHERE scanId = ? AND triggered`;
     - creates alerts set-based and attaches them, with the post-condition that no `alertKey` is left unattached;
-    - runs correlation through `FindingsRepository.recordCorrelation`.
+    - records correlation findings as `STATE` `scan_finding` rows of this scan (no alert; lasting correlation alerts are a follow-up).
   - Correlation atoms are read inside the finishing transaction after this scan's timeline rows are inserted (C2); `scan_finding` is not an atom source.
-- Pins (`PinnedFact.SQL`, shared with the readers): `deleteUnobservedUnpinned` also excludes facts referenced by triggered `scan_finding.recordId`, by `alert.recordId`, and by `alert_member` fact refs.
-- Every `forensic_timeline` delete path (scan deletion, "Clear all", the prune) excludes rows referenced by `alert_member` or `signal_member` row refs.
+- Pins (`PinnedFact.SQL`, shared with the readers): `deleteUnobservedUnpinned` also excludes facts referenced by triggered `scan_finding.recordId`, and by `alert.recordId`.
+- Every `forensic_timeline` delete path (scan deletion, "Clear all", the prune) excludes rows referenced by a `signal_member` row ref of another, surviving signal.
 - `ScanOrchestrator.kt`:
   - Delete `FINDINGS_PERSIST_CAP`, `capTriggeredFindings`, the findings top-K and the caps log.
   - Delete the remaining cap references at `BugReportScreen.kt:334` and in the KDoc at `IntrusionLogAnalyzer.kt:42`.
@@ -795,24 +802,16 @@ object Watermarks {
 **Interfaces:**
 - Entities: as in spec §5.4, including `alert.lastActivityAt` and `evidenceJson`.
   - `alert.id` is AUTOINCREMENT, and `alertKey` is unique.
-  - `alert_member` is unique on `(alertId, kind, refId)` and stores every member, with no cap.
-  - Indices: `alert(ruleId, groupKey, status)`, `alert(recordId)`, `alert_member(kind, refId)`, `scan_finding(recordId)`, `scan_finding(scanId, alertKey)`.
+  - Indices: `alert(ruleId, status)`, `alert(recordId)`, `scan_finding(recordId)`, `scan_finding(scanId, alertKey)`.
 - `AlertIdentity`:
   - `fun recordKey(ruleId: String, factId: Long, evidence: Evidence): ByteArray` = `h128("$ruleId|$factId|${evidence.type}|${evidence.matchedValue}")`.
   - `fun noFactKey(ruleId: String, evidence: Evidence, eventTime: Long?, scanId: Long, ordinal: Int): ByteArray` = `h128("$ruleId|nofact|${evidence.type}|${evidence.matchedValue}|${eventTime ?: "$scanId|$ordinal"}")`. It is used for evaluate-only findings that have no `recordId`.
-  - `suspend fun resolveCorrelation(ruleId: String, groupKey: String, members: List<AtomRef>, openingScanId: Long): Long`:
-    - Members are compared exactly, as `(kind, refId)` pairs.
-    - The chain's refs go into a `TEMP` table joined to `alert_member(kind, refId)`; matches are counted per `alertId`.
-    - If the members overlap OPEN alerts of the same rule and group, it joins the **lowest-id** one and updates `lastActivityAt`.
-    - Otherwise, if **one** CLOSED alert contains all members (match count = chain size), it attaches there (lowest id if several).
-    - Otherwise it creates a new alert, keyed `h128("$ruleId|$groupKey|$openingScanId|${members.min()}")`. Its `evidenceJson` is the opening finding, with member-id lists stripped.
-    - Create, join and attach all finish with the same `mergeMembers(alertId, members)`: `INSERT OR IGNORE` into `alert_member`, then re-mark `evidence = 1` on the opening 50 and the newest 50 members and clear it on the rest (facts and rows that lose `evidence` are passed to `deleteUnobservedUnpinned`).
-  - Record alerts also copy the opening finding into `evidenceJson`.
+  - Alerts copy the opening finding into `evidenceJson`.
+  - Correlation findings get no alert key (they are `STATE`); see the follow-up spec for lasting correlation alerts.
 - Kind for findings without a `recordId`: `ALERT` when the `matchContext` event time is > 0, or when the service is always-event. This is the same rule the migration uses.
 - `FindingsRepository`:
   - `recordChunk(scanId, firstOrdinal, findings, chunk: ChunkResult)`. It uses `factIdByChunkIndex`, `isEventByChunkIndex` and `observedThisScanByChunkIndex`. A finding that already carries `recordId` (from `evaluateStored`) uses that instead.
   - `createAlertsForScan(scanId)` (set-based)
-  - `recordCorrelation(scanId, findings, members)`
   - `current(): Flow<CurrentFindingsSummary>`
   - `openAlerts(): Flow<PagingData<AlertView>>`
   - `forScan(scanId): Flow<PagingData<Finding>>`
@@ -838,17 +837,11 @@ object Watermarks {
     - A state finding follows the latest live scan and survives an import.
     - An alert persists until closed.
     - Import B attaches to A's alert and keeps its own `scan_finding` row.
-    - Correlation chains:
-      - {a,b,c} → {a,b,c,d} joins the OPEN alert, and `alert_member` gains d.
-      - {d,e} then still joins, because d is a member.
-      - Closing {P1,D1} and then seeing {P1,D2} opens a new alert.
-      - {P1} ⊂ a closed alert attaches without reopening.
-      - A closed 1,500-member chain re-computed with no new members attaches; adding one new member opens a new alert.
+    - Correlation findings are `STATE` rows of their scan and open no alert; the same chain in the next scan is again a state finding of that scan.
     - This scan's own timeline rows are `Row(id)` atoms with real ids, and an event binds once.
     - Two evidence results yield two alerts.
     - The evidence discriminator is unchanged after an IOC re-sync.
-    - Evidence members (opening 50 + newest 50) survive deletion of the joining scan and a simulated 31-day live-event retention (delete the observations directly; D4 adds the real pass), and still decode through `TelemetryReader` and the Timeline paging source. Non-evidence members may be gone; overlap still matches them by id.
-    - Two OPEN alerts overlapping one chain: it joins the lowest id. Members split across two CLOSED alerts open a new alert.
+    - An alert's matched fact survives deletion of its opening scan and a simulated 31-day live-event retention (delete the observations directly; D4 adds the real pass), and still decodes through `TelemetryReader` and "Matched record".
     - A killed mid-import leaves 0 alerts.
     - A crash between delete batches of a `COMPLETE` scan leaves no visible orphan, and the startup sweep finishes the `DELETING` scan (S3, re-run with `scan_finding` pins).
   - **F2:** `recordId` resolves for every service.
@@ -868,13 +861,13 @@ object Watermarks {
 - Modify `data/repo/ScanRepository.kt`:
   - `deleteScan` runs these steps in order:
     1. **One transaction:** build the capped audit summary from the scan's triggered `scan_finding` rows, insert the persistent audit row (`category = "scan_deleted"`), and set `state = DELETING`.
-    2. Delete the scan's signal rows with their `signal_member` rows, its `scan_finding` rows, and its other non-persistent `forensic_timeline` rows. Rows referenced by an evidence `alert_member` or a remaining `signal_member` are re-homed to `scanResultId = -1` instead, in the same transaction.
+    2. Delete the scan's signal rows with their `signal_member` rows, its `scan_finding` rows, and its other non-persistent `forensic_timeline` rows. Another scan's signal that listed one of these rows shows the members that remain (today's behaviour).
     3. Run `telemetryStore.deleteScanTelemetry`.
     4. Delete the `ScanResult` row last.
     (The audit row from step 1 holds distinct (rule, level, package) entries with counts, capped at 100 entries plus "and K more".)
 
     It never deletes alerts, or anything an alert references.
-  - `deleteAllScans` follows the same order across every scan. It also deletes all non-persistent, unreferenced timeline rows, including live `scanResultId = -1` rows, as today. Then it writes one capped audit row.
+  - `deleteAllScans`: **first transaction** builds one capped audit row from every `COMPLETE` scan's triggered `scan_finding` rows, inserts it, and sets every scan `DELETING`. It then runs steps 2–4 per scan and deletes all non-persistent timeline rows not referenced by a surviving `signal_member`, including live `scanResultId = -1` rows, as today. No audit row is written at the end.
   - The `abort` and `StartupSweep` cleanup paths use a separate, unaudited delete.
 - Modify `FindingsRepository.close`:
   - Re-check `isDeviceSecure()` when given `NoSecureLock`.
@@ -893,8 +886,9 @@ object Watermarks {
     - Deleting a scan keeps its alert and writes an audit row that lists the scan's triggered findings.
     - "Clear all" keeps alerts, closure rows and audit rows, and removes live `scanResultId = -1` `dns_query` / `ioc_match` rows that nothing references.
     - The audit row for a 50,000-finding scan stays under 16 KB, and the Timeline and report still load.
-    - After deleting a correlation alert's opening scan, and again after "Clear all", these still hold:
-      - every evidence `alert_member` ref resolves through the Timeline paging source and the report (rows are protected by the reference and re-homed to `scanResultId = -1`);
+    - A `deleteScan` killed after its first transaction, and a "Clear all" killed after its first transaction, each leave exactly one audit row with a non-empty summary and no "import interrupted" row; the sweep finishes the delete.
+    - After deleting an alert's opening scan, and again after "Clear all", these still hold:
+      - the alert's matched fact reads back through the report and "Matched record";
       - every pinned fact decodes;
       - `alert.evidenceJson` is present.
   - Report: lists closed alerts with their credential flag.
@@ -912,7 +906,7 @@ object Watermarks {
   - `ForensicTimelineEventDao.kt:112-113`: the prune deletes only rows that meet all of these:
     - `telemetrySource = 'LIVE_SCAN'`;
     - `persistent = 0`;
-    - no `alert_member` or `signal_member` row ref points at them.
+    - no `signal_member` row ref of a surviving signal points at them.
 
     A pruned signal row deletes its `signal_member` rows in the same transaction.
     This applies whatever their `scanResultId`, so live `ioc_match` rows are trimmed again.
@@ -921,10 +915,9 @@ object Watermarks {
 - [ ] **Step 1: Write the failing tests**
   - Snapshot retention: with 25 live scans, 2 imports and N = 20, the newest 20 keep snapshots and the older 5 are `PARTIAL_RETENTION`.
   - Live-event retention: live events older than 30 days are trimmed, and their scans are marked `PARTIAL_RETENTION`.
-  - Kept data: imports stay untouched, and pinned facts (findings, alerts, alert and signal members, timeline refs) survive.
+  - Kept data: imports stay untouched, and pinned facts (findings, alerts, signal members, timeline refs) survive.
   - Lock skip: retention skips the cycle while a scan holds `scanMutex`.
-  - P1: import rows, persistent rows (closure, audit, "import interrupted"), re-homed `-1` rows, and rows referenced by an evidence `alert_member` or by `signal_member` survive the prune.
-  - P3: an OPEN alert joined 10,000 times pins at most 100 facts; after retention its non-evidence members are gone and overlap still matches by id.
+  - P1: import rows, persistent rows (closure, audit, "import interrupted") and rows referenced by a surviving `signal_member` survive the prune.
   - Retention: each keyset batch deletes its observations, the batch's unpinned candidates and their bodies in one transaction; a kill between batches leaves no visible orphan (S3).
   - P2: a 31-day-old live `ioc_match` row with `scanResultId = -1` is pruned.
 - [ ] **Step 2–4: fail → implement → pass.**
@@ -934,6 +927,7 @@ object Watermarks {
   - Import an intrusion log that has more than 1,000 findings.
   - Close and bulk-close alerts through the credential prompt.
   - Delete a scan and confirm its alert survives.
+  - Time `finish` on a 100k-finding import: ≤ 2 s on the F916B.
 
 ---
 
@@ -984,7 +978,7 @@ object Watermarks {
 **Files:**
 - `docs/ARCHITECTURE.md`:
   - a Glossary with spec §3's table, verbatim;
-  - in §5.1, rows for `record_body`, `telemetry_record`, `scan_record`, `signal_member`, `scan_finding`, `alert`, `alert_member` and `event_watermark`;
+  - in §5.1, rows for `record_body`, `telemetry_record`, `scan_record`, `signal_member`, `scan_finding`, `alert` and `event_watermark`;
   - in §5.2, retention;
   - in §6.3, remove `TimelineFormatter`.
 - `reporting/ReportExporter.kt:29-33`: update the comments.

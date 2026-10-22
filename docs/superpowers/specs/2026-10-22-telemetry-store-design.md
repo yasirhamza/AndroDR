@@ -2,7 +2,7 @@
 
 **Date:** 2026-10-22
 **Status:** Design approved in-session (all decisions closed 2026-10-22);
-revised after plan-gate rounds 1–6 (2026-10-22). Plan gate and implementation are coordinated by a
+revised after plan-gate rounds 1–7 (2026-10-22). Plan gate and implementation are coordinated by a
 separate session (Opus), not the session that wrote this document.
 **Depends on:** `docs/superpowers/specs/2026-04-09-unified-telemetry-findings-refactor-design.md`
 (§4 facts-first naming, provenance as a field); the rule-repo
@@ -163,7 +163,7 @@ containing them verbatim; a build gate (§9, V1) enforces the retired phrases.
 | **Fact** | One distinct telemetry record, stored once however many scans or imports observed it (§5.1). |
 | **Observation** | One scan's or import's sighting of a fact, at a position in that scan's emitted list. Provenance and capture time belong to the observation. |
 | **Timeline event** | A timestamped row on the forensic timeline. Comes from (a) every event fact, read in place — never copied; (b) every triggered finding; (c) correlation signals; (d) detected changes (first-seen install, first-seen device-admin grant, live DNS IOC match, alert closure). **Snapshot records never become timeline events.** |
-| **Finding** | Rule output in one scan (`Finding`), referencing the observation it matched. A finding on a snapshot record is a **state finding**; a finding on an event record, or a correlation finding, belongs to an **alert**. |
+| **Finding** | Rule output in one scan (`Finding`), referencing the observation it matched. A finding on an event record belongs to an **alert**; every other finding — on a snapshot record, or a correlation finding — is a **state finding**. |
 | **Alert** | The lasting record of an incident: opened by the first finding with its identity, kept across scans, closed only by a person (§5.4). |
 | **Provenance** | Where an observation came from: `TelemetrySource` (`LIVE_SCAN`, `BUGREPORT_IMPORT`, `INTRUSION_LOG_IMPORT`). It is not a kind of telemetry. |
 | **Watermark** | Per live event service, the position up to which live events have been collected. The next scan collects from it. |
@@ -199,10 +199,9 @@ Persistence surfaces:
   - New tables: `record_body`, `telemetry_record`, `scan_record` (content, facts, observations — §5.1); `event_watermark` (§5.2); `signal_member` (correlation-signal members, §5.4).
   - New `forensic_timeline` columns: `recordId`, `sourceEventKey` (h128 BLOB, the same hash as `telemetry_record.sourceKey`), `level`, `persistent` (default 0). New `ScanResult` columns: `state` (`IN_PROGRESS` | `COMPLETE` | `DELETING`, default `COMPLETE`), `telemetryState` (`NONE` | `STORED` | `PARTIAL_RETENTION` | `FAILED`). The migration backfills `level` on legacy finding rows from `ScanResult.findings` by (`scanResultId`, `ruleId`). It uses the same chunked `substr` reader as 19→20, so an oversized or corrupt row leaves `level` null and never aborts the upgrade.
   - Composite indices: §5.1 and §6.
-- **Schema 20 (Phase D)**: `scan_finding`, `alert`, `alert_member` (§5.4); `ScanResult` loses `findings`.
+- **Schema 20 (Phase D)**: `scan_finding`, `alert` (§5.4); `ScanResult` loses `findings`.
 - **`forensic_timeline`** keeps only finding rows, correlation signals, detected changes, and audit and closure rows.
   - Rows that outlive their scan *by nature* carry `persistent = 1`: closure, audit and "import interrupted" rows.
-  - Rows an alert references are protected **by that reference** (`alert_member`), not by a flag (§5.1 Pins), so nothing can drift.
   - `scanResultId = -1` keeps its existing meaning ("no owning scan") and is not a retention marker.
 
 ### 4.1 One list, evaluated and stored
@@ -333,13 +332,13 @@ wrap the bytes (`ByteBuffer.wrap`), never use raw `ByteArray` keys.
 - Every read of facts or observations (Timeline, browser, report, export, history, diff, storage sums) shows a fact only if one of these holds:
   - it has an observation whose scan is `COMPLETE`; or
   - it has **no observation at all and is pinned** (§5.1 Pins) — evidence behind a finding or alert whose observations retention or deletion removed stays readable. An unpinned orphan is never visible. The pin test is one shared SQL fragment, used by both the readers and `deleteUnobservedUnpinned`.
-- Every read of `scan_finding` requires its scan to be `COMPLETE`. A `forensic_timeline` row is visible when it is persistent, has `scanResultId = -1`, or belongs to a `COMPLETE` scan (one shared fragment, `VisibleRow.SQL`). Rows that an alert or signal references, and that outlive their scan, are re-homed to `scanResultId = -1` by the delete (below), so they stay visible.
+- Every read of `scan_finding` requires its scan to be `COMPLETE`. A `forensic_timeline` row is visible when it is persistent, has `scanResultId = -1`, or belongs to a `COMPLETE` scan (one shared fragment, `VisibleRow.SQL`).
 - A SQL source gate enforces all three rules.
 - Paging sources observe `ScanResult`, `forensic_timeline` and `alert`, not the store tables. Store data becomes visible only when a scan completes or is deleted, so chunk commits cause no invalidation storms.
 
 **Delete.**
 - Deleting a scan starts with **one transaction** that writes the persistent audit row (built from the scan's triggered `scan_finding` rows, §5.4) **and** sets `state = DELETING`, which hides the scan like `IN_PROGRESS`. The audit therefore exists before anything is removed and survives a force-stop; the sweep never needs to write it.
-- Then the scan's own signal rows (with their `signal_member` rows), its `scan_finding` rows and its other non-persistent `forensic_timeline` rows are deleted — except rows referenced by any `alert_member` or remaining `signal_member` ref, which are re-homed to `scanResultId = -1` in the same transaction.
+- Then the scan's own signal rows (with their `signal_member` rows), its `scan_finding` rows and its other non-persistent `forensic_timeline` rows are deleted. Another scan's signal that listed one of these rows as a member shows the members that remain, exactly as today's cluster builder does.
 - Then, by keyset on the observation PK, **each batch is one transaction**: delete the batch's observations, then the batch's candidate facts that now have no observation and no pin, then bodies left unreferenced.
 - The `ScanResult` row is deleted last.
 - Retention batches follow the same rule: no batch can leave an unpinned fact with no observation.
@@ -348,8 +347,7 @@ wrap the bytes (`ByteBuffer.wrap`), never use raw `ByteArray` keys.
 **Pins.** No delete path removes a fact, or a `forensic_timeline` row, while it is referenced by any of:
 - a triggered `scan_finding.recordId` (facts)
 - an `alert.recordId` (facts)
-- an `alert_member` ref with `evidence = 1` (facts and rows)
-- a `signal_member` ref (facts and rows)
+- a `signal_member` fact ref
 - a `forensic_timeline.recordId` (facts)
 
 Covered paths: scan deletion, "Clear all", retention and the prune. References are plain indexed columns (no FK).
@@ -386,12 +384,12 @@ Covered paths: scan deletion, "Clear all", retention and the prune. References a
      - detected changes (first-seen install, device-admin grant);
      - finding rows — in Phases A–C, after sweeping prior intrusion-log imports (excluding this scan), from the top-K and the newest-N heaps, which also hold the interim event rows; in Phase D, `INSERT … SELECT` from `scan_finding`.
    - Reads correlation atoms, inside the transaction, so this scan's just-written rows are `Row(id)` atoms with real ids.
-   - Runs the correlator with a time budget (default 10 s) and cooperative cancellation checks; exceeding it stops correlation for this scan and records a `NotEvaluatedReason` ("correlation incomplete") shown in the report, never a silent truncation.
+   - Runs the correlator. Each (rule, group) has its own step/time budget (default 2 s, checked by a deadline test that returns normally — never a `CancellationException` inside the transaction; the clock is injected so tests force the cut-off). Before the nested loops each group is filtered to atoms matching one of the rule's steps, and the largest groups run last. Signals of rules that completed are kept; an unfinished (rule, group) records `NotEvaluatedReason.CORRELATION_INCOMPLETE` with the rule and package (excluded from `realFailureCount`), shown in the report and on the dashboard — never a silent truncation.
    - Writes signals and `signal_member` rows.
-   - Creates record alerts **set-based** from this scan's `scan_finding.alertKey` values, and resolves correlation alerts (§5.4). Post-condition: no `scan_finding` row with an `alertKey` is left unattached.
+   - Creates alerts **set-based** from this scan's `scan_finding.alertKey` values (§5.4); correlation findings are state findings and create no alert. Post-condition: no `scan_finding` row with an `alertKey` is left unattached.
    - Writes summary columns, sets `state = COMPLETE` and `telemetryState`, and advances the watermarks.
 
-   Every helper it calls is transaction-agnostic. Atoms are bounded to atom-bound categories, so the correlation part of the transaction is short. Target: `finish` ≤ 2 s on the F916B for a 100k-finding import, asserted in the release battery.
+   Every helper it calls is transaction-agnostic. Atoms are bounded to atom-bound categories and each (rule, group) is budgeted, so a dense group cannot stall the transaction indefinitely. Target: `finish` ≤ 2 s on the F916B for a 100k-finding import, asserted in the release battery.
 
 Failure handling:
 - A failed writer deletes its scan inside `withContext(NonCancellable)`, through an unaudited cleanup delete.
@@ -399,7 +397,7 @@ Failure handling:
   - takes `scanMutex` only long enough to snapshot the `IN_PROGRESS` and `DELETING` ids;
   - deletes those scans (deletes are idempotent);
   - writes one persistent "import interrupted" row per swept `IN_PROGRESS` import, so an import that crashed the app is not silent (a resumed `DELETING` scan already has its audit row);
-  - runs `gcUnobservedUnpinned` only when it found scans to sweep or a delete batch set the store's dirty flag;
+  - runs `gcUnobservedUnpinned` only when it found scans to sweep or the store's dirty flag is set (a DataStore boolean set by any delete or retention batch that fails part-way, cleared after a completed GC pass);
   - deletes stale report and export files.
 - Nothing of a failed import is ever visible: no fact, finding, alert or Timeline row. This is the #342 B1 guarantee.
 - Live scans and imports are serialised by `scanMutex`. Retention takes the lock per keyset batch with `tryLock`.
@@ -430,7 +428,7 @@ Failure handling:
     - The current, still `IN_PROGRESS` scan's own facts are therefore excluded; they were already evaluated by `append`.
     - So are imported DNS facts, whatever their event time.
   - The facts are streamed in keyset chunks through `Session.evaluateStored(service, Sequence<(factId, record)>)`, and no new observations are written.
-  - A re-check finding is emitted only when no triggered `scan_finding` already exists for the same `(ruleId, recordId)`, so a fact that already fired does not re-fire every scan in the window or re-surface its alert.
+  - A re-check finding is emitted only when no alert with its record key (`recordKey(ruleId, factId, evidence)`) exists yet — alerts are permanent, so a fact that already fired never re-fires or re-surfaces its alert, even after the scan that first found it is deleted. (Phases A–C, before alerts exist: when no triggered finding for the same `(ruleId, recordId)` exists in a `COMPLETE` scan.)
   - Findings set `recordId = factId` directly, with `ordinal = -1`.
   - Today's behaviour is kept: a domain that becomes an IOC after it was queried still fires. Alert identity prevents duplicates.
 
@@ -477,33 +475,23 @@ Schema 20 (Phase D).
 - **Indices**: `recordId`, `(scanId, alertKey)`.
 
 **`alert`** has one row per incident.
-- **Columns**: `id` PK AUTOINCREMENT, `alertKey` BLOB unique, `ruleId`, `groupKey`, `status`, `openedAt`, `openedScanId`, `lastActivityAt`, `closedAt`, `closedReason`, `closedWithCredential`, `level`, `recordId`, `evidenceJson`.
-  - `evidenceJson` is the **authoritative evidence record** of the alert: the opening finding, with its `matchContext` (member-id lists stripped; members live in `alert_member`). The alert row, the report and "Matched record" read it, whatever happens to scans.
-- **Indices**: `recordId`, `(ruleId, groupKey, status)`.
+- **Columns**: `id` PK AUTOINCREMENT, `alertKey` BLOB unique, `ruleId`, `status`, `openedAt`, `openedScanId`, `lastActivityAt`, `closedAt`, `closedReason`, `closedWithCredential`, `level`, `recordId`, `evidenceJson`.
+  - `evidenceJson` is the **authoritative evidence record** of the alert: the opening finding, with its `matchContext`. The alert row, the report and "Matched record" read it, whatever happens to scans.
+- **Indices**: `recordId`, `(ruleId, status)`.
 - Attaching a finding to an alert updates `lastActivityAt` and re-surfaces the alert in the list.
 - Alerts are never deleted. Their evidence is a permanent incident record and is counted in the Settings storage figure.
 
-**`alert_member`** (`alertId`, `kind` INT, `refId` LONG, `evidence` BOOLEAN; unique `(alertId, kind, refId)`, index `(kind, refId)`) records **every** member, so overlap and subset tests stay exact. Ids are never reused (AUTOINCREMENT), so a member can be compared even after its fact is gone.
-- **Membership is not pinning.** Only `evidence = 1` members pin their fact or row: the opening 50 and the newest 50 members (re-marked on each merge). A long-running chain therefore keeps a bounded evidence set while the rest of its facts follow normal retention.
-- Create, join and attach all go through one member-merge step (`INSERT OR IGNORE`, then re-mark evidence).
-- Overlap and subset tests load the chain's refs into a `TEMP` table and join it to `alert_member(kind, refId)`, counting matches per `alertId` — never loading whole member sets.
-- A referenced fact or row is protected by the Pins rule on every delete path.
-
-**`signal_member`** (`signalRowId`, `kind`, `refId`; indices `(kind, refId)`, `signalRowId`) records every correlation signal's members, from Phase C, and is deleted together with its signal row. It is the **only** store of member lists: signal `details`, `correlationId` and `matchContext` carry no id lists (`correlationId = ruleId:` + a hash), so no row grows with chain size.
+**`signal_member`** (`signalRowId`, `kind`, `refId`; indices `(kind, refId)`, `signalRowId`) records every correlation signal's members, from Phase C, and is deleted together with its signal row. It is the **only** store of member lists: signal `details`, `correlationId` and `matchContext` carry no id lists (`correlationId = ruleId:` + `h128` over the members sorted by `(kind, refId)`, each encoded `kind:id`; `matchContext` carries `member_count`), so no row grows with chain size. Existing signals' `member_event_ids` are moved into `signal_member` by a one-time backfill in Phase C. Readers load a signal's members on demand (`ClusterMembers.load(signalRowId)`: rows through the DAO, facts decoded through `TelemetryReader`).
 
 **Kind**:
-- `ALERT` iff the matched record is an event fact, or the finding is a correlation finding.
+- `ALERT` iff the matched record is an event fact. Correlation findings are `STATE`.
 - A finding with no `recordId` (evaluate-only fallback) is `ALERT` iff its `matchContext` holds the service's event-time field > 0, or the service is always-event (`dns_monitor`, `network_monitor`, `security_log`) — the same rule as the migration.
 - Otherwise `STATE`.
 
 **Alert identity**, set-based at `finish`:
 - **Record finding**: `alertKey = H(ruleId | factId | evidenceDiscriminator)`, for triggered findings only. The discriminator is the evidence *type and matched value*, never IOC row ids or feed metadata, so it is stable across IOC re-sync.
 - **Record finding without a fact** (evaluate-only fallback): `alertKey = H(ruleId | "nofact" | evidence type | matched value | event time from matchContext)`; when there is no event time, `scanId | ordinal` takes its place, so unrelated hits never collapse into one alert. A dashboard banner marks `FAILED` scans.
-- **Correlation finding**:
-  - It joins the **lowest-id OPEN** alert of the same rule and group whose members overlap.
-  - Otherwise, if **one** CLOSED alert of the same rule and group already contains all of its members, it attaches to that alert (lowest id if several): nothing new happened. Members split across several closed alerts open a new alert.
-  - Otherwise it opens a new alert, keyed `H(ruleId | groupKey | openingScanId | min member ref)`.
-  - Members are compared exactly, as `(kind, refId)` pairs. With no truncation, no cutoff is ever inferred.
+- **Correlation findings** are state findings of the scan that produced them, as today. Lasting correlation alerts are a recorded follow-up (`docs/superpowers/specs/2026-10-22-lasting-correlation-alerts-followup.md`; maintainer decision 2026-10-22).
 
 **Lifecycle (maintainer decision, SOC pattern).**
 - **State findings** are current while the latest live scan triggers them. Imports never displace live state.
@@ -518,10 +506,10 @@ Schema 20 (Phase D).
 - **Not protected**: a person who knows the PIN, or spyware that has logged it, can close alerts. This is documented as a residual risk.
 
 **Deleting scans.**
-- Deleting a scan or "Clear all" never deletes an alert, its evidence JSON, or any fact or row an alert references, so it needs no credential.
+- Deleting a scan or "Clear all" never deletes an alert, its evidence JSON or its pinned fact, so it needs no credential.
 - Each deletion writes one persistent audit row, in the same transaction that marks the scan `DELETING` (§5.1). It summarises the deleted scan's triggered findings as distinct (rule, level, package) entries with counts, capped at 100 entries plus "and K more", so the row stays small.
 - Persistent rows are exempt from the prune and from "Clear all".
-- "Clear all" deletes scans, observations, `scan_finding` rows, and every non-persistent, unreferenced timeline row — including live `dns_query`/`ioc_match` rows with `scanResultId = -1`, as it does today.
+- "Clear all" starts with **one transaction** that writes a single capped audit row (built from every `COMPLETE` scan's triggered `scan_finding` rows) and sets every scan `DELETING`; it then deletes scans, observations, `scan_finding` rows, and every non-persistent timeline row not referenced by a `signal_member` — including live `dns_query`/`ioc_match` rows with `scanResultId = -1`, as it does today.
 
 **The report** lists state findings, open alerts (with the opening scan), and closed alerts (time, note, credential flag).
 
@@ -560,10 +548,10 @@ Allow-listed permanently:
 ### 5.6 Timeline rows
 
 `forensic_timeline` keeps finding rows, signals, detected changes, and the
-persistent audit, closure and "import interrupted" rows, plus rows re-homed to `scanResultId = -1` because an alert or signal references them.
+persistent audit, closure and "import interrupted" rows.
 
 The 30-day prune applies to non-persistent `LIVE_SCAN` rows that no
-evidence `alert_member` (`evidence = 1`) or `signal_member` row ref points at. This includes live
+`signal_member` row ref points at. This includes live
 `ioc_match` rows, whatever their `scanResultId`. A pruned signal row takes its
 `signal_member` rows with it, in the same transaction.
 
@@ -630,7 +618,7 @@ All gates are JVM unit tests (Robolectric 4.14.1, SDK 35, offline via the `robol
 | **S1** | The full decoded map equals the evaluated map for every service. |
 | **S2** | Facts are stored once: shared across imports with different `capturedAt`; identical-content events in one batch stay distinct; the same source key with different content gives two facts; id-less duplicate intrusion lines give one fact; unchanged snapshots share facts; exact duplicates in one import give one observation and one finding. |
 | **S3** | A failed or killed writer leaves no visible fact, finding, alert or Timeline row, and the startup sweep removes it. Re-run in Phase D with `scan_finding` pins; a crash between delete batches of a `COMPLETE` scan (now `DELETING`) or of retention leaves no visible orphan, and the sweep completes the delete. |
-| **S4** | Deleting import A keeps facts that B observed and facts that are pinned (including `alert_member` and `signal_member`). |
+| **S4** | Deleting import A keeps facts that B observed and facts that are pinned (including `signal_member` and `alert.recordId`). |
 | **S5** | Dictionary immutability and the zlib header check. |
 | **S6** | Unreadable placeholder. |
 | **S7** | A one-shot sequence cannot be read twice. |
@@ -647,15 +635,14 @@ All gates are JVM unit tests (Robolectric 4.14.1, SDK 35, offline via the `robol
 | **K1** | Every atom-bound category has a producer; day-precision facts never become atoms; a live DNS fact and its `ioc_match` row bind once. |
 | **F1** | Migration 19→20, including keeping `matchContext`, backfilling the summary columns, and resolving a late-IOC re-check finding by its `recordId`; `Migration18To19Test` covers a 3 MB row and a corrupt row (backfill leaves `level` null, upgrade completes). |
 | **F2** | `recordId` resolves for every service; finding rows carry `recordId` from Phase A. |
-| **L1** | Lifecycle, including: closed {P1, D1} then {P1, D2} opens a new alert; a growing chain joins an OPEN alert; a chain joining or attaching merges its members; a closed chain re-computed with no new members attaches; a chain with any new member opens a new alert; this scan's finding rows are `Row` atoms with real ids and bind once; correlation evidence — including members added on join — survives retention, the prune, deleting the joining scan and import deletion, and still decodes through `TelemetryReader`; the evidence discriminator is stable across an IOC re-sync. |
-| **L2** | Close and bulk close need confirmation; `NoSecureLock` fails closed; obscured touches are filtered; closure and audit rows survive "Clear all"; after deleting an alert's opening scan (and a scan that joined it) and after "Clear all", every evidence member resolves **through the Timeline paging source and the report**, pinned facts read back, and the evidence JSON is present; a delete killed after its first transaction still has exactly one audit row and no "import interrupted" row; the audit row for a 50,000-finding scan stays under 16 KB and the Timeline and report still load. |
+| **L1** | Lifecycle: state findings follow the latest live scan, not imports; an alert persists until closed; an overlapping import's finding attaches to the same alert and keeps its own `scan_finding` row; a closed alert stays closed; a new fact opens a new alert; correlation findings are state findings of their scan and open no alert; this scan's timeline rows are `Row` atoms with real ids and bind once; a signal's fact and row members load through `ClusterMembers` and the Timeline; legacy signals' members appear after the Phase C backfill; the evidence discriminator is stable across an IOC re-sync. |
+| **L2** | Close and bulk close need confirmation; `NoSecureLock` fails closed; obscured touches are filtered; closure and audit rows survive "Clear all"; after deleting an alert's opening scan and after "Clear all", the alert's matched fact reads back **through the report and "Matched record"** and the evidence JSON is present; a `deleteScan` or "Clear all" killed after its first transaction still has exactly one audit row with a non-empty summary and no "import interrupted" row; the audit row for a 50,000-finding scan stays under 16 KB and the Timeline and report still load. |
 | **M1** | Preflight and the per-chunk reserve (headers that under-report sizes); disk-full live fallback keeps findings from every later chunk; a fallback DNS IOC finding (no `recordId`) opens an OPEN alert; evaluate-only deduplicates duplicate lines; DNS retry backoff. |
 | **Q1** | No post-API-26 SQL syntax in DAO, migration or Timeline SQL; list-binding `@Query` calls go through `chunkedIn`; every fact/observation read filters `COMPLETE` scans. |
 | **X1** | Computed-column contract hash, including `categoryOf` outputs. |
 | **V1** | Vocabulary. |
-| **P1** | Prune exemptions (imports, persistent rows, `scanResultId = -1` re-homed rows, rows referenced by evidence `alert_member` or by `signal_member`). |
-| **P3** | An OPEN alert joined 10,000 times pins at most 100 facts; after a simulated 31-day retention its non-evidence members are gone and overlap tests still match by id. |
-| **C2** | Correlation over an adversarial-density import (100k `permission_use` atoms for one package in 30 min) stops at the time budget, records "correlation incomplete", and no row exceeds 64 KB. |
+| **P1** | Prune exemptions (imports, persistent rows, rows referenced by `signal_member`). |
+| **C2** | Correlation over an adversarial-density import (100k `permission_use` atoms for one package in 30 min) stops at its per-(rule, group) budget (an injected clock forces the cut-off deterministically), keeps the signals of rules that completed, records `CORRELATION_INCOMPLETE` for the unfinished rule and package (excluded from `realFailureCount`), and no row exceeds 64 KB. |
 | **P2** | A 31-day-old live `ioc_match` row with `scanResultId = -1` is pruned; a persistent row is not. |
 | **J1** | A live DNS fact and its `ioc_match` row join on `sourceKey = sourceEventKey` (both h128 BLOBs) in a real DAO query. |
 | **D1** | Imported DNS finding time (lands in Phase 0). |
@@ -685,17 +672,18 @@ Taxonomy cross-checks and `ServiceActivationCrossCheckTest` are re-derived from 
 - The bug-report telemetry loss is a defect.
 - SQLite (queryable across scans), not files; a fact is stored once.
 - Alerts stay open until a person closes them; state findings clear themselves.
+- Correlation chains stay per-scan in this design; lasting correlation alerts move to a follow-up spec (2026-10-22, plan gate round 7).
 - Taxonomy: collapse `dbinfo_audit` / `platform_compat_audit`; document the four emitter services with no rules.
 
-**Plan-gate resolutions** (my calls; findings in `docs/superpowers/plans/2026-10-22-telemetry-store-plan-gate-round{1,2,3}-findings.md`):
+**Plan-gate resolutions** (my calls; findings in `docs/superpowers/plans/2026-10-22-telemetry-store-plan-gate-round{1..7}-findings.md`):
 
 - **Storage model**: content, facts and observations; content-checked source identity with a stored `sourceKey`; conditional envelope stripping.
 - **Writer**: a push-session writer with per-chunk transactions; `IN_PROGRESS` scans; alerts created set-based at finish; every fact read filters `COMPLETE` scans.
 - **Watermarks**: they always advance; a live fact is observed once; recent DNS is re-checked against IOCs that arrive later.
 - **Findings and alerts**:
   - findings are per scan; alerts span scans;
-  - a correlation chain joins only OPEN alerts, or attaches to a CLOSED alert only when it adds no new members;
-  - member tables are indexed and pinned;
+  - correlation findings stay per-scan state findings (maintainer, 2026-10-22: lasting correlation alerts split to a follow-up);
+  - `signal_member` is the single, indexed member store for signals, with a one-time backfill;
   - closing and bulk closing need the credential;
   - deletions leave audit rows instead of asking for the credential.
 - **Bug-report records**: typed records that emit every fact; day-precision events never become correlation atoms; the wakelock time base is fixed.
@@ -721,6 +709,7 @@ Taxonomy cross-checks and `ServiceActivationCrossCheckTest` are re-derived from 
 - `BatteryDailyModule`'s `package_downgrade` is a judgment computed in the
   emitter; move it to a rule.
 - Usage-stats all apps, user-selectable. A richer alert case model.
+- **Lasting correlation alerts** — `docs/superpowers/specs/2026-10-22-lasting-correlation-alerts-followup.md`, which records the design explored in plan-gate rounds 3–7 and the open problems found.
 
 ## 12. References
 
