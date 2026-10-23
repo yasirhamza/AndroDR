@@ -3,6 +3,7 @@ package com.androdr.ui.timeline
 import android.content.Context
 import android.net.Uri
 import androidx.core.content.FileProvider
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.paging.Pager
@@ -27,6 +28,8 @@ import com.androdr.sigma.TimePrecision
 import com.androdr.util.appVersion
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
@@ -88,7 +91,12 @@ class TimelineViewModel @Inject constructor(
     private val reportExporter: com.androdr.reporting.ReportExporter,
     private val clusterMembers: ClusterMembers,
     private val signalMembers: com.androdr.data.db.SignalMemberDao,
+    /** This navigation entry's saved state: survives rotation and process death (deep links, I1). */
+    private val savedState: SavedStateHandle,
 ) : ViewModel() {
+
+    /** Where reads run; a test swaps in its own dispatcher. */
+    internal var io: CoroutineDispatcher = Dispatchers.IO
 
     /** One page of a correlation signal's members, loaded when its card is expanded (spec §5.4). */
     suspend fun loadClusterPage(signalRowId: Long, after: com.androdr.sigma.AtomRef?): ClusterPage =
@@ -101,7 +109,11 @@ class TimelineViewModel @Inject constructor(
         _groupMode.value = mode
     }
 
-    private val _filter = MutableStateFlow(TimelineFilter())
+    // The deep-linkable filters are saved per navigation entry, so recreation restores them as the
+    // user left them (a dismissed deep-link chip stays dismissed).
+    private val _filter = MutableStateFlow(
+        TimelineFilter(packageName = savedState[KEY_PACKAGE], scanId = savedState[KEY_SCAN])
+    )
 
     /** What the list, the counts and the exports read. */
     val filter: StateFlow<TimelineFilter> = _filter.asStateFlow()
@@ -129,6 +141,22 @@ class TimelineViewModel @Inject constructor(
 
     /** Shows only [scanId]'s rows and the facts it observed (null: every scan). */
     fun setScanFilter(scanId: Long?) = _filter.update { it.copy(scanId = scanId) }
+
+    /**
+     * Applies a navigation entry's deep link (the Apps screen's package, the import screen's scan)
+     * once per entry (I1): recreation (rotation, theme or locale change, process death) delivers the
+     * same arguments again, and re-applying them would undo a chip the user dismissed. A blank
+     * [packageName] means "no real package" and clears the package filter.
+     */
+    fun applyDeepLink(packageName: String?, scanId: Long?) {
+        if (savedState.get<Boolean>(KEY_DEEP_LINK_APPLIED) == true) return
+        savedState[KEY_DEEP_LINK_APPLIED] = true
+        if (packageName != null) setPackageFilter(packageName.ifBlank { null })
+        if (scanId != null) setScanFilter(scanId)
+    }
+
+    /** "Show only this app" from a detail sheet (ruling R33): an exact package filter, shown as a chip. */
+    fun showOnlyApp(packageName: String) = setPackageFilter(packageName)
 
     fun clearFilters() = _filter.update { TimelineFilter(zone = it.zone, query = it.query) }
 
@@ -164,6 +192,12 @@ class TimelineViewModel @Inject constructor(
     }
 
     init {
+        viewModelScope.launch {
+            _filter.collect {
+                savedState[KEY_PACKAGE] = it.packageName
+                savedState[KEY_SCAN] = it.scanId
+            }
+        }
         // Typing re-queries once per pause, not per keystroke; the read itself runs on IO (the pager).
         viewModelScope.launch {
             _searchText.debounce(SEARCH_DEBOUNCE_MS).collect { text ->
@@ -205,13 +239,28 @@ class TimelineViewModel @Inject constructor(
     val countsVersion: StateFlow<Int> get() = tableVersion
 
     /** Entries [filter] matches, off the main thread. */
-    suspend fun count(filter: TimelineFilter): Long = withContext(Dispatchers.IO) { entries.count(filter) }
+    /**
+     * Entries [filter] matches, off the main thread; null when the count fails (I3): a count is
+     * informational, so a failing statement shows no count rather than crashing the screen.
+     */
+    @Suppress("TooGenericExceptionCaught") // any SQLite or Room failure; cancellation is rethrown
+    suspend fun count(filter: TimelineFilter): Long? = try {
+        withContext(io) { entries.count(filter) }
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        android.util.Log.e(TAG, "Timeline count failed: ${e.message}", e)
+        null
+    }
+
+    /** Where a fact came from (the fact detail sheet, I4); null when it is no longer visible. */
+    suspend fun provenance(factId: Long): FactProvenance? = withContext(io) { entries.provenance(factId) }
 
     /** A date header's count: the current filter narrowed to [day]. */
-    suspend fun dayCount(day: Long): Long = count(_filter.value.forDay(day))
+    suspend fun dayCount(day: Long): Long? = count(_filter.value.forDay(day))
 
     /** A scan header's count: the current filter narrowed to [scanId]. */
-    suspend fun scanCount(scanId: Long): Long = count(_filter.value.copy(scanId = scanId))
+    suspend fun scanCount(scanId: Long): Long? = count(_filter.value.copy(scanId = scanId))
 
     private val latestFindings: StateFlow<List<Finding>> = scanRepository.allScans
         .map { scans -> timelineFindingRows(scans.firstOrNull()?.findings.orEmpty()) }
@@ -403,6 +452,9 @@ class TimelineViewModel @Inject constructor(
         private const val COUNT_DEBOUNCE_MS = 300L
         private const val SEARCH_DEBOUNCE_MS = 300L
         private const val HOUR_MS = 3_600_000L
+        private const val KEY_DEEP_LINK_APPLIED = "timeline.deepLinkApplied"
+        private const val KEY_PACKAGE = "timeline.packageFilter"
+        private const val KEY_SCAN = "timeline.scanFilter"
 
         /** The report sheet shows (and Copy copies) at most this much; a longer report is shared as a file. */
         const val PREVIEW_CHARS = 200_000

@@ -145,7 +145,12 @@
     <string name="timeline_range_7d">7d</string>
     <string name="timeline_range_30d">30d</string>
     <!-- Timeline search and filter bar (C5, ruling R30). The hint names exactly what search matches. -->
-    <string name="timeline_search_hint">Search apps, rules and event types</string>
+    <string name="timeline_search_hint">Search packages, rules and event types</string>
+    <string name="timeline_search_no_matches">No matches for “%1$s”</string>
+    <string name="timeline_show_only_app">Show only this app</string>
+    <string name="timeline_detail_first_captured_by">First captured by</string>
+    <string name="timeline_detail_observed_by">Observed by</string>
+    <string name="timeline_detail_observed_none">No remaining scan (kept as evidence)</string>
     <string name="cd_timeline_search">Search the timeline</string>
     <string name="cd_timeline_search_close">Close search</string>
     <string name="cd_timeline_search_clear">Clear search text</string>

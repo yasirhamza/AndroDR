@@ -31,6 +31,9 @@ class TimelineTieBoundaryTest {
     private val entries = TimelineEntries(f.db, f.reader)
     private lateinit var expected: List<TimelineKey>
 
+    /** Under [SEARCHED]: the facts only (no row matches), the two nested ones now standalone. */
+    private lateinit var searchedExpected: List<TimelineKey>
+
     @After fun tearDown() = f.close()
 
     @Before fun setUp() = runBlocking {
@@ -55,20 +58,24 @@ class TimelineTieBoundaryTest {
             factTimes.zip(factIds).filter { it.second !in nested }
                 .map { (t, id) -> TimelineKey(t, TimelineRowEntity.FACT, id) }
         expected = expected.sortedWith(TimelineKey.DISPLAY_ORDER)
+        searchedExpected = factTimes.zip(factIds).map { (t, id) -> TimelineKey(t, TimelineRowEntity.FACT, id) }
+            .sortedWith(TimelineKey.DISPLAY_ORDER)
     }
 
-    private fun source() = TimelinePagingSource(f.db, TimelineFilter(), entries)
+    private fun source(filter: TimelineFilter = TimelineFilter()) = TimelinePagingSource(f.db, filter, entries)
 
-    private suspend fun load(params: PagingSource.LoadParams<TimelineKey>) =
-        source().load(params) as PagingSource.LoadResult.Page<TimelineKey, TimelineRow.Entry>
+    private suspend fun load(params: PagingSource.LoadParams<TimelineKey>, filter: TimelineFilter = TimelineFilter()) =
+        source(filter).load(params) as PagingSource.LoadResult.Page<TimelineKey, TimelineRow.Entry>
 
-    private suspend fun appendFrom(page: PagingSource.LoadResult.Page<TimelineKey, TimelineRow.Entry>, size: Int):
-        List<TimelineKey> {
+    private suspend fun appendFrom(
+        page: PagingSource.LoadResult.Page<TimelineKey, TimelineRow.Entry>, size: Int,
+        filter: TimelineFilter = TimelineFilter(),
+    ): List<TimelineKey> {
         val out = page.data.map { it.key }.toMutableList()
         var next = page.nextKey
         while (next != null) {
             assertTrue("the append walk does not end (an entry repeats)", out.size <= expected.size + size)
-            val p = load(PagingSource.LoadParams.Append(next, size, false))
+            val p = load(PagingSource.LoadParams.Append(next, size, false), filter)
             out += p.data.map { it.key }
             next = p.nextKey
         }
@@ -99,6 +106,31 @@ class TimelineTieBoundaryTest {
                     prev = p.prevKey
                 }
                 assertEquals("size $size, key $i", expected, before + appendFrom(refreshed, size))
+            }
+        }
+    }
+
+    /**
+     * C5 review m6: search is a per-entry predicate, so a searched refresh at any key, then prepends
+     * and appends, returns every match once across ties too, and a row that does not match leaves
+     * its evidence fact standalone.
+     */
+    @Test
+    fun `a searched refresh at any key, then prepends and appends, returns every match once`() = runBlocking {
+        assertEquals(22, searchedExpected.size)
+        for (size in listOf(1, 3, 7)) {
+            for ((i, key) in searchedExpected.withIndex()) {
+                val refreshed = load(PagingSource.LoadParams.Refresh(key, size, false), SEARCHED)
+                assertEquals("inclusive at the anchor (size $size, key $i)", key, refreshed.data.first().key)
+                val before = ArrayList<TimelineKey>()
+                var prev = refreshed.prevKey
+                while (prev != null) {
+                    assertTrue("the prepend walk does not end", before.size <= searchedExpected.size + size)
+                    val p = load(PagingSource.LoadParams.Prepend(prev, size, false), SEARCHED)
+                    before.addAll(0, p.data.map { it.key })
+                    prev = p.prevKey
+                }
+                assertEquals("size $size, key $i", searchedExpected, before + appendFrom(refreshed, size, SEARCHED))
             }
         }
     }
@@ -138,5 +170,8 @@ class TimelineTieBoundaryTest {
 
     private companion object {
         const val BASE = 1_729_000_000_000L
+
+        /** Matches every fact's category (`security_event`) and no row (`app_risk`, `r<time>`, `r`). */
+        val SEARCHED = TimelineFilter(query = "SECURITY_ev")
     }
 }

@@ -333,9 +333,14 @@ object TimelineQueries {
             // Without a package (whose `(packageName, eventTime)` index the planner keeps), pin the
             // event-time index: it reads event records only. A searched count would otherwise read the
             // whole table, snapshots included, since the searched columns are not in that index.
-            val from = if (filter.packageName == null) "telemetry_record f INDEXED BY $EVENT_TIME_INDEX"
-            else "telemetry_record f"
-            TimelineSql("SELECT COUNT(*) FROM $from WHERE ${where.sql}", where.args)
+            // The explicit `eventTime >= MIN` range is a term every SQLite can plan on that index
+            // (older releases neither turn IS NOT NULL into a range nor scan a non-covering pinned
+            // index), so the pin can never fail with "no query solution" (C5 review I3).
+            if (filter.packageName != null) {
+                return TimelineSql("SELECT COUNT(*) FROM telemetry_record f WHERE ${where.sql}", where.args)
+            }
+            TimelineSql("SELECT COUNT(*) FROM telemetry_record f INDEXED BY $EVENT_TIME_INDEX " +
+                "WHERE f.eventTime >= ? AND ${where.sql}", listOf<Any?>(Long.MIN_VALUE) + where.args)
         }
     }
 }

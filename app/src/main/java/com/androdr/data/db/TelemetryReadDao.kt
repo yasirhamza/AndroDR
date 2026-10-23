@@ -51,6 +51,17 @@ data class BodyStatsRow(val encoding: Int, val bodies: Long, val storedBytes: Lo
 @Suppress("TooManyFunctions") // Room DAO: one query per read the store's consumers need
 interface TelemetryReadDao {
 
+    /** The source that created visible fact [factId] (`firstSource`); null when it is not visible. */
+    @Query("SELECT f.firstSource FROM telemetry_record f WHERE f.id = :factId AND ${VisibleFact.SQL}")
+    suspend fun firstSource(factId: Long): TelemetrySource?
+
+    /** The distinct sources of fact [factId]'s visible (`COMPLETE`) observations, by `scan_record(recordId)`. */
+    @Query(
+        "SELECT DISTINCT o.source FROM scan_record o JOIN ScanResult s ON s.id = o.scanId " +
+            "WHERE o.recordId = :factId AND ${CompleteScan.SQL} ORDER BY o.source"
+    )
+    suspend fun observedSources(factId: Long): List<TelemetrySource>
+
     @Query(
         "SELECT o.service AS service, COUNT(*) AS records FROM scan_record o " +
             "JOIN ScanResult s ON s.id = o.scanId WHERE o.scanId = :scanId AND ${CompleteScan.SQL} " +

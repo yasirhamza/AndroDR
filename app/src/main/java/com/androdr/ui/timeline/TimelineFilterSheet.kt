@@ -33,10 +33,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.semantics.LiveRegionMode
-import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -88,7 +85,7 @@ internal fun TimelineFilterBar(
                     trailingIcon = {
                         Icon(Icons.Filled.Close, contentDescription = null, Modifier.size(InputChipDefaults.IconSize))
                     },
-                    modifier = Modifier.clearAndSetSemantics { contentDescription = removeDescription },
+                    modifier = Modifier.semantics { contentDescription = removeDescription },
                 )
             }
         }
@@ -97,7 +94,6 @@ internal fun TimelineFilterBar(
                 text = stringResource(R.string.timeline_event_count, it),
                 style = MaterialTheme.typography.labelLarge,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
             )
         }
     }
@@ -108,7 +104,8 @@ internal fun TimelineFilterBar(
 internal fun activeFilterLabel(chip: ActiveFilter): String = when (chip) {
     is ActiveFilter.Scan -> stringResource(R.string.timeline_chip_scan)
     is ActiveFilter.Package -> stringResource(R.string.timeline_chip_package, chip.packageName)
-    is ActiveFilter.Source -> stringResource(R.string.timeline_chip_source, stringResource(sourceLabel(chip.source)))
+    is ActiveFilter.Source ->
+        stringResource(R.string.timeline_chip_source, stringResource(telemetrySourceLabel(chip.source)))
     is ActiveFilter.Severity -> chip.level.uppercase()
     is ActiveFilter.DateRange -> stringResource(
         when (rangeHours(chip.from, chip.to)) {
@@ -121,7 +118,7 @@ internal fun activeFilterLabel(chip: ActiveFilter): String = when (chip) {
     ActiveFilter.FindingsOnly -> stringResource(R.string.timeline_chip_findings_only)
 }
 
-private fun sourceLabel(source: TelemetrySource): Int = when (source) {
+internal fun telemetrySourceLabel(source: TelemetrySource): Int = when (source) {
     TelemetrySource.LIVE_SCAN -> R.string.timeline_source_live
     TelemetrySource.BUGREPORT_IMPORT -> R.string.history_source_bugreport_import
     TelemetrySource.INTRUSION_LOG_IMPORT -> R.string.history_source_intrusion_log_import
@@ -206,7 +203,7 @@ internal fun TimelineFilterSheet(
                     FilterChip(
                         selected = filter.source == source,
                         onClick = { actions.setSource(source) },
-                        label = { Text(stringResource(sourceLabel(source))) },
+                        label = { Text(stringResource(telemetrySourceLabel(source))) },
                     )
                 }
             }

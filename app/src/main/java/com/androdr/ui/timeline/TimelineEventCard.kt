@@ -40,6 +40,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -47,6 +48,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import com.androdr.sigma.AtomRef
+import com.androdr.sigma.TaxonomyContract
+import androidx.compose.material3.OutlinedButton
 import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -218,7 +221,8 @@ fun TimelineEventDetailSheet(
     event: ForensicTimelineEvent,
     onDismiss: () -> Unit,
     relatedEvents: List<ForensicTimelineEvent> = emptyList(),
-    onJumpToRelated: (ForensicTimelineEvent) -> Unit = {}
+    onJumpToRelated: (ForensicTimelineEvent) -> Unit = {},
+    onShowOnlyApp: ((String) -> Unit)? = null,
 ) {
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -247,6 +251,7 @@ fun TimelineEventDetailSheet(
             }
             if (event.packageName.isNotEmpty()) {
                 DetailSection(stringResource(R.string.timeline_detail_package), event.packageName)
+                onShowOnlyApp?.let { ShowOnlyAppButton(event.packageName, it) }
             }
             if (event.iocIndicator.isNotEmpty()) {
                 DetailSection(
@@ -517,7 +522,16 @@ fun FactCard(
 /** A stored fact's detail: its provenance, time and decoded fields (spec §6 "Matched record"). */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun FactDetailSheet(record: DecodedRecord, onDismiss: () -> Unit) {
+@Suppress("LongMethod") // header, provenance lines, the app action and every decoded field
+fun FactDetailSheet(
+    record: DecodedRecord,
+    onDismiss: () -> Unit,
+    loadProvenance: (suspend (Long) -> FactProvenance?)? = null,
+    onShowOnlyApp: ((String) -> Unit)? = null,
+) {
+    // Off the main thread (the ViewModel reads on IO); null until loaded or when no loader is given.
+    var provenance by remember(record.factId) { mutableStateOf<FactProvenance?>(null) }
+    LaunchedEffect(record.factId) { provenance = loadProvenance?.invoke(record.factId) }
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -535,7 +549,21 @@ fun FactDetailSheet(record: DecodedRecord, onDismiss: () -> Unit) {
             HorizontalDivider()
             DetailSection(stringResource(R.string.timeline_detail_description),
                 record.summary ?: stringResource(R.string.timeline_cluster_fact_unreadable))
-            DetailSection(stringResource(R.string.timeline_detail_source), "${record.service} (${record.source.name})")
+            DetailSection(stringResource(R.string.timeline_detail_source), record.service)
+            // Provenance (C5 review I4): the source filter matches "observed by", so show both.
+            provenance?.let { p ->
+                DetailSection(stringResource(R.string.timeline_detail_first_captured_by),
+                    stringResource(telemetrySourceLabel(p.firstCapturedBy)))
+                DetailSection(
+                    stringResource(R.string.timeline_detail_observed_by),
+                    if (p.observedBy.isEmpty()) stringResource(R.string.timeline_detail_observed_none)
+                    else p.observedBy.map { stringResource(telemetrySourceLabel(it)) }.joinToString(", "),
+                )
+            }
+            record.packageName()?.let { pkg ->
+                DetailSection(stringResource(R.string.timeline_detail_package), pkg)
+                onShowOnlyApp?.let { ShowOnlyAppButton(pkg, it) }
+            }
             record.fields?.forEach { (key, value) ->
                 DetailSection(escapeForReport(key), escapeForReport(value.toString()))
             }
@@ -657,3 +685,18 @@ private fun formatTime(ts: Long) =
 
 private fun formatDate(ts: Long) =
     if (ts > 0) SimpleDateFormat("MMM dd, yyyy", Locale.US).format(Date(ts)) else "Unknown"
+
+/** "Show only this app" (ruling R33): sets the exact package filter, shown as a dismissible chip. */
+@Composable
+private fun ShowOnlyAppButton(packageName: String, onShowOnlyApp: (String) -> Unit) {
+    OutlinedButton(onClick = { onShowOnlyApp(packageName) }) {
+        Text(stringResource(R.string.timeline_show_only_app))
+    }
+}
+
+/**
+ * The fact's package, computed as the store computes `telemetry_record.packageName` (the service's
+ * taxonomy package field); null when the service has none or the value is absent or empty.
+ */
+internal fun DecodedRecord.packageName(): String? =
+    TaxonomyContract.packageField(service)?.let { fields?.get(it)?.toString() }?.takeIf { it.isNotEmpty() }

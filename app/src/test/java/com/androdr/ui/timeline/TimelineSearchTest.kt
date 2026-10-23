@@ -141,5 +141,12 @@ class TimelineSearchTest {
         assertTrue(search(TimelineFilter(query = "hidden")).isEmpty())
         assertTrue(search(TimelineFilter(query = "com.hidden", scanId = 3L)).isEmpty())
         assertTrue(search(TimelineFilter(query = "androdr-099", levels = setOf("high"))).isEmpty())
+
+        // Positive control (C5 review m5): once the scan completes, the same searches find both.
+        f.setState(3L, ScanState.COMPLETE)
+        val found = search(TimelineFilter(query = "hidden"))
+        assertEquals("the fact and the row", 1 to 1, found.facts().size to found.rowIds().size)
+        assertEquals(2, search(TimelineFilter(query = "com.hidden", scanId = 3L)).size)
+        assertEquals(1, search(TimelineFilter(query = "androdr-099", levels = setOf("high"))).size)
     }
 }

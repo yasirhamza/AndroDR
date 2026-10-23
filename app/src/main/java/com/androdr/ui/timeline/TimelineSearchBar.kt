@@ -20,11 +20,12 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextOverflow
 import com.androdr.R
 
 /**
  * The Timeline's inline search field (ruling R30), shown in the top bar's title slot while search
- * is open. Its hint says exactly what search matches (apps, rules and event types: the columns
+ * is open. Its hint says exactly what search matches (packages, rules and event types: the columns
  * [com.androdr.data.db.TimelineQueries] searches); each keystroke goes to [onTextChange] and the
  * ViewModel debounces it before querying.
  */
@@ -38,7 +39,9 @@ internal fun TimelineSearchField(text: String, onTextChange: (String) -> Unit, m
         onValueChange = onTextChange,
         modifier = modifier.fillMaxWidth().focusRequester(focus),
         singleLine = true,
-        placeholder = { Text(stringResource(R.string.timeline_search_hint), maxLines = 1) },
+        placeholder = {
+            Text(stringResource(R.string.timeline_search_hint), maxLines = 1, overflow = TextOverflow.Ellipsis)
+        },
         trailingIcon = {
             if (text.isNotEmpty()) {
                 IconButton(onClick = { onTextChange("") }) {

@@ -5,6 +5,7 @@ import com.androdr.data.db.TimelineDirection
 import com.androdr.data.db.TimelineFilter
 import com.androdr.data.db.TimelineKey
 import com.androdr.data.db.chunkedIn
+import com.androdr.data.model.TelemetrySource
 import com.androdr.data.model.TimelineRowEntity
 import com.androdr.data.store.KeysetPagingSource
 import com.androdr.data.store.TelemetryReader
@@ -57,6 +58,16 @@ class TimelineEntries @Inject constructor(
         return KeysetPagingSource.Slice(hydrate(entities), entities.map { it.key })
     }
 
+    /**
+     * Where fact [factId] came from (I4): the source that created it and the distinct sources of its
+     * visible observations — what the source filter matches. Null when the fact is not visible.
+     */
+    suspend fun provenance(factId: Long): FactProvenance? {
+        val dao = db.telemetryReadDao()
+        val first = dao.firstSource(factId) ?: return null
+        return FactProvenance(first, dao.observedSources(factId))
+    }
+
     /** What the list shows for [filter] ([com.androdr.data.db.TimelineDao.count]). */
     suspend fun count(filter: TimelineFilter): Long = db.timelineDao().count(filter)
 
@@ -95,3 +106,10 @@ class TimelineEntries @Inject constructor(
         }
     }
 }
+
+/**
+ * A fact's provenance for its detail sheet: [firstCapturedBy] created it (`firstSource`);
+ * [observedBy] lists the sources of its visible observations (empty for a pinned orphan). The
+ * Timeline's source filter matches [observedBy] (a pinned orphan by [firstCapturedBy]).
+ */
+data class FactProvenance(val firstCapturedBy: TelemetrySource, val observedBy: List<TelemetrySource>)

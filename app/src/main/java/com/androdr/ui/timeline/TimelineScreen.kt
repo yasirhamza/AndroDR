@@ -24,7 +24,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
@@ -84,19 +84,10 @@ fun TimelineScreen(
     onNavigateToHistory: (() -> Unit)? = null,
     viewModel: TimelineViewModel = hiltViewModel()
 ) {
-    // Apply deep-link filter once on first composition. Treat an empty `initialPackage` as "no
-    // filter" — the Apps screen uses empty to mean "this group has no real package".
-    LaunchedEffect(initialPackage) {
-        when {
-            initialPackage == null -> Unit
-            initialPackage.isBlank() -> viewModel.setPackageFilter(null)
-            else -> viewModel.setPackageFilter(initialPackage)
-        }
-    }
-    // The import screen's link: one scan's rows and the facts it observed.
-    LaunchedEffect(initialScanId) {
-        if (initialScanId != null) viewModel.setScanFilter(initialScanId)
-    }
+    // The deep link (Apps screen: a package, empty meaning "no real package"; import screen: a scan)
+    // is applied once per navigation entry: recreation re-delivers it, and re-applying it would
+    // bring back a chip the user dismissed (C5 review I1). The ViewModel keeps the guard.
+    LaunchedEffect(initialPackage, initialScanId) { viewModel.applyDeepLink(initialPackage, initialScanId) }
     val filter by viewModel.filter.collectAsStateWithLifecycle()
     val rows = viewModel.rows.collectAsLazyPagingItems()
     val totalCount by viewModel.totalCount.collectAsStateWithLifecycle()
@@ -166,15 +157,22 @@ fun TimelineScreen(
                     Text(stringResource(R.string.timeline_title))
                 }
             },
-            actions = {
+            // While searching, a back arrow closes search (and clears it); the field's X only clears text.
+            navigationIcon = {
                 if (searchOpen) {
                     IconButton(onClick = {
                         searchOpen = false
                         viewModel.clearSearch()
                     }) {
-                        Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.cd_timeline_search_close))
+                        Icon(
+                            Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = stringResource(R.string.cd_timeline_search_close),
+                        )
                     }
-                } else {
+                }
+            },
+            actions = {
+                if (!searchOpen) {
                     IconButton(onClick = { searchOpen = true }) {
                         Icon(Icons.Filled.Search, contentDescription = stringResource(R.string.cd_timeline_search))
                     }
@@ -220,7 +218,7 @@ fun TimelineScreen(
         )
 
         // "No timeline events yet" only when nothing narrows the list; a filtered empty list shows its 0 count.
-        val unfiltered = activeFilters.isEmpty() && filter.searchText == null
+        val unfiltered = showPinnedFindings(filter, activeFilters)
         if (totalCount == 0L && unfiltered && findings.isEmpty() && groupMode == TimelineGroupMode.DATE) {
             TimelineEmptyState()
         } else if (groupMode == TimelineGroupMode.SCAN) {
@@ -253,8 +251,9 @@ fun TimelineScreen(
                 contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                // Pinned section: the current findings (the latest scan's).
-                if (findings.isNotEmpty()) {
+                // Pinned section: the current findings (the latest scan's), shown only while nothing
+                // narrows the list, so search and filter results never sit below an unfiltered block.
+                if (showPinnedFindings(filter, activeFilters) && findings.isNotEmpty()) {
                     item(key = "current_findings") {
                         Row(
                             modifier = Modifier.fillMaxWidth().clickable { findingsExpanded = !findingsExpanded },
@@ -273,6 +272,16 @@ fun TimelineScreen(
                         items(findings.size, key = { "current_$it" }) { i ->
                             FindingCard(row = TimelineRow.FindingRow(findings[i]))
                         }
+                    }
+                }
+                val search = filter.searchText
+                if (search != null && totalCount == 0L) {
+                    item(key = "no_matches") {
+                        Text(
+                            stringResource(R.string.timeline_search_no_matches, search),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
                     }
                 }
                 items(
@@ -309,11 +318,25 @@ fun TimelineScreen(
         TimelineEventDetailSheet(
             event = event,
             onDismiss = { selectedEvent = null },
+            onShowOnlyApp = { pkg ->
+                selectedEvent = null
+                viewModel.showOnlyApp(pkg)
+            },
             relatedEvents = related,
             onJumpToRelated = { selectedEvent = it }
         )
     }
-    selectedRecord?.let { record -> FactDetailSheet(record, onDismiss = { selectedRecord = null }) }
+    selectedRecord?.let { record ->
+        FactDetailSheet(
+            record = record,
+            onDismiss = { selectedRecord = null },
+            loadProvenance = viewModel::provenance,
+            onShowOnlyApp = { pkg ->
+                selectedRecord = null
+                viewModel.showOnlyApp(pkg)
+            },
+        )
+    }
 
     if (showReportSheet) {
         ReportViewSheet(
@@ -436,7 +459,7 @@ private fun TimelineEmptyState() {
 
 /** A count loaded off the composition (null while loading), reloaded when any of [keys] changes. */
 @Composable
-private fun rememberCount(vararg keys: Any?, load: suspend () -> Long): Long? {
+private fun rememberCount(vararg keys: Any?, load: suspend () -> Long?): Long? {
     var count by remember(*keys) { mutableStateOf<Long?>(null) }
     LaunchedEffect(*keys) { count = load() }
     return count
@@ -506,3 +529,11 @@ private fun ReportViewSheet(
         }
     }
 }
+
+/**
+ * Whether the pinned "Current findings" section shows (C5 review I2): only while no filter and no
+ * search narrow the list. It is the latest scan's findings, unfiltered, so above a filtered or
+ * searched list it would bury the results under entries the filter excludes.
+ */
+internal fun showPinnedFindings(filter: TimelineFilter, activeFilters: List<ActiveFilter>): Boolean =
+    activeFilters.isEmpty() && filter.searchText == null

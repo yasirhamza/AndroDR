@@ -6,6 +6,9 @@ import com.androdr.data.model.TelemetrySource
 import com.androdr.data.model.TimelineRowEntity
 import com.androdr.data.store.StoreFixture
 import com.androdr.data.store.StoreFixture.Companion.dns
+import com.androdr.ui.timeline.FactProvenance
+import com.androdr.ui.timeline.TimelineEntries
+import com.androdr.ui.timeline.packageName
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -69,6 +72,36 @@ class TimelineSourceFilterTest {
             all(TimelineFilter(scanId = 2L, source = TelemetrySource.BUGREPORT_IMPORT)).times())
         assertEquals(emptySet<Long>(), all(TimelineFilter(scanId = 2L, source = TelemetrySource.LIVE_SCAN)).times())
         assertEquals(emptySet<Long>(), all(TimelineFilter(source = TelemetrySource.INTRUSION_LOG_IMPORT)).times())
+    }
+
+    /**
+     * C5 review I4: the detail sheet shows what the filter matches. A fact created by a live scan
+     * and seen again by an import reports both: first captured by the live scan, observed by both
+     * while both scans are visible, and by the import alone once the live scan's observation is
+     * gone. An IN_PROGRESS scan's observation is not listed.
+     */
+    @Test
+    fun `a fact's provenance names its first source and every visible observation's source`() = runBlocking {
+        val entries = TimelineEntries(f.db, f.reader)
+        f.scan(1L)
+        val fact = f.persist(1L, "dns_monitor", listOf(dns("both.example", time = 300L)),
+            source = TelemetrySource.LIVE_SCAN).factIdByChunkIndex.single()
+        f.setState(1L, ScanState.COMPLETE)
+        f.scan(2L)
+        f.persist(2L, "dns_monitor", listOf(dns("both.example", time = 300L)),
+            source = TelemetrySource.BUGREPORT_IMPORT)
+        f.setState(2L, ScanState.COMPLETE)
+        f.scan(3L)
+        f.persist(3L, "dns_monitor", listOf(dns("both.example", time = 300L)),
+            source = TelemetrySource.INTRUSION_LOG_IMPORT)
+
+        assertEquals(FactProvenance(TelemetrySource.LIVE_SCAN,
+            listOf(TelemetrySource.BUGREPORT_IMPORT, TelemetrySource.LIVE_SCAN)), entries.provenance(fact))
+        f.db.openHelper.writableDatabase.execSQL("DELETE FROM scan_record WHERE scanId = 1")
+        assertEquals(FactProvenance(TelemetrySource.LIVE_SCAN, listOf(TelemetrySource.BUGREPORT_IMPORT)),
+            entries.provenance(fact))
+        assertEquals("the sheet's package (\"Show only this app\") is the fact's computed package", "com.example",
+            f.reader.records(listOf(fact)).single().packageName())
     }
 
     @Test
