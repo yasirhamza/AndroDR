@@ -49,6 +49,18 @@ interface BugreportModule {
         device: DeviceIdentity = DeviceIdentity.UNKNOWN,
     ): ModuleResult = ModuleResult()
 
+    /**
+     * As [analyze], reading every dumpsys wall-clock time with the import's one [clock] (ruling
+     * R27). The analyzer always calls this; modules that read wall-clock times override it, the
+     * others inherit this delegation to the three-argument form.
+     */
+    suspend fun analyze(
+        sectionText: String,
+        iocResolver: IndicatorResolver,
+        device: DeviceIdentity,
+        clock: DumpsysClock,
+    ): ModuleResult = analyze(sectionText, iocResolver, device)
+
     /** Analyze raw ZIP entries. Override for modules with targetSections == null. */
     suspend fun analyzeRaw(
         entries: Sequence<Pair<String, InputStream>>,

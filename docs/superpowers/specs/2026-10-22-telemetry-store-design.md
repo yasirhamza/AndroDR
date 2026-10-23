@@ -461,6 +461,7 @@ records that fill the `TelemetryBundle`, each emitting every fact it parses:
 
 Other module changes:
 - **`WakelockParser`**: its time base becomes the bug report's own capture time, taken from its header.
+- **One time base per import** (ruling R27): every dumpsys wall-clock time (the capture header, AppOps access times, package install/update times, battery day boundaries) is read with one `DumpsysClock` in the capture device's zone, `persist.sys.timezone` from SYSTEM PROPERTIES, resolved with `java.time.ZoneId` (DST per timestamp). Without the property, wall-clock times are read as UTC and the import card says "times assume UTC". Bases are never mixed within an import, and the analyzing device's zone is never used.
 - **`AdbKeysModule`**: its records are snapshots.
 
 In C3, the hand-built `TimelineEvent` rows, `ModuleResult.timeline`, `BugReportAnalysisResult.timeline`, `TimelineFormatter` and `TimelineEvent.kt` are removed. At the same time, a one-time cleanup deletes legacy event rows.

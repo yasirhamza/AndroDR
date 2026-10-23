@@ -5,7 +5,6 @@ import com.androdr.data.model.TelemetrySource
 import com.androdr.data.model.TimelineEvent
 import com.androdr.ioc.IndicatorResolver
 import java.time.LocalDate
-import java.time.ZoneOffset
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -38,6 +37,14 @@ class BatteryDailyModule internal constructor(private val maxRecords: Int) : Bug
         sectionText: String,
         iocResolver: IndicatorResolver,
         device: com.androdr.ioc.DeviceIdentity,
+    ): ModuleResult = analyze(sectionText, iocResolver, device, DumpsysClock.ASSUMED_UTC)
+
+    /** Day boundaries are the capture device's local midnights, read with the import's [clock] (R27). */
+    override suspend fun analyze(
+        sectionText: String,
+        iocResolver: IndicatorResolver,
+        device: com.androdr.ioc.DeviceIdentity,
+        clock: DumpsysClock,
     ): ModuleResult {
         val events = mutableListOf<BatteryDailyEvent>()
         val timeline = mutableListOf<TimelineEvent>()
@@ -68,7 +75,7 @@ class BatteryDailyModule internal constructor(private val maxRecords: Int) : Bug
             return true
         }
 
-        val changes = parseChanges(sectionText)
+        val changes = parseChanges(sectionText, clock)
         val versionHistory = mutableMapOf<String, MutableList<Change>>()
         for (c in changes) {
             versionHistory.getOrPut(c.packageName) { mutableListOf() }.add(c)
@@ -112,9 +119,9 @@ class BatteryDailyModule internal constructor(private val maxRecords: Int) : Bug
         )
     }
 
-    private fun parseChanges(sectionText: String): List<Change> {
+    private fun parseChanges(sectionText: String, clock: DumpsysClock): List<Change> {
         val starts = startTimeRegex.findAll(sectionText).toList()
-        val firstDay = starts.firstOrNull()?.let { dayMillis(it) }
+        val firstDay = starts.firstOrNull()?.let { dayMillis(it, clock) }
         val out = mutableListOf<Change>()
         var searchFrom = 0
         var dayIndex = 0
@@ -124,7 +131,7 @@ class BatteryDailyModule internal constructor(private val maxRecords: Int) : Bug
             searchFrom = blockStart + PACKAGE_CHANGES_LEN
 
             // Date of this block: nearest "Current start time" above it, else the section's first.
-            val day = starts.lastOrNull { it.range.first < blockStart }?.let { dayMillis(it) } ?: firstDay
+            val day = starts.lastOrNull { it.range.first < blockStart }?.let { dayMillis(it, clock) } ?: firstDay
             val block = sectionText.substring(blockStart, findBlockEnd(sectionText, searchFrom))
             packageChangeRegex.findAll(block).forEach { match ->
                 out.add(Change(
@@ -140,9 +147,8 @@ class BatteryDailyModule internal constructor(private val maxRecords: Int) : Bug
         return out
     }
 
-    private fun dayMillis(m: MatchResult): Long? = runCatching {
-        LocalDate.of(m.groupValues[1].toInt(), m.groupValues[2].toInt(), m.groupValues[3].toInt())
-            .atStartOfDay().toInstant(ZoneOffset.UTC).toEpochMilli()
+    private fun dayMillis(m: MatchResult, clock: DumpsysClock): Long? = runCatching {
+        clock.startOfDayMs(LocalDate.of(m.groupValues[1].toInt(), m.groupValues[2].toInt(), m.groupValues[3].toInt()))
     }.getOrNull()
 
     private fun findBlockEnd(text: String, fromIndex: Int): Int {

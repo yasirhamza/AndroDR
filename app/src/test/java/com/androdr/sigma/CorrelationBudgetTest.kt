@@ -8,6 +8,7 @@ import com.androdr.data.model.TelemetrySource
 import com.androdr.data.store.rawFile
 import com.androdr.scanner.WriterFixture
 import com.androdr.scanner.WriterHooks
+import com.androdr.scanner.inSession
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -129,11 +130,12 @@ class CorrelationBudgetTest {
     }
 
     /**
-     * Review m-2: an atom read that cannot run (here, more atom categories than one query binds)
-     * costs correlation only: the scan completes and every chain rule is recorded as not started.
+     * Review m-2 / I-3: more atom categories than one query binds is checked before any read. It
+     * costs correlation only: the scan completes and every chain rule is recorded as not started,
+     * with that cause (not the time budget).
      */
     @Test
-    fun `an atom read failure records every rule as not started and the scan completes`() = runBlocking {
+    fun `too many atom categories records every rule as not started with its true cause`() = runBlocking {
         val engine = io.mockk.mockk<SigmaRuleEngine>(relaxed = true)
         io.mockk.every { engine.getCorrelationRules() } returns listOf(installThenAdmin, permThenC2)
         io.mockk.every { engine.atomCategories() } returns
@@ -145,7 +147,48 @@ class CorrelationBudgetTest {
 
         assertEquals(ScanState.COMPLETE, done.state)
         assertEquals(listOf("androdr-corr-001", "androdr-corr-003"), incomplete(done).map { it.ruleId })
-        assertTrue(incomplete(done).all { it.message!!.contains("not started") })
+        val cause = "not started -- " + NotStartedCause.TOO_MANY_CATEGORIES.text
+        assertTrue(incomplete(done).all { it.message!!.endsWith(cause) })
+        assertTrue("never blamed on the time budget", incomplete(done).none { it.message!!.contains("time budget") })
+    }
+
+    /** Hooks whose lookback read fails with [failure] (as a SQLite read inside `finish` can). */
+    private fun failingHooks(scan: ScanResult, failure: Exception) =
+        object : WriterHooks(scan, engine(listOf(installThenAdmin)), SigmaCorrelationEngine(),
+            { CorrelationBudget(Ticker()::read) }) {
+            override suspend fun lookbackAtoms(atoms: com.androdr.data.store.AtomReader, categories: Set<String>):
+                List<TimelineAtom> = throw failure
+        }
+
+    /**
+     * Review I-3: a SQLite failure while reading atoms inside `finish` must fail the finish (rolling
+     * it back) rather than be swallowed: no COMPLETE scan is left, and the session's failure path
+     * (abort, an unaudited cleanup delete) runs.
+     */
+    @Test
+    fun `a SQLite I-O failure during the atom read fails the finish and leaves no COMPLETE scan`() = runBlocking {
+        val scan = w.scan(4L, TelemetrySource.LIVE_SCAN)
+        val hooks = failingHooks(scan, android.database.sqlite.SQLiteDiskIOException("disk I/O error"))
+
+        val thrown = runCatching { w.writer.inSession(scan, liveEvents = true, hooks) { it.finish() } }
+            .exceptionOrNull()
+
+        assertTrue("finish failed honestly: $thrown", thrown is android.database.sqlite.SQLiteDiskIOException)
+        assertEquals("no COMPLETE scan", 0L, w.count("SELECT COUNT(*) FROM ScanResult WHERE state = 'COMPLETE'"))
+        assertEquals("the failure path removed the scan", 0L, w.count("SELECT COUNT(*) FROM ScanResult"))
+    }
+
+    /** I-3, full disk: the session's own full-disk path runs (not saved, scan cleaned up), never COMPLETE. */
+    @Test
+    fun `a full disk during the atom read is reported as not saved, never COMPLETE`() = runBlocking {
+        val scan = w.scan(5L, TelemetrySource.BUGREPORT_IMPORT)
+        val hooks = failingHooks(scan, android.database.sqlite.SQLiteFullException("database or disk is full"))
+        val s = w.writer.begin(scan, liveEvents = false, hooks)
+
+        val result = s.finish()
+
+        assertTrue("not persisted", !result.persisted)
+        assertEquals(0L, w.count("SELECT COUNT(*) FROM ScanResult"))
     }
 
     @Test

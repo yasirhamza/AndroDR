@@ -202,9 +202,10 @@ class DashboardViewModel @Inject constructor(
         }
 
         /**
-         * The "Correlation incomplete" warning (spec §5.2): one line per chain rule the correlation
-         * budget cut off or never started on [scan], naming the rule and the packages. Separate from
-         * the scanner-failure banner — nothing failed; an app flooding events can cause it. Empty
+         * The "Correlation incomplete" warning (spec §5.2): one line per chain rule not fully checked
+         * on [scan] (cut off or never started by the correlation budget, which an app flooding events
+         * can cause, or not started because the rules bind too many event kinds), each naming the rule,
+         * the packages and the cause. Separate from the scanner-failure banner. Empty
          * while a scan runs.
          */
         fun correlationIncomplete(scan: ScanResult?, isScanning: Boolean): List<String> =

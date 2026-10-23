@@ -7,6 +7,15 @@ import com.androdr.util.reportSafe
 import javax.inject.Inject
 import javax.inject.Singleton
 
+/** Why a chain rule was never started (its CORRELATION_INCOMPLETE entry says so, truthfully). */
+enum class NotStartedCause(val text: String) {
+    /** The total deadline passed during binding or grouping. */
+    BUDGET("the correlation time budget ran out first"),
+
+    /** The loaded rules bind more atom categories than one correlation query can read. */
+    TOO_MANY_CATEGORIES("the loaded rules bind more event kinds than correlation can read at once"),
+}
+
 /** A signal row and its members, which are stored only in `signal_member` (spec §5.4). */
 data class CorrelationSignal(val row: ForensicTimelineEvent, val members: List<AtomRef>)
 
@@ -271,14 +280,14 @@ class SigmaCorrelationEngine @Inject constructor() {
         return CorrelationSignal(row, refs)
     }
 
-    /** A rule-level "not started" entry for every rule (the pass could not read or bind its atoms). */
-    fun notStarted(rules: List<CorrelationRule>): List<ScannerFailure> = rules.map { notStarted(it) }
+    /** A rule-level "not started" entry for every rule, saying why ([cause]). */
+    fun notStarted(rules: List<CorrelationRule>, cause: NotStartedCause): List<ScannerFailure> =
+        rules.map { notStarted(it, cause) }
 
-    private fun notStarted(rule: CorrelationRule) = ScannerFailure(
+    private fun notStarted(rule: CorrelationRule, cause: NotStartedCause = NotStartedCause.BUDGET) = ScannerFailure(
         scanner = SCANNER,
         exception = NotEvaluatedReason.CORRELATION_INCOMPLETE.sentinel,
-        message = "${reportSafe(rule.title)} (${reportSafe(rule.id)}): not started -- the correlation time " +
-            "budget ran out first",
+        message = "${reportSafe(rule.title)} (${reportSafe(rule.id)}): not started -- ${cause.text}",
         ruleId = rule.id,
     )
 

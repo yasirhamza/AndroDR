@@ -14,6 +14,7 @@ import com.androdr.ioc.IndicatorResolver
 import com.androdr.scanner.bugreport.BugreportModule
 import com.androdr.scanner.bugreport.DumpsysSectionParser
 import com.androdr.scanner.bugreport.GetpropParser
+import com.androdr.scanner.bugreport.DumpsysClock
 import com.androdr.scanner.bugreport.InstallTimeModule
 import com.androdr.scanner.bugreport.ModuleResult
 import com.androdr.scanner.bugreport.TombstoneParser
@@ -59,6 +60,8 @@ class BugReportAnalyzer @Inject constructor(
         val moduleTelemetry: List<ModuleTelemetry> = emptyList(),
         /** What the import session wrote (for the import card); null straight from [analyze]. */
         val write: WriteResult? = null,
+        /** Notes on how the report was read, shown on the import card (e.g. times assumed UTC, R27). */
+        val importNotes: List<String> = emptyList(),
     )
 
     /** The field-map records one generic module emitted for [service] (capped at the module bound). */
@@ -87,6 +90,9 @@ class BugReportAnalyzer @Inject constructor(
         val moduleTyped = mutableListOf<TypedTelemetry>()
         val boundTrips = mutableListOf<String>()
         var installHistory = emptyList<PackageInstallHistoryEntry>()
+        // Ruling R27: one time base for every wall-clock time of this import, the capture device's
+        // zone from persist.sys.timezone; UTC, flagged, when the report does not name it.
+        var clock = DumpsysClock.ASSUMED_UTC
 
         // Pre-pass: extract SYSTEM PROPERTIES section from dumpstate to derive
         // the source device identity (#90). Without this, bugreport modules
@@ -105,6 +111,7 @@ class BugReportAnalyzer @Inject constructor(
                         )
                         if (isDumpstate) {
                             val sysPropsText = sectionParser.extractSystemProperties(zip)
+                            clock = DumpsysClock.fromSystemProperties(sysPropsText)
                             if (sysPropsText != null) {
                                 val now = System.currentTimeMillis()
                                 systemPropertySnapshots = getpropParser.parse(
@@ -157,18 +164,18 @@ class BugReportAnalyzer @Inject constructor(
                         )
                         if (isDumpstate) {
                             Log.d(TAG, "Found dumpstate entry: ${entry.name}")
-                            val dumpstate = sectionParser.extractSectionsAndHeader(zip, neededSections)
+                            val dumpstate = sectionParser.extractSectionsAndHeader(zip, neededSections, clock)
                             val sections = dumpstate.sections
                             Log.d(TAG, "Extracted ${sections.size} sections: ${sections.keys}")
 
                             if (sections.isNotEmpty()) {
                                 sections["package"]?.let { packageSection ->
                                     allForensicEvents.addAll(
-                                        installTimeModule.parseSection(packageSection)
+                                        installTimeModule.parseSection(packageSection, clock)
                                     )
                                     installHistory = capped(
                                         installTimeModule.parseHistory(
-                                            packageSection, System.currentTimeMillis()
+                                            packageSection, System.currentTimeMillis(), clock
                                         ),
                                         "InstallTimeModule", boundTrips,
                                     )
@@ -176,7 +183,7 @@ class BugReportAnalyzer @Inject constructor(
                                 for (mod in sectionModules) {
                                     for (sectionName in mod.targetSections!!) {
                                         val sectionText = sections[sectionName] ?: continue
-                                        val result = mod.analyze(sectionText, iocResolver, sourceDevice)
+                                        val result = mod.analyze(sectionText, iocResolver, sourceDevice, clock)
                                         processModuleResult(
                                             mod, result, moduleTelemetry, allTimelineEvents, moduleTyped, boundTrips
                                         )
@@ -258,7 +265,8 @@ class BugReportAnalyzer @Inject constructor(
         Log.d(TAG, "Collected ${allTimelineEvents.size} timeline events, " +
             "${moduleTelemetry.sumOf { it.records.size }} generic records")
         BugReportAnalysisResult(
-            emptyList(), allTimelineEvents, allForensicEvents, bundle, boundTrips, moduleTelemetry
+            emptyList(), allTimelineEvents, allForensicEvents, bundle, boundTrips, moduleTelemetry,
+            importNotes = if (clock.assumedUtc) listOf(DumpsysClock.NOTE_ASSUMED_UTC) else emptyList(),
         )
     }
 

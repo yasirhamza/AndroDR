@@ -189,7 +189,7 @@ class BugReportViewModel @Inject constructor(
                         _analyzedArtifact.value = ArtifactType.BUG_REPORT
                         _importCard.value = ImportCard.from(
                             analysis.result.write, truncated = false, boundTrips = analysis.result.boundTrips,
-                            estimateBytes = importEstimate
+                            estimateBytes = importEstimate, notes = analysis.result.importNotes,
                         )
                     }
                     is ScanOrchestrator.ArtifactAnalysis.IntrusionLog -> {

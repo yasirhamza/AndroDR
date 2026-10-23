@@ -119,8 +119,14 @@ class TimelineRowDeleterTest {
     fun `no delete path scans signal_member`() = runBlocking {
         val dao = f.db.forensicTimelineEventDao()
         for ((r, delete) in deletePaths()) {
+            // A fact member too (review m-a), so the release step (PinnedFact over signal_member) runs.
+            f.scan(1L, ScanState.COMPLETE)
+            val fact = f.persist(1L, "app_scanner", listOf(app("com.member"))).factIdByChunkIndex.single()
             val sig = dao.insert(r.copy(kind = "signal"))
-            f.db.signalMemberDao().insertAll(listOf(SignalMember(sig, SignalMember.KIND_ROW, 1L)))
+            f.db.signalMemberDao().insertAll(listOf(SignalMember(sig, SignalMember.KIND_ROW, 1L),
+                SignalMember(sig, SignalMember.KIND_FACT, fact)))
+            f.store.deleteScanTelemetry(1L)
+            f.db.scanResultDao().deleteById(1L)
             f.sql.clear()
             f.db.withTransaction { delete() }
             val recorded = synchronized(f.sql) { f.sql.toList() }
@@ -133,14 +139,19 @@ class TimelineRowDeleterTest {
                 }
                 assertTrue("full scan of signal_member: $stmt -> $plan",
                     plan.none { Regex("""SCAN( TABLE)? signal_member\b""").containsMatchIn(it) })
-                // The composite primary key (signalRowId, kind, refId) is SQLite's autoindex.
+                // The member reads/deletes by signal id use the composite primary key (signalRowId,
+                // kind, refId), SQLite's autoindex. Other statements (the pin test) need only not scan.
+                if (!stmt.startsWith("SELECT DISTINCT refId FROM signal_member") &&
+                    !stmt.startsWith("DELETE FROM signal_member")) continue
                 assertTrue("searches by the primary key: $stmt -> $plan", plan.any {
                     it.startsWith("SEARCH") && it.contains("signal_member") &&
                         (it.contains("PRIMARY KEY") || it.contains("sqlite_autoindex_signal_member_1")) &&
                         it.contains("signalRowId=?")
                 })
             }
+            assertTrue("the fact's pin test ran too: $statements", statements.any { it.contains("telemetry_record") })
             assertEquals(0L, orphans())
+            assertEquals("the member's fact was released", 0L, facts())
         }
     }
 

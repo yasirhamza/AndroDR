@@ -21,6 +21,7 @@ import com.androdr.sigma.Finding
 import com.androdr.sigma.FindingCategory
 import com.androdr.sigma.IntrusionLogRecordBuilders
 import com.androdr.sigma.LiveRecordBuilders
+import com.androdr.sigma.NotStartedCause
 import com.androdr.sigma.RuleCoverage
 import com.androdr.sigma.SigmaCorrelationEngine
 import com.androdr.sigma.SigmaRuleEngine
@@ -28,11 +29,7 @@ import com.androdr.sigma.StoreRecord
 import com.androdr.sigma.TaxonomyContract
 import com.androdr.sigma.TimelineAtom
 import com.androdr.sigma.TimelineCategories
-import android.util.Log
-import kotlinx.coroutines.CancellationException
 import java.util.Collections
-
-private const val TAG = "WriterHooks"
 
 /** The correlation budget's clock: monotonic milliseconds (a wall-clock jump never cuts a pass short). */
 internal fun monotonicMs(): Long = System.nanoTime() / NANOS_PER_MS
@@ -96,10 +93,16 @@ internal abstract class WriterHooks(
     override suspend fun correlate(scan: ScanResult, atoms: AtomReader): Correlation {
         val budget = newBudget()
         val atomCategoryByRuleId = engine.atomCategories()
-        val all = readAtoms(scan, atoms, atomCategoryByRuleId.values.toSet()) ?: run {
-            incompleteSkips = correlationEngine.notStarted(rules)
+        val categories = atomCategoryByRuleId.values.toSet()
+        // Review m-2 / I-3: the one foreseeable, deterministic reason the atoms cannot be read is a
+        // rule set binding more categories than one query holds. Checked before any read, and said
+        // as such; every other read failure propagates and fails the finish honestly (a swallowed
+        // SQLite error could leave a half-written scan marked COMPLETE).
+        if (categories.size > AtomReader.MAX_ATOM_CATEGORIES) {
+            incompleteSkips = correlationEngine.notStarted(rules, NotStartedCause.TOO_MANY_CATEGORIES)
             return Correlation.NONE
         }
+        val all = (atoms.atomsForScan(scan.id, categories) + lookbackAtoms(atoms, categories)).distinctBy { it.ref }
         // #370: a chain rule fires only where every leg has events to bind to; legs with nothing
         // recorded are declared, so "no warning signs" never stands in for "not checked".
         chainSkips = RuleCoverage.noEventSkipsFor(rules, atomCategoryByRuleId, all)
@@ -114,22 +117,6 @@ internal abstract class WriterHooks(
             Correlation(signals, correlationEngine.findingsFor(signals, rules, atomRulesById))
         }
     }
-
-    /**
-     * This scan's atoms plus the lookback, each ref once; null when they could not be read (review
-     * m-2): that costs correlation only — every chain rule is then recorded as not started — never
-     * the whole finish.
-     */
-    @Suppress("TooGenericExceptionCaught")
-    private suspend fun readAtoms(scan: ScanResult, atoms: AtomReader, categories: Set<String>): List<TimelineAtom>? =
-        try {
-            (atoms.atomsForScan(scan.id, categories) + lookbackAtoms(atoms, categories)).distinctBy { it.ref }
-        } catch (c: CancellationException) {
-            throw c
-        } catch (e: Exception) {
-            Log.w(TAG, "Correlation atoms could not be read; chain rules not checked", e)
-            null
-        }
 
     override fun summarize(scan: ScanResult, totals: FindingTotals): ScanResult {
         this.totals = totals

@@ -5,7 +5,6 @@ import com.androdr.data.model.PackageHistoryEventType
 import com.androdr.data.model.PackageInstallHistoryEntry
 import com.androdr.data.model.TelemetrySource
 import java.time.LocalDateTime
-import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
@@ -19,10 +18,10 @@ import java.util.Locale
  * point-in-time snapshots, and we want every install row that's in there so the
  * forensic timeline reflects the full package inventory captured at report time.
  *
- * Note: timestamps in `dumpsys package` are formatted as `yyyy-MM-dd HH:mm:ss`
- * in the device's local time zone. We parse with [TimeZone.getDefault], which
- * is correct when the analyzing device shares the capturing device's time zone;
- * cross-zone analysis may shift values by the offset difference.
+ * Timestamps in `dumpsys package` are `yyyy-MM-dd HH:mm:ss` on the capture device's wall
+ * clock, with no offset. They are read with the import's [DumpsysClock] (ruling R27): the zone
+ * the report names in `persist.sys.timezone`, or UTC flagged as an assumption. Never the
+ * analyzing device's zone, so every analyzer of one report gets the same instants.
  */
 class InstallTimeModule {
 
@@ -31,13 +30,6 @@ class InstallTimeModule {
     private val lastUpdateRegex = Regex("""lastUpdateTime=([\d\- :]+)""")
 
     // DateTimeFormatter is immutable and thread-safe; SimpleDateFormat is not.
-    // Timestamps are interpreted as UTC for determinism: bug reports do not
-    // carry a zone offset on dumpsys timestamps, and parsing them in the
-    // analyzing device's local zone made cross-zone analyses non-reproducible.
-    // The trade-off is a fixed offset error bounded by ±12h that is the same
-    // for every analyzer of the same report. A future task should plumb the
-    // device timezone from `SYSTEM PROPERTIES` (persist.sys.timezone) into
-    // this module for an exact fix.
     private val dateFormatter: DateTimeFormatter =
         DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss", Locale.US)
 
@@ -50,7 +42,8 @@ class InstallTimeModule {
         val versionCode: Long?,
     )
 
-    fun parseSection(text: String): List<ForensicTimelineEvent> = parsePackages(text).map {
+    fun parseSection(text: String, clock: DumpsysClock = DumpsysClock.ASSUMED_UTC): List<ForensicTimelineEvent> =
+        parsePackages(text, clock).map {
         ForensicTimelineEvent(
             startTimestamp = it.firstInstallMs,
             kind = "event",
@@ -68,8 +61,12 @@ class InstallTimeModule {
      * an INSTALL per `firstInstallTime`, plus an UPDATE per parsed `lastUpdateTime` that differs
      * from `firstInstallTime` (equal values are the same instant, so no update happened).
      */
-    fun parseHistory(text: String, capturedAt: Long): List<PackageInstallHistoryEntry> =
-        parsePackages(text).flatMap { p ->
+    fun parseHistory(
+        text: String,
+        capturedAt: Long,
+        clock: DumpsysClock = DumpsysClock.ASSUMED_UTC,
+    ): List<PackageInstallHistoryEntry> =
+        parsePackages(text, clock).flatMap { p ->
             fun entry(type: PackageHistoryEventType, ts: Long) = PackageInstallHistoryEntry(
                 packageName = p.name,
                 eventType = type,
@@ -85,17 +82,17 @@ class InstallTimeModule {
             )
         }
 
-    private fun parseTime(regex: Regex, block: String, label: String): Long? =
+    private fun parseTime(regex: Regex, block: String, label: String, clock: DumpsysClock): Long? =
         regex.find(block)?.groupValues?.get(1)?.trim()?.let { raw ->
             runCatching {
-                LocalDateTime.parse(raw, dateFormatter).toInstant(ZoneOffset.UTC).toEpochMilli()
+                clock.epochMs(LocalDateTime.parse(raw, dateFormatter))
             }.getOrElse {
                 android.util.Log.w("InstallTimeModule", "Failed to parse $label='$raw'", it)
                 null
             }
         }
 
-    private fun parsePackages(text: String): List<ParsedPackage> {
+    private fun parsePackages(text: String, clock: DumpsysClock): List<ParsedPackage> {
         val packageStarts = packageHeaderRegex.findAll(text).toList()
         if (packageStarts.isEmpty()) return emptyList()
 
@@ -108,9 +105,9 @@ class InstallTimeModule {
             }
             val packageBlock = text.substring(match.range.first, sectionEnd)
 
-            val firstInstallMs = parseTime(firstInstallRegex, packageBlock, "firstInstallTime")
+            val firstInstallMs = parseTime(firstInstallRegex, packageBlock, "firstInstallTime", clock)
                 ?: return@mapIndexedNotNull null
-            val lastUpdateMs = parseTime(lastUpdateRegex, packageBlock, "lastUpdateTime")
+            val lastUpdateMs = parseTime(lastUpdateRegex, packageBlock, "lastUpdateTime", clock)
 
             val versionCode = versionCodeRegex.find(packageBlock)?.groupValues?.get(1)?.toLongOrNull()
             ParsedPackage(pkg, firstInstallMs, lastUpdateMs, versionCode)

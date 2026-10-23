@@ -37,6 +37,8 @@ data class ImportCard(
     val duplicatesDropped: Int,
     val trippedBounds: List<String>,
     val notice: ImportNotice,
+    /** How the file was read, e.g. "times assume UTC" when a bug report names no zone (R27). */
+    val notes: List<String> = emptyList(),
 ) {
     companion object {
         /** Shown for an intrusion log whose parser hit a line-length or per-type record limit. */
@@ -51,6 +53,7 @@ data class ImportCard(
             truncated: Boolean,
             boundTrips: List<String>,
             estimateBytes: Long? = null,
+            notes: List<String> = emptyList(),
         ): ImportCard? {
             if (write == null) return null
             val bounds = buildList {
@@ -62,7 +65,7 @@ data class ImportCard(
                 write.telemetryState == TelemetryState.FAILED -> ImportNotice.NotFullyStored(write.newFacts)
                 else -> ImportNotice.None
             }
-            return ImportCard(write.newFacts, write.alreadyStored, write.duplicatesDropped, bounds, notice)
+            return ImportCard(write.newFacts, write.alreadyStored, write.duplicatesDropped, bounds, notice, notes)
         }
     }
 }

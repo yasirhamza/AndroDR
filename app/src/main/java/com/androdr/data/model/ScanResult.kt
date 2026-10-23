@@ -129,12 +129,13 @@ enum class NotEvaluatedReason(val sentinel: String, val heading: String) {
     ),
 
     /**
-     * The correlation time budget (spec §5.2) cut a chain rule off, or ran out before it started,
-     * for the packages named. An app can cause this by flooding events, so it is never silent.
+     * A chain rule was not fully checked: the correlation time budget (spec §5.2) cut it off or ran
+     * out before it started (an app can cause this by flooding events), or the loaded rules bind more
+     * event kinds than one correlation query reads. Each entry's message names the cause; never silent.
      */
     CORRELATION_INCOMPLETE(
         "CorrelationIncomplete",
-        "Correlation incomplete -- some chains were not fully checked in the time allowed",
+        "Correlation incomplete -- some chains were not fully checked (each line says why)",
     ),
     ;
 

@@ -186,6 +186,28 @@ class BugReportTypedRecordsTest {
         assertTrue(wakelock.acquiredAt + offset in before..after)
     }
 
+    /**
+     * Ruling R27: the capture zone (persist.sys.timezone) is the time base of the whole import, so
+     * the header (and the wakelock times derived from it) are read in Asia/Qatar, not as UTC, and no
+     * "times assume UTC" note is added.
+     */
+    @Test
+    fun `the report's own time zone is the import's time base`() {
+        val zoned = fixtureText().replace("[ro.product.brand]: [google]",
+            "[ro.product.brand]: [google]\n[persist.sys.timezone]: [Asia/Qatar]")
+        val result = analyze(buildAnalyzer(zoned, defaultModules()))
+        val header = LocalDateTime.of(2026, 3, 28, 10, 15, 30).toInstant(ZoneOffset.ofHours(3)).toEpochMilli()
+        assertEquals(header - (2 * 3_600_000L + 15 * 60_000L + 30_000L),
+            result.telemetryBundle.wakelockAcquisitions.single().acquiredAt)
+        assertTrue("no assumption to report", result.importNotes.isEmpty())
+    }
+
+    /** R27 fallback: no persist.sys.timezone, so times are read as UTC and the import says so. */
+    @Test
+    fun `a report without a time zone is read as UTC with an import note`() {
+        assertEquals(listOf(com.androdr.scanner.bugreport.DumpsysClock.NOTE_ASSUMED_UTC), analyze().importNotes)
+    }
+
     @Test
     fun `a module that trips its record bound is reported in boundTrips`() {
         val tripping = buildAnalyzer(fixtureText(), defaultModules(BatteryDailyModule(maxRecords = 1)))

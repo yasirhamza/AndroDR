@@ -66,6 +66,10 @@ class GetpropParser @Inject constructor() {
         return manufacturer to brand
     }
 
+    /** The value of [key] in a getprop sequence, or null when it is absent. */
+    fun property(lines: Sequence<String>, key: String): String? =
+        lines.mapNotNull { parseLine(it) }.firstOrNull { it.first == key }?.second
+
     private fun parseLine(line: String): Pair<String, String>? {
         val bracketMatch = BRACKET_REGEX.find(line)
         if (bracketMatch != null) {

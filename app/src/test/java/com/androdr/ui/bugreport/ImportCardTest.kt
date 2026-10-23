@@ -22,6 +22,13 @@ class ImportCardTest {
         spaceToFree = space,
     )
 
+    /** R27: an import note (e.g. times assumed UTC) reaches the card. */
+    @Test
+    fun `import notes reach the card`() {
+        val card = ImportCard.from(write(), truncated = false, boundTrips = emptyList(), notes = listOf("note"))!!
+        assertEquals(listOf("note"), card.notes)
+    }
+
     @Test
     fun `counts are the write result's, not recomputed`() {
         val card = ImportCard.from(write(), truncated = false, boundTrips = emptyList())!!

@@ -17,8 +17,9 @@ import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import org.junit.Before
 import org.junit.runner.RunWith
-import org.robolectric.RobolectricTestRunner
+import org.robolectric.ParameterizedRobolectricTestRunner
 import java.util.TimeZone
 
 /**
@@ -26,16 +27,18 @@ import java.util.TimeZone
  * install-history UPDATE is not an install, and a system-UID AppOps op never had a timeline row, so
  * neither is a correlation atom. Driven through the real `InstallTimeModule` and `AppOpsModule`
  * output, stored and correlated by the import session's finishing transaction.
+ *
+ * Ruling R27 (TZ-1): both modules read the report's wall-clock times with the import's one clock
+ * (the capture zone, here Asia/Qatar from `persist.sys.timezone`), so every case gives the same
+ * outcome whatever the analyzing device's zone: the class runs under three JVM default zones.
  */
-@RunWith(RobolectricTestRunner::class)
-class BugReportCorrelationCategoriesTest {
+@RunWith(ParameterizedRobolectricTestRunner::class)
+class BugReportCorrelationCategoriesTest(private val jvmZone: String) {
     private val w = WriterFixture()
     private val zone: TimeZone = TimeZone.getDefault()
+    private val clock = DumpsysClock.fromSystemProperties("[persist.sys.timezone]: [Asia/Qatar]")
 
-    init {
-        // AppOpsModule reads local time, InstallTimeModule UTC: one zone keeps "20 min later" true.
-        TimeZone.setDefault(TimeZone.getTimeZone("UTC"))
-    }
+    @Before fun setUp() = TimeZone.setDefault(TimeZone.getTimeZone(jvmZone))
 
     @After fun tearDown() {
         w.close()
@@ -61,15 +64,15 @@ class BugReportCorrelationCategoriesTest {
     /** Imports [packages] (a `dumpsys package` section) and [appops] (a `dumpsys appops` section). */
     private fun import(id: Long, packages: String, appops: String) = runBlocking {
         val installs = InstallTimeModule()
-        val ops = AppOpsModule().analyze(appops, resolver, DeviceIdentity.UNKNOWN)
+        val ops = AppOpsModule().analyze(appops, resolver, DeviceIdentity.UNKNOWN, clock)
         val scan = w.scan(id, TelemetrySource.BUGREPORT_IMPORT)
         val hooks = BugReportHooks(scan, engine, SigmaCorrelationEngine(), emptyMap(), ops.timeline,
-            installs.parseSection(packages))
+            installs.parseSection(packages, clock))
         val s = w.writer.begin(scan, liveEvents = false, hooks)
         s.append("appops_audit", TelemetrySource.BUGREPORT_IMPORT, CAPTURED,
             BugReportRecordBuilders.generic(ops.telemetry))
         s.append(BugReportRecordBuilders.PACKAGE_INSTALL_HISTORY, TelemetrySource.BUGREPORT_IMPORT, CAPTURED,
-            BugReportRecordBuilders.packageInstallHistory(installs.parseHistory(packages, CAPTURED)))
+            BugReportRecordBuilders.packageInstallHistory(installs.parseHistory(packages, CAPTURED, clock)))
         s.finish()
         // Review m-6: every module row, built by the real modules, claims its fact (R17 key match).
         val unclaimed = w.f.db.forensicTimelineEventDao().getAllForExport()
@@ -150,7 +153,11 @@ class BugReportCorrelationCategoriesTest {
         assertEquals(1L, signals("androdr-corr-004"))
     }
 
-    private companion object {
-        const val CAPTURED = 1_774_605_600_000L
+    companion object {
+        private const val CAPTURED = 1_774_605_600_000L
+
+        @JvmStatic
+        @ParameterizedRobolectricTestRunner.Parameters(name = "JVM zone {0}")
+        fun zones(): List<Array<Any>> = listOf("UTC", "Asia/Qatar", "America/New_York").map { arrayOf<Any>(it) }
     }
 }
