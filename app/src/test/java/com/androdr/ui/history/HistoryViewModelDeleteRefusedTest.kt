@@ -32,7 +32,7 @@ class HistoryViewModelDeleteRefusedTest {
     @After fun tearDown() = Dispatchers.resetMain()
 
     private val scan = ScanResult(
-        id = 1L, timestamp = 1L, findings = emptyList(), bugReportFindings = emptyList(),
+        id = 1L, timestamp = 1L, bugReportFindings = emptyList(),
         riskySideloadCount = 0, knownMalwareCount = 0,
     )
 
@@ -40,10 +40,12 @@ class HistoryViewModelDeleteRefusedTest {
         repository = repository,
         orchestrator = mockk(relaxed = true),
         reportExporter = mockk(relaxed = true),
+        findings = mockk(relaxed = true),
     )
 
     private fun repo(deleteOne: Boolean, deleteAll: Boolean) = mockk<ScanRepository> {
-        every { allScans } returns flowOf(listOf(scan))
+        every { pagedScans() } returns flowOf(androidx.paging.PagingData.from(listOf(scan)))
+        every { hasScans } returns flowOf(true)
         coEvery { deleteScan(any()) } returns deleteOne
         coEvery { deleteAllScans() } returns deleteAll
     }

@@ -111,10 +111,10 @@ abstract class KeysetPagingSource<K : Any, V : Any>(
 
     companion object {
         /**
-         * Tables paging sources observe, as of the current schema (20): `ScanResult` and
-         * `forensic_timeline`. Schema 21 adds `alert`.
+         * Tables paging sources observe, as of the current schema (21): `ScanResult`,
+         * `forensic_timeline` and `alert`.
          */
-        val OBSERVED_TABLES: Array<String> = arrayOf("ScanResult", "forensic_timeline")
+        val OBSERVED_TABLES: Array<String> = arrayOf("ScanResult", "forensic_timeline", "alert")
     }
 }
 

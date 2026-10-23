@@ -4,6 +4,7 @@ import android.os.Build
 import com.androdr.data.db.ServiceSummary
 import com.androdr.data.model.NotEvaluatedReason
 import com.androdr.data.model.ScanResult
+import com.androdr.data.model.ScanWithFindings
 import com.androdr.data.model.TelemetrySource
 import com.androdr.data.model.TelemetryState
 import com.androdr.sigma.Evidence
@@ -114,8 +115,8 @@ object ReportFormatter {
         mode: ExportMode,
         versionName: String,
     ) {
-        // Phase B: the findings are the scan's own; every helper reads them from the scan.
-        val s = scan.copy(findings = findings.findings)
+        // The findings are the scan's own scan_finding rows (FindingsView); every helper reads them here.
+        val s = ScanWithFindings(scan, findings.findings)
         val o = ReportOut(out)
         val includeFindings = mode != ExportMode.TELEMETRY_ONLY
         val includeTelemetry = mode != ExportMode.FINDINGS_ONLY
@@ -138,7 +139,7 @@ object ReportFormatter {
         }
         if (includeTelemetry) {
             o.section("TELEMETRY SECTION")
-            o.appendStoredTelemetry(s, services, telemetry)
+            o.appendStoredTelemetry(s.scan, services, telemetry)
             o.appendLog(logLines)
         }
         o.appendLine()
@@ -147,7 +148,7 @@ object ReportFormatter {
         o.appendLine(RULE)
     }
 
-    private fun ReportOut.appendHeader(scan: ScanResult, mode: ExportMode, versionName: String) {
+    private fun ReportOut.appendHeader(scan: ScanWithFindings, mode: ExportMode, versionName: String) {
         val timestampFmt = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US)
         appendLine(RULE)
         appendLine("  AndroDR Security Report")
@@ -168,7 +169,7 @@ object ReportFormatter {
      * records (only when no finding carries domain IOC evidence), and an import's latest event.
      */
     private suspend fun findingsContext(
-        scan: ScanResult,
+        scan: ScanWithFindings,
         findings: FindingsView,
         services: List<ServiceSummary>,
         telemetry: StoredTelemetrySource,
@@ -213,7 +214,7 @@ object ReportFormatter {
      * This scan's own stored app count. Only a fully stored scan's count is the number scanned:
      * under PARTIAL_RETENTION or a partway FAILED the surviving records would understate it.
      */
-    private fun appCountText(scan: ScanResult, appRecords: ServiceSummary?): String = when {
+    private fun appCountText(scan: ScanWithFindings, appRecords: ServiceSummary?): String = when {
         appRecords == null -> "N/A"
         scan.telemetryState == TelemetryState.PARTIAL_RETENTION || scan.telemetryState == TelemetryState.FAILED ->
             "N/A (only part of this scan's telemetry is stored)"
@@ -221,7 +222,7 @@ object ReportFormatter {
     }
 
     @Suppress("LongMethod", "CyclomaticComplexMethod")
-    private fun ReportOut.appendFindingsSections(scan: ScanResult, ctx: FindingsContext) {
+    private fun ReportOut.appendFindingsSections(scan: ScanWithFindings, ctx: FindingsContext) {
         val scanSource = scan.source
         val displayNames = ctx.displayNames
         val campaignVerdicts = ctx.verdicts
@@ -312,7 +313,7 @@ object ReportFormatter {
      * was checked and found clean. Grouped by [NotEvaluatedReason] in enum order so the
      * output is stable whatever order the scanners recorded them in.
      */
-    private fun ReportOut.appendNotChecked(scan: ScanResult) {
+    private fun ReportOut.appendNotChecked(scan: ScanWithFindings) {
         val byReason = scan.scannerErrors
             .mapNotNull { failure -> NotEvaluatedReason.fromSentinel(failure.exception)?.to(failure) }
             .groupBy({ it.first }, { it.second })
@@ -338,7 +339,7 @@ object ReportFormatter {
     @Suppress("CyclomaticComplexMethod") // Verdict assembles summary, device posture, campaign,
     // and action guidance in a structured block -- splitting would fragment the output logic.
     private fun ReportOut.appendVerdict(
-        scan: ScanResult,
+        scan: ScanWithFindings,
         appCount: String,
         dnsIocRows: List<String>,
         campaignVerdicts: List<CampaignVerdict>,
@@ -404,7 +405,7 @@ object ReportFormatter {
 
     // Collects action guidance from Finding.guidance (rule-driven) and device posture summary.
     // Ordered: CRITICAL-prefixed first, then others, then device posture.
-    private fun ReportOut.appendActionGuidance(scan: ScanResult) {
+    private fun ReportOut.appendActionGuidance(scan: ScanWithFindings) {
         val actions = mutableListOf<String>()
 
         // Collect rule-driven guidance from triggered app risk findings
@@ -437,7 +438,7 @@ object ReportFormatter {
 
     // A chain of events -- several things that look minor on their own but add up.
     // Rendered first, and never again under APP RISKS or DEVICE CHECKS.
-    private fun ReportOut.appendActivityChains(scan: ScanResult) {
+    private fun ReportOut.appendActivityChains(scan: ScanWithFindings) {
         section(WARNING_SIGNS_SECTION)
         val chains = scan.activityChains.filter { it.triggered }
         // A pattern with no events to bind to was not checked at all; saying only

@@ -44,11 +44,10 @@ class BugReportAnalyzer @Inject constructor(
     }
 
     /**
-     * One bug report's telemetry. [findings] is empty from [analyze]: the orchestrator's writer
-     * session evaluates [moduleTelemetry] and [telemetryBundle] and returns the result with them.
+     * One bug report's telemetry: the orchestrator's writer session evaluates and stores
+     * [moduleTelemetry] and [telemetryBundle]; the findings are the import scan's `scan_finding` rows.
      */
     data class BugReportAnalysisResult(
-        val findings: List<Finding>,
         val telemetryBundle: TypedTelemetry = TypedTelemetry(),
         /** Record bounds a module tripped (it stopped adding records); empty when none. */
         val boundTrips: List<String> = emptyList(),
@@ -142,7 +141,7 @@ class BugReportAnalyzer @Inject constructor(
 
         if (neededSections.isNotEmpty()) {
             val stream1 = openBugReportStream(bugReportUri)
-                ?: return@withContext BugReportAnalysisResult(emptyList(), moduleTelemetry = moduleTelemetry)
+                ?: return@withContext BugReportAnalysisResult(moduleTelemetry = moduleTelemetry)
 
             try {
                 ZipInputStream(stream1.buffered()).use { zip ->
@@ -204,7 +203,7 @@ class BugReportAnalyzer @Inject constructor(
                 }
             } catch (e: Exception) {
                 Log.w(TAG, "Failed to read zip contents (pass 1): ${e.message}")
-                return@withContext BugReportAnalysisResult(emptyList(), moduleTelemetry = moduleTelemetry)
+                return@withContext BugReportAnalysisResult(moduleTelemetry = moduleTelemetry)
             }
         }
 
@@ -212,7 +211,7 @@ class BugReportAnalyzer @Inject constructor(
         // but kept for any future raw modules registered via Hilt IntoSet).
         if (rawModules.isNotEmpty()) {
             val stream2 = openBugReportStream(bugReportUri)
-                ?: return@withContext BugReportAnalysisResult(emptyList(), moduleTelemetry = moduleTelemetry)
+                ?: return@withContext BugReportAnalysisResult(moduleTelemetry = moduleTelemetry)
             try {
                 ZipInputStream(stream2.buffered()).use { zip ->
                     val entrySequence = sequence {
@@ -249,7 +248,7 @@ class BugReportAnalyzer @Inject constructor(
 
         Log.d(TAG, "Collected ${moduleTelemetry.sumOf { it.records.size }} generic records")
         BugReportAnalysisResult(
-            emptyList(), bundle, boundTrips, moduleTelemetry,
+            bundle, boundTrips, moduleTelemetry,
             importNotes = if (clock.assumedUtc) listOf(DumpsysClock.NOTE_ASSUMED_UTC) else emptyList(),
         )
     }

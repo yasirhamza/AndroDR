@@ -11,6 +11,7 @@ import androidx.paging.PagingConfig
 import androidx.paging.PagingData
 import androidx.paging.cachedIn
 import androidx.paging.insertSeparators
+import androidx.paging.map
 import com.androdr.data.db.AppDatabase
 import com.androdr.data.db.TimelineFilter
 import com.androdr.data.db.chunkedIn
@@ -42,7 +43,6 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
-import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.flow.runningFold
@@ -91,6 +91,7 @@ class TimelineViewModel @Inject constructor(
     private val reportExporter: com.androdr.reporting.ReportExporter,
     private val clusterMembers: ClusterMembers,
     private val signalMembers: com.androdr.data.db.SignalMemberDao,
+    private val findingsRepository: com.androdr.data.repo.FindingsRepository,
     /** This navigation entry's saved state: survives rotation and process death (deep links, I1). */
     private val savedState: SavedStateHandle,
 ) : ViewModel() {
@@ -262,25 +263,24 @@ class TimelineViewModel @Inject constructor(
     /** A scan header's count: the current filter narrowed to [scanId]. */
     suspend fun scanCount(scanId: Long): Long? = count(_filter.value.copy(scanId = scanId))
 
-    private val latestFindings: StateFlow<List<Finding>> = scanRepository.allScans
-        .map { scans -> timelineFindingRows(scans.firstOrNull()?.findings.orEmpty()) }
+    /**
+     * The pinned section (C5, ruling R34): the current findings' triggered state findings — the
+     * latest live scan's ([FindingsRepository.current]; imports never displace live state).
+     */
+    val findings: StateFlow<List<Finding>> = findingsRepository.current()
+        .map { timelineFindingRows(it.stateFindings) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    /** The pinned section: the latest scan's triggered findings (current findings). */
-    val findings: StateFlow<List<Finding>> = latestFindings
-
-    /** "By scan": one header per completed scan, newest first. */
-    val scanGroups: StateFlow<List<ScanGroup>> = scanRepository.allScans
-        .map { scans -> scans.map(::scanGroup) }
-        .flowOn(Dispatchers.Default)
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    /** "By scan": one header per completed scan, newest first, keyset-paged (no cap, spec §5.5). */
+    val scanGroups: Flow<PagingData<ScanGroup>> = scanRepository.pagedScans()
+        .map { page -> page.map(::scanGroup) }
+        .cachedIn(viewModelScope)
 
     private fun scanGroup(scan: ScanResult): ScanGroup = ScanGroup(
         scanId = scan.id,
         timestamp = scan.timestamp,
         importSource = scan.source.takeIf { it != TelemetrySource.LIVE_SCAN },
-        maxSeverity = scan.findings.filter { it.triggered }.maxByOrNull { severityOrdinal(it.level) }
-            ?.level?.uppercase() ?: "INFO",
+        maxSeverity = scan.maxLevel?.uppercase() ?: "INFO",
     )
 
     private val _shareUri = MutableStateFlow<Uri?>(null)
@@ -428,8 +428,7 @@ class TimelineViewModel @Inject constructor(
         viewModelScope.launch {
             _exporting.value = true
             try {
-                val scans = scanRepository.allScans.first()
-                val scan = scans.firstOrNull() ?: return@launch
+                val scan = scanRepository.latestTwo.first().firstOrNull() ?: return@launch
                 val uri = reportExporter.export(scan, mode)
                 _shareUri.value = uri
             } catch (e: Exception) {

@@ -195,6 +195,13 @@ object SigmaRuleEvaluator {
         return findings
     }
 
+    /**
+     * A finding's `matchContext`: the record's scalar fields as strings. The one definition, shared
+     * with readers that rebuild a stored finding's context from its fact (`FindingsRepository`).
+     */
+    fun matchContextOf(record: Map<String, Any?>): Map<String, String> =
+        record.filterValues { it !is List<*> && it !is Map<*, *> }.mapValues { (_, v) -> v?.toString() ?: "" }
+
     private fun buildFinding(
         rule: SigmaRule, category: FindingCategory, triggered: Boolean,
         record: Map<String, Any?>, evidenceResult: EvidenceResult?,
@@ -226,8 +233,7 @@ object SigmaRuleEvaluator {
             guidance = if (triggered) rule.display.guidance else "",
             triggered = triggered,
             evidence = evidenceResult?.evidence ?: Evidence.None,
-            matchContext = record.filterValues { it !is List<*> && it !is Map<*, *> }
-                .mapValues { (_, v) -> v?.toString() ?: "" },
+            matchContext = matchContextOf(record),
             impliesFlags = rule.impliesFlags,
             ruleCategory = rule.category.name,
             service = service,

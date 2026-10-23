@@ -3,9 +3,9 @@ package com.androdr.data.db
 import com.androdr.data.model.SignalMember
 
 /**
- * The fact pin test (spec §5.1 Pins): a fact is pinned while a `forensic_timeline` row or a
- * `signal_member` fact ref points at it. One fragment shared by every reader and by
- * [TelemetryFactDao.deleteUnobservedUnpinned]; Task D2 extends it to `scan_finding` and `alert`.
+ * The fact pin test (spec §5.1 Pins): a fact is pinned while a `forensic_timeline` row, a
+ * `signal_member` fact ref, a triggered `scan_finding` or an `alert` points at it. One fragment
+ * shared by every reader and by [TelemetryFactDao.deleteUnobservedUnpinned].
  *
  * **Fixed alias:** every fragment here refers to the fact as [ALIAS] (`f`), so a query using
  * them must name the fact table `telemetry_record f`. Room needs compile-time constant SQL, so
@@ -15,7 +15,9 @@ object PinnedFact {
     const val ALIAS = "f"
 
     const val SQL = "(EXISTS (SELECT 1 FROM forensic_timeline p WHERE p.recordId = f.id) " +
-        "OR EXISTS (SELECT 1 FROM signal_member m WHERE m.kind = ${SignalMember.KIND_FACT} AND m.refId = f.id))"
+        "OR EXISTS (SELECT 1 FROM signal_member m WHERE m.kind = ${SignalMember.KIND_FACT} AND m.refId = f.id) " +
+        "OR EXISTS (SELECT 1 FROM scan_finding pf WHERE pf.recordId = f.id AND pf.triggered = 1) " +
+        "OR EXISTS (SELECT 1 FROM alert pa WHERE pa.recordId = f.id))"
 
     /** True when no observation (of any scan) refers to the fact `f`. */
     const val UNOBSERVED = "NOT EXISTS (SELECT 1 FROM scan_record u WHERE u.recordId = f.id)"

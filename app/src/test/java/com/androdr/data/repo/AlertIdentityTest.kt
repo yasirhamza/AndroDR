@@ -59,7 +59,8 @@ class AlertIdentityTest {
         for (e in all) {
             val stored = Converters.fromFindingList(listOf(finding(e)))
             val evidence = (Json.parseToJsonElement(stored) as JsonArray).single().let { it as JsonObject }["evidence"]
-            assertEquals("$e", AlertIdentity.Discriminator.of(e), AlertIdentity.Discriminator.ofJson(evidence as? JsonObject))
+            assertEquals("$e", AlertIdentity.Discriminator.of(e),
+                AlertIdentity.Discriminator.ofJson(evidence as? JsonObject))
         }
     }
 

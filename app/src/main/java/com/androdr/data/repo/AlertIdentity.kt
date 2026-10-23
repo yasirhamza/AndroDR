@@ -38,7 +38,8 @@ object AlertIdentity {
             fun of(evidence: Evidence): Discriminator = when (evidence) {
                 Evidence.None -> Discriminator(NONE, "")
                 is Evidence.IocMatch -> Discriminator(IOC_MATCH, evidence.matchedIndicator)
-                is Evidence.CveList -> Discriminator(CVE_LIST, evidence.cves.map { it.cveId }.sorted().joinToString(","))
+                is Evidence.CveList ->
+                    Discriminator(CVE_LIST, evidence.cves.map { it.cveId }.sorted().joinToString(","))
                 is Evidence.PermissionCluster ->
                     Discriminator(PERMISSION_CLUSTER, evidence.permissions.sorted().joinToString(","))
             }

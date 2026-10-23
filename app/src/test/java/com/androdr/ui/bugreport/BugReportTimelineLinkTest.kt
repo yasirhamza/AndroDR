@@ -39,7 +39,7 @@ class BugReportTimelineLinkTest {
     @After fun tearDown() = Dispatchers.resetMain()
 
     private val uri = mockk<Uri>(relaxed = true)
-    private val scan = ScanResult(id = 42L, timestamp = 42L, findings = emptyList(), bugReportFindings = emptyList(),
+    private val scan = ScanResult(id = 42L, timestamp = 42L, bugReportFindings = emptyList(),
         riskySideloadCount = 0, knownMalwareCount = 0)
     private val write = WriteResult(1, 0, 0, TelemetryState.STORED, scan)
     private val exporter = mockk<ReportExporter>(relaxed = true)
@@ -48,10 +48,11 @@ class BugReportTimelineLinkTest {
         mockk { coEvery { analyzeArtifact(any()) } returns analysis },
         mockk<ImportPreflight> { coEvery { check(any()) } returns Preflight.Ok },
         exporter,
+        mockk(relaxed = true),
     )
 
     private val bugReport = ScanOrchestrator.ArtifactAnalysis.BugReport(
-        BugReportAnalyzer.BugReportAnalysisResult(findings = emptyList(), write = write))
+        BugReportAnalyzer.BugReportAnalysisResult(write = write))
 
     @Test
     fun `a bug report import links to its scan, and export writes that scan's report`() = runTest {
@@ -69,7 +70,7 @@ class BugReportTimelineLinkTest {
     fun `an intrusion-log import links to its scan`() = runTest {
         val stats = IntrusionLogStats(0, 0, 0, 0, 0, null, null)
         val vm = vm(ScanOrchestrator.ArtifactAnalysis.IntrusionLog(
-            IntrusionLogAnalysisResult(emptyList(), stats, write = write)))
+            IntrusionLogAnalysisResult(stats, write = write)))
         vm.onFilePicked(uri)
         assertEquals(42L, vm.importScanId.value)
     }

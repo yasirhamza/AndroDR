@@ -20,7 +20,7 @@ import org.junit.Test
 class NotEvaluatedReasonTest {
 
     private fun scan(vararg errors: ScannerFailure) =
-        ScanResult(timestamp = 0L, findings = emptyList(), bugReportFindings = emptyList(),
+        ScanResult(timestamp = 0L, bugReportFindings = emptyList(),
             riskySideloadCount = 0, knownMalwareCount = 0, scannerErrors = errors.toList())
 
     @Test

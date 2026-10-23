@@ -1,6 +1,7 @@
 package com.androdr.reporting
 
-import com.androdr.data.model.ScanResult
+import com.androdr.data.model.ScanWithFindings
+import com.androdr.data.model.scanWith
 import com.androdr.sigma.Finding
 import com.androdr.sigma.FindingCategory
 import org.junit.Assert.assertEquals
@@ -23,7 +24,7 @@ import org.junit.Test
  */
 class OverallRiskConsistencyTest {
 
-    private fun scanOf(vararg findings: Finding): ScanResult = ScanResult(
+    private fun scanOf(vararg findings: Finding): ScanWithFindings = scanWith(
         id = 1L,
         timestamp = 1711900800000,
         findings = findings.toList(),
@@ -33,7 +34,7 @@ class OverallRiskConsistencyTest {
         scannerErrors = emptyList()
     )
 
-    private fun headerRiskOf(scan: ScanResult): String =
+    private fun headerRiskOf(scan: ScanWithFindings): String =
         reportText(scan)
             .lineSequence()
             .first { it.contains("OVERALL RISK:") }

@@ -1,6 +1,7 @@
 package com.androdr.ui.dashboard
 
-import com.androdr.data.model.ScanResult
+import com.androdr.data.model.ScanWithFindings
+import com.androdr.data.model.scanWith
 import com.androdr.data.model.TelemetryState
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -11,13 +12,13 @@ import org.junit.Test
 /** A7c: the Dashboard's storage warnings and the "unsaved result" handling. */
 class StorageFailedBannerTest {
 
-    private fun scan(id: Long = 1L, state: TelemetryState = TelemetryState.STORED) = ScanResult(
-        id = id, timestamp = id, findings = emptyList(), bugReportFindings = emptyList(),
+    private fun scan(id: Long = 1L, state: TelemetryState = TelemetryState.STORED) = scanWith(
+        id = id, timestamp = id, bugReportFindings = emptyList(),
         riskySideloadCount = 0, knownMalwareCount = 0, telemetryState = state,
     )
 
     private fun banner(
-        scan: ScanResult?, scanning: Boolean = false, unsaved: Boolean = false, flag: Boolean = false,
+        scan: ScanWithFindings?, scanning: Boolean = false, unsaved: Boolean = false, flag: Boolean = false,
     ) = DashboardViewModel.storageBanner(scan, scanning, unsaved, flag)
 
     @Test
@@ -46,7 +47,7 @@ class StorageFailedBannerTest {
     @Test
     fun `a failed import with a saved live scan on screen does not mark that scan unsaved`() {
         val live = scan(id = 5L)
-        val outcome = DashboardViewModel.outcomeOf(live, listOf(live))!!
+        val outcome = DashboardViewModel.outcomeOf(live, saved = true)!!
         assertNull("the live scan was saved", outcome.unsaved)
         // The import's failure set the flag; the live scan is still the one displayed.
         assertEquals(StorageBanner.EARLIER_SCAN_SHOWN, banner(live, unsaved = outcome.unsaved != null, flag = true))
@@ -72,7 +73,7 @@ class StorageFailedBannerTest {
     fun `a failed history read concludes nothing, cancellation propagates`() = kotlinx.coroutines.runBlocking {
         assertNull(DashboardViewModel.readPersisted { error("database closed") })
         assertNull(DashboardViewModel.outcomeOf(scan(), null))
-        val ok = DashboardViewModel.readPersisted { listOf(scan(id = 9L)) }
+        val ok = DashboardViewModel.readPersisted { listOf(9L) }
         assertEquals(1, ok!!.size)
         var cancelled = false
         try {
@@ -92,23 +93,23 @@ class StorageFailedBannerTest {
     fun `an unsaved in-memory result replaces the older clean scan as the latest`() {
         val clean = scan(id = 1L)
         val unsaved = scan(id = 2L, state = TelemetryState.FAILED)
-        assertSame(unsaved, DashboardViewModel.resolveLatest(listOf(clean), unsaved))
-        assertSame(clean, DashboardViewModel.resolveLatest(listOf(clean), null))
+        assertSame(unsaved, DashboardViewModel.resolveLatest(clean, unsaved))
+        assertSame(clean, DashboardViewModel.resolveLatest(clean, null))
     }
 
     @Test
     fun `a result is unsaved exactly when no saved scan has its id`() {
         val r = scan(id = 2L)
-        assertNull(DashboardViewModel.unsavedOrNull(r, listOf(scan(id = 2L), scan(id = 1L))))
-        assertSame(r, DashboardViewModel.unsavedOrNull(r, listOf(scan(id = 1L))))
+        assertNull(DashboardViewModel.unsavedOrNull(r, saved = true))
+        assertSame(r, DashboardViewModel.unsavedOrNull(r, saved = false))
     }
 
     @Test
     fun `the health flag clears only after a scan that was saved with all its records`() {
-        val saved = listOf(scan(id = 2L))
-        assertTrue(DashboardViewModel.shouldClearHealthFlag(scan(id = 2L), saved))
-        assertTrue(!DashboardViewModel.shouldClearHealthFlag(scan(id = 3L), saved))
-        assertTrue(!DashboardViewModel.shouldClearHealthFlag(scan(id = 2L, state = TelemetryState.FAILED), saved))
+        assertTrue(DashboardViewModel.shouldClearHealthFlag(scan(id = 2L), saved = true))
+        assertTrue(!DashboardViewModel.shouldClearHealthFlag(scan(id = 3L), saved = false))
+        val failed = scan(id = 2L, state = TelemetryState.FAILED)
+        assertTrue(!DashboardViewModel.shouldClearHealthFlag(failed, saved = true))
     }
 
     @Test

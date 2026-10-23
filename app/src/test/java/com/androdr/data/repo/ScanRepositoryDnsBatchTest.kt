@@ -27,6 +27,7 @@ class ScanRepositoryDnsBatchTest {
         indicatorResolver = resolver,
         scanWrites = mockk(relaxed = true),
         scanLock = ScanLock(),
+        db = mockk(relaxed = true),
     )
     private val graphite = Indicator("domain", "forti.external-muki.com", family = "Graphite (Paragon)",
         source = "androdr_public_repo", fetchedAt = 0L)

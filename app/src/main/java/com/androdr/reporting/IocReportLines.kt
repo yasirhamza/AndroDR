@@ -1,6 +1,6 @@
 package com.androdr.reporting
 
-import com.androdr.data.model.ScanResult
+import com.androdr.data.model.ScanWithFindings
 import com.androdr.sigma.Evidence
 
 /** Report lines that name the threat-list entry a finding matched. Beside the formatter, as DnsReportSection is. */
@@ -29,7 +29,7 @@ internal fun blockedText(reason: String?): String? = when {
 }
 
 /** Domains the scan's findings matched against the threat lists. */
-internal fun iocDomainsOf(scan: ScanResult): Set<String> =
+internal fun iocDomainsOf(scan: ScanWithFindings): Set<String> =
     scan.appRisks.mapNotNull { it.evidence as? Evidence.IocMatch }
         .filter { it.iocType == "domain" }.map { it.matchedIndicator }.toSet()
 
@@ -39,7 +39,7 @@ internal fun iocDomainsOf(scan: ScanResult): Set<String> =
  * stored DNS records.
  * The summary count and the list both come from here so they cannot disagree.
  */
-internal fun dnsIocRows(scan: ScanResult, dnsReasons: Collection<String>): List<String> {
+internal fun dnsIocRows(scan: ScanWithFindings, dnsReasons: Collection<String>): List<String> {
     val fromEvidence = scan.appRisks.filter { it.triggered }
         .mapNotNull { it.evidence as? Evidence.IocMatch }
         .filter { it.iocType == "domain" }

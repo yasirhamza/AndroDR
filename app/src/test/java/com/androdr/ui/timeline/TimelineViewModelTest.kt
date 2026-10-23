@@ -47,6 +47,7 @@ class TimelineViewModelTest {
         reportExporter = mockk(relaxed = true),
         clusterMembers = mockk(relaxed = true),
         signalMembers = mockk(relaxed = true),
+        findingsRepository = mockk(relaxed = true),
         savedState = saved,
     ).also { it.io = dispatcher }
 

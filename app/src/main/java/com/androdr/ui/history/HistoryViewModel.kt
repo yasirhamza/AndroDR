@@ -5,6 +5,7 @@ import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.androdr.data.model.ScanResult
+import com.androdr.data.repo.FindingsRepository
 import com.androdr.data.repo.ScanRepository
 import com.androdr.reporting.ExportEstimate
 import com.androdr.reporting.ExportMode
@@ -12,26 +13,35 @@ import com.androdr.reporting.ReportExporter
 import com.androdr.reporting.ReportSummary
 import com.androdr.scanner.ScanOrchestrator
 import dagger.hilt.android.lifecycle.HiltViewModel
+import androidx.paging.PagingData
+import androidx.paging.cachedIn
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 @HiltViewModel
+@Suppress("TooManyFunctions") // the sheet, export, delete and selection actions share the history state
 class HistoryViewModel @Inject constructor(
     private val repository: ScanRepository,
     private val orchestrator: ScanOrchestrator,
     private val reportExporter: ReportExporter,
+    private val findings: FindingsRepository,
 ) : ViewModel() {
 
-    /** Full scan history, newest first. */
-    val allScans: StateFlow<List<ScanResult>> = repository.allScans
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+    /** Full scan history, newest first, keyset-paged (no cap, spec §5.5). */
+    val scans: Flow<PagingData<ScanResult>> = repository.pagedScans().cachedIn(viewModelScope)
+
+    /** False when no scan is listed (the empty state). */
+    val hasScans: StateFlow<Boolean> = repository.hasScans
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), true)
 
     private val _selectedScan = MutableStateFlow<ScanResult?>(null)
 
@@ -40,22 +50,31 @@ class HistoryViewModel @Inject constructor(
 
     /**
      * The diff between [selectedScan] and the scan that immediately preceded it
-     * in the history list (i.e. the next oldest entry). Null when no scan is
-     * selected or the selected scan has no predecessor.
+     * in the history list (the next oldest COMPLETE scan, [ScanRepository.previousOf]).
+     * Null when no scan is selected or the selected scan has no predecessor.
      *
-     * [allScans] is newest-first (`ORDER BY timestamp DESC`), so `idx + 1` is
-     * the OLDER neighbour and the selected scan is the newer one:
-     * [ScanOrchestrator.computeDiff] takes `(newer, older)` in that order.
-     * Passing them the other way round silently inverts the whole section —
-     * new risks render as resolved and resolved risks as new.
+     * The selected scan is the NEWER one: [ScanOrchestrator.computeDiff] takes
+     * `(newer, older)` in that order. Passing them the other way round silently
+     * inverts the whole section — new risks render as resolved and resolved
+     * risks as new. Both scans' triggered findings are read from `scan_finding`.
      */
-    val selectedDiff: StateFlow<ScanOrchestrator.ScanDiff?> =
-        combine(allScans, _selectedScan) { scans, selected ->
-            if (selected == null) return@combine null
-            val idx = scans.indexOfFirst { it.id == selected.id }
-            val predecessor = scans.getOrNull(idx + 1) ?: return@combine null
-            orchestrator.computeDiff(selected, predecessor)
-        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val selectedDiff: StateFlow<ScanOrchestrator.ScanDiff?> = _selectedScan
+        .mapLatest { selected -> selected?.let { diffWithPredecessor(it) } }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
+    @Suppress("TooGenericExceptionCaught") // a diff that cannot be read is not shown, never a crash
+    private suspend fun diffWithPredecessor(selected: ScanResult): ScanOrchestrator.ScanDiff? = try {
+        repository.previousOf(selected)?.let { older ->
+            orchestrator.computeDiff(findings.withFindings(selected, triggeredOnly = true),
+                findings.withFindings(older, triggeredOnly = true))
+        }
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        Log.w(TAG, "diff read failed", e)
+        null
+    }
 
     /** Emits a [Uri] when a report is ready to share; null when idle or after consumption. */
     private val _shareUri = MutableStateFlow<Uri?>(null)

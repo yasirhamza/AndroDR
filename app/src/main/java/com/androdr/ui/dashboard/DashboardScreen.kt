@@ -56,7 +56,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.androdr.R
 import com.androdr.data.model.RiskLevel
-import com.androdr.data.model.ScanResult
+import com.androdr.data.model.ScanWithFindings
 import com.androdr.scanner.ScanProgress
 import com.androdr.ui.theme.androdrColors
 import java.text.SimpleDateFormat
@@ -296,7 +296,7 @@ fun DashboardScreen(
 }
 
 @Composable
-private fun PostScanGuidance(riskLevel: RiskLevel?, latestScan: ScanResult?) {
+private fun PostScanGuidance(riskLevel: RiskLevel?, latestScan: ScanWithFindings?) {
     val colors = MaterialTheme.androdrColors
     val hasCriticalAppRisks = latestScan?.appRisks?.any {
         it.triggered && it.level.lowercase() == "critical"
@@ -361,7 +361,7 @@ private fun PostScanGuidance(riskLevel: RiskLevel?, latestScan: ScanResult?) {
 
 @Suppress("LongMethod") // Compose UI layout with conditional risk display
 @Composable
-private fun RiskLevelCard(latestScan: ScanResult?) {
+private fun RiskLevelCard(latestScan: ScanWithFindings?) {
     val colors = MaterialTheme.androdrColors
     val (riskColor, riskLabel) = when (latestScan?.overallRiskLevel) {
         RiskLevel.CRITICAL -> Pair(colors.critical, "CRITICAL")
@@ -579,12 +579,12 @@ private fun ScanProgressCard(progress: ScanProgress, isUpdatingIntel: Boolean = 
 
 /**
  * Warning banner shown when the most recent scan completed with at least
- * one scanner failure ([ScanResult.isPartialScan] == true). Without this
+ * one scanner failure ([ScanWithFindings.isPartialScan] == true). Without this
  * banner the Dashboard would claim "Your phone looks secure" even if half
  * the scanners crashed.
  */
 @Composable
-private fun PartialScanBanner(scan: ScanResult) {
+private fun PartialScanBanner(scan: ScanWithFindings) {
     val colors = MaterialTheme.androdrColors
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -624,7 +624,7 @@ private fun PartialScanBanner(scan: ScanResult) {
 
 /** Storage warnings: the latest result not saved / only partly stored, and dropped DNS events. */
 @Composable
-private fun StorageBanners(viewModel: DashboardViewModel, latestScan: ScanResult?, isScanning: Boolean) {
+private fun StorageBanners(viewModel: DashboardViewModel, latestScan: ScanWithFindings?, isScanning: Boolean) {
     val unsaved by viewModel.latestUnsaved.collectAsStateWithLifecycle()
     val healthFailed by viewModel.storageHealthFailed.collectAsStateWithLifecycle()
     val drops by viewModel.dnsDrops.collectAsStateWithLifecycle()

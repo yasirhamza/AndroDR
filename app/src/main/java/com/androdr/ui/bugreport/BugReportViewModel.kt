@@ -5,6 +5,7 @@ import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.androdr.data.model.ScanResult
+import com.androdr.data.repo.FindingsRepository
 import com.androdr.reporting.ReportExporter
 import com.androdr.scanner.ArtifactType
 import com.androdr.data.store.Preflight
@@ -13,7 +14,14 @@ import com.androdr.scanner.IntrusionLogStats
 import com.androdr.scanner.ScanOrchestrator
 import com.androdr.sigma.Finding
 import dagger.hilt.android.lifecycle.HiltViewModel
+import androidx.paging.PagingData
+import androidx.paging.cachedIn
+import androidx.paging.filter
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -28,10 +36,8 @@ class BugReportViewModel @Inject constructor(
     private val orchestrator: ScanOrchestrator,
     private val importPreflight: ImportPreflight,
     private val reportExporter: ReportExporter,
+    private val findingsRepository: FindingsRepository,
 ) : ViewModel() {
-
-    private val _findings = MutableStateFlow<List<Finding>>(emptyList())
-    val findings: StateFlow<List<Finding>> = _findings.asStateFlow()
 
     /**
      * The scan the last import was saved as, or null while none has completed. Its records are in
@@ -41,6 +47,22 @@ class BugReportViewModel @Inject constructor(
     private val _importScan = MutableStateFlow<ScanResult?>(null)
     val importScanId: StateFlow<Long?> = _importScan.map { it?.id }
         .stateIn(viewModelScope, SharingStarted.Eagerly, null)
+
+    /**
+     * The last import's triggered findings, informational ones excluded, paged from its
+     * `scan_finding` rows (every one is stored, spec §5.5); empty while none has completed.
+     */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val findings: Flow<PagingData<Finding>> = importScanId
+        .flatMapLatest { id ->
+            if (id == null) flowOf(PagingData.empty()) else findingsRepository.forScan(id)
+                .map { page -> page.filter { it.level.lowercase() != "informational" } }
+        }
+        .cachedIn(viewModelScope)
+
+    /** How many findings [findings] lists in all (0 while none has completed). */
+    private val _shownCount = MutableStateFlow(0)
+    val shownCount: StateFlow<Int> = _shownCount.asStateFlow()
 
     /** Non-null when the most recently analyzed artifact was an intrusion-log import (#342). */
     private val _intrusionLogSummary = MutableStateFlow<IntrusionLogStats?>(null)
@@ -183,7 +205,7 @@ class BugReportViewModel @Inject constructor(
             _isAnalyzing.value = true
             _analysisFinished.value = false
             _errorMessage.value = null
-            _findings.value = emptyList()
+            _shownCount.value = 0
             _importScan.value = null
             _analyzedArtifact.value = null
             _importCard.value = null
@@ -191,8 +213,8 @@ class BugReportViewModel @Inject constructor(
                 _intrusionLogSummary.value = null
                 when (val analysis = orchestrator.analyzeArtifact(uri)) {
                     is ScanOrchestrator.ArtifactAnalysis.BugReport -> {
-                        _findings.value = analysis.result.findings
                         _importScan.value = analysis.result.write?.scan
+                        _shownCount.value = shownCountOf(analysis.result.write?.scan)
                         _analyzedArtifact.value = ArtifactType.BUG_REPORT
                         _importCard.value = ImportCard.from(
                             analysis.result.write, truncated = false, boundTrips = analysis.result.boundTrips,
@@ -200,8 +222,8 @@ class BugReportViewModel @Inject constructor(
                         )
                     }
                     is ScanOrchestrator.ArtifactAnalysis.IntrusionLog -> {
-                        _findings.value = analysis.result.findings.filter { it.triggered }
                         _importScan.value = analysis.result.write?.scan
+                        _shownCount.value = shownCountOf(analysis.result.write?.scan)
                         _intrusionLogSummary.value = analysis.result.stats
                         _analyzedArtifact.value = ArtifactType.INTRUSION_LOG
                         _importCard.value = ImportCard.from(
@@ -246,6 +268,8 @@ class BugReportViewModel @Inject constructor(
             }
         }
     }
+
+    private suspend fun shownCountOf(scan: ScanResult?): Int = scan?.let { findingsRepository.shownCount(it.id) } ?: 0
 
     /** Call after the share intent has been launched to reset the URI state. */
     fun onShareConsumed() {

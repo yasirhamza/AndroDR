@@ -22,7 +22,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.paging.compose.collectAsLazyPagingItems
+import androidx.paging.compose.itemKey
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -83,7 +84,8 @@ import java.util.Locale
 fun HistoryScreen(
     viewModel: HistoryViewModel = hiltViewModel()
 ) {
-    val allScans   by viewModel.allScans.collectAsStateWithLifecycle()
+    val scans = viewModel.scans.collectAsLazyPagingItems()
+    val hasScans by viewModel.hasScans.collectAsStateWithLifecycle()
     val selectedScan by viewModel.selectedScan.collectAsStateWithLifecycle()
     val selectedDiff by viewModel.selectedDiff.collectAsStateWithLifecycle()
     val exporting  by viewModel.exporting.collectAsStateWithLifecycle()
@@ -116,7 +118,7 @@ fun HistoryScreen(
         viewModel.onShareConsumed()
     }
 
-    if (allScans.isEmpty()) {
+    if (!hasScans) {
         Box(
             modifier = Modifier.fillMaxSize(),
             contentAlignment = Alignment.Center
@@ -151,29 +153,28 @@ fun HistoryScreen(
         contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        if (allScans.isNotEmpty()) {
-            item {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.End
-                ) {
-                    IconButton(onClick = { viewModel.requestClearAll() }) {
-                        Icon(
-                            imageVector = Icons.Filled.DeleteSweep,
-                            contentDescription = "Clear all scan history",
-                            tint = MaterialTheme.colorScheme.error
-                        )
-                    }
+        item {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End
+            ) {
+                IconButton(onClick = { viewModel.requestClearAll() }) {
+                    Icon(
+                        imageVector = Icons.Filled.DeleteSweep,
+                        contentDescription = "Clear all scan history",
+                        tint = MaterialTheme.colorScheme.error
+                    )
                 }
             }
         }
-        items(allScans) { scan ->
+        items(count = scans.itemCount, key = scans.itemKey { it.id }) { index ->
+            val scan = scans[index] ?: return@items
             val isSelected = selectedScan?.id == scan.id
             ScanHistoryItem(
                 scan = scan,
                 isSelected = isSelected,
                 diff = if (isSelected) selectedDiff else null,
-                isFirstScan = allScans.last().id == scan.id,
+                isFirstScan = index == scans.itemCount - 1 && scans.loadState.append.endOfPaginationReached,
                 exporting = exporting,
                 onClick = { viewModel.selectScan(scan) },
                 onExport = {
@@ -479,8 +480,7 @@ private fun ScanHistoryItem(
                     // say so, or the row reads as live device state.
                     ImportSourceLabel(scan.source)
                     Text(
-                        text = "${scan.appRisks.count { it.triggered }} app risk(s) \u00b7 " +
-                            "${scan.deviceFlags.count { it.triggered }} device flag(s)",
+                        text = "${scan.triggeredCount} finding(s)",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -522,10 +522,9 @@ private fun ScanHistoryItem(
                     )
                     Text(
                         text = buildString {
-                            append("\u2022 ${scan.appRisks.count { it.triggered }} app risk(s) detected\n")
+                            append("\u2022 ${scan.triggeredCount} finding(s) triggered\n")
                             append("\u2022 ${scan.knownMalwareCount} known malware app(s)\n")
-                            append("\u2022 ${scan.riskySideloadCount} sideloaded app(s)\n")
-                            append("\u2022 ${scan.deviceFlags.count { it.triggered }} device flag(s) triggered")
+                            append("\u2022 ${scan.riskySideloadCount} sideloaded app(s)")
                         },
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurface

@@ -3,11 +3,11 @@ package com.androdr.scanner
 import android.content.Context
 import android.net.Uri
 import android.util.Log
-import androidx.annotation.VisibleForTesting
 import com.androdr.data.model.AppTelemetry
 import com.androdr.data.model.Indicator
 import com.androdr.data.model.NotEvaluatedReason
 import com.androdr.data.model.ScanResult
+import com.androdr.data.model.ScanWithFindings
 import com.androdr.data.model.ScannerFailure
 import com.androdr.data.model.TelemetrySource
 import com.androdr.data.model.UNREGISTERED_IOC_LOOKUP
@@ -181,7 +181,7 @@ class ScanOrchestrator @Inject constructor(
      * then every service is appended to one live writer session, which evaluates and stores it.
      * Progress is always reset, even when something above the scanner level throws.
      */
-    suspend fun runFullScan(): ScanResult = try {
+    suspend fun runFullScan(): ScanWithFindings = try {
         // Callers launch from a ViewModel (Main); rule loading, record building and the session are
         // CPU work, so they run on Default (A8 D2). The lock is a Mutex, taken outside any transaction.
         scanLock.withWriter { withContext(Dispatchers.Default) { runFullScanInner() } }
@@ -190,7 +190,7 @@ class ScanOrchestrator @Inject constructor(
     }
 
     @Suppress("TooGenericExceptionCaught") // a failed write must not crash the caller (abort, then report)
-    private suspend fun runFullScanInner(): ScanResult {
+    private suspend fun runFullScanInner(): ScanWithFindings {
         initRuleEngine()
         // Written from inside the parallel collectors, so it needs a synchronized wrapper.
         val errors: MutableList<ScannerFailure> = Collections.synchronizedList(mutableListOf())
@@ -210,7 +210,7 @@ class ScanOrchestrator @Inject constructor(
 
         val now = System.currentTimeMillis()
         val scan = ScanResult(
-            id = now, timestamp = now, findings = emptyList(), bugReportFindings = emptyList(),
+            id = now, timestamp = now, bugReportFindings = emptyList(),
             riskySideloadCount = 0, knownMalwareCount = 0,
         )
         val hooks = LiveScanHooks(
@@ -225,13 +225,13 @@ class ScanOrchestrator @Inject constructor(
         val recover = { session: ChunkedScanWriter.Session, t: Throwable ->
             Log.e(TAG, "Failed to persist scan results", t)
             val kept = session.keptScan()
-            kept.copy(scannerErrors = kept.scannerErrors + writerFailure(t))
+            kept.copy(scan = kept.scan.copy(scannerErrors = kept.scannerErrors + writerFailure(t)))
         }
         return try {
             writer.inSession(scan, liveEvents = true, hooks, recover) { session ->
                 appendLive(session, hooks, telemetry, now, liveDnsSources)
                 progress(ScanProgress.Running.Phase.SAVING_RESULTS, LiveScanCollector.SCANNER_COUNT)
-                session.finish().scan
+                session.finish().let { ScanWithFindings(it.scan, it.findings) }
             }.also { Log.i(TAG, "Scan ${it.id} complete — ${it.findings.size} findings, " +
                 "${it.scannerErrors.size} scanner entries") }
         } catch (c: CancellationException) {
@@ -239,7 +239,8 @@ class ScanOrchestrator @Inject constructor(
         } catch (t: Throwable) {
             // The session could not even be opened: nothing was evaluated or kept.
             Log.e(TAG, "Failed to open the scan's writer session", t)
-            scan.copy(scannerErrors = synchronized(errors) { errors.toList() } + writerFailure(t))
+            ScanWithFindings(scan.copy(scannerErrors = synchronized(errors) { errors.toList() } + writerFailure(t)),
+                emptyList())
         }
     }
 
@@ -283,7 +284,7 @@ class ScanOrchestrator @Inject constructor(
         val apkHashes = enrichmentHashes(errors)
         val now = System.currentTimeMillis()
         val scan = ScanResult(
-            id = now, timestamp = now, findings = emptyList(), bugReportFindings = emptyList(),
+            id = now, timestamp = now, bugReportFindings = emptyList(),
             riskySideloadCount = 0, knownMalwareCount = 0,
             // #356: an imported artifact is not a scan of the device in front of
             // the user; History labels it from this field.
@@ -302,7 +303,7 @@ class ScanOrchestrator @Inject constructor(
             Log.e(TAG, "Failed to persist bug-report scan results", t)
             throw BugReportPersistException(t)
         }
-        result.copy(findings = written.scan.findings, write = written)
+        result.copy(write = written)
     } }
 
     /**
@@ -408,7 +409,7 @@ class ScanOrchestrator @Inject constructor(
         initRuleEngine()
         val now = System.currentTimeMillis()
         val scan = ScanResult(
-            id = now, timestamp = now, findings = emptyList(), bugReportFindings = emptyList(),
+            id = now, timestamp = now, bugReportFindings = emptyList(),
             riskySideloadCount = 0, knownMalwareCount = 0,
             // #356: see analyzeBugReport — imports are labeled, not passed off
             // as live scans of this device.
@@ -419,7 +420,7 @@ class ScanOrchestrator @Inject constructor(
             writer.inSession(scan, liveEvents = false, hooks) { session ->
                 val analysis = intrusionLogAnalyzer.analyze(uri, IntrusionLogSessionChunks(session, now))
                 hooks.errors.addAll(analysis.scannerErrors)
-                intrusionLogResult(analysis, requireSaved(session.finish()), hooks)
+                intrusionLogResult(analysis, requireSaved(session.finish()))
             }
         } catch (c: CancellationException) {
             throw c
@@ -434,7 +435,7 @@ class ScanOrchestrator @Inject constructor(
     } }
 
     /**
-     * Computes a diff between two [ScanResult] snapshots.
+     * Computes a diff between two scans with their findings ([ScanWithFindings]).
      *
      * PURE: the answer depends only on the two arguments. The set of rules that
      * could not be evaluated is read from [newer]'s own persisted
@@ -461,8 +462,8 @@ class ScanOrchestrator @Inject constructor(
      * @return A [ScanDiff] describing what changed between the two scans.
      */
     fun computeDiff(
-        newer: ScanResult,
-        older: ScanResult
+        newer: ScanWithFindings,
+        older: ScanWithFindings
     ): ScanDiff {
         // Every reason a rule produced no verdict, not just the one this filter was
         // written for. A rule the newer scan could not evaluate has not been fixed,
@@ -578,37 +579,6 @@ class ScanOrchestrator @Inject constructor(
         /** APK hash per package, for enriching finding rows that carry none. */
         internal fun hashByPackage(apps: List<AppTelemetry>): Map<String, String> =
             apps.filter { !it.apkHash.isNullOrEmpty() }.associateBy({ it.packageName }, { it.apkHash!! })
-
-        /**
-         * The triggered findings to PERSIST for one intrusion-log import (#342 B3), capped at
-         * [FINDINGS_PERSIST_CAP]. Below the cap the input order is preserved (no reshuffle); above
-         * it, findings are ranked highest-severity first and, for equal severity, most-recent first
-         * (by the finding's own event time), so the rows most worth keeping survive the cut. Only
-         * triggered findings are ever persisted. The session's streaming [FindingsTopK] keeps
-         * exactly this set and order; this is its reference definition.
-         */
-        @VisibleForTesting
-        internal fun capTriggeredFindings(findings: List<Finding>): List<Finding> {
-            val triggered = findings.filter { it.triggered }
-            if (triggered.size <= FINDINGS_PERSIST_CAP) return triggered
-            return triggered.sortedWith(
-                compareByDescending<Finding> { FindingRank.severity(it.level) }
-                    .thenByDescending { FindingRank.eventTimeMs(it) }
-            ).take(FINDINGS_PERSIST_CAP)
-        }
-
-        /**
-         * Cap on triggered findings PERSISTED per import (#342 B3). One Finding is
-         * emitted per (record × matching rule) over the uncapped parsed stream, so
-         * a single beaconing domain resolved thousands of times can produce
-         * thousands of findings; persisting them all bloats the ScanResult JSON
-         * column past Room's ~2 MB CursorWindow and throws
-         * SQLiteBlobTooBigException on EVERY subsequent history read. 1000 is far
-         * above any real intrusion log's distinct-finding count while bounding the
-         * pathological/hostile case. Detection is unaffected — rules already ran
-         * over everything; this bounds only what is stored.
-         */
-        const val FINDINGS_PERSIST_CAP = 1_000
 
         /** App categories treated as trusted by the known_good_app_db IOC lookup. */
         private val TRUSTED_CATEGORIES = setOf(

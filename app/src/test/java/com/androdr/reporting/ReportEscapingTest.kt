@@ -1,6 +1,6 @@
 package com.androdr.reporting
 
-import com.androdr.data.model.ScanResult
+import com.androdr.data.model.scanWith
 import com.androdr.sigma.Finding
 import com.androdr.sigma.FindingCategory
 import org.junit.Assert.assertEquals
@@ -25,8 +25,8 @@ class ReportEscapingTest {
         "\uD800" to "\\uD800",
     )
 
-    private val scan = ScanResult(
-        id = 7L, timestamp = 1_711_900_800_000L, findings = emptyList(), bugReportFindings = emptyList(),
+    private val scan = scanWith(
+        id = 7L, timestamp = 1_711_900_800_000L, bugReportFindings = emptyList(),
         riskySideloadCount = 0, knownMalwareCount = 0,
     )
 

@@ -3,7 +3,8 @@ package com.androdr.scanner
 import org.junit.After
 import com.androdr.network.DnsVpnService
 import com.androdr.ioc.IndicatorResolver
-import com.androdr.data.model.ScanResult
+import com.androdr.data.model.ScanWithFindings
+import com.androdr.data.model.scanWith
 import com.androdr.data.model.ScannerFailure
 import com.androdr.data.model.NotEvaluatedReason
 import com.androdr.data.model.UNREGISTERED_IOC_LOOKUP
@@ -23,7 +24,7 @@ import org.junit.Test
  * [ScanOrchestrator.computeDiff] must never read a SKIPPED rule (unresolvable
  * `ioc_lookup` — see [SigmaRuleEngine.unevaluableRules]) as "resolved". A
  * skipped rule and a genuinely-un-triggered rule look identical in
- * [ScanResult.findings] (neither produces an entry unless the rule declares
+ * the scan's findings (neither produces an entry unless the rule declares
  * `reportSafeState`), so the two are told apart by the capability-skip entries
  * the scan itself persisted: [ScannerFailure]s with
  * `exception == UNREGISTERED_IOC_LOOKUP`, each carrying a structured
@@ -89,8 +90,8 @@ class ScanOrchestratorDiffTest {
         id: Long,
         findings: List<Finding>,
         scannerErrors: List<ScannerFailure> = emptyList()
-    ): ScanResult =
-        ScanResult(
+    ): ScanWithFindings =
+        scanWith(
             id = id,
             timestamp = id,
             findings = findings,

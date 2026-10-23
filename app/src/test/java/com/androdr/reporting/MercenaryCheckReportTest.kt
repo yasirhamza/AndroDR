@@ -2,7 +2,8 @@ package com.androdr.reporting
 
 import com.androdr.data.model.ForensicTimelineEvent
 import com.androdr.data.model.NotEvaluatedReason
-import com.androdr.data.model.ScanResult
+import com.androdr.data.model.ScanWithFindings
+import com.androdr.data.model.scanWith
 import com.androdr.data.model.ScannerFailure
 import com.androdr.data.model.TelemetrySource
 import com.androdr.ioc.Campaign
@@ -46,7 +47,7 @@ class MercenaryCheckReportTest {
         appRisks: List<Finding> = emptyList(),
         deviceFlags: List<Finding> = emptyList(),
         scannerErrors: List<ScannerFailure> = emptyList(),
-    ): ScanResult = ScanResult(
+    ): ScanWithFindings = scanWith(
         id = 1L, timestamp = scanTime, findings = deviceFlags + appRisks, bugReportFindings = emptyList(),
         riskySideloadCount = 0, knownMalwareCount = 0, scannerErrors = scannerErrors,
     )
@@ -93,7 +94,7 @@ class MercenaryCheckReportTest {
         scannerErrors: List<ScannerFailure> = emptyList(),
     ) = reportText(
         buildScan(appRisks = appRisks, deviceFlags = deviceFlags, scannerErrors = scannerErrors)
-            .copy(source = source),
+            .let { it.copy(scan = it.scan.copy(source = source)) },
         // The import's latest stored event: the window the campaign rows count back from.
         telemetry = FakeTelemetry(latestEvent = intrusionEvents.maxOfOrNull { it.startTimestamp }),
         campaigns = campaigns,

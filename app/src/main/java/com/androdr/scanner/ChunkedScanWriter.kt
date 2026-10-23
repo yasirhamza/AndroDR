@@ -2,11 +2,14 @@ package com.androdr.scanner
 
 import android.database.sqlite.SQLiteFullException
 import androidx.collection.MutableLongSet
-import com.androdr.data.db.RuleRecord
 import com.androdr.data.model.ScanResult
+import com.androdr.data.model.ScanWithFindings
 import com.androdr.data.model.TelemetrySource
 import com.androdr.data.model.TelemetryState
-import com.androdr.data.repo.KeptFinding
+import com.androdr.data.repo.AlertIdentity
+import com.androdr.data.repo.FindingCounter
+import com.androdr.data.repo.FindingsRepository
+import com.androdr.data.repo.PendingFindings
 import com.androdr.data.repo.ScanWriteRepository
 import com.androdr.data.repo.SessionHooks
 import com.androdr.data.store.ChunkResult
@@ -30,8 +33,11 @@ import javax.inject.Inject
 /**
  * What a finished session wrote.
  *
- * @property scan the completed scan with its kept findings — the in-memory result when [persisted]
- *   is false (the findings write itself failed on a full disk).
+ * @property scan the completed scan (its summary columns; the findings are `scan_finding` rows), or —
+ *   when [persisted] is false (the finishing write failed on a full disk) — the in-memory summary.
+ * @property findings the findings the session holds in memory: every recorded finding of a live
+ *   scan (bounded by rules × live records), and an import's evaluate-only findings. An import's
+ *   stored findings are read from `scan_finding` (`FindingsRepository`), never held.
  * @property spaceToFree bytes to free so the 150 MB import reserve holds again; > 0 only when an
  *   import fell back to evaluate-only on the reserve.
  */
@@ -45,17 +51,20 @@ data class WriteResult(
     val spaceToFree: Long = 0L,
     /** [duplicatesDropped] by service (an intrusion-log card nets them out of each type's count). */
     val duplicatesByService: Map<String, Int> = emptyMap(),
+    val findings: List<Finding> = emptyList(),
 )
 
 /**
  * The only way a writer evaluates and stores telemetry (spec §5.2 Session). A session's scan is
  * `IN_PROGRESS` (hidden) from [begin] until [Session.finish] completes it in one transaction; a
  * failed writer calls [Session.abort]. Callers hold `ScanLock.withWriter` for the whole session.
+ * Every finding is stored as a `scan_finding` row of its scan (spec §5.4); nothing is capped.
  */
 class ChunkedScanWriter @Inject constructor(
     private val engine: SigmaRuleEngine,
     private val store: TelemetryStore,
     private val repo: ScanWriteRepository,
+    private val findings: FindingsRepository,
     private val preflight: StoragePreflight,
     private val health: StorageHealthFlag,
 ) {
@@ -69,6 +78,7 @@ class ChunkedScanWriter @Inject constructor(
         return Session(scan, liveEvents, hooks)
     }
 
+    @Suppress("TooManyFunctions") // the session steps and their private helpers share its state
     inner class Session internal constructor(
         val scan: ScanResult,
         private val liveEvents: Boolean,
@@ -77,7 +87,12 @@ class ChunkedScanWriter @Inject constructor(
         private val isImport = scan.source != TelemetrySource.LIVE_SCAN
         private val nextOrdinal = HashMap<String, Int>()
         private val counters = HashMap<String, OccurrenceCounter>()
-        private val topK = FindingsTopK.forSource(scan.source)
+        private val counter = FindingCounter()
+
+        /** A live scan's recorded findings (bounded by rules × live records); empty for an import. */
+        private val memory = ArrayList<Finding>()
+        private val pendingNoFact = ArrayList<Finding>()
+        private val pendingStored = ArrayList<Finding>()
         private var dedup: EvaluateOnlyDedup? = null
         private var reserveBreached = false
         private var newFacts = 0
@@ -85,15 +100,17 @@ class ChunkedScanWriter @Inject constructor(
         private var duplicatesDropped = 0
         private val duplicatesByService = HashMap<String, Int>()
         private var stored = false
+        private val row = { f: Finding -> hooks.findingRow(f, scan) }
 
         /** True once the session stopped storing telemetry (full disk or breached import reserve). */
         val evaluateOnly: Boolean get() = dedup != null
 
         /**
-         * Evaluates [chunk] (≤ [CHUNK_SIZE]), then persists it in one transaction. Findings are kept
-         * only for ordinals newly observed by this scan, so a duplicate record yields no second one.
-         * Like every session step, it runs on [Dispatchers.Default]: evaluation, canonical JSON,
-         * Deflate and hashing are CPU work, and callers may be on the main thread (A8 D2).
+         * Evaluates [chunk] (≤ [CHUNK_SIZE]), then persists it and its findings in one transaction.
+         * Findings are kept only for ordinals newly observed by this scan, so a duplicate record
+         * yields no second one. Like every session step, it runs on [Dispatchers.Default]:
+         * evaluation, canonical JSON, Deflate and hashing are CPU work, and callers may be on the
+         * main thread (A8 D2).
          */
         suspend fun append(service: String, source: TelemetrySource, capturedAt: Long, chunk: List<StoreRecord>) {
             require(chunk.size <= CHUNK_SIZE) { "chunk of ${chunk.size} exceeds $CHUNK_SIZE" }
@@ -111,9 +128,9 @@ class ChunkedScanWriter @Inject constructor(
                 reserveBreached = true
                 enterEvaluateOnly()
             }
-            val findings = engine.evaluateRecords(service, chunk, first)
+            val found = engine.evaluateRecords(service, chunk, first)
             val result = try {
-                if (evaluateOnly) null else persistOrFallBack(service, source, capturedAt, chunk, first)
+                if (evaluateOnly) null else persistOrFallBack(service, source, capturedAt, chunk, first, found)
             } catch (c: CancellationException) {
                 throw c
             } catch (t: Throwable) {
@@ -122,14 +139,17 @@ class ChunkedScanWriter @Inject constructor(
                 // filter, so a live event an earlier scan reported, or a record repeated in the
                 // chunk, can show its finding again. On an aborted, partial scan that beats
                 // reading clean (review N2).
-                findings.forEach { topK.offer(it, null) }
+                found.forEach(::count)
                 throw t
             }
             if (result != null) {
-                keepObserved(service, findings, first, result)
+                recordTotals(service, result.chunk, result.kept)
             } else {
                 val dup = checkNotNull(dedup).duplicates(service, chunk) { store.sourceFactKey(source, capturedAt, it) }
-                findings.forEach { f -> if (dup.getOrNull(f.ordinal - first) != true) topK.offer(f, null) }
+                found.filter { f -> dup.getOrNull(f.ordinal - first) != true }.forEach { f ->
+                    pendingNoFact += f
+                    count(f)
+                }
             }
         }
 
@@ -142,22 +162,29 @@ class ChunkedScanWriter @Inject constructor(
 
         /**
          * Late-IOC re-check over stored facts: no observations are written. A finding carries
-         * `recordId = factId` and `ordinal = -1`, and is kept only when no visible finding row for
-         * the same `(ruleId, recordId)` exists (the Phase A–C alert-identity stand-in).
+         * `recordId = factId` and `ordinal = -1`, and is kept only when no alert with its record key
+         * exists (spec §5.2): alerts are permanent, so a fact that already fired never re-fires, even
+         * after the scan that first found it is deleted.
          */
         suspend fun evaluateStored(service: String, facts: Sequence<Pair<Long, StoreRecord>>) =
             withContext(Dispatchers.Default) { evaluateStoredChunks(service, facts) }
 
         private suspend fun evaluateStoredChunks(service: String, facts: Sequence<Pair<Long, StoreRecord>>) {
             facts.constrainOnce().chunked(CHUNK_SIZE).forEach { batch ->
-                val findings = engine.evaluateRecords(service, batch.map { it.second }, 0)
-                if (findings.isEmpty()) return@forEach
-                val existing = repo.existingFindings(findings.map { batch[it.ordinal].first })
-                for (f in findings) {
-                    val factId = batch[f.ordinal].first
-                    if (RuleRecord(f.ruleId, factId) in existing) continue
-                    topK.offer(f.copy(recordId = factId, ordinal = -1), factId)
+                val found = engine.evaluateRecords(service, batch.map { it.second }, 0)
+                    .filter { it.triggered }
+                    .map { it.copy(recordId = batch[it.ordinal].first, ordinal = -1) }
+                if (found.isEmpty()) return@forEach
+                val keys = found.map { AlertIdentity.recordKey(it.ruleId, checkNotNull(it.recordId), it.evidence) }
+                val fired = findings.existingAlertKeys(keys)
+                val fresh = found.filterIndexed { i, _ -> HashKeys.key(keys[i]) !in fired }
+                if (fresh.isEmpty()) return@forEach
+                if (evaluateOnly) {
+                    pendingStored += fresh
+                } else {
+                    repo.inTransaction { findings.recordStored(scan.id, fresh, row) }
                 }
+                fresh.forEach(::count)
             }
         }
 
@@ -177,38 +204,49 @@ class ChunkedScanWriter @Inject constructor(
                 stored -> TelemetryState.STORED
                 else -> TelemetryState.NONE
             }
-            val kept = topK.result()
             val spaceToFree = if (reserveBreached) preflight.shortfall() else 0L
-            val completed = try {
-                repo.finish(scan, kept, topK.totals(), hooks, state)
+            val finished = try {
+                repo.finish(scan, PendingFindings(pendingNoFact, pendingStored), counter.totals(), hooks, state)
             } catch (e: SQLiteFullException) {
-                return inMemoryResult(kept, spaceToFree, e)
+                return inMemoryResult(spaceToFree, e)
             }
-            return WriteResult(newFacts, alreadyStored, duplicatesDropped, state, completed, true, spaceToFree,
-                duplicatesByService.toMap())
+            val held = if (isImport) heldFindings() else heldFindings() + finished.correlationFindings
+            return WriteResult(newFacts, alreadyStored, duplicatesDropped, state, finished.scan, true, spaceToFree,
+                duplicatesByService.toMap(), held)
         }
 
         /**
-         * The scan as this session holds it in memory: its kept findings and summary, `FAILED`. A
+         * The scan as this session holds it in memory: its summary and held findings, `FAILED`. A
          * writer whose session failed returns this (after [abort]) so the findings stay visible.
          */
-        fun keptScan(): ScanResult =
-            hooks.summarize(scan.copy(findings = topK.result().map { it.finding }), topK.totals())
+        fun keptScan(): ScanWithFindings {
+            val totals = counter.totals()
+            val summary = hooks.summarize(totals.applyTo(scan), totals)
                 .copy(id = scan.id, telemetryState = TelemetryState.FAILED)
+            return ScanWithFindings(summary, heldFindings())
+        }
 
         /** Unaudited cleanup delete of this session's scan; runs to completion even when cancelled. */
         suspend fun abort() = withContext(NonCancellable) { repo.cleanupDelete(scan.id) }
 
+        /** A chunk's persist result and the findings recorded with it. */
+        private inner class Persisted(val chunk: ChunkResult, val kept: List<Finding>)
+
+        @Suppress("LongParameterList")
         private suspend fun persistOrFallBack(
             service: String, source: TelemetrySource, capturedAt: Long, chunk: List<StoreRecord>, first: Int,
-        ): ChunkResult? {
+            found: List<Finding>,
+        ): Persisted? {
             val deflater = Deflater()
             return try {
                 val counter = counters.getOrPut(service) { OccurrenceCounter() }
                 // Only services that can carry events need the already-observed check (spec §5.2).
                 val live = liveEvents && service in TaxonomyContract.eventServices
-                store.persistChunk(scan.id, service, source, capturedAt, chunk, first, counter, deflater, live)
-                    .also { stored = true }
+                repo.inTransaction {
+                    val result = store.persistChunk(scan.id, service, source, capturedAt, chunk, first, counter,
+                        deflater, live)
+                    Persisted(result, findings.recordChunk(scan.id, first, found, result, row))
+                }.also { stored = true }
             } catch (_: SQLiteFullException) {
                 // The rest of the pass continues evaluate-only (spec §5.2); the counter is now invalid.
                 enterEvaluateOnly()
@@ -218,32 +256,34 @@ class ChunkedScanWriter @Inject constructor(
             }
         }
 
-        private fun keepObserved(service: String, findings: List<Finding>, first: Int, result: ChunkResult) {
+        private fun recordTotals(service: String, result: ChunkResult, kept: List<Finding>) {
             newFacts += result.newFacts
             alreadyStored += result.alreadyStored
             duplicatesDropped += result.duplicatesDropped
             if (result.duplicatesDropped > 0) duplicatesByService.merge(service, result.duplicatesDropped, Int::plus)
-            for (f in findings) {
-                val i = f.ordinal - first
-                if (i in result.observedThisScanByChunkIndex.indices && result.observedThisScanByChunkIndex[i]) {
-                    topK.offer(f, result.factIdByChunkIndex[i])
-                }
-            }
+            kept.forEach(::count)
         }
+
+        private fun count(f: Finding) {
+            counter.offer(f)
+            if (!isImport) memory += f
+        }
+
+        /** Live: every recorded finding; import: only what it buffered evaluate-only. */
+        private fun heldFindings(): List<Finding> = if (isImport) pendingNoFact + pendingStored else memory.toList()
 
         private fun enterEvaluateOnly() {
             if (dedup == null) dedup = EvaluateOnlyDedup()
         }
 
-        private suspend fun inMemoryResult(kept: List<KeptFinding>, spaceToFree: Long, cause: Throwable): WriteResult {
+        private suspend fun inMemoryResult(spaceToFree: Long, cause: Throwable): WriteResult {
             withContext(NonCancellable) {
                 health.set()
                 runCatching { repo.cleanupDelete(scan.id) }.exceptionOrNull()?.let { cause.addSuppressed(it) }
             }
-            val inMemory = hooks.summarize(scan.copy(findings = kept.map { it.finding }), topK.totals())
-                .copy(id = scan.id, telemetryState = TelemetryState.FAILED)
-            return WriteResult(newFacts, alreadyStored, duplicatesDropped, TelemetryState.FAILED, inMemory, false,
-                spaceToFree, duplicatesByService.toMap())
+            val kept = keptScan()
+            return WriteResult(newFacts, alreadyStored, duplicatesDropped, TelemetryState.FAILED, kept.scan, false,
+                spaceToFree, duplicatesByService.toMap(), kept.findings)
         }
     }
 

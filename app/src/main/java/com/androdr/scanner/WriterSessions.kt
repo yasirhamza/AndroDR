@@ -235,18 +235,14 @@ internal suspend fun appendBugReport(
 }
 
 /**
- * An intrusion-log import's card: the kept findings (capped), its analysis errors, and counts net
- * of the exact duplicates the store dropped; `triggeredFindingCount` counts past the cap.
+ * An intrusion-log import's card: its analysis errors, and counts net of the exact duplicates the
+ * store dropped. Its findings are the import scan's `scan_finding` rows (all of them, spec §5.5).
  */
 internal fun intrusionLogResult(
-    analysis: IntrusionLogScan, written: WriteResult, hooks: IntrusionLogHooks,
+    analysis: IntrusionLogScan, written: WriteResult,
 ): IntrusionLogAnalysisResult {
     val s = analysis.stats
-    val triggered = hooks.totals?.triggered?.toInt() ?: written.scan.findings.count { it.triggered }
-    if (triggered > ScanOrchestrator.FINDINGS_PERSIST_CAP) {
-        Log.w(TAG, "Intrusion-log findings cap kept ${ScanOrchestrator.FINDINGS_PERSIST_CAP} of $triggered " +
-            "triggered findings. Detection saw the full stream; only persistence is bounded.")
-    }
+    val triggered = written.scan.triggeredCount
     fun dropped(service: String) = written.duplicatesByService[service] ?: 0
     val stats = s.copy(
         dnsEventCount = s.dnsEventCount - dropped(IntrusionLogRecordBuilders.DNS_MONITOR),
@@ -257,5 +253,5 @@ internal fun intrusionLogResult(
     )
     Log.i(TAG, "Persisted intrusion-log import ${written.scan.id}: ${written.newFacts} new facts, " +
         "${written.alreadyStored} already stored, ${written.duplicatesDropped} duplicates dropped")
-    return IntrusionLogAnalysisResult(written.scan.findings, stats, analysis.scannerErrors, written)
+    return IntrusionLogAnalysisResult(stats, analysis.scannerErrors, written)
 }

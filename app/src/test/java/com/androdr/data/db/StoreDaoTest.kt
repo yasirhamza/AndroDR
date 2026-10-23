@@ -62,7 +62,7 @@ class StoreDaoTest {
         ScanObservation(scanId = scanId, service = service, ordinal = ordinal, recordId = recordId, eventTime = 1_000L,
             source = TelemetrySource.LIVE_SCAN, capturedAt = 5L, strippedKeys = 0)
 
-    private fun scan(id: Long) = ScanResult(id = id, timestamp = id, findings = emptyList(),
+    private fun scan(id: Long) = ScanResult(id = id, timestamp = id,
         bugReportFindings = emptyList(), riskySideloadCount = 0, knownMalwareCount = 0)
 
     private fun plan(sql: String, args: List<Any?>): List<String> =
@@ -207,7 +207,7 @@ class StoreDaoTest {
         dao.insert(scan(1L))
         dao.insertInProgress(scan(2L))
         dao.insertInProgress(scan(3L))
-        assertEquals(listOf(1L), dao.getAllScans().first().map { it.id })
+        assertEquals(listOf(1L), dao.pagedAfter(Long.MAX_VALUE, 10).map { it.id })
         assertEquals(listOf(1L), dao.getLatestTwo().map { it.id })
         assertEquals(setOf(2L, 3L), dao.sweepableIds().toSet())
         assertEquals(1, dao.complete(2L, TelemetryState.STORED))

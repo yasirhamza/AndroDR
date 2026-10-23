@@ -202,23 +202,26 @@ class ScanOrchestratorIntrusionLogTest {
         })
     }
 
-    // ---------- findings cap (#342 B3) ----------
+    // ---------- no findings cap (D2, spec §5.5; the #342 B3 cap was 1,000) ----------
 
-    /** The cap applies to ScanResult.findings and the finding rows; criticals survive the cut. */
+    /** Every triggered finding is a scan_finding row with its finding row; nothing is dropped. */
     @Test
-    fun `triggered findings beyond the cap are dropped, keeping highest severity`() = runBlocking {
-        val cap = ScanOrchestrator.FINDINGS_PERSIST_CAP
+    fun `more than 1000 triggered findings are all stored`() = runBlocking {
+        val n = 1_030
         val criticals = (1L..3L).map { sec(5_000L + it, "critical_cmd") }
-        analyzerHandsOver(sec = (1L..(cap + 30).toLong()).map { sec(it) } + criticals)
+        analyzerHandsOver(sec = (1L..n.toLong()).map { sec(it) } + criticals)
 
         val result = f.orchestrator.analyzeIntrusionLog(uri)
 
         val persisted = f.scans().single()
-        assertEquals("ScanResult.findings is capped", cap, persisted.findings.size)
-        assertTrue(persisted.findings.all { it.triggered })
-        assertEquals(3, persisted.findings.count { it.ruleId == "androdr-il-crit" })
-        assertEquals(cap, rows().count { it.source == "intrusion_log_analysis" })
-        assertEquals("the card counts past the cap", cap + 33, result.stats.triggeredFindingCount)
+        val findings = f.findingsOf(persisted.id)
+        assertEquals("no cap", n + 3, findings.size)
+        assertTrue(findings.all { it.triggered })
+        assertEquals(3, findings.count { it.ruleId == "androdr-il-crit" })
+        assertEquals(n + 3, rows().count { it.source == "intrusion_log_analysis" })
+        assertEquals(n + 3, persisted.triggeredCount)
+        assertEquals("critical", persisted.maxLevel)
+        assertEquals(n + 3, result.stats.triggeredFindingCount)
     }
 
     // ---------- S2 and Interim re-import, through the real parser ----------
@@ -233,7 +236,7 @@ class ScanOrchestratorIntrusionLogTest {
         IntrusionLogZips.fixture(engine) { zip }.use { real ->
             val result = real.orchestrator.analyzeIntrusionLog(uri)
             assertEquals(1L, real.count("SELECT COUNT(*) FROM scan_record"))
-            assertEquals(1, result.findings.count { it.triggered })
+            assertEquals(1, real.findingsOf(result.write!!.scan.id).count { it.triggered })
             assertEquals("no event row (C3)", 0, real.timelineDao.getAllForExport().count { it.ruleId.isEmpty() })
             assertEquals(1, result.stats.securityEventCount)
             assertEquals(2, result.stats.duplicatesCollapsed)

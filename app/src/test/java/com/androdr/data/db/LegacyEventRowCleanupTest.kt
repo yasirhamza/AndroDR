@@ -43,7 +43,7 @@ class LegacyEventRowCleanupTest {
     )
 
     private suspend fun scan(id: Long, telemetry: TelemetryState) {
-        f.db.scanResultDao().insert(ScanResult(id = id, timestamp = id, findings = emptyList(),
+        f.db.scanResultDao().insert(ScanResult(id = id, timestamp = id,
             bugReportFindings = emptyList(), riskySideloadCount = 0, knownMalwareCount = 0,
             state = ScanState.COMPLETE, telemetryState = telemetry))
     }

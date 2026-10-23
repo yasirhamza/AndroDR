@@ -12,7 +12,6 @@ import com.androdr.ioc.IndicatorResolver
 import com.androdr.reporting.ATTRIBUTION_SCANNER
 import com.androdr.scanner.intrusionlog.IntrusionLogParser
 import com.androdr.scanner.intrusionlog.IntrusionLogSink
-import com.androdr.sigma.Finding
 import com.androdr.sigma.IntrusionLogRecordBuilders
 import com.androdr.sigma.StoreRecord
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -44,22 +43,15 @@ data class IntrusionLogStats(
      * silently assume detection saw the complete stream for a pathological file.
      */
     val truncated: Boolean = false,
-    /**
-     * Total number of TRIGGERED findings the analysis produced, before the
-     * persistence cap ([ScanOrchestrator.FINDINGS_PERSIST_CAP], #342 B3). The
-     * UI/report derive "kept N of M" from this and the cap constant — mirroring
-     * how the DNS/connect capped line is derived from the total event counts —
-     * so a truncated finding set is never silently hidden.
-     */
+    /** Number of TRIGGERED findings the import recorded (every one is stored, spec §5.5). */
     val triggeredFindingCount: Int = 0
 )
 
 /**
- * What an intrusion-log import showed the user: the findings it kept (capped at
- * [ScanOrchestrator.FINDINGS_PERSIST_CAP]) and its stats. The records themselves are in the store.
+ * What an intrusion-log import showed the user: its stats. The records are in the store and its
+ * findings are the import scan's `scan_finding` rows (`FindingsRepository.forScan`).
  */
 data class IntrusionLogAnalysisResult(
-    val findings: List<Finding>,
     val stats: IntrusionLogStats,
     /** Non-fatal problems during analysis (e.g. attribution unavailable); persisted on the import's scan. */
     val scannerErrors: List<ScannerFailure> = emptyList(),

@@ -65,6 +65,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.paging.LoadState
 import androidx.paging.compose.collectAsLazyPagingItems
 import androidx.paging.compose.itemKey
 import com.androdr.R
@@ -99,7 +100,7 @@ fun TimelineScreen(
     val shareUri by viewModel.shareUri.collectAsStateWithLifecycle()
     val exporting by viewModel.exporting.collectAsStateWithLifecycle()
     val groupMode by viewModel.groupMode.collectAsStateWithLifecycle()
-    val scanGroups by viewModel.scanGroups.collectAsStateWithLifecycle()
+    val scanGroups = viewModel.scanGroups.collectAsLazyPagingItems()
     val report by viewModel.report.collectAsStateWithLifecycle()
 
     val context = LocalContext.current
@@ -232,7 +233,7 @@ fun TimelineScreen(
                 contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                if (scanGroups.isEmpty()) {
+                if (scanGroups.itemCount == 0 && scanGroups.loadState.refresh is LoadState.NotLoading) {
                     item {
                         Text(
                             text = stringResource(R.string.timeline_scan_empty),
@@ -241,7 +242,8 @@ fun TimelineScreen(
                         )
                     }
                 }
-                items(scanGroups, key = { "scan_${it.scanId}" }) { group ->
+                items(count = scanGroups.itemCount, key = scanGroups.itemKey { "scan_${it.scanId}" }) { index ->
+                    val group = scanGroups[index] ?: return@items
                     val count = rememberCount(group.scanId, filter, countsVersion) { viewModel.scanCount(group.scanId) }
                     // A scan header opens that scan's Timeline.
                     ScanGroupHeader(group = group, count = count, onClick = {

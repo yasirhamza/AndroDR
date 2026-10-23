@@ -13,7 +13,7 @@ import org.junit.Test
 class ImportCardTest {
 
     private val scan = ScanResult(
-        id = 1L, timestamp = 1L, findings = emptyList(), bugReportFindings = emptyList(),
+        id = 1L, timestamp = 1L, bugReportFindings = emptyList(),
         riskySideloadCount = 0, knownMalwareCount = 0,
     )
 

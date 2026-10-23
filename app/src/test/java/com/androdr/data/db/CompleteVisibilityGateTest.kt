@@ -56,6 +56,11 @@ class CompleteVisibilityGateTest {
         "SignalMemberBackfillDao.rewrite",
         // The one-time legacy event-row cleanup (C3) selects rows of every scan by producer.
         "LegacyEventRowDao.orphanSignalIds", "LegacyEventRowDao.legacyRowsAfter",
+        // The finishing transaction's scan_finding statements (spec §5.2): the scan is still IN_PROGRESS.
+        "ScanFindingDao.insertFindingRows", "ScanFindingDao.clearEvidence", "ScanFindingDao.unattachedCount",
+        "AlertDao.openForScan", "AlertDao.attachForScan", "AlertDao.touchForScan",
+        // A scan delete's scan_finding pins and rows (TimelineRowDeleter-style: read, delete, release).
+        "ScanFindingDao.recordIdsForScan", "ScanFindingDao.deleteForScan",
     )
 
     private data class DaoQuery(val owner: String, val name: String, val sql: String) {
@@ -168,7 +173,7 @@ class CompleteVisibilityGateTest {
         try {
             val states = listOf(1L to ScanState.COMPLETE, 2L to ScanState.IN_PROGRESS, 3L to ScanState.DELETING)
             for ((id, state) in states) {
-                db.scanResultDao().insert(ScanResult(id = id, timestamp = id, findings = emptyList(),
+                db.scanResultDao().insert(ScanResult(id = id, timestamp = id,
                     bugReportFindings = emptyList(), riskySideloadCount = 0, knownMalwareCount = 0, state = state))
             }
             val dao = db.forensicTimelineEventDao()

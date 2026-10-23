@@ -50,7 +50,6 @@ class TimelineAdapterTest {
         )
         val scanResult = ScanResult(
             id = 5000L, timestamp = 3000L,
-            findings = listOf(finding),
             bugReportFindings = emptyList(),
             riskySideloadCount = 0, knownMalwareCount = 0
         )
@@ -74,7 +73,7 @@ class TimelineAdapterTest {
     )
 
     private val timelineScan = ScanResult(
-        id = 1L, timestamp = 1L, findings = emptyList(), bugReportFindings = emptyList(),
+        id = 1L, timestamp = 1L, bugReportFindings = emptyList(),
         riskySideloadCount = 0, knownMalwareCount = 0,
     )
 

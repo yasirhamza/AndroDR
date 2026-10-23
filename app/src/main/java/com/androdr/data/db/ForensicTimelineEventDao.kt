@@ -6,9 +6,6 @@ import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import com.androdr.data.model.ForensicTimelineEvent
 
-/** A finding row's rule and fact (see [ForensicTimelineEventDao.findingRuleRecords]). */
-data class RuleRecord(val ruleId: String, val recordId: Long)
-
 @Dao
 @Suppress("TooManyFunctions") // Room DAO: the writers', deleters' and pin readers' queries
 interface ForensicTimelineEventDao {
@@ -114,14 +111,4 @@ interface ForensicTimelineEventDao {
             "(SELECT 1 FROM ScanResult s WHERE s.id = forensic_timeline.scanResultId))"
     )
     suspend fun recordIdsUnownedNonPersistent(): List<Long>
-
-    /**
-     * Of [recordIds], the `(ruleId, recordId)` pairs a visible finding row already carries — the
-     * Phase A–C late-IOC re-check emits a finding only when none exists (spec §5.2).
-     */
-    @Query(
-        "SELECT r.ruleId AS ruleId, r.recordId AS recordId FROM forensic_timeline r " +
-            "WHERE r.recordId IN (:recordIds) AND r.ruleId != '' AND ${VisibleRow.SQL}"
-    )
-    suspend fun findingRuleRecords(recordIds: List<Long>): List<RuleRecord>
 }

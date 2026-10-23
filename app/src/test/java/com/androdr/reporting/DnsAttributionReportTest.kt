@@ -1,7 +1,7 @@
 package com.androdr.reporting
 
 import com.androdr.data.model.DnsEvent
-import com.androdr.data.model.ScanResult
+import com.androdr.data.model.scanWith
 import com.androdr.network.ConnectionOwnerResolver
 import com.androdr.sigma.Finding
 import com.androdr.sigma.FindingCategory
@@ -16,7 +16,7 @@ import org.junit.Test
  */
 class DnsAttributionReportTest {
 
-    private fun scanOf(vararg findings: Finding) = ScanResult(
+    private fun scanOf(vararg findings: Finding) = scanWith(
         id = 1L, timestamp = 1711900800000, findings = findings.toList(), bugReportFindings = emptyList(),
         riskySideloadCount = 0, knownMalwareCount = 0, scannerErrors = emptyList(),
     )

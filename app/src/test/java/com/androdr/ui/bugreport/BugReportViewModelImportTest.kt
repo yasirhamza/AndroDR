@@ -36,7 +36,7 @@ class BugReportViewModelImportTest {
     @After fun tearDown() = Dispatchers.resetMain()
 
     private val scan = ScanResult(
-        id = 1L, timestamp = 1L, findings = emptyList(), bugReportFindings = emptyList(),
+        id = 1L, timestamp = 1L, bugReportFindings = emptyList(),
         riskySideloadCount = 0, knownMalwareCount = 0,
     )
     private val uri = mockk<Uri>(relaxed = true)
@@ -55,12 +55,13 @@ class BugReportViewModelImportTest {
 
     private fun vm(orchestrator: ScanOrchestrator, preflight: Preflight) = BugReportViewModel(
         orchestrator,
-        mockk<ImportPreflight> { coEvery { check(any()) } returns preflight }, mockk(relaxed = true),
+        mockk<ImportPreflight> { coEvery { check(any()) } returns preflight },
+        mockk(relaxed = true), mockk(relaxed = true),
     )
 
     @Test
     fun `a tight preflight asks first and imports nothing until Import anyway`() = runTest {
-        val orchestrator = orchestratorReturning(IntrusionLogAnalysisResult(emptyList(), stats(), write = write()))
+        val orchestrator = orchestratorReturning(IntrusionLogAnalysisResult(stats(), write = write()))
         val vm = vm(orchestrator, Preflight.Tight(estimate = 500L, free = 900L))
 
         vm.onFilePicked(uri)
@@ -78,7 +79,7 @@ class BugReportViewModelImportTest {
 
     @Test
     fun `an unknown size is offered as unknown, not as zero`() = runTest {
-        val orchestrator = orchestratorReturning(IntrusionLogAnalysisResult(emptyList(), stats()))
+        val orchestrator = orchestratorReturning(IntrusionLogAnalysisResult(stats()))
         val vm = vm(orchestrator, Preflight.Tight(null, 900L))
         vm.onFilePicked(uri)
         assertNull(vm.preflightPrompt.value!!.estimateBytes)
@@ -86,7 +87,7 @@ class BugReportViewModelImportTest {
 
     @Test
     fun `cancelling the preflight imports nothing`() = runTest {
-        val orchestrator = orchestratorReturning(IntrusionLogAnalysisResult(emptyList(), stats()))
+        val orchestrator = orchestratorReturning(IntrusionLogAnalysisResult(stats()))
         val vm = vm(orchestrator, Preflight.Tight(1L, 1L))
         vm.onFilePicked(uri)
         vm.dismissPreflight()
@@ -96,7 +97,7 @@ class BugReportViewModelImportTest {
 
     @Test
     fun `enough space imports without a prompt`() = runTest {
-        val orchestrator = orchestratorReturning(IntrusionLogAnalysisResult(emptyList(), stats()))
+        val orchestrator = orchestratorReturning(IntrusionLogAnalysisResult(stats()))
         val vm = vm(orchestrator, Preflight.Ok)
         vm.onFilePicked(uri)
         assertNull(vm.preflightPrompt.value)
@@ -106,7 +107,7 @@ class BugReportViewModelImportTest {
     @Test
     fun `an intrusion log card shows the write counts and the truncation bound`() = runTest {
         val vm = vm(
-            orchestratorReturning(IntrusionLogAnalysisResult(emptyList(), stats(truncated = true), write = write())),
+            orchestratorReturning(IntrusionLogAnalysisResult(stats(truncated = true), write = write())),
             Preflight.Ok,
         )
         vm.onFilePicked(uri)
@@ -120,7 +121,7 @@ class BugReportViewModelImportTest {
         val orchestrator = mockk<ScanOrchestrator> {
             coEvery { analyzeArtifact(any()) } returns ScanOrchestrator.ArtifactAnalysis.BugReport(
                 BugReportAnalyzer.BugReportAnalysisResult(
-                    findings = emptyList(), boundTrips = listOf("M: stopped at 9 records"),
+                    boundTrips = listOf("M: stopped at 9 records"),
                     write = write(TelemetryState.FAILED, space = 123L),
                 )
             )
@@ -134,7 +135,7 @@ class BugReportViewModelImportTest {
 
     @Test
     fun `a failed import shows no card, and the previous card is cleared`() = runTest {
-        val orchestrator = orchestratorReturning(IntrusionLogAnalysisResult(emptyList(), stats(), write = write()))
+        val orchestrator = orchestratorReturning(IntrusionLogAnalysisResult(stats(), write = write()))
         val vm = vm(orchestrator, Preflight.Ok)
         vm.onFilePicked(uri)
         assertNotNull(vm.importCard.value)
@@ -149,10 +150,11 @@ class BugReportViewModelImportTest {
 
     @Test
     fun `a preflight that throws asks with an unknown size and invents no free-space figure`() = runTest {
-        val orchestrator = orchestratorReturning(IntrusionLogAnalysisResult(emptyList(), stats()))
+        val orchestrator = orchestratorReturning(IntrusionLogAnalysisResult(stats()))
         val vm = BugReportViewModel(
             orchestrator,
             mockk<ImportPreflight> { coEvery { check(any()) } throws IllegalStateException("provider gone") },
+            mockk(relaxed = true),
             mockk(relaxed = true),
         )
         vm.onFilePicked(uri)
@@ -170,7 +172,7 @@ class BugReportViewModelImportTest {
     @Test
     fun `the preflight estimate reaches the card of a low-space import`() = runTest {
         val orchestrator = orchestratorReturning(
-            IntrusionLogAnalysisResult(emptyList(), stats(), write = write(TelemetryState.FAILED, space = 5L))
+            IntrusionLogAnalysisResult(stats(), write = write(TelemetryState.FAILED, space = 5L))
         )
         val vm = vm(orchestrator, Preflight.Tight(estimate = 800L, free = 900L))
         vm.onFilePicked(uri)
@@ -182,8 +184,8 @@ class BugReportViewModelImportTest {
     fun `a second pick while the size check runs is ignored`() = runTest {
         val gate = kotlinx.coroutines.CompletableDeferred<Preflight>()
         val checker = mockk<ImportPreflight> { coEvery { check(any()) } coAnswers { gate.await() } }
-        val orchestrator = orchestratorReturning(IntrusionLogAnalysisResult(emptyList(), stats()))
-        val vm = BugReportViewModel(orchestrator, checker, mockk(relaxed = true))
+        val orchestrator = orchestratorReturning(IntrusionLogAnalysisResult(stats()))
+        val vm = BugReportViewModel(orchestrator, checker, mockk(relaxed = true), mockk(relaxed = true))
         vm.onFilePicked(uri)
         assertTrue(vm.checkingSize.value)
         vm.onFilePicked(uri)

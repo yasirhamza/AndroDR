@@ -1,6 +1,10 @@
 package com.androdr.data.repo
 
 import androidx.annotation.VisibleForTesting
+import androidx.paging.Pager
+import androidx.paging.PagingConfig
+import androidx.paging.PagingData
+import com.androdr.data.db.AppDatabase
 import com.androdr.data.db.DnsEventDao
 import com.androdr.data.db.ForensicTimelineEventDao
 import com.androdr.data.db.ScanResultDao
@@ -8,9 +12,14 @@ import com.androdr.data.db.toForensicTimelineEvent
 import com.androdr.data.model.DnsEvent
 import com.androdr.data.model.ScanResult
 import com.androdr.data.store.HashKeys
+import com.androdr.data.store.KeysetPagingSource
+import com.androdr.data.store.tableChanges
 import com.androdr.ioc.IndicatorResolver
 import com.androdr.sigma.LiveRecordBuilders
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.delay
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -23,17 +32,39 @@ class ScanRepository @Inject constructor(
     private val indicatorResolver: IndicatorResolver,
     private val scanWrites: ScanWriteRepository,
     private val scanLock: ScanLock,
+    private val db: AppDatabase,
 ) {
 
     // ── Scan results ───────────────────────────────────────────────────────────
 
-    /** Emits the full scan history, newest first. */
-    val allScans: Flow<List<ScanResult>> = scanResultDao.getAllScans()
+    /**
+     * The scan history, newest first, keyset-paged on `timestamp` (spec §5.5: no capped list);
+     * re-pages when a scan completes or is deleted.
+     */
+    fun pagedScans(): Flow<PagingData<ScanResult>> =
+        Pager(PagingConfig(pageSize = SCAN_PAGE_SIZE, enablePlaceholders = false)) {
+            ScanPagingSource(db, scanResultDao)
+        }.flow
+
+    /** True while at least one scan is listed (History's empty state). */
+    val hasScans: Flow<Boolean> = scanResultDao.anyComplete()
+
+    /** The newest COMPLETE live scan (null before the first one). */
+    val latestLiveScan: Flow<ScanResult?> = scanResultDao.latestLive()
+
+    /** The two newest COMPLETE scans (the Dashboard's diff), re-read when scans change. */
+    val latestTwo: Flow<List<ScanResult>> = db.tableChanges(arrayOf("ScanResult"))
+        .map { scanResultDao.getLatestTwo() }
+        .flowOn(Dispatchers.IO)
+
+    /** Whether scan [id] is saved (COMPLETE). */
+    suspend fun isSaved(id: Long): Boolean = scanResultDao.completeById(id) != null
+
+    /** The COMPLETE scan listed just before [scan] (History's diff baseline), if any. */
+    suspend fun previousOf(scan: ScanResult): ScanResult? = scanResultDao.previousOf(scan.timestamp).firstOrNull()
 
     companion object {
-        /** Selects the preferred scan: first with device flags (runtime), else latest. */
-        fun List<ScanResult>.preferRuntimeScan(): ScanResult? =
-            firstOrNull { it.deviceFlags.isNotEmpty() } ?: firstOrNull()
+        private const val SCAN_PAGE_SIZE = 30
 
         /** How long a user delete waits for a retention or backfill batch to release the lock. */
         const val DELETE_LOCK_WAIT_MS = 2_000L
@@ -166,4 +197,20 @@ class ScanRepository @Inject constructor(
         }
         return true
     }
+}
+
+/**
+ * COMPLETE scans newest first, keyset on `timestamp` ([ScanResultDao.pagedAfter]); the key is the
+ * negated timestamp so "ascending key" is "newest first". Observes `ScanResult`.
+ */
+internal class ScanPagingSource(db: AppDatabase, private val dao: ScanResultDao) :
+    KeysetPagingSource<Long, ScanResult>(db, KeysetPagingSource.OBSERVED_TABLES) {
+    override fun keyOf(item: ScanResult): Long = -item.timestamp
+
+    override suspend fun loadFrom(from: Long?, size: Int) =
+        slice(dao.pagedAfter(if (from == null) Long.MAX_VALUE else -from + 1, size))
+
+    override suspend fun loadAfter(after: Long, size: Int) = slice(dao.pagedAfter(-after, size))
+
+    override suspend fun loadBefore(before: Long, size: Int) = slice(dao.pagedBefore(-before, size))
 }

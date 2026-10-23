@@ -63,8 +63,8 @@ class BatteryUninstallIocRuleTest {
         val typed = BatteryDailyModule().analyze(section, f.indicatorResolver, DeviceIdentity.UNKNOWN,
             DumpsysClock.ASSUMED_UTC).typed
         coEvery { f.bugReportAnalyzer.analyze(any()) } returns
-            BugReportAnalyzer.BugReportAnalysisResult(findings = emptyList(), telemetryBundle = typed)
-        f.orchestrator.analyzeBugReport(uri)
+            BugReportAnalyzer.BugReportAnalysisResult(telemetryBundle = typed)
+        f.findingsOf(f.orchestrator.analyzeBugReport(uri).write!!.scan.id)
     }
 
     private fun section(vararg lines: String) = "Daily stats:\n  Current start time: 2026-03-28-01-00-01\n" +
@@ -74,7 +74,7 @@ class BatteryUninstallIocRuleTest {
     fun `an uninstall of an IOC-listed package fires androdr-110 once, with ioc_match evidence`() {
         val result = import(section("-pkg=$BAD vers=100", "-pkg=$CLEAN vers=7"))
 
-        val hits = result.findings.filter { it.triggered && it.ruleId == "androdr-110" }
+        val hits = result.filter { it.triggered && it.ruleId == "androdr-110" }
         assertEquals(1, hits.size)
         assertEquals(BAD, hits.single().matchContext["package_name"])
         val evidence = hits.single().evidence as Evidence.IocMatch
@@ -87,13 +87,13 @@ class BatteryUninstallIocRuleTest {
     @Test
     fun `an uninstall of a clean package does not fire`() {
         val result = import(section("-pkg=$CLEAN vers=7"))
-        assertTrue(result.findings.none { it.triggered && it.ruleId == "androdr-110" })
+        assertTrue(result.none { it.triggered && it.ruleId == "androdr-110" })
     }
 
     @Test
     fun `an install or update of an IOC-listed package does not fire the uninstall rule`() {
         val result = import(section("+pkg=$BAD vers=100", "+pkg=$BAD vers=200"))
-        assertTrue(result.findings.none { it.triggered && it.ruleId == "androdr-110" })
+        assertTrue(result.none { it.triggered && it.ruleId == "androdr-110" })
     }
 
     private companion object {

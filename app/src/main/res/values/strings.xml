@@ -249,8 +249,6 @@
     <string name="intrusion_log_summary_collapsed" tools:ignore="PluralsCandidate">%1$d duplicates collapsed \u00b7 %2$d malformed lines skipped</string>
     <!-- PluralsCandidate: compact cap-truncation notice -->
     <!-- PluralsCandidate: security-event cap-truncation notice (#342 B4) -->
-    <!-- PluralsCandidate: findings cap-truncation notice (#342 B3) -->
-    <string name="intrusion_log_summary_capped_findings" tools:ignore="PluralsCandidate">Saved the highest-severity %1$d of %2$d findings.</string>
     <string name="intrusion_log_summary_range">Covers %1$s \u2192 %2$s</string>
 
     <!-- Timeline — externalized -->

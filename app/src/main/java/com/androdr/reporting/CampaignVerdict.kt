@@ -1,7 +1,7 @@
 package com.androdr.reporting
 
 import com.androdr.data.model.NotEvaluatedReason
-import com.androdr.data.model.ScanResult
+import com.androdr.data.model.ScanWithFindings
 import com.androdr.data.model.TelemetrySource
 import com.androdr.ioc.Campaign
 import com.androdr.sigma.Evidence
@@ -42,7 +42,7 @@ private val CAMPAIGN_KEY = Regex("^[a-z0-9_-]{1,32}$")
  * observation in the scan that is not dated after the import (a future-dated one would push
  * genuine hits out of the window), else the scan time.
  */
-internal fun campaignReferenceTime(scan: ScanResult, latestImportedEvent: Long?): Long {
+internal fun campaignReferenceTime(scan: ScanWithFindings, latestImportedEvent: Long?): Long {
     if (scan.source == TelemetrySource.LIVE_SCAN) return scan.timestamp
     return latestImportedEvent
         ?: scan.appRisks.mapNotNull { (it.evidence as? Evidence.IocMatch)?.observedAt }
@@ -66,7 +66,7 @@ private data class CampaignHit(val time: Long, val text: String)
  */
 @Suppress("CyclomaticComplexMethod")
 internal fun campaignVerdicts(
-    scan: ScanResult,
+    scan: ScanWithFindings,
     campaigns: List<Campaign>,
     referenceTime: Long,
     ruleCategoryById: Map<String, String>,
@@ -188,7 +188,7 @@ private fun ReportOut.appendFixes(fixes: List<String>) {
  */
 internal fun ReportOut.appendCampaignRows(
     verdicts: List<CampaignVerdict>,
-    scan: ScanResult,
+    scan: ScanWithFindings,
     referenceFromLog: Boolean,
 ) {
     val live = scan.source == TelemetrySource.LIVE_SCAN

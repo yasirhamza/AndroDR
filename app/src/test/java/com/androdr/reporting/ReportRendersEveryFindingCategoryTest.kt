@@ -1,6 +1,6 @@
 package com.androdr.reporting
 
-import com.androdr.data.model.ScanResult
+import com.androdr.data.model.scanWith
 import com.androdr.sigma.Finding
 import com.androdr.sigma.FindingCategory
 import org.junit.Assert.assertTrue
@@ -26,7 +26,7 @@ class ReportRendersEveryFindingCategoryTest {
                 triggered = true,
                 matchContext = mapOf("package_name" to "com.example.probe"),
             )
-            val scan = ScanResult(
+            val scan = scanWith(
                 id = 1L,
                 timestamp = 1711900800000,
                 findings = listOf(finding),

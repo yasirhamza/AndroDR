@@ -2,6 +2,7 @@ package com.androdr.scanner
 
 import com.androdr.data.model.NotEvaluatedReason
 import com.androdr.data.model.ScanResult
+import com.androdr.data.model.ScanWithFindings
 import com.androdr.data.model.TelemetrySource
 import com.androdr.data.model.UNREGISTERED_IOC_LOOKUP
 import com.androdr.network.DnsVpnService
@@ -96,7 +97,7 @@ class ScanOrchestratorErrorHandlingTest {
         val boom = IllegalStateException("boom — simulated scanner crash")
         coEvery { appScanner.collectTelemetry() } throws boom
 
-        val result: ScanResult = orchestrator.runFullScan()
+        val result: ScanWithFindings = orchestrator.runFullScan()
 
         assertTrue(
             "scan with a failing scanner must be marked as partial",
@@ -113,7 +114,7 @@ class ScanOrchestratorErrorHandlingTest {
     fun `a failed DNS snapshot read is recorded as dnsSnapshot and the scan completes`() = runBlocking {
         coEvery { dnsEventDao.maxId() } throws IllegalStateException("database is locked")
 
-        val result: ScanResult = orchestrator.runFullScan()
+        val result: ScanWithFindings = orchestrator.runFullScan()
 
         val failure = result.scannerErrors.single { it.scanner == "dnsSnapshot" }
         assertEquals("IllegalStateException", failure.exception)
@@ -133,7 +134,7 @@ class ScanOrchestratorErrorHandlingTest {
     fun `one scanner failing does not cascade — other scanners still run and get recorded`() = runBlocking {
         coEvery { fileArtifactScanner.collectTelemetry() } throws RuntimeException("file scanner dead")
 
-        val result: ScanResult = orchestrator.runFullScan()
+        val result: ScanWithFindings = orchestrator.runFullScan()
 
         // The specific scanner that failed is recorded.
         assertTrue(result.isPartialScan)
@@ -156,7 +157,7 @@ class ScanOrchestratorErrorHandlingTest {
         coEvery { deviceAuditor.collectTelemetry() } throws IllegalStateException("b")
         coEvery { processScanner.collectTelemetry() } throws NullPointerException("c")
 
-        val result: ScanResult = orchestrator.runFullScan()
+        val result: ScanWithFindings = orchestrator.runFullScan()
 
         assertEquals(3, result.scannerErrors.size)
         val scannerNames = result.scannerErrors.map { it.scanner }.toSet()
@@ -184,7 +185,7 @@ class ScanOrchestratorErrorHandlingTest {
 
     @Test
     fun `successful scan has empty scannerErrors and is not marked partial`() = runBlocking {
-        val result: ScanResult = orchestrator.runFullScan()
+        val result: ScanWithFindings = orchestrator.runFullScan()
 
         assertFalse(result.isPartialScan)
         assertTrue(result.scannerErrors.isEmpty())
@@ -353,7 +354,7 @@ class ScanOrchestratorErrorHandlingTest {
     @Test
     fun `bug-report import is stamped BUGREPORT_IMPORT`() = runBlocking {
         coEvery { bugReportAnalyzer.analyze(any()) } returns
-            BugReportAnalyzer.BugReportAnalysisResult(findings = emptyList())
+            BugReportAnalyzer.BugReportAnalysisResult()
 
         orchestrator.analyzeBugReport(mockk<android.net.Uri>(relaxed = true))
 
@@ -372,7 +373,7 @@ class ScanOrchestratorErrorHandlingTest {
         every { sigmaRuleEngine.unevaluableRules() } returns
             mapOf("androdr-010" to "trusted_installer_db")
         coEvery { bugReportAnalyzer.analyze(any()) } returns
-            BugReportAnalyzer.BugReportAnalysisResult(findings = emptyList())
+            BugReportAnalyzer.BugReportAnalysisResult()
 
         orchestrator.analyzeBugReport(mockk<android.net.Uri>(relaxed = true))
 

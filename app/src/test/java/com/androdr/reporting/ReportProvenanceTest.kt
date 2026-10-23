@@ -64,6 +64,7 @@ class ReportProvenanceTest {
                 every { ruleScopes() } returns mapOf("androdr-003" to RuleScope("dns_monitor", emptySet(), true))
             },
             reportFiles = ReportFiles(reportsDir),
+            findings = f.findings,
         )
     }
 
@@ -79,7 +80,7 @@ class ReportProvenanceTest {
         telemetryState: TelemetryState = TelemetryState.STORED,
     ): ScanResult {
         val s = ScanResult(
-            id = id, timestamp = id, findings = emptyList(), bugReportFindings = emptyList(),
+            id = id, timestamp = id, bugReportFindings = emptyList(),
             riskySideloadCount = 0, knownMalwareCount = 0, source = source, state = ScanState.IN_PROGRESS,
             telemetryState = telemetryState,
         )

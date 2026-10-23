@@ -7,6 +7,7 @@ import androidx.annotation.VisibleForTesting
 import androidx.core.content.FileProvider
 import com.androdr.data.model.NotEvaluatedReason
 import com.androdr.data.model.ScanResult
+import com.androdr.data.repo.FindingsRepository
 import com.androdr.data.store.TelemetryReader
 import com.androdr.util.appVersion
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -48,6 +49,7 @@ class ReportExporter @Inject constructor(
     private val telemetryReader: TelemetryReader,
     private val reportInputs: ReportInputs,
     private val reportFiles: ReportFiles,
+    private val findings: FindingsRepository,
 ) {
     /** Streams [scan]'s report to a cached file and returns its FileProvider URI. */
     suspend fun export(scan: ScanResult, mode: ExportMode = ExportMode.BOTH): Uri = withContext(Dispatchers.IO) {
@@ -68,22 +70,23 @@ class ReportExporter @Inject constructor(
         includeLog: Boolean = true,
     ) =
         withContext(Dispatchers.IO) {
-            val findings = FindingsView.of(scan, reportInputs)
+            val view = FindingsView.of(scan, reportInputs, findings)
             val logLines = if (includeLog) logSource() else emptyList()
             val version = context.appVersion().name
             writeFile(file) { out ->
-                ReportFormatter.writeScanReport(out, scan, findings, logLines, telemetryReader, mode, version)
+                ReportFormatter.writeScanReport(out, scan, view, logLines, telemetryReader, mode, version)
             }
         }
 
     /** What the History sheet shows for [scan]: counts only, read off the main thread. */
     suspend fun summary(scan: ScanResult): ReportSummary = withContext(Dispatchers.IO) {
+        val s = findings.withFindings(scan, triggeredOnly = true)
         ReportSummary(
             source = scan.source,
-            overallRisk = scan.overallRiskLevel.name,
-            appIssues = scan.appRisks.count { it.triggered && it.level.lowercase() != "informational" },
-            deviceIssues = scan.deviceFlags.count { it.triggered },
-            warningSigns = scan.activityChains.count { it.triggered },
+            overallRisk = s.overallRiskLevel.name,
+            appIssues = s.appRisks.count { it.triggered && it.level.lowercase() != "informational" },
+            deviceIssues = s.deviceFlags.count { it.triggered },
+            warningSigns = s.activityChains.count { it.triggered },
             checksNotRun = scan.scannerErrors.count { NotEvaluatedReason.fromSentinel(it.exception) != null },
             failedScanners = scan.realFailureCount,
             telemetryState = scan.telemetryState,

@@ -70,9 +70,11 @@ class IntrusionLogImportLowHeapTest {
                 assertEquals(0, result.stats.malformedLines)
                 val hits = (0 until LINES).count { it % 3 == 2 && it % 50 == 2 }
                 assertEquals(hits, result.stats.triggeredFindingCount)
-                assertEquals("the findings cap holds", ScanOrchestrator.FINDINGS_PERSIST_CAP, result.findings.size)
+                assertEquals("every finding is stored, none capped (D2)", hits.toLong(),
+                    f.count("SELECT COUNT(*) FROM scan_finding WHERE triggered = 1"))
                 assertEquals("events are store-only: the rows are the finding rows (C3)",
-                    ScanOrchestrator.FINDINGS_PERSIST_CAP.toLong(), f.count("SELECT COUNT(*) FROM forensic_timeline"))
+                    hits.toLong(), f.count("SELECT COUNT(*) FROM forensic_timeline"))
+                assertEquals("nothing is held in memory for an import", 0, result.write!!.findings.size)
             }
         } finally {
             file.delete()

@@ -49,7 +49,7 @@ data class BodyStats(val bodies: Long, val storedBytes: Long, val rawBytes: Long
 
 /**
  * Store size: distinct bodies of facts observed by COMPLETE scans, by kind (snapshot bodies are
- * plain JSON, event bodies Deflate), plus bodies held only by pinned orphans and (from Task D2)
+ * plain JSON, event bodies Deflate), plus bodies held only by pinned orphans and
  * the bytes of alert evidence JSON.
  */
 data class StorageSummary(
@@ -191,6 +191,17 @@ class TelemetryReader @Inject constructor(
     suspend fun records(factIds: List<Long>): List<DecodedRecord> =
         chunkedIn(factIds) { dao.records(it) }.map(decoder::decode)
 
+    /**
+     * The visible facts among [factIds] as COMPLETE scan [scanId] observed them; a fact that scan did
+     * not observe (a late-IOC re-check's fact, or a pinned orphan) reads as [records] does.
+     */
+    suspend fun recordsInScan(scanId: Long, factIds: List<Long>): List<DecodedRecord> {
+        val ids = factIds.distinct()
+        val own = chunkedIn(ids) { dao.inScan(scanId, it) }.map(decoder::decode)
+        val seen = own.mapTo(HashSet()) { it.factId }
+        return own + records(ids.filter { it !in seen })
+    }
+
     suspend fun storage(): StorageSummary {
         val observed = dao.storageObserved().associateBy { it.encoding }
         fun stats(row: BodyStatsRow?) = row?.let { BodyStats(it.bodies, it.storedBytes, it.rawBytes) } ?: BodyStats.NONE
@@ -198,7 +209,7 @@ class TelemetryReader @Inject constructor(
             snapshots = stats(observed[TelemetryRecordCodec.ENCODING_PLAIN]),
             events = stats(observed[TelemetryRecordCodec.ENCODING_DEFLATE]),
             pinnedOrphans = stats(dao.storageOrphans()),
-            alertEvidenceBytes = 0L,
+            alertEvidenceBytes = db.alertDao().evidenceBytes(),
         )
     }
 

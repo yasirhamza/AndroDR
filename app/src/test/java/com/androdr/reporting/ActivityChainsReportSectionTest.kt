@@ -1,6 +1,7 @@
 package com.androdr.reporting
 
-import com.androdr.data.model.ScanResult
+import com.androdr.data.model.ScanWithFindings
+import com.androdr.data.model.scanWith
 import com.androdr.sigma.Finding
 import com.androdr.sigma.FindingCategory
 import org.junit.Assert.assertEquals
@@ -36,12 +37,12 @@ class ActivityChainsReportSectionTest {
         category = FindingCategory.DEVICE_POSTURE, triggered = true,
     )
 
-    private fun scanOf(vararg findings: Finding) = ScanResult(
+    private fun scanOf(vararg findings: Finding) = scanWith(
         id = 1L, timestamp = 1711900800000, findings = findings.toList(), bugReportFindings = emptyList(),
         riskySideloadCount = 0, knownMalwareCount = 0, scannerErrors = emptyList(),
     )
 
-    private fun report(scan: ScanResult) =
+    private fun report(scan: ScanWithFindings) =
         reportText(scan, mode = ExportMode.FINDINGS_ONLY)
 
     @Test
@@ -76,7 +77,7 @@ class ActivityChainsReportSectionTest {
             message = "Burst (androdr-corr-004): not finished in time for com.flood",
             ruleId = "androdr-corr-004", packages = listOf("com.flood"),
         )
-        val text = report(scanOf(chain).copy(scannerErrors = listOf(cut)))
+        val text = report(scanOf(chain).let { it.copy(scan = it.scan.copy(scannerErrors = listOf(cut))) })
         assertTrue(text, text.contains(com.androdr.data.model.NotEvaluatedReason.CORRELATION_INCOMPLETE.heading))
         assertTrue(text, text.contains("- Burst (androdr-corr-004): not finished in time for com.flood"))
     }

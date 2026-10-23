@@ -7,10 +7,10 @@ import java.io.File
 
 /**
  * C1 (spec §5.5, §9): no persistence cap anywhere in the scan → store → Timeline path. Every match of
- * the cap pattern in `main` must be on the Phase C allow-list: the permanent ones
+ * the cap pattern in `main` must be on the final allow-list, the permanent four
  * (`ScanResultDao.getLatestTwo`, `IndicatorDao.lookup`, the DNS monitor's
- * `DnsEventDao.getRecentEvents` / `getRecentSnapshot`) and the two D2 removes
- * (`FINDINGS_PERSIST_CAP`, `ScanResultDao.getAllScans`).
+ * `DnsEventDao.getRecentEvents` / `getRecentSnapshot`). D2 removed the last findings cap
+ * (`FINDINGS_PERSIST_CAP`, the findings top-K) and `ScanResultDao.getAllScans`' `LIMIT 50`.
  */
 class NoPersistenceCapsGateTest {
 
@@ -20,11 +20,10 @@ class NoPersistenceCapsGateTest {
     private val allowedFunctions = setOf(
         "ScanResultDao.getLatestTwo", "IndicatorDao.lookup",
         "DnsEventDao.getRecentEvents", "DnsEventDao.getRecentSnapshot",
-        "ScanResultDao.getAllScans",
     )
 
-    /** Allowed identifiers: the interim findings top-K cap, removed in D2. */
-    private val allowedNames = setOf("FINDINGS_PERSIST_CAP")
+    /** Allowed identifiers: none since D2. */
+    private val allowedNames = emptySet<String>()
 
     private fun root(): File = listOf(File("src/main/java/com/androdr"), File("app/src/main/java/com/androdr"))
         .first { it.isDirectory }
@@ -58,11 +57,18 @@ class NoPersistenceCapsGateTest {
     }.toList()
 
     @Test
-    fun `no persistence cap outside the Phase C allow-list`() {
+    fun `no persistence cap outside the permanent allow-list`() {
         val files = root().walkTopDown().filter { it.extension == "kt" }.toList()
         assertTrue(files.size > 100)
         val bad = files.flatMap { violations(it.name, it.readText()) }
         assertTrue("persistence caps (spec §5.5):\n" + bad.joinToString("\n"), bad.isEmpty())
+    }
+
+    @Test
+    fun `the allow-list is the permanent four and no identifier is allowed`() {
+        assertEquals(setOf("ScanResultDao.getLatestTwo", "IndicatorDao.lookup", "DnsEventDao.getRecentEvents",
+            "DnsEventDao.getRecentSnapshot"), allowedFunctions)
+        assertTrue(allowedNames.isEmpty())
     }
 
     @Test
@@ -74,15 +80,16 @@ class NoPersistenceCapsGateTest {
                 fun page(limit: Int = 200): List<X>
             }
             object Caps { const val DNS_PERSIST_CAP = 1; const val INTRUSION_ROW_LIMIT = 2 }
+            object Orchestrator { fun cap() = ScanOrchestrator.FINDINGS_PERSIST_CAP }
             /** This class holds an object. */
             interface ScanResultDao {
                 fun helper() { db.query("SELECT * FROM t LIMIT 3") }
                 @Query("SELECT * FROM ScanResult LIMIT 2")
                 fun getLatestTwo(): List<X>
             }
-            val k = ScanOrchestrator.FINDINGS_PERSIST_CAP
         """.trimIndent()
-        assertEquals(listOf("LIMIT 500", "limit: Int = 200", "_PERSIST_CAP", "_ROW_LIMIT", "LIMIT 3"),
+        assertEquals("the removed findings cap is no longer allowed by name",
+            listOf("LIMIT 500", "limit: Int = 200", "_PERSIST_CAP", "_ROW_LIMIT", "_PERSIST_CAP", "LIMIT 3"),
             violations("F.kt", src).map { it.substringAfter(": ").substringBefore(" (") })
         assertEquals("a body match belongs to its enclosing function, under the real owner",
             "ScanResultDao.helper", violations("F.kt", src).last().substringAfter("(").substringBefore(")"))

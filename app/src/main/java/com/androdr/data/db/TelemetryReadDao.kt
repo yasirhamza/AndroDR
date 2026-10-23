@@ -108,6 +108,16 @@ interface TelemetryReadDao {
     suspend fun records(ids: List<Long>): List<StoredRecordRow>
 
     /**
+     * Of [ids], the facts COMPLETE scan [scanId] observed, each with that scan's own observation (so a
+     * stored finding's `matchContext` is rebuilt with the envelope it was evaluated with). Call
+     * through [chunkedIn].
+     */
+    @Query(
+        "SELECT $OBS_COLS $OBS_FROM WHERE o.scanId = :scanId AND o.recordId IN (:ids) AND ${CompleteScan.SQL}"
+    )
+    suspend fun inScan(scanId: Long, ids: List<Long>): List<StoredRecordRow>
+
+    /**
      * Records of [scanId] (COMPLETE) for [service] whose fact [otherScanId] (also COMPLETE) did
      * not observe, keyset on `ordinal`.
      */

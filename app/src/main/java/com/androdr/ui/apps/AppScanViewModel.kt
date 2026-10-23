@@ -2,8 +2,7 @@ package com.androdr.ui.apps
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.androdr.data.repo.ScanRepository
-import com.androdr.data.repo.ScanRepository.Companion.preferRuntimeScan
+import com.androdr.data.repo.FindingsRepository
 import com.androdr.sigma.Finding
 import com.androdr.sigma.FindingCategory
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -18,7 +17,7 @@ import javax.inject.Inject
 
 @HiltViewModel
 class AppScanViewModel @Inject constructor(
-    private val repository: ScanRepository
+    private val findings: FindingsRepository
 ) : ViewModel() {
 
     /**
@@ -36,9 +35,9 @@ class AppScanViewModel @Inject constructor(
      * instead of mixing in a bogus "Network Detections" bucket for every
      * blocked domain.
      */
-    val appFindings: StateFlow<List<Finding>> = repository.allScans
-        .map { scans ->
-            scans.preferRuntimeScan()?.findings
+    val appFindings: StateFlow<List<Finding>> = findings.latestLive()
+        .map { latest ->
+            latest?.findings
                 ?.filter { finding ->
                     finding.category == FindingCategory.APP_RISK &&
                         finding.matchContext["package_name"]?.isNotBlank() == true

@@ -216,6 +216,7 @@ class StartupSweepTest {
         indicatorResolver = io.mockk.mockk(relaxed = true),
         scanWrites = w.repo,
         scanLock = lock,
+        db = w.f.db,
     )
 
     @Test
@@ -229,8 +230,12 @@ class StartupSweepTest {
 
         assertTrue(scanRepository().deleteScan(1L))
         assertEquals(null, state(1L))
-        assertEquals(0L, w.count("SELECT COUNT(*) FROM telemetry_record"))
-        assertEquals(0L, w.count("SELECT COUNT(*) FROM record_body"))
+        assertEquals("its findings go with it", 0L, w.count("SELECT COUNT(*) FROM scan_finding"))
+        // Spec §5.4: the alert survives the delete and pins its fact; the unmatched fact is gone.
+        assertEquals(1L, w.count("SELECT COUNT(*) FROM alert"))
+        assertEquals(1L, w.count("SELECT COUNT(*) FROM telemetry_record"))
+        assertEquals(1L, w.count("SELECT COUNT(*) FROM telemetry_record WHERE id = (SELECT recordId FROM alert)"))
+        assertEquals(1L, w.count("SELECT COUNT(*) FROM record_body"))
         assertEquals(listOf("kept"), w.f.db.forensicTimelineEventDao().getAllForExport().map { it.description })
     }
 
@@ -247,14 +252,16 @@ class StartupSweepTest {
             }
         }
         w.repo.completeDeleteAll(snapshot)
-        val r = s.finish()
+        s.finish()
         assertEquals(listOf(1L), snapshot)
         assertEquals(null, state(1L))
         assertEquals("COMPLETE", state(2L))
-        assertEquals(1, r.scan.findings.size)
+        assertEquals(1, w.findingsOf(2L).size)
         assertEquals(1L, w.count("SELECT COUNT(*) FROM scan_record WHERE scanId = 2"))
         assertEquals(1L, w.count("SELECT COUNT(*) FROM forensic_timeline WHERE scanResultId = 2"))
-        assertEquals(1L, w.visibleFacts())
+        // Scan 2's fact, and scan 1's: its alert survives "Clear all" and pins it (spec §5.4).
+        assertEquals(2L, w.visibleFacts())
+        assertEquals(2L, w.count("SELECT COUNT(*) FROM alert"))
     }
 
     @Test
@@ -295,7 +302,10 @@ class StartupSweepTest {
         assertEquals("COMPLETE", state(1L))
         assertTrue(repo.deleteAllScans())
         assertEquals(0L, w.count("SELECT COUNT(*) FROM ScanResult"))
-        assertEquals(0L, w.count("SELECT COUNT(*) FROM telemetry_record"))
+        assertEquals(0L, w.count("SELECT COUNT(*) FROM scan_finding"))
+        assertEquals("alerts are never deleted", 2L, w.count("SELECT COUNT(*) FROM alert"))
+        assertEquals("only the alerts' facts are left", 0L,
+            w.count("SELECT COUNT(*) FROM telemetry_record WHERE id NOT IN (SELECT recordId FROM alert)"))
         assertEquals(listOf("kept"), w.f.db.forensicTimelineEventDao().getAllForExport().map { it.description })
     }
 
@@ -319,7 +329,7 @@ class StartupSweepTest {
     @Test
     fun `the sweep runs the legacy event-row cleanup after the backfill`() = runBlocking {
         w.f.db.scanResultDao().insert(com.androdr.data.model.ScanResult(id = 4L, timestamp = 4L,
-            findings = emptyList(), bugReportFindings = emptyList(), riskySideloadCount = 0, knownMalwareCount = 0,
+            bugReportFindings = emptyList(), riskySideloadCount = 0, knownMalwareCount = 0,
             state = ScanState.COMPLETE, telemetryState = com.androdr.data.model.TelemetryState.STORED))
         val dao = w.f.db.forensicTimelineEventDao()
         fun raw(desc: String) = ForensicTimelineEvent(startTimestamp = 1L, source = "intrusion_log",
@@ -342,7 +352,7 @@ class StartupSweepTest {
     @Test
     fun `the legacy cleanup waits while the signal member backfill is unfinished`() = runBlocking {
         w.f.db.scanResultDao().insert(com.androdr.data.model.ScanResult(id = 4L, timestamp = 4L,
-            findings = emptyList(), bugReportFindings = emptyList(), riskySideloadCount = 0, knownMalwareCount = 0,
+            bugReportFindings = emptyList(), riskySideloadCount = 0, knownMalwareCount = 0,
             state = ScanState.COMPLETE, telemetryState = com.androdr.data.model.TelemetryState.STORED))
         val dao = w.f.db.forensicTimelineEventDao()
         val listed = dao.insert(ForensicTimelineEvent(startTimestamp = 1L, source = "intrusion_log",

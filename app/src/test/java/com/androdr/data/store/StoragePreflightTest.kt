@@ -88,7 +88,7 @@ class StoragePreflightTest {
         val r = s.finish()
 
         assertEquals(TelemetryState.FAILED, r.telemetryState)
-        assertEquals("findings from before and after the trip", 2, r.scan.findings.count { it.ruleId == SEC_RULE })
+        assertEquals("findings from before and after the trip", 2, w.findingsOf(1L).count { it.ruleId == SEC_RULE })
         assertEquals(50 * mb, r.spaceToFree)
         assertEquals("only the first chunk was stored", 1L, w.count("SELECT COUNT(*) FROM scan_record"))
         assertEquals("FAILED", w.f.db.openHelper.readableDatabase
@@ -103,7 +103,7 @@ class StoragePreflightTest {
         val r = s.finish()
         assertEquals(TelemetryState.FAILED, r.telemetryState)
         assertEquals(1 * mb, r.spaceToFree)
-        assertEquals(1, r.scan.findings.size)
+        assertEquals(1, w.findingsOf(1L).size)
     }
 
     @Test
@@ -121,13 +121,38 @@ class StoragePreflightTest {
 
         assertTrue(r.persisted)
         assertEquals(TelemetryState.FAILED, r.telemetryState)
-        assertEquals(listOf(DNS_RULE, DNS_RULE, APP_RULE), r.scan.findings.map { it.ruleId })
-        assertTrue(r.scan.findings.all { it.recordId == null })
+        assertEquals(listOf(DNS_RULE, DNS_RULE, APP_RULE), w.findingsOf(1L).map { it.ruleId })
+        assertTrue(w.findingsOf(1L).all { it.recordId == null })
         coVerify(exactly = 1) { store.persistChunk(any(), any(), any(), any(), any(), any(), any(), any(), any()) }
         val rows = w.f.db.forensicTimelineEventDao().getAllForExport()
         assertEquals(3, rows.size)
         assertTrue(rows.all { it.recordId == null && it.level != null })
         assertEquals(0L, w.count("SELECT COUNT(*) FROM telemetry_record"))
+    }
+
+    /** M1, Phase D half (spec §5.4): a fallback DNS IOC finding has no fact, so it keys on noFactKey. */
+    @Test
+    fun `a disk-full fallback DNS IOC finding opens an OPEN alert keyed by noFactKey`() = runBlocking {
+        val store = spyk(w.f.store)
+        coEvery {
+            store.persistChunk(any(), any(), any(), any(), any(), any(), any(), any(), any())
+        } throws SQLiteFullException("database or disk is full")
+        w.store = store
+        val s = w.writer.begin(w.scan(1L), liveEvents = true)
+        s.append("dns_monitor", live, CAPTURED, listOf(dns(EVIL_DOMAIN, time = 1_234L)))
+        s.finish()
+
+        val key = w.f.db.openHelper.readableDatabase.query("SELECT alertKey, status, recordId FROM alert").use { c ->
+            assertTrue("one alert", c.moveToFirst() && c.count == 1)
+            assertEquals("OPEN", c.getString(1))
+            assertTrue("no fact behind it", c.isNull(2))
+            c.getBlob(0)
+        }
+        assertTrue(key.contentEquals(
+            com.androdr.data.repo.AlertIdentity.noFactKey(DNS_RULE, com.androdr.sigma.Evidence.None, 1_234L, 1L, 0)))
+        val f = w.findingsOf(1L).single()
+        assertEquals("the finding keeps its matchContext", EVIL_DOMAIN, f.matchContext["domain"])
+        assertEquals(1, w.f.findings.currentOnce().openAlertCount)
     }
 
     @Test
@@ -147,7 +172,7 @@ class StoragePreflightTest {
 
             assertFalse(r.persisted)
             assertEquals(TelemetryState.FAILED, r.telemetryState)
-            assertEquals(listOf(APP_RULE), r.scan.findings.map { it.ruleId })
+            assertEquals(listOf(APP_RULE), r.findings.map { it.ruleId })
             assertTrue(w.health.isSet())
             assertEquals("the hidden scan is cleaned up", 0L, w.count("SELECT COUNT(*) FROM ScanResult"))
         }
@@ -160,7 +185,7 @@ class StoragePreflightTest {
         s.append("security_log", il, IMPORT_CAPTURED, listOf(securityLine(), securityLine(7L)))
         val r = s.finish()
         assertEquals(TelemetryState.FAILED, r.telemetryState)
-        assertEquals(2, r.scan.findings.size)
+        assertEquals(2, w.findingsOf(1L).size)
         assertEquals(0L, w.count("SELECT COUNT(*) FROM scan_record"))
     }
 
@@ -187,12 +212,14 @@ class StoragePreflightTest {
             // Stored normally, both strip to one body, so they are one fact and one observation.
             val stored = w.writer.begin(w.scan(1L, il), liveEvents = false)
             stored.append("security_log", il, IMPORT_CAPTURED, listOf(withEnvelope, bare))
-            assertEquals(1, stored.finish().scan.findings.size)
+            stored.finish()
+            assertEquals(1, w.findingsOf(1L).size)
             // Evaluate-only must agree.
             w.freeBytes = 10 * mb
             val evalOnly = w.writer.begin(w.scan(2L, il), liveEvents = false)
             evalOnly.append("security_log", il, IMPORT_CAPTURED, listOf(withEnvelope, bare))
-            assertEquals(1, evalOnly.finish().scan.findings.size)
+            evalOnly.finish()
+            assertEquals(1, w.findingsOf(2L).size)
         }
 
     @Test

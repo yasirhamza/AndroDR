@@ -2,9 +2,7 @@ package com.androdr.data.repo
 
 import androidx.room.withTransaction
 import com.androdr.data.db.AppDatabase
-import com.androdr.data.db.RuleRecord
 import com.androdr.data.db.SweepTarget
-import com.androdr.data.db.chunkedIn
 import com.androdr.data.model.EventWatermark
 import com.androdr.data.model.ForensicTimelineEvent
 import com.androdr.data.model.ScanResult
@@ -14,11 +12,19 @@ import com.androdr.data.model.TelemetryState
 import com.androdr.data.store.AtomReader
 import com.androdr.data.store.TelemetryStore
 import com.androdr.sigma.CorrelationSignal
+import com.androdr.sigma.Finding
 import javax.inject.Inject
 import javax.inject.Singleton
 
 /** The guarded finish found the scan no longer `IN_PROGRESS` (deleted or marked `DELETING` meanwhile). */
 class ScanNotInProgressException(scanId: Long) : IllegalStateException("scan $scanId is no longer IN_PROGRESS")
+
+/**
+ * Findings an evaluate-only session (spec §5.2: full disk, breached import reserve) buffered in
+ * memory, written by `finish`: [noFact] with no stored fact, [stored] the late-IOC re-check's (on a
+ * stored fact, `recordId` set).
+ */
+class PendingFindings(val noFact: List<Finding> = emptyList(), val stored: List<Finding> = emptyList())
 
 /**
  * The writer session's and the scan deleters' transactions (spec §5.1 Delete, §5.2), split out of
@@ -30,6 +36,7 @@ class ScanWriteRepository @Inject constructor(
     private val db: AppDatabase,
     private val store: TelemetryStore,
     private val rows: TimelineRowDeleter,
+    private val findings: FindingsRepository,
 ) {
     private val scans get() = db.scanResultDao()
     private val writes get() = db.scanWriteDao()
@@ -41,38 +48,50 @@ class ScanWriteRepository @Inject constructor(
     /** Opens a session's scan, hidden until [finish]. */
     suspend fun begin(scan: ScanResult) = scans.insertInProgress(scan)
 
+    /** Runs [block] in one Room transaction (a chunk's persist plus its findings, spec §5.2 step 2). */
+    suspend fun <T> inTransaction(block: suspend () -> T): T = db.withTransaction { block() }
+
     /**
-     * The session's single finishing transaction (spec §5.2 step 5, Phases A–C): this scan's
-     * finding rows (with `level` and `recordId`), its detected-change rows, the correlation pass
-     * over the atoms read after those inserts (so this scan's rows are `Row` atoms with their real
-     * ids), its signal rows and their `signal_member` rows, then the guarded
-     * `IN_PROGRESS → COMPLETE` update, the event watermarks ([SessionHooks.watermarks]) and the
-     * summary columns (the scan's findings plus the correlation's). Throws — rolling everything
-     * back — with [ScanNotInProgressException] when the guard changes no row.
+     * The session's single finishing transaction (spec §5.2 step 5, Phase D):
+     *  1. the evaluate-only findings the session buffered ([pending]: with no fact, or a late-IOC
+     *     re-check's on a stored fact), recorded now;
+     *  2. this scan's finding rows, `INSERT … SELECT` from its triggered `scan_finding` rows, and its
+     *     detected-change rows;
+     *  3. the correlation pass over the atoms read after those inserts (so this scan's rows are `Row`
+     *     atoms with their real ids), its signal rows and their `signal_member` rows, and its
+     *     correlation findings as STATE `scan_finding` rows (no alert);
+     *  4. alerts, set-based, from this scan's alert keys — none left unattached;
+     *  5. the guarded `IN_PROGRESS → COMPLETE` update, the event watermarks ([SessionHooks.watermarks])
+     *     and the summary columns ([totals] plus the correlation findings).
+     * Throws — rolling everything back — with [ScanNotInProgressException] when the guard changes no row.
      */
     suspend fun finish(
-        scan: ScanResult, kept: List<KeptFinding>, totals: FindingTotals, hooks: SessionHooks,
+        scan: ScanResult, pending: PendingFindings, totals: FindingTotals, hooks: SessionHooks,
         telemetryState: TelemetryState,
-    ): ScanResult = db.withTransaction {
-        val findingRows = kept.filter { it.finding.triggered }.map { k ->
-            val row = hooks.findingRow(k.finding, scan)
-            check(row.level == k.finding.level) { "finding row for ${k.finding.ruleId} must carry its level" }
-            row.copy(recordId = k.recordId, scanResultId = scan.id)
-        }
-        if (findingRows.isNotEmpty()) timeline.insertAll(findingRows)
+    ): Finished = db.withTransaction {
+        val row = { f: Finding -> hooks.findingRow(f, scan) }
+        findings.recordNoFact(scan.id, pending.noFact, row)
+        if (pending.stored.isNotEmpty()) findings.recordStored(scan.id, pending.stored, row)
+        db.scanFindingDao().insertFindingRows(scan.id, System.currentTimeMillis())
         hooks.extraRows(scan).takeIf { it.isNotEmpty() }?.let { timeline.insertAll(it) }
         val correlation = hooks.correlate(scan, atoms)
         insertSignals(correlation.signals)
+        findings.recordState(scan.id, correlation.findings)
+        findings.createAlertsForScan(scan.id, scan.timestamp)
         if (scans.complete(scan.id, telemetryState) == 0) throw ScanNotInProgressException(scan.id)
         hooks.watermarks(saveFallback = telemetryState == TelemetryState.FAILED).forEach { (service, position) ->
             watermarks.put(EventWatermark(service, position, scan.id))
         }
-        val findings = kept.map { it.finding } + correlation.findings
-        val completed = hooks.summarize(scan.copy(findings = findings), totals)
+        // The summary columns count the correlation findings too; the hooks' counts (known malware,
+        // sideloads) stay the session's, as before D2.
+        val completed = hooks.summarize((totals + correlation.findings).applyTo(scan), totals)
             .copy(id = scan.id, state = ScanState.COMPLETE, telemetryState = telemetryState)
         writes.update(completed)
-        completed
+        Finished(completed, correlation.findings)
     }
+
+    /** What [finish] committed: the completed scan and the correlation findings it recorded. */
+    class Finished(val scan: ScanResult, val correlationFindings: List<Finding>)
 
     /** Each signal row, then its members — the only store of member lists (spec §5.4). */
     private suspend fun insertSignals(signals: List<CorrelationSignal>) {
@@ -83,16 +102,6 @@ class ScanWriteRepository @Inject constructor(
             members.insertAll(signal.members.map { SignalMember(id, it.kind, it.id) })
         }
     }
-
-    /**
-     * Of [recordIds], the `(ruleId, recordId)` pairs a visible finding row already carries (the
-     * Phase A–C stand-in for "an alert with this record key exists", spec §5.2 Late-IOC re-check).
-     * For finding rows, `VisibleRow` is exactly "a triggered finding in a COMPLETE scan": [finish]
-     * writes rows for triggered findings only, never persistent and always with their scan id. So a
-     * fact can fire again once the scan that fired it is deleted; D2's alert identity closes that.
-     */
-    suspend fun existingFindings(recordIds: Collection<Long>): Set<RuleRecord> =
-        chunkedIn(recordIds) { timeline.findingRuleRecords(it) }.toHashSet()
 
     /**
      * First delete step, one transaction: hide [scanId] (`DELETING`) and write [persistentRow] if
@@ -115,10 +124,16 @@ class ScanWriteRepository @Inject constructor(
 
     /**
      * The rest of a delete, idempotent and resumable by the sweep: the scan's own non-persistent
-     * Timeline rows (so they stop pinning facts), its telemetry, then the `ScanResult` row.
+     * Timeline rows and its `scan_finding` rows (so they stop pinning facts; its alerts are never
+     * deleted and keep pinning theirs), its telemetry, then the `ScanResult` row.
      */
     suspend fun completeDelete(scanId: Long) {
-        db.withTransaction { rows.byScanId(scanId) }
+        db.withTransaction {
+            rows.byScanId(scanId)
+            val findingPins = db.scanFindingDao().recordIdsForScan(scanId)
+            db.scanFindingDao().deleteForScan(scanId)
+            store.releaseUnpinned(findingPins)
+        }
         store.deleteScanTelemetry(scanId)
         scans.deleteById(scanId)
     }
