@@ -9,20 +9,6 @@ import com.androdr.data.model.TelemetryFact
 /** A fact id with the key it was looked up by (`factKey` or `sourceKey`). Plain: holds a `ByteArray`. */
 class FactIdRow(val key: ByteArray, val id: Long)
 
-/**
- * The fact pin test (spec §5.1 Pins): a fact is pinned while a `forensic_timeline` row or a
- * `signal_member` fact ref points at it. One fragment shared by every reader and by
- * [TelemetryFactDao.deleteUnobservedUnpinned]; Task D2 extends it to `scan_finding` and `alert`.
- * It refers to the fact as `telemetry_record.id`, so callers must not alias the table.
- */
-object PinnedFact {
-    const val SQL = "(EXISTS (SELECT 1 FROM forensic_timeline p WHERE p.recordId = telemetry_record.id) " +
-        "OR EXISTS (SELECT 1 FROM signal_member m WHERE m.kind = 1 AND m.refId = telemetry_record.id))"
-
-    /** True when no observation (of any scan) refers to the fact. */
-    const val UNOBSERVED = "NOT EXISTS (SELECT 1 FROM scan_record o WHERE o.recordId = telemetry_record.id)"
-}
-
 /** Facts (`telemetry_record`). List-parameter queries must be called through [chunkedIn]/[chunkedEach]. */
 @Dao
 interface TelemetryFactDao {
@@ -41,15 +27,17 @@ interface TelemetryFactDao {
     )
     suspend fun liveObserved(ids: List<Long>): List<Long>
 
+    /** Of [ids], deletes the facts with no observation and no pin (spec §5.1 Delete). */
     @Query(
-        "DELETE FROM telemetry_record WHERE id IN (:ids) AND ${PinnedFact.UNOBSERVED} AND NOT ${PinnedFact.SQL}"
+        "DELETE FROM telemetry_record WHERE id IN (SELECT f.id FROM telemetry_record f WHERE f.id IN (:ids) " +
+            "AND ${PinnedFact.UNOBSERVED} AND NOT ${PinnedFact.SQL})"
     )
     suspend fun deleteUnobservedUnpinned(ids: List<Long>)
 
     /** Keyset over fact ids for `gcUnobservedUnpinned`. */
     @Query(
-        "SELECT id FROM telemetry_record WHERE id > :afterId AND ${PinnedFact.UNOBSERVED} " +
-            "AND NOT ${PinnedFact.SQL} ORDER BY id LIMIT :size"
+        "SELECT f.id FROM telemetry_record f WHERE f.id > :afterId AND ${PinnedFact.UNOBSERVED} " +
+            "AND NOT ${PinnedFact.SQL} ORDER BY f.id LIMIT :size"
     )
     suspend fun unobservedUnpinnedAfter(afterId: Long, size: Int): List<Long>
 
