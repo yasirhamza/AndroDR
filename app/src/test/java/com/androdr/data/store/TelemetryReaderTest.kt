@@ -5,6 +5,7 @@ import com.androdr.data.model.ScanState
 import com.androdr.data.model.TelemetrySource
 import com.androdr.data.store.StoreFixture.Companion.app
 import com.androdr.data.store.StoreFixture.Companion.dns
+import com.androdr.sigma.StoreRecord
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.After
@@ -71,6 +72,48 @@ class TelemetryReaderTest {
         assertEquals(listOf(r.factIdByChunkIndex[0]), history.map { it.factId })
         assertTrue(f.reader.history("app_scanner", "com.loose").first().isEmpty())
         assertEquals(1L, f.reader.storage().pinnedOrphans.bodies)
+    }
+
+    @Test
+    fun `a pinned orphan reads back with its first observation's exact provenance and fields`() = runBlocking {
+        val src = TelemetrySource.BUGREPORT_IMPORT
+        val original = mapOf("package_name" to "com.imp", "version_code" to 3L, "source" to src.name,
+            "captured_at" to 4_242L)
+        f.scan(1L)
+        val r = f.persist(1L, "app_scanner", listOf(StoreRecord(original)), source = src, capturedAt = 4_242L)
+        f.setState(1L, ScanState.COMPLETE)
+        f.pinByTimeline(r.factIdByChunkIndex[0])
+        f.setState(1L, ScanState.DELETING)
+        f.store.deleteScanTelemetry(1L)
+        val viaRecords = f.reader.records(r.factIdByChunkIndex.toList()).single()
+        val viaHistory = f.reader.history("app_scanner", "com.imp").first().single()
+        for (rec in listOf(viaRecords, viaHistory)) {
+            assertEquals(DecodedRecord.ORPHAN.toLong(), rec.scanId)
+            assertEquals(src, rec.source)
+            assertEquals(4_242L, rec.capturedAt)
+            assertEquals(original, rec.fields) // stripped envelope keys restored exactly
+        }
+    }
+
+    @Test
+    fun `history orders observations and pinned orphans by capture time`() = runBlocking {
+        val src = TelemetrySource.BUGREPORT_IMPORT
+        for ((scan, version) in listOf(1L to 1L, 2L to 2L, 3L to 3L)) {
+            f.scan(scan)
+            val r = f.persist(scan, "app_scanner", listOf(app("com.h2", version)), capturedAt = scan * 1000,
+                source = if (scan == 2L) TelemetrySource.LIVE_SCAN else src)
+            f.setState(scan, ScanState.COMPLETE)
+            if (scan != 2L) f.pinByTimeline(r.factIdByChunkIndex[0])
+        }
+        for (scan in listOf(1L, 3L)) {
+            f.setState(scan, ScanState.DELETING)
+            f.store.deleteScanTelemetry(scan)
+        }
+        val h = f.reader.history("app_scanner", "com.h2").first()
+        assertEquals(listOf(1L, 2L, 3L), h.map { it.fields!!["version_code"] })
+        assertEquals(listOf(1000L, 2000L, 3000L), h.map { it.capturedAt })
+        assertEquals(listOf(-1L, 2L, -1L), h.map { it.scanId })
+        assertEquals(listOf(src, TelemetrySource.LIVE_SCAN, src), h.map { it.source })
     }
 
     @Test

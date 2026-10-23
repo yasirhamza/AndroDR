@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "database": {
     "version": 20,
-    "identityHash": "7e1f7a3a2a777154fca81e70151fcdd1",
+    "identityHash": "5759477dd29a31d3ac1a50ffa0d14f70",
     "entities": [
       {
         "tableName": "ScanResult",
@@ -674,7 +674,7 @@
       },
       {
         "tableName": "telemetry_record",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `service` TEXT NOT NULL, `factKey` BLOB NOT NULL, `sourceKey` BLOB, `subjectKey` TEXT, `eventTime` INTEGER, `timePrecision` TEXT NOT NULL, `category` TEXT, `packageName` TEXT, `bodyHash` BLOB NOT NULL)",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `service` TEXT NOT NULL, `factKey` BLOB NOT NULL, `sourceKey` BLOB, `subjectKey` TEXT, `eventTime` INTEGER, `timePrecision` TEXT NOT NULL, `category` TEXT, `packageName` TEXT, `bodyHash` BLOB NOT NULL, `firstSource` TEXT NOT NULL, `firstCapturedAt` INTEGER NOT NULL, `firstStrippedKeys` INTEGER NOT NULL)",
         "fields": [
           {
             "fieldPath": "id",
@@ -734,6 +734,24 @@
             "fieldPath": "bodyHash",
             "columnName": "bodyHash",
             "affinity": "BLOB",
+            "notNull": true
+          },
+          {
+            "fieldPath": "firstSource",
+            "columnName": "firstSource",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "firstCapturedAt",
+            "columnName": "firstCapturedAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "firstStrippedKeys",
+            "columnName": "firstStrippedKeys",
+            "affinity": "INTEGER",
             "notNull": true
           }
         ],
@@ -979,7 +997,7 @@
     "views": [],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '7e1f7a3a2a777154fca81e70151fcdd1')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '5759477dd29a31d3ac1a50ffa0d14f70')"
     ]
   }
 }

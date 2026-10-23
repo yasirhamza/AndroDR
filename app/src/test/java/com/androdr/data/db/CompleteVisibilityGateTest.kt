@@ -67,14 +67,45 @@ class CompleteVisibilityGateTest {
             "\\s*\\)\\s*(?:@\\w+(?:\\([^)]*\\))?\\s*)*(?:suspend\\s+)?fun\\s+(\\w+)"
     )
 
-    private fun queries(src: String, owner: String): List<DaoQuery> =
-        queryRe.findAll(src).map { DaoQuery(owner, it.groupValues[2], it.groupValues[1]) }.toList()
+    private val literal = "\"(?:[^\"\\\\]|\\\\.)*\""
+    private val constRe = Regex("const\\s+val\\s+(\\w+)\\s*=\\s*($literal(?:\\s*\\+\\s*$literal)*)")
+    private val literalRe = Regex("\"((?:[^\"\\\\]|\\\\.)*)\"")
+    private val bareRef = Regex("\\$\\{(\\w+)\\}|\\$(\\w+)")
 
-    private fun daoQueries(): List<DaoQuery> = root().walkTopDown().filter { it.extension == "kt" }.flatMap { f ->
-        val src = f.readText()
-        val owner = Regex("interface\\s+(\\w+)").find(src)?.groupValues?.get(1) ?: f.nameWithoutExtension
-        queries(src, owner)
-    }.toList()
+    /** `const val NAME = "…" + "…"` string constants, as their concatenated literal text. */
+    private fun constants(src: String): Map<String, String> = constRe.findAll(src).associate { m ->
+        m.groupValues[1] to literalRe.findAll(m.groupValues[2]).joinToString("") { it.groupValues[1] }
+    }
+
+    /**
+     * Inlines unqualified `$NAME` / `${NAME}` constant references (recursively), so a guarded table
+     * named only inside a shared fragment such as `OBS_FROM` is still seen. Qualified visibility
+     * tokens (`${VisibleFact.SQL}` …) are left in place.
+     */
+    private fun expand(sql: String, consts: Map<String, String>): String {
+        var text = sql
+        repeat(MAX_EXPANSION_DEPTH) {
+            val next = bareRef.replace(text) { m -> consts[m.groupValues[1].ifEmpty { m.groupValues[2] }] ?: m.value }
+            if (next == text) return text
+            text = next
+        }
+        error("constant expansion did not converge: $sql")
+    }
+
+    private fun queries(src: String, owner: String, consts: Map<String, String>): List<DaoQuery> =
+        queryRe.findAll(src).map { DaoQuery(owner, it.groupValues[2], expand(it.groupValues[1], consts)) }.toList()
+
+    private fun sources(): List<String> =
+        root().walkTopDown().filter { it.extension == "kt" }.map { it.readText() }.toList()
+
+    private fun daoQueries(): List<DaoQuery> {
+        val all = sources()
+        val consts = all.fold(emptyMap<String, String>()) { acc, src -> acc + constants(src) }
+        return all.flatMap { src ->
+            val owner = Regex("interface\\s+(\\w+)").find(src)?.groupValues?.get(1) ?: "?"
+            queries(src, owner, consts)
+        }
+    }
 
     private fun violations(all: List<DaoQuery>, allow: Set<String>): List<String> = all
         .filter { guardedTables.containsMatchIn(it.sql) && it.id !in allow }
@@ -91,9 +122,8 @@ class CompleteVisibilityGateTest {
 
     @Test
     fun `CompleteScan is only used with the scan joined as s on the observation`() {
-        val joined = listOf("ScanResult s ON s.id = ", "\$OBS_FROM")
         val bad = daoQueries()
-            .filter { q -> q.sql.contains("\${CompleteScan.SQL}") && joined.none { q.sql.contains(it) } }
+            .filter { q -> q.sql.contains("\${CompleteScan.SQL}") && !q.sql.contains("ScanResult s ON s.id = ") }
         assertTrue(bad.joinToString { it.id }, bad.isEmpty())
     }
 
@@ -110,8 +140,21 @@ class CompleteVisibilityGateTest {
             " suspend fun bad(id: Long): List<X>\n @Query(\n \"SELECT * FROM scan_record o JOIN ScanResult s \" +\n" +
             " \"ON s.id = o.scanId WHERE \${CompleteScan.SQL}\"\n )\n suspend fun good(): List<X>\n" +
             " @Query(\"SELECT 1 FROM ScanResult\")\n fun other(): Int\n}"
-        val qs = queries(src, "D")
+        val qs = queries(src, "D", emptyMap())
         assertEquals(listOf("bad", "good", "other"), qs.map { it.name })
+        assertEquals(listOf("D.bad"), violations(qs, emptySet()))
+    }
+
+    @Test
+    fun `gate sees guarded tables named only through an interpolated constant`() {
+        val src = "internal const val FROM_OBS = \"FROM scan_record o \" +\n" +
+            "    \"JOIN ScanResult s ON s.id = o.scanId\"\n" +
+            "internal const val COLS = \"o.ordinal AS ordinal\"\n" +
+            "interface D {\n @Query(\"SELECT \$COLS \$FROM_OBS WHERE o.scanId = :id\")\n" +
+            " suspend fun bad(id: Long): List<X>\n" +
+            " @Query(\"SELECT \${COLS} \${FROM_OBS} WHERE \${CompleteScan.SQL}\")\n suspend fun good(): List<X>\n}"
+        val qs = queries(src, "D", constants(src))
+        assertTrue(qs.all { "scan_record" in it.sql && "\$" !in it.sql.replace("\${CompleteScan.SQL}", "") })
         assertEquals(listOf("D.bad"), violations(qs, emptySet()))
     }
 
@@ -138,5 +181,9 @@ class CompleteVisibilityGateTest {
         } finally {
             db.close()
         }
+    }
+
+    private companion object {
+        const val MAX_EXPANSION_DEPTH = 8
     }
 }

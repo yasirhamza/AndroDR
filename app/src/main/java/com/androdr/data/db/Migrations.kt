@@ -624,7 +624,8 @@ private val SCHEMA_20_DDL = listOf(
     "CREATE TABLE IF NOT EXISTS `telemetry_record` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
         "`service` TEXT NOT NULL, `factKey` BLOB NOT NULL, `sourceKey` BLOB, `subjectKey` TEXT, " +
         "`eventTime` INTEGER, `timePrecision` TEXT NOT NULL, `category` TEXT, `packageName` TEXT, " +
-        "`bodyHash` BLOB NOT NULL)",
+        "`bodyHash` BLOB NOT NULL, `firstSource` TEXT NOT NULL, `firstCapturedAt` INTEGER NOT NULL, " +
+        "`firstStrippedKeys` INTEGER NOT NULL)",
     "CREATE UNIQUE INDEX IF NOT EXISTS `index_telemetry_record_service_factKey` " +
         "ON `telemetry_record` (`service`, `factKey`)",
     "CREATE INDEX IF NOT EXISTS `index_telemetry_record_service_subjectKey` " +

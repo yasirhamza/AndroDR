@@ -86,6 +86,9 @@ class TelemetryStoreTest {
         assertEquals(1000, b.observed)
         assertArrayEquals(a.factIdByChunkIndex, b.factIdByChunkIndex)
         assertEquals(1000L, f.count("SELECT COUNT(*) FROM telemetry_record"))
+        // The first observation's envelope is written once and never updated by a later import.
+        assertEquals(1000L, f.count("SELECT COUNT(*) FROM telemetry_record WHERE firstCapturedAt = 111 " +
+            "AND firstSource = 'INTRUSION_LOG_IMPORT' AND firstStrippedKeys = 3"))
     }
 
     @Test

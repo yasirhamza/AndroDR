@@ -54,7 +54,8 @@ class StoreDaoTest {
     private fun fact(tag: String, service: String = "dns_monitor", sourceKey: ByteArray? = null) = TelemetryFact(
         service = service, factKey = h128("fact:$tag"), sourceKey = sourceKey, subjectKey = "s:$tag",
         eventTime = 1_000L, timePrecision = "EXACT", category = "dns_query", packageName = "com.example",
-        bodyHash = h128("body:$tag")
+        bodyHash = h128("body:$tag"), firstSource = TelemetrySource.LIVE_SCAN, firstCapturedAt = 5L,
+        firstStrippedKeys = 0,
     )
 
     private fun observation(scanId: Long, ordinal: Int, recordId: Long, service: String = "dns_monitor") =

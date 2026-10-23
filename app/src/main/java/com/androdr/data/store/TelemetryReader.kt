@@ -21,9 +21,9 @@ import javax.inject.Singleton
 /**
  * One stored record, decoded. [fields] is null when the body is unreadable (spec §5.1: corrupt
  * or over-long bodies become a placeholder). A pinned orphan (its observations were removed by
- * deletion or retention) has [scanId] and [ordinal] [ORPHAN]; its observation-only envelope
- * (`source`/`captured_at` when they were stripped) is gone, so [source] falls back to the
- * body's own `source` field, else [TelemetrySource.LIVE_SCAN], and [capturedAt] is 0.
+ * deletion or retention) has [scanId] and [ordinal] [ORPHAN]; its [source] and [capturedAt]
+ * are the fact's first observation's (`firstSource`/`firstCapturedAt`), and its [fields] are
+ * restored with that observation's stripped keys, so provenance stays exact.
  */
 data class DecodedRecord(
     val factId: Long, val scanId: Long, val service: String, val ordinal: Int, val source: TelemetrySource,
@@ -61,16 +61,12 @@ data class StorageSummary(
 /** Turns [StoredRecordRow]s into [DecodedRecord]s. */
 internal class RecordDecoder(private val codec: TelemetryRecordCodec, private val display: EventDisplay) {
     fun decode(row: StoredRecordRow): DecodedRecord {
-        val source = row.source ?: TelemetrySource.LIVE_SCAN
-        val fields = codec.decode(row.body, row.encoding, row.dictVersion, row.rawBytes, row.strippedKeys, source,
+        val fields = codec.decode(row.body, row.encoding, row.dictVersion, row.rawBytes, row.strippedKeys, row.source,
             row.capturedAt)
-        val effectiveSource = row.source
-            ?: (fields?.get("source") as? String)?.let { s -> TelemetrySource.entries.firstOrNull { it.name == s } }
-            ?: TelemetrySource.LIVE_SCAN
         val precision = TimePrecision.entries.firstOrNull { it.name == row.timePrecision } ?: TimePrecision.EXACT
         return DecodedRecord(
             factId = row.factId, scanId = row.scanId, service = row.service, ordinal = row.ordinal,
-            source = effectiveSource, capturedAt = row.capturedAt, eventTime = row.eventTime, precision = precision,
+            source = row.source, capturedAt = row.capturedAt, eventTime = row.eventTime, precision = precision,
             category = row.category, fields = fields, summary = fields?.let { display.summary(row.service, it) },
         )
     }

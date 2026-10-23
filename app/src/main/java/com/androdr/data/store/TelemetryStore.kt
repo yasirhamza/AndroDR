@@ -64,6 +64,10 @@ class TelemetryStore @Inject constructor(
      * one transaction: bodies → facts → observations, each `INSERT OR IGNORE`. With
      * [liveEvents], an event record whose fact already has a live observation (of a COMPLETE
      * scan) gets no new observation. The caller owns [deflater] and [counter].
+     *
+     * [counter] is advanced before the transaction runs, so after this throws it is no longer
+     * valid for the session: a retry with the same counter would mint different fact keys for
+     * id-less records. A failed chunk fails the session (spec §5.2); never retry with it.
      */
     @Suppress("LongParameterList")
     suspend fun persistChunk(
@@ -101,6 +105,7 @@ class TelemetryStore @Inject constructor(
             category = TimelineCategories.categoryOf(service, fields),
             packageName = TaxonomyContract.packageField(service)?.let { fields[it]?.toString() },
             bodyHash = bodyHash,
+            firstSource = source, firstCapturedAt = capturedAt, firstStrippedKeys = stripped.strippedKeys,
         )
         val body = RecordBody(bodyHash, encoded.encoding, encoded.dictVersion, encoded.body, encoded.rawBytes)
         return Prepared(body, fact, eventTime != null, stripped.strippedKeys)

@@ -6,8 +6,9 @@ import com.androdr.data.model.TelemetrySource
 
 /**
  * One stored record as read back: the fact, its body and (for an observed fact) the observation.
- * A pinned orphan (no observation left, spec §5.1) has [scanId] and [ordinal] −1, a null
- * [source], [capturedAt] 0 and [strippedKeys] 0. Plain: holds a `ByteArray`.
+ * A pinned orphan (no observation left, spec §5.1) has [scanId] and [ordinal] −1 and carries
+ * the fact's first-observation envelope (`firstSource`, `firstCapturedAt`, `firstStrippedKeys`)
+ * as [source], [capturedAt] and [strippedKeys]. Plain: holds a `ByteArray`.
  */
 @Suppress("LongParameterList")
 class StoredRecordRow(
@@ -15,7 +16,7 @@ class StoredRecordRow(
     val scanId: Long,
     val service: String,
     val ordinal: Int,
-    val source: TelemetrySource?,
+    val source: TelemetrySource,
     val capturedAt: Long,
     val strippedKeys: Int,
     val eventTime: Long?,
@@ -60,7 +61,11 @@ interface TelemetryReadDao {
         "AND o.ordinal < :before AND ${CompleteScan.SQL} ORDER BY o.ordinal DESC LIMIT :size")
     suspend fun pageBefore(scanId: Long, service: String, before: Int, size: Int): List<StoredRecordRow>
 
-    /** Every visible observation of a subject (COMPLETE scans), then its pinned orphans. */
+    /**
+     * Every visible record of a subject: its observations in COMPLETE scans and its pinned
+     * orphans (read with their first observation's envelope), in one capture-time order
+     * (`capturedAt`, then `scanId`, then `ordinal`; an orphan's `scanId` is −1).
+     */
     @Query(
         "SELECT $OBS_COLS $OBS_FROM WHERE f.service = :service AND f.subjectKey = :subjectKey " +
             "AND ${CompleteScan.SQL} UNION ALL SELECT $ORPHAN_COLS FROM telemetry_record f " +
@@ -71,12 +76,13 @@ interface TelemetryReadDao {
 
     /**
      * Of [ids], the visible facts, each with its newest `COMPLETE` observation (or none, for a
-     * pinned orphan). Call through [chunkedIn].
+     * pinned orphan, which reads with the fact's first-observation envelope). Call through [chunkedIn].
      */
     @Query(
         "SELECT f.id AS factId, COALESCE(o.scanId, -1) AS scanId, f.service AS service, " +
-            "COALESCE(o.ordinal, -1) AS ordinal, o.source AS source, COALESCE(o.capturedAt, 0) AS capturedAt, " +
-            "COALESCE(o.strippedKeys, 0) AS strippedKeys, $FACT_BODY_COLS FROM telemetry_record f " +
+            "COALESCE(o.ordinal, -1) AS ordinal, COALESCE(o.source, f.firstSource) AS source, " +
+            "COALESCE(o.capturedAt, f.firstCapturedAt) AS capturedAt, " +
+            "COALESCE(o.strippedKeys, f.firstStrippedKeys) AS strippedKeys, $FACT_BODY_COLS FROM telemetry_record f " +
             "JOIN record_body b ON b.hash = f.bodyHash LEFT JOIN scan_record o ON o.recordId = f.id AND o.scanId = " +
             "(SELECT MAX(o2.scanId) FROM scan_record o2 JOIN ScanResult s2 ON s2.id = o2.scanId " +
             "WHERE o2.recordId = f.id AND s2.state = 'COMPLETE') WHERE f.id IN (:ids) AND ${VisibleFact.SQL}"
@@ -121,7 +127,6 @@ interface TelemetryReadDao {
             "JOIN ScanResult s ON s.id = o.scanId WHERE f2.bodyHash = b.hash AND ${CompleteScan.SQL})"
     )
     suspend fun storageOrphans(): BodyStatsRow
-
 }
 
 // Column lists shared by [TelemetryReadDao] queries (aliases: o observation, s scan, f fact, b body).
@@ -132,7 +137,8 @@ internal const val OBS_COLS = "f.id AS factId, o.scanId AS scanId, f.service AS 
     "o.ordinal AS ordinal, o.source AS source, o.capturedAt AS capturedAt, " +
     "o.strippedKeys AS strippedKeys, $FACT_BODY_COLS"
 internal const val ORPHAN_COLS = "f.id AS factId, -1 AS scanId, f.service AS service, -1 AS ordinal, " +
-    "NULL AS source, 0 AS capturedAt, 0 AS strippedKeys, $FACT_BODY_COLS"
+    "f.firstSource AS source, f.firstCapturedAt AS capturedAt, f.firstStrippedKeys AS strippedKeys, " +
+    "$FACT_BODY_COLS"
 
 /** Observations joined to their scan (s), fact (f) and body (b). */
 internal const val OBS_FROM = "FROM scan_record o JOIN ScanResult s ON s.id = o.scanId " +
