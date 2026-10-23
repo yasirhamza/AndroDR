@@ -18,20 +18,28 @@ import javax.inject.Singleton
 
 /**
  * Queries UsageStatsManager for app foreground/background events in a window and emits them as
- * [UsageEvent] records (the emitter-only `usage_stats` service: stored, shown on the timeline,
- * targeted by no rule). The live scan reads from its usage watermark (spec §5.2, [Watermarks]).
- * Until Task C3 the live scan also maps them to today's `usage_stats` Timeline rows.
+ * [UsageEvent] records (the emitter-only `usage_stats` service: stored, read by the Timeline from
+ * the store, targeted by no rule). The live scan reads from its usage watermark (spec §5.2,
+ * [Watermarks]). One collection holds at most [maxEvents] events, oldest first: after a long
+ * watermark gap the watermark stops at the last event read and the next scan continues from there,
+ * so nothing is dropped and no scan holds everything Android keeps at once.
  *
  * Requires PACKAGE_USAGE_STATS, granted via Settings > Apps > Special access > Usage access. It is
  * checked explicitly ([UsageAccess]); without it the collection is [UsageCollection.NoAccess] (the
  * Dashboard banner prompts the user), never an empty list that reads like "no activity".
  */
 @Singleton
-class UsageStatsScanner @Inject constructor(
-    @ApplicationContext private val context: Context,
+class UsageStatsScanner internal constructor(
+    private val context: Context,
     private val oemPrefixResolver: OemPrefixResolver,
     private val usageAccess: UsageAccess,
+    private val maxEvents: Int,
 ) {
+    @Inject constructor(
+        @ApplicationContext context: Context,
+        oemPrefixResolver: OemPrefixResolver,
+        usageAccess: UsageAccess,
+    ) : this(context, oemPrefixResolver, usageAccess, MAX_EVENTS_PER_SCAN)
 
     private val localDevice = DeviceIdentity.local()
 
@@ -62,49 +70,55 @@ class UsageStatsScanner @Inject constructor(
         }
     }
 
+    /**
+     * The window's events, oldest first, with rapid transitions of the same app and category
+     * within the same minute collapsed to the first; stops at [maxEvents] kept events.
+     */
     private fun read(usm: UsageStatsManager, sinceMs: Long, untilMs: Long): List<UsageEvent> {
         val events = usm.queryEvents(sinceMs, untilMs)
-        val result = mutableListOf<UsageEvent>()
+        val result = ArrayList<UsageEvent>()
+        val seen = HashSet<String>()
         val event = UsageEvents.Event()
         val pm = context.packageManager
         val labelCache = mutableMapOf<String, String>()
+        var raw = 0
 
-        while (events.hasNextEvent()) {
+        while (result.size < maxEvents && events.hasNextEvent()) {
             events.getNextEvent(event)
-            if (event.timeStamp in sinceMs..untilMs) processUsageEvent(event, pm, labelCache, untilMs, result)
+            val usage = event.takeIf { it.timeStamp in sinceMs..untilMs }
+                ?.let { toUsageEvent(it, pm, labelCache, untilMs) }
+            if (usage != null) {
+                raw++
+                if (seen.add("${usage.packageName}|${usage.eventType}|${usage.timestamp / MINUTE_MS}")) result += usage
+            }
         }
-
-        // Deduplicate rapid transitions of same app+category within same minute
-        val deduped = result.distinctBy {
-            "${it.packageName}|${it.eventType}|${it.timestamp / 60000}"
+        if (result.size >= maxEvents) {
+            Log.i(TAG, "Usage collection reached $maxEvents events; the next scan continues from the last one")
         }
-
-        Log.d(TAG, "Collected ${deduped.size} usage events (from ${result.size} raw)")
-        return deduped
+        Log.d(TAG, "Collected ${result.size} usage events (from $raw raw)")
+        return result
     }
 
     /**
-     * Processes a single UsageEvents.Event and appends a [UsageEvent] to [result]
-     * if the event represents a relevant foreground/background transition for a non-OEM app.
+     * The [UsageEvent] for one UsageEvents.Event, or null unless it is a foreground/background
+     * transition of a non-OEM app.
      */
     @Suppress("TooGenericExceptionCaught")
-    private fun processUsageEvent(
+    private fun toUsageEvent(
         event: UsageEvents.Event,
         pm: PackageManager,
         labelCache: MutableMap<String, String>,
         capturedAt: Long,
-        result: MutableList<UsageEvent>
-    ) {
+    ): UsageEvent? {
         val category = when (event.eventType) {
             UsageEvents.Event.ACTIVITY_RESUMED -> "app_foreground"
             UsageEvents.Event.ACTIVITY_PAUSED -> "app_background"
-            else -> return
+            else -> return null
         }
 
-        val packageName = event.packageName ?: return
-
         // Skip OEM/system apps — only track user-installed app activity
-        if (oemPrefixResolver.isOemPrefix(packageName, localDevice)) return
+        val packageName = event.packageName?.takeUnless { oemPrefixResolver.isOemPrefix(it, localDevice) }
+            ?: return null
 
         // Resolve app label (cached to avoid repeated PM lookups)
         val appLabel = labelCache.getOrPut(packageName) {
@@ -119,19 +133,26 @@ class UsageStatsScanner @Inject constructor(
             }
         }
 
-        result.add(
-            UsageEvent(
-                timestamp = event.timeStamp,
-                packageName = packageName,
-                appName = appLabel,
-                eventType = category,
-                source = TelemetrySource.LIVE_SCAN,
-                capturedAt = capturedAt,
-            )
+        return UsageEvent(
+            timestamp = event.timeStamp,
+            packageName = packageName,
+            appName = appLabel,
+            eventType = category,
+            source = TelemetrySource.LIVE_SCAN,
+            capturedAt = capturedAt,
         )
     }
 
     companion object {
         private const val TAG = "UsageStatsScanner"
+        private const val MINUTE_MS = 60_000L
+
+        /**
+         * Usage events one collection holds (C1 m4). A heavy day is a few thousand transitions
+         * after the per-minute collapse, so 20,000 covers a first 24 h collection; a longer gap is
+         * read over the following scans from the watermark. (It can only stall if 20,000 collapsed
+         * events fall inside one 5-minute re-read window: over 2,000 apps active in one minute.)
+         */
+        const val MAX_EVENTS_PER_SCAN = 20_000
     }
 }

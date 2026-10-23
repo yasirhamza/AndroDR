@@ -44,6 +44,17 @@ interface ForensicTimelineEventDao {
         limit: Int = 500,
     ): Flow<List<ForensicTimelineEvent>>
 
+    /**
+     * One scan's visible rows (the import screen's link, C3): its finding rows, signals and detected
+     * changes. No row cap (spec §5.5); C4 replaces this read with the keyset-paged union.
+     */
+    @Query("""
+        SELECT * FROM forensic_timeline r
+        WHERE r.scanResultId = :scanResultId AND ${VisibleRow.SQL}
+        ORDER BY r.startTimestamp DESC
+    """)
+    fun getEventsByScan(scanResultId: Long): Flow<List<ForensicTimelineEvent>>
+
     @Query("""
         SELECT * FROM forensic_timeline r
         WHERE r.packageName = :packageName AND ${VisibleRow.SQL}
@@ -112,14 +123,8 @@ interface ForensicTimelineEventDao {
     @Query("SELECT id FROM forensic_timeline WHERE kind = 'signal' AND createdAt < :cutoff AND persistent = 0")
     suspend fun signalIdsOlderThan(cutoff: Long): List<Long>
 
-    @Query("SELECT id FROM forensic_timeline WHERE kind = 'signal' AND source = :source")
-    suspend fun signalIdsBySource(source: String): List<Long>
-
-    @Query(
-        "SELECT id FROM forensic_timeline WHERE kind = 'signal' AND source = :source " +
-            "AND startTimestamp BETWEEN :since AND :until"
-    )
-    suspend fun signalIdsBySourceBetween(source: String, since: Long, until: Long): List<Long>
+    @Query("SELECT id FROM forensic_timeline WHERE kind = 'signal' AND id IN (:ids)")
+    suspend fun signalIdsByIds(ids: List<Long>): List<Long>
 
     @Query("SELECT id FROM forensic_timeline WHERE kind = 'signal' AND scanResultId = :scanResultId AND persistent = 0")
     suspend fun signalIdsByScanId(scanResultId: Long): List<Long>
@@ -136,21 +141,12 @@ interface ForensicTimelineEventDao {
     )
     suspend fun recordIdsOlderThan(cutoff: Long): List<Long>
 
-    @Query("DELETE FROM forensic_timeline WHERE source = :source")
-    suspend fun deleteBySource(source: String)
+    /** The rows [ids] (the one-time legacy event-row cleanup, C3). At most 900 ids per call. */
+    @Query("DELETE FROM forensic_timeline WHERE id IN (:ids)")
+    suspend fun deleteByIds(ids: List<Long>)
 
-    @Query("SELECT DISTINCT recordId FROM forensic_timeline WHERE source = :source AND recordId IS NOT NULL")
-    suspend fun recordIdsBySource(source: String): List<Long>
-
-    /** Rows of [source] stamped in `[since, until]`: the usage rows a live scan's re-read replaces. */
-    @Query("DELETE FROM forensic_timeline WHERE source = :source AND startTimestamp BETWEEN :since AND :until")
-    suspend fun deleteBySourceBetween(source: String, since: Long, until: Long)
-
-    @Query(
-        "SELECT DISTINCT recordId FROM forensic_timeline WHERE source = :source " +
-            "AND startTimestamp BETWEEN :since AND :until AND recordId IS NOT NULL"
-    )
-    suspend fun recordIdsBySourceBetween(source: String, since: Long, until: Long): List<Long>
+    @Query("SELECT DISTINCT recordId FROM forensic_timeline WHERE id IN (:ids) AND recordId IS NOT NULL")
+    suspend fun recordIdsByIds(ids: List<Long>): List<Long>
 
     /** A scan's own rows; persistent (audit/closure) rows survive scan deletion (spec §5.1). */
     @Query("DELETE FROM forensic_timeline WHERE scanResultId = :scanResultId AND persistent = 0")
@@ -185,22 +181,4 @@ interface ForensicTimelineEventDao {
             "WHERE r.recordId IN (:recordIds) AND r.ruleId != '' AND ${VisibleRow.SQL}"
     )
     suspend fun findingRuleRecords(recordIds: List<Long>): List<RuleRecord>
-
-    /**
-     * Scan ids that own at least one row with the given [source] (#342).
-     *
-     * Used by the intrusion-log import's replace-on-reimport sweep: deleting by
-     * source alone would strand the correlation-signal rows the engine writes
-     * with `source = "sigma_correlation_engine"`, leaving clusters whose
-     * `signal_member` refs point at deleted rows. Deleting by the ids this
-     * returns removes a prior import's raw rows, finding rows, and signals
-     * together — without touching live-scan or bug-report signals, which carry
-     * their own scan ids.
-     *
-     * `scanResultId != -1` filters the "not associated with any scan" sentinel
-     * ([ForensicTimelineEvent.scanResultId] default), which must never be swept.
-     */
-    @Query("SELECT DISTINCT scanResultId FROM forensic_timeline WHERE source = :source AND scanResultId != -1")
-    suspend fun getDistinctScanIdsBySource(source: String): List<Long>
-
 }

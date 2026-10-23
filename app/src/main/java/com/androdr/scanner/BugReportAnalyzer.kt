@@ -3,10 +3,8 @@ package com.androdr.scanner
 import android.content.Context
 import android.net.Uri
 import android.util.Log
-import com.androdr.data.model.ForensicTimelineEvent
 import com.androdr.data.model.PackageInstallHistoryEntry
 import com.androdr.data.model.SystemPropertySnapshot
-import com.androdr.data.model.TimelineEvent
 import com.androdr.data.model.TombstoneEvent
 import com.androdr.data.model.WakelockAcquisition
 import com.androdr.ioc.DeviceIdentity
@@ -51,8 +49,6 @@ class BugReportAnalyzer @Inject constructor(
      */
     data class BugReportAnalysisResult(
         val findings: List<Finding>,
-        val timeline: List<TimelineEvent>,
-        val forensicEvents: List<ForensicTimelineEvent> = emptyList(),
         val telemetryBundle: TypedTelemetry = TypedTelemetry(),
         /** Record bounds a module tripped (it stopped adding records); empty when none. */
         val boundTrips: List<String> = emptyList(),
@@ -81,8 +77,6 @@ class BugReportAnalyzer @Inject constructor(
     @Suppress("LongMethod", "TooGenericExceptionCaught", "CyclomaticComplexMethod")
     suspend fun analyze(bugReportUri: Uri): BugReportAnalysisResult = withContext(Dispatchers.IO) {
         val moduleTelemetry = mutableListOf<ModuleTelemetry>()
-        val allTimelineEvents = mutableListOf<TimelineEvent>()
-        val allForensicEvents = mutableListOf<ForensicTimelineEvent>()
         var tombstoneEvents: List<TombstoneEvent> = emptyList()
         var wakelockEvents: List<WakelockAcquisition> = emptyList()
         var systemPropertySnapshots: List<SystemPropertySnapshot> = emptyList()
@@ -148,9 +142,7 @@ class BugReportAnalyzer @Inject constructor(
 
         if (neededSections.isNotEmpty()) {
             val stream1 = openBugReportStream(bugReportUri)
-                ?: return@withContext BugReportAnalysisResult(
-                    emptyList(), allTimelineEvents, allForensicEvents, moduleTelemetry = moduleTelemetry
-                )
+                ?: return@withContext BugReportAnalysisResult(emptyList(), moduleTelemetry = moduleTelemetry)
 
             try {
                 ZipInputStream(stream1.buffered()).use { zip ->
@@ -170,9 +162,6 @@ class BugReportAnalyzer @Inject constructor(
 
                             if (sections.isNotEmpty()) {
                                 sections["package"]?.let { packageSection ->
-                                    allForensicEvents.addAll(
-                                        installTimeModule.parseSection(packageSection, clock)
-                                    )
                                     installHistory = capped(
                                         installTimeModule.parseHistory(
                                             packageSection, System.currentTimeMillis(), clock
@@ -185,7 +174,7 @@ class BugReportAnalyzer @Inject constructor(
                                         val sectionText = sections[sectionName] ?: continue
                                         val result = mod.analyze(sectionText, iocResolver, sourceDevice, clock)
                                         processModuleResult(
-                                            mod, result, moduleTelemetry, allTimelineEvents, moduleTyped, boundTrips
+                                            mod, result, moduleTelemetry, moduleTyped, boundTrips
                                         )
                                     }
                                 }
@@ -215,9 +204,7 @@ class BugReportAnalyzer @Inject constructor(
                 }
             } catch (e: Exception) {
                 Log.w(TAG, "Failed to read zip contents (pass 1): ${e.message}")
-                return@withContext BugReportAnalysisResult(
-                    emptyList(), allTimelineEvents, allForensicEvents, moduleTelemetry = moduleTelemetry
-                )
+                return@withContext BugReportAnalysisResult(emptyList(), moduleTelemetry = moduleTelemetry)
             }
         }
 
@@ -225,9 +212,7 @@ class BugReportAnalyzer @Inject constructor(
         // but kept for any future raw modules registered via Hilt IntoSet).
         if (rawModules.isNotEmpty()) {
             val stream2 = openBugReportStream(bugReportUri)
-                ?: return@withContext BugReportAnalysisResult(
-                    emptyList(), allTimelineEvents, allForensicEvents, moduleTelemetry = moduleTelemetry
-                )
+                ?: return@withContext BugReportAnalysisResult(emptyList(), moduleTelemetry = moduleTelemetry)
             try {
                 ZipInputStream(stream2.buffered()).use { zip ->
                     val entrySequence = sequence {
@@ -243,7 +228,7 @@ class BugReportAnalyzer @Inject constructor(
                     for (mod in rawModules) {
                         val result = mod.analyzeRaw(entrySequence, iocResolver, sourceDevice)
                         processModuleResult(
-                            mod, result, moduleTelemetry, allTimelineEvents, moduleTyped, boundTrips
+                            mod, result, moduleTelemetry, moduleTyped, boundTrips
                         )
                     }
                 }
@@ -262,10 +247,9 @@ class BugReportAnalyzer @Inject constructor(
             )
         ) { acc, typed -> acc + typed }
 
-        Log.d(TAG, "Collected ${allTimelineEvents.size} timeline events, " +
-            "${moduleTelemetry.sumOf { it.records.size }} generic records")
+        Log.d(TAG, "Collected ${moduleTelemetry.sumOf { it.records.size }} generic records")
         BugReportAnalysisResult(
-            emptyList(), allTimelineEvents, allForensicEvents, bundle, boundTrips, moduleTelemetry,
+            emptyList(), bundle, boundTrips, moduleTelemetry,
             importNotes = if (clock.assumedUtc) listOf(DumpsysClock.NOTE_ASSUMED_UTC) else emptyList(),
         )
     }
@@ -274,7 +258,6 @@ class BugReportAnalyzer @Inject constructor(
         mod: BugreportModule,
         result: ModuleResult,
         moduleTelemetry: MutableList<ModuleTelemetry>,
-        allTimelineEvents: MutableList<TimelineEvent>,
         moduleTyped: MutableList<TypedTelemetry>,
         boundTrips: MutableList<String>,
     ) {
@@ -282,7 +265,6 @@ class BugReportAnalyzer @Inject constructor(
         val telemetry = capped(result.telemetry, name, boundTrips)
         if (telemetry.isNotEmpty()) moduleTelemetry += ModuleTelemetry(result.telemetryService, telemetry)
         result.truncatedAt?.let { boundTrips += "$name: stopped at $it records" }
-        allTimelineEvents.addAll(result.timeline)
         moduleTyped.add(result.typed)
     }
 

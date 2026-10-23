@@ -40,7 +40,7 @@ class FinishCorrelationTest {
 
     private inner class Hooks(private val signals: Boolean) : SessionHooks {
         var seen: List<TimelineAtom> = emptyList()
-        override fun interimRows(scan: ScanResult) = listOf(
+        override fun extraRows(scan: ScanResult) = listOf(
             ForensicTimelineEvent(startTimestamp = 1_000, source = "test", category = "permission_use",
                 description = "evt", packageName = "com.test", scanResultId = scan.id),
             ForensicTimelineEvent(startTimestamp = 2_000, source = "test", category = "permission_use",

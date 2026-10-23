@@ -38,10 +38,6 @@ class AdbKeysModuleTest {
             it["source"] == "adb_trusted_key" &&
                 it["host"] == "user@workstation"
         })
-        assertTrue(result.timeline.any {
-            it.category == "adb_trusted_key" &&
-                it.description.contains("user@workstation")
-        })
     }
 
     @Test
@@ -63,6 +59,5 @@ class AdbKeysModuleTest {
     fun `empty section produces no telemetry`() = runBlocking {
         val result = module.analyze("", mockIndicatorResolver, com.androdr.ioc.DeviceIdentity.UNKNOWN)
         assertTrue(result.telemetry.isEmpty())
-        assertTrue(result.timeline.isEmpty())
     }
 }

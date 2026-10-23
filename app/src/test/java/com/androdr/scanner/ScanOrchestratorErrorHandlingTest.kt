@@ -353,7 +353,7 @@ class ScanOrchestratorErrorHandlingTest {
     @Test
     fun `bug-report import is stamped BUGREPORT_IMPORT`() = runBlocking {
         coEvery { bugReportAnalyzer.analyze(any()) } returns
-            BugReportAnalyzer.BugReportAnalysisResult(findings = emptyList(), timeline = emptyList())
+            BugReportAnalyzer.BugReportAnalysisResult(findings = emptyList())
 
         orchestrator.analyzeBugReport(mockk<android.net.Uri>(relaxed = true))
 
@@ -372,7 +372,7 @@ class ScanOrchestratorErrorHandlingTest {
         every { sigmaRuleEngine.unevaluableRules() } returns
             mapOf("androdr-010" to "trusted_installer_db")
         coEvery { bugReportAnalyzer.analyze(any()) } returns
-            BugReportAnalyzer.BugReportAnalysisResult(findings = emptyList(), timeline = emptyList())
+            BugReportAnalyzer.BugReportAnalysisResult(findings = emptyList())
 
         orchestrator.analyzeBugReport(mockk<android.net.Uri>(relaxed = true))
 

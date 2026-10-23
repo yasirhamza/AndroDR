@@ -51,7 +51,7 @@ class TimelineRowDeleterTest {
     fun `each delete path releases the facts its rows pinned`() = runBlocking {
         val paths: List<Pair<ForensicTimelineEvent, suspend () -> Unit>> = listOf(
             row(createdAt = 10L) to { deleter.olderThan(11L) },
-            row(source = "intrusion_log") to { deleter.bySource("intrusion_log") },
+            row(source = "legacy") to { deleter.byIds(idsOf("legacy")) },
             row(scan = 7L) to { deleter.byScanId(7L) },
             row(scan = 404L) to { deleter.unownedNonPersistent() },
             row(scan = -1L) to { deleter.unownedNonPersistent() },
@@ -96,14 +96,27 @@ class TimelineRowDeleterTest {
         }
     }
 
-    /** Every TimelineRowDeleter path (prune, import/usage sweeps, scan delete, clear-all) and a row it deletes. */
+    /** Every TimelineRowDeleter path (prune, legacy cleanup by id, scan delete, clear-all) and a row it deletes. */
     private fun deletePaths(): List<Pair<ForensicTimelineEvent, suspend () -> Unit>> = listOf(
         row(createdAt = 10L) to { deleter.olderThan(11L) },
-        row(source = "intrusion_log") to { deleter.bySource("intrusion_log") },
-        row(source = "usage_stats").copy(startTimestamp = 50L) to { deleter.bySourceBetween("usage_stats", 40L, 60L) },
+        row(source = "legacy") to { deleter.byIds(idsOf("legacy")) },
         row(scan = 7L) to { deleter.byScanId(7L) },
         row(scan = 404L) to { deleter.unownedNonPersistent() },
     )
+
+    /** Ids of the rows of [source] (the legacy cleanup deletes by id). */
+    private fun idsOf(source: String): List<Long> = f.db.openHelper.readableDatabase
+        .query("SELECT id FROM forensic_timeline WHERE source = '$source'").use { c ->
+            generateSequence { if (c.moveToNext()) c.getLong(0) else null }.toList()
+        }
+
+    @Test
+    fun `byIds deletes exactly the given rows, past one list parameter's bound`() = runBlocking {
+        val dao = f.db.forensicTimelineEventDao()
+        val ids = dao.insertAll(List(1_000) { row() })
+        f.db.withTransaction { deleter.byIds(ids.dropLast(1)) }
+        assertEquals(listOf(ids.last()), idsOf("s"))
+    }
 
     private fun orphans() = f.count(
         "SELECT COUNT(*) FROM signal_member m WHERE NOT EXISTS " +
@@ -191,7 +204,7 @@ class TimelineRowDeleterTest {
     fun `no production code calls a raw forensic_timeline delete except TimelineRowDeleter`() {
         val root = listOf(File("src/main/java/com/androdr"), File("app/src/main/java/com/androdr"))
             .first { it.isDirectory }
-        val raw = Regex("\\.(deleteOlderThan|deleteBySource|deleteByScanId|deleteUnownedNonPersistent)\\(")
+        val raw = Regex("\\.(deleteOlderThan|deleteByIds|deleteByScanId|deleteUnownedNonPersistent)\\(")
         val offenders = root.walkTopDown().filter { it.extension == "kt" && it.name != "TimelineRowDeleter.kt" }
             .flatMap { file ->
                 file.readLines().withIndex()

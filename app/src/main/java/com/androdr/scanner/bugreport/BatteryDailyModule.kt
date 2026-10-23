@@ -2,7 +2,6 @@ package com.androdr.scanner.bugreport
 
 import com.androdr.data.model.BatteryDailyEvent
 import com.androdr.data.model.TelemetrySource
-import com.androdr.data.model.TimelineEvent
 import com.androdr.ioc.IndicatorResolver
 import java.time.LocalDate
 import javax.inject.Inject
@@ -24,7 +23,7 @@ class BatteryDailyModule internal constructor(private val maxRecords: Int) : Bug
     private val startTimeRegex =
         Regex("""Current start time:\s*(\d{4})-(\d{2})-(\d{2})-\d{2}-\d{2}-\d{2}""")
 
-    /** One parsed `+pkg=`/`-pkg=` entry, before it becomes a typed record and a timeline row. */
+    /** One parsed `+pkg=`/`-pkg=` entry, before it becomes a typed record. */
     private data class Change(
         val packageName: String,
         val version: Long,
@@ -47,7 +46,6 @@ class BatteryDailyModule internal constructor(private val maxRecords: Int) : Bug
         clock: DumpsysClock,
     ): ModuleResult {
         val events = mutableListOf<BatteryDailyEvent>()
-        val timeline = mutableListOf<TimelineEvent>()
         val now = System.currentTimeMillis()
         var truncatedAt: Int? = null
 
@@ -67,11 +65,6 @@ class BatteryDailyModule internal constructor(private val maxRecords: Int) : Bug
                 source = TelemetrySource.BUGREPORT_IMPORT,
                 capturedAt = now,
             ))
-            // Severity is assigned by SIGMA rules downstream (plan 6), not here.
-            timeline.add(TimelineEvent(
-                timestamp = -1, source = "battery_daily", category = eventType,
-                description = description, severity = "INFO",
-            ))
             return true
         }
 
@@ -85,17 +78,6 @@ class BatteryDailyModule internal constructor(private val maxRecords: Int) : Bug
                 add(c, "package_update", "App updated: ${c.packageName} (version ${c.version})")
             }
             if (!ok) break
-            val iocHit = if (c.uninstall) iocResolver.isKnownBadPackage(c.packageName) else null
-            if (iocHit != null) {
-                timeline.add(TimelineEvent(
-                    timestamp = -1,
-                    source = "battery_daily",
-                    category = "package_uninstall",
-                    description = "Known ${iocHit.category} package '${c.packageName}' " +
-                        "(${iocHit.name}) was uninstalled — possible anti-forensics",
-                    severity = "INFO",
-                ))
-            }
         }
 
         // Detect version downgrades
@@ -112,8 +94,6 @@ class BatteryDailyModule internal constructor(private val maxRecords: Int) : Bug
         }
 
         return ModuleResult(
-            // Deduplicate timeline by description
-            timeline = timeline.distinctBy { it.description },
             typed = TypedTelemetry(batteryDailyEvents = events),
             truncatedAt = truncatedAt,
         )

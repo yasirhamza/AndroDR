@@ -75,7 +75,7 @@ internal class LiveDnsSources(
 )
 
 /**
- * Every live service, in today's evaluation order; usage chunks also feed today's usage rows. Live
+ * Every live service, in today's evaluation order (usage events are store-only facts, C3). Live
  * DNS is streamed by id from the DNS watermark, then the stored live DNS facts of the trailing 24 h
  * are re-checked against late IOCs (spec §5.2).
  */
@@ -97,7 +97,6 @@ internal suspend fun appendLive(
     attribution.report()
     val usage = (t.usage.collection as? UsageCollection.Ok)?.events.orEmpty()
     usage.chunked(ChunkedScanWriter.CHUNK_SIZE).forEach { chunk ->
-        hooks.interim.stage(LiveRecordBuilders.USAGE_STATS, chunk)
         val records = LiveRecordBuilders.usage(chunk)
         session.append(LiveRecordBuilders.USAGE_STATS, TelemetrySource.LIVE_SCAN, capturedAtOf(records, now), records)
     }
@@ -248,10 +247,11 @@ internal fun intrusionLogResult(
         Log.w(TAG, "Intrusion-log findings cap kept ${ScanOrchestrator.FINDINGS_PERSIST_CAP} of $triggered " +
             "triggered findings. Detection saw the full stream; only persistence is bounded.")
     }
+    fun dropped(service: String) = written.duplicatesByService[service] ?: 0
     val stats = s.copy(
-        dnsEventCount = s.dnsEventCount - hooks.interim.unobserved(IntrusionLogRecordBuilders.DNS_MONITOR),
-        connectEventCount = s.connectEventCount - hooks.interim.unobserved(IntrusionLogRecordBuilders.NETWORK_MONITOR),
-        securityEventCount = s.securityEventCount - hooks.interim.unobserved(IntrusionLogRecordBuilders.SECURITY_LOG),
+        dnsEventCount = s.dnsEventCount - dropped(IntrusionLogRecordBuilders.DNS_MONITOR),
+        connectEventCount = s.connectEventCount - dropped(IntrusionLogRecordBuilders.NETWORK_MONITOR),
+        securityEventCount = s.securityEventCount - dropped(IntrusionLogRecordBuilders.SECURITY_LOG),
         duplicatesCollapsed = written.duplicatesDropped,
         triggeredFindingCount = triggered,
     )

@@ -163,16 +163,18 @@ class BugReportTypedRecordsTest {
     }
 
     @Test
-    fun `install history matches the InstallTimeModule timeline rows`() {
+    fun `install history has one INSTALL record per package with a first-install time`() {
         val section = fixtureText().substringAfter("------ SERVICE package ------")
             .substringBefore("------ SERVICE ")
-        val rows = InstallTimeModule().parseSection(section)
+        // The packages the retired install-time rows covered (C3): every block with a firstInstallTime.
+        val expected = section.split(Regex("(?m)^\\s*(?=Package \\[)")).mapNotNull { block ->
+            val pkg = Regex("^Package \\[([^\\]]+)\\]").find(block)?.groupValues?.get(1)
+            pkg?.takeIf { "firstInstallTime=" in block }
+        }
         val history = InstallTimeModule().parseHistory(section, capturedAt = 1L)
-        assertEquals(
-            rows.map { it.packageName to it.startTimestamp },
-            history.filter { it.eventType == PackageHistoryEventType.INSTALL }
-                .map { it.packageName to it.timestamp },
-        )
+        assertTrue("the fixture has packages: $expected", expected.isNotEmpty())
+        val installs = history.filter { it.eventType == PackageHistoryEventType.INSTALL }
+        assertEquals(expected, installs.map { it.packageName })
     }
 
     @Test

@@ -4,7 +4,6 @@ import android.content.Context
 import com.androdr.data.db.DnsEventDao
 import com.androdr.data.model.ScanResult
 import com.androdr.data.repo.ScanLock
-import com.androdr.data.repo.TimelineRowDeleter
 import com.androdr.ioc.FeedCoverage
 import com.androdr.ioc.IndicatorResolver
 import com.androdr.network.DnsVpnService
@@ -92,8 +91,6 @@ internal class OrchestratorFixture(
             intrusionLogAnalyzer = this.intrusionLogAnalyzer,
             writer = writer,
             scanLock = lock,
-            forensicTimelineEventDao = timelineDao,
-            timelineRows = TimelineRowDeleter(timelineDao, w.f.store, db.signalMemberDao()),
             installEventEmitter = installEventEmitter,
             deviceAdminGrantEmitter = deviceAdminGrantEmitter,
             sigmaRuleEngine = engine,

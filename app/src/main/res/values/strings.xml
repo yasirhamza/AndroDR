@@ -110,7 +110,6 @@
     <string name="bugreport_analyzed_bug_report">Analyzed: system diagnostic (bug report)</string>
     <string name="bugreport_analyzed_intrusion_log">Analyzed: intrusion log export</string>
     <!-- PluralsCandidate: compact completion summary; matches bugreport_finding_count style -->
-    <string name="bugreport_complete_timeline_only" tools:ignore="PluralsCandidate">Scan complete — %1$d timeline event(s), no triggered findings</string>
     <string name="bugreport_error_title">Analysis failed</string>
     <string name="bugreport_error_hint">Reason: %1$s</string>
     <!-- Entry point for BOTH import forks (bug report / intrusion log export), #356 -->
@@ -178,7 +177,8 @@
     <string name="bugreport_rule_findings">Rule-Based Findings</string>
     <!-- PluralsCandidate: shorthand for finding count display -->
     <string name="bugreport_finding_count" tools:ignore="PluralsCandidate">%1$d finding(s)</string>
-    <string name="bugreport_timeline_count" tools:ignore="PluralsCandidate">Timeline (%1$d events)</string>
+    <string name="bugreport_view_timeline">View in Timeline</string>
+    <string name="timeline_scan_filter_clear">One scan only — tap to show all</string>
     <string name="cd_collapse">Collapse</string>
     <string name="cd_expand">Expand</string>
 
@@ -212,9 +212,7 @@
     <!-- PluralsCandidate: compact multi-count summary; matches bugreport_finding_count style -->
     <string name="intrusion_log_summary_collapsed" tools:ignore="PluralsCandidate">%1$d duplicates collapsed \u00b7 %2$d malformed lines skipped</string>
     <!-- PluralsCandidate: compact cap-truncation notice -->
-    <string name="intrusion_log_summary_capped" tools:ignore="PluralsCandidate">Timeline keeps the newest %1$d of %2$d DNS and %3$d of %4$d connection events.</string>
     <!-- PluralsCandidate: security-event cap-truncation notice (#342 B4) -->
-    <string name="intrusion_log_summary_capped_security" tools:ignore="PluralsCandidate">Timeline keeps the newest %1$d of %2$d security events.</string>
     <!-- PluralsCandidate: findings cap-truncation notice (#342 B3) -->
     <string name="intrusion_log_summary_capped_findings" tools:ignore="PluralsCandidate">Saved the highest-severity %1$d of %2$d findings.</string>
     <string name="intrusion_log_summary_range">Covers %1$s \u2192 %2$s</string>

@@ -1,6 +1,5 @@
 package com.androdr.scanner
 
-import com.androdr.data.db.toForensicTimelineEvent
 import com.androdr.data.model.DnsEvent
 import com.androdr.data.model.Indicator
 import com.androdr.data.model.TelemetrySource
@@ -163,40 +162,34 @@ class EventWatermarkTest {
             assertEquals("query failed", third.scannerErrors.single { it.scanner == USAGE_SCANNER }.message)
         }
 
+    /**
+     * C3: usage events are store-only facts, so a live scan writes no usage row and deletes none —
+     * a legacy usage row (a pre-store scan's only record) survives, inside or outside the re-read
+     * window, and also when it is stamped after the window end (a clock that moved back; C1 I2).
+     */
     @Test
-    fun `usage rows older than the re-read window survive a scan, and no access replaces none`() = runBlocking {
+    fun `a live scan writes no usage row and deletes none, inside or outside its window`() = runBlocking {
         serveUsageLog()
         val start = System.currentTimeMillis()
         usageLog += usage(start - 7_200_000L)
         usageLog += usage(start - 60_000L)
-        scan()
-        val second = scan()
-        val rows = f.timelineDao.getAllForExport().filter { it.source == USAGE }
-        assertEquals("the older row is kept, the re-read one replaced", 2, rows.size)
-        assertEquals(second.id, rows.single { it.startTimestamp == start - 60_000L }.scanResultId)
-
-        coEvery { f.usageStatsScanner.collectEvents(any(), any()) } returns UsageCollection.NoAccess
-        scan()
-        assertEquals(2, f.timelineDao.getAllForExport().count { it.source == USAGE })
-    }
-
-    /**
-     * C1 fix round 1 (I2): a device clock that moved back leaves usage rows stamped after the
-     * scan's window end. The scan cannot read their events, so it must not delete their rows.
-     */
-    @Test
-    fun `usage rows stamped after the window end survive a scan after the clock moved back`() = runBlocking {
-        val now = System.currentTimeMillis()
         f.w.f.scan(5L, com.androdr.data.model.ScanState.COMPLETE)
-        f.timelineDao.insertAll(listOf(usage(now + 3_600_000L).toForensicTimelineEvent(5L)))
-        coEvery { f.usageStatsScanner.collectEvents(any(), any()) } returns
-            UsageCollection.Ok(listOf(usage(now - 60_000L)))
+        val legacy = listOf(start - 60_000L, start - 7_200_000L, start + 3_600_000L).map {
+            com.androdr.data.model.ForensicTimelineEvent(startTimestamp = it, source = USAGE,
+                category = "app_foreground", description = "App opened: A", packageName = "com.a",
+                scanResultId = 5L)
+        }
+        f.timelineDao.insertAll(legacy)
 
-        val scan = scan()
+        scan()
+        scan()
 
         val rows = f.timelineDao.getAllForExport().filter { it.source == USAGE }
-        assertEquals("the future-stamped row survives", 1, rows.count { it.startTimestamp == now + 3_600_000L })
-        assertEquals(scan.id, rows.single { it.startTimestamp == now - 60_000L }.scanResultId)
+        assertEquals("only the legacy rows, untouched", legacy.map { it.startTimestamp }.sorted(),
+            rows.map { it.startTimestamp }.sorted())
+        assertTrue(rows.all { it.scanResultId == 5L })
+        assertEquals("both events stored once", 2L,
+            f.count("SELECT COUNT(DISTINCT recordId) FROM scan_record WHERE service = '$USAGE'"))
     }
 
     // ── Live DNS by id ──────────────────────────────────────────────────────────

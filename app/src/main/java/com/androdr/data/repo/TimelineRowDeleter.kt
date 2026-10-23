@@ -30,13 +30,13 @@ class TimelineRowDeleter @Inject constructor(
     suspend fun olderThan(cutoff: Long) =
         delete(dao.recordIdsOlderThan(cutoff), dao.signalIdsOlderThan(cutoff)) { dao.deleteOlderThan(cutoff) }
 
-    suspend fun bySource(source: String) =
-        delete(dao.recordIdsBySource(source), dao.signalIdsBySource(source)) { dao.deleteBySource(source) }
-
-    /** Rows of [source] stamped in `[since, until]` (the live scan's re-read usage window). */
-    suspend fun bySourceBetween(source: String, since: Long, until: Long) = delete(
-        dao.recordIdsBySourceBetween(source, since, until), dao.signalIdsBySourceBetween(source, since, until),
-    ) { dao.deleteBySourceBetween(source, since, until) }
+    /** The rows [ids] (the one-time legacy event-row cleanup, C3). */
+    suspend fun byIds(ids: List<Long>) {
+        if (ids.isEmpty()) return
+        delete(chunkedIn(ids) { dao.recordIdsByIds(it) }, chunkedIn(ids) { dao.signalIdsByIds(it) }) {
+            chunkedEach(ids) { dao.deleteByIds(it) }
+        }
+    }
 
     /** A scan's own non-persistent rows. */
     suspend fun byScanId(scanId: Long) =

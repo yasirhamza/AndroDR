@@ -1,6 +1,7 @@
 package com.androdr.scanner
 
 import android.util.Log
+import com.androdr.data.db.LegacyEventRowCleanup
 import com.androdr.data.db.SignalMemberBackfill
 import com.androdr.data.db.SweepTarget
 import com.androdr.data.model.ForensicTimelineEvent
@@ -18,7 +19,8 @@ import javax.inject.Singleton
 /**
  * Finishes what a killed process left (spec §5.2 Failure handling): removes every `IN_PROGRESS`
  * (killed writer) and `DELETING` (interrupted delete) scan, then garbage-collects the store when
- * it swept something or the dirty flag is set, and runs the one-time [SignalMemberBackfill].
+ * it swept something or the dirty flag is set, and runs the one-time [SignalMemberBackfill] and
+ * [LegacyEventRowCleanup].
  *
  * [ScanLock.mutex] is held only to snapshot the ids, so a scan started meanwhile is never in the
  * snapshot and survives. A swept `IN_PROGRESS` import gets one persistent "import interrupted"
@@ -33,6 +35,7 @@ class StartupSweep @Inject constructor(
     private val dirty: StoreDirtyFlag,
     private val reportFiles: ReportFiles,
     private val backfill: SignalMemberBackfill,
+    private val legacyRows: LegacyEventRowCleanup,
 ) {
     /**
      * Returns how many scans it removed. A target that fails is logged, sets [StoreDirtyFlag] and
@@ -55,6 +58,9 @@ class StartupSweep @Inject constructor(
         // One-time move of legacy signals' member lists into signal_member (spec §5.4); it takes the
         // lock per batch, and a failure is retried next launch.
         runCatching { backfill.run() }.onFailure { Log.w(TAG, "Signal member backfill failed", it) }
+        // One-time removal of the retired event adapters' rows (C3, spec §5.3); after the backfill, so
+        // legacy signals' members are in signal_member and protect the rows they list.
+        runCatching { legacyRows.run() }.onFailure { Log.w(TAG, "Legacy event-row cleanup failed", it) }
         return removed
     }
 

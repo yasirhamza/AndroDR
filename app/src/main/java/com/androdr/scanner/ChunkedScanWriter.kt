@@ -43,6 +43,8 @@ data class WriteResult(
     val scan: ScanResult,
     val persisted: Boolean = true,
     val spaceToFree: Long = 0L,
+    /** [duplicatesDropped] by service (an intrusion-log card nets them out of each type's count). */
+    val duplicatesByService: Map<String, Int> = emptyMap(),
 )
 
 /**
@@ -81,6 +83,7 @@ class ChunkedScanWriter @Inject constructor(
         private var newFacts = 0
         private var alreadyStored = 0
         private var duplicatesDropped = 0
+        private val duplicatesByService = HashMap<String, Int>()
         private var stored = false
 
         /** True once the session stopped storing telemetry (full disk or breached import reserve). */
@@ -123,13 +126,10 @@ class ChunkedScanWriter @Inject constructor(
                 throw t
             }
             if (result != null) {
-                keepObserved(findings, first, result)
-                hooks.onChunk(service, source, chunk, first, result.factIdByChunkIndex,
-                    result.observedThisScanByChunkIndex)
+                keepObserved(service, findings, first, result)
             } else {
                 val dup = checkNotNull(dedup).duplicates(service, chunk) { store.sourceFactKey(source, capturedAt, it) }
                 findings.forEach { f -> if (dup.getOrNull(f.ordinal - first) != true) topK.offer(f, null) }
-                hooks.onChunk(service, source, chunk, first, null, null)
             }
         }
 
@@ -184,7 +184,8 @@ class ChunkedScanWriter @Inject constructor(
             } catch (e: SQLiteFullException) {
                 return inMemoryResult(kept, spaceToFree, e)
             }
-            return WriteResult(newFacts, alreadyStored, duplicatesDropped, state, completed, true, spaceToFree)
+            return WriteResult(newFacts, alreadyStored, duplicatesDropped, state, completed, true, spaceToFree,
+                duplicatesByService.toMap())
         }
 
         /**
@@ -217,10 +218,11 @@ class ChunkedScanWriter @Inject constructor(
             }
         }
 
-        private fun keepObserved(findings: List<Finding>, first: Int, result: ChunkResult) {
+        private fun keepObserved(service: String, findings: List<Finding>, first: Int, result: ChunkResult) {
             newFacts += result.newFacts
             alreadyStored += result.alreadyStored
             duplicatesDropped += result.duplicatesDropped
+            if (result.duplicatesDropped > 0) duplicatesByService.merge(service, result.duplicatesDropped, Int::plus)
             for (f in findings) {
                 val i = f.ordinal - first
                 if (i in result.observedThisScanByChunkIndex.indices && result.observedThisScanByChunkIndex[i]) {
@@ -241,7 +243,7 @@ class ChunkedScanWriter @Inject constructor(
             val inMemory = hooks.summarize(scan.copy(findings = kept.map { it.finding }), topK.totals())
                 .copy(id = scan.id, telemetryState = TelemetryState.FAILED)
             return WriteResult(newFacts, alreadyStored, duplicatesDropped, TelemetryState.FAILED, inMemory, false,
-                spaceToFree)
+                spaceToFree, duplicatesByService.toMap())
         }
     }
 

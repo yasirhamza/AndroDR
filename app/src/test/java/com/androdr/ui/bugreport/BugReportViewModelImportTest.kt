@@ -120,7 +120,7 @@ class BugReportViewModelImportTest {
         val orchestrator = mockk<ScanOrchestrator> {
             coEvery { analyzeArtifact(any()) } returns ScanOrchestrator.ArtifactAnalysis.BugReport(
                 BugReportAnalyzer.BugReportAnalysisResult(
-                    findings = emptyList(), timeline = emptyList(), boundTrips = listOf("M: stopped at 9 records"),
+                    findings = emptyList(), boundTrips = listOf("M: stopped at 9 records"),
                     write = write(TelemetryState.FAILED, space = 123L),
                 )
             )

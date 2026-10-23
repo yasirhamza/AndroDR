@@ -102,6 +102,10 @@ class TimelineViewModel @Inject constructor(
     private val _packageFilter = MutableStateFlow<String?>(null)
     val packageFilter: StateFlow<String?> = _packageFilter.asStateFlow()
 
+    /** One scan's rows only (the import screen's link, C3), or null for every scan. */
+    private val _scanFilter = MutableStateFlow<Long?>(null)
+    val scanFilter: StateFlow<Long?> = _scanFilter.asStateFlow()
+
     private val _dateRange = MutableStateFlow<Pair<Long, Long>?>(null)
     val dateRange: StateFlow<Pair<Long, Long>?> = _dateRange.asStateFlow()
 
@@ -115,15 +119,16 @@ class TimelineViewModel @Inject constructor(
     }
 
     private data class FilterState(
-        val src: String?, val pkg: String?, val dateRange: Pair<Long, Long>?
+        val src: String?, val pkg: String?, val dateRange: Pair<Long, Long>?, val scanId: Long?,
     )
 
     @OptIn(ExperimentalCoroutinesApi::class)
     val events: StateFlow<List<ForensicTimelineEvent>> = combine(
-        _sourceFilter, _packageFilter, _dateRange
-    ) { src, pkg, range -> FilterState(src, pkg, range) }
+        _sourceFilter, _packageFilter, _dateRange, _scanFilter
+    ) { src, pkg, range, scanId -> FilterState(src, pkg, range, scanId) }
         .flatMapLatest { filter ->
             when {
+                filter.scanId != null -> dao.getEventsByScan(filter.scanId)
                 filter.dateRange != null -> dao.getEventsInRange(filter.dateRange.first, filter.dateRange.second)
                 filter.pkg != null -> dao.getEventsByPackage(filter.pkg)
                 filter.src != null -> dao.getEventsBySource(filter.src)
@@ -310,19 +315,30 @@ class TimelineViewModel @Inject constructor(
     fun setSourceFilter(source: String?) {
         _packageFilter.value = null
         _dateRange.value = null
+        _scanFilter.value = null
         _sourceFilter.value = source
     }
 
     fun setPackageFilter(pkg: String?) {
         _sourceFilter.value = null
         _dateRange.value = null
+        _scanFilter.value = null
         _packageFilter.value = pkg
     }
 
     fun setDateRange(start: Long, end: Long) {
         _sourceFilter.value = null
         _packageFilter.value = null
+        _scanFilter.value = null
         _dateRange.value = start to end
+    }
+
+    /** Shows only [scanId]'s rows (null: every scan); clears the other filters. */
+    fun setScanFilter(scanId: Long?) {
+        _sourceFilter.value = null
+        _packageFilter.value = null
+        _dateRange.value = null
+        _scanFilter.value = scanId
     }
 
     fun clearDateRange() {
@@ -333,6 +349,7 @@ class TimelineViewModel @Inject constructor(
         _sourceFilter.value = null
         _packageFilter.value = null
         _dateRange.value = null
+        _scanFilter.value = null
     }
 
     /** Generated plaintext report for viewing/copying. Populated on demand. */

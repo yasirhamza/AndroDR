@@ -5,7 +5,6 @@ import com.androdr.data.model.ScanResult
 import com.androdr.data.model.ScanState
 import com.androdr.data.model.SignalMember
 import com.androdr.data.model.TelemetrySource
-import com.androdr.data.model.TimelineEvent
 import com.androdr.data.store.AtomReader
 import com.androdr.data.store.HashKeys
 import com.androdr.data.store.StoreFixture
@@ -205,15 +204,13 @@ class CorrelationOverFactsTest {
     }
 
     /**
-     * Ruling R17: a bug-report module row (AppOps) and the fact it was parsed from would both be
-     * permission_use atoms; the row carries the fact's recordId, so the event binds once.
+     * Ruling R17, moot since C3: the bug-report modules write no rows, so an event is only its fact
+     * and binds once, as a Fact atom.
      */
     @Test
-    fun `a bug-report module row and its fact bind once`() = runBlocking {
+    fun `a bug-report event binds once, as its fact`() = runBlocking {
         val scan = w.scan(30L, TelemetrySource.BUGREPORT_IMPORT)
-        val module = listOf(TimelineEvent(timestamp = 1_000, source = "appops", category = "permission_use",
-            description = "com.spy used CAMERA", severity = "INFO", packageName = "com.spy"))
-        val h = BugReportHooks(scan, engine(2), SigmaCorrelationEngine(), emptyMap(), module, emptyList())
+        val h = BugReportHooks(scan, engine(2), SigmaCorrelationEngine(), emptyMap())
         val s = w.writer.begin(scan, liveEvents = false, h)
         s.append("appops_audit", TelemetrySource.BUGREPORT_IMPORT, 9L,
             listOf(appOps("com.spy", "android:camera", 1_000)))
@@ -221,26 +218,21 @@ class CorrelationOverFactsTest {
 
         val fact = f.db.openHelper.readableDatabase.query("SELECT id FROM telemetry_record")
             .use { c -> c.moveToFirst(); c.getLong(0) }
-        val row = f.db.forensicTimelineEventDao().getAllForExport().single { it.source == "appops" }
-        assertEquals("the module row carries its fact", fact, row.recordId)
+        assertEquals("no module row", 0L, w.count("SELECT COUNT(*) FROM forensic_timeline WHERE kind = 'event'"))
         assertEquals("one event is one atom: a two-event burst does not fire", emptyList<Long>(), signals())
-        assertEquals(listOf<AtomRef>(Row(row.id)), atoms.atomsForScan(30L, setOf("permission_use")).map { it.ref })
+        assertEquals(listOf<AtomRef>(Fact(fact)), atoms.atomsForScan(30L, setOf("permission_use")).map { it.ref })
     }
 
     @Test
-    fun `two bug-report events with module rows fire once with two row members`() = runBlocking {
+    fun `two bug-report events fire once with two fact members`() = runBlocking {
         val scan = w.scan(31L, TelemetrySource.BUGREPORT_IMPORT)
-        val module = listOf(1_000L, 2_000L).map {
-            TimelineEvent(timestamp = it, source = "appops", category = "permission_use", description = "used",
-                severity = "INFO", packageName = "com.spy")
-        }
-        val h = BugReportHooks(scan, engine(2), SigmaCorrelationEngine(), emptyMap(), module, emptyList())
+        val h = BugReportHooks(scan, engine(2), SigmaCorrelationEngine(), emptyMap())
         val s = w.writer.begin(scan, liveEvents = false, h)
         s.append("appops_audit", TelemetrySource.BUGREPORT_IMPORT, 9L,
             listOf(appOps("com.spy", "android:camera", 1_000), appOps("com.spy", "android:read_sms", 2_000)))
         s.finish()
 
         val m = members(signals().single())
-        assertEquals(listOf(SignalMember.KIND_ROW, SignalMember.KIND_ROW), m.map { it.kind })
+        assertEquals(listOf(SignalMember.KIND_FACT, SignalMember.KIND_FACT), m.map { it.kind })
     }
 }

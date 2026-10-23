@@ -64,21 +64,6 @@ class TimelineAdapterTest {
         assertTrue(event.telemetrySource == TelemetrySource.LIVE_SCAN)
     }
 
-    @Test
-    fun `bugreport TimelineEvent maps to forensic event`() {
-        val legacy = com.androdr.data.model.TimelineEvent(
-            timestamp = 4000L, source = "appops",
-            category = "permission_use",
-            description = "com.spy used CAMERA at 14:30",
-            severity = "MEDIUM"
-        )
-        val event = legacy.toForensicTimelineEvent(scanResultId = 9000L)
-        assertEquals("appops", event.source)
-        assertEquals("permission_use", event.category)
-        assertEquals(9000L, event.scanResultId)
-        assertTrue(event.telemetrySource == TelemetrySource.BUGREPORT_IMPORT)
-    }
-
     private fun iocFindingWith(family: String, tags: List<String> = emptyList()) = Finding(
         ruleId = "androdr-003", title = "Malicious Domain", level = "critical",
         category = FindingCategory.APP_RISK, tags = tags,

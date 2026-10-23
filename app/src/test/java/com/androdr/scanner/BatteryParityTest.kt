@@ -17,8 +17,9 @@ import java.time.LocalDate
 import java.time.ZoneOffset
 
 /**
- * Pins the battery module's interim timeline rows to what the pre-typed-records module
- * (commit cdeefc4) produced for the same input, and pins the typed records exactly.
+ * Pins the battery module's typed records to the rows the pre-typed-records module (commit
+ * cdeefc4) produced for the same input — every old row has its record, so retiring the rows (C3)
+ * loses nothing the records do not carry — and pins the typed records exactly.
  */
 class BatteryParityTest {
 
@@ -53,33 +54,26 @@ class BatteryParityTest {
     )
 
     @Test
-    fun `timeline rows equal the rows the pre-typed module produced`() {
-        val rows = run(section).timeline
-        assertEquals(oldRows, rows.map { it.category to it.description })
-        assertTrue(rows.all { it.source == "battery_daily" && it.severity == "INFO" && it.timestamp == -1L })
+    fun `every row the pre-typed module produced is a typed record`() {
+        val records = run(section).typed.batteryDailyEvents
+        assertEquals(oldRows, records.map { it.eventType to it.description })
     }
 
+    /**
+     * cdeefc4 also wrote an IOC-only "anti-forensics" row after an uninstall of a listed package.
+     * That row was a hardcoded detection, not a parsed entry; it is retired with the rows (C3) and
+     * the uninstall record itself is unchanged by the IOC answer.
+     */
     @Test
-    fun `IOC-matched uninstall keeps its extra anti-forensics row`() {
+    fun `an IOC-listed uninstall yields the same records as any other`() {
         val ioc: IndicatorResolver = mockk()
-        every { ioc.isKnownBadPackage(any()) } returns null
-        every { ioc.isKnownBadPackage("com.example.beta") } returns BadPackageInfo(
+        every { ioc.isKnownBadPackage(any()) } returns BadPackageInfo(
             packageName = "com.example.beta", name = "BetaSpy", category = "STALKERWARE",
             severity = "CRITICAL", description = "d",
         )
-        val rows = run(section, r = ioc).timeline.map { it.category to it.description }
-        // cdeefc4 put the IOC row directly after the plain uninstall row, before the downgrade.
-        assertEquals(
-            listOf(
-                oldRows[0], oldRows[1], oldRows[2],
-                "package_uninstall" to "Known STALKERWARE package 'com.example.beta' (BetaSpy) " +
-                    "was uninstalled — possible anti-forensics",
-                oldRows[3],
-            ),
-            rows,
-        )
-        // The IOC row is not a separate parsed entry: typed records are unchanged.
-        assertEquals(4, run(section, r = ioc).typed.batteryDailyEvents.size)
+        fun tuples(r: IndicatorResolver) = run(section, r = r).typed.batteryDailyEvents
+            .map { listOf(it.eventType, it.packageName, it.version, it.timestamp, it.description) }
+        assertEquals(tuples(resolver), tuples(ioc))
     }
 
     @Test

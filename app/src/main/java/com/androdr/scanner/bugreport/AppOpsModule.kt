@@ -1,7 +1,6 @@
 package com.androdr.scanner.bugreport
 
 import android.util.Log
-import com.androdr.data.model.TimelineEvent
 import com.androdr.ioc.IndicatorResolver
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
@@ -58,7 +57,6 @@ class AppOpsModule @Inject constructor() : BugreportModule {
         clock: DumpsysClock,
     ): ModuleResult {
         val telemetry = mutableListOf<Map<String, Any?>>()
-        val timeline = mutableListOf<TimelineEvent>()
 
         var currentUid = -1
         var isSystemUid = true
@@ -74,10 +72,8 @@ class AppOpsModule @Inject constructor() : BugreportModule {
             if (!isEnumeratedOp) return
 
             val normalizedOp = "android:${op.lowercase()}"
-            // Parse the last-access time once so we can share it between the
-            // telemetry record (as `event_time_ms`, for SIGMA findings to
-            // inherit into their Timeline event) and the timeline event
-            // emitted below.
+            // The last-access time, published as `event_time_ms` so SIGMA findings inherit it
+            // into their Timeline row (the record itself is an event fact in the store).
             val accessTimestamp = lastAccessTime?.let { parseTimestamp(it, clock) }
                 ?.takeIf { it > 0L }
 
@@ -99,25 +95,6 @@ class AppOpsModule @Inject constructor() : BugreportModule {
                 // TimelineAdapter treats 0L as "unknown" the same way.
                 "event_time_ms" to (accessTimestamp ?: 0L)
             ))
-
-            if (!isSystemUid && accessTimestamp != null) {
-                timeline.add(TimelineEvent(
-                    timestamp = accessTimestamp,
-                    source = "appops",
-                    category = "permission_use",
-                    description = "$pkg used $op" +
-                        (lastAccessTime?.let { " at $it" } ?: ""),
-                    // Severity is not assigned here; rule engine findings derived
-                    // from the emitted telemetry carry their own severity via
-                    // SIGMA YAML. Timeline events for raw ops default to INFO.
-                    severity = "INFO",
-                    // Carried so the ScanOrchestrator dedup pass can match
-                    // this raw event against any SIGMA finding that fired
-                    // on the same (package, timestamp) tuple and drop the
-                    // raw row before persisting. See analyzeBugReport().
-                    packageName = pkg
-                ))
-            }
         }
 
         var lineCount = 0
@@ -176,13 +153,11 @@ class AppOpsModule @Inject constructor() : BugreportModule {
         // Emit the last op if any
         emitCurrentOp()
 
-        Log.d(TAG, "AppOps: $lineCount lines, ${telemetry.size} telemetry, " +
-            "${timeline.size} timeline events")
+        Log.d(TAG, "AppOps: $lineCount lines, ${telemetry.size} telemetry")
 
         return ModuleResult(
             telemetry = telemetry,
             telemetryService = "appops_audit",
-            timeline = timeline
         )
     }
 

@@ -42,10 +42,10 @@ class ScanWriteRepository @Inject constructor(
     suspend fun begin(scan: ScanResult) = scans.insertInProgress(scan)
 
     /**
-     * The session's single finishing transaction (spec §5.2 step 5, Phases A–C): the prior-import
-     * sweep, this scan's finding rows (with `level` and `recordId`), the interim event rows, the
-     * correlation pass over the atoms read after those inserts (so this scan's rows are `Row` atoms
-     * with their real ids), its signal rows and their `signal_member` rows, then the guarded
+     * The session's single finishing transaction (spec §5.2 step 5, Phases A–C): this scan's
+     * finding rows (with `level` and `recordId`), its detected-change rows, the correlation pass
+     * over the atoms read after those inserts (so this scan's rows are `Row` atoms with their real
+     * ids), its signal rows and their `signal_member` rows, then the guarded
      * `IN_PROGRESS → COMPLETE` update, the event watermarks ([SessionHooks.watermarks]) and the
      * summary columns (the scan's findings plus the correlation's). Throws — rolling everything
      * back — with [ScanNotInProgressException] when the guard changes no row.
@@ -54,14 +54,13 @@ class ScanWriteRepository @Inject constructor(
         scan: ScanResult, kept: List<KeptFinding>, totals: FindingTotals, hooks: SessionHooks,
         telemetryState: TelemetryState,
     ): ScanResult = db.withTransaction {
-        hooks.sweepPrior(scan.id)
         val findingRows = kept.filter { it.finding.triggered }.map { k ->
             val row = hooks.findingRow(k.finding, scan)
             check(row.level == k.finding.level) { "finding row for ${k.finding.ruleId} must carry its level" }
             row.copy(recordId = k.recordId, scanResultId = scan.id)
         }
         if (findingRows.isNotEmpty()) timeline.insertAll(findingRows)
-        hooks.interimRows(scan).takeIf { it.isNotEmpty() }?.let { timeline.insertAll(it) }
+        hooks.extraRows(scan).takeIf { it.isNotEmpty() }?.let { timeline.insertAll(it) }
         val correlation = hooks.correlate(scan, atoms)
         insertSignals(correlation.signals)
         if (scans.complete(scan.id, telemetryState) == 0) throw ScanNotInProgressException(scan.id)

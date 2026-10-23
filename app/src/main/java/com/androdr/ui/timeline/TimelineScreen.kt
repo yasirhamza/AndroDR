@@ -74,6 +74,7 @@ import com.androdr.data.model.effectiveCorrelationId
 @Composable
 fun TimelineScreen(
     initialPackage: String? = null,
+    initialScanId: Long? = null,
     onNavigateToHistory: (() -> Unit)? = null,
     viewModel: TimelineViewModel = hiltViewModel()
 ) {
@@ -88,6 +89,11 @@ fun TimelineScreen(
             else -> viewModel.setPackageFilter(initialPackage)
         }
     }
+    // The import screen's link: one scan's rows (C3; the store union arrives with C4).
+    LaunchedEffect(initialScanId) {
+        if (initialScanId != null) viewModel.setScanFilter(initialScanId)
+    }
+    val scanFilter by viewModel.scanFilter.collectAsStateWithLifecycle()
 
     val events by viewModel.events.collectAsStateWithLifecycle()
     val dateGroups by viewModel.dateGroupedRows.collectAsStateWithLifecycle()
@@ -206,6 +212,19 @@ fun TimelineScreen(
                 }
             }
         )
+
+        scanFilter?.let {
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                FilterChip(
+                    selected = true,
+                    onClick = { viewModel.setScanFilter(null) },
+                    label = { Text(stringResource(R.string.timeline_scan_filter_clear)) }
+                )
+            }
+        }
 
         Row(
             modifier = Modifier

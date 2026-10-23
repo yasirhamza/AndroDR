@@ -6,7 +6,9 @@ import com.androdr.data.model.ScanState
 import com.androdr.data.model.TelemetrySource
 import com.androdr.data.repo.ScanLock
 import com.androdr.data.repo.ScanWriteRepository
+import com.androdr.data.db.LegacyEventRowCleanup
 import com.androdr.data.db.SignalMemberBackfill
+import com.androdr.data.repo.TimelineRowDeleter
 import com.androdr.data.store.StoreFixture.Companion.CAPTURED
 import com.androdr.data.store.StoreFixture.Companion.app
 import com.androdr.data.store.StoreFixture.Companion.dns
@@ -50,7 +52,10 @@ class StartupSweepTest {
     private fun sweep(repo: ScanWriteRepository = w.repo) =
         StartupSweep(w.lock, repo, w.f.store, w.f.dirty, ReportFiles(reportsDir) { clock },
             SignalMemberBackfill(w.f.db, w.f.db.signalMemberBackfillDao(), w.f.db.signalMemberDao(), w.lock,
-                w.f.dataStore))
+                w.f.dataStore),
+            LegacyEventRowCleanup(w.f.db,
+                TimelineRowDeleter(w.f.db.forensicTimelineEventDao(), w.f.store, w.f.db.signalMemberDao()),
+                w.f.db.signalMemberDao(), w.f.store, w.lock, w.f.dataStore))
 
     private fun state(id: Long): String? = w.f.db.openHelper.readableDatabase
         .query("SELECT state FROM ScanResult WHERE id = $id").use { c -> if (c.moveToFirst()) c.getString(0) else null }
@@ -304,5 +309,28 @@ class StartupSweepTest {
 
         assertEquals(listOf(3L, 5L),
             w.f.db.signalMemberDao().forSignal(legacy, null, null, 10).map { it.refId })
+    }
+
+    /**
+     * C3 (spec §5.3): the sweep runs the one-time legacy event-row cleanup after the backfill, so a
+     * legacy signal's members (moved into signal_member first) protect the rows they list.
+     */
+    @Test
+    fun `the sweep runs the legacy event-row cleanup after the backfill`() = runBlocking {
+        w.f.db.scanResultDao().insert(com.androdr.data.model.ScanResult(id = 4L, timestamp = 4L,
+            findings = emptyList(), bugReportFindings = emptyList(), riskySideloadCount = 0, knownMalwareCount = 0,
+            state = ScanState.COMPLETE, telemetryState = com.androdr.data.model.TelemetryState.STORED))
+        val dao = w.f.db.forensicTimelineEventDao()
+        fun raw(desc: String) = ForensicTimelineEvent(startTimestamp = 1L, source = "intrusion_log",
+            category = "dns_query", description = desc, scanResultId = 4L)
+        val listed = dao.insert(raw("listed"))
+        dao.insert(raw("unlisted"))
+        dao.insert(ForensicTimelineEvent(startTimestamp = 1L, kind = "signal", source = "sigma_correlation_engine",
+            category = "correlation", description = "chain", ruleId = "androdr-corr-001", scanResultId = 4L,
+            details = """{"rule_id":"androdr-corr-001","member_event_ids":"$listed"}"""))
+
+        sweep().run()
+
+        assertEquals(setOf("listed", "chain"), dao.getAllForExport().map { it.description }.toSet())
     }
 }

@@ -66,18 +66,17 @@ class BugReportCorrelationCategoriesTest(private val jvmZone: String) {
         val installs = InstallTimeModule()
         val ops = AppOpsModule().analyze(appops, resolver, DeviceIdentity.UNKNOWN, clock)
         val scan = w.scan(id, TelemetrySource.BUGREPORT_IMPORT)
-        val hooks = BugReportHooks(scan, engine, SigmaCorrelationEngine(), emptyMap(), ops.timeline,
-            installs.parseSection(packages, clock))
+        val hooks = BugReportHooks(scan, engine, SigmaCorrelationEngine(), emptyMap())
         val s = w.writer.begin(scan, liveEvents = false, hooks)
         s.append("appops_audit", TelemetrySource.BUGREPORT_IMPORT, CAPTURED,
             BugReportRecordBuilders.generic(ops.telemetry))
         s.append(BugReportRecordBuilders.PACKAGE_INSTALL_HISTORY, TelemetrySource.BUGREPORT_IMPORT, CAPTURED,
             BugReportRecordBuilders.packageInstallHistory(installs.parseHistory(packages, CAPTURED, clock)))
         s.finish()
-        // Review m-6: every module row, built by the real modules, claims its fact (R17 key match).
-        val unclaimed = w.f.db.forensicTimelineEventDao().getAllForExport()
-            .filter { it.scanResultId == id && it.kind == "event" && it.recordId == null }
-        assertTrue("module rows without their fact: $unclaimed", unclaimed.isEmpty())
+        // C3: the modules write no rows (R17's row-to-fact pairing is moot): every event is its fact.
+        val moduleRows = w.f.db.forensicTimelineEventDao().getAllForExport()
+            .filter { it.scanResultId == id && it.kind == "event" && it.ruleId.isEmpty() }
+        assertTrue("module rows: $moduleRows", moduleRows.isEmpty())
     }
 
     private fun signals(ruleId: String): Long =
@@ -151,6 +150,10 @@ class BugReportCorrelationCategoriesTest(private val jvmZone: String) {
         """.trimIndent())
 
         assertEquals(1L, signals("androdr-corr-004"))
+        assertEquals("each op binds once, as its fact", listOf(1, 1, 1),
+            w.f.db.openHelper.readableDatabase.query("SELECT kind FROM signal_member").use { c ->
+                generateSequence { if (c.moveToNext()) c.getInt(0) else null }.toList()
+            })
     }
 
     companion object {

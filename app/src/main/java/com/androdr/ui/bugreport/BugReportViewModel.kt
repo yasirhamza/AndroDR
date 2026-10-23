@@ -4,7 +4,7 @@ import android.net.Uri
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.androdr.data.model.TimelineEvent
+import com.androdr.data.model.ScanResult
 import com.androdr.reporting.ReportExporter
 import com.androdr.scanner.ArtifactType
 import com.androdr.data.store.Preflight
@@ -18,6 +18,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -32,8 +33,14 @@ class BugReportViewModel @Inject constructor(
     private val _findings = MutableStateFlow<List<Finding>>(emptyList())
     val findings: StateFlow<List<Finding>> = _findings.asStateFlow()
 
-    private val _timeline = MutableStateFlow<List<TimelineEvent>>(emptyList())
-    val timeline: StateFlow<List<TimelineEvent>> = _timeline.asStateFlow()
+    /**
+     * The scan the last import was saved as, or null while none has completed. Its records are in
+     * the store: the screen links to the Timeline filtered to this scan (C3; the hand-built
+     * bug-report timeline is retired), and Export writes this scan's report.
+     */
+    private val _importScan = MutableStateFlow<ScanResult?>(null)
+    val importScanId: StateFlow<Long?> = _importScan.map { it?.id }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
     /** Non-null when the most recently analyzed artifact was an intrusion-log import (#342). */
     private val _intrusionLogSummary = MutableStateFlow<IntrusionLogStats?>(null)
@@ -168,7 +175,7 @@ class BugReportViewModel @Inject constructor(
      * Analyzes the imported artifact zip at the given [uri] — either a bug report
      * or an Advanced Protection Intrusion Logging export (#342); [ScanOrchestrator.analyzeArtifact]
      * sniffs which one it is.
-     * Updates [isAnalyzing], [findings], [timeline], and [intrusionLogSummary] reactively.
+     * Updates [isAnalyzing], [findings], [importScanId], and [intrusionLogSummary] reactively.
      */
     @Suppress("TooGenericExceptionCaught") // Artifact analysis surfaces any IO/parse error to the user.
     fun analyzeUri(uri: Uri) {
@@ -177,7 +184,7 @@ class BugReportViewModel @Inject constructor(
             _analysisFinished.value = false
             _errorMessage.value = null
             _findings.value = emptyList()
-            _timeline.value = emptyList()
+            _importScan.value = null
             _analyzedArtifact.value = null
             _importCard.value = null
             try {
@@ -185,7 +192,7 @@ class BugReportViewModel @Inject constructor(
                 when (val analysis = orchestrator.analyzeArtifact(uri)) {
                     is ScanOrchestrator.ArtifactAnalysis.BugReport -> {
                         _findings.value = analysis.result.findings
-                        _timeline.value = analysis.result.timeline
+                        _importScan.value = analysis.result.write?.scan
                         _analyzedArtifact.value = ArtifactType.BUG_REPORT
                         _importCard.value = ImportCard.from(
                             analysis.result.write, truncated = false, boundTrips = analysis.result.boundTrips,
@@ -194,7 +201,7 @@ class BugReportViewModel @Inject constructor(
                     }
                     is ScanOrchestrator.ArtifactAnalysis.IntrusionLog -> {
                         _findings.value = analysis.result.findings.filter { it.triggered }
-                        _timeline.value = emptyList()
+                        _importScan.value = analysis.result.write?.scan
                         _intrusionLogSummary.value = analysis.result.stats
                         _analyzedArtifact.value = ArtifactType.INTRUSION_LOG
                         _importCard.value = ImportCard.from(
@@ -223,18 +230,17 @@ class BugReportViewModel @Inject constructor(
     }
 
     /**
-     * Exports the current analysis results (SIGMA findings, legacy findings,
-     * and timeline) to a cached text file and emits its FileProvider URI
-     * via [shareUri] for sharing.
+     * Exports the last import's report (its findings and its stored records) to a cached text file
+     * through the one report path ([ReportExporter.export], spec §7) and emits its FileProvider URI
+     * via [shareUri] for sharing. Does nothing until an import has been saved.
      */
     fun exportReport() {
         if (_exporting.value) return
+        val scan = _importScan.value ?: return
         viewModelScope.launch {
             _exporting.value = true
             try {
-                // One report path: ReportExporter writes the file; APK hashes and app names come
-                // from the newest stored live scan's app records (TelemetryReader.latestLive).
-                _shareUri.value = reportExporter.exportBugReportTimeline(_timeline.value, _findings.value)
+                _shareUri.value = reportExporter.export(scan)
             } finally {
                 _exporting.value = false
             }

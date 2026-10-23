@@ -71,7 +71,6 @@ class DumpsysClockTest {
               lastUpdateTime=2026-03-27 12:00:00
         """.trimIndent()
         assertEquals(ms("2026-03-27T09:00:00Z"), InstallTimeModule().parseHistory(pkg, 0L, clock).single().timestamp)
-        assertEquals(ms("2026-03-27T09:00:00Z"), InstallTimeModule().parseSection(pkg, clock).single().startTimestamp)
 
         val header = "== dumpstate: 2026-03-28 10:15:30\n".byteInputStream()
         assertEquals(ms("2026-03-28T07:15:30Z"),

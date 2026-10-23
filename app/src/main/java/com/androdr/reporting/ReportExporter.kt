@@ -7,11 +7,7 @@ import androidx.annotation.VisibleForTesting
 import androidx.core.content.FileProvider
 import com.androdr.data.model.NotEvaluatedReason
 import com.androdr.data.model.ScanResult
-import com.androdr.data.model.TimelineEvent
-import com.androdr.data.store.DecodedRecord
 import com.androdr.data.store.TelemetryReader
-import com.androdr.sigma.Finding
-import com.androdr.sigma.LiveRecordBuilders
 import com.androdr.util.appVersion
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
@@ -101,33 +97,6 @@ class ReportExporter @Inject constructor(
         if (services.isEmpty()) return@withContext ExportEstimate.NONE
         val totals = telemetryReader.scanTotals(scan.id)
         ExportEstimate(totals.records, totals.rawBytes, services.map { serviceLabel(it.service) })
-    }
-
-    /**
-     * Writes an imported bug report's timeline export (the Bug Report screen's Export). APK hashes
-     * and app names come from the newest stored live scan's app records, when one was captured
-     * within [TelemetryReader.APP_ENRICHMENT_MAX_AGE_MS] -- the same device's apps.
-     */
-    suspend fun exportBugReportTimeline(timeline: List<TimelineEvent>, findings: List<Finding>): Uri =
-        withContext(Dispatchers.IO) {
-            val apps = telemetryReader
-                .latestLive(LiveRecordBuilders.APP_SCANNER, TelemetryReader.APP_ENRICHMENT_MAX_AGE_MS).orEmpty()
-            val text = TimelineFormatter.formatTimeline(
-                timeline, findings, apps.fieldMap("apk_hash"), apps.fieldMap("app_name"),
-                versionName = context.appVersion().name,
-            )
-            val file = newReportFile("androdr_bugreport", System.currentTimeMillis())
-            writeFile(file) { it.write(text) }
-            FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
-        }
-
-    /** Package name to a non-empty string field of each app record. */
-    private fun List<DecodedRecord>.fieldMap(field: String): Map<String, String> = buildMap {
-        this@fieldMap.forEach { r ->
-            val pkg = r.fields?.get("package_name") as? String
-            val value = r.fields?.get(field) as? String
-            if (!pkg.isNullOrEmpty() && !value.isNullOrEmpty()) put(pkg, value)
-        }
     }
 
     /** Removes stale files from `cache/reports/` (spec §7), then names `<prefix>_<time>.txt` there. */

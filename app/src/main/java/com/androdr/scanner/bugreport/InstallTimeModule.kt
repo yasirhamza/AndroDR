@@ -1,6 +1,5 @@
 package com.androdr.scanner.bugreport
 
-import com.androdr.data.model.ForensicTimelineEvent
 import com.androdr.data.model.PackageHistoryEventType
 import com.androdr.data.model.PackageInstallHistoryEntry
 import com.androdr.data.model.TelemetrySource
@@ -9,14 +8,13 @@ import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 /**
- * Parses the `package` section of a bug report (`dumpsys package`) to emit
- * `package_install` ForensicTimelineEvent rows — the bug-report analog of the
- * runtime [com.androdr.scanner.InstallEventEmitter]. Handles missing timestamps
- * gracefully: a package without a parseable `firstInstallTime` produces no event.
+ * Parses the `package` section of a bug report (`dumpsys package`) into typed
+ * [PackageInstallHistoryEntry] records (spec §5.3), stored as event facts of the import — the
+ * bug-report analog of the runtime [com.androdr.scanner.InstallEventEmitter]. Handles missing
+ * timestamps gracefully: a package without a parseable `firstInstallTime` produces no record.
  *
- * Unlike the runtime path, no delta detection is performed — bug reports are
- * point-in-time snapshots, and we want every install row that's in there so the
- * forensic timeline reflects the full package inventory captured at report time.
+ * Unlike the runtime path, no delta detection is performed — bug reports are point-in-time
+ * snapshots, so every package in the report is recorded.
  *
  * Timestamps in `dumpsys package` are `yyyy-MM-dd HH:mm:ss` on the capture device's wall
  * clock, with no offset. They are read with the import's [DumpsysClock] (ruling R27): the zone
@@ -42,24 +40,10 @@ class InstallTimeModule {
         val versionCode: Long?,
     )
 
-    fun parseSection(text: String, clock: DumpsysClock = DumpsysClock.ASSUMED_UTC): List<ForensicTimelineEvent> =
-        parsePackages(text, clock).map {
-        ForensicTimelineEvent(
-            startTimestamp = it.firstInstallMs,
-            kind = "event",
-            category = "package_install",
-            source = "bugreport",
-            description = "Package installed: ${it.name}",
-            packageName = it.name,
-            appName = it.name,
-            telemetrySource = TelemetrySource.BUGREPORT_IMPORT
-        )
-    }
-
     /**
-     * The typed install-history records for the same packages [parseSection] turns into rows:
-     * an INSTALL per `firstInstallTime`, plus an UPDATE per parsed `lastUpdateTime` that differs
-     * from `firstInstallTime` (equal values are the same instant, so no update happened).
+     * The typed install-history records of every parsed package: an INSTALL per
+     * `firstInstallTime`, plus an UPDATE per parsed `lastUpdateTime` that differs from
+     * `firstInstallTime` (equal values are the same instant, so no update happened).
      */
     fun parseHistory(
         text: String,

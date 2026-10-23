@@ -60,4 +60,6 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun atomDao(): AtomDao
 
     abstract fun signalMemberBackfillDao(): SignalMemberBackfillDao
+
+    abstract fun legacyEventRowDao(): LegacyEventRowDao
 }

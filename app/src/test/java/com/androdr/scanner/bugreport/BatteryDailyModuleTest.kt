@@ -37,12 +37,9 @@ class BatteryDailyModuleTest {
         """.trimIndent()
 
         val result = module.analyze(section, mockIndicatorResolver, com.androdr.ioc.DeviceIdentity.UNKNOWN)
-        assertTrue(result.timeline.any {
-            it.category == "package_update" && it.description.contains("com.example.app")
-        })
-        assertTrue(result.timeline.any {
-            it.category == "package_uninstall" && it.description.contains("com.example.app")
-        })
+        val events = result.typed.batteryDailyEvents
+        assertTrue(events.any { it.eventType == "package_update" && it.packageName == "com.example.app" })
+        assertTrue(events.any { it.eventType == "package_uninstall" && it.packageName == "com.example.app" })
     }
 
     @Test
@@ -54,15 +51,20 @@ class BatteryDailyModuleTest {
         """.trimIndent()
 
         val result = module.analyze(section, mockIndicatorResolver, com.androdr.ioc.DeviceIdentity.UNKNOWN)
-        assertTrue(result.timeline.any {
-            it.category == "package_downgrade" &&
+        assertTrue(result.typed.batteryDailyEvents.any {
+            it.eventType == "package_downgrade" &&
                 it.description.contains("200") &&
                 it.description.contains("100")
         })
     }
 
+    /**
+     * C3: the module no longer hand-builds an "anti-forensics" row from an IOC lookup (detection is
+     * rule-driven). The uninstall is a typed record carrying its package, which a battery_daily
+     * rule can look up; the module never consults the IOC resolver.
+     */
     @Test
-    fun `flags IOC-matched uninstall as anti-forensics`() = runBlocking {
+    fun `an IOC-listed uninstall is a plain typed record and the module looks nothing up`() = runBlocking {
         every { mockIndicatorResolver.isKnownBadPackage("com.mspy.android") } returns BadPackageInfo(
             packageName = "com.mspy.android",
             name = "mSpy",
@@ -77,22 +79,22 @@ class BatteryDailyModuleTest {
         """.trimIndent()
 
         val result = module.analyze(section, mockIndicatorResolver, com.androdr.ioc.DeviceIdentity.UNKNOWN)
-        // Severity no longer hardcoded; rule engine assigns it via SIGMA YAML (plan 6).
-        assertTrue(result.timeline.any {
-            it.description.contains("anti-forensics")
-        })
+        val event = result.typed.batteryDailyEvents.single()
+        assertEquals("package_uninstall", event.eventType)
+        assertEquals("com.mspy.android", event.packageName)
+        io.mockk.verify(exactly = 0) { mockIndicatorResolver.isKnownBadPackage(any()) }
     }
 
     @Test
     fun `empty section produces no events`() = runBlocking {
         val result = module.analyze("", mockIndicatorResolver, com.androdr.ioc.DeviceIdentity.UNKNOWN)
-        assertTrue(result.timeline.isEmpty())
         assertTrue(result.telemetry.isEmpty())
         assertTrue(result.typed.batteryDailyEvents.isEmpty())
     }
 
+    /** Every parsed entry is a record (emitters emit all facts; the old row dedup is gone with the rows). */
     @Test
-    fun `deduplicates repeated entries`() = runBlocking {
+    fun `repeated entries are each a record`() = runBlocking {
         val section = """
             Package changes:
               +pkg=com.example.app vers=100
@@ -101,9 +103,9 @@ class BatteryDailyModuleTest {
         """.trimIndent()
 
         val result = module.analyze(section, mockIndicatorResolver, com.androdr.ioc.DeviceIdentity.UNKNOWN)
-        val updateEvents = result.timeline.filter {
-            it.category == "package_update" && it.description.contains("com.example.app")
+        val updateEvents = result.typed.batteryDailyEvents.filter {
+            it.eventType == "package_update" && it.packageName == "com.example.app"
         }
-        assertEquals(1, updateEvents.size)
+        assertEquals(3, updateEvents.size)
     }
 }

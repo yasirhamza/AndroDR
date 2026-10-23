@@ -24,11 +24,10 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 
 /**
- * The intrusion-log import through its writer session (#342, telemetry store §5.2): the
- * replace-on-reimport sweep inside the finishing transaction, the newest-N Timeline-row caps, the
- * findings cap, failure honesty, and the source stamp — on a real database. The analyzer is mocked
- * where a test needs exact records; it hands them over the way the real one does, per type in
- * chunks of at most 5,000.
+ * The intrusion-log import through its writer session (#342, telemetry store §5.2): events stored
+ * as facts only (C3: no event rows, no replace-on-reimport), the findings cap, failure honesty, and
+ * the source stamp — on a real database. The analyzer is mocked where a test needs exact records;
+ * it hands them over the way the real one does, per type in chunks of at most 5,000.
  */
 @RunWith(RobolectricTestRunner::class)
 class ScanOrchestratorIntrusionLogTest {
@@ -107,37 +106,35 @@ class ScanOrchestratorIntrusionLogTest {
             }.toList()
         }
 
-    private fun times(category: String): List<Long> = f.db.openHelper.readableDatabase
-        .query("SELECT startTimestamp FROM forensic_timeline WHERE category = '$category'").use { c ->
-            generateSequence { if (c.moveToNext()) c.getLong(0) else null }.toList()
-        }
-
-    // ---------- replace-on-reimport (inside the finishing transaction, #342 B1) ----------
+    // ---------- no replace-on-reimport (C3, spec §5.2) ----------
 
     /**
-     * A prior import's correlation signals live under `source = "sigma_correlation_engine"` — shared
-     * with the live-scan and bug-report paths, so never deleted wholesale. They are swept by SCAN ID:
-     * every row of one import (raw, finding, and signal) carries that import's scanResultId.
+     * Replace-on-reimport is removed in C3: an import deletes no other scan's rows — neither a prior
+     * import's finding rows and signals nor anyone else's — and writes no event rows of its own.
      */
     @Test
-    fun `reimport sweeps every prior import's rows by scan id and keeps other rows`() = runBlocking {
-        f.timelineDao.insertAll(listOf(
+    fun `an import deletes no other scan's rows and writes no event rows`() = runBlocking {
+        val prior = listOf(
             row("intrusion_log", 11L), row("intrusion_log_analysis", 11L),
             row("sigma_correlation_engine", 11L, kind = "signal"), row("intrusion_log", 22L),
             row("intrusion_log", -1L), row("app_scanner", 33L),
-        ))
+        )
+        f.timelineDao.insertAll(prior)
         analyzerHandsOver(sec = listOf(sec(5L)))
 
         f.orchestrator.analyzeIntrusionLog(uri)
 
+        val scanId = f.scans().single().id
         val left = allRows()
-        assertEquals(listOf("app_scanner"), left.filter { it.scanResultId != f.scans().single().id }.map { it.source })
-        assertTrue("the new import's rows are written", left.any { it.source == "intrusion_log" })
+        assertEquals("every other row stays", prior.map { it.source to it.scanResultId },
+            left.filter { it.scanResultId != scanId }.map { it.source to it.scanResultId })
+        assertEquals("the import wrote its finding row only", listOf("intrusion_log_analysis"),
+            left.filter { it.scanResultId == scanId }.map { it.source })
     }
 
     /**
-     * #342 B1: a finish that fails after its sweep rolls the sweep back, the import is removed, and
-     * the failure is SURFACED as the honest [ScanOrchestrator.IntrusionLogPersistException].
+     * #342 B1: a finish that fails keeps every other row, the import is removed, and the failure is
+     * SURFACED as the honest [ScanOrchestrator.IntrusionLogPersistException].
      */
     @Test
     fun `a failed finish deletes nothing and surfaces the failure`() = runBlocking {
@@ -159,11 +156,11 @@ class ScanOrchestratorIntrusionLogTest {
     }
 
     /**
-     * #356: an ANALYSIS failure must never reach the sweep. The session is aborted, nothing is
-     * deleted or kept, and the error reaches the ViewModel's error card.
+     * #356: an ANALYSIS failure aborts the session: nothing is deleted or kept, and the error
+     * reaches the ViewModel's error card.
      */
     @Test
-    fun `an analysis failure never sweeps or persists anything`() = runBlocking {
+    fun `an analysis failure deletes and persists nothing`() = runBlocking {
         f.timelineDao.insertAll(listOf(row("intrusion_log", 11L)))
         coEvery { f.intrusionLogAnalyzer.analyze(any(), any()) } throws
             IntrusionLogAnalyzer.IntrusionLogAnalysisException(RuntimeException("unreadable zip"))
@@ -183,69 +180,22 @@ class ScanOrchestratorIntrusionLogTest {
         assertEquals(TelemetrySource.INTRUSION_LOG_IMPORT, f.scans().single().source)
     }
 
-    // ---------- Interim: newest-N Timeline-row caps (#342 spec §7, B4) ----------
+    // ---------- events are store-only (C3) ----------
 
-    /** Oldest-first input, so a cap that ignored ordering would keep the WRONG (oldest) events. */
+    /** Every record is an observation; the only rows are the finding rows, with the import's stamps. */
     @Test
-    fun `dns and connect rows are capped newest-first and security stays under its cap`() = runBlocking {
-        val dnsTotal = ScanOrchestrator.DNS_PERSIST_CAP + 5
-        val netTotal = ScanOrchestrator.CONNECT_PERSIST_CAP + 3
-        analyzerHandsOver(
-            dns = (1L..dnsTotal.toLong()).map { dns(it) },
-            net = (1L..netTotal.toLong()).map { net(it) },
-            sec = (1L..25L).map { sec(it, "other") },
-        )
-
-        f.orchestrator.analyzeIntrusionLog(uri)
-
-        // getAllForExport stops at 10,000 rows, so read the rows directly.
-        val dnsTimes = times("dns_query")
-        val netTimes = times("network_connect")
-        assertEquals(ScanOrchestrator.DNS_PERSIST_CAP, dnsTimes.size)
-        assertEquals(ScanOrchestrator.CONNECT_PERSIST_CAP, netTimes.size)
-        assertEquals("security below the cap is kept in full", 25, times("security_event").size)
-        assertEquals("oldest kept dns is exactly at the cap boundary", 6L, dnsTimes.min())
-        assertTrue("newest dns kept", dnsTotal.toLong() in dnsTimes)
-        assertEquals("oldest kept connect is exactly at the cap boundary", 4L, netTimes.min())
-        assertEquals("every record is stored even past the row cap", (dnsTotal + netTotal + 25).toLong(),
-            f.count("SELECT COUNT(*) FROM scan_record"))
-    }
-
-    /** Interim rows equal today's newest-N (`sortedByDescending { time }.take(cap)`), ties included. */
-    @Test
-    fun `interim security rows equal today's newest-N with ties and carry their recordId`() = runBlocking {
-        val total = ScanOrchestrator.SECURITY_PERSIST_CAP + 700
-        // Few distinct times, shuffled: ties must resolve exactly as the stable sort did.
-        val events = (0 until total).map { sec(1_000L + (it * 7919L) % 50, "other").copy(securityData = listOf("$it")) }
-        analyzerHandsOver(sec = events)
-
-        f.orchestrator.analyzeIntrusionLog(uri)
-
-        val expected = events.sortedByDescending { it.timestamp }.take(ScanOrchestrator.SECURITY_PERSIST_CAP)
-        val kept = rows().filter { it.category == "security_event" }
-        assertEquals(expected.map { it.securityData.single() }.sorted(), kept.map { it.details }.sorted())
-        assertTrue("every interim row pins its fact", kept.all { r ->
-            r.recordId != null && f.count("SELECT COUNT(*) FROM telemetry_record WHERE id = ${r.recordId}") == 1L
-        })
-    }
-
-    @Test
-    fun `rows are findings then dns then connect then security with import sources`() = runBlocking {
+    fun `records are observations and the only rows are finding rows with import sources`() = runBlocking {
         analyzerHandsOver(dns = listOf(dns(10L), dns(20L)), net = listOf(net(30L)), sec = listOf(sec(40L)))
 
         f.orchestrator.analyzeIntrusionLog(uri)
 
         val scanId = f.scans().single().id
+        assertEquals(4L, f.count("SELECT COUNT(*) FROM scan_record WHERE scanId = $scanId"))
         val written = f.db.openHelper.readableDatabase
-            .query("SELECT source, category, startTimestamp FROM forensic_timeline ORDER BY id").use { c ->
-                generateSequence { if (c.moveToNext()) Triple(c.getString(0), c.getString(1), c.getLong(2)) else null }
-                    .toList()
+            .query("SELECT source, startTimestamp FROM forensic_timeline ORDER BY id").use { c ->
+                generateSequence { if (c.moveToNext()) c.getString(0) to c.getLong(1) else null }.toList()
             }
-        assertEquals(listOf("intrusion_log_analysis") + List(4) { "intrusion_log" }, written.map { it.first })
-        assertEquals(listOf("dns_query", "dns_query", "network_connect", "security_event"),
-            written.drop(1).map { it.second })
-        assertEquals("DNS rows newest-first", listOf(20L, 10L), written.drop(1).take(2).map { it.third })
-        assertEquals("the finding row has its record's time", 40L, written.first().third)
+        assertEquals(listOf("intrusion_log_analysis" to 40L), written)
         assertTrue(rows().all {
             it.telemetrySource == TelemetrySource.INTRUSION_LOG_IMPORT && it.scanResultId == scanId
         })
@@ -283,19 +233,18 @@ class ScanOrchestratorIntrusionLogTest {
             val result = real.orchestrator.analyzeIntrusionLog(uri)
             assertEquals(1L, real.count("SELECT COUNT(*) FROM scan_record"))
             assertEquals(1, result.findings.count { it.triggered })
-            assertEquals(1, real.timelineDao.getAllForExport().count { it.category == "security_event" })
+            assertEquals("no event row (C3)", 0, real.timelineDao.getAllForExport().count { it.ruleId.isEmpty() })
             assertEquals(1, result.stats.securityEventCount)
             assertEquals(2, result.stats.duplicatesCollapsed)
         }
     }
 
-    /** Interim: re-importing the same log adds no fact ("0 new") and does not stack event rows. */
+    /** Re-importing the same log adds no fact ("0 new") and writes no event rows (C3). */
     @Test
-    fun `re-importing the same log shows 0 new facts and does not stack rows`() = runBlocking {
+    fun `re-importing the same log shows 0 new facts and writes no event rows`() = runBlocking {
         val zip = IntrusionLogZips.zip("2026-08-22.txt" to listOf(idLess, withId))
         IntrusionLogZips.fixture(engine) { zip }.use { real ->
             real.orchestrator.analyzeIntrusionLog(uri)
-            val firstRows = real.timelineDao.getAllForExport().size
             val facts = real.count("SELECT COUNT(*) FROM telemetry_record")
             Thread.sleep(2) // distinct scan ids (epoch ms)
 
@@ -304,10 +253,8 @@ class ScanOrchestratorIntrusionLogTest {
             assertEquals("the card shows 0 new", 0, again.write!!.newFacts)
             assertEquals(2, again.write!!.alreadyStored)
             assertEquals("no new facts", facts, real.count("SELECT COUNT(*) FROM telemetry_record"))
-            assertEquals("rows replaced, not stacked", firstRows, real.timelineDao.getAllForExport().size)
             assertEquals("two observation sets", 4L, real.count("SELECT COUNT(*) FROM scan_record"))
-            val latest = real.scans().first().id
-            assertTrue(real.timelineDao.getAllForExport().all { it.scanResultId == latest })
+            assertTrue("finding rows only", real.timelineDao.getAllForExport().all { it.ruleId.isNotEmpty() })
         }
     }
 

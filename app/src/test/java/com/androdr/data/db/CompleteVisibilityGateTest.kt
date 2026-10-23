@@ -35,27 +35,27 @@ class CompleteVisibilityGateTest {
         "TelemetryFactDao.idsBySourceKey", "RecordBodyDao.deleteUnreferenced",
         "ScanObservationDao.factIdsAfter", "ScanObservationDao.deleteForScan", "ScanObservationDao.deleteThrough",
         "ScanObservationDao.factIdsForOrdinals",
-        "ForensicTimelineEventDao.deleteOlderThan", "ForensicTimelineEventDao.deleteBySource",
+        "ForensicTimelineEventDao.deleteOlderThan", "ForensicTimelineEventDao.deleteByIds",
         "ForensicTimelineEventDao.deleteByScanId", "ForensicTimelineEventDao.deleteUnownedNonPersistent",
-        "ForensicTimelineEventDao.deleteBySourceBetween", "ForensicTimelineEventDao.recordIdsBySourceBetween",
         // The pins a delete releases (TimelineRowDeleter), read just before the paired delete.
-        "ForensicTimelineEventDao.recordIdsOlderThan", "ForensicTimelineEventDao.recordIdsBySource",
+        "ForensicTimelineEventDao.recordIdsOlderThan", "ForensicTimelineEventDao.recordIdsByIds",
         "ForensicTimelineEventDao.recordIdsByScanId", "ForensicTimelineEventDao.recordIdsUnownedNonPersistent",
         // Writer-side dedup lookups over everything already emitted (hidden rows included on purpose).
         "ForensicTimelineEventDao.getInstalledPackagesAlreadyEmitted",
         "ForensicTimelineEventDao.getAdminGrantedPackagesAlreadyEmitted",
-        "ForensicTimelineEventDao.getDistinctScanIdsBySource",
         // AtomReader (spec §5.2): the finishing scan's own rows and observations (it is IN_PROGRESS),
         // and the lookback's facts, visible as "a COMPLETE live-scan observation" (stricter than
         // VisibleFact: no pinned orphans, no import observations).
         "AtomDao.rowsForScan", "AtomDao.factsForScan", "AtomDao.liveFactsBetween",
         // The signal rows a delete is about to remove (their members go with them, by id).
-        "ForensicTimelineEventDao.signalIdsOlderThan", "ForensicTimelineEventDao.signalIdsBySource",
-        "ForensicTimelineEventDao.signalIdsBySourceBetween", "ForensicTimelineEventDao.signalIdsByScanId",
+        "ForensicTimelineEventDao.signalIdsOlderThan", "ForensicTimelineEventDao.signalIdsByIds",
+        "ForensicTimelineEventDao.signalIdsByScanId",
         "ForensicTimelineEventDao.signalIdsUnownedNonPersistent",
         // The one-time signal_member backfill reads and rewrites every legacy signal row.
         "SignalMemberBackfillDao.legacyAfter", "SignalMemberBackfillDao.signalExists",
         "SignalMemberBackfillDao.rewrite",
+        // The one-time legacy event-row cleanup (C3) selects rows of every scan by producer.
+        "LegacyEventRowDao.orphanSignalIds", "LegacyEventRowDao.legacyRowsAfter",
     )
 
     private data class DaoQuery(val owner: String, val name: String, val sql: String) {

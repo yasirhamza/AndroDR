@@ -4,7 +4,6 @@ import android.content.Context
 import android.net.Uri
 import android.util.Log
 import androidx.annotation.VisibleForTesting
-import com.androdr.data.db.ForensicTimelineEventDao
 import com.androdr.data.model.AppTelemetry
 import com.androdr.data.model.Indicator
 import com.androdr.data.model.NotEvaluatedReason
@@ -15,7 +14,6 @@ import com.androdr.data.model.UNREGISTERED_IOC_LOOKUP
 import com.androdr.data.store.DecodedRecord
 import com.androdr.data.store.TelemetryReader
 import com.androdr.data.repo.ScanLock
-import com.androdr.data.repo.TimelineRowDeleter
 import com.androdr.ioc.IndicatorResolver
 import com.androdr.network.DnsVpnService
 import com.androdr.sigma.CveEvidenceProvider
@@ -59,8 +57,6 @@ class ScanOrchestrator @Inject constructor(
     private val intrusionLogAnalyzer: IntrusionLogAnalyzer,
     private val writer: ChunkedScanWriter,
     private val scanLock: ScanLock,
-    private val forensicTimelineEventDao: ForensicTimelineEventDao,
-    private val timelineRows: TimelineRowDeleter,
     private val installEventEmitter: InstallEventEmitter,
     private val deviceAdminGrantEmitter: DeviceAdminGrantEmitter,
     private val sigmaRuleEngine: SigmaRuleEngine,
@@ -218,7 +214,7 @@ class ScanOrchestrator @Inject constructor(
             riskySideloadCount = 0, knownMalwareCount = 0,
         )
         val hooks = LiveScanHooks(
-            scan, sigmaRuleEngine, sigmaCorrelationEngine, timelineRows,
+            scan, sigmaRuleEngine, sigmaCorrelationEngine,
             hashByPackage(telemetry.apps), detectedChanges(scan.id, telemetry.apps),
             sigmaRuleEngine.getCorrelationRules().maxOfOrNull { it.timespanMs } ?: 0L,
             telemetry.usage, telemetry.dns,
@@ -293,8 +289,7 @@ class ScanOrchestrator @Inject constructor(
             // the user; History labels it from this field.
             source = TelemetrySource.BUGREPORT_IMPORT,
         )
-        val hooks = BugReportHooks(scan, sigmaRuleEngine, sigmaCorrelationEngine, apkHashes,
-            result.timeline, result.forensicEvents)
+        val hooks = BugReportHooks(scan, sigmaRuleEngine, sigmaCorrelationEngine, apkHashes)
         hooks.errors.addAll(errors)
         val written = try {
             writer.inSession(scan, liveEvents = false, hooks) { session ->
@@ -397,9 +392,9 @@ class ScanOrchestrator @Inject constructor(
 
     /**
      * #342: analyze an Advanced Protection Intrusion Logging export in one pass, appending each
-     * type's chunk to an import session as it fills (rules see every record; only the Timeline rows
-     * are capped, spec §7). The finishing transaction first sweeps the previous imports' Timeline
-     * rows (replace-on-reimport, B1), so a failed import rolls that back too.
+     * type's chunk to an import session as it fills: every record is evaluated and stored, and
+     * none becomes a Timeline row (C3; the Timeline reads them from the store). Re-importing a log
+     * observes its records again under the new import and replaces nothing (spec §5.2).
      *
      * Failure honesty (B1, #356): the session is aborted and nothing is kept; an analysis failure
      * rethrows [IntrusionLogAnalyzer.IntrusionLogAnalysisException], any other failure
@@ -419,11 +414,10 @@ class ScanOrchestrator @Inject constructor(
             // as live scans of this device.
             source = TelemetrySource.INTRUSION_LOG_IMPORT,
         )
-        val hooks = IntrusionLogHooks(scan, sigmaRuleEngine, sigmaCorrelationEngine, forensicTimelineEventDao,
-            timelineRows)
+        val hooks = IntrusionLogHooks(scan, sigmaRuleEngine, sigmaCorrelationEngine)
         try {
             writer.inSession(scan, liveEvents = false, hooks) { session ->
-                val analysis = intrusionLogAnalyzer.analyze(uri, IntrusionLogSessionChunks(session, hooks.interim, now))
+                val analysis = intrusionLogAnalyzer.analyze(uri, IntrusionLogSessionChunks(session, now))
                 hooks.errors.addAll(analysis.scannerErrors)
                 intrusionLogResult(analysis, requireSaved(session.finish()), hooks)
             }
@@ -604,15 +598,6 @@ class ScanOrchestrator @Inject constructor(
         }
 
         /**
-         * #342 spec §7: Timeline-row caps per import (newest first); rules always see the full
-         * stream. Interim until Task C3. The worst-case rows one import writes is
-         * FINDINGS_PERSIST_CAP + DNS + CONNECT + SECURITY (= 21000), above
-         * [ForensicTimelineEventDao.getAllForExport]'s `LIMIT 10000` (follow-up #353).
-         */
-        const val DNS_PERSIST_CAP = 10_000
-        const val CONNECT_PERSIST_CAP = 5_000
-
-        /**
          * Cap on triggered findings PERSISTED per import (#342 B3). One Finding is
          * emitted per (record × matching rule) over the uncapped parsed stream, so
          * a single beaconing domain resolved thousands of times can produce
@@ -624,16 +609,6 @@ class ScanOrchestrator @Inject constructor(
          * over everything; this bounds only what is stored.
          */
         const val FINDINGS_PERSIST_CAP = 1_000
-
-        /**
-         * Cap on `security_event` rows PERSISTED per import (#342 B4, security L1).
-         * Security events are the rarest, highest-signal records, so this was
-         * originally uncapped — but that let an attacker-crafted export of millions
-         * of `security_event` lines persist millions of rows surviving the 30-day
-         * retention (storage DoS). 5000 (matching [CONNECT_PERSIST_CAP]) is far
-         * above any legitimate export's security-event volume while bounding abuse.
-         */
-        const val SECURITY_PERSIST_CAP = 5_000
 
         /** App categories treated as trusted by the known_good_app_db IOC lookup. */
         private val TRUSTED_CATEGORIES = setOf(
