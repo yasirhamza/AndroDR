@@ -10,63 +10,60 @@ import com.androdr.data.model.UsageEvent
 import com.androdr.ioc.DeviceIdentity
 import com.androdr.ioc.OemPrefixResolver
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Queries UsageStatsManager for app foreground/background events in the last 24 hours and emits
- * them as [UsageEvent] records (the emitter-only `usage_stats` service: stored, shown on the
- * timeline, targeted by no rule). Until Task C3 the live scan also maps them to today's
- * `usage_stats` Timeline rows.
+ * Queries UsageStatsManager for app foreground/background events in a window and emits them as
+ * [UsageEvent] records (the emitter-only `usage_stats` service: stored, shown on the timeline,
+ * targeted by no rule). The live scan reads from its usage watermark (spec §5.2, [Watermarks]).
+ * Until Task C3 the live scan also maps them to today's `usage_stats` Timeline rows.
  *
- * Requires PACKAGE_USAGE_STATS permission granted via Settings > Apps > Special access > Usage access.
- * If permission is not granted, returns empty list gracefully.
+ * Requires PACKAGE_USAGE_STATS, granted via Settings > Apps > Special access > Usage access. It is
+ * checked explicitly ([UsageAccess]); without it the collection is [UsageCollection.NoAccess] (the
+ * Dashboard banner prompts the user), never an empty list that reads like "no activity".
  */
 @Singleton
 class UsageStatsScanner @Inject constructor(
     @ApplicationContext private val context: Context,
-    private val oemPrefixResolver: OemPrefixResolver
+    private val oemPrefixResolver: OemPrefixResolver,
+    private val usageAccess: UsageAccess,
 ) {
 
     private val localDevice = DeviceIdentity.local()
 
     /**
-     * Collects app usage events from the last [hoursBack] hours.
-     * Filters out OEM/system apps to reduce noise.
+     * Collects app usage events with `sinceMs <= timestamp <= untilMs`, filtering out OEM/system
+     * apps to reduce noise. A query failure is [UsageCollection.Failed], so the watermark stays put.
      */
-    @Suppress("TooGenericExceptionCaught", "SwallowedException")
-    suspend fun collectEvents(
-        hoursBack: Int = 24
-    ): List<UsageEvent> = withContext(Dispatchers.IO) {
-        require(hoursBack in 1..168) { "hoursBack must be between 1 hour and 1 week" }
-
+    @Suppress("TooGenericExceptionCaught")
+    suspend fun collectEvents(sinceMs: Long, untilMs: Long): UsageCollection = withContext(Dispatchers.IO) {
+        require(sinceMs <= untilMs) { "usage window starts after it ends: $sinceMs > $untilMs" }
+        if (!usageAccess.granted()) {
+            Log.w(TAG, "Usage Access not granted: usage events not collected")
+            return@withContext UsageCollection.NoAccess
+        }
         val usm = context.getSystemService(Context.USAGE_STATS_SERVICE) as? UsageStatsManager
-            ?: return@withContext emptyList()
-
-        val endTime = System.currentTimeMillis()
-        val startTime = endTime - (hoursBack * 3600_000L)
-
-        val events = try {
-            usm.queryEvents(startTime, endTime)
+            ?: return@withContext UsageCollection.Failed(IllegalStateException("UsageStatsManager unavailable"))
+        try {
+            UsageCollection.Ok(read(usm, sinceMs, untilMs))
+        } catch (c: CancellationException) {
+            throw c
         } catch (e: SecurityException) {
-            // PACKAGE_USAGE_STATS not granted. Previously this was logged at
-            // DEBUG with a comment calling the absence "expected" — which
-            // meant the forensic-timeline feature was silently disabled with
-            // no signal to anyone that the user needed to grant Usage Access
-            // in Settings. Promoting to WARN so the degraded state is at
-            // least visible in logcat, and the Dashboard banner (see
-            // UsageStatsPermission + DashboardScreen) prompts the user
-            // to grant the permission via the system settings page.
-            Log.w(TAG, "UsageStats permission not granted — forensic timeline " +
-                "will be empty until the user enables Usage Access in Settings")
-            return@withContext emptyList()
+            // Revoked between the check and the query.
+            Log.w(TAG, "Usage Access revoked during the query: ${e.message}")
+            UsageCollection.NoAccess
         } catch (e: Exception) {
             Log.w(TAG, "Usage stats query failed: ${e.message}")
-            return@withContext emptyList()
+            UsageCollection.Failed(e)
         }
+    }
 
+    private fun read(usm: UsageStatsManager, sinceMs: Long, untilMs: Long): List<UsageEvent> {
+        val events = usm.queryEvents(sinceMs, untilMs)
         val result = mutableListOf<UsageEvent>()
         val event = UsageEvents.Event()
         val pm = context.packageManager
@@ -74,7 +71,7 @@ class UsageStatsScanner @Inject constructor(
 
         while (events.hasNextEvent()) {
             events.getNextEvent(event)
-            processUsageEvent(event, pm, labelCache, endTime, result)
+            if (event.timeStamp in sinceMs..untilMs) processUsageEvent(event, pm, labelCache, untilMs, result)
         }
 
         // Deduplicate rapid transitions of same app+category within same minute
@@ -83,7 +80,7 @@ class UsageStatsScanner @Inject constructor(
         }
 
         Log.d(TAG, "Collected ${deduped.size} usage events (from ${result.size} raw)")
-        deduped
+        return deduped
     }
 
     /**

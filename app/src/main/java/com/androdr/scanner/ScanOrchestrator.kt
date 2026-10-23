@@ -202,7 +202,7 @@ class ScanOrchestrator @Inject constructor(
         errors.addAll(visibilityGapsOrFailure({ indicatorResolver.feedCoverage() }, DnsVpnService.isRunning.value))
 
         progress(ScanProgress.Running.Phase.COLLECTING_TELEMETRY, 0)
-        val telemetry = collector.collect(errors) {
+        val telemetry = collector.collect(errors, System.currentTimeMillis()) {
             _scanProgress.update { p ->
                 if (p is ScanProgress.Running) p.copy(completedScanners = p.completedScanners + 1) else p
             }
@@ -221,6 +221,7 @@ class ScanOrchestrator @Inject constructor(
             scan, sigmaRuleEngine, sigmaCorrelationEngine, forensicTimelineEventDao, timelineRows,
             hashByPackage(telemetry.apps), detectedChanges(scan.id, telemetry.apps),
             sigmaRuleEngine.getCorrelationRules().maxOfOrNull { it.timespanMs } ?: 0L,
+            telemetry.usage, telemetry.dns,
         )
         hooks.readLookback()
         hooks.errors.addAll(synchronized(errors) { errors.toList() })
@@ -233,7 +234,7 @@ class ScanOrchestrator @Inject constructor(
         }
         return try {
             writer.inSession(scan, liveEvents = true, hooks, recover) { session ->
-                appendLive(session, hooks, telemetry, now, indicatorResolver)
+                appendLive(session, hooks, telemetry, now, liveDnsSources)
                 progress(ScanProgress.Running.Phase.SAVING_RESULTS, LiveScanCollector.SCANNER_COUNT)
                 session.finish().scan
             }.also { Log.i(TAG, "Scan ${it.id} complete — ${it.findings.size} findings, " +
@@ -246,6 +247,15 @@ class ScanOrchestrator @Inject constructor(
             scan.copy(scannerErrors = synchronized(errors) { errors.toList() } + writerFailure(t))
         }
     }
+
+    /** Live DNS rows by id ([LiveScanCollector.dnsRows]) and stored live DNS facts for the late-IOC re-check. */
+    private val liveDnsSources = LiveDnsSources(
+        indicatorResolver,
+        rows = collector::dnsRows,
+        storedFacts = { since, after, size ->
+            telemetryReader.liveFactsSince(LiveRecordBuilders.DNS_MONITOR, since, after, size)
+        },
+    )
 
     /** Detected-change rows for this scan: first-seen installs and device-admin grants. */
     private suspend fun detectedChanges(scanId: Long, apps: List<AppTelemetry>) =

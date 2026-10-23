@@ -56,6 +56,13 @@ interface SessionHooks {
      */
     fun summarize(scan: ScanResult, totals: FindingTotals): ScanResult = scan
 
+    /**
+     * The event watermarks this session advances, by service (spec §5.2 Watermarks), written in the
+     * finishing transaction once the scan is `COMPLETE`, so a rolled-back finish advances nothing.
+     * [saveFallback]: the session fell back to evaluate-only, so watermarks stay put. Live scans only.
+     */
+    fun watermarks(saveFallback: Boolean): Map<String, Long> = emptyMap()
+
     companion object {
         val NONE: SessionHooks = object : SessionHooks {}
     }

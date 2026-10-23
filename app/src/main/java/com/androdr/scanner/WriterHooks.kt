@@ -18,6 +18,7 @@ import com.androdr.data.repo.TimelineRowDeleter
 import com.androdr.sigma.Finding
 import com.androdr.sigma.FindingCategory
 import com.androdr.sigma.IntrusionLogRecordBuilders
+import com.androdr.sigma.LiveRecordBuilders
 import com.androdr.sigma.RuleCoverage
 import com.androdr.sigma.SigmaCorrelationEngine
 import com.androdr.sigma.SigmaRuleEngine
@@ -97,10 +98,11 @@ internal abstract class WriterHooks(
 
 /**
  * The live scan: finding rows enriched with APK hashes, the detected-change rows (first-seen
- * installs, device-admin grants), today's `usage_stats` rows replaced wholesale, and a correlation
- * lookback read before the session writes ([readLookback]) that excludes imported intrusion-log
- * rows (#342 B2).
+ * installs, device-admin grants), the `usage_stats` rows of the re-read usage window replaced, a
+ * correlation lookback read before the session writes ([readLookback]) that excludes imported
+ * intrusion-log rows (#342 B2), and the event watermarks this scan advances (spec §5.2).
  */
+@Suppress("LongParameterList") // the live scan's inputs, built once by ScanOrchestrator
 internal class LiveScanHooks(
     scan: ScanResult,
     engine: SigmaRuleEngine,
@@ -110,6 +112,9 @@ internal class LiveScanHooks(
     private val hashByPkg: Map<String, String>,
     private val detectedChanges: List<ForensicTimelineEvent>,
     private val lookbackWindowMs: Long,
+    private val usage: UsageWindow,
+    private val dns: DnsWindow,
+    private val clock: () -> Long = System::currentTimeMillis,
 ) : WriterHooks(scan, engine, correlationEngine) {
     init {
         interim.register<UsageEvent>(
@@ -117,8 +122,32 @@ internal class LiveScanHooks(
         ) { e, scanId -> e.toForensicTimelineEvent(scanId) }
     }
 
-    /** Usage rows are replaced on every scan, as today. */
-    override suspend fun sweepPrior(scanId: Long) = timelineRows.bySource(USAGE_STATS)
+    /** The DNS id this scan collected through; set once every row of [DnsWindow.range] was appended. */
+    var dnsCollectedThrough: Long? = null
+
+    /** A DNS read failed mid-stream: the DNS watermark stays put. */
+    var dnsReadFailed = false
+
+    /**
+     * Where this scan's usage rows replace earlier ones: the re-read window's start, when usage was
+     * collected (it writes a row for every event it read since then); null when it was not, so no
+     * row is replaced. Rows older than the window are kept: this scan does not read their events.
+     */
+    private val usageReplacedSince: Long? = usage.since.takeIf { usage.collection is UsageCollection.Ok }
+
+    private fun replacedUsageRow(row: ForensicTimelineEvent): Boolean =
+        row.source == USAGE_STATS && usageReplacedSince != null && row.startTimestamp >= usageReplacedSince
+
+    override suspend fun sweepPrior(scanId: Long) {
+        usageReplacedSince?.let { timelineRows.bySourceSince(USAGE_STATS, it) }
+    }
+
+    override fun watermarks(saveFallback: Boolean): Map<String, Long> = buildMap {
+        Watermarks.nextTime(usage.previous, usage.collection, usage.until, clock(), saveFallback)
+            ?.let { put(USAGE_STATS, it) }
+        Watermarks.nextDnsId(dns.previous, dnsCollectedThrough, dns.failed || dnsReadFailed, saveFallback)
+            ?.let { put(LiveRecordBuilders.DNS_MONITOR, it) }
+    }
 
     override fun findingRow(finding: Finding, scan: ScanResult): ForensicTimelineEvent =
         withApkHash(finding.toForensicTimelineEvent(scan), hashByPkg)
@@ -130,8 +159,8 @@ internal class LiveScanHooks(
     /**
      * Reads the correlation lookback BEFORE the session writes anything, so `finish`'s correlation
      * never sees this scan's own rows twice (spec §5.2: an event is counted once). The window ends
-     * at the scan start; rows of this scan and the `usage_stats` rows `finish` replaces (this scan
-     * writes their events again) are left out.
+     * at the scan start; rows of this scan and the `usage_stats` rows `finish` replaces (those of the
+     * re-read window: this scan writes their events again) are left out.
      *
      * #342 B2: imported intrusion-log rows carry their own historical event time, so a plain
      * time-window query would sweep them in, and any signal they helped produce would be stamped
@@ -144,7 +173,7 @@ internal class LiveScanHooks(
                 scan.timestamp - lookbackWindowMs, TelemetrySource.INTRUSION_LOG_IMPORT
             )
         }.getOrDefault(emptyList()).filter {
-            it.startTimestamp <= scan.timestamp && it.scanResultId != scan.id && it.source != USAGE_STATS
+            it.startTimestamp <= scan.timestamp && it.scanResultId != scan.id && !replacedUsageRow(it)
         }
     }
 

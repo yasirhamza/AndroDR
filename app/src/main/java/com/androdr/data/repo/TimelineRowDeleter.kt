@@ -32,6 +32,13 @@ class TimelineRowDeleter @Inject constructor(
         store.releaseUnpinned(pinned)
     }
 
+    /** Rows of [source] stamped at or after [since] (the live scan's re-read usage window). */
+    suspend fun bySourceSince(source: String, since: Long) {
+        val pinned = dao.recordIdsBySourceSince(source, since)
+        dao.deleteBySourceSince(source, since)
+        store.releaseUnpinned(pinned)
+    }
+
     /** A scan's own non-persistent rows. */
     suspend fun byScanId(scanId: Long) {
         val pinned = dao.recordIdsByScanId(scanId)

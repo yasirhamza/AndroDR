@@ -42,7 +42,8 @@ class LiveScanWriterTest {
     )
 
     private fun dns(domain: String, reason: String? = null) =
-        DnsEvent(timestamp = 1_787_400_000_000L, domain = domain, appUid = 1, appName = "com.a", isBlocked = false,
+        DnsEvent(timestamp = System.currentTimeMillis() - 60_000L, domain = domain, appUid = 1, appName = "com.a",
+            isBlocked = false,
             reason = reason)
 
     @Test
@@ -64,7 +65,6 @@ class LiveScanWriterTest {
     @Test
     fun `a live scan stores DNS facts keyed dns-id, joining the ioc_match row`() = runBlocking {
         repo().logDnsEventsBatch(listOf(dns("evil.example", reason = "IOC: X")))
-        coEvery { f.dnsEventDao.getRecentSnapshot() } coAnswers { f.db.dnsEventDao().getRecentSnapshot() }
 
         f.orchestrator.runFullScan()
 
@@ -73,10 +73,10 @@ class LiveScanWriterTest {
                 "WHERE r.category = 'ioc_match' AND t.service = 'dns_monitor'"))
     }
 
-    /** Live events are observed once (§4.1): a re-read DNS row fires once; a snapshot fact fires every scan. */
+    /** Live events are observed once (§4.1): a DNS row fires once; a snapshot fact fires every scan. */
     @Test
     fun `a live DNS event already observed fires no second finding, a snapshot finding repeats`() = runBlocking {
-        coEvery { f.dnsEventDao.getRecentSnapshot() } returns listOf(dns("evil.example").copy(id = 41))
+        f.db.dnsEventDao().insert(dns("evil.example"))
         coEvery { f.appScanner.collectTelemetry() } returns listOf(OrchestratorFixture.app("com.evil"))
 
         val first = f.orchestrator.runFullScan()
@@ -89,12 +89,14 @@ class LiveScanWriterTest {
     }
 
     @Test
-    fun `usage rows are replaced every scan and pin their facts`() = runBlocking {
+    fun `re-read usage rows are replaced every scan and pin their facts`() = runBlocking {
+        // Inside the 5-minute re-read, so the second scan reads both events again.
+        val t = System.currentTimeMillis()
         val events = listOf(
-            UsageEvent(1_000L, "com.a", "A", "app_foreground", TelemetrySource.LIVE_SCAN, 9L),
-            UsageEvent(2_000L, "com.a", "A", "app_background", TelemetrySource.LIVE_SCAN, 9L),
+            UsageEvent(t - 60_000L, "com.a", "A", "app_foreground", TelemetrySource.LIVE_SCAN, 9L),
+            UsageEvent(t - 30_000L, "com.a", "A", "app_background", TelemetrySource.LIVE_SCAN, 9L),
         )
-        coEvery { f.usageStatsScanner.collectEvents() } returns events
+        coEvery { f.usageStatsScanner.collectEvents(any(), any()) } returns UsageCollection.Ok(events)
 
         f.orchestrator.runFullScan()
         Thread.sleep(2)
@@ -128,18 +130,6 @@ class LiveScanWriterTest {
         assertEquals(0L, f.count("SELECT COUNT(*) FROM ScanResult"))
         assertEquals(0L, f.count("SELECT COUNT(*) FROM forensic_timeline"))
         assertTrue("the lock is released", !f.lock.mutex.isLocked && !f.lock.writerRunning.value)
-    }
-
-    @Test
-    fun `watermark inputs are the highest DNS id and the latest usage time collected`() {
-        val t = LiveTelemetry(emptyList(), emptyList(), emptyList(), emptyList(), emptyList(), emptyList(), emptyList(),
-            usage = listOf(UsageEvent(7L, "p", "p", "app_foreground", TelemetrySource.LIVE_SCAN, 1L),
-                UsageEvent(5L, "p", "p", "app_foreground", TelemetrySource.LIVE_SCAN, 1L)),
-            dns = listOf(dns("a").copy(id = 4), dns("b").copy(id = 9)))
-        assertEquals(9L, t.dnsMaxId)
-        assertEquals(7L, t.usageMaxTime)
-        assertEquals(null, LiveTelemetry(emptyList(), emptyList(), emptyList(), emptyList(), emptyList(),
-            emptyList(), emptyList(), emptyList(), emptyList()).dnsMaxId)
     }
 
     /**
@@ -209,8 +199,8 @@ class LiveScanWriterTest {
                         source = "app_scanner", category = "package_install", description = "future",
                         packageName = "com.f", scanResultId = 8L),
                 ))
-                coEvery { g.usageStatsScanner.collectEvents() } returns listOf(
-                    UsageEvent(usageTime, "com.a", "A", "app_foreground", TelemetrySource.LIVE_SCAN, now))
+                coEvery { g.usageStatsScanner.collectEvents(any(), any()) } returns UsageCollection.Ok(listOf(
+                    UsageEvent(usageTime, "com.a", "A", "app_foreground", TelemetrySource.LIVE_SCAN, now)))
                 val events = io.mockk.slot<List<com.androdr.data.model.ForensicTimelineEvent>>()
                 io.mockk.every { correlation.evaluate(any(), capture(events), any(), any()) } returns emptyList()
 

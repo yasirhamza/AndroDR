@@ -48,6 +48,7 @@ data class BodyStatsRow(val encoding: Int, val bodies: Long, val storedBytes: Lo
  * `ordinal`, never OFFSET. List-parameter queries go through [chunkedIn].
  */
 @Dao
+@Suppress("TooManyFunctions") // Room DAO: one query per read the store's consumers need
 interface TelemetryReadDao {
 
     @Query(
@@ -107,6 +108,19 @@ interface TelemetryReadDao {
             "ORDER BY o.ordinal LIMIT :size"
     )
     suspend fun onlyIn(scanId: Long, otherScanId: Long, service: String, after: Int, size: Int): List<StoredRecordRow>
+
+    /**
+     * The late-IOC re-check's input (spec §5.2): facts of [service] with an event time at or after
+     * [since] that a COMPLETE live scan observed — never an `IN_PROGRESS` scan's own facts, never an
+     * import's — keyset on the fact id (`id > afterId`), each read with its first such observation.
+     */
+    @Query(
+        "SELECT $OBS_COLS $OBS_FROM WHERE f.service = :service AND f.eventTime >= :since AND f.id > :afterId " +
+            "AND o.source = 'LIVE_SCAN' AND ${CompleteScan.SQL} AND o.scanId = (SELECT MIN(o2.scanId) " +
+            "FROM scan_record o2 JOIN ScanResult s2 ON s2.id = o2.scanId WHERE o2.recordId = f.id " +
+            "AND o2.source = 'LIVE_SCAN' AND s2.state = 'COMPLETE') ORDER BY f.id LIMIT :size"
+    )
+    suspend fun liveFactsSince(service: String, since: Long, afterId: Long, size: Int): List<StoredRecordRow>
 
     /** The newest COMPLETE live scan that observed [service] at or after [since], if any. */
     @Query(

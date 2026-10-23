@@ -5,6 +5,7 @@ import com.androdr.data.db.AppDatabase
 import com.androdr.data.db.RuleRecord
 import com.androdr.data.db.SweepTarget
 import com.androdr.data.db.chunkedIn
+import com.androdr.data.model.EventWatermark
 import com.androdr.data.model.ForensicTimelineEvent
 import com.androdr.data.model.ScanResult
 import com.androdr.data.model.ScanState
@@ -30,6 +31,7 @@ class ScanWriteRepository @Inject constructor(
     private val scans get() = db.scanResultDao()
     private val writes get() = db.scanWriteDao()
     private val timeline get() = db.forensicTimelineEventDao()
+    private val watermarks get() = db.eventWatermarkDao()
 
     /** Opens a session's scan, hidden until [finish]. */
     suspend fun begin(scan: ScanResult) = scans.insertInProgress(scan)
@@ -38,9 +40,9 @@ class ScanWriteRepository @Inject constructor(
      * The session's single finishing transaction (spec §5.2 step 5, Phases A–C): the prior-import
      * sweep, this scan's finding rows (with `level` and `recordId`), the interim event rows, the
      * correlation pass over those rows (with their real ids) and its signal rows, then the guarded
-     * `IN_PROGRESS → COMPLETE` update and the summary columns (the scan's findings plus the
-     * correlation's). Throws — rolling everything back — with [ScanNotInProgressException] when the
-     * guard changes no row.
+     * `IN_PROGRESS → COMPLETE` update, the event watermarks ([SessionHooks.watermarks]) and the
+     * summary columns (the scan's findings plus the correlation's). Throws — rolling everything
+     * back — with [ScanNotInProgressException] when the guard changes no row.
      */
     suspend fun finish(
         scan: ScanResult, kept: List<KeptFinding>, totals: FindingTotals, hooks: SessionHooks,
@@ -56,6 +58,9 @@ class ScanWriteRepository @Inject constructor(
         val correlation = hooks.correlate(written)
         if (correlation.signals.isNotEmpty()) timeline.insertAll(correlation.signals)
         if (scans.complete(scan.id, telemetryState) == 0) throw ScanNotInProgressException(scan.id)
+        hooks.watermarks(saveFallback = telemetryState == TelemetryState.FAILED).forEach { (service, position) ->
+            watermarks.put(EventWatermark(service, position, scan.id))
+        }
         val findings = kept.map { it.finding } + correlation.findings
         val completed = hooks.summarize(scan.copy(findings = findings), totals)
             .copy(id = scan.id, state = ScanState.COMPLETE, telemetryState = telemetryState)
