@@ -200,7 +200,9 @@ class IntrusionLogAnalyzer @Inject constructor(
             )
         }
         val findings = buildList {
-            addAll(sigmaRuleEngine.evaluateDns(parsed.dnsEvents.map { it.event }))
+            // Through ImportedDnsEvent.toFieldMap(): carries the record's own
+            // `timestamp` (findings inherit it) and its `resolved_ips`.
+            addAll(sigmaRuleEngine.evaluateImportedDns(parsed.dnsEvents))
             addAll(sigmaRuleEngine.evaluateNetwork(parsed.networkEvents))
             addAll(sigmaRuleEngine.evaluateSecurityLog(parsed.securityEvents))
         }

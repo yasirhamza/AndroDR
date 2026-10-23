@@ -20,7 +20,7 @@ import java.io.InputStream
 class IntrusionLogAnalyzerTest {
 
     private val engine = mockk<SigmaRuleEngine>(relaxed = true) {
-        every { evaluateDns(any()) } returns emptyList()
+        every { evaluateImportedDns(any()) } returns emptyList()
         every { evaluateNetwork(any()) } returns emptyList()
         every { evaluateSecurityLog(any()) } returns emptyList()
     }
@@ -101,7 +101,7 @@ class IntrusionLogAnalyzerTest {
             sequenceOf(entry("2026-08-22.txt", day1Dns, day1Net, day2Sec)),
             uidResolver = { -1 }, capturedAt = capturedAt,
         )
-        verify(exactly = 1) { engine.evaluateDns(match { it.size == 1 }) }
+        verify(exactly = 1) { engine.evaluateImportedDns(match { it.size == 1 }) }
         verify(exactly = 1) { engine.evaluateNetwork(match { it.size == 1 }) }
         verify(exactly = 1) { engine.evaluateSecurityLog(match { it.size == 1 }) }
     }
@@ -115,7 +115,7 @@ class IntrusionLogAnalyzerTest {
     @Test
     fun `stats surface the triggered finding count for the persistence cap`() {
         val e = mockk<SigmaRuleEngine>(relaxed = true) {
-            every { evaluateDns(any()) } returns emptyList()
+            every { evaluateImportedDns(any()) } returns emptyList()
             every { evaluateNetwork(any()) } returns emptyList()
             every { evaluateSecurityLog(any()) } returns listOf(
                 Finding(
@@ -242,7 +242,7 @@ class IntrusionLogAnalyzerTest {
         val finding = Finding(ruleId = "androdr-003", title = "Malicious Domain", level = "critical",
             category = FindingCategory.APP_RISK)
         val e = mockk<SigmaRuleEngine>(relaxed = true) {
-            every { evaluateDns(any()) } returns listOf(finding)
+            every { evaluateImportedDns(any()) } returns listOf(finding)
             every { evaluateNetwork(any()) } returns emptyList()
             every { evaluateSecurityLog(any()) } returns emptyList()
         }

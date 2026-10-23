@@ -1,0 +1,45 @@
+[
+  {
+    "service": "usage_stats",
+    "fields": {
+      "timestamp": 1787400000000, "package_name": "com.example.chat", "app_name": "Chat",
+      "event_type": "app_foreground", "source": "LIVE_SCAN", "captured_at": 1787400400000
+    }
+  },
+  {
+    "service": "usage_stats",
+    "fields": {
+      "timestamp": 1787400060000, "package_name": "com.example.chat", "app_name": "Chat",
+      "event_type": "app_background", "source": "LIVE_SCAN", "captured_at": 1787400400000
+    }
+  },
+  {
+    "service": "dns_monitor",
+    "fields": {
+      "timestamp": 1787400100000, "domain": "cdn.example.com", "app_uid": 10123,
+      "source_package": "com.example.chat", "is_blocked": false, "reason": null
+    }
+  },
+  {
+    "service": "dns_monitor",
+    "fields": {
+      "timestamp": 1787400200000, "domain": "c2.badexample.net", "app_uid": 10124,
+      "source_package": "com.evil.app", "is_blocked": true, "reason": "IOC: ExampleCampaign"
+    }
+  },
+  {
+    "service": "dns_monitor",
+    "fields": {
+      "domain": "legacy.example.org", "app_uid": 10125, "source_package": null,
+      "is_blocked": false, "reason": null
+    }
+  },
+  {
+    "service": "appops_audit",
+    "fields": {
+      "package_name": "com.example.chat", "operation": "android:camera",
+      "last_access_time": 1787300000000, "last_reject_time": 0, "access_count": 4,
+      "is_system_app": false
+    }
+  }
+]

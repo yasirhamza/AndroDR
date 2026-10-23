@@ -9,9 +9,8 @@ import java.io.File
  * Shared locator + loader for rule-sweep tests (#268).
  *
  * The 5 legacy `rulesDirectory()` copies (and `BundledMirrorParityTest.bundledDir()`)
- * are intentionally left un-retrofitted — migrating them is out of scope, as is
- * `LogsourceTaxonomyCrossCheckTest`'s private taxonomy parse, which predates this
- * helper. NEW tests must use this helper instead of adding another copy.
+ * are intentionally left un-retrofitted — migrating them is out of scope.
+ * NEW tests must use this helper instead of adding another copy.
  *
  * Fail-vs-skip semantics: only an absent submodule checkout is skippable
  * ([submoduleRoot]/[submoduleRuleFiles]/[loadTaxonomy] return null for the caller
@@ -234,6 +233,16 @@ internal object TestRuleRepo {
         val fields: Set<String>,
         val status: String,
         val fieldKinds: Map<String, String?> = emptyMap(),
+        /** Fields flagged `optional: true` (set by only some producers). */
+        val optionalFields: Set<String> = emptySet(),
+        /** Fields flagged `positive_only: true` (old binaries never emit them). */
+        val positiveOnlyFields: Set<String> = emptySet(),
+        val eventTimeField: String? = null,
+        val timePrecisionField: String? = null,
+        val keyFields: List<String> = emptyList(),
+        val packageField: String? = null,
+        /** Field name -> description, in taxonomy order. */
+        val descriptions: Map<String, String?> = emptyMap(),
     )
 
     /**
@@ -262,6 +271,19 @@ internal object TestRuleRepo {
                     ?: error("taxonomy service '$name' has no status"),
                 fieldKinds = fieldsRaw.mapValues { (_, fieldEntry) ->
                     (fieldEntry as? Map<*, *>)?.get("kind")?.toString()
+                },
+                optionalFields = fieldsRaw
+                    .filterValues { (it as? Map<*, *>)?.get("optional") == true }
+                    .keys,
+                positiveOnlyFields = fieldsRaw
+                    .filterValues { (it as? Map<*, *>)?.get("positive_only") == true }
+                    .keys,
+                eventTimeField = entry["event_time_field"]?.toString(),
+                timePrecisionField = entry["time_precision_field"]?.toString(),
+                keyFields = (entry["key_fields"] as? List<*>)?.map { it.toString() }.orEmpty(),
+                packageField = entry["package_field"]?.toString(),
+                descriptions = fieldsRaw.mapValues { (_, fieldEntry) ->
+                    (fieldEntry as? Map<*, *>)?.get("description")?.toString()
                 },
             )
         }

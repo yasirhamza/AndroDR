@@ -12,6 +12,7 @@ import com.androdr.data.model.DeviceTelemetry
 import com.androdr.data.model.DnsEvent
 import com.androdr.data.model.FileArtifactTelemetry
 import com.androdr.data.model.ForensicTimelineEvent
+import com.androdr.data.model.ImportedDnsEvent
 import com.androdr.data.model.NetworkTelemetry
 import com.androdr.data.model.PackageInstallHistoryEntry
 import com.androdr.data.model.PlatformCompatChange
@@ -262,6 +263,12 @@ class SigmaRuleEngine @Inject constructor(
     }
 
     fun evaluateDns(events: List<DnsEvent>): List<Finding> {
+        val records = events.map { it.toFieldMap() }
+        return SigmaRuleEvaluator.evaluate(effectiveRules(), records, "dns_monitor", iocLookups, evidenceProviders)
+    }
+
+    /** Imported DNS records: the live DNS fields plus `resolved_ips` (D1). */
+    fun evaluateImportedDns(events: List<ImportedDnsEvent>): List<Finding> {
         val records = events.map { it.toFieldMap() }
         return SigmaRuleEvaluator.evaluate(effectiveRules(), records, "dns_monitor", iocLookups, evidenceProviders)
     }

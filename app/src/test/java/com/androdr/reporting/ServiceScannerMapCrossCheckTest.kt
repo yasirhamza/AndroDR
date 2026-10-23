@@ -1,8 +1,10 @@
 package com.androdr.reporting
 
+import com.androdr.sigma.TestRuleRepo
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
+import org.junit.Assume.assumeTrue
 import org.junit.Test
 import org.snakeyaml.engine.v2.api.Load
 import org.snakeyaml.engine.v2.api.LoadSettings
@@ -10,7 +12,8 @@ import java.io.File
 
 /**
  * Every logsource service is either run by a live scan (SCANNER_FOR_SERVICE, keyed to the name the
- * orchestrator records when that scanner crashes) or only by an import (IMPORT_ONLY_SERVICES).
+ * orchestrator records when that scanner crashes), only by an import (IMPORT_ONLY_SERVICES), or
+ * never, being stored but not rule-evaluated (EMITTER_ONLY_SERVICES).
  * A new service or a renamed scanner would otherwise count as "always checked" (#394).
  */
 class ServiceScannerMapCrossCheckTest {
@@ -28,8 +31,17 @@ class ServiceScannerMapCrossCheckTest {
     @Test
     fun `every taxonomy service is classified exactly once`() {
         val services = taxonomyServices()
-        assertEquals(services, SCANNER_FOR_SERVICE.keys + IMPORT_ONLY_SERVICES)
+        assertEquals(services, SCANNER_FOR_SERVICE.keys + IMPORT_ONLY_SERVICES + EMITTER_ONLY_SERVICES)
         assertTrue((SCANNER_FOR_SERVICE.keys intersect IMPORT_ONLY_SERVICES).isEmpty())
+        assertTrue((SCANNER_FOR_SERVICE.keys intersect EMITTER_ONLY_SERVICES).isEmpty())
+        assertTrue((IMPORT_ONLY_SERVICES intersect EMITTER_ONLY_SERVICES).isEmpty())
+    }
+
+    @Test
+    fun `emitter-only services are exactly the taxonomy's emitter_only services`() {
+        val taxonomy = TestRuleRepo.loadTaxonomy()
+        assumeTrue("Skipping: submodule not initialized.", taxonomy != null)
+        assertEquals(taxonomy!!.filterValues { it.status == "emitter_only" }.keys, EMITTER_ONLY_SERVICES)
     }
 
     @Test

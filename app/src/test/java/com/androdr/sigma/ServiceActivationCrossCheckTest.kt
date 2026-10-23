@@ -40,6 +40,10 @@ import java.io.File
  * `evaluateDatabasePathObservations`, `network_monitor` → `evaluateNetwork`),
  * so a hand-mirrored map would drift silently.
  *
+ * The converse holds for `status: emitter_only` (telemetry store, spec §4.2):
+ * those services are stored but never rule-evaluated, so they must have NO
+ * dedicated evaluate path and no rule may target them.
+ *
  * Must live in com.androdr.sigma so it can name [SigmaRuleEngine] /
  * [SigmaRuleEvaluator]; the taxonomy is read the same way
  * [LogsourceTaxonomyCrossCheckTest] / [TestRuleRepo.loadTaxonomy] read it.
@@ -197,7 +201,86 @@ class ServiceActivationCrossCheckTest {
         )
     }
 
+    @Test
+    fun `every taxonomy status is a known lifecycle status`() {
+        val taxonomy = TestRuleRepo.loadTaxonomy()
+        assumeTrue("Skipping: submodule not initialized.", taxonomy != null)
+        val unknown = taxonomy!!.filterValues { it.status !in KNOWN_STATUSES }.mapValues { it.value.status }
+        assertTrue(
+            "Unknown taxonomy status (this gate only understands $KNOWN_STATUSES): $unknown",
+            unknown.isEmpty(),
+        )
+    }
+
+    /**
+     * `emitter_only` services are produced and stored, but no rule may target
+     * them (validate-rule.py rejects one outside staging/). So no dedicated
+     * evaluate path may exist for one: it would be either dead or the first
+     * step to a rule nothing validates. The only tolerated evaluation is the
+     * generic bug-report dispatch for the modules in [GENERIC_EMITTER_ONLY],
+     * which evaluates whatever service a module names; with no rule allowed on
+     * the service it matches nothing.
+     */
+    @Test
+    fun `emitter-only services have no evaluate path`() {
+        val taxonomy = TestRuleRepo.loadTaxonomy()
+        assumeTrue("Skipping: submodule not initialized.", taxonomy != null)
+        val literals = evaluateMethodLiterals(engineSource())
+        val emitterOnly = taxonomy!!.filterValues { it.status == STATUS_EMITTER_ONLY }.keys
+        assertTrue(
+            "Expected the emitter-only services $EXPECTED_EMITTER_ONLY, found $emitterOnly",
+            emitterOnly.containsAll(EXPECTED_EMITTER_ONLY),
+        )
+        val failures = mutableListOf<String>()
+        for (service in emitterOnly) {
+            val methods = methodsForService(literals, service)
+            if (methods.isNotEmpty()) {
+                failures += "$service (emitter_only): evaluate method(s) $methods pass its literal"
+            }
+            val generic = genericRouteAvailable(service)
+            if (generic && service !in GENERIC_EMITTER_ONLY) {
+                failures += "$service (emitter_only): a bug-report module routes it to evaluateGeneric"
+            }
+            if (!generic && service in GENERIC_EMITTER_ONLY) {
+                failures += "$service: listed in GENERIC_EMITTER_ONLY but no longer generic-routed; remove it"
+            }
+        }
+        assertTrue(
+            "Emitter-only gate FAILED:\n" + failures.joinToString("\n") { "  - $it" },
+            failures.isEmpty(),
+        )
+    }
+
+    @Test
+    fun `no bundled or delivered rule targets an emitter-only service`() {
+        val taxonomy = TestRuleRepo.loadTaxonomy()
+        assumeTrue("Skipping: submodule not initialized.", taxonomy != null)
+        val emitterOnly = taxonomy!!.filterValues { it.status == STATUS_EMITTER_ONLY }.keys
+        val files = TestRuleRepo.bundledRuleFiles() + TestRuleRepo.submoduleRuleFiles().orEmpty()
+        val offenders = files.filter { file ->
+            val service = SERVICE_LINE.find(file.readText())?.groupValues?.get(1)
+            service in emitterOnly
+        }.map { it.name }
+        assertTrue("Rules targeting an emitter_only service: $offenders", offenders.isEmpty())
+    }
+
     private companion object {
+        const val STATUS_EMITTER_ONLY = "emitter_only"
+        val KNOWN_STATUSES = setOf("active", "emitter_only", "unwired")
+
+        /** Floor for the emitter-only sweep (spec §4.2's four documented services). */
+        val EXPECTED_EMITTER_ONLY = setOf("usage_stats", "system_property", "adb_audit", "activity_audit")
+
+        /**
+         * Emitter-only services a bug-report module still hands to the generic
+         * dispatcher (AdbKeysModule, ActivityModule). Tolerated because no rule
+         * may target them; see `emitter-only services have no evaluate path`.
+         */
+        val GENERIC_EMITTER_ONLY = setOf("adb_audit", "activity_audit")
+
+        /** `service: <name>` under a rule's logsource. */
+        val SERVICE_LINE = Regex("""(?m)^\s+service:\s*([a-z][a-z0-9_]*)\s*$""")
+
         const val ENGINE_SOURCE = "com/androdr/sigma/SigmaRuleEngine.kt"
         const val ENGINE_FILE_NAME = "SigmaRuleEngine.kt"
         const val BUGREPORT_PKG = "com/androdr/scanner/bugreport"

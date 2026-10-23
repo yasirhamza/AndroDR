@@ -10,4 +10,7 @@ package com.androdr.data.model
 data class ImportedDnsEvent(
     val event: DnsEvent,
     val resolvedIps: List<String>
-)
+) {
+    /** The `dns_monitor` record: the live DNS fields plus `resolved_ips`. */
+    fun toFieldMap(): Map<String, Any?> = event.toFieldMap() + ("resolved_ips" to resolvedIps)
+}

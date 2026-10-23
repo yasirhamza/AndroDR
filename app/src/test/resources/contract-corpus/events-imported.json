@@ -1,0 +1,82 @@
+[
+  {
+    "service": "dns_monitor",
+    "fields": {
+      "timestamp": 1787400345334, "domain": "api.example.com", "app_uid": -1,
+      "source_package": "com.evil.app", "is_blocked": false, "reason": null,
+      "resolved_ips": ["34.160.125.113"]
+    }
+  },
+  {
+    "service": "network_monitor",
+    "fields": {
+      "destination_ip": "192.168.1.7", "destination_port": 5555, "protocol": null,
+      "app_uid": -1, "app_name": "com.evil.app", "timestamp": 1787400345540,
+      "source": "INTRUSION_LOG_IMPORT", "captured_at": 1787400400000
+    }
+  },
+  {
+    "service": "security_log",
+    "fields": {
+      "timestamp": 1787400350000, "tag": 210002, "tag_name": "adb_shell_cmd",
+      "security_data": ["pm install /data/local/tmp/x.apk"],
+      "source": "INTRUSION_LOG_IMPORT", "captured_at": 1787400400000
+    }
+  },
+  {
+    "service": "appops_audit",
+    "fields": {
+      "package_name": "com.example.chat", "operation": "android:record_audio",
+      "last_access_time": "2026-08-20 10:00:00.000", "last_reject_time": "",
+      "access_count": 1, "is_system_app": false, "source": "bugreport_import",
+      "event_time_ms": 1787220000000
+    }
+  },
+  {
+    "service": "appops_audit",
+    "fields": {
+      "package_name": "com.example.chat", "operation": "android:camera",
+      "last_access_time": "", "last_reject_time": "", "access_count": 1,
+      "is_system_app": false, "source": "bugreport_import", "event_time_ms": 0
+    }
+  },
+  {
+    "service": "tombstone_parser",
+    "fields": {
+      "process_name": "com.example.chat", "package_name": "com.example.chat",
+      "signal_number": 11, "abort_message": null, "crash_timestamp": 1787100000000,
+      "source": "BUGREPORT_IMPORT", "captured_at": 1787400400000
+    }
+  },
+  {
+    "service": "wakelock_parser",
+    "fields": {
+      "package_name": "com.example.chat", "wakelock_tag": "*job*/sync",
+      "acquired_at": 1787200000000, "duration_millis": 1200,
+      "source": "BUGREPORT_IMPORT", "captured_at": 1787400400000
+    }
+  },
+  {
+    "service": "battery_daily",
+    "fields": {
+      "day_index": 2, "event_type": "package_install", "package_name": "com.example.chat",
+      "description": "Installed com.example.chat", "timestamp": 1787184000000,
+      "timestamp_precision": "day", "source": "BUGREPORT_IMPORT", "captured_at": 1787400400000
+    }
+  },
+  {
+    "service": "battery_daily",
+    "fields": {
+      "day_index": 3, "event_type": "package_uninstall", "package_name": "com.evil.app",
+      "description": "Uninstalled com.evil.app", "source": "BUGREPORT_IMPORT",
+      "captured_at": 1787400400000
+    }
+  },
+  {
+    "service": "package_install_history",
+    "fields": {
+      "package_name": "com.evil.app", "event_type": "INSTALL", "timestamp": 1787000000000,
+      "version_code": 42, "source": "BUGREPORT_IMPORT", "captured_at": 1787400400000
+    }
+  }
+]

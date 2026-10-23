@@ -939,11 +939,11 @@ class ScanOrchestrator @Inject constructor(
             finding.toForensicTimelineEvent(scanResult, isBugreport = true).copy(
                 source = "intrusion_log_analysis",
                 telemetrySource = TelemetrySource.INTRUSION_LOG_IMPORT,
-                // The network/security field maps carry "timestamp" and the
+                // The DNS/network/security field maps carry "timestamp" and the
                 // evaluator copies scalar record fields into matchContext as
-                // strings, so a finding inherits its own event's time. DNS
-                // records carry no timestamp field — those fall back to 0L,
-                // which the Timeline renders as "Unknown".
+                // strings, so a finding inherits its own event's time. A finding
+                // without one falls back to 0L, which the Timeline renders as
+                // "Unknown".
                 startTimestamp = findingEventTimeMs(finding)
             )
         }

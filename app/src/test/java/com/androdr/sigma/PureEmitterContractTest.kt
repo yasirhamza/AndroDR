@@ -82,6 +82,9 @@ class PureEmitterContractTest {
         "AccessibilityTelemetry.kt", "AppOpsTelemetry.kt", "AppTelemetry.kt",
         "DeviceTelemetry.kt", "DnsEvent.kt", "FileArtifactTelemetry.kt",
         "NetworkTelemetry.kt", "ProcessTelemetry.kt", "ReceiverTelemetry.kt",
+        // dns_monitor (imported, adds resolved_ips) and the emitter-only
+        // services usage_stats / system_property (telemetry store, Phase 0)
+        "ImportedDnsEvent.kt", "UsageEvent.kt", "SystemPropertySnapshot.kt",
         // extension emitters
         "TelemetryFieldMaps.kt",
     )

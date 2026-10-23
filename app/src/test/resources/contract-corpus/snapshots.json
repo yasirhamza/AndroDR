@@ -1,0 +1,31 @@
+[
+  {
+    "service": "db_info",
+    "fields": {
+      "file_path": "/data/data/com.example.chat/databases/msg.db", "process_name": null,
+      "package_name": "com.example.chat", "observation_timestamp": 1787400000000,
+      "source": "BUGREPORT_IMPORT", "captured_at": 1787400400000
+    }
+  },
+  {
+    "service": "app_scanner",
+    "fields": {
+      "package_name": "com.example.chat", "app_name": "Chat", "is_system_app": false,
+      "first_install_time": 1787000000000, "last_update_time": 1787100000000
+    }
+  },
+  {
+    "service": "system_property",
+    "fields": {
+      "key": "ro.boot.verifiedbootstate", "value": "green",
+      "source": "BUGREPORT_IMPORT", "captured_at": 1787400400000
+    }
+  },
+  {
+    "service": "adb_audit",
+    "fields": {
+      "key_fragment": "QUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFB...", "host": "user@workstation",
+      "source": "adb_trusted_key"
+    }
+  }
+]
