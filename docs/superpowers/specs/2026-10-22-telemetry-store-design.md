@@ -509,7 +509,7 @@ Schema 21 (Phase D).
 **Closing an alert.**
 - **Confirmation**: closing one alert, or a selection (**bulk close** under one confirmation), requires the device credential: platform `BiometricPrompt` with `DEVICE_CREDENTIAL` only on API 30+ (manifest `USE_BIOMETRIC`), and `KeyguardManager.createConfirmDeviceCredentialIntent` on API 26–29.
 - **No secure lock screen**: `NoSecureLock` is returned only when `KeyguardManager.isDeviceSecure()` is false; any other error is `Cancelled`. The repository re-checks `isDeviceSecure()` before honouring `NoSecureLock` and records `closedWithCredential = false`.
-- **Obscured touches**: the views set `filterTouchesWhenObscured = true` (`FLAG_WINDOW_IS_PARTIALLY_OBSCURED` exists only from API 29). Accessibility clicks bypass touch filtering; the credential is the real control.
+- **Obscured touches**: each protected control drops any touch flagged `FLAG_WINDOW_IS_OBSCURED`, or `FLAG_WINDOW_IS_PARTIALLY_OBSCURED` from API 29 (ruling R35: per-event filtering, no shared host-view state, so overlapping controls cannot disable each other). Accessibility clicks bypass touch filtering; the credential is the real control.
 - **Not protected**: a person who knows the PIN, or spyware that has logged it, can close alerts. This is documented as a residual risk.
 
 **Deleting scans.**
