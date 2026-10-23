@@ -5,69 +5,17 @@ import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import com.androdr.data.model.ForensicTimelineEvent
-import kotlinx.coroutines.flow.Flow
 
 /** A finding row's rule and fact (see [ForensicTimelineEventDao.findingRuleRecords]). */
 data class RuleRecord(val ruleId: String, val recordId: Long)
 
 @Dao
-@Suppress("TooManyFunctions") // Room DAO with filtered queries for timeline
+@Suppress("TooManyFunctions") // Room DAO: the writers', deleters' and pin readers' queries
 interface ForensicTimelineEventDao {
 
     // Reads below show only visible rows (spec §5.1 Visibility: `VisibleRow`), so rows of an
-    // IN_PROGRESS or DELETING scan never reach the Timeline, a report or an export.
-
-    @Query("SELECT * FROM forensic_timeline r WHERE ${VisibleRow.SQL} ORDER BY r.startTimestamp DESC LIMIT :limit")
-    fun getRecentEvents(limit: Int = 500): Flow<List<ForensicTimelineEvent>>
-
-    @Query("""
-        SELECT * FROM forensic_timeline r
-        WHERE r.source = :source AND ${VisibleRow.SQL}
-        ORDER BY r.startTimestamp DESC LIMIT :limit
-    """)
-    fun getEventsBySource(source: String, limit: Int = 500): Flow<List<ForensicTimelineEvent>>
-
-    /**
-     * Rows of one source belonging to ONE scan (#342 C4). A report embeds
-     * imported intrusion-log evidence only when it is the report FOR that import,
-     * identified by the scan's id — a live-scan report (or a historical one from
-     * before any import) matches no intrusion-log rows and embeds none.
-     */
-    @Query("""
-        SELECT * FROM forensic_timeline r
-        WHERE r.source = :source AND r.scanResultId = :scanResultId AND ${VisibleRow.SQL}
-        ORDER BY r.startTimestamp DESC LIMIT :limit
-    """)
-    fun getEventsBySourceForScan(
-        source: String,
-        scanResultId: Long,
-        limit: Int = 500,
-    ): Flow<List<ForensicTimelineEvent>>
-
-    /**
-     * One scan's visible rows (the import screen's link, C3): its finding rows, signals and detected
-     * changes. No row cap (spec §5.5); C4 replaces this read with the keyset-paged union.
-     */
-    @Query("""
-        SELECT * FROM forensic_timeline r
-        WHERE r.scanResultId = :scanResultId AND ${VisibleRow.SQL}
-        ORDER BY r.startTimestamp DESC
-    """)
-    fun getEventsByScan(scanResultId: Long): Flow<List<ForensicTimelineEvent>>
-
-    @Query("""
-        SELECT * FROM forensic_timeline r
-        WHERE r.packageName = :packageName AND ${VisibleRow.SQL}
-        ORDER BY r.startTimestamp DESC LIMIT 500
-    """)
-    fun getEventsByPackage(packageName: String): Flow<List<ForensicTimelineEvent>>
-
-    @Query("""
-        SELECT * FROM forensic_timeline r
-        WHERE r.startTimestamp BETWEEN :startMs AND :endMs AND ${VisibleRow.SQL}
-        ORDER BY r.startTimestamp DESC LIMIT 500
-    """)
-    fun getEventsInRange(startMs: Long, endMs: Long): Flow<List<ForensicTimelineEvent>>
+    // IN_PROGRESS or DELETING scan never reach a report or an export. The Timeline reads through
+    // TimelineDao (spec §6: the keyset union of event facts and rows).
 
     @Query("SELECT DISTINCT r.source FROM forensic_timeline r WHERE ${VisibleRow.SQL} ORDER BY r.source")
     suspend fun getDistinctSources(): List<String>
@@ -84,8 +32,9 @@ interface ForensicTimelineEventDao {
     @Query("SELECT DISTINCT packageName FROM forensic_timeline WHERE category = 'device_admin_grant'")
     suspend fun getAdminGrantedPackagesAlreadyEmitted(): List<String>
 
-    @Query("SELECT * FROM forensic_timeline r WHERE ${VisibleRow.SQL} ORDER BY r.startTimestamp ASC LIMIT 10000")
-    suspend fun getAllForExport(): List<ForensicTimelineEvent>
+    /** Up to [size] visible rows with `id > afterId`, ascending by id (keyset; the STIX export streams it). */
+    @Query("SELECT * FROM forensic_timeline r WHERE r.id > :afterId AND ${VisibleRow.SQL} ORDER BY r.id LIMIT :size")
+    suspend fun visibleAfter(afterId: Long, size: Int): List<ForensicTimelineEvent>
 
     @Query(
         "SELECT * FROM forensic_timeline r WHERE r.startTimestamp >= :sinceMs AND ${VisibleRow.SQL} " +

@@ -1,5 +1,6 @@
 package com.androdr.scanner.bugreport
 
+import com.androdr.data.db.getAllForExport
 import com.androdr.data.model.TelemetrySource
 import com.androdr.data.store.rawFile
 import com.androdr.ioc.DeviceIdentity

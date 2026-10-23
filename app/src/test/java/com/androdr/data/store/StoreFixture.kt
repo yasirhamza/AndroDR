@@ -30,10 +30,13 @@ internal fun rawFile(name: String): File =
 internal class StoreFixture(recordSql: Boolean = true) : Closeable {
     /** Every SQL statement run, when recorded ([recordSql] false for large imports: it grows per statement). */
     val sql: MutableList<String> = Collections.synchronizedList(mutableListOf())
+
+    /** Whether [sql] records right now (a test turns it off around a large write). */
+    @Volatile var recording: Boolean = true
     val db: AppDatabase = Room.inMemoryDatabaseBuilder(
         ApplicationProvider.getApplicationContext<Context>(), AppDatabase::class.java
     ).allowMainThreadQueries().apply {
-        if (recordSql) setQueryCallback({ q, _ -> sql += q }, Executor { it.run() })
+        if (recordSql) setQueryCallback({ q, _ -> if (recording) sql += q }, Executor { it.run() })
     }.build()
 
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())

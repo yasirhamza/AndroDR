@@ -1,53 +1,47 @@
 package com.androdr.ui.timeline
 
-import com.androdr.data.model.ForensicTimelineEvent
+import com.androdr.data.db.TimelineFilter
+import com.androdr.data.model.ScanState
 import com.androdr.data.model.TelemetrySource
+import com.androdr.data.store.StoreFixture
+import com.androdr.scanner.WriterFixture
+import com.androdr.sigma.StoreRecord
+import kotlinx.coroutines.runBlocking
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
 import java.io.File
 
 /**
  * Regression guard for #342 C2 (correctness C#5 / architect #5).
  *
- * The imported adapters used to stamp dns:/net:/sec: correlation ids on every
- * raw row. TimelineClusters Pass-2 clusters any >= 2 rows sharing an
- * effectiveCorrelationId, so N identical imported events (N keyguard_dismissed
- * security events sharing sec:$tag, a domain resolved twice sharing dns:<domain>)
- * formed one meaningless PRE_LINKED cluster. The fix stopped stamping raw rows.
- *
- * C3 retired the adapters: imported events are store-only facts and no new raw row is written.
- * Raw rows of pre-store (`NONE`) imports remain, in the shape the adapters wrote (empty
- * correlationId), so clustering is still driven over that shape the way the Timeline UI does
- * ([partitionSignals]); and no production code may write an intrusion-log raw row again.
+ * The imported adapters used to stamp dns:/net:/sec: correlation ids on every raw row, and the
+ * Timeline's read-time pre-linking clustered any >= 2 rows sharing one, so N identical imported
+ * events (N keyguard_dismissed security events, a domain resolved twice) formed one meaningless
+ * cluster. C3 retired the adapters (imported events are store-only facts); C4 retired read-time
+ * pre-linking (spec §6: no cross-page roll-up). Identical imported events therefore page as that
+ * many standalone Timeline events, and no production code may write an intrusion-log raw row again.
  */
+@RunWith(RobolectricTestRunner::class)
 class IntrusionLogClusterRegressionTest {
 
-    /** A legacy raw row as the retired adapters wrote it (C2: empty correlationId). */
-    private fun legacyRow(id: Long, category: String, description: String) = ForensicTimelineEvent(
-        id = id, startTimestamp = 1_700_000_000_000L + id, source = "intrusion_log", category = category,
-        description = description, correlationId = "", scanResultId = 1L,
-        telemetrySource = TelemetrySource.INTRUSION_LOG_IMPORT,
-    )
-
     @Test
-    fun `identical imported rows do not form a PRE_LINKED cluster`() {
-        // Same tag / domain / destination and no package: only a stamped correlationId could cluster these.
-        val rows: List<ForensicTimelineEvent> =
-            (1L..400L).map { legacyRow(it, "security_event", "Security: keyguard_dismissed") } +
-                (401L..410L).map { legacyRow(it, "dns_query", "DNS: cdn.example.com") } +
-                (411L..420L).map { legacyRow(it, "network_connect", "Connect: 8.8.8.8:853") }
+    fun `identical imported events page as standalone events, never one cluster`() = runBlocking {
+        StoreFixture().use { f ->
+            f.scan(1L)
+            f.persist(1L, "security_log", (1L..400L).map { i ->
+                val line = WriterFixture.securityLine(time = BASE + i, tag = "keyguard_dismissed")
+                StoreRecord(line.fields, "210001 $i ${BASE + i}")
+            }, source = TelemetrySource.INTRUSION_LOG_IMPORT)
+            f.setState(1L, ScanState.COMPLETE)
+            val all = ArrayList<TimelineRow.Entry>()
+            TimelineEntries(f.db, f.reader).forEachPage(TimelineFilter(), oldestFirst = false, size = 100) { all += it }
 
-        val (clusters, standalone) = partitionSignals(rows)
-
-        assertTrue(
-            "Imported raw rows must not form a PRE_LINKED cluster, got: " +
-                clusters.map { it.pattern to it.members.size },
-            clusters.none { it.pattern == CorrelationPattern.PRE_LINKED },
-        )
-        assertTrue(
-            "Expected all ${rows.size} rows standalone, got ${standalone.size}",
-            standalone.size == rows.size,
-        )
+            assertEquals(400, all.size)
+            assertTrue("every one a standalone event", all.all { it is TimelineRow.EventRow })
+        }
     }
 
     @Test
@@ -60,5 +54,9 @@ class IntrusionLogClusterRegressionTest {
         val offenders = root.walkTopDown().filter { it.extension == "kt" && it.name != "LegacyEventRowCleanup.kt" }
             .filter { literal.containsMatchIn(it.readText()) }.map { it.name }.toList()
         assertTrue("raw intrusion-log rows are retired (C3): $offenders", offenders.isEmpty())
+    }
+
+    private companion object {
+        const val BASE = 1_700_000_000_000L
     }
 }

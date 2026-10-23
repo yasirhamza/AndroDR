@@ -9,6 +9,7 @@ import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.conflate
+import java.lang.ref.WeakReference
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
@@ -18,7 +19,10 @@ import java.util.concurrent.atomic.AtomicBoolean
  *
  * Invalidation: on the first load it calls `refreshVersionsSync()` (so writes before the load
  * do not invalidate it) and registers an [InvalidationTracker.Observer] on [observed]; the
- * observer is removed when the source is invalidated. Store tables are not observed: store data
+ * observer is removed (off the calling thread) when the source is invalidated. The tracker holds
+ * only a small forwarding observer that references this source weakly, so a source Paging abandons
+ * without invalidating (its collector cancelled) is collected, and its forwarder removes itself on
+ * the next change of [observed]. Store tables are not observed: store data
  * becomes visible only when a scan completes or is deleted, so chunk commits cause no
  * invalidation storms. Pass only tables that exist in the current schema (see [OBSERVED_TABLES]).
  */
@@ -28,12 +32,10 @@ abstract class KeysetPagingSource<K : Any, V : Any>(
 ) : PagingSource<K, V>() {
 
     private val registered = AtomicBoolean(false)
-    private val observer = object : InvalidationTracker.Observer(observed) {
-        override fun onInvalidated(tables: Set<String>) = invalidate()
-    }
+    private val observer = WeakForwarder(db, observed, WeakReference(this))
 
     init {
-        registerInvalidatedCallback { db.invalidationTracker.removeObserver(observer) }
+        registerInvalidatedCallback { db.queryExecutor.execute { db.invalidationTracker.removeObserver(observer) } }
     }
 
     protected abstract fun keyOf(item: V): K
@@ -78,6 +80,22 @@ abstract class KeysetPagingSource<K : Any, V : Any>(
         val anchor = state.anchorPosition ?: return null
         val position = (anchor - state.config.initialLoadSize / 2).coerceAtLeast(0)
         return state.closestItemToPosition(position)?.let(::keyOf)
+    }
+
+    /**
+     * The observer the tracker holds: it forwards to the source while the source is reachable, and
+     * removes itself once the source has been collected (A5 deferred minor: a strong observer kept
+     * every abandoned source alive).
+     */
+    private class WeakForwarder(
+        private val db: RoomDatabase,
+        tables: Array<String>,
+        private val source: WeakReference<KeysetPagingSource<*, *>>,
+    ) : InvalidationTracker.Observer(tables) {
+        override fun onInvalidated(tables: Set<String>) {
+            val target = source.get()
+            if (target != null) target.invalidate() else db.invalidationTracker.removeObserver(this)
+        }
     }
 
     companion object {

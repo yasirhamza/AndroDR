@@ -312,14 +312,13 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch {
             _stixExporting.value = true
             try {
-                // Export device-specific findings as STIX2 indicators
+                // Export device-specific findings as STIX2 indicators: every visible timeline row,
+                // streamed by keyset (no row cap, spec §5.5), keeping one row per distinct indicator.
                 val events = kotlinx.coroutines.withContext(Dispatchers.IO) {
-                    forensicTimelineEventDao.getAllForExport()
+                    forensicTimelineEventDao.distinctIndicatorRows()
                 }
                 // Convert timeline events with IOC/package data to Indicator for STIX2
                 val indicators = events
-                    .filter { it.packageName.isNotEmpty() || it.iocIndicator.isNotEmpty() }
-                    .distinctBy { "${it.packageName}|${it.iocIndicator}|${it.apkHash}" }
                     .map { event ->
                         val type = when {
                             event.apkHash.isNotEmpty() -> IndicatorResolver.TYPE_APK_HASH
@@ -382,3 +381,19 @@ internal fun ForensicTimelineEvent.toExportIndicator(type: String, value: String
     source = "androdr_scan",
     fetchedAt = startTimestamp
 )
+
+private const val STIX_BATCH = 500
+
+/** The first visible row of each distinct package/IOC/hash, read [STIX_BATCH] rows at a time (keyset). */
+private suspend fun com.androdr.data.db.ForensicTimelineEventDao.distinctIndicatorRows():
+    List<com.androdr.data.model.ForensicTimelineEvent> {
+    val byIndicator = LinkedHashMap<String, com.androdr.data.model.ForensicTimelineEvent>()
+    var after = 0L
+    while (true) {
+        val rows = visibleAfter(after, STIX_BATCH)
+        rows.filter { it.packageName.isNotEmpty() || it.iocIndicator.isNotEmpty() }
+            .forEach { byIndicator.putIfAbsent("${it.packageName}|${it.iocIndicator}|${it.apkHash}", it) }
+        if (rows.size < STIX_BATCH) return byIndicator.values.toList()
+        after = rows.last().id
+    }
+}

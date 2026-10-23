@@ -1,5 +1,6 @@
 package com.androdr.scanner
 
+import com.androdr.data.db.getAllForExport
 import android.net.Uri
 import com.androdr.data.model.DnsEvent
 import com.androdr.data.model.ForensicTimelineEvent

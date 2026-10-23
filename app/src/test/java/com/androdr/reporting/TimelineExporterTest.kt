@@ -199,6 +199,25 @@ class TimelineExporterTest {
     }
 
     @Test
+    fun `device-controlled text is escaped and the formula guard holds in streamed CSV rows`() {
+        val evil = ForensicTimelineEvent(id = 6, startTimestamp = 1000L, source = "dns_monitor", category = "dns_query",
+            description = "=HYPERLINK(\"x\")", details = "line1\nline2‮gnp.exe", packageName = "com.a",
+            recordId = 77L)
+        val out = StringBuilder()
+        TimelineExporter.writeCsvHeader(out)
+        TimelineExporter.writeCsvRow(out, evil)
+        val lines = out.lines().filter { it.isNotEmpty() }
+        assertEquals("one header and one row: no raw line break escapes", 2, lines.size)
+        assertTrue(lines[1].contains("\"'=HYPERLINK(\"\"x\"\")\""))
+        assertTrue(lines[1].contains("line1\\u000Aline2\\u202Egnp.exe"))
+        assertTrue("record_id is the last column", lines[1].endsWith(",77"))
+        assertEquals("record_id", lines[0].split(",").last())
+        val text = TimelineExporter.formatPlaintext(listOf(evil), versionName = "t")
+        assertTrue(text.contains("line1\\u000Aline2\\u202Egnp.exe"))
+        assertTrue(text.none { it == '‮' })
+    }
+
+    @Test
     fun `output is ASCII only`() {
         val text = TimelineExporter.formatPlaintext(events, versionName = "test")
         val nonAscii = text.filter { it.code > 127 }

@@ -1,5 +1,6 @@
 package com.androdr.data.repo
 
+import com.androdr.data.db.getAllForExport
 import com.androdr.data.model.ForensicTimelineEvent
 import com.androdr.data.model.ScanResult
 import com.androdr.data.model.SignalMember

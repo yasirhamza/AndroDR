@@ -21,6 +21,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
@@ -56,6 +58,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Surface
 import com.androdr.R
+import com.androdr.data.store.DecodedRecord
+import com.androdr.reporting.escapeForReport
 import com.androdr.data.model.ForensicTimelineEvent
 import com.androdr.data.model.TelemetrySource
 import com.androdr.sigma.FindingCategory
@@ -112,21 +116,6 @@ fun TimelineEventCard(
                 }
             }
         }
-    }
-}
-
-/**
- * Neutral telemetry row renderer — thin wrapper over [TimelineEventCard]
- * used by the flat `TimelineRow` rendering path.
- */
-@Composable
-fun TelemetryCard(
-    row: TimelineRow.TelemetryRow,
-    modifier: Modifier = Modifier,
-    onClick: () -> Unit = {},
-) {
-    Box(modifier = modifier) {
-        TimelineEventCard(event = row.event, onClick = onClick)
     }
 }
 
@@ -488,14 +477,27 @@ fun CorrelationClusterCard(
 /** A stored fact that is a correlation member: its service, time and display summary. */
 @Composable
 private fun FactMemberCard(member: TimelineMember.FactMember) {
-    val record = member.record
+    FactCard(record = member.record, timestamp = member.timestamp)
+}
+
+/**
+ * A stored event fact: its time, category (or service) and display summary. Used for a Timeline
+ * event, a cluster member, and (with [label]) a finding row's nested evidence.
+ */
+@Composable
+fun FactCard(
+    record: DecodedRecord,
+    timestamp: Long,
+    label: String? = null,
+    onClick: (() -> Unit)? = null,
+) {
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth().let { m -> if (onClick != null) m.clickable(onClick = onClick) else m },
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
     ) {
         Column(modifier = Modifier.padding(8.dp)) {
             Text(
-                "${formatTime(member.timestamp)}  ${record.category ?: record.service}",
+                listOfNotNull(label, formatTime(timestamp), record.category ?: record.service).joinToString("  "),
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -509,12 +511,42 @@ private fun FactMemberCard(member: TimelineMember.FactMember) {
     }
 }
 
+/** A stored fact's detail: its provenance, time and decoded fields (spec §6 "Matched record"). */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun FactDetailSheet(record: DecodedRecord, onDismiss: () -> Unit) {
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    ) {
+        Column(
+            modifier = Modifier.padding(horizontal = 24.dp, vertical = 16.dp)
+                .verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Text(record.category ?: record.service, style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold)
+            val time = record.eventTime ?: record.capturedAt
+            Text("${formatTime(time)}  ${formatDate(time)}", style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant)
+            HorizontalDivider()
+            DetailSection(stringResource(R.string.timeline_detail_description),
+                record.summary ?: stringResource(R.string.timeline_cluster_fact_unreadable))
+            DetailSection(stringResource(R.string.timeline_detail_source), "${record.service} (${record.source.name})")
+            record.fields?.forEach { (key, value) ->
+                DetailSection(escapeForReport(key), escapeForReport(value.toString()))
+            }
+            Spacer(modifier = Modifier.height(32.dp))
+        }
+    }
+}
+
 @Composable
 @Suppress("LongMethod") // Scan group header with expand/collapse renders type, date, count, severity, chevron
 fun ScanGroupHeader(
     group: ScanGroup,
-    expanded: Boolean = false,
-    onToggle: (() -> Unit)? = null
+    count: Long?,
+    onClick: (() -> Unit)? = null
 ) {
     val dateStr = remember(group.timestamp) {
         if (group.timestamp > 0) SimpleDateFormat("MMM dd, yyyy HH:mm", Locale.US).format(Date(group.timestamp))
@@ -533,7 +565,7 @@ fun ScanGroupHeader(
 
     Card(
         modifier = Modifier.fillMaxWidth().then(
-            if (onToggle != null) Modifier.clickable { onToggle() } else Modifier
+            if (onClick != null) Modifier.clickable { onClick() } else Modifier
         ),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceContainer
@@ -562,20 +594,14 @@ fun ScanGroupHeader(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(
-                    stringResource(R.string.timeline_event_count, group.eventCount),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                SeverityChip(level = group.maxSeverity, active = true)
-                if (onToggle != null) {
-                    Icon(
-                        imageVector = if (expanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
-                        contentDescription = if (expanded) "Collapse" else "Expand",
-                        modifier = Modifier.size(20.dp),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                if (count != null) {
+                    Text(
+                        stringResource(R.string.timeline_event_count, count),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
+                SeverityChip(level = group.maxSeverity, active = true)
             }
         }
     }

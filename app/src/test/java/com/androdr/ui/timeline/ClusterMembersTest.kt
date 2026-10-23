@@ -59,16 +59,13 @@ class ClusterMembersTest {
         val sig = ForensicTimelineEvent(id = 9L, startTimestamp = 1_000L, endTimestamp = 5_000L, kind = "signal",
             source = "sigma_correlation_engine", category = "correlation", description = "Burst",
             details = """{"correlation_type":"event_count","rule_id":"r","member_count":4}""")
-        val member = row(2_000).copy(id = 3L, packageName = "com.only")
 
-        val (clusters, standalone) = partitionSignals(listOf(sig, member))
+        val c = signalCluster(sig)
 
-        val c = clusters.single()
         assertEquals(9L, c.signalRowId)
         assertEquals(4, c.size)
         assertTrue("members load through ClusterMembers, not from the row", c.members.isEmpty())
         assertEquals(1_000L to 5_000L, c.startTimestamp to c.endTimestamp)
-        assertEquals("members stay standalone Timeline entries until C4", listOf(3L), standalone.map { it.id })
     }
 
     @Test

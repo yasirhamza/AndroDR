@@ -242,6 +242,14 @@
     <string name="timeline_scan_unknown">Unknown</string>
     <!-- PluralsCandidate: shorthand for compact event count -->
     <string name="timeline_event_count" tools:ignore="PluralsCandidate">%1$d events</string>
+    <string name="timeline_findings_evidence_only">Show findings and their evidence only</string>
+    <string name="timeline_current_findings" tools:ignore="PluralsCandidate">Current findings (%1$d)</string>
+    <string name="timeline_unknown_date">Unknown date</string>
+    <string name="timeline_filters_count" tools:ignore="PluralsCandidate">Filters · %1$d events</string>
+    <string name="timeline_matched_record">Matched record</string>
+    <string name="timeline_detail_source">Source</string>
+    <string name="timeline_report_preview_truncated">Preview only — the full timeline is in the shared file.</string>
+    <string name="timeline_report_too_large">The timeline is too large to copy. Use Share instead.</string>
 
     <!-- Device audit remediation -->
     <string name="what_to_do">What to do</string>

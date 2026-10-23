@@ -1,5 +1,6 @@
 package com.androdr.scanner
 
+import com.androdr.data.db.getAllForExport
 import com.androdr.data.model.DnsEvent
 import com.androdr.data.model.Indicator
 import com.androdr.data.model.TelemetrySource
