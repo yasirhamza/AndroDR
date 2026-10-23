@@ -8,3 +8,10 @@ OVERALL RISK:
 !OVERALL RISK: HIGH
 !OVERALL RISK: CRITICAL
 !Known Malicious Package
+# Every live report lists every campaign. On a clean device none is DETECTED. EXPOSED is
+# NOT forbidden: an old emulator patch level legitimately leaves campaign CVEs unpatched.
+MERCENARY SPYWARE CHECK
+# Every row carries its own coverage (#394); LANDFALL has no live infection check.
+[--]  LANDFALL: no infection check exists for a live scan; patch level only
+Campaign detections: none
+!: DETECTED --

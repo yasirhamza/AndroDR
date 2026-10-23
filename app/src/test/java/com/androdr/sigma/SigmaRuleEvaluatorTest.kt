@@ -672,4 +672,17 @@ class SigmaRuleEvaluatorTest {
             listOf(rule), listOf(partial), service = "app_scanner"
         ).isEmpty())
     }
+
+    @Test
+    fun `buildFinding copies the rule's category`() {
+        val selections = mapOf("selection" to SigmaSelection(listOf(
+            SigmaFieldMatcher("is_sideloaded", SigmaModifier.EQUALS, listOf(true))
+        )))
+        val posture = makeRule(id = "p", selections = selections, category = RuleCategory.DEVICE_POSTURE)
+        val incident = makeRule(id = "i", selections = selections, category = RuleCategory.INCIDENT)
+        val findings = SigmaRuleEvaluator.evaluate(
+            listOf(posture, incident), listOf(mapOf<String, Any?>("is_sideloaded" to true)), "app_scanner")
+        assertEquals("DEVICE_POSTURE", findings.single { it.ruleId == "p" }.ruleCategory)
+        assertEquals("INCIDENT", findings.single { it.ruleId == "i" }.ruleCategory)
+    }
 }

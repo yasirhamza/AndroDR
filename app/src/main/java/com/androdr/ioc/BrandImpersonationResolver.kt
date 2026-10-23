@@ -26,9 +26,10 @@ import javax.inject.Singleton
  * fetch that violates the sanity bounds is rejected wholesale, never merged or
  * truncated. This matters because `brand_domain_db` is the fleet's first
  * remote input that SUPPRESSES a finding (092's `not scope_legit`): an
- * over-broad domain like `com` would blind detection globally, and ioc-data is
- * not covered by the rules.sha256 manifest, so these guards are the only
- * on-device backstop.
+ * over-broad domain like `com` would blind detection globally. Both files are
+ * fetched through [IocDataManifest] (fail-closed against `ioc-data.sha256`), which
+ * proves the bytes are what the rules repo published; these guards remain the
+ * on-device backstop against a bad entry that was published and hashed.
  *
  * Matching semantics (spec docs/superpowers/specs/2026-08-20-299):
  *  - names: word-boundary, Unicode-case-insensitive containment of a variant
@@ -42,6 +43,7 @@ import javax.inject.Singleton
 @Singleton
 class BrandImpersonationResolver @Inject constructor(
     @ApplicationContext private val context: Context,
+    private val manifest: IocDataManifest = IocDataManifest(),
 ) {
 
     /** Pure matching core — constructible without a Context for tests. */
@@ -112,8 +114,8 @@ class BrandImpersonationResolver @Inject constructor(
      * contract, cf. OemPrefixResolver.refresh).
      */
     suspend fun refresh(): Int = withContext(Dispatchers.IO) {
-        val namesYaml = SafeHttpFetch.fetch(NAMES_URL, maxBytes = MAX_FETCH_BYTES, timeoutMs = TIMEOUT_MS)
-        val domainsYaml = SafeHttpFetch.fetch(DOMAINS_URL, maxBytes = MAX_FETCH_BYTES, timeoutMs = TIMEOUT_MS)
+        val namesYaml = manifest.verified(NAMES_PATH, MAX_FETCH_BYTES)
+        val domainsYaml = manifest.verified(DOMAINS_PATH, MAX_FETCH_BYTES)
         if (namesYaml == null || domainsYaml == null) {
             Log.w(
                 TAG,
@@ -151,11 +153,8 @@ class BrandImpersonationResolver @Inject constructor(
         private const val MIN_NAME_VARIANT_LEN = 2
         private const val MAX_NAME_VARIANT_LEN = 128
         private const val MAX_FETCH_BYTES = 262_144
-        private const val TIMEOUT_MS = 15_000
-        private const val NAMES_URL =
-            "https://raw.githubusercontent.com/android-sigma-rules/rules/main/ioc-data/brand-names.yml"
-        private const val DOMAINS_URL =
-            "https://raw.githubusercontent.com/android-sigma-rules/rules/main/ioc-data/brand-domains.yml"
+        private const val NAMES_PATH = "ioc-data/brand-names.yml"
+        private const val DOMAINS_PATH = "ioc-data/brand-domains.yml"
 
         private val CF_REGEX = Regex("\\p{Cf}")
 
@@ -168,8 +167,8 @@ class BrandImpersonationResolver @Inject constructor(
          * touches (single-label entries are redundant with the no-dot check and
          * kept only belt-and-suspenders). The primary integrity controls are
          * the per-entry HitL gate and the rules-repo branch protection; this
-         * and the CI validator (kept in lockstep) are defence in depth on the
-         * un-hashed ioc-data channel. Keep in sync with
+         * and the CI validator (kept in lockstep) are defence in depth behind
+         * the ioc-data.sha256 manifest, which proves origin, not content. Keep in sync with
          * validate-ioc-data.py:BRAND_PUBLIC_SUFFIX_DENYLIST.
          */
         private val PUBLIC_SUFFIX_DENYLIST = setOf(

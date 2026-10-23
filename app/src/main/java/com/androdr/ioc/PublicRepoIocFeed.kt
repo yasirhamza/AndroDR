@@ -19,122 +19,90 @@ import javax.inject.Singleton
 @Singleton
 class PublicRepoIocFeed @Inject constructor(
     private val indicatorDao: IndicatorDao,
-    private val knownAppEntryDao: KnownAppEntryDao
+    private val knownAppEntryDao: KnownAppEntryDao,
+    private val manifest: IocDataManifest = IocDataManifest(),
+    /** Null only in tests that do not exercise the campaign vocabulary. */
+    private val campaignRegistry: CampaignRegistry? = null,
 ) {
 
+    /** One ioc-data file feeding one indicator type. */
+    private data class IocFile(
+        val path: String,
+        val type: String,
+        val lowercase: Boolean,
+        val defaultCategory: String,
+        val keepDescription: Boolean,
+    )
+
     @Suppress("TooGenericExceptionCaught")
-    suspend fun update(): Int = withContext(Dispatchers.IO) {
+    suspend fun update(): UpdateResult = withContext(Dispatchers.IO) {
         var total = 0
+        var evicted = 0
         val now = System.currentTimeMillis()
 
         try {
-            total += fetchAndUpsertPackages(now)
-            total += fetchAndUpsertDomains(now)
-            total += fetchAndUpsertCertHashes(now)
-            total += fetchAndUpsertApkHashes(now)
+            for (file in IOC_FILES) {
+                val (written, gone) = fetchAndUpsert(file, now)
+                total += written
+                evicted += gone
+            }
             total += fetchAndUpsertPopularApps(now)
-            Log.i(TAG, "Public repo IOC feed: $total entries upserted")
+            Log.i(TAG, "Public repo IOC feed: $total entries upserted, $evicted evicted")
         } catch (e: Exception) {
             Log.w(TAG, "Public repo IOC feed failed: ${e.message}")
         }
 
-        total
+        // Its own try: a failed indicator or popular-apps step must not skip the vocabulary.
+        try {
+            fetchCampaigns()
+        } catch (c: kotlinx.coroutines.CancellationException) {
+            throw c
+        } catch (e: Exception) {
+            Log.w(TAG, "campaigns.yml update failed: ${e.message}")
+        }
+
+        UpdateResult(written = total, evicted = evicted)
     }
 
-    @Suppress("TooGenericExceptionCaught", "SwallowedException")
-    private suspend fun fetchAndUpsertPackages(fetchedAt: Long): Int {
-        val yaml = fetchUrl("${BASE_URL}ioc-data/package-names.yml") ?: return 0
-        val entries = parseIocYaml(yaml)
-
-        val indicators = entries.mapNotNull { entry ->
-            val indicator = entry["indicator"]?.toString() ?: return@mapNotNull null
+    /**
+     * Fetches one verified file and upserts it. Stale rows of THIS type are evicted only after
+     * the file verified and parsed non-empty, so one failed or unverified file never evicts
+     * another type's rows (and a bad fetch never wipes its own).
+     */
+    private suspend fun fetchAndUpsert(file: IocFile, fetchedAt: Long): Pair<Int, Int> {
+        val yaml = manifest.verified(file.path, MAX_FILE_CHARS) ?: return 0 to 0
+        val indicators = parseIocYaml(yaml).mapNotNull { entry ->
+            val raw = entry["indicator"]?.toString() ?: return@mapNotNull null
             Indicator(
-                type = IndicatorResolver.TYPE_PACKAGE, value = indicator,
-                name = entry["family"]?.toString() ?: "",
-                campaign = entry["category"]?.toString() ?: "MALWARE",
+                type = file.type, value = if (file.lowercase) raw.lowercase() else raw,
+                family = entry["family"]?.toString() ?: "",
+                category = entry["category"]?.toString() ?: file.defaultCategory,
+                campaignKey = entry["campaign"]?.toString() ?: "",
                 severity = entry["severity"]?.toString() ?: "CRITICAL",
-                description = entry["description"]?.toString() ?: "",
+                description = if (file.keepDescription) entry["description"]?.toString() ?: "" else "",
+                reference = entry["reference"]?.toString() ?: "",
                 source = SOURCE_ID, fetchedAt = fetchedAt
-            )
+            ).let(IocSanitizer::sanitize)
         }
-
-        if (indicators.isNotEmpty()) {
-            indicatorDao.upsertAll(indicators)
-            indicatorDao.deleteStaleEntries(SOURCE_ID, fetchedAt - 1)
-        }
-        return indicators.size
+        if (indicators.isEmpty()) return 0 to 0
+        indicatorDao.upsertAll(indicators)
+        val gone = indicatorDao.deleteStaleEntriesOfType(SOURCE_ID, file.type, fetchedAt - 1)
+        return indicators.size to gone
     }
 
-    @Suppress("TooGenericExceptionCaught", "SwallowedException")
-    private suspend fun fetchAndUpsertDomains(fetchedAt: Long): Int {
-        val yaml = fetchUrl("${BASE_URL}ioc-data/c2-domains.yml") ?: return 0
-        val entries = parseIocYaml(yaml)
-
-        val indicators = entries.mapNotNull { entry ->
-            val domain = entry["indicator"]?.toString()?.lowercase() ?: return@mapNotNull null
-            Indicator(
-                type = IndicatorResolver.TYPE_DOMAIN, value = domain,
-                name = "", campaign = entry["family"]?.toString() ?: "",
-                severity = entry["severity"]?.toString() ?: "CRITICAL",
-                description = "", source = SOURCE_ID, fetchedAt = fetchedAt
-            )
-        }
-
-        if (indicators.isNotEmpty()) {
-            indicatorDao.upsertAll(indicators)
-        }
-        return indicators.size
-    }
-
-    @Suppress("TooGenericExceptionCaught", "SwallowedException")
-    private suspend fun fetchAndUpsertCertHashes(fetchedAt: Long): Int {
-        val yaml = fetchUrl("${BASE_URL}ioc-data/cert-hashes.yml") ?: return 0
-        val entries = parseIocYaml(yaml)
-
-        val indicators = entries.mapNotNull { entry ->
-            val hash = entry["indicator"]?.toString()?.lowercase() ?: return@mapNotNull null
-            Indicator(
-                type = IndicatorResolver.TYPE_CERT_HASH, value = hash,
-                name = entry["family"]?.toString() ?: "",
-                campaign = entry["category"]?.toString() ?: "MALWARE",
-                severity = entry["severity"]?.toString() ?: "CRITICAL",
-                description = entry["description"]?.toString() ?: "",
-                source = SOURCE_ID, fetchedAt = fetchedAt
-            )
-        }
-
-        if (indicators.isNotEmpty()) {
-            indicatorDao.upsertAll(indicators)
-        }
-        return indicators.size
-    }
-
-    @Suppress("TooGenericExceptionCaught", "SwallowedException")
-    private suspend fun fetchAndUpsertApkHashes(fetchedAt: Long): Int {
-        val yaml = fetchUrl("${BASE_URL}ioc-data/malware-hashes.yml") ?: return 0
-        val entries = parseIocYaml(yaml)
-
-        val indicators = entries.mapNotNull { entry ->
-            val hash = entry["indicator"]?.toString()?.lowercase() ?: return@mapNotNull null
-            Indicator(
-                type = IndicatorResolver.TYPE_APK_HASH, value = hash,
-                name = entry["family"]?.toString() ?: "",
-                campaign = entry["category"]?.toString() ?: "MALWARE",
-                severity = entry["severity"]?.toString() ?: "CRITICAL",
-                description = entry["description"]?.toString() ?: "",
-                source = SOURCE_ID, fetchedAt = fetchedAt
-            )
-        }
-
-        if (indicators.isNotEmpty()) {
-            indicatorDao.upsertAll(indicators)
-        }
-        return indicators.size
+    /**
+     * Caches `campaigns.yml` for [CampaignRegistry] only when it verifies against the manifest
+     * (fail-closed, B9); otherwise the registry keeps its last good copy or the bundled list.
+     */
+    private suspend fun fetchCampaigns() {
+        val registry = campaignRegistry ?: return
+        val yaml = manifest.verified(CAMPAIGNS_PATH, MAX_FILE_CHARS) ?: return
+        if (!registry.storeVerified(yaml)) Log.w(TAG, "campaigns.yml verified but held no valid campaigns")
     }
 
     @Suppress("TooGenericExceptionCaught", "SwallowedException")
     private suspend fun fetchAndUpsertPopularApps(fetchedAt: Long): Int {
-        val yaml = fetchUrl("${BASE_URL}ioc-data/popular-apps.yml") ?: return 0
+        val yaml = manifest.verified("ioc-data/popular-apps.yml", MAX_FILE_CHARS) ?: return 0
         val entries = parsePopularAppsYaml(yaml)
 
         val knownAppEntries = entries.mapNotNull { entry ->
@@ -187,14 +155,19 @@ class PublicRepoIocFeed @Inject constructor(
         }
     }
 
-    private fun fetchUrl(url: String): String? =
-        SafeHttpFetch.fetch(url, maxBytes = 1_000_000, timeoutMs = TIMEOUT_MS)
-
     companion object {
         private const val TAG = "PublicRepoIocFeed"
         const val SOURCE_ID = "androdr_public_repo"
-        private const val BASE_URL =
-            "https://raw.githubusercontent.com/android-sigma-rules/rules/main/"
-        private const val TIMEOUT_MS = 15_000
+        private const val MAX_FILE_CHARS = 1_000_000
+        private const val CAMPAIGNS_PATH = "ioc-data/campaigns.yml"
+        private val IOC_FILES = listOf(
+            IocFile("ioc-data/package-names.yml", IndicatorResolver.TYPE_PACKAGE, false, "MALWARE", true),
+            IocFile("ioc-data/c2-domains.yml", IndicatorResolver.TYPE_DOMAIN, true, "", false),
+            IocFile("ioc-data/cert-hashes.yml", IndicatorResolver.TYPE_CERT_HASH, true, "MALWARE", true),
+            IocFile("ioc-data/malware-hashes.yml", IndicatorResolver.TYPE_APK_HASH, true, "MALWARE", true),
+        )
     }
 }
+
+/** Outcome of one rules-repo feed run: rows written and rows evicted. */
+data class UpdateResult(val written: Int, val evicted: Int)

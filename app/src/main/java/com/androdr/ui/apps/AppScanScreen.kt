@@ -366,7 +366,7 @@ private fun AppGroupDetailSheet(
 
             // Uninstall button (pinned at bottom). Disabled when the group
             // has no real package — the Network Detections bucket, where
-            // DNS-sourced findings like androdr-005 Graphite/Paragon land
+            // DNS-sourced findings like androdr-003 Malicious Domain land
             // because Finding.matchContext carries a `domain` key but no
             // `package_name`. There is nothing to uninstall for a DNS C2
             // match, and showing a live red button for it is misleading.

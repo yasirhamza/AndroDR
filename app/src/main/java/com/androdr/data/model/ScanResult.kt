@@ -50,8 +50,19 @@ data class ScannerFailure(
      * wording can change (or be translated) without a data migration or old rows
      * rendering in the old words.
      */
-    val missingEvidence: List<String> = emptyList()
+    val missingEvidence: List<String> = emptyList(),
+    /**
+     * For [NotEvaluatedReason.CAMPAIGN_SOURCES_NOT_LOADED] only: which sources did not load
+     * ("rules_repo", "mvt"), so the mercenary check can tell a missing MVT list (domains only)
+     * from a missing rules-repo list (domains and packages) without parsing [message] (#394).
+     * Empty on rows saved before this field existed: readers must then assume both.
+     */
+    val missingSources: List<String> = emptyList(),
 )
+
+/** [ScannerFailure.missingSources] values for CAMPAIGN_SOURCES_NOT_LOADED (#394). */
+const val MISSING_SOURCE_RULES_REPO = "rules_repo"
+const val MISSING_SOURCE_MVT = "mvt"
 
 /**
  * [ScannerFailure.exception] value marking a capability skip — a rule this
@@ -85,6 +96,29 @@ enum class NotEvaluatedReason(val sentinel: String, val heading: String) {
 
     /** No event of the kind the rule needs was recorded, so it had nothing to match (#370). */
     NO_EVENTS_TO_CHECK("NoEventsToCheck", "Nothing of that kind was recorded to check"),
+
+    /** The indicator table was empty at scan start: only the bundled lists were checked. */
+    FEEDS_NOT_LOADED(
+        "FeedsNotLoaded",
+        "Threat-intel feeds not loaded yet -- only the bundled lists were checked",
+    ),
+
+    /**
+     * The table had rows, but a campaign-key source (the rules-repo threat lists or the MVT
+     * collections) had none: campaign attribution may be incomplete. The entry's message
+     * names which source is missing. Per-campaign check state is follow-up #394.
+     */
+    CAMPAIGN_SOURCES_NOT_LOADED(
+        "CampaignSourcesNotLoaded",
+        "Campaign sources not loaded yet -- campaign attribution may be incomplete",
+    ),
+
+    /** The DNS tunnel was off at scan start. */
+    DNS_MONITOR_OFF(
+        "DnsMonitorOff",
+        "DNS monitoring was off at scan time -- lookups made while it is off are not recorded; " +
+            "the most recent recorded lookups were checked",
+    ),
     ;
 
     companion object {

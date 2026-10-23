@@ -2,11 +2,11 @@ package com.androdr.sigma
 
 import android.util.Log
 import com.androdr.data.repo.SettingsRepository
+import com.androdr.integrity.ManifestVerifier
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.net.HttpURLConnection
 import java.net.URL
-import java.security.MessageDigest
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -78,7 +78,7 @@ class SigmaRuleFeed @Inject constructor(
             val ruleFiles = parseManifest(manifest)
 
             val hashManifest = fetchUrl("${baseUrl}rules.sha256")
-            val expectedHashes = if (hashManifest != null) parseHashManifest(hashManifest) else emptyMap()
+            val expectedHashes = if (hashManifest != null) ManifestVerifier.parse(hashManifest) else emptyMap()
             // Fail CLOSED for the trusted default repo: no usable hash manifest means
             // we cannot verify integrity, so we ship nothing rather than accept
             // unverified rules. This covers BOTH a missing/unfetchable rules.sha256
@@ -163,23 +163,6 @@ class SigmaRuleFeed @Inject constructor(
                 .map { it.trim() }
                 .filter { it.endsWith(".yml") && !it.startsWith("#") }
 
-        /** Parse a rules.sha256 manifest into a map of filename → expected hash. */
-        fun parseHashManifest(manifest: String): Map<String, String> =
-            manifest.lines()
-                .map { it.trim() }
-                .filter { it.isNotEmpty() && !it.startsWith("#") }
-                .mapNotNull { line ->
-                    // Format: sha256hash  filename (two-space separator per sha256sum convention)
-                    val parts = line.split("  ", limit = 2)
-                    if (parts.size == 2) parts[1] to parts[0] else null
-                }
-                .toMap()
-
-        private fun sha256(content: String): String {
-            val digest = MessageDigest.getInstance("SHA-256")
-            return digest.digest(content.toByteArray()).joinToString("") { "%02x".format(it) }
-        }
-
         /**
          * Verifies and parses each fetched file, independently (#288).
          *
@@ -248,7 +231,7 @@ class SigmaRuleFeed @Inject constructor(
                     RuleFileDecision.Accept
                 }
             }
-            val actual = sha256(yaml)
+            val actual = ManifestVerifier.sha256(yaml)
             return if (actual.equals(expected, ignoreCase = true)) {
                 RuleFileDecision.Accept
             } else {

@@ -195,6 +195,9 @@ class IntrusionLogParser(
         // an absent/blank hostname is malformed, not an empty-domain phantom row.
         val domain = body.sanitizedString("hostname")
         require(!domain.isNullOrBlank()) { "dns_event without hostname" }
+        // RFC 1035: no hostname exceeds 253 characters. Longer ones are malformed, and
+        // dropping them bounds what a crafted export can push into detection (B5).
+        require(domain.length <= MAX_HOSTNAME_LENGTH) { "dns_event hostname longer than $MAX_HOSTNAME_LENGTH" }
         return ImportedDnsEvent(
             event = DnsEvent(
                 timestamp = eventTime,
@@ -366,6 +369,9 @@ class IntrusionLogParser(
 
         /** Per-field length bound (covers 253-char hostnames / 255-char packages). */
         const val MAX_FIELD_LENGTH = 4_096
+
+        /** RFC 1035 maximum length of a hostname in text form. */
+        const val MAX_HOSTNAME_LENGTH = 253
 
         /** 2008-01-01T00:00:00Z — predates any Android device; nothing earlier is real. */
         const val MIN_EVENT_TIME_MS = 1_199_145_600_000L

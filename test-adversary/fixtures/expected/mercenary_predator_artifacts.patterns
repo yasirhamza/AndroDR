@@ -10,3 +10,6 @@ Predator artifact: /data/local/tmp/dropbox
 !/data/local/tmp/wd : clear
 !/data/local/tmp/wd/fs.db : clear
 !/data/local/tmp/dropbox : clear
+# androdr-108 is an incident rule tagged campaign.predator: the Predator row is DETECTED
+# and, as a tagged finding, its title is the detail (it wins over any IOC hit).
+[!!]  Predator: DETECTED -- Predator artifact: /data/local/tmp/

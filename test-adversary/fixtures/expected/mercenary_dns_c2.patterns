@@ -1,2 +1,10 @@
-[MATCHED]
-cdn-tp2.xyz
+# 2y4nothing.xyz is in MVT's "Predator Spyware Indicators of Compromise" collection
+# (mvt-indicators intellexa_predator/predator.stix2), loaded on-device by
+# MvtIndicatorsFeed. It is in no ioc-data file and not in the bundle. MvtCampaigns maps
+# that exact (name, URL) to campaign key "predator"; MVT rows carry no category.
+# Precondition: the MVT rows are loaded before the ping (see detect_only_dns_wording).
+~\[MATCHED\].*2y4nothing\.xyz
+2y4nothing.xyz -> Predator Spyware Indicators of Compromise
+# The DETECTED detail names the domain only when no campaign-tagged rule also fired:
+# with mercenary_predator_artifacts in the same scan, androdr-108's title wins the detail.
+[!!]  Predator: DETECTED -- domain 2y4nothing.xyz (Predator Spyware Indicators of Compromise),

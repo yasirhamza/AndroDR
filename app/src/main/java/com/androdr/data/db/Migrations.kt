@@ -558,3 +558,28 @@ val MIGRATION_17_18 = object : Migration(17, 18) {
         )
     }
 }
+
+/**
+ * v19: one attribution layout for every indicator type (#<pr>). v18 stored the
+ * family in `name` and the category in `campaign` for packages/certs/hashes, but
+ * domain rows kept their label in `campaign` with `name` empty; nothing could
+ * read a domain's family, so domain findings lost attribution.
+ *
+ * Drop-and-recreate, not copy (owner decision, plan gate round 2): copying ~670k
+ * rows inside Room's upgrade transaction can't reliably recover from a mid-copy
+ * failure (SQLite may roll back the whole transaction -> crash on every launch).
+ * The table is a cache: IndicatorRefreshOnEmpty enqueues a one-time refresh on
+ * the first open, and the bundled lists cover cold start until it completes.
+ */
+@Suppress("MagicNumber")
+val MIGRATION_18_19 = object : Migration(18, 19) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("DROP TABLE IF EXISTS `indicators`")
+        db.execSQL(
+            "CREATE TABLE IF NOT EXISTS `indicators` (`type` TEXT NOT NULL, `value` TEXT NOT NULL, " +
+                "`family` TEXT NOT NULL, `category` TEXT NOT NULL, `campaignKey` TEXT NOT NULL, " +
+                "`severity` TEXT NOT NULL, `description` TEXT NOT NULL, `source` TEXT NOT NULL, " +
+                "`reference` TEXT NOT NULL, `fetchedAt` INTEGER NOT NULL, PRIMARY KEY(`type`, `value`))"
+        )
+    }
+}

@@ -31,9 +31,13 @@ Ask: "Would adding this threat's indicators to the IOC database and relying on t
 ### Examples
 
 **IOC data (do NOT create a rule):**
-- "FlexiSpy uses package name com.flexispy.android" → add to `ioc-data/package-names.yml`
-- "Cerberus C2 domain cerberusapp.com" → add to `ioc-data/c2-domains.yml`
-- "TheTruthSpy cert hash abc123..." → add to `ioc-data/cert-hashes.yml`
+- "TheTruthSpy uses package name com.ttsapp.catchcheating" (stalkerware-indicators) → add to `ioc-data/package-names.yml`
+- "Graphite infrastructure certificate name forti.external-muki.com" (Citizen Lab, March 2025) → add to `ioc-data/c2-domains.yml`
+- "ToSpy developer certificate de90f6899eec315f4ed05c2aa052d4fe8b71125a" (ESET) → add to `ioc-data/cert-hashes.yml`
+
+Examples are real, sourced indicators. Never write an illustrative indicator
+that is not in a cited source — an invented example is how invented entries
+entered the bundle in 2026.
 
 **SIGMA rule (DO create):**
 - "Sideloaded app with 4+ surveillance permissions + accessibility service" → behavioral pattern
@@ -277,7 +281,7 @@ decisions:
     field: "ioc_data"
     type: "ioc_confidence"
     chosen: "skip"
-    alternative: "include domain example.com from single blog post"
+    alternative: "include domain <domain named in a single blog post>"
     reasoning: "Only mentioned in passing, no technical analysis confirming C2 role"
 ```
 
@@ -325,19 +329,50 @@ decisions:
 - NEVER use a `family` value containing: test, fixture, simulation, sample, example (and there is no `familyName` field — the schema rejects unknown keys)
 - If a SIR has only IPs and AndroDR doesn't monitor raw IP connections, flag as skip
 
-### Mandatory `source` field
+### Mandatory provenance fields
 
-Every IOC data entry MUST include a `source` field tracing to a verified feed:
+Every IOC data entry MUST carry `family`, `source` and `reference`:
 
 ```yaml
 entries:
-  - indicator: "com.flexispy.android"
-    family: "FlexiSPY"
-    category: "STALKERWARE"
+  - indicator: "forti.external-muki.com"
+    family: "Graphite (Paragon)"
+    category: "NATION_STATE_SPYWARE"
+    campaign: "graphite"            # only for a known campaign key
     severity: "CRITICAL"
-    description: "..."
-    source: "stalkerware-indicators"   # ← MANDATORY
+    description: "Paragon Graphite infrastructure certificate name (Citizen Lab, March 2025)"
+    source: "threat_research"
+    reference: "https://citizenlab.ca/2025/03/a-first-look-at-paragons-proliferating-spyware-operations/"
 ```
+
+- `family`: the name a finding will show. Required, non-empty.
+- `reference`: for research/discover SIRs, the SIR's `source.url` — the primary
+  report that lists the indicator, not a search page or news summary. For
+  feed-ingester SIRs, `feed:<source-id>#<family>`.
+- Copy the indicator exactly as the reference writes it (re-fanged, lower case
+  for domains and hashes). Gate 2b fetches the reference and rejects the entry
+  if the indicator is not in it.
+- A wildcard domain in the report (`*.<x>.com`): write `<x>.com` only when
+  `<x>.com` is the threat actor's own registered domain (the app's domain match
+  already covers every subdomain of a listed domain). Never turn a wildcard
+  into a shared-hosting or public-suffix parent (`cloudfront.net`,
+  `herokuapp.com`, `cloudapp.azure.com`, `appspot.com`, …): that would flag
+  every site hosted there. A specific actor hostname on shared hosting
+  (`<actor-host>.appspot.com`) is fine as written; a wildcard over shared
+  hosting with no specific hostname is not emitted (flag it in the notes).
+- For research/discover SIRs: if the SIR has no `source.url` that lists the
+  indicator, do not emit the entry; flag it in the candidate's notes instead.
+  Feed SIRs cite `feed:<id>#<family>` and need no `source.url`.
+
+### What belongs in `c2-domains.yml`
+
+Every `c2-domains.yml` entry fires androdr-003 ("DNS query to known C2
+domain"), which is `level: critical`, whatever the entry's own `severity`. So
+only infrastructure the threat actor controls goes there (C2, exfiltration,
+payload or phishing servers). Ad-tech, tracking, analytics, CDN and
+shared-hosting domains that ordinary users reach never go into `ioc-data`,
+even when a report names them: listing one would raise a critical "known C2"
+alarm on ordinary devices. Record a skip decision instead.
 
 Allowed sources (authoritative list: `validation/allowed-sources.json`):
 `stalkerware-indicators`, `malwarebazaar`, `threatfox`,
@@ -373,14 +408,21 @@ Return a JSON object:
   "ioc_data": [
     {
       "type": "package_name",
-      "indicator": "com.example.malware",
-      "family": "MalwareName",
-      "category": "MALWARE",
+      "indicator": "com.ttsapp.catchcheating",
+      "family": "TheTruthSpy",
+      "category": "STALKERWARE",
       "severity": "CRITICAL",
       "description": "...",
-      "source": "malwarebazaar",
-      "source_sir": "threatfox-android-example"
+      "source": "stalkerware-indicators",
+      "reference": "feed:stalkerware-indicators#TheTruthSpy",
+      "source_sir": "<id of the SIR this entry came from>"
     }
   ]
 }
 ```
+
+`campaign` is optional: **leave the key out when there is no campaign** (never
+`null` or an empty string; the entry schema has `additionalProperties: false` and
+`campaign` must be a string). When set it must be a key in `ioc-data/campaigns.yml`
+(for example `graphite` for the Graphite entry shown above). `type` and `source_sir`
+are pipeline-only keys: the orchestrator strips them before writing the candidate file.

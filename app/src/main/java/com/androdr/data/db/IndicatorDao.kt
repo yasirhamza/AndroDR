@@ -39,13 +39,32 @@ interface IndicatorDao {
     suspend fun countByType(type: String): Int
 
     @Query("DELETE FROM indicators WHERE source = :source AND fetchedAt < :olderThan")
-    suspend fun deleteStaleEntries(source: String, olderThan: Long)
+    suspend fun deleteStaleEntries(source: String, olderThan: Long): Int
+
+    /** Rows deleted (feeds UpdateResult.evicted). */
+    @Query("DELETE FROM indicators WHERE source = :source AND type = :type AND fetchedAt < :olderThan")
+    suspend fun deleteStaleEntriesOfType(source: String, type: String, olderThan: Long): Int
+
+    /** Values of [type] owned by any of [sources] (or by MVT collections when [includeMvt]). */
+    @Query(
+        "SELECT value FROM indicators WHERE type = :type AND " +
+            "(source IN (:sources) OR (:includeMvt = 1 AND source LIKE 'mvt_%'))"
+    )
+    suspend fun ownedValues(type: String, sources: List<String>, includeMvt: Boolean): List<String>
 
     @Query("SELECT MAX(fetchedAt) FROM indicators WHERE source = :source")
     suspend fun lastFetchTime(source: String): Long?
 
     @Query("SELECT MAX(fetchedAt) FROM indicators")
     suspend fun lastFetchTimeGlobal(): Long?
+
+    /** Whether any row comes from [source]; EXISTS stops at the first match. */
+    @Query("SELECT EXISTS(SELECT 1 FROM indicators WHERE source = :source)")
+    suspend fun hasSource(source: String): Boolean
+
+    /** Whether any row's source starts with [prefix] (exact prefix, no LIKE wildcards). */
+    @Query("SELECT EXISTS(SELECT 1 FROM indicators WHERE substr(source, 1, length(:prefix)) = :prefix)")
+    suspend fun hasSourcePrefix(prefix: String): Boolean
 
     @Query("SELECT DISTINCT source FROM indicators ORDER BY source")
     suspend fun allSources(): List<String>

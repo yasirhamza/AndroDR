@@ -388,7 +388,6 @@ class SigmaRuleEngine @Inject constructor(
             R.raw.sigma_androdr_002_cert_hash_ioc,
             R.raw.sigma_androdr_003_domain_ioc,
             R.raw.sigma_androdr_004_apk_hash_ioc,
-            R.raw.sigma_androdr_005_graphite_paragon,
             R.raw.sigma_androdr_010_sideloaded_app,
             R.raw.sigma_androdr_011_surveillance_permissions,
             R.raw.sigma_androdr_012_accessibility_abuse,

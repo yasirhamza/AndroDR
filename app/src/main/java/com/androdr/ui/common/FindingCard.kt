@@ -110,6 +110,8 @@ private fun evidenceSummary(evidence: Evidence): String = when (evidence) {
         if (evidence.campaignCount > 0) parts.add("${evidence.campaignCount} linked to spyware")
         parts.joinToString(" \u00b7 ")
     }
-    is Evidence.IocMatch -> "Matched: ${evidence.matchedIndicator}"
+    is Evidence.IocMatch ->
+        "Matched: ${evidence.matchedIndicator}" +
+            if (evidence.family.isNotBlank()) " (${evidence.family})" else ""
     is Evidence.PermissionCluster -> "${evidence.surveillanceCount} surveillance permissions"
 }

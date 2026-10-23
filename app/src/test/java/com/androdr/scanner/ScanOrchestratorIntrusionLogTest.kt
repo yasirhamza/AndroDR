@@ -1,5 +1,8 @@
 package com.androdr.scanner
 
+import org.junit.After
+import com.androdr.network.DnsVpnService
+import com.androdr.ioc.IndicatorResolver
 import android.net.Uri
 import com.androdr.data.db.ForensicTimelineEventDao
 import com.androdr.data.model.DnsEvent
@@ -44,8 +47,15 @@ class ScanOrchestratorIntrusionLogTest {
     private lateinit var sigmaRuleEngine: SigmaRuleEngine
     private lateinit var orchestrator: ScanOrchestrator
 
+    private lateinit var indicatorResolver: IndicatorResolver
+
     @Before
     fun setUp() {
+        indicatorResolver = mockk(relaxed = true)
+        // B6: an empty indicator table adds a FeedsNotLoaded entry; these tests are about
+        // other things. DnsVpnService.isRunning (JVM-global, defaults false) likewise adds DnsMonitorOff.
+        coEvery { indicatorResolver.feedCoverage() } returns com.androdr.ioc.FeedCoverage(1, true, true)
+        DnsVpnService.isRunning.value = true
         forensicTimelineEventDao = mockk(relaxed = true)
         scanRepository = mockk(relaxed = true)
         intrusionLogAnalyzer = mockk(relaxed = true)
@@ -69,7 +79,7 @@ class ScanOrchestratorIntrusionLogTest {
             deviceAdminGrantEmitter = mockk(relaxed = true),
             sigmaRuleEngine = sigmaRuleEngine,
             sigmaCorrelationEngine = mockk(relaxed = true),
-            indicatorResolver = mockk(relaxed = true),
+            indicatorResolver = indicatorResolver,
             sigmaRuleFeed = mockk(relaxed = true),
             knownAppResolver = mockk(relaxed = true),
             oemPrefixResolver = mockk(relaxed = true),
@@ -145,6 +155,11 @@ class ScanOrchestratorIntrusionLogTest {
     }
 
     // ---------- replace-on-reimport (now atomic with the save, #342 B1) ----------
+
+    @After
+    fun resetVpnState() {
+        DnsVpnService.isRunning.value = false
+    }
 
     /**
      * A prior import's correlation signals live under

@@ -142,6 +142,25 @@ re-validation lever). Rules-repo PRs must have a green `validate` check before
 merge; AndroDR's CI remains the second, independent guard via the pinned
 submodule.
 
+**IOC data manifest (`ioc-data.sha256`):** any edit to an `ioc-data/*.yml` file in
+the rules repo must regenerate `ioc-data.sha256`:
+
+```bash
+cd third-party/android-sigma-rules
+for f in $(ls ioc-data/*.yml | sort); do printf '%s  %s\n' "$(sha256sum "$f" | cut -d' ' -f1)" "$f"; done > ioc-data.sha256
+```
+
+Rules CI fails on a stale manifest. The app verifies it, fail-closed:
+`IocDataManifest` fetches `ioc-data.sha256` and uses a remote `ioc-data` file
+(`PublicRepoIocFeed`, `BrandImpersonationResolver`, `OemPrefixResolver`) only when
+its SHA-256 matches. A mismatched file, a file missing from the manifest, or a
+manifest that is missing, unfetchable or empty/corrupt means no remote `ioc-data`
+is used (bundled lists and mirror feeds still work), so an `ioc-data` edit without
+a regenerated manifest is silently dropped on-device. `IocDataManifestIntegrityTest`
+(AndroDR unit tests), the sibling of `RuleManifestIntegrityTest`, fails the build if
+the pinned submodule's `ioc-data.sha256` has drifted, hashing each file the way the
+device does (`ManifestVerifier.sha256` over UTF-8 text).
+
 **Safe ordering for any rule or `logsource-taxonomy.yml` change** (so AndroDR CI
 gates *before* the change reaches production — the app pulls rules from
 `android-sigma-rules` main on a 12h cycle, not from the submodule, so a broken

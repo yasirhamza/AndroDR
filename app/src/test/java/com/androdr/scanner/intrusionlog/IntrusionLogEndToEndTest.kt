@@ -84,7 +84,7 @@ class IntrusionLogEndToEndTest {
         // this keeps the test JVM-only while exercising real matching.
         val engine = mockEngine(dnsRule, netRule, secRule)
 
-        val result = IntrusionLogAnalyzer(mockk(relaxed = true), engine).analyzeEntries(
+        val result = IntrusionLogAnalyzer(mockk(relaxed = true), engine, mockk(relaxed = true)).analyzeEntries(
             zipEntries(exportZip()), uidResolver = { -1 }, capturedAt = 1_787_400_400_000L
         )
 

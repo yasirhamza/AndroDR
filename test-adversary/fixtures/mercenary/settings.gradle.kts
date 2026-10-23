@@ -26,5 +26,6 @@ include(
     ":overlay-permission",
     ":nfc-relay",
     ":overlay-accessibility-combo",
-    ":sms-notification-otp-theft"
+    ":sms-notification-otp-theft",
+    ":removed-fake-package"
 )

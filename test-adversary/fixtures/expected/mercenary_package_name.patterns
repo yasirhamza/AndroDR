@@ -1,1 +1,6 @@
+# com.serv.services is a NoviSpy app id (Amnesty, Dec 2024; ioc-data/package-names.yml).
 Uninstall this app immediately
+com.serv.services
+# APP RISKS "Matched :" line (iocMatchLabel; continues " (NATION_STATE_SPYWARE)").
+Matched : com.serv.services -> NoviSpy
+!Pegasus Disguise

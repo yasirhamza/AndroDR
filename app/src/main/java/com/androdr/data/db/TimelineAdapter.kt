@@ -24,7 +24,7 @@ fun DnsEvent.toForensicTimelineEvent(): ForensicTimelineEvent =
  */
 fun DnsEvent.toForensicTimelineEvent(indicator: com.androdr.data.model.Indicator?): ForensicTimelineEvent {
     val isMatched = this.reason != null
-    val realCampaign = indicator?.campaign?.takeIf { it.isNotBlank() }
+    val realCampaign = indicator?.family?.takeIf { it.isNotBlank() }
     val realSource = indicator?.source?.takeIf { it.isNotBlank() }
     val realDescription = indicator?.description?.takeIf { it.isNotBlank() }
     return ForensicTimelineEvent(
@@ -125,7 +125,7 @@ fun Finding.toForensicTimelineEvent(
         iocIndicator = dnsIndicator,
         iocType = dnsIocType,
         iocSource = dnsIocSource,
-        campaignName = campaignTag ?: "",
+        campaignName = iocEvidence?.family?.takeIf { it.isNotBlank() } ?: campaignTag ?: "",
         // For DNS findings, use the matched domain as a linkage key. The
         // Timeline UI can join on correlationId to find the underlying
         // ioc_match row (which has iocIndicator = same domain). This gives

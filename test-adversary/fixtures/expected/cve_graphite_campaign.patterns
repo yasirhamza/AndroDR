@@ -1,1 +1,8 @@
-Graphite
+# androdr-050 is a patch-level (device_posture) rule: EXPOSED, never DETECTED (Q9-3).
+# Requires a patch level old enough that the rule's CVEs are unpatched. In a --load run
+# with graphite_dns_attribution the Graphite row is DETECTED (DETECTED outranks
+# EXPOSED), so the EXPOSED lines can only hold without it.
+[!!]  Graphite (Paragon): EXPOSED --
+~\[!!\]  Graphite \(Paragon\): EXPOSED -- [0-9]+ CVEs linked to Graphite \(unpatched; not evidence of infection\)
+# A CVE rule must never read as DETECTED.
+!~Graphite \(Paragon\): DETECTED -- .*CVEs linked to

@@ -242,6 +242,9 @@ private fun IocMatchContent(evidence: Evidence.IocMatch) {
             DetailRow(label = "What was detected", value = evidence.matchedIndicator)
             DetailRow(label = "Detection type", value = evidence.iocType)
             DetailRow(label = "Source", value = evidence.source)
+            if (evidence.family.isNotBlank()) DetailRow(label = "Threat", value = evidence.family)
+            if (evidence.category.isNotBlank()) DetailRow(label = "Category", value = evidence.category)
+            if (evidence.reference.isNotBlank()) DetailRow(label = "Reference", value = evidence.reference)
         }
     }
 }

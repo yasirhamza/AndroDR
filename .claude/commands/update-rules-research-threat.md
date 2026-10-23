@@ -11,6 +11,9 @@ You are a threat researcher agent. Your job is to research a specific named thre
 You receive:
 - `threat_name`: the threat to research (e.g., "Sturnus banking trojan", "CVE-2025-48633", "Intellexa Predator 2025")
 - `existing_rule_ids`: list of existing rule IDs (to avoid duplicating covered threats)
+- `primary_url`: (optional) the primary report for this threat, from `/update-rules threat "<name>" --url <URL>`. When given, read it first and use it as the SIR's `source.url`.
+
+`<run-dir>` is the per-run directory the dispatcher creates (`update-rules.md` Step 1).
 
 ## Process
 
@@ -22,13 +25,26 @@ You receive:
    - NVD (for CVE-specific queries)
    - abuse.ch (ThreatFox, MalwareBazaar)
 
-2. **Extract structured data** from search results:
+2. **Read each report as raw text.** Download the page itself and work from
+   that copy, never from a summarising fetch tool (WebFetch and similar): a
+   summary can reword, shorten or drop an indicator.
+   - Download to a file: `curl -fsSL -o <run-dir>/report-<n>.html '<URL>'` (single-quote the URL; skip any URL that contains a quote, space or `$`).
+   - Strip the HTML to text with Python's standard `html.parser` (for example a
+     small `HTMLParser` subclass that keeps `handle_data` text), written to
+     `<run-dir>/report-<n>.txt`. Run it with `python3 -I` and pass the paths as
+     arguments. For a PDF, use `pdftotext`.
+   - Re-fang defanged text before comparing or copying: `[.]` and `(.)` → `.`,
+     `hxxp` → `http`, `[:]` → `:`.
+   - Copy every indicator verbatim from the text file (after re-fanging). Do
+     not retype, shorten or "fix" one.
+
+3. **Extract structured data** from the reports:
    - IOCs: package names, domains, IP addresses, file hashes, certificate hashes, URLs
    - CVEs: ID, CVSS score, affected versions
    - TTPs: MITRE ATT&CK technique IDs and descriptions
    - Behavioral patterns: permission clusters, accessibility abuse, overlay attacks, etc.
 
-3. **Cross-reference** IOCs across sources and classify source type:
+4. **Cross-reference** IOCs across sources and classify source type:
 
    **Structured sources** (machine-parseable feeds from `allowed-sources.json`):
    `stalkerware-indicators`, `malwarebazaar`, `threatfox`, `amnesty-investigations`,
@@ -42,16 +58,16 @@ You receive:
    - Found in 1 unstructured source only: `confidence: "medium"`
    - Mentioned vaguely without exact value: DO NOT include, set note in description
 
-4. **Build SIRs** — typically one primary SIR, but split into multiple if the threat has distinct components (e.g., a dropper + payload, or infrastructure + malware)
+5. **Build SIRs** — typically one primary SIR, but split into multiple if the threat has distinct components (e.g., a dropper + payload, or infrastructure + malware)
 
 ## SIR Construction
 
 - `source.feed`: `"threat_research"`
-- `source.url`: primary source URL
+- `source.url`: the primary report that lists the indicators: `primary_url` when given, otherwise the best primary report you found (not a search page or news summary)
 - `threat.name`: as provided by user
 - `threat.families`: aliases found during research
 - `threat.description`: 2-3 sentence summary of the threat
-- `indicators`: ONLY IOCs extracted from sources, NEVER invented
+- `indicators`: ONLY IOCs extracted from sources, NEVER invented. Format: `third-party/android-sigma-rules/validation/sir-schema.json` (an object of string lists: `package_names`, `cert_hashes`, `domains`, `file_hashes`, `urls`, `ips`)
 - `attack_techniques`: map observed behaviors to ATT&CK Mobile techniques
 - `behavioral_signals`: describe detectable behaviors
 - `confidence`: based on cross-referencing (see above)

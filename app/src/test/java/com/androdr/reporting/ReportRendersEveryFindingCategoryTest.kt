@@ -38,6 +38,8 @@ class ReportRendersEveryFindingCategoryTest {
 
             val findingsSection = ReportFormatter.formatScanReport(
                 scan, emptyList(), emptyList(), versionName = "test", mode = ExportMode.FINDINGS_ONLY,
+                campaigns = emptyList(),
+                ruleScopes = emptyMap(), ruleCategoryById = emptyMap(),
             )
 
             assertTrue(

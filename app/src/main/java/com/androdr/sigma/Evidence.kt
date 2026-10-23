@@ -43,7 +43,15 @@ sealed interface Evidence {
     data class IocMatch(
         val matchedIndicator: String,
         val iocType: String,
-        val source: String
+        val source: String,
+        // Attribution (IOC provenance). Defaults keep scans stored before these
+        // fields existed decodable (StoredIocMatchDecodeTest).
+        val family: String = "",
+        val category: String = "",
+        val campaign: String = "",
+        val reference: String = "",
+        /** When the matched DNS lookup was observed (epoch ms); 0 when not a DNS match. */
+        val observedAt: Long = 0L
     ) : Evidence
 
     @Serializable

@@ -79,4 +79,11 @@ class CorrelationFindingsTest {
         assertEquals("1700000000000", ctx["chain_start"])
         assertEquals("1700000600000", ctx["chain_end"])
     }
+
+    @Test
+    fun `the finding records the effective rule category`() {
+        assertEquals("INCIDENT", CorrelationFindings.fromSignal(signal, rule, RuleCategory.INCIDENT).ruleCategory)
+        assertEquals("DEVICE_POSTURE",
+            CorrelationFindings.fromSignal(signal, rule, RuleCategory.DEVICE_POSTURE).ruleCategory)
+    }
 }

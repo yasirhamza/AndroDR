@@ -6,5 +6,6 @@ data class DomainIocEntry(
     val campaignName: String,
     val severity: String,
     val source: String,
-    val fetchedAt: Long
+    val fetchedAt: Long,
+    val campaignKey: String = ""
 )

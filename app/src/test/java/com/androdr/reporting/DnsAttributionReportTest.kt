@@ -31,6 +31,8 @@ class DnsAttributionReportTest {
         val text = ReportFormatter.formatScanReport(
             scanOf(), listOf(dns("graph.instagram.com", 10042, "com.instagram.android")), emptyList(),
             displayNames = names, versionName = "test",
+            campaigns = emptyList(),
+            ruleScopes = emptyMap(), ruleCategoryById = emptyMap(),
         )
 
         assertTrue(text, text.contains("graph.instagram.com"))
@@ -42,6 +44,8 @@ class DnsAttributionReportTest {
         val text = ReportFormatter.formatScanReport(
             scanOf(), listOf(dns("mtalk.google.com", ConnectionOwnerResolver.DNS_RESOLVER_UID, null)), emptyList(),
             versionName = "test",
+            campaigns = emptyList(),
+            ruleScopes = emptyMap(), ruleCategoryById = emptyMap(),
         )
 
         assertTrue(text, text.contains("<- system resolver"))
@@ -53,6 +57,8 @@ class DnsAttributionReportTest {
         val text = ReportFormatter.formatScanReport(
             scanOf(), listOf(dns("example.com", ConnectionOwnerResolver.UNKNOWN_UID, null)), emptyList(),
             versionName = "test",
+            campaigns = emptyList(),
+            ruleScopes = emptyMap(), ruleCategoryById = emptyMap(),
         )
 
         assertTrue(text, text.contains("<- unknown"))
@@ -69,10 +75,61 @@ class DnsAttributionReportTest {
 
         val text = ReportFormatter.formatScanReport(
             scanOf(c2), emptyList(), emptyList(), versionName = "test", mode = ExportMode.FINDINGS_ONLY,
+            campaigns = emptyList(),
+            ruleScopes = emptyMap(), ruleCategoryById = emptyMap(),
         )
         val apps = text.substring(text.indexOf("APP RISKS"))
 
         assertTrue(apps, apps.contains("com.evil.app"))
         assertTrue("grouped under unknown: $apps", !apps.contains("unknown"))
     }
+
+    @Test
+    fun `an unchecked event for a domain the scan matched reads NOT CHECKED`() {
+        val text = ReportFormatter.formatScanReport(
+            scanOf(iocDomainFinding("c2.evil.example", "NoviSpy")),
+            listOf(dns("c2.evil.example", 10042, "com.evil.app", reason = null)), emptyList(),
+            versionName = "test",
+            campaigns = emptyList(),
+            ruleScopes = emptyMap(), ruleCategoryById = emptyMap(),
+        )
+
+        assertTrue(text, text.contains("[NOT CHECKED]  "))
+        assertTrue(text, text.contains("reason: threat list not yet loaded when queried; matched at scan time"))
+    }
+
+    @Test
+    fun `an unchecked event for an unmatched domain stays ALLOWED`() {
+        val text = ReportFormatter.formatScanReport(
+            scanOf(iocDomainFinding("c2.evil.example", "NoviSpy")),
+            listOf(dns("example.com", 10042, "com.evil.app", reason = null)), emptyList(),
+            versionName = "test",
+            campaigns = emptyList(),
+            ruleScopes = emptyMap(), ruleCategoryById = emptyMap(),
+        )
+
+        assertTrue(text, text.contains("[ALLOWED]  "))
+        assertTrue(text, !text.contains("[NOT CHECKED]"))
+    }
+
+    @Test
+    fun `a tunnel-matched event stays MATCHED`() {
+        val text = ReportFormatter.formatScanReport(
+            scanOf(iocDomainFinding("c2.evil.example", "NoviSpy")),
+            listOf(dns("c2.evil.example", 10042, "com.evil.app", reason = "IOC_detect: c2.evil.example")),
+            emptyList(), versionName = "test",
+            campaigns = emptyList(),
+            ruleScopes = emptyMap(), ruleCategoryById = emptyMap(),
+        )
+
+        assertTrue(text, text.contains("[MATCHED]  "))
+        assertTrue(text, !text.contains("[NOT CHECKED]"))
+    }
+
+    private fun iocDomainFinding(domain: String, family: String) = Finding(
+        ruleId = "androdr-003", title = "Malicious Domain", level = "critical",
+        category = FindingCategory.APP_RISK, triggered = true,
+        evidence = com.androdr.sigma.Evidence.IocMatch(domain, "domain", "src", family),
+        matchContext = mapOf("domain" to domain, "source_package" to "com.evil.app"),
+    )
 }

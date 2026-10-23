@@ -98,34 +98,38 @@ Emit a JSON object extending the existing SIR array:
     {
       "file": "ioc-data/c2-domains.yml",
       "entry": {
-        "indicator": "c2.example.com",
-        "family": "ExampleMalware",
+        "indicator": "<domain as the feed lists it>",
+        "family": "<family as the feed lists it>",
         "category": "MALWARE",
         "severity": "CRITICAL",
         "source": "threatfox",
+        "reference": "feed:threatfox#<family as the feed lists it>",
         "description": "..."
       }
     },
     {
       "file": "ioc-data/malware-hashes.yml",
       "entry": {
-        "indicator": "abc123...sha256",
-        "family": "ExampleApk",
+        "indicator": "<sha256 as the feed lists it>",
+        "family": "<family as the feed lists it>",
         "category": "MALWARE",
         "severity": "HIGH",
         "source": "malwarebazaar",
+        "reference": "feed:malwarebazaar#<family as the feed lists it>",
         "description": "..."
       }
     }
   ],
   "upstream_snapshot_hash_set": [
-    ["C2_DOMAIN", "c2.example.com"]
+    ["C2_DOMAIN", "<domain as the feed lists it>"]
   ]
 }
 ```
 
 ### candidate_ioc_entries
 
+- `reference` is always the `feed:<source-id>#<family>` form shown above, never the
+  ThreatFox record's own `reference` field (that is a free-text URL from the submitter).
 - ThreatFox domain entries → `ioc-data/c2-domains.yml`, source `threatfox`.
 - MalwareBazaar APK-hash entries → `ioc-data/malware-hashes.yml`, source
   `malwarebazaar`.

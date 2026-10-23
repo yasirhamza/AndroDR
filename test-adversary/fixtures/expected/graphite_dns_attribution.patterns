@@ -1,0 +1,13 @@
+# forti.external-muki.com is a Graphite certificate name (Citizen Lab, March 2025),
+# in ioc-data/c2-domains.yml with campaign: graphite; androdr-003 must match it.
+# paragon-graphite.net was an invented placeholder and must stay [ALLOWED].
+~\[MATCHED\].*forti\.external-muki\.com
+!~\[MATCHED\].*paragon-graphite\.net
+!Graphite/Paragon Spyware
+# DNS IOC MATCHES row (iocMatchLabel; the row also carries " (NATION_STATE_SPYWARE)").
+forti.external-muki.com -> Graphite (Paragon)
+# MERCENARY SPYWARE CHECK row: CampaignVerdict DETECTED detail is
+# "<iocType> <indicator> (<family>), <yyyy-MM-dd>"; the date varies, so it is left off.
+[!!]  Graphite (Paragon): DETECTED -- domain forti.external-muki.com (Graphite (Paragon)),
+# The paragon alias folds into the one Graphite row, labelled "Graphite (Paragon)".
+!Graphite (Paragon): not detected

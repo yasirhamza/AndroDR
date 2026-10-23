@@ -83,6 +83,7 @@ appropriate file, same pattern as other ingesters:
         "category": "MALWARE",
         "severity": "HIGH",
         "source": "android-security-bulletin",
+        "reference": "feed:android-security-bulletin#<family as the bulletin names it>",
         "description": "..."
       }
     }

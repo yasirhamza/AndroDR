@@ -14,7 +14,9 @@ data class CertHashInfo(
     val familyName: String,
     val category: String,
     val severity: String,
-    val description: String
+    val description: String,
+    val campaign: String = "",
+    val reference: String = ""
 )
 
 @Singleton

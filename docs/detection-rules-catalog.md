@@ -102,21 +102,12 @@ remediation:
   - "A connection to a known malicious IP address was blocked."
 ```
 
-### ANDRODR-005: Graphite/Paragon domain IOC match [ROADMAP #13]
-```yaml
-id: androdr-005
-title: DNS query to known Graphite/Paragon C2 domain
-status: experimental
-tags: [attack.t1437]
-category: incident
-severity: CRITICAL
-type: ioc_lookup
-detection:
-  field: dns_query_domain
-  lookup: graphite_domain_ioc_db
-remediation:
-  - "A connection to infrastructure associated with Paragon's Graphite spyware was blocked."
-```
+### ANDRODR-005: Graphite/Paragon domain IOC match [RETIRED 2026-10-15]
+Retired: it only re-labelled androdr-003 hits and its two domains were invented
+placeholders. Paragon Graphite domains published by Citizen Lab (March 2025) now
+live in `ioc-data/c2-domains.yml` with family `Graphite (Paragon)`, and androdr-003
+detects them (verified on-device 2026-10-15). Its findings do not yet show the
+family name: domain IOC hits carry no campaign attribution on the current path.
 
 ---
 
@@ -499,7 +490,7 @@ remediation:
 
 | ID Range | Category | Count | Status |
 |----------|----------|-------|--------|
-| 001-005 | IOC matching | 5 | 3 implemented, 2 roadmap |
+| 001-005 | IOC matching | 5 | 3 implemented, 1 roadmap, 1 retired |
 | 010-018 | App behavioral heuristics | 9 | 6 implemented, 3 new |
 | 020 | File artifacts | 1 | Roadmap #8 |
 | 030 | Process monitoring | 1 | Roadmap #9 |

@@ -71,17 +71,18 @@ In addition to SIRs, emit a JSON object with two new fields:
     {
       "file": "ioc-data/package-names.yml",
       "entry": {
-        "indicator": "com.example.spy",
-        "family": "ExampleSpyware",
+        "indicator": "<package name as the feed lists it>",
+        "family": "<family as the feed lists it>",
         "category": "STALKERWARE",
         "severity": "CRITICAL",
         "source": "stalkerware-indicators",
+        "reference": "feed:stalkerware-indicators#<family as the feed lists it>",
         "description": "..."
       }
     }
   ],
   "upstream_snapshot_hash_set": [
-    ["PACKAGE_NAME", "com.example.spy"]
+    ["PACKAGE_NAME", "<package name as the feed lists it>"]
   ]
 }
 ```

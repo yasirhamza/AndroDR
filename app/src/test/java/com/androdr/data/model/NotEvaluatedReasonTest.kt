@@ -59,6 +59,8 @@ class NotEvaluatedReasonTest {
         assertEquals("UnregisteredIocLookup", NotEvaluatedReason.MISSING_CAPABILITY.sentinel)
         assertEquals("UnreadableArtifactPaths", NotEvaluatedReason.UNREADABLE_PATHS.sentinel)
         assertEquals("NoEventsToCheck", NotEvaluatedReason.NO_EVENTS_TO_CHECK.sentinel)
+        assertEquals("FeedsNotLoaded", NotEvaluatedReason.FEEDS_NOT_LOADED.sentinel)
+        assertEquals("CampaignSourcesNotLoaded", NotEvaluatedReason.CAMPAIGN_SOURCES_NOT_LOADED.sentinel)
         assertEquals(UNREGISTERED_IOC_LOOKUP, NotEvaluatedReason.MISSING_CAPABILITY.sentinel)
     }
 

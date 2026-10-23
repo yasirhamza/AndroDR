@@ -1,190 +1,202 @@
 [
   {
-    "certHash": "fac61745dc0903786fb9ede62a962b399f7348f0bb6f899b8332667591033b9c",
-    "familyName": "Cerberus",
-    "category": "BANKER",
-    "severity": "CRITICAL",
-    "description": "Cerberus Android banking trojan signing certificate",
-    "source": "malwarebazaar"
-  },
-  {
-    "certHash": "159777041b3b2f5d0464c87c3194f08070aa0744895695f960b3dbacceb2f020",
-    "familyName": "SpyNote",
-    "category": "RAT",
-    "severity": "CRITICAL",
-    "description": "SpyNote Android remote access trojan signing certificate",
-    "source": "malwarebazaar"
-  },
-  {
-    "certHash": "a40da80a59d170caa950cf15c18c454d47a39b26989d8b640ecd745ba71bf5dc",
-    "familyName": "BRATA",
-    "category": "RAT",
-    "severity": "CRITICAL",
-    "description": "BRATA Android remote access trojan signing certificate",
-    "source": "malwarebazaar"
-  },
-  {
-    "certHash": "90be68b9a75663ab55bd3e724f3c0df7b106286d8c50f146192545d00e5f2f42",
-    "familyName": "TheTruthSpy",
+    "certHash": "0172d7d80d2f0656711ed87c2433988bff820e3d",
+    "familyName": "Msafely",
     "category": "STALKERWARE",
+    "campaign": "",
     "severity": "CRITICAL",
-    "description": "TheTruthSpy commercial stalkerware signing certificate",
-    "source": "stalkerware-indicators"
-  },
-  {
-    "certHash": "0321fb7295da7c63acc9824457a46200446a2d1e4ec30fc329a5089c687357fc",
-    "familyName": "TiSpy",
-    "category": "STALKERWARE",
-    "severity": "CRITICAL",
-    "description": "TiSpy commercial stalkerware signing certificate",
-    "source": "stalkerware-indicators"
-  },
-  {
-    "certHash": "8585dd60a09e8a8f42d362fd1d982edb245d55696608f2ac9080fd56757d983e",
-    "familyName": "Trojanized Repackage",
-    "category": "TROJAN",
-    "severity": "CRITICAL",
-    "description": "Signing certificate associated with trojanized repackages of legitimate apps. Apps signed with this certificate are modified copies distributed outside official stores.",
-    "source": "malwarebazaar"
-  },
-  {
-    "certHash": "3ac97735164824657b683e805133b1274b2dedabf9fdd6aa9aca31089d501e64",
-    "familyName": "NoviSpy",
-    "category": "NATION_STATE_SPYWARE",
-    "severity": "CRITICAL",
-    "description": "NoviSpy signing certificate"
-  },
-  {
-    "certHash": "35926e966186c8f2deec66864389d73989c75c85cb6668da2f455db6fe67e91f",
-    "familyName": "NoviSpy",
-    "category": "NATION_STATE_SPYWARE",
-    "severity": "CRITICAL",
-    "description": "NoviSpy signing certificate variant"
-  },
-  {
-    "certHash": "38693e1ea0fbf39d28f66b1714fdeed4e23b3973276481097d2d66e87f3647eb",
-    "familyName": "NoviSpy",
-    "category": "NATION_STATE_SPYWARE",
-    "severity": "CRITICAL",
-    "description": "NoviSpy signing certificate variant"
+    "description": "Msafely APK signing certificate (stalkerware-indicators, 2026-07-03 sweep)",
+    "source": "stalkerware-indicators",
+    "reference": "feed:stalkerware-indicators#Msafely"
   },
   {
     "certHash": "18afc5c6bfaee504a26291f6bf3e6f823dbedd54bba0c4acac2e7c2414b3e24d",
     "familyName": "ResidentBat",
     "category": "NATION_STATE_SPYWARE",
+    "campaign": "",
     "severity": "CRITICAL",
-    "description": "ResidentBat signing certificate"
-  },
-  {
-    "certHash": "c1884e617348ebbdfe7cfe5fc99945b37296d6ebc6059bb74fbaeea277d32941",
-    "familyName": "ResidentBat",
-    "category": "NATION_STATE_SPYWARE",
-    "severity": "CRITICAL",
-    "description": "ResidentBat signing certificate"
-  },
-  {
-    "certHash": "e5016f3cfb937d502dabedc32ca3bdef3bbcce032fb3b1bff3b9c6482895f4fd",
-    "familyName": "ResidentBat",
-    "category": "NATION_STATE_SPYWARE",
-    "severity": "CRITICAL",
-    "description": "ResidentBat signing certificate"
-  },
-  {
-    "certHash": "d12616542268d32329f1c4357b5d5a57e954e13d2338d27bb8439794291b8c6d",
-    "familyName": "ResidentBat",
-    "category": "NATION_STATE_SPYWARE",
-    "severity": "CRITICAL",
-    "description": "ResidentBat signing certificate"
-  },
-  {
-    "certHash": "3e9f1192e33cb851b48479629c93d29770a4f76af00f1e42a3c6e7f97db62c79",
-    "familyName": "ResidentBat",
-    "category": "NATION_STATE_SPYWARE",
-    "severity": "CRITICAL",
-    "description": "ResidentBat signing certificate"
-  },
-  {
-    "certHash": "6782039a81a85264acdc6af0973b225ada6009f76faae7f948a1de040bb32f0c",
-    "familyName": "ResidentBat",
-    "category": "NATION_STATE_SPYWARE",
-    "severity": "CRITICAL",
-    "description": "ResidentBat signing certificate"
-  },
-  {
-    "certHash": "a6a067b0d899fb514b7b4597d4fe16fcd4d7e5c361f6c84b3d45ed7e394036c7",
-    "familyName": "ResidentBat",
-    "category": "NATION_STATE_SPYWARE",
-    "severity": "CRITICAL",
-    "description": "ResidentBat signing certificate"
-  },
-  {
-    "certHash": "6d6278ffc80ad9dd1b1c6b445847ce108f3ea5ce349f232689e9b8c1fd10801e",
-    "familyName": "ResidentBat",
-    "category": "NATION_STATE_SPYWARE",
-    "severity": "CRITICAL",
-    "description": "ResidentBat signing certificate"
-  },
-  {
-    "certHash": "fc5a4ad10f0686aa8eae2c08ba13cc451cbd6037",
-    "familyName": "EasyPhoneTrack",
-    "category": "STALKERWARE",
-    "severity": "CRITICAL",
-    "description": "EasyPhoneTrack stalkerware signing certificate"
-  },
-  {
-    "certHash": "892c4f172ad3262ec398b40bbf8130c6421040a1",
-    "familyName": "EasyPhoneTrack",
-    "category": "STALKERWARE",
-    "severity": "CRITICAL",
-    "description": "EasyPhoneTrack stalkerware signing certificate"
-  },
-  {
-    "certHash": "1ce722f401c3fa8fe498ff824669c0007a200aa9",
-    "familyName": "MobileTrackerFree",
-    "category": "STALKERWARE",
-    "severity": "CRITICAL",
-    "description": "MobileTrackerFree stalkerware signing certificate"
-  },
-  {
-    "certHash": "de90f6899eec315f4ed05c2aa052d4fe8b71125a",
-    "familyName": "BITTER",
-    "category": "NATION_STATE_SPYWARE",
-    "severity": "CRITICAL",
-    "description": "BITTER ToSpy developer signing certificate (SHA-1)"
+    "description": "ResidentBat signing certificate",
+    "source": "mvt-indicators",
+    "reference": "feed:mvt-indicators#ResidentBat"
   },
   {
     "certHash": "1be914194d14b3deda93ea06e0c58ecd420bb89f",
     "familyName": "Msafely",
     "category": "STALKERWARE",
+    "campaign": "",
     "severity": "CRITICAL",
-    "description": "Msafely/SpyX/SpyPhone stalkerware signing certificate (SHA-1) \u2014 if not self-installed, contact a DV hotline"
+    "description": "Msafely/SpyX/SpyPhone stalkerware signing certificate (SHA-1) \u2014 if not self-installed, contact a DV hotline",
+    "source": "stalkerware-indicators",
+    "reference": "feed:stalkerware-indicators#Msafely"
   },
   {
-    "certHash": "e82ededcdc22c6fa054aa74274ab789412b1c2f5",
-    "familyName": "Msafely",
+    "certHash": "1ce722f401c3fa8fe498ff824669c0007a200aa9",
+    "familyName": "MobileTrackerFree",
     "category": "STALKERWARE",
+    "campaign": "",
     "severity": "CRITICAL",
-    "description": "Msafely APK signing certificate (stalkerware-indicators, 2026-07-03 sweep)"
+    "description": "MobileTrackerFree stalkerware signing certificate",
+    "source": "stalkerware-indicators",
+    "reference": "feed:stalkerware-indicators#MobileTrackerFree"
+  },
+  {
+    "certHash": "35926e966186c8f2deec66864389d73989c75c85cb6668da2f455db6fe67e91f",
+    "familyName": "NoviSpy",
+    "category": "NATION_STATE_SPYWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "NoviSpy signing certificate variant",
+    "source": "amnesty-investigations",
+    "reference": "feed:amnesty-investigations#NoviSpy"
+  },
+  {
+    "certHash": "38693e1ea0fbf39d28f66b1714fdeed4e23b3973276481097d2d66e87f3647eb",
+    "familyName": "NoviSpy",
+    "category": "NATION_STATE_SPYWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "NoviSpy signing certificate variant",
+    "source": "amnesty-investigations",
+    "reference": "feed:amnesty-investigations#NoviSpy"
+  },
+  {
+    "certHash": "3ac97735164824657b683e805133b1274b2dedabf9fdd6aa9aca31089d501e64",
+    "familyName": "NoviSpy",
+    "category": "NATION_STATE_SPYWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "NoviSpy signing certificate",
+    "source": "amnesty-investigations",
+    "reference": "feed:amnesty-investigations#NoviSpy"
+  },
+  {
+    "certHash": "3e9f1192e33cb851b48479629c93d29770a4f76af00f1e42a3c6e7f97db62c79",
+    "familyName": "ResidentBat",
+    "category": "NATION_STATE_SPYWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "ResidentBat signing certificate",
+    "source": "mvt-indicators",
+    "reference": "feed:mvt-indicators#ResidentBat"
   },
   {
     "certHash": "4feaf05665d7ca7d017962cadfdb4e38cc8d79e7",
     "familyName": "Msafely",
     "category": "STALKERWARE",
+    "campaign": "",
     "severity": "CRITICAL",
-    "description": "Msafely APK signing certificate (stalkerware-indicators, 2026-07-03 sweep)"
+    "description": "Msafely APK signing certificate (stalkerware-indicators, 2026-07-03 sweep)",
+    "source": "stalkerware-indicators",
+    "reference": "feed:stalkerware-indicators#Msafely"
   },
   {
-    "certHash": "0172d7d80d2f0656711ed87c2433988bff820e3d",
-    "familyName": "Msafely",
-    "category": "STALKERWARE",
+    "certHash": "6782039a81a85264acdc6af0973b225ada6009f76faae7f948a1de040bb32f0c",
+    "familyName": "ResidentBat",
+    "category": "NATION_STATE_SPYWARE",
+    "campaign": "",
     "severity": "CRITICAL",
-    "description": "Msafely APK signing certificate (stalkerware-indicators, 2026-07-03 sweep)"
+    "description": "ResidentBat signing certificate",
+    "source": "mvt-indicators",
+    "reference": "feed:mvt-indicators#ResidentBat"
+  },
+  {
+    "certHash": "6d6278ffc80ad9dd1b1c6b445847ce108f3ea5ce349f232689e9b8c1fd10801e",
+    "familyName": "ResidentBat",
+    "category": "NATION_STATE_SPYWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "ResidentBat signing certificate",
+    "source": "mvt-indicators",
+    "reference": "feed:mvt-indicators#ResidentBat"
+  },
+  {
+    "certHash": "892c4f172ad3262ec398b40bbf8130c6421040a1",
+    "familyName": "EasyPhoneTrack",
+    "category": "STALKERWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "EasyPhoneTrack stalkerware signing certificate",
+    "source": "stalkerware-indicators",
+    "reference": "feed:stalkerware-indicators#EasyPhoneTrack"
   },
   {
     "certHash": "9997e63018756cc7034f94b005205a5e15a3770c",
     "familyName": "Spynger",
     "category": "STALKERWARE",
+    "campaign": "",
     "severity": "CRITICAL",
-    "description": "Spynger stalkerware signing certificate (SHA-1) \u2014 if not self-installed, contact a DV hotline"
+    "description": "Spynger stalkerware signing certificate (SHA-1) \u2014 if not self-installed, contact a DV hotline",
+    "source": "stalkerware-indicators",
+    "reference": "feed:stalkerware-indicators#Spynger"
+  },
+  {
+    "certHash": "a6a067b0d899fb514b7b4597d4fe16fcd4d7e5c361f6c84b3d45ed7e394036c7",
+    "familyName": "ResidentBat",
+    "category": "NATION_STATE_SPYWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "ResidentBat signing certificate",
+    "source": "mvt-indicators",
+    "reference": "feed:mvt-indicators#ResidentBat"
+  },
+  {
+    "certHash": "c1884e617348ebbdfe7cfe5fc99945b37296d6ebc6059bb74fbaeea277d32941",
+    "familyName": "ResidentBat",
+    "category": "NATION_STATE_SPYWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "ResidentBat signing certificate",
+    "source": "mvt-indicators",
+    "reference": "feed:mvt-indicators#ResidentBat"
+  },
+  {
+    "certHash": "d12616542268d32329f1c4357b5d5a57e954e13d2338d27bb8439794291b8c6d",
+    "familyName": "ResidentBat",
+    "category": "NATION_STATE_SPYWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "ResidentBat signing certificate",
+    "source": "mvt-indicators",
+    "reference": "feed:mvt-indicators#ResidentBat"
+  },
+  {
+    "certHash": "de90f6899eec315f4ed05c2aa052d4fe8b71125a",
+    "familyName": "ToSpy",
+    "category": "SPYWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "ToSpy developer signing certificate (SHA-1), ESET 2025 UAE campaign; attribution inconclusive per ESET",
+    "source": "threat_research",
+    "reference": "https://www.welivesecurity.com/en/eset-research/new-spyware-campaigns-target-privacy-conscious-android-users-uae/"
+  },
+  {
+    "certHash": "e5016f3cfb937d502dabedc32ca3bdef3bbcce032fb3b1bff3b9c6482895f4fd",
+    "familyName": "ResidentBat",
+    "category": "NATION_STATE_SPYWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "ResidentBat signing certificate",
+    "source": "mvt-indicators",
+    "reference": "feed:mvt-indicators#ResidentBat"
+  },
+  {
+    "certHash": "e82ededcdc22c6fa054aa74274ab789412b1c2f5",
+    "familyName": "Msafely",
+    "category": "STALKERWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "Msafely APK signing certificate (stalkerware-indicators, 2026-07-03 sweep)",
+    "source": "stalkerware-indicators",
+    "reference": "feed:stalkerware-indicators#Msafely"
+  },
+  {
+    "certHash": "fc5a4ad10f0686aa8eae2c08ba13cc451cbd6037",
+    "familyName": "EasyPhoneTrack",
+    "category": "STALKERWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "EasyPhoneTrack stalkerware signing certificate",
+    "source": "stalkerware-indicators",
+    "reference": "feed:stalkerware-indicators#EasyPhoneTrack"
   }
 ]

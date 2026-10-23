@@ -3,15 +3,15 @@ version: 3
 profiles:
   pegasus:
     description: "NSO Group Pegasus mercenary spyware"
-    scenarios: [mercenary_package_name, cve_campaign_pegasus, surveillance_permissions, system_name_disguise]
+    scenarios: [cve_campaign_pegasus, surveillance_permissions, system_name_disguise]
 
   predator:
     description: "Intellexa Predator mercenary spyware"
-    scenarios: [cve_predator_campaign, surveillance_permissions, mercenary_predator_artifacts]
+    scenarios: [cve_predator_campaign, surveillance_permissions, mercenary_predator_artifacts, mercenary_dns_c2]
 
   graphite:
     description: "Paragon Graphite mercenary spyware"
-    scenarios: [cve_graphite_campaign, surveillance_permissions]
+    scenarios: [cve_graphite_campaign, surveillance_permissions, graphite_dns_attribution]
 
   journalist:
     description: "Threat model for journalists/activists"
@@ -34,6 +34,8 @@ scenarios:
 
   # ── Track 1: Commodity malware ─────────────────────────────────────────
   - id: cerberus_banker
+    # Its APK hash IOC was a bundle-only entry in no feed and no report; removed
+    # 2026-10-16 (Plan A ruling D6). Detection here is the sideload rule only.
     track: 1
     risk: medium
     technique: T1429
@@ -47,6 +49,8 @@ scenarios:
       - "Sideloaded Application"
 
   - id: spynote_rat
+    # Its APK hash IOC was a bundle-only entry in no feed and no report; removed
+    # 2026-10-16 (Plan A ruling D6). Detection here is the sideload rule only.
     track: 1
     risk: medium
     technique: T1429
@@ -64,10 +68,13 @@ scenarios:
     risk: medium
     technique: T1429
     tactic: collection
-    description: "Anubis Android banking trojan with SMS stealing"
+    # Formerly labelled Anubis. The sample is an "RTO eChallan" lure
+    # (com.eksctm.android) with 0 AV detections and no family label in any
+    # source; its hash IOC was removed 2026-10-15 and must no longer fire.
+    description: "Unlabelled MalwareBazaar APK (formerly mislabelled Anubis): sideload baseline, removed hash IOC must not fire"
     source: malwarebazaar
     sha256: "392272ef515d2f60f2c058675d637bf63a265800b8e4613ed9f72eeb8ebb323d"
-    tags: [android, Anubis, banker, sms-stealer]
+    tags: [android, unlabelled, removed-ioc]
     attack: [T1429, T1636]
     expected_patterns:
       - "Sideloaded Application"
@@ -77,10 +84,12 @@ scenarios:
     risk: medium
     technique: T1429
     tactic: collection
-    description: "BRATA Android remote access trojan"
+    # Formerly labelled BRATA; no source gives this sample a family. Its hash
+    # IOC was removed 2026-10-15 and must no longer fire.
+    description: "Unlabelled MalwareBazaar APK (formerly mislabelled BRATA): sideload baseline, removed hash IOC must not fire"
     source: malwarebazaar
     sha256: "f690e30b6ee25c153effc5620fd7ec61481a449a127b54a67c7afc4c13d7917f"
-    tags: [android, BRATA, banker, trojan]
+    tags: [android, unlabelled, removed-ioc]
     attack: [T1429, T1636]
     expected_patterns:
       - "Sideloaded Application"
@@ -90,15 +99,19 @@ scenarios:
     risk: medium
     technique: T1429
     tactic: collection
-    description: "Hydra Android banking trojan dropper"
+    # Formerly labelled Hydra; Triage scores it 1/10 with no family. Its hash
+    # IOC was removed 2026-10-15 and must no longer fire.
+    description: "Unlabelled MalwareBazaar APK (formerly mislabelled Hydra): sideload baseline, removed hash IOC must not fire"
     source: malwarebazaar
     sha256: "c565f4b9b3c6bb095c6ce62ab02c5cc8a84502231f4facdddb6f3d7af2321b5e"
-    tags: [android, Hydra, banker]
+    tags: [android, unlabelled, removed-ioc]
     attack: [T1429, T1636]
     expected_patterns:
       - "Sideloaded Application"
 
   - id: vultur_rat
+    # Its APK hash IOC was a bundle-only entry in no feed and no report; removed
+    # 2026-10-16 (Plan A ruling D6). Detection here is the sideload rule only.
     track: 1
     risk: medium
     technique: T1429
@@ -119,7 +132,7 @@ scenarios:
     description: "SharkBot ATS-based auto-transfer banking trojan (fixture)"
     source: fixture
     fixture: fixtures/mercenary/spyware-package-name.apk
-    sha256: "ab62a82d7752a52bc81001c7fc990037b45040f68e98769492f877815375876d"
+    sha256: "88ec538ba5834b8554d415064b4809b44b59a1123b340ff0203a8f7f602048a3"
     tags: [android, SharkBot, banker]
     expected_patterns:
       - "Sideloaded Application"
@@ -132,7 +145,7 @@ scenarios:
     description: "Ermac 2.0 credential overlay stealer (fixture)"
     source: fixture
     fixture: fixtures/mercenary/spyware-package-name.apk
-    sha256: "ab62a82d7752a52bc81001c7fc990037b45040f68e98769492f877815375876d"
+    sha256: "88ec538ba5834b8554d415064b4809b44b59a1123b340ff0203a8f7f602048a3"
     tags: [android, Ermac, stealer]
     expected_patterns:
       - "Sideloaded Application"
@@ -145,7 +158,7 @@ scenarios:
     description: "GodFather banking trojan (fixture)"
     source: fixture
     fixture: fixtures/mercenary/spyware-package-name.apk
-    sha256: "ab62a82d7752a52bc81001c7fc990037b45040f68e98769492f877815375876d"
+    sha256: "88ec538ba5834b8554d415064b4809b44b59a1123b340ff0203a8f7f602048a3"
     tags: [android, GodFather, banker]
     expected_patterns:
       - "Sideloaded Application"
@@ -158,7 +171,7 @@ scenarios:
     description: "Hook screen streaming RAT (fixture)"
     source: fixture
     fixture: fixtures/mercenary/spyware-package-name.apk
-    sha256: "ab62a82d7752a52bc81001c7fc990037b45040f68e98769492f877815375876d"
+    sha256: "88ec538ba5834b8554d415064b4809b44b59a1123b340ff0203a8f7f602048a3"
     tags: [android, Hook, rat]
     expected_patterns:
       - "Sideloaded Application"
@@ -179,6 +192,8 @@ scenarios:
       - "Sideloaded Application"
 
   - id: andrmonitor_stalkerware
+    # Its APK hash IOC was a bundle-only entry in no feed and no report; removed
+    # 2026-10-16 (Plan A ruling D6). Detection here is the permission and sideload rules only.
     track: 2
     risk: high
     technique: T1429
@@ -197,10 +212,11 @@ scenarios:
     risk: high
     technique: T1429
     tactic: collection
-    description: "TiSpy commercial stalkerware"
+    # stalkerware-indicators samples.csv labels this hash Spyone, not TiSpy.
+    description: "Spyone commercial stalkerware (formerly mislabelled TiSpy)"
     source: malwarebazaar
     sha256: "4bcb6951c5f78c646c19771ff58c2ea749e734ae3fa916f130aeee8e083ca2e4"
-    tags: [android, TiSpy, stalkerware]
+    tags: [android, Spyone, stalkerware]
     attack: [T1429, T1430, T1512, T1636]
     expected_patterns:
       - "surveillance capabilities"
@@ -254,13 +270,17 @@ scenarios:
     risk: high
     technique: T1418
     tactic: discovery
-    description: "App using known Pegasus disguise package name (com.android.bsp)"
+    # com.android.bsp ("Pegasus disguise") was invented to make this scenario
+    # pass; no Pegasus source lists it. com.serv.services is a NoviSpy app id
+    # (Amnesty, Dec 2024; MVT + ioc-data/package-names.yml).
+    description: "App using a known NoviSpy package name (com.serv.services)"
     source: fixture
     fixture: fixtures/mercenary/spyware-package-name.apk
-    sha256: "ab62a82d7752a52bc81001c7fc990037b45040f68e98769492f877815375876d"
+    sha256: "88ec538ba5834b8554d415064b4809b44b59a1123b340ff0203a8f7f602048a3"
     attack: [T1418]
     expected_patterns:
       - "Uninstall this app immediately"
+      - "Matched : com.serv.services -> NoviSpy"
 
   - id: mercenary_cert_hash
     track: 3
@@ -355,21 +375,28 @@ scenarios:
     expected_patterns:
       - "Predator artifact: /data/local/tmp/wd"
       - "Predator artifact: /data/local/tmp/dropbox"
+      - "[!!]  Predator: DETECTED -- Predator artifact: /data/local/tmp/"
 
   - id: mercenary_dns_c2
     track: 3
     risk: medium
     technique: T1437
     tactic: command-and-control
-    description: "DNS query to known Predator C2 domain"
+    # cdn-tp2.xyz was invented, 10.0.0.2 is not the tunnel's DNS address, and
+    # the emulator image has no nslookup, so this scenario never ran. ping
+    # resolves through netd like an app does (attributed to com.android.shell).
+    # 2y4nothing.xyz is in MVT's Intellexa Predator bundle (loaded on-device by
+    # MvtIndicatorsFeed) and nowhere in the bundled blocklist. Needs the VPN on.
+    description: "DNS query to known Predator C2 domain (MVT Intellexa Predator)"
     source: adb_inject
     inject:
       - type: dns_query
-        adb_cmd: "shell nslookup cdn-tp2.xyz 10.0.0.2"
+        adb_cmd: "shell ping -c1 -W2 2y4nothing.xyz"
     attack: [T1437]
     expected_patterns:
-      - "[MATCHED]"
-      - "cdn-tp2.xyz"
+      - "~\\[MATCHED\\].*2y4nothing\\.xyz"
+      - "2y4nothing.xyz -> Predator Spyware Indicators of Compromise"
+      - "[!!]  Predator: DETECTED -- domain 2y4nothing.xyz (Predator Spyware Indicators of Compromise),"
 
   - id: mercenary_ip_c2
     track: 3
@@ -513,16 +540,14 @@ scenarios:
     # Depends on device patch level being old enough that Pegasus CVEs are unpatched.
     # Rule CVEs (Android NSO set since #319): CVE-2019-2215 (KEV 2021-11-03) and
     # CVE-2023-7024 (KEV 2024-01-02) — an emulator patched after 2024-01-02 shows
-    # the safe state. NOTE: the "Pegasus" pattern matches the safe-state line
-    # ("No Pegasus-linked CVEs") too, so this scenario verifies report presence,
-    # not a firing — a patch-gated true-positive needs an old-patch-level image.
-    # This scenario validates campaign attribution appears in the report when applicable.
+    # "[OK]  Pegasus: not detected" and FAILS this scenario: a patch-gated true
+    # positive needs an old-patch-level image. Since Plan B (B7) the report lists
+    # every campaign, so a bare "Pegasus" pattern was vacuous; the patch-level rule
+    # must read EXPOSED and never DETECTED (owner decision Q9-3).
     attack: [T1404]
     expected_patterns:
-      - "Pegasus"
-    # Campaign-specific patterns depend on actual patch level:
-    # If device is old enough: "CVEs linked to Pegasus" should also appear
-    # This scenario may PASS or EXPECTED FAIL depending on emulator patch level
+      - "[!!]  Pegasus: EXPOSED --"
+      - "!~Pegasus: DETECTED -- .*CVEs linked to"
 
   - id: cve_settings_display
     track: 4
@@ -559,8 +584,12 @@ scenarios:
     description: "Predator campaign rule fires for matching unpatched CVEs"
     source: adb_inject
     inject: []
+    # Patch-gated like cve_campaign_pegasus. In a --load run with a Predator
+    # detection (mercenary_predator_artifacts, mercenary_dns_c2) the row is DETECTED,
+    # which outranks EXPOSED, so run this one without them.
     expected_patterns:
-      - "Predator"
+      - "[!!]  Predator: EXPOSED --"
+      - "!~Predator: DETECTED -- .*CVEs linked to"
 
   - id: cve_graphite_campaign
     track: 4
@@ -570,8 +599,11 @@ scenarios:
     description: "Graphite campaign rule fires for matching unpatched CVEs"
     source: adb_inject
     inject: []
+    # Patch-gated like cve_campaign_pegasus. In a --load run with
+    # graphite_dns_attribution the row is DETECTED, which outranks EXPOSED.
     expected_patterns:
-      - "Graphite"
+      - "[!!]  Graphite (Paragon): EXPOSED --"
+      - "!~Graphite \\(Paragon\\): DETECTED -- .*CVEs linked to"
 
   # ── Track 5: Benign baseline ───────────────────────────────────────────
   # Nothing installed, nothing injected. Asserts what the report says when the
@@ -588,3 +620,82 @@ scenarios:
       - "SUMMARY:"
       - "!OVERALL RISK: HIGH"
       - "!OVERALL RISK: CRITICAL"
+      - "Campaign detections: none"
+      - "!: DETECTED --"
+
+  # ── 2026-10-15: fabricated-IOC removal (AndroDR #392) ─────────────────
+  - id: graphite_dns_attribution
+    track: 3
+    risk: high
+    technique: T1437
+    tactic: command-and-control
+    # forti.external-muki.com is a Graphite certificate name from Citizen Lab
+    # (March 2025), now in ioc-data/c2-domains.yml; androdr-003 must match it.
+    # paragon-graphite.net was an invented placeholder (retired androdr-005)
+    # and must stay [ALLOWED]. Needs the VPN on.
+    description: "Graphite domain matches via androdr-003; retired placeholder stays allowed"
+    source: adb_inject
+    inject:
+      - type: dns_query
+        adb_cmd: "shell ping -c1 -W2 forti.external-muki.com"
+      - type: dns_query
+        adb_cmd: "shell ping -c1 -W2 paragon-graphite.net"
+    attack: [T1437]
+    expected_patterns:
+      - "~\\[MATCHED\\].*forti\\.external-muki\\.com"
+      - "!~\\[MATCHED\\].*paragon-graphite\\.net"
+      - "!Graphite/Paragon Spyware"
+      - "forti.external-muki.com -> Graphite (Paragon)"
+      - "[!!]  Graphite (Paragon): DETECTED -- domain forti.external-muki.com (Graphite (Paragon)),"
+      - "!Graphite (Paragon): not detected"
+
+  - id: removed_fake_package
+    track: 3
+    risk: low
+    technique: T1418
+    tactic: discovery
+    # com.cerberus.rat was an invented "Cerberus Banking Trojan" package IOC,
+    # removed 2026-10-15. A sideloaded app with that name must be flagged as
+    # sideloaded only, never as a known malicious package.
+    description: "Removed fake package IOC (com.cerberus.rat) must not fire"
+    source: fixture
+    fixture: fixtures/mercenary/removed-fake-package.apk
+    sha256: "8bcada5b46edf6fc0105adee4bdc5777e51b3a40fbd8bcc04e47180d0ea22f05"
+    attack: [T1418]
+    expected_patterns:
+      - "Sideloaded Application"
+      - "!Cerberus Banking Trojan"
+
+  # ── 2026-10-17: IOC attribution report wording (Plan B, Task B8) ──────
+  - id: detect_only_dns_wording
+    track: 3
+    risk: medium
+    technique: T1437
+    tactic: command-and-control
+    # Threat-list domains are detect-only by default (domainIocBlockMode = false), so
+    # the report must say the query was not blocked and why. 2y4nothing.xyz is an MVT
+    # Predator domain. Precondition (Q6-3): the MVT rows are loaded before the ping
+    # (run the feed update first), or the tunnel never matches it. Needs the VPN on.
+    description: "Detect-only DNS IOC hit: report says the domain was not blocked, and why"
+    source: adb_inject
+    inject:
+      - type: dns_query
+        adb_cmd: "shell ping -c1 -W2 2y4nothing.xyz"
+    attack: [T1437]
+    expected_patterns:
+      - "Blocked : 2y4nothing.xyz no (blocking is off for threat-list domains)"
+      - "!Blocked : 2y4nothing.xyz yes"
+
+  # ── 2026-10-17: per-campaign check state (#394) ─────────────────────────
+  - id: campaign_rows_dns_off
+    track: 5
+    risk: none
+    # Needs the VPN OFF (the opposite of the DNS scenarios): run it with --only after
+    # stopping the debug VPN. Pegasus is DNS-only, so it cannot read [OK] with DNS off.
+    description: "DNS monitoring off: DNS-only campaign rows say not monitored, with the fix"
+    source: baseline
+    tags: [android, baseline, report-wording]
+    expected_patterns:
+      - "[--]  Pegasus: DNS lookups not monitored (DNS monitoring was off; only lookups recorded earlier were checked)"
+      - "Turn on DNS monitoring, use the phone as usual, then scan again."
+      - "![OK]  Pegasus: not detected"

@@ -11,10 +11,12 @@ import com.androdr.data.repo.ScanRepository
 import com.androdr.reporting.ExportMode
 import com.androdr.reporting.ReportExporter
 import com.androdr.reporting.ReportFormatter
+import com.androdr.reporting.ReportInputs
 import com.androdr.scanner.ScanOrchestrator
 import com.androdr.util.appVersion
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -22,6 +24,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import javax.inject.Inject
 
 @HiltViewModel
@@ -31,6 +34,7 @@ class HistoryViewModel @Inject constructor(
     private val reportExporter: ReportExporter,
     private val dnsEventDao: DnsEventDao,
     private val forensicTimelineEventDao: com.androdr.data.db.ForensicTimelineEventDao,
+    private val reportInputs: ReportInputs,
     @ApplicationContext private val appContext: Context
 ) : ViewModel() {
 
@@ -92,10 +96,16 @@ class HistoryViewModel @Inject constructor(
             // scan's DNS section would report that the import carried no DNS at all.
             val intrusionEvents = forensicTimelineEventDao
                 .getEventsBySourceForScan("intrusion_log", scan.id, INTRUSION_ROW_LIMIT).first()
+            // Same inputs as ReportExporter, so a History-opened report shows the same campaign rows.
+            val campaigns = withContext(Dispatchers.IO) { reportInputs.campaigns() }
+            val ruleScopes = withContext(Dispatchers.IO) { reportInputs.ruleScopes() }
             _sheetReportText.value = ReportFormatter.formatScanReport(
                 scan, dnsEvents, emptyList(), inventory,
                 versionName = appContext.appVersion().name,
                 intrusionEvents = intrusionEvents,
+                campaigns = campaigns,
+                ruleScopes = ruleScopes,
+                ruleCategoryById = reportInputs.ruleCategoryById(),
             )
         }
     }

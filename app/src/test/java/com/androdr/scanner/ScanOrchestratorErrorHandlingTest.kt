@@ -1,5 +1,7 @@
 package com.androdr.scanner
 
+import org.junit.After
+import com.androdr.network.DnsVpnService
 import com.androdr.data.db.DnsEventDao
 import com.androdr.data.db.ForensicTimelineEventDao
 import com.androdr.data.db.ScanResultDao
@@ -105,6 +107,10 @@ class ScanOrchestratorErrorHandlingTest {
         forensicTimelineEventDao = mockk(relaxed = true)
         sigmaRuleEngine = mockk(relaxed = true)
         indicatorResolver = mockk(relaxed = true)
+        // B6: an empty indicator table adds a FeedsNotLoaded entry; these tests are about
+        // other things. DnsVpnService.isRunning (JVM-global, defaults false) likewise adds DnsMonitorOff.
+        coEvery { indicatorResolver.feedCoverage() } returns com.androdr.ioc.FeedCoverage(1, true, true)
+        DnsVpnService.isRunning.value = true
         sigmaRuleFeed = mockk(relaxed = true)
         knownAppResolver = mockk(relaxed = true)
         oemPrefixResolver = mockk(relaxed = true)
@@ -165,6 +171,11 @@ class ScanOrchestratorErrorHandlingTest {
         )
     }
 
+    @After
+    fun resetVpnState() {
+        DnsVpnService.isRunning.value = false
+    }
+
     @Test
     fun `scanner exception is recorded in scannerErrors instead of being swallowed`() = runTest {
         val boom = IllegalStateException("boom — simulated scanner crash")
@@ -181,6 +192,26 @@ class ScanOrchestratorErrorHandlingTest {
         assertEquals("appScanner", failure.scanner)
         assertEquals("IllegalStateException", failure.exception)
         assertEquals("boom — simulated scanner crash", failure.message)
+    }
+
+    @Test
+    fun `a failed DNS snapshot read is recorded as dnsSnapshot and the scan completes`() = runTest {
+        coEvery { dnsEventDao.getRecentSnapshot() } throws IllegalStateException("database is locked")
+
+        val result: ScanResult = orchestrator.runFullScan()
+
+        val failure = result.scannerErrors.single { it.scanner == "dnsSnapshot" }
+        assertEquals("IllegalStateException", failure.exception)
+        assertEquals("database is locked", failure.message)
+        assertTrue("DNS rules did not run: the scan is partial", result.isPartialScan)
+    }
+
+    @Test
+    fun `cancellation during the DNS snapshot read propagates`() = runTest {
+        coEvery { dnsEventDao.getRecentSnapshot() } throws CancellationException("user cancelled")
+        var caught: Throwable? = null
+        try { orchestrator.runFullScan() } catch (e: CancellationException) { caught = e }
+        assertNotNull(caught)
     }
 
     @Test
@@ -446,5 +477,160 @@ class ScanOrchestratorErrorHandlingTest {
         val skip = capturePersistedScan().scannerErrors.single()
         assertEquals(UNREGISTERED_IOC_LOOKUP, skip.exception)
         assertEquals("androdr-010", skip.ruleId)
+    }
+
+    // ── Attribution misses (B5): a live domain hit evaluated without its prefetched
+    // row cannot name its family; the scan says so instead of staying silent.
+
+    private fun dnsEvent() = com.androdr.data.model.DnsEvent(timestamp = 1L, domain = "a.com", appUid = 1,
+        appName = null, isBlocked = false, reason = null)
+
+    @Test
+    fun `attribution misses become one scanner failure and are cleared`() = runTest {
+        val misses = java.util.concurrent.atomic.AtomicReference<Set<String>>(emptySet())
+        every { indicatorResolver.attributionMisses } returns misses
+        coEvery { dnsEventDao.getRecentSnapshot() } returns listOf(dnsEvent())
+        coEvery { sigmaRuleEngine.evaluateDns(any()) } answers {
+            misses.set(setOf("a.com", "b.com")); emptyList()
+        }
+
+        val result = orchestrator.runFullScan()
+
+        val attribution = result.scannerErrors.filter { it.scanner == "attribution" }
+        assertEquals(1, attribution.size)
+        assertEquals("MissingPrefetch", attribution.single().exception)
+        assertTrue(attribution.single().message!!.contains("2 domain(s)"))
+        assertTrue("misses are cleared after the scan reads them", misses.get().isEmpty())
+    }
+
+    @Test
+    fun `no attribution misses means no attribution failure`() = runTest {
+        val misses = java.util.concurrent.atomic.AtomicReference<Set<String>>(emptySet())
+        every { indicatorResolver.attributionMisses } returns misses
+        coEvery { dnsEventDao.getRecentSnapshot() } returns listOf(dnsEvent())
+
+        val result = orchestrator.runFullScan()
+
+        assertTrue(result.scannerErrors.none { it.scanner == "attribution" })
+    }
+
+    @Test
+    fun `a failing domain prefetch keeps the findings and records an attribution failure`() = runTest {
+        val dnsFinding = com.androdr.sigma.Finding(ruleId = "androdr-003", title = "Malicious Domain",
+            level = "critical", category = com.androdr.sigma.FindingCategory.APP_RISK)
+        coEvery { dnsEventDao.getRecentSnapshot() } returns listOf(dnsEvent())
+        coEvery { indicatorResolver.prefetchDomainIndicators(any()) } throws
+            android.database.sqlite.SQLiteException("database disk image is malformed")
+        every { indicatorResolver.attributionMisses } returns
+            java.util.concurrent.atomic.AtomicReference(emptySet())
+        coEvery { sigmaRuleEngine.evaluateDns(any()) } returns listOf(dnsFinding)
+
+        val result = orchestrator.runFullScan()
+
+        assertTrue("the DNS finding still fires", result.findings.any { it.ruleId == "androdr-003" })
+        val attribution = result.scannerErrors.single { it.scanner == "attribution" }
+        assertEquals("SQLiteException", attribution.exception)
+    }
+
+    @Test
+    fun `a cancelled domain prefetch propagates instead of becoming a scanner failure`() = runTest {
+        coEvery { dnsEventDao.getRecentSnapshot() } returns listOf(dnsEvent())
+        coEvery { indicatorResolver.prefetchDomainIndicators(any()) } throws CancellationException("left screen")
+
+        var caught: Throwable? = null
+        try {
+            orchestrator.runFullScan()
+        } catch (e: CancellationException) {
+            caught = e
+        }
+
+        assertNotNull("CancellationException from the prefetch must propagate", caught)
+        coVerify(exactly = 0) { sigmaRuleEngine.evaluateDns(any()) }
+    }
+
+    @Test
+    fun `a failed prefetch records exactly one attribution failure even with misses`() = runTest {
+        val misses = java.util.concurrent.atomic.AtomicReference<Set<String>>(emptySet())
+        every { indicatorResolver.attributionMisses } returns misses
+        coEvery { dnsEventDao.getRecentSnapshot() } returns listOf(dnsEvent())
+        coEvery { indicatorResolver.prefetchDomainIndicators(any()) } throws
+            android.database.sqlite.SQLiteException("database is locked")
+        // After a failed prefetch every live hit is a miss.
+        coEvery { sigmaRuleEngine.evaluateDns(any()) } answers { misses.set(setOf("a.com")); emptyList() }
+
+        val result = orchestrator.runFullScan()
+
+        val attribution = result.scannerErrors.filter { it.scanner == "attribution" }
+        assertEquals(listOf("SQLiteException"), attribution.map { it.exception })
+        assertTrue("misses still cleared", misses.get().isEmpty())
+    }
+
+    @Test
+    fun `an empty indicator table records a FeedsNotLoaded entry that is not a failure`() = runTest {
+        coEvery { indicatorResolver.feedCoverage() } returns com.androdr.ioc.FeedCoverage(0, false, false)
+
+        val result = orchestrator.runFullScan()
+
+        val entry = result.scannerErrors.single { it.scanner == "threat_intel" }
+        assertEquals(NotEvaluatedReason.FEEDS_NOT_LOADED.sentinel, entry.exception)
+        assertEquals(0, result.realFailureCount)
+    }
+
+    @Test
+    fun `a populated indicator table records no FeedsNotLoaded entry`() = runTest {
+        coEvery { indicatorResolver.feedCoverage() } returns com.androdr.ioc.FeedCoverage(5, true, true)
+
+        val result = orchestrator.runFullScan()
+
+        assertTrue(result.scannerErrors.none { it.scanner == "threat_intel" })
+    }
+
+    @Test
+    fun `rules-repo rows missing at scan start record a CampaignSourcesNotLoaded entry`() = runTest {
+        coEvery { indicatorResolver.feedCoverage() } returns com.androdr.ioc.FeedCoverage(5, false, true)
+
+        val result = orchestrator.runFullScan()
+
+        val entry = result.scannerErrors.single { it.scanner == "threat_intel" }
+        assertEquals(NotEvaluatedReason.CAMPAIGN_SOURCES_NOT_LOADED.sentinel, entry.exception)
+        assertTrue(entry.message.orEmpty().contains("the rules-repo threat lists did not load"))
+        assertEquals(0, result.realFailureCount)
+    }
+
+    @Test
+    fun `DNS monitor off records a DnsMonitorOff entry that is not a failure`() = runTest {
+        DnsVpnService.isRunning.value = false
+
+        val result = orchestrator.runFullScan()
+
+        val entry = result.scannerErrors.single { it.scanner == "dns_monitor" }
+        assertEquals(NotEvaluatedReason.DNS_MONITOR_OFF.sentinel, entry.exception)
+        assertEquals(0, result.realFailureCount)
+    }
+
+    @Test
+    fun `DNS monitor on records no DnsMonitorOff entry`() = runTest {
+        DnsVpnService.isRunning.value = true
+
+        val result = orchestrator.runFullScan()
+
+        assertTrue(result.scannerErrors.none { it.scanner == "dns_monitor" })
+    }
+
+    @Test
+    fun `an indicator count failure does not end the scan and claims no feed gap`() = runTest {
+        coEvery { indicatorResolver.feedCoverage() } throws android.database.sqlite.SQLiteException("disk")
+        every { indicatorResolver.attributionMisses } returns
+            java.util.concurrent.atomic.AtomicReference<Set<String>>(emptySet())
+        val finding = com.androdr.sigma.Finding(ruleId = "androdr-003", title = "Malicious Domain",
+            level = "critical", category = com.androdr.sigma.FindingCategory.APP_RISK)
+        coEvery { dnsEventDao.getRecentSnapshot() } returns listOf(dnsEvent())
+        coEvery { sigmaRuleEngine.evaluateDns(any()) } returns listOf(finding)
+
+        val result = orchestrator.runFullScan()
+
+        assertTrue(result.findings.any { it.ruleId == "androdr-003" })
+        assertTrue(result.scannerErrors.none { it.scanner == "threat_intel" })
+        assertEquals("SQLiteException", result.scannerErrors.single { it.scanner == "visibility_gaps" }.exception)
     }
 }
