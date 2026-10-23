@@ -209,7 +209,9 @@ class ScanOrchestrator @Inject constructor(
      * Progress is always reset, even when something above the scanner level throws.
      */
     suspend fun runFullScan(): ScanResult = try {
-        scanLock.withWriter { runFullScanInner() }
+        // Callers launch from a ViewModel (Main); rule loading, record building and the session are
+        // CPU work, so they run on Default (A8 D2). The lock is a Mutex, taken outside any transaction.
+        scanLock.withWriter { withContext(Dispatchers.Default) { runFullScanInner() } }
     } finally {
         _scanProgress.value = ScanProgress.Idle
     }
@@ -302,7 +304,9 @@ class ScanOrchestrator @Inject constructor(
      *   import could not be saved (nothing of it is kept).
      */
     @Suppress("TooGenericExceptionCaught")
-    suspend fun analyzeBugReport(uri: Uri): BugReportAnalyzer.BugReportAnalysisResult = scanLock.withWriter {
+    suspend fun analyzeBugReport(uri: Uri): BugReportAnalyzer.BugReportAnalysisResult =
+        // CPU work (rules, records, session) off the caller's Main; the lock is outside any transaction (A8 D2).
+        scanLock.withWriter { withContext(Dispatchers.Default) {
         initRuleEngine()
         val result = bugReportAnalyzer.analyze(uri)
         // Capability skips and enrichment failures are recorded on the persisted scan, so the
@@ -333,7 +337,7 @@ class ScanOrchestrator @Inject constructor(
             throw BugReportPersistException(t)
         }
         result.copy(findings = written.scan.findings, write = written)
-    }
+    } }
 
     /**
      * App telemetry for bug-report APK-hash enrichment — same device, same apps. A live scan's
@@ -432,7 +436,9 @@ class ScanOrchestrator @Inject constructor(
      * instead of rendering a summary for data that is not in the database.
      */
     @Suppress("TooGenericExceptionCaught")
-    suspend fun analyzeIntrusionLog(uri: Uri): IntrusionLogAnalysisResult = scanLock.withWriter {
+    suspend fun analyzeIntrusionLog(uri: Uri): IntrusionLogAnalysisResult =
+        // CPU work (rules, records, session) off the caller's Main; the lock is outside any transaction (A8 D2).
+        scanLock.withWriter { withContext(Dispatchers.Default) {
         initRuleEngine()
         val now = System.currentTimeMillis()
         val scan = ScanResult(
@@ -460,7 +466,7 @@ class ScanOrchestrator @Inject constructor(
             Log.e(TAG, "Failed to persist intrusion log import", t)
             throw IntrusionLogPersistException(t)
         }
-    }
+    } }
 
     /**
      * Computes a diff between two [ScanResult] snapshots.

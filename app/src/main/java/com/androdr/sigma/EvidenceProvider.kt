@@ -1,6 +1,6 @@
 package com.androdr.sigma
 
-import com.androdr.data.model.CveEntity
+import com.androdr.data.model.CveFields
 
 data class EvidenceResult(
     val evidence: Evidence,
@@ -17,31 +17,36 @@ class CveEvidenceProvider(private val allRules: List<SigmaRule>) : EvidenceProvi
 
     override fun provide(rule: SigmaRule, record: Map<String, Any?>): List<EvidenceResult> {
         val rawList = record["unpatched_cves"] as? List<*> ?: return emptyList()
-        val cves = rawList.filterIsInstance<CveEntity>()
-        if (cves.isEmpty()) return emptyList()
-        val cveEvidences = cves.map { cve ->
-            CveEvidence(
-                cveId = cve.cveId, description = cve.description, severity = cve.severity,
-                patchLevel = cve.fixedInPatchLevel, campaigns = campaignMap[cve.cveId] ?: emptyList(),
-                dateAdded = cve.cisaDateAdded)
-        }
+        // Plain maps (ruling R21), so a record read back from the store gives the same evidence.
+        val cveEvidences = rawList.mapNotNull { (it as? Map<*, *>)?.let(::cveEvidence) }
+        if (cveEvidences.isEmpty()) return emptyList()
         val campaignCount = cveEvidences.count { it.campaigns.isNotEmpty() }
-        val targetPatchLevel = cves.maxOf { it.fixedInPatchLevel }
+        val targetPatchLevel = cveEvidences.maxOf { it.patchLevel }
         val evidence = Evidence.CveList(
             cves = cveEvidences,
             targetPatchLevel = targetPatchLevel,
             campaignCount = campaignCount
         )
         val titleVars = mapOf(
-            "count" to cves.size.toString(),
+            "count" to cveEvidences.size.toString(),
             "campaign_count" to campaignCount.toString()
         )
         val remediationVars = mapOf(
             "target_patch_level" to targetPatchLevel,
-            "count" to cves.size.toString(),
+            "count" to cveEvidences.size.toString(),
             "campaign_count" to campaignCount.toString()
         )
         return listOf(EvidenceResult(evidence, titleVars, remediationVars))
+    }
+
+    /** One `unpatched_cves` entry; null when it names no CVE id. A missing text field reads as empty. */
+    private fun cveEvidence(m: Map<*, *>): CveEvidence? {
+        val id = m[CveFields.CVE_ID] as? String ?: return null
+        fun text(key: String) = m[key] as? String ?: ""
+        return CveEvidence(
+            cveId = id, description = text(CveFields.DESCRIPTION), severity = text(CveFields.SEVERITY),
+            patchLevel = text(CveFields.FIXED_IN_PATCH_LEVEL), campaigns = campaignMap[id] ?: emptyList(),
+            dateAdded = text(CveFields.CISA_DATE_ADDED))
     }
 
     private fun buildCampaignMap(): Map<String, List<String>> {
