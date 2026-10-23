@@ -11,6 +11,7 @@ import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -53,7 +54,7 @@ class DnsFlushRetryTest {
         scope: CoroutineScope = backgroundScope,
     ) = DnsLogBuffer(
         scope, flush = writer::write, health = health,
-        maxSize = 100, maxBuffered = maxBuffered, flushIntervalMs = 2_000L,
+        maxSize = 100, maxBuffered = maxBuffered, flushIntervalMs = 2_000L, detached = backgroundScope,
     )
 
     @Test
@@ -162,6 +163,7 @@ class DnsFlushRetryTest {
             backgroundScope,
             flush = { batch -> gate.await(); stored += batch },
             health = RecordingHealth(), maxSize = 2, maxBuffered = 50, flushIntervalMs = 2_000L,
+            detached = backgroundScope,
         )
         buf.add(event(1))
         buf.add(event(2)) // full buffer: a flush starts at once and is suspended on the gate
@@ -174,6 +176,69 @@ class DnsFlushRetryTest {
         gate.complete(Unit)
         stopping.await()
         assertEquals("every event was offered, in order", listOf(1L, 2L, 3L), stored.map { it.timestamp })
+    }
+
+    private fun TestScope.stalledBuffer(health: RecordingHealth, gate: kotlinx.coroutines.CompletableDeferred<Unit>,
+                                        fails: Boolean = false, maxSize: Int = 100) =
+        DnsLogBuffer(
+            backgroundScope,
+            flush = { gate.await(); if (fails) error("late failure") },
+            health = health, maxSize = maxSize, maxBuffered = 50, flushIntervalMs = 2_000L,
+            detached = backgroundScope,
+        )
+
+    @Test
+    fun `shutdown with a stalled writer returns within the bound and records the dropped count`() = runTest {
+        val gate = kotlinx.coroutines.CompletableDeferred<Unit>()
+        val health = RecordingHealth()
+        val buf = stalledBuffer(health, gate)
+        (1..3).forEach { buf.add(event(it)) }
+        val start = testScheduler.currentTime
+
+        val result = kotlinx.coroutines.withTimeoutOrNull(1_500) { buf.flushAndStop() }
+
+        assertNull("the stalled write must not complete the stop", result)
+        assertEquals("the caller is released at the bound, not when the writer returns", 1_500L,
+            testScheduler.currentTime - start)
+        runCurrent()
+        assertEquals("events not confirmed written are reported, not lost silently", listOf(3), health.dropped)
+        gate.complete(Unit)
+        runCurrent()
+        assertEquals("a late success does not report them again", listOf(3), health.dropped)
+    }
+
+    @Test
+    fun `shutdown that times out waiting behind an in-flight flush reports both batches`() = runTest {
+        val gate = kotlinx.coroutines.CompletableDeferred<Unit>()
+        val health = RecordingHealth()
+        val buf = stalledBuffer(health, gate, maxSize = 2)
+        buf.add(event(1)); buf.add(event(2)) // flush of [1, 2] starts and stalls
+        runCurrent()
+        buf.add(event(3)) // still buffered
+
+        kotlinx.coroutines.withTimeoutOrNull(1_500) { buf.flushAndStop() }
+        runCurrent()
+
+        assertEquals(listOf(3), health.dropped)
+        assertEquals(0, buf.pending())
+    }
+
+    @Test
+    fun `an abandoned in-flight batch that later fails is neither re-queued nor reported twice`() = runTest {
+        val gate = kotlinx.coroutines.CompletableDeferred<Unit>()
+        val health = RecordingHealth()
+        val buf = stalledBuffer(health, gate, fails = true, maxSize = 2)
+        buf.add(event(1)); buf.add(event(2))
+        runCurrent()
+        kotlinx.coroutines.withTimeoutOrNull(1_500) { buf.flushAndStop() }
+        runCurrent()
+        assertEquals(listOf(2), health.dropped)
+
+        gate.complete(Unit) // the abandoned write now fails
+        runCurrent()
+
+        assertEquals(0, buf.pending())
+        assertEquals(listOf(2), health.dropped)
     }
 
     @Test

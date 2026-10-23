@@ -6,8 +6,10 @@ import com.androdr.data.store.DnsDropLog
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
-import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -49,6 +51,8 @@ internal class DnsLogBuffer(
     private val maxSize: Int = 100,
     private val maxBuffered: Int = MAX_BUFFERED,
     private val flushIntervalMs: Long = 2_000L,
+    /** Runs the final drain and its reports so a caller's timeout can stop waiting without stopping them. */
+    private val detached: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO),
 ) {
     private val lock = Any()
     private val flushLock = Mutex()
@@ -57,6 +61,12 @@ internal class DnsLogBuffer(
     private var failures = 0
     private var unreportedDrops = 0
     private var stopped = false
+
+    /** The batch being written right now, if any (counted as dropped when a shutdown gives up on it). */
+    private var inFlight: List<DnsEvent>? = null
+
+    /** Set when a shutdown stopped waiting: the buffer and the in-flight batch were already reported dropped. */
+    private var abandoned = false
 
     fun start() {
         flushJob = scope.launch {
@@ -73,18 +83,31 @@ internal class DnsLogBuffer(
     }
 
     /**
-     * Called from [DnsVpnService.stopVpn] inside `runBlocking { withTimeoutOrNull(...) }`. Stops the
-     * periodic job, waits for a flush already in progress to finish, then makes one last attempt at
-     * everything buffered. Whatever still cannot be stored is reported as dropped (not silently lost).
+     * Called from [DnsVpnService.stopVpn] inside `runBlocking { withTimeoutOrNull(...) }`, so the wait
+     * must be cancellable even though a batch that has started must not be interrupted halfway. The
+     * final drain therefore runs in [detached] and this call only awaits it: it waits for a flush in
+     * progress, makes one last attempt at everything buffered, and reports what could not be stored as
+     * dropped. If the caller gives up first (timeout), the buffer and the in-flight batch are reported
+     * as dropped ("not confirmed written before shutdown") and the report is made without waiting.
      */
     suspend fun flushAndStop() {
         synchronized(lock) { stopped = true }
-        try {
-            flushJob?.cancelAndJoin()
-            flushJob = null
+        flushJob?.cancel()
+        flushJob = null
+        val drain = detached.async {
             flushLock.withLock { flushOnce() }
-        } finally {
-            withContext(NonCancellable) { dropRemaining() }
+            dropRemaining()
+        }
+        try {
+            drain.await()
+        } catch (e: CancellationException) {
+            synchronized(lock) {
+                abandoned = true
+                unreportedDrops += buffer.size + (inFlight?.size ?: 0)
+                buffer.clear()
+            }
+            detached.launch { reportDrops() }
+            throw e
         }
     }
 
@@ -130,6 +153,7 @@ internal class DnsLogBuffer(
             if (buffer.isEmpty()) return
             snapshot = buffer.toList()
             buffer.clear()
+            inFlight = snapshot
         }
         val stored = try {
             // A batch that has started is allowed to finish: cancelling an insert halfway would
@@ -141,13 +165,14 @@ internal class DnsLogBuffer(
             false
         }
         synchronized(lock) {
+            inFlight = null
             if (stored) {
                 failures = 0
-            } else {
+            } else if (!abandoned) {
                 failures++
                 buffer.addAll(0, snapshot)
                 trimLocked()
-            }
+            } // else: a shutdown already counted this batch as dropped
         }
         reportDrops()
     }

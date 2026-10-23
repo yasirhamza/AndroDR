@@ -120,10 +120,17 @@ class ZipCentralDirectoryTest {
     }
 
     @Test
-    fun `source gate - the preflight never reopens a path`() {
+    fun `an out-of-memory while reading a forged directory gives no estimate`() {
+        val ch = mockk<java.nio.channels.FileChannel> { every { size() } throws OutOfMemoryError() }
+        assertNull(ZipCentralDirectory.totalSize(ch))
+    }
+
+    @Test
+    fun `source gate - the preflight never reopens a path and closes its stream`() {
         val src = File("src/main/java/com/androdr/scanner/ImportPreflight.kt").readText()
         assertTrue(!src.contains("/proc/self/fd"))
         assertTrue(!src.contains("ZipFile("))
         assertTrue(src.contains("openFileDescriptor"))
+        assertTrue(src.contains("FileInputStream(pfd.fileDescriptor).use"))
     }
 }

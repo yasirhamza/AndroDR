@@ -38,8 +38,49 @@ class StorageFailedBannerTest {
     }
 
     @Test
-    fun `the persistent health flag shows the not-saved warning`() {
-        assertEquals(StorageBanner.NOT_SAVED, banner(scan(), flag = true))
+    fun `after a restart the flag alone never says the scan on screen was not saved`() {
+        // The in-memory result is gone; the screen shows an older saved scan.
+        assertEquals(StorageBanner.EARLIER_SCAN_SHOWN, banner(scan(), unsaved = false, flag = true))
+    }
+
+    @Test
+    fun `a failed import with a saved live scan on screen does not mark that scan unsaved`() {
+        val live = scan(id = 5L)
+        val outcome = DashboardViewModel.outcomeOf(live, listOf(live))!!
+        assertNull("the live scan was saved", outcome.unsaved)
+        // The import's failure set the flag; the live scan is still the one displayed.
+        assertEquals(StorageBanner.EARLIER_SCAN_SHOWN, banner(live, unsaved = outcome.unsaved != null, flag = true))
+    }
+
+    @Test
+    fun `the not-saved banner needs the displayed scan itself to be unsaved`() {
+        assertEquals(StorageBanner.NOT_SAVED, banner(scan(), unsaved = true, flag = false))
+        assertEquals(StorageBanner.NOT_SAVED, banner(scan(), unsaved = true, flag = true))
+    }
+
+    @Test
+    fun `earlier-scan copy does not vouch for the screen and not-saved copy is true of the screen`() {
+        val strings = java.io.File("src/main/res/values/strings.xml").readText()
+        val earlier = Regex("name=\"storage_earlier_banner_body\">([^<]*)").find(strings)!!.groupValues[1]
+        assertTrue(!earlier.contains("findings are shown"))
+        assertTrue(earlier.contains("earlier"))
+        val notSaved = Regex("name=\"storage_not_saved_banner_body\">([^<]*)").find(strings)!!.groupValues[1]
+        assertTrue("no storage cause is asserted for any unsaved scan", !notSaved.contains("ran out"))
+    }
+
+    @Test
+    fun `a failed history read concludes nothing, cancellation propagates`() = kotlinx.coroutines.runBlocking {
+        assertNull(DashboardViewModel.readPersisted { error("database closed") })
+        assertNull(DashboardViewModel.outcomeOf(scan(), null))
+        val ok = DashboardViewModel.readPersisted { listOf(scan(id = 9L)) }
+        assertEquals(1, ok!!.size)
+        var cancelled = false
+        try {
+            DashboardViewModel.readPersisted { throw kotlinx.coroutines.CancellationException("x") }
+        } catch (_: kotlinx.coroutines.CancellationException) {
+            cancelled = true
+        }
+        assertTrue(cancelled)
     }
 
     @Test

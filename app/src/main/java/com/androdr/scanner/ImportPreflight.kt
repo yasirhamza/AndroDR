@@ -31,7 +31,8 @@ class ImportPreflight @Inject constructor(
         try {
             // The descriptor the provider handed us is read in place; no path is reopened.
             context.contentResolver.openFileDescriptor(uri, "r")?.use { pfd ->
-                ZipCentralDirectory.totalSize(FileInputStream(pfd.fileDescriptor).channel)
+                // The stream does not own the descriptor; closing it only releases the channel.
+                FileInputStream(pfd.fileDescriptor).use { ZipCentralDirectory.totalSize(it.channel) }
             }
         } catch (e: CancellationException) {
             throw e

@@ -156,9 +156,11 @@ class DashboardViewModel @Inject constructor(
                     }
                 }
                 val result = orchestrator.runFullScan()
-                val persisted = repository.allScans.first()
-                _unsavedScan.value = unsavedOrNull(result, persisted)
-                if (shouldClearHealthFlag(result, persisted)) storageHealth.clear()
+                // A history read that fails leaves the state as it was: neither "saved" nor "unsaved" is known.
+                outcomeOf(result, readPersisted { repository.allScans.first() })?.let { outcome ->
+                    _unsavedScan.value = outcome.unsaved
+                    if (outcome.clearHealthFlag) storageHealth.clear()
+                }
             } finally {
                 _isScanning.value = false
             }
@@ -192,7 +194,8 @@ class DashboardViewModel @Inject constructor(
          */
         fun storageBanner(scan: ScanResult?, isScanning: Boolean, unsaved: Boolean, healthFailed: Boolean) = when {
             isScanning -> StorageBanner.NONE
-            unsaved || healthFailed -> StorageBanner.NOT_SAVED
+            unsaved -> StorageBanner.NOT_SAVED
+        healthFailed -> StorageBanner.EARLIER_SCAN_SHOWN
             scan?.telemetryState == TelemetryState.FAILED -> StorageBanner.PARTLY_STORED
             else -> StorageBanner.NONE
         }
@@ -200,6 +203,23 @@ class DashboardViewModel @Inject constructor(
         /** The unsaved in-memory result wins over history: an older clean scan must not answer for it. */
         fun resolveLatest(persisted: List<ScanResult>, unsaved: ScanResult?): ScanResult? =
             unsaved ?: persisted.preferRuntimeScan()
+
+        /** What a finished run means for the Dashboard state. */
+        class ScanOutcome(val unsaved: ScanResult?, val clearHealthFlag: Boolean)
+
+        /** Null when history could not be read ([persisted] null): nothing can be concluded. */
+        fun outcomeOf(result: ScanResult, persisted: List<ScanResult>?): ScanOutcome? =
+            persisted?.let { ScanOutcome(unsavedOrNull(result, it), shouldClearHealthFlag(result, it)) }
+
+        /** Reads history; a failed read (the failure mode this feature exists for) gives null. */
+        @Suppress("TooGenericExceptionCaught", "SwallowedException")
+        suspend fun readPersisted(read: suspend () -> List<ScanResult>): List<ScanResult>? = try {
+            read()
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            null
+        }
 
         /** [result] when no saved scan has its id (the write failed), else null. */
         fun unsavedOrNull(result: ScanResult, persisted: List<ScanResult>): ScanResult? =
@@ -220,4 +240,13 @@ class DashboardViewModel @Inject constructor(
 }
 
 /** Which storage warning the Dashboard shows, if any. */
-enum class StorageBanner { NONE, PARTLY_STORED, NOT_SAVED }
+enum class StorageBanner {
+    NONE,
+    PARTLY_STORED,
+
+    /** The scan on screen exists only in memory. */
+    NOT_SAVED,
+
+    /** A recent scan or import could not be saved, but the scan on screen is an earlier, saved one. */
+    EARLIER_SCAN_SHOWN,
+}

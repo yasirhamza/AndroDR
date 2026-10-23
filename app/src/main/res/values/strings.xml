@@ -28,9 +28,11 @@
     <string name="storage_failed_banner_title">Some of this scan\'s records were not saved</string>
     <string name="storage_failed_banner_body">The database could not store every record of this scan. The findings were all checked and are shown, but part of the scan\'s history may be missing from the Timeline and from later re-checks.</string>
     <string name="storage_not_saved_banner_title">The latest scan was not saved</string>
-    <string name="storage_not_saved_banner_body">The scan ran and any findings are shown, but its results could not be saved, so they are not in your history and are lost when you close the app. Free some storage and scan again.</string>
+    <string name="storage_not_saved_banner_body">The scan ran, but its results could not be saved, so they are not in your history and are lost when you close the app. Any findings are shown on this screen only. Scan again; if this repeats, free some storage.</string>
+    <string name="storage_earlier_banner_title">A recent scan or import was not saved</string>
+    <string name="storage_earlier_banner_body">Storage ran out while saving a recent scan or import, so it is not in your history. The result shown here is from an earlier, saved scan and does not include it. Free some storage and scan again.</string>
     <string name="dns_drops_banner_title">DNS events were not recorded</string>
-    <string name="dns_drops_banner_body" tools:ignore="PluralsCandidate">%1$d DNS event(s) could not be saved while the database was unavailable, so they are missing from the DNS log.</string>
+    <string name="dns_drops_banner_body" tools:ignore="PluralsCandidate">%1$d DNS event(s) could not be saved (the database was unavailable, or the VPN stopped before they were written), so they are missing from the DNS log.</string>
     <string name="dns_drops_banner_dismiss">Dismiss</string>
     <string name="partial_scan_banner_title">Scan incomplete</string>
     <!-- PluralsCandidate: compact failure counter -->

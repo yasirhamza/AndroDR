@@ -36,6 +36,8 @@ object ZipCentralDirectory {
         null
     } catch (e: RuntimeException) {
         null // buffer under/overflow on a malformed directory
+    } catch (e: OutOfMemoryError) {
+        null // a forged directory size on a low-heap device
     }
 
     private fun parse(ch: FileChannel): Long? {
@@ -52,7 +54,7 @@ object ZipCentralDirectory {
             entries = z[0]; cdSize = z[1]; cdOffset = z[2]
         }
         if (entries !in 0..MAX_ENTRIES || cdSize !in 0..MAX_DIRECTORY_BYTES) return null
-        if (cdOffset < 0 || cdOffset + cdSize > fileSize) return null
+        if (cdOffset < 0 || cdOffset > fileSize - cdSize) return null
         val cd = readAt(ch, cdOffset, cdSize.toInt()) ?: return null
         return sumEntries(cd, entries)
     }
@@ -69,7 +71,7 @@ object ZipCentralDirectory {
         val loc = eocd - ZIP64_LOCATOR_SIZE
         if (loc < 0 || tail.getInt(loc) != ZIP64_LOCATOR_SIG) return null
         val recordOffset = tail.getLong(loc + 8)
-        if (recordOffset < 0 || recordOffset + ZIP64_EOCD_MIN > fileSize) return null
+        if (recordOffset < 0 || recordOffset > fileSize - ZIP64_EOCD_MIN) return null
         val rec = readAt(ch, recordOffset, ZIP64_EOCD_MIN) ?: return null
         if (rec.getInt(0) != ZIP64_EOCD_SIG) return null
         return longArrayOf(rec.getLong(32), rec.getLong(40), rec.getLong(48))

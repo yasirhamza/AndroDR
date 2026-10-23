@@ -624,11 +624,14 @@ private fun StorageBanners(viewModel: DashboardViewModel, latestScan: ScanResult
             WarningBanner(R.string.storage_not_saved_banner_title, R.string.storage_not_saved_banner_body)
         StorageBanner.PARTLY_STORED ->
             WarningBanner(R.string.storage_failed_banner_title, R.string.storage_failed_banner_body)
+        StorageBanner.EARLIER_SCAN_SHOWN ->
+            WarningBanner(R.string.storage_earlier_banner_title, R.string.storage_earlier_banner_body)
         StorageBanner.NONE -> Unit
     }
     if (drops.any) {
         WarningBanner(
-            R.string.dns_drops_banner_title, R.string.dns_drops_banner_body, drops.total.toInt(),
+            R.string.dns_drops_banner_title, R.string.dns_drops_banner_body,
+            drops.total.coerceAtMost(Int.MAX_VALUE.toLong()).toInt(),
             onDismiss = viewModel::dismissDnsDrops,
         )
     }
