@@ -1,0 +1,5 @@
+{"app_name":null,"app_uid":1000,"destination_ip":"10.0.2.15","destination_port":80,"protocol":null,"timestamp":1729612345682}
+{"app_name":"com.google.android.gms","app_uid":10187,"destination_ip":"142.250.185.78","destination_port":443,"protocol":"UDP","timestamp":1729612345681}
+{"app_name":"com.whatsapp","app_uid":10145,"destination_ip":"157.240.201.35","destination_port":5222,"protocol":"TCP","timestamp":1729612345680}
+{"app_name":"com.android.chrome","app_uid":10123,"destination_ip":"172.217.169.46","destination_port":443,"protocol":"TCP","timestamp":1729612345679}
+{"app_name":"com.android.chrome","app_uid":10123,"destination_ip":"216.58.213.174","destination_port":443,"protocol":"TCP","timestamp":1729612345678}

@@ -69,9 +69,8 @@ class TelemetryRecordCodec(private val dictionaries: TelemetryDictionaries) {
             }
         } catch (_: java.util.zip.DataFormatException) {
             null
-        } catch (_: IllegalArgumentException) {
-            null
-        } catch (_: IllegalStateException) {
+        } catch (_: RuntimeException) {
+            // unknown/tampered dictionary, loader I/O or Resources.NotFoundException: unreadable, not fatal
             null
         }
         val parsed = raw?.let { CanonicalJson.parse(String(it, Charsets.UTF_8)) }
@@ -105,7 +104,7 @@ class TelemetryRecordCodec(private val dictionaries: TelemetryDictionaries) {
                     !inflater.finished() -> return null
                 }
             }
-            return out.takeIf { off == rawBytes }
+            return out.takeIf { off == rawBytes && inflater.remaining == 0 }
         } finally {
             inflater.end()
         }

@@ -1,0 +1,10 @@
+{"event_type":"INSTALL","package_name":"com.android.chrome","timestamp":1729612345678,"version_code":1234567890}
+{"event_type":"UPDATE","package_name":"com.google.android.gms","timestamp":1729612345678,"version_code":244735035}
+{"event_type":"UNINSTALL","package_name":"com.whatsapp","timestamp":1729612345678,"version_code":2}
+{"app_name":"com.instagram.android","event_type":"app_foreground","package_name":"com.instagram.android","timestamp":1729612345678}
+{"app_name":"com.instagram.android","event_type":"app_background","package_name":"com.instagram.android","timestamp":1729612345678}
+{"access_count":12,"event_time_ms":1729612345678,"is_system_app":false,"last_access_time":1729612345678,"last_reject_time":0,"operation":"android:camera","package_name":"com.instagram.android"}
+{"access_count":3,"event_time_ms":1729612345678,"is_system_app":true,"last_access_time":1729612345678,"last_reject_time":0,"operation":"android:record_audio","package_name":"com.android.vending"}
+{"acquired_at":1729612345678,"duration_millis":1500,"package_name":"com.google.android.gms","wakelock_tag":"*alarm*"}
+{"abort_message":"","crash_timestamp":1729612345678,"package_name":"com.google.android.youtube","process_name":"com.google.android.youtube","signal_number":11}
+{"day_index":3,"description":"top=10123:\"com.android.vending\"","event_type":"top","package_name":"com.android.vending","timestamp":1729612345678,"timestamp_precision":"day","version":1}

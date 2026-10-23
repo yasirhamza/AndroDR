@@ -141,42 +141,112 @@ class TelemetryRecordCodecTest {
         assertArrayEquals(first.body, codec.encode("network_monitor", json, true, d).body)
     }
 
-    /**
-     * Fixture: 1,000 deterministic (seeded) [NetworkTelemetry] live-scan records built from a pool of
-     * realistic package names, public IPv4/IPv6 addresses, ports and protocols, with epoch-ms
-     * timestamps spread over a day. The pool is deliberately larger than the dictionary's samples.
-     */
-    @Test fun `event bodies compress at least 2_5x on 1000 network records`() {
-        val rnd = Random(42)
-        val apps = listOf(
-            "com.android.chrome", "com.google.android.gms", "com.whatsapp", "org.mozilla.firefox",
-            "com.discord", "com.reddit.frontpage", "com.netflix.mediaclient", "com.amazon.mShop.android.shopping",
-            "com.twitter.android", "com.snapchat.android", "com.google.android.apps.photos", "com.dropbox.android",
-            "com.slack", "us.zoom.videomeetings", "com.paypal.android.p2pmobile", null,
-        )
-        val protocols = listOf("TCP", "UDP", null)
-        val ports = listOf(443, 443, 443, 80, 53, 5228, 8080, 993, 5222, 123)
+    // Compression fixtures: deterministic (seeded) records whose package names, domains and IPs are
+    // deliberately NOT in any dictionary's sample pools (dictionaries can only help with field names and
+    // structure, not memorised values). Ratio = sum(canonical bytes) / sum(Deflate-with-dictionary bytes).
+
+    private val otherApps = listOf(
+        "org.mozilla.firefox", "com.discord", "com.reddit.frontpage", "com.netflix.mediaclient",
+        "com.amazon.mShop.android.shopping", "com.twitter.android", "com.snapchat.android",
+        "com.google.android.apps.photos", "com.dropbox.android", "com.slack", "us.zoom.videomeetings",
+        "com.paypal.android.p2pmobile", "com.ubercab", "com.duolingo", "org.thoughtcrime.securesms",
+    )
+
+    private fun ip(rnd: Random): String =
+        if (rnd.nextInt(10) == 0) "2607:f8b0:4004:${rnd.nextInt(0xfff).toString(16)}::200e"
+        else "${listOf(23, 52, 13, 151, 185, 99, 54).random(rnd)}." +
+            "${rnd.nextInt(256)}.${rnd.nextInt(256)}.${rnd.nextInt(1, 255)}"
+
+    private fun ratio(service: String, records: List<Map<String, Any?>>): Double {
         var raw = 0L
         var packed = 0L
         val d = Deflater()
-        repeat(1000) {
-            val ip = if (rnd.nextInt(10) == 0) "2607:f8b0:4004:${rnd.nextInt(0xfff).toString(16)}::200e"
-            else "${listOf(142, 172, 157, 31, 104, 52, 13, 151, 185).random(rnd)}." +
-                "${rnd.nextInt(256)}.${rnd.nextInt(256)}.${rnd.nextInt(1, 255)}"
-            val rec = NetworkTelemetry(
-                destinationIp = ip, destinationPort = ports.random(rnd), protocol = protocols.random(rnd),
-                appUid = 10000 + rnd.nextInt(300), appName = apps.random(rnd),
+        for (fields in records) {
+            val s = codec.strip(fields, TelemetrySource.LIVE_SCAN, captured)
+            val enc = codec.encode(service, codec.canonicalJson(s.fields), true, d)
+            raw += enc.rawBytes
+            packed += enc.body.size
+            // every compressed record must still decode to the original
+            val back = codec.decode(
+                enc.body, enc.encoding, enc.dictVersion, enc.rawBytes, s.strippedKeys,
+                TelemetrySource.LIVE_SCAN, captured
+            )
+            assertEquals(fields, back)
+        }
+        val r = raw.toDouble() / packed
+        println("MEASURED_COMPRESSION_RATIO service=$service ratio=$r raw=$raw packed=$packed")
+        return r
+    }
+
+    @Test fun `network family compresses at least 2_5x on 1000 NetworkTelemetry records`() {
+        val rnd = Random(42)
+        val protocols = listOf("TCP", "UDP", null)
+        val ports = listOf(443, 443, 443, 80, 53, 5228, 8080, 993, 5222, 123)
+        val records = List(1000) {
+            NetworkTelemetry(
+                destinationIp = ip(rnd), destinationPort = ports.random(rnd), protocol = protocols.random(rnd),
+                appUid = 10000 + rnd.nextInt(300), appName = (otherApps + null).random(rnd),
                 timestamp = 1_729_600_000_000L + rnd.nextLong(86_400_000L),
                 source = TelemetrySource.LIVE_SCAN, capturedAt = captured,
-            )
-            val s = codec.strip(rec.toFieldMap(), rec.source, rec.capturedAt)
-            val enc = codec.encode("network_monitor", codec.canonicalJson(s.fields), true, d)
+            ).toFieldMap()
+        }
+        val r = ratio("network_monitor", records)
+        assertTrue("ratio $r", r >= 2.5)
+    }
+
+    @Test fun `dns family compresses at least 2x on 1000 dns records`() {
+        val rnd = Random(7)
+        val domains = listOf("api.stripe.com", "cdn.discordapp.com", "gateway.reddit.com", "ocsp.digicert.com",
+            "assets.nflxext.com", "api.twitter.com", "sentry.io", "o1234.ingest.sentry.io", "time.cloudflare.com")
+        val records = List(1000) {
+            val blocked = rnd.nextInt(8) == 0
+            buildMap<String, Any?> {
+                put("app_uid", 10000 + rnd.nextInt(300))
+                put("domain", domains.random(rnd))
+                put("is_blocked", blocked)
+                put("reason", if (blocked) "blocklist" else null)
+                if (!blocked) put("resolved_ips", List(rnd.nextInt(1, 4)) { ip(rnd) })
+                put("source_package", otherApps.random(rnd))
+                put("timestamp", 1_729_600_000_000L + rnd.nextLong(86_400_000L))
+            }
+        }
+        val r = ratio("dns_monitor", records)
+        assertTrue("ratio $r", r >= 2.0)
+    }
+
+    @Test fun `activity family compresses at least 2x on 1000 package events`() {
+        val rnd = Random(11)
+        val ops = listOf("android:coarse_location", "android:read_contacts", "android:post_notification")
+        val records = List(1000) {
+            val pkg = otherApps.random(rnd)
+            val t = 1_729_600_000_000L + rnd.nextLong(86_400_000L)
+            when (rnd.nextInt(3)) {
+                0 -> mapOf("event_type" to "UPDATE", "package_name" to pkg, "timestamp" to t,
+                    "version_code" to rnd.nextInt(1, 900_000))
+                1 -> mapOf("app_name" to pkg, "event_type" to "app_foreground", "package_name" to pkg,
+                    "timestamp" to t)
+                else -> mapOf("access_count" to rnd.nextInt(1, 90), "event_time_ms" to t,
+                    "is_system_app" to false, "last_access_time" to t, "last_reject_time" to 0L,
+                    "operation" to ops.random(rnd), "package_name" to pkg)
+            }
+        }
+        // appops/usage/install records share one family dictionary; encode them under their own services
+        var raw = 0L
+        var packed = 0L
+        val d = Deflater()
+        for (fields in records) {
+            val service = when {
+                "operation" in fields -> "appops_audit"
+                "version_code" in fields -> "package_install_history"
+                else -> "usage_stats"
+            }
+            val enc = codec.encode(service, codec.canonicalJson(fields), true, d)
             raw += enc.rawBytes
             packed += enc.body.size
         }
-        val ratio = raw.toDouble() / packed
-        println("MEASURED_COMPRESSION_RATIO=$ratio raw=$raw packed=$packed")
-        assertTrue("ratio $ratio", ratio >= 2.5)
+        val r = raw.toDouble() / packed
+        println("MEASURED_COMPRESSION_RATIO service=activity-family ratio=$r raw=$raw packed=$packed")
+        assertTrue("ratio $r", r >= 2.0)
     }
 
     // ---- S6 --------------------------------------------------------------------------------

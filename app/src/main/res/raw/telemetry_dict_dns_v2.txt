@@ -1,0 +1,4 @@
+{"app_uid":10187,"domain":"play.googleapis.com","is_blocked":true,"reason":"blocklist","source_package":"com.google.android.gms","timestamp":1729612345678}
+{"app_uid":10123,"domain":"mtalk.google.com","is_blocked":false,"reason":null,"resolved_ips":["142.250.185.78","157.240.201.35"],"source_package":"com.android.chrome","timestamp":1729612345678}
+{"app_uid":10145,"domain":"graph.facebook.com","is_blocked":false,"reason":null,"resolved_ips":["172.217.169.46"],"source_package":"com.whatsapp","timestamp":1729612345678}
+{"app_uid":10123,"domain":"www.google.com","is_blocked":false,"reason":null,"resolved_ips":["216.58.213.174"],"source_package":"com.android.chrome","timestamp":1729612345679}
