@@ -3,7 +3,7 @@
     "service": "dns_monitor",
     "fields": {
       "timestamp": 1787400345334, "domain": "api.example.com", "app_uid": -1,
-      "source_package": "com.evil.app", "is_blocked": false, "reason": null,
+      "source_package": "com.evil.app",
       "resolved_ips": ["34.160.125.113"]
     }
   },

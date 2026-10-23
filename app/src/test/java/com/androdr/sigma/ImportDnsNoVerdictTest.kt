@@ -74,4 +74,43 @@ class ImportDnsNoVerdictTest {
         val liveHits = SigmaRuleEvaluator.evaluate(listOf(rule), listOf(live), "dns_monitor", emptyMap(), emptyMap())
         assertTrue(liveHits.any { it.triggered })
     }
+
+    @Test
+    fun `a rule selecting is_blocked false never matches an import`() {
+        // Test-only rule: a shipped one would break fleet safety. It discriminates the old defaults.
+        val rule = SigmaRuleParser.parse(
+            """
+            title: Allowed DNS
+            id: test-allowed
+            status: experimental
+            description: Test
+            category: incident
+            logsource:
+                product: androdr
+                service: dns_monitor
+            detection:
+                selection:
+                    is_blocked: false
+                condition: selection
+            level: high
+            display:
+                category: app_risk
+            """.trimIndent()
+        )!!
+        val hits =
+            SigmaRuleEvaluator.evaluate(listOf(rule), listOf(importedFields()), "dns_monitor", emptyMap(), emptyMap())
+        assertTrue(hits.none { it.triggered })
+    }
+
+    @Test
+    fun `no imported dns_monitor corpus record carries a tunnel verdict`() {
+        val imported = ContractCorpus.records().filter { (service, fields) ->
+            service == "dns_monitor" && fields.containsKey("resolved_ips")
+        }
+        assertTrue("the corpus needs an imported dns_monitor record", imported.isNotEmpty())
+        imported.forEach { (_, fields) ->
+            assertFalse(fields.toString(), fields.containsKey("is_blocked"))
+            assertFalse(fields.toString(), fields.containsKey("reason"))
+        }
+    }
 }
