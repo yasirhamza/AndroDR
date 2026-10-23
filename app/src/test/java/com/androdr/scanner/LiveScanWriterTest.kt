@@ -190,7 +190,13 @@ class LiveScanWriterTest {
                         displayLabel = "l"))
                 val now = System.currentTimeMillis()
                 val usageTime = now - 60_000
+                // Review m1: with a watermark 10 min ago the re-read starts ~15 min ago; a row older
+                // than that is not rewritten by this scan, so it joins the lookback (once).
+                g.db.eventWatermarkDao().put(com.androdr.data.model.EventWatermark("usage_stats", now - 600_000, 6L))
+                val olderTime = now - 1_800_000
                 g.timelineDao.insertAll(listOf(
+                    UsageEvent(olderTime, "com.b", "B", "app_foreground", TelemetrySource.LIVE_SCAN, now - 1)
+                        .toForensicTimelineEvent(6L),
                     // An earlier scan's row for the usage event this scan reads again.
                     UsageEvent(usageTime, "com.a", "A", "app_foreground", TelemetrySource.LIVE_SCAN, now - 1)
                         .toForensicTimelineEvent(7L),
@@ -209,6 +215,8 @@ class LiveScanWriterTest {
                 assertEquals("the usage event is correlated once", 1,
                     events.captured.count { it.source == "usage_stats" && it.startTimestamp == usageTime })
                 assertTrue("no row after the scan start", events.captured.none { it.description == "future" })
+                assertEquals("a usage row before the re-read window is correlated once", 1,
+                    events.captured.count { it.source == "usage_stats" && it.startTimestamp == olderTime })
             }
         }
 }

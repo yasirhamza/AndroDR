@@ -39,9 +39,17 @@ object Watermarks {
     fun nextDnsId(previous: Long?, collectedMaxId: Long?, failed: Boolean, saveFallback: Boolean): Long? =
         if (failed || saveFallback) null else collectedMaxId ?: previous
 
-    /** Where a usage collection starts: [USAGE_REREAD_MS] before a usable watermark, else the last 24 h. */
-    fun usageSince(previous: Long?, now: Long): Long =
-        previous?.takeIf { it <= now }?.let { it - USAGE_REREAD_MS } ?: (now - LIVE_LOOKBACK_MS)
+    /**
+     * Where a usage collection starts: [USAGE_REREAD_MS] before a usable watermark, else the last
+     * 24 h, floored to the minute so the scanner's per-minute dedup buckets are never split
+     * between two windows.
+     */
+    fun usageSince(previous: Long?, now: Long): Long {
+        val since = previous?.takeIf { it <= now }?.let { it - USAGE_REREAD_MS } ?: (now - LIVE_LOOKBACK_MS)
+        return since - Math.floorMod(since, MINUTE_MS)
+    }
+
+    private const val MINUTE_MS = 60_000L
 }
 
 /**

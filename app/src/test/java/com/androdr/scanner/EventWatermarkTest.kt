@@ -1,5 +1,6 @@
 package com.androdr.scanner
 
+import com.androdr.data.db.toForensicTimelineEvent
 import com.androdr.data.model.DnsEvent
 import com.androdr.data.model.Indicator
 import com.androdr.data.model.TelemetrySource
@@ -89,7 +90,9 @@ class EventWatermarkTest {
 
     @Test
     fun `usage is re-read from five minutes before the watermark, or the last 24 h without a usable one`() {
-        assertEquals(SCAN_START - 1_000L - Watermarks.USAGE_REREAD_MS, Watermarks.usageSince(SCAN_START - 1_000L, NOW))
+        // NOW is a whole minute; the start is floored to the minute (whole dedup buckets).
+        assertEquals(NOW - 6 * 60_000L, Watermarks.usageSince(NOW - 1_000L, NOW))
+        assertEquals(NOW - Watermarks.USAGE_REREAD_MS, Watermarks.usageSince(NOW, NOW))
         assertEquals(NOW - Watermarks.LIVE_LOOKBACK_MS, Watermarks.usageSince(null, NOW))
         assertEquals(NOW - Watermarks.LIVE_LOOKBACK_MS, Watermarks.usageSince(NOW + 1L, NOW))
     }
@@ -128,8 +131,8 @@ class EventWatermarkTest {
         usageLog += usage(System.currentTimeMillis() - 1L)
         Thread.sleep(2)
         scan()
-        assertEquals("scan 2 re-reads from five minutes before the watermark",
-            first - Watermarks.USAGE_REREAD_MS, usageCalls[1].first)
+        assertEquals("scan 2 re-reads from five minutes before the watermark (floored to the minute)",
+            Math.floorDiv(first - Watermarks.USAGE_REREAD_MS, 60_000L) * 60_000L, usageCalls[1].first)
         scan()
 
         assertEquals("every event is observed", 4L,
@@ -175,6 +178,24 @@ class EventWatermarkTest {
         coEvery { f.usageStatsScanner.collectEvents(any(), any()) } returns UsageCollection.NoAccess
         scan()
         assertEquals(2, f.timelineDao.getAllForExport().count { it.source == USAGE })
+    }
+
+    /**
+     * C1 fix round 1 (I2): a device clock that moved back leaves usage rows stamped after the
+     * scan's window end. The scan cannot read their events, so it must not delete their rows.
+     */
+    @Test
+    fun `usage rows stamped after the window end survive a scan after the clock moved back`() = runBlocking {
+        val now = System.currentTimeMillis()
+        f.timelineDao.insertAll(listOf(usage(now + 3_600_000L).toForensicTimelineEvent(5L)))
+        coEvery { f.usageStatsScanner.collectEvents(any(), any()) } returns
+            UsageCollection.Ok(listOf(usage(now - 60_000L)))
+
+        val scan = scan()
+
+        val rows = f.timelineDao.getAllForExport().filter { it.source == USAGE }
+        assertEquals("the future-stamped row survives", 1, rows.count { it.startTimestamp == now + 3_600_000L })
+        assertEquals(scan.id, rows.single { it.startTimestamp == now - 60_000L }.scanResultId)
     }
 
     // ── Live DNS by id ──────────────────────────────────────────────────────────
@@ -254,6 +275,39 @@ class EventWatermarkTest {
         assertNull(f.db.eventWatermarkDao().get(USAGE))
     }
 
+    /** Review m3: a DNS watermark past the newest row is treated as absent (the last 24 h is read). */
+    @Test
+    fun `a DNS watermark past the newest row falls back to the last 24 h without duplicates`() = runBlocking {
+        insertDns(dns("a.example"))
+        scan()
+        val newest = checkNotNull(f.db.dnsEventDao().maxId())
+        f.db.eventWatermarkDao().put(com.androdr.data.model.EventWatermark(DNS, newest + 100, 1L))
+        val late = insertDns(dns("b.example")).single()
+
+        scan()
+
+        assertEquals(2L, f.count("SELECT COUNT(*) FROM scan_record WHERE service = '$DNS'"))
+        assertEquals(2L, f.count("SELECT COUNT(DISTINCT recordId) FROM scan_record WHERE service = '$DNS'"))
+        assertEquals(late, watermark(DNS).position)
+    }
+
+    /** Review m2: the watermarks are written inside the finishing transaction, so a failed finish advances none. */
+    @Test
+    fun `a finish that rolls back advances no watermark`() = runBlocking {
+        val hooks = object : com.androdr.data.repo.SessionHooks {
+            override fun watermarks(saveFallback: Boolean) = mapOf(DNS to 5L)
+            override fun summarize(scan: com.androdr.data.model.ScanResult,
+                totals: com.androdr.data.repo.FindingTotals): com.androdr.data.model.ScanResult =
+                error("summary failed after the watermark write")
+        }
+        val session = f.writer.begin(f.w.scan(1L), liveEvents = true, hooks = hooks)
+
+        val failure = runCatching { session.finish() }.exceptionOrNull()
+
+        assertEquals("summary failed after the watermark write", failure?.message)
+        assertNull(f.db.eventWatermarkDao().get(DNS))
+    }
+
     // ── Late-IOC re-check ───────────────────────────────────────────────────────
 
     @Test
@@ -274,6 +328,29 @@ class EventWatermarkTest {
 
         val third = scan()
         assertTrue("fires once inside the 24 h window", third.findings.none { it.ruleId == IOC_RULE })
+    }
+
+    /**
+     * C1 fix round 1 (I1): the re-check covers the trailing 24 h only. A stored live fact whose
+     * event time is past the window is never re-checked; one just inside it is.
+     */
+    @Test
+    fun `the re-check covers stored DNS facts of the trailing 24 h only`() = runBlocking {
+        insertDns(dns(LATE), dns(OLD))
+        val first = scan()
+        val now = System.currentTimeMillis()
+        // OLD's fact now reads as 25 h old; LATE's as 23 h old (inside the window).
+        fun setEventTime(domain: String, time: Long) = f.db.openHelper.writableDatabase.execSQL(
+            "UPDATE telemetry_record SET eventTime = $time WHERE service = '$DNS' AND id IN (SELECT recordId " +
+                "FROM scan_record WHERE scanId = ${first.id} AND ordinal = ${if (domain == LATE) 0 else 1})")
+        setEventTime(OLD, now - 25 * 3_600_000L)
+        setEventTime(LATE, now - 23 * 3_600_000L)
+        iocDomains += setOf(LATE, OLD)
+
+        val second = scan()
+
+        val hits = second.findings.filter { it.ruleId == IOC_RULE }
+        assertEquals("only the in-window fact fires", listOf(LATE), hits.map { it.matchContext["domain"] })
     }
 
     @Test
@@ -333,6 +410,7 @@ class EventWatermarkTest {
     private companion object {
         const val IOC_RULE = "androdr-wm-ioc"
         const val LATE = "late.example"
+        const val OLD = "old.example"
         const val DNS = "dns_monitor"
         const val USAGE = "usage_stats"
         const val USAGE_SCANNER = "usageStatsScanner"

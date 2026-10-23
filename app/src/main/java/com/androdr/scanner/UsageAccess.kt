@@ -1,7 +1,9 @@
 package com.androdr.scanner
 
+import android.Manifest
 import android.app.AppOpsManager
 import android.content.Context
+import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Process
 import com.androdr.data.model.UsageEvent
@@ -40,7 +42,10 @@ class UsageAccess @Inject constructor(@ApplicationContext private val context: C
                 @Suppress("DEPRECATION")
                 appOps.checkOpNoThrow(AppOpsManager.OPSTR_GET_USAGE_STATS, Process.myUid(), context.packageName)
             }
-            return mode == AppOpsManager.MODE_ALLOWED
+            // MODE_DEFAULT defers to the permission itself (granted by adb or an MDM, say).
+            return mode == AppOpsManager.MODE_ALLOWED || (mode == AppOpsManager.MODE_DEFAULT &&
+                context.checkCallingOrSelfPermission(Manifest.permission.PACKAGE_USAGE_STATS) ==
+                PackageManager.PERMISSION_GRANTED)
         }
     }
 }

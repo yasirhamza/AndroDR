@@ -77,6 +77,9 @@ class ScanWriteRepository @Inject constructor(
     /**
      * Of [recordIds], the `(ruleId, recordId)` pairs a visible finding row already carries (the
      * Phase A–C stand-in for "an alert with this record key exists", spec §5.2 Late-IOC re-check).
+     * For finding rows, `VisibleRow` is exactly "a triggered finding in a COMPLETE scan": [finish]
+     * writes rows for triggered findings only, never persistent and always with their scan id. So a
+     * fact can fire again once the scan that fired it is deleted; D2's alert identity closes that.
      */
     suspend fun existingFindings(recordIds: Collection<Long>): Set<RuleRecord> =
         chunkedIn(recordIds) { timeline.findingRuleRecords(it) }.toHashSet()

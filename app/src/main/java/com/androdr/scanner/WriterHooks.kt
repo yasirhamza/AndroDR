@@ -129,17 +129,18 @@ internal class LiveScanHooks(
     var dnsReadFailed = false
 
     /**
-     * Where this scan's usage rows replace earlier ones: the re-read window's start, when usage was
-     * collected (it writes a row for every event it read since then); null when it was not, so no
-     * row is replaced. Rows older than the window are kept: this scan does not read their events.
+     * Whether this scan's usage rows replace earlier ones: only when usage was collected, and only
+     * inside the re-read window `[since, until]`, where it writes a row for every event it read.
+     * Rows outside it are kept: this scan cannot read their events. That includes rows stamped
+     * after `until`, which exist when the device clock moved back since they were written.
      */
-    private val usageReplacedSince: Long? = usage.since.takeIf { usage.collection is UsageCollection.Ok }
+    private val replacesUsage = usage.collection is UsageCollection.Ok
 
     private fun replacedUsageRow(row: ForensicTimelineEvent): Boolean =
-        row.source == USAGE_STATS && usageReplacedSince != null && row.startTimestamp >= usageReplacedSince
+        replacesUsage && row.source == USAGE_STATS && row.startTimestamp in usage.since..usage.until
 
     override suspend fun sweepPrior(scanId: Long) {
-        usageReplacedSince?.let { timelineRows.bySourceSince(USAGE_STATS, it) }
+        if (replacesUsage) timelineRows.bySourceBetween(USAGE_STATS, usage.since, usage.until)
     }
 
     override fun watermarks(saveFallback: Boolean): Map<String, Long> = buildMap {

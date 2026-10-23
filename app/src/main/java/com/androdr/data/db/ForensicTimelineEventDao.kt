@@ -132,15 +132,15 @@ interface ForensicTimelineEventDao {
     @Query("SELECT DISTINCT recordId FROM forensic_timeline WHERE source = :source AND recordId IS NOT NULL")
     suspend fun recordIdsBySource(source: String): List<Long>
 
-    /** Rows of [source] stamped at or after [since]: the usage rows a live scan's re-read replaces. */
-    @Query("DELETE FROM forensic_timeline WHERE source = :source AND startTimestamp >= :since")
-    suspend fun deleteBySourceSince(source: String, since: Long)
+    /** Rows of [source] stamped in `[since, until]`: the usage rows a live scan's re-read replaces. */
+    @Query("DELETE FROM forensic_timeline WHERE source = :source AND startTimestamp BETWEEN :since AND :until")
+    suspend fun deleteBySourceBetween(source: String, since: Long, until: Long)
 
     @Query(
-        "SELECT DISTINCT recordId FROM forensic_timeline WHERE source = :source AND startTimestamp >= :since " +
-            "AND recordId IS NOT NULL"
+        "SELECT DISTINCT recordId FROM forensic_timeline WHERE source = :source " +
+            "AND startTimestamp BETWEEN :since AND :until AND recordId IS NOT NULL"
     )
-    suspend fun recordIdsBySourceSince(source: String, since: Long): List<Long>
+    suspend fun recordIdsBySourceBetween(source: String, since: Long, until: Long): List<Long>
 
     /** A scan's own rows; persistent (audit/closure) rows survive scan deletion (spec §5.1). */
     @Query("DELETE FROM forensic_timeline WHERE scanResultId = :scanResultId AND persistent = 0")
