@@ -19,6 +19,7 @@ import com.androdr.sigma.Finding
 import com.androdr.sigma.SigmaRuleEngine
 import com.androdr.sigma.StoreRecord
 import com.androdr.sigma.TaxonomyContract
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.withContext
 import java.nio.ByteBuffer
@@ -88,6 +89,7 @@ class ChunkedScanWriter @Inject constructor(
          * Evaluates [chunk] (≤ [CHUNK_SIZE]), then persists it in one transaction. Findings are kept
          * only for ordinals newly observed by this scan, so a duplicate record yields no second one.
          */
+        @Suppress("TooGenericExceptionCaught") // a failed persist keeps its findings in memory, then rethrows
         suspend fun append(service: String, source: TelemetrySource, capturedAt: Long, chunk: List<StoreRecord>) {
             require(chunk.size <= CHUNK_SIZE) { "chunk of ${chunk.size} exceeds $CHUNK_SIZE" }
             if (chunk.isEmpty()) return
@@ -98,7 +100,15 @@ class ChunkedScanWriter @Inject constructor(
                 enterEvaluateOnly()
             }
             val findings = engine.evaluateRecords(service, chunk, first)
-            val result = if (evaluateOnly) null else persistOrFallBack(service, source, capturedAt, chunk, first)
+            val result = try {
+                if (evaluateOnly) null else persistOrFallBack(service, source, capturedAt, chunk, first)
+            } catch (c: CancellationException) {
+                throw c
+            } catch (t: Throwable) {
+                // The writer aborts on this failure; [keptScan] still shows what this chunk found.
+                findings.forEach { topK.offer(it, null) }
+                throw t
+            }
             if (result != null) {
                 keepObserved(findings, first, result)
                 hooks.onChunk(service, source, chunk, first, result.factIdByChunkIndex,
@@ -158,6 +168,14 @@ class ChunkedScanWriter @Inject constructor(
             }
             return WriteResult(newFacts, alreadyStored, duplicatesDropped, state, completed, true, spaceToFree)
         }
+
+        /**
+         * The scan as this session holds it in memory: its kept findings and summary, `FAILED`. A
+         * writer whose session failed returns this (after [abort]) so the findings stay visible.
+         */
+        fun keptScan(): ScanResult =
+            hooks.summarize(scan.copy(findings = topK.result().map { it.finding }), topK.totals())
+                .copy(id = scan.id, telemetryState = TelemetryState.FAILED)
 
         /** Unaudited cleanup delete of this session's scan; runs to completion even when cancelled. */
         suspend fun abort() = withContext(NonCancellable) { repo.cleanupDelete(scan.id) }

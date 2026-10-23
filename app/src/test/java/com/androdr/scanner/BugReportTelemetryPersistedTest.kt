@@ -101,4 +101,19 @@ class BugReportTelemetryPersistedTest {
             assertEquals(0L, g.count("SELECT COUNT(*) FROM telemetry_record"))
         }
     }
+
+    /** I2 (fix round 1): a finishing write that hits a full disk is a failed import, not a saved one. */
+    @Test
+    fun `a bug report whose finishing write is not saved fails with BugReportPersistException`() = runBlocking {
+        val repo = io.mockk.spyk(f.w.repo)
+        f.w.repo = repo
+        coEvery { repo.finish(any(), any(), any(), any(), any()) } throws
+            android.database.sqlite.SQLiteFullException("database or disk is full")
+
+        val thrown = runCatching { f.orchestrator.analyzeBugReport(uri) }.exceptionOrNull()
+
+        assertTrue("not saved is a failed import: $thrown", thrown is ScanOrchestrator.BugReportPersistException)
+        assertEquals(0L, f.count("SELECT COUNT(*) FROM ScanResult"))
+        assertEquals(0L, f.count("SELECT COUNT(*) FROM scan_record"))
+    }
 }

@@ -328,4 +328,41 @@ class ScanOrchestratorIntrusionLogTest {
             assertFalse(events.captured.any { it.telemetrySource == TelemetrySource.INTRUSION_LOG_IMPORT })
         }
     }
+
+    // ---------- fix round 1 ----------
+
+    /** I2: a finishing write that hits a full disk leaves nothing saved, so the import fails loudly. */
+    @Test
+    fun `an import whose finishing write is not saved fails with IntrusionLogPersistException`() = runBlocking {
+        analyzerHandsOver(sec = listOf(sec(5L)))
+        val repo = io.mockk.spyk(f.w.repo)
+        f.w.repo = repo
+        coEvery { repo.finish(any(), any(), any(), any(), any()) } throws
+            android.database.sqlite.SQLiteFullException("database or disk is full")
+
+        val thrown = runCatching { f.orchestrator.analyzeIntrusionLog(uri) }.exceptionOrNull()
+
+        assertTrue("not saved is a failed import: $thrown", thrown is ScanOrchestrator.IntrusionLogPersistException)
+        assertEquals(0L, f.count("SELECT COUNT(*) FROM ScanResult"))
+    }
+
+    /** M2: a writer failure inside the analyzer is a failed save, not a failed analysis. */
+    @Test
+    fun `a writer failure inside the analyzer surfaces as IntrusionLogPersistException`() = runBlocking {
+        val zip = IntrusionLogZips.zip("2026-08-22.txt" to listOf(withId))
+        IntrusionLogZips.fixture(engine) { zip }.use { real ->
+            val store = io.mockk.spyk(real.w.f.store)
+            real.w.store = store
+            coEvery { store.persistChunk(any(), any(), any(), any(), any(), any(), any(), any(), any()) } throws
+                IllegalStateException("constraint failed")
+
+            val thrown = runCatching { real.orchestrator.analyzeIntrusionLog(uri) }.exceptionOrNull()
+
+            assertTrue("a failed save, not a failed analysis: $thrown",
+                thrown is ScanOrchestrator.IntrusionLogPersistException)
+            assertTrue(generateSequence(thrown) { it.cause }.any { it is IllegalStateException &&
+                it.message == "constraint failed" })
+            assertEquals(0L, real.count("SELECT COUNT(*) FROM ScanResult"))
+        }
+    }
 }

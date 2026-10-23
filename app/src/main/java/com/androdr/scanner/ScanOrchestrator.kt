@@ -245,10 +245,18 @@ class ScanOrchestrator @Inject constructor(
             hashByPackage(telemetry.apps), detectedChanges(scan.id, telemetry.apps),
             sigmaRuleEngine.getCorrelationRules().maxOfOrNull { it.timespanMs } ?: 0L,
         )
+        hooks.readLookback()
+        hooks.errors.addAll(synchronized(errors) { errors.toList() })
+        // A failed write keeps nothing (the session is aborted), but the in-memory findings are
+        // still returned with the writer failure, so the Dashboard never reads as clean.
+        val recover = { session: ChunkedScanWriter.Session, t: Throwable ->
+            Log.e(TAG, "Failed to persist scan results", t)
+            val kept = session.keptScan()
+            kept.copy(scannerErrors = kept.scannerErrors + writerFailure(t))
+        }
         return try {
-            writer.inSession(scan, liveEvents = true, hooks) { session ->
+            writer.inSession(scan, liveEvents = true, hooks, recover) { session ->
                 appendLive(session, hooks, telemetry, now, indicatorResolver)
-                hooks.errors.addAll(synchronized(errors) { errors.toList() })
                 progress(ScanProgress.Running.Phase.SAVING_RESULTS, LiveScanCollector.SCANNER_COUNT)
                 session.finish().scan
             }.also { Log.i(TAG, "Scan ${it.id} complete — ${it.findings.size} findings, " +
@@ -256,10 +264,9 @@ class ScanOrchestrator @Inject constructor(
         } catch (c: CancellationException) {
             throw c
         } catch (t: Throwable) {
-            // Nothing was kept (the session was aborted); the UI still shows what failed.
-            Log.e(TAG, "Failed to persist scan results", t)
-            scan.copy(scannerErrors = synchronized(errors) { errors.toList() } +
-                ScannerFailure(scanner = SCAN_WRITER, exception = t.javaClass.simpleName, message = t.message))
+            // The session could not even be opened: nothing was evaluated or kept.
+            Log.e(TAG, "Failed to open the scan's writer session", t)
+            scan.copy(scannerErrors = synchronized(errors) { errors.toList() } + writerFailure(t))
         }
     }
 
@@ -317,7 +324,7 @@ class ScanOrchestrator @Inject constructor(
         val written = try {
             writer.inSession(scan, liveEvents = false, hooks) { session ->
                 appendBugReport(session, result, now)
-                session.finish()
+                requireSaved(session.finish())
             }
         } catch (c: CancellationException) {
             throw c
@@ -441,7 +448,7 @@ class ScanOrchestrator @Inject constructor(
             writer.inSession(scan, liveEvents = false, hooks) { session ->
                 val analysis = intrusionLogAnalyzer.analyze(uri, IntrusionLogSessionChunks(session, hooks.interim, now))
                 hooks.errors.addAll(analysis.scannerErrors)
-                intrusionLogResult(analysis, session.finish(), hooks)
+                intrusionLogResult(analysis, requireSaved(session.finish()), hooks)
             }
         } catch (c: CancellationException) {
             throw c
@@ -584,6 +591,9 @@ class ScanOrchestrator @Inject constructor(
 
         /** [ScannerFailure.scanner] of a live scan whose writer session failed (nothing was kept). */
         const val SCAN_WRITER = "scanWriter"
+
+        private fun writerFailure(t: Throwable) =
+            ScannerFailure(scanner = SCAN_WRITER, exception = t.javaClass.simpleName, message = t.message)
 
         /** APK hash per package, for enriching finding rows that carry none. */
         internal fun hashByPackage(apps: List<AppTelemetry>): Map<String, String> =

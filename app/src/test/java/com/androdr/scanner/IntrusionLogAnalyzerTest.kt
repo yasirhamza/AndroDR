@@ -287,4 +287,45 @@ class IntrusionLogAnalyzerTest {
         assertTrue("cancellation propagates: $outcome",
             outcome?.exceptionOrNull() is kotlinx.coroutines.CancellationException)
     }
+
+    /**
+     * M1 (fix round 1): the analyzer streams. Chunk k reaches the writer before line
+     * (k+1)*5000+1 of the export is read (an ST1-style check on lines pulled from the stream).
+     */
+    @Test
+    fun `chunk k reaches the writer before line (k+1)x5000+1 is read`() {
+        val total = 15_001
+        var linesRead = 0
+        val bytes = (0 until total).joinToString("\n") {
+            """{"dns_event":{"event_id":$it,"event_time":${1787400000000L + it},"hostname":"h$it.example"}}"""
+        }.toByteArray()
+        val counting = object : java.io.InputStream() {
+            private var pos = 0
+            override fun read(): Int {
+                if (pos >= bytes.size) return -1
+                val b = bytes[pos++].toInt() and 0xff
+                if (b == '\n'.code) linesRead++
+                return b
+            }
+        }
+        val readAtChunk = mutableListOf<Int>()
+        val chunks = object : IntrusionLogChunks {
+            override suspend fun dns(events: List<com.androdr.data.model.ImportedDnsEvent>,
+                                     records: List<com.androdr.sigma.StoreRecord>) { readAtChunk += linesRead }
+            override suspend fun connect(events: List<com.androdr.data.model.NetworkTelemetry>,
+                                         records: List<com.androdr.sigma.StoreRecord>) = Unit
+            override suspend fun security(events: List<com.androdr.data.model.SecurityLogEvent>,
+                                          records: List<com.androdr.sigma.StoreRecord>) = Unit
+        }
+        runBlocking {
+            analyzer().analyzeEntries(sequenceOf("2026-08-22.txt" to counting), uidResolver = { -1 },
+                capturedAt = capturedAt, chunks = chunks)
+        }
+        assertEquals(4, readAtChunk.size)
+        // The readers buffer ahead at most 16 KiB (~200 of these lines) — never a whole chunk.
+        val readAhead = 500
+        readAtChunk.take(3).forEachIndexed { k, read ->
+            assertTrue("chunk $k handed over after $read lines read", read < (k + 1) * 5_000 + 1 + readAhead)
+        }
+    }
 }

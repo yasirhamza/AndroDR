@@ -98,7 +98,8 @@ internal abstract class WriterHooks(
 /**
  * The live scan: finding rows enriched with APK hashes, the detected-change rows (first-seen
  * installs, device-admin grants), today's `usage_stats` rows replaced wholesale, and a correlation
- * lookback that excludes imported intrusion-log rows (#342 B2).
+ * lookback read before the session writes ([readLookback]) that excludes imported intrusion-log
+ * rows (#342 B2).
  */
 internal class LiveScanHooks(
     scan: ScanResult,
@@ -124,18 +125,30 @@ internal class LiveScanHooks(
 
     override fun extraRows(scan: ScanResult): List<ForensicTimelineEvent> = detectedChanges
 
-    // #342 B2: imported intrusion-log rows carry their own historical event time, so a plain
-    // time-window query would sweep them in, and any signal they helped produce would be stamped
-    // with this live scan's id — unreachable by the intrusion-log sweep (an orphan signal).
-    override suspend fun lookback(): List<ForensicTimelineEvent> = if (lookbackWindowMs <= 0L) {
-        emptyList()
-    } else {
-        runCatching {
+    private var lookbackRows: List<ForensicTimelineEvent> = emptyList()
+
+    /**
+     * Reads the correlation lookback BEFORE the session writes anything, so `finish`'s correlation
+     * never sees this scan's own rows twice (spec §5.2: an event is counted once). The window ends
+     * at the scan start; rows of this scan and the `usage_stats` rows `finish` replaces (this scan
+     * writes their events again) are left out.
+     *
+     * #342 B2: imported intrusion-log rows carry their own historical event time, so a plain
+     * time-window query would sweep them in, and any signal they helped produce would be stamped
+     * with this live scan's id — unreachable by the intrusion-log sweep (an orphan signal).
+     */
+    suspend fun readLookback() {
+        if (lookbackWindowMs <= 0L) return
+        lookbackRows = runCatching {
             timeline.getEventsSinceExcludingTelemetrySource(
-                System.currentTimeMillis() - lookbackWindowMs, TelemetrySource.INTRUSION_LOG_IMPORT
+                scan.timestamp - lookbackWindowMs, TelemetrySource.INTRUSION_LOG_IMPORT
             )
-        }.getOrDefault(emptyList())
+        }.getOrDefault(emptyList()).filter {
+            it.startTimestamp <= scan.timestamp && it.scanResultId != scan.id && it.source != USAGE_STATS
+        }
     }
+
+    override suspend fun lookback(): List<ForensicTimelineEvent> = lookbackRows
 
     override fun summarize(scan: ScanResult, totals: FindingTotals): ScanResult = super.summarize(scan, totals).copy(
         riskySideloadCount = scan.findings.count {

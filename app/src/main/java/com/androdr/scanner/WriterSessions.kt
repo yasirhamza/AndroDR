@@ -23,19 +23,43 @@ private const val TAG = "WriterSessions"
 
 /**
  * Opens a session for [scan] and runs [block] on it; on any failure — cancellation included — the
- * session is aborted (an unaudited cleanup delete) before the failure propagates.
+ * session is aborted (an unaudited cleanup delete). The failure then propagates, unless [recover]
+ * is given and the failure is not a cancellation: [recover] gets the aborted session (its
+ * in-memory findings are still readable) and its answer is returned.
  */
 @Suppress("TooGenericExceptionCaught")
 internal suspend fun <T> ChunkedScanWriter.inSession(
-    scan: ScanResult, liveEvents: Boolean, hooks: SessionHooks, block: suspend (ChunkedScanWriter.Session) -> T,
+    scan: ScanResult, liveEvents: Boolean, hooks: SessionHooks,
+    recover: ((ChunkedScanWriter.Session, Throwable) -> T)? = null,
+    block: suspend (ChunkedScanWriter.Session) -> T,
 ): T {
     val session = begin(scan, liveEvents, hooks)
     try {
         return block(session)
+    } catch (c: CancellationException) {
+        session.abortKeeping(c)
+        throw c
     } catch (t: Throwable) {
-        withContext(NonCancellable) { runCatching { session.abort() }.exceptionOrNull()?.let(t::addSuppressed) }
-        throw t
+        session.abortKeeping(t)
+        if (recover == null) throw t
+        return recover(session, t)
     }
+}
+
+/** Aborts the session; a failure of the abort itself is kept on [cause] as suppressed. */
+private suspend fun ChunkedScanWriter.Session.abortKeeping(cause: Throwable) =
+    withContext(NonCancellable) { runCatching { abort() }.exceptionOrNull()?.let(cause::addSuppressed) }
+
+/**
+ * Thrown inside an import session whose finishing write could not be saved (`persisted = false`,
+ * a full disk): the import is not in the database, so it must fail loudly (#342 B1).
+ */
+internal class ImportNotSavedException : IllegalStateException("the import's finishing write was not saved")
+
+/** [written] if it was saved; otherwise the import fails ([ImportNotSavedException]). */
+internal fun requireSaved(written: WriteResult): WriteResult {
+    if (!written.persisted) throw ImportNotSavedException()
+    return written
 }
 
 /** Every live service, in today's evaluation order; usage chunks also feed today's usage rows. */

@@ -29,7 +29,7 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 data class IntrusionLogStats(
-    /** Distinct DNS records stored by this import (exact duplicates excluded). */
+    /** DNS records parsed, minus the exact duplicates the store dropped (none subtracted when evaluate-only). */
     val dnsEventCount: Int,
     val connectEventCount: Int,
     val securityEventCount: Int,
@@ -158,6 +158,9 @@ class IntrusionLogAnalyzer @Inject constructor(
         } catch (c: CancellationException) {
             // Cooperative cancellation must not be swallowed as a failed import.
             throw c
+        } catch (w: WriterFailure) {
+            // The writer (session) failed, not the analysis: the orchestrator reports a failed save.
+            throw w.cause
         } catch (t: Throwable) {
             // A crafted ZIP can trigger OutOfMemoryError / StackOverflowError,
             // which are Errors (not Exceptions); catching Throwable here still
@@ -283,21 +286,37 @@ class IntrusionLogAnalyzer @Inject constructor(
         private suspend fun flushDns() {
             if (dns.isEmpty()) return
             prefetch(dns)
-            chunks.dns(dns.toList(), IntrusionLogRecordBuilders.importedDns(dns, dnsKeys))
+            val events = dns.toList()
+            handOver { chunks.dns(events, IntrusionLogRecordBuilders.importedDns(events, dnsKeys)) }
             dns.clear(); dnsKeys.clear()
         }
 
         private suspend fun flushNet() {
             if (net.isEmpty()) return
-            chunks.connect(net.toList(), IntrusionLogRecordBuilders.network(net, netKeys))
+            val events = net.toList()
+            handOver { chunks.connect(events, IntrusionLogRecordBuilders.network(events, netKeys)) }
             net.clear(); netKeys.clear()
         }
 
         private suspend fun flushSec() {
             if (sec.isEmpty()) return
-            chunks.security(sec.toList(), IntrusionLogRecordBuilders.securityLog(sec, secKeys))
+            val events = sec.toList()
+            handOver { chunks.security(events, IntrusionLogRecordBuilders.securityLog(events, secKeys)) }
             sec.clear(); secKeys.clear()
         }
+    }
+
+    /** Carries a failure of [IntrusionLogChunks] (the writer) past the analysis-failure boundary. */
+    private class WriterFailure(override val cause: Throwable) : Exception(cause)
+
+    /** Runs one hand-over to the writer; its failure (other than cancellation) is a [WriterFailure]. */
+    @Suppress("TooGenericExceptionCaught")
+    private suspend fun handOver(block: suspend () -> Unit) = try {
+        block()
+    } catch (c: CancellationException) {
+        throw c
+    } catch (t: Throwable) {
+        throw WriterFailure(t)
     }
 
     private companion object {

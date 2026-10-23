@@ -120,6 +120,8 @@ class LiveScanWriterTest {
 
         val failure = result.scannerErrors.single { it.scanner == ScanOrchestrator.SCAN_WRITER }
         assertEquals("IllegalStateException", failure.exception)
+        assertTrue("the in-memory findings are still shown (never reads as clean)",
+            result.findings.any { it.ruleId == "androdr-lv-app" && it.matchContext["package_name"] == "com.evil" })
         assertTrue(result.isPartialScan)
         assertEquals(0L, f.count("SELECT COUNT(*) FROM ScanResult"))
         assertEquals(0L, f.count("SELECT COUNT(*) FROM forensic_timeline"))
@@ -136,5 +138,47 @@ class LiveScanWriterTest {
         assertEquals(7L, t.usageMaxTime)
         assertEquals(null, LiveTelemetry(emptyList(), emptyList(), emptyList(), emptyList(), emptyList(),
             emptyList(), emptyList(), emptyList(), emptyList()).dnsMaxId)
+    }
+
+    /**
+     * C1 (fix round 1): the lookback is read before the session writes, so correlation never sees
+     * this scan's own rows twice. A recent install and admin grant (this scan's detected changes)
+     * and the two-step chain corr-001 give exactly one signal and one correlation finding.
+     */
+    @Test
+    fun `live correlation counts this scan's own rows once`() = runBlocking {
+        fun atom(name: String) = com.androdr.sigma.SigmaRuleParser.parse(
+            com.androdr.data.store.rawFile("$name.yml").readText())!!
+        val chain = com.androdr.sigma.SigmaRuleParser.parseCorrelation(
+            com.androdr.data.store.rawFile("sigma_androdr_corr_001_install_then_admin.yml").readText())
+        val engine = spyk(IntrusionLogZips.engine(atom("sigma_androdr_atom_package_install"),
+            atom("sigma_androdr_atom_device_admin_grant")))
+        io.mockk.every { engine.getCorrelationRules() } returns listOf(chain)
+        val correlation = spyk(com.androdr.sigma.SigmaCorrelationEngine())
+        OrchestratorFixture(engine = engine, correlationEngine = correlation).use { g ->
+            val t = System.currentTimeMillis() - 60_000
+            coEvery { g.installEventEmitter.emitNew(any(), any()) } answers {
+                listOf(com.androdr.data.model.ForensicTimelineEvent(startTimestamp = t, source = "app_scanner",
+                    category = "package_install", description = "Package installed: E", packageName = "com.evil",
+                    scanResultId = firstArg()))
+            }
+            coEvery { g.deviceAdminGrantEmitter.emitNew(any()) } answers {
+                listOf(com.androdr.data.model.ForensicTimelineEvent(startTimestamp = t + 1_000,
+                    source = "device_admin_emitter", category = "device_admin_grant", description = "admin",
+                    packageName = "com.evil", scanResultId = firstArg()))
+            }
+            val inputs = mutableListOf<List<com.androdr.data.model.ForensicTimelineEvent>>()
+            io.mockk.every { correlation.evaluate(any(), any(), any(), any()) } answers {
+                inputs += secondArg<List<com.androdr.data.model.ForensicTimelineEvent>>()
+                callOriginal()
+            }
+
+            val scan = g.orchestrator.runFullScan()
+
+            val ids = inputs.single().map { it.id }
+            assertEquals("correlate's input ids are distinct: $ids", ids.size, ids.toSet().size)
+            assertEquals(1L, g.count("SELECT COUNT(*) FROM forensic_timeline WHERE kind = 'signal'"))
+            assertEquals(1, scan.findings.count { it.category == com.androdr.sigma.FindingCategory.CORRELATION })
+        }
     }
 }
