@@ -11,6 +11,7 @@ import com.androdr.data.store.StoreFixture
 import com.androdr.data.store.StoreFixture.Companion.app
 import com.androdr.data.store.StoreFixture.Companion.dns
 import com.androdr.ioc.Campaign
+import com.androdr.sigma.StoreRecord
 import com.androdr.util.AppVersion
 import com.androdr.util.appVersion
 import io.mockk.every
@@ -174,23 +175,28 @@ class ReportProvenanceTest {
         }
 
     @Test
-    fun `an import's DNS section says its is_blocked and reason are not verdicts`() = runBlocking {
+    fun `an import's DNS section carries no tunnel verdict and no note about one`() = runBlocking {
         val import = scan(1_000L, source = TelemetrySource.INTRUSION_LOG_IMPORT)
-        f.persist(
-            import.id, "dns_monitor", listOf(dns("c2.example")), source = TelemetrySource.INTRUSION_LOG_IMPORT,
+        val record = StoreRecord(
+            mapOf("domain" to "c2.example", "app_uid" to 10_001, "source_package" to "com.example",
+                "timestamp" to 1_729_600_000_000L, "resolved_ips" to listOf("1.2.3.4")),
         )
+        f.persist(import.id, "dns_monitor", listOf(record), source = TelemetrySource.INTRUSION_LOG_IMPORT)
         complete(import.id)
         val text = report(import)
         val dnsSection = text.substringAfter("${ReportFormatter.STORED_TELEMETRY_SECTION}: dns_monitor")
-        assertTrue(text, dnsSection.lines().drop(2).first() == ReportFormatter.DNS_IMPORT_NOTE)
+        assertTrue(text, dnsSection.contains("domain: c2.example"))
+        assertFalse(text, dnsSection.contains("is_blocked"))
+        assertFalse(text, dnsSection.contains("reason:"))
         assertFalse(text, text.contains(ReportFormatter.DNS_LIVE_NOTE))
+        assertFalse(text, text.contains("Imported queries"))
 
         val live = scan(2_000L)
         f.persist(live.id, "dns_monitor", listOf(dns("live.example")))
         complete(live.id)
         val liveText = report(live)
         assertTrue(liveText, liveText.contains(ReportFormatter.DNS_LIVE_NOTE))
-        assertFalse(liveText, liveText.contains(ReportFormatter.DNS_IMPORT_NOTE))
+        assertTrue(liveText, liveText.contains("is_blocked: false"))
     }
 
     @Test

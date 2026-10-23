@@ -14,7 +14,7 @@ object IntrusionLogRecordBuilders {
     const val NETWORK_MONITOR = "network_monitor"
     const val SECURITY_LOG = "security_log"
 
-    /** The live DNS fields plus `resolved_ips`. */
+    /** The live DNS fields plus `resolved_ips`, without the tunnel verdict (`is_blocked`, `reason`). */
     fun importedDns(t: List<ImportedDnsEvent>, keys: List<String>? = null): List<StoreRecord> =
         t.mapIndexed { i, e -> StoreRecord(e.toFieldMap(), keys?.get(i)) }
     fun network(t: List<NetworkTelemetry>, keys: List<String>? = null): List<StoreRecord> =

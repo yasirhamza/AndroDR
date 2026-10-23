@@ -583,10 +583,6 @@ object ReportFormatter {
     /** Heading for the checks that produced no verdict (#366, #370). */
     const val NOT_CHECKED_SECTION = "WHAT THIS SCAN COULD NOT CHECK"
 
-    /** Under an import's dns_monitor section: its is_blocked / reason values are not verdicts (#375). */
-    const val DNS_IMPORT_NOTE = "  Imported queries: AndroDR was not in the path, so is_blocked and reason were " +
-        "not recorded by the import (the values below are defaults, not verdicts); detections are in FINDINGS."
-
     /** Under a live scan's dns_monitor section: what a null reason means. */
     const val DNS_LIVE_NOTE = "  reason: null means the tunnel had no match when the domain was queried; " +
         "matches found at scan time are in FINDINGS."

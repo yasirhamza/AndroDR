@@ -214,9 +214,10 @@ class LogsourceTaxonomyCrossCheckTest {
     }
 
     @Test
-    fun `live dns map is the imported map without resolved_ips`() {
+    fun `live dns map is the imported map plus the tunnel verdict, without resolved_ips`() {
+        // R22: an import has no tunnel verdict, so it omits is_blocked and reason.
         assertEquals(
-            ImportedDnsEvent(dnsEvent, emptyList()).toFieldMap().keys - "resolved_ips",
+            ImportedDnsEvent(dnsEvent, emptyList()).toFieldMap().keys - "resolved_ips" + setOf("is_blocked", "reason"),
             dnsEvent.toFieldMap().keys,
         )
     }

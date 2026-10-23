@@ -106,8 +106,24 @@ internal val TAXONOMY_CONTRACT_TABLE: Map<String, ServiceContract> = linkedMapOf
                 "selections but INVERTS under `not`, over-firing the old fleet. Never reference it in " +
                 "a negated filter until the fleet floor covers the emitter (validate-rule.py rejects " +
                 "it)",
-            "is_blocked" to "True if DNS response was replaced with NXDOMAIN",
-            "reason" to "Reason for blocking (blocklist match, etc.)",
+            "is_blocked" to
+                "True if the tunnel replaced the DNS response with NXDOMAIN. Set only on live tunnel " +
+                "records; imported DNS records (intrusion-log and bug-report imports) omit it, because " +
+                "AndroDR was not in the path and a default would read as a verdict that never happened. " +
+                "OPTIONAL: only some producers set it, and optional implies positive-only. FLEET SAFETY " +
+                "— POSITIVE REFERENCES ONLY: imported records never carry this field, so a matcher on " +
+                "it evaluates false there, which no-ops positive selections but INVERTS under `not`, " +
+                "over-firing the old fleet. Never reference it in a negated filter until the fleet " +
+                "floor covers the emitter (validate-rule.py rejects it)",
+            "reason" to
+                "Reason the tunnel gave for blocking or flagging the query (blocklist match, IOC match, " +
+                "etc.); null on a live record means the tunnel had no match when the domain was " +
+                "queried. Set only on live tunnel records; imported DNS records omit it, because " +
+                "AndroDR was not in the path. OPTIONAL: only some producers set it, and optional " +
+                "implies positive-only. FLEET SAFETY — POSITIVE REFERENCES ONLY: imported records never " +
+                "carry this field, so a matcher on it evaluates false there, which no-ops positive " +
+                "selections but INVERTS under `not`, over-firing the old fleet. Never reference it in a " +
+                "negated filter until the fleet floor covers the emitter (validate-rule.py rejects it)",
             "timestamp" to
                 "When the query was observed (epoch ms). Emitted only by app builds newer than " +
                 "0.9.0.656 (the last release without it); older binaries never set it. FLEET SAFETY — " +
