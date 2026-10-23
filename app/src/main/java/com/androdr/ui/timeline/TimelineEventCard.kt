@@ -59,6 +59,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Surface
 import com.androdr.R
 import com.androdr.data.store.DecodedRecord
+import com.androdr.sigma.TimePrecision
 import com.androdr.reporting.escapeForReport
 import com.androdr.data.model.ForensicTimelineEvent
 import com.androdr.data.model.TelemetrySource
@@ -497,7 +498,7 @@ fun FactCard(
     ) {
         Column(modifier = Modifier.padding(8.dp)) {
             Text(
-                listOfNotNull(label, formatTime(timestamp), record.category ?: record.service).joinToString("  "),
+                listOfNotNull(label, factTime(record, timestamp), record.category ?: record.service).joinToString("  "),
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -527,7 +528,7 @@ fun FactDetailSheet(record: DecodedRecord, onDismiss: () -> Unit) {
             Text(record.category ?: record.service, style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold)
             val time = record.eventTime ?: record.capturedAt
-            Text("${formatTime(time)}  ${formatDate(time)}", style = MaterialTheme.typography.labelMedium,
+            Text("${factTime(record, time)}  ${formatDate(time)}", style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant)
             HorizontalDivider()
             DetailSection(stringResource(R.string.timeline_detail_description),
@@ -613,6 +614,16 @@ private fun formatTimeRange(first: Long, last: Long): String {
         "${fmt.format(Date(first))}\u2013${fmt.format(Date(last))}"
     } else ""
 }
+
+/**
+ * A fact's time of day, or [DATE_ONLY] for a day-precision fact (ruling R31): its stored time is the
+ * start of its day, so a time of day would be invented.
+ */
+internal fun factTime(record: DecodedRecord, timestamp: Long): String =
+    if (record.precision == TimePrecision.DAY) DATE_ONLY else formatTime(timestamp)
+
+/** The marker a day-precision event shows in place of a time of day. */
+internal const val DATE_ONLY = "(date only)"
 
 private fun formatTime(ts: Long) =
     if (ts > 0) SimpleDateFormat("HH:mm:ss", Locale.US).format(Date(ts)) else "??:??:??"

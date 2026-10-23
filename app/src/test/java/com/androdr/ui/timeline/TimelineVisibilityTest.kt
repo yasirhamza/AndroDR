@@ -20,7 +20,7 @@ import org.robolectric.RobolectricTestRunner
 /**
  * C4 review I2: what the Timeline union shows, by spec §3 and §5.1.
  * - Snapshot records never appear (a snapshot record carries no event time, even when its fields
- *   hold a timestamp-like value), and day-precision event facts are left out.
+ *   hold a timestamp-like value); day-precision event facts do (ruling R31), shown date-only.
  * - A DELETING scan's facts and rows are invisible, like an IN_PROGRESS one's.
  * - A pinned orphan (no observation left) shows: standalone when a `signal_member` pins it, nested
  *   under a persistent row that points at it; an unpinned orphan never shows.
@@ -35,8 +35,9 @@ class TimelineVisibilityTest {
 
     private fun line(i: Int, t: Long) = StoreRecord(WriterFixture.securityLine(time = t).fields, "210001 v$i $t")
 
-    private fun battery(t: Long, precision: String) = StoreRecord(mapOf("package_name" to "com.b", "event" to "install",
-        "timestamp" to t, "timestamp_precision" to precision, "source" to "BUGREPORT_IMPORT"))
+    private fun battery(t: Long, precision: String) = StoreRecord(mapOf("package_name" to "com.b",
+        "event_type" to "uninstall", "description" to "Uninstalled com.b", "timestamp" to t,
+        "timestamp_precision" to precision, "source" to "BUGREPORT_IMPORT"))
 
     private suspend fun all(): List<TimelineRow.Entry> {
         val out = ArrayList<TimelineRow.Entry>()
@@ -83,13 +84,22 @@ class TimelineVisibilityTest {
         val facts = got.filterIsInstance<TimelineRow.EventRow>().map { it.record.factId }.toSet()
         val rows = got.filterIsInstance<TimelineRow.StoredRow>()
 
-        assertEquals(setOf(events[0], events[1], orphans[0]), facts)
-        assertTrue(facts.none { it in snapshots || it == day || it == deleting || it == orphans[2] })
+        assertEquals("events, the day-precision uninstall (R31) and the signal-pinned orphan",
+            setOf(events[0], events[1], day, orphans[0]), facts)
+        assertTrue(facts.none { it in snapshots || it == deleting || it == orphans[2] })
+        val dayRow = got.filterIsInstance<TimelineRow.EventRow>().single { it.record.factId == day }
+        assertEquals("rendered date-only, never with a time of day", DATE_ONLY,
+            factTime(dayRow.record, dayRow.timestamp))
+        assertEquals("the day-precision fact exports date-only", "day",
+            dayRow.exportEvents().single().timestampPrecision)
+        val exact = got.filterIsInstance<TimelineRow.EventRow>().first { it.record.factId == events[0] }
+        assertTrue("an exact event shows its time of day",
+            factTime(exact.record, BASE + 1).matches(Regex("\\d{2}:\\d{2}:\\d{2}")))
         assertEquals("the DELETING scan's row is hidden; the persistent row shows", listOf(audit),
             rows.map { it.event.id })
         assertEquals("the orphan pinned by the persistent row is nested under it", orphans[1],
             rows.single().evidence?.factId)
-        assertEquals("count = 2 events + the signal-pinned orphan + the row + its evidence", 5L,
+        assertEquals("count = 2 events + the day event + the signal-pinned orphan + the row + its evidence", 6L,
             entries.count(TimelineFilter()))
     }
 

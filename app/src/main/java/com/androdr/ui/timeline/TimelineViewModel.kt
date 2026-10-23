@@ -23,6 +23,7 @@ import com.androdr.data.store.tableChanges
 import com.androdr.ioc.KnownAppResolver
 import com.androdr.reporting.TimelineExporter
 import com.androdr.sigma.Finding
+import com.androdr.sigma.TimePrecision
 import com.androdr.util.appVersion
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -382,6 +383,7 @@ internal fun DecodedRecord.asExportEvent(
 ): ForensicTimelineEvent = ForensicTimelineEvent(
     startTimestamp = eventTime ?: capturedAt,
     kind = "event",
+    timestampPrecision = if (precision == TimePrecision.DAY) TimelineExporter.DAY_PRECISION else "exact",
     source = service,
     category = category?.ifEmpty { null } ?: service,
     description = summary.orEmpty(),

@@ -210,11 +210,33 @@ class TimelineExporterTest {
         assertEquals("one header and one row: no raw line break escapes", 2, lines.size)
         assertTrue(lines[1].contains("\"'=HYPERLINK(\"\"x\"\")\""))
         assertTrue(lines[1].contains("line1\\u000Aline2\\u202Egnp.exe"))
-        assertTrue("record_id is the last column", lines[1].endsWith(",77"))
-        assertEquals("record_id", lines[0].split(",").last())
+        assertTrue("record_id, then time_precision, end the row", lines[1].endsWith(",77,exact"))
+        assertEquals(listOf("record_id", "time_precision"), lines[0].split(",").takeLast(2))
         val text = TimelineExporter.formatPlaintext(listOf(evil), versionName = "t")
         assertTrue(text.contains("line1\\u000Aline2\\u202Egnp.exe"))
         assertTrue(text.none { it == '‮' })
+    }
+
+    /** Ruling R31: a day-precision event is written date-only, never with an invented time of day. */
+    @Test
+    fun `a day-precision event exports date-only with its precision`() {
+        val day = java.util.Calendar.getInstance().apply {
+            set(2026, 9, 3, 0, 0, 0)
+            set(java.util.Calendar.MILLISECOND, 0)
+        }.timeInMillis
+        val uninstall = ForensicTimelineEvent(id = 0, startTimestamp = day, kind = "event", source = "battery_daily",
+            category = "package_uninstall", description = "Uninstalled com.gone", timestampPrecision = "day")
+        val out = StringBuilder()
+        TimelineExporter.writeCsvHeader(out)
+        TimelineExporter.writeCsvRow(out, uninstall)
+        val header = out.lines()[0].split(",")
+        val row = out.lines()[1].split(",")
+        assertEquals("2026-10-03", row[header.indexOf("isodate")])
+        assertEquals("day", row[header.indexOf("time_precision")])
+        val text = TimelineExporter.formatPlaintext(listOf(uninstall), versionName = "t")
+        val line = text.lines().single { "Uninstalled com.gone" in it }
+        assertTrue(line, line.contains("(date only)"))
+        assertTrue("no time of day: $line", !Regex("\\d{2}:\\d{2}:\\d{2}").containsMatchIn(line))
     }
 
     @Test

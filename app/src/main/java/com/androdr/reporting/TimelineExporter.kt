@@ -26,7 +26,10 @@ object TimelineExporter {
     // fact an event is (or a finding row points at): the id a `1:<id>` member ref names.
     const val CSV_HEADER = "timestamp,isodate,end_timestamp,end_isodate,kind,module,event,data,package," +
         "severity,rule_id,correlation_id,member_refs,scan_result_id," +
-        "ioc_indicator,ioc_type,ioc_source,campaign,mitre_technique,apk_hash,details,record_id"
+        "ioc_indicator,ioc_type,ioc_source,campaign,mitre_technique,apk_hash,details,record_id,time_precision"
+
+    /** `timestampPrecision` of a day-precision event: written date-only, never with a time of day (R31). */
+    const val DAY_PRECISION = "day"
 
     /**
      * What the plaintext header summarises, gathered in a first streaming pass over the rows
@@ -114,7 +117,11 @@ object TimelineExporter {
                 out.line("  $date")
                 out.line(THIN)
             }
-            val time = if (event.startTimestamp > 0) timeFmt.format(Date(event.startTimestamp)) else "??:??:??"
+            val time = when {
+                event.timestampPrecision == DAY_PRECISION -> "(date only)"
+                event.startTimestamp > 0 -> timeFmt.format(Date(event.startTimestamp))
+                else -> "??:??:??"
+            }
             out.line("  $time  ${escapeForReport(event.description)}")
             val pkg = escapeForReport(event.packageName)
             if (event.appName.isNotEmpty() && event.appName != event.packageName) {
@@ -172,7 +179,11 @@ object TimelineExporter {
      * timeline row, `1` a stored fact), from `signal_member` — the only store of member lists (spec §5.4).
      */
     fun writeCsvRow(out: Appendable, event: ForensicTimelineEvent, memberRefs: List<String> = emptyList()) {
-        val iso = if (event.startTimestamp > 0) utc(event.startTimestamp) else ""
+        val iso = when {
+            event.startTimestamp <= 0 -> ""
+            event.timestampPrecision == DAY_PRECISION -> date(event.startTimestamp)
+            else -> utc(event.startTimestamp)
+        }
         val endIso = event.endTimestamp?.let { if (it > 0) utc(it) else "" } ?: ""
         // Fall back to the description-parsed package so legacy rows are not blank in the export.
         val pkg = event.packageName.takeIf { it.isNotBlank() } ?: event.effectivePackageFromDescription().orEmpty()
@@ -186,7 +197,7 @@ object TimelineExporter {
             csvEscape(memberRefs.joinToString(";")), event.scanResultId.toString(), csvEscape(event.iocIndicator),
             csvEscape(event.iocType), csvEscape(event.iocSource), csvEscape(event.campaignName),
             csvEscape(event.attackTechniqueId), csvEscape(event.apkHash), csvEscape(event.details),
-            event.recordId?.toString().orEmpty(),
+            event.recordId?.toString().orEmpty(), csvEscape(event.timestampPrecision),
         )
         out.line(cells.joinToString(","))
     }
@@ -209,6 +220,9 @@ object TimelineExporter {
     }
 
     private fun utc(ms: Long): String = utcFormat.get()!!.format(Date(ms))
+
+    /** A day-precision time as its date, in the zone the day was recorded in (the device's). */
+    private fun date(ms: Long): String = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date(ms))
 
     private fun Appendable.line(text: String) {
         append(text).append('\n')

@@ -50,8 +50,9 @@ class TimelineSql(val sql: String, val args: List<Any?>) {
  *
  * Events only (spec §3): a record is an event record when it carries an event time, so
  * [EVENT_RECORD] (`f.eventTime IS NOT NULL`) is what excludes every snapshot record (the taxonomy
- * gives a snapshot service no event-time field, and an absent value leaves it null). [EXACT_TIME]
- * then leaves out day-precision event facts.
+ * gives a snapshot service no event-time field, and an absent value leaves it null). Day-precision
+ * event facts are events too (ruling R31: spec §3, "exact or day"): they sort at their stored time,
+ * the start of their day, and the UI shows them date-only. Only correlation atoms leave them out (K1).
  *
  * Nesting: a fact referenced (`recordId`) by a visible row this same filter shows is nested under
  * that row and left out of the fact arm. A count is what the list shows: the rows, the standalone
@@ -111,9 +112,6 @@ object TimelineQueries {
     /** An event record (spec §3): it carries an event time. This is what excludes snapshot records. */
     private const val EVENT_RECORD = "f.eventTime IS NOT NULL"
 
-    /** Exact precision: leaves out day-precision event facts (they have no time of day to place). */
-    private const val EXACT_TIME = "f.timePrecision = 'EXACT'"
-
     /** Predicates and their arguments, joined with AND. */
     private class Where {
         val terms = ArrayList<String>()
@@ -168,7 +166,6 @@ object TimelineQueries {
     /** The fact predicates of [filter] except visibility, nesting and the keyset. */
     private fun factFilter(filter: TimelineFilter, time: String): Where = Where().apply {
         add(EVENT_RECORD)
-        add(EXACT_TIME)
         if (time != "f.eventTime") add("$time IS NOT NULL")
         val shape = filter.shape
         filter.packageName?.let {
