@@ -33,7 +33,7 @@ object TaxonomyContract {
      * to [contractHash] or to [TimelineCategories] / [precisionOf] outputs needs
      * a recompute migration and a bump here (gate X1).
      */
-    const val CONTRACT_SCHEMA_VERSION = 19
+    const val CONTRACT_SCHEMA_VERSION = 20
 
     private const val DAY_PRECISION = "day"
 

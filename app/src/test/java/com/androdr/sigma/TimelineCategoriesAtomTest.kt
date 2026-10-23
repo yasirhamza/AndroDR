@@ -36,16 +36,35 @@ class TimelineCategoriesAtomTest {
         return categories.values.toSet()
     }
 
+    /**
+     * A category [TimelineCategories] fixes for a whole service is produced by
+     * that code alone. One it copies from the record (`event_type` of
+     * [EVENT_TYPE_SERVICES]) is only as real as the producer writing that value,
+     * so such an atom category must be in [EVENT_TYPE_PRODUCERS], whose producer
+     * literal is checked below; a hand-written corpus record does not count.
+     */
     @Test
     fun `every atom category is produced by TimelineCategories or a forensic_timeline row`() {
-        val produced = ContractCorpus.records().map { (service, fields) ->
-            TimelineCategories.categoryOf(service, fields)
-        }.toSet()
-        val orphaned = atomCategories() - produced - ROW_CATEGORIES.keys
+        val records = ContractCorpus.records()
+        val fixed = records.filter { it.first !in EVENT_TYPE_SERVICES }
+            .map { (service, fields) -> TimelineCategories.categoryOf(service, fields) }.toSet()
+        val copied = records.filter { it.first in EVENT_TYPE_SERVICES }
+            .map { (service, fields) -> TimelineCategories.categoryOf(service, fields) }.toSet()
+        val atoms = atomCategories()
+        val orphaned = atoms - fixed - ROW_CATEGORIES.keys - (copied intersect EVENT_TYPE_PRODUCERS.keys)
         assertTrue(
             "Atom categories with no producer (the atom can never bind): $orphaned",
             orphaned.isEmpty(),
         )
+    }
+
+    @Test
+    fun `copied categories are written by their named producer`() {
+        for ((category, producer) in EVENT_TYPE_PRODUCERS) {
+            val (file, literal) = producer
+            val source = TestRuleRepo.stripKotlinComments(TestRuleRepo.mainSourceFile(file).readText())
+            assertTrue("$file no longer produces \"$category\" (expected `$literal`)", source.contains(literal))
+        }
     }
 
     @Test
@@ -61,6 +80,19 @@ class TimelineCategoriesAtomTest {
 
     private companion object {
         const val MIN_ATOM_FILES = 5
+
+        /** Services whose category [TimelineCategories] copies from the record's `event_type`. */
+        val EVENT_TYPE_SERVICES = setOf("usage_stats", "battery_daily")
+
+        /**
+         * Atom categories that reach the timeline only as a copied `event_type`.
+         * Category -> (production file, the code literal that sets the value).
+         */
+        val EVENT_TYPE_PRODUCERS = mapOf(
+            // UsageStatsScanner maps ACTIVITY_RESUMED to the usage event's category.
+            "app_foreground" to ("com/androdr/scanner/UsageStatsScanner.kt" to
+                "UsageEvents.Event.ACTIVITY_RESUMED -> \"app_foreground\""),
+        )
 
         /**
          * Categories written directly as `forensic_timeline` rows by a live

@@ -144,8 +144,11 @@ class FieldMapCompletenessTest {
             // Published under the taxonomy keys embedded_component_class / embedded_native_lib.
             "AppTelemetry.embeddedComponentClasses" to "embedded_component_class",
             "AppTelemetry.embeddedNativeLibs" to "embedded_native_lib",
-            // Live-scan provenance: always LIVE_SCAN for these classes, so the
-            // observation's own source carries it (spec §4.1 envelope keys).
+            // Live-scan provenance. ASSUMPTION: every producer of these classes
+            // passes TelemetrySource.LIVE_SCAN (bug-report and intrusion imports use
+            // generic maps or other classes), so the observation's own source carries
+            // it (spec §4.1 envelope keys). A non-live producer of one of these
+            // classes must add "source" to its field map and drop its entry here.
             "AppTelemetry.source" to "envelope",
             "DeviceTelemetry.source" to "envelope",
             "ProcessTelemetry.source" to "envelope",

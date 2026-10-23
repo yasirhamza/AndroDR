@@ -234,9 +234,13 @@ internal val TAXONOMY_CONTRACT_TABLE: Map<String, ServiceContract> = linkedMapOf
         fields = listOf(
             "day_index" to "Day offset in the battery stats history",
             "version" to
-                "Package version string parsed from the battery-stats entry, when present. OPTIONAL: " +
-                "set only by the bug-report BatteryDailyModule's generic record, not by the typed " +
-                "BatteryDailyEvent; optional implies positive-only (never reference it under `not`)",
+                "Package version code parsed from the battery-stats entry (0 when unparseable). " +
+                "Emitted today only by BatteryDailyModule's IOC-match generic record; the typed " +
+                "BatteryDailyEvent does not carry it yet (AndroDR telemetry-store Task A6 must emit " +
+                "it there or remove it deliberately). FLEET SAFETY — POSITIVE REFERENCES ONLY: most " +
+                "records lack this field, so a matcher on it evaluates false there, which no-ops " +
+                "positive selections but INVERTS under `not`. Never reference it in a negated filter " +
+                "(validate-rule.py rejects it)",
             "event_type" to "Battery event type",
             "package_name" to "Package associated with the event",
             "description" to "Human-readable event description",
@@ -276,11 +280,6 @@ internal val TAXONOMY_CONTRACT_TABLE: Map<String, ServiceContract> = linkedMapOf
             "change_id" to "Platform compatibility change ID",
             "package_name" to "Package affected by the change",
             "enabled" to "Whether the compat change is enabled",
-            "is_ioc" to
-                "True if the package matched a known-bad package IOC at parse time. OPTIONAL: set " +
-                "only by the bug-report PlatformCompatModule record, not by the typed " +
-                "PlatformCompatChange; optional implies positive-only (never reference it under " +
-                "`not`)",
             "source" to "TelemetrySource enum name",
             "captured_at" to "When this telemetry was captured (epoch ms)",
         ),
@@ -299,11 +298,6 @@ internal val TAXONOMY_CONTRACT_TABLE: Map<String, ServiceContract> = linkedMapOf
                 "so a matcher on it evaluates false there, which no-ops positive selections but " +
                 "INVERTS under `not`, over-firing the old fleet. Never reference it in a negated " +
                 "filter until the fleet floor covers the emitter (validate-rule.py rejects it)",
-            "is_ioc" to
-                "True if the package matched a known-bad package IOC at parse time. OPTIONAL: set " +
-                "only by the bug-report DbInfoModule record, not by the typed " +
-                "DatabasePathObservation; optional implies positive-only (never reference it under " +
-                "`not`)",
             "recent_query_count" to
                 "Recent query count parsed from the dbinfo section for this database. FLEET SAFETY — " +
                 "POSITIVE REFERENCES ONLY: old builds never emit this field, so a matcher on it " +

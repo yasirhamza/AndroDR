@@ -310,6 +310,9 @@ class LogsourceTaxonomyCrossCheckTest {
          */
         val PENDING_PRODUCER: Map<String, Map<String, String>> = mapOf(
             "battery_daily" to mapOf(
+                // Only the IOC-match generic record emits it today; A6 must put it on
+                // BatteryDailyEvent or remove it from the taxonomy deliberately.
+                "version" to "Task A6: BatteryDailyModule fills BatteryDailyEvent",
                 "timestamp" to "Task A6: BatteryDailyModule fills BatteryDailyEvent",
                 "timestamp_precision" to "Task A6: BatteryDailyModule fills BatteryDailyEvent",
             ),

@@ -126,7 +126,8 @@ class TaxonomyContractTest {
         val actual = TaxonomyContract.corpusHash(ContractCorpus.records())
         assertEquals(
             "Computed-column contract changed (actual $actual): recompute migration + bump " +
-                "CONTRACT_SCHEMA_VERSION, then pin the new hash under the new version.",
+                "CONTRACT_SCHEMA_VERSION, then pin the new hash under the new version. If only the " +
+                "corpus changed, re-pin the hash without bumping the version.",
             pinned, actual,
         )
     }
@@ -134,7 +135,8 @@ class TaxonomyContractTest {
     private companion object {
         /** Schema version that last recomputed the computed columns -> its contract hash. */
         val PINNED_CONTRACT_HASHES = mapOf(
-            19 to "a18120eb79c0e201886766cace4a3b45f3b77cf0f403b0c777b64faa19b910a9",
+            // Schema 20: the Phase A store migration (19 -> 20) first writes the computed columns.
+            20 to "a18120eb79c0e201886766cace4a3b45f3b77cf0f403b0c777b64faa19b910a9",
         )
     }
 }
