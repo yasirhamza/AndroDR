@@ -4,6 +4,7 @@ import com.androdr.data.model.BatteryDailyEvent
 import com.androdr.data.model.DatabasePathObservation
 import com.androdr.data.model.PackageInstallHistoryEntry
 import com.androdr.data.model.PlatformCompatChange
+import com.androdr.data.model.SystemPropertySnapshot
 import com.androdr.data.model.TombstoneEvent
 import com.androdr.data.model.WakelockAcquisition
 
@@ -15,6 +16,7 @@ object BugReportRecordBuilders {
     const val PACKAGE_INSTALL_HISTORY = "package_install_history"
     const val PLATFORM_COMPAT = "platform_compat"
     const val DB_INFO = "db_info"
+    const val SYSTEM_PROPERTY = "system_property"
 
     fun tombstones(t: List<TombstoneEvent>): List<StoreRecord> = t.map { StoreRecord(it.toFieldMap()) }
     fun wakelocks(t: List<WakelockAcquisition>): List<StoreRecord> = t.map { StoreRecord(it.toFieldMap()) }
@@ -24,6 +26,9 @@ object BugReportRecordBuilders {
     fun platformCompat(t: List<PlatformCompatChange>): List<StoreRecord> =
         t.map { StoreRecord(it.toFieldMap()) }
     fun databasePathObservations(t: List<DatabasePathObservation>): List<StoreRecord> =
+        t.map { StoreRecord(it.toFieldMap()) }
+
+    fun systemProperties(t: List<SystemPropertySnapshot>): List<StoreRecord> =
         t.map { StoreRecord(it.toFieldMap()) }
 
     /** Modules that already emit field maps (the generic bug-report path). */

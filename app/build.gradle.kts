@@ -228,6 +228,22 @@ tasks.withType<Test>().configureEach {
     dependsOn(copyRobolectricDeps)
     systemProperty("robolectric.offline", "true")
     systemProperty("robolectric.dependency.dir", robolectricDepsDir.get().asFile.absolutePath)
+    // *LowHeap* tests prove a bound on memory, so they run only under lowHeapTest's 256 MB heap.
+    if (name != "lowHeapTest") filter { excludeTestsMatching("*LowHeap*") }
+}
+
+// Telemetry store spec §9 "Low heap": a 200,000-line intrusion-log import fits in 256 MB. Reuses the
+// debug unit-test classes and classpath (Robolectric included), with only *LowHeap* tests selected.
+val lowHeapTest by tasks.registering(Test::class) {
+    description = "Runs the *LowHeap* unit tests with a 256 MB heap."
+    group = "verification"
+    val unitTest = tasks.named<Test>("testDebugUnitTest")
+    // The copied file collections carry their producing tasks (compilation, resources) as inputs.
+    dependsOn(copyRobolectricDeps)
+    testClassesDirs = unitTest.get().testClassesDirs
+    classpath = unitTest.get().classpath
+    maxHeapSize = "256m"
+    filter { includeTestsMatching("*LowHeap*") }
 }
 
 dependencies {

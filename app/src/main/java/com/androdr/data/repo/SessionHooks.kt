@@ -43,6 +43,13 @@ interface SessionHooks {
     fun interimRows(scan: ScanResult): List<ForensicTimelineEvent> = emptyList()
 
     /**
+     * The correlation pass, inside the finishing transaction after this scan's rows were written:
+     * [rows] are those rows with their real ids (finding rows, then interim rows; duplicates Room
+     * ignored are left out). Returns the signal rows to insert and the findings they become (#350).
+     */
+    suspend fun correlate(rows: List<ForensicTimelineEvent>): Correlation = Correlation.NONE
+
+    /**
      * Summary columns (counts, scanner errors) of the completed scan. `scan.findings` holds the
      * kept findings (capped for intrusion-log imports); [totals] counts every finding the session
      * kept or dropped, so a summary never undercounts past the cap.
@@ -51,6 +58,13 @@ interface SessionHooks {
 
     companion object {
         val NONE: SessionHooks = object : SessionHooks {}
+    }
+}
+
+/** What [SessionHooks.correlate] found: signal rows to insert and the findings they become. */
+data class Correlation(val signals: List<ForensicTimelineEvent>, val findings: List<Finding>) {
+    companion object {
+        val NONE = Correlation(emptyList(), emptyList())
     }
 }
 

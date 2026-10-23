@@ -21,12 +21,10 @@ class ScanRepositoryDnsBatchTest {
     private val timelineDao = mockk<ForensicTimelineEventDao>(relaxed = true)
     private val resolver = mockk<IndicatorResolver>()
     private val repo = ScanRepository(
-        database = mockk(relaxed = true),
         scanResultDao = mockk(relaxed = true),
         dnsEventDao = mockk(relaxed = true),
         forensicTimelineEventDao = timelineDao,
         indicatorResolver = resolver,
-        timelineRows = mockk(relaxed = true),
         scanWrites = mockk(relaxed = true),
         scanLock = ScanLock(),
     )

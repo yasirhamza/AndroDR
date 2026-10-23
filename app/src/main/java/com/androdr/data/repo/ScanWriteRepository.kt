@@ -36,9 +36,11 @@ class ScanWriteRepository @Inject constructor(
 
     /**
      * The session's single finishing transaction (spec §5.2 step 5, Phases A–C): the prior-import
-     * sweep, this scan's finding rows (with `level` and `recordId`), the interim event rows, then the
-     * guarded `IN_PROGRESS → COMPLETE` update and the summary columns. Throws — rolling everything
-     * back — with [ScanNotInProgressException] when the guard changes no row.
+     * sweep, this scan's finding rows (with `level` and `recordId`), the interim event rows, the
+     * correlation pass over those rows (with their real ids) and its signal rows, then the guarded
+     * `IN_PROGRESS → COMPLETE` update and the summary columns (the scan's findings plus the
+     * correlation's). Throws — rolling everything back — with [ScanNotInProgressException] when the
+     * guard changes no row.
      */
     suspend fun finish(
         scan: ScanResult, kept: List<KeptFinding>, totals: FindingTotals, hooks: SessionHooks,
@@ -50,14 +52,21 @@ class ScanWriteRepository @Inject constructor(
             check(row.level == k.finding.level) { "finding row for ${k.finding.ruleId} must carry its level" }
             row.copy(recordId = k.recordId, scanResultId = scan.id)
         }
-        if (findingRows.isNotEmpty()) timeline.insertAll(findingRows)
-        val interim = hooks.interimRows(scan)
-        if (interim.isNotEmpty()) timeline.insertAll(interim)
+        val written = insertWithIds(findingRows) + insertWithIds(hooks.interimRows(scan))
+        val correlation = hooks.correlate(written)
+        if (correlation.signals.isNotEmpty()) timeline.insertAll(correlation.signals)
         if (scans.complete(scan.id, telemetryState) == 0) throw ScanNotInProgressException(scan.id)
-        val completed = hooks.summarize(scan.copy(findings = kept.map { it.finding }), totals)
+        val findings = kept.map { it.finding } + correlation.findings
+        val completed = hooks.summarize(scan.copy(findings = findings), totals)
             .copy(id = scan.id, state = ScanState.COMPLETE, telemetryState = telemetryState)
         writes.update(completed)
         completed
+    }
+
+    /** Inserts [rows] and returns them with their ids, leaving out rows Room ignored (`-1`). */
+    private suspend fun insertWithIds(rows: List<ForensicTimelineEvent>): List<ForensicTimelineEvent> {
+        if (rows.isEmpty()) return emptyList()
+        return rows.zip(timeline.insertAll(rows)).mapNotNull { (row, id) -> if (id <= 0L) null else row.copy(id = id) }
     }
 
     /**

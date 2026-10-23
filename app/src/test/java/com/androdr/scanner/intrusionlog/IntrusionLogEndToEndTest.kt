@@ -1,24 +1,25 @@
 package com.androdr.scanner.intrusionlog
 
+import android.net.Uri
 import com.androdr.scanner.ArtifactSniffer
 import com.androdr.scanner.ArtifactType
-import com.androdr.scanner.IntrusionLogAnalyzer
+import com.androdr.scanner.IntrusionLogZips
 import com.androdr.sigma.SigmaRule
-import com.androdr.sigma.SigmaRuleEngine
-import com.androdr.sigma.SigmaRuleEvaluator
 import com.androdr.sigma.SigmaRuleParser
-import com.androdr.sigma.toFieldMap
-import io.mockk.every
 import io.mockk.mockk
+import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.util.zip.ZipEntry
 import java.util.zip.ZipInputStream
 import java.util.zip.ZipOutputStream
 
+@RunWith(RobolectricTestRunner::class)
 class IntrusionLogEndToEndTest {
 
     /**
@@ -75,36 +76,33 @@ class IntrusionLogEndToEndTest {
         assertEquals(ArtifactType.INTRUSION_LOG, ArtifactSniffer.classify(names.asSequence()))
     }
 
+    /** The real analyzer, writer session and store: the cross-file duplicate collapses in the store. */
     @Test
-    fun `full pipeline - parse, dedup, and fire rules on all three services`() {
-        val dnsRule = buildDnsRule()
-        val netRule = buildNetRule()
-        val secRule = buildSecRule()
-        // Engine mock delegates to the real evaluator with the inline rules —
-        // this keeps the test JVM-only while exercising real matching.
-        val engine = mockEngine(dnsRule, netRule, secRule)
+    fun `full pipeline - parse, dedup, and fire rules on all three services`() = runBlocking {
+        val engine = IntrusionLogZips.engine(buildDnsRule(), buildNetRule(), buildSecRule())
+        val zip = exportZip()
+        IntrusionLogZips.fixture(engine) { zip }.use { f ->
+            val result = f.orchestrator.analyzeIntrusionLog(mockk<Uri>(relaxed = true))
 
-        val result = IntrusionLogAnalyzer(mockk(relaxed = true), engine, mockk(relaxed = true)).analyzeEntries(
-            zipEntries(exportZip()), uidResolver = { -1 }, capturedAt = 1_787_400_400_000L
-        )
-
-        // dnsEventCount is 2: the top-level flexispy event AND the one-dir-deep
-        // "intrusion-logs/2026-08-20.txt" event — regression guard for the
-        // depth-inclusion rule (`<= 1` slashes) in ArtifactSniffer /
-        // IntrusionLogAnalyzer. A tightened rule (e.g. `< 1`) would drop the
-        // deep entry and turn this red.
-        assertEquals(2, result.stats.dnsEventCount)
-        assertEquals(1, result.stats.connectEventCount)      // event_id 1 deduped across files
-        assertEquals(1, result.stats.securityEventCount)
-        assertEquals(1, result.stats.duplicatesCollapsed)
-        assertTrue(result.dnsEvents.any { it.event.domain == "deep.example.com" })
-        // The dns rule only matches flexispy.com, so the deep event does not
-        // add a fourth triggered finding — triggered-findings counts are
-        // unchanged from the two-file baseline.
-        assertEquals(3, result.findings.count { it.triggered })
-        assertTrue(result.findings.any { it.ruleId == "androdr-e2e-dns" && it.triggered })
-        assertTrue(result.findings.any { it.ruleId == "androdr-e2e-net" && it.triggered })
-        assertTrue(result.findings.any { it.ruleId == "androdr-e2e-sec" && it.triggered })
+            // dnsEventCount is 2: the top-level flexispy event AND the one-dir-deep
+            // "intrusion-logs/2026-08-20.txt" event — regression guard for the
+            // depth-inclusion rule (`<= 1` slashes) in ArtifactSniffer /
+            // IntrusionLogAnalyzer. A tightened rule (e.g. `< 1`) would drop the
+            // deep entry and turn this red.
+            assertEquals(2, result.stats.dnsEventCount)
+            assertEquals(1, result.stats.connectEventCount)      // event_id 1 deduped across files
+            assertEquals(1, result.stats.securityEventCount)
+            assertEquals(1, result.stats.duplicatesCollapsed)
+            assertEquals("one observation per distinct record", 4L, f.count("SELECT COUNT(*) FROM scan_record"))
+            assertTrue(f.timelineDao.getAllForExport().any { it.description.contains("deep.example.com") })
+            // The dns rule only matches flexispy.com, so the deep event does not
+            // add a fourth triggered finding; the duplicate connect adds no second one.
+            assertEquals(3, result.findings.count { it.triggered })
+            assertEquals(3, result.stats.triggeredFindingCount)
+            assertTrue(result.findings.any { it.ruleId == "androdr-e2e-dns" && it.triggered })
+            assertTrue(result.findings.any { it.ruleId == "androdr-e2e-net" && it.triggered })
+            assertTrue(result.findings.any { it.ruleId == "androdr-e2e-sec" && it.triggered })
+        }
     }
 
     private fun buildDnsRule(): SigmaRule = SigmaRuleParser.parse(
@@ -173,33 +171,4 @@ class IntrusionLogEndToEndTest {
                 category: app_risk
         """.trimIndent()
     )!!
-
-    private fun mockEngine(dnsRule: SigmaRule, netRule: SigmaRule, secRule: SigmaRule): SigmaRuleEngine {
-        val engine = mockk<SigmaRuleEngine>(relaxed = true)
-        every { engine.evaluateImportedDns(any()) } answers {
-            SigmaRuleEvaluator.evaluate(
-                listOf(dnsRule),
-                firstArg<List<com.androdr.data.model.ImportedDnsEvent>>().map { it.toFieldMap() },
-                "dns_monitor", emptyMap(), emptyMap()
-            )
-        }
-        every { engine.evaluateNetwork(any()) } answers {
-            SigmaRuleEvaluator.evaluate(
-                listOf(netRule),
-                firstArg<List<com.androdr.data.model.NetworkTelemetry>>().map { it.toFieldMap() },
-                "network_monitor", emptyMap(), emptyMap()
-            )
-        }
-        every { engine.evaluateSecurityLog(any()) } answers {
-            SigmaRuleEvaluator.evaluate(
-                listOf(secRule),
-                // SecurityLogEvent.toFieldMap() is internal to com.androdr.sigma,
-                // but the unit-test source set is a friend module, so the real
-                // extension is directly callable — no hand-copied mirror needed.
-                firstArg<List<com.androdr.data.model.SecurityLogEvent>>().map { it.toFieldMap() },
-                "security_log", emptyMap(), emptyMap()
-            )
-        }
-        return engine
-    }
 }

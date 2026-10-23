@@ -18,6 +18,7 @@ import com.androdr.data.store.TelemetryStore
 import com.androdr.sigma.Finding
 import com.androdr.sigma.SigmaRuleEngine
 import com.androdr.sigma.StoreRecord
+import com.androdr.sigma.TaxonomyContract
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.withContext
 import java.nio.ByteBuffer
@@ -56,7 +57,8 @@ class ChunkedScanWriter @Inject constructor(
 ) {
     /**
      * Inserts [scan] `IN_PROGRESS` and opens its session. [liveEvents]: a live event fact already
-     * observed by an earlier live scan gets no new observation (and so no finding).
+     * observed by an earlier live scan gets no new observation (and so no finding); the services
+     * checked are the live event services, [TaxonomyContract.eventServices].
      */
     suspend fun begin(scan: ScanResult, liveEvents: Boolean, hooks: SessionHooks = SessionHooks.NONE): Session {
         repo.begin(scan)
@@ -166,7 +168,9 @@ class ChunkedScanWriter @Inject constructor(
             val deflater = Deflater()
             return try {
                 val counter = counters.getOrPut(service) { OccurrenceCounter() }
-                store.persistChunk(scan.id, service, source, capturedAt, chunk, first, counter, deflater, liveEvents)
+                // Only services that can carry events need the already-observed check (spec §5.2).
+                val live = liveEvents && service in TaxonomyContract.eventServices
+                store.persistChunk(scan.id, service, source, capturedAt, chunk, first, counter, deflater, live)
                     .also { stored = true }
             } catch (_: SQLiteFullException) {
                 // The rest of the pass continues evaluate-only (spec §5.2); the counter is now invalid.

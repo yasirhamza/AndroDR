@@ -27,11 +27,14 @@ internal fun rawFile(name: String): File =
     listOf(File("src/main/res/raw/$name"), File("app/src/main/res/raw/$name")).first { it.isFile }
 
 /** An in-memory store + reader over a Robolectric Room database (callers use RobolectricTestRunner). */
-internal class StoreFixture : Closeable {
+internal class StoreFixture(recordSql: Boolean = true) : Closeable {
+    /** Every SQL statement run, when recorded ([recordSql] false for large imports: it grows per statement). */
     val sql: MutableList<String> = Collections.synchronizedList(mutableListOf())
     val db: AppDatabase = Room.inMemoryDatabaseBuilder(
         ApplicationProvider.getApplicationContext<Context>(), AppDatabase::class.java
-    ).allowMainThreadQueries().setQueryCallback({ q, _ -> sql += q }, Executor { it.run() }).build()
+    ).allowMainThreadQueries().apply {
+        if (recordSql) setQueryCallback({ q, _ -> sql += q }, Executor { it.run() })
+    }.build()
 
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private val dir: File = Files.createTempDirectory("store-flag").toFile()

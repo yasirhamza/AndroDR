@@ -126,7 +126,7 @@ jobs:
         with:
           cache-read-only: ${{ github.ref != 'refs/heads/main' }}
       - name: Build debug APK + run unit tests
-        run: ./gradlew assembleDebug test --stacktrace
+        run: ./gradlew assembleDebug test lowHeapTest --stacktrace
       - name: Upload debug APK
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         if: always()

@@ -20,11 +20,9 @@ import com.androdr.scanner.WriterFixture.Companion.SEC_RULE
 import com.androdr.scanner.WriterFixture.Companion.securityLine
 import com.androdr.sigma.Finding
 import com.androdr.sigma.FindingCategory
-import com.androdr.sigma.SigmaRuleEngine
 import com.androdr.sigma.StoreRecord
 import io.mockk.coEvery
 import io.mockk.every
-import io.mockk.mockk
 import io.mockk.spyk
 import kotlinx.coroutines.runBlocking
 import org.junit.After
@@ -248,21 +246,6 @@ class ChunkedScanWriterTest {
 
     // ── Interim findings top-K ──────────────────────────────────────────────────
 
-    private fun orchestrator() = ScanOrchestrator(
-        appScanner = mockk(relaxed = true), deviceAuditor = mockk(relaxed = true),
-        processScanner = mockk(relaxed = true), fileArtifactScanner = mockk(relaxed = true),
-        accessibilityAuditScanner = mockk(relaxed = true), receiverAuditScanner = mockk(relaxed = true),
-        appOpsScanner = mockk(relaxed = true), usageStatsScanner = mockk(relaxed = true),
-        bugReportAnalyzer = mockk(relaxed = true), intrusionLogAnalyzer = mockk(relaxed = true),
-        scanRepository = mockk(relaxed = true), dnsEventDao = mockk(relaxed = true),
-        forensicTimelineEventDao = mockk(relaxed = true), timelineRows = mockk(relaxed = true),
-        installEventEmitter = mockk(relaxed = true), deviceAdminGrantEmitter = mockk(relaxed = true),
-        sigmaRuleEngine = mockk<SigmaRuleEngine>(relaxed = true), sigmaCorrelationEngine = mockk(relaxed = true),
-        indicatorResolver = mockk(relaxed = true), sigmaRuleFeed = mockk(relaxed = true),
-        knownAppResolver = mockk(relaxed = true), oemPrefixResolver = mockk(relaxed = true),
-        brandImpersonationResolver = mockk(relaxed = true), context = mockk(relaxed = true),
-    )
-
     private fun fixture(n: Int, seed: Int): List<Finding> {
         val rnd = Random(seed)
         val levels = listOf("critical", "high", "medium", "low", "informational", "")
@@ -276,12 +259,11 @@ class ChunkedScanWriterTest {
 
     @Test
     fun `the findings top-K equals capTriggeredFindings on a 1500-finding fixture`() {
-        val cap = orchestrator()
         for ((n, seed) in listOf(1_500 to 1, 1_500 to 2, 800 to 3, 1_112 to 4)) {
             val all = fixture(n, seed)
             val top = FindingsTopK.forSource(il)
             all.forEach { top.offer(it, null) }
-            assertEquals("n=$n seed=$seed", cap.capTriggeredFindings(all), top.result().map { it.finding })
+            assertEquals("n=$n seed=$seed", ScanOrchestrator.capTriggeredFindings(all), top.result().map { it.finding })
             assertEquals(n.toLong(), top.totals().seen)
             assertEquals(all.count { it.triggered }.toLong(), top.totals().triggered)
         }

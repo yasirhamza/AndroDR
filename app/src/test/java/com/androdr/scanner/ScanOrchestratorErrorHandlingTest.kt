@@ -1,34 +1,26 @@
 package com.androdr.scanner
 
-import org.junit.After
-import com.androdr.network.DnsVpnService
-import com.androdr.data.db.DnsEventDao
-import com.androdr.data.db.ForensicTimelineEventDao
-import com.androdr.data.db.ScanResultDao
+import com.androdr.data.model.NotEvaluatedReason
 import com.androdr.data.model.ScanResult
 import com.androdr.data.model.TelemetrySource
-import com.androdr.data.model.NotEvaluatedReason
 import com.androdr.data.model.UNREGISTERED_IOC_LOOKUP
-import com.androdr.data.repo.ScanRepository
-import com.androdr.ioc.IndicatorResolver
-import com.androdr.ioc.KnownAppResolver
-import com.androdr.ioc.OemPrefixResolver
-import com.androdr.sigma.SigmaRuleEngine
+import com.androdr.network.DnsVpnService
 import com.androdr.sigma.SigmaRuleFeed
 import io.mockk.coEvery
-import io.mockk.coJustRun
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
-import io.mockk.slot
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.runBlocking
+import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
 
 /**
  * Error-handling tests for [ScanOrchestrator].
@@ -48,7 +40,7 @@ import org.junit.Test
  *  4. The scan progress returns to [ScanProgress.Idle] on both the
  *     success path and the exception path.
  *
- * Mutation-tested: reverting `trackScanner` to the old
+ * Mutation-tested: reverting `LiveScanCollector.trackedAsync` to the old
  * `runCatching { ... }.getOrDefault(...)` pattern causes `scannerErrors`
  * to be empty and both of the first two tests to fail.
  *
@@ -61,63 +53,28 @@ import org.junit.Test
  * orchestrator actually writes one. They share this harness deliberately rather
  * than standing up a third ~20-mock orchestrator fixture.
  */
+@RunWith(RobolectricTestRunner::class)
 class ScanOrchestratorErrorHandlingTest {
 
-    private lateinit var appScanner: AppScanner
-    private lateinit var deviceAuditor: DeviceAuditor
-    private lateinit var processScanner: ProcessScanner
-    private lateinit var fileArtifactScanner: FileArtifactScanner
-    private lateinit var accessibilityAuditScanner: AccessibilityAuditScanner
-    private lateinit var receiverAuditScanner: ReceiverAuditScanner
-    private lateinit var appOpsScanner: AppOpsScanner
-    private lateinit var usageStatsScanner: UsageStatsScanner
-    private lateinit var bugReportAnalyzer: BugReportAnalyzer
-    private lateinit var scanRepository: ScanRepository
-    private lateinit var dnsEventDao: DnsEventDao
-    private lateinit var forensicTimelineEventDao: ForensicTimelineEventDao
-    private lateinit var sigmaRuleEngine: SigmaRuleEngine
-    private lateinit var indicatorResolver: IndicatorResolver
-    private lateinit var sigmaRuleFeed: SigmaRuleFeed
-    private lateinit var knownAppResolver: KnownAppResolver
-    private lateinit var oemPrefixResolver: OemPrefixResolver
-    private lateinit var scanResultDao: ScanResultDao
+    // The writer session runs on a real in-memory database; everything else is a relaxed mock.
+    private val f = OrchestratorFixture()
+    private val appScanner = f.appScanner
+    private val deviceAuditor = f.deviceAuditor
+    private val processScanner = f.processScanner
+    private val fileArtifactScanner = f.fileArtifactScanner
+    private val accessibilityAuditScanner = f.accessibilityAuditScanner
+    private val receiverAuditScanner = f.receiverAuditScanner
+    private val appOpsScanner = f.appOpsScanner
+    private val usageStatsScanner = f.usageStatsScanner
+    private val bugReportAnalyzer = f.bugReportAnalyzer
+    private val dnsEventDao = f.dnsEventDao
+    private val sigmaRuleEngine = f.engine
+    private val indicatorResolver = f.indicatorResolver
+    private val orchestrator get() = f.orchestrator
 
-    private lateinit var orchestrator: ScanOrchestrator
-
-    @Suppress("LongMethod") // Stubs for ~17 collaborators — splitting adds no clarity
     @Before
     fun setUp() {
-        appScanner = mockk(relaxed = true)
-        deviceAuditor = mockk(relaxed = true)
-        processScanner = mockk(relaxed = true)
-        fileArtifactScanner = mockk(relaxed = true)
-        accessibilityAuditScanner = mockk(relaxed = true)
-        receiverAuditScanner = mockk(relaxed = true)
-        appOpsScanner = mockk(relaxed = true)
-        usageStatsScanner = mockk(relaxed = true)
-        bugReportAnalyzer = mockk(relaxed = true)
-        scanRepository = mockk(relaxed = true)
-        // #350: saveScanWithCorrelation returns the persisted scan, which runFullScan
-        // now hands back to its caller. A relaxed mock would return a hollow
-        // ScanResult, so model the real contract: give back the scan it was given.
-        coEvery {
-            scanRepository.saveScanWithCorrelation(any(), any(), any(), any(), any(), any(), any())
-        } coAnswers { firstArg() }
-        dnsEventDao = mockk(relaxed = true)
-        forensicTimelineEventDao = mockk(relaxed = true)
-        sigmaRuleEngine = mockk(relaxed = true)
-        indicatorResolver = mockk(relaxed = true)
-        // B6: an empty indicator table adds a FeedsNotLoaded entry; these tests are about
-        // other things. DnsVpnService.isRunning (JVM-global, defaults false) likewise adds DnsMonitorOff.
-        coEvery { indicatorResolver.feedCoverage() } returns com.androdr.ioc.FeedCoverage(1, true, true)
-        DnsVpnService.isRunning.value = true
-        sigmaRuleFeed = mockk(relaxed = true)
-        knownAppResolver = mockk(relaxed = true)
-        oemPrefixResolver = mockk(relaxed = true)
-        scanResultDao = mockk(relaxed = true)
-
-        // Happy defaults: every scanner returns an empty list, every sink
-        // accepts any argument. Individual tests override these to throw.
+        // Happy defaults: every scanner returns an empty list. Individual tests override these to throw.
         coEvery { appScanner.collectTelemetry() } returns emptyList()
         coEvery { deviceAuditor.collectTelemetry() } returns emptyList()
         coEvery { processScanner.collectTelemetry() } returns emptyList()
@@ -125,60 +82,18 @@ class ScanOrchestratorErrorHandlingTest {
         coEvery { accessibilityAuditScanner.collectTelemetry() } returns emptyList()
         coEvery { receiverAuditScanner.collectTelemetry() } returns emptyList()
         coEvery { appOpsScanner.collectTelemetry() } returns emptyList()
-        coEvery { usageStatsScanner.collectTimelineEvents() } returns emptyList()
+        coEvery { usageStatsScanner.collectEvents() } returns emptyList()
         coEvery { dnsEventDao.getRecentSnapshot() } returns emptyList()
-        coJustRun { scanRepository.saveScan(any()) }
-        coJustRun { forensicTimelineEventDao.insertAll(any()) }
-        coJustRun { forensicTimelineEventDao.deleteBySource(any()) }
-        coEvery { sigmaRuleFeed.fetch() } returns emptyList()
-        coEvery { sigmaRuleEngine.evaluateApps(any()) } returns emptyList()
-        coEvery { sigmaRuleEngine.evaluateDevice(any()) } returns emptyList()
-        coEvery { sigmaRuleEngine.evaluateProcesses(any()) } returns emptyList()
-        coEvery { sigmaRuleEngine.evaluateFiles(any()) } returns emptyList()
-        coEvery { sigmaRuleEngine.evaluateAccessibility(any()) } returns emptyList()
-        coEvery { sigmaRuleEngine.evaluateReceivers(any()) } returns emptyList()
-        coEvery { sigmaRuleEngine.evaluateAppOps(any()) } returns emptyList()
-        coEvery { sigmaRuleEngine.evaluateDns(any()) } returns emptyList()
+        coEvery { f.sigmaRuleFeed.fetch() } returns emptyList()
+        every { sigmaRuleEngine.evaluateRecords(any(), any(), any()) } returns emptyList()
         every { sigmaRuleEngine.getRules() } returns emptyList()
-        // ruleCount(), loadBundledRules(), setIocLookups(), setRemoteRules(),
-        // setEvidenceProviders() are covered by the mockk `relaxed = true` default
-        // return values — no explicit stubs needed.
-
-        orchestrator = ScanOrchestrator(
-            appScanner = appScanner,
-            deviceAuditor = deviceAuditor,
-            processScanner = processScanner,
-            fileArtifactScanner = fileArtifactScanner,
-            accessibilityAuditScanner = accessibilityAuditScanner,
-            receiverAuditScanner = receiverAuditScanner,
-            appOpsScanner = appOpsScanner,
-            usageStatsScanner = usageStatsScanner,
-            bugReportAnalyzer = bugReportAnalyzer,
-            intrusionLogAnalyzer = mockk(relaxed = true),
-            scanRepository = scanRepository,
-            dnsEventDao = dnsEventDao,
-            forensicTimelineEventDao = mockk(relaxed = true),
-            timelineRows = mockk(relaxed = true),
-            installEventEmitter = mockk(relaxed = true),
-            deviceAdminGrantEmitter = mockk(relaxed = true),
-            sigmaRuleEngine = sigmaRuleEngine,
-            sigmaCorrelationEngine = mockk(relaxed = true),
-            indicatorResolver = indicatorResolver,
-            sigmaRuleFeed = sigmaRuleFeed,
-            knownAppResolver = knownAppResolver,
-            oemPrefixResolver = oemPrefixResolver,
-            brandImpersonationResolver = mockk(relaxed = true),
-            context = mockk(relaxed = true)
-        )
     }
 
     @After
-    fun resetVpnState() {
-        DnsVpnService.isRunning.value = false
-    }
+    fun tearDown() = f.close()
 
     @Test
-    fun `scanner exception is recorded in scannerErrors instead of being swallowed`() = runTest {
+    fun `scanner exception is recorded in scannerErrors instead of being swallowed`() = runBlocking {
         val boom = IllegalStateException("boom — simulated scanner crash")
         coEvery { appScanner.collectTelemetry() } throws boom
 
@@ -196,7 +111,7 @@ class ScanOrchestratorErrorHandlingTest {
     }
 
     @Test
-    fun `a failed DNS snapshot read is recorded as dnsSnapshot and the scan completes`() = runTest {
+    fun `a failed DNS snapshot read is recorded as dnsSnapshot and the scan completes`() = runBlocking {
         coEvery { dnsEventDao.getRecentSnapshot() } throws IllegalStateException("database is locked")
 
         val result: ScanResult = orchestrator.runFullScan()
@@ -208,7 +123,7 @@ class ScanOrchestratorErrorHandlingTest {
     }
 
     @Test
-    fun `cancellation during the DNS snapshot read propagates`() = runTest {
+    fun `cancellation during the DNS snapshot read propagates`() = runBlocking {
         coEvery { dnsEventDao.getRecentSnapshot() } throws CancellationException("user cancelled")
         var caught: Throwable? = null
         try { orchestrator.runFullScan() } catch (e: CancellationException) { caught = e }
@@ -216,7 +131,7 @@ class ScanOrchestratorErrorHandlingTest {
     }
 
     @Test
-    fun `one scanner failing does not cascade — other scanners still run and get recorded`() = runTest {
+    fun `one scanner failing does not cascade — other scanners still run and get recorded`() = runBlocking {
         coEvery { fileArtifactScanner.collectTelemetry() } throws RuntimeException("file scanner dead")
 
         val result: ScanResult = orchestrator.runFullScan()
@@ -233,11 +148,11 @@ class ScanOrchestratorErrorHandlingTest {
         io.mockk.coVerify(exactly = 1) { accessibilityAuditScanner.collectTelemetry() }
         io.mockk.coVerify(exactly = 1) { receiverAuditScanner.collectTelemetry() }
         io.mockk.coVerify(exactly = 1) { appOpsScanner.collectTelemetry() }
-        io.mockk.coVerify(exactly = 1) { usageStatsScanner.collectTimelineEvents() }
+        io.mockk.coVerify(exactly = 1) { usageStatsScanner.collectEvents() }
     }
 
     @Test
-    fun `multiple scanners can fail independently and all failures are recorded`() = runTest {
+    fun `multiple scanners can fail independently and all failures are recorded`() = runBlocking {
         coEvery { appScanner.collectTelemetry() } throws RuntimeException("a")
         coEvery { deviceAuditor.collectTelemetry() } throws IllegalStateException("b")
         coEvery { processScanner.collectTelemetry() } throws NullPointerException("c")
@@ -252,7 +167,7 @@ class ScanOrchestratorErrorHandlingTest {
     }
 
     @Test
-    fun `CancellationException propagates and is not swallowed as a scanner failure`() = runTest {
+    fun `CancellationException propagates and is not swallowed as a scanner failure`() = runBlocking {
         coEvery { appScanner.collectTelemetry() } throws CancellationException("user cancelled")
 
         var caught: Throwable? = null
@@ -269,7 +184,7 @@ class ScanOrchestratorErrorHandlingTest {
     }
 
     @Test
-    fun `successful scan has empty scannerErrors and is not marked partial`() = runTest {
+    fun `successful scan has empty scannerErrors and is not marked partial`() = runBlocking {
         val result: ScanResult = orchestrator.runFullScan()
 
         assertFalse(result.isPartialScan)
@@ -277,13 +192,13 @@ class ScanOrchestratorErrorHandlingTest {
     }
 
     @Test
-    fun `scanProgress returns to Idle after a successful scan`() = runTest {
+    fun `scanProgress returns to Idle after a successful scan`() = runBlocking {
         orchestrator.runFullScan()
         assertEquals(ScanProgress.Idle, orchestrator.scanProgress.value)
     }
 
     @Test
-    fun `scanProgress returns to Idle even when a scanner throws`() = runTest {
+    fun `scanProgress returns to Idle even when a scanner throws`() = runBlocking {
         coEvery { appScanner.collectTelemetry() } throws RuntimeException("boom")
         orchestrator.runFullScan()
         assertEquals(ScanProgress.Idle, orchestrator.scanProgress.value)
@@ -291,24 +206,11 @@ class ScanOrchestratorErrorHandlingTest {
 
     // ---- Capability skips (#136 R1) ------------------------------------------
 
-    /** The ScanResult actually handed to the repository for persistence. */
-    private suspend fun capturePersistedScan(): ScanResult {
-        val persisted = slot<ScanResult>()
-        coVerify {
-            scanRepository.saveScanWithCorrelation(
-                scan = capture(persisted),
-                findingTimelineEvents = any(),
-                replaceUsageStatsEvents = any(),
-                lookbackEvents = any(),
-                findingsForSignals = any(),
-                correlator = any()
-            )
-        }
-        return persisted.captured
-    }
+    /** The ScanResult the session persisted (the only completed scan). */
+    private suspend fun capturePersistedScan(): ScanResult = f.scans().single()
 
     @Test
-    fun `capability skip is recorded on the persisted scan and does not mark it partial`() = runTest {
+    fun `capability skip is recorded on the persisted scan and does not mark it partial`() = runBlocking {
         every { sigmaRuleEngine.unevaluableRules() } returns
             mapOf("androdr-010" to "trusted_installer_db")
 
@@ -332,7 +234,7 @@ class ScanOrchestratorErrorHandlingTest {
     }
 
     @Test
-    fun `capability skips coexist with a real scanner failure without inflating its count`() = runTest {
+    fun `capability skips coexist with a real scanner failure without inflating its count`() = runBlocking {
         every { sigmaRuleEngine.unevaluableRules() } returns
             mapOf("androdr-010" to "trusted_installer_db", "androdr-017" to "known_good_app_db")
         coEvery { appScanner.collectTelemetry() } throws RuntimeException("boom")
@@ -352,7 +254,7 @@ class ScanOrchestratorErrorHandlingTest {
     // -- #288: a remote rule this build could not read is a named gap, not a log line --
 
     @Test
-    fun `a rejected remote rule with no built-in copy is declared not evaluated, by id`() = runTest {
+    fun `a rejected remote rule with no built-in copy is declared not evaluated, by id`() = runBlocking {
         every { sigmaRuleEngine.rejectedRemoteRules() } returns listOf(
             SigmaRuleFeed.RejectedRuleFile("new_rule.yml", "androdr-950", "missing display.category"),
         )
@@ -366,7 +268,7 @@ class ScanOrchestratorErrorHandlingTest {
     }
 
     @Test
-    fun `a rejected update to a rule that still runs says an earlier version is checked`() = runTest {
+    fun `a rejected update to a rule that still runs says an earlier version is checked`() = runBlocking {
         // setRemoteRules only replaces a bundled rule when the remote copy loaded; a
         // rejected update leaves the built-in version evaluating. Claiming "not
         // evaluated" would be false, and a ruleId would stop History from ever
@@ -388,7 +290,7 @@ class ScanOrchestratorErrorHandlingTest {
     }
 
     @Test
-    fun `a rejected update to a disabled rule is not claimed to still run`() = runTest {
+    fun `a rejected update to a disabled rule is not claimed to still run`() = runBlocking {
         // A disabled built-in copy is checked by nothing; saying an earlier version
         // runs would be false. getEnabledRules is the set that actually evaluates.
         every { sigmaRuleEngine.getEnabledRules() } returns emptyList()
@@ -403,7 +305,7 @@ class ScanOrchestratorErrorHandlingTest {
     }
 
     @Test
-    fun `a hostile rejected file name and reason cannot forge report lines`() = runTest {
+    fun `a hostile rejected file name and reason cannot forge report lines`() = runBlocking {
         every { sigmaRuleEngine.rejectedRemoteRules() } returns listOf(
             SigmaRuleFeed.RejectedRuleFile(
                 "x.yml\nFINDINGS SECTION", "androdr-951", "bad\r\nNo threats detected." + "C".repeat(500),
@@ -418,7 +320,7 @@ class ScanOrchestratorErrorHandlingTest {
     }
 
     @Test
-    fun `a hostile lookup name cannot inject report lines or flood the report`() = runTest {
+    fun `a hostile lookup name cannot inject report lines or flood the report`() = runBlocking {
         // The lookup name is feed-controlled (it comes from remote rule YAML) and
         // is rendered verbatim into the exported report, one entry per line.
         val hostile = "evil\nRULES NOT EVALUATED ON THIS BUILD: none\r" + "A".repeat(500) + "é"
@@ -450,30 +352,30 @@ class ScanOrchestratorErrorHandlingTest {
      * bug-report import describes a device state that may be days old.
      */
     @Test
-    fun `bug-report import is stamped BUGREPORT_IMPORT`() = runTest {
+    fun `bug-report import is stamped BUGREPORT_IMPORT`() = runBlocking {
         coEvery { bugReportAnalyzer.analyze(any()) } returns
             BugReportAnalyzer.BugReportAnalysisResult(findings = emptyList(), timeline = emptyList())
 
-        orchestrator.analyzeBugReport(mockk(relaxed = true))
+        orchestrator.analyzeBugReport(mockk<android.net.Uri>(relaxed = true))
 
         assertEquals(TelemetrySource.BUGREPORT_IMPORT, capturePersistedScan().source)
     }
 
     @Test
-    fun `a live scan keeps the LIVE_SCAN default`() = runTest {
+    fun `a live scan keeps the LIVE_SCAN default`() = runBlocking {
         orchestrator.runFullScan()
 
         assertEquals(TelemetrySource.LIVE_SCAN, capturePersistedScan().source)
     }
 
     @Test
-    fun `bug-report path records capability skips too`() = runTest {
+    fun `bug-report path records capability skips too`() = runBlocking {
         every { sigmaRuleEngine.unevaluableRules() } returns
             mapOf("androdr-010" to "trusted_installer_db")
         coEvery { bugReportAnalyzer.analyze(any()) } returns
             BugReportAnalyzer.BugReportAnalysisResult(findings = emptyList(), timeline = emptyList())
 
-        orchestrator.analyzeBugReport(mockk(relaxed = true))
+        orchestrator.analyzeBugReport(mockk<android.net.Uri>(relaxed = true))
 
         val skip = capturePersistedScan().scannerErrors.single()
         assertEquals(UNREGISTERED_IOC_LOOKUP, skip.exception)
@@ -487,11 +389,11 @@ class ScanOrchestratorErrorHandlingTest {
         appName = null, isBlocked = false, reason = null)
 
     @Test
-    fun `attribution misses become one scanner failure and are cleared`() = runTest {
+    fun `attribution misses become one scanner failure and are cleared`() = runBlocking {
         val misses = java.util.concurrent.atomic.AtomicReference<Set<String>>(emptySet())
         every { indicatorResolver.attributionMisses } returns misses
         coEvery { dnsEventDao.getRecentSnapshot() } returns listOf(dnsEvent())
-        coEvery { sigmaRuleEngine.evaluateDns(any()) } answers {
+        coEvery { sigmaRuleEngine.evaluateRecords("dns_monitor", any(), any()) } answers {
             misses.set(setOf("a.com", "b.com")); emptyList()
         }
 
@@ -505,7 +407,7 @@ class ScanOrchestratorErrorHandlingTest {
     }
 
     @Test
-    fun `no attribution misses means no attribution failure`() = runTest {
+    fun `no attribution misses means no attribution failure`() = runBlocking {
         val misses = java.util.concurrent.atomic.AtomicReference<Set<String>>(emptySet())
         every { indicatorResolver.attributionMisses } returns misses
         coEvery { dnsEventDao.getRecentSnapshot() } returns listOf(dnsEvent())
@@ -516,7 +418,7 @@ class ScanOrchestratorErrorHandlingTest {
     }
 
     @Test
-    fun `a failing domain prefetch keeps the findings and records an attribution failure`() = runTest {
+    fun `a failing domain prefetch keeps the findings and records an attribution failure`() = runBlocking {
         val dnsFinding = com.androdr.sigma.Finding(ruleId = "androdr-003", title = "Malicious Domain",
             level = "critical", category = com.androdr.sigma.FindingCategory.APP_RISK)
         coEvery { dnsEventDao.getRecentSnapshot() } returns listOf(dnsEvent())
@@ -524,7 +426,8 @@ class ScanOrchestratorErrorHandlingTest {
             android.database.sqlite.SQLiteException("database disk image is malformed")
         every { indicatorResolver.attributionMisses } returns
             java.util.concurrent.atomic.AtomicReference(emptySet())
-        coEvery { sigmaRuleEngine.evaluateDns(any()) } returns listOf(dnsFinding)
+        coEvery { sigmaRuleEngine.evaluateRecords("dns_monitor", any(), any()) } returns
+            listOf(dnsFinding.copy(ordinal = 0))
 
         val result = orchestrator.runFullScan()
 
@@ -534,7 +437,7 @@ class ScanOrchestratorErrorHandlingTest {
     }
 
     @Test
-    fun `a cancelled domain prefetch propagates instead of becoming a scanner failure`() = runTest {
+    fun `a cancelled domain prefetch propagates instead of becoming a scanner failure`() = runBlocking {
         coEvery { dnsEventDao.getRecentSnapshot() } returns listOf(dnsEvent())
         coEvery { indicatorResolver.prefetchDomainIndicators(any()) } throws CancellationException("left screen")
 
@@ -546,18 +449,20 @@ class ScanOrchestratorErrorHandlingTest {
         }
 
         assertNotNull("CancellationException from the prefetch must propagate", caught)
-        coVerify(exactly = 0) { sigmaRuleEngine.evaluateDns(any()) }
+        coVerify(exactly = 0) { sigmaRuleEngine.evaluateRecords("dns_monitor", any(), any()) }
     }
 
     @Test
-    fun `a failed prefetch records exactly one attribution failure even with misses`() = runTest {
+    fun `a failed prefetch records exactly one attribution failure even with misses`() = runBlocking {
         val misses = java.util.concurrent.atomic.AtomicReference<Set<String>>(emptySet())
         every { indicatorResolver.attributionMisses } returns misses
         coEvery { dnsEventDao.getRecentSnapshot() } returns listOf(dnsEvent())
         coEvery { indicatorResolver.prefetchDomainIndicators(any()) } throws
             android.database.sqlite.SQLiteException("database is locked")
         // After a failed prefetch every live hit is a miss.
-        coEvery { sigmaRuleEngine.evaluateDns(any()) } answers { misses.set(setOf("a.com")); emptyList() }
+        coEvery { sigmaRuleEngine.evaluateRecords("dns_monitor", any(), any()) } answers {
+            misses.set(setOf("a.com")); emptyList()
+        }
 
         val result = orchestrator.runFullScan()
 
@@ -567,7 +472,7 @@ class ScanOrchestratorErrorHandlingTest {
     }
 
     @Test
-    fun `an empty indicator table records a FeedsNotLoaded entry that is not a failure`() = runTest {
+    fun `an empty indicator table records a FeedsNotLoaded entry that is not a failure`() = runBlocking {
         coEvery { indicatorResolver.feedCoverage() } returns com.androdr.ioc.FeedCoverage(0, false, false)
 
         val result = orchestrator.runFullScan()
@@ -578,7 +483,7 @@ class ScanOrchestratorErrorHandlingTest {
     }
 
     @Test
-    fun `a populated indicator table records no FeedsNotLoaded entry`() = runTest {
+    fun `a populated indicator table records no FeedsNotLoaded entry`() = runBlocking {
         coEvery { indicatorResolver.feedCoverage() } returns com.androdr.ioc.FeedCoverage(5, true, true)
 
         val result = orchestrator.runFullScan()
@@ -587,7 +492,7 @@ class ScanOrchestratorErrorHandlingTest {
     }
 
     @Test
-    fun `rules-repo rows missing at scan start record a CampaignSourcesNotLoaded entry`() = runTest {
+    fun `rules-repo rows missing at scan start record a CampaignSourcesNotLoaded entry`() = runBlocking {
         coEvery { indicatorResolver.feedCoverage() } returns com.androdr.ioc.FeedCoverage(5, false, true)
 
         val result = orchestrator.runFullScan()
@@ -599,7 +504,7 @@ class ScanOrchestratorErrorHandlingTest {
     }
 
     @Test
-    fun `DNS monitor off records a DnsMonitorOff entry that is not a failure`() = runTest {
+    fun `DNS monitor off records a DnsMonitorOff entry that is not a failure`() = runBlocking {
         DnsVpnService.isRunning.value = false
 
         val result = orchestrator.runFullScan()
@@ -610,7 +515,7 @@ class ScanOrchestratorErrorHandlingTest {
     }
 
     @Test
-    fun `DNS monitor on records no DnsMonitorOff entry`() = runTest {
+    fun `DNS monitor on records no DnsMonitorOff entry`() = runBlocking {
         DnsVpnService.isRunning.value = true
 
         val result = orchestrator.runFullScan()
@@ -619,14 +524,15 @@ class ScanOrchestratorErrorHandlingTest {
     }
 
     @Test
-    fun `an indicator count failure does not end the scan and claims no feed gap`() = runTest {
+    fun `an indicator count failure does not end the scan and claims no feed gap`() = runBlocking {
         coEvery { indicatorResolver.feedCoverage() } throws android.database.sqlite.SQLiteException("disk")
         every { indicatorResolver.attributionMisses } returns
             java.util.concurrent.atomic.AtomicReference<Set<String>>(emptySet())
         val finding = com.androdr.sigma.Finding(ruleId = "androdr-003", title = "Malicious Domain",
             level = "critical", category = com.androdr.sigma.FindingCategory.APP_RISK)
         coEvery { dnsEventDao.getRecentSnapshot() } returns listOf(dnsEvent())
-        coEvery { sigmaRuleEngine.evaluateDns(any()) } returns listOf(finding)
+        coEvery { sigmaRuleEngine.evaluateRecords("dns_monitor", any(), any()) } returns
+            listOf(finding.copy(ordinal = 0))
 
         val result = orchestrator.runFullScan()
 

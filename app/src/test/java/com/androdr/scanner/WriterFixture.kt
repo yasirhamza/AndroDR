@@ -32,8 +32,8 @@ import java.nio.file.Files
  * A [ChunkedScanWriter] over a [StoreFixture] database with three test rules (callers use
  * RobolectricTestRunner). [store] / [repo] may be replaced by spies before [writer] is first used.
  */
-internal class WriterFixture : Closeable {
-    val f = StoreFixture()
+internal class WriterFixture(recordSql: Boolean = true) : Closeable {
+    val f = StoreFixture(recordSql)
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private val dir: File = Files.createTempDirectory("writer-health").toFile()
     val health = StorageHealthFlag(PreferenceDataStoreFactory.create(scope = scope) { File(dir, "h.preferences_pb") })

@@ -6,7 +6,6 @@ import com.androdr.data.model.ScanState
 import com.androdr.data.model.TelemetrySource
 import com.androdr.data.repo.ScanLock
 import com.androdr.data.repo.ScanWriteRepository
-import com.androdr.data.repo.TimelineRowDeleter
 import com.androdr.data.store.StoreFixture.Companion.CAPTURED
 import com.androdr.data.store.StoreFixture.Companion.app
 import com.androdr.data.store.StoreFixture.Companion.dns
@@ -202,10 +201,10 @@ class StartupSweepTest {
     // ── ScanRepository deletes ──────────────────────────────────────────────────
 
     private fun scanRepository(lock: ScanLock = w.lock) = ScanRepository(
-        database = w.f.db, scanResultDao = w.f.db.scanResultDao(), dnsEventDao = w.f.db.dnsEventDao(),
+        scanResultDao = w.f.db.scanResultDao(), dnsEventDao = w.f.db.dnsEventDao(),
         forensicTimelineEventDao = w.f.db.forensicTimelineEventDao(),
         indicatorResolver = io.mockk.mockk(relaxed = true),
-        timelineRows = TimelineRowDeleter(w.f.db.forensicTimelineEventDao(), w.f.store), scanWrites = w.repo,
+        scanWrites = w.repo,
         scanLock = lock,
     )
 

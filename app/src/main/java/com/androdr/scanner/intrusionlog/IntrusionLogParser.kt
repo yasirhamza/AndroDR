@@ -17,19 +17,30 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.longOrNull
 
-data class ParsedIntrusionLog(
-    val dnsEvents: List<ImportedDnsEvent>,
-    val networkEvents: List<NetworkTelemetry>,
-    val securityEvents: List<SecurityLogEvent>,
-    val duplicatesCollapsed: Int,
+/**
+ * Receives each parsed intrusion-log record as it is read, one callback per wrapper type, with its
+ * source event key: `"$type $eventId $eventTime"`, or `"$type ? $eventTime"` when the record has no
+ * event id. Exact duplicates are not dropped here: the store keeps one fact and one observation per
+ * (key, content) and drops the repeat (spec §4.1).
+ */
+interface IntrusionLogSink {
+    suspend fun dns(event: ImportedDnsEvent, key: String)
+    suspend fun connect(event: NetworkTelemetry, key: String)
+    suspend fun security(event: SecurityLogEvent, key: String)
+}
+
+/**
+ * What one parse saw besides its records (records past a bound are not counted).
+ *
+ * @property truncated a per-type record bound ([IntrusionLogParser.MAX_DNS_RECORDS] etc.) dropped at
+ *   least one record, so detection did NOT see the complete stream (spec §7).
+ */
+data class IntrusionLogParseCounts(
+    val dnsRecords: Int,
+    val connectRecords: Int,
+    val securityRecords: Int,
     val malformedLines: Int,
-    /**
-     * True when a per-type record cap ([MAX_DNS_RECORDS] etc.) or the line-length
-     * bound dropped at least one record. When set, detection did NOT see the
-     * complete stream — the "detection sees everything" invariant (spec §7) is
-     * not guaranteed for this file, so callers must not assume completeness.
-     */
-    val truncated: Boolean = false
+    val truncated: Boolean,
 )
 
 /**
@@ -45,12 +56,13 @@ data class ParsedIntrusionLog(
  * security_event field) do NOT drop a record; they fall back to sentinels so the
  * fact still reaches the engine (emitters-emit-all-facts, spec §4.2).
  *
- * Dedup is on the tuple `(event_id, event_time, wrapper_type)` — first-seen
- * across the whole (multi-file) sequence. event_id alone is unsafe: it may be a
- * per-day counter that restarts at 0, so two genuinely distinct events can share
- * an id; the tuple keeps them apart while still collapsing byte-identical
- * within-file and overlapping-file duplicates (which share all three). Records
- * with no event_id fall back to `(wrapper_type, event_time, content-hash)`.
+ * Each record's source event key is the tuple `(wrapper_type, event_id, event_time)`. event_id
+ * alone is unsafe: it may be a per-day counter that restarts at 0, so two genuinely distinct events
+ * can share an id; the tuple keeps them apart. A record with no event_id uses
+ * `(wrapper_type, ?, event_time)`; the store's fact key adds the content hash, so id-less records
+ * with different content stay distinct, while byte-identical within-file and overlapping-file
+ * duplicates collapse to one fact and one observation (spec §4.1, S2). The parser keeps no seen-set,
+ * so its memory does not grow with the file.
  *
  * Hardening (#342 review): caps line length, per-type record counts, and every
  * ingested string field's length; sanitizes CR/LF and C0 control characters out
@@ -65,18 +77,19 @@ class IntrusionLogParser(
     private val maxSecurityRecords: Int = MAX_SECURITY_RECORDS
 ) {
 
+    /**
+     * Streams every record of [lines] to [sink] (fail-soft per line) and returns the counts. Records
+     * past a per-type bound are dropped and set [IntrusionLogParseCounts.truncated].
+     */
     @Suppress("TooGenericExceptionCaught") // any per-line parse error means one malformed line, never a failed import
-    fun parse(
+    suspend fun parse(
         lines: Sequence<String>,
         uidResolver: (String) -> Int,
         capturedAt: Long,
-        onLine: () -> Unit = {}
-    ): ParsedIntrusionLog {
-        val dns = mutableListOf<ImportedDnsEvent>()
-        val net = mutableListOf<NetworkTelemetry>()
-        val sec = mutableListOf<SecurityLogEvent>()
-        val seenKeys = HashSet<String>()
-        var duplicates = 0
+        sink: IntrusionLogSink,
+        onLine: () -> Unit = {},
+    ): IntrusionLogParseCounts {
+        val counts = IntArray(TYPE_COUNT)
         var malformed = 0
         var truncated = false
 
@@ -87,37 +100,47 @@ class IntrusionLogParser(
             // "malformed". ensureActive() (the caller's check) is a cheap
             // volatile read, so a per-line cadence is fine.
             onLine()
-            when {
-                // Bound line length before any work; an over-long line (e.g. a
-                // crafted ZIP with one multi-MB unterminated "line") is counted
-                // malformed and never parsed, so it cannot blow memory here.
-                rawLine.length > maxLineLength -> malformed++
-                rawLine.isBlank() -> Unit // blank lines are ignored silently
-                else -> try {
-                    when (processLine(rawLine.trim(), uidResolver, capturedAt, seenKeys, dns, net, sec)) {
-                        LineOutcome.DUPLICATE -> duplicates++
-                        LineOutcome.TRUNCATED -> truncated = true
-                        LineOutcome.PROCESSED -> Unit
-                    }
+            if (rawLine.isBlank()) continue // blank lines are ignored silently
+            // Bound line length before any work; an over-long line (e.g. a
+            // crafted ZIP with one multi-MB unterminated "line") is counted
+            // malformed and never parsed, so it cannot blow memory here.
+            val record = if (rawLine.length > maxLineLength) {
+                null
+            } else {
+                try {
+                    parseLine(rawLine.trim(), uidResolver, capturedAt)
                 } catch (_: Exception) {
-                    malformed++
+                    null
+                }
+            }
+            when {
+                record == null -> malformed++
+                counts[record.type] >= capOf(record.type) -> truncated = true
+                else -> {
+                    counts[record.type]++
+                    // Outside the per-line catch: a sink (writer) failure fails the import.
+                    emit(record, sink)
                 }
             }
         }
-        return ParsedIntrusionLog(dns, net, sec, duplicates, malformed, truncated)
+        return IntrusionLogParseCounts(counts[DNS], counts[CONNECT], counts[SECURITY], malformed, truncated)
     }
 
-    private enum class LineOutcome { PROCESSED, DUPLICATE, TRUNCATED }
+    private class Parsed(val type: Int, val event: Any, val key: String)
 
-    private fun processLine(
-        line: String,
-        uidResolver: (String) -> Int,
-        capturedAt: Long,
-        seenKeys: MutableSet<String>,
-        dns: MutableList<ImportedDnsEvent>,
-        net: MutableList<NetworkTelemetry>,
-        sec: MutableList<SecurityLogEvent>
-    ): LineOutcome {
+    private fun capOf(type: Int): Int = when (type) {
+        DNS -> maxDnsRecords
+        CONNECT -> maxConnectRecords
+        else -> maxSecurityRecords
+    }
+
+    private suspend fun emit(record: Parsed, sink: IntrusionLogSink) = when (record.type) {
+        DNS -> sink.dns(record.event as ImportedDnsEvent, record.key)
+        CONNECT -> sink.connect(record.event as NetworkTelemetry, record.key)
+        else -> sink.security(record.event as SecurityLogEvent, record.key)
+    }
+
+    private fun parseLine(line: String, uidResolver: (String) -> Int, capturedAt: Long): Parsed {
         // Only parseToJsonElement is used, which ignores decode-time config
         // (ignoreUnknownKeys is inert here), so the default Json instance suffices.
         val root = Json.parseToJsonElement(line).jsonObject
@@ -137,51 +160,19 @@ class IntrusionLogParser(
             "event_time $rawEventTime out of window"
         }
 
-        // Cap BEFORE dedup so a truncated type never pollutes the seen-set.
-        val capReached = when (type) {
-            "dns_event" -> dns.size >= maxDnsRecords
-            "connect_event" -> net.size >= maxConnectRecords
-            else -> sec.size >= maxSecurityRecords
-        }
-        if (capReached) return LineOutcome.TRUNCATED
-
-        // Build the record now. A record missing its DEFINING payload (a
-        // dns_event without a hostname, a connect_event without an ip_address or
-        // port) throws here and is caught as malformed — never emitted as a
-        // phantom row that inflates the event counts. Building before the dedup
-        // add means such a record never touches the seen-set, so it cannot mask
-        // a later good record as a "duplicate". Secondary fields (package_name,
-        // resolved ip_addresses[], and ALL of security_event) keep their lenient
-        // sentinels so security_log never regresses to shipping dead.
-        val dnsEvent: ImportedDnsEvent?
-        val netEvent: NetworkTelemetry?
-        val secEvent: SecurityLogEvent?
-        when (type) {
-            "dns_event" -> {
-                dnsEvent = parseDnsEvent(body, eventTime, uidResolver); netEvent = null; secEvent = null
-            }
-            "connect_event" -> {
-                netEvent = parseConnectEvent(body, eventTime, uidResolver, capturedAt); dnsEvent = null; secEvent = null
-            }
-            else -> {
-                secEvent = parseSecurityEvent(body, eventTime, capturedAt); dnsEvent = null; netEvent = null
-            }
-        }
-
+        // A record missing its DEFINING payload (a dns_event without a hostname, a
+        // connect_event without an ip_address or port) throws here and is caught as
+        // malformed — never emitted as a phantom row that inflates the event counts.
+        // Secondary fields (package_name, resolved ip_addresses[], and ALL of
+        // security_event) keep their lenient sentinels so security_log never
+        // regresses to shipping dead.
         val eventId = body["event_id"]?.jsonPrimitive?.longOrNull
-        val dedupKey = if (eventId != null) {
-            "$type $eventId $eventTime"
-        } else {
-            // No id: synthesize a stable identity so byte-identical records still
-            // collapse while distinct records (different content) are kept.
-            "$type ? $eventTime ${line.hashCode()}"
+        val key = if (eventId != null) "$type $eventId $eventTime" else "$type ? $eventTime"
+        return when (type) {
+            "dns_event" -> Parsed(DNS, parseDnsEvent(body, eventTime, uidResolver), key)
+            "connect_event" -> Parsed(CONNECT, parseConnectEvent(body, eventTime, uidResolver, capturedAt), key)
+            else -> Parsed(SECURITY, parseSecurityEvent(body, eventTime, capturedAt), key)
         }
-        if (!seenKeys.add(dedupKey)) return LineOutcome.DUPLICATE
-
-        dnsEvent?.let { dns += it }
-        netEvent?.let { net += it }
-        secEvent?.let { sec += it }
-        return LineOutcome.PROCESSED
     }
 
     private fun parseDnsEvent(
@@ -344,39 +335,44 @@ class IntrusionLogParser(
     /** Java InetAddress.toString() renders "hostname/literal"; exports show "/1.2.3.4". */
     private fun stripIpPrefix(raw: String): String = raw.substringAfterLast('/')
 
-    private companion object {
-        val KNOWN_WRAPPERS = setOf("dns_event", "connect_event", "security_event")
+    companion object {
+        private const val DNS = 0
+        private const val CONNECT = 1
+        private const val SECURITY = 2
+        private const val TYPE_COUNT = 3
+
+        private val KNOWN_WRAPPERS = setOf("dns_event", "connect_event", "security_event")
 
         /** Wrapper-body keys that are envelope metadata, never the tag-name payload key. */
-        val EVENT_META_KEYS = setOf("event_id", "event_time")
+        private val EVENT_META_KEYS = setOf("event_id", "event_time")
 
         /** At/above this an `event_time` is nanoseconds, not milliseconds (1e15). */
-        const val NANOSECOND_FLOOR = 1_000_000_000_000_000L
-        const val NANOS_PER_MILLI = 1_000_000L
+        private const val NANOSECOND_FLOOR = 1_000_000_000_000_000L
+        private const val NANOS_PER_MILLI = 1_000_000L
 
         /** 1 MiB. A single JSONL record is far smaller; anything larger is crafted. */
-        const val MAX_LINE_LENGTH = 1_048_576
+        private const val MAX_LINE_LENGTH = 1_048_576
 
         /**
-         * Per-type record caps. Detection normally sees the complete stream
-         * (spec §7), but an unbounded pathological file would OOM; 200k events
-         * per type dwarfs any real export while bounding worst-case memory.
-         * Distinct from ScanOrchestrator's much smaller persistence caps.
+         * Per-type input bounds (spec §5.2 Input bounds). Records stream through the writer session
+         * in chunks, so memory no longer grows with them; a bound only stops a pathological file
+         * from filling the disk, and a tripped bound is reported (`truncated`).
+         * Distinct from ScanOrchestrator's much smaller Timeline-row caps.
          */
-        const val MAX_DNS_RECORDS = 200_000
-        const val MAX_CONNECT_RECORDS = 200_000
-        const val MAX_SECURITY_RECORDS = 200_000
+        const val MAX_DNS_RECORDS = 2_000_000
+        const val MAX_CONNECT_RECORDS = 2_000_000
+        const val MAX_SECURITY_RECORDS = 2_000_000
 
         /** Per-field length bound (covers 253-char hostnames / 255-char packages). */
-        const val MAX_FIELD_LENGTH = 4_096
+        private const val MAX_FIELD_LENGTH = 4_096
 
         /** RFC 1035 maximum length of a hostname in text form. */
-        const val MAX_HOSTNAME_LENGTH = 253
+        private const val MAX_HOSTNAME_LENGTH = 253
 
         /** 2008-01-01T00:00:00Z — predates any Android device; nothing earlier is real. */
-        const val MIN_EVENT_TIME_MS = 1_199_145_600_000L
+        private const val MIN_EVENT_TIME_MS = 1_199_145_600_000L
 
         /** Import wall-clock (capturedAt) + skew is the future ceiling; rejects Long.MAX pins. */
-        const val MAX_CLOCK_SKEW_MS = 5L * 60_000L
+        private const val MAX_CLOCK_SKEW_MS = 5L * 60_000L
     }
 }

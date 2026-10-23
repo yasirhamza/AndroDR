@@ -33,7 +33,10 @@ import java.io.File
  *      `fun evaluateXxx(` is referenced somewhere under app/src/main OUTSIDE
  *      SigmaRuleEngine.kt, OR the generic route is live (evaluateGeneric is
  *      called in main AND a bugreport module carries the literal as a
- *      telemetryService value).
+ *      telemetryService value), OR a writer appends the service's records to a
+ *      session (telemetry store §4.1: the session evaluates every chunk through
+ *      `evaluateRecords`) — a production file outside the sigma package names the
+ *      service's `*RecordBuilders` constant on an `append`/`appendAll`/`put` line.
  *
  * The service→method mapping is derived from the literal each evaluate method
  * passes, NOT from a name transform: the names do not correspond (`db_info` →
@@ -146,6 +149,23 @@ class ServiceActivationCrossCheckTest {
             .any { TestRuleRepo.stripKotlinComments(it.readText()).contains(literal) }
     }
 
+    /**
+     * True when a writer appends [service]'s records to a session: the session's `evaluateRecords`
+     * call is live, and a production file outside the sigma package passes the service's builder
+     * constant on an append line (`append(`, `appendAll(`, or a writer's local `put(`).
+     */
+    private fun appendedToSession(service: String, constants: Map<String, String>): Boolean {
+        if (!referencedInMainOutsideEngine("evaluateRecords")) return false
+        val refs = constants.filterValues { it == service }.keys
+        if (refs.isEmpty()) return false
+        val appendLine = Regex("""\b(append|appendAll|put)\s*\(""")
+        return mainKotlinFiles().filter { "/sigma/" !in it.invariantSeparatorsPath }.any { f ->
+            TestRuleRepo.stripKotlinComments(f.readText()).lines().any { line ->
+                appendLine.containsMatchIn(line) && refs.any { it in line }
+            }
+        }
+    }
+
     private fun mainKotlinFiles(): Sequence<File> =
         TestRuleRepo.mainSourceRoot().walkTopDown().filter { it.isFile && it.extension == "kt" }
 
@@ -191,10 +211,12 @@ class ServiceActivationCrossCheckTest {
             .keys
 
         val failures = mutableListOf<String>()
+        val constants = builderServiceConstants()
         for (service in activeServices) {
             val methods = methodsForService(literals, service)
             val genericRoute = genericRouteAvailable(service)
-            val called = methods.any { referencedInMainOutsideEngine(it) } || genericRoute
+            val called = methods.any { referencedInMainOutsideEngine(it) } || genericRoute ||
+                appendedToSession(service, constants)
             when {
                 // (a) WIRED.
                 methods.isEmpty() && !genericRoute ->

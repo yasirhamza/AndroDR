@@ -20,7 +20,6 @@ import com.androdr.scanner.bugreport.PlatformCompatModule
 import com.androdr.scanner.bugreport.ReceiverModule
 import com.androdr.scanner.bugreport.TombstoneParser
 import com.androdr.scanner.bugreport.WakelockParser
-import com.androdr.sigma.SigmaRuleEngine
 import com.androdr.sigma.toFieldMap
 import io.mockk.every
 import io.mockk.mockk
@@ -87,7 +86,7 @@ class BugReportTypedRecordsTest {
         val context = mockk<Context>(relaxed = true)
         every { context.contentResolver } returns contentResolver
         return BugReportAnalyzer(
-            context, resolver, modules, SigmaRuleEngine(mockk<Context>(relaxed = true)),
+            context, resolver, modules,
             TombstoneParser(), WakelockParser(), GetpropParser(),
         )
     }
