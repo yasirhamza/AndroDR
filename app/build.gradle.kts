@@ -311,6 +311,14 @@ dependencies {
     testImplementation(libs.androidx.test.core)
     testImplementation(libs.androidx.room.testing)
     robolectricAndroidAll(libs.robolectric.android.all)
+    constraints {
+        // Robolectric 4.14.1 brings bcprov-jdk18on 1.78.1 (test classpath only, never in the APK).
+        // Policy: a fix exists -> bump, never suppress. Gate: BouncyCastleTestClasspathTest.
+        testImplementation(libs.bouncycastle.bcprov) {
+            version { strictly(libs.versions.bouncycastle.get()) }
+            because("GHSA-574f-3g2m-x479, GHSA-9pwp-9qqc-pr26 (critical), GHSA-qp49-qgx5-5m26 (high): fixed in 1.85")
+        }
+    }
 
     // Instrumented tests
     androidTestImplementation(libs.androidx.junit)
