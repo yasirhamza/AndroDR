@@ -30,6 +30,8 @@ abstract class AppDatabase : RoomDatabase() {
 
     abstract fun scanResultDao(): ScanResultDao
 
+    abstract fun scanWriteDao(): ScanWriteDao
+
     abstract fun dnsEventDao(): DnsEventDao
 
     abstract fun knownAppEntryDao(): KnownAppEntryDao

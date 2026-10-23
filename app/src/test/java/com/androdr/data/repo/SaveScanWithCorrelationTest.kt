@@ -60,7 +60,10 @@ class SaveScanWithCorrelationTest {
             scanResultDao = scanResultDao,
             dnsEventDao = dnsEventDao,
             forensicTimelineEventDao = timelineDao,
-            indicatorResolver = mockk(relaxed = true)
+            indicatorResolver = mockk(relaxed = true),
+            timelineRows = TimelineRowDeleter(timelineDao, mockk(relaxed = true)),
+            scanWrites = mockk(relaxed = true),
+            scanLock = ScanLock(),
         )
     }
 

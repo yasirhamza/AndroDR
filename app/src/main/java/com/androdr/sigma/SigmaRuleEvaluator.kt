@@ -48,6 +48,9 @@ data class Finding(
     // spec 4.1). "" / -1 on findings stored before these fields existed.
     val service: String = "",
     val ordinal: Int = -1,
+    // The stored fact this finding was evaluated from, set only by a late-IOC re-check over
+    // stored facts (`Session.evaluateStored`, with ordinal -1). null everywhere else.
+    val recordId: Long? = null,
 )
 
 /**

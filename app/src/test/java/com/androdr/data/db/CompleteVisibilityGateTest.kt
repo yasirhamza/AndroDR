@@ -36,7 +36,10 @@ class CompleteVisibilityGateTest {
         "ScanObservationDao.factIdsAfter", "ScanObservationDao.deleteForScan", "ScanObservationDao.deleteThrough",
         "ScanObservationDao.factIdsForOrdinals",
         "ForensicTimelineEventDao.deleteOlderThan", "ForensicTimelineEventDao.deleteBySource",
-        "ForensicTimelineEventDao.deleteByScanId", "ForensicTimelineEventDao.deleteAll",
+        "ForensicTimelineEventDao.deleteByScanId", "ForensicTimelineEventDao.deleteAllNonPersistent",
+        // The pins a delete releases (TimelineRowDeleter), read just before the paired delete.
+        "ForensicTimelineEventDao.recordIdsOlderThan", "ForensicTimelineEventDao.recordIdsBySource",
+        "ForensicTimelineEventDao.recordIdsByScanId", "ForensicTimelineEventDao.recordIdsNonPersistent",
         // Writer-side dedup lookups over everything already emitted (hidden rows included on purpose).
         "ForensicTimelineEventDao.getInstalledPackagesAlreadyEmitted",
         "ForensicTimelineEventDao.getAdminGrantedPackagesAlreadyEmitted",

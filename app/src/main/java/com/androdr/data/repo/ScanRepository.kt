@@ -11,6 +11,7 @@ import com.androdr.data.model.ForensicTimelineEvent
 import com.androdr.data.model.ScanResult
 import com.androdr.ioc.IndicatorResolver
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.withTimeoutOrNull
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -20,7 +21,10 @@ class ScanRepository @Inject constructor(
     private val scanResultDao: ScanResultDao,
     private val dnsEventDao: DnsEventDao,
     private val forensicTimelineEventDao: ForensicTimelineEventDao,
-    private val indicatorResolver: IndicatorResolver
+    private val indicatorResolver: IndicatorResolver,
+    private val timelineRows: TimelineRowDeleter,
+    private val scanWrites: ScanWriteRepository,
+    private val scanLock: ScanLock,
 ) {
 
     // ── Scan results ───────────────────────────────────────────────────────────
@@ -32,6 +36,9 @@ class ScanRepository @Inject constructor(
         /** Selects the preferred scan: first with device flags (runtime), else latest. */
         fun List<ScanResult>.preferRuntimeScan(): ScanResult? =
             firstOrNull { it.deviceFlags.isNotEmpty() } ?: firstOrNull()
+
+        /** How long a user delete waits for a retention or backfill batch to release the lock. */
+        const val DELETE_LOCK_WAIT_MS = 2_000L
     }
 
     /** Persists a completed [ScanResult] to the database. */
@@ -67,7 +74,7 @@ class ScanRepository @Inject constructor(
                 forensicTimelineEventDao.insertAll(findingTimelineEvents)
             }
             if (replaceUsageStatsEvents != null) {
-                forensicTimelineEventDao.deleteBySource("usage_stats")
+                timelineRows.bySource("usage_stats")
                 if (replaceUsageStatsEvents.isNotEmpty()) {
                     forensicTimelineEventDao.insertAll(replaceUsageStatsEvents)
                 }
@@ -128,7 +135,7 @@ class ScanRepository @Inject constructor(
             preDelete?.invoke()
 
             val persistedUsage: List<ForensicTimelineEvent> = if (replaceUsageStatsEvents != null) {
-                forensicTimelineEventDao.deleteBySource("usage_stats")
+                timelineRows.bySource("usage_stats")
                 if (replaceUsageStatsEvents.isEmpty()) emptyList()
                 else assignIds(replaceUsageStatsEvents, forensicTimelineEventDao.insertAll(replaceUsageStatsEvents))
             } else emptyList()
@@ -226,21 +233,35 @@ class ScanRepository @Inject constructor(
         dnsEventDao.deleteOlderThan(cutoff)
     }
 
-    suspend fun deleteScan(scanId: Long) {
-        // Single transaction so the History screen and Timeline screen
-        // both receive exactly one invalidation after the scan is gone,
-        // instead of rendering a half-deleted intermediate state between
-        // the timeline-event delete and the scan-row delete.
-        database.withTransaction {
-            forensicTimelineEventDao.deleteByScanId(scanId)
-            scanResultDao.deleteById(scanId)
-        }
+    /**
+     * Deletes one scan (spec §5.1 Delete): `DELETING` first (Task D3 adds the audit row to that
+     * transaction), then its own Timeline rows, its telemetry, and the `ScanResult` row last.
+     * Returns false — deleting nothing — while a scan or import is running, or when the writer lock
+     * stays busy past [DELETE_LOCK_WAIT_MS] ("A scan is running — try again when it finishes").
+     */
+    suspend fun deleteScan(scanId: Long): Boolean {
+        if (!underLockFirst { scanWrites.markForDelete(scanId) }) return false
+        scanWrites.completeDelete(scanId)
+        return true
     }
 
-    suspend fun deleteAllScans() {
-        database.withTransaction {
-            forensicTimelineEventDao.deleteAll()
-            scanResultDao.deleteAll()
+    /** "Clear all": like [deleteScan] for every scan; persistent audit rows survive. */
+    suspend fun deleteAllScans(): Boolean {
+        if (!underLockFirst { scanWrites.markAllForDelete() }) return false
+        scanWrites.completeDeleteAll()
+        return true
+    }
+
+    /** Runs a delete's first transaction under the writer lock, outside any transaction. */
+    private suspend fun underLockFirst(first: suspend () -> Unit): Boolean {
+        if (scanLock.writerRunning.value) return false
+        // writerRunning is raised only while the mutex is held, so holding it means no writer runs.
+        withTimeoutOrNull(DELETE_LOCK_WAIT_MS) { scanLock.mutex.lock() } ?: return false
+        try {
+            first()
+        } finally {
+            scanLock.mutex.unlock()
         }
+        return true
     }
 }

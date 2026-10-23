@@ -1,0 +1,214 @@
+package com.androdr.scanner
+
+import androidx.room.withTransaction
+import com.androdr.data.model.ForensicTimelineEvent
+import com.androdr.data.model.ScanState
+import com.androdr.data.model.TelemetrySource
+import com.androdr.data.repo.ScanLock
+import com.androdr.data.repo.ScanWriteRepository
+import com.androdr.data.repo.TimelineRowDeleter
+import com.androdr.data.store.StoreFixture.Companion.CAPTURED
+import com.androdr.data.store.StoreFixture.Companion.app
+import com.androdr.data.store.StoreFixture.Companion.dns
+import com.androdr.scanner.WriterFixture.Companion.EVIL_DOMAIN
+import com.androdr.scanner.WriterFixture.Companion.IMPORT_CAPTURED
+import com.androdr.scanner.WriterFixture.Companion.securityLine
+import io.mockk.coEvery
+import io.mockk.spyk
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.yield
+import org.junit.After
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
+import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+
+/** S3 / Review Focus 5: the startup sweep, the writer lock, the dirty flag and scan deletion. */
+@RunWith(RobolectricTestRunner::class)
+class StartupSweepTest {
+    private val w = WriterFixture()
+
+    @After fun tearDown() = w.close()
+
+    private fun sweep(repo: ScanWriteRepository = w.repo) = StartupSweep(w.lock, repo, w.f.store, w.f.dirty)
+
+    private fun state(id: Long): String? = w.f.db.openHelper.readableDatabase
+        .query("SELECT state FROM ScanResult WHERE id = $id").use { c -> if (c.moveToFirst()) c.getString(0) else null }
+
+    /** An orphan fact: stored, then its only observation removed behind the store's back. */
+    private suspend fun orphanFact() {
+        w.f.scan(99L)
+        w.f.persist(99L, "app_scanner", listOf(app("com.orphan")))
+        w.f.db.openHelper.writableDatabase.execSQL("DELETE FROM scan_record WHERE scanId = 99")
+        w.f.db.openHelper.writableDatabase.execSQL("DELETE FROM ScanResult WHERE id = 99")
+    }
+
+    @Test
+    fun `a killed writer stays IN_PROGRESS and the sweep removes it with one interrupted row per import`() =
+        runBlocking {
+            // A killed intrusion-log import, a killed live scan, an interrupted delete, a finished scan.
+            val import = w.writer.begin(w.scan(1L, TelemetrySource.INTRUSION_LOG_IMPORT), liveEvents = false)
+            import.append("security_log", TelemetrySource.INTRUSION_LOG_IMPORT, IMPORT_CAPTURED, listOf(securityLine()))
+            val liveScan = w.writer.begin(w.scan(2L), liveEvents = true)
+            liveScan.append("dns_monitor", TelemetrySource.LIVE_SCAN, CAPTURED, listOf(dns(EVIL_DOMAIN)))
+            val done = w.writer.begin(w.scan(4L), liveEvents = false)
+            done.append("app_scanner", TelemetrySource.LIVE_SCAN, CAPTURED, listOf(app("com.kept")))
+            done.finish()
+            val deleting = w.scan(3L, TelemetrySource.INTRUSION_LOG_IMPORT).copy(state = ScanState.DELETING)
+            w.f.db.scanResultDao().insert(deleting)
+            assertEquals("IN_PROGRESS", state(1L))
+            assertEquals("IN_PROGRESS", state(2L))
+
+            assertEquals(3, sweep().run())
+
+            assertEquals(listOf(null, null, null, "COMPLETE"), (1L..4L).map { state(it) })
+            val interrupted = w.f.db.forensicTimelineEventDao().getAllForExport()
+                .filter { it.category == StartupSweep.CATEGORY }
+            assertEquals(1, interrupted.size)
+            assertTrue(interrupted.single().persistent)
+            assertEquals(TelemetrySource.INTRUSION_LOG_IMPORT, interrupted.single().telemetrySource)
+            assertEquals(-1L, interrupted.single().scanResultId)
+            assertEquals("only the finished scan's fact is left", 1L, w.count("SELECT COUNT(*) FROM telemetry_record"))
+            assertEquals(1L, w.visibleFacts())
+        }
+
+    @Test
+    fun `the sweep runs gc only when it swept something or the dirty flag is set`() = runBlocking {
+        orphanFact()
+        assertEquals(0, sweep().run())
+        assertEquals("nothing swept, flag clear: no gc", 1L, w.count("SELECT COUNT(*) FROM telemetry_record"))
+
+        w.f.scan(5L, ScanState.IN_PROGRESS)
+        assertEquals(1, sweep().run())
+        assertEquals("swept something: gc ran", 0L, w.count("SELECT COUNT(*) FROM telemetry_record"))
+    }
+
+    @Test
+    fun `dirty flag - a failed delete batch sets it and the next sweep gcs with nothing to sweep and clears it`() =
+        runBlocking {
+            w.f.scan(1L)
+            w.f.persist(1L, "app_scanner", listOf(app("com.a")))
+            val failing = spyk(w.f.store)
+            coEvery { failing.deleteBatch(any(), any()) } throws IllegalStateException("disk went away")
+            assertTrue(runCatching { failing.deleteScanTelemetry(1L) }.isFailure)
+            assertTrue(w.f.dirty.isSet())
+            w.f.setState(1L, ScanState.COMPLETE)
+            orphanFact()
+
+            assertEquals(0, sweep().run())
+            assertFalse(w.f.dirty.isSet())
+            assertEquals("the orphan is gone, scan 1's fact stays", 1L,
+                w.count("SELECT COUNT(*) FROM telemetry_record"))
+        }
+
+    @Test
+    fun `a scan started during the sweep survives it`() = runBlocking {
+        w.f.scan(1L, ScanState.IN_PROGRESS)
+        val repo = spyk(w.repo)
+        coEvery { repo.completeDelete(1L) } coAnswers {
+            // The sweep released the lock after its snapshot: a new session can begin now.
+            w.lock.withWriter { w.writer.begin(w.scan(2L), liveEvents = false) }
+            callOriginal()
+        }
+        assertEquals(1, sweep(repo).run())
+        assertEquals(null, state(1L))
+        assertEquals("IN_PROGRESS", state(2L))
+    }
+
+    @Test
+    fun `ScanLock - writerRunning is true inside withWriter and false after a block that throws`() = runBlocking {
+        val lock = ScanLock()
+        assertFalse(lock.writerRunning.value)
+        lock.withWriter { assertTrue(lock.writerRunning.value) }
+        assertFalse(lock.writerRunning.value)
+        assertTrue(runCatching { lock.withWriter { error("writer failed") } }.isFailure)
+        assertFalse(lock.writerRunning.value)
+        assertFalse(lock.mutex.isLocked)
+    }
+
+    @Test
+    fun `ScanLock - a lock-then-transaction batch waits for the writer and then completes`() = runBlocking {
+        val release = CompletableDeferred<Unit>()
+        val writerIn = CompletableDeferred<Unit>()
+        val writer = async(Dispatchers.IO) {
+            w.lock.withWriter {
+                writerIn.complete(Unit)
+                release.await()
+            }
+        }
+        writerIn.await()
+        val batch = async(Dispatchers.IO) {
+            w.lock.mutex.withLock {
+                w.f.db.withTransaction {
+                    w.f.db.forensicTimelineEventDao().insert(
+                        ForensicTimelineEvent(startTimestamp = 1L, source = "backfill", category = "c",
+                            description = "d"))
+                }
+            }
+        }
+        repeat(20) { yield() }
+        assertFalse("the batch waits for the writer", batch.isCompleted)
+        assertTrue(w.lock.writerRunning.value)
+        release.complete(Unit)
+        withTimeout(10_000) {
+            writer.await()
+            batch.await()
+        }
+        assertFalse(w.lock.writerRunning.value)
+        assertEquals(1L, w.count("SELECT COUNT(*) FROM forensic_timeline WHERE source = 'backfill'"))
+    }
+
+    // ── ScanRepository deletes ──────────────────────────────────────────────────
+
+    private fun scanRepository(lock: ScanLock = w.lock) = com.androdr.data.repo.ScanRepository(
+        database = w.f.db, scanResultDao = w.f.db.scanResultDao(), dnsEventDao = w.f.db.dnsEventDao(),
+        forensicTimelineEventDao = w.f.db.forensicTimelineEventDao(),
+        indicatorResolver = io.mockk.mockk(relaxed = true),
+        timelineRows = TimelineRowDeleter(w.f.db.forensicTimelineEventDao(), w.f.store), scanWrites = w.repo,
+        scanLock = lock,
+    )
+
+    @Test
+    fun `deleteScan removes the scan, its rows and its telemetry, keeping persistent rows`() = runBlocking {
+        val s = w.writer.begin(w.scan(1L), liveEvents = false)
+        s.append("dns_monitor", TelemetrySource.LIVE_SCAN, CAPTURED, listOf(dns(EVIL_DOMAIN), dns("ok.example")))
+        s.finish()
+        w.f.db.forensicTimelineEventDao().insert(ForensicTimelineEvent(startTimestamp = 1L, source = "audit",
+            category = "scan_deleted", description = "kept", scanResultId = 1L, persistent = true))
+        assertEquals(1L, w.count("SELECT COUNT(*) FROM forensic_timeline WHERE recordId IS NOT NULL"))
+
+        assertTrue(scanRepository().deleteScan(1L))
+        assertEquals(null, state(1L))
+        assertEquals(0L, w.count("SELECT COUNT(*) FROM telemetry_record"))
+        assertEquals(0L, w.count("SELECT COUNT(*) FROM record_body"))
+        assertEquals(listOf("kept"), w.f.db.forensicTimelineEventDao().getAllForExport().map { it.description })
+    }
+
+    @Test
+    fun `deleteAllScans clears every scan but persistent rows, and both refuse while a writer runs`() = runBlocking {
+        for (id in 1L..2L) {
+            val s = w.writer.begin(w.scan(id), liveEvents = false)
+            s.append("dns_monitor", TelemetrySource.LIVE_SCAN, CAPTURED, listOf(dns(EVIL_DOMAIN, time = id)))
+            s.finish()
+        }
+        w.f.db.forensicTimelineEventDao().insert(ForensicTimelineEvent(startTimestamp = 1L, source = "audit",
+            category = "scan_deleted", description = "kept", persistent = true))
+        val repo = scanRepository()
+        w.lock.withWriter {
+            assertFalse(repo.deleteScan(1L))
+            assertFalse(repo.deleteAllScans())
+        }
+        assertEquals("COMPLETE", state(1L))
+        assertTrue(repo.deleteAllScans())
+        assertEquals(0L, w.count("SELECT COUNT(*) FROM ScanResult"))
+        assertEquals(0L, w.count("SELECT COUNT(*) FROM telemetry_record"))
+        assertEquals(listOf("kept"), w.f.db.forensicTimelineEventDao().getAllForExport().map { it.description })
+    }
+}

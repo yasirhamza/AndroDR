@@ -1,6 +1,7 @@
 package com.androdr
 
 import android.app.Application
+import android.util.Log
 import androidx.hilt.work.HiltWorkerFactory
 import androidx.work.BackoffPolicy
 import androidx.work.Configuration
@@ -16,6 +17,7 @@ import com.androdr.ioc.IndicatorRefreshOnEmpty
 import com.androdr.ioc.IndicatorResolver
 import com.androdr.ioc.IocUpdateWorker
 import com.androdr.ioc.KnownAppResolver
+import com.androdr.scanner.StartupSweep
 import com.androdr.sigma.SigmaRuleEngine
 import dagger.hilt.android.HiltAndroidApp
 import kotlinx.coroutines.CoroutineScope
@@ -39,6 +41,8 @@ class AndroDRApplication : Application(), Configuration.Provider {
     @Inject lateinit var sigmaRuleEngine: SigmaRuleEngine
     @Suppress("LateinitUsage")
     @Inject lateinit var cveRepository: CveRepository
+    @Suppress("LateinitUsage")
+    @Inject lateinit var startupSweep: StartupSweep
 
     override val workManagerConfiguration: Configuration
         get() = Configuration.Builder()
@@ -48,6 +52,8 @@ class AndroDRApplication : Application(), Configuration.Provider {
     override fun onCreate() {
         super.onCreate()
         CoroutineScope(Dispatchers.IO).launch {
+            // Finish what a killed writer or an interrupted delete left (telemetry store spec §5.2).
+            runCatching { startupSweep.run() }.onFailure { Log.e(TAG, "Startup sweep failed", it) }
             // Schema 19 drops the indicators table; repopulate it once, off the main thread.
             IndicatorRefreshOnEmpty.maybeEnqueue(indicatorDao) {
                 WorkManager.getInstance(this@AndroDRApplication).enqueueUniqueWork(
@@ -77,5 +83,9 @@ class AndroDRApplication : Application(), Configuration.Provider {
             ExistingPeriodicWorkPolicy.KEEP,
             request
         )
+    }
+
+    private companion object {
+        const val TAG = "AndroDRApplication"
     }
 }

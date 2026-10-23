@@ -89,6 +89,7 @@ class DnsFindingTimestampTest {
             scanRepository = mockk(relaxed = true),
             dnsEventDao = mockk(relaxed = true),
             forensicTimelineEventDao = mockk(relaxed = true),
+            timelineRows = mockk(relaxed = true),
             installEventEmitter = mockk(relaxed = true),
             deviceAdminGrantEmitter = mockk(relaxed = true),
             sigmaRuleEngine = mockk(relaxed = true),

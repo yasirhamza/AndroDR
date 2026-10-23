@@ -133,6 +133,7 @@ fun Finding.toForensicTimelineEvent(
         correlationId = if (dnsMatchedDomain != null) "dns:$dnsMatchedDomain" else "",
         ruleId = this.ruleId,
         scanResultId = scanResult.id,
+        level = this.level,
         attackTechniqueId = this.tags.firstOrNull { it.startsWith("attack.t") }
             ?.removePrefix("attack.") ?: "",
         telemetrySource = if (isBugreport) {

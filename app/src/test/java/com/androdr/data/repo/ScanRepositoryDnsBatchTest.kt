@@ -26,6 +26,9 @@ class ScanRepositoryDnsBatchTest {
         dnsEventDao = mockk(relaxed = true),
         forensicTimelineEventDao = timelineDao,
         indicatorResolver = resolver,
+        timelineRows = mockk(relaxed = true),
+        scanWrites = mockk(relaxed = true),
+        scanLock = ScanLock(),
     )
     private val graphite = Indicator("domain", "forti.external-muki.com", family = "Graphite (Paragon)",
         source = "androdr_public_repo", fetchedAt = 0L)

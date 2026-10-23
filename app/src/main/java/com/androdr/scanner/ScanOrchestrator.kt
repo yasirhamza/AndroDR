@@ -76,6 +76,7 @@ class ScanOrchestrator @Inject constructor(
     private val scanRepository: ScanRepository,
     private val dnsEventDao: DnsEventDao,
     private val forensicTimelineEventDao: ForensicTimelineEventDao,
+    private val timelineRows: com.androdr.data.repo.TimelineRowDeleter,
     private val installEventEmitter: InstallEventEmitter,
     private val deviceAdminGrantEmitter: DeviceAdminGrantEmitter,
     private val sigmaRuleEngine: SigmaRuleEngine,
@@ -894,10 +895,10 @@ class ScanOrchestrator @Inject constructor(
      */
     private suspend fun deletePriorIntrusionLogRows() {
         forensicTimelineEventDao.getDistinctScanIdsBySource("intrusion_log").forEach { priorScanId ->
-            forensicTimelineEventDao.deleteByScanId(priorScanId)
+            timelineRows.byScanId(priorScanId)
         }
-        forensicTimelineEventDao.deleteBySource("intrusion_log")
-        forensicTimelineEventDao.deleteBySource("intrusion_log_analysis")
+        timelineRows.bySource("intrusion_log")
+        timelineRows.bySource("intrusion_log_analysis")
     }
 
     /**
@@ -944,7 +945,7 @@ class ScanOrchestrator @Inject constructor(
                 // strings, so a finding inherits its own event's time. A finding
                 // without one falls back to 0L, which the Timeline renders as
                 // "Unknown".
-                startTimestamp = findingEventTimeMs(finding)
+                startTimestamp = FindingRank.eventTimeMs(finding)
             )
         }
         val cappedDns = result.dnsEvents
@@ -975,8 +976,8 @@ class ScanOrchestrator @Inject constructor(
         val triggered = findings.filter { it.triggered }
         if (triggered.size <= FINDINGS_PERSIST_CAP) return triggered
         return triggered.sortedWith(
-            compareByDescending<Finding> { severityRank(it.level) }
-                .thenByDescending { findingEventTimeMs(it) }
+            compareByDescending<Finding> { FindingRank.severity(it.level) }
+                .thenByDescending { FindingRank.eventTimeMs(it) }
         ).take(FINDINGS_PERSIST_CAP)
     }
 
@@ -1152,23 +1153,6 @@ class ScanOrchestrator @Inject constructor(
          * above any legitimate export's security-event volume while bounding abuse.
          */
         const val SECURITY_PERSIST_CAP = 5_000
-
-        /**
-         * Orders severity strings for the [FINDINGS_PERSIST_CAP] cut (B3): higher
-         * wins. Unknown/blank levels rank lowest so they are dropped first.
-         */
-        private fun severityRank(level: String): Int = when (level.lowercase()) {
-            "critical" -> 5
-            "high" -> 4
-            "medium" -> 3
-            "low" -> 2
-            "info", "informational" -> 1
-            else -> 0
-        }
-
-        /** Event time a finding inherits from its matched record, or 0L ("Unknown"). */
-        private fun findingEventTimeMs(finding: Finding): Long =
-            finding.matchContext["timestamp"]?.toLongOrNull()?.takeIf { it > 0L } ?: 0L
 
         /** App categories treated as trusted by the known_good_app_db IOC lookup. */
         private val TRUSTED_CATEGORIES = setOf(

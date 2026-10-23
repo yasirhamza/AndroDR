@@ -75,6 +75,7 @@ class ScanOrchestratorIntrusionLogTest {
             scanRepository = scanRepository,
             dnsEventDao = mockk(relaxed = true),
             forensicTimelineEventDao = forensicTimelineEventDao,
+            timelineRows = com.androdr.data.repo.TimelineRowDeleter(forensicTimelineEventDao, mockk(relaxed = true)),
             installEventEmitter = mockk(relaxed = true),
             deviceAdminGrantEmitter = mockk(relaxed = true),
             sigmaRuleEngine = sigmaRuleEngine,

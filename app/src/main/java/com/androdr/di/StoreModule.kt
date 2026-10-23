@@ -1,6 +1,7 @@
 package com.androdr.di
 
 import android.content.Context
+import android.os.StatFs
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.preferencesDataStore
@@ -13,6 +14,7 @@ import com.androdr.data.db.SignalMemberDao
 import com.androdr.data.db.TelemetryFactDao
 import com.androdr.data.db.TelemetryReadDao
 import com.androdr.data.store.EventDisplay
+import com.androdr.data.store.StoragePreflight
 import com.androdr.data.store.TelemetryDictionaries
 import com.androdr.data.store.TelemetryRecordCodec
 import dagger.Module
@@ -83,4 +85,10 @@ object StoreModule {
     @Singleton
     fun provideEventDisplay(@ApplicationContext ctx: Context): EventDisplay =
         EventDisplay.parse(ctx.resources.openRawResource(R.raw.event_display).bufferedReader().use { it.readText() })
+
+    /** Free space of the partition holding the database (the app's data directory). */
+    @Provides
+    @Singleton
+    fun provideStoragePreflight(@ApplicationContext ctx: Context): StoragePreflight =
+        StoragePreflight { StatFs(ctx.filesDir.path) }
 }
