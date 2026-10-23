@@ -8,13 +8,20 @@ import android.os.Build
 import android.os.CancellationSignal
 import androidx.activity.ComponentActivity
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.activity.result.ActivityResultLauncher
 import androidx.annotation.RequiresApi
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.DefaultLifecycleObserver
+import androidx.lifecycle.LifecycleOwner
 import java.util.UUID
 import kotlin.coroutines.resume
 import kotlinx.coroutines.suspendCancellableCoroutine
 
-/** Real [CredentialUi] bound to a foreground activity. Needs a device; covered by on-device checks. */
+/**
+ * Real [CredentialUi] bound to a foreground activity. The BiometricPrompt path needs a device (D3
+ * on-device checklist). Holds the activity strongly: create it per composition (`remember` keyed
+ * by the activity), never in a ViewModel or singleton.
+ */
 class PlatformCredentialUi(private val activity: ComponentActivity) : CredentialUi {
 
     override suspend fun authenticateWithDeviceCredential(title: String, description: String): Boolean {
@@ -50,13 +57,43 @@ class PlatformCredentialUi(private val activity: ComponentActivity) : Credential
             )
         }
 
+    /**
+     * API 26-29 path. Fail closed: the result is delivered once; if the host activity is destroyed
+     * first (rotation, process pressure) the lost result resolves to `false` (Cancelled), never
+     * true. A unique key per launch means a stale OK from an earlier launch can never be replayed
+     * into a later confirmation. The launcher is always unregistered (completion, cancellation,
+     * destruction, or a throwing `launch`).
+     */
     override suspend fun launchConfirmIntent(intent: Intent): Boolean =
         suspendCancellableCoroutine { cont ->
-            val launcher = activity.activityResultRegistry.register(
+            var launcher: ActivityResultLauncher<Intent>? = null
+            var observer: DefaultLifecycleObserver? = null
+
+            fun cleanup() {
+                launcher?.unregister()
+                observer?.let { activity.lifecycle.removeObserver(it) }
+            }
+
+            fun finish(confirmed: Boolean) {
+                cleanup()
+                if (cont.isActive) cont.resume(confirmed)
+            }
+
+            val destroyObserver = object : DefaultLifecycleObserver {
+                override fun onDestroy(owner: LifecycleOwner) = finish(false)
+            }
+            observer = destroyObserver
+            cont.invokeOnCancellation { cleanup() }
+            launcher = activity.activityResultRegistry.register(
                 "confirm-credential-${UUID.randomUUID()}",
                 ActivityResultContracts.StartActivityForResult(),
-            ) { result -> if (cont.isActive) cont.resume(result.resultCode == Activity.RESULT_OK) }
-            cont.invokeOnCancellation { launcher.unregister() }
-            launcher.launch(intent)
+            ) { result -> finish(result.resultCode == Activity.RESULT_OK) }
+            activity.lifecycle.addObserver(destroyObserver)
+            try {
+                launcher.launch(intent)
+            } catch (@Suppress("TooGenericExceptionCaught") t: Throwable) {
+                cleanup()
+                throw t
+            }
         }
 }

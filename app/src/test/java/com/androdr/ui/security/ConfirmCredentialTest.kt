@@ -94,4 +94,15 @@ class ConfirmCredentialTest {
         val kg = mockk<KeyguardManager> { every { isDeviceSecure } throws SecurityException("x") }
         assertEquals(ConfirmResult.Cancelled, ConfirmCredential(30, kg, FakeUi()).confirm("t", "d"))
     }
+
+    @Test fun `coroutine cancellation propagates and is not mapped to a result`() = runTest {
+        val ui = FakeUi(failWith = kotlinx.coroutines.CancellationException("scope gone"))
+        var thrown: Throwable? = null
+        try {
+            ConfirmCredential(30, keyguard(true), ui).confirm("t", "d")
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            thrown = e
+        }
+        org.junit.Assert.assertNotNull(thrown)
+    }
 }
