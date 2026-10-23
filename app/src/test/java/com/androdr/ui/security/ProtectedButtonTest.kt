@@ -71,10 +71,17 @@ class ProtectedButtonTest {
 
     // --- real dispatch ---
 
-    private fun dispatchTap(host: View, x: Float, y: Float, flags: Int) {
+    private fun dispatchTap(host: View, x: Float, y: Float, flags: Int) =
+        dispatchGesture(host, x, y, listOf(MotionEvent.ACTION_DOWN to flags, MotionEvent.ACTION_UP to flags))
+
+    /** Dispatches one gesture; each step is (action, flags) so a gesture can mix clean and obscured events. */
+    private fun dispatchGesture(host: View, x: Float, y: Float, steps: List<Pair<Int, Int>>) {
         val t = SystemClock.uptimeMillis()
-        for ((i, action) in listOf(MotionEvent.ACTION_DOWN, MotionEvent.ACTION_UP).withIndex()) {
-            val ev = MotionEvent.obtain(t + i * 50L, t + i * 50L, action, x, y, 0)
+        for ((i, step) in steps.withIndex()) {
+            val (action, flags) = step
+            // MOVE shifts a little: Compose drops moves that change nothing.
+            val px = if (action == MotionEvent.ACTION_MOVE) x + 2f else x
+            val ev = MotionEvent.obtain(t, t + i * 50L, action, px, y, 0)
             // No public/hidden Java setter exists on API 35; the window manager sets the flag through
             // the native event, so do the same (Robolectric native-backed MotionEvent).
             val ptr = MotionEvent::class.java.getDeclaredField("mNativePtr").apply { isAccessible = true }.getLong(ev)
@@ -160,5 +167,43 @@ class ProtectedButtonTest {
         showA = false
         rule.waitForIdle()
         assertEquals(original, host!!.filterTouchesWhenObscured)
+    }
+
+    private fun clicksAfter(vararg steps: Pair<Int, Int>): Int {
+        var host: View? = null
+        var clicks = 0
+        rule.setContent {
+            host = LocalView.current
+            ProtectedButton(onClick = { clicks++ }, modifier = Modifier.testTag("btn")) { Text("Close") }
+        }
+        rule.waitForIdle()
+        val (x, y) = centreOf("btn")
+        dispatchGesture(host!!, x, y, steps.toList())
+        return clicks
+    }
+
+    private val down = MotionEvent.ACTION_DOWN
+    private val move = MotionEvent.ACTION_MOVE
+    private val up = MotionEvent.ACTION_UP
+    private val obscured = MotionEvent.FLAG_WINDOW_IS_OBSCURED
+
+    @Test fun `clean down then obscured up does not click`() {
+        assertEquals(0, clicksAfter(down to 0, up to obscured))
+    }
+
+    @Test fun `obscured down then clean up does not click`() {
+        assertEquals(0, clicksAfter(down to obscured, up to 0))
+    }
+
+    @Test fun `clean down obscured move clean up does not click`() {
+        assertEquals(0, clicksAfter(down to 0, move to obscured, up to 0))
+    }
+
+    @Test fun `clean down clean up clicks once`() {
+        assertEquals(1, clicksAfter(down to 0, up to 0))
+    }
+
+    @Test fun `taint resets at the next down`() {
+        assertEquals(1, clicksAfter(down to obscured, up to obscured, down to 0, up to 0))
     }
 }

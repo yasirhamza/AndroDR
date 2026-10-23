@@ -57,4 +57,11 @@ class PlatformCredentialUiTest {
         controller.pause().stop().destroy() // what a configuration change does to the old activity
         assertEquals(false, job.await())
     }
+
+    @Test fun `already destroyed activity resolves false immediately`() = runBlocking {
+        val controller = Robolectric.buildActivity(ComponentActivity::class.java).setup()
+        val activity = controller.get()
+        controller.pause().stop().destroy()
+        assertEquals(false, PlatformCredentialUi(activity).launchConfirmIntent(intent))
+    }
 }

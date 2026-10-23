@@ -12,6 +12,7 @@ import androidx.activity.result.ActivityResultLauncher
 import androidx.annotation.RequiresApi
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.DefaultLifecycleObserver
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleOwner
 import java.util.UUID
 import kotlin.coroutines.resume
@@ -66,6 +67,10 @@ class PlatformCredentialUi(private val activity: ComponentActivity) : Credential
      */
     override suspend fun launchConfirmIntent(intent: Intent): Boolean =
         suspendCancellableCoroutine { cont ->
+            if (activity.lifecycle.currentState == Lifecycle.State.DESTROYED) {
+                cont.resume(false) // no onDestroy will ever fire; fail closed
+                return@suspendCancellableCoroutine
+            }
             var launcher: ActivityResultLauncher<Intent>? = null
             var observer: DefaultLifecycleObserver? = null
 
@@ -83,7 +88,8 @@ class PlatformCredentialUi(private val activity: ComponentActivity) : Credential
                 override fun onDestroy(owner: LifecycleOwner) = finish(false)
             }
             observer = destroyObserver
-            cont.invokeOnCancellation { cleanup() }
+            // Lifecycle observers are main-thread only; a cancel from another dispatcher hops to the UI thread.
+            cont.invokeOnCancellation { activity.runOnUiThread { cleanup() } }
             launcher = activity.activityResultRegistry.register(
                 "confirm-credential-${UUID.randomUUID()}",
                 ActivityResultContracts.StartActivityForResult(),
