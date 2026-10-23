@@ -234,12 +234,11 @@ internal val TAXONOMY_CONTRACT_TABLE: Map<String, ServiceContract> = linkedMapOf
         fields = listOf(
             "day_index" to "Day offset in the battery stats history",
             "version" to
-                "Package version code parsed from the battery-stats entry (0 when unparseable). " +
-                "Emitted today only by BatteryDailyModule's IOC-match generic record; the typed " +
-                "BatteryDailyEvent does not carry it yet (AndroDR telemetry-store Task A6 must emit " +
-                "it there or remove it deliberately). FLEET SAFETY — POSITIVE REFERENCES ONLY: most " +
-                "records lack this field, so a matcher on it evaluates false there, which no-ops " +
-                "positive selections but INVERTS under `not`. Never reference it in a negated filter " +
+                "Package version code parsed from the battery-stats entry (0 when unparseable), " +
+                "carried on every typed BatteryDailyEvent. FLEET SAFETY — POSITIVE REFERENCES ONLY: " +
+                "old builds never emit this field, so a matcher on it evaluates false there, which " +
+                "no-ops positive selections but INVERTS under `not`, over-firing the old fleet. Never " +
+                "reference it in a negated filter until the fleet floor covers the emitter " +
                 "(validate-rule.py rejects it)",
             "event_type" to "Battery event type",
             "package_name" to "Package associated with the event",
@@ -279,7 +278,14 @@ internal val TAXONOMY_CONTRACT_TABLE: Map<String, ServiceContract> = linkedMapOf
         fields = listOf(
             "change_id" to "Platform compatibility change ID",
             "package_name" to "Package affected by the change",
-            "enabled" to "Whether the compat change is enabled",
+            "enabled" to
+                "Whether the compat change is enabled, parsed from the `enabled=` token of the " +
+                "dumpsys line; omitted when the line does not state it. OPTIONAL: only some records " +
+                "set it, and optional implies positive-only. FLEET SAFETY — POSITIVE REFERENCES ONLY: " +
+                "old builds never emit this field, so a matcher on it evaluates false there, which " +
+                "no-ops positive selections but INVERTS under `not`, over-firing the old fleet. Never " +
+                "reference it in a negated filter until the fleet floor covers the emitter " +
+                "(validate-rule.py rejects it)",
             "source" to "TelemetrySource enum name",
             "captured_at" to "When this telemetry was captured (epoch ms)",
         ),
