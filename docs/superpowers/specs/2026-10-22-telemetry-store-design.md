@@ -195,11 +195,11 @@ Report (streamed) · Telemetry browser · JSONL export · cross-scan history / d
 
 Persistence surfaces:
 
-- **Schema 19 (Phase A)**:
+- **Schema 20 (Phase A)**:
   - New tables: `record_body`, `telemetry_record`, `scan_record` (content, facts, observations — §5.1); `event_watermark` (§5.2); `signal_member` (correlation-signal members, §5.4).
-  - New `forensic_timeline` columns: `recordId`, `sourceEventKey` (h128 BLOB, the same hash as `telemetry_record.sourceKey`), `level`, `persistent` (default 0). New `ScanResult` columns: `state` (`IN_PROGRESS` | `COMPLETE` | `DELETING`, default `COMPLETE`), `telemetryState` (`NONE` | `STORED` | `PARTIAL_RETENTION` | `FAILED`). The migration backfills `level` on legacy finding rows from `ScanResult.findings` by (`scanResultId`, `ruleId`). It uses the same chunked `substr` reader as 19→20, so an oversized or corrupt row leaves `level` null and never aborts the upgrade.
+  - New `forensic_timeline` columns: `recordId`, `sourceEventKey` (h128 BLOB, the same hash as `telemetry_record.sourceKey`), `level`, `persistent` (default 0). New `ScanResult` columns: `state` (`IN_PROGRESS` | `COMPLETE` | `DELETING`, default `COMPLETE`), `telemetryState` (`NONE` | `STORED` | `PARTIAL_RETENTION` | `FAILED`). The migration backfills `level` on legacy finding rows from `ScanResult.findings` by (`scanResultId`, `ruleId`). It uses the same chunked `substr` reader as 20→21, so an oversized or corrupt row leaves `level` null and never aborts the upgrade.
   - Composite indices: §5.1 and §6.
-- **Schema 20 (Phase D)**: `scan_finding`, `alert` (§5.4); `ScanResult` loses `findings`.
+- **Schema 21 (Phase D)**: `scan_finding`, `alert` (§5.4); `ScanResult` loses `findings`.
 - **`forensic_timeline`** keeps only finding rows, correlation signals, detected changes, and audit and closure rows.
   - Rows that outlive their scan *by nature* carry `persistent = 1`: closure, audit and "import interrupted" rows.
   - `scanResultId = -1` keeps its existing meaning ("no owning scan") and is not a retention marker.
@@ -468,11 +468,11 @@ Interim event rows written in Phases A–C carry `recordId`, so correlation neve
 
 ### 5.4 Findings, alerts, lifecycle
 
-Schema 20 (Phase D).
+Schema 21 (Phase D).
 
 **`scan_finding`** has one row per finding per scan, always inserted.
 - **Columns**: `id`, `scanId`, `ruleId`, `triggered`, `level`, `category`, `kind` (`STATE` | `ALERT`), `recordId`, `service`, `ordinal`, `alertKey`, `alertId`, `findingJson`.
-- **`findingJson`** omits `matchContext` only when `recordId` is set; correlation and pre-schema-19 findings keep it.
+- **`findingJson`** omits `matchContext` only when `recordId` is set; correlation and pre-schema-20 findings keep it.
 - **Untriggered findings** (safe-state rows) are stored only for snapshot services.
 - **Indices**: `recordId`, `(scanId, alertKey)`.
 
@@ -515,12 +515,12 @@ Schema 20 (Phase D).
 
 **The report** lists state findings, open alerts (with the opening scan), and closed alerts (time, note, credential flag).
 
-**Migration 19 → 20.**
+**Migration 20 → 21.**
 - **Reading**: `findings` is read in 256 KB `substr` chunks. A corrupt row keeps its scan with zero findings. `ScanResult` is rebuilt as a new table, then copied and renamed, because API 26 has no `DROP COLUMN`.
 - **Backfill**: `triggeredCount`, `maxLevel` and `forensic_timeline.level`.
 - **Kind**:
   - findings carrying `recordId` (late-IOC re-checks) are resolved by it;
-  - other schema-19 findings (with `service`/`ordinal`) are resolved per record through `scan_record`;
+  - other schema-20 findings (with `service`/`ordinal`) are resolved per record through `scan_record`;
   - older findings are ALERT iff `matchContext` holds the event-time field > 0, or the service is always-event (`dns_monitor`, `network_monitor`, `security_log`);
   - findings of category `CORRELATION` are STATE and open no alert;
   - unknown rule ids are STATE;
@@ -571,7 +571,7 @@ merges, because retention arrives in D4.
   - A fact referenced by a `forensic_timeline` row is nested under that row.
 - **Counts** appear on every group header and on the filter bar. Date groups use the device's zone.
 - **Presentation (my calls):**
-  - The severity filter is SQL on `level` (schema 19).
+  - The severity filter is SQL on `level` (schema 20).
   - There is no cross-page roll-up.
   - Finding rows appear for every scan.
   - The pinned section shows current findings.
@@ -636,7 +636,7 @@ All gates are JVM unit tests (Robolectric 4.14.1, SDK 35, offline via the `robol
 | **C1** | No persistence caps (allow-lists per phase, §5.5). |
 | **T1** | 100,000-event import pages fully; counts match; no duplicates; no OFFSET; no TEMP B-TREE for any shape; scroll position survives an invalidation; an uncommitted import is invisible, including its finding rows; the severity filter matches writer-produced rows. |
 | **K1** | Every atom-bound category has a producer; day-precision facts never become atoms; a live DNS fact and its `ioc_match` row bind once. |
-| **F1** | Migration 19→20, including keeping `matchContext`, backfilling the summary columns, and resolving a late-IOC re-check finding by its `recordId`; `Migration18To19Test` covers a 3 MB row and a corrupt row (backfill leaves `level` null, upgrade completes). |
+| **F1** | Migration 20→21, including keeping `matchContext`, backfilling the summary columns, and resolving a late-IOC re-check finding by its `recordId`; `Migration19To20Test` covers a 3 MB row and a corrupt row (backfill leaves `level` null, upgrade completes). |
 | **F2** | `recordId` resolves for every service; finding rows carry `recordId` from Phase A. |
 | **L1** | Lifecycle: state findings follow the latest live scan, not imports; an alert persists until closed; an overlapping import's finding attaches to the same alert and keeps its own `scan_finding` row; a closed alert stays closed; a new fact opens a new alert; correlation findings are state findings of their scan and open no alert; this scan's timeline rows are `Row` atoms with real ids and bind once; a signal's fact and row members load through `ClusterMembers` and the Timeline; legacy signals' members appear after the Phase C backfill, which is idempotent under a kill between batches and a concurrent delete, and leaves malformed rows untouched; the evidence discriminator is stable across an IOC re-sync. |
 | **L2** | Close and bulk close need confirmation; `NoSecureLock` fails closed; obscured touches are filtered; closure and audit rows survive "Clear all"; after deleting an alert's opening scan and after "Clear all", the alert's matched fact reads back **through the report and "Matched record"** and the evidence JSON is present; a `deleteScan` or "Clear all" killed after its first transaction still has exactly one audit row with a non-empty summary and no "import interrupted" row; a user delete while a scan or import holds `scanMutex` is refused, and a `finish` whose scan is no longer `IN_PROGRESS` rolls back; a scan that starts after "Clear all"'s first transaction and completes before it ends survives (members it bound from pre-clear live rows load as missing); after deleting scan X whose row is a member of scan Y's signal, the row is gone, no non-persistent row has a dangling `scanResultId`, and Y's cluster loads the remaining members; the audit row for a 50,000-finding scan stays under 16 KB and the Timeline and report still load. |
@@ -692,7 +692,7 @@ Taxonomy cross-checks and `ServiceActivationCrossCheckTest` are re-derived from 
 - **Bug-report records**: typed records that emit every fact; day-precision events never become correlation atoms; the wakelock time base is fixed.
 - **Compression and keys**: immutable versioned dictionaries; 128-bit BLOB keys.
 - **Storage protection**: preflight with "import anyway", plus a per-chunk reserve that nothing overrides.
-- **Schema and Timeline**: one `TaxonomyContract`; a computed-column contract hash; composite indices and `level` in schema 19; keyset paging everywhere.
+- **Schema and Timeline**: one `TaxonomyContract`; a computed-column contract hash; composite indices and `level` in schema 20; keyset paging everywhere.
 - **Reports**: streaming; complete escaping; a notice of the sensitive categories included; full telemetry kept per owner intent.
 - **Phases**: replace-on-reimport removed in C3, together with a cleanup of legacy event rows; retention in Phase D.
 

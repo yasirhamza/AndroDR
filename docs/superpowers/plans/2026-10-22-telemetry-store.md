@@ -18,6 +18,8 @@
 
 ## Global Constraints
 
+**Schema numbering (execution ruling, 2026-10-23):** `main` already took schema 19 (IOC layout, d1bf383). The store migration is therefore 19→20 (Phase A) and the findings migration 20→21 (Phase D); every schema number in this plan and the spec was bumped by one.
+
 **Builds and tests**
 - JDK 21.
 - Gates: `./gradlew testDebugUnitTest`, `./gradlew detekt`, `./gradlew lintDebug`, `./gradlew lowHeapTest`.
@@ -68,7 +70,7 @@
 1. **Content-valued envelope keys.** Keys holding content survive unchanged, and keys equal to the observation restore exactly. Pinned in Task A5 (S1).
 2. **Usage access revoked.** When usage access is revoked between scans, the watermark stays unchanged. When access is present but there are no events, it advances to scan start. Pinned in Task C1.
 3. **Rule this binary can't evaluate.** A rules update ships a `dns_monitor` rule that this binary cannot evaluate. The watermark still advances; observations stay linear; the late-IOC re-check still runs. Pinned in Task C1.
-4. **Oversized or corrupt findings during migration 19→20.** A `findings` value over 2 MB, or corrupt, still lets the migration complete. Pinned in Task D2.
+4. **Oversized or corrupt findings during migration 20→21.** A `findings` value over 2 MB, or corrupt, still lets the migration complete. Pinned in Task D2.
 5. **Killed mid-import.** After restart, nothing of the import is visible and the sweep removes it. Pinned in Task A7.
 
 ---
@@ -121,8 +123,8 @@ object TaxonomyContract {
     fun eventTimeOf(service: String, fields: Map<String, Any?>): Long?
     fun precisionOf(service: String, fields: Map<String, Any?>): TimePrecision
     val eventServices: Set<String>
-    val contractHash: String            // contract table + categoryOf/precisionOf outputs over the corpus
-    const val CONTRACT_SCHEMA_VERSION = 19   // schema version that last recomputed the computed columns
+    val contractHash: String            // contract table only (production cannot read the test corpus); X1 pins corpusHash(corpus) = table + categoryOf/precisionOf outputs over the corpus
+    const val CONTRACT_SCHEMA_VERSION = 20   // schema version that last recomputed the computed columns
 }
 object TimelineCategories { fun categoryOf(service: String, fields: Map<String, Any?>): String }   // spec §4.3 table
 ```
@@ -183,7 +185,7 @@ There is no retention yet; it arrives in D4.
 - [ ] **Step 1: Write the failing tests**
   - **Harness:**
     - The in-memory DB round-trips a `ScanResult`.
-    - The migration helper opens schema 18.
+    - The migration helper opens schema 19.
     - If the test assets are not visible, fall back to a `copySchemas` task.
   - **Q1 syntax:** SQL string literals in `data/db/*.kt` contain none of `ON CONFLICT`, `RETURNING`, `OVER (`, `NULLS LAST`, `NULLS FIRST`, `DROP COLUMN`, `RENAME COLUMN`, `IIF(`, `->>`, `FILTER (`.
   - **Q1 parameters:** every `@Query` function with a `List`/`Collection` parameter is called only inside `chunkedIn`/`chunkedEach`.
@@ -260,7 +262,7 @@ class TelemetryDictionaries(load: (String) -> ByteArray) {
 - [ ] **Step 2–4: fail → implement → pass.**
 - [ ] **Step 5: Commit** `feat(store): codec with conditional envelope stripping and immutable dictionaries`
 
-### Task A4: Entities, DAOs, migration 18→19
+### Task A4: Entities, DAOs, migration 19→20
 
 **Files:**
 - Create:
@@ -268,18 +270,18 @@ class TelemetryDictionaries(load: (String) -> ByteArray) {
   - `data/db/{RecordBodyDao,TelemetryFactDao,ScanObservationDao,EventWatermarkDao,SignalMemberDao}.kt`
   - `di/StoreModule.kt`
 - Modify:
-  - `data/db/Migrations.kt`: `MIGRATION_18_19`.
-  - `AppDatabase.kt`: `version = 19`.
+  - `data/db/Migrations.kt`: `MIGRATION_19_20`.
+  - `AppDatabase.kt`: `version = 20`.
   - `data/model/ScanResult.kt`: add `state` (`IN_PROGRESS` | `COMPLETE` | `DELETING`; default `COMPLETE` in the entity and in the migration) and `telemetryState`.
-  - `data/db/MigrationFindingsReader.kt` (new): a chunked `substr` reader for `ScanResult.findings`, shared by `MIGRATION_18_19` (the `level` backfill) and `MIGRATION_19_20`. If a row is oversized or corrupt, the reader returns no findings for it.
+  - `data/db/MigrationFindingsReader.kt` (new): a chunked `substr` reader for `ScanResult.findings`, shared by `MIGRATION_19_20` (the `level` backfill) and `MIGRATION_20_21`. If a row is oversized or corrupt, the reader returns no findings for it.
   - `data/model/ForensicTimelineEvent.kt`:
     - add `recordId`, `sourceEventKey: ByteArray?` (an h128 hash, the same hash as `telemetry_record.sourceKey`), `level`, and `persistent: Boolean = false`;
     - indices: `recordId`, `sourceEventKey`, `(scanResultId, startTimestamp)`, `(packageName, startTimestamp)`.
-  - `MIGRATION_18_19`: backfill `level` on legacy finding rows from `ScanResult.findings`, matching on (`scanResultId`, `ruleId`).
+  - `MIGRATION_19_20`: backfill `level` on legacy finding rows from `ScanResult.findings`, matching on (`scanResultId`, `ruleId`).
   - `ScanResultDao.kt`: add `insertInProgress`, `complete(...)` and `sweepableIds()` (returns `IN_PROGRESS` and `DELETING` ids). `deleteById` already exists at `:21`. Every list query filters `state = 'COMPLETE'`.
   - DI: register the migration; `onOpen` runs `PRAGMA journal_size_limit = 67108864`.
-  - Commit `19.json`.
-- Test: `data/db/Migration18To19Test.kt`, `data/db/StoreDaoTest.kt`.
+  - Commit `20.json`.
+- Test: `data/db/Migration19To20Test.kt`, `data/db/StoreDaoTest.kt`.
 
 **Interfaces:**
 - Entities follow spec §5.1 exactly. Entities holding `ByteArray` are plain classes. `telemetry_record.id` and `forensic_timeline.id` stay AUTOINCREMENT, which a schema test pins.
@@ -318,7 +320,7 @@ class TelemetryDictionaries(load: (String) -> ByteArray) {
     - No captured SQL contains `OFFSET`.
     - Deletes use indices (`EXPLAIN QUERY PLAN`).
 - [ ] **Step 2–4: fail → implement → pass.**
-- [ ] **Step 5: Commit** `feat(db): content, facts, observations, watermarks, signal members (schema 19)`
+- [ ] **Step 5: Commit** `feat(db): content, facts, observations, watermarks, signal members (schema 20)`
 
 ### Task A5: `TelemetryStore` and `TelemetryReader`
 
@@ -369,7 +371,7 @@ class StoreDirtyFlag @Inject constructor(...) { suspend fun set(); suspend fun c
   - registers an `InvalidationTracker.Observer` on first load and removes it on invalidate, calling `refreshVersionsSync()` before the first load;
   - `getRefreshKey` backs off half a load from the anchor;
   - prepends through a reverse-ordered query;
-  - observes only tables that exist in the current schema: `ScanResult` and `forensic_timeline` from schema 19, plus `alert` from schema 20.
+  - observes only tables that exist in the current schema: `ScanResult` and `forensic_timeline` from schema 20, plus `alert` from schema 21.
 - **Detekt split:** reads are split across `TelemetryReader` (per-scan), `AtomReader` (correlation atoms, Phase C) and `TelemetryExport` (JSONL, Phase E), to stay under the detekt function limit.
 
 - [ ] **Step 1: Write the failing tests**
@@ -721,7 +723,7 @@ object Watermarks {
   - `data/db/TimelineFilter.kt`
   - `ui/timeline/TimelinePagingSource.kt`, which extends `KeysetPagingSource` and keys on `(time, rowKind, id)`.
     - In Phase C it observes `ScanResult` and `forensic_timeline`.
-    - D2 adds `alert`, because that table does not exist before schema 20.
+    - D2 adds `alert`, because that table does not exist before schema 21.
 - Modify:
   - `data/db/ForensicTimelineEventDao.kt`: delete the six read queries.
   - `ui/timeline/TimelineViewModel.kt`, `TimelineRow.kt` (`EventRow`), `TimelineScreen.kt`.
@@ -778,7 +780,7 @@ object Watermarks {
 - [ ] **Step 2–4: fail → implement → pass.**
 - [ ] **Step 5: Commit** `feat(ui): device-credential confirmation; obscured-touch filtering`
 
-### Task D2: `scan_finding`, `alert`, migration 19→20, caps removed
+### Task D2: `scan_finding`, `alert`, migration 20→21, caps removed
 
 **Files:**
 - Create:
@@ -787,8 +789,8 @@ object Watermarks {
   - `data/db/FrozenRuleServices.kt`
   - `data/repo/FindingsRepository.kt`, `data/repo/AlertIdentity.kt`
 - Schema:
-  - `Migrations.kt`: `MIGRATION_19_20`.
-  - `AppDatabase.kt`: `version = 20`.
+  - `Migrations.kt`: `MIGRATION_20_21`.
+  - `AppDatabase.kt`: `version = 21`.
   - `ScanResult.kt`: drop `findings`; add `triggeredCount` and `maxLevel`.
   - `ScanResultDao.kt`: add `latestLive()` and `pagedAfter(afterTimestamp, size)`; delete `getAllScans`.
 - Writer (`ChunkedScanWriter`):
@@ -811,7 +813,7 @@ object Watermarks {
   - `TimelineViewModel`
   - `reporting/FindingsView.kt`
 - Tests: replace `ScanResult(findings = …)` with `scanWith(findings)` in the 16 test files that use it.
-- Test: `data/db/Migration19To20Test.kt` (F1 and Review Focus 4), `data/repo/FindingLifecycleTest.kt` (L1), `data/repo/FindingRecordRefTest.kt` (F2), `scanner/NoPersistenceCapsGateTest.kt` (C1 final).
+- Test: `data/db/Migration20To21Test.kt` (F1 and Review Focus 4), `data/repo/FindingLifecycleTest.kt` (L1), `data/repo/FindingRecordRefTest.kt` (F2), `scanner/NoPersistenceCapsGateTest.kt` (C1 final).
 
 **Interfaces:**
 - Entities: as in spec §5.4, including `alert.lastActivityAt` and `evidenceJson`.
@@ -832,7 +834,7 @@ object Watermarks {
   - `close(alertIds: List<Long>, reason: String?, result: CredentialResult)`
 - `CurrentFindingsSummary(stateFindings: List<Finding>, openAlertCount: Int)`. `stateFindings` is bounded by rules × live records.
 - `findingJson` drops `matchContext` only when `recordId != null`. Untriggered rows are stored only for snapshot services.
-- Migration 19→20 follows spec §5.4:
+- Migration 20→21 follows spec §5.4:
   - `substr` reads and a table rebuild;
   - summary and `level` backfill;
   - per-record kind, with `recordId` resolution preferred over `(scanId, service, ordinal)`; category `CORRELATION` is STATE with no alert (F1 test);
@@ -843,7 +845,7 @@ object Watermarks {
   - **F1 (migration):**
     - 1,200 findings, plus a corrupt row and a 3 MB row: all scans survive.
     - `triggeredCount` and `maxLevel` are backfilled.
-    - A schema-19 live app-ops finding is STATE.
+    - A schema-20 live app-ops finding is STATE.
     - DNS findings become ALERTs: OPEN at 10 days old, CLOSED at 40 days.
     - Migrated findings keep `matchContext`.
     - A Phase C late-IOC re-check finding migrates to its own fact and alert key, through `recordId`.
@@ -863,7 +865,7 @@ object Watermarks {
   - **Query plan:** the extended `deleteUnobservedUnpinned`, the alert insert and attach, the `INSERT … SELECT` of finding rows, and the summary queries all use indices (`EXPLAIN QUERY PLAN`).
   - **C1:** the allow-list is reduced to the permanent four.
 - [ ] **Step 2–4: fail → implement → pass.**
-- [ ] **Step 5: Commit** `feat(findings): per-scan findings, lasting alerts, migration 19→20; caps removed`
+- [ ] **Step 5: Commit** `feat(findings): per-scan findings, lasting alerts, migration 20→21; caps removed`
 
 ### Task D3: Alerts UI; audited deletion
 
@@ -1064,4 +1066,4 @@ object Watermarks {
 - C3 and C4 ship in one PR.
 - `FINDINGS_PERSIST_CAP` stays until D2.
 - Retention (D4) lands after finding pins (D2).
-- Schema 19 already carries every column and index that Phase C reads.
+- Schema 20 already carries every column and index that Phase C reads.
