@@ -66,7 +66,8 @@ class ScanOrchestratorDiffTest {
             sigmaRuleEngine = sigmaRuleEngine, sigmaCorrelationEngine = mockk(relaxed = true),
             indicatorResolver = indicatorResolver, sigmaRuleFeed = mockk(relaxed = true),
             knownAppResolver = mockk(relaxed = true), oemPrefixResolver = mockk(relaxed = true),
-            brandImpersonationResolver = mockk(relaxed = true), context = mockk(relaxed = true),
+            brandImpersonationResolver = mockk(relaxed = true), telemetryReader = mockk(relaxed = true),
+            context = mockk(relaxed = true),
         )
     }
 

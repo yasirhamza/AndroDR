@@ -214,4 +214,28 @@ class TelemetryReaderTest {
         assertEquals(0L, s.pinnedOrphans.bodies)
         assertTrue(s.events.storedBytes > 0 && s.events.rawBytes > 0)
     }
+
+    @Test
+    fun `scanTotals counts one scan's records and its latest exact event time`() = runBlocking {
+        f.scan(1L)
+        f.persist(1L, "dns_monitor", listOf(dns("a.example", time = 1_000L), dns("b.example", time = 5_000L)))
+        f.persist(1L, "app_scanner", listOf(app("x")))
+        f.setState(1L, ScanState.COMPLETE)
+        f.scan(2L)
+        f.persist(2L, "dns_monitor", listOf(dns("later.example", time = 9_000L)))
+        f.setState(2L, ScanState.COMPLETE)
+        val totals = f.reader.scanTotals(1L)
+        assertEquals(3L, totals.records)
+        assertTrue(totals.rawBytes > 0)
+        assertEquals("the report's import reference time is this scan's own latest event", 5_000L,
+            f.reader.latestEventTime(1L, notAfter = Long.MAX_VALUE))
+        assertEquals("events after the bound (a future-dated record) are ignored", 1_000L,
+            f.reader.latestEventTime(1L, notAfter = 4_999L))
+        f.scan(3L)
+        f.persist(3L, "app_scanner", listOf(app("y")))
+        f.setState(3L, ScanState.COMPLETE)
+        assertNull("snapshot records carry no event time", f.reader.latestEventTime(3L, Long.MAX_VALUE))
+        f.setState(2L, ScanState.DELETING)
+        assertNull("a scan that is not COMPLETE is invisible", f.reader.latestEventTime(2L, Long.MAX_VALUE))
+    }
 }

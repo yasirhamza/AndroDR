@@ -584,6 +584,21 @@ sealed interface Preflight { data object Ok : Preflight; data class Tight(val es
 
 ## Phase C — Events in place and the Timeline (PR 3)
 
+### Task C0: Imported DNS records carry no tunnel verdict (ruling R22)
+
+Imported `dns_monitor` records (intrusion-log and bug-report imports) today carry the tunnel's defaults `is_blocked: false` and `reason: null`. These read as VPN verdicts that never happened. Emitters emit facts, never fabricated values.
+
+**Files:**
+- Rules repo, on a branch: in `validation/logsource-taxonomy.yml` mark `dns_monitor.is_blocked` `optional: true` (live tunnel records only). The description says imports omit it. FLEET SAFETY: positive references only.
+- `TaxonomyContractTable.kt`: mirror the description.
+- Import record builders (`IntrusionLogRecordBuilders`, bug-report DNS builders): omit `is_blocked` and `reason` for imported records.
+- `reporting/ReportFormatter.kt`: drop B1's interim parser-default note for imports.
+- Test: `sigma/ImportDnsNoVerdictTest.kt`. An imported DNS record's field map has no `is_blocked` and no `reason` key. A live tunnel record still carries both. A rule selecting `is_blocked: true` never matches an import.
+
+Safe ordering (CLAUDE.md): rules branch with a green validate check, then the submodule bumped to that branch commit, then AndroDR CI green, then the rules PR merged, then the submodule re-pointed at the rules main commit.
+
+- [ ] Steps: failing test → implement → pass → commit `fix(dns): imported DNS records carry no tunnel verdict`.
+
 ### Task C1: Watermarks and late-IOC re-check
 
 **Files:**

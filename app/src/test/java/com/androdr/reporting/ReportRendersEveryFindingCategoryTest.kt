@@ -36,11 +36,7 @@ class ReportRendersEveryFindingCategoryTest {
                 scannerErrors = emptyList(),
             )
 
-            val findingsSection = ReportFormatter.formatScanReport(
-                scan, emptyList(), emptyList(), versionName = "test", mode = ExportMode.FINDINGS_ONLY,
-                campaigns = emptyList(),
-                ruleScopes = emptyMap(), ruleCategoryById = emptyMap(),
-            )
+            val findingsSection = reportText(scan, mode = ExportMode.FINDINGS_ONLY)
 
             assertTrue(
                 "FindingCategory.$category has no renderer: '$marker' is absent from the findings section",

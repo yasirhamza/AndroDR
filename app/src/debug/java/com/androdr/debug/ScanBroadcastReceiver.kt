@@ -4,16 +4,13 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.util.Log
-import com.androdr.data.db.DnsEventDao
 import com.androdr.data.repo.CveRepository
 import com.androdr.ioc.IndicatorUpdater
 import com.androdr.ioc.KnownAppUpdater
-import com.androdr.reporting.ReportFormatter
-import com.androdr.reporting.ReportInputs
+import com.androdr.reporting.ReportExporter
 import com.androdr.scanner.ScanOrchestrator
 import com.androdr.sigma.SigmaRuleEngine
 import com.androdr.sigma.SigmaRuleFeed
-import com.androdr.util.appVersion
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -27,13 +24,12 @@ import javax.inject.Inject
 class ScanBroadcastReceiver : BroadcastReceiver() {
 
     @Inject lateinit var scanOrchestrator: ScanOrchestrator
-    @Inject lateinit var dnsEventDao: DnsEventDao
     @Inject lateinit var cveRepository: CveRepository
     @Inject lateinit var indicatorUpdater: IndicatorUpdater
     @Inject lateinit var knownAppUpdater: KnownAppUpdater
     @Inject lateinit var sigmaRuleFeed: SigmaRuleFeed
     @Inject lateinit var sigmaRuleEngine: SigmaRuleEngine
-    @Inject lateinit var reportInputs: ReportInputs
+    @Inject lateinit var reportExporter: ReportExporter
 
     override fun onReceive(context: Context, intent: Intent) {
         val action = intent.action
@@ -46,20 +42,11 @@ class ScanBroadcastReceiver : BroadcastReceiver() {
                     Log.i(TAG, "Update complete")
                 } else {
                     val scan = scanOrchestrator.runFullScan()
-                    val dns = dnsEventDao.getRecentSnapshot()
-                    val inventory = scanOrchestrator.lastAppTelemetry
-                    // The file checks must reach this report too: without them the
-                    // harness's "<path> : clear" guards match nothing and pass vacuously.
-                    val report = ReportFormatter.formatScanReport(
-                        scan, dns, emptyList(), inventory,
-                        fileTelemetry = scanOrchestrator.lastFileArtifactTelemetry,
-                        versionName = context.appVersion().name,
-                        campaigns = reportInputs.campaigns(),
-                        ruleScopes = reportInputs.ruleScopes(),
-                        ruleCategoryById = reportInputs.ruleCategoryById()
-                    )
+                    // The one report path: the harness reads the same report a user exports,
+                    // with this scan's own stored telemetry. No logcat: a log line naming a path,
+                    // domain or finding title would satisfy (or trip) a harness pattern.
                     val outDir = context.getExternalFilesDir(null) ?: return@launch
-                    File(outDir, "androdr_last_report.txt").writeText(report)
+                    reportExporter.writeTo(File(outDir, "androdr_last_report.txt"), scan, includeLog = false)
                     Log.i(TAG, "Scan complete, report written to ${outDir.absolutePath}")
                 }
             } catch (e: Exception) {

@@ -42,11 +42,7 @@ class ActivityChainsReportSectionTest {
     )
 
     private fun report(scan: ScanResult) =
-        ReportFormatter.formatScanReport(
-            scan, emptyList(), emptyList(), versionName = "test", mode = ExportMode.FINDINGS_ONLY,
-            campaigns = emptyList(),
-            ruleScopes = emptyMap(), ruleCategoryById = emptyMap(),
-        )
+        reportText(scan, mode = ExportMode.FINDINGS_ONLY)
 
     @Test
     fun `chains section is rendered before device checks and app risks`() {

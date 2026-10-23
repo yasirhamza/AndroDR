@@ -40,10 +40,6 @@ class HistoryViewModelDeleteRefusedTest {
         repository = repository,
         orchestrator = mockk(relaxed = true),
         reportExporter = mockk(relaxed = true),
-        dnsEventDao = mockk(relaxed = true),
-        forensicTimelineEventDao = mockk(relaxed = true),
-        reportInputs = mockk(relaxed = true),
-        appContext = mockk(relaxed = true),
     )
 
     private fun repo(deleteOne: Boolean, deleteAll: Boolean) = mockk<ScanRepository> {

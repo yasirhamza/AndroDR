@@ -30,6 +30,8 @@ while [[ "${1:-}" == --* ]]; do
 done
 SERIAL="${1:?Usage: $0 [--load|--guided] [--profile X] [--track N] [--risk high,medium] [--random N] [--only a,b] [--no-pause] <emulator-serial>}"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+# Longer than DnsLogBuffer's 2 s flush interval: injected DNS must be stored before a scan starts.
+DNS_FLUSH_WAIT_S=5
 MANIFEST="$SCRIPT_DIR/manifest.yml"
 EXPECTED_DIR="$SCRIPT_DIR/fixtures/expected"
 FIXTURE_DIR="$SCRIPT_DIR/fixtures/mercenary"
@@ -399,6 +401,9 @@ run_scenario() {
             echo "  Injecting: adb $cmd"
             $ADB $cmd 2>/dev/null || true
         done < <(get_inject_cmds "$id")
+        # The scan reads DNS from the stored log at its start, and DnsLogBuffer flushes every 2 s:
+        # wait past one flush so an injected query is in the scan's own dns_monitor records.
+        sleep "$DNS_FLUSH_WAIT_S"
     fi
 
     # Step 5: SEED IOC DB (cert-hash scenario only). A failed seed is a setup
@@ -572,6 +577,9 @@ if [ "$MODE" = "load" ] || [ "$MODE" = "guided" ]; then
     # Restore stdin for interactive prompts
     exec 0<&3 3<&-
 
+    # Same flush wait as the per-scenario path, once for every injection above.
+    sleep "$DNS_FLUSH_WAIT_S"
+
     echo ""
     echo "  Triggering scan..."
     # Delete old report so we can detect the new one
@@ -680,42 +688,14 @@ if [ "$MODE" = "load" ] || [ "$MODE" = "guided" ]; then
                 pattern="${pattern%$'\r'}"
                 [ -z "$pattern" ] && continue
                 case "$pattern" in '#'*) continue ;; esac
-                # A `!`-prefixed line asserts ABSENCE — present is the failure.
-                # Same sigils as check-patterns.sh, which the non-guided path uses.
-                want_absent=false
-                grep_mode=-qF
-                case "$pattern" in
-                    '!~'*) want_absent=true; grep_mode=-qE; pattern="${pattern:2}" ;;
-                    '~'*) grep_mode=-qE; pattern="${pattern:1}" ;;
-                    '!'*) want_absent=true; pattern="${pattern#!}" ;;
+                # One assertion through guided-check.sh: the same sigils as check-patterns.sh,
+                # and a MALFORMED pattern always counts as a failure (never an expected fail).
+                bash "$SCRIPT_DIR/guided-check.sh" "$REPORT" "$pattern" "$roadmap" </dev/null
+                case $? in
+                    0) ((GUIDED_PASS++)) || true ;;
+                    2) ((GUIDED_EXPECTED++)) || true ;;
+                    *) ((GUIDED_FAIL++)) || true ;;
                 esac
-                [ -z "$pattern" ] && continue
-
-                if grep "$grep_mode" -- "$pattern" "$REPORT" 2>/dev/null; then
-                    present=true
-                else
-                    present=false
-                fi
-                if [ "$want_absent" = true ]; then
-                    label="absent: $pattern"
-                    $present && satisfied=false || satisfied=true
-                else
-                    label="$pattern"
-                    satisfied=$present
-                fi
-
-                if [ "$satisfied" = true ]; then
-                    echo "    ✓ \"$label\""
-                    ((GUIDED_PASS++)) || true
-                else
-                    if [ -n "$roadmap" ] && [ "$roadmap" != "None" ] && [ "$roadmap" != "" ]; then
-                        echo "    ○ \"$label\" (expected fail — roadmap #$roadmap)"
-                        ((GUIDED_EXPECTED++)) || true
-                    else
-                        echo "    ✗ \"$label\" MISS"
-                        ((GUIDED_FAIL++)) || true
-                    fi
-                fi
             done < "$patterns_file"
         done
 

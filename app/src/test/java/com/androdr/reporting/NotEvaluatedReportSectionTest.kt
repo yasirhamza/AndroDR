@@ -23,11 +23,7 @@ class NotEvaluatedReportSectionTest {
         riskySideloadCount = 0, knownMalwareCount = 0, scannerErrors = errors.toList(),
     )
 
-    private fun report(scan: ScanResult) = ReportFormatter.formatScanReport(
-        scan, emptyList(), emptyList(), versionName = "test", mode = ExportMode.FINDINGS_ONLY,
-        campaigns = emptyList(),
-        ruleScopes = emptyMap(), ruleCategoryById = emptyMap(),
-    )
+    private fun report(scan: ScanResult) = reportText(scan, mode = ExportMode.FINDINGS_ONLY)
 
     private val missingCapability = ScannerFailure(
         "ruleCapability", NotEvaluatedReason.MISSING_CAPABILITY.sentinel,

@@ -10,7 +10,7 @@ import java.util.Locale
 /**
  * Formats bug report analysis results (SIGMA findings, legacy findings,
  * and timeline events) into a human-readable plaintext report suitable
- * for sharing. Output is strictly ASCII.
+ * for sharing. Every line is escaped with [escapeForReport].
  */
 object TimelineFormatter {
 
@@ -28,15 +28,15 @@ object TimelineFormatter {
     ): String = buildString {
         val generated = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).format(Date())
 
-        appendLine(RULE)
-        appendLine("  AndroDR Bug Report Analysis Timeline")
-        appendLine("  Version   : $versionName")
-        appendLine("  Generated : $generated")
-        appendLine("  Android   : ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT})")
-        appendLine("  Device    : ${Build.MANUFACTURER} ${Build.MODEL}")
-        appendLine("  Patch     : ${Build.VERSION.SECURITY_PATCH}")
-        appendLine(RULE)
-        appendLine()
+        line(RULE)
+        line("  AndroDR Bug Report Analysis Timeline")
+        line("  Version   : $versionName")
+        line("  Generated : $generated")
+        line("  Android   : ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT})")
+        line("  Device    : ${Build.MANUFACTURER} ${Build.MODEL}")
+        line("  Patch     : ${Build.VERSION.SECURITY_PATCH}")
+        line(RULE)
+        line()
 
         // -- Verdict --------------------------------------------------------------
         val triggeredFindings = findings.filter { it.triggered }
@@ -50,16 +50,16 @@ object TimelineFormatter {
             triggeredFindings.isNotEmpty() -> "INFORMATIONAL ONLY"
             else -> "CLEAN"
         }
-        appendLine("  ANALYSIS VERDICT: $verdict")
-        appendLine("  SIGMA findings: $critical critical, $high high, $medium medium")
-        appendLine()
+        line("  ANALYSIS VERDICT: $verdict")
+        line("  SIGMA findings: $critical critical, $high high, $medium medium")
+        line()
 
         // -- SIGMA findings section -----------------------------------------------
-        appendLine(THIN)
-        appendLine("  FINDINGS (${triggeredFindings.size})")
-        appendLine(THIN)
+        line(THIN)
+        line("  FINDINGS (${triggeredFindings.size})")
+        line(THIN)
         if (triggeredFindings.isEmpty()) {
-            appendLine("  No SIGMA rule findings triggered.")
+            line("  No SIGMA rule findings triggered.")
         } else {
             // Group identical findings by title+level to reduce noise
             val grouped = triggeredFindings
@@ -70,66 +70,74 @@ object TimelineFormatter {
                 val packages = group.mapNotNull {
                     it.matchContext["package_name"]?.takeIf { p -> p.isNotEmpty() }
                 }.distinct()
-                appendLine("  [${f.level.uppercase()}] ${f.title}")
+                line("  [${f.level.uppercase()}] ${f.title}")
                 if (packages.isNotEmpty()) {
                     if (packages.size <= 3) {
                         packages.forEach { pkg ->
                             val name = displayNames[pkg]
                             if (name != null) {
-                                appendLine("    Package: $name ($pkg)")
+                                line("    Package: $name ($pkg)")
                             } else {
-                                appendLine("    Package: $pkg")
+                                line("    Package: $pkg")
                             }
-                            hashByPkg[pkg]?.let { appendLine("    APK SHA-256: $it") }
+                            hashByPkg[pkg]?.let { line("    APK SHA-256: $it") }
                         }
                     } else {
-                        appendLine("    ${packages.size} apps: ${packages.take(5).joinToString(", ")}" +
+                        line("    ${packages.size} apps: ${packages.take(5).joinToString(", ")}" +
                             if (packages.size > 5) ", ..." else "")
                     }
                 }
                 if (f.description.isNotEmpty()) {
-                    appendLine("    ${f.description}")
+                    line("    ${f.description}")
                 }
                 if (f.remediation.isNotEmpty()) {
-                    appendLine("    Action: ${f.remediation.first()}")
+                    line("    Action: ${f.remediation.first()}")
                 }
-                appendLine()
+                line()
             }
         }
 
         // Timeline section
         if (timeline.isNotEmpty()) {
-            appendLine(THIN)
-            appendLine("  TIMELINE (${timeline.size} events)")
-            appendLine(THIN)
+            line(THIN)
+            line("  TIMELINE (${timeline.size} events)")
+            line(THIN)
             timeline.sortedBy { it.timestamp }.forEach { e ->
                 val sev = e.severity.uppercase().padEnd(8)
-                appendLine("  $sev  [${e.source}] ${e.description}")
+                line("  $sev  [${e.source}] ${e.description}")
             }
-            appendLine()
+            line()
         }
 
         // APP HASH INVENTORY
         if (hashByPkg.isNotEmpty()) {
-            appendLine(THIN)
-            appendLine("  APP HASH INVENTORY (${hashByPkg.size} apps)")
-            appendLine(THIN)
+            line(THIN)
+            line("  APP HASH INVENTORY (${hashByPkg.size} apps)")
+            line(THIN)
             hashByPkg.entries.sortedBy { it.key }.forEach { (pkg, hash) ->
                 val name = displayNames[pkg]
                 if (name != null) {
-                    appendLine("  $name")
-                    appendLine("    Package: $pkg")
+                    line("  $name")
+                    line("    Package: $pkg")
                 } else {
-                    appendLine("  $pkg")
+                    line("  $pkg")
                 }
-                appendLine("    SHA-256: $hash")
+                line("    SHA-256: $hash")
             }
-            appendLine()
+            line()
         }
 
-        appendLine(RULE)
-        appendLine("  End of analysis - AndroDR")
-        appendLine(RULE)
+        line(RULE)
+        line("  End of analysis - AndroDR")
+        line(RULE)
+    }
+
+    /**
+     * One line of the export, through [escapeForReport] (spec §7, R3): package, process and app
+     * names and event descriptions come from the bug report, so none may break a line or reverse text.
+     */
+    private fun StringBuilder.line(text: String = "") {
+        append(escapeForReport(text)).append('\n')
     }
 
     private fun severityOrdinal(level: String): Int = when (level.lowercase()) {

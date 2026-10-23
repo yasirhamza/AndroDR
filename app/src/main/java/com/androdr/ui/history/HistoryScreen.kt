@@ -67,6 +67,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.androdr.R
 import com.androdr.data.model.ScanResult
 import com.androdr.data.model.TelemetrySource
+import com.androdr.reporting.ReportSummary
 import com.androdr.scanner.ScanOrchestrator
 import com.androdr.ui.common.ExportModeDialog
 import com.androdr.ui.common.severityColor
@@ -88,7 +89,11 @@ fun HistoryScreen(
     val exporting  by viewModel.exporting.collectAsStateWithLifecycle()
     val shareUri   by viewModel.shareUri.collectAsStateWithLifecycle()
     val sheetScan  by viewModel.sheetScan.collectAsStateWithLifecycle()
-    val sheetReportText by viewModel.sheetReportText.collectAsStateWithLifecycle()
+    val sheetSummary by viewModel.sheetSummary.collectAsStateWithLifecycle()
+    val sheetFailed by viewModel.sheetFailed.collectAsStateWithLifecycle()
+    val exportEstimate by viewModel.exportEstimate.collectAsStateWithLifecycle()
+    val estimateFailed by viewModel.estimateFailed.collectAsStateWithLifecycle()
+    val exportFailed by viewModel.exportFailed.collectAsStateWithLifecycle()
     val showDeleteConfirm by viewModel.showDeleteConfirm.collectAsStateWithLifecycle()
     val showClearAllConfirm by viewModel.showClearAllConfirm.collectAsStateWithLifecycle()
     val deleteRefused by viewModel.deleteRefused.collectAsStateWithLifecycle()
@@ -171,7 +176,10 @@ fun HistoryScreen(
                 isFirstScan = allScans.last().id == scan.id,
                 exporting = exporting,
                 onClick = { viewModel.selectScan(scan) },
-                onExport = { exportModeDialogScan = scan },
+                onExport = {
+                    exportModeDialogScan = scan
+                    viewModel.loadExportEstimate(scan)
+                },
                 onViewReport = { viewModel.openSheet(scan) },
                 onDelete = { viewModel.requestDeleteScan(scan.id) }
             )
@@ -182,7 +190,13 @@ fun HistoryScreen(
     sheetScan?.let { scan ->
         ScanReportBottomSheet(
             scan = scan,
-            reportText = sheetReportText,
+            summary = sheetSummary,
+            failed = sheetFailed,
+            onExport = {
+                viewModel.closeSheet()
+                exportModeDialogScan = scan
+                viewModel.loadExportEstimate(scan)
+            },
             onDismiss = { viewModel.closeSheet() }
         )
     }
@@ -223,10 +237,31 @@ fun HistoryScreen(
     // Export mode selector
     exportModeDialogScan?.let { scan ->
         ExportModeDialog(
+            estimate = exportEstimate?.text() ?: stringResource(
+                if (estimateFailed) {
+                    R.string.history_export_estimate_unknown
+                } else {
+                    R.string.history_export_estimate_loading
+                }
+            ),
             onDismiss = { exportModeDialogScan = null },
             onConfirm = { mode ->
                 exportModeDialogScan = null
                 viewModel.exportReport(scan, mode)
+            }
+        )
+    }
+
+    // An export that failed: nothing was shared
+    if (exportFailed) {
+        AlertDialog(
+            onDismissRequest = { viewModel.dismissExportFailed() },
+            title = { Text(stringResource(R.string.history_export_failed_title)) },
+            text = { Text(stringResource(R.string.history_export_failed_body)) },
+            confirmButton = {
+                TextButton(onClick = { viewModel.dismissExportFailed() }) {
+                    Text(stringResource(android.R.string.ok))
+                }
             }
         )
     }
@@ -256,9 +291,12 @@ fun HistoryScreen(
 @Composable
 private fun ScanReportBottomSheet(
     scan: ScanResult,
-    reportText: String,
+    summary: ReportSummary?,
+    failed: Boolean,
+    onExport: () -> Unit,
     onDismiss: () -> Unit
 ) {
+    val summaryText = summary?.lines()?.joinToString("\n").orEmpty()
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val context = LocalContext.current
     val dateFormatter = remember { SimpleDateFormat("MMM d, yyyy  HH:mm", Locale.getDefault()) }
@@ -318,17 +356,23 @@ private fun ScanReportBottomSheet(
             HorizontalDivider()
             Spacer(modifier = Modifier.height(12.dp))
 
-            // Scrollable report body
+            // Scrollable summary body: the full report is exported, never built for the sheet.
             Column(
                 modifier = Modifier
                     .weight(1f, fill = false)
                     .verticalScroll(rememberScrollState())
             ) {
-                if (reportText.isEmpty()) {
+                if (failed) {
+                    Text(
+                        text = stringResource(R.string.history_summary_failed),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                } else if (summary == null) {
                     CircularProgressIndicator(modifier = Modifier.align(Alignment.CenterHorizontally))
                 } else {
                     Text(
-                        text = reportText,
+                        text = summaryText,
                         style = MaterialTheme.typography.bodySmall,
                         fontFamily = FontFamily.Monospace,
                         color = MaterialTheme.colorScheme.onSurface
@@ -350,13 +394,13 @@ private fun ScanReportBottomSheet(
                         val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE)
                             as ClipboardManager
                         clipboard.setPrimaryClip(
-                            ClipData.newPlainText("AndroDR Report", reportText)
+                            ClipData.newPlainText("AndroDR Report summary", summaryText)
                         )
-                        Toast.makeText(context, "Report copied to clipboard", Toast.LENGTH_SHORT)
+                        Toast.makeText(context, "Summary copied to clipboard", Toast.LENGTH_SHORT)
                             .show()
                     },
                     modifier = Modifier.weight(1f),
-                    enabled = reportText.isNotEmpty()
+                    enabled = summaryText.isNotEmpty()
                 ) {
                     Icon(
                         imageVector = Icons.Filled.ContentCopy,
@@ -367,18 +411,8 @@ private fun ScanReportBottomSheet(
                     Text("Copy")
                 }
                 Button(
-                    onClick = {
-                        val intent = Intent(Intent.ACTION_SEND).apply {
-                            type = "text/plain"
-                            putExtra(Intent.EXTRA_TEXT, reportText)
-                            putExtra(Intent.EXTRA_SUBJECT, "AndroDR Security Report")
-                        }
-                        context.startActivity(
-                            Intent.createChooser(intent, "Share Security Report")
-                        )
-                    },
-                    modifier = Modifier.weight(1f),
-                    enabled = reportText.isNotEmpty()
+                    onClick = onExport,
+                    modifier = Modifier.weight(1f)
                 ) {
                     Icon(
                         imageVector = Icons.Filled.Share,
@@ -386,7 +420,7 @@ private fun ScanReportBottomSheet(
                         modifier = Modifier.size(18.dp)
                     )
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text("Share")
+                    Text("Export report")
                 }
             }
 

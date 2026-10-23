@@ -90,6 +90,7 @@ internal class OrchestratorFixture(
             knownAppResolver = mockk(relaxed = true),
             oemPrefixResolver = mockk(relaxed = true),
             brandImpersonationResolver = mockk(relaxed = true),
+            telemetryReader = w.f.reader,
             context = context,
         )
     }

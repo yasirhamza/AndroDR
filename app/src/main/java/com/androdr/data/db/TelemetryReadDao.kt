@@ -32,6 +32,12 @@ class StoredRecordRow(
 /** How many records one scan holds for one service. */
 data class ServiceSummary(val service: String, val records: Int)
 
+/**
+ * One scan's record count, the decoded bytes of their bodies (an observed body counts per record),
+ * and its latest exact event time.
+ */
+data class ScanTotals(val records: Long, val rawBytes: Long, val latestEventTime: Long?)
+
 /** Distinct bodies of one encoding (−1 for the pinned-orphan total) and their sizes. */
 data class BodyStatsRow(val encoding: Int, val bodies: Long, val storedBytes: Long, val rawBytes: Long)
 
@@ -108,6 +114,18 @@ interface TelemetryReadDao {
             "WHERE o.service = :service AND o.source = 'LIVE_SCAN' AND ${CompleteScan.SQL} AND o.capturedAt >= :since"
     )
     suspend fun latestLiveScan(service: String, since: Long): Long?
+
+    /**
+     * One COMPLETE scan's record count, the decoded size of their bodies, and the latest exact
+     * event time among them no later than [eventsNotAfter] (null when no record has one).
+     */
+    @Query(
+        "SELECT COUNT(*) AS records, COALESCE(SUM(b.rawBytes), 0) AS rawBytes, " +
+            "MAX(CASE WHEN f.timePrecision = 'EXACT' AND f.eventTime <= :eventsNotAfter THEN f.eventTime END) " +
+            "AS latestEventTime " +
+            "$OBS_FROM WHERE o.scanId = :scanId AND ${CompleteScan.SQL}"
+    )
+    suspend fun scanTotals(scanId: Long, eventsNotAfter: Long = Long.MAX_VALUE): ScanTotals
 
     /** Distinct bodies of facts observed by a COMPLETE scan, by encoding. */
     @Query(

@@ -79,8 +79,8 @@ class MercenaryCheckReportTest {
         scannerErrors: List<ScannerFailure> = emptyList(),
         ruleCategoryById: Map<String, String> = emptyMap(),
         ruleScopes: Map<String, RuleScope> = BUNDLE_SCOPES,
-    ) = ReportFormatter.formatScanReport(
-        buildScan(appRisks, deviceFlags, scannerErrors), emptyList(), emptyList(), versionName = "test",
+    ) = reportText(
+        buildScan(appRisks, deviceFlags, scannerErrors),
         campaigns = campaigns, ruleScopes = ruleScopes, ruleCategoryById = ruleCategoryById,
     )
 
@@ -91,12 +91,12 @@ class MercenaryCheckReportTest {
         campaigns: List<Campaign>,
         source: TelemetrySource = TelemetrySource.INTRUSION_LOG_IMPORT,
         scannerErrors: List<ScannerFailure> = emptyList(),
-    ) = ReportFormatter.formatScanReport(
+    ) = reportText(
         buildScan(appRisks = appRisks, deviceFlags = deviceFlags, scannerErrors = scannerErrors)
             .copy(source = source),
-        emptyList(), emptyList(), intrusionEvents = intrusionEvents, versionName = "test",
+        // The import's latest stored event: the window the campaign rows count back from.
+        telemetry = FakeTelemetry(latestEvent = intrusionEvents.maxOfOrNull { it.startTimestamp }),
         campaigns = campaigns,
-        ruleScopes = emptyMap(), ruleCategoryById = emptyMap(),
     )
 
     private fun importedEvent(at: Long) = ForensicTimelineEvent(
@@ -172,6 +172,34 @@ class MercenaryCheckReportTest {
         assertTrue(report.contains("Graphite (Paragon): earlier hit only -- "))
         assertTrue(report.contains("(over 30 days before the log's latest event)"))
         assertFalse(report.contains("Graphite (Paragon): no hit in the imported log"))
+    }
+
+    @Test
+    fun `a future-dated imported record does not push a recent hit out of the window`() {
+        // One record parsed with a far-future time (a corrupt line, a clock set ahead) must not become
+        // the reference time: the hit two days before the import still reads DETECTED.
+        val report = formatImportReportWith(
+            appRisks = listOf(iocFinding("forti.external-muki.com", "Graphite (Paragon)", "", "false",
+                campaign = "graphite", observedAt = scanTime - 2 * DAY)),
+            intrusionEvents = listOf(importedEvent(at = scanTime + 400 * DAY)),
+            campaigns = listOf(campaign("graphite")))
+        assertTrue(report, report.contains("[!!]  Graphite (Paragon): DETECTED -- "))
+        assertFalse(report, report.contains("earlier hit only"))
+    }
+
+    @Test
+    fun `a future-dated IOC observation does not push a recent hit out of the window`() {
+        // No imported event times: the reference falls back to the latest IOC observation, which must
+        // not be one dated after the import itself.
+        val report = formatImportReportWith(
+            appRisks = listOf(
+                iocFinding("forti.external-muki.com", "Graphite (Paragon)", "", "false",
+                    campaign = "graphite", observedAt = scanTime - 2 * DAY),
+                iocFinding("0--4.com", "HaGeZi TIF", "", "false", campaign = "", observedAt = scanTime + 400 * DAY),
+            ),
+            campaigns = listOf(campaign("graphite")))
+        assertTrue(report, report.contains("[!!]  Graphite (Paragon): DETECTED -- "))
+        assertFalse(report, report.contains("earlier hit only"))
     }
 
     @Test

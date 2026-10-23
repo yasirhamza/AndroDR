@@ -237,3 +237,216 @@ def test_negated_regex_ties_both_facts_to_one_line(tmp_path):
     # the regex only fails if the same line carries both.
     result = run_check(tmp_path, DNS_REPORT, "!~\\[MATCHED\\].*paragon-graphite\\.net\n")
     assert result.returncode == 0, result.stdout
+
+
+# Since Phase B the report's DNS rows are the scan's stored dns_monitor records, printed one
+# field per line by the generic per-service renderer (ReportFormatter). The scenario files'
+# DNS checks target that format; this pins them against it.
+STORED_DNS_REPORT = """------------------------------------------------------------
+  STORED TELEMETRY: dns_monitor (2 record(s))
+------------------------------------------------------------
+  [0] captured 2026-10-23 12:00:01
+     app_uid: 2000
+     domain: forti.external-muki.com
+     is_blocked: false
+     reason: IOC_detect: forti.external-muki.com
+     source_package: com.android.shell
+     timestamp: 1792746001000
+  [1] captured 2026-10-23 12:00:02
+     app_uid: 2000
+     domain: paragon-graphite.net
+     is_blocked: false
+     reason: null
+     source_package: com.android.shell
+     timestamp: 1792746002000
+"""
+
+GRAPHITE = Path(__file__).parent / "fixtures" / "expected" / "graphite_dns_attribution.patterns"
+
+
+def graphite_dns_lines():
+    return "".join(line for line in GRAPHITE.read_text().splitlines(keepends=True)
+                   if "reason:" in line and not line.startswith("#"))
+
+
+def test_graphite_dns_checks_accept_the_stored_record_format(tmp_path):
+    lines = graphite_dns_lines()
+    assert lines.count("\n") == 2, lines
+    result = run_check(tmp_path, STORED_DNS_REPORT, lines)
+    assert result.returncode == 0, result.stdout
+
+
+@pytest.mark.parametrize("reason", ["IOC: paragon-graphite.net", "IOC_detect: graphite.net", "blocklist",
+                                    "blocklist_detect"])
+def test_graphite_dns_checks_reject_any_reason_on_the_placeholder(tmp_path, reason):
+    # The old "[MATCHED]" negative caught every non-null reason, not only an IOC that quotes the host.
+    report = STORED_DNS_REPORT.replace("     reason: null", "     reason: " + reason)
+    result = run_check(tmp_path, report, graphite_dns_lines())
+    assert result.returncode == 1, result.stdout
+    assert "a record matching '^     domain: paragon-graphite" in result.stdout
+
+
+def test_graphite_dns_checks_reject_an_unmatched_graphite_domain(tmp_path):
+    report = STORED_DNS_REPORT.replace("     reason: IOC_detect: forti.external-muki.com", "     reason: null")
+    result = run_check(tmp_path, report, graphite_dns_lines())
+    assert result.returncode == 1
+    assert "MISS: regex not matched" in result.stdout
+
+
+# Record-scoped assertions ("@<anchor> => <regex>", "!@<anchor> => <regex>"): the regexes are
+# evaluated within one stored record's block, so a file's path is tied to its own file_exists.
+FILE_REPORT = """------------------------------------------------------------
+  STORED TELEMETRY: file_scanner (3 record(s))
+------------------------------------------------------------
+  [0] captured 2026-10-23 12:00:01
+     accessible: true
+     file_exists: true
+     file_path: /data/local/tmp/wd
+  [1] captured 2026-10-23 12:00:01
+     accessible: true
+     file_exists: false
+     file_path: /data/local/tmp/wd/fs.db
+  [2] captured 2026-10-23 12:00:01
+     accessible: true
+     file_exists: true
+     file_path: /data/local/tmp/dropbox
+------------------------------------------------------------
+  APPLICATION LOG  (1 lines, captured at export)
+------------------------------------------------------------
+     file_exists: true
+"""
+
+FOUND = " => ^     file_exists: true$\n"
+
+
+def test_record_scoped_accepts_a_found_record(tmp_path):
+    result = run_check(tmp_path, FILE_REPORT, "@^     file_path: /data/local/tmp/wd$" + FOUND)
+    assert result.returncode == 0, result.stdout
+
+
+def test_record_scoped_rejects_a_stored_but_not_found_path(tmp_path):
+    # Its neighbours say file_exists: true; only its own block counts.
+    result = run_check(tmp_path, FILE_REPORT, "@^     file_path: /data/local/tmp/wd/fs\\.db$" + FOUND)
+    assert result.returncode == 1
+    assert "has no line matching" in result.stdout
+
+
+def test_record_scoped_rejects_a_missing_record(tmp_path):
+    result = run_check(tmp_path, FILE_REPORT, "@^     file_path: /data/local/tmp/\\.raptor$" + FOUND)
+    assert result.returncode == 1
+    assert "MISS: no record matches" in result.stdout
+
+
+def test_record_scoped_block_ends_at_the_first_non_field_line(tmp_path):
+    # The log's indented "file_exists: true" after the section rule is not part of record [2].
+    report = FILE_REPORT.replace("     file_exists: true\n     file_path: /data/local/tmp/dropbox",
+                                 "     file_exists: false\n     file_path: /data/local/tmp/dropbox")
+    result = run_check(tmp_path, report, "@^     file_path: /data/local/tmp/dropbox$" + FOUND)
+    assert result.returncode == 1, result.stdout
+
+
+def test_negated_record_scoped_fails_only_on_its_own_record(tmp_path):
+    ok = run_check(tmp_path, FILE_REPORT, "!@^     file_path: /data/local/tmp/wd$ => ^     file_exists: false$\n")
+    assert ok.returncode == 0, ok.stdout
+    bad = run_check(tmp_path, FILE_REPORT,
+                    "!@^     file_path: /data/local/tmp/wd/fs\\.db$ => ^     file_exists: false$\n")
+    assert bad.returncode == 1
+    assert "UNEXPECTED: a record matching" in bad.stdout
+
+
+def test_record_scoped_without_an_arrow_is_malformed(tmp_path):
+    result = run_check(tmp_path, FILE_REPORT, "@^     file_path: /data/local/tmp/wd$\n")
+    assert result.returncode == 1
+    assert "MALFORMED" in result.stdout
+
+
+PREDATOR = Path(__file__).parent / "fixtures" / "expected" / "mercenary_predator_artifacts.patterns"
+FILES = Path(__file__).parent / "fixtures" / "expected" / "mercenary_file_artifacts.patterns"
+
+
+def record_lines(path):
+    return "".join(line for line in path.read_text().splitlines(keepends=True) if line.startswith("@"))
+
+
+def file_records(paths, missing_state=None):
+    out = ""
+    for i, path in enumerate(paths):
+        state = "false" if path == missing_state else "true"
+        out += "  [%d] captured 2026-10-23 12:00:01\n     file_exists: %s\n     file_path: %s\n" % (i, state, path)
+    return out
+
+
+@pytest.mark.parametrize("patterns,paths", [
+    (PREDATOR, ["/data/local/tmp/wd", "/data/local/tmp/wd/fs.db", "/data/local/tmp/dropbox"]),
+    (FILES, ["/data/local/tmp/.raptor", "/data/local/tmp/.stat"]),
+])
+def test_artifact_scenarios_tie_every_planted_path_to_found(tmp_path, patterns, paths):
+    lines = record_lines(patterns)
+    assert lines.count("\n") == len(paths), lines
+    assert run_check(tmp_path, file_records(paths), lines).returncode == 0
+    for path in paths:
+        result = run_check(tmp_path, file_records(paths, missing_state=path), lines)
+        assert result.returncode == 1, "%s stored but not found must fail: %s" % (path, result.stdout)
+
+
+# A record-scoped assertion that cannot be evaluated must fail closed. An invalid awk regex used
+# to make awk exit with no output; the empty counts broke the numeric tests and the check passed.
+@pytest.mark.parametrize("pattern", [
+    "@^     file_path: (unclosed$ => ^     file_exists: true$",
+    "@^     file_path: /data/local/tmp/wd$ => ^     file_exists: (true$",
+    "!@^     file_path: (unclosed$ => ^     file_exists: false$",
+    "!@^     file_path: /data/local/tmp/wd$ => ^     file_exists: (false$",
+])
+def test_record_scoped_invalid_regex_is_malformed(tmp_path, pattern):
+    result = run_check(tmp_path, FILE_REPORT, pattern + "\n")
+    assert result.returncode == 1, result.stdout
+    assert "MALFORMED" in result.stdout
+
+
+@pytest.mark.parametrize("pattern", [
+    "@^     file_path: /data/local/tmp/wd$ => ",
+    "!@^     file_path: /data/local/tmp/wd$ => ",
+    "@ => ^     file_exists: true$",
+])
+def test_record_scoped_empty_side_is_malformed(tmp_path, pattern):
+    # An empty regex matches every line: "@x => " would reduce to "the record exists".
+    result = run_check(tmp_path, FILE_REPORT, pattern + "\n")
+    assert result.returncode == 1, result.stdout
+    assert "MALFORMED" in result.stdout
+
+
+GUIDED = Path(__file__).parent / "guided-check.sh"
+
+
+def guided(tmp_path, pattern, roadmap=""):
+    report = tmp_path / "report.txt"
+    report.write_text(FILE_REPORT)
+    return subprocess.run(["bash", str(GUIDED), str(report), pattern, roadmap], capture_output=True, text=True)
+
+
+def test_guided_mode_never_excuses_a_malformed_pattern(tmp_path):
+    result = guided(tmp_path, "@^     file_path: (unclosed$ => ^     file_exists: true$", roadmap="123")
+    assert result.returncode == 1, result.stdout
+    assert "MALFORMED" in result.stdout
+
+
+def test_guided_mode_excuses_a_plain_miss_with_a_roadmap_issue(tmp_path):
+    result = guided(tmp_path, "@^     file_path: /data/local/tmp/wd/fs\\.db$ => ^     file_exists: true$",
+                    roadmap="123")
+    assert result.returncode == 2, result.stdout
+    assert "expected fail" in result.stdout
+
+
+def test_guided_mode_pass_miss_and_absent_label(tmp_path):
+    assert guided(tmp_path, "@^     file_path: /data/local/tmp/wd$ => ^     file_exists: true$").returncode == 0
+    miss = guided(tmp_path, "@^     file_path: /data/local/tmp/wd/fs\\.db$ => ^     file_exists: true$")
+    assert miss.returncode == 1 and "MISS" in miss.stdout
+    absent = guided(tmp_path, "!OVERALL RISK: HIGH")
+    assert absent.returncode == 0
+    assert '"absent: OVERALL RISK: HIGH"' in absent.stdout
+
+
+def test_run_sh_guided_mode_goes_through_guided_check():
+    text = (Path(__file__).parent / "run.sh").read_text()
+    assert 'guided-check.sh" "$REPORT" "$pattern" "$roadmap"' in text
+    assert "grep_mode" not in text, "guided mode must not keep its own copy of the sigil logic"

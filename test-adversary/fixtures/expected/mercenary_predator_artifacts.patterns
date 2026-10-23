@@ -3,13 +3,13 @@
 # wd is made world-searchable here, so wd/fs.db is checkable too.
 Predator artifact: /data/local/tmp/wd/fs.db
 Predator artifact: /data/local/tmp/dropbox
-/data/local/tmp/wd : FOUND
-/data/local/tmp/wd/fs.db : FOUND
-/data/local/tmp/dropbox : FOUND
-# A planted path must never be reported as clear.
-!/data/local/tmp/wd : clear
-!/data/local/tmp/wd/fs.db : clear
-!/data/local/tmp/dropbox : clear
+# Since Phase B the telemetry section prints each stored file_scanner record as one block
+# (a "[n] captured" header, then one "     key: value" line per field). The record-scoped
+# "@<anchor> => <regex>" form ties each planted path to its own record's state: the record
+# must exist and say file_exists: true (it replaces "<path> : FOUND" and "!<path> : clear").
+@^     file_path: /data/local/tmp/wd$ => ^     file_exists: true$
+@^     file_path: /data/local/tmp/wd/fs\.db$ => ^     file_exists: true$
+@^     file_path: /data/local/tmp/dropbox$ => ^     file_exists: true$
 # androdr-108 is an incident rule tagged campaign.predator: the Predator row is DETECTED
 # and, as a tagged finding, its title is the detail (it wins over any IOC hit).
 [!!]  Predator: DETECTED -- Predator artifact: /data/local/tmp/

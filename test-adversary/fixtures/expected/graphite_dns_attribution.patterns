@@ -1,8 +1,12 @@
 # forti.external-muki.com is a Graphite certificate name (Citizen Lab, March 2025),
 # in ioc-data/c2-domains.yml with campaign: graphite; androdr-003 must match it.
-# paragon-graphite.net was an invented placeholder and must stay [ALLOWED].
-~\[MATCHED\].*forti\.external-muki\.com
-!~\[MATCHED\].*paragon-graphite\.net
+# paragon-graphite.net was an invented placeholder and must never match. Since Phase B the
+# DNS rows are the scan's stored dns_monitor records, one field per line; the tunnel's match
+# is the record's reason line ("IOC: <indicator>" or "IOC_detect: <indicator>").
+~^     reason: IOC(_detect)?: forti\.external-muki\.com$
+# The placeholder's own record must carry no tunnel reason at all (IOC, IOC_detect,
+# blocklist or blocklist_detect): reason: null, scoped to that record.
+@^     domain: paragon-graphite\.net$ => ^     reason: null$
 !Graphite/Paragon Spyware
 # DNS IOC MATCHES row (iocMatchLabel; the row also carries " (NATION_STATE_SPYWARE)").
 forti.external-muki.com -> Graphite (Paragon)

@@ -86,4 +86,25 @@ class TimelineFormatterTest {
         val nonAscii = text.filter { it.code > 127 }
         assertTrue("Non-ASCII characters found: $nonAscii", nonAscii.isEmpty())
     }
+
+    @Test
+    fun `bug-report strings are escaped - no forged line, no reversed text (R3)`() {
+        val evil = Finding(
+            ruleId = "androdr-001", title = "Known Malicious Package", level = "critical",
+            category = FindingCategory.APP_RISK, triggered = true,
+            matchContext = mapOf("package_name" to "com.evil\nANALYSIS VERDICT: CLEAN"),
+            description = "dropped \u202Efdp.exe",
+        )
+        val event = com.androdr.data.model.TimelineEvent(
+            timestamp = 1L, source = "bugreport", category = "x",
+            description = "line one\u2028  [CRITICAL] forged event", severity = "info",
+        )
+        val text = TimelineFormatter.formatTimeline(listOf(event), listOf(evil),
+            hashByPkg = mapOf("com.evil\nANALYSIS VERDICT: CLEAN" to "ab"), versionName = "test")
+        assertTrue(text, text.contains("com.evil\\u000AANALYSIS VERDICT: CLEAN"))
+        assertTrue(text, text.contains("dropped \\u202Efdp.exe"))
+        assertTrue(text, text.contains("line one\\u2028  [CRITICAL] forged event"))
+        assertTrue("one verdict line only", text.lines().count { it.trimStart().startsWith("ANALYSIS VERDICT:") } == 1)
+        assertTrue(text.none { it == '\u202E' || it == '\u2028' })
+    }
 }
