@@ -8,6 +8,8 @@ import com.androdr.data.repo.ScanRepository
 import com.androdr.data.store.HashKeys
 import com.androdr.sigma.TaxonomyContract
 import io.mockk.coEvery
+import io.mockk.mockk
+import com.androdr.data.db.toForensicTimelineEvent
 import io.mockk.spyk
 import kotlinx.coroutines.runBlocking
 import org.junit.After
@@ -181,4 +183,42 @@ class LiveScanWriterTest {
             assertEquals(1, scan.findings.count { it.category == com.androdr.sigma.FindingCategory.CORRELATION })
         }
     }
+
+    /**
+     * N1 (fix round 2): the lookback leaves out the `usage_stats` rows `finish` replaces (this scan
+     * writes the same events again) and every row stamped after the scan start (spec §5.2).
+     */
+    @Test
+    fun `the lookback counts a re-read usage event once and leaves out rows after the scan start`() =
+        runBlocking {
+            val correlation = mockk<com.androdr.sigma.SigmaCorrelationEngine>(relaxed = true)
+            OrchestratorFixture(correlationEngine = correlation).use { g ->
+                io.mockk.every { g.engine.getCorrelationRules() } returns listOf(
+                    com.androdr.sigma.CorrelationRule(id = "corr-n1", title = "t",
+                        type = com.androdr.sigma.CorrelationType.EVENT_COUNT, referencedRuleIds = listOf("a"),
+                        timespanMs = 3_600_000L, groupBy = emptyList(), minEvents = 2, severity = "high",
+                        displayLabel = "l"))
+                val now = System.currentTimeMillis()
+                val usageTime = now - 60_000
+                g.timelineDao.insertAll(listOf(
+                    // An earlier scan's row for the usage event this scan reads again.
+                    UsageEvent(usageTime, "com.a", "A", "app_foreground", TelemetrySource.LIVE_SCAN, now - 1)
+                        .toForensicTimelineEvent(7L),
+                    // Stamped after this scan starts (a producer outside the writer lock).
+                    com.androdr.data.model.ForensicTimelineEvent(startTimestamp = now + 600_000,
+                        source = "app_scanner", category = "package_install", description = "future",
+                        packageName = "com.f", scanResultId = 8L),
+                ))
+                coEvery { g.usageStatsScanner.collectEvents() } returns listOf(
+                    UsageEvent(usageTime, "com.a", "A", "app_foreground", TelemetrySource.LIVE_SCAN, now))
+                val events = io.mockk.slot<List<com.androdr.data.model.ForensicTimelineEvent>>()
+                io.mockk.every { correlation.evaluate(any(), capture(events), any(), any()) } returns emptyList()
+
+                g.orchestrator.runFullScan()
+
+                assertEquals("the usage event is correlated once", 1,
+                    events.captured.count { it.source == "usage_stats" && it.startTimestamp == usageTime })
+                assertTrue("no row after the scan start", events.captured.none { it.description == "future" })
+            }
+        }
 }

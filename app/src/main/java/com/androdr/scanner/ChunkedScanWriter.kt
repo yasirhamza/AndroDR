@@ -106,6 +106,10 @@ class ChunkedScanWriter @Inject constructor(
                 throw c
             } catch (t: Throwable) {
                 // The writer aborts on this failure; [keptScan] still shows what this chunk found.
+                // Deliberately over-reports: with nothing persisted there is no observed-this-scan
+                // filter, so a live event an earlier scan reported, or a record repeated in the
+                // chunk, can show its finding again. On an aborted, partial scan that beats
+                // reading clean (review N2).
                 findings.forEach { topK.offer(it, null) }
                 throw t
             }

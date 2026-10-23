@@ -287,21 +287,27 @@ class IntrusionLogAnalyzer @Inject constructor(
             if (dns.isEmpty()) return
             prefetch(dns)
             val events = dns.toList()
-            handOver { chunks.dns(events, IntrusionLogRecordBuilders.importedDns(events, dnsKeys)) }
+            // Built outside handOver: a record-building bug stays an analysis failure.
+            val records = IntrusionLogRecordBuilders.importedDns(events, dnsKeys)
+            handOver { chunks.dns(events, records) }
             dns.clear(); dnsKeys.clear()
         }
 
         private suspend fun flushNet() {
             if (net.isEmpty()) return
             val events = net.toList()
-            handOver { chunks.connect(events, IntrusionLogRecordBuilders.network(events, netKeys)) }
+            // Built outside handOver: a record-building bug stays an analysis failure.
+            val records = IntrusionLogRecordBuilders.network(events, netKeys)
+            handOver { chunks.connect(events, records) }
             net.clear(); netKeys.clear()
         }
 
         private suspend fun flushSec() {
             if (sec.isEmpty()) return
             val events = sec.toList()
-            handOver { chunks.security(events, IntrusionLogRecordBuilders.securityLog(events, secKeys)) }
+            // Built outside handOver: a record-building bug stays an analysis failure.
+            val records = IntrusionLogRecordBuilders.securityLog(events, secKeys)
+            handOver { chunks.security(events, records) }
             sec.clear(); secKeys.clear()
         }
     }
