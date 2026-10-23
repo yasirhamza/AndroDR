@@ -44,6 +44,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
@@ -57,6 +58,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -108,6 +111,8 @@ fun TimelineScreen(
     var searchOpen by rememberSaveable { mutableStateOf(searchText.isNotEmpty()) }
     var showFilterSheet by rememberSaveable { mutableStateOf(false) }
     var findingsExpanded by rememberSaveable { mutableStateOf(true) }
+    // Ruling R34: the pinned section lists the top PINNED_FINDINGS_PREVIEW until "Show all" (saved).
+    var showAllFindings by rememberSaveable { mutableStateOf(false) }
     var menuExpanded by remember { mutableStateOf(false) }
     var showExportModeDialog by remember { mutableStateOf(false) }
     var pendingCopy by remember { mutableStateOf(false) }
@@ -269,8 +274,16 @@ fun TimelineScreen(
                         }
                     }
                     if (findingsExpanded) {
-                        items(findings.size, key = { "current_$it" }) { i ->
-                            FindingCard(row = TimelineRow.FindingRow(findings[i]))
+                        val shown = pinnedFindings(findings, showAllFindings)
+                        items(shown.size, key = { "current_$it" }) { i ->
+                            FindingCard(row = TimelineRow.FindingRow(shown[i]))
+                        }
+                        if (findings.size > PINNED_FINDINGS_PREVIEW) {
+                            item(key = "current_findings_toggle") {
+                                PinnedFindingsToggle(showAllFindings, findings.size) {
+                                    showAllFindings = !showAllFindings
+                                }
+                            }
                         }
                     }
                 }
@@ -369,6 +382,22 @@ fun TimelineScreen(
                 showExportModeDialog = false
                 viewModel.exportFullReport(mode)
             }
+        )
+    }
+}
+
+/** "Show all N" / "Show fewer" under the pinned findings (ruling R34). */
+@Composable
+private fun PinnedFindingsToggle(showAll: Boolean, total: Int, onToggle: () -> Unit) {
+    val description = if (showAll) {
+        stringResource(R.string.cd_timeline_findings_show_fewer, PINNED_FINDINGS_PREVIEW)
+    } else {
+        stringResource(R.string.cd_timeline_findings_show_all, total)
+    }
+    TextButton(onClick = onToggle, modifier = Modifier.semantics { contentDescription = description }) {
+        Text(
+            if (showAll) stringResource(R.string.timeline_findings_show_fewer)
+            else stringResource(R.string.timeline_findings_show_all, total)
         )
     }
 }

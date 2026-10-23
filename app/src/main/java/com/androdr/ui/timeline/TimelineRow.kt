@@ -66,3 +66,16 @@ sealed interface TimelineRow {
  */
 fun timelineFindingRows(findings: List<Finding>): List<Finding> =
     findings.filter { it.triggered && it.category != com.androdr.sigma.FindingCategory.CORRELATION }
+
+/** How many current findings the pinned section lists before "Show all" (ruling R34). */
+internal const val PINNED_FINDINGS_PREVIEW = 3
+
+/**
+ * The pinned section's cards (ruling R34): the current findings most severe first (ties keep their
+ * scan order); only the first [PINNED_FINDINGS_PREVIEW] unless [showAll], so a large import's
+ * findings never bury the Timeline below them.
+ */
+internal fun pinnedFindings(findings: List<Finding>, showAll: Boolean): List<Finding> {
+    val bySeverity = findings.sortedByDescending { severityOrdinal(it.level) }
+    return if (showAll) bySeverity else bySeverity.take(PINNED_FINDINGS_PREVIEW)
+}

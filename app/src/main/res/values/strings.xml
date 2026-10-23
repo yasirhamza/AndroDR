@@ -148,6 +148,10 @@
     <string name="timeline_search_hint">Search packages, rules and event types</string>
     <string name="timeline_search_no_matches">No matches for “%1$s”</string>
     <string name="timeline_show_only_app">Show only this app</string>
+    <string name="timeline_findings_show_all" tools:ignore="PluralsCandidate">Show all %1$d</string>
+    <string name="timeline_findings_show_fewer">Show fewer</string>
+    <string name="cd_timeline_findings_show_all" tools:ignore="PluralsCandidate">Show all %1$d current findings</string>
+    <string name="cd_timeline_findings_show_fewer" tools:ignore="PluralsCandidate">Show only the %1$d most severe current findings</string>
     <string name="timeline_detail_first_captured_by">First captured by</string>
     <string name="timeline_detail_observed_by">Observed by</string>
     <string name="timeline_detail_observed_none">No remaining scan (kept as evidence)</string>
