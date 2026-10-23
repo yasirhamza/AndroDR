@@ -387,3 +387,66 @@ def test_artifact_scenarios_tie_every_planted_path_to_found(tmp_path, patterns, 
     for path in paths:
         result = run_check(tmp_path, file_records(paths, missing_state=path), lines)
         assert result.returncode == 1, "%s stored but not found must fail: %s" % (path, result.stdout)
+
+
+# A record-scoped assertion that cannot be evaluated must fail closed. An invalid awk regex used
+# to make awk exit with no output; the empty counts broke the numeric tests and the check passed.
+@pytest.mark.parametrize("pattern", [
+    "@^     file_path: (unclosed$ => ^     file_exists: true$",
+    "@^     file_path: /data/local/tmp/wd$ => ^     file_exists: (true$",
+    "!@^     file_path: (unclosed$ => ^     file_exists: false$",
+    "!@^     file_path: /data/local/tmp/wd$ => ^     file_exists: (false$",
+])
+def test_record_scoped_invalid_regex_is_malformed(tmp_path, pattern):
+    result = run_check(tmp_path, FILE_REPORT, pattern + "\n")
+    assert result.returncode == 1, result.stdout
+    assert "MALFORMED" in result.stdout
+
+
+@pytest.mark.parametrize("pattern", [
+    "@^     file_path: /data/local/tmp/wd$ => ",
+    "!@^     file_path: /data/local/tmp/wd$ => ",
+    "@ => ^     file_exists: true$",
+])
+def test_record_scoped_empty_side_is_malformed(tmp_path, pattern):
+    # An empty regex matches every line: "@x => " would reduce to "the record exists".
+    result = run_check(tmp_path, FILE_REPORT, pattern + "\n")
+    assert result.returncode == 1, result.stdout
+    assert "MALFORMED" in result.stdout
+
+
+GUIDED = Path(__file__).parent / "guided-check.sh"
+
+
+def guided(tmp_path, pattern, roadmap=""):
+    report = tmp_path / "report.txt"
+    report.write_text(FILE_REPORT)
+    return subprocess.run(["bash", str(GUIDED), str(report), pattern, roadmap], capture_output=True, text=True)
+
+
+def test_guided_mode_never_excuses_a_malformed_pattern(tmp_path):
+    result = guided(tmp_path, "@^     file_path: (unclosed$ => ^     file_exists: true$", roadmap="123")
+    assert result.returncode == 1, result.stdout
+    assert "MALFORMED" in result.stdout
+
+
+def test_guided_mode_excuses_a_plain_miss_with_a_roadmap_issue(tmp_path):
+    result = guided(tmp_path, "@^     file_path: /data/local/tmp/wd/fs\\.db$ => ^     file_exists: true$",
+                    roadmap="123")
+    assert result.returncode == 2, result.stdout
+    assert "expected fail" in result.stdout
+
+
+def test_guided_mode_pass_miss_and_absent_label(tmp_path):
+    assert guided(tmp_path, "@^     file_path: /data/local/tmp/wd$ => ^     file_exists: true$").returncode == 0
+    miss = guided(tmp_path, "@^     file_path: /data/local/tmp/wd/fs\\.db$ => ^     file_exists: true$")
+    assert miss.returncode == 1 and "MISS" in miss.stdout
+    absent = guided(tmp_path, "!OVERALL RISK: HIGH")
+    assert absent.returncode == 0
+    assert '"absent: OVERALL RISK: HIGH"' in absent.stdout
+
+
+def test_run_sh_guided_mode_goes_through_guided_check():
+    text = (Path(__file__).parent / "run.sh").read_text()
+    assert 'guided-check.sh" "$REPORT" "$pattern" "$roadmap"' in text
+    assert "grep_mode" not in text, "guided mode must not keep its own copy of the sigil logic"

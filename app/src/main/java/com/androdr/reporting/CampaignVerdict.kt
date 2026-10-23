@@ -39,12 +39,14 @@ private val CAMPAIGN_KEY = Regex("^[a-z0-9_-]{1,32}$")
  * The time the 30-day window counts back from: the scan's own time for a live scan; for
  * an import, [latestImportedEvent] (the latest exact event time among the import's own stored
  * records, never one dated after the import: the caller bounds it), else the latest IOC
- * observation in the scan, else the scan time.
+ * observation in the scan that is not dated after the import (a future-dated one would push
+ * genuine hits out of the window), else the scan time.
  */
 internal fun campaignReferenceTime(scan: ScanResult, latestImportedEvent: Long?): Long {
     if (scan.source == TelemetrySource.LIVE_SCAN) return scan.timestamp
     return latestImportedEvent
-        ?: scan.appRisks.mapNotNull { (it.evidence as? Evidence.IocMatch)?.observedAt }.filter { it > 0 }.maxOrNull()
+        ?: scan.appRisks.mapNotNull { (it.evidence as? Evidence.IocMatch)?.observedAt }
+            .filter { it > 0 && it <= scan.timestamp }.maxOrNull()
         ?: scan.timestamp
 }
 

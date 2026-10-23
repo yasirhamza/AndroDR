@@ -688,30 +688,14 @@ if [ "$MODE" = "load" ] || [ "$MODE" = "guided" ]; then
                 pattern="${pattern%$'\r'}"
                 [ -z "$pattern" ] && continue
                 case "$pattern" in '#'*) continue ;; esac
-                # Every sigil (`!`, `~`, `!~`, record-scoped `@` / `!@`) means exactly what it
-                # means to check-patterns.sh, the non-guided path: one assertion per run.
-                one_pattern=$(mktemp)
-                printf '%s\n' "$pattern" > "$one_pattern"
-                if bash "$SCRIPT_DIR/check-patterns.sh" "$REPORT" "$one_pattern" >/dev/null 2>&1; then
-                    satisfied=true
-                else
-                    satisfied=false
-                fi
-                rm -f "$one_pattern"
-                label="$pattern"
-
-                if [ "$satisfied" = true ]; then
-                    echo "    ✓ \"$label\""
-                    ((GUIDED_PASS++)) || true
-                else
-                    if [ -n "$roadmap" ] && [ "$roadmap" != "None" ] && [ "$roadmap" != "" ]; then
-                        echo "    ○ \"$label\" (expected fail — roadmap #$roadmap)"
-                        ((GUIDED_EXPECTED++)) || true
-                    else
-                        echo "    ✗ \"$label\" MISS"
-                        ((GUIDED_FAIL++)) || true
-                    fi
-                fi
+                # One assertion through guided-check.sh: the same sigils as check-patterns.sh,
+                # and a MALFORMED pattern always counts as a failure (never an expected fail).
+                bash "$SCRIPT_DIR/guided-check.sh" "$REPORT" "$pattern" "$roadmap" </dev/null
+                case $? in
+                    0) ((GUIDED_PASS++)) || true ;;
+                    2) ((GUIDED_EXPECTED++)) || true ;;
+                    *) ((GUIDED_FAIL++)) || true ;;
+                esac
             done < "$patterns_file"
         done
 

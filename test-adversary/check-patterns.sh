@@ -16,6 +16,10 @@
 #                              matching <forbidden>
 #   # anything                 comment, ignored
 #
+# Regex dialects: `~` / `!~` use grep -E; the record-scoped forms use awk EREs (dynamic
+# regexes), which differ in escapes such as \b. A record-scoped assertion that cannot be
+# evaluated (no " => ", an empty side, an invalid regex) is MALFORMED and fails the check.
+#
 # The regex forms exist because a literal match cannot tie two facts to one
 # line: "fake.net appears" and "[MATCHED] appears" both hold when fake.net is an
 # [ALLOWED] row and some other domain matched.
@@ -63,6 +67,37 @@ record_scan() {
     ' "$report"
 }
 
+# Parses "<anchor> => <target>" ($1; $2 is the whole line, for messages) into $anchor and
+# $target and runs record_scan into $anchored and $hit. Fails closed: a missing arrow, an empty
+# side, an invalid regex (awk exits non-zero) or any non-numeric count prints MALFORMED and
+# returns 1, so a typo can never turn a guard into a silent pass.
+record_counts() {
+    local spec="$1" out status err errfile
+    anchor="" target="" anchored="" hit=""
+    if [[ "$spec" != *" => "* ]]; then
+        echo "  MALFORMED: record-scoped assertion needs '<anchor> => <regex>': '$2'"
+        return 1
+    fi
+    anchor="${spec%% => *}"
+    target="${spec#* => }"
+    if [ -z "$anchor" ] || [ -z "$target" ]; then
+        echo "  MALFORMED: record-scoped assertion has an empty anchor or regex: '$2'"
+        return 1
+    fi
+    errfile=$(mktemp)
+    out=$(record_scan "$anchor" "$target" 2>"$errfile")
+    status=$?
+    err=$(head -c 400 "$errfile")
+    rm -f "$errfile"
+    read -r anchored hit <<< "$out"
+    if [ "$status" -ne 0 ] || [[ ! "$anchored" =~ ^[0-9]+$ ]] || [[ ! "$hit" =~ ^[0-9]+$ ]]; then
+        echo "  MALFORMED: record-scoped assertion could not be evaluated (invalid regex?): '$2'"
+        [ -n "$err" ] && echo "    awk: $err"
+        return 1
+    fi
+    return 0
+}
+
 fail=0
 while IFS= read -r line || [ -n "$line" ]; do
     # Strip a trailing CR so a CRLF-edited patterns file still matches.
@@ -73,30 +108,14 @@ while IFS= read -r line || [ -n "$line" ]; do
             continue
             ;;
         '!@'*)
-            spec="${line:2}"
-            if [[ "$spec" != *" => "* ]]; then
-                echo "  MALFORMED: record-scoped assertion needs '<anchor> => <regex>': '$line'"
-                fail=1
-                continue
-            fi
-            anchor="${spec%% => *}"
-            target="${spec#* => }"
-            read -r anchored hit < <(record_scan "$anchor" "$target")
+            record_counts "${line:2}" "$line" || { fail=1; continue; }
             if [ "$hit" -gt 0 ]; then
                 echo "  UNEXPECTED: a record matching '$anchor' has a line matching '$target'"
                 fail=1
             fi
             ;;
         '@'*)
-            spec="${line:1}"
-            if [[ "$spec" != *" => "* ]]; then
-                echo "  MALFORMED: record-scoped assertion needs '<anchor> => <regex>': '$line'"
-                fail=1
-                continue
-            fi
-            anchor="${spec%% => *}"
-            target="${spec#* => }"
-            read -r anchored hit < <(record_scan "$anchor" "$target")
+            record_counts "${line:1}" "$line" || { fail=1; continue; }
             if [ "$anchored" -eq 0 ]; then
                 echo "  MISS: no record matches '$anchor'"
                 fail=1

@@ -188,6 +188,21 @@ class MercenaryCheckReportTest {
     }
 
     @Test
+    fun `a future-dated IOC observation does not push a recent hit out of the window`() {
+        // No imported event times: the reference falls back to the latest IOC observation, which must
+        // not be one dated after the import itself.
+        val report = formatImportReportWith(
+            appRisks = listOf(
+                iocFinding("forti.external-muki.com", "Graphite (Paragon)", "", "false",
+                    campaign = "graphite", observedAt = scanTime - 2 * DAY),
+                iocFinding("0--4.com", "HaGeZi TIF", "", "false", campaign = "", observedAt = scanTime + 400 * DAY),
+            ),
+            campaigns = listOf(campaign("graphite")))
+        assertTrue(report, report.contains("[!!]  Graphite (Paragon): DETECTED -- "))
+        assertFalse(report, report.contains("earlier hit only"))
+    }
+
+    @Test
     fun `campaign-tagged app-risk finding marks its campaign detected`() {
         // androdr-109: tag campaign.midnight-mimosa, display.category app_risk -- not a CVE finding
         val f = taggedFinding(ruleId = "androdr-109", title = "Midnight Mimosa preinstalled enabler",
