@@ -58,9 +58,11 @@ class StartupSweep @Inject constructor(
         // One-time move of legacy signals' member lists into signal_member (spec §5.4); it takes the
         // lock per batch, and a failure is retried next launch.
         runCatching { backfill.run() }.onFailure { Log.w(TAG, "Signal member backfill failed", it) }
-        // One-time removal of the retired event adapters' rows (C3, spec §5.3); after the backfill, so
-        // legacy signals' members are in signal_member and protect the rows they list.
-        runCatching { legacyRows.run() }.onFailure { Log.w(TAG, "Legacy event-row cleanup failed", it) }
+        // One-time removal of the retired event adapters' rows (C3, spec §5.3), only once the backfill
+        // has finished: until then a legacy signal's list is not in signal_member and would protect
+        // nothing (review m1). A pending backfill defers the cleanup to a later launch.
+        runCatching { if (backfill.isDone()) legacyRows.run() }
+            .onFailure { Log.w(TAG, "Legacy event-row cleanup failed", it) }
         return removed
     }
 

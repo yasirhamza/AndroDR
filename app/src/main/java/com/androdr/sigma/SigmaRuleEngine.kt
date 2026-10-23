@@ -444,6 +444,7 @@ class SigmaRuleEngine @Inject constructor(
             R.raw.sigma_androdr_095_manic_mesh_relay,
             R.raw.sigma_androdr_109_midnight_mimosa_enabler,
             R.raw.sigma_androdr_108_predator_artifacts,
+            R.raw.sigma_androdr_110_known_bad_package_uninstalled,
             // Atom rules — pass-through matchers for raw timeline event categories.
             // Referenced by sprint-75 correlation rules (Task 9); tagged
             // level: informational so they are filtered out of the user-facing

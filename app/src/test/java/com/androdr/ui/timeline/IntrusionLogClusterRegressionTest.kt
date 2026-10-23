@@ -54,9 +54,11 @@ class IntrusionLogClusterRegressionTest {
     fun `no production code writes an intrusion-log raw row`() {
         val root = listOf(File("src/main/java/com/androdr"), File("app/src/main/java/com/androdr"))
             .first { it.isDirectory }
-        val writer = Regex("""source\s*=\s*"intrusion_log"""")
-        val offenders = root.walkTopDown().filter { it.extension == "kt" }
-            .filter { writer.containsMatchIn(it.readText()) }.map { it.name }.toList()
+        // Any `"intrusion_log"` literal (a named argument, a constant, a copy), not only `source = …`;
+        // the frozen cleanup list is the one allowed mention (review m3).
+        val literal = Regex(""""intrusion_log"""")
+        val offenders = root.walkTopDown().filter { it.extension == "kt" && it.name != "LegacyEventRowCleanup.kt" }
+            .filter { literal.containsMatchIn(it.readText()) }.map { it.name }.toList()
         assertTrue("raw intrusion-log rows are retired (C3): $offenders", offenders.isEmpty())
     }
 }

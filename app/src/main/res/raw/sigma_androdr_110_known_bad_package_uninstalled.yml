@@ -1,0 +1,39 @@
+title: Known-bad package was uninstalled (possible anti-forensics)
+id: androdr-110
+status: experimental
+description: >
+    The battery-stats daily history of an imported bug report records the
+    uninstall of a package listed in the known-bad package IOC database.
+    Removing an implant before an examination is a common anti-forensics
+    step; the app is gone, so this is historical evidence that a listed
+    threat was on the device. Replaces the hand-built "Known package was
+    uninstalled - possible anti-forensics" timeline row that BatteryDailyModule
+    wrote until AndroDR's telemetry store (C3, ruling R28): detection is
+    rule-driven, so the module now only emits the parsed record. Same
+    severity as that row (informational: shown on the Timeline, not as a
+    report finding). Fleet: builds before the typed BatteryDailyEvent emit
+    battery_daily records only for IOC-listed installs/updates, with
+    event_type package_install, so this positive-only selection never matches
+    there.
+author: AndroDR
+date: 2026-10-23
+tags:
+    - attack.t1630.001
+logsource:
+    product: androdr
+    service: battery_daily
+detection:
+    selection:
+        event_type: package_uninstall
+        package_name|ioc_lookup: package_ioc_db
+    condition: selection
+category: incident
+level: informational
+display:
+    category: app_risk
+    icon: delete_forever
+    triggered_title: "Known malicious app was uninstalled (possible anti-forensics)"
+    evidence_type: ioc_match
+    guidance: "A listed threat was removed from this device before the bug report was taken; review what else happened around that day"
+remediation:
+    - "Treat the device as previously compromised; review accounts and credentials used on it."

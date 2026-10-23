@@ -192,6 +192,30 @@ class EventWatermarkTest {
             f.count("SELECT COUNT(DISTINCT recordId) FROM scan_record WHERE service = '$USAGE'"))
     }
 
+    /**
+     * Review m4: a usage collection that is full ([UsageStatsScanner.MAX_EVENTS_PER_SCAN]) without
+     * reading past the previous watermark cannot advance it; the scan says so instead of silently
+     * re-reading the same window forever. A full collection that does advance records nothing.
+     */
+    @Test
+    fun `a full usage collection inside the re-read window is recorded, one that advances is not`() =
+        runBlocking {
+            val start = System.currentTimeMillis()
+            val previous = start - 60_000L
+            f.db.eventWatermarkDao().put(com.androdr.data.model.EventWatermark(USAGE, previous, 1L))
+            val inside = List(UsageStatsScanner.MAX_EVENTS_PER_SCAN) { usage(previous - 1 - it % 60_000) }
+            coEvery { f.usageStatsScanner.collectEvents(any(), any()) } returns UsageCollection.Ok(inside)
+
+            val stalled = scan()
+
+            assertEquals(LiveScanCollector.USAGE_WINDOW_STALLED,
+                stalled.scannerErrors.single { it.scanner == USAGE_SCANNER }.exception)
+
+            val advancing = inside.dropLast(1) + usage(previous + 1)
+            coEvery { f.usageStatsScanner.collectEvents(any(), any()) } returns UsageCollection.Ok(advancing)
+            assertTrue(scan().scannerErrors.none { it.scanner == USAGE_SCANNER })
+        }
+
     // ── Live DNS by id ──────────────────────────────────────────────────────────
 
     private fun dns(domain: String, ts: Long = System.currentTimeMillis() - 60_000L) =

@@ -333,4 +333,39 @@ class StartupSweepTest {
 
         assertEquals(setOf("listed", "chain"), dao.getAllForExport().map { it.description }.toSet())
     }
+
+    /**
+     * Review m1: a backfill that fails part-way leaves its done flag unset, and the cleanup then waits:
+     * a legacy signal whose list is not yet in signal_member must not lose its listed rows.
+     */
+    @Test
+    fun `the legacy cleanup waits while the signal member backfill is unfinished`() = runBlocking {
+        w.f.db.scanResultDao().insert(com.androdr.data.model.ScanResult(id = 4L, timestamp = 4L,
+            findings = emptyList(), bugReportFindings = emptyList(), riskySideloadCount = 0, knownMalwareCount = 0,
+            state = ScanState.COMPLETE, telemetryState = com.androdr.data.model.TelemetryState.STORED))
+        val dao = w.f.db.forensicTimelineEventDao()
+        val listed = dao.insert(ForensicTimelineEvent(startTimestamp = 1L, source = "intrusion_log",
+            category = "dns_query", description = "listed", scanResultId = 4L))
+        dao.insert(ForensicTimelineEvent(startTimestamp = 1L, kind = "signal", source = "sigma_correlation_engine",
+            category = "correlation", description = "chain", ruleId = "androdr-corr-001", scanResultId = 4L,
+            details = """{"rule_id":"androdr-corr-001","member_event_ids":"$listed"}"""))
+        val failingDao = spyk(w.f.db.signalMemberBackfillDao())
+        coEvery { failingDao.legacyAfter(any(), any()) } throws IllegalStateException("disk I/O")
+        val backfill = SignalMemberBackfill(w.f.db, failingDao, w.f.db.signalMemberDao(), w.lock, w.f.dataStore)
+        val sweep = StartupSweep(w.lock, w.repo, w.f.store, w.f.dirty, ReportFiles(reportsDir) { clock }, backfill,
+            LegacyEventRowCleanup(w.f.db,
+                TimelineRowDeleter(w.f.db.forensicTimelineEventDao(), w.f.store, w.f.db.signalMemberDao()),
+                w.f.db.signalMemberDao(), w.f.store, w.lock, w.f.dataStore))
+
+        sweep.run()
+
+        assertEquals("the listed row waits for the backfill", setOf("listed", "chain"),
+            dao.getAllForExport().map { it.description }.toSet())
+
+        sweep().run()
+
+        assertEquals(setOf("listed", "chain"), dao.getAllForExport().map { it.description }.toSet())
+        assertEquals("the backfill moved the list, so the row stays protected", 1L,
+            w.count("SELECT COUNT(*) FROM signal_member WHERE refId = $listed"))
+    }
 }

@@ -101,7 +101,24 @@ class LiveScanCollector @Inject constructor(
             Log.w(TAG, "$USAGE_SCANNER failed", collection.e)
             synchronized(errors) { errors.add(failure(USAGE_SCANNER, collection.e)) }
         }
+        usageStall(previous, collection)?.let { synchronized(errors) { errors.add(it) } }
         return UsageWindow(previous, since, scanStart, collection)
+    }
+
+    /**
+     * Review m4: a collection that hit [UsageStatsScanner.MAX_EVENTS_PER_SCAN] without reading past
+     * the previous watermark cannot advance it, so every later scan would re-read the same window.
+     * Never silent: recorded on the scan (unreachable in practice: over 2,000 apps in one minute).
+     */
+    private fun usageStall(previous: Long?, collection: UsageCollection): ScannerFailure? {
+        val events = (collection as? UsageCollection.Ok)?.events.orEmpty()
+        val latest = events.maxOfOrNull { it.timestamp }
+        val stalled = previous != null && latest != null && latest <= previous &&
+            events.size >= UsageStatsScanner.MAX_EVENTS_PER_SCAN
+        if (!stalled) return null
+        Log.w(TAG, "usage collection is full inside the re-read window; the usage watermark cannot advance")
+        return ScannerFailure(scanner = USAGE_SCANNER, exception = USAGE_WINDOW_STALLED,
+            message = "${events.size} usage events inside the re-read window; later usage is not collected")
     }
 
     /** Up to [size] live DNS rows with ids in `(afterId, untilId]`, ascending (the session's chunks). */
@@ -163,6 +180,7 @@ class LiveScanCollector @Inject constructor(
     companion object {
         private const val TAG = "LiveScanCollector"
         private const val USAGE_SCANNER = "usageStatsScanner"
+        const val USAGE_WINDOW_STALLED = "UsageWindowStalled"
         private const val USAGE_STATS = LiveRecordBuilders.USAGE_STATS
         private const val DNS_MONITOR = LiveRecordBuilders.DNS_MONITOR
 

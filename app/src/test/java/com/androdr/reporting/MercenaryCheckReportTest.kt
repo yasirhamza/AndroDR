@@ -438,8 +438,13 @@ class MercenaryCheckReportTest {
     @Test
     fun `clean live device - fully checked campaigns are OK, LANDFALL has no infection check`() {
         val report = formatReportWith(campaigns = REGISTRY)
-        REGISTRY.filter { it.key != "landfall" }
+        // R28: a campaign with package IOCs is also detectable from a bug report's battery history
+        // (androdr-110), which a live scan cannot read, so its row says what an import would add.
+        val needsImport = setOf("cellebrite", "midnight-mimosa")
+        REGISTRY.filter { it.key != "landfall" && it.key !in needsImport }
             .forEach { assertTrue(it.key, report.contains("  [OK]  ${it.label}: not detected")) }
+        assertTrue(report, report.contains(
+            "  [--]  Cellebrite: no hit in installed apps; past app uninstalls need a bug report or intrusion log"))
         assertTrue(report.contains("  [--]  LANDFALL: no infection check exists for a live scan; patch level only"))
         assertFalse("every row carries its own reason", report.contains("\"not detected\" means"))
         assertTrue(report.contains("Campaign detections: none"))
@@ -462,7 +467,8 @@ class MercenaryCheckReportTest {
     @Test
     fun `dns off - a two-service campaign names what was checked and what was not`() {
         val report = formatReportWith(campaigns = listOf(campaign("midnight-mimosa")), scannerErrors = listOf(dnsOff))
-        assertTrue(report, report.contains("  [--]  Midnight Mimosa: no hit in installed apps; $dnsOffClause"))
+        assertTrue(report, report.contains("  [--]  Midnight Mimosa: no hit in installed apps; " +
+            "past app uninstalls need a bug report or intrusion log; $dnsOffClause"))
     }
 
     @Test
@@ -491,8 +497,8 @@ class MercenaryCheckReportTest {
             scannerErrors = listOf(ScannerFailure("threat_intel", NotEvaluatedReason.FEEDS_NOT_LOADED.sentinel, "x")))
         assertTrue(report, report.contains(
             "  [--]  Midnight Mimosa: installed apps checked against the built-in list " +
-            "only (threat lists had not finished loading); DNS lookups checked against the built-in list only " +
-            "(threat lists had not finished loading)"))
+            "only (threat lists had not finished loading); past app uninstalls need a bug report or intrusion " +
+            "log; DNS lookups checked against the built-in list only (threat lists had not finished loading)"))
         assertEquals(1, Regex("Scan again in a few minutes\\.").findAll(report).count())
     }
 
@@ -616,8 +622,8 @@ class MercenaryCheckReportTest {
             appRisks = listOf(iocFinding("p.example", "Pegasus", "", "false", campaign = "pegasus")),
             campaigns = REGISTRY)
         val detected = report.indexOf("[!!]  Pegasus: DETECTED")
-        val cellebrite = report.indexOf("[OK]  Cellebrite: not detected")
-        assertTrue(detected in 0 until cellebrite)
+        val graphite = report.indexOf("[OK]  Graphite (Paragon): not detected")
+        assertTrue(detected in 0 until graphite)
     }
 
     @Test

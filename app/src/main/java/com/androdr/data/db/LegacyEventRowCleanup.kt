@@ -142,6 +142,12 @@ class LegacyEventRowCleanup @Inject constructor(
          * Frozen: the `source` of every retired event adapter's rows (C3). Intrusion-log DNS,
          * connect and security rows; live usage rows; the bug-report AppOps, battery-daily,
          * ADB-keys and install-time module rows. Never extended: new producers never write rows.
+         * Derived at base a258be57 from the six producer sites (reviewed in C3): the
+         * `ImportedDnsEvent` / `NetworkTelemetry` / `SecurityLogEvent` adapters (`intrusion_log`),
+         * the `UsageEvent` adapter (`usage_stats`), `AppOpsModule` (`appops`), `BatteryDailyModule`
+         * (`battery_daily`), `AdbKeysModule.SERVICE` (`adb_audit`) and
+         * `InstallTimeModule.parseSection` (`bugreport`). The adapters are deleted, so the test
+         * that pins this list can only be a change detector.
          */
         val RETIRED_SOURCES: List<String> =
             listOf("intrusion_log", "usage_stats", "appops", "battery_daily", "adb_audit", "bugreport")
