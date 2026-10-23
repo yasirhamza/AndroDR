@@ -43,6 +43,11 @@ data class Finding(
     // section and can't tell: androdr-108 is an incident rule displayed under device posture.
     // "" on findings stored before this field existed (the report then looks the rule up).
     val ruleCategory: String = "",
+    // The logsource service of the record that produced this finding, and that
+    // record's ordinal within its service's list for the scan (telemetry store
+    // spec 4.1). "" / -1 on findings stored before these fields existed.
+    val service: String = "",
+    val ordinal: Int = -1,
 )
 
 /**
@@ -141,7 +146,9 @@ object SigmaRuleEvaluator {
         records: List<Map<String, Any?>>,
         service: String,
         iocLookups: Map<String, (Any) -> Boolean> = emptyMap(),
-        evidenceProviders: Map<String, EvidenceProvider> = emptyMap()
+        evidenceProviders: Map<String, EvidenceProvider> = emptyMap(),
+        firstOrdinal: Int = 0,
+        include: (Int) -> Boolean = { true }
     ): List<Finding> {
         // A suppressed rule (display.suppress_finding: true -- the timeline atoms)
         // produces no findings by construction. Before #367 nothing honoured the
@@ -152,7 +159,12 @@ object SigmaRuleEvaluator {
         val evaluableRules = if (skipped.isEmpty()) matchingRules
         else matchingRules.filter { it.id !in skipped }
         val findings = mutableListOf<Finding>()
-        for (record in records) {
+        // The ordinal of a record is firstOrdinal + its index in [records], counting records
+        // [include] rejects: a skipped record still consumes its ordinal, so ordinals stay
+        // aligned with the full list the store keeps. [include] receives the index.
+        for ((index, record) in records.withIndex()) {
+            if (!include(index)) continue
+            val ordinal = firstOrdinal + index
             for (rule in evaluableRules) {
                 val matched = evaluateCondition(rule.detection, record, iocLookups)
                 val category = checkNotNull(rule.display.category) {
@@ -164,16 +176,16 @@ object SigmaRuleEvaluator {
                     if (provider != null && evidenceType != "none") {
                         val results = provider.provide(rule, record)
                         for (result in results) {
-                            findings.add(buildFinding(rule, category, true, record, result))
+                            findings.add(buildFinding(rule, category, true, record, result, service, ordinal))
                         }
                         if (results.isEmpty()) {
-                            findings.add(buildFinding(rule, category, true, record, null))
+                            findings.add(buildFinding(rule, category, true, record, null, service, ordinal))
                         }
                     } else {
-                        findings.add(buildFinding(rule, category, true, record, null))
+                        findings.add(buildFinding(rule, category, true, record, null, service, ordinal))
                     }
                 } else if (rule.reportSafeState) {
-                    findings.add(buildFinding(rule, category, false, record, null))
+                    findings.add(buildFinding(rule, category, false, record, null, service, ordinal))
                 }
             }
         }
@@ -182,7 +194,8 @@ object SigmaRuleEvaluator {
 
     private fun buildFinding(
         rule: SigmaRule, category: FindingCategory, triggered: Boolean,
-        record: Map<String, Any?>, evidenceResult: EvidenceResult?
+        record: Map<String, Any?>, evidenceResult: EvidenceResult?,
+        service: String, ordinal: Int
     ): Finding {
         val titleTemplate = if (triggered) {
             rule.display.triggeredTitle.ifEmpty { rule.title }
@@ -214,6 +227,8 @@ object SigmaRuleEvaluator {
                 .mapValues { (_, v) -> v?.toString() ?: "" },
             impliesFlags = rule.impliesFlags,
             ruleCategory = rule.category.name,
+            service = service,
+            ordinal = ordinal,
         )
     }
 

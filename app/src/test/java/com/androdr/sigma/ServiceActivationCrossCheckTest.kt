@@ -67,18 +67,43 @@ class ServiceActivationCrossCheckTest {
                 "broke and a vacuous pass would hide a dead service.",
             funDecls.isNotEmpty(),
         )
+        val builderServiceConstants = builderServiceConstants()
+        assertTrue(
+            "No service constants found in the *RecordBuilders objects -- the builder scan broke.",
+            builderServiceConstants.isNotEmpty(),
+        )
         val result = mutableMapOf<String, Set<String>>()
         for (i in funDecls.indices) {
             val (name, start) = funDecls[i]
-            if (!name.startsWith("evaluate")) continue
+            // evaluateRecords is the shared dispatcher, not a service's entry point.
+            if (!name.startsWith("evaluate") || name == "evaluateRecords") continue
             val end = funDecls.getOrNull(i + 1)?.second ?: engineSrc.length
             val body = engineSrc.substring(start, end)
-            result[name] = SERVICE_LITERAL.findAll(body).map { it.groupValues[1] }.toSet()
+            // A service is named either by a literal or by a builder constant
+            // (`LiveRecordBuilders.APP_SCANNER`); both resolve to the literal.
+            val viaBuilder = BUILDER_CONSTANT_REF.findAll(body)
+                .mapNotNull { builderServiceConstants[it.groupValues[1] + "." + it.groupValues[2]] }
+            result[name] = (SERVICE_LITERAL.findAll(body).map { it.groupValues[1] } + viaBuilder).toSet()
         }
         assertTrue(
             "Found no evaluate* methods in SigmaRuleEngine.kt — extraction broke.",
             result.isNotEmpty(),
         )
+        return result
+    }
+
+    /**
+     * `Builders.CONST` -> service literal, from every `object ...RecordBuilders` in the
+     * sigma package: the builders own the service names, the engine only references them.
+     */
+    private fun builderServiceConstants(): Map<String, String> {
+        val result = mutableMapOf<String, String>()
+        for (name in BUILDER_FILES) {
+            val src = TestRuleRepo.stripKotlinComments(
+                TestRuleRepo.mainSourceFile("com/androdr/sigma/$name.kt").readText()
+            )
+            for (m in CONST_DECL.findAll(src)) result["$name.${m.groupValues[1]}"] = m.groupValues[2]
+        }
         return result
     }
 
@@ -101,7 +126,13 @@ class ServiceActivationCrossCheckTest {
      * literal reaches [SigmaRuleEngine.evaluateGeneric] from a real call site.
      */
     private fun genericRouteAvailable(service: String): Boolean {
-        if (!referencedInMainOutsideEngine("evaluateGeneric")) return false
+        // The generic route is the bug-report dispatcher (evaluateGeneric) or a direct
+        // evaluateRecords call (the writer session, spec 4.1) outside the engine.
+        if (!referencedInMainOutsideEngine("evaluateGeneric") &&
+            !referencedInMainOutsideEngine("evaluateRecords")
+        ) {
+            return false
+        }
         val bugreportDir = File(TestRuleRepo.mainSourceRoot(), BUGREPORT_PKG)
         if (!bugreportDir.isDirectory) return false
         val literal = "\"$service\""
@@ -289,6 +320,14 @@ class ServiceActivationCrossCheckTest {
 
         /** Floor below which the sweep is suspiciously empty (see call site). */
         const val MIN_ACTIVE_SERVICES = 12
+
+        val BUILDER_FILES = listOf("LiveRecordBuilders", "BugReportRecordBuilders", "IntrusionLogRecordBuilders")
+
+        /** `const val NAME = "service"` inside a builder object. */
+        val CONST_DECL = Regex("""const val (\w+)\s*=\s*"([a-z][a-z0-9_]*)"""")
+
+        /** `SomeRecordBuilders.NAME` reference in the engine. */
+        val BUILDER_CONSTANT_REF = Regex("""\b(\w+RecordBuilders)\.([A-Z][A-Z0-9_]*)\b""")
 
         /** Any Kotlin function declaration (used as region boundaries). */
         val FUN_DECL = Regex("""\bfun\s+(\w+)\s*\(""")
