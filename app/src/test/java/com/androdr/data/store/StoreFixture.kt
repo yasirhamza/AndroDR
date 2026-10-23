@@ -38,7 +38,9 @@ internal class StoreFixture(recordSql: Boolean = true) : Closeable {
 
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private val dir: File = Files.createTempDirectory("store-flag").toFile()
-    val dirty = StoreDirtyFlag(PreferenceDataStoreFactory.create(scope = scope) { File(dir, "flag.preferences_pb") })
+    /** The store's DataStore (the dirty flag and the signal-member backfill flag share it, as in the app). */
+    val dataStore = PreferenceDataStoreFactory.create(scope = scope) { File(dir, "flag.preferences_pb") }
+    val dirty = StoreDirtyFlag(dataStore)
     val codec = TelemetryRecordCodec(TelemetryDictionaries { rawFile("$it.txt").readBytes() })
     val display = EventDisplay.parse(rawFile("event_display.yml").readText())
     val store = TelemetryStore(db, codec, dirty)

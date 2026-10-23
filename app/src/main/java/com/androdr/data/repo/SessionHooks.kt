@@ -4,6 +4,8 @@ import com.androdr.data.db.toForensicTimelineEvent
 import com.androdr.data.model.ForensicTimelineEvent
 import com.androdr.data.model.ScanResult
 import com.androdr.data.model.TelemetrySource
+import com.androdr.data.store.AtomReader
+import com.androdr.sigma.CorrelationSignal
 import com.androdr.sigma.Finding
 import com.androdr.sigma.StoreRecord
 
@@ -43,11 +45,12 @@ interface SessionHooks {
     fun interimRows(scan: ScanResult): List<ForensicTimelineEvent> = emptyList()
 
     /**
-     * The correlation pass, inside the finishing transaction after this scan's rows were written:
-     * [rows] are those rows with their real ids (finding rows, then interim rows; duplicates Room
-     * ignored are left out). Returns the signal rows to insert and the findings they become (#350).
+     * The correlation pass, inside the finishing transaction after this scan's rows were written
+     * (spec §5.2): reads its atoms through [atoms] — this scan's rows are `Row` atoms with their
+     * real ids — and returns the signals (with their members, written only to `signal_member`) and
+     * the findings they become (#350). Must never throw because of its time budget.
      */
-    suspend fun correlate(rows: List<ForensicTimelineEvent>): Correlation = Correlation.NONE
+    suspend fun correlate(scan: ScanResult, atoms: AtomReader): Correlation = Correlation.NONE
 
     /**
      * Summary columns (counts, scanner errors) of the completed scan. `scan.findings` holds the
@@ -69,7 +72,7 @@ interface SessionHooks {
 }
 
 /** What [SessionHooks.correlate] found: signal rows to insert and the findings they become. */
-data class Correlation(val signals: List<ForensicTimelineEvent>, val findings: List<Finding>) {
+data class Correlation(val signals: List<CorrelationSignal>, val findings: List<Finding>) {
     companion object {
         val NONE = Correlation(emptyList(), emptyList())
     }

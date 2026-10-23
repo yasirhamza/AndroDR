@@ -3,6 +3,7 @@ package com.androdr.data.repo
 import androidx.room.withTransaction
 import com.androdr.data.model.ForensicTimelineEvent
 import com.androdr.data.model.ScanState
+import com.androdr.data.model.SignalMember
 import com.androdr.data.store.StoreFixture
 import com.androdr.data.store.StoreFixture.Companion.app
 import kotlinx.coroutines.runBlocking
@@ -21,7 +22,7 @@ import java.io.File
 @RunWith(RobolectricTestRunner::class)
 class TimelineRowDeleterTest {
     private val f = StoreFixture()
-    private val deleter = TimelineRowDeleter(f.db.forensicTimelineEventDao(), f.store)
+    private val deleter = TimelineRowDeleter(f.db.forensicTimelineEventDao(), f.store, f.db.signalMemberDao())
 
     @After fun tearDown() = f.close()
 
@@ -64,11 +65,48 @@ class TimelineRowDeleterTest {
         }
     }
 
+    /**
+     * Spec §5.4/§5.6: a signal row is deleted together with its `signal_member` rows, by every delete
+     * path (the 30-day prune included), and the facts those members alone pinned are released in the
+     * same transaction. Another signal's members are untouched.
+     */
+    @Test
+    fun `each delete path takes a deleted signal's members with it and releases their facts`() = runBlocking {
+        val paths: List<Pair<ForensicTimelineEvent, suspend () -> Unit>> = listOf(
+            row(createdAt = 10L) to { deleter.olderThan(11L) },
+            row(source = "intrusion_log") to { deleter.bySource("intrusion_log") },
+            row(scan = 7L) to { deleter.byScanId(7L) },
+            row(scan = 404L) to { deleter.unownedNonPersistent() },
+        )
+        val dao = f.db.forensicTimelineEventDao()
+        val survivor = dao.insert(row(source = "kept", scan = 1L, createdAt = 1_000L).copy(kind = "signal",
+            persistent = true))
+        f.db.signalMemberDao().insertAll(listOf(SignalMember(survivor, SignalMember.KIND_ROW, 5L)))
+        for ((r, delete) in paths) {
+            f.scan(1L, ScanState.COMPLETE)
+            val fact = f.persist(1L, "app_scanner", listOf(app("com.member"))).factIdByChunkIndex.single()
+            val sig = dao.insert(r.copy(kind = "signal"))
+            f.db.signalMemberDao().insertAll(listOf(SignalMember(sig, SignalMember.KIND_FACT, fact),
+                SignalMember(sig, SignalMember.KIND_ROW, 77L)))
+            f.store.deleteScanTelemetry(1L)
+            f.db.scanResultDao().deleteById(1L)
+            assertEquals("the member pins the fact", 1L, facts())
+
+            f.db.withTransaction { delete() }
+
+            assertEquals(0L, f.count("SELECT COUNT(*) FROM signal_member WHERE signalRowId = $sig"))
+            assertEquals("the fact its member pinned is released", 0L, facts())
+            assertEquals("another signal's members stay", 1L,
+                f.count("SELECT COUNT(*) FROM signal_member WHERE signalRowId = $survivor"))
+        }
+    }
+
     @Test
     fun `the 30-day prune keeps a 31-day-old persistent row and removes a non-persistent one`() = runBlocking {
         val now = 100L * DAY
         val old = now - 31 * DAY
         val dao = f.db.forensicTimelineEventDao()
+        f.scan(7L, ScanState.COMPLETE) // the rows' scan: getAllForExport shows visible rows only
         dao.insert(row(createdAt = old).copy(description = "interrupted", persistent = true))
         dao.insert(row(createdAt = old).copy(description = "stale"))
         dao.insert(row(createdAt = now).copy(description = "fresh"))

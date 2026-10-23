@@ -2,6 +2,7 @@ package com.androdr.reporting
 
 import com.androdr.data.model.ForensicTimelineEvent
 import com.androdr.data.model.TelemetrySource
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -67,14 +68,18 @@ class TimelineExporterTest {
             ruleId = "androdr-corr-001",
             correlationId = "androdr-corr-001:1,2",
             scanResultId = 42L,
-            details = """{"correlation_type":"temporal_ordered","member_event_ids":"1,2"}"""
+            details = """{"correlation_type":"temporal_ordered","member_count":2}"""
         )
-        val csv = TimelineExporter.formatCsv(listOf(signalEvent))
+        val csv = TimelineExporter.formatCsv(listOf(signalEvent), mapOf(100L to listOf("0:1", "1:7")))
         val dataRow = csv.lines().drop(1).first { it.isNotBlank() }
         assertTrue("kind column populated", dataRow.contains("signal"))
         assertTrue("rule_id column populated", dataRow.contains("androdr-corr-001"))
         assertTrue("correlation_id column populated", dataRow.contains("androdr-corr-001:1,2"))
         assertTrue("scan_result_id column populated", dataRow.contains(",42,"))
+        assertTrue("member_refs lists kind:id from signal_member", dataRow.contains(",0:1;1:7,"))
+        val header = csv.lines().first().split(",")
+        assertEquals("member_refs follows correlation_id", header.indexOf("correlation_id") + 1,
+            header.indexOf("member_refs"))
         // endTimestamp is epoch ms for signals
         assertTrue("end_timestamp populated", dataRow.contains("1700000300000"))
     }

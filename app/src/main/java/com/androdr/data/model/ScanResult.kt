@@ -59,6 +59,13 @@ data class ScannerFailure(
      * Empty on rows saved before this field existed: readers must then assume both.
      */
     val missingSources: List<String> = emptyList(),
+    /**
+     * For [NotEvaluatedReason.CORRELATION_INCOMPLETE] only: the packages whose (rule, group) the
+     * correlation budget cut off or never started, at most 20 (spec §5.2); [morePackages] counts the
+     * rest. Both empty for a rule-level "not started" entry (the budget ran out before grouping).
+     */
+    val packages: List<String> = emptyList(),
+    val morePackages: Int = 0,
 )
 
 /** [ScannerFailure.missingSources] values for CAMPAIGN_SOURCES_NOT_LOADED (#394). */
@@ -119,6 +126,15 @@ enum class NotEvaluatedReason(val sentinel: String, val heading: String) {
         "DnsMonitorOff",
         "DNS monitoring was off at scan time -- lookups made while it is off are not recorded; " +
             "the most recent recorded lookups were checked",
+    ),
+
+    /**
+     * The correlation time budget (spec §5.2) cut a chain rule off, or ran out before it started,
+     * for the packages named. An app can cause this by flooding events, so it is never silent.
+     */
+    CORRELATION_INCOMPLETE(
+        "CorrelationIncomplete",
+        "Correlation incomplete -- some chains were not fully checked in the time allowed",
     ),
     ;
 

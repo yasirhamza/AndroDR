@@ -6,6 +6,7 @@ import com.androdr.data.model.ScanState
 import com.androdr.data.model.TelemetrySource
 import com.androdr.data.repo.ScanLock
 import com.androdr.data.repo.ScanWriteRepository
+import com.androdr.data.db.SignalMemberBackfill
 import com.androdr.data.store.StoreFixture.Companion.CAPTURED
 import com.androdr.data.store.StoreFixture.Companion.app
 import com.androdr.data.store.StoreFixture.Companion.dns
@@ -47,7 +48,9 @@ class StartupSweepTest {
     private val clock = 10L * 24 * 60 * 60 * 1000
 
     private fun sweep(repo: ScanWriteRepository = w.repo) =
-        StartupSweep(w.lock, repo, w.f.store, w.f.dirty, ReportFiles(reportsDir) { clock })
+        StartupSweep(w.lock, repo, w.f.store, w.f.dirty, ReportFiles(reportsDir) { clock },
+            SignalMemberBackfill(w.f.db, w.f.db.signalMemberBackfillDao(), w.f.db.signalMemberDao(), w.lock,
+                w.f.dataStore))
 
     private fun state(id: Long): String? = w.f.db.openHelper.readableDatabase
         .query("SELECT state FROM ScanResult WHERE id = $id").use { c -> if (c.moveToFirst()) c.getString(0) else null }
@@ -288,5 +291,18 @@ class StartupSweepTest {
         assertEquals(0L, w.count("SELECT COUNT(*) FROM ScanResult"))
         assertEquals(0L, w.count("SELECT COUNT(*) FROM telemetry_record"))
         assertEquals(listOf("kept"), w.f.db.forensicTimelineEventDao().getAllForExport().map { it.description })
+    }
+
+    /** Spec §5.4: the one-time signal_member backfill runs from the startup sweep. */
+    @Test
+    fun `the sweep runs the signal member backfill once`() = runBlocking {
+        val legacy = w.f.db.forensicTimelineEventDao().insert(ForensicTimelineEvent(startTimestamp = 1L,
+            kind = "signal", source = "sigma_correlation_engine", category = "correlation", description = "chain",
+            ruleId = "androdr-corr-001", details = """{"rule_id":"androdr-corr-001","member_event_ids":"3,5"}"""))
+
+        sweep().run()
+
+        assertEquals(listOf(3L, 5L),
+            w.f.db.signalMemberDao().forSignal(legacy, null, null, 10).map { it.refId })
     }
 }

@@ -9,6 +9,7 @@ import com.androdr.data.model.TelemetryState
 import com.androdr.sigma.Evidence
 import com.androdr.sigma.Finding
 import com.androdr.sigma.LiveRecordBuilders
+import com.androdr.sigma.SigmaCorrelationEngine
 import java.io.Writer
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -469,10 +470,12 @@ object ReportFormatter {
         chains.sortedByDescending { severityOrdinal(it.level) }.forEach { chain ->
             appendFinding(chain)
             val pkg = chain.matchContext["package_name"].orEmpty()
-            val members = chain.matchContext["member_event_ids"].orEmpty()
-                .split(',').count { it.isNotBlank() }
+            // A chain saved before signal members existed (spec §5.4) has no member_count: it
+            // prints its linked events without a number rather than a false "0".
+            val linked = chain.matchContext[SigmaCorrelationEngine.MEMBER_COUNT]?.toIntOrNull()
+                ?.let { "$it linked event(s)" } ?: "linked events"
             val where = if (pkg.isNotEmpty()) "App: $pkg" else "Device-wide"
-            appendLine("           $where -- $members linked event(s); open the Timeline to see them")
+            appendLine("           $where -- $linked; open the Timeline to see them")
         }
     }
 

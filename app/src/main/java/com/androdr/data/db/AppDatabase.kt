@@ -26,6 +26,7 @@ import com.androdr.data.model.TelemetryFact
     exportSchema = true
 )
 @TypeConverters(Converters::class)
+@Suppress("TooManyFunctions") // one accessor per DAO, as Room requires
 abstract class AppDatabase : RoomDatabase() {
 
     abstract fun scanResultDao(): ScanResultDao
@@ -55,4 +56,8 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun signalMemberDao(): SignalMemberDao
 
     abstract fun telemetryReadDao(): TelemetryReadDao
+
+    abstract fun atomDao(): AtomDao
+
+    abstract fun signalMemberBackfillDao(): SignalMemberBackfillDao
 }

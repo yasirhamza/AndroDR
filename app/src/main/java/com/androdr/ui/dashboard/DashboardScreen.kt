@@ -155,6 +155,15 @@ fun DashboardScreen(
 
             StorageBanners(viewModel, latestScan, isScanning)
 
+            // Distinct from the scanner-failure banner: no scanner failed, but the correlation time
+            // budget cut some chain rules off (an app flooding events can cause it), spec §5.2.
+            DashboardViewModel.correlationIncomplete(latestScan, isScanning).takeIf { it.isNotEmpty() }?.let {
+                WarningBanner(
+                    R.string.correlation_incomplete_banner_title, R.string.correlation_incomplete_banner_body,
+                    text = it.joinToString("\n"),
+                )
+            }
+
             // Usage Access permission banner — shown when PACKAGE_USAGE_STATS
             // hasn't been granted, which silently disables the forensic
             // timeline feature. Previously the app just returned empty
@@ -638,7 +647,13 @@ private fun StorageBanners(viewModel: DashboardViewModel, latestScan: ScanResult
 }
 
 @Composable
-private fun WarningBanner(titleRes: Int, bodyRes: Int, count: Int? = null, onDismiss: (() -> Unit)? = null) {
+private fun WarningBanner(
+    titleRes: Int,
+    bodyRes: Int,
+    count: Int? = null,
+    onDismiss: (() -> Unit)? = null,
+    text: String? = null,
+) {
     val colors = MaterialTheme.androdrColors
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -658,7 +673,11 @@ private fun WarningBanner(titleRes: Int, bodyRes: Int, count: Int? = null, onDis
                     color = colors.high
                 )
                 Text(
-                    text = if (count != null) stringResource(bodyRes, count) else stringResource(bodyRes),
+                    text = when {
+                        count != null -> stringResource(bodyRes, count)
+                        text != null -> stringResource(bodyRes, text)
+                        else -> stringResource(bodyRes)
+                    },
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurface
                 )

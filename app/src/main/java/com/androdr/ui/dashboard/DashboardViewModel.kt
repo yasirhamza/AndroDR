@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.androdr.data.db.IndicatorDao
+import com.androdr.data.model.NotEvaluatedReason
 import com.androdr.data.model.ScanResult
 import com.androdr.data.model.TelemetryState
 import com.androdr.data.repo.ScanRepository
@@ -199,6 +200,21 @@ class DashboardViewModel @Inject constructor(
             scan?.telemetryState == TelemetryState.FAILED -> StorageBanner.PARTLY_STORED
             else -> StorageBanner.NONE
         }
+
+        /**
+         * The "Correlation incomplete" warning (spec §5.2): one line per chain rule the correlation
+         * budget cut off or never started on [scan], naming the rule and the packages. Separate from
+         * the scanner-failure banner — nothing failed; an app flooding events can cause it. Empty
+         * while a scan runs.
+         */
+        fun correlationIncomplete(scan: ScanResult?, isScanning: Boolean): List<String> =
+            if (isScanning || scan == null) {
+                emptyList()
+            } else {
+                scan.scannerErrors
+                    .filter { it.exception == NotEvaluatedReason.CORRELATION_INCOMPLETE.sentinel }
+                    .mapNotNull { it.message }
+            }
 
         /** The unsaved in-memory result wins over history: an older clean scan must not answer for it. */
         fun resolveLatest(persisted: List<ScanResult>, unsaved: ScanResult?): ScanResult? =

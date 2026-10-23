@@ -9,8 +9,11 @@ import com.androdr.data.model.EventWatermark
 import com.androdr.data.model.ForensicTimelineEvent
 import com.androdr.data.model.ScanResult
 import com.androdr.data.model.ScanState
+import com.androdr.data.model.SignalMember
 import com.androdr.data.model.TelemetryState
+import com.androdr.data.store.AtomReader
 import com.androdr.data.store.TelemetryStore
+import com.androdr.sigma.CorrelationSignal
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -32,6 +35,8 @@ class ScanWriteRepository @Inject constructor(
     private val writes get() = db.scanWriteDao()
     private val timeline get() = db.forensicTimelineEventDao()
     private val watermarks get() = db.eventWatermarkDao()
+    private val members get() = db.signalMemberDao()
+    private val atoms = AtomReader(db)
 
     /** Opens a session's scan, hidden until [finish]. */
     suspend fun begin(scan: ScanResult) = scans.insertInProgress(scan)
@@ -39,7 +44,8 @@ class ScanWriteRepository @Inject constructor(
     /**
      * The session's single finishing transaction (spec §5.2 step 5, Phases A–C): the prior-import
      * sweep, this scan's finding rows (with `level` and `recordId`), the interim event rows, the
-     * correlation pass over those rows (with their real ids) and its signal rows, then the guarded
+     * correlation pass over the atoms read after those inserts (so this scan's rows are `Row` atoms
+     * with their real ids), its signal rows and their `signal_member` rows, then the guarded
      * `IN_PROGRESS → COMPLETE` update, the event watermarks ([SessionHooks.watermarks]) and the
      * summary columns (the scan's findings plus the correlation's). Throws — rolling everything
      * back — with [ScanNotInProgressException] when the guard changes no row.
@@ -54,9 +60,10 @@ class ScanWriteRepository @Inject constructor(
             check(row.level == k.finding.level) { "finding row for ${k.finding.ruleId} must carry its level" }
             row.copy(recordId = k.recordId, scanResultId = scan.id)
         }
-        val written = insertWithIds(findingRows) + insertWithIds(hooks.interimRows(scan))
-        val correlation = hooks.correlate(written)
-        if (correlation.signals.isNotEmpty()) timeline.insertAll(correlation.signals)
+        if (findingRows.isNotEmpty()) timeline.insertAll(findingRows)
+        hooks.interimRows(scan).takeIf { it.isNotEmpty() }?.let { timeline.insertAll(it) }
+        val correlation = hooks.correlate(scan, atoms)
+        insertSignals(correlation.signals)
         if (scans.complete(scan.id, telemetryState) == 0) throw ScanNotInProgressException(scan.id)
         hooks.watermarks(saveFallback = telemetryState == TelemetryState.FAILED).forEach { (service, position) ->
             watermarks.put(EventWatermark(service, position, scan.id))
@@ -68,10 +75,14 @@ class ScanWriteRepository @Inject constructor(
         completed
     }
 
-    /** Inserts [rows] and returns them with their ids, leaving out rows Room ignored (`-1`). */
-    private suspend fun insertWithIds(rows: List<ForensicTimelineEvent>): List<ForensicTimelineEvent> {
-        if (rows.isEmpty()) return emptyList()
-        return rows.zip(timeline.insertAll(rows)).mapNotNull { (row, id) -> if (id <= 0L) null else row.copy(id = id) }
+    /** Each signal row, then its members — the only store of member lists (spec §5.4). */
+    private suspend fun insertSignals(signals: List<CorrelationSignal>) {
+        if (signals.isEmpty()) return
+        val ids = timeline.insertAll(signals.map { it.row })
+        signals.zip(ids).forEach { (signal, id) ->
+            check(id > 0L) { "signal row for ${signal.row.ruleId} was not inserted" }
+            members.insertAll(signal.members.map { SignalMember(id, it.kind, it.id) })
+        }
     }
 
     /**

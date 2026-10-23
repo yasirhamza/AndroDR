@@ -36,8 +36,16 @@ import androidx.compose.material3.SuggestionChip
 import androidx.compose.material3.SuggestionChipDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import com.androdr.sigma.AtomRef
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -361,10 +369,16 @@ private fun TagChip(text: String, color: Color) {
     )
 }
 
-@Suppress("LongMethod") // Compose card renders header row, time range, and per-event children with connectors
+/**
+ * A correlation cluster. A pre-linked cluster shows its rows at once; a signal's members live only
+ * in `signal_member` and load page by page through [loadPage] when the card is expanded (spec §5.4).
+ * Members whose row or fact is gone are counted, not shown.
+ */
+@Suppress("LongMethod") // Compose card renders header row, time range, and per-member children with connectors
 @Composable
 fun CorrelationClusterCard(
     cluster: EventCluster,
+    loadPage: suspend (signalRowId: Long, after: AtomRef?) -> ClusterPage,
     onEventTap: (ForensicTimelineEvent) -> Unit
 ) {
     val colors = MaterialTheme.androdrColors
@@ -374,9 +388,29 @@ fun CorrelationClusterCard(
         CorrelationPattern.MULTI_PERMISSION_BURST -> colors.high
         else                                      -> colors.neutral
     }
+    val signalRowId = cluster.signalRowId
+    var expanded by remember(cluster.key) { mutableStateOf(signalRowId == null) }
+    var members by remember(cluster.key) { mutableStateOf(cluster.members) }
+    var missing by remember(cluster.key) { mutableIntStateOf(0) }
+    var next by remember(cluster.key) { mutableStateOf<AtomRef?>(null) }
+    var loaded by remember(cluster.key) { mutableStateOf(signalRowId == null) }
+    val scope = rememberCoroutineScope()
+    fun loadMore() {
+        val id = signalRowId ?: return
+        scope.launch {
+            val page = loadPage(id, next)
+            members = members + page.members
+            missing += page.missing
+            next = page.next
+            loaded = true
+        }
+    }
 
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth().clickable(enabled = signalRowId != null) {
+            expanded = !expanded
+            if (expanded && !loaded) loadMore()
+        },
         border = BorderStroke(2.dp, clusterColor.copy(alpha = 0.5f)),
         colors = CardDefaults.cardColors(
             containerColor = clusterColor.copy(alpha = 0.04f)
@@ -391,11 +425,9 @@ fun CorrelationClusterCard(
                 // Cluster label can be long (e.g. "Multiple surveillance
                 // permissions accessed rapidly (3)") so give it the weighted
                 // flex slot and allow a second line with ellipsis overflow.
-                // Previously this was an unweighted Text next to a
-                // SpaceBetween sibling, which let the label push the time
-                // range off-screen or forced mid-word single-line cutoff.
                 Text(
-                    "${cluster.label} (${cluster.events.size})",
+                    if (cluster.memberCount == null && signalRowId != null) cluster.label
+                    else "${cluster.label} (${cluster.size})",
                     style = MaterialTheme.typography.labelMedium,
                     fontWeight = FontWeight.Bold,
                     color = clusterColor,
@@ -403,29 +435,76 @@ fun CorrelationClusterCard(
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f)
                 )
-                val timeRange = formatTimeRange(cluster.events)
                 Text(
-                    timeRange,
+                    formatTimeRange(cluster.startTimestamp, cluster.endTimestamp),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
-            }
-            Spacer(modifier = Modifier.height(8.dp))
-            cluster.events.forEachIndexed { index, event ->
-                TimelineEventCard(event = event, onClick = { onEventTap(event) })
-                if (index < cluster.events.lastIndex) {
-                    // Vertical connector line
-                    Box(
-                        modifier = Modifier
-                            .padding(start = 10.dp)
-                            .width(2.dp)
-                            .height(4.dp)
-                            .background(clusterColor.copy(alpha = 0.3f))
+                if (signalRowId != null) {
+                    Icon(
+                        imageVector = if (expanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
+                        contentDescription = null,
                     )
                 }
             }
+            if (expanded) {
+                Spacer(modifier = Modifier.height(8.dp))
+                members.forEachIndexed { index, member ->
+                    when (member) {
+                        is TimelineMember.RowMember ->
+                            TimelineEventCard(event = member.row, onClick = { onEventTap(member.row) })
+                        is TimelineMember.FactMember -> FactMemberCard(member)
+                    }
+                    if (index < members.lastIndex) {
+                        // Vertical connector line
+                        Box(
+                            modifier = Modifier
+                                .padding(start = 10.dp)
+                                .width(2.dp)
+                                .height(4.dp)
+                                .background(clusterColor.copy(alpha = 0.3f))
+                        )
+                    }
+                }
+                if (missing > 0) {
+                    Text(
+                        stringResource(R.string.timeline_cluster_members_missing, missing),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                if (next != null) {
+                    TextButton(onClick = { loadMore() }) {
+                        Text(stringResource(R.string.timeline_cluster_load_more))
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** A stored fact that is a correlation member: its service, time and display summary. */
+@Composable
+private fun FactMemberCard(member: TimelineMember.FactMember) {
+    val record = member.record
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
+    ) {
+        Column(modifier = Modifier.padding(8.dp)) {
+            Text(
+                "${formatTime(member.timestamp)}  ${record.category ?: record.service}",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Text(
+                record.summary ?: stringResource(R.string.timeline_cluster_fact_unreadable),
+                style = MaterialTheme.typography.bodySmall,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
         }
     }
 }
@@ -502,11 +581,8 @@ fun ScanGroupHeader(
     }
 }
 
-private fun formatTimeRange(events: List<ForensicTimelineEvent>): String {
-    if (events.isEmpty()) return ""
+private fun formatTimeRange(first: Long, last: Long): String {
     val fmt = SimpleDateFormat("HH:mm", Locale.US)
-    val first = events.minOf { it.startTimestamp }
-    val last = events.maxOf { it.startTimestamp }
     return if (first > 0 && last > 0) {
         "${fmt.format(Date(first))}\u2013${fmt.format(Date(last))}"
     } else ""

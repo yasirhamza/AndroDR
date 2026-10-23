@@ -212,7 +212,7 @@ class FailClosedLookupTest {
         engine.setRemoteRules(listOf(parse(atomRuleWithLookup)))
         engine.setIocLookups(emptyMap())
 
-        val bindings = engine.computeAtomBindings(listOf(timelineEvent(id = 1, category = "package_install")))
+        val bindings = engine.rowBindings(listOf(timelineEvent(id = 1, category = "package_install")))
 
         assertTrue(
             "Atom rule with an unresolved ioc_lookup must produce no binding — fail-closed " +
@@ -227,7 +227,7 @@ class FailClosedLookupTest {
         engine.setRemoteRules(listOf(parse(atomRuleWithLookup)))
         engine.setIocLookups(allRegistered)
 
-        val bindings = engine.computeAtomBindings(listOf(timelineEvent(id = 1, category = "package_install")))
+        val bindings = engine.rowBindings(listOf(timelineEvent(id = 1, category = "package_install")))
 
         assertEquals(setOf("androdr-atom-test-lookup"), bindings[1])
     }

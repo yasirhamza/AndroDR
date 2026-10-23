@@ -91,6 +91,22 @@ class ScanOrchestratorIntrusionLogTest {
 
     private suspend fun rows() = f.timelineDao.getAllForExport()
 
+    /**
+     * Every row present as (source, scanResultId), visible or not: the sweep tests' prior imports
+     * have no ScanResult row, so `VisibleRow` (C2) hides their rows from the DAO reads.
+     */
+    private fun allRows(): List<ForensicTimelineEvent> = f.db.openHelper.readableDatabase
+        .query("SELECT source, scanResultId FROM forensic_timeline ORDER BY id").use { c ->
+            generateSequence {
+                if (c.moveToNext()) {
+                    ForensicTimelineEvent(startTimestamp = 0L, source = c.getString(0), category = "",
+                        description = "", scanResultId = c.getLong(1))
+                } else {
+                    null
+                }
+            }.toList()
+        }
+
     private fun times(category: String): List<Long> = f.db.openHelper.readableDatabase
         .query("SELECT startTimestamp FROM forensic_timeline WHERE category = '$category'").use { c ->
             generateSequence { if (c.moveToNext()) c.getLong(0) else null }.toList()
@@ -114,7 +130,7 @@ class ScanOrchestratorIntrusionLogTest {
 
         f.orchestrator.analyzeIntrusionLog(uri)
 
-        val left = rows()
+        val left = allRows()
         assertEquals(listOf("app_scanner"), left.filter { it.scanResultId != f.scans().single().id }.map { it.source })
         assertTrue("the new import's rows are written", left.any { it.source == "intrusion_log" })
     }
@@ -137,7 +153,7 @@ class ScanOrchestratorIntrusionLogTest {
         val thrown = runCatching { f.orchestrator.analyzeIntrusionLog(uri) }.exceptionOrNull()
 
         assertTrue("honest failure: $thrown", thrown is ScanOrchestrator.IntrusionLogPersistException)
-        assertEquals("the prior import survives", listOf(11L), rows().map { it.scanResultId })
+        assertEquals("the prior import survives", listOf(11L), allRows().map { it.scanResultId })
         assertEquals("the failed import is removed", 0L, f.count("SELECT COUNT(*) FROM ScanResult"))
         assertEquals(0L, f.count("SELECT COUNT(*) FROM scan_record"))
     }
@@ -155,7 +171,7 @@ class ScanOrchestratorIntrusionLogTest {
         val thrown = runCatching { f.orchestrator.analyzeIntrusionLog(uri) }.exceptionOrNull()
 
         assertTrue("propagated: $thrown", thrown is IntrusionLogAnalyzer.IntrusionLogAnalysisException)
-        assertEquals(listOf(11L), rows().map { it.scanResultId })
+        assertEquals(listOf(11L), allRows().map { it.scanResultId })
         assertEquals(0L, f.count("SELECT COUNT(*) FROM ScanResult"))
     }
 
@@ -311,6 +327,9 @@ class ScanOrchestratorIntrusionLogTest {
                     minEvents = 1, severity = "high", displayLabel = "l")
             )
             val now = System.currentTimeMillis()
+            // Both scans COMPLETE, so only the import source keeps the imported row out (not visibility).
+            live.w.f.scan(8L, com.androdr.data.model.ScanState.COMPLETE)
+            live.w.f.scan(9L, com.androdr.data.model.ScanState.COMPLETE)
             live.timelineDao.insertAll(listOf(
                 ForensicTimelineEvent(startTimestamp = now - 1_000, source = "intrusion_log",
                     category = "dns_query", description = "imported",
@@ -319,13 +338,15 @@ class ScanOrchestratorIntrusionLogTest {
                     category = "package_install", description = "live",
                     telemetrySource = TelemetrySource.LIVE_SCAN, scanResultId = 8L),
             ))
-            val events = slot<List<ForensicTimelineEvent>>()
-            every { live.correlationEngine.evaluate(any(), capture(events), any(), any()) } returns emptyList()
+            every { live.engine.atomCategories() } returns mapOf("a" to "package_install", "b" to "dns_query")
+            val atoms = slot<List<com.androdr.sigma.TimelineAtom>>()
+            every { live.correlationEngine.evaluate(any(), capture(atoms), any(), any(), any()) } returns
+                com.androdr.sigma.CorrelationResult.NONE
 
             live.orchestrator.runFullScan()
 
-            assertEquals(listOf("live"), events.captured.map { it.description })
-            assertFalse(events.captured.any { it.telemetrySource == TelemetrySource.INTRUSION_LOG_IMPORT })
+            assertEquals("only the live row is an atom", listOf("package_install"), atoms.captured.map { it.category })
+            assertFalse(atoms.captured.any { it.telemetrySource == TelemetrySource.INTRUSION_LOG_IMPORT })
         }
     }
 

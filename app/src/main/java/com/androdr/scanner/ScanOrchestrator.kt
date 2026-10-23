@@ -218,12 +218,11 @@ class ScanOrchestrator @Inject constructor(
             riskySideloadCount = 0, knownMalwareCount = 0,
         )
         val hooks = LiveScanHooks(
-            scan, sigmaRuleEngine, sigmaCorrelationEngine, forensicTimelineEventDao, timelineRows,
+            scan, sigmaRuleEngine, sigmaCorrelationEngine, timelineRows,
             hashByPackage(telemetry.apps), detectedChanges(scan.id, telemetry.apps),
             sigmaRuleEngine.getCorrelationRules().maxOfOrNull { it.timespanMs } ?: 0L,
             telemetry.usage, telemetry.dns,
         )
-        hooks.readLookback()
         hooks.errors.addAll(synchronized(errors) { errors.toList() })
         // A failed write keeps nothing (the session is aborted), but the in-memory findings are
         // still returned with the writer failure, so the Dashboard never reads as clean.

@@ -128,7 +128,12 @@ object TimelineExporter {
         appendLine(RULE)
     }
 
-    fun formatCsv(events: List<ForensicTimelineEvent>): String = buildString {
+    /**
+     * [memberRefs]: each signal row's members that still exist, as `kind:id` (`0` a timeline row,
+     * `1` a stored fact), from `signal_member` — the only store of member lists (spec §5.4).
+     */
+    fun formatCsv(events: List<ForensicTimelineEvent>, memberRefs: Map<Long, List<String>> = emptyMap()): String =
+        buildString {
         // Column set mirrors the on-screen Timeline detail sheet plus the
         // clustering/correlation fields the UI uses to render cluster cards
         // and the Linked Evidence section. Without rule_id + correlation_id
@@ -138,7 +143,7 @@ object TimelineExporter {
         // shows but previously dropped on export.
         appendLine(
             "timestamp,isodate,end_timestamp,end_isodate,kind,module,event,data,package," +
-                "severity,rule_id,correlation_id,scan_result_id," +
+                "severity,rule_id,correlation_id,member_refs,scan_result_id," +
                 "ioc_indicator,ioc_type,ioc_source,campaign,mitre_technique,apk_hash,details"
         )
 
@@ -175,6 +180,7 @@ object TimelineExporter {
             // This keeps the CSV consistent with what the app renders on
             // screen, even for rows that predate the migration.
             val correlationId = csvEscape(event.effectiveCorrelationId())
+            val refs = csvEscape(memberRefs[event.id].orEmpty().joinToString(";"))
             val scanId = event.scanResultId.toString()
             val ioc = csvEscape(event.iocIndicator)
             val iocType = csvEscape(event.iocType)
@@ -184,7 +190,7 @@ object TimelineExporter {
             val hash = csvEscape(event.apkHash)
             val details = csvEscape(event.details)
             @Suppress("MaxLineLength") // CSV row must be a single appendLine call
-            appendLine("$ts,$iso,$endTs,$endIso,$kind,$module,$eventType,$data,$pkg,$sev,$ruleId,$correlationId,$scanId,$ioc,$iocType,$iocSrc,$campaign,$mitre,$hash,$details")
+            appendLine("$ts,$iso,$endTs,$endIso,$kind,$module,$eventType,$data,$pkg,$sev,$ruleId,$correlationId,$refs,$scanId,$ioc,$iocType,$iocSrc,$campaign,$mitre,$hash,$details")
         }
     }
 

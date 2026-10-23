@@ -59,7 +59,7 @@ class IntrusionLogClusterRegressionTest {
         assertTrue(
             "Imported raw rows must not form a PRE_LINKED cluster (unconditional " +
                 "correlation-id stamping reintroduced?), got: " +
-                clusters.map { it.pattern to it.events.size },
+                clusters.map { it.pattern to it.members.size },
             clusters.none { it.pattern == CorrelationPattern.PRE_LINKED },
         )
         // Every imported row should render standalone.

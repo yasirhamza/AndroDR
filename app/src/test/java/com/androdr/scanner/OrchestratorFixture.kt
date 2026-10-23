@@ -93,7 +93,7 @@ internal class OrchestratorFixture(
             writer = writer,
             scanLock = lock,
             forensicTimelineEventDao = timelineDao,
-            timelineRows = TimelineRowDeleter(timelineDao, w.f.store),
+            timelineRows = TimelineRowDeleter(timelineDao, w.f.store, db.signalMemberDao()),
             installEventEmitter = installEventEmitter,
             deviceAdminGrantEmitter = deviceAdminGrantEmitter,
             sigmaRuleEngine = engine,

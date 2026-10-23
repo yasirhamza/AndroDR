@@ -59,11 +59,11 @@ class SigmaRuleEngineCorrelationTest {
             event(id = 3, category = "dns_lookup") // no matching atom
         )
 
-        val bindings = engine.computeAtomBindings(events)
+        val bindings = engine.rowBindings(events)
 
         assertEquals(setOf("androdr-atom-package-install"), bindings[1])
         assertEquals(setOf("androdr-atom-device-admin-grant"), bindings[2])
-        assertEquals(emptySet<String>(), bindings[3])
+        assertEquals("an atom bound to nothing is left out", null, bindings[3])
     }
 
     private fun atomRule(

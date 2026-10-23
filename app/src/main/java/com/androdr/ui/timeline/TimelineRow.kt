@@ -157,7 +157,7 @@ fun buildDateGroups(rows: List<TimelineRow>): List<DateGroup> {
         buckets.getOrPut(dateKey(row.timestamp)) { Bucket() }.findings.add(row)
     }
     clusters.forEach { cluster ->
-        buckets.getOrPut(dateKey(cluster.events.first().startTimestamp)) { Bucket() }
+        buckets.getOrPut(dateKey(cluster.startTimestamp)) { Bucket() }
             .clusters.add(cluster)
     }
     standaloneRows.forEach { row ->
@@ -168,16 +168,12 @@ fun buildDateGroups(rows: List<TimelineRow>): List<DateGroup> {
         DateGroup(
             label = label,
             findingRows = bucket.findings.sortedByDescending { it.timestamp },
-            clusters = bucket.clusters.sortedByDescending { c ->
-                c.events.maxOfOrNull { it.startTimestamp } ?: 0L
-            },
+            clusters = bucket.clusters.sortedByDescending { it.endTimestamp },
             standaloneRows = bucket.standalone.sortedByDescending { it.timestamp },
         )
     }.sortedByDescending { group ->
         val maxFinding = group.findingRows.maxOfOrNull { it.timestamp } ?: 0L
-        val maxCluster = group.clusters.maxOfOrNull { c ->
-            c.events.maxOfOrNull { it.startTimestamp } ?: 0L
-        } ?: 0L
+        val maxCluster = group.clusters.maxOfOrNull { it.endTimestamp } ?: 0L
         val maxStandalone = group.standaloneRows.maxOfOrNull { it.timestamp } ?: 0L
         maxOf(maxFinding, maxCluster, maxStandalone)
     }

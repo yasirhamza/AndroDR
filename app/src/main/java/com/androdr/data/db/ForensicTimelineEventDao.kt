@@ -5,7 +5,6 @@ import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import com.androdr.data.model.ForensicTimelineEvent
-import com.androdr.data.model.TelemetrySource
 import kotlinx.coroutines.flow.Flow
 
 /** A finding row's rule and fact (see [ForensicTimelineEventDao.findingRuleRecords]). */
@@ -15,13 +14,16 @@ data class RuleRecord(val ruleId: String, val recordId: Long)
 @Suppress("TooManyFunctions") // Room DAO with filtered queries for timeline
 interface ForensicTimelineEventDao {
 
-    @Query("SELECT * FROM forensic_timeline ORDER BY startTimestamp DESC LIMIT :limit")
+    // Reads below show only visible rows (spec §5.1 Visibility: `VisibleRow`), so rows of an
+    // IN_PROGRESS or DELETING scan never reach the Timeline, a report or an export.
+
+    @Query("SELECT * FROM forensic_timeline r WHERE ${VisibleRow.SQL} ORDER BY r.startTimestamp DESC LIMIT :limit")
     fun getRecentEvents(limit: Int = 500): Flow<List<ForensicTimelineEvent>>
 
     @Query("""
-        SELECT * FROM forensic_timeline
-        WHERE source = :source
-        ORDER BY startTimestamp DESC LIMIT :limit
+        SELECT * FROM forensic_timeline r
+        WHERE r.source = :source AND ${VisibleRow.SQL}
+        ORDER BY r.startTimestamp DESC LIMIT :limit
     """)
     fun getEventsBySource(source: String, limit: Int = 500): Flow<List<ForensicTimelineEvent>>
 
@@ -32,9 +34,9 @@ interface ForensicTimelineEventDao {
      * before any import) matches no intrusion-log rows and embeds none.
      */
     @Query("""
-        SELECT * FROM forensic_timeline
-        WHERE source = :source AND scanResultId = :scanResultId
-        ORDER BY startTimestamp DESC LIMIT :limit
+        SELECT * FROM forensic_timeline r
+        WHERE r.source = :source AND r.scanResultId = :scanResultId AND ${VisibleRow.SQL}
+        ORDER BY r.startTimestamp DESC LIMIT :limit
     """)
     fun getEventsBySourceForScan(
         source: String,
@@ -43,23 +45,26 @@ interface ForensicTimelineEventDao {
     ): Flow<List<ForensicTimelineEvent>>
 
     @Query("""
-        SELECT * FROM forensic_timeline
-        WHERE packageName = :packageName
-        ORDER BY startTimestamp DESC LIMIT 500
+        SELECT * FROM forensic_timeline r
+        WHERE r.packageName = :packageName AND ${VisibleRow.SQL}
+        ORDER BY r.startTimestamp DESC LIMIT 500
     """)
     fun getEventsByPackage(packageName: String): Flow<List<ForensicTimelineEvent>>
 
     @Query("""
-        SELECT * FROM forensic_timeline
-        WHERE startTimestamp BETWEEN :startMs AND :endMs
-        ORDER BY startTimestamp DESC LIMIT 500
+        SELECT * FROM forensic_timeline r
+        WHERE r.startTimestamp BETWEEN :startMs AND :endMs AND ${VisibleRow.SQL}
+        ORDER BY r.startTimestamp DESC LIMIT 500
     """)
     fun getEventsInRange(startMs: Long, endMs: Long): Flow<List<ForensicTimelineEvent>>
 
-    @Query("SELECT DISTINCT source FROM forensic_timeline ORDER BY source")
+    @Query("SELECT DISTINCT r.source FROM forensic_timeline r WHERE ${VisibleRow.SQL} ORDER BY r.source")
     suspend fun getDistinctSources(): List<String>
 
-    @Query("SELECT DISTINCT packageName FROM forensic_timeline WHERE packageName != '' ORDER BY packageName")
+    @Query(
+        "SELECT DISTINCT r.packageName FROM forensic_timeline r WHERE r.packageName != '' AND ${VisibleRow.SQL} " +
+            "ORDER BY r.packageName"
+    )
     suspend fun getDistinctPackages(): List<String>
 
     @Query("SELECT DISTINCT packageName FROM forensic_timeline WHERE category = 'package_install'")
@@ -68,41 +73,22 @@ interface ForensicTimelineEventDao {
     @Query("SELECT DISTINCT packageName FROM forensic_timeline WHERE category = 'device_admin_grant'")
     suspend fun getAdminGrantedPackagesAlreadyEmitted(): List<String>
 
-    @Query("SELECT * FROM forensic_timeline ORDER BY startTimestamp ASC LIMIT 10000")
+    @Query("SELECT * FROM forensic_timeline r WHERE ${VisibleRow.SQL} ORDER BY r.startTimestamp ASC LIMIT 10000")
     suspend fun getAllForExport(): List<ForensicTimelineEvent>
 
-    @Query("SELECT * FROM forensic_timeline WHERE startTimestamp >= :sinceMs ORDER BY startTimestamp ASC")
+    @Query(
+        "SELECT * FROM forensic_timeline r WHERE r.startTimestamp >= :sinceMs AND ${VisibleRow.SQL} " +
+            "ORDER BY r.startTimestamp ASC"
+    )
     suspend fun getEventsSince(sinceMs: Long): List<ForensicTimelineEvent>
 
-    /**
-     * Like [getEventsSince] but drops rows whose [ForensicTimelineEvent.telemetrySource]
-     * equals [excluded] (#342 B2).
-     *
-     * The live-scan correlation lookback uses this with
-     * `excluded = INTRUSION_LOG_IMPORT`: imported forensic snapshots carry each
-     * event's OWN (historical) timestamp, so a plain time-window query pulls them
-     * into a live scan's correlation input. Any signal they help produce is then
-     * stamped with the LIVE scan's id, which the intrusion-log replace-on-reimport
-     * sweep (keyed on intrusion_log scan ids) can never reach — an orphan signal
-     * accumulating per live scan. Excluding imported rows keeps a live scan's
-     * correlation to live/bug-report evidence. [getEventsSince] is retained
-     * unchanged for any caller that genuinely wants every source.
-     */
-    @Query("""
-        SELECT * FROM forensic_timeline
-        WHERE startTimestamp >= :sinceMs AND telemetrySource != :excluded
-        ORDER BY startTimestamp ASC
-    """)
-    suspend fun getEventsSinceExcludingTelemetrySource(
-        sinceMs: Long,
-        excluded: TelemetrySource
-    ): List<ForensicTimelineEvent>
+    /** The visible rows among [ids] (correlation-cluster members, spec §5.4). Call through [chunkedIn]. */
+    @Query("SELECT * FROM forensic_timeline r WHERE r.id IN (:ids) AND ${VisibleRow.SQL}")
+    suspend fun visibleByIds(ids: List<Long>): List<ForensicTimelineEvent>
 
     /**
      * Bulk insert returning the Room-assigned autoincrement IDs, in the same
-     * order as the input list. The correlation engine needs these IDs so that
-     * `matchContext.member_event_ids` can reference real rows (otherwise every
-     * member would be serialized as `id = 0` from the default value).
+     * order as the input list. A signal's `signal_member` rows need its real id.
      *
      * Rows that were skipped by `OnConflictStrategy.IGNORE` get a `-1` entry.
      */
@@ -182,7 +168,7 @@ interface ForensicTimelineEventDao {
      * Used by the intrusion-log import's replace-on-reimport sweep: deleting by
      * source alone would strand the correlation-signal rows the engine writes
      * with `source = "sigma_correlation_engine"`, leaving clusters whose
-     * `member_event_ids` point at deleted rows. Deleting by the ids this
+     * `signal_member` refs point at deleted rows. Deleting by the ids this
      * returns removes a prior import's raw rows, finding rows, and signals
      * together — without touching live-scan or bug-report signals, which carry
      * their own scan ids.

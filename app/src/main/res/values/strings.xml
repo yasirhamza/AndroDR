@@ -34,6 +34,11 @@
     <string name="dns_drops_banner_title">DNS events were not recorded</string>
     <string name="dns_drops_banner_body" tools:ignore="PluralsCandidate">%1$d DNS event(s) could not be saved (the database was unavailable, or the VPN stopped before they were written), so they are missing from the DNS log.</string>
     <string name="dns_drops_banner_dismiss">Dismiss</string>
+    <string name="correlation_incomplete_banner_title">Correlation incomplete</string>
+    <string name="correlation_incomplete_banner_body">Some event chains were not fully checked in the time allowed, so a chain there may have been missed. %1$s</string>
+    <string name="timeline_cluster_members_missing" tools:ignore="PluralsCandidate">%1$d linked event(s) no longer exist.</string>
+    <string name="timeline_cluster_load_more">Show more linked events</string>
+    <string name="timeline_cluster_fact_unreadable">Record could not be read</string>
     <string name="partial_scan_banner_title">Scan incomplete</string>
     <!-- PluralsCandidate: compact failure counter -->
     <string name="partial_scan_banner_body" tools:ignore="PluralsCandidate">%1$d check(s) failed — results may be inaccurate. Retry the scan to get a complete picture.</string>

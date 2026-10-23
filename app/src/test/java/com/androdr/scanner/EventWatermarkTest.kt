@@ -187,6 +187,7 @@ class EventWatermarkTest {
     @Test
     fun `usage rows stamped after the window end survive a scan after the clock moved back`() = runBlocking {
         val now = System.currentTimeMillis()
+        f.w.f.scan(5L, com.androdr.data.model.ScanState.COMPLETE)
         f.timelineDao.insertAll(listOf(usage(now + 3_600_000L).toForensicTimelineEvent(5L)))
         coEvery { f.usageStatsScanner.collectEvents(any(), any()) } returns
             UsageCollection.Ok(listOf(usage(now - 60_000L)))

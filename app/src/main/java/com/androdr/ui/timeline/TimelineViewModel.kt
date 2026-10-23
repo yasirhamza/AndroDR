@@ -64,7 +64,23 @@ class TimelineViewModel @Inject constructor(
     private val sigmaRuleEngine: com.androdr.sigma.SigmaRuleEngine,
     private val scanRepository: ScanRepository,
     private val reportExporter: com.androdr.reporting.ReportExporter,
+    private val clusterMembers: ClusterMembers,
+    private val signalMembers: com.androdr.data.db.SignalMemberDao,
 ) : ViewModel() {
+
+    /** One page of a correlation signal's members, loaded when its card is expanded (spec §5.4). */
+    suspend fun loadClusterPage(signalRowId: Long, after: com.androdr.sigma.AtomRef?): ClusterPage =
+        withContext(Dispatchers.IO) { clusterMembers.load(signalRowId, after) }
+
+    /** Each exported signal's members that still exist, as `kind:id` (the CSV `member_refs` column). */
+    private suspend fun memberRefs(events: List<ForensicTimelineEvent>): Map<Long, List<String>> {
+        val signalIds = events.filter { it.kind == "signal" }.map { it.id }
+        if (signalIds.isEmpty()) return emptyMap()
+        return withContext(Dispatchers.IO) {
+            com.androdr.data.db.chunkedIn(signalIds) { signalMembers.existingRefs(it) }
+                .groupBy({ it.signalRowId }, { "${it.kind}:${it.refId}" })
+        }
+    }
 
     private val _groupMode = MutableStateFlow(TimelineGroupMode.DATE)
     val groupMode: StateFlow<TimelineGroupMode> = _groupMode.asStateFlow()
@@ -348,12 +364,12 @@ class TimelineViewModel @Inject constructor(
             versionName = appContext.appVersion().name
         )
     }
-    fun exportCsv() = export("csv") { TimelineExporter.formatCsv(it) }
+    fun exportCsv() = export("csv") { TimelineExporter.formatCsv(it, memberRefs(it)) }
 
     @Suppress("TooGenericExceptionCaught") // Export can throw IOException (disk full, no
     // permission) or SecurityException (FileProvider misconfiguration) — catching Exception
     // ensures the exporting flag is always reset and the error is logged regardless of type.
-    private fun export(extension: String, formatter: (List<ForensicTimelineEvent>) -> String) {
+    private fun export(extension: String, formatter: suspend (List<ForensicTimelineEvent>) -> String) {
         if (_exporting.value) return
         viewModelScope.launch {
             _exporting.value = true

@@ -15,6 +15,8 @@ import com.androdr.data.repo.Correlation
 import com.androdr.data.repo.FindingTotals
 import com.androdr.data.repo.SessionHooks
 import com.androdr.data.repo.TimelineRowDeleter
+import com.androdr.data.store.AtomReader
+import com.androdr.sigma.CorrelationBudget
 import com.androdr.sigma.Finding
 import com.androdr.sigma.FindingCategory
 import com.androdr.sigma.IntrusionLogRecordBuilders
@@ -23,18 +25,28 @@ import com.androdr.sigma.RuleCoverage
 import com.androdr.sigma.SigmaCorrelationEngine
 import com.androdr.sigma.SigmaRuleEngine
 import com.androdr.sigma.StoreRecord
+import com.androdr.sigma.TaxonomyContract
+import com.androdr.sigma.TimelineAtom
+import com.androdr.sigma.TimelineCategories
 import java.util.Collections
+
+/** The correlation budget's clock: monotonic milliseconds (a wall-clock jump never cuts a pass short). */
+internal fun monotonicMs(): Long = System.nanoTime() / NANOS_PER_MS
+
+private const val NANOS_PER_MS = 1_000_000L
 
 /**
  * What every writer adds to its session's finishing transaction in Phases A–C (spec §5.2): the
  * interim event rows ([interim], fed per chunk), the writer's detected-change or module rows
- * ([extraRows]), and the correlation pass over this scan's just-written rows — with [lookback]
- * rows for a live scan — whose chain coverage gaps (#370) land on the summary.
+ * ([extraRows]), and the correlation pass over this scan's atoms — read after its rows were written,
+ * plus [lookbackAtoms] for a live scan — under a [CorrelationBudget] ([newBudget]). Its chain
+ * coverage gaps (#370) and budget cut-offs land on the summary.
  */
 internal abstract class WriterHooks(
     protected val scan: ScanResult,
     private val engine: SigmaRuleEngine,
     private val correlationEngine: SigmaCorrelationEngine,
+    private val newBudget: () -> CorrelationBudget = { CorrelationBudget(::monotonicMs) },
 ) : SessionHooks {
     val interim = InterimTimelineRows()
 
@@ -47,13 +59,18 @@ internal abstract class WriterHooks(
     private val rules = engine.getCorrelationRules()
     private val atomRulesById = engine.getEnabledRules().associateBy { it.id }
     private var chainSkips: List<ScannerFailure> = emptyList()
+    private var incompleteSkips: List<ScannerFailure> = emptyList()
 
     /** The session's finding totals, once [summarize] ran (counts past the intrusion-log cap). */
     var totals: FindingTotals? = null
         private set
 
-    /** Rows already in the database that take part in this scan's correlation (live scans only). */
-    protected open suspend fun lookback(): List<ForensicTimelineEvent> = emptyList()
+    /**
+     * Atoms already in the database that take part in this scan's correlation (live scans only).
+     * An import correlates over its own atoms only, so its signals never reference live data.
+     */
+    protected open suspend fun lookbackAtoms(atoms: AtomReader, categories: Set<String>): List<TimelineAtom> =
+        emptyList()
 
     /** Rows written before the interim rows (detected changes, bug-report module rows). */
     protected open fun extraRows(scan: ScanResult): List<ForensicTimelineEvent> = emptyList()
@@ -66,15 +83,25 @@ internal abstract class WriterHooks(
     override fun interimRows(scan: ScanResult): List<ForensicTimelineEvent> =
         extraRows(scan) + interim.rows(scan.id)
 
-    override suspend fun correlate(rows: List<ForensicTimelineEvent>): Correlation {
-        val events = lookback() + rows
+    /**
+     * Inside the finishing transaction, after this scan's rows were inserted: this scan's own atoms
+     * (its rows with their real ids, and the facts it observed) plus [lookbackAtoms], each ref once.
+     * The budget's total deadline covers the reads, binding and grouping; a cut-off returns normally
+     * with the signals already found and a CORRELATION_INCOMPLETE entry per affected rule.
+     */
+    override suspend fun correlate(scan: ScanResult, atoms: AtomReader): Correlation {
+        val budget = newBudget()
+        val atomCategoryByRuleId = engine.atomCategories()
+        val categories = atomCategoryByRuleId.values.toSet()
+        val all = (atoms.atomsForScan(scan.id, categories) + lookbackAtoms(atoms, categories)).distinctBy { it.ref }
         // #370: a chain rule fires only where every leg has events to bind to; legs with nothing
         // recorded are declared, so "no warning signs" never stands in for "not checked".
-        chainSkips = RuleCoverage.noEventSkipsFor(rules, engine.atomCategories(), events)
-        if (rules.isEmpty() || events.isEmpty()) return Correlation.NONE
-        val bindings = engine.computeAtomBindings(events)
-        val signals = correlationEngine.evaluate(rules, events, bindings, atomRulesById)
-            .map { it.copy(scanResultId = scan.id) }
+        chainSkips = RuleCoverage.noEventSkipsFor(rules, atomCategoryByRuleId, all)
+        if (rules.isEmpty() || all.isEmpty()) return Correlation.NONE
+        val bindings = engine.computeAtomBindings(all, budget::totalExpired)
+        val result = correlationEngine.evaluate(rules, all, bindings, atomRulesById, budget)
+        incompleteSkips = result.incomplete
+        val signals = result.signals.map { it.copy(row = it.row.copy(scanResultId = scan.id)) }
         if (signals.isEmpty()) return Correlation.NONE
         return Correlation(signals, correlationEngine.findingsFor(signals, rules, atomRulesById))
     }
@@ -83,7 +110,8 @@ internal abstract class WriterHooks(
         this.totals = totals
         return scan.copy(
             knownMalwareCount = totals.knownMalware,
-            scannerErrors = scan.scannerErrors + synchronized(errors) { errors.toList() } + chainSkips,
+            scannerErrors = scan.scannerErrors + synchronized(errors) { errors.toList() } + chainSkips +
+                incompleteSkips,
         )
     }
 
@@ -99,15 +127,14 @@ internal abstract class WriterHooks(
 /**
  * The live scan: finding rows enriched with APK hashes, the detected-change rows (first-seen
  * installs, device-admin grants), the `usage_stats` rows of the re-read usage window replaced, a
- * correlation lookback read before the session writes ([readLookback]) that excludes imported
- * intrusion-log rows (#342 B2), and the event watermarks this scan advances (spec §5.2).
+ * correlation lookback ([lookbackAtoms]) that excludes every import source (#342 B2), and the
+ * event watermarks this scan advances (spec §5.2).
  */
 @Suppress("LongParameterList") // the live scan's inputs, built once by ScanOrchestrator
 internal class LiveScanHooks(
     scan: ScanResult,
     engine: SigmaRuleEngine,
     correlationEngine: SigmaCorrelationEngine,
-    private val timeline: ForensicTimelineEventDao,
     private val timelineRows: TimelineRowDeleter,
     private val hashByPkg: Map<String, String>,
     private val detectedChanges: List<ForensicTimelineEvent>,
@@ -115,7 +142,8 @@ internal class LiveScanHooks(
     private val usage: UsageWindow,
     private val dns: DnsWindow,
     private val clock: () -> Long = System::currentTimeMillis,
-) : WriterHooks(scan, engine, correlationEngine) {
+    newBudget: () -> CorrelationBudget = { CorrelationBudget(::monotonicMs) },
+) : WriterHooks(scan, engine, correlationEngine, newBudget) {
     init {
         interim.register<UsageEvent>(
             USAGE_STATS, cap = null, keepUnobserved = true, time = { it.timestamp },
@@ -136,9 +164,6 @@ internal class LiveScanHooks(
      */
     private val replacesUsage = usage.collection is UsageCollection.Ok
 
-    private fun replacedUsageRow(row: ForensicTimelineEvent): Boolean =
-        replacesUsage && row.source == USAGE_STATS && row.startTimestamp in usage.since..usage.until
-
     override suspend fun sweepPrior(scanId: Long) {
         if (replacesUsage) timelineRows.bySourceBetween(USAGE_STATS, usage.since, usage.until)
     }
@@ -155,30 +180,22 @@ internal class LiveScanHooks(
 
     override fun extraRows(scan: ScanResult): List<ForensicTimelineEvent> = detectedChanges
 
-    private var lookbackRows: List<ForensicTimelineEvent> = emptyList()
-
     /**
-     * Reads the correlation lookback BEFORE the session writes anything, so `finish`'s correlation
-     * never sees this scan's own rows twice (spec §5.2: an event is counted once). The window ends
-     * at the scan start; rows of this scan and the `usage_stats` rows `finish` replaces (those of the
-     * re-read window: this scan writes their events again) are left out.
-     *
-     * #342 B2: imported intrusion-log rows carry their own historical event time, so a plain
-     * time-window query would sweep them in, and any signal they helped produce would be stamped
-     * with this live scan's id — unreachable by the intrusion-log sweep (an orphan signal).
+     * The correlation lookback (spec §5.2), read inside `finish` after this scan's rows were
+     * inserted: visible live rows and facts a `COMPLETE` live scan observed, stamped in
+     * `[scanStart - window, scanStart]`. Each guarantee is structural:
+     *  - this scan's own rows and facts are not in it (its scan is still `IN_PROGRESS`, so neither
+     *    [com.androdr.data.db.VisibleRow] nor a `COMPLETE` observation admits them) — they come
+     *    once, from `atomsForScan`, and `correlate` also keeps each ref once;
+     *  - the `usage_stats` rows `finish` replaces are gone: [sweepPrior] deleted them first in the
+     *    same transaction, and the rows this scan wrote for those events are its own atoms;
+     *  - nothing stamped after the scan start, and nothing an import recorded (#342 B2: imported
+     *    events carry their own historical times; a signal they helped produce would be stamped
+     *    with this live scan's id, unreachable by the import's sweep).
      */
-    suspend fun readLookback() {
-        if (lookbackWindowMs <= 0L) return
-        lookbackRows = runCatching {
-            timeline.getEventsSinceExcludingTelemetrySource(
-                scan.timestamp - lookbackWindowMs, TelemetrySource.INTRUSION_LOG_IMPORT
-            )
-        }.getOrDefault(emptyList()).filter {
-            it.startTimestamp <= scan.timestamp && it.scanResultId != scan.id && !replacedUsageRow(it)
-        }
-    }
-
-    override suspend fun lookback(): List<ForensicTimelineEvent> = lookbackRows
+    override suspend fun lookbackAtoms(atoms: AtomReader, categories: Set<String>): List<TimelineAtom> =
+        if (lookbackWindowMs <= 0L) emptyList()
+        else atoms.atomsBetween(scan.timestamp - lookbackWindowMs, scan.timestamp, categories)
 
     override fun summarize(scan: ScanResult, totals: FindingTotals): ScanResult = super.summarize(scan, totals).copy(
         riskySideloadCount = scan.findings.count {
@@ -237,7 +254,7 @@ internal class IntrusionLogHooks(
      *
      * Deleting by source alone is not enough. The correlation engine persists its signals with
      * `source = "sigma_correlation_engine"` (shared with the live-scan and bug-report paths, so that
-     * source must never be deleted wholesale) and each signal's `member_event_ids` points at the
+     * source must never be deleted wholesale) and each signal's `signal_member` rows point at the
      * raw rows that produced it. Every row of one import — raw, finding, and signal — carries that
      * import's `scanResultId`, so the ids owning "intrusion_log" rows identify the whole set. The
      * two source deletes still run afterwards as belt-and-braces for rows written without a scan id.
@@ -256,6 +273,11 @@ internal class IntrusionLogHooks(
  * A bug-report import: finding rows enriched with APK hashes, then the modules' raw timeline rows
  * not already covered by a finding row at the same (package, time) — so a finding and its raw
  * evidence don't read as duplicates — and the modules' own rows (e.g. install times).
+ *
+ * Ruling R17: a module row and the fact it was parsed from must never bind twice in correlation.
+ * Each module row carries the `recordId` of its fact, matched by (category, package, event time)
+ * against the facts this import stored ([onChunk]), one fact per row; the atom reader then leaves
+ * that fact out, because the row stands in for it.
  */
 internal class BugReportHooks(
     scan: ScanResult,
@@ -264,8 +286,38 @@ internal class BugReportHooks(
     private val hashByPkg: Map<String, String>,
     private val moduleTimeline: List<TimelineEvent>,
     private val moduleRows: List<ForensicTimelineEvent>,
-) : WriterHooks(scan, engine, correlationEngine) {
+    newBudget: () -> CorrelationBudget = { CorrelationBudget(::monotonicMs) },
+) : WriterHooks(scan, engine, correlationEngine, newBudget) {
     private val coveredByFinding = HashSet<Pair<String, Long>>()
+
+    private data class EventKey(val category: String, val packageName: String, val time: Long)
+
+    /** The keys module rows have, so only facts a row can claim are remembered. */
+    private val moduleKeys: Set<EventKey> by lazy {
+        moduleTimeline.mapTo(HashSet()) { EventKey(it.category, it.packageName.orEmpty(), it.timestamp) } +
+            moduleRows.map { EventKey(it.category, it.packageName, it.startTimestamp) }
+    }
+
+    /** Stored facts by key, in store order; each module row claims (removes) one. */
+    private val factsByKey = HashMap<EventKey, ArrayDeque<Long>>()
+
+    override fun onChunk(
+        service: String, source: TelemetrySource, chunk: List<StoreRecord>, firstOrdinal: Int,
+        factIds: LongArray?, observed: BooleanArray?,
+    ) {
+        super.onChunk(service, source, chunk, firstOrdinal, factIds, observed)
+        if (factIds == null) return
+        val packageField = TaxonomyContract.packageField(service)
+        chunk.forEachIndexed { i, record ->
+            val time = TaxonomyContract.eventTimeOf(service, record.fields) ?: return@forEachIndexed
+            val pkg = packageField?.let { record.fields[it]?.toString() }.orEmpty()
+            val key = EventKey(TimelineCategories.categoryOf(service, record.fields), pkg, time)
+            if (key in moduleKeys) factsByKey.getOrPut(key) { ArrayDeque() }.addLast(factIds[i])
+        }
+    }
+
+    private fun claim(category: String, packageName: String, time: Long): Long? =
+        factsByKey[EventKey(category, packageName, time)]?.removeFirstOrNull()
 
     override fun findingRow(finding: Finding, scan: ScanResult): ForensicTimelineEvent {
         val row = withApkHash(finding.toForensicTimelineEvent(scan, isBugreport = true), hashByPkg)
@@ -279,8 +331,13 @@ internal class BugReportHooks(
     override fun extraRows(scan: ScanResult): List<ForensicTimelineEvent> =
         moduleTimeline
             .filterNot { raw -> raw.packageName != null && (raw.packageName to raw.timestamp) in coveredByFinding }
-            .map { it.toForensicTimelineEvent(scan.id) } +
-            moduleRows.map { it.copy(scanResultId = scan.id) }
+            .map { raw ->
+                raw.toForensicTimelineEvent(scan.id)
+                    .copy(recordId = claim(raw.category, raw.packageName.orEmpty(), raw.timestamp))
+            } +
+            moduleRows.map {
+                it.copy(scanResultId = scan.id, recordId = claim(it.category, it.packageName, it.startTimestamp))
+            }
 }
 
 /**

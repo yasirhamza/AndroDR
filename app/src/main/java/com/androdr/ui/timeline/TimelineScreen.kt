@@ -416,6 +416,7 @@ fun TimelineScreen(
                                     group.clusters.forEach { cluster ->
                                         CorrelationClusterCard(
                                             cluster = cluster,
+                                            loadPage = viewModel::loadClusterPage,
                                             onEventTap = { selectedEvent = it }
                                         )
                                     }
@@ -461,9 +462,10 @@ fun TimelineScreen(
                         )
                     }
                     group.clusters.forEach { cluster ->
-                        item(key = "cluster_${group.label}_${cluster.events.minOf { it.id }}") {
+                        item(key = "cluster_${group.label}_${cluster.key}") {
                             CorrelationClusterCard(
                                 cluster = cluster,
+                                loadPage = viewModel::loadClusterPage,
                                 onEventTap = { selectedEvent = it }
                             )
                         }

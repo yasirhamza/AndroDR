@@ -20,12 +20,29 @@ enum class CorrelationPattern {
     GENERIC_TEMPORAL            // fallback
 }
 
-/** A group of raw timeline events that share a correlation signal. */
+/**
+ * A group of timeline members shown as one card. A pre-linked cluster holds its rows in [members].
+ * A correlation signal's cluster ([signalRowId] set) starts with no members: they live only in
+ * `signal_member` and are loaded page by page through [ClusterMembers] when the card is expanded;
+ * [memberCount] is the signal's own count (null for a legacy signal not yet backfilled).
+ */
 data class EventCluster(
-    val events: List<ForensicTimelineEvent>,
+    val members: List<TimelineMember>,
     val pattern: CorrelationPattern,
-    val label: String
-)
+    val label: String,
+    val startTimestamp: Long,
+    val endTimestamp: Long,
+    val signalRowId: Long? = null,
+    val memberCount: Int? = null,
+) {
+    /** A stable list key: the signal row, or the first member. */
+    val key: String
+        get() = signalRowId?.let { "signal_$it" }
+            ?: "prelinked_" + ((members.firstOrNull() as? TimelineMember.RowMember)?.row?.id ?: startTimestamp)
+
+    /** How many members the card announces. */
+    val size: Int get() = memberCount ?: members.size
+}
 
 /** Shared severity ordinal for timeline components. */
 fun severityOrdinal(level: String): Int = when (level.uppercase()) {
@@ -41,29 +58,24 @@ private val signalJson = Json { ignoreUnknownKeys = true; isLenient = true }
  * standalone events for the timeline UI.
  *
  * Signal rows are produced by [com.androdr.sigma.SigmaCorrelationEngine] during
- * scans and persisted to `forensic_timeline`. Each signal's `details` JSON
- * encodes a comma-separated `member_event_ids` list that this function uses to
- * look up the underlying raw events and bundle them into an [EventCluster].
- *
- * Events referenced by any signal are removed from the standalone list so they
- * render inside their cluster only — not twice.
+ * scans and persisted to `forensic_timeline`. Each becomes an [EventCluster] whose
+ * members (rows and stored facts, kept only in `signal_member`) load on expand through
+ * [ClusterMembers]. The members also stay standalone Timeline entries (spec §6: the
+ * row-and-fact union of the Timeline arrives in Task C4).
  */
 fun partitionSignals(
     allEvents: List<ForensicTimelineEvent>
 ): Pair<List<EventCluster>, List<ForensicTimelineEvent>> {
     if (allEvents.isEmpty()) return emptyList<EventCluster>() to emptyList()
-    val byId = allEvents.associateBy { it.id }
     val clusters = mutableListOf<EventCluster>()
     val clusteredIds = mutableSetOf<Long>()
 
-    // Pass 1 — explicit correlation signals produced by SigmaCorrelationEngine.
-    // Each signal row carries a JSON payload listing its member event IDs.
+    // Pass 1 — explicit correlation signals produced by SigmaCorrelationEngine. The signal row
+    // is the cluster head; its members load on expand.
     allEvents.asSequence()
         .filter { it.kind == "signal" }
         .forEach { sig ->
-            val cluster = buildCluster(sig, byId) ?: return@forEach
-            clusters.add(cluster)
-            clusteredIds.addAll(cluster.events.map { it.id })
+            clusters.add(buildCluster(sig))
             // Hide the signal row itself from the standalone list.
             clusteredIds.add(sig.id)
         }
@@ -86,9 +98,11 @@ fun partitionSignals(
             val sorted = members.sortedBy { it.startTimestamp }
             clusters.add(
                 EventCluster(
-                    events = sorted,
+                    members = sorted.map { TimelineMember.RowMember(it) },
                     pattern = CorrelationPattern.PRE_LINKED,
-                    label = prelinkedLabel(sorted)
+                    label = prelinkedLabel(sorted),
+                    startTimestamp = sorted.first().startTimestamp,
+                    endTimestamp = sorted.last().startTimestamp,
                 )
             )
             clusteredIds.addAll(sorted.map { it.id })
@@ -133,19 +147,17 @@ private fun prelinkedLabel(members: List<ForensicTimelineEvent>): String {
     return members.first().description
 }
 
-private fun buildCluster(
-    sig: ForensicTimelineEvent,
-    byId: Map<Long, ForensicTimelineEvent>
-): EventCluster? {
+private fun buildCluster(sig: ForensicTimelineEvent): EventCluster {
     val fields = parseSignalDetails(sig.details)
-    val memberIds = fields["member_event_ids"].orEmpty()
-        .split(",")
-        .mapNotNull { it.trim().toLongOrNull() }
-    val members = memberIds.mapNotNull(byId::get).sortedBy { it.startTimestamp }
-    if (members.isEmpty()) return null
-    val pattern = patternFor(fields["correlation_type"].orEmpty())
-    val label = sig.description.ifEmpty { "Correlated events" }
-    return EventCluster(members, pattern, label)
+    return EventCluster(
+        members = emptyList(),
+        pattern = patternFor(fields["correlation_type"].orEmpty()),
+        label = sig.description.ifEmpty { "Correlated events" },
+        startTimestamp = sig.startTimestamp,
+        endTimestamp = sig.endTimestamp ?: sig.startTimestamp,
+        signalRowId = sig.id,
+        memberCount = fields[com.androdr.sigma.SigmaCorrelationEngine.MEMBER_COUNT]?.toIntOrNull(),
+    )
 }
 
 private fun parseSignalDetails(details: String): Map<String, String> {

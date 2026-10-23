@@ -62,7 +62,7 @@ class DateGroupBuilderTest {
 
         assertEquals(1, groups.size)
         assertEquals(0, groups[0].findingRows.size)
-        assertTrue(groups[0].standaloneRows.size + groups[0].clusters.sumOf { it.events.size } == 2)
+        assertTrue(groups[0].standaloneRows.size + groups[0].clusters.sumOf { it.members.size } == 2)
     }
 
     @Test
@@ -76,9 +76,9 @@ class DateGroupBuilderTest {
 
         assertEquals(2, groups.size)
         val newestGroupTs = groups[0].standaloneRows.maxOfOrNull { it.timestamp }
-            ?: groups[0].clusters.flatMap { it.events }.maxOfOrNull { it.startTimestamp } ?: 0L
+            ?: groups[0].clusters.maxOfOrNull { it.endTimestamp } ?: 0L
         val oldestGroupTs = groups[1].standaloneRows.maxOfOrNull { it.timestamp }
-            ?: groups[1].clusters.flatMap { it.events }.maxOfOrNull { it.startTimestamp } ?: 0L
+            ?: groups[1].clusters.maxOfOrNull { it.endTimestamp } ?: 0L
         assertTrue("Newest group first", newestGroupTs > oldestGroupTs)
     }
 

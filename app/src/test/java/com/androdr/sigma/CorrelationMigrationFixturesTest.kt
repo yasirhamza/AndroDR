@@ -72,7 +72,8 @@ class CorrelationMigrationFixturesTest {
             2L to setOf("androdr-atom-device-admin-grant")
         )
 
-        val signals = SigmaCorrelationEngine().evaluate(listOf(rule), events, bindings)
+        val fired = SigmaCorrelationEngine().evaluateRows(listOf(rule), events, bindings)
+        val signals = fired.map { it.row }
 
         // NOTE: in production this rule will not fire until issue #79 lands
         // (no producer of category="device_admin_grant"). This test exercises
@@ -106,7 +107,8 @@ class CorrelationMigrationFixturesTest {
             11L to setOf("androdr-atom-permission-use")
         )
 
-        val signals = SigmaCorrelationEngine().evaluate(listOf(rule), events, bindings)
+        val fired = SigmaCorrelationEngine().evaluateRows(listOf(rule), events, bindings)
+        val signals = fired.map { it.row }
 
         assertEquals(1, signals.size)
         assertEquals("androdr-corr-002", signals[0].ruleId)
@@ -135,7 +137,8 @@ class CorrelationMigrationFixturesTest {
             21L to setOf("androdr-atom-dns-lookup")
         )
 
-        val signals = SigmaCorrelationEngine().evaluate(listOf(rule), events, bindings)
+        val fired = SigmaCorrelationEngine().evaluateRows(listOf(rule), events, bindings)
+        val signals = fired.map { it.row }
 
         assertEquals(1, signals.size)
         assertEquals("androdr-corr-003", signals[0].ruleId)
@@ -158,7 +161,8 @@ class CorrelationMigrationFixturesTest {
             21L to setOf("androdr-atom-dns-lookup")
         )
 
-        val signals = SigmaCorrelationEngine().evaluate(listOf(rule), events, bindings)
+        val fired = SigmaCorrelationEngine().evaluateRows(listOf(rule), events, bindings)
+        val signals = fired.map { it.row }
         assertTrue("should not fire outside window", signals.isEmpty())
     }
 
@@ -185,7 +189,8 @@ class CorrelationMigrationFixturesTest {
             32L to setOf("androdr-atom-permission-use")
         )
 
-        val signals = SigmaCorrelationEngine().evaluate(listOf(rule), events, bindings)
+        val fired = SigmaCorrelationEngine().evaluateRows(listOf(rule), events, bindings)
+        val signals = fired.map { it.row }
 
         assertEquals(1, signals.size)
         val sig = signals[0]
@@ -194,7 +199,8 @@ class CorrelationMigrationFixturesTest {
         assertEquals("correlation", sig.category)
         assertEquals(t0, sig.startTimestamp)
         assertEquals(t0 + 2 * 60_000L, sig.endTimestamp)
-        assertTrue(sig.details.contains("\"member_event_ids\":\"30,31,32\""))
+        assertEquals(listOf(Row(30), Row(31), Row(32)), fired.single().members)
+        assertEquals(3, sig.memberCount)
     }
 
     @Test
@@ -212,7 +218,8 @@ class CorrelationMigrationFixturesTest {
             31L to setOf("androdr-atom-permission-use")
         )
 
-        val signals = SigmaCorrelationEngine().evaluate(listOf(rule), events, bindings)
+        val fired = SigmaCorrelationEngine().evaluateRows(listOf(rule), events, bindings)
+        val signals = fired.map { it.row }
         assertTrue("should not fire below gte:3 threshold", signals.isEmpty())
     }
 }

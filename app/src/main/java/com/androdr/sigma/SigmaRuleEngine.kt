@@ -11,7 +11,6 @@ import com.androdr.data.model.DatabasePathObservation
 import com.androdr.data.model.DeviceTelemetry
 import com.androdr.data.model.DnsEvent
 import com.androdr.data.model.FileArtifactTelemetry
-import com.androdr.data.model.ForensicTimelineEvent
 import com.androdr.data.model.ImportedDnsEvent
 import com.androdr.data.model.NetworkTelemetry
 import com.androdr.data.model.PackageInstallHistoryEntry
@@ -111,28 +110,36 @@ class SigmaRuleEngine @Inject constructor(
     }
 
     /**
-     * For each event, compute the set of atom rule IDs whose selection.category
-     * matches the event's category. Atom rules are detection rules with
-     * level == "informational" that have a single `selection` with a `category`
-     * equals matcher. Used by [SigmaCorrelationEngine] to bind raw timeline
-     * events to the atom rule IDs referenced by correlation rules.
+     * For each atom, the set of atom rule IDs whose selection.category matches the atom's
+     * category. Atom rules are detection rules with level == "informational" that have a single
+     * `selection` with a `category` equals matcher. Used by [SigmaCorrelationEngine] to bind
+     * correlation atoms (timeline rows and stored facts, spec §6) to the atom rule IDs referenced
+     * by correlation rules. Atoms bound to no rule are left out of the map.
      *
      * Atom rules whose id is in [unevaluableRules] (unresolvable `ioc_lookup`,
      * judged against this engine's own [iocLookups] — the same source
      * [evaluate]-family methods use) are excluded: fail-closed applies to the
      * binding path too, so a rule this binary cannot faithfully evaluate must
-     * not silently bind timeline events into correlations either.
+     * not silently bind atoms into correlations either.
+     *
+     * [expired] is the correlation budget's total deadline (spec §5.2), checked every
+     * [BINDING_CHECK_EVERY] atoms; once it passes the map built so far is returned and the caller
+     * records every rule as not started.
      */
-    fun computeAtomBindings(events: List<ForensicTimelineEvent>): Map<Long, Set<String>> {
+    fun computeAtomBindings(
+        atoms: List<TimelineAtom>,
+        expired: () -> Boolean = { false },
+    ): Map<AtomRef, Set<String>> {
         val atomCategoryByRuleId = atomCategories()
-        if (atomCategoryByRuleId.isEmpty() || events.isEmpty()) return emptyMap()
-        return events.associate { event ->
-            event.id to atomCategoryByRuleId
-                .asSequence()
-                .filter { (_, cat) -> cat == event.category }
-                .map { it.key }
-                .toSet()
+        if (atomCategoryByRuleId.isEmpty() || atoms.isEmpty()) return emptyMap()
+        val rulesByCategory = atomCategoryByRuleId.entries.groupBy({ it.value }, { it.key })
+            .mapValues { it.value.toSet() }
+        val out = HashMap<AtomRef, Set<String>>()
+        for ((i, atom) in atoms.withIndex()) {
+            if (i % BINDING_CHECK_EVERY == 0 && expired()) break
+            rulesByCategory[atom.category]?.let { out[atom.ref] = it }
         }
+        return out
     }
 
     private fun extractAtomCategory(rule: SigmaRule): String? {
@@ -372,6 +379,9 @@ class SigmaRuleEngine @Inject constructor(
          * entry must grow with it (tracked as a follow-up to #268).
          */
         const val ATOM_BINDING_FIELD = "category"
+
+        /** How many atoms [computeAtomBindings] binds between two total-deadline checks. */
+        const val BINDING_CHECK_EVERY = 256
 
         /** Explicit manifest of bundled SIGMA rule resources — R8-safe (no reflection). */
         private val BUNDLED_RULE_IDS = listOf(

@@ -71,7 +71,7 @@ class AtomCategoriesMatchBindingsTest {
         load(listOf(atom("atom-real", "package_install"), atom("judge", "package_install", level = "high")))
 
         assertEquals(setOf("atom-real"), engine.atomCategories().keys)
-        val bound = engine.computeAtomBindings(listOf(event(1, "package_install"))).values.flatten().toSet()
+        val bound = engine.rowBindings(listOf(event(1, "package_install"))).values.flatten().toSet()
         assertEquals(bound, engine.atomCategories().keys)
     }
 
@@ -97,7 +97,7 @@ class AtomCategoriesMatchBindingsTest {
             "an unevaluable rule must not appear as an atom",
             "atom-unevaluable" !in engine.atomCategories().keys,
         )
-        val bound = engine.computeAtomBindings(
+        val bound = engine.rowBindings(
             listOf(event(1, "package_install"), event(2, "device_admin_grant")),
         ).values.flatten().toSet()
         assertEquals(bound, engine.atomCategories().keys)
@@ -119,7 +119,7 @@ class AtomCategoriesMatchBindingsTest {
             event(4, "app_foreground"), event(5, "network_connect"),
         )
 
-        val bound = engine.computeAtomBindings(events).values.flatten().toSet()
+        val bound = engine.rowBindings(events).values.flatten().toSet()
 
         assertEquals(setOf("atom-install", "atom-admin", "atom-perm"), engine.atomCategories().keys)
         assertEquals(bound, engine.atomCategories().keys)

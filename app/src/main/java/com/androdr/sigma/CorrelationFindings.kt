@@ -14,17 +14,27 @@ import com.androdr.data.model.ForensicTimelineEvent
  *
  * Severity follows the same policy as every other finding: the rule's declared
  * severity, capped when every leg of the chain is a device-posture condition.
+ *
+ * The finding carries the chain's `member_count`; the members themselves live only in
+ * `signal_member` (spec §5.4), so no finding grows with chain size.
  */
 object CorrelationFindings {
 
-    private val MEMBER_IDS = Regex(""""member_event_ids"\s*:\s*"([^"]*)"""")
+    private val MEMBER_COUNT = Regex(""""member_count"\s*:\s*(\d+)""")
 
     fun fromSignal(
         signal: ForensicTimelineEvent,
         rule: CorrelationRule,
         effectiveCategory: RuleCategory,
     ): Finding {
-        val memberIds = MEMBER_IDS.find(signal.details)?.groupValues?.get(1).orEmpty()
+        val memberCount = MEMBER_COUNT.find(signal.details)?.groupValues?.get(1)
+        val context = buildMap {
+            put("package_name", signal.packageName)
+            put("correlation_id", signal.correlationId)
+            memberCount?.let { put(SigmaCorrelationEngine.MEMBER_COUNT, it) }
+            put("chain_start", signal.startTimestamp.toString())
+            put("chain_end", (signal.endTimestamp ?: signal.startTimestamp).toString())
+        }
         return Finding(
             ruleId = rule.id,
             title = rule.displayLabel,
@@ -34,13 +44,7 @@ object CorrelationFindings {
             tags = rule.tags,
             triggered = true,
             ruleCategory = effectiveCategory.name,
-            matchContext = mapOf(
-                "package_name" to signal.packageName,
-                "correlation_id" to signal.correlationId,
-                "member_event_ids" to memberIds,
-                "chain_start" to signal.startTimestamp.toString(),
-                "chain_end" to (signal.endTimestamp ?: signal.startTimestamp).toString(),
-            ),
+            matchContext = context,
         )
     }
 }

@@ -47,13 +47,15 @@ class SigmaCorrelationEngineTest {
             event(2, 2000, "device_admin_grant")
         )
         val binds = bindings(1L to setOf("atom-install"), 2L to setOf("atom-admin"))
-        val signals = SigmaCorrelationEngine().evaluate(listOf(installRule), events, binds)
+        val signals = SigmaCorrelationEngine().evaluateRows(listOf(installRule), events, binds)
         assertEquals(1, signals.size)
-        assertEquals("test-install-then-admin", signals[0].ruleId)
-        assertEquals(1000L, signals[0].startTimestamp)
-        assertEquals(2000L, signals[0].endTimestamp)
-        assertEquals("signal", signals[0].kind)
-        assertTrue(signals[0].details.contains("\"member_event_ids\":\"1,2\""))
+        assertEquals("test-install-then-admin", signals[0].row.ruleId)
+        assertEquals(1000L, signals[0].row.startTimestamp)
+        assertEquals(2000L, signals[0].row.endTimestamp)
+        assertEquals("signal", signals[0].row.kind)
+        assertEquals(listOf(Row(1), Row(2)), signals[0].members)
+        assertEquals(2, signals[0].row.memberCount)
+        assertTrue("no id list on the row", !signals[0].row.details.contains("1,2"))
     }
 
     @Test
@@ -63,7 +65,7 @@ class SigmaCorrelationEngineTest {
             event(2, 2000, "package_install")
         )
         val binds = bindings(1L to setOf("atom-admin"), 2L to setOf("atom-install"))
-        val signals = SigmaCorrelationEngine().evaluate(listOf(installRule), events, binds)
+        val signals = SigmaCorrelationEngine().evaluateRows(listOf(installRule), events, binds)
         assertTrue(signals.isEmpty())
     }
 
@@ -74,7 +76,7 @@ class SigmaCorrelationEngineTest {
             event(2, 1000 + 3_600_001L, "device_admin_grant")
         )
         val binds = bindings(1L to setOf("atom-install"), 2L to setOf("atom-admin"))
-        val signals = SigmaCorrelationEngine().evaluate(listOf(installRule), events, binds)
+        val signals = SigmaCorrelationEngine().evaluateRows(listOf(installRule), events, binds)
         assertTrue(signals.isEmpty())
     }
 
@@ -92,7 +94,7 @@ class SigmaCorrelationEngineTest {
             event(2, 1_000L + thirtyDaysMs, "device_admin_grant")    // "now" on first scan
         )
         val binds = bindings(1L to setOf("atom-install"), 2L to setOf("atom-admin"))
-        val signals = SigmaCorrelationEngine().evaluate(listOf(installRule), events, binds)
+        val signals = SigmaCorrelationEngine().evaluateRows(listOf(installRule), events, binds)
         assertTrue(
             "historic install plus seed-timestamp admin must not fire corr-001",
             signals.isEmpty()
@@ -111,9 +113,10 @@ class SigmaCorrelationEngineTest {
             2L to setOf("atom-perm"),
             3L to setOf("atom-perm")
         )
-        val signals = SigmaCorrelationEngine().evaluate(listOf(burstRule), events, binds)
+        val signals = SigmaCorrelationEngine().evaluateRows(listOf(burstRule), events, binds)
         assertEquals(1, signals.size)
-        assertTrue(signals[0].details.contains("\"member_event_ids\":\"1,2,3\""))
+        assertEquals(listOf(Row(1), Row(2), Row(3)), signals[0].members)
+        assertEquals(3, signals[0].row.memberCount)
     }
 
     @Test
@@ -123,7 +126,7 @@ class SigmaCorrelationEngineTest {
             event(2, 2000, "permission_use")
         )
         val binds = bindings(1L to setOf("atom-perm"), 2L to setOf("atom-perm"))
-        val signals = SigmaCorrelationEngine().evaluate(listOf(burstRule), events, binds)
+        val signals = SigmaCorrelationEngine().evaluateRows(listOf(burstRule), events, binds)
         assertTrue(signals.isEmpty())
     }
 
@@ -134,7 +137,7 @@ class SigmaCorrelationEngineTest {
             event(2, 2000, "device_admin_grant", pkg = "com.b")
         )
         val binds = bindings(1L to setOf("atom-install"), 2L to setOf("atom-admin"))
-        val signals = SigmaCorrelationEngine().evaluate(listOf(installRule), events, binds)
+        val signals = SigmaCorrelationEngine().evaluateRows(listOf(installRule), events, binds)
         assertTrue("group-by package_name should prevent cross-package match", signals.isEmpty())
     }
 }

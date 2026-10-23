@@ -3,7 +3,6 @@ package com.androdr.sigma
 import com.androdr.data.model.ForensicTimelineEvent
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
-import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
 
@@ -90,7 +89,9 @@ class AllCorrelationRulesFireTest {
 
         // 4. Run the engine.
         val engine = SigmaCorrelationEngine()
-        val signals = engine.evaluate(rules, events, bindings)
+        val fired = engine.evaluateRows(rules, events, bindings)
+        val membersByRule = fired.associate { it.row.ruleId to it.members }
+        val signals = fired.map { it.row }
 
         // 5. Print the output for human inspection (visible in test output).
         println()
@@ -120,25 +121,21 @@ class AllCorrelationRulesFireTest {
         listOf("androdr-corr-001", "androdr-corr-002", "androdr-corr-003", "androdr-corr-004")
             .forEach { id -> assertNotNull("rule $id did not fire", byRule[id]) }
 
-        // Spot-check the corr-001 signal carries both member event ids in its details JSON.
+        // Spot-check the corr-001 signal's members (they live only in signal_member, spec §5.4).
         val corr001 = byRule.getValue("androdr-corr-001")
         assertEquals("signal", corr001.kind)
         assertEquals("correlation", corr001.category)
         assertEquals("com.installthenadmin", corr001.packageName)
         assertEquals(t0, corr001.startTimestamp)
         assertEquals(t0 + 5 * min, corr001.endTimestamp)
-        assertTrue(
-            "corr-001 details should encode both member event ids",
-            corr001.details.contains("\"member_event_ids\":\"1,2\"")
-        )
+        assertEquals("corr-001 members are both rows", listOf(Row(1), Row(2)), membersByRule["androdr-corr-001"])
+        assertEquals(2, corr001.memberCount)
 
         // Spot-check the corr-004 burst signal carries 3 member ids.
         val corr004 = byRule.getValue("androdr-corr-004")
         assertEquals("com.burst", corr004.packageName)
-        assertTrue(
-            "corr-004 details should list 3 member ids",
-            corr004.details.contains("\"member_event_ids\":\"7,8,9\"")
-        )
+        assertEquals("corr-004 has 3 members", listOf(Row(7), Row(8), Row(9)), membersByRule["androdr-corr-004"])
+        assertEquals(3, corr004.memberCount)
     }
 
     private fun event(id: Long, ts: Long, category: String, pkg: String) =
