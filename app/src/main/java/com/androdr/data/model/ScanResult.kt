@@ -1,5 +1,6 @@
 package com.androdr.data.model
 
+import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.Ignore
 import androidx.room.PrimaryKey
@@ -166,7 +167,17 @@ data class ScanResult(
      * paths; [TelemetrySource.LIVE_SCAN] is the default, which is also what rows
      * written before the column existed read back as (see MIGRATION_17_18).
      */
-    val source: TelemetrySource = TelemetrySource.LIVE_SCAN
+    val source: TelemetrySource = TelemetrySource.LIVE_SCAN,
+    /**
+     * Lifecycle in the telemetry store (spec §5.1): only [ScanState.COMPLETE] scans are listed.
+     * A writer session inserts [ScanState.IN_PROGRESS] and completes it; a delete marks
+     * [ScanState.DELETING] first. Rows written before schema 20 read back COMPLETE (MIGRATION_19_20).
+     */
+    @ColumnInfo(defaultValue = "COMPLETE")
+    val state: ScanState = ScanState.COMPLETE,
+    /** What the store holds for this scan; pre-store scans are [TelemetryState.NONE]. */
+    @ColumnInfo(defaultValue = "NONE")
+    val telemetryState: TelemetryState = TelemetryState.NONE,
 ) {
     /**
      * Number of entries in [scannerErrors] that are real scanner failures — every
