@@ -159,12 +159,20 @@ android {
     testOptions {
         unitTests {
             isReturnDefaultValues = true  // prevents android.util.Log stubs from throwing in JUnit tests
+            isIncludeAndroidResources = true  // Robolectric (JVM Room harness)
         }
     }
 
     sourceSets {
         getByName("androidTest") {
             assets.srcDirs("schemas")
+        }
+        // Unit tests: AGP merges only the tested variant's assets for Robolectric, so the
+        // "test" assets alone are NOT visible to MigrationTestHelper. The schemas are also
+        // put on the test classpath as resources; RoomTestDb serves them to the helper.
+        getByName("test") {
+            assets.srcDirs("schemas")
+            resources.srcDirs("schemas")
         }
     }
 
@@ -205,7 +213,29 @@ detekt {
     buildUponDefaultConfig = true
 }
 
+// Robolectric runs fully offline: the SDK 35 android-all jar is resolved (and
+// checksum-verified) by Gradle, then copied into a directory Robolectric reads.
+val robolectricAndroidAll by configurations.creating {
+    isCanBeConsumed = false
+    isCanBeResolved = true
+}
+val robolectricDepsDir = layout.buildDirectory.dir("robolectric-deps")
+val copyRobolectricDeps by tasks.registering(Copy::class) {
+    from(robolectricAndroidAll)
+    into(robolectricDepsDir)
+}
+tasks.withType<Test>().configureEach {
+    dependsOn(copyRobolectricDeps)
+    systemProperty("robolectric.offline", "true")
+    systemProperty("robolectric.dependency.dir", robolectricDepsDir.get().asFile.absolutePath)
+}
+
 dependencies {
+    // Telemetry store
+    implementation(libs.androidx.paging.runtime)
+    implementation(libs.androidx.paging.compose)
+    implementation(libs.androidx.collection)
+
     // AndroidX Core
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
@@ -261,6 +291,10 @@ dependencies {
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.org.json) // provides org.json.JSONObject for JVM unit tests
     testImplementation(libs.json.schema.validator)
+    testImplementation(libs.robolectric)
+    testImplementation(libs.androidx.test.core)
+    testImplementation(libs.androidx.room.testing)
+    robolectricAndroidAll(libs.robolectric.android.all)
 
     // Instrumented tests
     androidTestImplementation(libs.androidx.junit)
