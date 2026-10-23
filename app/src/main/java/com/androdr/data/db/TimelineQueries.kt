@@ -65,6 +65,12 @@ class TimelineSql(val sql: String, val args: List<Any?>) {
  *
  * Columns that have their own index but are not the shape's driving column are written `+col`, so
  * the planner never trades the ordered index for an equality one and a sort.
+ *
+ * Search ([TimelineFilter.query], ruling R30) is a contains-match (`LIKE '%q%' ESCAPE '\'`) on
+ * columns only. A leading `%` can use no index, so search never drives one: it filters the shape's
+ * ordered keyset walk, each arm still stopping at its `LIMIT`. A sparse match therefore reads more
+ * of that index per page (and a count reads the whole shape), the cost of a contains-match at
+ * Timeline scale; it adds no sort, no OFFSET and no full scan (TimelineQueryPlanTest).
  */
 object TimelineQueries {
 
@@ -113,6 +119,9 @@ object TimelineQueries {
         "JOIN ScanResult s ON s.id = o.scanId " +
         "JOIN telemetry_record f ON f.id = o.recordId"
 
+    /** Room's name for `telemetry_record(eventTime)` ([com.androdr.data.model.TelemetryFact]). */
+    private const val EVENT_TIME_INDEX = "index_telemetry_record_eventTime"
+
     /** An event record (spec §3): it carries an event time. This is what excludes snapshot records. */
     private const val EVENT_RECORD = "f.eventTime IS NOT NULL"
 
@@ -136,8 +145,44 @@ object TimelineQueries {
             args.addAll(other.args)
         }
 
+        /** A contains-match of [text] on any of [columns]: a case-insensitive LIKE, wildcards escaped. */
+        fun addSearch(text: String, columns: List<String>) {
+            val pattern = likeContains(text)
+            addWithArgs(columns.joinToString(" OR ", "(", ")") { "$it LIKE ? ESCAPE '$LIKE_ESCAPE'" },
+                columns.map { pattern })
+        }
+
         val sql: String get() = terms.joinToString(" AND ")
     }
+
+    /** The LIKE escape character (a backslash): it precedes a literal `%`, `_` or backslash. */
+    private const val LIKE_ESCAPE = '\\'
+
+    /** `%text%` with `%`, `_` and [LIKE_ESCAPE] in [text] escaped, so each matches only itself. */
+    internal fun likeContains(text: String): String = buildString {
+        append('%')
+        for (c in text) {
+            if (c == LIKE_ESCAPE || c == '%' || c == '_') append(LIKE_ESCAPE)
+            append(c)
+        }
+        append('%')
+    }
+
+    /**
+     * What search matches (ruling R30): columns only, never decoded bodies. A row's title is its
+     * `description`. A fact's DNS domain lives only in its body (`dns_monitor` has no key field, so
+     * its `subjectKey` is null), so domains are not searched.
+     */
+    private val ROW_SEARCH_COLUMNS = listOf("r.packageName", "r.category", "r.ruleId", "r.description")
+    private val FACT_SEARCH_COLUMNS = listOf("f.packageName", "f.category")
+
+    /**
+     * A fact's telemetry source (outside the scan filter): a visible observation of that source,
+     * or — a pinned orphan, which has none — the source that created it.
+     */
+    private const val FACT_SOURCE = "(EXISTS (SELECT 1 FROM scan_record so JOIN ScanResult ss ON ss.id = so.scanId " +
+        "WHERE so.recordId = f.id AND ss.state = 'COMPLETE' AND so.source = ?) " +
+        "OR (${VisibleFact.PINNED_ORPHAN} AND f.firstSource = ?))"
 
     /** The row predicates of [filter] except the keyset; [driving] false writes every column `+col`. */
     private fun rowFilter(filter: TimelineFilter, driving: Boolean, ranged: Boolean = true): Where = Where().apply {
@@ -147,7 +192,8 @@ object TimelineQueries {
         filter.packageName?.let {
             add(if (driving && shape == TimelineShape.PACKAGE) "r.packageName = ?" else "+r.packageName = ?", it)
         }
-        filter.source?.let { add("+r.source = ?", it) }
+        filter.source?.let { add("+r.telemetrySource = ?", it.name) }
+        filter.searchText?.let { addSearch(it, ROW_SEARCH_COLUMNS) }
         val time = if (driving) "r.startTimestamp" else "+r.startTimestamp"
         if (ranged) addAll(timeRange(filter, time, "lower(r.timestampPrecision) = 'day'"))
         if (filter.levels.isNotEmpty()) {
@@ -168,15 +214,22 @@ object TimelineQueries {
         }
     }
 
-    /** The fact predicates of [filter] except visibility, nesting and the keyset. */
-    private fun factFilter(filter: TimelineFilter, time: String): Where = Where().apply {
+    /**
+     * The fact predicates of [filter] except visibility, nesting and the keyset; [scanned] when the
+     * fact is read through its scan's observation `o` (the scan filter), whose [time] is `o.eventTime`.
+     */
+    private fun factFilter(filter: TimelineFilter, time: String, scanned: Boolean): Where = Where().apply {
         add(EVENT_RECORD)
-        if (time != "f.eventTime") add("$time IS NOT NULL")
+        if (scanned) add("$time IS NOT NULL")
         val shape = filter.shape
         filter.packageName?.let {
             add(if (shape == TimelineShape.PACKAGE) "f.packageName = ?" else "+f.packageName = ?", it)
         }
-        filter.source?.let { add("+f.service = ?", it) }
+        filter.source?.let {
+            // One meaning in both arms (C4 review m4): the telemetry source of the fact's observation.
+            if (scanned) add("o.source = ?", it.name) else add(FACT_SOURCE, it.name, it.name)
+        }
+        filter.searchText?.let { addSearch(it, FACT_SEARCH_COLUMNS) }
         addAll(timeRange(filter, time, "f.timePrecision = 'DAY'"))
     }
 
@@ -244,7 +297,7 @@ object TimelineQueries {
         val seq = if (scan != null) "o.rowid" else "f.id"
         val where = Where()
         if (scan != null) where.add("o.scanId = ? AND ${CompleteScan.SQL}", scan) else where.add(VisibleFact.SQL)
-        where.addAll(factFilter(filter, time))
+        where.addAll(factFilter(filter, time, scanned = scan != null))
         where.addAll(notNested(filter))
         where.addAll(keyset(key, direction, TimelineRowEntity.FACT, time, seq))
         val cols = if (scan != null) SCAN_FACT_COLS else FACT_COLS
@@ -269,15 +322,20 @@ object TimelineQueries {
         val where = Where()
         return if (scan != null) {
             where.add("o.scanId = ? AND ${CompleteScan.SQL}", scan)
-            where.addAll(factFilter(filter, "o.eventTime"))
+            where.addAll(factFilter(filter, "o.eventTime", scanned = true))
             where.addAll(notNested(filter))
             TimelineSql("SELECT COUNT(*) FROM scan_record o JOIN ScanResult s ON s.id = o.scanId " +
                 "JOIN telemetry_record f ON f.id = o.recordId WHERE ${where.sql}", where.args)
         } else {
             where.add(VisibleFact.SQL)
-            where.addAll(factFilter(filter, "f.eventTime"))
+            where.addAll(factFilter(filter, "f.eventTime", scanned = false))
             where.addAll(notNested(filter))
-            TimelineSql("SELECT COUNT(*) FROM telemetry_record f WHERE ${where.sql}", where.args)
+            // Without a package (whose `(packageName, eventTime)` index the planner keeps), pin the
+            // event-time index: it reads event records only. A searched count would otherwise read the
+            // whole table, snapshots included, since the searched columns are not in that index.
+            val from = if (filter.packageName == null) "telemetry_record f INDEXED BY $EVENT_TIME_INDEX"
+            else "telemetry_record f"
+            TimelineSql("SELECT COUNT(*) FROM $from WHERE ${where.sql}", where.args)
         }
     }
 }

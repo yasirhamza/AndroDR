@@ -5,7 +5,7 @@ import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.widget.Toast
-import androidx.compose.animation.AnimatedVisibility
+import androidx.annotation.StringRes
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -20,16 +20,16 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentCopy
-import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
-import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Timeline
 import androidx.compose.material3.Button
@@ -37,7 +37,6 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -75,8 +74,8 @@ import java.util.Date
 import java.util.Locale
 
 @Suppress("LongMethod", "CyclomaticComplexMethod")
-// Timeline screen combines top bar, filter bar, paged list, empty state, export menu and the
-// detail sheets — inherently a longer composable with more branches.
+// Timeline screen combines top bar, search, filter bar, paged list, empty state, overflow menu and
+// the detail and filter sheets — inherently a longer composable with more branches.
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TimelineScreen(
@@ -112,9 +111,13 @@ fun TimelineScreen(
     val context = LocalContext.current
     val hasRows = (totalCount ?: 0L) > 0L
 
-    var filterPanelExpanded by rememberSaveable { mutableStateOf(true) }
+    val searchText by viewModel.searchText.collectAsStateWithLifecycle()
+    val activeFilters by viewModel.activeFilters.collectAsStateWithLifecycle()
+    // Saved across rotation: whether search is open and whether the Filters sheet is showing.
+    var searchOpen by rememberSaveable { mutableStateOf(searchText.isNotEmpty()) }
+    var showFilterSheet by rememberSaveable { mutableStateOf(false) }
     var findingsExpanded by rememberSaveable { mutableStateOf(true) }
-    var exportMenuExpanded by remember { mutableStateOf(false) }
+    var menuExpanded by remember { mutableStateOf(false) }
     var showExportModeDialog by remember { mutableStateOf(false) }
     var pendingCopy by remember { mutableStateOf(false) }
     var selectedEvent by remember { mutableStateOf<ForensicTimelineEvent?>(null) }
@@ -154,106 +157,71 @@ fun TimelineScreen(
     }
 
     Column(modifier = Modifier.fillMaxSize()) {
+        // Top bar (ruling R30): the title (or the open search field), search, and one overflow menu.
         TopAppBar(
-            title = { Text(stringResource(R.string.timeline_title)) },
+            title = {
+                if (searchOpen) {
+                    TimelineSearchField(text = searchText, onTextChange = viewModel::setSearchText)
+                } else {
+                    Text(stringResource(R.string.timeline_title))
+                }
+            },
             actions = {
-                if (onNavigateToHistory != null) {
-                    IconButton(onClick = onNavigateToHistory) {
-                        Icon(Icons.Filled.History, contentDescription = "Manage scans")
+                if (searchOpen) {
+                    IconButton(onClick = {
+                        searchOpen = false
+                        viewModel.clearSearch()
+                    }) {
+                        Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.cd_timeline_search_close))
                     }
-                }
-                IconButton(
-                    onClick = {
-                        viewModel.generateReport()
-                        showReportSheet = true
-                    },
-                    enabled = hasRows
-                ) {
-                    Icon(Icons.Filled.Description, contentDescription = stringResource(R.string.cd_view_report))
-                }
-                IconButton(
-                    onClick = {
-                        pendingCopy = true
-                        viewModel.generateReport()
-                    },
-                    enabled = hasRows
-                ) {
-                    Icon(Icons.Filled.ContentCopy, contentDescription = stringResource(R.string.cd_copy_report))
+                } else {
+                    IconButton(onClick = { searchOpen = true }) {
+                        Icon(Icons.Filled.Search, contentDescription = stringResource(R.string.cd_timeline_search))
+                    }
                 }
                 if (exporting) {
                     CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
-                } else {
-                    Box {
-                        IconButton(onClick = { exportMenuExpanded = true }, enabled = hasRows) {
-                            Icon(Icons.Filled.Share, contentDescription = stringResource(R.string.cd_export))
+                }
+                Box {
+                    IconButton(onClick = { menuExpanded = true }) {
+                        Icon(Icons.Filled.MoreVert, contentDescription = stringResource(R.string.cd_timeline_more))
+                    }
+                    DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
+                        fun close(action: () -> Unit): () -> Unit = {
+                            menuExpanded = false
+                            action()
                         }
-                        DropdownMenu(expanded = exportMenuExpanded, onDismissRequest = { exportMenuExpanded = false }) {
-                            DropdownMenuItem(
-                                text = { Text(stringResource(R.string.timeline_export_txt)) },
-                                onClick = {
-                                    exportMenuExpanded = false
-                                    viewModel.exportPlaintext()
-                                }
-                            )
-                            DropdownMenuItem(
-                                text = { Text(stringResource(R.string.timeline_export_csv)) },
-                                onClick = {
-                                    exportMenuExpanded = false
-                                    viewModel.exportCsv()
-                                }
-                            )
-                            DropdownMenuItem(
-                                text = { Text("Full Report…") },
-                                onClick = {
-                                    exportMenuExpanded = false
-                                    showExportModeDialog = true
-                                }
-                            )
-                        }
+                        onNavigateToHistory?.let { MenuItem(R.string.timeline_menu_history, onClick = close(it)) }
+                        MenuItem(R.string.timeline_menu_view_report, enabled = hasRows, onClick = close {
+                            viewModel.generateReport()
+                            showReportSheet = true
+                        })
+                        MenuItem(R.string.timeline_menu_copy, enabled = hasRows, onClick = close {
+                            pendingCopy = true
+                            viewModel.generateReport()
+                        })
+                        MenuItem(R.string.timeline_export_txt, enabled = hasRows && !exporting,
+                            onClick = close(viewModel::exportPlaintext))
+                        MenuItem(R.string.timeline_export_csv, enabled = hasRows && !exporting,
+                            onClick = close(viewModel::exportCsv))
+                        MenuItem(R.string.timeline_export_full, enabled = !exporting,
+                            onClick = close { showExportModeDialog = true })
                     }
                 }
             }
         )
 
-        if (filter.scanId != null) {
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                FilterChip(
-                    selected = true,
-                    onClick = { viewModel.setScanFilter(null) },
-                    label = { Text(stringResource(R.string.timeline_scan_filter_clear)) }
-                )
-            }
-        }
+        // One compact filter row (ruling R30): Filters (n), a chip per active filter, the live count.
+        TimelineFilterBar(
+            chips = activeFilters,
+            totalCount = totalCount,
+            onOpenFilters = { showFilterSheet = true },
+            onDismiss = viewModel::dismiss,
+        )
 
-        // The filter bar, with the filter's count.
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clickable { filterPanelExpanded = !filterPanelExpanded }
-                .padding(horizontal = 16.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Text(
-                text = totalCount?.let { stringResource(R.string.timeline_filters_count, it) } ?: "Filters",
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Icon(
-                imageVector = if (filterPanelExpanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
-                contentDescription = if (filterPanelExpanded) "Collapse filters" else "Expand filters",
-                tint = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-
-        AnimatedVisibility(visible = filterPanelExpanded) {
-            TimelineFilterPanel(viewModel, filter, groupMode)
-        }
-
-        if (totalCount == 0L && findings.isEmpty() && groupMode == TimelineGroupMode.DATE) {
+        // "No timeline events yet" only when nothing narrows the list; a filtered empty list shows its 0 count.
+        val unfiltered = activeFilters.isEmpty() && filter.searchText == null
+        if (totalCount == 0L && unfiltered && findings.isEmpty() && groupMode == TimelineGroupMode.DATE) {
             TimelineEmptyState()
         } else if (groupMode == TimelineGroupMode.SCAN) {
             LazyColumn(
@@ -356,6 +324,21 @@ fun TimelineScreen(
         )
     }
 
+    if (showFilterSheet) {
+        TimelineFilterSheet(
+            filter = filter,
+            groupMode = groupMode,
+            actions = TimelineFilterActions(
+                setFindingsOnly = viewModel::setFindingsAndEvidenceOnly,
+                toggleSeverity = viewModel::toggleSeverity,
+                setSource = viewModel::setSourceFilter,
+                setRangeHours = viewModel::setRecentHours,
+                setGroupMode = viewModel::setGroupMode,
+            ),
+            onDismiss = { showFilterSheet = false },
+        )
+    }
+
     if (showExportModeDialog) {
         com.androdr.ui.common.ExportModeDialog(
             onDismiss = { showExportModeDialog = false },
@@ -367,98 +350,17 @@ fun TimelineScreen(
     }
 }
 
+/** One overflow-menu entry. */
+@Composable
+private fun MenuItem(@StringRes label: Int, enabled: Boolean = true, onClick: () -> Unit) {
+    DropdownMenuItem(text = { Text(stringResource(label)) }, enabled = enabled, onClick = onClick)
+}
+
 /** A stable list key per row: an entry by kind and id, a header by its day. */
 private fun rowKey(row: TimelineRow): String = when (row) {
     is TimelineRow.Entry -> "e${row.entity.rowKind}_${row.entity.id}"
     is TimelineRow.DayHeader -> "day_${row.day}_${row.anchor}"
     is TimelineRow.FindingRow -> "finding_${row.finding.ruleId}"
-}
-
-@Suppress("LongMethod") // the switch, severity chips, package chips, group mode and date range
-@Composable
-private fun TimelineFilterPanel(viewModel: TimelineViewModel, filter: TimelineFilter, groupMode: TimelineGroupMode) {
-    Column {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            androidx.compose.material3.Switch(
-                checked = filter.findingsAndEvidenceOnly,
-                onCheckedChange = viewModel::setFindingsAndEvidenceOnly
-            )
-            Spacer(Modifier.width(8.dp))
-            Text(stringResource(R.string.timeline_findings_evidence_only), style = MaterialTheme.typography.bodyMedium)
-        }
-
-        LazyRow(contentPadding = ChipPadding, horizontalArrangement = ChipSpacing) {
-            items(listOf("CRITICAL", "HIGH", "MEDIUM", "LOW")) { level ->
-                FilterChip(
-                    selected = level in filter.levels,
-                    onClick = { viewModel.toggleSeverity(level) },
-                    label = { Text(level) }
-                )
-            }
-        }
-
-        val packages by viewModel.availablePackages.collectAsStateWithLifecycle()
-        if (packages.isNotEmpty()) {
-            LazyRow(contentPadding = ChipPadding, horizontalArrangement = ChipSpacing) {
-                items(packages.take(PACKAGE_CHIPS)) { pkg ->
-                    FilterChip(
-                        selected = filter.packageName == pkg,
-                        onClick = { viewModel.setPackageFilter(if (filter.packageName == pkg) null else pkg) },
-                        label = { Text(pkg.substringAfterLast("."), maxLines = 1) }
-                    )
-                }
-            }
-        }
-
-        LazyRow(contentPadding = ChipPadding, horizontalArrangement = ChipSpacing) {
-            item {
-                FilterChip(
-                    selected = groupMode == TimelineGroupMode.DATE,
-                    onClick = { viewModel.setGroupMode(TimelineGroupMode.DATE) },
-                    label = { Text(stringResource(R.string.timeline_group_date)) }
-                )
-            }
-            item {
-                FilterChip(
-                    selected = groupMode == TimelineGroupMode.SCAN,
-                    onClick = { viewModel.setGroupMode(TimelineGroupMode.SCAN) },
-                    label = { Text(stringResource(R.string.timeline_group_scan)) }
-                )
-            }
-        }
-
-        data class RangeOption(val hoursBack: Int?, val label: String)
-        val rangeOptions = listOf(
-            RangeOption(null, stringResource(R.string.timeline_filter_all)),
-            RangeOption(24, stringResource(R.string.timeline_range_24h)),
-            RangeOption(24 * 7, stringResource(R.string.timeline_range_7d)),
-            RangeOption(24 * 30, stringResource(R.string.timeline_range_30d))
-        )
-        var activeRangeHours by remember { mutableStateOf<Int?>(null) }
-        if (filter.from == null) activeRangeHours = null
-        LazyRow(contentPadding = ChipPadding, horizontalArrangement = ChipSpacing) {
-            items(rangeOptions) { option ->
-                FilterChip(
-                    selected = activeRangeHours == option.hoursBack,
-                    onClick = {
-                        if (option.hoursBack == null) {
-                            activeRangeHours = null
-                            viewModel.clearDateRange()
-                        } else {
-                            activeRangeHours = option.hoursBack
-                            val now = System.currentTimeMillis()
-                            viewModel.setDateRange(now - option.hoursBack * 3600_000L, now)
-                        }
-                    },
-                    label = { Text(option.label) }
-                )
-            }
-        }
-        Spacer(modifier = Modifier.height(8.dp))
-    }
 }
 
 /** A day's header, with the count of what the current filter shows that day. */
@@ -532,8 +434,6 @@ private fun TimelineEmptyState() {
     }
 }
 
-private const val PACKAGE_CHIPS = 10
-
 /** A count loaded off the composition (null while loading), reloaded when any of [keys] changes. */
 @Composable
 private fun rememberCount(vararg keys: Any?, load: suspend () -> Long): Long? {
@@ -541,8 +441,6 @@ private fun rememberCount(vararg keys: Any?, load: suspend () -> Long): Long? {
     LaunchedEffect(*keys) { count = load() }
     return count
 }
-private val ChipPadding = PaddingValues(horizontal = 16.dp)
-private val ChipSpacing = Arrangement.spacedBy(8.dp)
 
 @Suppress("LongMethod") // Sheet includes header, scrollable body, dividers, and two action buttons
 @OptIn(ExperimentalMaterial3Api::class)

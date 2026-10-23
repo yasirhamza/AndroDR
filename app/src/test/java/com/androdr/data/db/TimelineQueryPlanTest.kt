@@ -1,9 +1,11 @@
 package com.androdr.data.db
 
 import androidx.sqlite.db.SimpleSQLiteQuery
+import com.androdr.data.model.TelemetrySource
 import com.androdr.data.model.TimelineRowEntity
 import com.androdr.data.store.StoreFixture
 import org.junit.After
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -39,15 +41,20 @@ class TimelineQueryPlanTest {
             "all" to TimelineFilter(),
             "scan" to TimelineFilter(scanId = 7L),
             "package" to TimelineFilter(packageName = "com.x"),
-            "source" to TimelineFilter(source = "dns_monitor"),
-            "scan+package+source" to TimelineFilter(scanId = 7L, packageName = "com.x", source = "dns_monitor"),
-            "package+source" to TimelineFilter(packageName = "com.x", source = "dns_monitor"),
+            "source" to TimelineFilter(source = IMPORT),
+            "scan+package+source" to TimelineFilter(scanId = 7L, packageName = "com.x", source = IMPORT),
+            "package+source" to TimelineFilter(packageName = "com.x", source = IMPORT),
         )
         for ((name, base) in bases) {
             put(name, base)
             put("$name+range", base.copy(from = 1_000L, to = 9_000L))
             put("$name+levels", base.copy(levels = setOf("HIGH", "critical")))
             put("$name+findings", base.copy(findingsAndEvidenceOnly = true))
+            // C5 search: a contains-match filters the shape's ordered index walk.
+            put("$name+search", base.copy(query = SEARCH))
+            put("$name+search+range", base.copy(query = SEARCH, from = 1_000L, to = 9_000L))
+            put("$name+search+levels", base.copy(query = SEARCH, levels = setOf("HIGH")))
+            put("$name+search+findings", base.copy(query = SEARCH, findingsAndEvidenceOnly = true))
         }
     }
 
@@ -114,6 +121,36 @@ class TimelineQueryPlanTest {
         assertTrue(factPlan(TimelineFilter(scanId = 1L)).any { "index_scan_record_scanId_eventTime" in it })
     }
 
+    /**
+     * C5: the search shape's plan. A contains-match (`%q%`) cannot use an index, so each arm of a
+     * searched page must walk exactly the index its unsearched shape walks (the query only filters
+     * that ordered walk, never trades it for another index and a sort), and every LIKE escapes.
+     */
+    @Test
+    fun `the search shape walks the same index as its base shape, and every LIKE escapes`() {
+        for ((name, base) in shapes.filterKeys { "search" !in it }) {
+            for (direction in TimelineDirection.entries) {
+                for (key in listOf(null) + keys) {
+                    val plain = plan(TimelineQueries.page(base, key, direction, 100))
+                    val searched = plan(TimelineQueries.page(base.copy(query = SEARCH), key, direction, 100))
+                    assertEquals("$name $direction $key", plain, searched)
+                }
+            }
+            // A searched count walks the indexes the unsearched count walks (search adds no scan or
+            // sort); it reads the searched columns from the row, so a covering index becomes a plain one.
+            fun walk(sql: TimelineSql) = plan(sql).map { it.replace("USING COVERING INDEX", "USING INDEX") }
+            assertEquals("$name count", walk(TimelineQueries.count(base)),
+                walk(TimelineQueries.count(base.copy(query = SEARCH))))
+        }
+        val searched = shapes.filterKeys { "search" in it }.values
+        val sqls = searched.map { TimelineQueries.page(it, null, TimelineDirection.FROM, 100).sql } +
+            searched.map { TimelineQueries.count(it).sql }
+        for (sql in sqls) {
+            val likes = Regex("""LIKE \?( ESCAPE '\\')?""").findAll(sql).toList()
+            assertTrue(sql, likes.isNotEmpty() && likes.all { it.groupValues[1].isNotEmpty() })
+        }
+    }
+
     @Test
     fun `counts never sort, and no statement uses OFFSET`() {
         val counts = shapes.values.map { TimelineQueries.count(it) }
@@ -121,5 +158,12 @@ class TimelineQueryPlanTest {
         assertTrue(sorting.joinToString("\n") { it.sql }, sorting.isEmpty())
         val offsets = (statements().map { it.second } + counts).filter { "OFFSET" in it.sql.uppercase() }
         assertTrue(offsets.isEmpty())
+    }
+
+    private companion object {
+        val IMPORT = TelemetrySource.BUGREPORT_IMPORT
+
+        /** A query holding both LIKE wildcards and the escape character. */
+        const val SEARCH = "ov%er_la\\y"
     }
 }

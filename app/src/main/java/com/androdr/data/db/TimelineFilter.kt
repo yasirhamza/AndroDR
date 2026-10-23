@@ -1,6 +1,7 @@
 package com.androdr.data.db
 
 import com.androdr.data.model.CivilDay
+import com.androdr.data.model.TelemetrySource
 import java.time.Instant
 import java.time.ZoneId
 
@@ -9,10 +10,16 @@ import java.time.ZoneId
  * visible `forensic_timeline` rows:
  * - [scanId]: one scan's rows and the facts it observed (read through `scan_record(scanId, eventTime)`);
  * - [packageName]: rows and facts of one package;
- * - [source]: rows of one producing module (`forensic_timeline.source`) and facts of one service;
+ * - [source]: entries of one telemetry source, alike in both arms (C4 review m4): a row by its
+ *   `telemetrySource`, a fact by the source of a visible observation (`scan_record.source`; under
+ *   the scan filter, that scan's observation), a pinned orphan by the source that created it
+ *   (`firstSource`);
  * - [from] / [to]: an inclusive time range, in epoch ms;
  * - [levels]: finding rows of these severities only (SQL on `level`, case-insensitive); no facts;
  * - [findingsAndEvidenceOnly]: finding and signal rows only, their evidence nested under them; no facts.
+ * - [query]: a case-insensitive contains-match over columns only, never decoded bodies (ruling R30):
+ *   a row's `packageName`, `category`, `ruleId` or title (`description`); a fact's `packageName` or
+ *   `category`. Blank means no search. It never drives an index (see [TimelineQueries]).
  *
  * [zone] sets day boundaries (date headers and their counts). Bug-report times are capture-zone
  * instants already (ruling R27), so one zone groups every source alike.
@@ -20,7 +27,7 @@ import java.time.ZoneId
 data class TimelineFilter(
     val scanId: Long? = null,
     val packageName: String? = null,
-    val source: String? = null,
+    val source: TelemetrySource? = null,
     val from: Long? = null,
     val to: Long? = null,
     val levels: Set<String> = emptySet(),
@@ -31,7 +38,11 @@ data class TimelineFilter(
      * so day-precision entries of that date count under it (ruling R32).
      */
     val civilDay: Long? = null,
+    val query: String? = null,
 ) {
+    /** [query] trimmed, or null when blank: the text the search matches. */
+    val searchText: String? get() = query?.trim()?.takeIf { it.isNotEmpty() }
+
     /** The index-driving filter: one SQL builder per shape (see [TimelineQueries]). */
     val shape: TimelineShape
         get() = when {

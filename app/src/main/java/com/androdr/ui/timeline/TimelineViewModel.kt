@@ -112,7 +112,7 @@ class TimelineViewModel @Inject constructor(
         it.copy(levels = if (level in it.levels) it.levels - level else it.levels + level)
     }
 
-    fun setSourceFilter(source: String?) = _filter.update { it.copy(source = source) }
+    fun setSourceFilter(source: TelemetrySource?) = _filter.update { it.copy(source = source) }
 
     fun setPackageFilter(pkg: String?) = _filter.update { it.copy(packageName = pkg) }
 
@@ -120,10 +120,57 @@ class TimelineViewModel @Inject constructor(
 
     fun clearDateRange() = _filter.update { it.copy(from = null, to = null) }
 
+    /** The last [hours] hours up to now (a Filters-sheet preset); null clears the range. */
+    fun setRecentHours(hours: Int?) {
+        if (hours == null) return clearDateRange()
+        val now = System.currentTimeMillis()
+        setDateRange(now - hours * HOUR_MS, now)
+    }
+
     /** Shows only [scanId]'s rows and the facts it observed (null: every scan). */
     fun setScanFilter(scanId: Long?) = _filter.update { it.copy(scanId = scanId) }
 
-    fun clearFilters() = _filter.update { TimelineFilter(zone = it.zone) }
+    fun clearFilters() = _filter.update { TimelineFilter(zone = it.zone, query = it.query) }
+
+    /** Clears exactly the filter [chip] stands for (the filter bar's dismissible chips). */
+    fun dismiss(chip: ActiveFilter) = _filter.update {
+        when (chip) {
+            is ActiveFilter.Scan -> it.copy(scanId = null)
+            is ActiveFilter.Package -> it.copy(packageName = null)
+            is ActiveFilter.Source -> it.copy(source = null)
+            is ActiveFilter.Severity -> it.copy(levels = it.levels - chip.level)
+            is ActiveFilter.DateRange -> it.copy(from = null, to = null)
+            ActiveFilter.FindingsOnly -> it.copy(findingsAndEvidenceOnly = false)
+        }
+    }
+
+    /** The filter bar's chips, one per active filter ([activeFiltersOf]). */
+    val activeFilters: StateFlow<List<ActiveFilter>> = _filter.map(::activeFiltersOf)
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    private val _searchText = MutableStateFlow("")
+
+    /** The search field's text as typed; it reaches [filter] after [SEARCH_DEBOUNCE_MS] of quiet. */
+    val searchText: StateFlow<String> = _searchText.asStateFlow()
+
+    fun setSearchText(text: String) {
+        _searchText.value = text
+    }
+
+    /** Empties the search field and drops the search at once (closing the search bar). */
+    fun clearSearch() {
+        _searchText.value = ""
+        _filter.update { it.copy(query = null) }
+    }
+
+    init {
+        // Typing re-queries once per pause, not per keystroke; the read itself runs on IO (the pager).
+        viewModelScope.launch {
+            _searchText.debounce(SEARCH_DEBOUNCE_MS).collect { text ->
+                _filter.update { it.copy(query = text.trim().ifEmpty { null }) }
+            }
+        }
+    }
 
     /**
      * Bumps when a scan completes or is deleted, or Timeline rows change (what changes counts),
@@ -186,12 +233,6 @@ class TimelineViewModel @Inject constructor(
         maxSeverity = scan.findings.filter { it.triggered }.maxByOrNull { severityOrdinal(it.level) }
             ?.level?.uppercase() ?: "INFO",
     )
-
-    /** Package chips: packages named by visible timeline rows. */
-    @OptIn(ExperimentalCoroutinesApi::class)
-    val availablePackages: StateFlow<List<String>> = tableVersion
-        .mapLatest { withContext(Dispatchers.IO) { db.forensicTimelineEventDao().getDistinctPackages() } }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     private val _shareUri = MutableStateFlow<Uri?>(null)
     val shareUri: StateFlow<Uri?> = _shareUri.asStateFlow()
@@ -360,6 +401,8 @@ class TimelineViewModel @Inject constructor(
         private const val PAGE_SIZE = 100
         private const val EXPORT_PAGE = 500
         private const val COUNT_DEBOUNCE_MS = 300L
+        private const val SEARCH_DEBOUNCE_MS = 300L
+        private const val HOUR_MS = 3_600_000L
 
         /** The report sheet shows (and Copy copies) at most this much; a longer report is shared as a file. */
         const val PREVIEW_CHARS = 200_000
@@ -429,4 +472,34 @@ internal fun TimelineFilter.describe(): String? = buildList {
     }
     if (levels.isNotEmpty()) add("severity ${levels.sorted().joinToString("/")}")
     if (findingsAndEvidenceOnly) add("findings and their evidence only")
+    searchText?.let { add("search \"$it\"") }
 }.takeIf { it.isNotEmpty() }?.joinToString(", ")
+
+/** One active filter, shown as a dismissible chip on the filter bar ([activeFiltersOf]). */
+sealed interface ActiveFilter {
+    data class Scan(val scanId: Long) : ActiveFilter
+    data class Package(val packageName: String) : ActiveFilter
+    data class Source(val source: TelemetrySource) : ActiveFilter
+    data class Severity(val level: String) : ActiveFilter
+    data class DateRange(val from: Long?, val to: Long?) : ActiveFilter
+    data object FindingsOnly : ActiveFilter
+}
+
+/** Severity chips' order: most severe first. */
+private val SEVERITY_ORDER = listOf("CRITICAL", "HIGH", "MEDIUM", "LOW")
+
+/**
+ * The filter bar's chips for [filter], in bar order: scan, package, source, each severity (most
+ * severe first), date range, findings only. The Filters button shows how many. The search query is
+ * not a chip: the search field shows it.
+ */
+internal fun activeFiltersOf(filter: TimelineFilter): List<ActiveFilter> = buildList {
+    filter.scanId?.let { add(ActiveFilter.Scan(it)) }
+    filter.packageName?.let { add(ActiveFilter.Package(it)) }
+    filter.source?.let { add(ActiveFilter.Source(it)) }
+    filter.levels.sortedWith(compareBy<String>({ lvl ->
+        SEVERITY_ORDER.indexOf(lvl.uppercase()).let { if (it < 0) SEVERITY_ORDER.size else it }
+    }, { it })).forEach { add(ActiveFilter.Severity(it)) }
+    if (filter.from != null || filter.to != null) add(ActiveFilter.DateRange(filter.from, filter.to))
+    if (filter.findingsAndEvidenceOnly) add(ActiveFilter.FindingsOnly)
+}

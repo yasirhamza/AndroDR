@@ -20,12 +20,6 @@ interface ForensicTimelineEventDao {
     @Query("SELECT DISTINCT r.source FROM forensic_timeline r WHERE ${VisibleRow.SQL} ORDER BY r.source")
     suspend fun getDistinctSources(): List<String>
 
-    @Query(
-        "SELECT DISTINCT r.packageName FROM forensic_timeline r WHERE r.packageName != '' AND ${VisibleRow.SQL} " +
-            "ORDER BY r.packageName"
-    )
-    suspend fun getDistinctPackages(): List<String>
-
     @Query("SELECT DISTINCT packageName FROM forensic_timeline WHERE category = 'package_install'")
     suspend fun getInstalledPackagesAlreadyEmitted(): List<String>
 
