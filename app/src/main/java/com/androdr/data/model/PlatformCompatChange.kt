@@ -10,14 +10,14 @@ package com.androdr.data.model
  *
  * @property changeId the compat ChangeId as a string (large numeric values)
  * @property packageName the affected package
- * @property enabled whether the ChangeId is currently enabled
+ * @property enabled whether the ChangeId is enabled; null when the dumpsys line does not state it
  * @property source where this row came from
  * @property capturedAt epoch milliseconds when the scan/import produced this row
  */
 data class PlatformCompatChange(
     val changeId: String,
     val packageName: String,
-    val enabled: Boolean,
+    val enabled: Boolean?,
     val source: TelemetrySource,
     val capturedAt: Long,
 )

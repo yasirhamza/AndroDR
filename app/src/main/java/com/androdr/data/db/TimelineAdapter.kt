@@ -8,6 +8,7 @@ import com.androdr.data.model.SecurityLogEvent
 import com.androdr.data.model.TelemetrySource
 import com.androdr.data.model.TimelineEvent
 import com.androdr.data.model.ImportedDnsEvent
+import com.androdr.data.model.UsageEvent
 import com.androdr.sigma.Evidence
 import com.androdr.sigma.Finding
 import com.androdr.sigma.FindingCategory
@@ -22,7 +23,10 @@ fun DnsEvent.toForensicTimelineEvent(): ForensicTimelineEvent =
  * stub), the timeline row's `campaignName`, `severity`, and `iocSource` are
  * populated from the indicator metadata instead of the raw reason string.
  */
-fun DnsEvent.toForensicTimelineEvent(indicator: com.androdr.data.model.Indicator?): ForensicTimelineEvent {
+fun DnsEvent.toForensicTimelineEvent(
+    indicator: com.androdr.data.model.Indicator?,
+    sourceEventKey: ByteArray? = null,
+): ForensicTimelineEvent {
     val isMatched = this.reason != null
     val realCampaign = indicator?.family?.takeIf { it.isNotBlank() }
     val realSource = indicator?.source?.takeIf { it.isNotBlank() }
@@ -54,6 +58,8 @@ fun DnsEvent.toForensicTimelineEvent(indicator: com.androdr.data.model.Indicator
         // Matches the correlationId stamped on Finding rows in
         // Finding.toForensicTimelineEvent when matchContext["domain"] is set.
         correlationId = if (isMatched) "dns:${this.domain}" else "",
+        // h128 of the stored live DNS fact's source key ("dns:$id"), so the row joins its fact (J1).
+        sourceEventKey = sourceEventKey,
         telemetrySource = com.androdr.data.model.TelemetrySource.LIVE_SCAN
     )
 }
@@ -133,6 +139,7 @@ fun Finding.toForensicTimelineEvent(
         correlationId = if (dnsMatchedDomain != null) "dns:$dnsMatchedDomain" else "",
         ruleId = this.ruleId,
         scanResultId = scanResult.id,
+        level = this.level,
         attackTechniqueId = this.tags.firstOrNull { it.startsWith("attack.t") }
             ?.removePrefix("attack.") ?: "",
         telemetrySource = if (isBugreport) {
@@ -203,6 +210,22 @@ fun SecurityLogEvent.toForensicTimelineEvent(scanResultId: Long): ForensicTimeli
         correlationId = "",
         scanResultId = scanResultId,
         telemetrySource = source
+    )
+
+/**
+ * A live usage transition → today's `usage_stats` Timeline row (interim until Task C3, when event
+ * rows leave `forensic_timeline`). The live scan replaces these rows on every scan.
+ */
+fun UsageEvent.toForensicTimelineEvent(scanResultId: Long): ForensicTimelineEvent =
+    ForensicTimelineEvent(
+        startTimestamp = timestamp,
+        source = "usage_stats",
+        category = eventType,
+        description = "App ${if (eventType == "app_foreground") "opened" else "closed"}: $appName",
+        packageName = packageName,
+        appName = appName,
+        scanResultId = scanResultId,
+        telemetrySource = TelemetrySource.LIVE_SCAN
     )
 
 /** Extracts the campaign name from DNS event reason strings like "IOC: Pegasus" */

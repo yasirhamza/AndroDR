@@ -1,6 +1,7 @@
 package com.androdr.sigma
 
 import com.androdr.data.model.CveEntity
+import com.androdr.data.model.toCveFieldMap
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -43,7 +44,7 @@ class EvidenceProviderTest {
             CveEntity("CVE-A", "desc a", "CRITICAL", "2024-11-05", "2024-10-01", true, "Google", "Android", 0),
             CveEntity("CVE-B", "desc b", "HIGH", "2024-10-05", "2024-09-01", true, "Google", "Android", 0))
         val provider = CveEvidenceProvider(emptyList())
-        val record = mapOf<String, Any?>("unpatched_cves" to cves)
+        val record = mapOf<String, Any?>("unpatched_cves" to cves.map { it.toCveFieldMap() })
         val results = provider.provide(makeRule(), record)
         assertEquals(1, results.size)
         val evidence = results[0].evidence as Evidence.CveList
@@ -58,7 +59,7 @@ class EvidenceProviderTest {
             CveEntity("CVE-OTHER", "desc", "HIGH", "2024-02-05", "", true, "Google", "Android", 0))
         val campaignRules = listOf(makeCampaignRule("campaign.pegasus", listOf("CVE-2023-41064")))
         val provider = CveEvidenceProvider(campaignRules)
-        val record = mapOf<String, Any?>("unpatched_cves" to cves)
+        val record = mapOf<String, Any?>("unpatched_cves" to cves.map { it.toCveFieldMap() })
         val results = provider.provide(makeRule(), record)
         val evidence = results[0].evidence as Evidence.CveList
         assertEquals(listOf("pegasus"), evidence.cves.find { it.cveId == "CVE-2023-41064" }!!.campaigns)
@@ -73,7 +74,7 @@ class EvidenceProviderTest {
             CveEntity("CVE-B", "b", "HIGH", "2025-01-05", "", true, "Google", "Android", 0),
             CveEntity("CVE-C", "c", "MEDIUM", "2024-11-05", "", true, "Google", "Android", 0))
         val provider = CveEvidenceProvider(emptyList())
-        val results = provider.provide(makeRule(), mapOf("unpatched_cves" to cves))
+        val results = provider.provide(makeRule(), mapOf("unpatched_cves" to cves.map { it.toCveFieldMap() }))
         assertEquals("2025-01-05", (results[0].evidence as Evidence.CveList).targetPatchLevel)
     }
 
@@ -88,7 +89,7 @@ class EvidenceProviderTest {
     fun `template vars include count and campaign_count`() {
         val cves = listOf(CveEntity("CVE-A", "a", "HIGH", "2024-11-05", "", true, "Google", "Android", 0))
         val provider = CveEvidenceProvider(emptyList())
-        val results = provider.provide(makeRule(), mapOf("unpatched_cves" to cves))
+        val results = provider.provide(makeRule(), mapOf("unpatched_cves" to cves.map { it.toCveFieldMap() }))
         assertEquals("1", results[0].titleVars["count"])
         assertEquals("0", results[0].titleVars["campaign_count"])
         assertEquals("2024-11-05", results[0].remediationVars["target_patch_level"])

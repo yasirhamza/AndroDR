@@ -4,9 +4,17 @@ import java.io.BufferedReader
 import java.io.InputStream
 import java.io.InputStreamReader
 
+/** Sections of a dumpstate file plus the capture time its header states (epoch ms, UTC). */
+data class DumpstateSections(val sections: Map<String, String>, val captureTimeMs: Long?)
+
 class DumpsysSectionParser {
 
     companion object {
+        // "== dumpstate: 2026-03-28 10:15:30" is the report's own capture time. dumpstate
+        // prints no zone offset, so it is read as UTC (same convention as InstallTimeModule).
+        private val CAPTURE_HEADER =
+            Regex("""^==\s*dumpstate:\s*(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2}):(\d{2})""")
+
         private val DUMP_HEADER = Regex("""^-*\s*DUMP OF SERVICE (\S+?):\s*$""")
         private val DASHED_HEADER = Regex("""^-+ SERVICE (\S+?) -+$""")
         private val SYSTEM_PROPS_HEADER = Regex("""^-+\s*SYSTEM PROPERTIES\s*-+$""")
@@ -44,12 +52,21 @@ class DumpsysSectionParser {
     fun extractSections(
         stream: InputStream,
         serviceNames: Set<String>
-    ): Map<String, String> {
+    ): Map<String, String> = extractSectionsAndHeader(stream, serviceNames).sections
+
+    fun extractSectionsAndHeader(
+        stream: InputStream,
+        serviceNames: Set<String>
+    ): DumpstateSections {
         val results = mutableMapOf<String, StringBuilder>()
         var currentSection: String? = null
+        var captureTimeMs: Long? = null
 
         BufferedReader(InputStreamReader(stream, Charsets.UTF_8)).use { reader ->
             reader.forEachLine { line ->
+                if (captureTimeMs == null && line.startsWith("==")) {
+                    captureTimeMs = parseCaptureHeader(line)
+                }
                 val name = extractServiceName(line)
                 if (name != null) {
                     currentSection = if (name in serviceNames) {
@@ -64,7 +81,16 @@ class DumpsysSectionParser {
             }
         }
 
-        return results.mapValues { it.value.toString() }
+        return DumpstateSections(results.mapValues { it.value.toString() }, captureTimeMs)
+    }
+
+    private fun parseCaptureHeader(line: String): Long? {
+        val m = CAPTURE_HEADER.find(line)?.groupValues ?: return null
+        return runCatching {
+            java.time.LocalDateTime.of(
+                m[1].toInt(), m[2].toInt(), m[3].toInt(), m[4].toInt(), m[5].toInt(), m[6].toInt()
+            ).toInstant(java.time.ZoneOffset.UTC).toEpochMilli()
+        }.getOrNull()
     }
 
     fun extractSystemProperties(stream: InputStream): String? {

@@ -247,121 +247,105 @@ class SigmaRuleEngine @Inject constructor(
     fun unevaluableRules(): Map<String, String> =
         SigmaRuleEvaluator.unevaluableRules(effectiveRules(), iocLookups)
 
-    fun evaluateApps(telemetry: List<AppTelemetry>): List<Finding> {
-        val records = telemetry.map { it.toFieldMap() }
-        return SigmaRuleEvaluator.evaluate(effectiveRules(), records, "app_scanner", iocLookups, evidenceProviders)
-    }
-
-    fun evaluateDevice(telemetry: List<DeviceTelemetry>): List<Finding> {
-        val records = telemetry.map { it.toFieldMap() }
-        return SigmaRuleEvaluator.evaluate(effectiveRules(), records, "device_auditor", iocLookups, evidenceProviders)
-    }
-
-    fun evaluateProcesses(telemetry: List<ProcessTelemetry>): List<Finding> {
-        val records = telemetry.map { it.toFieldMap() }
-        return SigmaRuleEvaluator.evaluate(effectiveRules(), records, "process_monitor", iocLookups, evidenceProviders)
-    }
-
-    fun evaluateDns(events: List<DnsEvent>): List<Finding> {
-        val records = events.map { it.toFieldMap() }
-        return SigmaRuleEvaluator.evaluate(effectiveRules(), records, "dns_monitor", iocLookups, evidenceProviders)
-    }
-
-    /** Imported DNS records: the live DNS fields plus `resolved_ips` (D1). */
-    fun evaluateImportedDns(events: List<ImportedDnsEvent>): List<Finding> {
-        val records = events.map { it.toFieldMap() }
-        return SigmaRuleEvaluator.evaluate(effectiveRules(), records, "dns_monitor", iocLookups, evidenceProviders)
-    }
-
     /**
-     * Rules see only the paths that were actually read.
+     * Evaluates [chunk] against the rules for [service]. The record at index `i` has
+     * ordinal `firstOrdinal + i`, counting any record an engine-side pre-filter skips,
+     * and each finding carries its record's ordinal. The typed `evaluate*` methods
+     * delegate here through the `*RecordBuilders`.
      *
+     * `file_scanner` rules see only the paths that were actually read.
      * A path the app was refused arrives with `fileExists = false` because nothing
      * was observed, not because the file is known to be absent (#366). Letting such
      * a row reach a rule turns "not allowed to look" into a clean pass. What went
      * unread is declared instead, by [RuleCoverage.unreadableArtifactSkips].
      */
-    fun evaluateFiles(telemetry: List<FileArtifactTelemetry>): List<Finding> {
-        val records = telemetry.filter { it.accessible }.map { it.toFieldMap() }
-        return SigmaRuleEvaluator.evaluate(effectiveRules(), records, "file_scanner", iocLookups, evidenceProviders)
-    }
-
-    fun evaluateAccessibility(telemetry: List<AccessibilityTelemetry>): List<Finding> {
-        val records = telemetry.map { it.toFieldMap() }
+    fun evaluateRecords(service: String, chunk: List<StoreRecord>, firstOrdinal: Int): List<Finding> {
+        val maps = chunk.map { it.fields }
+        val include: (Int) -> Boolean =
+            if (service == LiveRecordBuilders.FILE_SCANNER) {
+                { index -> maps[index]["accessible"] != false }
+            } else {
+                { true }
+            }
         return SigmaRuleEvaluator.evaluate(
-            effectiveRules(), records, "accessibility_audit", iocLookups, evidenceProviders
+            effectiveRules(), maps, service, iocLookups, evidenceProviders, firstOrdinal, include
         )
     }
 
-    fun evaluateReceivers(telemetry: List<ReceiverTelemetry>): List<Finding> {
-        val records = telemetry.map { it.toFieldMap() }
-        return SigmaRuleEvaluator.evaluate(effectiveRules(), records, "receiver_audit", iocLookups, evidenceProviders)
-    }
+    fun evaluateApps(telemetry: List<AppTelemetry>): List<Finding> =
+        evaluateRecords(LiveRecordBuilders.APP_SCANNER, LiveRecordBuilders.apps(telemetry), 0)
 
-    fun evaluateAppOps(telemetry: List<AppOpsTelemetry>): List<Finding> {
-        val records = telemetry.map { it.toFieldMap() }
-        return SigmaRuleEvaluator.evaluate(effectiveRules(), records, "appops_audit", iocLookups, evidenceProviders)
-    }
+    fun evaluateDevice(telemetry: List<DeviceTelemetry>): List<Finding> =
+        evaluateRecords(LiveRecordBuilders.DEVICE_AUDITOR, LiveRecordBuilders.device(telemetry), 0)
 
-    fun evaluateTombstones(telemetry: List<TombstoneEvent>): List<Finding> {
-        val records = telemetry.map { it.toFieldMap() }
-        return SigmaRuleEvaluator.evaluate(
-            effectiveRules(), records, "tombstone_parser", iocLookups, evidenceProviders
+    fun evaluateProcesses(telemetry: List<ProcessTelemetry>): List<Finding> =
+        evaluateRecords(LiveRecordBuilders.PROCESS_MONITOR, LiveRecordBuilders.processes(telemetry), 0)
+
+    fun evaluateDns(events: List<DnsEvent>): List<Finding> =
+        evaluateRecords(LiveRecordBuilders.DNS_MONITOR, LiveRecordBuilders.dns(events), 0)
+
+    /** Imported DNS records: the live DNS fields plus `resolved_ips` (D1). */
+    fun evaluateImportedDns(events: List<ImportedDnsEvent>): List<Finding> =
+        evaluateRecords(IntrusionLogRecordBuilders.DNS_MONITOR, IntrusionLogRecordBuilders.importedDns(events), 0)
+
+    /** Unreadable paths are skipped inside [evaluateRecords] (#366) but keep their ordinal. */
+    fun evaluateFiles(telemetry: List<FileArtifactTelemetry>): List<Finding> =
+        evaluateRecords(LiveRecordBuilders.FILE_SCANNER, LiveRecordBuilders.files(telemetry), 0)
+
+    fun evaluateAccessibility(telemetry: List<AccessibilityTelemetry>): List<Finding> =
+        evaluateRecords(
+            LiveRecordBuilders.ACCESSIBILITY_AUDIT, LiveRecordBuilders.accessibility(telemetry), 0
         )
-    }
 
-    fun evaluateWakelocks(telemetry: List<WakelockAcquisition>): List<Finding> {
-        val records = telemetry.map { it.toFieldMap() }
-        return SigmaRuleEvaluator.evaluate(
-            effectiveRules(), records, "wakelock_parser", iocLookups, evidenceProviders
+    fun evaluateReceivers(telemetry: List<ReceiverTelemetry>): List<Finding> =
+        evaluateRecords(LiveRecordBuilders.RECEIVER_AUDIT, LiveRecordBuilders.receivers(telemetry), 0)
+
+    fun evaluateAppOps(telemetry: List<AppOpsTelemetry>): List<Finding> =
+        evaluateRecords(LiveRecordBuilders.APPOPS_AUDIT, LiveRecordBuilders.appOps(telemetry), 0)
+
+    fun evaluateTombstones(telemetry: List<TombstoneEvent>): List<Finding> =
+        evaluateRecords(
+            BugReportRecordBuilders.TOMBSTONE_PARSER, BugReportRecordBuilders.tombstones(telemetry), 0
         )
-    }
 
-    fun evaluateBatteryDaily(telemetry: List<BatteryDailyEvent>): List<Finding> {
-        val records = telemetry.map { it.toFieldMap() }
-        return SigmaRuleEvaluator.evaluate(
-            effectiveRules(), records, "battery_daily", iocLookups, evidenceProviders
+    fun evaluateWakelocks(telemetry: List<WakelockAcquisition>): List<Finding> =
+        evaluateRecords(
+            BugReportRecordBuilders.WAKELOCK_PARSER, BugReportRecordBuilders.wakelocks(telemetry), 0
         )
-    }
 
-    fun evaluatePackageInstallHistory(telemetry: List<PackageInstallHistoryEntry>): List<Finding> {
-        val records = telemetry.map { it.toFieldMap() }
-        return SigmaRuleEvaluator.evaluate(
-            effectiveRules(), records, "package_install_history", iocLookups, evidenceProviders
+    fun evaluateBatteryDaily(telemetry: List<BatteryDailyEvent>): List<Finding> =
+        evaluateRecords(
+            BugReportRecordBuilders.BATTERY_DAILY, BugReportRecordBuilders.batteryDaily(telemetry), 0
         )
-    }
 
-    fun evaluatePlatformCompat(telemetry: List<PlatformCompatChange>): List<Finding> {
-        val records = telemetry.map { it.toFieldMap() }
-        return SigmaRuleEvaluator.evaluate(
-            effectiveRules(), records, "platform_compat", iocLookups, evidenceProviders
+    fun evaluatePackageInstallHistory(telemetry: List<PackageInstallHistoryEntry>): List<Finding> =
+        evaluateRecords(
+            BugReportRecordBuilders.PACKAGE_INSTALL_HISTORY,
+            BugReportRecordBuilders.packageInstallHistory(telemetry), 0
         )
-    }
 
-    fun evaluateDatabasePathObservations(telemetry: List<DatabasePathObservation>): List<Finding> {
-        val records = telemetry.map { it.toFieldMap() }
-        return SigmaRuleEvaluator.evaluate(
-            effectiveRules(), records, "db_info", iocLookups, evidenceProviders
+    fun evaluatePlatformCompat(telemetry: List<PlatformCompatChange>): List<Finding> =
+        evaluateRecords(
+            BugReportRecordBuilders.PLATFORM_COMPAT, BugReportRecordBuilders.platformCompat(telemetry), 0
         )
-    }
 
-    fun evaluateNetwork(telemetry: List<NetworkTelemetry>): List<Finding> {
-        val records = telemetry.map { it.toFieldMap() }
-        return SigmaRuleEvaluator.evaluate(
-            effectiveRules(), records, "network_monitor", iocLookups, evidenceProviders
+    fun evaluateDatabasePathObservations(telemetry: List<DatabasePathObservation>): List<Finding> =
+        evaluateRecords(
+            BugReportRecordBuilders.DB_INFO, BugReportRecordBuilders.databasePathObservations(telemetry), 0
         )
-    }
 
-    fun evaluateSecurityLog(telemetry: List<SecurityLogEvent>): List<Finding> {
-        val records = telemetry.map { it.toFieldMap() }
-        return SigmaRuleEvaluator.evaluate(
-            effectiveRules(), records, "security_log", iocLookups, evidenceProviders
+    fun evaluateNetwork(telemetry: List<NetworkTelemetry>): List<Finding> =
+        evaluateRecords(
+            IntrusionLogRecordBuilders.NETWORK_MONITOR, IntrusionLogRecordBuilders.network(telemetry), 0
         )
-    }
 
-    fun evaluateGeneric(records: List<Map<String, Any?>>, service: String): List<Finding> {
-        return SigmaRuleEvaluator.evaluate(effectiveRules(), records, service, iocLookups, evidenceProviders)
-    }
+    fun evaluateSecurityLog(telemetry: List<SecurityLogEvent>): List<Finding> =
+        evaluateRecords(
+            IntrusionLogRecordBuilders.SECURITY_LOG, IntrusionLogRecordBuilders.securityLog(telemetry), 0
+        )
+
+    fun evaluateGeneric(records: List<Map<String, Any?>>, service: String): List<Finding> =
+        evaluateRecords(service, BugReportRecordBuilders.generic(records), 0)
 
     /**
      * Returns the total number of loaded rules, **including rules with

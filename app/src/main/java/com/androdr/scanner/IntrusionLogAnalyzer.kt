@@ -8,31 +8,32 @@ import com.androdr.data.model.ImportedDnsEvent
 import com.androdr.data.model.NetworkTelemetry
 import com.androdr.data.model.ScannerFailure
 import com.androdr.data.model.SecurityLogEvent
-import com.androdr.reporting.ATTRIBUTION_SCANNER
 import com.androdr.ioc.IndicatorResolver
+import com.androdr.reporting.ATTRIBUTION_SCANNER
 import com.androdr.scanner.intrusionlog.IntrusionLogParser
+import com.androdr.scanner.intrusionlog.IntrusionLogSink
 import com.androdr.sigma.Finding
-import com.androdr.sigma.SigmaRuleEngine
+import com.androdr.sigma.IntrusionLogRecordBuilders
+import com.androdr.sigma.StoreRecord
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
-import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import java.io.IOException
 import java.io.InputStream
 import java.io.Reader
 import java.util.zip.ZipInputStream
 import javax.inject.Inject
-import kotlin.coroutines.EmptyCoroutineContext
 import javax.inject.Singleton
 
 data class IntrusionLogStats(
+    /** DNS records parsed, minus the exact duplicates the store dropped (none subtracted when evaluate-only). */
     val dnsEventCount: Int,
     val connectEventCount: Int,
     val securityEventCount: Int,
+    /** Exact duplicate records the store dropped (one observation per fact and import). */
     val duplicatesCollapsed: Int,
     val malformedLines: Int,
     val earliestEventMs: Long?,
@@ -53,27 +54,46 @@ data class IntrusionLogStats(
     val triggeredFindingCount: Int = 0
 )
 
+/**
+ * What an intrusion-log import showed the user: the findings it kept (capped at
+ * [ScanOrchestrator.FINDINGS_PERSIST_CAP]) and its stats. The records themselves are in the store.
+ */
 data class IntrusionLogAnalysisResult(
     val findings: List<Finding>,
-    val dnsEvents: List<ImportedDnsEvent>,
-    val networkEvents: List<NetworkTelemetry>,
-    val securityEvents: List<SecurityLogEvent>,
     val stats: IntrusionLogStats,
     /** Non-fatal problems during analysis (e.g. attribution unavailable); persisted on the import's scan. */
-    val scannerErrors: List<ScannerFailure> = emptyList()
+    val scannerErrors: List<ScannerFailure> = emptyList(),
+    /**
+     * What the import session wrote (new facts, already-stored facts, dropped duplicates, telemetry
+     * state, space to free) for the import card; null only for results not produced by a session.
+     */
+    val write: WriteResult? = null,
 )
+
+/**
+ * Receives an import's records one full per-type chunk (at most [ChunkedScanWriter.CHUNK_SIZE])
+ * at a time — the typed records and the [StoreRecord]s they project to, index for index. The
+ * orchestrator appends each chunk to its writer session; nothing else holds the whole import.
+ */
+interface IntrusionLogChunks {
+    suspend fun dns(events: List<ImportedDnsEvent>, records: List<StoreRecord>)
+    suspend fun connect(events: List<NetworkTelemetry>, records: List<StoreRecord>)
+    suspend fun security(events: List<SecurityLogEvent>, records: List<StoreRecord>)
+}
+
+/** What [IntrusionLogAnalyzer] saw while streaming an import; per-type counts are records parsed. */
+data class IntrusionLogScan(val stats: IntrusionLogStats, val scannerErrors: List<ScannerFailure>)
 
 /**
  * Coordinator for Advanced Protection Intrusion Logging imports (#342).
  * Streams per-day JSONL entries out of the export ZIP, parses them into
- * typed telemetry (pure emitters), and evaluates SIGMA rules over the
- * COMPLETE parsed stream — persistence caps are applied later by the
- * orchestrator, never here (spec §7: detection sees everything).
+ * typed telemetry (pure emitters), and hands each type's records to
+ * [IntrusionLogChunks] in chunks, in one pass: the writer session evaluates the
+ * rules over every chunk (spec §7: detection sees everything) and stores it.
  */
 @Singleton
 class IntrusionLogAnalyzer @Inject constructor(
     @ApplicationContext private val context: Context,
-    private val sigmaRuleEngine: SigmaRuleEngine,
     private val indicatorResolver: IndicatorResolver
 ) {
     // JVM unit tests construct this with a relaxed MockK Context — only
@@ -90,8 +110,8 @@ class IntrusionLogAnalyzer @Inject constructor(
      * persist an empty import AND run its replace-on-reimport sweep, wiping the
      * previous import's rows while the UI reported success: a failed read
      * destroyed good evidence and said nothing. A failure is now loud, and
-     * because it propagates out before the save, the prior import survives
-     * untouched.
+     * because it propagates out of the writer session, the session is aborted
+     * and the prior import survives untouched.
      */
     class IntrusionLogAnalysisException(cause: Throwable) : Exception(
         "Intrusion log analysis failed — nothing was imported.",
@@ -101,8 +121,7 @@ class IntrusionLogAnalyzer @Inject constructor(
     // Catching Throwable at the import boundary is deliberate (finding 3c): a
     // crafted ZIP can raise an Error, which must not crash the process.
     @Suppress("TooGenericExceptionCaught")
-    suspend fun analyze(uri: Uri): IntrusionLogAnalysisResult = withContext(Dispatchers.IO) {
-        val analysisScope: CoroutineScope = this
+    suspend fun analyze(uri: Uri, chunks: IntrusionLogChunks): IntrusionLogScan = withContext(Dispatchers.IO) {
         // Bounded, validating package -> uid resolver (security M3): rejects
         // junk names without a PackageManager binder call, caps the cache, and
         // stops resolving after too many misses so a crafted export cannot flood
@@ -130,18 +149,18 @@ class IntrusionLogAnalyzer @Inject constructor(
                             entry = try { zip.nextEntry } catch (_: Exception) { null }
                         }
                     }
-                    analyzeEntries(
-                        entrySequence,
-                        uidResolver,
-                        System.currentTimeMillis(),
-                        onLine = { analysisScope.ensureActive() },
-                        parentJob = analysisScope.coroutineContext[Job]
-                    )
+                    val scope = currentCoroutineContext()
+                    analyzeEntries(entrySequence, uidResolver, System.currentTimeMillis(), chunks) {
+                        scope.ensureActive()
+                    }
                 }
             }
         } catch (c: CancellationException) {
             // Cooperative cancellation must not be swallowed as a failed import.
             throw c
+        } catch (w: WriterFailure) {
+            // The writer (session) failed, not the analysis: the orchestrator reports a failed save.
+            throw w.cause
         } catch (t: Throwable) {
             // A crafted ZIP can trigger OutOfMemoryError / StackOverflowError,
             // which are Errors (not Exceptions); catching Throwable here still
@@ -153,15 +172,16 @@ class IntrusionLogAnalyzer @Inject constructor(
         }
     }
 
-    internal fun analyzeEntries(
+    /** One pass over [entries]: parse, buffer each type up to a chunk, hand full chunks to [chunks]. */
+    internal suspend fun analyzeEntries(
         entries: Sequence<Pair<String, InputStream>>,
         uidResolver: (String) -> Int,
         capturedAt: Long,
+        chunks: IntrusionLogChunks,
         onLine: () -> Unit = {},
-        parentJob: Job? = null
-    ): IntrusionLogAnalysisResult {
-        // One concatenated line sequence across all matching entries makes
-        // cross-file event dedup inherent to a single parse() call.
+    ): IntrusionLogScan {
+        // One concatenated line sequence across all matching entries, so cross-file
+        // duplicates reach the store in one import (where they collapse).
         val lines = sequence {
             for ((name, input) in entries) {
                 // Shared with the sniffer (#356) so a ZIP the sniffer accepts can
@@ -175,69 +195,134 @@ class IntrusionLogAnalyzer @Inject constructor(
                 boundedLines(input.bufferedReader(), LINE_READ_CAP).forEach { yield(it) }
             }
         }
-        val parsed = IntrusionLogParser().parse(lines, uidResolver, capturedAt, onLine)
-
-        // Rows behind domain hits, so ioc_match findings name their family. analyzeEntries
-        // is synchronous and already runs on Dispatchers.IO via analyze(). A failure costs
-        // the attribution only: findings still fire, and the import says what it lacked.
-        // runBlocking is made a child of the caller's Job ([parentJob]) so cancelling the
-        // import reaches the prefetch; a bare runBlocking is a top-level Job and would run
-        // one DAO lookup per host to the end.
-        val analysisErrors = mutableListOf<ScannerFailure>()
-        @Suppress("TooGenericExceptionCaught")
-        try {
-            runBlocking(parentJob ?: EmptyCoroutineContext) {
-                indicatorResolver.prefetchDomainIndicators(parsed.dnsEvents.map { it.event.domain })
-            }
-        } catch (c: CancellationException) {
-            throw c
-        } catch (e: Exception) {
-            Log.w(TAG, "Domain attribution prefetch failed; findings keep no family", e)
-            analysisErrors += ScannerFailure(
-                scanner = ATTRIBUTION_SCANNER,
-                exception = e.javaClass.simpleName,
-                message = "family unavailable: domain prefetch failed"
-            )
-        }
-        val findings = buildList {
-            // Through ImportedDnsEvent.toFieldMap(): carries the record's own
-            // `timestamp` (findings inherit it) and its `resolved_ips`.
-            addAll(sigmaRuleEngine.evaluateImportedDns(parsed.dnsEvents))
-            addAll(sigmaRuleEngine.evaluateNetwork(parsed.networkEvents))
-            addAll(sigmaRuleEngine.evaluateSecurityLog(parsed.securityEvents))
-        }
-
-        val allTimestamps = parsed.dnsEvents.asSequence().map { it.event.timestamp } +
-            parsed.networkEvents.asSequence().map { it.timestamp } +
-            parsed.securityEvents.asSequence().map { it.timestamp }
-        val tsList = allTimestamps.toList()
+        val buffer = ChunkBuffer(chunks)
+        val counts = IntrusionLogParser().parse(lines, uidResolver, capturedAt, buffer, onLine)
+        buffer.flushAll()
 
         Log.d(
             TAG,
-            "Parsed ${parsed.dnsEvents.size} dns / ${parsed.networkEvents.size} connect / " +
-                "${parsed.securityEvents.size} security events " +
-                "(${parsed.duplicatesCollapsed} dupes, ${parsed.malformedLines} malformed, " +
-                "truncated=${parsed.truncated}); ${findings.count { it.triggered }} findings"
+            "Parsed ${counts.dnsRecords} dns / ${counts.connectRecords} connect / " +
+                "${counts.securityRecords} security records " +
+                "(${counts.malformedLines} malformed, truncated=${counts.truncated})"
         )
-
-        return IntrusionLogAnalysisResult(
-            findings = findings,
-            dnsEvents = parsed.dnsEvents,
-            networkEvents = parsed.networkEvents,
-            securityEvents = parsed.securityEvents,
-            scannerErrors = analysisErrors,
+        return IntrusionLogScan(
             stats = IntrusionLogStats(
-                dnsEventCount = parsed.dnsEvents.size,
-                connectEventCount = parsed.networkEvents.size,
-                securityEventCount = parsed.securityEvents.size,
-                duplicatesCollapsed = parsed.duplicatesCollapsed,
-                malformedLines = parsed.malformedLines,
-                earliestEventMs = tsList.minOrNull(),
-                latestEventMs = tsList.maxOrNull(),
-                truncated = parsed.truncated,
-                triggeredFindingCount = findings.count { it.triggered }
-            )
+                dnsEventCount = counts.dnsRecords,
+                connectEventCount = counts.connectRecords,
+                securityEventCount = counts.securityRecords,
+                duplicatesCollapsed = 0,
+                malformedLines = counts.malformedLines,
+                earliestEventMs = buffer.earliest,
+                latestEventMs = buffer.latest,
+                truncated = counts.truncated,
+            ),
+            scannerErrors = buffer.errors.toList(),
         )
+    }
+
+    /**
+     * Buffers each record type up to one chunk and tracks the running event-time min/max (no
+     * per-record list survives a chunk). Before each DNS chunk it prefetches the rows behind domain
+     * hits, so ioc_match findings name their family; a failure costs the attribution only — findings
+     * still fire, and the import says what it lacked (recorded once; later chunks skip the prefetch).
+     */
+    private inner class ChunkBuffer(private val chunks: IntrusionLogChunks) : IntrusionLogSink {
+        private val dns = ArrayList<ImportedDnsEvent>()
+        private val dnsKeys = ArrayList<String>()
+        private val net = ArrayList<NetworkTelemetry>()
+        private val netKeys = ArrayList<String>()
+        private val sec = ArrayList<SecurityLogEvent>()
+        private val secKeys = ArrayList<String>()
+        val errors = mutableListOf<ScannerFailure>()
+        var earliest: Long? = null
+        var latest: Long? = null
+        private var prefetchFailed = false
+
+        override suspend fun dns(event: ImportedDnsEvent, key: String) {
+            seen(event.event.timestamp)
+            dns += event; dnsKeys += key
+            if (dns.size >= ChunkedScanWriter.CHUNK_SIZE) flushDns()
+        }
+
+        override suspend fun connect(event: NetworkTelemetry, key: String) {
+            seen(event.timestamp)
+            net += event; netKeys += key
+            if (net.size >= ChunkedScanWriter.CHUNK_SIZE) flushNet()
+        }
+
+        override suspend fun security(event: SecurityLogEvent, key: String) {
+            seen(event.timestamp)
+            sec += event; secKeys += key
+            if (sec.size >= ChunkedScanWriter.CHUNK_SIZE) flushSec()
+        }
+
+        suspend fun flushAll() {
+            flushDns(); flushNet(); flushSec()
+        }
+
+        private fun seen(time: Long) {
+            earliest = minOf(earliest ?: time, time)
+            latest = maxOf(latest ?: time, time)
+        }
+
+        @Suppress("TooGenericExceptionCaught")
+        private suspend fun prefetch(events: List<ImportedDnsEvent>) {
+            if (prefetchFailed) return
+            try {
+                indicatorResolver.prefetchDomainIndicators(events.map { it.event.domain })
+            } catch (c: CancellationException) {
+                throw c
+            } catch (e: Exception) {
+                Log.w(TAG, "Domain attribution prefetch failed; findings keep no family", e)
+                prefetchFailed = true
+                errors += ScannerFailure(
+                    scanner = ATTRIBUTION_SCANNER,
+                    exception = e.javaClass.simpleName,
+                    message = "family unavailable: domain prefetch failed"
+                )
+            }
+        }
+
+        private suspend fun flushDns() {
+            if (dns.isEmpty()) return
+            prefetch(dns)
+            val events = dns.toList()
+            // Built outside handOver: a record-building bug stays an analysis failure.
+            val records = IntrusionLogRecordBuilders.importedDns(events, dnsKeys)
+            handOver { chunks.dns(events, records) }
+            dns.clear(); dnsKeys.clear()
+        }
+
+        private suspend fun flushNet() {
+            if (net.isEmpty()) return
+            val events = net.toList()
+            // Built outside handOver: a record-building bug stays an analysis failure.
+            val records = IntrusionLogRecordBuilders.network(events, netKeys)
+            handOver { chunks.connect(events, records) }
+            net.clear(); netKeys.clear()
+        }
+
+        private suspend fun flushSec() {
+            if (sec.isEmpty()) return
+            val events = sec.toList()
+            // Built outside handOver: a record-building bug stays an analysis failure.
+            val records = IntrusionLogRecordBuilders.securityLog(events, secKeys)
+            handOver { chunks.security(events, records) }
+            sec.clear(); secKeys.clear()
+        }
+    }
+
+    /** Carries a failure of [IntrusionLogChunks] (the writer) past the analysis-failure boundary. */
+    private class WriterFailure(override val cause: Throwable) : Exception(cause)
+
+    /** Runs one hand-over to the writer; its failure (other than cancellation) is a [WriterFailure]. */
+    @Suppress("TooGenericExceptionCaught")
+    private suspend fun handOver(block: suspend () -> Unit) = try {
+        block()
+    } catch (c: CancellationException) {
+        throw c
+    } catch (t: Throwable) {
+        throw WriterFailure(t)
     }
 
     private companion object {

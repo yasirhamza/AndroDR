@@ -2,6 +2,10 @@ package com.androdr.data.db
 
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.booleanOrNull
+import kotlinx.serialization.json.contentOrNull
 
 val MIGRATION_1_2 = object : Migration(1, 2) {
     override fun migrate(database: SupportSQLiteDatabase) {
@@ -582,4 +586,91 @@ val MIGRATION_18_19 = object : Migration(18, 19) {
                 "`reference` TEXT NOT NULL, `fetchedAt` INTEGER NOT NULL, PRIMARY KEY(`type`, `value`))"
         )
     }
+}
+
+/**
+ * v20: the telemetry store (spec §4, §5.1). Adds the content/fact/observation tables, event
+ * watermarks and correlation-signal members; `ScanResult.state` / `telemetryState` (existing scans
+ * read back COMPLETE / NONE); `forensic_timeline.recordId` / `sourceEventKey` / `level` /
+ * `persistent` and their indices. All DDL is additive (API 26 SQLite: ADD COLUMN only), so
+ * `telemetry_record.id` and `forensic_timeline.id` keep AUTOINCREMENT.
+ *
+ * Then backfills `level` on legacy finding rows from `ScanResult.findings`, matched by
+ * (`scanResultId`, `ruleId`), through [MigrationFindingsReader]: an oversized or corrupt findings
+ * row leaves those rows' `level` null and never aborts the upgrade.
+ */
+val MIGRATION_19_20 = object : Migration(19, 20) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        SCHEMA_20_DDL.forEach(db::execSQL)
+        backfillFindingLevels(db)
+    }
+}
+
+private val SCHEMA_20_DDL = listOf(
+    "ALTER TABLE ScanResult ADD COLUMN `state` TEXT NOT NULL DEFAULT 'COMPLETE'",
+    "ALTER TABLE ScanResult ADD COLUMN `telemetryState` TEXT NOT NULL DEFAULT 'NONE'",
+    "ALTER TABLE forensic_timeline ADD COLUMN `recordId` INTEGER",
+    "ALTER TABLE forensic_timeline ADD COLUMN `sourceEventKey` BLOB",
+    "ALTER TABLE forensic_timeline ADD COLUMN `level` TEXT",
+    "ALTER TABLE forensic_timeline ADD COLUMN `persistent` INTEGER NOT NULL DEFAULT 0",
+    "CREATE INDEX IF NOT EXISTS `index_forensic_timeline_recordId` ON `forensic_timeline` (`recordId`)",
+    "CREATE INDEX IF NOT EXISTS `index_forensic_timeline_sourceEventKey` ON `forensic_timeline` (`sourceEventKey`)",
+    "CREATE INDEX IF NOT EXISTS `index_forensic_timeline_scanResultId_startTimestamp` " +
+        "ON `forensic_timeline` (`scanResultId`, `startTimestamp`)",
+    "CREATE INDEX IF NOT EXISTS `index_forensic_timeline_packageName_startTimestamp` " +
+        "ON `forensic_timeline` (`packageName`, `startTimestamp`)",
+    "CREATE TABLE IF NOT EXISTS `record_body` (`hash` BLOB NOT NULL, `encoding` INTEGER NOT NULL, " +
+        "`dictVersion` INTEGER NOT NULL, `body` BLOB NOT NULL, `rawBytes` INTEGER NOT NULL, PRIMARY KEY(`hash`))",
+    "CREATE TABLE IF NOT EXISTS `telemetry_record` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+        "`service` TEXT NOT NULL, `factKey` BLOB NOT NULL, `sourceKey` BLOB, `subjectKey` TEXT, " +
+        "`eventTime` INTEGER, `timePrecision` TEXT NOT NULL, `category` TEXT, `packageName` TEXT, " +
+        "`bodyHash` BLOB NOT NULL, `firstSource` TEXT NOT NULL, `firstCapturedAt` INTEGER NOT NULL, " +
+        "`firstStrippedKeys` INTEGER NOT NULL)",
+    "CREATE UNIQUE INDEX IF NOT EXISTS `index_telemetry_record_service_factKey` " +
+        "ON `telemetry_record` (`service`, `factKey`)",
+    "CREATE INDEX IF NOT EXISTS `index_telemetry_record_service_subjectKey` " +
+        "ON `telemetry_record` (`service`, `subjectKey`)",
+    "CREATE INDEX IF NOT EXISTS `index_telemetry_record_packageName_eventTime` " +
+        "ON `telemetry_record` (`packageName`, `eventTime`)",
+    "CREATE INDEX IF NOT EXISTS `index_telemetry_record_eventTime` ON `telemetry_record` (`eventTime`)",
+    "CREATE INDEX IF NOT EXISTS `index_telemetry_record_sourceKey` ON `telemetry_record` (`sourceKey`)",
+    "CREATE INDEX IF NOT EXISTS `index_telemetry_record_bodyHash` ON `telemetry_record` (`bodyHash`)",
+    "CREATE TABLE IF NOT EXISTS `scan_record` (`scanId` INTEGER NOT NULL, `service` TEXT NOT NULL, " +
+        "`ordinal` INTEGER NOT NULL, `recordId` INTEGER NOT NULL, `eventTime` INTEGER, `source` TEXT NOT NULL, " +
+        "`capturedAt` INTEGER NOT NULL, `strippedKeys` INTEGER NOT NULL, PRIMARY KEY(`scanId`, `service`, `ordinal`))",
+    "CREATE UNIQUE INDEX IF NOT EXISTS `index_scan_record_scanId_recordId` ON `scan_record` (`scanId`, `recordId`)",
+    "CREATE INDEX IF NOT EXISTS `index_scan_record_recordId` ON `scan_record` (`recordId`)",
+    "CREATE INDEX IF NOT EXISTS `index_scan_record_scanId_eventTime` ON `scan_record` (`scanId`, `eventTime`)",
+    "CREATE TABLE IF NOT EXISTS `event_watermark` (`service` TEXT NOT NULL, `position` INTEGER NOT NULL, " +
+        "`scanId` INTEGER NOT NULL, PRIMARY KEY(`service`))",
+    "CREATE TABLE IF NOT EXISTS `signal_member` (`signalRowId` INTEGER NOT NULL, `kind` INTEGER NOT NULL, " +
+        "`refId` INTEGER NOT NULL, PRIMARY KEY(`signalRowId`, `kind`, `refId`))",
+    "CREATE INDEX IF NOT EXISTS `index_signal_member_kind_refId` ON `signal_member` (`kind`, `refId`)",
+)
+
+private fun backfillFindingLevels(db: SupportSQLiteDatabase) {
+    val scanIds = db.query(
+        "SELECT DISTINCT f.scanResultId FROM forensic_timeline f JOIN ScanResult s ON s.id = f.scanResultId " +
+            "WHERE f.ruleId != '' AND f.level IS NULL"
+    ).use { c -> buildList { while (c.moveToNext()) add(c.getLong(0)) } }
+    for (scanId in scanIds) {
+        for ((ruleId, level) in triggeredLevels(MigrationFindingsReader.read(db, scanId))) {
+            db.execSQL(
+                "UPDATE forensic_timeline SET level = ? WHERE scanResultId = ? AND ruleId = ? AND level IS NULL",
+                arrayOf<Any>(level, scanId, ruleId)
+            )
+        }
+    }
+}
+
+/** ruleId -> level of the first triggered finding per rule (`triggered` defaults to true when absent). */
+private fun triggeredLevels(findings: List<JsonObject>): Map<String, String> {
+    val out = LinkedHashMap<String, String>()
+    for (f in findings) {
+        val triggered = (f["triggered"] as? JsonPrimitive)?.booleanOrNull ?: true
+        val ruleId = (f["ruleId"] as? JsonPrimitive)?.contentOrNull
+        val level = (f["level"] as? JsonPrimitive)?.contentOrNull
+        if (triggered && !ruleId.isNullOrEmpty() && !level.isNullOrEmpty()) out.putIfAbsent(ruleId, level)
+    }
+    return out
 }

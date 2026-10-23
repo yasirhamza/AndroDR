@@ -72,7 +72,7 @@ class FieldMapCompletenessTest {
         ).let { it to it.toFieldMap() },
         BatteryDailyEvent(
             dayIndex = 0, eventType = "x", packageName = null, description = "x",
-            source = imported, capturedAt = 0L,
+            version = 0L, timestamp = 0L, timestampPrecision = "day", source = imported, capturedAt = 0L,
         ).let { it to it.toFieldMap() },
         PackageInstallHistoryEntry(
             packageName = "x", eventType = PackageHistoryEventType.INSTALL, timestamp = 0L,
@@ -83,7 +83,7 @@ class FieldMapCompletenessTest {
         ).let { it to it.toFieldMap() },
         DatabasePathObservation(
             filePath = "x", processName = null, packageName = null, observationTimestamp = 0L,
-            source = imported, capturedAt = 0L,
+            dbPath = "x", recentQueryCount = 0, source = imported, capturedAt = 0L,
         ).let { it to it.toFieldMap() },
         SecurityLogEvent(
             timestamp = 0L, tag = 0, tagName = "x", securityData = emptyList(),

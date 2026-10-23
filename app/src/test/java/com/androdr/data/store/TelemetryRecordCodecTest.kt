@@ -1,0 +1,284 @@
+package com.androdr.data.store
+
+import com.androdr.data.model.NetworkTelemetry
+import com.androdr.data.model.TelemetrySource
+import org.junit.Assert.assertArrayEquals
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
+import org.junit.Test
+import java.io.File
+import java.util.zip.Deflater
+import kotlin.random.Random
+
+class TelemetryRecordCodecTest {
+
+    private val codec = TelemetryRecordCodec(TelemetryDictionaries(::loadDict))
+
+    private fun loadDict(name: String): ByteArray = listOf(
+        File("src/main/res/raw/$name.txt"), File("app/src/main/res/raw/$name.txt")
+    ).first { it.isFile }.readBytes()
+
+    private val captured = 1_729_612_345_678L
+
+    // ---- stripping -------------------------------------------------------------------------
+
+    @Test fun `content-valued source strings are kept`() {
+        for (content in listOf("bugreport_import", "adb_trusted_key")) {
+            val fields = mapOf("source" to content, "x" to 1)
+            val stripped = codec.strip(fields, TelemetrySource.BUGREPORT_IMPORT, captured)
+            assertEquals(fields, stripped.fields)
+            assertEquals(0, stripped.strippedKeys)
+        }
+    }
+
+    @Test fun `source equal to the observation source name is stripped`() {
+        val fields = mapOf("source" to "BUGREPORT_IMPORT", "x" to 1)
+        val same = codec.strip(fields, TelemetrySource.BUGREPORT_IMPORT, captured)
+        assertFalse(same.fields.containsKey("source"))
+        assertTrue(same.strippedKeys != 0)
+        val other = codec.strip(fields, TelemetrySource.LIVE_SCAN, captured)
+        assertEquals(fields, other.fields)
+        assertEquals(0, other.strippedKeys)
+    }
+
+    @Test fun `captured_at is stripped only when equal`() {
+        val equal = codec.strip(mapOf("captured_at" to captured), TelemetrySource.LIVE_SCAN, captured)
+        assertTrue(equal.fields.isEmpty())
+        val differs = codec.strip(mapOf("captured_at" to captured + 1), TelemetrySource.LIVE_SCAN, captured)
+        assertEquals(mapOf<String, Any?>("captured_at" to captured + 1), differs.fields)
+        assertEquals(0, differs.strippedKeys)
+        val wrongType = codec.strip(mapOf("captured_at" to "x"), TelemetrySource.LIVE_SCAN, captured)
+        assertEquals(0, wrongType.strippedKeys)
+    }
+
+    @Test fun `decode restores exactly the stripped keys`() {
+        val cases = listOf(
+            mapOf("source" to "LIVE_SCAN", "captured_at" to captured, "a" to 1),
+            mapOf("source" to "LIVE_SCAN", "captured_at" to 5L, "a" to 1),
+            mapOf("source" to "adb_trusted_key", "captured_at" to captured, "a" to 1),
+            mapOf("source" to "adb_trusted_key", "a" to 1),
+            mapOf("a" to 1),
+        )
+        for (fields in cases) {
+            val s = codec.strip(fields, TelemetrySource.LIVE_SCAN, captured)
+            for (event in listOf(false, true)) {
+                val enc = codec.encode("network_monitor", codec.canonicalJson(s.fields), event, Deflater())
+                val back = codec.decode(
+                    enc.body, enc.encoding, enc.dictVersion, enc.rawBytes, s.strippedKeys,
+                    TelemetrySource.LIVE_SCAN, captured
+                )
+                assertEquals(fields, back)
+            }
+        }
+    }
+
+    // ---- canonical JSON --------------------------------------------------------------------
+
+    @Test fun `types round-trip through canonical json`() {
+        val fields = mapOf<String, Any?>(
+            "int" to 7, "intNeg" to -3, "longSmall" to 7L, "longBig" to 1_729_612_345_678L,
+            "zero" to 0L, "intMax" to Int.MAX_VALUE, "longMin" to Long.MIN_VALUE,
+            "dbl" to 1.5, "dblWhole" to 2.0, "dblNegZero" to -0.0, "nan" to Double.NaN,
+            "inf" to Double.POSITIVE_INFINITY, "ninf" to Double.NEGATIVE_INFINITY,
+            "t" to true, "f" to false, "null" to null,
+            "str" to "q\"\\\n\u0001é😀", "empty" to "",
+            "bytes" to byteArrayOf(0, 1, -1, 127),
+            "list" to listOf(1, "a", null, listOf(2L)),
+            "set" to setOf("b", "a"),
+            "map" to mapOf("z" to 1, "~tilde" to 2, "~L" to 3, "n" to mapOf("k" to listOf<Any?>())),
+        )
+        val json = codec.canonicalJson(fields)
+        val back = codec.parse(json)!!
+        assertEquals(fields.keys, back.keys)
+        for ((k, v) in fields) {
+            if (v is ByteArray) assertArrayEquals(v, back[k] as ByteArray)
+            else if (v is Double && v.isNaN()) assertTrue((back[k] as Double).isNaN())
+            else assertEquals("key $k", v, back[k])
+        }
+        assertEquals(java.lang.Double.doubleToRawLongBits(-0.0),
+            java.lang.Double.doubleToRawLongBits(back["dblNegZero"] as Double))
+        assertTrue(back["longSmall"] is Long)
+        assertTrue(back["int"] is Int)
+    }
+
+    @Test fun `key order does not change the canonical form or hash`() {
+        val a = linkedMapOf<String, Any?>("b" to 1, "a" to mapOf("y" to 1, "x" to 2), "s" to setOf(3, 1, 2))
+        val b = linkedMapOf<String, Any?>("s" to setOf(2, 3, 1), "a" to mapOf("x" to 2, "y" to 1), "b" to 1)
+        assertEquals(codec.canonicalJson(a), codec.canonicalJson(b))
+        assertArrayEquals(HashKeys.h128(codec.canonicalJson(a)), HashKeys.h128(codec.canonicalJson(b)))
+    }
+
+    @Test fun `h128 is 16 bytes and keys compare by content`() {
+        val h = HashKeys.h128("abc")
+        assertEquals(16, h.size)
+        assertArrayEquals(h, HashKeys.h128("abc".toByteArray()))
+        assertEquals(HashKeys.key(h), HashKeys.key(h.copyOf()))
+        assertEquals(mapOf(HashKeys.key(h) to 1)[HashKeys.key(h.copyOf())], 1)
+    }
+
+    // ---- encoding / compression ------------------------------------------------------------
+
+    @Test fun `snapshot bodies are plain json and event bodies are deflate`() {
+        val json = codec.canonicalJson(mapOf("a" to 1))
+        val snap = codec.encode("app_scanner", json, false, Deflater())
+        assertEquals(0, snap.encoding)
+        assertEquals(json, String(snap.body, Charsets.UTF_8))
+        assertEquals(snap.body.size, snap.rawBytes)
+        val ev = codec.encode("network_monitor", json, true, Deflater())
+        assertEquals(1, ev.encoding)
+        assertTrue(ev.dictVersion >= 1)
+        assertEquals(json.toByteArray().size, ev.rawBytes)
+    }
+
+    @Test fun `a reused deflater gives identical output`() {
+        val d = Deflater()
+        val json = codec.canonicalJson(mapOf("a" to "hello", "b" to 2))
+        val first = codec.encode("network_monitor", json, true, d)
+        codec.encode("network_monitor", codec.canonicalJson(mapOf("zzz" to "other")), true, d)
+        assertArrayEquals(first.body, codec.encode("network_monitor", json, true, d).body)
+    }
+
+    // Compression fixtures: deterministic (seeded) records whose package names, domains and IPs are
+    // deliberately NOT in any dictionary's sample pools (dictionaries can only help with field names and
+    // structure, not memorised values). Ratio = sum(canonical bytes) / sum(Deflate-with-dictionary bytes).
+
+    private val otherApps = listOf(
+        "org.mozilla.firefox", "com.discord", "com.reddit.frontpage", "com.netflix.mediaclient",
+        "com.amazon.mShop.android.shopping", "com.twitter.android", "com.snapchat.android",
+        "com.google.android.apps.photos", "com.dropbox.android", "com.slack", "us.zoom.videomeetings",
+        "com.paypal.android.p2pmobile", "com.ubercab", "com.duolingo", "org.thoughtcrime.securesms",
+    )
+
+    private fun ip(rnd: Random): String =
+        if (rnd.nextInt(10) == 0) "2607:f8b0:4004:${rnd.nextInt(0xfff).toString(16)}::200e"
+        else "${listOf(23, 52, 13, 151, 185, 99, 54).random(rnd)}." +
+            "${rnd.nextInt(256)}.${rnd.nextInt(256)}.${rnd.nextInt(1, 255)}"
+
+    private fun ratio(service: String, records: List<Map<String, Any?>>): Double {
+        var raw = 0L
+        var packed = 0L
+        val d = Deflater()
+        for (fields in records) {
+            val s = codec.strip(fields, TelemetrySource.LIVE_SCAN, captured)
+            val enc = codec.encode(service, codec.canonicalJson(s.fields), true, d)
+            raw += enc.rawBytes
+            packed += enc.body.size
+            // every compressed record must still decode to the original
+            val back = codec.decode(
+                enc.body, enc.encoding, enc.dictVersion, enc.rawBytes, s.strippedKeys,
+                TelemetrySource.LIVE_SCAN, captured
+            )
+            assertEquals(fields, back)
+        }
+        val r = raw.toDouble() / packed
+        println("MEASURED_COMPRESSION_RATIO service=$service ratio=$r raw=$raw packed=$packed")
+        return r
+    }
+
+    @Test fun `network family compresses at least 2_5x on 1000 NetworkTelemetry records`() {
+        val rnd = Random(42)
+        val protocols = listOf("TCP", "UDP", null)
+        val ports = listOf(443, 443, 443, 80, 53, 5228, 8080, 993, 5222, 123)
+        val records = List(1000) {
+            NetworkTelemetry(
+                destinationIp = ip(rnd), destinationPort = ports.random(rnd), protocol = protocols.random(rnd),
+                appUid = 10000 + rnd.nextInt(300), appName = (otherApps + null).random(rnd),
+                timestamp = 1_729_600_000_000L + rnd.nextLong(86_400_000L),
+                source = TelemetrySource.LIVE_SCAN, capturedAt = captured,
+            ).toFieldMap()
+        }
+        val r = ratio("network_monitor", records)
+        assertTrue("ratio $r", r >= 2.5)
+    }
+
+    @Test fun `dns family compresses at least 2x on 1000 dns records`() {
+        val rnd = Random(7)
+        val domains = listOf("api.stripe.com", "cdn.discordapp.com", "gateway.reddit.com", "ocsp.digicert.com",
+            "assets.nflxext.com", "api.twitter.com", "sentry.io", "o1234.ingest.sentry.io", "time.cloudflare.com")
+        val records = List(1000) {
+            val blocked = rnd.nextInt(8) == 0
+            buildMap<String, Any?> {
+                put("app_uid", 10000 + rnd.nextInt(300))
+                put("domain", domains.random(rnd))
+                put("is_blocked", blocked)
+                put("reason", if (blocked) "blocklist" else null)
+                if (!blocked) put("resolved_ips", List(rnd.nextInt(1, 4)) { ip(rnd) })
+                put("source_package", otherApps.random(rnd))
+                put("timestamp", 1_729_600_000_000L + rnd.nextLong(86_400_000L))
+            }
+        }
+        val r = ratio("dns_monitor", records)
+        assertTrue("ratio $r", r >= 2.0)
+    }
+
+    @Test fun `activity family compresses at least 2x on 1000 package events`() {
+        val rnd = Random(11)
+        val ops = listOf("android:coarse_location", "android:read_contacts", "android:post_notification")
+        val records = List(1000) {
+            val pkg = otherApps.random(rnd)
+            val t = 1_729_600_000_000L + rnd.nextLong(86_400_000L)
+            when (rnd.nextInt(3)) {
+                0 -> mapOf("event_type" to "UPDATE", "package_name" to pkg, "timestamp" to t,
+                    "version_code" to rnd.nextInt(1, 900_000))
+                1 -> mapOf("app_name" to pkg, "event_type" to "app_foreground", "package_name" to pkg,
+                    "timestamp" to t)
+                else -> mapOf("access_count" to rnd.nextInt(1, 90), "event_time_ms" to t,
+                    "is_system_app" to false, "last_access_time" to t, "last_reject_time" to 0L,
+                    "operation" to ops.random(rnd), "package_name" to pkg)
+            }
+        }
+        // appops/usage/install records share one family dictionary; encode them under their own services
+        var raw = 0L
+        var packed = 0L
+        val d = Deflater()
+        for (fields in records) {
+            val service = when {
+                "operation" in fields -> "appops_audit"
+                "version_code" in fields -> "package_install_history"
+                else -> "usage_stats"
+            }
+            val enc = codec.encode(service, codec.canonicalJson(fields), true, d)
+            raw += enc.rawBytes
+            packed += enc.body.size
+        }
+        val r = raw.toDouble() / packed
+        println("MEASURED_COMPRESSION_RATIO service=activity-family ratio=$r raw=$raw packed=$packed")
+        assertTrue("ratio $r", r >= 2.0)
+    }
+
+    // ---- S6 --------------------------------------------------------------------------------
+
+    @Test fun `S6 corrupt body decodes to null`() {
+        val json = codec.canonicalJson(mapOf("a" to "x".repeat(200)))
+        val enc = codec.encode("network_monitor", json, true, Deflater())
+        val corrupt = enc.body.copyOf().also { it[it.size / 2] = (it[it.size / 2].toInt() xor 0x5a).toByte() }
+        assertNull(decode(enc, corrupt))
+        assertNull(decode(enc, enc.body.copyOf(enc.body.size - 3)))
+        assertNull(decode(enc, ByteArray(0)))
+        assertNull(codec.decode("{not json".toByteArray(), 0, 0, 9, 0, TelemetrySource.LIVE_SCAN, captured))
+        assertNull(codec.decode(json.toByteArray(), 0, 0, json.length + 1, 0, TelemetrySource.LIVE_SCAN, captured))
+        assertNull(codec.decode(json.toByteArray(), 7, 0, json.length, 0, TelemetrySource.LIVE_SCAN, captured))
+        assertNull(codec.decode(enc.body, 1, 99, enc.rawBytes, 0, TelemetrySource.LIVE_SCAN, captured))
+        assertNotNull(decode(enc, enc.body))
+    }
+
+    @Test fun `S6 body inflating past rawBytes decodes to null without huge allocation`() {
+        val json = codec.canonicalJson(mapOf("a" to "y".repeat(5_000_000)))
+        val enc = codec.encode("network_monitor", json, true, Deflater())
+        assertTrue(enc.body.size < 100_000)
+        assertNull(codec.decode(enc.body, 1, enc.dictVersion, 100, 0, TelemetrySource.LIVE_SCAN, captured))
+        assertNull(codec.decode(enc.body, 1, enc.dictVersion, Int.MAX_VALUE, 0, TelemetrySource.LIVE_SCAN, captured))
+        assertNull(codec.decode(enc.body, 1, enc.dictVersion, -1, 0, TelemetrySource.LIVE_SCAN, captured))
+        // rawBytes larger than the real size: the inflated length must match exactly
+        assertNull(
+            codec.decode(enc.body, 1, enc.dictVersion, enc.rawBytes + 10, 0, TelemetrySource.LIVE_SCAN, captured)
+        )
+    }
+
+    private fun decode(enc: EncodedBody, body: ByteArray) = codec.decode(
+        body, enc.encoding, enc.dictVersion, enc.rawBytes, 0, TelemetrySource.LIVE_SCAN, captured
+    )
+}

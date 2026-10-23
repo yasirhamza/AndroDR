@@ -15,10 +15,22 @@ import java.io.InputStream
 data class ModuleResult(
     val telemetry: List<Map<String, Any?>> = emptyList(),
     val telemetryService: String = "",
-    val timeline: List<TimelineEvent> = emptyList()
+    val timeline: List<TimelineEvent> = emptyList(),
+    /** Typed records this module produced; the analyzer folds them into the telemetry bundle. */
+    val typed: TypedTelemetry = TypedTelemetry(),
+    /**
+     * Set when the module hit [BugreportModule.MAX_RECORDS_PER_MODULE] (or its test override)
+     * and stopped adding records: the bound that tripped. The analyzer reports it; never silent.
+     */
+    val truncatedAt: Int? = null,
 )
 
 interface BugreportModule {
+    companion object {
+        /** Per-module record bound; modules still materialise their lists in memory. */
+        const val MAX_RECORDS_PER_MODULE = 200_000
+    }
+
     /** Dumpsys service names this module needs, or null for raw ZIP entries. */
     val targetSections: List<String>?
 

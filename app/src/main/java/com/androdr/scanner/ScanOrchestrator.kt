@@ -4,39 +4,31 @@ import android.content.Context
 import android.net.Uri
 import android.util.Log
 import androidx.annotation.VisibleForTesting
-import com.androdr.data.db.DnsEventDao
 import com.androdr.data.db.ForensicTimelineEventDao
-import com.androdr.data.db.toForensicTimelineEvent
-import com.androdr.data.model.ForensicTimelineEvent
+import com.androdr.data.model.AppTelemetry
+import com.androdr.data.model.Indicator
+import com.androdr.data.model.NotEvaluatedReason
 import com.androdr.data.model.ScanResult
 import com.androdr.data.model.ScannerFailure
 import com.androdr.data.model.TelemetrySource
-import com.androdr.data.model.NotEvaluatedReason
 import com.androdr.data.model.UNREGISTERED_IOC_LOOKUP
-import com.androdr.sigma.RuleCoverage
-import com.androdr.util.reportSafe
-import com.androdr.data.repo.ScanRepository
+import com.androdr.data.repo.ScanLock
+import com.androdr.data.repo.TimelineRowDeleter
 import com.androdr.ioc.IndicatorResolver
-import com.androdr.data.model.Indicator
 import com.androdr.network.DnsVpnService
-import com.androdr.reporting.ATTRIBUTION_SCANNER
-import com.androdr.reporting.DNS_SNAPSHOT_SCANNER
 import com.androdr.sigma.CveEvidenceProvider
 import com.androdr.sigma.EvidenceProvider
-import com.androdr.sigma.IocMatchEvidenceProvider
-import com.androdr.sigma.SigmaRule
 import com.androdr.sigma.Finding
-import com.androdr.sigma.FindingCategory
+import com.androdr.sigma.IocMatchEvidenceProvider
+import com.androdr.sigma.RuleCoverage
 import com.androdr.sigma.SigmaCorrelationEngine
-import com.androdr.sigma.SigmaRuleFeed
+import com.androdr.sigma.SigmaRule
 import com.androdr.sigma.SigmaRuleEngine
+import com.androdr.sigma.SigmaRuleFeed
+import com.androdr.util.reportSafe
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.Deferred
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -48,34 +40,24 @@ import java.util.Collections
 import javax.inject.Inject
 import javax.inject.Singleton
 
-/** A failed DNS snapshot read: the DNS rules did not run, so the scan records it (#394). */
-private fun dnsSnapshotReadFailure(e: Exception) = ScannerFailure(
-    scanner = DNS_SNAPSHOT_SCANNER,
-    exception = e.javaClass.simpleName,
-    message = e.message,
-)
-
 /**
- * Orchestrates all scanning operations.  Runs [AppScanner] and [DeviceAuditor] in parallel,
- * assembles a [ScanResult], persists it, and exposes helpers for bug-report analysis and
- * result diffing.
+ * Orchestrates all scanning operations. Every writer — the live scan, the bug-report import and the
+ * intrusion-log import — runs inside [ScanLock.withWriter] and evaluates and stores its telemetry
+ * only through one [ChunkedScanWriter] session (spec §4.1, §5.2): records are appended chunk by
+ * chunk, and every Timeline row is written in the session's single finishing transaction. A failed
+ * writer aborts its session, so nothing of it is ever visible (#342 B1).
  */
 @Singleton
 @Suppress("LongParameterList") // All parameters are Hilt-injected dependencies
 class ScanOrchestrator @Inject constructor(
+    private val collector: LiveScanCollector,
     private val appScanner: AppScanner,
-    private val deviceAuditor: DeviceAuditor,
-    private val processScanner: ProcessScanner,
-    private val fileArtifactScanner: FileArtifactScanner,
-    private val accessibilityAuditScanner: AccessibilityAuditScanner,
-    private val receiverAuditScanner: ReceiverAuditScanner,
-    private val appOpsScanner: AppOpsScanner,
-    private val usageStatsScanner: UsageStatsScanner,
     private val bugReportAnalyzer: BugReportAnalyzer,
     private val intrusionLogAnalyzer: IntrusionLogAnalyzer,
-    private val scanRepository: ScanRepository,
-    private val dnsEventDao: DnsEventDao,
+    private val writer: ChunkedScanWriter,
+    private val scanLock: ScanLock,
     private val forensicTimelineEventDao: ForensicTimelineEventDao,
+    private val timelineRows: TimelineRowDeleter,
     private val installEventEmitter: InstallEventEmitter,
     private val deviceAdminGrantEmitter: DeviceAdminGrantEmitter,
     private val sigmaRuleEngine: SigmaRuleEngine,
@@ -95,7 +77,7 @@ class ScanOrchestrator @Inject constructor(
     private var ruleEngineInitialized = false
 
     /** Cached app telemetry from the most recent scan, for report export. */
-    @Volatile var lastAppTelemetry: List<com.androdr.data.model.AppTelemetry> = emptyList()
+    @Volatile var lastAppTelemetry: List<AppTelemetry> = emptyList()
         private set
 
     /** Cached telemetry from the most recent scan, for report export. */
@@ -128,66 +110,6 @@ class ScanOrchestrator @Inject constructor(
      */
     private val _scanProgress = MutableStateFlow<ScanProgress>(ScanProgress.Idle)
     val scanProgress: StateFlow<ScanProgress> = _scanProgress.asStateFlow()
-
-    /**
-     * Wraps a single scanner's telemetry-collection call with:
-     *   1. **Per-scanner error isolation.** Any exception (other than
-     *      [CancellationException]) is caught, logged, and recorded in
-     *      [errors] so the final [ScanResult] can tell the UI which scanners
-     *      failed. The other scanners continue running — one failure does not
-     *      zero out the whole scan.
-     *   2. **Cancellation pass-through.** [CancellationException] is
-     *      re-thrown so coroutine cancellation still works end-to-end.
-     *   3. **Progress counter increment.** On completion (success or
-     *      failure) the scan-progress StateFlow is advanced by one. We count
-     *      failed scanners as "completed" from the progress perspective
-     *      because the user cares about wall-clock progress, not success
-     *      rate — the failures are surfaced separately in the scan result.
-     *
-     * Silently swallowing scanner exceptions (the previous behavior) was a
-     * detection-evasion hazard: a malware sample that crashed any one scanner
-     * would cause that scanner's category of findings to disappear, yielding
-     * an apparently-clean scan result indistinguishable from a real clean.
-     */
-    @Suppress("TooGenericExceptionCaught")
-    private suspend fun <T> trackScanner(
-        name: String,
-        errors: MutableList<ScannerFailure>,
-        default: T,
-        block: suspend () -> T
-    ): T {
-        return try {
-            block()
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            Log.e(TAG, "$name failed", e)
-            errors.add(
-                ScannerFailure(
-                    scanner = name,
-                    exception = e::class.simpleName ?: "Exception",
-                    message = e.message
-                )
-            )
-            default
-        } finally {
-            _scanProgress.update { current ->
-                if (current is ScanProgress.Running) {
-                    current.copy(completedScanners = current.completedScanners + 1)
-                } else {
-                    current
-                }
-            }
-        }
-    }
-
-    /** Launches a tracked scanner call inside the enclosing coroutineScope. */
-    private fun <T> CoroutineScope.trackedAsync(
-        name: String,
-        errors: MutableList<ScannerFailure>,
-        default: T,
-        block: suspend () -> T
-    ): Deferred<T> = async { trackScanner(name, errors, default, block) }
 
     private suspend fun initRuleEngine() = initMutex.withLock {
         if (ruleEngineInitialized) return@withLock
@@ -282,455 +204,172 @@ class ScanOrchestrator @Inject constructor(
     }
 
     /**
-     * Runs a full device scan.
-     *
-     * [AppScanner.collectTelemetry] and [DeviceAuditor.collectTelemetry] execute concurrently on the IO dispatcher
-     * (each is already wrapped with [kotlinx.coroutines.withContext]).  The results are combined
-     * into a [ScanResult], saved to the database, and returned.
+     * Runs a full device scan: the scanners collect telemetry in parallel ([LiveScanCollector]),
+     * then every service is appended to one live writer session, which evaluates and stores it.
+     * Progress is always reset, even when something above the scanner level throws.
      */
-    @Suppress("LongMethod", "TooGenericExceptionCaught")
-    // Two-phase scan: telemetry collection + SIGMA rule evaluation. Wrapped
-    // in try/finally so progress is always reset even if something above the
-    // scanner-tracker level throws (e.g. SIGMA rule engine init failure).
     suspend fun runFullScan(): ScanResult = try {
-        runFullScanInner()
+        // Callers launch from a ViewModel (Main); rule loading, record building and the session are
+        // CPU work, so they run on Default (A8 D2). The lock is a Mutex, taken outside any transaction.
+        scanLock.withWriter { withContext(Dispatchers.Default) { runFullScanInner() } }
     } finally {
         _scanProgress.value = ScanProgress.Idle
     }
 
-    @Suppress("LongMethod") // Linear two-phase scan body kept intact for readability
-    private suspend fun runFullScanInner(): ScanResult = coroutineScope {
+    @Suppress("TooGenericExceptionCaught") // a failed write must not crash the caller (abort, then report)
+    private suspend fun runFullScanInner(): ScanResult {
         initRuleEngine()
+        // Written from inside the parallel collectors, so it needs a synchronized wrapper.
+        val errors: MutableList<ScannerFailure> = Collections.synchronizedList(mutableListOf())
+        recordRuleCapabilitySkips(errors)
+        errors.addAll(visibilityGapsOrFailure({ indicatorResolver.feedCoverage() }, DnsVpnService.isRunning.value))
 
-        // scannerErrors is written from inside parallel async blocks, so it
-        // needs a synchronized wrapper. Using the Collections.synchronizedList
-        // wrapper gives us mutex semantics with no extra boilerplate.
-        val scannerErrors: MutableList<ScannerFailure> =
-            Collections.synchronizedList(mutableListOf())
-        recordRuleCapabilitySkips(scannerErrors)
-        scannerErrors.addAll(
-            visibilityGapsOrFailure({ indicatorResolver.feedCoverage() }, DnsVpnService.isRunning.value)
-        )
-
-        // Initialize progress for phase 1 — 8 parallel scanners to track.
-        _scanProgress.value = ScanProgress.Running(
-            phase = ScanProgress.Running.Phase.COLLECTING_TELEMETRY,
-            completedScanners = 0,
-            totalScanners = SCANNER_COUNT
-        )
-
-        // Phase 1: Collect telemetry (no detection logic)
-        val appTelemetryDeferred = trackedAsync("appScanner", scannerErrors, emptyList()) {
-            appScanner.collectTelemetry()
-        }
-        val deviceTelemetryDeferred = trackedAsync("deviceAuditor", scannerErrors, emptyList()) {
-            deviceAuditor.collectTelemetry()
-        }
-        val processTelemetryDeferred = trackedAsync("processScanner", scannerErrors, emptyList()) {
-            processScanner.collectTelemetry()
-        }
-        val fileTelemetryDeferred = trackedAsync("fileArtifactScanner", scannerErrors, emptyList()) {
-            fileArtifactScanner.collectTelemetry()
-        }
-        val accessibilityTelemetryDeferred =
-            trackedAsync("accessibilityAuditScanner", scannerErrors, emptyList()) {
-                accessibilityAuditScanner.collectTelemetry()
+        progress(ScanProgress.Running.Phase.COLLECTING_TELEMETRY, 0)
+        val telemetry = collector.collect(errors) {
+            _scanProgress.update { p ->
+                if (p is ScanProgress.Running) p.copy(completedScanners = p.completedScanners + 1) else p
             }
-        val receiverTelemetryDeferred =
-            trackedAsync("receiverAuditScanner", scannerErrors, emptyList()) {
-                receiverAuditScanner.collectTelemetry()
-            }
-        val appOpsTelemetryDeferred = trackedAsync("appOpsScanner", scannerErrors, emptyList()) {
-            appOpsScanner.collectTelemetry()
         }
-        val usageEventsDeferred = trackedAsync("usageStatsScanner", scannerErrors, emptyList()) {
-            usageStatsScanner.collectTimelineEvents()
-        }
+        cacheForExport(telemetry)
 
-        val appTelemetry = appTelemetryDeferred.await()
-        lastAppTelemetry = appTelemetry // cache for report export
-        // Stamp the cache freshness so analyzeBugReport() can decide
-        // whether to reuse this telemetry or do its own fresh scan.
-        if (appTelemetry.isNotEmpty()) {
-            lastAppTelemetryTimestamp = System.currentTimeMillis()
-        }
-        val deviceTelemetry = deviceTelemetryDeferred.await()
-        val processTelemetry = processTelemetryDeferred.await()
-        val fileTelemetry = fileTelemetryDeferred.await()
-        val accessibilityTelemetry = accessibilityTelemetryDeferred.await()
-        val receiverTelemetry = receiverTelemetryDeferred.await()
-        val appOpsTelemetry = appOpsTelemetryDeferred.await()
-        lastDeviceTelemetry = deviceTelemetry
-        lastProcessTelemetry = processTelemetry
-        lastFileArtifactTelemetry = fileTelemetry
-        lastAccessibilityTelemetry = accessibilityTelemetry
-        lastReceiverTelemetry = receiverTelemetry
-        lastAppOpsTelemetry = appOpsTelemetry
-
-        // Phase 2: SIGMA rule evaluation — all detection via rules
-        _scanProgress.value = ScanProgress.Running(
-            phase = ScanProgress.Running.Phase.EVALUATING_RULES,
-            completedScanners = SCANNER_COUNT,
-            totalScanners = SCANNER_COUNT
-        )
-        val allFindings = mutableListOf<Finding>()
-        allFindings.addAll(sigmaRuleEngine.evaluateApps(appTelemetry))
-        allFindings.addAll(sigmaRuleEngine.evaluateDevice(deviceTelemetry))
-        allFindings.addAll(sigmaRuleEngine.evaluateProcesses(processTelemetry))
-        allFindings.addAll(sigmaRuleEngine.evaluateFiles(fileTelemetry))
+        progress(ScanProgress.Running.Phase.EVALUATING_RULES, LiveScanCollector.SCANNER_COUNT)
         // #366: the engine judges only the paths it could read. What went unread is
         // declared, so the report states the limit instead of reading like a clean check.
-        synchronized(scannerErrors) {
-            scannerErrors.addAll(
-                RuleCoverage.unreadableArtifactSkips(sigmaRuleEngine.getEnabledRules(), fileTelemetry)
-            )
-        }
-        allFindings.addAll(sigmaRuleEngine.evaluateAccessibility(accessibilityTelemetry))
-        allFindings.addAll(sigmaRuleEngine.evaluateReceivers(receiverTelemetry))
-        allFindings.addAll(sigmaRuleEngine.evaluateAppOps(appOpsTelemetry))
-
-        // Post-hoc DNS evaluation — SIGMA rules evaluate recent DNS events for reporting
-        // A failed read means the DNS rules did not run: record it (#394) so the report says so
-        // per campaign, instead of reading as "no DNS hits".
-        @Suppress("TooGenericExceptionCaught")
-        val recentDnsEvents = try {
-            dnsEventDao.getRecentSnapshot()
-        } catch (c: CancellationException) {
-            throw c
-        } catch (e: Exception) {
-            Log.w(TAG, "DNS snapshot read failed; DNS rules not evaluated", e)
-            synchronized(scannerErrors) { scannerErrors.add(dnsSnapshotReadFailure(e)) }
-            emptyList()
-        }
-        if (recentDnsEvents.isNotEmpty()) {
-            // Load the rows behind domain hits so ioc_match findings can name their family;
-            // the provider reads them from this cache, never from Room on the VPN path (#71).
-            // A failure costs the attribution only: findings still fire, and the scan says so.
-            var prefetchFailed = false
-            @Suppress("TooGenericExceptionCaught")
-            try {
-                indicatorResolver.prefetchDomainIndicators(recentDnsEvents.map { it.domain })
-            } catch (c: CancellationException) {
-                throw c
-            } catch (e: Exception) {
-                Log.w(TAG, "Domain attribution prefetch failed; findings keep no family", e)
-                prefetchFailed = true
-                synchronized(scannerErrors) {
-                    scannerErrors.add(
-                        ScannerFailure(
-                            scanner = ATTRIBUTION_SCANNER,
-                            exception = e.javaClass.simpleName,
-                            message = "family unavailable: domain prefetch failed"
-                        )
-                    )
-                }
-            }
-            allFindings.addAll(sigmaRuleEngine.evaluateDns(recentDnsEvents))
-            val misses = indicatorResolver.attributionMisses.getAndSet(emptySet())
-            // After a failed prefetch every live hit is a miss; that failure already says so.
-            if (misses.isNotEmpty() && !prefetchFailed) {
-                synchronized(scannerErrors) {
-                    scannerErrors.add(
-                        ScannerFailure(
-                            scanner = ATTRIBUTION_SCANNER,
-                            exception = "MissingPrefetch",
-                            message = "family unavailable for ${misses.size} domain(s): " +
-                                "DNS evaluated without prefetch"
-                        )
-                    )
-                }
-            }
-        }
-
-        val sideloadedCount = allFindings.count {
-            it.category == FindingCategory.APP_RISK && it.matchContext["is_sideloaded"] == "true"
-        }
-        val malwareCount = allFindings.count {
-            it.level == "critical" && "known_malware" in it.impliesFlags
-        }
-
-        Log.i(TAG, "Scan complete — SIGMA: ${allFindings.size} findings from " +
-            "${sigmaRuleEngine.ruleCount()} rules")
-
-        // Snapshot scanner errors before building the result — after this point
-        // no more scanner-phase work can add to the list.
-        val snapshottedErrors: List<ScannerFailure> =
-            synchronized(scannerErrors) { scannerErrors.toList() }
-
-        _scanProgress.value = ScanProgress.Running(
-            phase = ScanProgress.Running.Phase.SAVING_RESULTS,
-            completedScanners = SCANNER_COUNT,
-            totalScanners = SCANNER_COUNT
-        )
+        errors.addAll(RuleCoverage.unreadableArtifactSkips(sigmaRuleEngine.getEnabledRules(), telemetry.files))
 
         val now = System.currentTimeMillis()
-        val result = ScanResult(
-            id                 = now,
-            timestamp          = now,
-            findings           = allFindings,
-            bugReportFindings  = emptyList(),
-            riskySideloadCount = sideloadedCount,
-            knownMalwareCount  = malwareCount,
-            scannerErrors      = snapshottedErrors
+        val scan = ScanResult(
+            id = now, timestamp = now, findings = emptyList(), bugReportFindings = emptyList(),
+            riskySideloadCount = 0, knownMalwareCount = 0,
         )
-
-        if (snapshottedErrors.isNotEmpty()) {
-            Log.w(TAG, "Scan completed with ${snapshottedErrors.size} scanner failures: " +
-                snapshottedErrors.joinToString { "${it.scanner}(${it.exception})" })
-        }
-
-        // Build hash lookup from app telemetry for enrichment
-        val hashByPkg = appTelemetry.filter { !it.apkHash.isNullOrEmpty() }
-            .associateBy({ it.packageName }, { it.apkHash!! })
-        val findingTimelineEvents = allFindings
-            .filter { it.triggered }
-            .map { finding ->
-                val event = finding.toForensicTimelineEvent(result)
-                // Enrich with APK hash from telemetry if not already set
-                if (event.apkHash.isEmpty() && event.packageName.isNotEmpty()) {
-                    event.copy(apkHash = hashByPkg[event.packageName] ?: "")
-                } else event
-            }
-        // Usage stats produce timeline events directly (observational data,
-        // not SIGMA telemetry). Await the deferred before entering the save
-        // transaction so the whole save + finding events + usage event
-        // replacement is one atomic Room write — giving Flow observers a
-        // single invalidation per scan instead of three.
-        val usageEvents = usageEventsDeferred.await()
-        val taggedUsageEvents = usageEvents.map { it.copy(scanResultId = result.id) }
-
-        // Correlation engine — emit install events for new packages, query a
-        // lookback window of existing events, then run the correlation pass
-        // INSIDE the repository's transaction once the new events have been
-        // assigned real Room IDs. Running the engine on pre-insert events
-        // produced signals with member_event_ids = "0,0,0" because every
-        // event's default id = 0L hadn't been replaced with the autoincrement
-        // value yet; the Timeline UI's expand-cluster path could not look up
-        // such members. Fixed in `saveScanWithCorrelation`.
-        val installEvents = runCatching {
-            installEventEmitter.emitNew(result.id, appTelemetry)
-        }.onFailure { Log.w(TAG, "installEventEmitter failed: ${it.message}", it) }
-            .getOrDefault(emptyList())
-        val adminGrantEvents = runCatching {
-            deviceAdminGrantEmitter.emitNew(result.id)
-        }.onFailure { Log.w(TAG, "deviceAdminGrantEmitter failed: ${it.message}", it) }
-            .getOrDefault(emptyList())
-        val correlationRules = sigmaRuleEngine.getCorrelationRules()
-        val maxRuleWindowMs = correlationRules.maxOfOrNull { it.timespanMs } ?: 0L
-        val lookbackEvents = if (maxRuleWindowMs > 0) {
-            runCatching {
-                // #342 B2: exclude imported intrusion-log rows from a LIVE scan's
-                // correlation lookback. They carry their own historical event time
-                // (so a plain time-window query would sweep them in), and any signal
-                // they helped produce would be stamped with this live scan's id —
-                // unreachable by the intrusion-log sweep, i.e. an orphan signal.
-                forensicTimelineEventDao.getEventsSinceExcludingTelemetrySource(
-                    System.currentTimeMillis() - maxRuleWindowMs,
-                    TelemetrySource.INTRUSION_LOG_IMPORT
-                )
-            }.getOrDefault(emptyList())
-        } else emptyList()
-
-        var correlationSignalCount = 0
-        // Only enabled rules contribute to correlation category propagation (and to the
-        // severity of the findings the chains become, #350). Including disabled rules
-        // would let their category influence classifications even though they produce
-        // no bindings.
-        val atomRulesById = sigmaRuleEngine.getEnabledRules().associateBy { it.id }
-        // #370: a chain rule fires only where every leg has events to bind to. Legs with
-        // nothing recorded are declared, so "no warning signs" never stands in for
-        // "three of these patterns could not be checked at all".
-        val chainSkips = RuleCoverage.noEventSkipsFor(
-            correlationRules, sigmaRuleEngine.atomCategories(),
-            installEvents + adminGrantEvents + findingTimelineEvents + taggedUsageEvents + lookbackEvents,
+        val hooks = LiveScanHooks(
+            scan, sigmaRuleEngine, sigmaCorrelationEngine, forensicTimelineEventDao, timelineRows,
+            hashByPackage(telemetry.apps), detectedChanges(scan.id, telemetry.apps),
+            sigmaRuleEngine.getCorrelationRules().maxOfOrNull { it.timespanMs } ?: 0L,
         )
-        val resultWithCoverage = result.copy(scannerErrors = result.scannerErrors + chainSkips)
-        val persisted = runCatching {
-            val saved = scanRepository.saveScanWithCorrelation(
-                scan = resultWithCoverage,
-                findingTimelineEvents = installEvents + adminGrantEvents + findingTimelineEvents,
-                replaceUsageStatsEvents = taggedUsageEvents,
-                lookbackEvents = lookbackEvents,
-                findingsForSignals = { sigmaCorrelationEngine.findingsFor(it, correlationRules, atomRulesById) },
-            ) { eventsWithIds ->
-                if (correlationRules.isEmpty() || eventsWithIds.isEmpty()) emptyList()
-                else {
-                    val bindings = sigmaRuleEngine.computeAtomBindings(eventsWithIds)
-                    val signals = sigmaCorrelationEngine
-                        .evaluate(correlationRules, eventsWithIds, bindings, atomRulesById)
-                        .map { it.copy(scanResultId = result.id) }
-                    correlationSignalCount = signals.size
-                    signals
-                }
-            }
-            Log.i(TAG, "Persisted scan ${result.id} with ${findingTimelineEvents.size} finding, " +
-                "${installEvents.size} install, ${adminGrantEvents.size} admin_grant, " +
-                "$correlationSignalCount signal, " +
-                "${taggedUsageEvents.size} usage events (single transaction)")
-            saved
-        }.getOrElse {
-            Log.e(TAG, "Failed to persist scan results", it)
-            // Keep the coverage declarations: a save that failed does not make the
-            // unevaluable chains evaluable, and the in-memory result is what the UI
-            // renders.
-            resultWithCoverage
+        hooks.readLookback()
+        hooks.errors.addAll(synchronized(errors) { errors.toList() })
+        // A failed write keeps nothing (the session is aborted), but the in-memory findings are
+        // still returned with the writer failure, so the Dashboard never reads as clean.
+        val recover = { session: ChunkedScanWriter.Session, t: Throwable ->
+            Log.e(TAG, "Failed to persist scan results", t)
+            val kept = session.keptScan()
+            kept.copy(scannerErrors = kept.scannerErrors + writerFailure(t))
         }
+        return try {
+            writer.inSession(scan, liveEvents = true, hooks, recover) { session ->
+                appendLive(session, hooks, telemetry, now, indicatorResolver)
+                progress(ScanProgress.Running.Phase.SAVING_RESULTS, LiveScanCollector.SCANNER_COUNT)
+                session.finish().scan
+            }.also { Log.i(TAG, "Scan ${it.id} complete — ${it.findings.size} findings, " +
+                "${it.scannerErrors.size} scanner entries") }
+        } catch (c: CancellationException) {
+            throw c
+        } catch (t: Throwable) {
+            // The session could not even be opened: nothing was evaluated or kept.
+            Log.e(TAG, "Failed to open the scan's writer session", t)
+            scan.copy(scannerErrors = synchronized(errors) { errors.toList() } + writerFailure(t))
+        }
+    }
 
-        // Progress is reset to Idle by the outer runFullScan() in its
-        // `finally` block, which also handles the exception path.
-        persisted
+    /** Detected-change rows for this scan: first-seen installs and device-admin grants. */
+    private suspend fun detectedChanges(scanId: Long, apps: List<AppTelemetry>) =
+        runCatching { installEventEmitter.emitNew(scanId, apps) }
+            .onFailure { Log.w(TAG, "installEventEmitter failed: ${it.message}", it) }.getOrDefault(emptyList()) +
+            runCatching { deviceAdminGrantEmitter.emitNew(scanId) }
+                .onFailure { Log.w(TAG, "deviceAdminGrantEmitter failed: ${it.message}", it) }.getOrDefault(emptyList())
+
+    private fun cacheForExport(t: LiveTelemetry) {
+        lastAppTelemetry = t.apps
+        // Stamp the cache freshness so analyzeBugReport() can decide
+        // whether to reuse this telemetry or do its own fresh scan.
+        if (t.apps.isNotEmpty()) lastAppTelemetryTimestamp = System.currentTimeMillis()
+        lastDeviceTelemetry = t.device
+        lastProcessTelemetry = t.processes
+        lastFileArtifactTelemetry = t.files
+        lastAccessibilityTelemetry = t.accessibility
+        lastReceiverTelemetry = t.receivers
+        lastAppOpsTelemetry = t.appOps
+    }
+
+    private fun progress(phase: ScanProgress.Running.Phase, completed: Int) {
+        _scanProgress.value = ScanProgress.Running(phase, completed, LiveScanCollector.SCANNER_COUNT)
     }
 
     /**
-     * Analyzes a bug report, evaluates telemetry through SIGMA rules,
-     * and persists the result in scan history.
+     * Analyzes a bug report and persists it in scan history through one import session: every
+     * module's telemetry — generic field maps and typed records — is evaluated and stored (B1).
      *
-     * @param uri Content URI pointing to the bugreport .zip file.
-     * @return [BugReportAnalyzer.BugReportAnalysisResult] with SIGMA findings,
-     *         legacy findings, and timeline events.
+     * @return the analysis with the session's findings; throws [BugReportPersistException] when the
+     *   import could not be saved (nothing of it is kept).
      */
-    @Suppress("TooGenericExceptionCaught", "LongMethod")
-    suspend fun analyzeBugReport(uri: Uri): BugReportAnalyzer.BugReportAnalysisResult {
+    @Suppress("TooGenericExceptionCaught")
+    suspend fun analyzeBugReport(uri: Uri): BugReportAnalyzer.BugReportAnalysisResult =
+        // CPU work (rules, records, session) off the caller's Main; the lock is outside any transaction (A8 D2).
+        scanLock.withWriter { withContext(Dispatchers.Default) {
         initRuleEngine()
         val result = bugReportAnalyzer.analyze(uri)
-
-        // Collect app telemetry for hash enrichment — same device, same apps.
-        //
-        // Two things combined here:
-        //  1. AppTelemetry cache reuse: if a recent runtime scan populated
-        //     `lastAppTelemetry` within the freshness window, reuse it
-        //     instead of re-running AppScanner (which takes ~14s on a real
-        //     device with ~500 installed packages).
-        //  2. Proper error handling: on cache miss, a cancellation must
-        //     still propagate, and any other exception from collectTelemetry
-        //     is recorded as a scanner failure on the persisted ScanResult
-        //     so the Dashboard partial-scan banner fires.
-        val bugReportScannerErrors = mutableListOf<ScannerFailure>()
-        recordRuleCapabilitySkips(bugReportScannerErrors)
-        val cacheAgeMs = System.currentTimeMillis() - lastAppTelemetryTimestamp
-        val appTelemetry: List<com.androdr.data.model.AppTelemetry> =
-            if (lastAppTelemetryTimestamp > 0L &&
-                cacheAgeMs <= APP_TELEMETRY_CACHE_MAX_AGE_MS &&
-                lastAppTelemetry.isNotEmpty()
-            ) {
-                Log.i(TAG, "analyzeBugReport: reusing cached app telemetry " +
-                    "(${lastAppTelemetry.size} entries, ${cacheAgeMs}ms old)")
-                lastAppTelemetry
-            } else {
-                try {
-                    appScanner.collectTelemetry().also { fresh ->
-                        if (fresh.isNotEmpty()) {
-                            lastAppTelemetry = fresh
-                            lastAppTelemetryTimestamp = System.currentTimeMillis()
-                        }
-                    }
-                } catch (e: CancellationException) {
-                    throw e
-                } catch (e: Exception) {
-                    Log.e(TAG, "appScanner failed during bug-report enrichment", e)
-                    bugReportScannerErrors.add(
-                        ScannerFailure(
-                            scanner = "appScanner",
-                            exception = e::class.simpleName ?: "Exception",
-                            message = e.message
-                        )
-                    )
-                    emptyList()
-                }
-            }
-        val hashByPkg = appTelemetry.filter { !it.apkHash.isNullOrEmpty() }
-            .associateBy({ it.packageName }, { it.apkHash!! })
-
-        // Persist as ScanResult so it shows in history
+        // Capability skips and enrichment failures are recorded on the persisted scan, so the
+        // Dashboard partial-scan banner fires.
+        val errors = mutableListOf<ScannerFailure>()
+        recordRuleCapabilitySkips(errors)
+        val appTelemetry = enrichmentTelemetry(errors)
         val now = System.currentTimeMillis()
-        val scanResult = ScanResult(
-            id = now,
-            timestamp = now,
-            findings = result.findings,
-            bugReportFindings = emptyList(),
-            riskySideloadCount = 0,
-            knownMalwareCount = result.findings.count {
-                it.level == "critical" && "known_malware" in it.impliesFlags
-            },
-            scannerErrors = bugReportScannerErrors,
+        val scan = ScanResult(
+            id = now, timestamp = now, findings = emptyList(), bugReportFindings = emptyList(),
+            riskySideloadCount = 0, knownMalwareCount = 0,
             // #356: an imported artifact is not a scan of the device in front of
             // the user; History labels it from this field.
-            source = TelemetrySource.BUGREPORT_IMPORT
+            source = TelemetrySource.BUGREPORT_IMPORT,
         )
-        // Phase 1: finding-derived events. Each triggered finding becomes
-        // one ForensicTimelineEvent. Bug-report findings may inherit a
-        // real `event_time_ms` from their underlying telemetry record
-        // (see TimelineAdapter.Finding.toForensicTimelineEvent) — so a
-        // "Camera Access" finding now shows up at the actual time the
-        // AppOps access was recorded, not at 0L / "Unknown".
-        val findingEvents = result.findings.filter { it.triggered }
-            .map { finding ->
-                val event = finding.toForensicTimelineEvent(scanResult, isBugreport = true)
-                if (event.apkHash.isEmpty() && event.packageName.isNotEmpty()) {
-                    event.copy(apkHash = hashByPkg[event.packageName] ?: "")
-                } else event
+        val hooks = BugReportHooks(scan, sigmaRuleEngine, sigmaCorrelationEngine, hashByPackage(appTelemetry),
+            result.timeline, result.forensicEvents)
+        hooks.errors.addAll(errors)
+        val written = try {
+            writer.inSession(scan, liveEvents = false, hooks) { session ->
+                appendBugReport(session, result, now)
+                requireSaved(session.finish())
             }
-
-        // Phase 2: raw module-produced timeline events, **deduplicated**
-        // against finding-derived events that inherited the same
-        // (packageName, timestamp) tuple. Without this filter the
-        // Timeline would show a "Camera Access" finding row right next
-        // to a raw "com.X used CAMERA at ..." row with the identical
-        // time — two rows describing the same underlying evidence,
-        // which reads as a duplicate to the user. Raw events for
-        // unmatched AppOps records (packages whose dangerous-op usage
-        // didn't trigger any SIGMA rule) still appear as before.
-        val coveredByFinding = findingEvents
-            .filter { it.startTimestamp > 0L && it.packageName.isNotEmpty() }
-            .mapTo(HashSet()) { it.packageName to it.startTimestamp }
-        val rawEvents = result.timeline
-            .filterNot { raw ->
-                raw.packageName != null &&
-                    (raw.packageName to raw.timestamp) in coveredByFinding
-            }
-            .map { it.toForensicTimelineEvent(scanResult.id) }
-        // Phase 3: bug-report module-produced ForensicTimelineEvents (e.g.
-        // InstallTimeModule's package_install rows). These already carry
-        // isFromBugreport = true and scan-independent shape; stamp them
-        // with the scanResultId for history association.
-        val moduleForensicEvents = result.forensicEvents.map {
-            it.copy(scanResultId = scanResult.id)
+        } catch (c: CancellationException) {
+            throw c
+        } catch (t: Throwable) {
+            Log.e(TAG, "Failed to persist bug-report scan results", t)
+            throw BugReportPersistException(t)
         }
-        val baseBugReportEvents = findingEvents + rawEvents + moduleForensicEvents
+        result.copy(findings = written.scan.findings, write = written)
+    } }
 
-        // Correlation engine runs inside the repository transaction AFTER the
-        // raw events get their Room autoincrement IDs. Before this change, the
-        // bug-report path evaluated correlation on pre-insert events whose
-        // `id` was still the default 0L, so every signal's member_event_ids
-        // serialized as "0,0,0" and the Timeline UI couldn't expand clusters.
-        // Bug reports are snapshots — no historical lookback query.
-        // Only enabled rules contribute to correlation category propagation (and to the
-        // severity of the findings the chains become, #350). Including disabled rules
-        // would let their category influence classifications even though they produce
-        // no bindings.
-        val atomRulesById = sigmaRuleEngine.getEnabledRules().associateBy { it.id }
-        val brCorrelationRules = sigmaRuleEngine.getCorrelationRules()
-        val brChainSkips = RuleCoverage.noEventSkipsFor(
-            brCorrelationRules, sigmaRuleEngine.atomCategories(), baseBugReportEvents,
-        )
-        runCatching {
-            scanRepository.saveScanWithCorrelation(
-                scan = scanResult.copy(scannerErrors = scanResult.scannerErrors + brChainSkips),
-                findingTimelineEvents = baseBugReportEvents,
-                replaceUsageStatsEvents = null,
-                lookbackEvents = emptyList(),
-                findingsForSignals = { sigmaCorrelationEngine.findingsFor(it, brCorrelationRules, atomRulesById) },
-            ) { eventsWithIds ->
-                if (brCorrelationRules.isEmpty() || eventsWithIds.isEmpty()) emptyList()
-                else {
-                    val bindings = sigmaRuleEngine.computeAtomBindings(eventsWithIds)
-                    sigmaCorrelationEngine.evaluate(brCorrelationRules, eventsWithIds, bindings, atomRulesById)
-                        .map { it.copy(scanResultId = scanResult.id) }
+    /**
+     * App telemetry for bug-report APK-hash enrichment — same device, same apps. A live scan's
+     * cache within [APP_TELEMETRY_CACHE_MAX_AGE_MS] is reused (AppScanner takes ~14 s with ~500
+     * packages); otherwise a fresh collection runs. A cancellation propagates; any other failure is
+     * recorded in [errors] and enrichment is skipped. Enrichment data is never stored under an import.
+     */
+    @Suppress("TooGenericExceptionCaught")
+    private suspend fun enrichmentTelemetry(errors: MutableList<ScannerFailure>): List<AppTelemetry> {
+        val cacheAgeMs = System.currentTimeMillis() - lastAppTelemetryTimestamp
+        if (lastAppTelemetryTimestamp > 0L && cacheAgeMs <= APP_TELEMETRY_CACHE_MAX_AGE_MS &&
+            lastAppTelemetry.isNotEmpty()
+        ) {
+            Log.i(TAG, "analyzeBugReport: reusing cached app telemetry " +
+                "(${lastAppTelemetry.size} entries, ${cacheAgeMs}ms old)")
+            return lastAppTelemetry
+        }
+        return try {
+            appScanner.collectTelemetry().also { fresh ->
+                if (fresh.isNotEmpty()) {
+                    lastAppTelemetry = fresh
+                    lastAppTelemetryTimestamp = System.currentTimeMillis()
                 }
             }
-        }.onFailure { Log.e(TAG, "Failed to persist bug-report scan results", it) }
-
-        return result
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.e(TAG, "appScanner failed during bug-report enrichment", e)
+            errors.add(ScannerFailure(scanner = "appScanner", exception = e::class.simpleName ?: "Exception",
+                message = e.message))
+            emptyList()
+        }
     }
 
     /** Thrown by [analyzeArtifact] when the imported ZIP is neither supported artifact. */
@@ -747,6 +386,12 @@ class ScanOrchestrator @Inject constructor(
      */
     class IntrusionLogPersistException(cause: Throwable) : Exception(
         "Intrusion log analyzed, but saving it failed — nothing was imported.",
+        cause
+    )
+
+    /** Like [IntrusionLogPersistException], for a bug report whose import session failed. */
+    class BugReportPersistException(cause: Throwable) : Exception(
+        "Bug report analyzed, but saving it failed — nothing was imported.",
         cause
     )
 
@@ -780,205 +425,48 @@ class ScanOrchestrator @Inject constructor(
     }
 
     /**
-     * #342: analyze an Advanced Protection Intrusion Logging export and persist
-     * it. Replace-on-reimport: the previous import's rows are swept
-     * ATOMICALLY with the save (spec §4.2, B1). Rules saw the COMPLETE stream
-     * inside the analyzer; only timeline persistence is capped (spec §7, B3/B4).
+     * #342: analyze an Advanced Protection Intrusion Logging export in one pass, appending each
+     * type's chunk to an import session as it fills (rules see every record; only the Timeline rows
+     * are capped, spec §7). The finishing transaction first sweeps the previous imports' Timeline
+     * rows (replace-on-reimport, B1), so a failed import rolls that back too.
      *
-     * Persistence-failure honesty (B1): the analysis genuinely ran, but if the
-     * save throws, nothing was written — so this rethrows [IntrusionLogPersistException]
-     * rather than returning normally. Returning the result on a failed save would
-     * let [com.androdr.ui.bugreport.BugReportViewModel] render the "Intrusion log
-     * analyzed — N events" summary card for data that is NOT in the database
-     * (silent evidence loss in a forensic tool). The ViewModel already routes any
-     * thrown exception to its error card, so the honest "import failed to save"
-     * message reaches the user via the existing path.
+     * Failure honesty (B1, #356): the session is aborted and nothing is kept; an analysis failure
+     * rethrows [IntrusionLogAnalyzer.IntrusionLogAnalysisException], any other failure
+     * [IntrusionLogPersistException], so the ViewModel's error card says nothing was imported
+     * instead of rendering a summary for data that is not in the database.
      */
     @Suppress("TooGenericExceptionCaught")
-    suspend fun analyzeIntrusionLog(uri: Uri): IntrusionLogAnalysisResult {
+    suspend fun analyzeIntrusionLog(uri: Uri): IntrusionLogAnalysisResult =
+        // CPU work (rules, records, session) off the caller's Main; the lock is outside any transaction (A8 D2).
+        scanLock.withWriter { withContext(Dispatchers.Default) {
         initRuleEngine()
-        val result = intrusionLogAnalyzer.analyze(uri)
-
         val now = System.currentTimeMillis()
-        // B3: cap the triggered findings persisted into ScanResult.findings (a
-        // single JSON TEXT column read via Room's ~2 MB CursorWindow for EVERY
-        // history row). The SAME capped set feeds the finding timeline rows in
-        // buildIntrusionLogTimelineEvents, so the two never diverge.
-        val persistedFindings = capTriggeredFindings(result.findings)
-        val scanResult = ScanResult(
-            id = now,
-            timestamp = now,
-            findings = persistedFindings,
-            bugReportFindings = emptyList(),
-            riskySideloadCount = 0,
-            knownMalwareCount = result.findings.count {
-                it.level == "critical" && "known_malware" in it.impliesFlags
-            },
-            scannerErrors = result.scannerErrors,
+        val scan = ScanResult(
+            id = now, timestamp = now, findings = emptyList(), bugReportFindings = emptyList(),
+            riskySideloadCount = 0, knownMalwareCount = 0,
             // #356: see analyzeBugReport — imports are labeled, not passed off
             // as live scans of this device.
-            source = TelemetrySource.INTRUSION_LOG_IMPORT
+            source = TelemetrySource.INTRUSION_LOG_IMPORT,
         )
-        val allEvents = buildIntrusionLogTimelineEvents(result, scanResult)
-
-        val triggeredTotal = result.findings.count { it.triggered }
-        val findingsDropped = triggeredTotal - persistedFindings.size
-        val securityDropped = (result.securityEvents.size - SECURITY_PERSIST_CAP).coerceAtLeast(0)
-        if (findingsDropped > 0 || securityDropped > 0) {
-            Log.w(TAG, "Intrusion-log persistence caps dropped rows: " +
-                "$findingsDropped of $triggeredTotal findings (cap $FINDINGS_PERSIST_CAP), " +
-                "$securityDropped of ${result.securityEvents.size} security events " +
-                "(cap $SECURITY_PERSIST_CAP). Detection saw the full stream; only " +
-                "persistence is bounded.")
-        }
-
-        // Replace-on-reimport, persisted atomically with the save (B1): the sweep
-        // runs as the transaction's first step via preDelete, so a failed save
-        // rolls the deletes back and the prior import survives. A re-import of the
-        // same (or a corrected) export still replaces the previous import's rows
-        // instead of stacking a second copy of every event.
-        // Only enabled rules contribute to correlation category propagation (and to the
-        // severity of the findings the chains become, #350). Including disabled rules
-        // would let their category influence classifications even though they produce
-        // no bindings.
-        val atomRulesById = sigmaRuleEngine.getEnabledRules().associateBy { it.id }
-        val corrRules = sigmaRuleEngine.getCorrelationRules()
-        val ilChainSkips =
-            RuleCoverage.noEventSkipsFor(corrRules, sigmaRuleEngine.atomCategories(), allEvents)
+        val hooks = IntrusionLogHooks(scan, sigmaRuleEngine, sigmaCorrelationEngine, forensicTimelineEventDao,
+            timelineRows)
         try {
-            scanRepository.saveScanWithCorrelation(
-                scan = scanResult.copy(scannerErrors = scanResult.scannerErrors + ilChainSkips),
-                findingTimelineEvents = allEvents,
-                replaceUsageStatsEvents = null,
-                lookbackEvents = emptyList(),
-                preDelete = ::deletePriorIntrusionLogRows,
-                findingsForSignals = { sigmaCorrelationEngine.findingsFor(it, corrRules, atomRulesById) },
-            ) { eventsWithIds ->
-                if (corrRules.isEmpty() || eventsWithIds.isEmpty()) emptyList()
-                else {
-                    val bindings = sigmaRuleEngine.computeAtomBindings(eventsWithIds)
-                    sigmaCorrelationEngine.evaluate(corrRules, eventsWithIds, bindings, atomRulesById)
-                        .map { it.copy(scanResultId = scanResult.id) }
-                }
+            writer.inSession(scan, liveEvents = false, hooks) { session ->
+                val analysis = intrusionLogAnalyzer.analyze(uri, IntrusionLogSessionChunks(session, hooks.interim, now))
+                hooks.errors.addAll(analysis.scannerErrors)
+                intrusionLogResult(analysis, requireSaved(session.finish()), hooks)
             }
-            Log.i(TAG, "Persisted intrusion-log import ${scanResult.id} with ${allEvents.size} events")
         } catch (c: CancellationException) {
             throw c
-        } catch (e: Exception) {
-            // Do NOT swallow: a swallowed failure here (the original behavior)
-            // left the prior import deleted, the new one unwritten, and the UI
-            // still reporting success — silent evidence destruction.
-            Log.e(TAG, "Failed to persist intrusion log import", e)
-            throw IntrusionLogPersistException(e)
+        } catch (e: IntrusionLogAnalyzer.IntrusionLogAnalysisException) {
+            throw e
+        } catch (t: Throwable) {
+            // Do NOT swallow: a swallowed failure here (the original behavior) left the
+            // prior import deleted, the new one unwritten, and the UI still reporting success.
+            Log.e(TAG, "Failed to persist intrusion log import", t)
+            throw IntrusionLogPersistException(t)
         }
-
-        return result
-    }
-
-    /**
-     * Replace-on-reimport sweep (#342 spec §4.2): removes EVERY row a previous
-     * intrusion-log import left behind, before the new import is persisted.
-     *
-     * Deleting by source alone is not enough. The correlation engine persists
-     * its signals with `source = "sigma_correlation_engine"` (shared with the
-     * live-scan and bug-report paths, so that source must never be deleted
-     * wholesale) and each signal's `member_event_ids` points at the raw rows
-     * that produced it. Sweeping only "intrusion_log" / "intrusion_log_analysis"
-     * would therefore strand one signal cluster per prior import, expanding to
-     * nothing in the Timeline UI and accumulating forever.
-     *
-     * Every row of one import — raw, finding, and signal — carries that
-     * import's `scanResultId`, so the ids owning "intrusion_log" rows identify
-     * the whole set. The two source deletes still run afterwards as
-     * belt-and-braces for rows written without a scan id.
-     */
-    private suspend fun deletePriorIntrusionLogRows() {
-        forensicTimelineEventDao.getDistinctScanIdsBySource("intrusion_log").forEach { priorScanId ->
-            forensicTimelineEventDao.deleteByScanId(priorScanId)
-        }
-        forensicTimelineEventDao.deleteBySource("intrusion_log")
-        forensicTimelineEventDao.deleteBySource("intrusion_log_analysis")
-    }
-
-    /**
-     * Builds the timeline rows for one intrusion-log import: one row per
-     * triggered finding (`source = "intrusion_log_analysis"`) followed by the
-     * raw imported evidence (`source = "intrusion_log"`).
-     *
-     * Persistence caps (spec §7, B3/B4). Detection is unaffected:
-     * [IntrusionLogAnalyzer] already evaluated the rules over the COMPLETE parsed
-     * stream, so a capped-away event can still have produced a finding row here.
-     * Only what is WRITTEN is bounded:
-     *  - findings: [FINDINGS_PERSIST_CAP], highest-severity-then-newest first
-     *    (see [capTriggeredFindings]); an uncapped stream of
-     *    (record × matching rule) findings would bloat the ScanResult JSON
-     *    column past Room's CursorWindow and brick history for every scan;
-     *  - DNS: [DNS_PERSIST_CAP], newest-first;
-     *  - connect: [CONNECT_PERSIST_CAP], newest-first;
-     *  - security: [SECURITY_PERSIST_CAP], newest-first. Previously uncapped —
-     *    an attacker-crafted export of millions of `security_event` lines would
-     *    otherwise persist millions of rows surviving the 30-day retention
-     *    (storage DoS, security L1).
-     *
-     * PER-IMPORT PERSISTED-ROW BUDGET vs. export limit: the worst-case rows one
-     * import writes is FINDINGS_PERSIST_CAP + DNS_PERSIST_CAP + CONNECT_PERSIST_CAP
-     * + SECURITY_PERSIST_CAP (= 1000 + 10000 + 5000 + 5000 = 21000). That exceeds
-     * [ForensicTimelineEventDao.getAllForExport]'s `LIMIT 10000`, so a single
-     * maximal import can already fill the export window, and the export truncates
-     * newest-first. getAllForExport is a SHARED export path and is deliberately
-     * NOT changed here; the caps above bound on-disk growth and keep the highest-
-     * signal rows, and reconciling the budget with the export limit is tracked as
-     * follow-up polish in issue #353.
-     */
-    @VisibleForTesting
-    internal fun buildIntrusionLogTimelineEvents(
-        result: IntrusionLogAnalysisResult,
-        scanResult: ScanResult
-    ): List<ForensicTimelineEvent> {
-        val findingEvents = capTriggeredFindings(result.findings).map { finding ->
-            finding.toForensicTimelineEvent(scanResult, isBugreport = true).copy(
-                source = "intrusion_log_analysis",
-                telemetrySource = TelemetrySource.INTRUSION_LOG_IMPORT,
-                // The DNS/network/security field maps carry "timestamp" and the
-                // evaluator copies scalar record fields into matchContext as
-                // strings, so a finding inherits its own event's time. A finding
-                // without one falls back to 0L, which the Timeline renders as
-                // "Unknown".
-                startTimestamp = findingEventTimeMs(finding)
-            )
-        }
-        val cappedDns = result.dnsEvents
-            .sortedByDescending { it.event.timestamp }
-            .take(DNS_PERSIST_CAP)
-        val cappedNet = result.networkEvents
-            .sortedByDescending { it.timestamp }
-            .take(CONNECT_PERSIST_CAP)
-        val cappedSec = result.securityEvents
-            .sortedByDescending { it.timestamp }
-            .take(SECURITY_PERSIST_CAP)
-        return findingEvents +
-            cappedDns.map { it.toForensicTimelineEvent(scanResult.id) } +
-            cappedNet.map { it.toForensicTimelineEvent(scanResult.id) } +
-            cappedSec.map { it.toForensicTimelineEvent(scanResult.id) }
-    }
-
-    /**
-     * The triggered findings to PERSIST for one import (#342 B3), capped at
-     * [FINDINGS_PERSIST_CAP]. Below the cap the input order is preserved (no
-     * reshuffle); above it, findings are ranked highest-severity first and, for
-     * equal severity, most-recent first (by the finding's own event time), so the
-     * rows most worth keeping survive the cut. Only triggered findings are ever
-     * persisted — untriggered ones were never written as rows.
-     */
-    @VisibleForTesting
-    internal fun capTriggeredFindings(findings: List<Finding>): List<Finding> {
-        val triggered = findings.filter { it.triggered }
-        if (triggered.size <= FINDINGS_PERSIST_CAP) return triggered
-        return triggered.sortedWith(
-            compareByDescending<Finding> { severityRank(it.level) }
-                .thenByDescending { findingEventTimeMs(it) }
-        ).take(FINDINGS_PERSIST_CAP)
-    }
+    } }
 
     /**
      * Computes a diff between two [ScanResult] snapshots.
@@ -1107,13 +595,33 @@ class ScanOrchestrator @Inject constructor(
          */
         private fun sanitizeLookupName(name: String): String = reportSafe(name)
 
+        /** [ScannerFailure.scanner] of a live scan whose writer session failed (nothing was kept). */
+        const val SCAN_WRITER = "scanWriter"
+
+        private fun writerFailure(t: Throwable) =
+            ScannerFailure(scanner = SCAN_WRITER, exception = t.javaClass.simpleName, message = t.message)
+
+        /** APK hash per package, for enriching finding rows that carry none. */
+        internal fun hashByPackage(apps: List<AppTelemetry>): Map<String, String> =
+            apps.filter { !it.apkHash.isNullOrEmpty() }.associateBy({ it.packageName }, { it.apkHash!! })
+
         /**
-         * Number of parallel scanners tracked by the progress indicator.
-         * Keep in sync with the scanners launched in [runFullScanInner] —
-         * adding or removing a scanner requires updating this constant so
-         * the progress bar fills to 100%.
+         * The triggered findings to PERSIST for one intrusion-log import (#342 B3), capped at
+         * [FINDINGS_PERSIST_CAP]. Below the cap the input order is preserved (no reshuffle); above
+         * it, findings are ranked highest-severity first and, for equal severity, most-recent first
+         * (by the finding's own event time), so the rows most worth keeping survive the cut. Only
+         * triggered findings are ever persisted. The session's streaming [FindingsTopK] keeps
+         * exactly this set and order; this is its reference definition.
          */
-        private const val SCANNER_COUNT = 8
+        @VisibleForTesting
+        internal fun capTriggeredFindings(findings: List<Finding>): List<Finding> {
+            val triggered = findings.filter { it.triggered }
+            if (triggered.size <= FINDINGS_PERSIST_CAP) return triggered
+            return triggered.sortedWith(
+                compareByDescending<Finding> { FindingRank.severity(it.level) }
+                    .thenByDescending { FindingRank.eventTimeMs(it) }
+            ).take(FINDINGS_PERSIST_CAP)
+        }
 
         /**
          * Maximum age of the cached app telemetry that [analyzeBugReport]
@@ -1126,7 +634,12 @@ class ScanOrchestrator @Inject constructor(
          */
         private const val APP_TELEMETRY_CACHE_MAX_AGE_MS = 5L * 60_000L // 5 minutes
 
-        /** #342 spec §7: timeline persistence caps; rules always see the full stream. */
+        /**
+         * #342 spec §7: Timeline-row caps per import (newest first); rules always see the full
+         * stream. Interim until Task C3. The worst-case rows one import writes is
+         * FINDINGS_PERSIST_CAP + DNS + CONNECT + SECURITY (= 21000), above
+         * [ForensicTimelineEventDao.getAllForExport]'s `LIMIT 10000` (follow-up #353).
+         */
         const val DNS_PERSIST_CAP = 10_000
         const val CONNECT_PERSIST_CAP = 5_000
 
@@ -1152,23 +665,6 @@ class ScanOrchestrator @Inject constructor(
          * above any legitimate export's security-event volume while bounding abuse.
          */
         const val SECURITY_PERSIST_CAP = 5_000
-
-        /**
-         * Orders severity strings for the [FINDINGS_PERSIST_CAP] cut (B3): higher
-         * wins. Unknown/blank levels rank lowest so they are dropped first.
-         */
-        private fun severityRank(level: String): Int = when (level.lowercase()) {
-            "critical" -> 5
-            "high" -> 4
-            "medium" -> 3
-            "low" -> 2
-            "info", "informational" -> 1
-            else -> 0
-        }
-
-        /** Event time a finding inherits from its matched record, or 0L ("Unknown"). */
-        private fun findingEventTimeMs(finding: Finding): Long =
-            finding.matchContext["timestamp"]?.toLongOrNull()?.takeIf { it > 0L } ?: 0L
 
         /** App categories treated as trusted by the known_good_app_db IOC lookup. */
         private val TRUSTED_CATEGORIES = setOf(

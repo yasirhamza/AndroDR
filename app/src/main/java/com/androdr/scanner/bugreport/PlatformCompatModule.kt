@@ -1,5 +1,7 @@
 package com.androdr.scanner.bugreport
 
+import com.androdr.data.model.PlatformCompatChange
+import com.androdr.data.model.TelemetrySource
 import com.androdr.ioc.IndicatorResolver
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -10,12 +12,16 @@ import javax.inject.Singleton
  * compatibility workarounds as an anti-analysis technique.
  */
 @Singleton
-class PlatformCompatModule @Inject constructor() : BugreportModule {
+class PlatformCompatModule internal constructor(private val maxRecords: Int) : BugreportModule {
+
+    @Inject constructor() : this(BugreportModule.MAX_RECORDS_PER_MODULE)
 
     override val targetSections: List<String> = listOf("platform_compat")
 
+    private val enabledRegex = Regex("""enabled=(true|false)""")
+
     private val compatOverrideRegex = Regex(
-        """^\s+(\d+),\s*\{.*packageName=([a-zA-Z][a-zA-Z0-9._]+)""",
+        """^\s+(\d+),\s*\{(.*packageName=([a-zA-Z][a-zA-Z0-9._]+).*)$""",
         RegexOption.MULTILINE
     )
 
@@ -24,33 +30,37 @@ class PlatformCompatModule @Inject constructor() : BugreportModule {
         iocResolver: IndicatorResolver,
         device: com.androdr.ioc.DeviceIdentity,
     ): ModuleResult {
-        val telemetry = mutableListOf<Map<String, Any?>>()
+        val changes = mutableListOf<PlatformCompatChange>()
+        val now = System.currentTimeMillis()
+        var truncatedAt: Int? = null
 
         val compatStart = sectionText.indexOf("Compat overrides:")
             .takeIf { it >= 0 }
             ?: sectionText.indexOf("ChangeId").takeIf { it >= 0 }
-            ?: return ModuleResult(telemetryService = SERVICE)
+            ?: return ModuleResult()
 
         // Emit every compat override observed. SIGMA rules (plan 6) decide
         // which ChangeIds matter (e.g. DOWNSCALED=168419799 for anti-analysis).
         // No hardcoded ChangeId filter in this module.
-        compatOverrideRegex.findAll(sectionText, compatStart).forEach { match ->
-            val changeId = match.groupValues[1]
-            val packageName = match.groupValues[2]
-            val isIoc = iocResolver.isKnownBadPackage(packageName)
-            telemetry.add(mapOf(
-                "source" to "bugreport_import",
-                "service" to "platform_compat",
-                "package_name" to packageName,
-                "change_id" to changeId,
-                "is_ioc" to (isIoc != null)
+        for (match in compatOverrideRegex.findAll(sectionText, compatStart)) {
+            if (changes.size >= maxRecords) {
+                truncatedAt = maxRecords
+                break
+            }
+            // null when the line does not state `enabled=`; never guessed.
+            val enabled = enabledRegex.find(match.groupValues[2])?.groupValues?.get(1)?.toBooleanStrict()
+            changes.add(PlatformCompatChange(
+                changeId = match.groupValues[1],
+                packageName = match.groupValues[3],
+                enabled = enabled,
+                source = TelemetrySource.BUGREPORT_IMPORT,
+                capturedAt = now,
             ))
         }
 
-        return ModuleResult(telemetry = telemetry, telemetryService = SERVICE)
-    }
-
-    companion object {
-        private const val SERVICE = "platform_compat_audit"
+        return ModuleResult(
+            typed = TypedTelemetry(platformCompatChanges = changes),
+            truncatedAt = truncatedAt,
+        )
     }
 }

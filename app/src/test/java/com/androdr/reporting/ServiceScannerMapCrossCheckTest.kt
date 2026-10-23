@@ -46,16 +46,17 @@ class ServiceScannerMapCrossCheckTest {
 
     @Test
     fun `every mapped scanner name is one the orchestrator records`() {
-        val source = file("src/main/java/com/androdr/scanner/ScanOrchestrator.kt",
-            "app/src/main/java/com/androdr/scanner/ScanOrchestrator.kt").readText()
+        // The live scan's scanners are run (and their failures recorded) by LiveScanCollector.
+        val source = file("src/main/java/com/androdr/scanner/LiveScanCollector.kt",
+            "app/src/main/java/com/androdr/scanner/LiveScanCollector.kt").readText()
         // Comment lines are dropped so a mention in a KDoc or comment cannot satisfy the DNS check.
         val code = source.lines().filterNot { line ->
             line.trimStart().let { it.startsWith("//") || it.startsWith("*") }
         }.joinToString("\n")
-        val recorded = Regex("""trackedAsync\(\s*"(\w+)"""").findAll(code).map { it.groupValues[1] }.toSet() +
+        val recorded = Regex("""tracked\(\s*"(\w+)"""").findAll(code).map { it.groupValues[1] }.toSet() +
             (if (Regex("""scanner\s*=\s*DNS_SNAPSHOT_SCANNER""").containsMatchIn(code)) setOf(DNS_SNAPSHOT_SCANNER)
             else emptySet())
-        assertTrue("not recorded by ScanOrchestrator: ${SCANNER_FOR_SERVICE.values.toSet() - recorded}",
+        assertTrue("not recorded by LiveScanCollector: ${SCANNER_FOR_SERVICE.values.toSet() - recorded}",
             recorded.containsAll(SCANNER_FOR_SERVICE.values))
     }
 
@@ -66,7 +67,8 @@ class ServiceScannerMapCrossCheckTest {
             "app/src/main/java/com/androdr/scanner/$name").readText().lines().filterNot { line ->
             line.trimStart().let { it.startsWith("//") || it.startsWith("*") }
         }.joinToString("\n")
-        val orchestrator = code("ScanOrchestrator.kt")
+        // The live scan's DNS attribution failures are recorded where its DNS chunk is appended.
+        val orchestrator = code("WriterSessions.kt")
         val visibility = code("ScanVisibilityGaps.kt")
         assertTrue("attribution must be recorded via ATTRIBUTION_SCANNER",
             Regex("""scanner\s*=\s*ATTRIBUTION_SCANNER""").containsMatchIn(orchestrator))

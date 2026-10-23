@@ -36,9 +36,8 @@ class DbInfoModuleTest {
         """.trimIndent()
 
         val result = module.analyze(section, mockIndicatorResolver, com.androdr.ioc.DeviceIdentity.UNKNOWN)
-        assertTrue(result.telemetry.any {
-            it["package_name"] == "com.evil.spy" &&
-                it["recent_query_count"] == 2
+        assertTrue(result.typed.databasePathObservations.any {
+            it.packageName == "com.evil.spy" && it.recentQueryCount == 2
         })
     }
 
@@ -52,8 +51,8 @@ class DbInfoModuleTest {
         """.trimIndent()
 
         val result = module.analyze(section, mockIndicatorResolver, com.androdr.ioc.DeviceIdentity.UNKNOWN)
-        assertTrue(result.telemetry.any {
-            (it["db_path"] as String).endsWith("contacts2.db")
+        assertTrue(result.typed.databasePathObservations.any {
+            it.dbPath!!.endsWith("contacts2.db")
         })
     }
 
@@ -61,5 +60,17 @@ class DbInfoModuleTest {
     fun `empty section produces no telemetry`() = runBlocking {
         val result = module.analyze("", mockIndicatorResolver, com.androdr.ioc.DeviceIdentity.UNKNOWN)
         assertTrue(result.telemetry.isEmpty())
+        assertTrue(result.typed.databasePathObservations.isEmpty())
+    }
+
+    @Test
+    fun `module stops at the record bound and reports the trip`() = runBlocking {
+        val section = (1..10).joinToString("\n") {
+            "Connection pool for /data/user/0/com.p$it/databases/a.db:\n  Pool size: 1"
+        }
+        val result = DbInfoModule(maxRecords = 3)
+            .analyze(section, mockIndicatorResolver, com.androdr.ioc.DeviceIdentity.UNKNOWN)
+        assertEquals(3, result.typed.databasePathObservations.size)
+        assertEquals(3, result.truncatedAt)
     }
 }

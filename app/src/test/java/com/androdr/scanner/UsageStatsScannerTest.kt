@@ -30,7 +30,7 @@ class UsageStatsScannerTest {
     fun `returns empty when UsageStatsManager unavailable`() = runTest {
         every { mockContext.getSystemService(Context.USAGE_STATS_SERVICE) } returns null
         val scanner = UsageStatsScanner(mockContext, oemPrefixResolver)
-        assertTrue(scanner.collectTimelineEvents().isEmpty())
+        assertTrue(scanner.collectEvents().isEmpty())
     }
 
     @Test
@@ -39,6 +39,6 @@ class UsageStatsScannerTest {
         every { mockContext.getSystemService(Context.USAGE_STATS_SERVICE) } returns mockUsm
         every { mockUsm.queryEvents(any(), any()) } throws SecurityException("Not granted")
         val scanner = UsageStatsScanner(mockContext, oemPrefixResolver)
-        assertTrue(scanner.collectTimelineEvents().isEmpty())
+        assertTrue(scanner.collectEvents().isEmpty())
     }
 }

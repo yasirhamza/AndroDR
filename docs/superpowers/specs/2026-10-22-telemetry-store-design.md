@@ -308,7 +308,7 @@ wrap the bytes (`ByteBuffer.wrap`), never use raw `ByteArray` keys.
   - `body` BLOB
   - `rawBytes`
 - **`telemetry_record`** (fact):
-  - columns: `id` PK AUTOINCREMENT, `service`, `factKey` BLOB, `sourceKey` BLOB (nullable, = `h128` of the source-supplied key), `subjectKey`, `eventTime`, `timePrecision`, `category`, `packageName`, `bodyHash` BLOB
+  - columns: `id` PK AUTOINCREMENT, `service`, `factKey` BLOB, `sourceKey` BLOB (nullable, = `h128` of the source-supplied key), `subjectKey`, `eventTime`, `timePrecision`, `category`, `packageName`, `bodyHash` BLOB, and the first observation's envelope `firstSource`, `firstCapturedAt`, `firstStrippedKeys` (written once at insert, never updated), so a pinned fact whose observations are gone still decodes with its true provenance
   - indices: unique `(service, factKey)`; `(service, subjectKey)`; `(packageName, eventTime)`; `eventTime`; `sourceKey`; `bodyHash`
 - **`scan_record`** (observation):
   - columns: `scanId`, `service`, `ordinal` (PK `(scanId, service, ordinal)`); `recordId`; `eventTime` (copied from the fact for ordered scan-filtered reads); `source`; `capturedAt`; `strippedKeys`

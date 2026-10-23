@@ -1,4 +1,4 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Prevent resource shrinking from removing SIGMA rule YAML files (loaded via explicit R.raw IDs) ; known_campaigns is read by CampaignRegistry (Plan B Task B4) -->
+<!-- Prevent resource shrinking from removing SIGMA rule YAML files (loaded via explicit R.raw IDs) ; known_campaigns is read by CampaignRegistry (Plan B Task B4) ; telemetry_dict_* are the immutable Deflate dictionaries loaded by name -->
 <resources xmlns:tools="http://schemas.android.com/tools"
-    tools:keep="@raw/sigma_*,@raw/known_campaigns" />
+    tools:keep="@raw/sigma_*,@raw/known_campaigns,@raw/telemetry_dict_*" />

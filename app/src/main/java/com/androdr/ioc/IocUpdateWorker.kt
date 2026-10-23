@@ -7,7 +7,9 @@ import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
-import com.androdr.data.db.ForensicTimelineEventDao
+import androidx.room.withTransaction
+import com.androdr.data.db.AppDatabase
+import com.androdr.data.repo.TimelineRowDeleter
 import com.androdr.data.repo.ScanRepository
 import com.androdr.sigma.SigmaRuleEngine
 
@@ -18,7 +20,8 @@ class IocUpdateWorker @AssistedInject constructor(
     private val intelRefresher: IntelRefresher,
     private val sigmaRuleEngine: SigmaRuleEngine,
     private val scanRepository: ScanRepository,
-    private val forensicTimelineEventDao: ForensicTimelineEventDao
+    private val database: AppDatabase,
+    private val timelineRows: TimelineRowDeleter,
 ) : CoroutineWorker(context, params) {
 
     @Suppress("TooGenericExceptionCaught")
@@ -27,7 +30,7 @@ class IocUpdateWorker @AssistedInject constructor(
             val report = intelRefresher.refreshAll(skipIfRefreshedWithinMs = RECENT_REFRESH_SKIP_MS)
             val thirtyDaysAgo = System.currentTimeMillis() - (30L * 24 * 60 * 60 * 1000)
             scanRepository.pruneOldDnsEvents(thirtyDaysAgo)
-            forensicTimelineEventDao.deleteOlderThan(thirtyDaysAgo)
+            database.withTransaction { timelineRows.olderThan(thirtyDaysAgo) }
             Log.i(
                 TAG,
                 "Worker finished — ${report.bulkFetchedCount} IOC entries, " +

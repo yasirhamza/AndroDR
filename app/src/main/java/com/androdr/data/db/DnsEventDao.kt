@@ -19,12 +19,13 @@ interface DnsEventDao {
     @Query("SELECT * FROM DnsEvent ORDER BY timestamp DESC LIMIT 500")
     suspend fun getRecentSnapshot(): List<DnsEvent>
 
+    /** Returns the row id: the live DNS fact's source event key is `"dns:$id"`. */
     @Insert
-    suspend fun insert(event: DnsEvent)
+    suspend fun insert(event: DnsEvent): Long
 
-    /** Batched insert used by the VPN packet path to amortize Room transaction overhead. */
+    /** Batched insert used by the VPN packet path to amortize Room transaction overhead; ids in order. */
     @Insert
-    suspend fun insertAll(events: List<DnsEvent>)
+    suspend fun insertAll(events: List<DnsEvent>): List<Long>
 
     @Query("DELETE FROM DnsEvent WHERE timestamp < :cutoff")
     suspend fun deleteOlderThan(cutoff: Long)

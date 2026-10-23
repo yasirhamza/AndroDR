@@ -177,7 +177,8 @@ class LogsourceTaxonomyCrossCheckTest {
 
         "battery_daily" to BatteryDailyEvent(
             dayIndex = 0, eventType = "x", packageName = null,
-            description = "x", source = TelemetrySource.BUGREPORT_IMPORT,
+            description = "x", version = 0L, timestamp = 0L, timestampPrecision = "day",
+            source = TelemetrySource.BUGREPORT_IMPORT,
             capturedAt = 0L,
         ).toFieldMap().keys,
 
@@ -194,8 +195,8 @@ class LogsourceTaxonomyCrossCheckTest {
 
         "db_info" to DatabasePathObservation(
             filePath = "x", processName = null, packageName = null,
-            observationTimestamp = 0L, source = TelemetrySource.BUGREPORT_IMPORT,
-            capturedAt = 0L,
+            observationTimestamp = 0L, dbPath = "x", recentQueryCount = 0,
+            source = TelemetrySource.BUGREPORT_IMPORT, capturedAt = 0L,
         ).toFieldMap().keys,
 
         "security_log" to SecurityLogEvent(
@@ -308,18 +309,6 @@ class LogsourceTaxonomyCrossCheckTest {
          * §5.3 exist). Service -> field -> the plan task whose typed record
          * emits it.
          */
-        val PENDING_PRODUCER: Map<String, Map<String, String>> = mapOf(
-            "battery_daily" to mapOf(
-                // Only the IOC-match generic record emits it today; A6 must put it on
-                // BatteryDailyEvent or remove it from the taxonomy deliberately.
-                "version" to "Task A6: BatteryDailyModule fills BatteryDailyEvent",
-                "timestamp" to "Task A6: BatteryDailyModule fills BatteryDailyEvent",
-                "timestamp_precision" to "Task A6: BatteryDailyModule fills BatteryDailyEvent",
-            ),
-            "db_info" to mapOf(
-                "db_path" to "Task A6: DbInfoModule fills DatabasePathObservation",
-                "recent_query_count" to "Task A6: DbInfoModule fills DatabasePathObservation",
-            ),
-        )
+        val PENDING_PRODUCER: Map<String, Map<String, String>> = emptyMap()
     }
 }

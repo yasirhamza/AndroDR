@@ -58,29 +58,15 @@ class ScanOrchestratorDiffTest {
         every { sigmaRuleEngine.unevaluableRules() } returns emptyMap()
 
         orchestrator = ScanOrchestrator(
-            appScanner = mockk(relaxed = true),
-            deviceAuditor = mockk(relaxed = true),
-            processScanner = mockk(relaxed = true),
-            fileArtifactScanner = mockk(relaxed = true),
-            accessibilityAuditScanner = mockk(relaxed = true),
-            receiverAuditScanner = mockk(relaxed = true),
-            appOpsScanner = mockk(relaxed = true),
-            usageStatsScanner = mockk(relaxed = true),
-            bugReportAnalyzer = mockk(relaxed = true),
-            intrusionLogAnalyzer = mockk(relaxed = true),
-            scanRepository = mockk(relaxed = true),
-            dnsEventDao = mockk(relaxed = true),
-            forensicTimelineEventDao = mockk(relaxed = true),
-            installEventEmitter = mockk(relaxed = true),
-            deviceAdminGrantEmitter = mockk(relaxed = true),
-            sigmaRuleEngine = sigmaRuleEngine,
-            sigmaCorrelationEngine = mockk(relaxed = true),
-            indicatorResolver = indicatorResolver,
-            sigmaRuleFeed = mockk(relaxed = true),
-            knownAppResolver = mockk(relaxed = true),
-            oemPrefixResolver = mockk(relaxed = true),
-            brandImpersonationResolver = mockk(relaxed = true),
-            context = mockk(relaxed = true)
+            collector = mockk(relaxed = true), appScanner = mockk(relaxed = true),
+            bugReportAnalyzer = mockk(relaxed = true), intrusionLogAnalyzer = mockk(relaxed = true),
+            writer = mockk(relaxed = true), scanLock = com.androdr.data.repo.ScanLock(),
+            forensicTimelineEventDao = mockk(relaxed = true), timelineRows = mockk(relaxed = true),
+            installEventEmitter = mockk(relaxed = true), deviceAdminGrantEmitter = mockk(relaxed = true),
+            sigmaRuleEngine = sigmaRuleEngine, sigmaCorrelationEngine = mockk(relaxed = true),
+            indicatorResolver = indicatorResolver, sigmaRuleFeed = mockk(relaxed = true),
+            knownAppResolver = mockk(relaxed = true), oemPrefixResolver = mockk(relaxed = true),
+            brandImpersonationResolver = mockk(relaxed = true), context = mockk(relaxed = true),
         )
     }
 

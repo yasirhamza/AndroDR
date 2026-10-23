@@ -1,5 +1,7 @@
 package com.androdr.scanner.bugreport
 
+import com.androdr.data.model.DatabasePathObservation
+import com.androdr.data.model.TelemetrySource
 import com.androdr.ioc.IndicatorResolver
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -10,7 +12,9 @@ import javax.inject.Singleton
  * paths to package names for IOC matching.
  */
 @Singleton
-class DbInfoModule @Inject constructor() : BugreportModule {
+class DbInfoModule internal constructor(private val maxRecords: Int) : BugreportModule {
+
+    @Inject constructor() : this(BugreportModule.MAX_RECORDS_PER_MODULE)
 
     override val targetSections: List<String> = listOf("dbinfo")
 
@@ -36,7 +40,9 @@ class DbInfoModule @Inject constructor() : BugreportModule {
         iocResolver: IndicatorResolver,
         device: com.androdr.ioc.DeviceIdentity,
     ): ModuleResult {
-        val telemetry = mutableListOf<Map<String, Any?>>()
+        val observations = mutableListOf<DatabasePathObservation>()
+        val now = System.currentTimeMillis()
+        var truncatedAt: Int? = null
 
         // Materialize all pool-header matches once so adjacent-pair boundary
         // lookup is O(1). The previous implementation called
@@ -51,9 +57,12 @@ class DbInfoModule @Inject constructor() : BugreportModule {
         val allPools = poolHeaderRegex.findAll(sectionText).toList()
 
         for ((i, match) in allPools.withIndex()) {
+            if (observations.size >= maxRecords) {
+                truncatedAt = maxRecords
+                break
+            }
             val dbPath = match.groupValues[1]
             val packageName = match.groupValues[2]
-            val isIoc = iocResolver.isKnownBadPackage(packageName)
 
             // Bounded block from end-of-this-header to start-of-next-header
             // (or EOF if this is the last pool).
@@ -66,15 +75,22 @@ class DbInfoModule @Inject constructor() : BugreportModule {
                 recentSqlRegex.findAll(poolBlock, sqlSection).count()
             } else 0
 
-            telemetry.add(mapOf(
-                "package_name" to packageName,
-                "db_path" to dbPath,
-                "recent_query_count" to queryCount,
-                "is_ioc" to (isIoc != null),
-                "source" to "bugreport_import"
+            // The pool is observed at import time; the dbinfo section carries no clock of its own.
+            observations.add(DatabasePathObservation(
+                filePath = dbPath,
+                processName = null,
+                packageName = packageName,
+                observationTimestamp = now,
+                dbPath = dbPath,
+                recentQueryCount = queryCount,
+                source = TelemetrySource.BUGREPORT_IMPORT,
+                capturedAt = now,
             ))
         }
 
-        return ModuleResult(telemetry = telemetry, telemetryService = "dbinfo_audit")
+        return ModuleResult(
+            typed = TypedTelemetry(databasePathObservations = observations),
+            truncatedAt = truncatedAt,
+        )
     }
 }

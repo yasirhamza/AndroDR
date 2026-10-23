@@ -42,8 +42,13 @@ internal fun BatteryDailyEvent.toFieldMap(): Map<String, Any?> = mapOf(
     "event_type" to eventType,
     "package_name" to packageName,
     "description" to description,
+    "version" to version,
     "source" to source.name,
     "captured_at" to capturedAt,
+) + listOfNotNull(
+    // Present only when the battery-stats section yielded a date (positive-only fields).
+    timestamp?.let { "timestamp" to it },
+    timestampPrecision?.let { "timestamp_precision" to it },
 )
 
 internal fun PackageInstallHistoryEntry.toFieldMap(): Map<String, Any?> = mapOf(
@@ -58,9 +63,11 @@ internal fun PackageInstallHistoryEntry.toFieldMap(): Map<String, Any?> = mapOf(
 internal fun PlatformCompatChange.toFieldMap(): Map<String, Any?> = mapOf(
     "change_id" to changeId,
     "package_name" to packageName,
-    "enabled" to enabled,
     "source" to source.name,
     "captured_at" to capturedAt,
+) + listOfNotNull(
+    // Omitted when the dumpsys line does not state it (optional field).
+    enabled?.let { "enabled" to it },
 )
 
 internal fun DatabasePathObservation.toFieldMap(): Map<String, Any?> = mapOf(
@@ -70,6 +77,10 @@ internal fun DatabasePathObservation.toFieldMap(): Map<String, Any?> = mapOf(
     "observation_timestamp" to observationTimestamp,
     "source" to source.name,
     "captured_at" to capturedAt,
+) + listOfNotNull(
+    // Typed bug-report records only (positive-only fields).
+    dbPath?.let { "db_path" to it },
+    recentQueryCount?.let { "recent_query_count" to it },
 )
 
 internal fun SecurityLogEvent.toFieldMap(): Map<String, Any?> = mapOf(

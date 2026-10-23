@@ -80,8 +80,12 @@ fun BugReportScreen(
     val errorMessage by viewModel.errorMessage.collectAsStateWithLifecycle()
     val exporting by viewModel.exporting.collectAsStateWithLifecycle()
     val shareUri by viewModel.shareUri.collectAsStateWithLifecycle()
+    val importCard by viewModel.importCard.collectAsStateWithLifecycle()
+    val importBusy by viewModel.importBusy.collectAsStateWithLifecycle()
 
     val context = LocalContext.current
+
+    PreflightDialogHost(viewModel)
 
     var instructionsExpanded by remember { mutableStateOf(false) }
     var intrusionInstructionsExpanded by remember { mutableStateOf(false) }
@@ -104,7 +108,7 @@ fun BugReportScreen(
     val filePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument()
     ) { uri: Uri? ->
-        uri?.let { viewModel.analyzeUri(it) }
+        uri?.let { viewModel.onFilePicked(it) }
     }
 
     val hasResults = findings.isNotEmpty()
@@ -143,7 +147,7 @@ fun BugReportScreen(
                     onClick = {
                         filePickerLauncher.launch(arrayOf("application/zip", "application/octet-stream"))
                     },
-                    enabled = !isAnalyzing,
+                    enabled = !importBusy,
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Icon(
@@ -257,6 +261,8 @@ fun BugReportScreen(
                     }
                 }
             }
+
+            importCardItem(if (isAnalyzing) null else importCard)
 
             // Intrusion log summary card — shown whenever the imported artifact was an
             // Advanced Protection Intrusion Logging export (#342), independent of whether

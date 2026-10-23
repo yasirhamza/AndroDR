@@ -8,7 +8,6 @@ import com.androdr.sigma.FindingCategory
 import com.androdr.sigma.SigmaRuleEngine
 import io.mockk.every
 import io.mockk.mockk
-import io.mockk.verify
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -18,12 +17,6 @@ import java.io.ByteArrayInputStream
 import java.io.InputStream
 
 class IntrusionLogAnalyzerTest {
-
-    private val engine = mockk<SigmaRuleEngine>(relaxed = true) {
-        every { evaluateImportedDns(any()) } returns emptyList()
-        every { evaluateNetwork(any()) } returns emptyList()
-        every { evaluateSecurityLog(any()) } returns emptyList()
-    }
 
     // capturedAt must be at/after the imported events (see IntrusionLogParserTest);
     // event_time validation (#342) rejects events from the future relative to it.
@@ -43,25 +36,42 @@ class IntrusionLogAnalyzerTest {
     private val day2NetDupe = day1Net // same event_id 1 + event_time — overlapping-file duplicate
     private val day2Sec = """{"security_event":{"event_id":2,"event_time":1787400350000,"tag":210002,"data":["id"]}}"""
 
+    private fun analyzer(resolver: com.androdr.ioc.IndicatorResolver = mockk(relaxed = true)) =
+        IntrusionLogAnalyzer(mockk(relaxed = true), resolver)
+
+    private fun analyze(
+        vararg entries: Pair<String, java.io.InputStream>,
+        chunks: CollectingChunks = CollectingChunks(),
+        resolver: com.androdr.ioc.IndicatorResolver = mockk(relaxed = true),
+    ) = runBlocking {
+        analyzer(resolver).analyzeEntries(entries.asSequence(), uidResolver = { -1 }, capturedAt = capturedAt, chunks)
+    }
+
+    // Exact duplicates are no longer dropped here: the store collapses them (one fact, one
+    // observation per import), so the analyzer counts records parsed; the orchestrator subtracts
+    // the duplicates the store dropped (IntrusionLogImportTest).
     @Test
-    fun `parses matching entries only, dedups across files, computes stats`() {
-        val result = IntrusionLogAnalyzer(mockk(relaxed = true), engine, mockk(relaxed = true)).analyzeEntries(
-            sequenceOf(
-                entry("2026-08-21.txt", day1Dns, day1Net),
-                entry("2026-08-22.txt", day2NetDupe, day2Sec),
-                entry("intrusion-logs/2026-08-20.txt"),          // one dir deep: included (empty)
-                entry("README.md", "not a log line"),            // non-matching: ignored entirely
-            ),
-            uidResolver = { -1 }, capturedAt = capturedAt,
+    fun `parses matching entries only, hands every record over, computes stats`() {
+        val chunks = CollectingChunks()
+        val result = analyze(
+            entry("2026-08-21.txt", day1Dns, day1Net),
+            entry("2026-08-22.txt", day2NetDupe, day2Sec),
+            entry("intrusion-logs/2026-08-20.txt"),          // one dir deep: included (empty)
+            entry("README.md", "not a log line"),            // non-matching: ignored entirely
+            chunks = chunks,
         )
         assertEquals(1, result.stats.dnsEventCount)
-        assertEquals(1, result.stats.connectEventCount)
+        assertEquals(2, result.stats.connectEventCount)
         assertEquals(1, result.stats.securityEventCount)
-        assertEquals(1, result.stats.duplicatesCollapsed)
         assertEquals(0, result.stats.malformedLines)
         assertFalse(result.stats.truncated)
         assertEquals(1787400345334L, result.stats.earliestEventMs)
         assertEquals(1787400350000L, result.stats.latestEventMs)
+        assertEquals(
+            "the overlapping-file duplicate keeps the same source key",
+            listOf("connect_event 1 1787400345540", "connect_event 1 1787400345540"),
+            chunks.records.getValue("network_monitor").map { it.sourceEventKey },
+        )
     }
 
     /**
@@ -73,20 +83,17 @@ class IntrusionLogAnalyzerTest {
      */
     @Test
     fun `continuation chunk entries are parsed, not skipped`() {
-        val result = IntrusionLogAnalyzer(mockk(relaxed = true), engine, mockk(relaxed = true)).analyzeEntries(
-            sequenceOf(
-                entry("2026-08-22.txt", day1Dns),
-                entry("2026-08-22(1).txt", day1Net),
-                entry("2026-08-23(10).txt", day2Sec),
-                entry("intrusion-logs/2026-08-21(2).txt"),   // one dir deep chunk: included (empty)
-                // Too deep: still ignored. A DISTINCT dns line, so parsing it
-                // would raise dnsEventCount to 2 rather than collapsing as a dupe.
-                entry(
-                    "a/b/2026-08-20(1).txt",
-                    """{"dns_event":{"event_id":9,"event_time":1787400346000,"hostname":"deep.example.com"}}"""
-                ),
+        val result = analyze(
+            entry("2026-08-22.txt", day1Dns),
+            entry("2026-08-22(1).txt", day1Net),
+            entry("2026-08-23(10).txt", day2Sec),
+            entry("intrusion-logs/2026-08-21(2).txt"),   // one dir deep chunk: included (empty)
+            // Too deep: still ignored. A DISTINCT dns line, so parsing it
+            // would raise dnsEventCount to 2.
+            entry(
+                "a/b/2026-08-20(1).txt",
+                """{"dns_event":{"event_id":9,"event_time":1787400346000,"hostname":"deep.example.com"}}"""
             ),
-            uidResolver = { -1 }, capturedAt = capturedAt,
         )
         assertEquals(1, result.stats.dnsEventCount)
         assertEquals(1, result.stats.connectEventCount)
@@ -95,51 +102,32 @@ class IntrusionLogAnalyzerTest {
     }
 
     @Test
-    fun `evaluates all three streams through the engine`() {
-        val analyzer = IntrusionLogAnalyzer(mockk(relaxed = true), engine, mockk(relaxed = true))
-        analyzer.analyzeEntries(
-            sequenceOf(entry("2026-08-22.txt", day1Dns, day1Net, day2Sec)),
-            uidResolver = { -1 }, capturedAt = capturedAt,
-        )
-        verify(exactly = 1) { engine.evaluateImportedDns(match { it.size == 1 }) }
-        verify(exactly = 1) { engine.evaluateNetwork(match { it.size == 1 }) }
-        verify(exactly = 1) { engine.evaluateSecurityLog(match { it.size == 1 }) }
+    fun `hands all three streams over as store records with their source keys`() {
+        val chunks = CollectingChunks()
+        analyze(entry("2026-08-22.txt", day1Dns, day1Net, day2Sec), chunks = chunks)
+        assertEquals(listOf("dns_event 0 1787400345334"),
+            chunks.records.getValue("dns_monitor").map { it.sourceEventKey })
+        assertEquals(1, chunks.records.getValue("network_monitor").size)
+        assertEquals(listOf("security_event 2 1787400350000"),
+            chunks.records.getValue("security_log").map { it.sourceEventKey })
+        assertEquals("h1.example.com", chunks.records.getValue("dns_monitor").single().fields["domain"])
     }
 
-    /**
-     * #342 B3: the stats must surface the TOTAL triggered-finding count so the
-     * UI/report can show "kept N of M" once the persistence cap
-     * ([ScanOrchestrator.FINDINGS_PERSIST_CAP]) truncates the set. Only triggered
-     * findings count — untriggered ones are never persisted as rows.
-     */
+    /** One pass, chunked: each type is handed over whenever its 5,000-record buffer fills. */
     @Test
-    fun `stats surface the triggered finding count for the persistence cap`() {
-        val e = mockk<SigmaRuleEngine>(relaxed = true) {
-            every { evaluateImportedDns(any()) } returns emptyList()
-            every { evaluateNetwork(any()) } returns emptyList()
-            every { evaluateSecurityLog(any()) } returns listOf(
-                Finding(
-                    ruleId = "androdr-1", title = "t", level = "high",
-                    category = FindingCategory.DEVICE_POSTURE, triggered = true,
-                ),
-                Finding(
-                    ruleId = "androdr-2", title = "t", level = "high",
-                    category = FindingCategory.DEVICE_POSTURE, triggered = true,
-                ),
-                Finding(
-                    ruleId = "androdr-3", title = "t", level = "high",
-                    category = FindingCategory.DEVICE_POSTURE, triggered = false,
-                ),
-            )
+    fun `each type is handed over in chunks of at most 5000`() {
+        val lines = (0 until 12_001).map {
+            """{"dns_event":{"event_id":$it,"event_time":${1787400000000L + it},"hostname":"h$it.example"}}"""
         }
-        val result = IntrusionLogAnalyzer(mockk(relaxed = true), e, mockk(relaxed = true)).analyzeEntries(
-            sequenceOf(entry("2026-08-22.txt", day2Sec)),
-            uidResolver = { -1 }, capturedAt = capturedAt,
-        )
+        val chunks = CollectingChunks()
+        val result = analyze(entry("2026-08-22.txt", *lines.toTypedArray()), entry("2026-08-23.txt", day2Sec),
+            chunks = chunks)
         assertEquals(
-            "only triggered findings count toward the cap",
-            2, result.stats.triggeredFindingCount
+            listOf("dns_monitor" to 5_000, "dns_monitor" to 5_000, "dns_monitor" to 2_001, "security_log" to 1),
+            chunks.chunkSizes,
         )
+        assertEquals(12_001, result.stats.dnsEventCount)
+        assertEquals(1787400000000L, result.stats.earliestEventMs)
     }
 
     /**
@@ -168,7 +156,8 @@ class IntrusionLogAnalyzerTest {
 
         val thrown = runCatching {
             runBlocking {
-                IntrusionLogAnalyzer(context, engine, mockk(relaxed = true)).analyze(mockk<Uri>(relaxed = true))
+                IntrusionLogAnalyzer(context, mockk(relaxed = true))
+                    .analyze(mockk<Uri>(relaxed = true), CollectingChunks())
             }
         }.exceptionOrNull()
 
@@ -197,7 +186,8 @@ class IntrusionLogAnalyzerTest {
 
         val thrown = runCatching {
             runBlocking {
-                IntrusionLogAnalyzer(context, engine, mockk(relaxed = true)).analyze(mockk<Uri>(relaxed = true))
+                IntrusionLogAnalyzer(context, mockk(relaxed = true))
+                    .analyze(mockk<Uri>(relaxed = true), CollectingChunks())
             }
         }.exceptionOrNull()
 
@@ -242,30 +232,22 @@ class IntrusionLogAnalyzerTest {
         val finding = Finding(ruleId = "androdr-003", title = "Malicious Domain", level = "critical",
             category = FindingCategory.APP_RISK)
         val e = mockk<SigmaRuleEngine>(relaxed = true) {
-            every { evaluateImportedDns(any()) } returns listOf(finding)
-            every { evaluateNetwork(any()) } returns emptyList()
-            every { evaluateSecurityLog(any()) } returns emptyList()
+            every { evaluateRecords("dns_monitor", any(), any()) } returns listOf(finding)
         }
         val resolver = mockk<com.androdr.ioc.IndicatorResolver>(relaxed = true)
         io.mockk.coEvery { resolver.prefetchDomainIndicators(any()) } throws
             android.database.sqlite.SQLiteException("database disk image is malformed")
+        val chunks = CollectingChunks(e)
 
-        // Linked to the import's Job (fix round 2): a failing prefetch must not cancel the import.
-        val importJob = kotlinx.coroutines.Job()
-        val result = IntrusionLogAnalyzer(mockk(relaxed = true), e, resolver).analyzeEntries(
-            sequenceOf(entry("2026-08-22.txt", day1Dns)), uidResolver = { -1 }, capturedAt = capturedAt,
-            parentJob = importJob,
-        )
+        val result = analyze(entry("2026-08-22.txt", day1Dns), chunks = chunks, resolver = resolver)
 
-        assertTrue("a prefetch failure leaves the import's Job active", importJob.isActive)
-        assertEquals(listOf(finding), result.findings)
+        assertEquals(listOf(finding), chunks.findings)
         assertEquals("SQLiteException", result.scannerErrors.single { it.scanner == "attribution" }.exception)
     }
 
     /**
-     * B5 fix round 2: cancelling an import must reach the attribution prefetch. The
-     * prefetch used to run under a top-level runBlocking with no link to analyze()'s
-     * Job, so a cancelled import kept doing one DAO lookup per host to the end.
+     * B5 fix round 2: cancelling an import must reach the attribution prefetch. The prefetch now
+     * runs in the import's own coroutine, so a cancelled import stops its DAO lookups early.
      */
     @Test
     fun `cancelling the import stops the attribution prefetch early`() {
@@ -286,13 +268,15 @@ class IntrusionLogAnalyzerTest {
             """{"dns_event":{"event_id":$it,"event_time":${1787400345334L + it},"hostname":"d$it.example"}}"""
         }
         val job = kotlinx.coroutines.Job()
-        var outcome: Result<IntrusionLogAnalysisResult>? = null
+        var outcome: Result<IntrusionLogScan>? = null
         val worker = kotlin.concurrent.thread {
             outcome = runCatching {
-                IntrusionLogAnalyzer(mockk(relaxed = true), engine, resolver).analyzeEntries(
-                    sequenceOf(entry("2026-08-22.txt", *lines.toTypedArray())),
-                    uidResolver = { -1 }, capturedAt = capturedAt, parentJob = job,
-                )
+                runBlocking(job) {
+                    analyzer(resolver).analyzeEntries(
+                        sequenceOf(entry("2026-08-22.txt", *lines.toTypedArray())),
+                        uidResolver = { -1 }, capturedAt = capturedAt, chunks = CollectingChunks(),
+                    )
+                }
             }
         }
         assertTrue(firstLookup.await(10, java.util.concurrent.TimeUnit.SECONDS))
@@ -302,5 +286,46 @@ class IntrusionLogAnalyzerTest {
         assertTrue("prefetch stopped early: ${lookups.get()} of $hosts lookups", lookups.get() < hosts / 2)
         assertTrue("cancellation propagates: $outcome",
             outcome?.exceptionOrNull() is kotlinx.coroutines.CancellationException)
+    }
+
+    /**
+     * M1 (fix round 1): the analyzer streams. Chunk k reaches the writer before line
+     * (k+1)*5000+1 of the export is read (an ST1-style check on lines pulled from the stream).
+     */
+    @Test
+    fun `chunk k reaches the writer before line (k+1)x5000+1 is read`() {
+        val total = 15_001
+        var linesRead = 0
+        val bytes = (0 until total).joinToString("\n") {
+            """{"dns_event":{"event_id":$it,"event_time":${1787400000000L + it},"hostname":"h$it.example"}}"""
+        }.toByteArray()
+        val counting = object : java.io.InputStream() {
+            private var pos = 0
+            override fun read(): Int {
+                if (pos >= bytes.size) return -1
+                val b = bytes[pos++].toInt() and 0xff
+                if (b == '\n'.code) linesRead++
+                return b
+            }
+        }
+        val readAtChunk = mutableListOf<Int>()
+        val chunks = object : IntrusionLogChunks {
+            override suspend fun dns(events: List<com.androdr.data.model.ImportedDnsEvent>,
+                                     records: List<com.androdr.sigma.StoreRecord>) { readAtChunk += linesRead }
+            override suspend fun connect(events: List<com.androdr.data.model.NetworkTelemetry>,
+                                         records: List<com.androdr.sigma.StoreRecord>) = Unit
+            override suspend fun security(events: List<com.androdr.data.model.SecurityLogEvent>,
+                                          records: List<com.androdr.sigma.StoreRecord>) = Unit
+        }
+        runBlocking {
+            analyzer().analyzeEntries(sequenceOf("2026-08-22.txt" to counting), uidResolver = { -1 },
+                capturedAt = capturedAt, chunks = chunks)
+        }
+        assertEquals(4, readAtChunk.size)
+        // The readers buffer ahead at most 16 KiB (~200 of these lines) — never a whole chunk.
+        val readAhead = 500
+        readAtChunk.take(3).forEachIndexed { k, read ->
+            assertTrue("chunk $k handed over after $read lines read", read < (k + 1) * 5_000 + 1 + readAhead)
+        }
     }
 }

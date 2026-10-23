@@ -1,0 +1,13 @@
+# One-line summary templates for event records (TelemetryReader -> DecodedRecord.summary).
+# service -> template; {field} names a field of that service (logsource taxonomy).
+# Absent or null fields render as nothing. EventDisplayTest requires a template for every
+# event service (TaxonomyContract.eventServices) and checks every placeholder is a real field.
+network_monitor: "{app_name} → {destination_ip}:{destination_port} {protocol}"
+dns_monitor: "{source_package} → {domain} {reason}"
+usage_stats: "{event_type} {package_name}"
+appops_audit: "{package_name} {operation}"
+package_install_history: "{event_type} {package_name} {version_code}"
+battery_daily: "{event_type} {package_name} {description}"
+tombstone_parser: "{process_name} crashed (signal {signal_number}) {abort_message}"
+wakelock_parser: "{package_name} wakelock {wakelock_tag} {duration_millis} ms"
+security_log: "{tag_name} {security_data}"

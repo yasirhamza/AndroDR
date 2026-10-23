@@ -71,40 +71,50 @@ class IntrusionLogParserTest {
         assertEquals(listOf("pm list packages"), sec.securityData)
     }
 
+    // The parser keeps no seen-set (telemetry store §4.1): a byte-identical duplicate is emitted
+    // again under the SAME source event key, and the store keeps one fact and one observation for
+    // it (S2, ChunkedScanWriterTest / IntrusionLogDuplicatesTest).
     @Test
-    fun `byte-identical duplicate collapse first-seen`() {
+    fun `byte-identical duplicate is emitted twice under one source event key`() {
         val result = parse(connectLine, connectLine)
-        assertEquals(1, result.networkEvents.size)
-        assertEquals(1, result.duplicatesCollapsed)
+        assertEquals(2, result.networkEvents.size)
+        assertEquals(listOf("connect_event 1 1787400345540", "connect_event 1 1787400345540"), result.networkKeys)
     }
 
     @Test
-    fun `distinct events with same fields but different event_id are both kept`() {
+    fun `distinct events with same fields but different event_id get distinct keys`() {
         val second = connectLine.replace(""""event_id":1""", """"event_id":7""")
         val result = parse(connectLine, second)
         assertEquals(2, result.networkEvents.size)
-        assertEquals(0, result.duplicatesCollapsed)
+        assertEquals(2, result.networkKeys.toSet().size)
     }
 
-    // Finding 1: dedup on (event_id, event_time, wrapper_type). event_id may be a
-    // per-day counter that restarts at 0, so two records sharing an id but with
-    // different event_time are DISTINCT and must both survive — the old
-    // event_id-only key silently dropped one, importing only day 1 of an export.
+    // Finding 1: the key is (wrapper_type, event_id, event_time). event_id may be a per-day
+    // counter that restarts at 0, so two records sharing an id but with different event_time are
+    // DISTINCT — the old event_id-only key silently dropped one, importing only day 1 of an export.
     @Test
-    fun `same event_id with different event_time are both kept (per-day restart)`() {
+    fun `same event_id with different event_time get distinct keys (per-day restart)`() {
         val a = """{"dns_event":{"event_id":0,"event_time":1787400345334,"hostname":"a.example.com"}}"""
         val b = """{"dns_event":{"event_id":0,"event_time":1787400399999,"hostname":"b.example.com"}}"""
         val result = parse(a, b)
-        assertEquals(2, result.dnsEvents.size)
-        assertEquals(0, result.duplicatesCollapsed)
+        assertEquals(listOf("dns_event 0 1787400345334", "dns_event 0 1787400399999"), result.dnsKeys)
     }
 
     @Test
-    fun `byte-identical record sharing all three key fields collapses`() {
-        val a = """{"dns_event":{"event_id":0,"event_time":1787400345334,"hostname":"a.example.com"}}"""
-        val result = parse(a, a)
-        assertEquals(1, result.dnsEvents.size)
-        assertEquals(1, result.duplicatesCollapsed)
+    fun `a record without event_id is keyed by type and time only`() {
+        val a = """{"security_event":{"event_time":1787400345600,"tag":210002,"data":["ls"]}}"""
+        val b = """{"security_event":{"event_time":1787400345600,"tag":210002,"data":["id"]}}"""
+        val result = parse(a, b)
+        // Same key; the store's fact key adds the content hash, so these stay two facts.
+        assertEquals(listOf("security_event ? 1787400345600", "security_event ? 1787400345600"), result.securityKeys)
+        assertEquals(2, result.securityEvents.size)
+    }
+
+    @Test
+    fun `the per-type bounds are two million records`() {
+        assertEquals(2_000_000, IntrusionLogParser.MAX_DNS_RECORDS)
+        assertEquals(2_000_000, IntrusionLogParser.MAX_CONNECT_RECORDS)
+        assertEquals(2_000_000, IntrusionLogParser.MAX_SECURITY_RECORDS)
     }
 
     @Test

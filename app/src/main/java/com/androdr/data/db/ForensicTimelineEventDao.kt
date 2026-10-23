@@ -8,6 +8,9 @@ import com.androdr.data.model.ForensicTimelineEvent
 import com.androdr.data.model.TelemetrySource
 import kotlinx.coroutines.flow.Flow
 
+/** A finding row's rule and fact (see [ForensicTimelineEventDao.findingRuleRecords]). */
+data class RuleRecord(val ruleId: String, val recordId: Long)
+
 @Dao
 @Suppress("TooManyFunctions") // Room DAO with filtered queries for timeline
 interface ForensicTimelineEventDao {
@@ -109,14 +112,59 @@ interface ForensicTimelineEventDao {
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insert(event: ForensicTimelineEvent): Long
 
-    @Query("DELETE FROM forensic_timeline WHERE createdAt < :cutoff")
+    // Every delete below removes rows that may pin facts (`recordId`). Call them only through
+    // `TimelineRowDeleter`, which reads the paired `recordIds*` first and releases those facts in
+    // the same transaction (spec §5.1 Pins; gated by TimelineRowDeleterTest).
+
+    /** The 30-day prune; persistent (audit/closure) rows are never pruned. */
+    @Query("DELETE FROM forensic_timeline WHERE createdAt < :cutoff AND persistent = 0")
     suspend fun deleteOlderThan(cutoff: Long)
+
+    @Query(
+        "SELECT DISTINCT recordId FROM forensic_timeline " +
+            "WHERE createdAt < :cutoff AND persistent = 0 AND recordId IS NOT NULL"
+    )
+    suspend fun recordIdsOlderThan(cutoff: Long): List<Long>
 
     @Query("DELETE FROM forensic_timeline WHERE source = :source")
     suspend fun deleteBySource(source: String)
 
-    @Query("DELETE FROM forensic_timeline WHERE scanResultId = :scanResultId")
+    @Query("SELECT DISTINCT recordId FROM forensic_timeline WHERE source = :source AND recordId IS NOT NULL")
+    suspend fun recordIdsBySource(source: String): List<Long>
+
+    /** A scan's own rows; persistent (audit/closure) rows survive scan deletion (spec §5.1). */
+    @Query("DELETE FROM forensic_timeline WHERE scanResultId = :scanResultId AND persistent = 0")
     suspend fun deleteByScanId(scanResultId: Long)
+
+    @Query(
+        "SELECT DISTINCT recordId FROM forensic_timeline " +
+            "WHERE scanResultId = :scanResultId AND persistent = 0 AND recordId IS NOT NULL"
+    )
+    suspend fun recordIdsByScanId(scanResultId: Long): List<Long>
+
+    /** "Clear all": non-persistent rows that are scan-less or whose scan no longer exists. */
+    @Query(
+        "DELETE FROM forensic_timeline WHERE persistent = 0 AND (scanResultId = -1 OR NOT EXISTS " +
+            "(SELECT 1 FROM ScanResult s WHERE s.id = forensic_timeline.scanResultId))"
+    )
+    suspend fun deleteUnownedNonPersistent()
+
+    @Query(
+        "SELECT DISTINCT recordId FROM forensic_timeline WHERE persistent = 0 AND recordId IS NOT NULL " +
+            "AND (scanResultId = -1 OR NOT EXISTS " +
+            "(SELECT 1 FROM ScanResult s WHERE s.id = forensic_timeline.scanResultId))"
+    )
+    suspend fun recordIdsUnownedNonPersistent(): List<Long>
+
+    /**
+     * Of [recordIds], the `(ruleId, recordId)` pairs a visible finding row already carries — the
+     * Phase A–C late-IOC re-check emits a finding only when none exists (spec §5.2).
+     */
+    @Query(
+        "SELECT r.ruleId AS ruleId, r.recordId AS recordId FROM forensic_timeline r " +
+            "WHERE r.recordId IN (:recordIds) AND r.ruleId != '' AND ${VisibleRow.SQL}"
+    )
+    suspend fun findingRuleRecords(recordIds: List<Long>): List<RuleRecord>
 
     /**
      * Scan ids that own at least one row with the given [source] (#342).
@@ -135,6 +183,4 @@ interface ForensicTimelineEventDao {
     @Query("SELECT DISTINCT scanResultId FROM forensic_timeline WHERE source = :source AND scanResultId != -1")
     suspend fun getDistinctScanIdsBySource(source: String): List<Long>
 
-    @Query("DELETE FROM forensic_timeline")
-    suspend fun deleteAll()
 }
