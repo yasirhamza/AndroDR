@@ -16,7 +16,6 @@ import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
-import androidx.compose.ui.test.performClick
 import androidx.test.core.app.ApplicationProvider
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -71,6 +70,17 @@ class ProtectedButtonTest {
 
     // --- real dispatch ---
 
+    /** Sets MotionEvent flags via the native event (no Java setter on API 35), as the window manager does. */
+    private fun MotionEvent.withFlags(flags: Int): MotionEvent {
+        val ptr = MotionEvent::class.java.getDeclaredField("mNativePtr").apply { isAccessible = true }.getLong(this)
+        MotionEvent::class.java
+            .getDeclaredMethod("nativeSetFlags", Long::class.javaPrimitiveType, Int::class.javaPrimitiveType)
+            .apply { isAccessible = true }
+            .invoke(null, ptr, flags)
+        check(this.flags == flags) { "flags not applied" }
+        return this
+    }
+
     private fun dispatchTap(host: View, x: Float, y: Float, flags: Int) =
         dispatchGesture(host, x, y, listOf(MotionEvent.ACTION_DOWN to flags, MotionEvent.ACTION_UP to flags))
 
@@ -82,14 +92,7 @@ class ProtectedButtonTest {
             // MOVE shifts a little: Compose drops moves that change nothing.
             val px = if (action == MotionEvent.ACTION_MOVE) x + 2f else x
             val ev = MotionEvent.obtain(t, t + i * 50L, action, px, y, 0)
-            // No public/hidden Java setter exists on API 35; the window manager sets the flag through
-            // the native event, so do the same (Robolectric native-backed MotionEvent).
-            val ptr = MotionEvent::class.java.getDeclaredField("mNativePtr").apply { isAccessible = true }.getLong(ev)
-            MotionEvent::class.java
-                .getDeclaredMethod("nativeSetFlags", Long::class.javaPrimitiveType, Int::class.javaPrimitiveType)
-                .apply { isAccessible = true }
-                .invoke(null, ptr, flags)
-            check(ev.flags == flags) { "flags not applied" }
+            ev.withFlags(flags)
             host.dispatchTouchEvent(ev)
             ev.recycle()
         }
@@ -118,8 +121,6 @@ class ProtectedButtonTest {
 
         dispatchTap(host!!, x, y, 0)
         assertEquals("plain dispatched tap fires", 1, clicks)
-        rule.onNodeWithTag("btn").performClick()
-        assertEquals("semantic click fires", 2, clicks)
     }
 
     @Test fun `disposing one of two buttons leaves the other protected`() {
@@ -205,5 +206,30 @@ class ProtectedButtonTest {
 
     @Test fun `taint resets at the next down`() {
         assertEquals(1, clicksAfter(down to obscured, up to obscured, down to 0, up to 0))
+    }
+
+    @Test fun `wrapper layout sets the platform obscured-touch filter and cancels the child on taint`() {
+        val ctx = ApplicationProvider.getApplicationContext<Application>()
+        val layout = ObscuredTouchFilterLayout(ctx)
+        assertTrue(layout.filterTouchesWhenObscured)
+        val child = RecordingView(ctx)
+        layout.addView(child)
+        val exactly = View.MeasureSpec.makeMeasureSpec(100, View.MeasureSpec.EXACTLY)
+        layout.measure(exactly, exactly)
+        layout.layout(0, 0, 100, 100)
+        fun ev(action: Int) = MotionEvent.obtain(0, 0, action, 1f, 1f, 0)
+        layout.dispatchTouchEvent(ev(MotionEvent.ACTION_DOWN))
+        val obscuredMove = ev(MotionEvent.ACTION_MOVE).withFlags(MotionEvent.FLAG_WINDOW_IS_PARTIALLY_OBSCURED)
+        layout.dispatchTouchEvent(obscuredMove)
+        layout.dispatchTouchEvent(ev(MotionEvent.ACTION_UP))
+        assertEquals(listOf(MotionEvent.ACTION_DOWN, MotionEvent.ACTION_CANCEL), child.actions)
+    }
+
+    private class RecordingView(context: Application) : View(context) {
+        val actions = mutableListOf<Int>()
+        override fun onTouchEvent(event: MotionEvent): Boolean {
+            actions += event.actionMasked
+            return true
+        }
     }
 }

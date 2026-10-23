@@ -1,15 +1,17 @@
 package com.androdr.ui.security
 
+import android.content.Context
 import android.os.Build
 import android.view.MotionEvent
+import android.widget.FrameLayout
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.material3.Button
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.rememberCompositionContext
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.input.pointer.PointerEvent
-import androidx.compose.ui.input.pointer.PointerEventPass
-import androidx.compose.ui.input.pointer.PointerInputScope
-import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.ComposeView
+import androidx.compose.ui.viewinterop.AndroidView
 
 /** `MotionEvent.FLAG_WINDOW_IS_PARTIALLY_OBSCURED` (0x2), API 29+; local copy because `sdkInt` is injected. */
 private const val FLAG_PARTIALLY_OBSCURED = 0x2
@@ -24,15 +26,53 @@ internal fun isObscuredTouch(flags: Int, sdkInt: Int): Boolean {
 }
 
 /**
- * A [Button] for protected actions (closing an alert, audited deletion). If any touch of a
- * gesture (DOWN, MOVE or UP) is flagged as obscured by another window, the whole gesture is
- * cancelled before the button sees it, so a tapjacking overlay cannot trigger [onClick], even one
- * that appears between a clean DOWN and the UP.
+ * A view group that drops every obscured touch before its child sees it. Sets the platform
+ * `filterTouchesWhenObscured` (which covers `FLAG_WINDOW_IS_OBSCURED`) and also rejects
+ * `FLAG_WINDOW_IS_PARTIALLY_OBSCURED` on API 29+, which the platform filter does not check.
  *
- * Filtering is per gesture and per button: there is no shared mutable state, so any number of
- * instances can enter and leave composition in any order (a host-view flag saved and restored per
- * instance would be corrupted by that). It also works inside a Dialog or Popup, whose window has
- * its own view. Unlike a global `filterTouchesWhenObscured`, the rest of the screen stays live.
+ * Dropping single events is not enough: a clean DOWN, a dropped (obscured) MOVE or UP and a later
+ * clean UP would still complete a click. So the first obscured event of a gesture cancels the
+ * child's gesture (ACTION_CANCEL, sent straight to the child) and every later event is dropped
+ * until the next ACTION_DOWN.
+ */
+internal class ObscuredTouchFilterLayout(context: Context) : FrameLayout(context) {
+    private var tainted = false
+
+    init {
+        filterTouchesWhenObscured = true
+    }
+
+    override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
+        if (ev.actionMasked == MotionEvent.ACTION_DOWN) tainted = false
+        if (!tainted && isObscuredTouch(ev.flags, Build.VERSION.SDK_INT)) {
+            tainted = true
+            if (ev.actionMasked != MotionEvent.ACTION_DOWN) cancelChildGesture(ev)
+        }
+        return !tainted && super.dispatchTouchEvent(ev)
+    }
+
+    private fun cancelChildGesture(ev: MotionEvent) {
+        val cancel = MotionEvent.obtain(ev)
+        cancel.action = MotionEvent.ACTION_CANCEL
+        getChildAt(0)?.dispatchTouchEvent(cancel)
+        cancel.recycle()
+    }
+}
+
+/**
+ * A button for protected actions (closing an alert, audited deletion). The Compose [Button] is
+ * hosted in its own child view with obscured-touch filtering ([ObscuredTouchFilterLayout]), the
+ * platform's standard anti-tapjacking mechanism. The view system drops each flagged event at that
+ * view, so a gesture in which any DOWN, MOVE or UP is obscured never completes a click, even when
+ * an overlay appears between a clean DOWN and the UP.
+ *
+ * The filter is per control and there is no shared host-view state, so any number of instances can
+ * enter and leave composition in any order. It also works in a Dialog or Popup, whose window has
+ * its own view. The rest of the screen stays live. No reflection: nothing here depends on library
+ * internals, so R8 minification cannot break it.
+ *
+ * Layout: [modifier] sizes the wrapper view; the button inside is wrap-content. The content shares
+ * the caller's composition locals (theme) through the parent composition context.
  *
  * Limits: accessibility clicks (`performClick` from an accessibility service) are not touch
  * events and bypass this. The device credential ([ConfirmCredential]) is the real control; this is
@@ -45,42 +85,27 @@ fun ProtectedButton(
     enabled: Boolean = true,
     content: @Composable RowScope.() -> Unit,
 ) {
-    Button(
-        onClick = onClick,
-        modifier = modifier.pointerInput(Unit) { dropObscuredGestures() },
-        enabled = enabled,
-        content = content,
+    val currentOnClick = rememberUpdatedState(onClick)
+    val currentEnabled = rememberUpdatedState(enabled)
+    val currentContent = rememberUpdatedState(content)
+    val parent = rememberCompositionContext()
+    AndroidView(
+        modifier = modifier,
+        factory = { context ->
+            ObscuredTouchFilterLayout(context).apply {
+                addView(
+                    ComposeView(context).apply {
+                        setParentCompositionContext(parent)
+                        setContent {
+                            Button(
+                                onClick = { currentOnClick.value() },
+                                enabled = currentEnabled.value,
+                                content = currentContent.value,
+                            )
+                        }
+                    },
+                )
+            }
+        },
     )
-}
-
-/**
- * Runs on the Initial pass, before the button's own click handling. A gesture is tainted as soon
- * as any of its events is obscured; from then until the next fresh DOWN every change is consumed,
- * so the button sees a cancelled press and `onClick` never fires.
- */
-private suspend fun PointerInputScope.dropObscuredGestures() {
-    awaitPointerEventScope {
-        var tainted = false
-        while (true) {
-            val event = awaitPointerEvent(PointerEventPass.Initial)
-            if (event.changes.none { it.previousPressed } && event.changes.any { it.pressed }) tainted = false
-            val flags = rawFlags(event)
-            if (flags == null || isObscuredTouch(flags, Build.VERSION.SDK_INT)) tainted = true
-            if (tainted) event.changes.forEach { it.consume() }
-        }
-    }
-}
-
-/**
- * The raw `MotionEvent.getFlags()` of [event]. Compose 1.7 exposes the event only through an
- * internal accessor (public in bytecode), so it is read reflectively. Returns null when it cannot
- * be read, and the caller then treats the gesture as obscured (fail closed). `ProtectedButtonTest`
- * dispatches real flagged events, so a Compose upgrade that moves the accessor fails the build.
- */
-private fun rawFlags(event: PointerEvent): Int? = runCatching {
-    (MOTION_EVENT_GETTER.invoke(event) as? MotionEvent)?.flags
-}.getOrNull()
-
-private val MOTION_EVENT_GETTER by lazy {
-    PointerEvent::class.java.getMethod("getMotionEvent\$ui_release")
 }
