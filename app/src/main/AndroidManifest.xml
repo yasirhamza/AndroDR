@@ -15,6 +15,9 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <!-- USE_BIOMETRIC: install-time (normal) permission; lets the platform BiometricPrompt show the
+         device-credential confirmation that protects closing alerts and audited deletion (API 30+). -->
+    <uses-permission android:name="android.permission.USE_BIOMETRIC" />
     <!--
       ProtectedPermissions: READ_LOGS is required for the EDR logcat capture feature
       (ReportExporter). The app targets sideloaded/enterprise deployment where this
