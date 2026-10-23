@@ -82,6 +82,8 @@ class TimelineDayPrecisionZoneTest {
             assertEquals(UTC_MIDNIGHT, row.event.startTimestamp)
             assertTrue(row.entity.isDay)
             assertEquals(DATE_ONLY, rowTime(row.event))
+            // I6: the Linked Evidence line never shows a made-up time of day for a day row.
+            assertTrue(linkedEvidenceLabel(row.event).startsWith(DATE_ONLY))
             assertEquals("Mar 28, 2026", rowDate(row.event))
             assertEquals("the row groups under the printed date", dayStart,
                 filter.dayOf(row.timestamp, row.entity.isDay))

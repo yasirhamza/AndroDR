@@ -332,7 +332,7 @@ private fun LinkedEvidenceRow(
                     overflow = TextOverflow.Ellipsis
                 )
                 Text(
-                    text = "${formatTime(related.startTimestamp)}  ${related.category}",
+                    text = linkedEvidenceLabel(related),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -639,6 +639,9 @@ internal fun factDate(record: DecodedRecord, timestamp: Long): String =
 internal fun rowTime(event: ForensicTimelineEvent): String =
     if (event.timestampPrecision.equals(TimelineRowEntity.DAY, ignoreCase = true)) DATE_ONLY
     else formatTime(event.startTimestamp)
+
+/** A Linked Evidence line: the related row's time ([DATE_ONLY] for a day-precision row) and category. */
+internal fun linkedEvidenceLabel(related: ForensicTimelineEvent): String = "${rowTime(related)}  ${related.category}"
 
 /** A row's date; a day-precision row's calendar date in UTC (R32). */
 internal fun rowDate(event: ForensicTimelineEvent): String =
