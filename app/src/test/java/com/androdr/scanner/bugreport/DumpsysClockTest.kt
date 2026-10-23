@@ -63,7 +63,7 @@ class DumpsysClockTest {
     }
 
     @Test
-    fun `install times, the capture header and battery days use the same clock`() = runBlocking {
+    fun `install times and the capture header use the clock, battery days are printed dates`() = runBlocking {
         val clock = DumpsysClock.fromSystemProperties(props("Asia/Qatar"))
         val pkg = """
             Package [com.example.chat] (ab12cd):
@@ -84,7 +84,8 @@ class DumpsysClockTest {
         """.trimIndent()
         val day = BatteryDailyModule().analyze(battery, resolver, DeviceIdentity.UNKNOWN, clock)
             .typed.batteryDailyEvents.single().timestamp
-        assertEquals("the capture device's local midnight", ms("2026-03-27T21:00:00Z"), day)
+        assertEquals("a calendar date, stored as its UTC midnight (R32), not the capture zone's midnight",
+            ms("2026-03-28T00:00:00Z"), day)
     }
 
     @Test

@@ -15,6 +15,8 @@ import com.androdr.data.db.TimelineKey
  * - [scanId]: the row's `scanResultId`; for a fact, the filtered scan, or −1 when no scan filter.
  * - [recordId]: the fact a row points at (a finding row's evidence, nested under it); null for facts.
  * - [bodyHash]: the fact's body, null for rows.
+ * - [timePrecision]: the row's `timestampPrecision` or the fact's `timePrecision` (case varies);
+ *   [isDay] when it is a calendar date ([CivilDay], ruling R32).
  *
  * A plain class: it holds a `ByteArray`.
  */
@@ -34,8 +36,12 @@ class TimelineRowEntity(
     val telemetrySource: TelemetrySource,
     val bodyHash: ByteArray?,
     val recordId: Long?,
+    val timePrecision: String,
 ) {
     val key: TimelineKey get() = TimelineKey(time, rowKind, seq)
+
+    /** A day-precision entry: [time] is a calendar date (UTC midnight), not a moment. */
+    val isDay: Boolean get() = timePrecision.equals(DAY, ignoreCase = true)
 
     companion object {
         /** A `forensic_timeline` row: a finding row, a correlation signal, or a detected change. */
@@ -43,5 +49,7 @@ class TimelineRowEntity(
 
         /** An event fact, read in place from the store. Rows sort before facts at one time. */
         const val FACT = 1
+
+        const val DAY = "day"
     }
 }

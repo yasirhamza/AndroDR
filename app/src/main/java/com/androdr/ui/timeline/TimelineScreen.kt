@@ -370,7 +370,7 @@ fun TimelineScreen(
 /** A stable list key per row: an entry by kind and id, a header by its day. */
 private fun rowKey(row: TimelineRow): String = when (row) {
     is TimelineRow.Entry -> "e${row.entity.rowKind}_${row.entity.id}"
-    is TimelineRow.DayHeader -> "day_${row.day}"
+    is TimelineRow.DayHeader -> "day_${row.day}_${row.anchor}"
     is TimelineRow.FindingRow -> "finding_${row.finding.ruleId}"
 }
 

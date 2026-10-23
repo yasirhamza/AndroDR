@@ -1,29 +1,28 @@
 package com.androdr.scanner.bugreport
 
 import java.time.DateTimeException
-import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.ZoneId
 import java.time.ZoneOffset
 
 /**
  * The one time base of a bug-report import (ruling R27): every dumpsys wall-clock time (the
- * capture header, AppOps access times, package install/update times, battery day boundaries) is
- * read in the capture device's own zone, `persist.sys.timezone` from the report's SYSTEM
+ * capture header, AppOps access times, package install/update times) is read in the capture
+ * device's own zone, `persist.sys.timezone` from the report's SYSTEM
  * PROPERTIES, and turned into an epoch instant with [ZoneId] rules, so DST applies per timestamp.
  *
  * Without that property the import falls back to a deterministic UTC wall clock ([assumedUtc]) and
  * says so ([NOTE_ASSUMED_UTC]); it never mixes bases, and never uses the analyzing device's zone.
  * In a DST gap a wall time is shifted forward by the gap; in an overlap the earlier offset is used
  * (`java.time` defaults), so the result is deterministic.
+ *
+ * Day-precision dates (battery daily stats) are not instants and do not use this clock: they are
+ * stored as the printed calendar date ([com.androdr.data.model.CivilDay], ruling R32).
  */
 class DumpsysClock private constructor(val zone: ZoneId, val assumedUtc: Boolean) {
 
     /** [time] on the capture device's wall clock, as epoch milliseconds. */
     fun epochMs(time: LocalDateTime): Long = time.atZone(zone).toInstant().toEpochMilli()
-
-    /** The start of [day] on the capture device's wall clock, as epoch milliseconds. */
-    fun startOfDayMs(day: LocalDate): Long = day.atStartOfDay(zone).toInstant().toEpochMilli()
 
     override fun toString(): String = if (assumedUtc) "DumpsysClock(UTC, assumed)" else "DumpsysClock($zone)"
 

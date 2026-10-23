@@ -91,6 +91,20 @@ class TimelineQueryPlanTest {
         assertTrue(bad.joinToString("\n") { it.sql }, bad.isEmpty())
     }
 
+    /** UNION ALL matches columns by position: both arms must select the same columns in the same order. */
+    @Test
+    fun `both arms of every page select the same columns in the same order`() {
+        val alias = Regex("""\bAS (\w+)""")
+        for ((name, sql) in statements()) {
+            val arms = sql.sql.split(" UNION ALL ").map { arm ->
+                alias.findAll(arm.removePrefix("SELECT * FROM (").substringBefore(" FROM "))
+                    .map { it.groupValues[1] }.toList()
+            }
+            assertTrue("$name: $arms", arms.first().size == 15)
+            assertTrue("$name: $arms", arms.all { it == arms.first() })
+        }
+    }
+
     @Test
     fun `fact arms use the shape's index`() {
         fun factPlan(filter: TimelineFilter) = plan(TimelineQueries.page(filter, null, TimelineDirection.FROM, 10))

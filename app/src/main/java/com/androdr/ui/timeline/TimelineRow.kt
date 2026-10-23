@@ -36,8 +36,13 @@ sealed interface TimelineRow {
         val evidence: DecodedRecord?,
     ) : Entry
 
-    /** The start of one day of the list ([com.androdr.data.db.TimelineFilter.dayOf]). */
-    data class DayHeader(val day: Long) : TimelineRow {
+    /**
+     * The start of one day of the list ([com.androdr.data.db.TimelineFilter.dayOf]), placed before
+     * the entry at [anchor]. A day-precision entry sorts at its date's UTC midnight but groups under
+     * its own date (R32), so in a zone far from UTC one day's header can appear twice; [anchor]
+     * keeps each header's list key unique.
+     */
+    data class DayHeader(val day: Long, val anchor: TimelineKey? = null) : TimelineRow {
         override val timestamp: Long get() = day
     }
 

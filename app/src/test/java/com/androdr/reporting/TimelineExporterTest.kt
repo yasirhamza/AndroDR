@@ -217,13 +217,24 @@ class TimelineExporterTest {
         assertTrue(text.none { it == '‮' })
     }
 
-    /** Ruling R31: a day-precision event is written date-only, never with an invented time of day. */
+    /**
+     * Rulings R31/R32: a day-precision event is written date-only, never with an invented time of
+     * day, and its date is the stored calendar date (UTC midnight) read in UTC, so a device west of
+     * UTC still prints the source's date.
+     */
     @Test
-    fun `a day-precision event exports date-only with its precision`() {
-        val day = java.util.Calendar.getInstance().apply {
-            set(2026, 9, 3, 0, 0, 0)
-            set(java.util.Calendar.MILLISECOND, 0)
-        }.timeInMillis
+    fun `a day-precision event exports date-only with its printed date in any device zone`() {
+        val jvmZone = java.util.TimeZone.getDefault()
+        java.util.TimeZone.setDefault(java.util.TimeZone.getTimeZone("America/Los_Angeles"))
+        try {
+            exportDayEvent()
+        } finally {
+            java.util.TimeZone.setDefault(jvmZone)
+        }
+    }
+
+    private fun exportDayEvent() {
+        val day = com.androdr.data.model.CivilDay.epochMs(java.time.LocalDate.of(2026, 10, 3))
         val uninstall = ForensicTimelineEvent(id = 0, startTimestamp = day, kind = "event", source = "battery_daily",
             category = "package_uninstall", description = "Uninstalled com.gone", timestampPrecision = "day")
         val out = StringBuilder()

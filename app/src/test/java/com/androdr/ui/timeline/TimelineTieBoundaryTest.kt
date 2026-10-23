@@ -103,6 +103,39 @@ class TimelineTieBoundaryTest {
         }
     }
 
+    /**
+     * Re-review n4: under the scan filter the fact arm breaks ties on `scan_record`'s rowid, not the
+     * fact id. Facts here are observed in id order, so the expected entries are the same.
+     */
+    @Test
+    fun `the scan-filter shape walks ties without skips or duplicates`() = runBlocking {
+        val scanFilter = TimelineFilter(scanId = 1L)
+        fun ids(page: List<TimelineRow.Entry>) = page.map { it.entity.rowKind to it.entity.id }
+        val want = expected.map { it.rowKind to it.seq }
+        for (size in 1..expected.size + 1) {
+            val s = TimelineEntries(f.db, f.reader)
+            val walked = ArrayList<Pair<Int, Long>>()
+            var page = s.page(scanFilter, null, com.androdr.data.db.TimelineDirection.FROM, size)
+            walked += ids(page.items)
+            while (page.keys.size == size) {
+                assertTrue("the walk does not end", walked.size <= expected.size + size)
+                page = s.page(scanFilter, page.keys.last(), com.androdr.data.db.TimelineDirection.AFTER, size)
+                walked += ids(page.items)
+            }
+            assertEquals("page size $size", want, walked)
+            // And back up from the end, nearest first.
+            val back = ArrayList<Pair<Int, Long>>()
+            var up = s.page(scanFilter, null, com.androdr.data.db.TimelineDirection.BEFORE, size)
+            back += ids(up.items)
+            while (up.keys.size == size) {
+                assertTrue("the walk does not end", back.size <= expected.size + size)
+                up = s.page(scanFilter, up.keys.last(), com.androdr.data.db.TimelineDirection.BEFORE, size)
+                back += ids(up.items)
+            }
+            assertEquals("reverse, page size $size", want.reversed(), back)
+        }
+    }
+
     private companion object {
         const val BASE = 1_729_000_000_000L
     }

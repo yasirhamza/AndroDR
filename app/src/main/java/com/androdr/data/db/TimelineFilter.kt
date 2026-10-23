@@ -1,5 +1,6 @@
 package com.androdr.data.db
 
+import com.androdr.data.model.CivilDay
 import java.time.Instant
 import java.time.ZoneId
 
@@ -25,6 +26,11 @@ data class TimelineFilter(
     val levels: Set<String> = emptySet(),
     val findingsAndEvidenceOnly: Boolean = false,
     val zone: ZoneId = ZoneId.systemDefault(),
+    /**
+     * Set by [forDay] only (a date header's count): the header's calendar date as its UTC midnight,
+     * so day-precision entries of that date count under it (ruling R32).
+     */
+    val civilDay: Long? = null,
 ) {
     /** The index-driving filter: one SQL builder per shape (see [TimelineQueries]). */
     val shape: TimelineShape
@@ -39,24 +45,25 @@ data class TimelineFilter(
     val includesFacts: Boolean get() = levels.isEmpty() && !findingsAndEvidenceOnly
 
     /**
-     * The day [time] falls on in [zone], as the epoch ms of its start; [UNKNOWN_DAY] for a time of
-     * zero or less (a finding with no event time), which groups under "Unknown date".
+     * The day an entry at [time] groups under, as the epoch ms of that day's start in [zone];
+     * [UNKNOWN_DAY] for a time of zero or less (a finding with no event time), "Unknown date".
+     * An exact time is an instant: its date in [zone]. A day-precision time ([isDay]) is a calendar
+     * date stored as UTC midnight (ruling R32): its UTC date, started in [zone], so it groups under
+     * the date the source printed whatever the viewer's zone.
      */
-    fun dayOf(time: Long): Long = if (time <= 0L) {
-        UNKNOWN_DAY
-    } else {
-        Instant.ofEpochMilli(time).atZone(zone).toLocalDate().atStartOfDay(zone).toInstant().toEpochMilli()
+    fun dayOf(time: Long, isDay: Boolean = false): Long = when {
+        time <= 0L -> UNKNOWN_DAY
+        isDay -> CivilDay.dateOf(time).atStartOfDay(zone).toInstant().toEpochMilli()
+        else -> Instant.ofEpochMilli(time).atZone(zone).toLocalDate().atStartOfDay(zone).toInstant().toEpochMilli()
     }
 
     /** This filter narrowed to one day ([dayOf]'s value), for a date header's count. */
     fun forDay(day: Long): TimelineFilter {
-        val (start, end) = if (day == UNKNOWN_DAY) {
-            Long.MIN_VALUE to 0L
-        } else {
-            val date = Instant.ofEpochMilli(day).atZone(zone).toLocalDate()
-            day to date.plusDays(1).atStartOfDay(zone).toInstant().toEpochMilli() - 1
-        }
-        return copy(from = maxOf(from ?: Long.MIN_VALUE, start), to = minOf(to ?: Long.MAX_VALUE, end))
+        if (day == UNKNOWN_DAY) return copy(to = minOf(to ?: 0L, 0L))
+        val date = Instant.ofEpochMilli(day).atZone(zone).toLocalDate()
+        val end = date.plusDays(1).atStartOfDay(zone).toInstant().toEpochMilli() - 1
+        return copy(from = maxOf(from ?: Long.MIN_VALUE, day), to = minOf(to ?: Long.MAX_VALUE, end),
+            civilDay = CivilDay.epochMs(date))
     }
 
     companion object {

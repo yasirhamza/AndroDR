@@ -1,6 +1,7 @@
 package com.androdr.reporting
 
 import android.os.Build
+import com.androdr.data.model.CivilDay
 import com.androdr.data.model.ForensicTimelineEvent
 import com.androdr.data.model.effectiveCorrelationId
 import com.androdr.data.model.effectivePackageFromDescription
@@ -110,19 +111,14 @@ object TimelineExporter {
         }
 
         fun event(event: ForensicTimelineEvent) {
-            val date = if (event.startTimestamp > 0) dateFmt.format(Date(event.startTimestamp)) else "Unknown"
+            val date = dateOf(event)
             if (date != currentDate) {
                 currentDate = date
                 out.line(THIN)
                 out.line("  $date")
                 out.line(THIN)
             }
-            val time = when {
-                event.timestampPrecision == DAY_PRECISION -> "(date only)"
-                event.startTimestamp > 0 -> timeFmt.format(Date(event.startTimestamp))
-                else -> "??:??:??"
-            }
-            out.line("  $time  ${escapeForReport(event.description)}")
+            out.line("  ${timeOf(event)}  ${escapeForReport(event.description)}")
             val pkg = escapeForReport(event.packageName)
             if (event.appName.isNotEmpty() && event.appName != event.packageName) {
                 out.line("             App: ${escapeForReport(event.appName)} ($pkg)")
@@ -142,6 +138,27 @@ object TimelineExporter {
             }
             if (event.apkHash.isNotEmpty()) out.line("             APK SHA-256: ${escapeForReport(event.apkHash)}")
             if (event.details.isNotEmpty()) out.line("             ${escapeForReport(event.details)}")
+        }
+
+        /**
+         * A row's nested evidence, right after the row and inside the row's date section (it never
+         * opens a section of its own, so a cross-day evidence fact cannot repeat a date header).
+         */
+        fun evidence(event: ForensicTimelineEvent) {
+            out.line("             Evidence: ${dateOf(event)} ${timeOf(event)}  ${escapeForReport(event.description)}")
+        }
+
+        /** The date section an entry falls in: a day-precision date in UTC (R32), an instant on this device. */
+        private fun dateOf(event: ForensicTimelineEvent): String = when {
+            event.startTimestamp <= 0 -> "Unknown"
+            event.timestampPrecision == DAY_PRECISION -> CivilDay.format(event.startTimestamp)
+            else -> dateFmt.format(Date(event.startTimestamp))
+        }
+
+        private fun timeOf(event: ForensicTimelineEvent): String = when {
+            event.timestampPrecision == DAY_PRECISION -> "(date only)"
+            event.startTimestamp > 0 -> timeFmt.format(Date(event.startTimestamp))
+            else -> "??:??:??"
         }
 
         fun footer() {
@@ -221,8 +238,11 @@ object TimelineExporter {
 
     private fun utc(ms: Long): String = utcFormat.get()!!.format(Date(ms))
 
-    /** A day-precision time as its date, in the zone the day was recorded in (the device's). */
-    private fun date(ms: Long): String = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date(ms))
+    /**
+     * A day-precision time as its calendar date. It is stored as that date's UTC midnight (ruling
+     * R32), so it is read in UTC: the date the source printed, whatever this device's zone.
+     */
+    private fun date(ms: Long): String = CivilDay.format(ms)
 
     private fun Appendable.line(text: String) {
         append(text).append('\n')

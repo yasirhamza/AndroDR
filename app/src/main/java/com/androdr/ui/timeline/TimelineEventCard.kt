@@ -59,7 +59,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Surface
 import com.androdr.R
 import com.androdr.data.store.DecodedRecord
+import com.androdr.data.model.TimelineRowEntity
 import com.androdr.sigma.TimePrecision
+import java.util.TimeZone
 import com.androdr.reporting.escapeForReport
 import com.androdr.data.model.ForensicTimelineEvent
 import com.androdr.data.model.TelemetrySource
@@ -101,7 +103,7 @@ fun TimelineEventCard(
                 verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
                 Text(
-                    text = formatTime(event.startTimestamp),
+                    text = rowTime(event),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -234,7 +236,7 @@ fun TimelineEventDetailSheet(
                 Text(event.category, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
             }
             Text(
-                text = "${formatTime(event.startTimestamp)}  ${formatDate(event.startTimestamp)}",
+                text = "${rowTime(event)}  ${rowDate(event)}",
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -528,7 +530,7 @@ fun FactDetailSheet(record: DecodedRecord, onDismiss: () -> Unit) {
             Text(record.category ?: record.service, style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold)
             val time = record.eventTime ?: record.capturedAt
-            Text("${factTime(record, time)}  ${formatDate(time)}", style = MaterialTheme.typography.labelMedium,
+            Text("${factTime(record, time)}  ${factDate(record, time)}", style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant)
             HorizontalDivider()
             DetailSection(stringResource(R.string.timeline_detail_description),
@@ -624,6 +626,28 @@ internal fun factTime(record: DecodedRecord, timestamp: Long): String =
 
 /** The marker a day-precision event shows in place of a time of day. */
 internal const val DATE_ONLY = "(date only)"
+
+/**
+ * A fact's date: a day-precision fact's calendar date read in UTC (it is stored as that date's UTC
+ * midnight, ruling R32), so it is the date the source printed in any viewer zone; otherwise the
+ * instant's date on this device.
+ */
+internal fun factDate(record: DecodedRecord, timestamp: Long): String =
+    if (record.precision == TimePrecision.DAY) civilDate(timestamp) else formatDate(timestamp)
+
+/** A row's time of day, or [DATE_ONLY] for a day-precision row (an import finding on a battery day). */
+internal fun rowTime(event: ForensicTimelineEvent): String =
+    if (event.timestampPrecision.equals(TimelineRowEntity.DAY, ignoreCase = true)) DATE_ONLY
+    else formatTime(event.startTimestamp)
+
+/** A row's date; a day-precision row's calendar date in UTC (R32). */
+internal fun rowDate(event: ForensicTimelineEvent): String =
+    if (event.timestampPrecision.equals(TimelineRowEntity.DAY, ignoreCase = true)) civilDate(event.startTimestamp)
+    else formatDate(event.startTimestamp)
+
+private fun civilDate(ts: Long): String =
+    if (ts > 0) SimpleDateFormat("MMM dd, yyyy", Locale.US).apply { timeZone = TimeZone.getTimeZone("UTC") }
+        .format(Date(ts)) else "Unknown"
 
 private fun formatTime(ts: Long) =
     if (ts > 0) SimpleDateFormat("HH:mm:ss", Locale.US).format(Date(ts)) else "??:??:??"

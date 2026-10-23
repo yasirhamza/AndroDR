@@ -90,10 +90,13 @@ object TimelineQueries {
         return TimelineSql("SELECT " + parts.joinToString(" + ") { "(${it.sql})" }, parts.flatMap { it.args })
     }
 
+    // UNION ALL matches columns by position: ROW_COLS, FACT_COLS and SCAN_FACT_COLS list the same
+    // columns in the same order (TimelineQueryPlanTest checks it).
     private const val ROW_COLS = "SELECT ${TimelineRowEntity.ROW} AS rowKind, r.id AS id, r.id AS seq, " +
         "r.scanResultId AS scanId, r.startTimestamp AS time, r.category AS category, " +
         "r.packageName AS packageName, r.level AS level, r.ruleId AS ruleId, r.correlationId AS correlationId, " +
-        "r.kind AS kind, r.telemetrySource AS telemetrySource, NULL AS bodyHash, r.recordId AS recordId " +
+        "r.kind AS kind, r.telemetrySource AS telemetrySource, NULL AS bodyHash, r.recordId AS recordId, " +
+        "r.timestampPrecision AS timePrecision " +
         "FROM forensic_timeline r"
 
     private const val FACT_VALUE_COLS = "COALESCE(f.category, '') AS category, " +
@@ -102,11 +105,12 @@ object TimelineQueries {
 
     private const val FACT_COLS = "SELECT ${TimelineRowEntity.FACT} AS rowKind, f.id AS id, f.id AS seq, " +
         "-1 AS scanId, f.eventTime AS time, $FACT_VALUE_COLS, f.firstSource AS telemetrySource, " +
-        "f.bodyHash AS bodyHash, NULL AS recordId FROM telemetry_record f"
+        "f.bodyHash AS bodyHash, NULL AS recordId, f.timePrecision AS timePrecision FROM telemetry_record f"
 
     private const val SCAN_FACT_COLS = "SELECT ${TimelineRowEntity.FACT} AS rowKind, f.id AS id, o.rowid AS seq, " +
         "o.scanId AS scanId, o.eventTime AS time, $FACT_VALUE_COLS, o.source AS telemetrySource, " +
-        "f.bodyHash AS bodyHash, NULL AS recordId FROM scan_record o JOIN ScanResult s ON s.id = o.scanId " +
+        "f.bodyHash AS bodyHash, NULL AS recordId, f.timePrecision AS timePrecision FROM scan_record o " +
+        "JOIN ScanResult s ON s.id = o.scanId " +
         "JOIN telemetry_record f ON f.id = o.recordId"
 
     /** An event record (spec §3): it carries an event time. This is what excludes snapshot records. */
@@ -136,7 +140,7 @@ object TimelineQueries {
     }
 
     /** The row predicates of [filter] except the keyset; [driving] false writes every column `+col`. */
-    private fun rowFilter(filter: TimelineFilter, driving: Boolean): Where = Where().apply {
+    private fun rowFilter(filter: TimelineFilter, driving: Boolean, ranged: Boolean = true): Where = Where().apply {
         add(VisibleRow.SQL)
         val shape = filter.shape
         filter.scanId?.let { add(if (driving) "r.scanResultId = ?" else "+r.scanResultId = ?", it) }
@@ -145,8 +149,7 @@ object TimelineQueries {
         }
         filter.source?.let { add("+r.source = ?", it) }
         val time = if (driving) "r.startTimestamp" else "+r.startTimestamp"
-        filter.from?.let { add("$time >= ?", it) }
-        filter.to?.let { add("$time <= ?", it) }
+        if (ranged) addAll(timeRange(filter, time, "lower(r.timestampPrecision) = 'day'"))
         if (filter.levels.isNotEmpty()) {
             val levels = filter.levels.map { it.lowercase() }.distinct().sorted()
             addWithArgs("LOWER(r.level) IN (${levels.joinToString(", ") { "?" }})", levels)
@@ -156,7 +159,9 @@ object TimelineQueries {
 
     /** True for the facts nested under a visible row this filter shows (left out of the fact arm). */
     private fun notNested(filter: TimelineFilter): Where {
-        val inner = rowFilter(filter, driving = false)
+        // A day header counts what that day shows: a fact nested under a row of another day is shown
+        // (and counted) under that row's day, so the nesting check ignores the header's day range.
+        val inner = rowFilter(filter, driving = false, ranged = filter.civilDay == null)
         return Where().apply {
             addWithArgs("NOT EXISTS (SELECT 1 FROM forensic_timeline r WHERE r.recordId = f.id AND ${inner.sql})",
                 inner.args)
@@ -172,6 +177,21 @@ object TimelineQueries {
             add(if (shape == TimelineShape.PACKAGE) "f.packageName = ?" else "+f.packageName = ?", it)
         }
         filter.source?.let { add("+f.service = ?", it) }
+        addAll(timeRange(filter, time, "f.timePrecision = 'DAY'"))
+    }
+
+    /**
+     * The filter's time range over [time]. For a day header's count ([TimelineFilter.civilDay] set),
+     * a day-precision entry belongs to the day of its calendar date (stored as that date's UTC
+     * midnight, ruling R32), not to the day its stored instant falls on in the filter zone.
+     */
+    private fun timeRange(filter: TimelineFilter, time: String, isDay: String): Where = Where().apply {
+        val day = filter.civilDay
+        if (day != null) {
+            add("(($time >= ? AND $time <= ? AND NOT ($isDay)) OR ($time = ? AND $isDay))",
+                filter.from ?: Long.MIN_VALUE, filter.to ?: Long.MAX_VALUE, day)
+            return@apply
+        }
         filter.from?.let { add("$time >= ?", it) }
         filter.to?.let { add("$time <= ?", it) }
     }

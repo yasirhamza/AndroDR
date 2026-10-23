@@ -141,9 +141,9 @@ class TimelineViewModel @Inject constructor(
             TimelinePagingSource(db, filter, entries)
         }.flow.map { data ->
             data.insertSeparators<TimelineRow.Entry, TimelineRow> { before, after ->
-                val next = after?.let { filter.dayOf(it.timestamp) }
-                val prev = before?.let { filter.dayOf(it.timestamp) }
-                if (next != null && next != prev) TimelineRow.DayHeader(next) else null
+                val next = after?.let { filter.dayOf(it.timestamp, it.entity.isDay) }
+                val prev = before?.let { filter.dayOf(it.timestamp, it.entity.isDay) }
+                if (next != null && next != prev) TimelineRow.DayHeader(next, after.key) else null
             }
         }
     }.cachedIn(viewModelScope)
@@ -219,7 +219,10 @@ class TimelineViewModel @Inject constructor(
     fun generateReport() {
         viewModelScope.launch {
             try {
-                val file = withContext(Dispatchers.IO) { newReportFile("txt").also { writePlaintext(it) } }
+                val filter = _filter.value
+                val file = withContext(Dispatchers.IO) {
+                    newReportFile("txt", filter).also { writePlaintext(it, filter) }
+                }
                 reportFile = file
                 _report.value = withContext(Dispatchers.IO) { preview(file) }
             } catch (e: Exception) {
@@ -241,12 +244,16 @@ class TimelineViewModel @Inject constructor(
     @Suppress("TooGenericExceptionCaught") // Export can throw IOException (disk full, no
     // permission) or SecurityException (FileProvider misconfiguration) — catching Exception
     // ensures the exporting flag is always reset and the error is logged regardless of type.
-    private fun export(extension: String, write: suspend (File) -> Unit) {
+    private fun export(extension: String, write: suspend (File, TimelineFilter) -> Unit) {
         if (_exporting.value) return
+        // One filter for the whole export: the file name's label and the content can never disagree.
+        val filter = _filter.value
         viewModelScope.launch {
             _exporting.value = true
             try {
-                _shareUri.value = withContext(Dispatchers.IO) { uriOf(newReportFile(extension).also { write(it) }) }
+                _shareUri.value = withContext(Dispatchers.IO) {
+                    uriOf(newReportFile(extension, filter).also { write(it, filter) })
+                }
             } catch (e: Exception) {
                 android.util.Log.e(TAG, "Export failed: ${e.message}", e)
             } finally {
@@ -256,8 +263,7 @@ class TimelineViewModel @Inject constructor(
     }
 
     /** Streams the current filter's Timeline as CSV, oldest first, one page at a time. */
-    private suspend fun writeCsv(file: File) {
-        val filter = _filter.value
+    private suspend fun writeCsv(file: File, filter: TimelineFilter) {
         file.bufferedWriter(Charsets.UTF_8).use { out ->
             TimelineExporter.writeCsvHeader(out)
             entries.forEachPage(filter, oldestFirst = true, size = EXPORT_PAGE) { page ->
@@ -273,8 +279,7 @@ class TimelineViewModel @Inject constructor(
      * to write. The two passes are separate reads, so a scan completing between them can make the
      * header's totals differ slightly from the body; neither pass holds the whole Timeline.
      */
-    private suspend fun writePlaintext(file: File) {
-        val filter = _filter.value
+    private suspend fun writePlaintext(file: File, filter: TimelineFilter) {
         val stats = TimelineExporter.PlaintextStats(buildRuleGuidance())
         entries.forEachPage(filter, oldestFirst = false, size = EXPORT_PAGE) { page ->
             page.forEach { entry -> entry.exportEvents().forEach(stats::add) }
@@ -286,7 +291,7 @@ class TimelineViewModel @Inject constructor(
             }
             writer.header(stats, appContext.appVersion().name, filter.describe())
             entries.forEachPage(filter, oldestFirst = false, size = EXPORT_PAGE) { page ->
-                page.forEach { entry -> entry.exportEvents().forEach(writer::event) }
+                page.forEach(writer::entry)
             }
             writer.footer()
         }
@@ -300,10 +305,10 @@ class TimelineViewModel @Inject constructor(
             .groupBy({ it.signalRowId }, { "${it.kind}:${it.refId}" })
     }
 
-    private fun newReportFile(extension: String): File {
+    private fun newReportFile(extension: String, filter: TimelineFilter): File {
         val reportsDir = File(appContext.cacheDir, "reports").apply { mkdirs() }
         val ts = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
-        val suffix = if (_filter.value.describe() != null) "_filtered" else ""
+        val suffix = if (filter.describe() != null) "_filtered" else ""
         return File(reportsDir, "androdr_timeline_$ts$suffix.$extension")
     }
 
@@ -372,6 +377,16 @@ internal fun TimelineRow.Entry.exportEvents(): List<ForensicTimelineEvent> = whe
 }
 
 /**
+ * Writes one Timeline entry: the entry itself, then (for a row) its nested evidence inside the
+ * row's date section (re-review n5: evidence of another day never repeats a date header).
+ */
+internal fun TimelineExporter.PlaintextWriter.entry(entry: TimelineRow.Entry) {
+    val lines = entry.exportEvents()
+    event(lines.first())
+    lines.drop(1).forEach(::evidence)
+}
+
+/**
  * A stored fact as an exported `event` row: its display summary as the description, its fact id as
  * `recordId`, and row id 0 (never colliding with a signal row's member refs). [scanId] is the scan
  * the Timeline read it under, when known (≥ 0); [packageName] the fact's computed package, when the
@@ -407,7 +422,11 @@ internal fun TimelineFilter.describe(): String? = buildList {
     scanId?.let { add("scan $it") }
     packageName?.let { add("package $it") }
     source?.let { add("source $it") }
-    if (from != null || to != null) add("time ${from ?: "-"}..${to ?: "-"}")
+    if (from != null || to != null) {
+        fun iso(ms: Long?) =
+            ms?.let { java.time.Instant.ofEpochMilli(it).atZone(zone).toLocalDateTime().toString() } ?: "-"
+        add("time ${iso(from)}..${iso(to)} ($zone)")
+    }
     if (levels.isNotEmpty()) add("severity ${levels.sorted().joinToString("/")}")
     if (findingsAndEvidenceOnly) add("findings and their evidence only")
 }.takeIf { it.isNotEmpty() }?.joinToString(", ")

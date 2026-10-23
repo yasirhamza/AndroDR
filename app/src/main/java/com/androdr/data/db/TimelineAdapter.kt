@@ -6,6 +6,7 @@ import com.androdr.data.model.ScanResult
 import com.androdr.sigma.Evidence
 import com.androdr.sigma.Finding
 import com.androdr.sigma.FindingCategory
+import com.androdr.sigma.TAXONOMY_CONTRACT_TABLE
 
 fun DnsEvent.toForensicTimelineEvent(): ForensicTimelineEvent =
     toForensicTimelineEvent(indicator = null)
@@ -81,33 +82,15 @@ fun Finding.toForensicTimelineEvent(
     val dnsIocType = iocEvidence?.iocType ?: (if (dnsMatchedDomain != null) "domain" else "")
     val dnsIocSource = iocEvidence?.source ?: (if (dnsMatchedDomain != null) "dns_monitor" else "")
 
-    // Runtime-scan findings use the scan timestamp. Bug-report findings try
-    // to inherit a real per-event timestamp from their evidence:
-    //
-    //   * Modules that know a real event time (e.g. `AppOpsModule` knows
-    //     `last_access_time` for each dangerous-op record) publish it under
-    //     the telemetry map key `event_time_ms` (epoch ms Long).
-    //   * `SigmaRuleEvaluator.buildFinding` copies scalar record fields
-    //     into `matchContext` as strings, so the Finding inherits the
-    //     `event_time_ms` string automatically.
-    //   * Here we parse it back to a Long and use it as the persisted
-    //     event's `timestamp`. If it's missing or unparseable, we fall
-    //     back to 0L, which the Timeline UI renders as "Unknown" — the
-    //     honest answer for SIGMA rules that fire on stateful data
-    //     without a meaningful event time (e.g. receiver registrations).
-    //
-    // This is strictly better than the previous unconditional 0L for bug
-    // reports: AppOps-derived findings (Camera Access, Microphone Access,
-    // etc.) now show the real time the dangerous op was last invoked,
-    // instead of "Unknown".
-    val eventTimestamp = if (isBugreport) {
-        this.matchContext["event_time_ms"]?.toLongOrNull()?.takeIf { it > 0L } ?: 0L
-    } else {
-        scanResult.timestamp
-    }
+    // Runtime-scan findings use the scan timestamp. Import findings inherit the event time of the
+    // record they matched (FindingEventTime), with its precision; a finding on a record with no
+    // event time (a snapshot) stays at 0L, which the Timeline renders as "Unknown date".
+    val recorded = if (isBugreport) FindingEventTime.of(this) else null
+    val eventTimestamp = if (isBugreport) recorded?.time ?: 0L else scanResult.timestamp
 
     return ForensicTimelineEvent(
         startTimestamp = eventTimestamp,
+        timestampPrecision = if (recorded?.day == true) DAY_PRECISION else EXACT_PRECISION,
         source = if (isBugreport) "bugreport_analysis" else "app_scanner",
         category = when (this.category) {
             FindingCategory.APP_RISK -> "app_risk"
@@ -158,4 +141,30 @@ private fun extractDnsIocSource(reason: String?): String = when {
     reason.startsWith("IOC:") || reason.startsWith("IOC_detect:") -> "domain_ioc_feed"
     reason == "blocklist" || reason == "blocklist_detect" -> "blocklist"
     else -> ""
+}
+
+private const val DAY_PRECISION = "day"
+private const val EXACT_PRECISION = "exact"
+
+/**
+ * The event time a finding inherits from the record it matched (C4 review n1).
+ * `SigmaRuleEvaluator.buildFinding` copies a record's scalar fields into `matchContext` as strings,
+ * so the record's event-time field is there under its taxonomy name: `event_time_ms` (AppOps),
+ * `timestamp` (battery days, security log, DNS, connections, usage, install history),
+ * `crash_timestamp`, `acquired_at`. [FIELDS] is every service's event-time field, read from the
+ * taxonomy (so a new service is covered); only event services carry these names. A day-precision
+ * record's time is its calendar date ([com.androdr.data.model.CivilDay], R32).
+ */
+internal object FindingEventTime {
+    data class Time(val time: Long, val day: Boolean)
+
+    val FIELDS: List<String> = TAXONOMY_CONTRACT_TABLE.values.mapNotNull { it.eventTimeField }.distinct()
+    val PRECISION_FIELDS: List<String> = TAXONOMY_CONTRACT_TABLE.values.mapNotNull { it.precisionField }.distinct()
+
+    fun of(finding: Finding): Time? {
+        val time = FIELDS.firstNotNullOfOrNull { finding.matchContext[it]?.toLongOrNull()?.takeIf { t -> t > 0L } }
+            ?: return null
+        val day = PRECISION_FIELDS.any { finding.matchContext[it].equals(DAY_PRECISION, ignoreCase = true) }
+        return Time(time, day)
+    }
 }
