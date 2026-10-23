@@ -28,6 +28,7 @@ class InstallTimeModule {
 
     private val packageHeaderRegex = Regex("""^Package \[([^\]]+)\]""", RegexOption.MULTILINE)
     private val firstInstallRegex = Regex("""firstInstallTime=([\d\- :]+)""")
+    private val lastUpdateRegex = Regex("""lastUpdateTime=([\d\- :]+)""")
 
     // DateTimeFormatter is immutable and thread-safe; SimpleDateFormat is not.
     // Timestamps are interpreted as UTC for determinism: bug reports do not
@@ -42,7 +43,12 @@ class InstallTimeModule {
 
     private val versionCodeRegex = Regex("""versionCode=(\d+)""")
 
-    private data class ParsedPackage(val name: String, val firstInstallMs: Long, val versionCode: Long?)
+    private data class ParsedPackage(
+        val name: String,
+        val firstInstallMs: Long,
+        val lastUpdateMs: Long?,
+        val versionCode: Long?,
+    )
 
     fun parseSection(text: String): List<ForensicTimelineEvent> = parsePackages(text).map {
         ForensicTimelineEvent(
@@ -57,17 +63,36 @@ class InstallTimeModule {
         )
     }
 
-    /** The typed install-history records for the same packages [parseSection] turns into rows. */
+    /**
+     * The typed install-history records for the same packages [parseSection] turns into rows:
+     * an INSTALL per `firstInstallTime`, plus an UPDATE per parsed `lastUpdateTime` that differs
+     * from `firstInstallTime` (equal values are the same instant, so no update happened).
+     */
     fun parseHistory(text: String, capturedAt: Long): List<PackageInstallHistoryEntry> =
-        parsePackages(text).map {
-            PackageInstallHistoryEntry(
-                packageName = it.name,
-                eventType = PackageHistoryEventType.INSTALL,
-                timestamp = it.firstInstallMs,
-                versionCode = it.versionCode,
+        parsePackages(text).flatMap { p ->
+            fun entry(type: PackageHistoryEventType, ts: Long) = PackageInstallHistoryEntry(
+                packageName = p.name,
+                eventType = type,
+                timestamp = ts,
+                versionCode = p.versionCode,
                 source = TelemetrySource.BUGREPORT_IMPORT,
                 capturedAt = capturedAt,
             )
+            listOfNotNull(
+                entry(PackageHistoryEventType.INSTALL, p.firstInstallMs),
+                p.lastUpdateMs?.takeIf { it != p.firstInstallMs }
+                    ?.let { entry(PackageHistoryEventType.UPDATE, it) },
+            )
+        }
+
+    private fun parseTime(regex: Regex, block: String, label: String): Long? =
+        regex.find(block)?.groupValues?.get(1)?.trim()?.let { raw ->
+            runCatching {
+                LocalDateTime.parse(raw, dateFormatter).toInstant(ZoneOffset.UTC).toEpochMilli()
+            }.getOrElse {
+                android.util.Log.w("InstallTimeModule", "Failed to parse $label='$raw'", it)
+                null
+            }
         }
 
     private fun parsePackages(text: String): List<ParsedPackage> {
@@ -83,20 +108,12 @@ class InstallTimeModule {
             }
             val packageBlock = text.substring(match.range.first, sectionEnd)
 
-            val firstInstallMs = firstInstallRegex.find(packageBlock)
-                ?.groupValues?.get(1)?.trim()
-                ?.let { raw ->
-                    runCatching {
-                        LocalDateTime.parse(raw, dateFormatter).toInstant(ZoneOffset.UTC).toEpochMilli()
-                    }.getOrElse {
-                        android.util.Log.w("InstallTimeModule", "Failed to parse firstInstallTime='$raw'", it)
-                        null
-                    }
-                }
+            val firstInstallMs = parseTime(firstInstallRegex, packageBlock, "firstInstallTime")
                 ?: return@mapIndexedNotNull null
+            val lastUpdateMs = parseTime(lastUpdateRegex, packageBlock, "lastUpdateTime")
 
             val versionCode = versionCodeRegex.find(packageBlock)?.groupValues?.get(1)?.toLongOrNull()
-            ParsedPackage(pkg, firstInstallMs, versionCode)
+            ParsedPackage(pkg, firstInstallMs, lastUpdateMs, versionCode)
         }
     }
 }

@@ -3,6 +3,7 @@ package com.androdr.scanner
 import android.content.ContentResolver
 import android.content.Context
 import android.net.Uri
+import com.androdr.data.model.PackageHistoryEventType
 import com.androdr.ioc.DeviceIdentity
 import com.androdr.ioc.IndicatorResolver
 import com.androdr.ioc.OemPrefixResolver
@@ -25,7 +26,6 @@ import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -69,23 +69,31 @@ class BugReportTypedRecordsTest {
     fun setUp() {
         resolver = mockk(relaxed = true)
         every { resolver.isKnownBadPackage(any()) } returns null
-        val bytes = zipBytes(fixtureText())
+        analyzer = buildAnalyzer(fixtureText(), defaultModules())
+    }
+
+    private fun defaultModules(battery: BatteryDailyModule = BatteryDailyModule()): Set<BugreportModule> {
+        val oem = mockk<OemPrefixResolver>(relaxed = true)
+        return setOf(
+            AccessibilityModule(oem), ActivityModule(oem), AdbKeysModule(), AppOpsModule(),
+            battery, DbInfoModule(), PlatformCompatModule(), ReceiverModule(oem),
+        )
+    }
+
+    private fun buildAnalyzer(text: String, modules: Set<BugreportModule>): BugReportAnalyzer {
+        val bytes = zipBytes(text)
         val contentResolver = mockk<ContentResolver>()
         every { contentResolver.openInputStream(any()) } answers { ByteArrayInputStream(bytes) }
         val context = mockk<Context>(relaxed = true)
         every { context.contentResolver } returns contentResolver
-        val oem = mockk<OemPrefixResolver>(relaxed = true)
-        val modules: Set<BugreportModule> = setOf(
-            AccessibilityModule(oem), ActivityModule(oem), AdbKeysModule(), AppOpsModule(),
-            BatteryDailyModule(), DbInfoModule(), PlatformCompatModule(), ReceiverModule(oem),
-        )
-        analyzer = BugReportAnalyzer(
+        return BugReportAnalyzer(
             context, resolver, modules, SigmaRuleEngine(mockk<Context>(relaxed = true)),
             TombstoneParser(), WakelockParser(), GetpropParser(),
         )
     }
 
-    private fun analyze() = runBlocking { analyzer.analyze(Uri.parse("content://test/bugreport.zip")) }
+    private fun analyze(a: BugReportAnalyzer = analyzer) =
+        runBlocking { a.analyze(Uri.parse("content://test/bugreport.zip")) }
 
     @Test
     fun `every typed list is non-empty`() {
@@ -110,22 +118,27 @@ class BugReportTypedRecordsTest {
     }
 
     @Test
-    fun `install history carries version code and install time`() {
+    fun `install history is the exact INSTALL and UPDATE list`() {
+        fun ms(m: Int, d: Int, h: Int, mi: Int) =
+            LocalDateTime.of(2026, m, d, h, mi, 0).toInstant(ZoneOffset.UTC).toEpochMilli()
         val history = analyze().telemetryBundle.packageInstallHistory
-        val alpha = history.first { it.packageName == "com.example.alpha" }
-        assertEquals(100L, alpha.versionCode)
+        // beta's lastUpdateTime equals its firstInstallTime: the same instant, so no UPDATE.
         assertEquals(
-            LocalDateTime.of(2026, 3, 1, 8, 0, 0).toInstant(ZoneOffset.UTC).toEpochMilli(),
-            alpha.timestamp,
+            listOf(
+                Triple("com.example.alpha", PackageHistoryEventType.INSTALL, ms(3, 1, 8, 0)),
+                Triple("com.example.alpha", PackageHistoryEventType.UPDATE, ms(3, 20, 9, 0)),
+                Triple("com.example.beta", PackageHistoryEventType.INSTALL, ms(3, 5, 12, 30)),
+            ),
+            history.map { Triple(it.packageName, it.eventType, it.timestamp) },
         )
-        assertEquals(2, history.size)
+        assertEquals(listOf(100L, 100L, 7L), history.map { it.versionCode })
     }
 
     @Test
     fun `platform compat parses enabled`() {
         val compat = analyze().telemetryBundle.platformCompatChanges
-        assertTrue(compat.first { it.changeId == "168419799" }.enabled)
-        assertFalse(compat.first { it.changeId == "999999999" }.enabled)
+        assertEquals(true, compat.first { it.changeId == "168419799" }.enabled)
+        assertEquals(false, compat.first { it.changeId == "999999999" }.enabled)
     }
 
     @Test
@@ -158,7 +171,28 @@ class BugReportTypedRecordsTest {
         val history = InstallTimeModule().parseHistory(section, capturedAt = 1L)
         assertEquals(
             rows.map { it.packageName to it.startTimestamp },
-            history.map { it.packageName to it.timestamp },
+            history.filter { it.eventType == PackageHistoryEventType.INSTALL }
+                .map { it.packageName to it.timestamp },
         )
+    }
+
+    @Test
+    fun `wakelock time falls back to import time when the dumpstate header is missing`() {
+        val noHeader = fixtureText().lines().filterNot { it.startsWith("== dumpstate:") }.joinToString("\n")
+        val offset = 2 * 3_600_000L + 15 * 60_000L + 30_000L
+        val before = System.currentTimeMillis()
+        val wakelock = analyze(buildAnalyzer(noHeader, defaultModules()))
+            .telemetryBundle.wakelockAcquisitions.single()
+        val after = System.currentTimeMillis()
+        assertTrue(wakelock.acquiredAt + offset in before..after)
+    }
+
+    @Test
+    fun `a module that trips its record bound is reported in boundTrips`() {
+        val tripping = buildAnalyzer(fixtureText(), defaultModules(BatteryDailyModule(maxRecords = 1)))
+        val result = analyze(tripping)
+        assertEquals(1, result.telemetryBundle.batteryDailyEvents.size)
+        assertEquals(listOf("BatteryDailyModule: stopped at 1 records"), result.boundTrips)
+        assertTrue(analyze().boundTrips.isEmpty())
     }
 }

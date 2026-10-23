@@ -62,4 +62,15 @@ class DbInfoModuleTest {
         assertTrue(result.telemetry.isEmpty())
         assertTrue(result.typed.databasePathObservations.isEmpty())
     }
+
+    @Test
+    fun `module stops at the record bound and reports the trip`() = runBlocking {
+        val section = (1..10).joinToString("\n") {
+            "Connection pool for /data/user/0/com.p$it/databases/a.db:\n  Pool size: 1"
+        }
+        val result = DbInfoModule(maxRecords = 3)
+            .analyze(section, mockIndicatorResolver, com.androdr.ioc.DeviceIdentity.UNKNOWN)
+        assertEquals(3, result.typed.databasePathObservations.size)
+        assertEquals(3, result.truncatedAt)
+    }
 }

@@ -12,7 +12,8 @@ package com.androdr.data.model
  * @property filePath the observed database file path
  * @property processName the process that referenced it, if known
  * @property packageName the owning package, if derivable
- * @property observationTimestamp epoch milliseconds of the reference
+ * @property observationTimestamp epoch milliseconds of the reference. For bug-report records this
+ *   is the import time: the dbinfo section carries no clock of its own
  * @property dbPath the database path as referenced in the bug report (typed bug-report records
  *   only; same value as [filePath])
  * @property recentQueryCount how many recently executed SQL statements the dbinfo pool lists

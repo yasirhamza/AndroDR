@@ -47,9 +47,8 @@ class PlatformCompatModule internal constructor(private val maxRecords: Int) : B
                 truncatedAt = maxRecords
                 break
             }
-            // An override is listed because it is applied; an entry that does not state
-            // `enabled=` is therefore recorded as enabled.
-            val enabled = enabledRegex.find(match.groupValues[2])?.groupValues?.get(1) != "false"
+            // null when the line does not state `enabled=`; never guessed.
+            val enabled = enabledRegex.find(match.groupValues[2])?.groupValues?.get(1)?.toBooleanStrict()
             changes.add(PlatformCompatChange(
                 changeId = match.groupValues[1],
                 packageName = match.groupValues[3],

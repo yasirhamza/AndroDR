@@ -63,9 +63,11 @@ internal fun PackageInstallHistoryEntry.toFieldMap(): Map<String, Any?> = mapOf(
 internal fun PlatformCompatChange.toFieldMap(): Map<String, Any?> = mapOf(
     "change_id" to changeId,
     "package_name" to packageName,
-    "enabled" to enabled,
     "source" to source.name,
     "captured_at" to capturedAt,
+) + listOfNotNull(
+    // Omitted when the dumpsys line does not state it (optional field).
+    enabled?.let { "enabled" to it },
 )
 
 internal fun DatabasePathObservation.toFieldMap(): Map<String, Any?> = mapOf(
