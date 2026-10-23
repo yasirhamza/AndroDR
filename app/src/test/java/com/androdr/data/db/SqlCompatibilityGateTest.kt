@@ -77,6 +77,10 @@ class SqlCompatibilityGateTest {
             " suspend fun byIds(ids: List<Long>): List<T>\n" +
             " @Query(\"SELECT 1\")\n suspend fun one(): Int\n @Insert suspend fun ins(x: List<T>)\n}"
         assertEquals(listOf("byIds"), listParamQueryNames(dao))
+        // A multi-line @Query( "..." + "..." ) is recognised too.
+        val multi = "@Query(\n  \"SELECT * FROM t \" +\n  \"WHERE id IN (:ids)\"\n)\n" +
+            "suspend fun many(ids: List<Long>): List<T>"
+        assertEquals(listOf("many"), listParamQueryNames(multi))
         assertEquals(listOf("byIds"), unchunkedCalls("val r = dao.byIds(keys)", listOf("byIds")))
         val ok = "val r = chunkedIn(keys) { c ->\n dao.byIds(c)\n}"
         assertTrue(unchunkedCalls(ok, listOf("byIds")).isEmpty())
@@ -100,7 +104,7 @@ class SqlCompatibilityGateTest {
     private fun listParamQueryNames(src: String): List<String> {
         val quoted = "\"(?:[^\"\\\\]|\\\\.)*\""
         val re = Regex(
-            "@Query\\((?:\"\"\"[\\s\\S]*?\"\"\"|$quoted)(?:\\s*\\+\\s*$quoted)*\\)\\s*" +
+            "@Query\\(\\s*(?:\"\"\"[\\s\\S]*?\"\"\"|$quoted)(?:\\s*\\+\\s*$quoted)*\\s*\\)\\s*" +
                 "(?:@\\w+\\s*)*(?:suspend\\s+)?fun\\s+(\\w+)\\s*\\(([^)]*)\\)"
         )
         val listy = Regex("(?:vararg\\s|:\\s*(?:List|Collection|Set|Iterable|Array)<)")

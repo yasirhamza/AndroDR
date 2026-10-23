@@ -29,6 +29,13 @@ interface ScanObservationDao {
     @Query("DELETE FROM scan_record WHERE scanId = :scanId")
     suspend fun deleteForScan(scanId: Long)
 
+    /** Deletes [scanId]'s observations up to and including `(service, ordinal)` in PK order. */
+    @Query(
+        "DELETE FROM scan_record WHERE scanId = :scanId " +
+            "AND (service < :service OR (service = :service AND ordinal <= :ordinal))"
+    )
+    suspend fun deleteThrough(scanId: Long, service: String, ordinal: Int)
+
     @Query(
         "SELECT ordinal, recordId FROM scan_record WHERE scanId = :scanId AND service = :service " +
             "AND ordinal IN (:ordinals)"

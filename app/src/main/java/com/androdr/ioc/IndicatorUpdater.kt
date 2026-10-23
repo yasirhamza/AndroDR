@@ -2,6 +2,7 @@ package com.androdr.ioc
 
 import android.util.Log
 import com.androdr.data.db.IndicatorDao
+import com.androdr.data.db.chunkedIn
 import com.androdr.data.model.CertHashIocEntry
 import com.androdr.data.model.DomainIocEntry
 import com.androdr.data.model.IocEntry
@@ -79,7 +80,9 @@ class IndicatorUpdater @Inject constructor(
         // A lower-ranked feed never overwrites a value a higher-ranked source owns (spec R18).
         val (above, mvt) = SourceRank.above(feed.sourceId)
         val toWrite = entries.groupBy { it.type }.flatMap { (type, rows) ->
-            val owned = dao.ownedValues(type, above, mvt).toHashSet()
+            // `above` is the short fixed rank list; chunkedIn keeps the bind-limit invariant (Q1). An empty
+            // list still needs one query for the MVT branch, so it binds a source id that never exists.
+            val owned = chunkedIn(above.ifEmpty { listOf("") }) { dao.ownedValues(type, it, mvt) }.toHashSet()
             if (owned.isEmpty()) rows else rows.filter { it.value !in owned }
         }
         // Upsert in bounded chunks rather than one giant transaction. A single

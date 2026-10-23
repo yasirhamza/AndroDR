@@ -1,0 +1,139 @@
+package com.androdr.data.db
+
+import androidx.room.Dao
+import androidx.room.Query
+import com.androdr.data.model.TelemetrySource
+
+/**
+ * One stored record as read back: the fact, its body and (for an observed fact) the observation.
+ * A pinned orphan (no observation left, spec §5.1) has [scanId] and [ordinal] −1, a null
+ * [source], [capturedAt] 0 and [strippedKeys] 0. Plain: holds a `ByteArray`.
+ */
+@Suppress("LongParameterList")
+class StoredRecordRow(
+    val factId: Long,
+    val scanId: Long,
+    val service: String,
+    val ordinal: Int,
+    val source: TelemetrySource?,
+    val capturedAt: Long,
+    val strippedKeys: Int,
+    val eventTime: Long?,
+    val timePrecision: String,
+    val category: String?,
+    val subjectKey: String?,
+    val encoding: Int,
+    val dictVersion: Int,
+    val body: ByteArray,
+    val rawBytes: Int,
+)
+
+/** How many records one scan holds for one service. */
+data class ServiceSummary(val service: String, val records: Int)
+
+/** Distinct bodies of one encoding (−1 for the pinned-orphan total) and their sizes. */
+data class BodyStatsRow(val encoding: Int, val bodies: Long, val storedBytes: Long, val rawBytes: Long)
+
+/**
+ * Reader side of the telemetry store (spec §5.1). Every query applies the visibility rule:
+ * scan-scoped reads require their scan `COMPLETE` ([CompleteScan]); fact reads use
+ * [VisibleFact] (a `COMPLETE` observation, or no observation and pinned). Paging is keyset on
+ * `ordinal`, never OFFSET. List-parameter queries go through [chunkedIn].
+ */
+@Dao
+interface TelemetryReadDao {
+
+    @Query(
+        "SELECT o.service AS service, COUNT(*) AS records FROM scan_record o " +
+            "JOIN ScanResult s ON s.id = o.scanId WHERE o.scanId = :scanId AND ${CompleteScan.SQL} " +
+            "GROUP BY o.service ORDER BY o.service"
+    )
+    suspend fun services(scanId: Long): List<ServiceSummary>
+
+    /** Records of one scan and service with `ordinal > after`, ascending. */
+    @Query("SELECT $OBS_COLS $OBS_FROM WHERE o.scanId = :scanId AND o.service = :service " +
+        "AND o.ordinal > :after AND ${CompleteScan.SQL} ORDER BY o.ordinal LIMIT :size")
+    suspend fun pageAfter(scanId: Long, service: String, after: Int, size: Int): List<StoredRecordRow>
+
+    /** Records of one scan and service with `ordinal < before`, DESCENDING (the prepend query). */
+    @Query("SELECT $OBS_COLS $OBS_FROM WHERE o.scanId = :scanId AND o.service = :service " +
+        "AND o.ordinal < :before AND ${CompleteScan.SQL} ORDER BY o.ordinal DESC LIMIT :size")
+    suspend fun pageBefore(scanId: Long, service: String, before: Int, size: Int): List<StoredRecordRow>
+
+    /** Every visible observation of a subject (COMPLETE scans), then its pinned orphans. */
+    @Query(
+        "SELECT $OBS_COLS $OBS_FROM WHERE f.service = :service AND f.subjectKey = :subjectKey " +
+            "AND ${CompleteScan.SQL} UNION ALL SELECT $ORPHAN_COLS FROM telemetry_record f " +
+            "JOIN record_body b ON b.hash = f.bodyHash WHERE f.service = :service AND f.subjectKey = :subjectKey " +
+            "AND ${VisibleFact.PINNED_ORPHAN} ORDER BY capturedAt, scanId, ordinal"
+    )
+    suspend fun history(service: String, subjectKey: String): List<StoredRecordRow>
+
+    /**
+     * Of [ids], the visible facts, each with its newest `COMPLETE` observation (or none, for a
+     * pinned orphan). Call through [chunkedIn].
+     */
+    @Query(
+        "SELECT f.id AS factId, COALESCE(o.scanId, -1) AS scanId, f.service AS service, " +
+            "COALESCE(o.ordinal, -1) AS ordinal, o.source AS source, COALESCE(o.capturedAt, 0) AS capturedAt, " +
+            "COALESCE(o.strippedKeys, 0) AS strippedKeys, $FACT_BODY_COLS FROM telemetry_record f " +
+            "JOIN record_body b ON b.hash = f.bodyHash LEFT JOIN scan_record o ON o.recordId = f.id AND o.scanId = " +
+            "(SELECT MAX(o2.scanId) FROM scan_record o2 JOIN ScanResult s2 ON s2.id = o2.scanId " +
+            "WHERE o2.recordId = f.id AND s2.state = 'COMPLETE') WHERE f.id IN (:ids) AND ${VisibleFact.SQL}"
+    )
+    suspend fun records(ids: List<Long>): List<StoredRecordRow>
+
+    /**
+     * Records of [scanId] (COMPLETE) for [service] whose fact [otherScanId] (also COMPLETE) did
+     * not observe, keyset on `ordinal`.
+     */
+    @Query(
+        "SELECT $OBS_COLS $OBS_FROM WHERE o.scanId = :scanId AND o.service = :service " +
+            "AND o.ordinal > :after AND ${CompleteScan.SQL} " +
+            "AND EXISTS (SELECT 1 FROM ScanResult so WHERE so.id = :otherScanId AND so.state = 'COMPLETE') " +
+            "AND NOT EXISTS (SELECT 1 FROM scan_record x WHERE x.scanId = :otherScanId AND x.recordId = o.recordId) " +
+            "ORDER BY o.ordinal LIMIT :size"
+    )
+    suspend fun onlyIn(scanId: Long, otherScanId: Long, service: String, after: Int, size: Int): List<StoredRecordRow>
+
+    /** The newest COMPLETE live scan that observed [service] at or after [since], if any. */
+    @Query(
+        "SELECT MAX(o.scanId) FROM scan_record o JOIN ScanResult s ON s.id = o.scanId " +
+            "WHERE o.service = :service AND o.source = 'LIVE_SCAN' AND ${CompleteScan.SQL} AND o.capturedAt >= :since"
+    )
+    suspend fun latestLiveScan(service: String, since: Long): Long?
+
+    /** Distinct bodies of facts observed by a COMPLETE scan, by encoding. */
+    @Query(
+        "SELECT b.encoding AS encoding, COUNT(*) AS bodies, COALESCE(SUM(LENGTH(b.body)), 0) AS storedBytes, " +
+            "COALESCE(SUM(b.rawBytes), 0) AS rawBytes FROM record_body b WHERE EXISTS (SELECT 1 FROM " +
+            "telemetry_record f JOIN scan_record o ON o.recordId = f.id JOIN ScanResult s ON s.id = o.scanId " +
+            "WHERE f.bodyHash = b.hash AND ${CompleteScan.SQL}) GROUP BY b.encoding ORDER BY b.encoding"
+    )
+    suspend fun storageObserved(): List<BodyStatsRow>
+
+    /** Distinct bodies held only by pinned orphan facts (not counted by [storageObserved]). */
+    @Query(
+        "SELECT -1 AS encoding, COUNT(*) AS bodies, COALESCE(SUM(LENGTH(b.body)), 0) AS storedBytes, " +
+            "COALESCE(SUM(b.rawBytes), 0) AS rawBytes FROM record_body b WHERE EXISTS (SELECT 1 FROM " +
+            "telemetry_record f WHERE f.bodyHash = b.hash AND ${VisibleFact.PINNED_ORPHAN}) AND NOT EXISTS " +
+            "(SELECT 1 FROM telemetry_record f2 JOIN scan_record o ON o.recordId = f2.id " +
+            "JOIN ScanResult s ON s.id = o.scanId WHERE f2.bodyHash = b.hash AND ${CompleteScan.SQL})"
+    )
+    suspend fun storageOrphans(): BodyStatsRow
+
+}
+
+// Column lists shared by [TelemetryReadDao] queries (aliases: o observation, s scan, f fact, b body).
+internal const val FACT_BODY_COLS = "f.eventTime AS eventTime, f.timePrecision AS timePrecision, " +
+    "f.category AS category, f.subjectKey AS subjectKey, b.encoding AS encoding, " +
+    "b.dictVersion AS dictVersion, b.body AS body, b.rawBytes AS rawBytes"
+internal const val OBS_COLS = "f.id AS factId, o.scanId AS scanId, f.service AS service, " +
+    "o.ordinal AS ordinal, o.source AS source, o.capturedAt AS capturedAt, " +
+    "o.strippedKeys AS strippedKeys, $FACT_BODY_COLS"
+internal const val ORPHAN_COLS = "f.id AS factId, -1 AS scanId, f.service AS service, -1 AS ordinal, " +
+    "NULL AS source, 0 AS capturedAt, 0 AS strippedKeys, $FACT_BODY_COLS"
+
+/** Observations joined to their scan (s), fact (f) and body (b). */
+internal const val OBS_FROM = "FROM scan_record o JOIN ScanResult s ON s.id = o.scanId " +
+    "JOIN telemetry_record f ON f.id = o.recordId JOIN record_body b ON b.hash = f.bodyHash"

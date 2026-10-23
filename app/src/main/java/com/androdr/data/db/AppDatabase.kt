@@ -51,4 +51,6 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun eventWatermarkDao(): EventWatermarkDao
 
     abstract fun signalMemberDao(): SignalMemberDao
+
+    abstract fun telemetryReadDao(): TelemetryReadDao
 }

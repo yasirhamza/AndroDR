@@ -239,11 +239,12 @@ class StoreDaoTest {
         db.signalMemberDao().deleteForSignals(listOf(1L))
         facts.deleteUnobservedUnpinned(ids)
         bodies.deleteUnreferenced(listOf(h128("body:a")))
+        obs.deleteThrough(1L, "dns_monitor", 0)
         obs.deleteForScan(1L)
         val sqls = captured.toList()
         assertTrue(sqls.none { it.first.uppercase().contains("OFFSET") })
         val deletes = sqls.filter { it.first.trimStart().uppercase().startsWith("DELETE") }
-        assertEquals(4, deletes.map { it.first }.distinct().size)
+        assertEquals(5, deletes.map { it.first }.distinct().size)
         for ((sql, args) in deletes) {
             val lines = plan(sql, args)
             val scans = lines.filter { Regex("^SCAN\\b").containsMatchIn(it.trim()) }
