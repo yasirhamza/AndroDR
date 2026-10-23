@@ -228,12 +228,14 @@ class TelemetryReaderTest {
         assertEquals(3L, totals.records)
         assertTrue(totals.rawBytes > 0)
         assertEquals("the report's import reference time is this scan's own latest event", 5_000L,
-            f.reader.latestEventTime(1L))
+            f.reader.latestEventTime(1L, notAfter = Long.MAX_VALUE))
+        assertEquals("events after the bound (a future-dated record) are ignored", 1_000L,
+            f.reader.latestEventTime(1L, notAfter = 4_999L))
         f.scan(3L)
         f.persist(3L, "app_scanner", listOf(app("y")))
         f.setState(3L, ScanState.COMPLETE)
-        assertNull("snapshot records carry no event time", f.reader.latestEventTime(3L))
+        assertNull("snapshot records carry no event time", f.reader.latestEventTime(3L, Long.MAX_VALUE))
         f.setState(2L, ScanState.DELETING)
-        assertNull("a scan that is not COMPLETE is invisible", f.reader.latestEventTime(2L))
+        assertNull("a scan that is not COMPLETE is invisible", f.reader.latestEventTime(2L, Long.MAX_VALUE))
     }
 }

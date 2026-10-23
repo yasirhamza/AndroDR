@@ -643,7 +643,7 @@ scenarios:
     attack: [T1437]
     expected_patterns:
       - "~^     reason: IOC(_detect)?: forti\\.external-muki\\.com$"
-      - "!~reason: IOC(_detect)?: .*paragon-graphite\\.net"
+      - "@^     domain: paragon-graphite\\.net$ => ^     reason: null$"
       - "!Graphite/Paragon Spyware"
       - "forti.external-muki.com -> Graphite (Paragon)"
       - "[!!]  Graphite (Paragon): DETECTED -- domain forti.external-muki.com (Graphite (Paragon)),"

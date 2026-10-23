@@ -4,7 +4,9 @@
 # DNS rows are the scan's stored dns_monitor records, one field per line; the tunnel's match
 # is the record's reason line ("IOC: <indicator>" or "IOC_detect: <indicator>").
 ~^     reason: IOC(_detect)?: forti\.external-muki\.com$
-!~reason: IOC(_detect)?: .*paragon-graphite\.net
+# The placeholder's own record must carry no tunnel reason at all (IOC, IOC_detect,
+# blocklist or blocklist_detect): reason: null, scoped to that record.
+@^     domain: paragon-graphite\.net$ => ^     reason: null$
 !Graphite/Paragon Spyware
 # DNS IOC MATCHES row (iocMatchLabel; the row also carries " (NATION_STATE_SPYWARE)").
 forti.external-muki.com -> Graphite (Paragon)

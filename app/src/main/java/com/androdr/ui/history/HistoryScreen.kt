@@ -92,6 +92,7 @@ fun HistoryScreen(
     val sheetSummary by viewModel.sheetSummary.collectAsStateWithLifecycle()
     val sheetFailed by viewModel.sheetFailed.collectAsStateWithLifecycle()
     val exportEstimate by viewModel.exportEstimate.collectAsStateWithLifecycle()
+    val estimateFailed by viewModel.estimateFailed.collectAsStateWithLifecycle()
     val exportFailed by viewModel.exportFailed.collectAsStateWithLifecycle()
     val showDeleteConfirm by viewModel.showDeleteConfirm.collectAsStateWithLifecycle()
     val showClearAllConfirm by viewModel.showClearAllConfirm.collectAsStateWithLifecycle()
@@ -236,7 +237,13 @@ fun HistoryScreen(
     // Export mode selector
     exportModeDialogScan?.let { scan ->
         ExportModeDialog(
-            estimate = exportEstimate?.text() ?: stringResource(R.string.history_export_estimate_loading),
+            estimate = exportEstimate?.text() ?: stringResource(
+                if (estimateFailed) {
+                    R.string.history_export_estimate_unknown
+                } else {
+                    R.string.history_export_estimate_loading
+                }
+            ),
             onDismiss = { exportModeDialogScan = null },
             onConfirm = { mode ->
                 exportModeDialogScan = null

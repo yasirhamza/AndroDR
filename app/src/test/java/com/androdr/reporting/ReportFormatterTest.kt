@@ -474,4 +474,28 @@ class ReportFormatterTest {
         assertFalse(mercenary, mercenary.contains("HaGeZi"))
         assertFalse(mercenary, mercenary.contains("DNS IOC matches linked to"))
     }
+
+    @Test
+    fun `each stored record is one block - its header, then only its own fields`() {
+        // The adversary harness's record-scoped assertions (check-patterns.sh "@anchor => regex")
+        // rely on this: a file's path and its file_exists are lines of the same block.
+        val records = listOf(
+            mapOf("file_path" to "/data/local/tmp/a", "file_exists" to true),
+            mapOf("file_path" to "/data/local/tmp/b", "file_exists" to false),
+        )
+        val text = reportText(cleanScan, mode = ExportMode.TELEMETRY_ONLY,
+            telemetry = FakeTelemetry(mapOf("file_scanner" to records)))
+        val lines = text.lines()
+        val first = lines.indexOfFirst { it.startsWith("  [0] captured ") }
+        assertEquals(
+            listOf("     file_path: /data/local/tmp/a", "     file_exists: true"),
+            lines.subList(first + 1, first + 3),
+        )
+        assertTrue(lines[first + 3], lines[first + 3].startsWith("  [1] captured "))
+        assertEquals(
+            listOf("     file_path: /data/local/tmp/b", "     file_exists: false"),
+            lines.subList(first + 4, first + 6),
+        )
+        assertFalse("the block ends at the next non-field line", lines[first + 6].startsWith("     "))
+    }
 }

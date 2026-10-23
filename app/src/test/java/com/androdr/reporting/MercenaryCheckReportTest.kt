@@ -175,6 +175,19 @@ class MercenaryCheckReportTest {
     }
 
     @Test
+    fun `a future-dated imported record does not push a recent hit out of the window`() {
+        // One record parsed with a far-future time (a corrupt line, a clock set ahead) must not become
+        // the reference time: the hit two days before the import still reads DETECTED.
+        val report = formatImportReportWith(
+            appRisks = listOf(iocFinding("forti.external-muki.com", "Graphite (Paragon)", "", "false",
+                campaign = "graphite", observedAt = scanTime - 2 * DAY)),
+            intrusionEvents = listOf(importedEvent(at = scanTime + 400 * DAY)),
+            campaigns = listOf(campaign("graphite")))
+        assertTrue(report, report.contains("[!!]  Graphite (Paragon): DETECTED -- "))
+        assertFalse(report, report.contains("earlier hit only"))
+    }
+
+    @Test
     fun `campaign-tagged app-risk finding marks its campaign detected`() {
         // androdr-109: tag campaign.midnight-mimosa, display.category app_risk -- not a CVE finding
         val f = taggedFinding(ruleId = "androdr-109", title = "Midnight Mimosa preinstalled enabler",

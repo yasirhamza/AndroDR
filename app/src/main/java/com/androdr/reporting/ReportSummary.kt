@@ -70,7 +70,13 @@ internal fun telemetryLine(state: TelemetryState, records: Int, services: Int): 
     TelemetryState.STORED -> "Stored telemetry: $records record(s) from $services source(s), captured with this scan."
     TelemetryState.PARTIAL_RETENTION -> "${ReportFormatter.TELEMETRY_PARTIAL} $records record(s) remain."
     TelemetryState.NONE -> ReportFormatter.TELEMETRY_NONE
-    TelemetryState.FAILED -> ReportFormatter.TELEMETRY_FAILED
+    // Chunks persisted before an evaluate-only fallback stay: never claim nothing was saved.
+    TelemetryState.FAILED -> if (records == 0) {
+        ReportFormatter.TELEMETRY_FAILED
+    } else {
+        "${ReportFormatter.TELEMETRY_FAILED_PARTWAY} $records record(s) were stored before it failed; " +
+            "the rest were checked but not saved."
+    }
 }
 
 /** Plain words for each telemetry service: the export notice's sensitive categories. */

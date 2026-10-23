@@ -90,6 +90,13 @@ class HistoryViewModel @Inject constructor(
     private val _exportEstimate = MutableStateFlow<ExportEstimate?>(null)
     val exportEstimate: StateFlow<ExportEstimate?> = _exportEstimate.asStateFlow()
 
+    /** True when the estimate could not be read; the dialog says the size is unknown. */
+    private val _estimateFailed = MutableStateFlow(false)
+    val estimateFailed: StateFlow<Boolean> = _estimateFailed.asStateFlow()
+
+    /** The scan whose estimate the open dialog is waiting for. */
+    private var estimateScanId: Long? = null
+
     fun selectScan(scan: ScanResult) {
         _selectedScan.value = scan
     }
@@ -124,14 +131,18 @@ class HistoryViewModel @Inject constructor(
     @Suppress("TooGenericExceptionCaught") // an unknown estimate is shown as unknown
     fun loadExportEstimate(scan: ScanResult) {
         _exportEstimate.value = null
+        _estimateFailed.value = false
+        estimateScanId = scan.id
         viewModelScope.launch {
-            _exportEstimate.value = try {
-                reportExporter.exportEstimate(scan)
+            try {
+                val estimate = reportExporter.exportEstimate(scan)
+                // A slower estimate for an earlier dialog must not land in this one.
+                if (estimateScanId == scan.id) _exportEstimate.value = estimate
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
                 Log.w(TAG, "export estimate failed", e)
-                null
+                if (estimateScanId == scan.id) _estimateFailed.value = true
             }
         }
     }

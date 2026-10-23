@@ -265,7 +265,8 @@ GRAPHITE = Path(__file__).parent / "fixtures" / "expected" / "graphite_dns_attri
 
 
 def graphite_dns_lines():
-    return "".join(line for line in GRAPHITE.read_text().splitlines(keepends=True) if "reason: IOC" in line)
+    return "".join(line for line in GRAPHITE.read_text().splitlines(keepends=True)
+                   if "reason:" in line and not line.startswith("#"))
 
 
 def test_graphite_dns_checks_accept_the_stored_record_format(tmp_path):
@@ -275,11 +276,14 @@ def test_graphite_dns_checks_accept_the_stored_record_format(tmp_path):
     assert result.returncode == 0, result.stdout
 
 
-def test_graphite_dns_checks_reject_a_matched_placeholder(tmp_path):
-    report = STORED_DNS_REPORT.replace("     reason: null", "     reason: IOC: paragon-graphite.net")
+@pytest.mark.parametrize("reason", ["IOC: paragon-graphite.net", "IOC_detect: graphite.net", "blocklist",
+                                    "blocklist_detect"])
+def test_graphite_dns_checks_reject_any_reason_on_the_placeholder(tmp_path, reason):
+    # The old "[MATCHED]" negative caught every non-null reason, not only an IOC that quotes the host.
+    report = STORED_DNS_REPORT.replace("     reason: null", "     reason: " + reason)
     result = run_check(tmp_path, report, graphite_dns_lines())
-    assert result.returncode == 1
-    assert "UNEXPECTED: forbidden regex matched" in result.stdout
+    assert result.returncode == 1, result.stdout
+    assert "a record matching '^     domain: paragon-graphite" in result.stdout
 
 
 def test_graphite_dns_checks_reject_an_unmatched_graphite_domain(tmp_path):
@@ -287,3 +291,99 @@ def test_graphite_dns_checks_reject_an_unmatched_graphite_domain(tmp_path):
     result = run_check(tmp_path, report, graphite_dns_lines())
     assert result.returncode == 1
     assert "MISS: regex not matched" in result.stdout
+
+
+# Record-scoped assertions ("@<anchor> => <regex>", "!@<anchor> => <regex>"): the regexes are
+# evaluated within one stored record's block, so a file's path is tied to its own file_exists.
+FILE_REPORT = """------------------------------------------------------------
+  STORED TELEMETRY: file_scanner (3 record(s))
+------------------------------------------------------------
+  [0] captured 2026-10-23 12:00:01
+     accessible: true
+     file_exists: true
+     file_path: /data/local/tmp/wd
+  [1] captured 2026-10-23 12:00:01
+     accessible: true
+     file_exists: false
+     file_path: /data/local/tmp/wd/fs.db
+  [2] captured 2026-10-23 12:00:01
+     accessible: true
+     file_exists: true
+     file_path: /data/local/tmp/dropbox
+------------------------------------------------------------
+  APPLICATION LOG  (1 lines, captured at export)
+------------------------------------------------------------
+     file_exists: true
+"""
+
+FOUND = " => ^     file_exists: true$\n"
+
+
+def test_record_scoped_accepts_a_found_record(tmp_path):
+    result = run_check(tmp_path, FILE_REPORT, "@^     file_path: /data/local/tmp/wd$" + FOUND)
+    assert result.returncode == 0, result.stdout
+
+
+def test_record_scoped_rejects_a_stored_but_not_found_path(tmp_path):
+    # Its neighbours say file_exists: true; only its own block counts.
+    result = run_check(tmp_path, FILE_REPORT, "@^     file_path: /data/local/tmp/wd/fs\\.db$" + FOUND)
+    assert result.returncode == 1
+    assert "has no line matching" in result.stdout
+
+
+def test_record_scoped_rejects_a_missing_record(tmp_path):
+    result = run_check(tmp_path, FILE_REPORT, "@^     file_path: /data/local/tmp/\\.raptor$" + FOUND)
+    assert result.returncode == 1
+    assert "MISS: no record matches" in result.stdout
+
+
+def test_record_scoped_block_ends_at_the_first_non_field_line(tmp_path):
+    # The log's indented "file_exists: true" after the section rule is not part of record [2].
+    report = FILE_REPORT.replace("     file_exists: true\n     file_path: /data/local/tmp/dropbox",
+                                 "     file_exists: false\n     file_path: /data/local/tmp/dropbox")
+    result = run_check(tmp_path, report, "@^     file_path: /data/local/tmp/dropbox$" + FOUND)
+    assert result.returncode == 1, result.stdout
+
+
+def test_negated_record_scoped_fails_only_on_its_own_record(tmp_path):
+    ok = run_check(tmp_path, FILE_REPORT, "!@^     file_path: /data/local/tmp/wd$ => ^     file_exists: false$\n")
+    assert ok.returncode == 0, ok.stdout
+    bad = run_check(tmp_path, FILE_REPORT,
+                    "!@^     file_path: /data/local/tmp/wd/fs\\.db$ => ^     file_exists: false$\n")
+    assert bad.returncode == 1
+    assert "UNEXPECTED: a record matching" in bad.stdout
+
+
+def test_record_scoped_without_an_arrow_is_malformed(tmp_path):
+    result = run_check(tmp_path, FILE_REPORT, "@^     file_path: /data/local/tmp/wd$\n")
+    assert result.returncode == 1
+    assert "MALFORMED" in result.stdout
+
+
+PREDATOR = Path(__file__).parent / "fixtures" / "expected" / "mercenary_predator_artifacts.patterns"
+FILES = Path(__file__).parent / "fixtures" / "expected" / "mercenary_file_artifacts.patterns"
+
+
+def record_lines(path):
+    return "".join(line for line in path.read_text().splitlines(keepends=True) if line.startswith("@"))
+
+
+def file_records(paths, missing_state=None):
+    out = ""
+    for i, path in enumerate(paths):
+        state = "false" if path == missing_state else "true"
+        out += "  [%d] captured 2026-10-23 12:00:01\n     file_exists: %s\n     file_path: %s\n" % (i, state, path)
+    return out
+
+
+@pytest.mark.parametrize("patterns,paths", [
+    (PREDATOR, ["/data/local/tmp/wd", "/data/local/tmp/wd/fs.db", "/data/local/tmp/dropbox"]),
+    (FILES, ["/data/local/tmp/.raptor", "/data/local/tmp/.stat"]),
+])
+def test_artifact_scenarios_tie_every_planted_path_to_found(tmp_path, patterns, paths):
+    lines = record_lines(patterns)
+    assert lines.count("\n") == len(paths), lines
+    assert run_check(tmp_path, file_records(paths), lines).returncode == 0
+    for path in paths:
+        result = run_check(tmp_path, file_records(paths, missing_state=path), lines)
+        assert result.returncode == 1, "%s stored but not found must fail: %s" % (path, result.stdout)

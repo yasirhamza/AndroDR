@@ -181,6 +181,7 @@
     <string name="history_delete_refused_title">Nothing was deleted</string>
     <string name="history_delete_refused_body">A scan or import is running. Try again when it finishes.</string>
     <string name="history_summary_failed">This scan\'s summary could not be read. Export the report to see it in full.</string>
+    <string name="history_export_estimate_unknown">The size of this scan\'s stored telemetry is unknown; the full report includes all of it.</string>
     <string name="history_export_estimate_loading">Counting this scan\'s stored telemetry…</string>
     <string name="history_export_failed_title">The report was not exported</string>
     <string name="history_export_failed_body">Writing the report failed, so nothing was shared. Try again.</string>

@@ -3,6 +3,7 @@ package com.androdr.reporting
 import android.content.Context
 import android.net.Uri
 import android.util.Log
+import androidx.annotation.VisibleForTesting
 import androidx.core.content.FileProvider
 import com.androdr.data.model.NotEvaluatedReason
 import com.androdr.data.model.ScanResult
@@ -61,12 +62,18 @@ class ReportExporter @Inject constructor(
 
     /**
      * Streams [scan]'s report into [file] (the debug harness's fixed path, or [export]'s cached
-     * file); a write that fails leaves no partial file behind.
+     * file); a write that fails leaves no partial file behind. [includeLog] false leaves the app
+     * log out (the harness: its patterns must match the report, not a log line).
      */
-    suspend fun writeTo(file: File, scan: ScanResult, mode: ExportMode = ExportMode.BOTH) =
+    suspend fun writeTo(
+        file: File,
+        scan: ScanResult,
+        mode: ExportMode = ExportMode.BOTH,
+        includeLog: Boolean = true,
+    ) =
         withContext(Dispatchers.IO) {
             val findings = FindingsView.of(scan, reportInputs)
-            val logLines = captureLogcat()
+            val logLines = if (includeLog) logSource() else emptyList()
             val version = context.appVersion().name
             writeFile(file) { out ->
                 ReportFormatter.writeScanReport(out, scan, findings, logLines, telemetryReader, mode, version)
@@ -140,13 +147,17 @@ class ReportExporter @Inject constructor(
         val part = File(file.parentFile, "${file.name}.part")
         try {
             part.bufferedWriter(Charsets.UTF_8).use { write(it) }
-            file.delete()
+            // rename(2) replaces an existing report atomically: never delete it first.
             check(part.renameTo(file)) { "could not move the report into place" }
         } catch (t: Throwable) {
             part.delete()
             throw t
         }
     }
+
+    /** The app's own log lines, captured at export. Replaceable so tests can tell whether it is read. */
+    @VisibleForTesting
+    internal var logSource: () -> List<String> = ::captureLogcat
 
     @Suppress("TooGenericExceptionCaught")
     private fun captureLogcat(): List<String> = try {

@@ -82,4 +82,27 @@ class HistoryViewModelSummaryTest {
         assertFalse(vm.exporting.value)
         assertNull(vm.shareUri.value)
     }
+
+    @Test
+    fun `a failed estimate says the size is unknown instead of loading forever`() = runTest {
+        val vm = vm(mockk { coEvery { exportEstimate(scan) } throws IllegalStateException("db closed") })
+        vm.loadExportEstimate(scan)
+        assertNull(vm.exportEstimate.value)
+        assertTrue(vm.estimateFailed.value)
+    }
+
+    @Test
+    fun `a slow estimate for an earlier dialog never lands in the current one`() = runTest {
+        val other = scan.copy(id = 2L)
+        val slow = kotlinx.coroutines.CompletableDeferred<ExportEstimate>()
+        val forOther = ExportEstimate(9, 9_000, listOf("DNS lookups"))
+        val vm = vm(mockk {
+            coEvery { exportEstimate(scan) } coAnswers { slow.await() }
+            coEvery { exportEstimate(other) } returns forOther
+        })
+        vm.loadExportEstimate(scan)
+        vm.loadExportEstimate(other)
+        slow.complete(ExportEstimate(1, 100, listOf("installed apps")))
+        assertEquals(forOther, vm.exportEstimate.value)
+    }
 }

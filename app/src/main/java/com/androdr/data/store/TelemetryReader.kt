@@ -112,7 +112,8 @@ class TelemetryReader @Inject constructor(
 
     override suspend fun services(scanId: Long): List<ServiceSummary> = dao.services(scanId)
 
-    override suspend fun latestEventTime(scanId: Long): Long? = dao.scanTotals(scanId).latestEventTime
+    override suspend fun latestEventTime(scanId: Long, notAfter: Long): Long? =
+        dao.scanTotals(scanId, notAfter).latestEventTime
 
     /** One scan's record count, decoded body bytes and latest exact event time (the export estimate). */
     suspend fun scanTotals(scanId: Long): ScanTotals = dao.scanTotals(scanId)

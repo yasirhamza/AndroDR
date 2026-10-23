@@ -117,14 +117,15 @@ interface TelemetryReadDao {
 
     /**
      * One COMPLETE scan's record count, the decoded size of their bodies, and the latest exact
-     * event time among them (null when no record has one).
+     * event time among them no later than [eventsNotAfter] (null when no record has one).
      */
     @Query(
         "SELECT COUNT(*) AS records, COALESCE(SUM(b.rawBytes), 0) AS rawBytes, " +
-            "MAX(CASE WHEN f.timePrecision = 'EXACT' THEN f.eventTime END) AS latestEventTime " +
+            "MAX(CASE WHEN f.timePrecision = 'EXACT' AND f.eventTime <= :eventsNotAfter THEN f.eventTime END) " +
+            "AS latestEventTime " +
             "$OBS_FROM WHERE o.scanId = :scanId AND ${CompleteScan.SQL}"
     )
-    suspend fun scanTotals(scanId: Long): ScanTotals
+    suspend fun scanTotals(scanId: Long, eventsNotAfter: Long = Long.MAX_VALUE): ScanTotals
 
     /** Distinct bodies of facts observed by a COMPLETE scan, by encoding. */
     @Query(

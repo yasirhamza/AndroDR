@@ -43,9 +43,10 @@ class ScanBroadcastReceiver : BroadcastReceiver() {
                 } else {
                     val scan = scanOrchestrator.runFullScan()
                     // The one report path: the harness reads the same report a user exports,
-                    // with this scan's own stored telemetry.
+                    // with this scan's own stored telemetry. No logcat: a log line naming a path,
+                    // domain or finding title would satisfy (or trip) a harness pattern.
                     val outDir = context.getExternalFilesDir(null) ?: return@launch
-                    reportExporter.writeTo(File(outDir, "androdr_last_report.txt"), scan)
+                    reportExporter.writeTo(File(outDir, "androdr_last_report.txt"), scan, includeLog = false)
                     Log.i(TAG, "Scan complete, report written to ${outDir.absolutePath}")
                 }
             } catch (e: Exception) {

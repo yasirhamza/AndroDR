@@ -157,6 +157,86 @@ class ReportProvenanceTest {
     }
 
     @Test
+    fun `a FAILED scan with stored records says how many were stored, never that nothing was saved`() =
+        runBlocking {
+            val s = scan(1_000L, telemetryState = TelemetryState.FAILED)
+            f.persist(s.id, "app_scanner", listOf(app("com.kept.a"), app("com.kept.b")))
+            complete(s.id)
+            val text = report(s)
+            assertTrue(text, text.contains(
+                "${ReportFormatter.TELEMETRY_FAILED_PARTWAY} 2 record(s) were stored before it failed;"))
+            assertFalse(text, text.contains(ReportFormatter.TELEMETRY_FAILED))
+            assertTrue(text, text.contains("package_name: com.kept.a"))
+            assertFalse(exporter.summary(s.copy(state = ScanState.COMPLETE)).lines()
+                .any { it.contains(ReportFormatter.TELEMETRY_FAILED) })
+            assertTrue("a partly stored scan's app count is not the number scanned",
+                text.contains("Apps scanned: N/A (only part of this scan's telemetry is stored)"))
+        }
+
+    @Test
+    fun `an import's DNS section says its is_blocked and reason are not verdicts`() = runBlocking {
+        val import = scan(1_000L, source = TelemetrySource.INTRUSION_LOG_IMPORT)
+        f.persist(
+            import.id, "dns_monitor", listOf(dns("c2.example")), source = TelemetrySource.INTRUSION_LOG_IMPORT,
+        )
+        complete(import.id)
+        val text = report(import)
+        val dnsSection = text.substringAfter("${ReportFormatter.STORED_TELEMETRY_SECTION}: dns_monitor")
+        assertTrue(text, dnsSection.lines().drop(2).first() == ReportFormatter.DNS_IMPORT_NOTE)
+        assertFalse(text, text.contains(ReportFormatter.DNS_LIVE_NOTE))
+
+        val live = scan(2_000L)
+        f.persist(live.id, "dns_monitor", listOf(dns("live.example")))
+        complete(live.id)
+        val liveText = report(live)
+        assertTrue(liveText, liveText.contains(ReportFormatter.DNS_LIVE_NOTE))
+        assertFalse(liveText, liveText.contains(ReportFormatter.DNS_IMPORT_NOTE))
+    }
+
+    @Test
+    fun `a live scan's report never shows an import's records`() = runBlocking {
+        val import = scan(1_000L, source = TelemetrySource.INTRUSION_LOG_IMPORT)
+        f.persist(import.id, "dns_monitor", listOf(dns("imported-only.example")),
+            source = TelemetrySource.INTRUSION_LOG_IMPORT)
+        complete(import.id)
+        val live = scan(2_000L)
+        f.persist(live.id, "app_scanner", listOf(app("com.live.app")))
+        complete(live.id)
+        val text = report(live)
+        assertTrue(text, text.contains("package_name: com.live.app"))
+        assertFalse(text, text.contains("imported-only.example"))
+        assertFalse(text, text.contains("${ReportFormatter.STORED_TELEMETRY_SECTION}: dns_monitor"))
+    }
+
+    @Test
+    fun `an intrusion-log import's connection and security records render`() = runBlocking {
+        val import = scan(1_000L, source = TelemetrySource.INTRUSION_LOG_IMPORT)
+        val src = TelemetrySource.INTRUSION_LOG_IMPORT
+        f.persist(import.id, "network_monitor", listOf(com.androdr.sigma.StoreRecord(
+            mapOf("destination_ip" to "8.8.8.8", "destination_port" to 853, "app_name" to "com.samsung.x"))),
+            source = src)
+        f.persist(import.id, "security_log", listOf(com.androdr.sigma.StoreRecord(
+            mapOf("tag_name" to "adb_shell_cmd", "security_data" to "ls"))), source = src)
+        complete(import.id)
+        val text = report(import)
+        assertTrue(text, text.contains("${ReportFormatter.STORED_TELEMETRY_SECTION}: network_monitor (1 record(s))"))
+        assertTrue(text, text.contains("destination_ip: 8.8.8.8"))
+        assertTrue(text, text.contains("${ReportFormatter.STORED_TELEMETRY_SECTION}: security_log (1 record(s))"))
+        assertTrue(text, text.contains("tag_name: adb_shell_cmd"))
+    }
+
+    @Test
+    fun `the harness report leaves the app log out, the shared export keeps it`() = runBlocking {
+        exporter.logSource = { listOf("LOG-LINE-NAMING /data/local/tmp/.raptor") }
+        val a = scan(1_000L)
+        complete(a.id)
+        val harness = File(tmp.root, "androdr_last_report.txt")
+        exporter.writeTo(harness, a.copy(state = ScanState.COMPLETE), includeLog = false)
+        assertFalse(harness.readText().contains("LOG-LINE-NAMING"))
+        assertTrue(report(a).contains("LOG-LINE-NAMING"))
+    }
+
+    @Test
     fun `a findings-only report carries no telemetry records`() = runBlocking {
         val a = scan(1_000L)
         f.persist(a.id, "app_scanner", listOf(app("com.scan.a")))

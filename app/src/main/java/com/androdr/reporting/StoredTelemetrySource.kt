@@ -16,6 +16,10 @@ interface StoredTelemetrySource {
     /** Streams [scanId]'s records of [service] in ordinal order, a batch at a time. */
     suspend fun forEach(scanId: Long, service: String, block: suspend (DecodedRecord) -> Unit)
 
-    /** The latest exact event time among [scanId]'s records, or null when none has one. */
-    suspend fun latestEventTime(scanId: Long): Long?
+    /**
+     * The latest exact event time among [scanId]'s records no later than [notAfter], or null when
+     * none has one. The bound keeps a record with a bogus future time (a corrupt line, a clock set
+     * ahead) from becoming the import's reference time.
+     */
+    suspend fun latestEventTime(scanId: Long, notAfter: Long): Long?
 }

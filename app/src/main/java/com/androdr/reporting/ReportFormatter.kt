@@ -5,6 +5,7 @@ import com.androdr.data.db.ServiceSummary
 import com.androdr.data.model.NotEvaluatedReason
 import com.androdr.data.model.ScanResult
 import com.androdr.data.model.TelemetrySource
+import com.androdr.data.model.TelemetryState
 import com.androdr.sigma.Evidence
 import com.androdr.sigma.Finding
 import com.androdr.sigma.LiveRecordBuilders
@@ -18,6 +19,8 @@ import java.util.Locale
  * surrogates) as `\uXXXX` (spec §7), so no device-controlled string can emit a raw line break, a
  * bidi override, or an escape that reads ambiguously. A supplementary character in one of those
  * categories becomes its two escaped UTF-16 units; a valid surrogate pair otherwise passes through.
+ * Cn follows the runtime's Unicode tables, so a character assigned in a newer Unicode version is
+ * escaped on an older device (fail-safe; the same text can escape differently across devices).
  */
 fun escapeForReport(s: String): String {
     var i = 0
@@ -93,7 +96,7 @@ object ReportFormatter {
 
     /** What the findings sections need beyond the findings, read from this scan's own telemetry. */
     private class FindingsContext(
-        val appCount: Int?,
+        val appCount: String,
         val displayNames: Map<String, String>,
         val dnsIocRows: List<String>,
         val verdicts: List<CampaignVerdict>,
@@ -188,15 +191,32 @@ object ReportFormatter {
                 if (reason != null && (reason.startsWith("IOC:") || reason.startsWith("IOC_detect:"))) reasons += reason
             }
         }
-        val latestImported = if (scan.source == TelemetrySource.LIVE_SCAN) null else telemetry.latestEventTime(scan.id)
+        // An imported event cannot postdate its import: later times are bogus and never the reference.
+        val latestImported = if (scan.source == TelemetrySource.LIVE_SCAN) {
+            null
+        } else {
+            telemetry.latestEventTime(scan.id, notAfter = scan.timestamp)?.takeIf { it <= scan.timestamp }
+        }
         val verdicts = campaignVerdicts(
             scan, findings.campaigns, campaignReferenceTime(scan, latestImported),
             findings.ruleCategoryById, findings.ruleScopes,
         )
         return FindingsContext(
-            appCount = appRecords?.records, displayNames = displayNames, dnsIocRows = dnsIocRows(scan, reasons),
+            appCount = appCountText(scan, appRecords), displayNames = displayNames,
+            dnsIocRows = dnsIocRows(scan, reasons),
             verdicts = verdicts, referenceFromLog = latestImported != null,
         )
+    }
+
+    /**
+     * This scan's own stored app count. Only a fully stored scan's count is the number scanned:
+     * under PARTIAL_RETENTION or a partway FAILED the surviving records would understate it.
+     */
+    private fun appCountText(scan: ScanResult, appRecords: ServiceSummary?): String = when {
+        appRecords == null -> "N/A"
+        scan.telemetryState == TelemetryState.PARTIAL_RETENTION || scan.telemetryState == TelemetryState.FAILED ->
+            "N/A (only part of this scan's telemetry is stored)"
+        else -> appRecords.records.toString()
     }
 
     @Suppress("LongMethod", "CyclomaticComplexMethod")
@@ -297,8 +317,7 @@ object ReportFormatter {
             .groupBy({ it.first }, { it.second })
         if (byReason.isEmpty()) return
         appendLine()
-        // ASCII-only per class doc: em dash replaced with the file's existing
-        // "--" convention (see e.g. appendVerdict's "Flagged:" line).
+        // The file's "--" convention rather than an em dash (see appendVerdict's "Flagged:" line).
         appendLine("$NOT_CHECKED_SECTION:")
         NotEvaluatedReason.entries.forEach { reason ->
             val failures = byReason[reason].orEmpty()
@@ -319,7 +338,7 @@ object ReportFormatter {
     // and action guidance in a structured block -- splitting would fragment the output logic.
     private fun ReportOut.appendVerdict(
         scan: ScanResult,
-        appCount: Int?,
+        appCount: String,
         dnsIocRows: List<String>,
         campaignVerdicts: List<CampaignVerdict>,
     ) {
@@ -349,8 +368,7 @@ object ReportFormatter {
         // Summary block
         appendLine("  SUMMARY:")
         // This scan's own stored app records: an import (or a scan without them) has none.
-        val totalApps = appCount?.toString() ?: "N/A"
-        appendLine("    Apps scanned: $totalApps -- Flagged: $appRiskCount")
+        appendLine("    Apps scanned: $appCount -- Flagged: $appRiskCount")
         if (scan.knownMalwareCount > 0) {
             appendLine("    Known malware: ${scan.knownMalwareCount}")
         }
@@ -565,19 +583,34 @@ object ReportFormatter {
     /** Heading for the checks that produced no verdict (#366, #370). */
     const val NOT_CHECKED_SECTION = "WHAT THIS SCAN COULD NOT CHECK"
 
+    /** Under an import's dns_monitor section: its is_blocked / reason values are not verdicts (#375). */
+    const val DNS_IMPORT_NOTE = "  Imported queries: AndroDR was not in the path, so is_blocked and reason were " +
+        "not recorded by the import (the values below are defaults, not verdicts); detections are in FINDINGS."
+
+    /** Under a live scan's dns_monitor section: what a null reason means. */
+    const val DNS_LIVE_NOTE = "  reason: null means the tunnel had no match when the domain was queried; " +
+        "matches found at scan time are in FINDINGS."
+
     /** Heading of each per-service section of the scan's own stored records. */
     const val STORED_TELEMETRY_SECTION = "STORED TELEMETRY"
 
     /** The state line for a scan whose records retention partly removed (followed by the count left). */
-    const val TELEMETRY_PARTIAL = "Stored telemetry: PARTIAL -- retention removed some of this scan's records;"
+    const val TELEMETRY_PARTIAL =
+        "Stored telemetry: PARTIAL_RETENTION -- retention removed some of this scan's records;"
 
     /** The state line for a scan saved before telemetry was stored. */
     const val TELEMETRY_NONE =
         "Stored telemetry: NONE -- this scan was saved before telemetry was stored; only its findings remain."
 
-    /** The state line for a scan whose storage failed (it was checked without saving telemetry). */
+    /** The state line for a scan whose storage failed before any record was stored. */
     const val TELEMETRY_FAILED =
         "Stored telemetry: FAILED -- storage failed during this scan; it was checked without saving its telemetry."
+
+    /**
+     * The state line for a scan whose storage failed partway (followed by the count stored): the
+     * records written before the disk filled stay, and are printed below it.
+     */
+    const val TELEMETRY_FAILED_PARTWAY = "Stored telemetry: FAILED -- storage failed partway;"
 
     private const val RULE = "============================================================"
 }

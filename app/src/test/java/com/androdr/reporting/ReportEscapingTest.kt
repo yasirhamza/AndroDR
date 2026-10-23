@@ -19,8 +19,8 @@ class ReportEscapingTest {
     private val cases = listOf(
         "\n" to "\\u000A",
         "\r" to "\\u000D",
-        " " to "\\u2028",
-        "‮" to "\\u202E",
+        "\u2028" to "\\u2028",
+        "\u202E" to "\\u202E",
         "\\" to "\\u005C",
         "\uD800" to "\\uD800",
     )
@@ -37,11 +37,11 @@ class ReportEscapingTest {
         }
         assertEquals("plain ASCII: com.example/1.0 (ok)", escapeForReport("plain ASCII: com.example/1.0 (ok)"))
         // A valid surrogate pair (an assigned emoji) is not a lone surrogate.
-        assertEquals("😀", escapeForReport("😀"))
+        assertEquals("\uD83D\uDE00", escapeForReport("\uD83D\uDE00"))
         // A low surrogate with no high surrogate before it is lone too.
         assertEquals("x\\uDC00", escapeForReport("x\uDC00"))
         // Private use (Co) and a format character (Cf, zero-width joiner).
-        assertEquals("\\uE000\\u200D", escapeForReport("‍"))
+        assertEquals("\\uE000\\u200D", escapeForReport("\uE000\u200D"))
     }
 
     @Test
@@ -80,12 +80,12 @@ class ReportEscapingTest {
         val f = Finding(
             ruleId = "androdr-001", title = "Sideloaded app", level = "high", category = FindingCategory.APP_RISK,
             triggered = true,
-            matchContext = mapOf("package_name" to "com.evil\nFlags   : forged", "app_name" to "Innocent‮exe.gpj"),
+            matchContext = mapOf("package_name" to "com.evil\nFlags   : forged", "app_name" to "Innocent\u202Eexe.gpj"),
         )
         val text = reportText(scan.copy(findings = listOf(f)), mode = ExportMode.FINDINGS_ONLY)
         assertTrue(text, text.contains("com.evil\\u000AFlags   : forged"))
         assertTrue(text, text.contains("Innocent\\u202Eexe.gpj"))
-        assertFalse(text.lines().any { it.startsWith("Flags   : forged") })
-        assertFalse(text.contains("‮"))
+        assertFalse(text.lines().any { it.trimStart().startsWith("Flags   : forged") })
+        assertFalse(text.contains("\u202E"))
     }
 }

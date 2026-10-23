@@ -33,7 +33,7 @@ internal class FakeTelemetry(
         }
     }
 
-    override suspend fun latestEventTime(scanId: Long): Long? = latestEvent
+    override suspend fun latestEventTime(scanId: Long, notAfter: Long): Long? = latestEvent
 }
 
 /** The report for [scan] as text, through the one formatter entry point. */

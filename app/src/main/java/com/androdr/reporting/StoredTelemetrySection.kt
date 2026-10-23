@@ -2,7 +2,9 @@ package com.androdr.reporting
 
 import com.androdr.data.db.ServiceSummary
 import com.androdr.data.model.ScanResult
+import com.androdr.data.model.TelemetrySource
 import com.androdr.data.store.DecodedRecord
+import com.androdr.sigma.LiveRecordBuilders
 import com.androdr.sigma.TimePrecision
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -29,8 +31,21 @@ internal suspend fun ReportOut.appendStoredTelemetry(
     val dayFmt = SimpleDateFormat("yyyy-MM-dd", Locale.US)
     services.forEach { service ->
         section("${ReportFormatter.STORED_TELEMETRY_SECTION}: ${service.service} (${service.records} record(s))")
+        if (service.service == LiveRecordBuilders.DNS_MONITOR) appendDnsNote(scan.source)
         telemetry.forEach(scan.id, service.service) { r -> appendRecord(r, timeFmt, dayFmt) }
     }
+}
+
+/**
+ * What a DNS record's `is_blocked` / `reason` fields mean here. An import's parser fills them with
+ * the tunnel's defaults although AndroDR was never in the path, so printed bare they read as
+ * "seen and allowed" beside a FINDINGS entry naming the same domain (#375). A live record's null
+ * reason means the tunnel had no match when it was queried, not that the domain is clean.
+ */
+private fun ReportOut.appendDnsNote(source: TelemetrySource) {
+    appendLine(
+        if (source == TelemetrySource.LIVE_SCAN) ReportFormatter.DNS_LIVE_NOTE else ReportFormatter.DNS_IMPORT_NOTE
+    )
 }
 
 private fun ReportOut.appendRecord(r: DecodedRecord, timeFmt: SimpleDateFormat, dayFmt: SimpleDateFormat) {

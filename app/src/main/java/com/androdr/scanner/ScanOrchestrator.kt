@@ -563,7 +563,6 @@ class ScanOrchestrator @Inject constructor(
         private fun writerFailure(t: Throwable) =
             ScannerFailure(scanner = SCAN_WRITER, exception = t.javaClass.simpleName, message = t.message)
 
-        /** APK hash per package, for enriching finding rows that carry none. */
         /** APK hash by package from stored `app_scanner` records (empty and absent hashes skipped). */
         internal fun storedHashByPackage(apps: List<DecodedRecord>): Map<String, String> = buildMap {
             apps.forEach { r ->
@@ -573,6 +572,7 @@ class ScanOrchestrator @Inject constructor(
             }
         }
 
+        /** APK hash per package, for enriching finding rows that carry none. */
         internal fun hashByPackage(apps: List<AppTelemetry>): Map<String, String> =
             apps.filter { !it.apkHash.isNullOrEmpty() }.associateBy({ it.packageName }, { it.apkHash!! })
 

@@ -6,9 +6,9 @@
 # it had not looked (#366). The scanner now looks, so detection is what to demand.
 Spyware artifact: /data/local/tmp/.raptor
 Spyware artifact: /data/local/tmp/.stat
-# Since Phase B the telemetry section prints the scan's stored file_scanner records one field
-# per line (the old "<path> : FOUND" / "<path> : clear" rows are gone), so a path and its
-# file_exists state are no longer on one line: the finding lines above carry the detection,
-# and these require that each planted path's record was stored with the scan.
-~^     file_path: /data/local/tmp/\.raptor$
-~^     file_path: /data/local/tmp/\.stat$
+# Since Phase B the telemetry section prints each stored file_scanner record as one block
+# (a "[n] captured" header, then one "     key: value" line per field). The record-scoped
+# "@<anchor> => <regex>" form ties each planted path to its own record's state: the record
+# must exist and say file_exists: true (it replaces "<path> : FOUND" and "!<path> : clear").
+@^     file_path: /data/local/tmp/\.raptor$ => ^     file_exists: true$
+@^     file_path: /data/local/tmp/\.stat$ => ^     file_exists: true$
