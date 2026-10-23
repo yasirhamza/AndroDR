@@ -90,15 +90,20 @@ class PlatformCredentialUi(private val activity: ComponentActivity) : Credential
             observer = destroyObserver
             // Lifecycle observers are main-thread only; a cancel from another dispatcher hops to the UI thread.
             cont.invokeOnCancellation { activity.runOnUiThread { cleanup() } }
-            launcher = activity.activityResultRegistry.register(
-                "confirm-credential-${UUID.randomUUID()}",
-                ActivityResultContracts.StartActivityForResult(),
-            ) { result -> finish(result.resultCode == Activity.RESULT_OK) }
-            activity.lifecycle.addObserver(destroyObserver)
+            // Registration sits inside the try: from a non-main thread addObserver throws after
+            // register, and the launcher key must still be released (the call fails closed).
             try {
-                launcher.launch(intent)
+                val registered = activity.activityResultRegistry.register(
+                    "confirm-credential-${UUID.randomUUID()}",
+                    ActivityResultContracts.StartActivityForResult(),
+                ) { result -> finish(result.resultCode == Activity.RESULT_OK) }
+                launcher = registered
+                activity.lifecycle.addObserver(destroyObserver)
+                registered.launch(intent)
             } catch (@Suppress("TooGenericExceptionCaught") t: Throwable) {
-                cleanup()
+                launcher?.unregister()
+                // removeObserver is main-thread only; off main it throws, and addObserver never ran.
+                runCatching { activity.lifecycle.removeObserver(destroyObserver) }
                 throw t
             }
         }

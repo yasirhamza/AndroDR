@@ -2,13 +2,18 @@ package com.androdr.ui.security
 
 import android.app.Activity
 import android.content.Intent
+import android.os.Bundle
+import android.os.Looper
 import androidx.activity.ComponentActivity
+import androidx.lifecycle.LifecycleRegistry
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.runBlocking
+import kotlin.concurrent.thread
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -63,5 +68,46 @@ class PlatformCredentialUiTest {
         val activity = controller.get()
         controller.pause().stop().destroy()
         assertEquals(false, PlatformCredentialUi(activity).launchConfirmIntent(intent))
+    }
+
+    private fun ComponentActivity.observers() = (lifecycle as LifecycleRegistry).observerCount
+
+    /** Result-registry keys this activity still holds, as it would save them across recreation. */
+    private fun ComponentActivity.confirmKeys(): List<String> {
+        val out = Bundle()
+        activityResultRegistry.onSaveInstanceState(out)
+        return out.getStringArrayList("KEY_COMPONENT_ACTIVITY_REGISTERED_KEYS").orEmpty()
+            .filter { it.startsWith("confirm-credential-") }
+    }
+
+    @Test fun `cancel from a background thread runs cleanup on the main looper`() = runBlocking {
+        val activity = Robolectric.buildActivity(ComponentActivity::class.java).setup().get()
+        val baseline = activity.observers()
+        val job = async(Dispatchers.Unconfined, CoroutineStart.UNDISPATCHED) {
+            PlatformCredentialUi(activity).launchConfirmIntent(intent)
+        }
+        assertEquals(baseline + 1, activity.observers())
+
+        var failure: Throwable? = null
+        thread { job.cancel() }.apply { setUncaughtExceptionHandler { _, e -> failure = e } }.join()
+        assertEquals("cleanup must not run on the cancelling thread", null, failure)
+        assertEquals("cleanup deferred to the main looper", baseline + 1, activity.observers())
+
+        shadowOf(Looper.getMainLooper()).idle()
+        assertEquals("observer removed on the main looper", baseline, activity.observers())
+        // The key itself stays reserved by the registry once launched (a late result is routed and
+        // ignored), so it is not asserted here.
+        assertTrue(job.isCancelled)
+    }
+
+    @Test fun `call from a background thread fails closed without leaking the launcher key`() {
+        val activity = Robolectric.buildActivity(ComponentActivity::class.java).setup().get()
+        var failure: Throwable? = null
+        thread {
+            failure = runCatching { runBlocking { PlatformCredentialUi(activity).launchConfirmIntent(intent) } }
+                .exceptionOrNull()
+        }.join()
+        assertNotNull("must throw (ConfirmCredential maps it to Cancelled), never resolve", failure)
+        assertEquals("launcher key released", emptyList<String>(), activity.confirmKeys())
     }
 }

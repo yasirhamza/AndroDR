@@ -7,6 +7,8 @@ import android.view.MotionEvent
 import android.view.View
 import androidx.activity.ComponentActivity
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.width
 import androidx.compose.material3.Text
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -14,8 +16,19 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.assertHasClickAction
+import androidx.compose.ui.test.assertIsEnabled
+import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.unit.dp
 import androidx.test.core.app.ApplicationProvider
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -206,6 +219,106 @@ class ProtectedButtonTest {
 
     @Test fun `taint resets at the next down`() {
         assertEquals(1, clicksAfter(down to obscured, up to obscured, down to 0, up to 0))
+    }
+
+    // --- semantics and layout ---
+
+    @Test fun `exposed to accessibility as one clickable enabled control carrying its label`() {
+        rule.setContent { ProtectedButton(onClick = {}) { Text("Close") } }
+        rule.onNodeWithText("Close").assertHasClickAction().assertIsEnabled()
+        rule.onAllNodesWithText("Close").assertCountEquals(1)
+        rule.onAllNodes(hasClickAction()).assertCountEquals(1)
+    }
+
+    @Test fun `content description in the content is exposed on the clickable control`() {
+        rule.setContent {
+            ProtectedButton(onClick = {}) { Text("X", Modifier.semantics { contentDescription = "Close alert" }) }
+        }
+        rule.onNodeWithContentDescription("Close alert").assertHasClickAction()
+    }
+
+    @Test fun `disabled button does not click and enabling it later does`() {
+        var host: View? = null
+        var enabled by mutableStateOf(false)
+        var clicks = 0
+        rule.setContent {
+            host = LocalView.current
+            ProtectedButton(onClick = { clicks++ }, enabled = enabled, modifier = Modifier.testTag("btn")) {
+                Text("Close")
+            }
+        }
+        rule.onNodeWithText("Close").assertIsNotEnabled()
+        val (x, y) = centreOf("btn")
+        dispatchTap(host!!, x, y, 0)
+        assertEquals("disabled button must not click", 0, clicks)
+
+        enabled = true
+        rule.waitForIdle()
+        rule.onNodeWithText("Close").assertIsEnabled()
+        dispatchTap(host!!, x, y, 0)
+        assertEquals(1, clicks)
+    }
+
+    @Test fun `the newest onClick passed on recomposition is the one invoked`() {
+        var host: View? = null
+        var second by mutableStateOf(false)
+        var firstClicks = 0
+        var secondClicks = 0
+        rule.setContent {
+            host = LocalView.current
+            val onClick: () -> Unit = if (second) ({ secondClicks++ }) else ({ firstClicks++ })
+            ProtectedButton(onClick = onClick, modifier = Modifier.testTag("btn")) { Text("Close") }
+        }
+        rule.waitForIdle()
+        second = true
+        rule.waitForIdle()
+        val (x, y) = centreOf("btn")
+        dispatchTap(host!!, x, y, 0)
+        assertEquals(0, firstClicks)
+        assertEquals(1, secondClicks)
+    }
+
+    @Test fun `caller test tag lands on a findable node with the button's bounds`() {
+        rule.setContent {
+            ProtectedButton(onClick = {}, modifier = Modifier.testTag("btn")) { Text("Close") }
+        }
+        val wrapper = rule.onNodeWithTag("btn").fetchSemanticsNode().boundsInWindow
+        val button = rule.onNodeWithText("Close", useUnmergedTree = false).fetchSemanticsNode().boundsInWindow
+        assertEquals(wrapper, button)
+    }
+
+    @Test fun `fill-width button has no dead zone at the wrapper edge`() {
+        var host: View? = null
+        var clicks = 0
+        rule.setContent {
+            host = LocalView.current
+            Column(Modifier.width(300.dp)) {
+                ProtectedButton(onClick = { clicks++ }, modifier = Modifier.fillMaxWidth().testTag("btn")) {
+                    Text("Close")
+                }
+            }
+        }
+        rule.waitForIdle()
+        val b = rule.onNodeWithTag("btn").fetchSemanticsNode().boundsInRoot
+        dispatchTap(host!!, b.right - 3f, b.center.y, 0)
+        assertEquals("tap near the right edge of a fill-width button must click", 1, clicks)
+        dispatchTap(host!!, b.left + 3f, b.center.y, 0)
+        assertEquals(2, clicks)
+    }
+
+    @Test fun `button without a size modifier stays wrap-content`() {
+        rule.setContent {
+            Column(Modifier.width(300.dp).testTag("col")) {
+                ProtectedButton(onClick = {}, modifier = Modifier.testTag("btn")) { Text("Close") }
+            }
+        }
+        val w = rule.onNodeWithTag("btn").fetchSemanticsNode().boundsInRoot.width
+        val col = rule.onNodeWithTag("col").fetchSemanticsNode().boundsInRoot.width
+        assertTrue("width $w should be well under column width $col", w < col / 2f)
+    }
+
+    @Test fun `clean system cancel then a fresh tap clicks once`() {
+        assertEquals(1, clicksAfter(down to 0, MotionEvent.ACTION_CANCEL to 0, down to 0, up to 0))
     }
 
     @Test fun `wrapper layout sets the platform obscured-touch filter and cancels the child on taint`() {

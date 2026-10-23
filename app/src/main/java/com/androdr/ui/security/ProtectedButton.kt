@@ -3,6 +3,7 @@ package com.androdr.ui.security
 import android.content.Context
 import android.os.Build
 import android.view.MotionEvent
+import android.view.ViewGroup.LayoutParams.MATCH_PARENT
 import android.widget.FrameLayout
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.material3.Button
@@ -71,10 +72,20 @@ internal class ObscuredTouchFilterLayout(context: Context) : FrameLayout(context
  * its own view. The rest of the screen stays live. No reflection: nothing here depends on library
  * internals, so R8 minification cannot break it.
  *
- * Layout: [modifier] sizes the wrapper view; the button inside is wrap-content. The content shares
- * the caller's composition locals (theme) through the parent composition context.
+ * Layout: [modifier] sizes the wrapper view and the button fills it (wrap-content when [modifier]
+ * sets no size), so the whole wrapper area is the button. The content shares the caller's
+ * composition locals (theme) through the parent composition context.
  *
- * Limits: accessibility clicks (`performClick` from an accessibility service) are not touch
+ * Semantics: accessibility sees one clickable control carrying the button's label, role and
+ * enabled state (from the inner composition). Semantics in [modifier] (test tag, `semantics {}`)
+ * attach to the wrapper node, which has the button's bounds, not to the clickable node; put a
+ * content description inside [content] to have it on the clickable node.
+ *
+ * Limits: an obscured DOWN is not consumed for Compose, so an ancestor `clickable` around this
+ * button could still receive that tap; do not nest it in one. Each instance hosts its own
+ * composition, so avoid it in long lazy lists.
+ *
+ * Accessibility clicks (`performClick` from an accessibility service) are not touch
  * events and bypass this. The device credential ([ConfirmCredential]) is the real control; this is
  * a defence-in-depth layer only.
  */
@@ -104,6 +115,9 @@ fun ProtectedButton(
                             )
                         }
                     },
+                    // Fill the wrapper: with an exact size from [modifier] (e.g. fillMaxWidth) the
+                    // button gets min = max constraints and fills it, so the wrapper has no dead zone.
+                    FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT),
                 )
             }
         },
