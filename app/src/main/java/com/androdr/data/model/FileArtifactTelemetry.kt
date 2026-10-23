@@ -12,6 +12,7 @@ data class FileArtifactTelemetry(
         "file_path" to filePath,
         "file_exists" to fileExists,
         "file_size" to fileSize,
-        "file_modified" to fileModified
+        "file_modified" to fileModified,
+        "accessible" to accessible
     )
 }

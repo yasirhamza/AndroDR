@@ -63,6 +63,15 @@ internal val IMPORT_ONLY_SERVICES: Set<String> = setOf(
     "package_install_history", "platform_compat", "db_info", "timeline",
 )
 
+/**
+ * Services that are stored but never rule-evaluated (taxonomy `status: emitter_only`).
+ * No rule may target one, so no campaign can name it in `detected_by`; if one ever did,
+ * it would report as an unknown service, which is the honest answer.
+ */
+internal val EMITTER_ONLY_SERVICES: Set<String> = setOf(
+    "usage_stats", "system_property", "adb_audit", "activity_audit",
+)
+
 /** Services whose matches come from threat lists that may still be loading. */
 private val LIST_SERVICES = setOf("dns_monitor", "app_scanner")
 private const val DNS_SERVICE = "dns_monitor"

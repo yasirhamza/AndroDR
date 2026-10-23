@@ -17,4 +17,12 @@ data class SystemPropertySnapshot(
     val value: String,
     val source: TelemetrySource,
     val capturedAt: Long,
-)
+) {
+    /** The `system_property` record (emitter-only: stored, never rule-evaluated). */
+    fun toFieldMap(): Map<String, Any?> = mapOf(
+        "key" to key,
+        "value" to value,
+        "source" to source.name,
+        "captured_at" to capturedAt,
+    )
+}

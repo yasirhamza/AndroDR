@@ -176,10 +176,10 @@ class IntrusionLogEndToEndTest {
 
     private fun mockEngine(dnsRule: SigmaRule, netRule: SigmaRule, secRule: SigmaRule): SigmaRuleEngine {
         val engine = mockk<SigmaRuleEngine>(relaxed = true)
-        every { engine.evaluateDns(any()) } answers {
+        every { engine.evaluateImportedDns(any()) } answers {
             SigmaRuleEvaluator.evaluate(
                 listOf(dnsRule),
-                firstArg<List<com.androdr.data.model.DnsEvent>>().map { it.toFieldMap() },
+                firstArg<List<com.androdr.data.model.ImportedDnsEvent>>().map { it.toFieldMap() },
                 "dns_monitor", emptyMap(), emptyMap()
             )
         }
