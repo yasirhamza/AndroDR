@@ -1,5 +1,6 @@
 package com.androdr.scanner
 
+import android.util.Log
 import com.androdr.data.db.SweepTarget
 import com.androdr.data.model.ForensicTimelineEvent
 import com.androdr.data.model.ScanState
@@ -8,6 +9,7 @@ import com.androdr.data.repo.ScanLock
 import com.androdr.data.repo.ScanWriteRepository
 import com.androdr.data.store.StoreDirtyFlag
 import com.androdr.data.store.TelemetryStore
+import com.androdr.reporting.ReportFiles
 import kotlinx.coroutines.sync.withLock
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -28,17 +30,33 @@ class StartupSweep @Inject constructor(
     private val repo: ScanWriteRepository,
     private val store: TelemetryStore,
     private val dirty: StoreDirtyFlag,
+    private val reportFiles: ReportFiles,
 ) {
-    /** Returns how many scans it removed. */
+    /**
+     * Returns how many scans it removed. A target that fails is logged, sets [StoreDirtyFlag] and
+     * is left for the next start; the other targets still go.
+     */
     suspend fun run(): Int {
         val targets = lock.mutex.withLock { repo.sweepTargets() }
+        var removed = 0
         for (target in targets) {
-            val interrupted = interruptedRow(target)
-            if (interrupted != null) repo.markForDelete(target.id, interrupted)
-            repo.completeDelete(target.id)
+            try {
+                sweep(target)
+                removed++
+            } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+                Log.e(TAG, "Startup sweep could not remove scan ${target.id}", e)
+                dirty.set()
+            }
         }
         if (targets.isNotEmpty() || dirty.isSet()) store.gcUnobservedUnpinned()
-        return targets.size
+        runCatching { reportFiles.deleteStale() }.onFailure { Log.w(TAG, "Stale report cleanup failed", it) }
+        return removed
+    }
+
+    private suspend fun sweep(target: SweepTarget) {
+        val interrupted = interruptedRow(target)
+        if (interrupted != null) repo.markForDelete(target.id, interrupted)
+        repo.completeDelete(target.id)
     }
 
     private fun interruptedRow(target: SweepTarget): ForensicTimelineEvent? {
@@ -56,6 +74,7 @@ class StartupSweep @Inject constructor(
     }
 
     companion object {
+        private const val TAG = "StartupSweep"
         const val SOURCE = "androdr_store"
         const val CATEGORY = "import_interrupted"
     }

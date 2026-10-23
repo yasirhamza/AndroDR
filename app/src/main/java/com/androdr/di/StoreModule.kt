@@ -2,6 +2,7 @@ package com.androdr.di
 
 import android.content.Context
 import android.os.StatFs
+import java.io.File
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.preferencesDataStore
@@ -17,6 +18,7 @@ import com.androdr.data.store.EventDisplay
 import com.androdr.data.store.StoragePreflight
 import com.androdr.data.store.TelemetryDictionaries
 import com.androdr.data.store.TelemetryRecordCodec
+import com.androdr.reporting.ReportFiles
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -91,4 +93,8 @@ object StoreModule {
     @Singleton
     fun provideStoragePreflight(@ApplicationContext ctx: Context): StoragePreflight =
         StoragePreflight { StatFs(ctx.filesDir.path) }
+
+    @Provides
+    @Singleton
+    fun provideReportFiles(@ApplicationContext ctx: Context): ReportFiles = ReportFiles(File(ctx.cacheDir, "reports"))
 }

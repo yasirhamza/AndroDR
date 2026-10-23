@@ -116,10 +116,14 @@ interface ForensicTimelineEventDao {
     // `TimelineRowDeleter`, which reads the paired `recordIds*` first and releases those facts in
     // the same transaction (spec §5.1 Pins; gated by TimelineRowDeleterTest).
 
-    @Query("DELETE FROM forensic_timeline WHERE createdAt < :cutoff")
+    /** The 30-day prune; persistent (audit/closure) rows are never pruned. */
+    @Query("DELETE FROM forensic_timeline WHERE createdAt < :cutoff AND persistent = 0")
     suspend fun deleteOlderThan(cutoff: Long)
 
-    @Query("SELECT DISTINCT recordId FROM forensic_timeline WHERE createdAt < :cutoff AND recordId IS NOT NULL")
+    @Query(
+        "SELECT DISTINCT recordId FROM forensic_timeline " +
+            "WHERE createdAt < :cutoff AND persistent = 0 AND recordId IS NOT NULL"
+    )
     suspend fun recordIdsOlderThan(cutoff: Long): List<Long>
 
     @Query("DELETE FROM forensic_timeline WHERE source = :source")
@@ -138,12 +142,19 @@ interface ForensicTimelineEventDao {
     )
     suspend fun recordIdsByScanId(scanResultId: Long): List<Long>
 
-    /** "Clear all": every row except persistent audit/closure rows. */
-    @Query("DELETE FROM forensic_timeline WHERE persistent = 0")
-    suspend fun deleteAllNonPersistent()
+    /** "Clear all": non-persistent rows that are scan-less or whose scan no longer exists. */
+    @Query(
+        "DELETE FROM forensic_timeline WHERE persistent = 0 AND (scanResultId = -1 OR NOT EXISTS " +
+            "(SELECT 1 FROM ScanResult s WHERE s.id = forensic_timeline.scanResultId))"
+    )
+    suspend fun deleteUnownedNonPersistent()
 
-    @Query("SELECT DISTINCT recordId FROM forensic_timeline WHERE persistent = 0 AND recordId IS NOT NULL")
-    suspend fun recordIdsNonPersistent(): List<Long>
+    @Query(
+        "SELECT DISTINCT recordId FROM forensic_timeline WHERE persistent = 0 AND recordId IS NOT NULL " +
+            "AND (scanResultId = -1 OR NOT EXISTS " +
+            "(SELECT 1 FROM ScanResult s WHERE s.id = forensic_timeline.scanResultId))"
+    )
+    suspend fun recordIdsUnownedNonPersistent(): List<Long>
 
     /**
      * Of [recordIds], the `(ruleId, recordId)` pairs a visible finding row already carries — the

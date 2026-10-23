@@ -25,6 +25,10 @@ class TimelineRowDeleterTest {
 
     @After fun tearDown() = f.close()
 
+    private companion object {
+        const val DAY = 24L * 60 * 60 * 1000
+    }
+
     /** A fact pinned only by one Timeline row (its observation is gone, its scan deleted). */
     private suspend fun pinnedOrphan(row: ForensicTimelineEvent): Long {
         f.scan(1L, ScanState.COMPLETE)
@@ -48,7 +52,8 @@ class TimelineRowDeleterTest {
             row(createdAt = 10L) to { deleter.olderThan(11L) },
             row(source = "intrusion_log") to { deleter.bySource("intrusion_log") },
             row(scan = 7L) to { deleter.byScanId(7L) },
-            row() to { deleter.allNonPersistent() },
+            row(scan = 404L) to { deleter.unownedNonPersistent() },
+            row(scan = -1L) to { deleter.unownedNonPersistent() },
         )
         for ((r, delete) in paths) {
             pinnedOrphan(r)
@@ -60,10 +65,32 @@ class TimelineRowDeleterTest {
     }
 
     @Test
+    fun `the 30-day prune keeps a 31-day-old persistent row and removes a non-persistent one`() = runBlocking {
+        val now = 100L * DAY
+        val old = now - 31 * DAY
+        val dao = f.db.forensicTimelineEventDao()
+        dao.insert(row(createdAt = old).copy(description = "interrupted", persistent = true))
+        dao.insert(row(createdAt = old).copy(description = "stale"))
+        dao.insert(row(createdAt = now).copy(description = "fresh"))
+        f.db.withTransaction { deleter.olderThan(now - 30 * DAY) }
+        assertEquals(listOf("fresh", "interrupted"), dao.getAllForExport().map { it.description }.sorted())
+    }
+
+    @Test
+    fun `clear-all keeps rows of a scan that still exists`() = runBlocking {
+        f.scan(7L, ScanState.COMPLETE)
+        f.db.forensicTimelineEventDao().insert(row(scan = 7L))
+        f.db.forensicTimelineEventDao().insert(row(scan = -1L))
+        f.db.withTransaction { deleter.unownedNonPersistent() }
+        assertEquals(listOf(7L), f.db.forensicTimelineEventDao().getAllForExport().map { it.scanResultId })
+    }
+
+    @Test
     fun `persistent rows survive scan deletion and clear-all, and keep their pin`() = runBlocking {
         pinnedOrphan(row(scan = 7L).copy(persistent = true))
         f.db.withTransaction { deleter.byScanId(7L) }
-        f.db.withTransaction { deleter.allNonPersistent() }
+        f.db.withTransaction { deleter.unownedNonPersistent() }
+        f.db.withTransaction { deleter.olderThan(Long.MAX_VALUE) }
         assertEquals(1L, f.count("SELECT COUNT(*) FROM forensic_timeline"))
         assertEquals(1L, facts())
     }
@@ -72,7 +99,7 @@ class TimelineRowDeleterTest {
     fun `no production code calls a raw forensic_timeline delete except TimelineRowDeleter`() {
         val root = listOf(File("src/main/java/com/androdr"), File("app/src/main/java/com/androdr"))
             .first { it.isDirectory }
-        val raw = Regex("\\.(deleteOlderThan|deleteBySource|deleteByScanId|deleteAllNonPersistent)\\(")
+        val raw = Regex("\\.(deleteOlderThan|deleteBySource|deleteByScanId|deleteUnownedNonPersistent)\\(")
         val offenders = root.walkTopDown().filter { it.extension == "kt" && it.name != "TimelineRowDeleter.kt" }
             .flatMap { file ->
                 file.readLines().withIndex()

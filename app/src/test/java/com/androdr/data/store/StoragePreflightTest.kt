@@ -10,6 +10,7 @@ import com.androdr.data.store.StoreFixture.Companion.dns
 import com.androdr.scanner.ChunkedScanWriter
 import com.androdr.scanner.EvaluateOnlyDedup
 import com.androdr.scanner.WriterFixture
+import com.androdr.sigma.StoreRecord
 import com.androdr.scanner.WriterFixture.Companion.APP_RULE
 import com.androdr.scanner.WriterFixture.Companion.DNS_RULE
 import com.androdr.scanner.WriterFixture.Companion.EVIL_APP
@@ -136,7 +137,7 @@ class StoragePreflightTest {
                 store.persistChunk(any(), any(), any(), any(), any(), any(), any(), any(), any())
             } throws SQLiteFullException("full")
             val repo = spyk(w.repo)
-            coEvery { repo.finish(any(), any(), any(), any()) } throws SQLiteFullException("still full")
+            coEvery { repo.finish(any(), any(), any(), any(), any()) } throws SQLiteFullException("still full")
             w.store = store
             w.repo = repo
             val s = w.writer.begin(w.scan(1L), liveEvents = true)
@@ -166,15 +167,32 @@ class StoragePreflightTest {
     fun `evaluate-only dedup is bounded at 200000 key prefixes`() {
         assertEquals(200_000, EvaluateOnlyDedup.MAX_KEYS)
         val dedup = EvaluateOnlyDedup(capacity = 1)
+        val key = { r: StoreRecord -> w.f.store.sourceFactKey(il, IMPORT_CAPTURED, r) }
         val a = securityLine(1L)
         val b = securityLine(2L)
-        assertEquals(listOf(false, true), dedup.duplicates("security_log", listOf(a, a)).toList())
+        assertEquals(listOf(false, true), dedup.duplicates("security_log", listOf(a, a), key).toList())
         // Full: b is not remembered, so its repeat is no longer caught (bounded memory over exactness).
-        assertEquals(listOf(false, false, true), dedup.duplicates("security_log", listOf(b, b, a)).toList())
+        assertEquals(listOf(false, false, true), dedup.duplicates("security_log", listOf(b, b, a), key).toList())
         // Records with no source key are never exact duplicates (distinct facts by occurrence).
-        val noKey = EvaluateOnlyDedup().duplicates("dns_monitor", listOf(dns("x"), dns("x")))
+        val noKey = EvaluateOnlyDedup().duplicates("dns_monitor", listOf(dns("x"), dns("x")), key)
         assertEquals(listOf(false, false), noKey.toList())
     }
+
+    @Test
+    fun `evaluate-only dedup keys on the stored form, so an envelope-only difference is still one finding`() =
+        runBlocking {
+            val withEnvelope = securityLine()
+            val bare = StoreRecord(withEnvelope.fields - "captured_at", withEnvelope.sourceEventKey)
+            // Stored normally, both strip to one body, so they are one fact and one observation.
+            val stored = w.writer.begin(w.scan(1L, il), liveEvents = false)
+            stored.append("security_log", il, IMPORT_CAPTURED, listOf(withEnvelope, bare))
+            assertEquals(1, stored.finish().scan.findings.size)
+            // Evaluate-only must agree.
+            w.freeBytes = 10 * mb
+            val evalOnly = w.writer.begin(w.scan(2L, il), liveEvents = false)
+            evalOnly.append("security_log", il, IMPORT_CAPTURED, listOf(withEnvelope, bare))
+            assertEquals(1, evalOnly.finish().scan.findings.size)
+        }
 
     @Test
     fun `chunk size is 5000`() {

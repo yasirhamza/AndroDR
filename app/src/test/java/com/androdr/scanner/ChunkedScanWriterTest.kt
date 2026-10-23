@@ -4,7 +4,10 @@ import com.androdr.data.db.Converters
 import com.androdr.data.model.ScanState
 import com.androdr.data.model.TelemetrySource
 import com.androdr.data.model.TelemetryState
+import com.androdr.data.model.ScanResult
+import com.androdr.data.repo.FindingTotals
 import com.androdr.data.repo.ScanNotInProgressException
+import com.androdr.data.repo.SessionHooks
 import com.androdr.data.store.StoreFixture.Companion.CAPTURED
 import com.androdr.data.store.StoreFixture.Companion.app
 import com.androdr.data.store.StoreFixture.Companion.dns
@@ -154,9 +157,11 @@ class ChunkedScanWriterTest {
     }
 
     @Test
-    fun `S3 - a throw inside finish after the last write rolls the whole finish back`() = runBlocking {
+    fun `S3 - a throw inside finish after the Timeline writes and the guarded complete rolls it all back`() =
+        runBlocking {
+        // summarize runs after the finding rows are inserted and the scan is set COMPLETE.
         val hooks = object : SessionHooks {
-            override fun summarize(scan: com.androdr.data.model.ScanResult) = error("boom after the last write")
+            override fun summarize(scan: ScanResult, totals: FindingTotals): ScanResult = error("boom")
         }
         val s = w.writer.begin(w.scan(1L), liveEvents = false, hooks)
         s.append("dns_monitor", live, CAPTURED, listOf(dns(EVIL_DOMAIN)))
@@ -274,12 +279,58 @@ class ChunkedScanWriterTest {
         val cap = orchestrator()
         for ((n, seed) in listOf(1_500 to 1, 1_500 to 2, 800 to 3, 1_112 to 4)) {
             val all = fixture(n, seed)
-            val top = FindingsTopK()
+            val top = FindingsTopK.forSource(il)
             all.forEach { top.offer(it, null) }
-            val kept = top.result().map { it.finding }
-            assertEquals("n=$n seed=$seed", cap.capTriggeredFindings(all), kept.filter { it.triggered })
-            assertEquals(all.filter { !it.triggered }, kept.filter { !it.triggered })
+            assertEquals("n=$n seed=$seed", cap.capTriggeredFindings(all), top.result().map { it.finding })
+            assertEquals(n.toLong(), top.totals().seen)
+            assertEquals(all.count { it.triggered }.toLong(), top.totals().triggered)
         }
+    }
+
+    @Test
+    fun `live and bug-report sessions keep every finding in arrival order, as today`() {
+        for (source in listOf(live, TelemetrySource.BUGREPORT_IMPORT)) {
+            val all = fixture(1_500, 9)
+            val top = FindingsTopK.forSource(source)
+            all.forEach { top.offer(it, null) }
+            assertEquals("$source", all, top.result().map { it.finding })
+        }
+    }
+
+    @Test
+    fun `totals count every finding past the cap`() {
+        val top = FindingsTopK(cap = 1)
+        val malware = Finding(ruleId = "m", title = "m", level = "critical", category = FindingCategory.APP_RISK,
+            impliesFlags = listOf("known_malware"))
+        repeat(3) { top.offer(malware, null) }
+        top.offer(malware.copy(ruleId = "x", triggered = false), null)
+        assertEquals(FindingTotals(seen = 4, triggered = 3, knownMalware = 4, triggeredByRule = mapOf("m" to 3L)),
+            top.totals())
+        assertEquals(1, top.result().size)
+    }
+
+    @Test
+    fun `a live session with 1500 findings keeps all of them`() = runBlocking {
+        val s = w.writer.begin(w.scan(1L), liveEvents = false)
+        s.appendAll("dns_monitor", live, CAPTURED,
+            (0 until 1_500).asSequence().map { dns(EVIL_DOMAIN, time = 1_000L + it, key = "dns:$it") })
+        val r = s.finish()
+        assertEquals(1_500, r.scan.findings.size)
+        assertEquals(1_500L, w.count("SELECT COUNT(*) FROM forensic_timeline WHERE scanResultId = 1"))
+    }
+
+    @Test
+    fun `summarize sees the totals of findings dropped by the intrusion-log cap`() = runBlocking {
+        var seen: FindingTotals? = null
+        val hooks = object : SessionHooks {
+            override fun summarize(scan: ScanResult, totals: FindingTotals): ScanResult = scan.also { seen = totals }
+        }
+        val s = w.writer.begin(w.scan(1L, il), liveEvents = false, hooks)
+        s.appendAll("dns_monitor", il, IMPORT_CAPTURED,
+            (0 until 1_200).asSequence().map { dns(EVIL_DOMAIN, time = 1_000L + it, key = "dns $it") })
+        assertEquals(1_000, s.finish().scan.findings.size)
+        assertEquals(1_200L, seen?.triggered)
+        assertEquals(mapOf(DNS_RULE to 1_200L), seen?.triggeredByRule)
     }
 
     @Test

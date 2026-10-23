@@ -1,55 +1,10 @@
 package com.androdr.scanner
 
-import com.androdr.data.db.toForensicTimelineEvent
-import com.androdr.data.model.ForensicTimelineEvent
-import com.androdr.data.model.ScanResult
 import com.androdr.data.model.TelemetrySource
+import com.androdr.data.repo.FindingTotals
+import com.androdr.data.repo.KeptFinding
 import com.androdr.sigma.Finding
-import com.androdr.sigma.StoreRecord
 import java.util.PriorityQueue
-
-/**
- * What a writer adds to a [ChunkedScanWriter.Session]'s finishing transaction in Phases A–C
- * (spec §5.2 Interim). Every member has a no-op default; [NONE] is the plain session.
- *
- * Task A7b fills it per writer: the bounded newest-N event-row heaps (fed from [onChunk], whose
- * fact ids let the rows carry `recordId`), the intrusion-log replace-on-reimport sweep
- * ([sweepPrior]) and each writer's finding-row shape ([findingRow]).
- */
-interface SessionHooks {
-    /**
-     * After each chunk: its fact ids and observed-this-scan flags by chunk index, or null for
-     * both when the chunk was only evaluated (evaluate-only mode).
-     */
-    @Suppress("LongParameterList")
-    fun onChunk(
-        service: String, source: TelemetrySource, chunk: List<StoreRecord>, firstOrdinal: Int,
-        factIds: LongArray?, observed: BooleanArray?,
-    ) = Unit
-
-    /** First statement of the finishing transaction (e.g. `deletePriorIntrusionLogRows`, excluding [scanId]). */
-    suspend fun sweepPrior(scanId: Long) = Unit
-
-    /**
-     * The Timeline row of one triggered finding, built from `Finding.toForensicTimelineEvent` (which
-     * carries the finding's `level`); `finish` sets its `recordId` and `scanResultId`.
-     */
-    fun findingRow(finding: Finding, scan: ScanResult): ForensicTimelineEvent =
-        finding.toForensicTimelineEvent(scan, isBugreport = scan.source != TelemetrySource.LIVE_SCAN)
-
-    /** Bounded event rows written in the finishing transaction, after the finding rows. */
-    fun interimRows(scan: ScanResult): List<ForensicTimelineEvent> = emptyList()
-
-    /** Summary columns (counts, scanner errors) of the completed scan, given its kept findings. */
-    fun summarize(scan: ScanResult): ScanResult = scan
-
-    companion object {
-        val NONE: SessionHooks = object : SessionHooks {}
-    }
-}
-
-/** A finding the session keeps, with the fact its Timeline row pins (null when nothing was stored). */
-class KeptFinding(val finding: Finding, val recordId: Long?)
 
 /** The ranking the 1,000-finding persistence cap uses (#342 B3): severity, then the finding's own time. */
 internal object FindingRank {
@@ -69,41 +24,67 @@ internal object FindingRank {
 }
 
 /**
- * Streaming top-K over a session's findings: the same set and order as
- * [ScanOrchestrator.capTriggeredFindings] on the full list, holding at most [cap] triggered
- * findings at a time. Untriggered (safe-state) findings keep their first [cap] in order.
+ * A session's kept findings (spec §5.2 Interim), keeping today's scope of the 1,000-finding cap:
+ *  - [cap] non-null (intrusion-log imports): a streaming top-K with the same set and order as
+ *    [ScanOrchestrator.capTriggeredFindings] on the full list — at most [cap] triggered findings
+ *    held at a time, untriggered ones dropped as today;
+ *  - [cap] null (live scans, bug-report imports): every finding, in arrival order, as today.
+ * [totals] counts every finding offered, before the cap.
  */
-class FindingsTopK(private val cap: Int = ScanOrchestrator.FINDINGS_PERSIST_CAP) {
+class FindingsTopK(private val cap: Int?) {
     private class Entry(val kept: KeptFinding, val seq: Long) {
         val severity = FindingRank.severity(kept.finding.level)
         val time = FindingRank.eventTimeMs(kept.finding)
     }
 
     /** Better first: severity desc, time desc, then arrival (a stable sort keeps the earlier). */
-    private val better = compareByDescending<Entry> { it.severity }.thenByDescending { it.time }.thenBy { it.seq }
+    private val better =
+        compareByDescending<Entry> { it.severity }.thenByDescending { it.time }.thenBy { it.seq }
     private val heap = PriorityQueue(better.reversed())
-    private val untriggered = ArrayList<KeptFinding>()
+    private val all = ArrayList<KeptFinding>()
     private var seq = 0L
-
-    /** Triggered findings offered so far. */
-    var triggeredSeen: Long = 0
-        private set
+    private var seen = 0L
+    private var triggered = 0L
+    private var knownMalware = 0
+    private val byRule = HashMap<String, Long>()
 
     fun offer(finding: Finding, recordId: Long?) {
+        count(finding)
         val kept = KeptFinding(finding, recordId)
-        if (!finding.triggered) {
-            if (untriggered.size < cap) untriggered += kept
-            return
+        when {
+            cap == null -> all += kept
+            !finding.triggered -> Unit
+            else -> {
+                heap += Entry(kept, seq++)
+                if (heap.size > cap) heap.poll()
+            }
         }
-        triggeredSeen++
-        heap += Entry(kept, seq++)
-        if (heap.size > cap) heap.poll()
     }
 
-    /** The kept triggered findings (input order below the cap, ranked above it), then the untriggered. */
+    /** Capped: the kept triggered findings, input order below the cap and ranked above it. Uncapped: all. */
     fun result(): List<KeptFinding> {
+        if (cap == null) return all.toList()
         val entries = heap.toMutableList()
-        if (triggeredSeen <= cap) entries.sortBy { it.seq } else entries.sortWith(better)
-        return entries.map { it.kept } + untriggered
+        if (triggered <= cap) entries.sortBy { it.seq } else entries.sortWith(better)
+        return entries.map { it.kept }
+    }
+
+    fun totals() = FindingTotals(seen, triggered, knownMalware, byRule.toMap())
+
+    private fun count(finding: Finding) {
+        seen++
+        if (finding.level == "critical" && "known_malware" in finding.impliesFlags) knownMalware++
+        if (finding.triggered) {
+            triggered++
+            byRule[finding.ruleId] = (byRule[finding.ruleId] ?: 0L) + 1
+        }
+    }
+
+    companion object {
+        /** Today's cap scope: only intrusion-log imports are capped (#342 B3). */
+        fun forSource(source: TelemetrySource): FindingsTopK {
+            val capped = source == TelemetrySource.INTRUSION_LOG_IMPORT
+            return FindingsTopK(if (capped) ScanOrchestrator.FINDINGS_PERSIST_CAP else null)
+        }
     }
 }

@@ -19,7 +19,7 @@ class TimelineRowDeleter @Inject constructor(
     private val dao: ForensicTimelineEventDao,
     private val store: TelemetryStore,
 ) {
-    /** The 30-day prune. */
+    /** The 30-day prune of non-persistent rows (audit/closure rows are kept). */
     suspend fun olderThan(cutoff: Long) {
         val pinned = dao.recordIdsOlderThan(cutoff)
         dao.deleteOlderThan(cutoff)
@@ -39,10 +39,10 @@ class TimelineRowDeleter @Inject constructor(
         store.releaseUnpinned(pinned)
     }
 
-    /** "Clear all": every non-persistent row. */
-    suspend fun allNonPersistent() {
-        val pinned = dao.recordIdsNonPersistent()
-        dao.deleteAllNonPersistent()
+    /** "Clear all": non-persistent rows that are scan-less or whose scan no longer exists. */
+    suspend fun unownedNonPersistent() {
+        val pinned = dao.recordIdsUnownedNonPersistent()
+        dao.deleteUnownedNonPersistent()
         store.releaseUnpinned(pinned)
     }
 }

@@ -7,6 +7,7 @@ import androidx.annotation.VisibleForTesting
 import com.androdr.data.db.DnsEventDao
 import com.androdr.data.db.ForensicTimelineEventDao
 import com.androdr.data.db.toForensicTimelineEvent
+import com.androdr.data.repo.TimelineRowDeleter
 import com.androdr.data.model.ForensicTimelineEvent
 import com.androdr.data.model.ScanResult
 import com.androdr.data.model.ScannerFailure
@@ -76,7 +77,7 @@ class ScanOrchestrator @Inject constructor(
     private val scanRepository: ScanRepository,
     private val dnsEventDao: DnsEventDao,
     private val forensicTimelineEventDao: ForensicTimelineEventDao,
-    private val timelineRows: com.androdr.data.repo.TimelineRowDeleter,
+    private val timelineRows: TimelineRowDeleter,
     private val installEventEmitter: InstallEventEmitter,
     private val deviceAdminGrantEmitter: DeviceAdminGrantEmitter,
     private val sigmaRuleEngine: SigmaRuleEngine,

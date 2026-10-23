@@ -29,15 +29,26 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import java.io.File
+import java.nio.file.Files
+import com.androdr.reporting.ReportFiles
+import com.androdr.data.repo.ScanRepository
 
 /** S3 / Review Focus 5: the startup sweep, the writer lock, the dirty flag and scan deletion. */
 @RunWith(RobolectricTestRunner::class)
 class StartupSweepTest {
     private val w = WriterFixture()
 
-    @After fun tearDown() = w.close()
+    @After fun tearDown() {
+        w.close()
+        reportsDir.deleteRecursively()
+    }
 
-    private fun sweep(repo: ScanWriteRepository = w.repo) = StartupSweep(w.lock, repo, w.f.store, w.f.dirty)
+    private val reportsDir: File = Files.createTempDirectory("reports").toFile()
+    private val clock = 10L * 24 * 60 * 60 * 1000
+
+    private fun sweep(repo: ScanWriteRepository = w.repo) =
+        StartupSweep(w.lock, repo, w.f.store, w.f.dirty, ReportFiles(reportsDir) { clock })
 
     private fun state(id: Long): String? = w.f.db.openHelper.readableDatabase
         .query("SELECT state FROM ScanResult WHERE id = $id").use { c -> if (c.moveToFirst()) c.getString(0) else null }
@@ -109,6 +120,29 @@ class StartupSweepTest {
         }
 
     @Test
+    fun `a target that fails is logged, sets the dirty flag, and the other targets are still swept`() = runBlocking {
+        w.f.scan(1L, ScanState.IN_PROGRESS)
+        w.f.scan(2L, ScanState.IN_PROGRESS)
+        val repo = spyk(w.repo)
+        coEvery { repo.completeDelete(1L) } throws IllegalStateException("cannot delete 1")
+        assertEquals(1, sweep(repo).run())
+        assertEquals("left for the next start", "IN_PROGRESS", state(1L))
+        assertEquals(null, state(2L))
+        assertFalse("gc ran after the failure and cleared the flag", w.f.dirty.isSet())
+    }
+
+    @Test
+    fun `the sweep deletes stale report and export files and keeps fresh ones`() = runBlocking {
+        val stale = File(reportsDir, "androdr_report_old.txt").apply { writeText("x") }
+        val fresh = File(reportsDir, "androdr_timeline_new.csv").apply { writeText("y") }
+        stale.setLastModified(clock - ReportFiles.STALE_AFTER_MS - 1)
+        fresh.setLastModified(clock - 1_000)
+        sweep().run()
+        assertFalse(stale.exists())
+        assertTrue(fresh.exists())
+    }
+
+    @Test
     fun `a scan started during the sweep survives it`() = runBlocking {
         w.f.scan(1L, ScanState.IN_PROGRESS)
         val repo = spyk(w.repo)
@@ -167,7 +201,7 @@ class StartupSweepTest {
 
     // ── ScanRepository deletes ──────────────────────────────────────────────────
 
-    private fun scanRepository(lock: ScanLock = w.lock) = com.androdr.data.repo.ScanRepository(
+    private fun scanRepository(lock: ScanLock = w.lock) = ScanRepository(
         database = w.f.db, scanResultDao = w.f.db.scanResultDao(), dnsEventDao = w.f.db.dnsEventDao(),
         forensicTimelineEventDao = w.f.db.forensicTimelineEventDao(),
         indicatorResolver = io.mockk.mockk(relaxed = true),
@@ -190,6 +224,50 @@ class StartupSweepTest {
         assertEquals(0L, w.count("SELECT COUNT(*) FROM record_body"))
         assertEquals(listOf("kept"), w.f.db.forensicTimelineEventDao().getAllForExport().map { it.description })
     }
+
+    @Test
+    fun `clear-all - a writer that begins after the first phase completes with its data intact`() = runBlocking {
+        val old = w.writer.begin(w.scan(1L), liveEvents = false)
+        old.append("dns_monitor", TelemetrySource.LIVE_SCAN, CAPTURED, listOf(dns(EVIL_DOMAIN, time = 1L)))
+        old.finish()
+        val snapshot = w.lock.mutex.withLock { w.repo.markAllForDelete() }
+        // The writer takes the lock after "Clear all" released it, before its second phase runs.
+        val s = w.lock.withWriter {
+            w.writer.begin(w.scan(2L), liveEvents = false).also {
+                it.append("dns_monitor", TelemetrySource.LIVE_SCAN, CAPTURED, listOf(dns(EVIL_DOMAIN, time = 2L)))
+            }
+        }
+        w.repo.completeDeleteAll(snapshot)
+        val r = s.finish()
+        assertEquals(listOf(1L), snapshot)
+        assertEquals(null, state(1L))
+        assertEquals("COMPLETE", state(2L))
+        assertEquals(1, r.scan.findings.size)
+        assertEquals(1L, w.count("SELECT COUNT(*) FROM scan_record WHERE scanId = 2"))
+        assertEquals(1L, w.count("SELECT COUNT(*) FROM forensic_timeline WHERE scanResultId = 2"))
+        assertEquals(1L, w.visibleFacts())
+    }
+
+    @Test
+    fun `a delete waiting on a lock held by a non-writer gives up, changes nothing and leaves no lock`() =
+        runBlocking {
+            val s = w.writer.begin(w.scan(1L), liveEvents = false)
+            s.append("dns_monitor", TelemetrySource.LIVE_SCAN, CAPTURED, listOf(dns(EVIL_DOMAIN)))
+            s.finish()
+            val repo = scanRepository().apply { deleteLockWaitMs = 150L }
+            val owner = Any()
+            w.lock.mutex.lock(owner) // e.g. a retention or backfill batch: writerRunning stays false
+            assertFalse(w.lock.writerRunning.value)
+            assertFalse(repo.deleteScan(1L))
+            assertFalse(repo.deleteAllScans())
+            assertEquals("COMPLETE", state(1L))
+            assertTrue("still held by its owner only", w.lock.mutex.holdsLock(owner))
+            w.lock.mutex.unlock(owner)
+            assertFalse("the refused deletes left no lock behind", w.lock.mutex.isLocked)
+            assertTrue(repo.deleteScan(1L))
+            assertFalse(w.lock.mutex.isLocked)
+            assertEquals(null, state(1L))
+        }
 
     @Test
     fun `deleteAllScans clears every scan but persistent rows, and both refuse while a writer runs`() = runBlocking {

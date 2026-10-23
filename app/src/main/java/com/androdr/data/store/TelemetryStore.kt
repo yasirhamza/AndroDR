@@ -92,12 +92,14 @@ class TelemetryStore @Inject constructor(
         val stripped = codec.strip(fields, source, capturedAt)
         val canonical = codec.canonicalJson(stripped.fields)
         val bodyHash = HashKeys.h128(canonical)
-        val hex = bodyHash.joinToString("") { "%02x".format(it) }
         val eventTime = TaxonomyContract.eventTimeOf(service, fields)
         val encoded = codec.encode(service, canonical, eventTime != null, deflater)
         val key = record.sourceEventKey
-        val factKey =
-            if (key != null) HashKeys.h128("src:$key#$hex") else HashKeys.h128("$hex#${counter.next(bodyHash)}")
+        val factKey = if (key != null) {
+            keyedFactKey(key, bodyHash)
+        } else {
+            HashKeys.h128("${hex(bodyHash)}#${counter.next(bodyHash)}")
+        }
         val fact = TelemetryFact(
             service = service, factKey = factKey, sourceKey = key?.let { HashKeys.h128(it) },
             subjectKey = subjectKeyOf(service, fields), eventTime = eventTime,
@@ -109,6 +111,16 @@ class TelemetryStore @Inject constructor(
         )
         val body = RecordBody(bodyHash, encoded.encoding, encoded.dictVersion, encoded.body, encoded.rawBytes)
         return Prepared(body, fact, eventTime != null, stripped.strippedKeys)
+    }
+
+    /**
+     * The fact key [persistChunk] gives [record] when it has a source event key (stripped and
+     * canonicalised exactly as stored), or null without one. Evaluate-only deduplication uses it.
+     */
+    fun sourceFactKey(source: TelemetrySource, capturedAt: Long, record: StoreRecord): ByteArray? {
+        val key = record.sourceEventKey ?: return null
+        val canonical = codec.canonicalJson(codec.strip(record.fields, source, capturedAt).fields)
+        return keyedFactKey(key, HashKeys.h128(canonical))
     }
 
     /** Each record's fact id, and whether this chunk created it (first occurrence only). */
@@ -225,6 +237,12 @@ class TelemetryStore @Inject constructor(
     }
 
     companion object {
+        private fun hex(hash: ByteArray): String = hash.joinToString("") { "%02x".format(it) }
+
+        /** `H("src:" + sourceEventKey + "#" + bodyHash)` (spec §5.1 fact identity). */
+        private fun keyedFactKey(key: String, bodyHash: ByteArray): ByteArray =
+            HashKeys.h128("src:$key#${hex(bodyHash)}")
+
         /** Observations (or facts, for GC) per delete transaction. */
         const val DELETE_BATCH = 500
 

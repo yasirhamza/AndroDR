@@ -6,8 +6,9 @@ import com.androdr.data.db.RuleRecord
 import com.androdr.data.model.ScanResult
 import com.androdr.data.model.TelemetrySource
 import com.androdr.data.model.TelemetryState
+import com.androdr.data.repo.KeptFinding
 import com.androdr.data.repo.ScanWriteRepository
-import com.androdr.data.store.CanonicalJson
+import com.androdr.data.repo.SessionHooks
 import com.androdr.data.store.ChunkResult
 import com.androdr.data.store.HashKeys
 import com.androdr.data.store.OccurrenceCounter
@@ -70,7 +71,7 @@ class ChunkedScanWriter @Inject constructor(
         private val isImport = scan.source != TelemetrySource.LIVE_SCAN
         private val nextOrdinal = HashMap<String, Int>()
         private val counters = HashMap<String, OccurrenceCounter>()
-        private val topK = FindingsTopK()
+        private val topK = FindingsTopK.forSource(scan.source)
         private var dedup: EvaluateOnlyDedup? = null
         private var reserveBreached = false
         private var newFacts = 0
@@ -101,7 +102,7 @@ class ChunkedScanWriter @Inject constructor(
                 hooks.onChunk(service, source, chunk, first, result.factIdByChunkIndex,
                     result.observedThisScanByChunkIndex)
             } else {
-                val dup = checkNotNull(dedup).duplicates(service, chunk)
+                val dup = checkNotNull(dedup).duplicates(service, chunk) { store.sourceFactKey(source, capturedAt, it) }
                 findings.forEach { f -> if (dup.getOrNull(f.ordinal - first) != true) topK.offer(f, null) }
                 hooks.onChunk(service, source, chunk, first, null, null)
             }
@@ -149,7 +150,7 @@ class ChunkedScanWriter @Inject constructor(
             val kept = topK.result()
             val spaceToFree = if (reserveBreached) preflight.shortfall() else 0L
             val completed = try {
-                repo.finish(scan, kept, hooks, state)
+                repo.finish(scan, kept, topK.totals(), hooks, state)
             } catch (e: SQLiteFullException) {
                 return inMemoryResult(kept, spaceToFree, e)
             }
@@ -197,7 +198,7 @@ class ChunkedScanWriter @Inject constructor(
                 health.set()
                 runCatching { repo.cleanupDelete(scan.id) }.exceptionOrNull()?.let { cause.addSuppressed(it) }
             }
-            val inMemory = hooks.summarize(scan.copy(findings = kept.map { it.finding }))
+            val inMemory = hooks.summarize(scan.copy(findings = kept.map { it.finding }), topK.totals())
                 .copy(id = scan.id, telemetryState = TelemetryState.FAILED)
             return WriteResult(newFacts, alreadyStored, duplicatesDropped, TelemetryState.FAILED, inMemory, false,
                 spaceToFree)
@@ -213,18 +214,23 @@ class ChunkedScanWriter @Inject constructor(
 /**
  * Evaluate-only duplicate filter (spec §9 M1): stands in for the store's unique
  * `(scanId, recordId)` once nothing is stored. Only records with a source event key can be exact
- * duplicates (id-less content repeats are distinct facts by occurrence). Remembers at most
- * [capacity] 64-bit key prefixes (~3 MB at 200,000); past that, nothing more is deduplicated.
+ * duplicates (id-less content repeats are distinct facts by occurrence); the key is the store's own
+ * fact key ([TelemetryStore.sourceFactKey]) with the service. Remembers at most [capacity] 64-bit
+ * prefixes (~3 MB at 200,000); past that, nothing more is deduplicated.
  */
 internal class EvaluateOnlyDedup(private val capacity: Int = MAX_KEYS) {
     private val seen = MutableLongSet()
 
     /** Per chunk index: true when that record repeats one already seen in this session. */
-    fun duplicates(service: String, chunk: List<StoreRecord>): BooleanArray = BooleanArray(chunk.size) { i ->
-        val key = chunk[i].sourceEventKey ?: return@BooleanArray false
-        val hash = HashKeys.h128("$service\u0000$key\u0000${CanonicalJson.write(chunk[i].fields)}")
+    fun duplicates(service: String, chunk: List<StoreRecord>, factKey: (StoreRecord) -> ByteArray?): BooleanArray =
+        BooleanArray(chunk.size) { i ->
+            val key = factKey(chunk[i]) ?: return@BooleanArray false
+            isRepeat(HashKeys.h128(service.toByteArray(Charsets.UTF_8) + key))
+        }
+
+    private fun isRepeat(hash: ByteArray): Boolean {
         val prefix = ByteBuffer.wrap(hash, 0, Long.SIZE_BYTES).long
-        when {
+        return when {
             prefix in seen -> true
             seen.size < capacity -> { seen += prefix; false }
             else -> false

@@ -10,8 +10,6 @@ import com.androdr.data.model.ScanResult
 import com.androdr.data.model.ScanState
 import com.androdr.data.model.TelemetryState
 import com.androdr.data.store.TelemetryStore
-import com.androdr.scanner.KeptFinding
-import com.androdr.scanner.SessionHooks
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -43,7 +41,8 @@ class ScanWriteRepository @Inject constructor(
      * back — with [ScanNotInProgressException] when the guard changes no row.
      */
     suspend fun finish(
-        scan: ScanResult, kept: List<KeptFinding>, hooks: SessionHooks, telemetryState: TelemetryState,
+        scan: ScanResult, kept: List<KeptFinding>, totals: FindingTotals, hooks: SessionHooks,
+        telemetryState: TelemetryState,
     ): ScanResult = db.withTransaction {
         hooks.sweepPrior(scan.id)
         val findingRows = kept.filter { it.finding.triggered }.map { k ->
@@ -55,7 +54,7 @@ class ScanWriteRepository @Inject constructor(
         val interim = hooks.interimRows(scan)
         if (interim.isNotEmpty()) timeline.insertAll(interim)
         if (scans.complete(scan.id, telemetryState) == 0) throw ScanNotInProgressException(scan.id)
-        val completed = hooks.summarize(scan.copy(findings = kept.map { it.finding }))
+        val completed = hooks.summarize(scan.copy(findings = kept.map { it.finding }), totals)
             .copy(id = scan.id, state = ScanState.COMPLETE, telemetryState = telemetryState)
         writes.update(completed)
         completed
@@ -77,8 +76,15 @@ class ScanWriteRepository @Inject constructor(
         if (persistentRow != null) timeline.insert(persistentRow)
     }
 
-    /** "Clear all"'s first step: hide every scan. */
-    suspend fun markAllForDelete() = writes.markAllDeleting()
+    /**
+     * "Clear all"'s first step, one transaction: hide every scan and return their ids. Only these
+     * are deleted by [completeDeleteAll]; a scan begun after this (once the caller releases the
+     * lock) is not among them and survives.
+     */
+    suspend fun markAllForDelete(): List<Long> = db.withTransaction {
+        writes.markAllDeleting()
+        writes.sweepTargets().map { it.id }
+    }
 
     /**
      * The rest of a delete, idempotent and resumable by the sweep: the scan's own non-persistent
@@ -90,13 +96,13 @@ class ScanWriteRepository @Inject constructor(
         scans.deleteById(scanId)
     }
 
-    /** "Clear all" after [markAllForDelete]: every non-persistent row, then each scan's telemetry and row. */
-    suspend fun completeDeleteAll() {
-        db.withTransaction { rows.allNonPersistent() }
-        for (target in writes.sweepTargets()) {
-            store.deleteScanTelemetry(target.id)
-            scans.deleteById(target.id)
-        }
+    /**
+     * "Clear all" after [markAllForDelete]: completes the delete of each snapshotted scan, then
+     * removes the non-persistent rows no surviving scan owns (scan-less live rows and leftovers).
+     */
+    suspend fun completeDeleteAll(scanIds: List<Long>) {
+        for (id in scanIds) completeDelete(id)
+        db.withTransaction { rows.unownedNonPersistent() }
     }
 
     /** An unaudited cleanup delete (a failed or aborted writer). */

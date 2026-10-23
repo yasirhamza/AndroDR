@@ -1,5 +1,6 @@
 package com.androdr.data.repo
 
+import androidx.annotation.VisibleForTesting
 import androidx.room.withTransaction
 import com.androdr.data.db.AppDatabase
 import com.androdr.data.db.DnsEventDao
@@ -11,7 +12,7 @@ import com.androdr.data.model.ForensicTimelineEvent
 import com.androdr.data.model.ScanResult
 import com.androdr.ioc.IndicatorResolver
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.coroutines.delay
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -39,6 +40,8 @@ class ScanRepository @Inject constructor(
 
         /** How long a user delete waits for a retention or backfill batch to release the lock. */
         const val DELETE_LOCK_WAIT_MS = 2_000L
+        private const val LOCK_POLL_MS = 25L
+        private const val NANOS_PER_MILLI = 1_000_000L
     }
 
     /** Persists a completed [ScanResult] to the database. */
@@ -240,27 +243,49 @@ class ScanRepository @Inject constructor(
      * stays busy past [DELETE_LOCK_WAIT_MS] ("A scan is running — try again when it finishes").
      */
     suspend fun deleteScan(scanId: Long): Boolean {
-        if (!underLockFirst { scanWrites.markForDelete(scanId) }) return false
+        underLockFirst { scanWrites.markForDelete(scanId) } ?: return false
         scanWrites.completeDelete(scanId)
         return true
     }
 
-    /** "Clear all": like [deleteScan] for every scan; persistent audit rows survive. */
+    /**
+     * "Clear all": like [deleteScan] for every scan existing when it starts (a scan begun after its
+     * first transaction survives); persistent audit rows survive.
+     */
     suspend fun deleteAllScans(): Boolean {
-        if (!underLockFirst { scanWrites.markAllForDelete() }) return false
-        scanWrites.completeDeleteAll()
+        val ids = underLockFirst { scanWrites.markAllForDelete() } ?: return false
+        scanWrites.completeDeleteAll(ids)
         return true
     }
 
-    /** Runs a delete's first transaction under the writer lock, outside any transaction. */
-    private suspend fun underLockFirst(first: suspend () -> Unit): Boolean {
-        if (scanLock.writerRunning.value) return false
+    /** How long a user delete waits for the writer lock; tests shorten it. */
+    @VisibleForTesting
+    internal var deleteLockWaitMs: Long = DELETE_LOCK_WAIT_MS
+
+    /**
+     * Runs a delete's first transaction under the writer lock, taken outside any transaction.
+     * Null (nothing run, lock not held) while a writer runs or when the lock stays busy.
+     */
+    private suspend fun <T : Any> underLockFirst(first: suspend () -> T): T? {
+        if (scanLock.writerRunning.value) return null
         // writerRunning is raised only while the mutex is held, so holding it means no writer runs.
-        withTimeoutOrNull(DELETE_LOCK_WAIT_MS) { scanLock.mutex.lock() } ?: return false
+        if (!acquireLockWithin(deleteLockWaitMs)) return null
         try {
-            first()
+            return first()
         } finally {
             scanLock.mutex.unlock()
+        }
+    }
+
+    /**
+     * Polls [ScanLock.mutex] with `tryLock` until [waitMs] passes. Unlike a timed-out suspending
+     * `lock()`, a poll can never acquire the lock and then report failure, so nothing leaks it.
+     */
+    private suspend fun acquireLockWithin(waitMs: Long): Boolean {
+        val deadline = System.nanoTime() + waitMs * NANOS_PER_MILLI
+        while (!scanLock.mutex.tryLock()) {
+            if (System.nanoTime() >= deadline) return false
+            delay(LOCK_POLL_MS)
         }
         return true
     }
