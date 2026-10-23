@@ -1,13 +1,13 @@
 package com.androdr.scanner.bugreport
 
-import com.androdr.data.model.TimelineEvent
 import com.androdr.ioc.DeviceIdentity
 import com.androdr.ioc.IndicatorResolver
 import java.io.InputStream
 
 /**
- * Result returned by a [BugreportModule]. Modules produce structured telemetry
- * (records matching SIGMA rule logsource fields) plus optional timeline events.
+ * Result returned by a [BugreportModule]. Modules produce structured telemetry (records matching
+ * SIGMA rule logsource fields) and typed records; both are stored by the import session, and the
+ * Timeline reads them from the store (spec §5.3: the hand-built timeline rows are retired).
  *
  * Plan 6 deleted the `legacyFindings: List<BugReportFinding>` field — findings
  * are now produced exclusively by `SigmaRuleEngine` via telemetry evaluation.
@@ -15,7 +15,6 @@ import java.io.InputStream
 data class ModuleResult(
     val telemetry: List<Map<String, Any?>> = emptyList(),
     val telemetryService: String = "",
-    val timeline: List<TimelineEvent> = emptyList(),
     /** Typed records this module produced; the analyzer folds them into the telemetry bundle. */
     val typed: TypedTelemetry = TypedTelemetry(),
     /**
@@ -48,6 +47,18 @@ interface BugreportModule {
         iocResolver: IndicatorResolver,
         device: DeviceIdentity = DeviceIdentity.UNKNOWN,
     ): ModuleResult = ModuleResult()
+
+    /**
+     * As [analyze], reading every dumpsys wall-clock time with the import's one [clock] (ruling
+     * R27). The analyzer always calls this; modules that read wall-clock times override it, the
+     * others inherit this delegation to the three-argument form.
+     */
+    suspend fun analyze(
+        sectionText: String,
+        iocResolver: IndicatorResolver,
+        device: DeviceIdentity,
+        clock: DumpsysClock,
+    ): ModuleResult = analyze(sectionText, iocResolver, device)
 
     /** Analyze raw ZIP entries. Override for modules with targetSections == null. */
     suspend fun analyzeRaw(

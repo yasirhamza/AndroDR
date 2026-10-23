@@ -138,7 +138,7 @@ class BugReportViewModelIntrusionLogTest {
         val orchestrator = mockk<ScanOrchestrator>()
         coEvery { orchestrator.analyzeArtifact(any()) } returns
             ScanOrchestrator.ArtifactAnalysis.BugReport(
-                BugReportAnalyzer.BugReportAnalysisResult(findings = emptyList(), timeline = emptyList())
+                BugReportAnalyzer.BugReportAnalysisResult(findings = emptyList())
             )
         val vm = BugReportViewModel(orchestrator, mockk(relaxed = true), mockk(relaxed = true))
 

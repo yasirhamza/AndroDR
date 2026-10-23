@@ -27,7 +27,7 @@ class BugReportEnrichmentTest {
 
     @Before fun setUp() {
         coEvery { f.bugReportAnalyzer.analyze(any()) } returns
-            BugReportAnalyzer.BugReportAnalysisResult(findings = emptyList(), timeline = emptyList())
+            BugReportAnalyzer.BugReportAnalysisResult(findings = emptyList())
     }
 
     @After fun tearDown() = f.close()

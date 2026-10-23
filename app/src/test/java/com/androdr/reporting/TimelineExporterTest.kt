@@ -2,6 +2,7 @@ package com.androdr.reporting
 
 import com.androdr.data.model.ForensicTimelineEvent
 import com.androdr.data.model.TelemetrySource
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -67,14 +68,18 @@ class TimelineExporterTest {
             ruleId = "androdr-corr-001",
             correlationId = "androdr-corr-001:1,2",
             scanResultId = 42L,
-            details = """{"correlation_type":"temporal_ordered","member_event_ids":"1,2"}"""
+            details = """{"correlation_type":"temporal_ordered","member_count":2}"""
         )
-        val csv = TimelineExporter.formatCsv(listOf(signalEvent))
+        val csv = TimelineExporter.formatCsv(listOf(signalEvent), mapOf(100L to listOf("0:1", "1:7")))
         val dataRow = csv.lines().drop(1).first { it.isNotBlank() }
         assertTrue("kind column populated", dataRow.contains("signal"))
         assertTrue("rule_id column populated", dataRow.contains("androdr-corr-001"))
         assertTrue("correlation_id column populated", dataRow.contains("androdr-corr-001:1,2"))
         assertTrue("scan_result_id column populated", dataRow.contains(",42,"))
+        assertTrue("member_refs lists kind:id from signal_member", dataRow.contains(",0:1;1:7,"))
+        val header = csv.lines().first().split(",")
+        assertEquals("member_refs follows correlation_id", header.indexOf("correlation_id") + 1,
+            header.indexOf("member_refs"))
         // endTimestamp is epoch ms for signals
         assertTrue("end_timestamp populated", dataRow.contains("1700000300000"))
     }
@@ -191,6 +196,58 @@ class TimelineExporterTest {
         )
         val text = TimelineExporter.formatPlaintext(infoEvents, versionName = "test")
         assertTrue(text.contains("NO CONCERNS"))
+    }
+
+    @Test
+    fun `device-controlled text is escaped and the formula guard holds in streamed CSV rows`() {
+        val evil = ForensicTimelineEvent(id = 6, startTimestamp = 1000L, source = "dns_monitor", category = "dns_query",
+            description = "=HYPERLINK(\"x\")", details = "line1\nline2‮gnp.exe", packageName = "com.a",
+            recordId = 77L)
+        val out = StringBuilder()
+        TimelineExporter.writeCsvHeader(out)
+        TimelineExporter.writeCsvRow(out, evil)
+        val lines = out.lines().filter { it.isNotEmpty() }
+        assertEquals("one header and one row: no raw line break escapes", 2, lines.size)
+        assertTrue(lines[1].contains("\"'=HYPERLINK(\"\"x\"\")\""))
+        assertTrue(lines[1].contains("line1\\u000Aline2\\u202Egnp.exe"))
+        assertTrue("record_id, then time_precision, end the row", lines[1].endsWith(",77,exact"))
+        assertEquals(listOf("record_id", "time_precision"), lines[0].split(",").takeLast(2))
+        val text = TimelineExporter.formatPlaintext(listOf(evil), versionName = "t")
+        assertTrue(text.contains("line1\\u000Aline2\\u202Egnp.exe"))
+        assertTrue(text.none { it == '‮' })
+    }
+
+    /**
+     * Rulings R31/R32: a day-precision event is written date-only, never with an invented time of
+     * day, and its date is the stored calendar date (UTC midnight) read in UTC, so a device west of
+     * UTC still prints the source's date.
+     */
+    @Test
+    fun `a day-precision event exports date-only with its printed date in any device zone`() {
+        val jvmZone = java.util.TimeZone.getDefault()
+        java.util.TimeZone.setDefault(java.util.TimeZone.getTimeZone("America/Los_Angeles"))
+        try {
+            exportDayEvent()
+        } finally {
+            java.util.TimeZone.setDefault(jvmZone)
+        }
+    }
+
+    private fun exportDayEvent() {
+        val day = com.androdr.data.model.CivilDay.epochMs(java.time.LocalDate.of(2026, 10, 3))
+        val uninstall = ForensicTimelineEvent(id = 0, startTimestamp = day, kind = "event", source = "battery_daily",
+            category = "package_uninstall", description = "Uninstalled com.gone", timestampPrecision = "day")
+        val out = StringBuilder()
+        TimelineExporter.writeCsvHeader(out)
+        TimelineExporter.writeCsvRow(out, uninstall)
+        val header = out.lines()[0].split(",")
+        val row = out.lines()[1].split(",")
+        assertEquals("2026-10-03", row[header.indexOf("isodate")])
+        assertEquals("day", row[header.indexOf("time_precision")])
+        val text = TimelineExporter.formatPlaintext(listOf(uninstall), versionName = "t")
+        val line = text.lines().single { "Uninstalled com.gone" in it }
+        assertTrue(line, line.contains("(date only)"))
+        assertTrue("no time of day: $line", !Regex("\\d{2}:\\d{2}:\\d{2}").containsMatchIn(line))
     }
 
     @Test

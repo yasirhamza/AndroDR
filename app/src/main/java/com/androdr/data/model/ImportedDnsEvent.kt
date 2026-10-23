@@ -11,6 +11,11 @@ data class ImportedDnsEvent(
     val event: DnsEvent,
     val resolvedIps: List<String>
 ) {
-    /** The `dns_monitor` record: the live DNS fields plus `resolved_ips`. */
-    fun toFieldMap(): Map<String, Any?> = event.toFieldMap() + ("resolved_ips" to resolvedIps)
+    /**
+     * The `dns_monitor` record: the live DNS fields plus `resolved_ips`, minus `is_blocked` and
+     * `reason`. Those are the tunnel's verdict; AndroDR was not in the path of an import, so the
+     * parser's defaults would be fabricated facts (R22).
+     */
+    fun toFieldMap(): Map<String, Any?> =
+        event.toFieldMap() - "is_blocked" - "reason" + ("resolved_ips" to resolvedIps)
 }

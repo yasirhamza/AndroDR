@@ -1,5 +1,6 @@
 package com.androdr.scanner
 
+import com.androdr.data.db.getAllForExport
 import com.androdr.data.model.DnsEvent
 import com.androdr.data.model.TelemetrySource
 import com.androdr.data.model.UsageEvent
@@ -9,7 +10,6 @@ import com.androdr.data.store.HashKeys
 import com.androdr.sigma.TaxonomyContract
 import io.mockk.coEvery
 import io.mockk.mockk
-import com.androdr.data.db.toForensicTimelineEvent
 import io.mockk.spyk
 import kotlinx.coroutines.runBlocking
 import org.junit.After
@@ -22,8 +22,8 @@ import org.robolectric.RobolectricTestRunner
 
 /**
  * The live scan through its writer session (telemetry store §5.2): live DNS facts keyed by their row
- * id, `ioc_match` rows carrying the same key, today's usage rows (replaced every scan, each pinning
- * its fact), live events observed once, and a failed write that keeps nothing.
+ * id, `ioc_match` rows carrying the same key, usage events stored as facts only (C3), live events
+ * observed once, and a failed write that keeps nothing.
  */
 @RunWith(RobolectricTestRunner::class)
 class LiveScanWriterTest {
@@ -42,7 +42,8 @@ class LiveScanWriterTest {
     )
 
     private fun dns(domain: String, reason: String? = null) =
-        DnsEvent(timestamp = 1_787_400_000_000L, domain = domain, appUid = 1, appName = "com.a", isBlocked = false,
+        DnsEvent(timestamp = System.currentTimeMillis() - 60_000L, domain = domain, appUid = 1, appName = "com.a",
+            isBlocked = false,
             reason = reason)
 
     @Test
@@ -64,7 +65,6 @@ class LiveScanWriterTest {
     @Test
     fun `a live scan stores DNS facts keyed dns-id, joining the ioc_match row`() = runBlocking {
         repo().logDnsEventsBatch(listOf(dns("evil.example", reason = "IOC: X")))
-        coEvery { f.dnsEventDao.getRecentSnapshot() } coAnswers { f.db.dnsEventDao().getRecentSnapshot() }
 
         f.orchestrator.runFullScan()
 
@@ -73,10 +73,10 @@ class LiveScanWriterTest {
                 "WHERE r.category = 'ioc_match' AND t.service = 'dns_monitor'"))
     }
 
-    /** Live events are observed once (§4.1): a re-read DNS row fires once; a snapshot fact fires every scan. */
+    /** Live events are observed once (§4.1): a DNS row fires once; a snapshot fact fires every scan. */
     @Test
     fun `a live DNS event already observed fires no second finding, a snapshot finding repeats`() = runBlocking {
-        coEvery { f.dnsEventDao.getRecentSnapshot() } returns listOf(dns("evil.example").copy(id = 41))
+        f.db.dnsEventDao().insert(dns("evil.example"))
         coEvery { f.appScanner.collectTelemetry() } returns listOf(OrchestratorFixture.app("com.evil"))
 
         val first = f.orchestrator.runFullScan()
@@ -88,25 +88,26 @@ class LiveScanWriterTest {
         assertTrue("dns_monitor is a live event service", "dns_monitor" in TaxonomyContract.eventServices)
     }
 
+    /** C3: a re-read usage event is the same fact, observed once; no usage row is written. */
     @Test
-    fun `usage rows are replaced every scan and pin their facts`() = runBlocking {
+    fun `re-read usage events are one fact each, observed once, with no rows`() = runBlocking {
+        // Inside the 5-minute re-read, so the second scan reads both events again.
+        val t = System.currentTimeMillis()
         val events = listOf(
-            UsageEvent(1_000L, "com.a", "A", "app_foreground", TelemetrySource.LIVE_SCAN, 9L),
-            UsageEvent(2_000L, "com.a", "A", "app_background", TelemetrySource.LIVE_SCAN, 9L),
+            UsageEvent(t - 60_000L, "com.a", "A", "app_foreground", TelemetrySource.LIVE_SCAN, 9L),
+            UsageEvent(t - 30_000L, "com.a", "A", "app_background", TelemetrySource.LIVE_SCAN, 9L),
         )
-        coEvery { f.usageStatsScanner.collectEvents() } returns events
+        coEvery { f.usageStatsScanner.collectEvents(any(), any()) } returns UsageCollection.Ok(events)
 
-        f.orchestrator.runFullScan()
+        val first = f.orchestrator.runFullScan()
         Thread.sleep(2)
-        val second = f.orchestrator.runFullScan()
+        f.orchestrator.runFullScan()
 
-        val usage = f.timelineDao.getAllForExport().filter { it.source == "usage_stats" }
-        assertEquals("replaced, not stacked; re-read events keep their rows", 2, usage.size)
-        assertEquals(listOf("App opened: A", "App closed: A"), usage.map { it.description })
-        assertTrue(usage.all { it.scanResultId == second.id })
-        assertTrue("each row pins its fact", usage.all { r ->
-            r.recordId != null && f.count("SELECT COUNT(*) FROM telemetry_record WHERE id = ${r.recordId}") == 1L
-        })
+        assertEquals(0L, f.count("SELECT COUNT(*) FROM forensic_timeline WHERE source = 'usage_stats'"))
+        assertEquals(2L, f.count("SELECT COUNT(*) FROM telemetry_record WHERE service = 'usage_stats'"))
+        assertEquals("observed by the first scan only", listOf(first.id, first.id),
+            f.db.openHelper.readableDatabase.query("SELECT scanId FROM scan_record WHERE service = 'usage_stats'")
+                .use { c -> generateSequence { if (c.moveToNext()) c.getLong(0) else null }.toList() })
     }
 
     /** A failed write aborts the session: nothing is kept, and the in-memory result says what failed. */
@@ -130,21 +131,11 @@ class LiveScanWriterTest {
         assertTrue("the lock is released", !f.lock.mutex.isLocked && !f.lock.writerRunning.value)
     }
 
-    @Test
-    fun `watermark inputs are the highest DNS id and the latest usage time collected`() {
-        val t = LiveTelemetry(emptyList(), emptyList(), emptyList(), emptyList(), emptyList(), emptyList(), emptyList(),
-            usage = listOf(UsageEvent(7L, "p", "p", "app_foreground", TelemetrySource.LIVE_SCAN, 1L),
-                UsageEvent(5L, "p", "p", "app_foreground", TelemetrySource.LIVE_SCAN, 1L)),
-            dns = listOf(dns("a").copy(id = 4), dns("b").copy(id = 9)))
-        assertEquals(9L, t.dnsMaxId)
-        assertEquals(7L, t.usageMaxTime)
-        assertEquals(null, LiveTelemetry(emptyList(), emptyList(), emptyList(), emptyList(), emptyList(),
-            emptyList(), emptyList(), emptyList(), emptyList()).dnsMaxId)
-    }
-
     /**
-     * C1 (fix round 1): the lookback is read before the session writes, so correlation never sees
-     * this scan's own rows twice. A recent install and admin grant (this scan's detected changes)
+     * C1 (A7b fix round 1), kept through C2: the atoms are read inside `finish` after this scan's
+     * rows were inserted, and the lookback admits only visible rows (this scan is still IN_PROGRESS),
+     * so correlation never sees this scan's own rows twice. A recent install and admin grant (this
+     * scan's detected changes)
      * and the two-step chain corr-001 give exactly one signal and one correlation finding.
      */
     @Test
@@ -169,30 +160,35 @@ class LiveScanWriterTest {
                     source = "device_admin_emitter", category = "device_admin_grant", description = "admin",
                     packageName = "com.evil", scanResultId = firstArg()))
             }
-            val inputs = mutableListOf<List<com.androdr.data.model.ForensicTimelineEvent>>()
-            io.mockk.every { correlation.evaluate(any(), any(), any(), any()) } answers {
-                inputs += secondArg<List<com.androdr.data.model.ForensicTimelineEvent>>()
+            val inputs = mutableListOf<List<com.androdr.sigma.TimelineAtom>>()
+            io.mockk.every { correlation.evaluate(any(), any(), any(), any(), any()) } answers {
+                inputs += secondArg<List<com.androdr.sigma.TimelineAtom>>()
                 callOriginal()
             }
 
             val scan = g.orchestrator.runFullScan()
 
-            val ids = inputs.single().map { it.id }
-            assertEquals("correlate's input ids are distinct: $ids", ids.size, ids.toSet().size)
+            val refs = inputs.single().map { it.ref }
+            assertEquals("correlate's input refs are distinct: $refs", refs.size, refs.toSet().size)
+            assertEquals("both detected changes are Row atoms", 2, refs.count { it is com.androdr.sigma.Row })
             assertEquals(1L, g.count("SELECT COUNT(*) FROM forensic_timeline WHERE kind = 'signal'"))
             assertEquals(1, scan.findings.count { it.category == com.androdr.sigma.FindingCategory.CORRELATION })
         }
     }
 
     /**
-     * N1 (fix round 2): the lookback leaves out the `usage_stats` rows `finish` replaces (this scan
-     * writes the same events again) and every row stamped after the scan start (spec §5.2).
+     * N1 (A7b fix round 2), kept through C3: a usage event re-read by this scan is the fact an earlier
+     * scan observed (no second observation, no usage rows since C3), so it is correlated once, from
+     * the lookback; a usage event older than the re-read window is correlated once too, and nothing
+     * stamped after the scan start is (spec §5.2).
      */
     @Test
     fun `the lookback counts a re-read usage event once and leaves out rows after the scan start`() =
         runBlocking {
             val correlation = mockk<com.androdr.sigma.SigmaCorrelationEngine>(relaxed = true)
             OrchestratorFixture(correlationEngine = correlation).use { g ->
+                io.mockk.every { g.engine.atomCategories() } returns
+                    mapOf("a" to "app_foreground", "b" to "package_install")
                 io.mockk.every { g.engine.getCorrelationRules() } returns listOf(
                     com.androdr.sigma.CorrelationRule(id = "corr-n1", title = "t",
                         type = com.androdr.sigma.CorrelationType.EVENT_COUNT, referencedRuleIds = listOf("a"),
@@ -200,25 +196,37 @@ class LiveScanWriterTest {
                         displayLabel = "l"))
                 val now = System.currentTimeMillis()
                 val usageTime = now - 60_000
+                val olderTime = now - 1_800_000
+                fun usage(ts: Long) = UsageEvent(ts, "com.a", "A", "app_foreground", TelemetrySource.LIVE_SCAN, 1L)
+                val atoms = mutableListOf<List<com.androdr.sigma.TimelineAtom>>()
+                io.mockk.every { correlation.evaluate(any(), any(), any(), any(), any()) } answers {
+                    atoms += secondArg<List<com.androdr.sigma.TimelineAtom>>()
+                    com.androdr.sigma.CorrelationResult.NONE
+                }
+                // Scan 1 reads both events; scan 2 re-reads only the recent one (inside its window).
+                coEvery { g.usageStatsScanner.collectEvents(any(), any()) } returns
+                    UsageCollection.Ok(listOf(usage(olderTime), usage(usageTime)))
+                g.orchestrator.runFullScan()
+                atoms.clear()
+                Thread.sleep(2)
+                g.w.f.scan(8L, com.androdr.data.model.ScanState.COMPLETE)
                 g.timelineDao.insertAll(listOf(
-                    // An earlier scan's row for the usage event this scan reads again.
-                    UsageEvent(usageTime, "com.a", "A", "app_foreground", TelemetrySource.LIVE_SCAN, now - 1)
-                        .toForensicTimelineEvent(7L),
                     // Stamped after this scan starts (a producer outside the writer lock).
                     com.androdr.data.model.ForensicTimelineEvent(startTimestamp = now + 600_000,
                         source = "app_scanner", category = "package_install", description = "future",
                         packageName = "com.f", scanResultId = 8L),
                 ))
-                coEvery { g.usageStatsScanner.collectEvents() } returns listOf(
-                    UsageEvent(usageTime, "com.a", "A", "app_foreground", TelemetrySource.LIVE_SCAN, now))
-                val events = io.mockk.slot<List<com.androdr.data.model.ForensicTimelineEvent>>()
-                io.mockk.every { correlation.evaluate(any(), capture(events), any(), any()) } returns emptyList()
+                coEvery { g.usageStatsScanner.collectEvents(any(), any()) } returns
+                    UsageCollection.Ok(listOf(usage(usageTime)))
 
                 g.orchestrator.runFullScan()
 
-                assertEquals("the usage event is correlated once", 1,
-                    events.captured.count { it.source == "usage_stats" && it.startTimestamp == usageTime })
-                assertTrue("no row after the scan start", events.captured.none { it.description == "future" })
+                val second = atoms.single()
+                assertEquals("the re-read usage event is correlated once", 1,
+                    second.count { it.category == "app_foreground" && it.timestamp == usageTime })
+                assertTrue("no row after the scan start", second.none { it.timestamp == now + 600_000 })
+                assertEquals("a usage event before the re-read window is correlated once", 1,
+                    second.count { it.category == "app_foreground" && it.timestamp == olderTime })
             }
         }
 }

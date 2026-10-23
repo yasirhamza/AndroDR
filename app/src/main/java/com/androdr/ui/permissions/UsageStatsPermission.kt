@@ -1,10 +1,7 @@
 package com.androdr.ui.permissions
 
-import android.app.AppOpsManager
 import android.content.Context
 import android.content.Intent
-import android.os.Build
-import android.os.Process
 import android.provider.Settings
 
 /**
@@ -31,33 +28,11 @@ import android.provider.Settings
 object UsageStatsPermission {
 
     /**
-     * Checks whether `PACKAGE_USAGE_STATS` is currently granted to this app.
-     *
-     * The canonical way to detect this is via [AppOpsManager], not by
-     * catching the eventual `SecurityException` from `queryEvents()`. Use
-     * [AppOpsManager.unsafeCheckOpNoThrow] on API 29+ (the older
-     * [AppOpsManager.checkOpNoThrow] was deprecated in Q). On API 26-28 the
-     * deprecated overload is still the correct choice.
+     * Checks whether `PACKAGE_USAGE_STATS` is currently granted to this app, through AppOps rather
+     * than by catching the eventual `SecurityException` from `queryEvents()`. The one check is
+     * [com.androdr.scanner.UsageAccess.isGranted], shared with the live scan's usage collection.
      */
-    fun isGranted(context: Context): Boolean {
-        val appOps = context.getSystemService(Context.APP_OPS_SERVICE) as? AppOpsManager
-            ?: return false
-        val mode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            appOps.unsafeCheckOpNoThrow(
-                AppOpsManager.OPSTR_GET_USAGE_STATS,
-                Process.myUid(),
-                context.packageName
-            )
-        } else {
-            @Suppress("DEPRECATION")
-            appOps.checkOpNoThrow(
-                AppOpsManager.OPSTR_GET_USAGE_STATS,
-                Process.myUid(),
-                context.packageName
-            )
-        }
-        return mode == AppOpsManager.MODE_ALLOWED
-    }
+    fun isGranted(context: Context): Boolean = com.androdr.scanner.UsageAccess.isGranted(context)
 
     /**
      * Opens the system Usage Access settings screen. The user will see a

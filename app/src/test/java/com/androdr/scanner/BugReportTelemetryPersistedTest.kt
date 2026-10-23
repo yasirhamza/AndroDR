@@ -61,7 +61,7 @@ class BugReportTelemetryPersistedTest {
     fun `generic module telemetry is observed under each module's service`() = runBlocking {
         OrchestratorFixture(engine = IntrusionLogZips.engine(), bugReportAnalyzer = mockk(relaxed = true)).use { g ->
             coEvery { g.bugReportAnalyzer.analyze(any()) } returns BugReportAnalyzer.BugReportAnalysisResult(
-                findings = emptyList(), timeline = emptyList(),
+                findings = emptyList(),
                 moduleTelemetry = listOf(
                     BugReportAnalyzer.ModuleTelemetry("receiver_audit", listOf(mapOf("package_name" to "a"),
                         mapOf("package_name" to "b"))),
@@ -85,7 +85,7 @@ class BugReportTelemetryPersistedTest {
         val failing = OrchestratorFixture(engine = IntrusionLogZips.engine(), bugReportAnalyzer = mockk(relaxed = true))
         failing.use { g ->
             coEvery { g.bugReportAnalyzer.analyze(any()) } returns BugReportAnalyzer.BugReportAnalysisResult(
-                findings = emptyList(), timeline = emptyList(),
+                findings = emptyList(),
                 moduleTelemetry = listOf(BugReportAnalyzer.ModuleTelemetry("receiver_audit", listOf(mapOf("a" to 1)))),
             )
             val store = io.mockk.spyk(g.w.f.store)

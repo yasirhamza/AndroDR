@@ -58,6 +58,24 @@ class TimelineCategoriesAtomTest {
         )
     }
 
+    /**
+     * Ruling R26: only what the legacy timeline wrote as an install or a permission use keeps those
+     * atom categories. An install-history UPDATE / UNINSTALL and a system-UID AppOps op get their own.
+     */
+    @Test
+    fun `install history maps by event type and system appops ops are not permission_use`() {
+        fun history(type: String) =
+            TimelineCategories.categoryOf("package_install_history", mapOf("event_type" to type))
+        assertEquals("package_install", history("INSTALL"))
+        assertEquals("package_update", history("UPDATE"))
+        assertEquals("package_uninstall", history("UNINSTALL"))
+        fun ops(system: Boolean?) = TimelineCategories.categoryOf("appops_audit",
+            if (system == null) emptyMap() else mapOf("is_system_app" to system))
+        assertEquals("system_permission_use", ops(true))
+        assertEquals("permission_use", ops(false))
+        assertEquals("permission_use", ops(null))
+    }
+
     @Test
     fun `copied categories are written by their named producer`() {
         for ((category, producer) in EVENT_TYPE_PRODUCERS) {

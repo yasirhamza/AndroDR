@@ -9,6 +9,7 @@ import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.conflate
+import java.lang.ref.WeakReference
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
@@ -18,7 +19,10 @@ import java.util.concurrent.atomic.AtomicBoolean
  *
  * Invalidation: on the first load it calls `refreshVersionsSync()` (so writes before the load
  * do not invalidate it) and registers an [InvalidationTracker.Observer] on [observed]; the
- * observer is removed when the source is invalidated. Store tables are not observed: store data
+ * observer is removed (off the calling thread) when the source is invalidated. The tracker holds
+ * only a small forwarding observer that references this source weakly, so a source Paging abandons
+ * without invalidating (its collector cancelled) is collected, and its forwarder removes itself on
+ * the next change of [observed]. Store tables are not observed: store data
  * becomes visible only when a scan completes or is deleted, so chunk commits cause no
  * invalidation storms. Pass only tables that exist in the current schema (see [OBSERVED_TABLES]).
  */
@@ -28,24 +32,32 @@ abstract class KeysetPagingSource<K : Any, V : Any>(
 ) : PagingSource<K, V>() {
 
     private val registered = AtomicBoolean(false)
-    private val observer = object : InvalidationTracker.Observer(observed) {
-        override fun onInvalidated(tables: Set<String>) = invalidate()
-    }
+    private val observer = WeakForwarder(db, observed, WeakReference(this))
 
     init {
-        registerInvalidatedCallback { db.invalidationTracker.removeObserver(observer) }
+        registerInvalidatedCallback { db.queryExecutor.execute { db.invalidationTracker.removeObserver(observer) } }
     }
 
     protected abstract fun keyOf(item: V): K
 
-    /** Items with key >= [from] (from the start when null), ascending, at most [size]. */
-    protected abstract suspend fun loadFrom(from: K?, size: Int): List<V>
+    /**
+     * One read: the [items] to show and the [keys] of every entry the keyset read selected, in read
+     * order. Page keys and the end of the list come from [keys], so an entry that fails to load
+     * after it was selected (deleted in between) is skipped without ending the list early.
+     */
+    class Slice<K : Any, V : Any>(val items: List<V>, val keys: List<K>)
 
-    /** Items with key > [after], ascending, at most [size]. */
-    protected abstract suspend fun loadAfter(after: K, size: Int): List<V>
+    /** A slice whose items are exactly the entries read. */
+    protected fun slice(items: List<V>): Slice<K, V> = Slice(items, items.map(::keyOf))
 
-    /** Items with key < [before], DESCENDING (nearest first), at most [size]. */
-    protected abstract suspend fun loadBefore(before: K, size: Int): List<V>
+    /** Entries with key >= [from] (from the start when null), ascending, at most [size]. */
+    protected abstract suspend fun loadFrom(from: K?, size: Int): Slice<K, V>
+
+    /** Entries with key > [after], ascending, at most [size]. */
+    protected abstract suspend fun loadAfter(after: K, size: Int): Slice<K, V>
+
+    /** Entries with key < [before], DESCENDING (nearest first), at most [size]. */
+    protected abstract suspend fun loadBefore(before: K, size: Int): Slice<K, V>
 
     override val jumpingSupported: Boolean get() = false
 
@@ -57,27 +69,44 @@ abstract class KeysetPagingSource<K : Any, V : Any>(
         }
         val size = params.loadSize
         val page = when (params) {
-            is LoadParams.Refresh -> loadFrom(params.key, size).let { items ->
-                val prev = if (params.key == null) null else items.firstOrNull()?.let(::keyOf) ?: params.key
-                LoadResult.Page(items, prev, nextKeyOf(items, size))
+            is LoadParams.Refresh -> loadFrom(params.key, size).let { s ->
+                val prev = if (params.key == null) null else s.keys.firstOrNull() ?: params.key
+                LoadResult.Page(s.items, prev, nextKeyOf(s, size))
             }
-            is LoadParams.Append -> loadAfter(params.key, size).let { items ->
-                LoadResult.Page(items, null, nextKeyOf(items, size))
+            is LoadParams.Append -> loadAfter(params.key, size).let { s ->
+                LoadResult.Page(s.items, null, nextKeyOf(s, size))
             }
-            is LoadParams.Prepend -> loadBefore(params.key, size).asReversed().let { items ->
-                LoadResult.Page(items, if (items.size < size) null else keyOf(items.first()), null)
+            is LoadParams.Prepend -> loadBefore(params.key, size).let { s ->
+                // Read nearest first; shown ascending. The next prepend continues past the farthest read.
+                LoadResult.Page(s.items.asReversed(), if (s.keys.size < size) null else s.keys.last(), null)
             }
         }
         return if (invalid) LoadResult.Invalid() else page
     }
 
-    private fun nextKeyOf(items: List<V>, size: Int): K? = if (items.size < size) null else keyOf(items.last())
+    private fun nextKeyOf(s: Slice<K, V>, size: Int): K? = if (s.keys.size < size) null else s.keys.last()
 
     /** Backs off half a load from the anchor, so the reloaded page still covers it. */
     override fun getRefreshKey(state: PagingState<K, V>): K? {
         val anchor = state.anchorPosition ?: return null
         val position = (anchor - state.config.initialLoadSize / 2).coerceAtLeast(0)
         return state.closestItemToPosition(position)?.let(::keyOf)
+    }
+
+    /**
+     * The observer the tracker holds: it forwards to the source while the source is reachable, and
+     * removes itself once the source has been collected (A5 deferred minor: a strong observer kept
+     * every abandoned source alive).
+     */
+    private class WeakForwarder(
+        private val db: RoomDatabase,
+        tables: Array<String>,
+        private val source: WeakReference<KeysetPagingSource<*, *>>,
+    ) : InvalidationTracker.Observer(tables) {
+        override fun onInvalidated(tables: Set<String>) {
+            val target = source.get()
+            if (target != null) target.invalidate() else db.invalidationTracker.removeObserver(this)
+        }
     }
 
     companion object {

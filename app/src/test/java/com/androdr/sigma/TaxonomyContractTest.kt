@@ -136,7 +136,11 @@ class TaxonomyContractTest {
         /** Schema version that last recomputed the computed columns -> its contract hash. */
         val PINNED_CONTRACT_HASHES = mapOf(
             // Schema 20: the Phase A store migration (19 -> 20) first writes the computed columns.
-            20 to "a18120eb79c0e201886766cace4a3b45f3b77cf0f403b0c777b64faa19b910a9",
+            // Re-pinned in C2 fix round 1 (ruling R26: install-history categories by event_type,
+            // system-UID AppOps -> system_permission_use; corpus gained UPDATE/UNINSTALL/system
+            // records). Schema 20 has never shipped (A-D are one release train), so no stored value
+            // needs a recompute and the version stays 20.
+            20 to "35a11533215ebb0d20cdc14b21f2ffff0d4e8109c9f42a25e1d1946936d0df3f",
         )
     }
 }

@@ -3,18 +3,38 @@ package com.androdr.ui.timeline
 import android.content.Context
 import android.net.Uri
 import androidx.core.content.FileProvider
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.androdr.data.db.ForensicTimelineEventDao
+import androidx.paging.Pager
+import androidx.paging.PagingConfig
+import androidx.paging.PagingData
+import androidx.paging.cachedIn
+import androidx.paging.insertSeparators
+import com.androdr.data.db.AppDatabase
+import com.androdr.data.db.TimelineFilter
+import com.androdr.data.db.chunkedIn
 import com.androdr.data.model.ForensicTimelineEvent
+import com.androdr.data.model.ScanResult
+import com.androdr.data.model.TelemetrySource
 import com.androdr.data.repo.ScanRepository
+import com.androdr.data.store.DecodedRecord
+import com.androdr.data.store.KeysetPagingSource
+import com.androdr.data.store.tableChanges
+import com.androdr.ioc.KnownAppResolver
 import com.androdr.reporting.TimelineExporter
 import com.androdr.sigma.Finding
+import com.androdr.sigma.TimePrecision
 import com.androdr.util.appVersion
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -24,47 +44,63 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.mapLatest
+import kotlinx.coroutines.flow.runningFold
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.io.Writer
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
-import com.androdr.ioc.KnownAppResolver
 import javax.inject.Inject
 
 enum class TimelineGroupMode { DATE, SCAN }
 
-data class DateGroup(
-    val label: String,
-    val findingRows: List<TimelineRow.FindingRow>,
-    val clusters: List<EventCluster>,
-    val standaloneRows: List<TimelineRow.TelemetryRow>,
-)
-
+/** A scan's header in the "By scan" view; its count loads through [TimelineViewModel.count]. */
 data class ScanGroup(
     val scanId: Long,
     val timestamp: Long,
-    val importSource: com.androdr.data.model.TelemetrySource?,
-    val eventCount: Int,
+    val importSource: TelemetrySource?,
     val maxSeverity: String,
-    val clusters: List<EventCluster>,
-    val standaloneEvents: List<ForensicTimelineEvent>
 )
 
-@Suppress("TooManyFunctions") // ViewModel exposes filter setters, export methods, and report
-// generation — splitting would fragment the timeline feature's cohesive state management.
+/** The report sheet's text: the first [TimelineViewModel.PREVIEW_CHARS] of the report, whole or not. */
+data class ReportPreview(val text: String, val truncated: Boolean) {
+    companion object {
+        val EMPTY = ReportPreview("", false)
+    }
+}
+
+/**
+ * The Timeline (spec §6): one keyset-paged union of visible event facts and visible
+ * `forensic_timeline` rows ([TimelinePagingSource]), with date headers, counts on every header and
+ * on the filter bar, and streaming exports. Nothing is capped and no read holds the whole Timeline.
+ */
+@Suppress("TooManyFunctions") // filter setters, export methods and report generation share the filter state
 @HiltViewModel
 class TimelineViewModel @Inject constructor(
     @ApplicationContext private val appContext: Context,
-    private val dao: ForensicTimelineEventDao,
+    private val db: AppDatabase,
+    private val entries: TimelineEntries,
     private val knownAppResolver: KnownAppResolver,
     private val sigmaRuleEngine: com.androdr.sigma.SigmaRuleEngine,
     private val scanRepository: ScanRepository,
     private val reportExporter: com.androdr.reporting.ReportExporter,
+    private val clusterMembers: ClusterMembers,
+    private val signalMembers: com.androdr.data.db.SignalMemberDao,
+    /** This navigation entry's saved state: survives rotation and process death (deep links, I1). */
+    private val savedState: SavedStateHandle,
 ) : ViewModel() {
+
+    /** Where reads run; a test swaps in its own dispatcher. */
+    internal var io: CoroutineDispatcher = Dispatchers.IO
+
+    /** One page of a correlation signal's members, loaded when its card is expanded (spec §5.4). */
+    suspend fun loadClusterPage(signalRowId: Long, after: com.androdr.sigma.AtomRef?): ClusterPage =
+        withContext(Dispatchers.IO) { clusterMembers.load(signalRowId, after) }
 
     private val _groupMode = MutableStateFlow(TimelineGroupMode.DATE)
     val groupMode: StateFlow<TimelineGroupMode> = _groupMode.asStateFlow()
@@ -73,207 +109,179 @@ class TimelineViewModel @Inject constructor(
         _groupMode.value = mode
     }
 
-    private val _hideInformationalTelemetry = MutableStateFlow(false)
-    val hideInformationalTelemetry: StateFlow<Boolean> = _hideInformationalTelemetry.asStateFlow()
-
-    fun setHideInformationalTelemetry(hidden: Boolean) {
-        _hideInformationalTelemetry.value = hidden
-    }
-
-    private val _sourceFilter = MutableStateFlow<String?>(null)
-    val sourceFilter: StateFlow<String?> = _sourceFilter.asStateFlow()
-
-    private val _packageFilter = MutableStateFlow<String?>(null)
-    val packageFilter: StateFlow<String?> = _packageFilter.asStateFlow()
-
-    private val _dateRange = MutableStateFlow<Pair<Long, Long>?>(null)
-    val dateRange: StateFlow<Pair<Long, Long>?> = _dateRange.asStateFlow()
-
-    private val _severityFilter = MutableStateFlow<Set<String>>(emptySet())
-    val severityFilter: StateFlow<Set<String>> = _severityFilter.asStateFlow()
-
-    fun toggleSeverity(level: String) {
-        _severityFilter.update { current ->
-            if (level in current) current - level else current + level
-        }
-    }
-
-    private data class FilterState(
-        val src: String?, val pkg: String?, val dateRange: Pair<Long, Long>?
+    // The deep-linkable filters are saved per navigation entry, so recreation restores them as the
+    // user left them (a dismissed deep-link chip stays dismissed).
+    private val _filter = MutableStateFlow(
+        TimelineFilter(packageName = savedState[KEY_PACKAGE], scanId = savedState[KEY_SCAN])
     )
 
-    @OptIn(ExperimentalCoroutinesApi::class)
-    val events: StateFlow<List<ForensicTimelineEvent>> = combine(
-        _sourceFilter, _packageFilter, _dateRange
-    ) { src, pkg, range -> FilterState(src, pkg, range) }
-        .flatMapLatest { filter ->
-            when {
-                filter.dateRange != null -> dao.getEventsInRange(filter.dateRange.first, filter.dateRange.second)
-                filter.pkg != null -> dao.getEventsByPackage(filter.pkg)
-                filter.src != null -> dao.getEventsBySource(filter.src)
-                else -> dao.getRecentEvents()
-            }
-        }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    /** What the list, the counts and the exports read. */
+    val filter: StateFlow<TimelineFilter> = _filter.asStateFlow()
 
-    /**
-     * Latest scan's findings. Empty when there is no scan yet. Phase B
-     * surfaces findings as their own `FindingRow` variant in the merged
-     * [rows] stream so the UI can render them distinctly from telemetry.
-     */
-    private val latestFindings: StateFlow<List<Finding>> = scanRepository.allScans
-        .map { scans ->
-            // Only triggered findings belong in the timeline. Non-triggered
-            // "safe state" findings (e.g. "Unknown Sources Disabled") are for
-            // the Device Audit screen and report, not the timeline.
-            timelineFindingRows(scans.firstOrNull()?.findings.orEmpty())
-        }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    fun setFindingsAndEvidenceOnly(only: Boolean) = _filter.update { it.copy(findingsAndEvidenceOnly = only) }
 
-    /**
-     * Merged chronological stream of telemetry and finding rows.
-     *
-     * Telemetry events are wrapped as [TimelineRow.TelemetryRow] with a
-     * `referencedByFindingIds` list computed by matching `ruleId`. Findings
-     * are wrapped as [TimelineRow.FindingRow] with an anchor event (first
-     * telemetry event whose `ruleId` matches the finding's `ruleId`, if any).
-     *
-     * When [hideInformationalTelemetry] is ON, telemetry rows not referenced
-     * by any finding are filtered out; finding rows and their anchors remain.
-     */
-    /**
-     * Findings from the latest scan, surfaced for UI consumers that render
-     * a pinned "Findings" section above the telemetry list.
-     */
-    val findings: StateFlow<List<Finding>> = latestFindings
-
-    val rows: StateFlow<List<TimelineRow>> = combine(
-        events, latestFindings, _hideInformationalTelemetry
-    ) { eventList, findings, hideInformational ->
-        mergeTimelineRows(eventList, findings, hideInformational)
-    }.flowOn(Dispatchers.Default)
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
-
-    val dateGroupedRows: StateFlow<List<DateGroup>> = combine(
-        rows, _severityFilter, _groupMode
-    ) { rowList, severitySet, mode ->
-        if (mode != TimelineGroupMode.DATE || rowList.isEmpty()) return@combine emptyList()
-
-        val filtered = if (severitySet.isEmpty()) {
-            rowList
-        } else {
-            rowList.filter { row ->
-                row is TimelineRow.FindingRow &&
-                    row.finding.level.uppercase() in severitySet
-            }
-        }
-
-        buildDateGroups(filtered)
-    }.flowOn(Dispatchers.Default)
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
-
-    /** Snapshot of the latest findings used by scan-group severity rollup. */
-    @Volatile
-    private var currentFindingsSnapshot: List<Finding> = emptyList()
-
-    private fun rollupSeverity(scanEvents: List<ForensicTimelineEvent>): String {
-        val findings = currentFindingsSnapshot
-        val ruleIds = scanEvents.asSequence()
-            .mapNotNull { it.ruleId.takeIf { rid -> rid.isNotEmpty() } }
-            .toSet()
-        val matching = findings.filter { it.ruleId in ruleIds }
-        val order = listOf("CRITICAL", "HIGH", "MEDIUM", "LOW", "INFORMATIONAL", "INFO")
-        return matching
-            .map { it.level.uppercase() }
-            .minByOrNull { order.indexOf(it).let { i -> if (i < 0) Int.MAX_VALUE else i } }
-            ?: "INFO"
+    fun toggleSeverity(level: String) = _filter.update {
+        it.copy(levels = if (level in it.levels) it.levels - level else it.levels + level)
     }
 
-    // StateFlow already guarantees distinctUntilChanged semantics, so no explicit call needed.
-    // Only compute the partition when DATE mode is active to avoid redundant work in SCAN mode.
-    val partitionedEvents: StateFlow<Pair<List<EventCluster>, List<ForensicTimelineEvent>>> =
-        combine(events, _groupMode) { eventList, mode ->
-            if (mode != TimelineGroupMode.DATE || eventList.isEmpty()) {
-                emptyList<EventCluster>() to emptyList<ForensicTimelineEvent>()
-            } else {
-                partitionSignals(eventList)
-            }
-        }.flowOn(Dispatchers.Default).stateIn(
-            viewModelScope,
-            SharingStarted.WhileSubscribed(5000),
-            emptyList<EventCluster>() to emptyList()
-        )
+    fun setSourceFilter(source: TelemetrySource?) = _filter.update { it.copy(source = source) }
 
-    val scanGroupedEvents: StateFlow<List<ScanGroup>> = combine(
-        events, _groupMode, latestFindings
-    ) { eventList, mode, findings ->
-        currentFindingsSnapshot = findings
-        if (mode != TimelineGroupMode.SCAN || eventList.isEmpty()) return@combine emptyList()
-        val groups = eventList.filter { it.scanResultId != -1L }
-            .groupBy { it.scanResultId }
-            .map { (scanId, scanEvents) ->
-                val (clusters, standalone) = partitionSignals(scanEvents)
-                ScanGroup(
-                    scanId = scanId,
-                    // The group header must show when the SCAN was RUN, not
-                    // the earliest event's time. For bug-report scans the
-                    // events include AppOps records with real last-access
-                    // timestamps from the bug-report content (potentially
-                    // weeks old), so the previous
-                    // `scanEvents.minOf { it.timestamp }` labelled the
-                    // group with that ancient time instead of when the
-                    // user actually ran the analysis. The History list
-                    // already shows the correct time because it reads
-                    // `scanResult.timestamp` directly.
-                    //
-                    // Crucial invariant we exploit: ScanOrchestrator sets
-                    // BOTH `ScanResult.id = now` and `ScanResult.timestamp
-                    // = now` to the same `System.currentTimeMillis()` at
-                    // scan creation (see runFullScan:180 and
-                    // analyzeBugReport:278), and ForensicTimelineEvent
-                    // rows are persisted with `scanResultId = scanResult.id`.
-                    // So the `scanId` we already have in this lambda IS
-                    // the scan run time in milliseconds — we can use it
-                    // directly without going back to the ScanResult table.
-                    timestamp = scanId,
-                    importSource = scanEvents.firstOrNull {
-                        it.telemetrySource != com.androdr.data.model.TelemetrySource.LIVE_SCAN
-                    }?.telemetrySource,
-                    eventCount = scanEvents.size,
-                    // Scan group max-severity rollup derives from findings
-                    // that share a ruleId with any event in this group.
-                    maxSeverity = rollupSeverity(scanEvents),
-                    clusters = clusters,
-                    standaloneEvents = standalone
-                )
-            }
-            .sortedByDescending { it.timestamp }
-            .toMutableList()
-        val ungrouped = eventList.filter { it.scanResultId == -1L }
-        if (ungrouped.isNotEmpty()) {
-            val (ungroupedClusters, ungroupedStandalone) = partitionSignals(ungrouped)
-            groups.add(ScanGroup(
-                scanId = -1,
-                // Same invalid-timestamp filter as the per-scan groups above.
-                timestamp = ungrouped.filter { it.startTimestamp > 0L }
-                    .minOfOrNull { it.startTimestamp }
-                    ?: 0L,
-                importSource = null,
-                eventCount = ungrouped.size,
-                maxSeverity = rollupSeverity(ungrouped),
-                clusters = ungroupedClusters,
-                standaloneEvents = ungroupedStandalone
-            ))
+    fun setPackageFilter(pkg: String?) = _filter.update { it.copy(packageName = pkg) }
+
+    fun setDateRange(start: Long, end: Long) = _filter.update { it.copy(from = start, to = end) }
+
+    fun clearDateRange() = _filter.update { it.copy(from = null, to = null) }
+
+    /** The last [hours] hours up to now (a Filters-sheet preset); null clears the range. */
+    fun setRecentHours(hours: Int?) {
+        if (hours == null) return clearDateRange()
+        val now = System.currentTimeMillis()
+        setDateRange(now - hours * HOUR_MS, now)
+    }
+
+    /** Shows only [scanId]'s rows and the facts it observed (null: every scan). */
+    fun setScanFilter(scanId: Long?) = _filter.update { it.copy(scanId = scanId) }
+
+    /**
+     * Applies a navigation entry's deep link (the Apps screen's package, the import screen's scan)
+     * once per entry (I1): recreation (rotation, theme or locale change, process death) delivers the
+     * same arguments again, and re-applying them would undo a chip the user dismissed. A blank
+     * [packageName] means "no real package" and clears the package filter.
+     */
+    fun applyDeepLink(packageName: String?, scanId: Long?) {
+        if (savedState.get<Boolean>(KEY_DEEP_LINK_APPLIED) == true) return
+        savedState[KEY_DEEP_LINK_APPLIED] = true
+        if (packageName != null) setPackageFilter(packageName.ifBlank { null })
+        if (scanId != null) setScanFilter(scanId)
+    }
+
+    /** "Show only this app" from a detail sheet (ruling R33): an exact package filter, shown as a chip. */
+    fun showOnlyApp(packageName: String) = setPackageFilter(packageName)
+
+    fun clearFilters() = _filter.update { TimelineFilter(zone = it.zone, query = it.query) }
+
+    /** Clears exactly the filter [chip] stands for (the filter bar's dismissible chips). */
+    fun dismiss(chip: ActiveFilter) = _filter.update {
+        when (chip) {
+            is ActiveFilter.Scan -> it.copy(scanId = null)
+            is ActiveFilter.Package -> it.copy(packageName = null)
+            is ActiveFilter.Source -> it.copy(source = null)
+            is ActiveFilter.Severity -> it.copy(levels = it.levels - chip.level)
+            is ActiveFilter.DateRange -> it.copy(from = null, to = null)
+            ActiveFilter.FindingsOnly -> it.copy(findingsAndEvidenceOnly = false)
         }
-        groups
-    }.flowOn(Dispatchers.Default)
+    }
+
+    /** The filter bar's chips, one per active filter ([activeFiltersOf]). */
+    val activeFilters: StateFlow<List<ActiveFilter>> = _filter.map(::activeFiltersOf)
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    private val _searchText = MutableStateFlow("")
+
+    /** The search field's text as typed; it reaches [filter] after [SEARCH_DEBOUNCE_MS] of quiet. */
+    val searchText: StateFlow<String> = _searchText.asStateFlow()
+
+    fun setSearchText(text: String) {
+        _searchText.value = text
+    }
+
+    /** Empties the search field and drops the search at once (closing the search bar). */
+    fun clearSearch() {
+        _searchText.value = ""
+        _filter.update { it.copy(query = null) }
+    }
+
+    init {
+        viewModelScope.launch {
+            _filter.collect {
+                savedState[KEY_PACKAGE] = it.packageName
+                savedState[KEY_SCAN] = it.scanId
+            }
+        }
+        // Typing re-queries once per pause, not per keystroke; the read itself runs on IO (the pager).
+        viewModelScope.launch {
+            _searchText.debounce(SEARCH_DEBOUNCE_MS).collect { text ->
+                _filter.update { it.copy(query = text.trim().ifEmpty { null }) }
+            }
+        }
+    }
+
+    /**
+     * Bumps when a scan completes or is deleted, or Timeline rows change (what changes counts),
+     * coalesced over [COUNT_DEBOUNCE_MS] so a burst of row inserts (live DNS IOC matches, a scan's
+     * finish) re-counts once, not once per change.
+     */
+    private val tableVersion: StateFlow<Int> = db.tableChanges(KeysetPagingSource.OBSERVED_TABLES)
+        .coalescedVersions(COUNT_DEBOUNCE_MS)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
+
+    /** The paged list: the union under [filter], a [TimelineRow.DayHeader] before each day. */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val rows: Flow<PagingData<TimelineRow>> = _filter.flatMapLatest { filter ->
+        Pager(PagingConfig(pageSize = PAGE_SIZE, enablePlaceholders = false)) {
+            TimelinePagingSource(db, filter, entries)
+        }.flow.map { data ->
+            data.insertSeparators<TimelineRow.Entry, TimelineRow> { before, after ->
+                val next = after?.let { filter.dayOf(it.timestamp, it.entity.isDay) }
+                val prev = before?.let { filter.dayOf(it.timestamp, it.entity.isDay) }
+                if (next != null && next != prev) TimelineRow.DayHeader(next, after.key) else null
+            }
+        }
+    }.cachedIn(viewModelScope)
+
+    /** How many entries [filter] matches (the filter bar); null while counting. */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val totalCount: StateFlow<Long?> = combine(_filter, tableVersion) { f, _ -> f }
+        .mapLatest { count(it) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+
+    /** Counts re-read after [tableVersion] changes; headers key their count on it. */
+    val countsVersion: StateFlow<Int> get() = tableVersion
+
+    /** Entries [filter] matches, off the main thread. */
+    /**
+     * Entries [filter] matches, off the main thread; null when the count fails (I3): a count is
+     * informational, so a failing statement shows no count rather than crashing the screen.
+     */
+    @Suppress("TooGenericExceptionCaught") // any SQLite or Room failure; cancellation is rethrown
+    suspend fun count(filter: TimelineFilter): Long? = try {
+        withContext(io) { entries.count(filter) }
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        android.util.Log.e(TAG, "Timeline count failed: ${e.message}", e)
+        null
+    }
+
+    /** Where a fact came from (the fact detail sheet, I4); null when it is no longer visible. */
+    suspend fun provenance(factId: Long): FactProvenance? = withContext(io) { entries.provenance(factId) }
+
+    /** A date header's count: the current filter narrowed to [day]. */
+    suspend fun dayCount(day: Long): Long? = count(_filter.value.forDay(day))
+
+    /** A scan header's count: the current filter narrowed to [scanId]. */
+    suspend fun scanCount(scanId: Long): Long? = count(_filter.value.copy(scanId = scanId))
+
+    private val latestFindings: StateFlow<List<Finding>> = scanRepository.allScans
+        .map { scans -> timelineFindingRows(scans.firstOrNull()?.findings.orEmpty()) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    private val _availableSources = MutableStateFlow<List<String>>(emptyList())
-    val availableSources: StateFlow<List<String>> = _availableSources.asStateFlow()
+    /** The pinned section: the latest scan's triggered findings (current findings). */
+    val findings: StateFlow<List<Finding>> = latestFindings
 
-    private val _availablePackages = MutableStateFlow<List<String>>(emptyList())
-    val availablePackages: StateFlow<List<String>> = _availablePackages.asStateFlow()
+    /** "By scan": one header per completed scan, newest first. */
+    val scanGroups: StateFlow<List<ScanGroup>> = scanRepository.allScans
+        .map { scans -> scans.map(::scanGroup) }
+        .flowOn(Dispatchers.Default)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    private fun scanGroup(scan: ScanResult): ScanGroup = ScanGroup(
+        scanId = scan.id,
+        timestamp = scan.timestamp,
+        importSource = scan.source.takeIf { it != TelemetrySource.LIVE_SCAN },
+        maxSeverity = scan.findings.filter { it.triggered }.maxByOrNull { severityOrdinal(it.level) }
+            ?.level?.uppercase() ?: "INFO",
+    )
 
     private val _shareUri = MutableStateFlow<Uri?>(null)
     val shareUri: StateFlow<Uri?> = _shareUri.asStateFlow()
@@ -281,98 +289,131 @@ class TimelineViewModel @Inject constructor(
     private val _exporting = MutableStateFlow(false)
     val exporting: StateFlow<Boolean> = _exporting.asStateFlow()
 
-    init {
-        // Refresh available filter options whenever events change
-        viewModelScope.launch {
-            events.collect {
-                _availableSources.value = dao.getDistinctSources()
-                _availablePackages.value = dao.getDistinctPackages()
-            }
-        }
-    }
+    private val _report = MutableStateFlow(ReportPreview.EMPTY)
 
-    fun setSourceFilter(source: String?) {
-        _packageFilter.value = null
-        _dateRange.value = null
-        _sourceFilter.value = source
-    }
+    /** The report sheet's text (filled on demand); see [ReportPreview]. */
+    val report: StateFlow<ReportPreview> = _report.asStateFlow()
 
-    fun setPackageFilter(pkg: String?) {
-        _sourceFilter.value = null
-        _dateRange.value = null
-        _packageFilter.value = pkg
-    }
+    /** The file the last [generateReport] wrote, shared by the report sheet. */
+    private var reportFile: File? = null
 
-    fun setDateRange(start: Long, end: Long) {
-        _sourceFilter.value = null
-        _packageFilter.value = null
-        _dateRange.value = start to end
-    }
-
-    fun clearDateRange() {
-        _dateRange.value = null
-    }
-
-    fun clearFilters() {
-        _sourceFilter.value = null
-        _packageFilter.value = null
-        _dateRange.value = null
-    }
-
-    /** Generated plaintext report for viewing/copying. Populated on demand. */
-    private val _reportText = MutableStateFlow("")
-    val reportText: StateFlow<String> = _reportText.asStateFlow()
-
-    /** Clears the generated report text (e.g. when the report sheet is dismissed). */
     fun clearReport() {
-        _reportText.value = ""
+        _report.value = ReportPreview.EMPTY
     }
 
-    /** Generates the plaintext report for the view/copy sheet. */
+    /**
+     * Writes the plaintext report of the current filter to a file (streaming) and shows its first
+     * [PREVIEW_CHARS] characters in the sheet; a longer report is shared as the file.
+     */
+    @Suppress("TooGenericExceptionCaught") // IO or decoding failures must not crash the sheet
     fun generateReport() {
         viewModelScope.launch {
-            val allEvents = withContext(Dispatchers.IO) { dao.getAllForExport() }
-            val versionName = appContext.appVersion().name
-            _reportText.value = withContext(Dispatchers.Default) {
-                TimelineExporter.formatPlaintext(
-                    allEvents, buildDisplayNames(allEvents), buildRuleGuidance(),
-                    versionName = versionName
-                )
+            try {
+                val filter = _filter.value
+                val file = withContext(Dispatchers.IO) {
+                    newReportFile("txt", filter).also { writePlaintext(it, filter) }
+                }
+                reportFile = file
+                _report.value = withContext(Dispatchers.IO) { preview(file) }
+            } catch (e: Exception) {
+                android.util.Log.e(TAG, "Report failed: ${e.message}", e)
             }
         }
     }
 
-    fun exportPlaintext() = export("txt") {
-        TimelineExporter.formatPlaintext(
-            it, buildDisplayNames(it), buildRuleGuidance(),
-            versionName = appContext.appVersion().name
-        )
+    /** Shares the last generated report file. */
+    fun shareReport() {
+        val file = reportFile ?: return
+        viewModelScope.launch { _shareUri.value = withContext(Dispatchers.IO) { uriOf(file) } }
     }
-    fun exportCsv() = export("csv") { TimelineExporter.formatCsv(it) }
+
+    fun exportPlaintext() = export("txt", ::writePlaintext)
+
+    fun exportCsv() = export("csv", ::writeCsv)
 
     @Suppress("TooGenericExceptionCaught") // Export can throw IOException (disk full, no
     // permission) or SecurityException (FileProvider misconfiguration) — catching Exception
     // ensures the exporting flag is always reset and the error is logged regardless of type.
-    private fun export(extension: String, formatter: (List<ForensicTimelineEvent>) -> String) {
+    private fun export(extension: String, write: suspend (File, TimelineFilter) -> Unit) {
         if (_exporting.value) return
+        // One filter for the whole export: the file name's label and the content can never disagree.
+        val filter = _filter.value
         viewModelScope.launch {
             _exporting.value = true
             try {
-                val allEvents = withContext(Dispatchers.IO) { dao.getAllForExport() }
-                val text = withContext(Dispatchers.Default) { formatter(allEvents) }
                 _shareUri.value = withContext(Dispatchers.IO) {
-                    val reportsDir = File(appContext.cacheDir, "reports").apply { mkdirs() }
-                    val ts = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
-                    val file = File(reportsDir, "androdr_timeline_$ts.$extension")
-                    file.writeText(text, Charsets.UTF_8)
-                    FileProvider.getUriForFile(appContext, "${appContext.packageName}.fileprovider", file)
+                    uriOf(newReportFile(extension, filter).also { write(it, filter) })
                 }
             } catch (e: Exception) {
-                android.util.Log.e("TimelineViewModel", "Export failed: ${e.message}", e)
+                android.util.Log.e(TAG, "Export failed: ${e.message}", e)
             } finally {
                 _exporting.value = false
             }
         }
+    }
+
+    /** Streams the current filter's Timeline as CSV, oldest first, one page at a time. */
+    private suspend fun writeCsv(file: File, filter: TimelineFilter) {
+        file.bufferedWriter(Charsets.UTF_8).use { out ->
+            TimelineExporter.writeCsvHeader(out)
+            entries.forEachPage(filter, oldestFirst = true, size = EXPORT_PAGE) { page ->
+                val events = page.flatMap { it.exportEvents() }
+                val refs = memberRefs(events)
+                events.forEach { TimelineExporter.writeCsvRow(out, it, refs[it.id].orEmpty()) }
+            }
+        }
+    }
+
+    /**
+     * Streams the current filter's Timeline as plaintext, newest first: one pass for the header, one
+     * to write. The two passes are separate reads, so a scan completing between them can make the
+     * header's totals differ slightly from the body; neither pass holds the whole Timeline.
+     */
+    private suspend fun writePlaintext(file: File, filter: TimelineFilter) {
+        val stats = TimelineExporter.PlaintextStats(buildRuleGuidance())
+        entries.forEachPage(filter, oldestFirst = false, size = EXPORT_PAGE) { page ->
+            page.forEach { entry -> entry.exportEvents().forEach(stats::add) }
+        }
+        val names = HashMap<String, String?>()
+        file.bufferedWriter(Charsets.UTF_8).use { out: Writer ->
+            val writer = TimelineExporter.PlaintextWriter(out) { pkg ->
+                names.getOrPut(pkg) { knownAppResolver.lookup(pkg)?.displayName }
+            }
+            writer.header(stats, appContext.appVersion().name, filter.describe())
+            entries.forEachPage(filter, oldestFirst = false, size = EXPORT_PAGE) { page ->
+                page.forEach(writer::entry)
+            }
+            writer.footer()
+        }
+    }
+
+    /** Each exported signal's members that still exist, as `kind:id` (the CSV `member_refs` column). */
+    private suspend fun memberRefs(events: List<ForensicTimelineEvent>): Map<Long, List<String>> {
+        val signalIds = events.filter { it.kind == "signal" }.map { it.id }
+        if (signalIds.isEmpty()) return emptyMap()
+        return chunkedIn(signalIds) { signalMembers.existingRefs(it) }
+            .groupBy({ it.signalRowId }, { "${it.kind}:${it.refId}" })
+    }
+
+    private fun newReportFile(extension: String, filter: TimelineFilter): File {
+        val reportsDir = File(appContext.cacheDir, "reports").apply { mkdirs() }
+        val ts = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
+        val suffix = if (filter.describe() != null) "_filtered" else ""
+        return File(reportsDir, "androdr_timeline_$ts$suffix.$extension")
+    }
+
+    private fun uriOf(file: File): Uri =
+        FileProvider.getUriForFile(appContext, "${appContext.packageName}.fileprovider", file)
+
+    private fun preview(file: File): ReportPreview = file.bufferedReader(Charsets.UTF_8).use { reader ->
+        val buf = CharArray(PREVIEW_CHARS + 1)
+        var n = 0
+        while (n < buf.size) {
+            val read = reader.read(buf, n, buf.size - n)
+            if (read < 0) break
+            n += read
+        }
+        ReportPreview(String(buf, 0, minOf(n, PREVIEW_CHARS)), truncated = n > PREVIEW_CHARS)
     }
 
     fun onShareConsumed() { _shareUri.value = null }
@@ -392,29 +433,125 @@ class TimelineViewModel @Inject constructor(
                 val uri = reportExporter.export(scan, mode)
                 _shareUri.value = uri
             } catch (e: Exception) {
-                android.util.Log.e("TimelineViewModel", "Full report export failed: ${e.message}", e)
+                android.util.Log.e(TAG, "Full report export failed: ${e.message}", e)
             } finally {
                 _exporting.value = false
             }
         }
     }
 
-    private fun buildDisplayNames(events: List<ForensicTimelineEvent>): Map<String, String> {
-        val fromEvents = events
-            .filter { it.appName.isNotEmpty() && it.appName != it.packageName }
-            .associateBy({ it.packageName }, { it.appName })
-        val needLookup = events
-            .map { it.packageName }
-            .filter { it.isNotEmpty() && it !in fromEvents }
-            .distinct()
-        val fromResolver = needLookup.mapNotNull { pkg ->
-            knownAppResolver.lookup(pkg)?.let { pkg to it.displayName }
-        }.toMap()
-        return fromResolver + fromEvents
-    }
-
     private fun buildRuleGuidance(): Map<String, String> =
         sigmaRuleEngine.getRules()
             .filter { it.display.guidance.isNotEmpty() }
             .associate { it.id to it.display.guidance }
+
+    companion object {
+        private const val TAG = "TimelineViewModel"
+        private const val PAGE_SIZE = 100
+        private const val EXPORT_PAGE = 500
+        private const val COUNT_DEBOUNCE_MS = 300L
+        private const val SEARCH_DEBOUNCE_MS = 300L
+        private const val HOUR_MS = 3_600_000L
+        private const val KEY_DEEP_LINK_APPLIED = "timeline.deepLinkApplied"
+        private const val KEY_PACKAGE = "timeline.packageFilter"
+        private const val KEY_SCAN = "timeline.scanFilter"
+
+        /** The report sheet shows (and Copy copies) at most this much; a longer report is shared as a file. */
+        const val PREVIEW_CHARS = 200_000
+    }
+}
+
+/**
+ * A Timeline entry as the exporters write it, in display order: a row as stored, then its nested
+ * evidence fact (so every `record_id` resolves within the file and the export's total is the
+ * on-screen count); a fact as an `event` row of its service.
+ */
+internal fun TimelineRow.Entry.exportEvents(): List<ForensicTimelineEvent> = when (this) {
+    is TimelineRow.StoredRow -> listOfNotNull(event, evidence?.asExportEvent(event.scanResultId))
+    is TimelineRow.EventRow -> listOf(record.asExportEvent(entity.scanId, entity.packageName))
+}
+
+/**
+ * Writes one Timeline entry: the entry itself, then (for a row) its nested evidence inside the
+ * row's date section (re-review n5: evidence of another day never repeats a date header).
+ */
+internal fun TimelineExporter.PlaintextWriter.entry(entry: TimelineRow.Entry) {
+    val lines = entry.exportEvents()
+    event(lines.first())
+    lines.drop(1).forEach(::evidence)
+}
+
+/**
+ * A stored fact as an exported `event` row: its display summary as the description, its fact id as
+ * `recordId`, and row id 0 (never colliding with a signal row's member refs). [scanId] is the scan
+ * the Timeline read it under, when known (≥ 0); [packageName] the fact's computed package, when the
+ * caller has it (else the record's `package_name` field).
+ */
+internal fun DecodedRecord.asExportEvent(
+    scanId: Long,
+    packageName: String = (fields?.get("package_name") as? String).orEmpty(),
+): ForensicTimelineEvent = ForensicTimelineEvent(
+    startTimestamp = eventTime ?: capturedAt,
+    kind = "event",
+    timestampPrecision = if (precision == TimePrecision.DAY) TimelineExporter.DAY_PRECISION else "exact",
+    source = service,
+    category = category?.ifEmpty { null } ?: service,
+    description = summary.orEmpty(),
+    packageName = packageName,
+    scanResultId = if (scanId >= 0) scanId else this.scanId,
+    telemetrySource = source,
+    createdAt = capturedAt,
+    recordId = factId,
+)
+
+/**
+ * A version number that bumps once per burst of changes: a change followed by quiet for [quietMs]
+ * bumps it once, however many changes the burst held (counts re-run per burst, not per change).
+ */
+@OptIn(FlowPreview::class)
+internal fun Flow<Unit>.coalescedVersions(quietMs: Long): Flow<Int> =
+    debounce(quietMs).runningFold(0) { n, _ -> n + 1 }
+
+/** The active filter in words for an export header, or null when nothing is filtered. */
+internal fun TimelineFilter.describe(): String? = buildList {
+    scanId?.let { add("scan $it") }
+    packageName?.let { add("package $it") }
+    source?.let { add("source $it") }
+    if (from != null || to != null) {
+        fun iso(ms: Long?) =
+            ms?.let { java.time.Instant.ofEpochMilli(it).atZone(zone).toLocalDateTime().toString() } ?: "-"
+        add("time ${iso(from)}..${iso(to)} ($zone)")
+    }
+    if (levels.isNotEmpty()) add("severity ${levels.sorted().joinToString("/")}")
+    if (findingsAndEvidenceOnly) add("findings and their evidence only")
+    searchText?.let { add("search \"$it\"") }
+}.takeIf { it.isNotEmpty() }?.joinToString(", ")
+
+/** One active filter, shown as a dismissible chip on the filter bar ([activeFiltersOf]). */
+sealed interface ActiveFilter {
+    data class Scan(val scanId: Long) : ActiveFilter
+    data class Package(val packageName: String) : ActiveFilter
+    data class Source(val source: TelemetrySource) : ActiveFilter
+    data class Severity(val level: String) : ActiveFilter
+    data class DateRange(val from: Long?, val to: Long?) : ActiveFilter
+    data object FindingsOnly : ActiveFilter
+}
+
+/** Severity chips' order: most severe first. */
+private val SEVERITY_ORDER = listOf("CRITICAL", "HIGH", "MEDIUM", "LOW")
+
+/**
+ * The filter bar's chips for [filter], in bar order: scan, package, source, each severity (most
+ * severe first), date range, findings only. The Filters button shows how many. The search query is
+ * not a chip: the search field shows it.
+ */
+internal fun activeFiltersOf(filter: TimelineFilter): List<ActiveFilter> = buildList {
+    filter.scanId?.let { add(ActiveFilter.Scan(it)) }
+    filter.packageName?.let { add(ActiveFilter.Package(it)) }
+    filter.source?.let { add(ActiveFilter.Source(it)) }
+    filter.levels.sortedWith(compareBy<String>({ lvl ->
+        SEVERITY_ORDER.indexOf(lvl.uppercase()).let { if (it < 0) SEVERITY_ORDER.size else it }
+    }, { it })).forEach { add(ActiveFilter.Severity(it)) }
+    if (filter.from != null || filter.to != null) add(ActiveFilter.DateRange(filter.from, filter.to))
+    if (filter.findingsAndEvidenceOnly) add(ActiveFilter.FindingsOnly)
 }

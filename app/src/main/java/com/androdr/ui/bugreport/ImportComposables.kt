@@ -118,6 +118,13 @@ internal fun ImportCardView(card: ImportCard) {
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
+            card.notes.forEach { note ->
+                Text(
+                    text = note,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
             card.trippedBounds.forEach { bound ->
                 Text(
                     text = stringResource(R.string.import_card_bound, bound),

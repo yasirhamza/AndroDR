@@ -12,6 +12,8 @@ import com.androdr.data.db.EventWatermarkDao
 import com.androdr.data.db.RecordBodyDao
 import com.androdr.data.db.ScanObservationDao
 import com.androdr.data.db.SignalMemberDao
+import com.androdr.data.db.SignalMemberBackfillDao
+import com.androdr.data.db.AtomDao
 import com.androdr.data.db.TelemetryFactDao
 import com.androdr.data.db.TelemetryReadDao
 import com.androdr.data.store.EventDisplay
@@ -61,6 +63,12 @@ object StoreModule {
 
     @Provides
     fun provideSignalMemberDao(db: AppDatabase): SignalMemberDao = db.signalMemberDao()
+
+    @Provides
+    fun provideSignalMemberBackfillDao(db: AppDatabase): SignalMemberBackfillDao = db.signalMemberBackfillDao()
+
+    @Provides
+    fun provideAtomDao(db: AppDatabase): AtomDao = db.atomDao()
 
     @Provides
     fun provideTelemetryReadDao(db: AppDatabase): TelemetryReadDao = db.telemetryReadDao()

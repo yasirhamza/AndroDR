@@ -136,19 +136,14 @@ class SigmaRuleEngineDisabledRuleTest {
 
         setBundledRulesDirectly(listOf(disabledAtom))
 
-        val method = SigmaRuleEngine::class.java.getDeclaredMethod(
-            "computeAtomBindings",
-            List::class.java,
-        )
-        method.isAccessible = true
         val event = com.androdr.data.model.ForensicTimelineEvent(
+            id = 1L,
             startTimestamp = 0L,
             source = "test",
             category = "test_category",
             description = "test event",
         )
-        @Suppress("UNCHECKED_CAST")
-        val bindings = method.invoke(engine, listOf(event)) as Map<Long, Set<String>>
+        val bindings = engine.computeAtomBindings(listOf(event.asAtom()))
 
         assertTrue(
             "Expected no bindings from disabled atom rule, got: $bindings",

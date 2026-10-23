@@ -15,9 +15,20 @@ interface DnsEventDao {
     @Query("SELECT * FROM DnsEvent WHERE reason IS NOT NULL ORDER BY timestamp DESC")
     fun getMatchedEvents(): Flow<List<DnsEvent>>
 
-    /** One-shot snapshot for report export; not a Flow. */
-    @Query("SELECT * FROM DnsEvent ORDER BY timestamp DESC LIMIT 500")
-    suspend fun getRecentSnapshot(): List<DnsEvent>
+    /**
+     * Keyset over row ids: up to [size] rows with `afterId < id <= untilId`, ascending. The live
+     * scan collects DNS by id (spec §5.2 Watermarks), so a late-flushed row is never skipped.
+     */
+    @Query("SELECT * FROM DnsEvent WHERE id > :afterId AND id <= :untilId ORDER BY id LIMIT :size")
+    suspend fun eventsAfterId(afterId: Long, untilId: Long, size: Int): List<DnsEvent>
+
+    /** The newest row id, or null when no row is stored. */
+    @Query("SELECT MAX(id) FROM DnsEvent")
+    suspend fun maxId(): Long?
+
+    /** The lowest id among rows stamped at or after [ts] (where a first collection starts). */
+    @Query("SELECT MIN(id) FROM DnsEvent WHERE timestamp >= :ts")
+    suspend fun minIdSince(ts: Long): Long?
 
     /** Returns the row id: the live DNS fact's source event key is `"dns:$id"`. */
     @Insert

@@ -61,7 +61,6 @@ class ScanOrchestratorDiffTest {
             collector = mockk(relaxed = true), appScanner = mockk(relaxed = true),
             bugReportAnalyzer = mockk(relaxed = true), intrusionLogAnalyzer = mockk(relaxed = true),
             writer = mockk(relaxed = true), scanLock = com.androdr.data.repo.ScanLock(),
-            forensicTimelineEventDao = mockk(relaxed = true), timelineRows = mockk(relaxed = true),
             installEventEmitter = mockk(relaxed = true), deviceAdminGrantEmitter = mockk(relaxed = true),
             sigmaRuleEngine = sigmaRuleEngine, sigmaCorrelationEngine = mockk(relaxed = true),
             indicatorResolver = indicatorResolver, sigmaRuleFeed = mockk(relaxed = true),

@@ -34,6 +34,11 @@
     <string name="dns_drops_banner_title">DNS events were not recorded</string>
     <string name="dns_drops_banner_body" tools:ignore="PluralsCandidate">%1$d DNS event(s) could not be saved (the database was unavailable, or the VPN stopped before they were written), so they are missing from the DNS log.</string>
     <string name="dns_drops_banner_dismiss">Dismiss</string>
+    <string name="correlation_incomplete_banner_title">Correlation incomplete</string>
+    <string name="correlation_incomplete_banner_body">Some event chains were not fully checked, so a chain there may have been missed. %1$s</string>
+    <string name="timeline_cluster_members_missing" tools:ignore="PluralsCandidate">%1$d linked event(s) no longer exist.</string>
+    <string name="timeline_cluster_load_more">Show more linked events</string>
+    <string name="timeline_cluster_fact_unreadable">Record could not be read</string>
     <string name="partial_scan_banner_title">Scan incomplete</string>
     <!-- PluralsCandidate: compact failure counter -->
     <string name="partial_scan_banner_body" tools:ignore="PluralsCandidate">%1$d check(s) failed — results may be inaccurate. Retry the scan to get a complete picture.</string>
@@ -105,7 +110,6 @@
     <string name="bugreport_analyzed_bug_report">Analyzed: system diagnostic (bug report)</string>
     <string name="bugreport_analyzed_intrusion_log">Analyzed: intrusion log export</string>
     <!-- PluralsCandidate: compact completion summary; matches bugreport_finding_count style -->
-    <string name="bugreport_complete_timeline_only" tools:ignore="PluralsCandidate">Scan complete — %1$d timeline event(s), no triggered findings</string>
     <string name="bugreport_error_title">Analysis failed</string>
     <string name="bugreport_error_hint">Reason: %1$s</string>
     <!-- Entry point for BOTH import forks (bug report / intrusion log export), #356 -->
@@ -140,6 +144,43 @@
     <string name="timeline_range_24h">24h</string>
     <string name="timeline_range_7d">7d</string>
     <string name="timeline_range_30d">30d</string>
+    <!-- Timeline search and filter bar (C5, ruling R30). The hint names exactly what search matches. -->
+    <string name="timeline_search_hint">Search packages, rules and event types</string>
+    <string name="timeline_search_no_matches">No matches for “%1$s”</string>
+    <string name="timeline_show_only_app">Show only this app</string>
+    <string name="timeline_findings_show_all" tools:ignore="PluralsCandidate">Show all %1$d</string>
+    <string name="timeline_findings_show_fewer">Show fewer</string>
+    <string name="cd_timeline_findings_show_all" tools:ignore="PluralsCandidate">Show all %1$d current findings</string>
+    <string name="cd_timeline_findings_show_fewer" tools:ignore="PluralsCandidate">Show only the %1$d most severe current findings</string>
+    <string name="timeline_detail_first_captured_by">First captured by</string>
+    <string name="timeline_detail_observed_by">Observed by</string>
+    <string name="timeline_detail_observed_none">No remaining scan (kept as evidence)</string>
+    <string name="cd_timeline_search">Search the timeline</string>
+    <string name="cd_timeline_search_close">Close search</string>
+    <string name="cd_timeline_search_clear">Clear search text</string>
+    <string name="cd_timeline_more">More options</string>
+    <string name="timeline_menu_history">Manage scans</string>
+    <string name="timeline_menu_view_report">View report</string>
+    <string name="timeline_menu_copy">Copy report</string>
+    <string name="timeline_export_full">Full report…</string>
+    <string name="timeline_filters">Filters</string>
+    <string name="timeline_filters_active">Filters (%1$d)</string>
+    <string name="cd_timeline_filters" tools:ignore="PluralsCandidate">Open filters, %1$d active</string>
+    <string name="cd_timeline_remove_filter">Remove filter: %1$s</string>
+    <string name="timeline_chip_scan">One scan</string>
+    <string name="timeline_chip_package">App: %1$s</string>
+    <string name="timeline_chip_source">Source: %1$s</string>
+    <string name="timeline_chip_range">Date range</string>
+    <string name="timeline_chip_range_24h">Last 24 hours</string>
+    <string name="timeline_chip_range_7d">Last 7 days</string>
+    <string name="timeline_chip_range_30d">Last 30 days</string>
+    <string name="timeline_chip_findings_only">Findings and evidence only</string>
+    <string name="timeline_sheet_severity">Severity</string>
+    <string name="timeline_sheet_source">Source</string>
+    <string name="timeline_sheet_range">Date range</string>
+    <string name="timeline_sheet_group">Group by</string>
+    <string name="timeline_sheet_done">Done</string>
+    <string name="timeline_source_live">Live scan</string>
 
     <!-- Post-scan guidance -->
     <string name="guidance_critical">Immediate action needed. Tap \"App Risks\" below to see which apps should be removed.</string>
@@ -173,7 +214,7 @@
     <string name="bugreport_rule_findings">Rule-Based Findings</string>
     <!-- PluralsCandidate: shorthand for finding count display -->
     <string name="bugreport_finding_count" tools:ignore="PluralsCandidate">%1$d finding(s)</string>
-    <string name="bugreport_timeline_count" tools:ignore="PluralsCandidate">Timeline (%1$d events)</string>
+    <string name="bugreport_view_timeline">View in Timeline</string>
     <string name="cd_collapse">Collapse</string>
     <string name="cd_expand">Expand</string>
 
@@ -207,18 +248,13 @@
     <!-- PluralsCandidate: compact multi-count summary; matches bugreport_finding_count style -->
     <string name="intrusion_log_summary_collapsed" tools:ignore="PluralsCandidate">%1$d duplicates collapsed \u00b7 %2$d malformed lines skipped</string>
     <!-- PluralsCandidate: compact cap-truncation notice -->
-    <string name="intrusion_log_summary_capped" tools:ignore="PluralsCandidate">Timeline keeps the newest %1$d of %2$d DNS and %3$d of %4$d connection events.</string>
     <!-- PluralsCandidate: security-event cap-truncation notice (#342 B4) -->
-    <string name="intrusion_log_summary_capped_security" tools:ignore="PluralsCandidate">Timeline keeps the newest %1$d of %2$d security events.</string>
     <!-- PluralsCandidate: findings cap-truncation notice (#342 B3) -->
     <string name="intrusion_log_summary_capped_findings" tools:ignore="PluralsCandidate">Saved the highest-severity %1$d of %2$d findings.</string>
     <string name="intrusion_log_summary_range">Covers %1$s \u2192 %2$s</string>
 
     <!-- Timeline — externalized -->
     <string name="timeline_title">Timeline</string>
-    <string name="cd_view_report">View report</string>
-    <string name="cd_copy_report">Copy report</string>
-    <string name="cd_export">Export</string>
     <string name="timeline_copied">Timeline copied to clipboard</string>
     <string name="timeline_report_title">Forensic Timeline Report</string>
     <string name="timeline_copy">Copy</string>
@@ -239,6 +275,13 @@
     <string name="timeline_scan_unknown">Unknown</string>
     <!-- PluralsCandidate: shorthand for compact event count -->
     <string name="timeline_event_count" tools:ignore="PluralsCandidate">%1$d events</string>
+    <string name="timeline_findings_evidence_only">Show findings and their evidence only</string>
+    <string name="timeline_current_findings" tools:ignore="PluralsCandidate">Current findings (%1$d)</string>
+    <string name="timeline_unknown_date">Unknown date</string>
+    <string name="timeline_matched_record">Matched record</string>
+    <string name="timeline_detail_source">Source</string>
+    <string name="timeline_report_preview_truncated">Preview only — the full timeline is in the shared file.</string>
+    <string name="timeline_report_too_large">The timeline is too large to copy. Use Share instead.</string>
 
     <!-- Device audit remediation -->
     <string name="what_to_do">What to do</string>

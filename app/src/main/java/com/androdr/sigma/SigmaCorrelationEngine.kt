@@ -1,28 +1,50 @@
 package com.androdr.sigma
 
 import com.androdr.data.model.ForensicTimelineEvent
+import com.androdr.data.model.NotEvaluatedReason
+import com.androdr.data.model.ScannerFailure
+import com.androdr.util.reportSafe
 import javax.inject.Inject
 import javax.inject.Singleton
 
+/** Why a chain rule was never started (its CORRELATION_INCOMPLETE entry says so, truthfully). */
+enum class NotStartedCause(val text: String) {
+    /** The total deadline passed during binding or grouping. */
+    BUDGET("the correlation time budget ran out first"),
+
+    /** The loaded rules bind more atom categories than one correlation query can read. */
+    TOO_MANY_CATEGORIES("the loaded rules bind more event kinds than correlation can read at once"),
+}
+
+/** A signal row and its members, which are stored only in `signal_member` (spec §5.4). */
+data class CorrelationSignal(val row: ForensicTimelineEvent, val members: List<AtomRef>)
+
 /**
- * Evaluates upstream-SIGMA-compliant correlation rules over a list of timeline events.
+ * What one correlation pass produced: the signals found (including those found in a (rule, group)
+ * before its cut-off) and one [NotEvaluatedReason.CORRELATION_INCOMPLETE] entry per rule the budget
+ * cut off or never started.
+ */
+data class CorrelationResult(val signals: List<CorrelationSignal>, val incomplete: List<ScannerFailure>) {
+    companion object {
+        val NONE = CorrelationResult(emptyList(), emptyList())
+    }
+}
+
+/**
+ * Evaluates upstream-SIGMA-compliant correlation rules over correlation atoms (spec §5.2, §6):
+ * timeline rows and exact-precision facts, keyed by [AtomRef].
  *
  * Inputs:
  *  - rules: parsed correlation rules to evaluate
- *  - events: candidate events (typically a per-rule windowed slice of forensic_timeline)
- *  - bindings: map of eventId -> set of atom rule IDs that the event satisfies.
- *    Computed by SigmaRuleEngine after detection runs.
+ *  - atoms: candidate atoms (this scan's, plus a live scan's lookback)
+ *  - bindings: atom ref -> atom rule IDs it satisfies ([SigmaRuleEngine.computeAtomBindings])
+ *  - budget: the per-(rule, group) and total deadlines; checked, never thrown
  *
- * Output: list of ForensicTimelineEvent rows with kind = "signal" representing
- * each cluster that fired.
- *
- * Note on matchContext: the existing ForensicTimelineEvent has no `matchContext`
- * map column. The three correlation metadata keys (correlation_type, rule_id,
- * member_event_ids) are encoded as a small JSON object in the existing `details`
- * field. Timeline UI parses it back. A future schema bump can promote
- * matchContext to a real column if it grows.
+ * Each signal row carries `correlation_type`, `rule_id` and `member_count` in `details`; its
+ * members go to `signal_member` only, so no row grows with chain size.
  */
 @Singleton
+@Suppress("TooManyFunctions") // one evaluator per correlation type plus the budget bookkeeping
 class SigmaCorrelationEngine @Inject constructor() {
 
     /**
@@ -31,40 +53,97 @@ class SigmaCorrelationEngine @Inject constructor() {
      * category exactly as [evaluate] caps the signal's own severity.
      */
     fun findingsFor(
-        signals: List<ForensicTimelineEvent>,
+        signals: List<CorrelationSignal>,
         rules: List<CorrelationRule>,
         atomRulesById: Map<String, SigmaRule> = emptyMap(),
     ): List<Finding> {
         val byId = rules.associateBy { it.id }
         return signals.mapNotNull { signal ->
-            val rule = byId[signal.ruleId] ?: return@mapNotNull null
+            val rule = byId[signal.row.ruleId] ?: return@mapNotNull null
             CorrelationFindings.fromSignal(
-                signal, rule, computeEffectiveCategory(rule.referencedRuleIds, atomRulesById)
+                signal.row, rule, computeEffectiveCategory(rule.referencedRuleIds, atomRulesById)
             )
         }
     }
 
+    /**
+     * Runs [rules] over [atoms]. Per rule, atoms are first filtered to those bound to one of the
+     * rule's steps, then grouped; groups run smallest first, so the largest (the adversarial ones)
+     * run last. Every unfinished or unstarted (rule, group) is reported, never silently dropped.
+     */
     fun evaluate(
         rules: List<CorrelationRule>,
-        events: List<ForensicTimelineEvent>,
-        bindings: Map<Long, Set<String>>,
+        atoms: List<TimelineAtom>,
+        bindings: Map<AtomRef, Set<String>>,
         atomRulesById: Map<String, SigmaRule> = emptyMap(),
-    ): List<ForensicTimelineEvent> {
-        val signals = mutableListOf<ForensicTimelineEvent>()
-        rules.forEach { rule ->
-            val effectiveCategory = computeEffectiveCategory(rule.referencedRuleIds, atomRulesById)
-            val effectiveSeverity = SeverityCapPolicy.applyCap(effectiveCategory, rule.severity)
+        budget: CorrelationBudget = CorrelationBudget.unbounded(),
+    ): CorrelationResult {
+        if (rules.isEmpty()) return CorrelationResult.NONE
+        // Binding (done by the caller under the same budget) or grouping overran the total
+        // deadline: no rule ran, and no package is known yet.
+        val grouped = groupAll(rules, atoms, bindings, budget) ?: return CorrelationResult(
+            emptyList(), rules.map { notStarted(it) }
+        )
+        val signals = mutableListOf<CorrelationSignal>()
+        val unfinished = LinkedHashMap<String, MutableList<String>>()
+        for ((rule, groups) in grouped) {
             val effectiveRule = rule.copy(
-                severity = effectiveSeverity,
+                severity = SeverityCapPolicy.applyCap(
+                    computeEffectiveCategory(rule.referencedRuleIds, atomRulesById), rule.severity
+                ),
             )
-            signals += when (rule.type) {
-                CorrelationType.TEMPORAL_ORDERED -> evaluateTemporalOrdered(effectiveRule, events, bindings)
-                CorrelationType.EVENT_COUNT      -> evaluateEventCount(effectiveRule, events, bindings)
-                CorrelationType.TEMPORAL         -> evaluateTemporalUnordered(effectiveRule, events, bindings)
+            for ((key, group) in groups) {
+                if (budget.totalExpired()) {
+                    unfinished.getOrPut(rule.id) { mutableListOf() } += key
+                    continue
+                }
+                val deadline = budget.groupDeadline()
+                val outcome = evaluateGroup(effectiveRule, group, bindings) { budget.expired(deadline) }
+                signals += outcome.signals
+                if (!outcome.finished) unfinished.getOrPut(rule.id) { mutableListOf() } += key
             }
         }
-        return signals
+        val byId = rules.associateBy { it.id }
+        return CorrelationResult(signals, unfinished.map { (id, keys) -> notFinished(byId.getValue(id), keys) })
     }
+
+    /**
+     * Per rule, its step-bound atoms grouped by the rule's group key, each group sorted by time,
+     * groups ordered smallest first. Null when the total deadline passed before grouping finished.
+     */
+    private fun groupAll(
+        rules: List<CorrelationRule>,
+        atoms: List<TimelineAtom>,
+        bindings: Map<AtomRef, Set<String>>,
+        budget: CorrelationBudget,
+    ): List<Pair<CorrelationRule, List<Pair<String, List<TimelineAtom>>>>>? {
+        if (budget.totalExpired()) return null
+        return rules.map { rule ->
+            val steps = rule.referencedRuleIds.toSet()
+            val groups = HashMap<String, MutableList<TimelineAtom>>()
+            for ((i, atom) in atoms.withIndex()) {
+                if (i % CHECK_EVERY == 0 && budget.totalExpired()) return null
+                if (bindings[atom.ref].orEmpty().any { it in steps }) {
+                    groups.getOrPut(groupKey(atom, rule.groupBy)) { mutableListOf() } += atom
+                }
+            }
+            val byTime = compareBy<TimelineAtom> { it.timestamp }.thenBy { it.ref }
+            val ordered = groups.entries
+                .map { (key, list) -> key to list.sortedWith(byTime) }
+                .sortedWith(compareBy<Pair<String, List<TimelineAtom>>> { it.second.size }.thenBy { it.first })
+            rule to ordered
+        }
+    }
+
+    private fun evaluateGroup(
+        rule: CorrelationRule, sorted: List<TimelineAtom>, bindings: Map<AtomRef, Set<String>>, cut: () -> Boolean,
+    ): GroupOutcome = when (rule.type) {
+        CorrelationType.TEMPORAL_ORDERED -> evaluateTemporalOrdered(rule, sorted, bindings, cut)
+        CorrelationType.EVENT_COUNT -> evaluateEventCount(rule, sorted, cut)
+        CorrelationType.TEMPORAL -> evaluateTemporalUnordered(rule, sorted, bindings, cut)
+    }
+
+    private class GroupOutcome(val signals: List<CorrelationSignal>, val finished: Boolean)
 
     /**
      * Determines the effective rule category for a correlation rule by inspecting
@@ -93,120 +172,152 @@ class SigmaCorrelationEngine @Inject constructor() {
         }
     }
 
-    @Suppress("LoopWithTooManyJumpStatements") // chain-matching loop legitimately uses break/continue
+    @Suppress("LoopWithTooManyJumpStatements", "ReturnCount") // chain matching breaks; a cut returns early
     private fun evaluateTemporalOrdered(
         rule: CorrelationRule,
-        events: List<ForensicTimelineEvent>,
-        bindings: Map<Long, Set<String>>
-    ): List<ForensicTimelineEvent> {
-        val grouped = events.groupBy { groupKey(it, rule.groupBy) }
-        val results = mutableListOf<ForensicTimelineEvent>()
-        grouped.forEach { (_, groupEvents) ->
-            val sorted = groupEvents.sortedBy { it.startTimestamp }
-            val firstStepRule = rule.referencedRuleIds.first()
-            sorted.forEachIndexed { i, e ->
-                if (firstStepRule !in (bindings[e.id] ?: emptySet())) return@forEachIndexed
-                val chain = mutableListOf(e)
-                var nextStepIdx = 1
-                for (j in (i + 1) until sorted.size) {
-                    val candidate = sorted[j]
-                    if (candidate.startTimestamp - e.startTimestamp > rule.timespanMs) break
-                    val needRule = rule.referencedRuleIds[nextStepIdx]
-                    if (needRule in (bindings[candidate.id] ?: emptySet())) {
-                        chain += candidate
-                        nextStepIdx++
-                        if (nextStepIdx >= rule.referencedRuleIds.size) break
-                    }
-                }
-                if (chain.size == rule.referencedRuleIds.size) {
-                    results += signal(rule, chain)
+        sorted: List<TimelineAtom>,
+        bindings: Map<AtomRef, Set<String>>,
+        cut: () -> Boolean,
+    ): GroupOutcome {
+        val results = mutableListOf<CorrelationSignal>()
+        val firstStepRule = rule.referencedRuleIds.first()
+        for (i in sorted.indices) {
+            if (cut()) return GroupOutcome(results, finished = false)
+            val e = sorted[i]
+            if (firstStepRule !in bindings[e.ref].orEmpty()) continue
+            val chain = mutableListOf(e)
+            var nextStepIdx = 1
+            for (j in (i + 1) until sorted.size) {
+                if (cut()) return GroupOutcome(results, finished = false)
+                val candidate = sorted[j]
+                if (candidate.timestamp - e.timestamp > rule.timespanMs) break
+                val needRule = rule.referencedRuleIds[nextStepIdx]
+                if (needRule in bindings[candidate.ref].orEmpty()) {
+                    chain += candidate
+                    nextStepIdx++
+                    if (nextStepIdx >= rule.referencedRuleIds.size) break
                 }
             }
+            if (chain.size == rule.referencedRuleIds.size) results += signal(rule, chain)
         }
-        return results
+        return GroupOutcome(results, finished = true)
     }
 
+    /** Group atoms are already filtered to the rule's steps, so every one of them counts. */
     private fun evaluateEventCount(
-        rule: CorrelationRule,
-        events: List<ForensicTimelineEvent>,
-        bindings: Map<Long, Set<String>>
-    ): List<ForensicTimelineEvent> {
-        val refRules = rule.referencedRuleIds.toSet()
-        val grouped = events.groupBy { groupKey(it, rule.groupBy) }
-        val results = mutableListOf<ForensicTimelineEvent>()
-        grouped.forEach { (_, groupEvents) ->
-            val matching = groupEvents
-                .filter { (bindings[it.id] ?: emptySet()).any { id -> id in refRules } }
-                .sortedBy { it.startTimestamp }
-            var i = 0
-            while (i < matching.size) {
-                val windowEnd = matching[i].startTimestamp + rule.timespanMs
-                val window = matching.subList(i, matching.size).takeWhile { it.startTimestamp <= windowEnd }
-                if (window.size >= rule.minEvents) {
-                    results += signal(rule, window)
-                    i += window.size
-                } else {
-                    i++
-                }
+        rule: CorrelationRule, matching: List<TimelineAtom>, cut: () -> Boolean,
+    ): GroupOutcome {
+        val results = mutableListOf<CorrelationSignal>()
+        var i = 0
+        var end = 0
+        while (i < matching.size) {
+            if (cut()) return GroupOutcome(results, finished = false)
+            val windowEnd = matching[i].timestamp + rule.timespanMs
+            if (end < i) end = i
+            while (end < matching.size && matching[end].timestamp <= windowEnd) end++
+            if (end - i >= rule.minEvents) {
+                results += signal(rule, matching.subList(i, end))
+                i = end
+            } else {
+                i++
             }
         }
-        return results
+        return GroupOutcome(results, finished = true)
     }
 
-    @Suppress("LoopWithTooManyJumpStatements") // unordered-all-fire uses break to short-circuit on match
+    @Suppress("LoopWithTooManyJumpStatements", "ReturnCount") // unordered-all-fire breaks on a match
     private fun evaluateTemporalUnordered(
         rule: CorrelationRule,
-        events: List<ForensicTimelineEvent>,
-        bindings: Map<Long, Set<String>>
-    ): List<ForensicTimelineEvent> {
+        sorted: List<TimelineAtom>,
+        bindings: Map<AtomRef, Set<String>>,
+        cut: () -> Boolean,
+    ): GroupOutcome {
         val needed = rule.referencedRuleIds.toSet()
-        val grouped = events.groupBy { groupKey(it, rule.groupBy) }
-        val results = mutableListOf<ForensicTimelineEvent>()
-        grouped.forEach { (_, groupEvents) ->
-            val sorted = groupEvents.sortedBy { it.startTimestamp }
-            for (i in sorted.indices) {
-                val anchor = sorted[i]
-                val window = mutableListOf(anchor)
-                val seenRules = (bindings[anchor.id] ?: emptySet()).intersect(needed).toMutableSet()
-                for (j in (i + 1) until sorted.size) {
-                    if (sorted[j].startTimestamp - anchor.startTimestamp > rule.timespanMs) break
-                    window += sorted[j]
-                    seenRules += (bindings[sorted[j].id] ?: emptySet()).intersect(needed)
-                    if (seenRules.containsAll(needed)) {
-                        results += signal(rule, window)
-                        break
-                    }
+        val results = mutableListOf<CorrelationSignal>()
+        for (i in sorted.indices) {
+            if (cut()) return GroupOutcome(results, finished = false)
+            val anchor = sorted[i]
+            val window = mutableListOf(anchor)
+            val seenRules = bindings[anchor.ref].orEmpty().intersect(needed).toMutableSet()
+            for (j in (i + 1) until sorted.size) {
+                if (cut()) return GroupOutcome(results, finished = false)
+                if (sorted[j].timestamp - anchor.timestamp > rule.timespanMs) break
+                window += sorted[j]
+                seenRules += bindings[sorted[j].ref].orEmpty().intersect(needed)
+                if (seenRules.containsAll(needed)) {
+                    results += signal(rule, window)
+                    break
                 }
             }
         }
-        return results
+        return GroupOutcome(results, finished = true)
     }
 
-    private fun groupKey(event: ForensicTimelineEvent, groupBy: List<String>): String =
+    private fun groupKey(atom: TimelineAtom, groupBy: List<String>): String =
         when (groupBy.firstOrNull()) {
-            "package_name" -> event.packageName
-            null -> ""
+            "package_name" -> atom.packageName
             else -> ""
         }
 
-    private fun signal(rule: CorrelationRule, members: List<ForensicTimelineEvent>): ForensicTimelineEvent {
+    private fun signal(rule: CorrelationRule, members: List<TimelineAtom>): CorrelationSignal {
         val first = members.first()
         val last = members.last()
-        val memberIds = members.joinToString(",") { it.id.toString() }
+        val refs = members.map { it.ref }
         val detailsJson = """{"correlation_type":"${rule.type.name.lowercase()}",""" +
-            """"rule_id":"${rule.id}","member_event_ids":"$memberIds"}"""
-        return ForensicTimelineEvent(
-            scanResultId = first.scanResultId,
-            startTimestamp = first.startTimestamp,
-            endTimestamp = last.startTimestamp,
+            """"rule_id":"${rule.id}","$MEMBER_COUNT":${refs.size}}"""
+        val row = ForensicTimelineEvent(
+            startTimestamp = first.timestamp,
+            endTimestamp = last.timestamp,
             kind = "signal",
             category = "correlation",
-            source = "sigma_correlation_engine",
+            source = SOURCE,
             description = rule.displayLabel,
             details = detailsJson,
             packageName = first.packageName,
             ruleId = rule.id,
-            correlationId = "${rule.id}:$memberIds"
+            correlationId = SignalIdentity.correlationId(rule.id, refs),
         )
+        return CorrelationSignal(row, refs)
+    }
+
+    /** A rule-level "not started" entry for every rule, saying why ([cause]). */
+    fun notStarted(rules: List<CorrelationRule>, cause: NotStartedCause): List<ScannerFailure> =
+        rules.map { notStarted(it, cause) }
+
+    private fun notStarted(rule: CorrelationRule, cause: NotStartedCause = NotStartedCause.BUDGET) = ScannerFailure(
+        scanner = SCANNER,
+        exception = NotEvaluatedReason.CORRELATION_INCOMPLETE.sentinel,
+        message = "${reportSafe(rule.title)} (${reportSafe(rule.id)}): not started -- ${cause.text}",
+        ruleId = rule.id,
+    )
+
+    private fun notFinished(rule: CorrelationRule, keys: List<String>): ScannerFailure {
+        val names = keys.map { if (it.isEmpty()) DEVICE_WIDE else reportSafe(it) }
+        val shown = names.take(MAX_INCOMPLETE_PACKAGES)
+        val more = names.size - shown.size
+        val list = shown.joinToString(", ") + if (more > 0) " and $more more" else ""
+        return ScannerFailure(
+            scanner = SCANNER,
+            exception = NotEvaluatedReason.CORRELATION_INCOMPLETE.sentinel,
+            message = "${reportSafe(rule.title)} (${reportSafe(rule.id)}): not finished in time for $list",
+            ruleId = rule.id,
+            packages = shown,
+            morePackages = more,
+        )
+    }
+
+    companion object {
+        const val SOURCE = "sigma_correlation_engine"
+        const val MEMBER_COUNT = "member_count"
+        const val SCANNER = "correlation"
+
+        /** Packages one CORRELATION_INCOMPLETE entry names before "and K more" (spec §5.2). */
+        const val MAX_INCOMPLETE_PACKAGES = 20
+
+        /** The group label of a rule without `group-by`. */
+        const val DEVICE_WIDE = "device-wide"
+
+        /** Atoms grouped between two total-deadline checks. */
+        private const val CHECK_EVERY = 256
     }
 }

@@ -14,13 +14,26 @@ object TimelineCategories {
     private const val EVENT_TYPE = "event_type"
 
     /**
+     * Only an INSTALL was ever a legacy `package_install` row; an update or uninstall gets its own
+     * category, so it is never an install atom (ruling R26).
+     */
+    private fun installHistoryCategory(eventType: String?): String = when (eventType) {
+        "INSTALL" -> "package_install"
+        "UPDATE" -> "package_update"
+        "UNINSTALL" -> "package_uninstall"
+        else -> "package_install_history"
+    }
+
+    /**
      * Category for one record of [service]. Services outside the table
      * (snapshot services, tombstones, wakelocks) use the service name.
      */
     fun categoryOf(service: String, fields: Map<String, Any?>): String = when (service) {
         "usage_stats", "battery_daily" -> fields[EVENT_TYPE]?.toString() ?: service
-        "appops_audit" -> "permission_use"
-        "package_install_history" -> "package_install"
+        // System-UID ops never got a legacy timeline row: their own category, so they are not
+        // permission_use atoms (ruling R26; spec §4.3).
+        "appops_audit" -> if (fields["is_system_app"] == true) "system_permission_use" else "permission_use"
+        "package_install_history" -> installHistoryCategory(fields[EVENT_TYPE]?.toString())
         "network_monitor" -> "network_connect"
         "security_log" -> "security_event"
         "dns_monitor" -> if (fields["reason"] != null) "ioc_match" else "dns_query"

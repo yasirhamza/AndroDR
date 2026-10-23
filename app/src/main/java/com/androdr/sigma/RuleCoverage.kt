@@ -1,7 +1,6 @@
 package com.androdr.sigma
 
 import com.androdr.data.model.FileArtifactTelemetry
-import com.androdr.data.model.ForensicTimelineEvent
 import com.androdr.data.model.NotEvaluatedReason
 import com.androdr.data.model.ScannerFailure
 import com.androdr.util.reportSafe
@@ -143,12 +142,12 @@ object RuleCoverage {
         )
     }
 
-    /** As [noEventSkips], reading the recorded categories off the events themselves. */
+    /** As [noEventSkips], reading the recorded categories off the correlation atoms themselves. */
     fun noEventSkipsFor(
         rules: List<CorrelationRule>,
         atomCategoryByRuleId: Map<String, String>,
-        events: List<ForensicTimelineEvent>,
+        atoms: List<TimelineAtom>,
     ): List<ScannerFailure> =
-        noEventSkips(rules, atomCategoryByRuleId, events.mapTo(HashSet()) { it.category })
+        noEventSkips(rules, atomCategoryByRuleId, atoms.mapTo(HashSet()) { it.category })
 
 }

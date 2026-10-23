@@ -26,7 +26,6 @@ import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Share
-import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -45,8 +44,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -57,23 +54,26 @@ import com.androdr.R
 import com.androdr.scanner.ArtifactType
 import com.androdr.scanner.ScanOrchestrator
 import com.androdr.ui.common.FindingCard
-import com.androdr.ui.theme.ExtendedColors
-import com.androdr.ui.theme.androdrColors
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
+/**
+ * The import screen. An import's records live in the store (C3): the screen shows its findings and
+ * import card, and links to the Timeline filtered to the import's scan ([onViewTimeline]).
+ */
 @Suppress("LongMethod") // Bug report screen combines file-picker launch, progress state,
-// empty-state, completion confirmation, error card, findings list, timeline, and export.
+// empty-state, completion confirmation, error card, findings list, Timeline link, and export.
 // Splitting into child composables would require threading 5+ state flows through wrappers;
 // keeping inline trades length for state-flow locality.
 @Composable
 fun BugReportScreen(
-    viewModel: BugReportViewModel = hiltViewModel()
+    onViewTimeline: (scanId: Long) -> Unit = {},
+    viewModel: BugReportViewModel = hiltViewModel(),
 ) {
     val analyzedArtifact by viewModel.analyzedArtifact.collectAsStateWithLifecycle()
     val findings by viewModel.findings.collectAsStateWithLifecycle()
-    val timeline by viewModel.timeline.collectAsStateWithLifecycle()
+    val importScanId by viewModel.importScanId.collectAsStateWithLifecycle()
     val intrusionSummary by viewModel.intrusionLogSummary.collectAsStateWithLifecycle()
     val isAnalyzing by viewModel.isAnalyzing.collectAsStateWithLifecycle()
     val analysisFinished by viewModel.analysisFinished.collectAsStateWithLifecycle()
@@ -264,6 +264,19 @@ fun BugReportScreen(
 
             importCardItem(if (isAnalyzing) null else importCard)
 
+            // The import's records are in the store: link to the Timeline filtered to its scan.
+            if (!isAnalyzing) {
+                importScanId?.let { scanId ->
+                    item {
+                        ImportTimelineLink(
+                            onViewTimeline = { onViewTimeline(scanId) },
+                            onExport = if (hasResults) null else viewModel::exportReport,
+                            exporting = exporting,
+                        )
+                    }
+                }
+            }
+
             // Intrusion log summary card — shown whenever the imported artifact was an
             // Advanced Protection Intrusion Logging export (#342), independent of whether
             // any SIGMA rule triggered, so the user always sees what was actually analyzed.
@@ -310,33 +323,6 @@ fun BugReportScreen(
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
-                                val dnsCap = ScanOrchestrator.DNS_PERSIST_CAP
-                                val netCap = ScanOrchestrator.CONNECT_PERSIST_CAP
-                                if (s.dnsEventCount > dnsCap || s.connectEventCount > netCap) {
-                                    Text(
-                                        text = stringResource(
-                                            R.string.intrusion_log_summary_capped,
-                                            minOf(s.dnsEventCount, dnsCap),
-                                            s.dnsEventCount,
-                                            minOf(s.connectEventCount, netCap),
-                                            s.connectEventCount
-                                        ),
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                }
-                                val secCap = ScanOrchestrator.SECURITY_PERSIST_CAP
-                                if (s.securityEventCount > secCap) {
-                                    Text(
-                                        text = stringResource(
-                                            R.string.intrusion_log_summary_capped_security,
-                                            secCap,
-                                            s.securityEventCount
-                                        ),
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                }
                                 val findingsCap = ScanOrchestrator.FINDINGS_PERSIST_CAP
                                 if (s.triggeredFindingCount > findingsCap) {
                                     Text(
@@ -399,56 +385,16 @@ fun BugReportScreen(
                                     // analyzed — telling an intrusion-log importer
                                     // "your system diagnostic was analyzed"
                                     // misidentifies their evidence.
-                                    text = when {
-                                        timeline.isNotEmpty() -> stringResource(
-                                            R.string.bugreport_complete_timeline_only,
-                                            timeline.size
-                                        )
-                                        analyzedArtifact == ArtifactType.INTRUSION_LOG ->
-                                            stringResource(R.string.intrusion_log_complete_clean_hint)
-                                        else -> stringResource(R.string.bugreport_complete_clean_hint)
+                                    text = if (analyzedArtifact == ArtifactType.INTRUSION_LOG) {
+                                        stringResource(R.string.intrusion_log_complete_clean_hint)
+                                    } else {
+                                        stringResource(R.string.bugreport_complete_clean_hint)
                                     },
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             }
                         }
-                    }
-                }
-
-                // Timeline-only result: still show the timeline + an export button so
-                // the user can capture forensic events that didn't trip a SIGMA rule.
-                if (timeline.isNotEmpty()) {
-                    item {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.End,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            OutlinedButton(
-                                onClick = { viewModel.exportReport() },
-                                enabled = !exporting
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Filled.Share,
-                                    contentDescription = stringResource(R.string.report_export_cd),
-                                    modifier = Modifier.size(18.dp)
-                                )
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text(stringResource(R.string.report_export_label))
-                            }
-                        }
-                    }
-                    item {
-                        Text(
-                            text = stringResource(R.string.bugreport_timeline_count, timeline.size),
-                            style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.SemiBold,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                    }
-                    items(timeline.sortedBy { it.timestamp }) { event ->
-                        TimelineEventCard(event = event)
                     }
                 }
             }
@@ -512,21 +458,6 @@ fun BugReportScreen(
                     }
                     items(triggeredFindings) { finding ->
                         FindingCard(finding = finding)
-                    }
-                }
-
-                // Timeline events
-                if (timeline.isNotEmpty()) {
-                    item {
-                        Text(
-                            text = stringResource(R.string.bugreport_timeline_count, timeline.size),
-                            style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.SemiBold,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                    }
-                    items(timeline.sortedBy { it.timestamp }) { event ->
-                        TimelineEventCard(event = event)
                     }
                 }
             }
@@ -600,52 +531,28 @@ private fun InstructionsCard(
     }
 }
 
+/**
+ * "View in Timeline" for the last import, plus Export when no finding card row offers it.
+ */
 @Composable
-private fun TimelineEventCard(event: com.androdr.data.model.TimelineEvent) {
-    val (icon, color) = findingIconAndColor(event.severity, MaterialTheme.androdrColors)
-
-    Card(
+private fun ImportTimelineLink(onViewTimeline: () -> Unit, onExport: (() -> Unit)?, exporting: Boolean) {
+    Row(
         modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
-        )
+        horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Row(
-            modifier = Modifier.padding(12.dp),
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = event.severity,
-                tint = color,
-                modifier = Modifier.size(20.dp)
-            )
-            Column(
-                modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(2.dp)
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = event.source,
-                        style = MaterialTheme.typography.labelSmall,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Text(
-                        text = event.category,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-                Text(
-                    text = event.description,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurface
+        OutlinedButton(onClick = onViewTimeline) {
+            Text(stringResource(R.string.bugreport_view_timeline))
+        }
+        if (onExport != null) {
+            OutlinedButton(onClick = onExport, enabled = !exporting) {
+                Icon(
+                    imageVector = Icons.Filled.Share,
+                    contentDescription = stringResource(R.string.report_export_cd),
+                    modifier = Modifier.size(18.dp)
                 )
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(stringResource(R.string.report_export_label))
             }
         }
     }
@@ -661,15 +568,4 @@ private fun analyzedArtifactLabel(type: ArtifactType?): Int? = when (type) {
     ArtifactType.BUG_REPORT -> R.string.bugreport_analyzed_bug_report
     ArtifactType.INTRUSION_LOG -> R.string.bugreport_analyzed_intrusion_log
     ArtifactType.UNRECOGNIZED, null -> null
-}
-
-private fun findingIconAndColor(
-    severity: String,
-    colors: ExtendedColors
-): Pair<ImageVector, Color> = when (severity.uppercase()) {
-    "CRITICAL" -> Pair(Icons.Filled.Error, colors.critical)
-    "HIGH"     -> Pair(Icons.Filled.Warning, colors.high)
-    "MEDIUM"   -> Pair(Icons.Filled.Warning, colors.medium)
-    "ERROR"    -> Pair(Icons.Filled.Error, colors.critical)
-    else       -> Pair(Icons.Filled.Info, colors.neutral)
 }

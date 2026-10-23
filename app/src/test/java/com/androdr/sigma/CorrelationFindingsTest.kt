@@ -36,10 +36,10 @@ class CorrelationFindingsTest {
         category = "correlation",
         source = "sigma_correlation_engine",
         description = rule.displayLabel,
-        details = """{"correlation_type":"temporal_ordered","rule_id":"androdr-corr-001","member_event_ids":"11,12"}""",
+        details = """{"correlation_type":"temporal_ordered","rule_id":"androdr-corr-001","member_count":2}""",
         packageName = "com.evil.app",
         ruleId = rule.id,
-        correlationId = "androdr-corr-001:11,12",
+        correlationId = SignalIdentity.correlationId("androdr-corr-001", listOf(Row(11), Row(12))),
     )
 
     @Test
@@ -74,10 +74,21 @@ class CorrelationFindingsTest {
         val ctx = CorrelationFindings.fromSignal(signal, rule, RuleCategory.INCIDENT).matchContext
 
         assertEquals("com.evil.app", ctx["package_name"])
-        assertEquals("androdr-corr-001:11,12", ctx["correlation_id"])
-        assertEquals("11,12", ctx["member_event_ids"])
+        assertEquals(signal.correlationId, ctx["correlation_id"])
+        assertEquals("the members' count, never their ids (spec §5.4)", "2", ctx["member_count"])
+        assertTrue("no id list", ctx.values.none { it.contains("11,12") })
         assertEquals("1700000000000", ctx["chain_start"])
         assertEquals("1700000600000", ctx["chain_end"])
+    }
+
+    @Test
+    fun `the canonical correlation id is the rule id plus h128 hex over the sorted kind-id members`() {
+        val a = SignalIdentity.correlationId("r", listOf(Fact(3), Row(9), Row(2)))
+        assertEquals("order-independent", a, SignalIdentity.correlationId("r", listOf(Row(2), Fact(3), Row(9))))
+        val hex = com.androdr.data.store.HashKeys.h128("0:2,0:9,1:3").joinToString("") { "%02x".format(it) }
+        assertEquals("r:$hex", a)
+        assertTrue("a row and a fact with the same id differ",
+            SignalIdentity.correlationId("r", listOf(Row(5))) != SignalIdentity.correlationId("r", listOf(Fact(5))))
     }
 
     @Test

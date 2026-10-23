@@ -1,11 +1,15 @@
 package com.androdr.scanner
 
+import com.androdr.data.db.getAllForExport
 import androidx.room.withTransaction
 import com.androdr.data.model.ForensicTimelineEvent
 import com.androdr.data.model.ScanState
 import com.androdr.data.model.TelemetrySource
 import com.androdr.data.repo.ScanLock
 import com.androdr.data.repo.ScanWriteRepository
+import com.androdr.data.db.LegacyEventRowCleanup
+import com.androdr.data.db.SignalMemberBackfill
+import com.androdr.data.repo.TimelineRowDeleter
 import com.androdr.data.store.StoreFixture.Companion.CAPTURED
 import com.androdr.data.store.StoreFixture.Companion.app
 import com.androdr.data.store.StoreFixture.Companion.dns
@@ -47,7 +51,12 @@ class StartupSweepTest {
     private val clock = 10L * 24 * 60 * 60 * 1000
 
     private fun sweep(repo: ScanWriteRepository = w.repo) =
-        StartupSweep(w.lock, repo, w.f.store, w.f.dirty, ReportFiles(reportsDir) { clock })
+        StartupSweep(w.lock, repo, w.f.store, w.f.dirty, ReportFiles(reportsDir) { clock },
+            SignalMemberBackfill(w.f.db, w.f.db.signalMemberBackfillDao(), w.f.db.signalMemberDao(), w.lock,
+                w.f.dataStore),
+            LegacyEventRowCleanup(w.f.db,
+                TimelineRowDeleter(w.f.db.forensicTimelineEventDao(), w.f.store, w.f.db.signalMemberDao()),
+                w.f.db.signalMemberDao(), w.f.store, w.lock, w.f.dataStore))
 
     private fun state(id: Long): String? = w.f.db.openHelper.readableDatabase
         .query("SELECT state FROM ScanResult WHERE id = $id").use { c -> if (c.moveToFirst()) c.getString(0) else null }
@@ -288,5 +297,76 @@ class StartupSweepTest {
         assertEquals(0L, w.count("SELECT COUNT(*) FROM ScanResult"))
         assertEquals(0L, w.count("SELECT COUNT(*) FROM telemetry_record"))
         assertEquals(listOf("kept"), w.f.db.forensicTimelineEventDao().getAllForExport().map { it.description })
+    }
+
+    /** Spec §5.4: the one-time signal_member backfill runs from the startup sweep. */
+    @Test
+    fun `the sweep runs the signal member backfill once`() = runBlocking {
+        val legacy = w.f.db.forensicTimelineEventDao().insert(ForensicTimelineEvent(startTimestamp = 1L,
+            kind = "signal", source = "sigma_correlation_engine", category = "correlation", description = "chain",
+            ruleId = "androdr-corr-001", details = """{"rule_id":"androdr-corr-001","member_event_ids":"3,5"}"""))
+
+        sweep().run()
+
+        assertEquals(listOf(3L, 5L),
+            w.f.db.signalMemberDao().forSignal(legacy, null, null, 10).map { it.refId })
+    }
+
+    /**
+     * C3 (spec §5.3): the sweep runs the one-time legacy event-row cleanup after the backfill, so a
+     * legacy signal's members (moved into signal_member first) protect the rows they list.
+     */
+    @Test
+    fun `the sweep runs the legacy event-row cleanup after the backfill`() = runBlocking {
+        w.f.db.scanResultDao().insert(com.androdr.data.model.ScanResult(id = 4L, timestamp = 4L,
+            findings = emptyList(), bugReportFindings = emptyList(), riskySideloadCount = 0, knownMalwareCount = 0,
+            state = ScanState.COMPLETE, telemetryState = com.androdr.data.model.TelemetryState.STORED))
+        val dao = w.f.db.forensicTimelineEventDao()
+        fun raw(desc: String) = ForensicTimelineEvent(startTimestamp = 1L, source = "intrusion_log",
+            category = "dns_query", description = desc, scanResultId = 4L)
+        val listed = dao.insert(raw("listed"))
+        dao.insert(raw("unlisted"))
+        dao.insert(ForensicTimelineEvent(startTimestamp = 1L, kind = "signal", source = "sigma_correlation_engine",
+            category = "correlation", description = "chain", ruleId = "androdr-corr-001", scanResultId = 4L,
+            details = """{"rule_id":"androdr-corr-001","member_event_ids":"$listed"}"""))
+
+        sweep().run()
+
+        assertEquals(setOf("listed", "chain"), dao.getAllForExport().map { it.description }.toSet())
+    }
+
+    /**
+     * Review m1: a backfill that fails part-way leaves its done flag unset, and the cleanup then waits:
+     * a legacy signal whose list is not yet in signal_member must not lose its listed rows.
+     */
+    @Test
+    fun `the legacy cleanup waits while the signal member backfill is unfinished`() = runBlocking {
+        w.f.db.scanResultDao().insert(com.androdr.data.model.ScanResult(id = 4L, timestamp = 4L,
+            findings = emptyList(), bugReportFindings = emptyList(), riskySideloadCount = 0, knownMalwareCount = 0,
+            state = ScanState.COMPLETE, telemetryState = com.androdr.data.model.TelemetryState.STORED))
+        val dao = w.f.db.forensicTimelineEventDao()
+        val listed = dao.insert(ForensicTimelineEvent(startTimestamp = 1L, source = "intrusion_log",
+            category = "dns_query", description = "listed", scanResultId = 4L))
+        dao.insert(ForensicTimelineEvent(startTimestamp = 1L, kind = "signal", source = "sigma_correlation_engine",
+            category = "correlation", description = "chain", ruleId = "androdr-corr-001", scanResultId = 4L,
+            details = """{"rule_id":"androdr-corr-001","member_event_ids":"$listed"}"""))
+        val failingDao = spyk(w.f.db.signalMemberBackfillDao())
+        coEvery { failingDao.legacyAfter(any(), any()) } throws IllegalStateException("disk I/O")
+        val backfill = SignalMemberBackfill(w.f.db, failingDao, w.f.db.signalMemberDao(), w.lock, w.f.dataStore)
+        val sweep = StartupSweep(w.lock, w.repo, w.f.store, w.f.dirty, ReportFiles(reportsDir) { clock }, backfill,
+            LegacyEventRowCleanup(w.f.db,
+                TimelineRowDeleter(w.f.db.forensicTimelineEventDao(), w.f.store, w.f.db.signalMemberDao()),
+                w.f.db.signalMemberDao(), w.f.store, w.lock, w.f.dataStore))
+
+        sweep.run()
+
+        assertEquals("the listed row waits for the backfill", setOf("listed", "chain"),
+            dao.getAllForExport().map { it.description }.toSet())
+
+        sweep().run()
+
+        assertEquals(setOf("listed", "chain"), dao.getAllForExport().map { it.description }.toSet())
+        assertEquals("the backfill moved the list, so the row stays protected", 1L,
+            w.count("SELECT COUNT(*) FROM signal_member WHERE refId = $listed"))
     }
 }

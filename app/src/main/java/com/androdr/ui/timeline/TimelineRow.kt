@@ -1,185 +1,60 @@
 package com.androdr.ui.timeline
 
+import com.androdr.data.db.TimelineKey
 import com.androdr.data.model.ForensicTimelineEvent
+import com.androdr.data.model.TimelineRowEntity
+import com.androdr.data.store.DecodedRecord
 import com.androdr.sigma.Finding
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
-
-/** Thread-local date formatter for date-group labels (SimpleDateFormat is not thread-safe). */
-private val DATE_GROUP_FORMAT = ThreadLocal.withInitial {
-    SimpleDateFormat("MMM dd, yyyy", Locale.US)
-}
 
 /**
- * A single row in the timeline UI. Sealed type with two variants that
- * enforce the spec §3 layer separation at the UI level:
- *
- * - [TelemetryRow] wraps a pure-observation [ForensicTimelineEvent] with
- *   no severity. Rendered as a neutral entry — no severity badge, low
- *   visual weight.
- * - [FindingRow] wraps a rule-produced [Finding] with a severity, category,
- *   and ruleId. Rendered with a severity badge and category indicator.
- *
- * The [TimelineViewModel] merges telemetry events and findings into a
- * single chronological stream of `TimelineRow`. The `Screen` renders
- * each variant via a `when` exhaustive branch so the compiler enforces
- * that every variant has a visual treatment.
- *
- * See `docs/superpowers/specs/2026-04-09-unified-telemetry-findings-refactor-design.md`
- * §10 for the rationale.
+ * One row of the Timeline UI (spec §6). The paged list holds [Entry] rows — the keyset union of
+ * event facts ([EventRow]) and `forensic_timeline` rows ([StoredRow]) — with a [DayHeader] between
+ * days; the pinned section above it holds the current findings ([FindingRow]). The screen renders
+ * each variant through an exhaustive `when`, so every variant has a visual treatment.
  */
-/**
- * Pure merge logic extracted from [TimelineViewModel] so it can be unit
- * tested without Hilt or Room. Wraps telemetry events and findings into
- * a chronologically sorted list of [TimelineRow], applies the
- * `hideInformationalTelemetry` filter, and computes finding references
- * via rule-id matching.
- */
-fun mergeTimelineRows(
-    events: List<ForensicTimelineEvent>,
-    findings: List<Finding>,
-    hideInformationalTelemetry: Boolean
-): List<TimelineRow> {
-    val findingsByRuleId: Map<String, List<Finding>> = findings.groupBy { it.ruleId }
-    val telemetryRows = events.map { event ->
-        val refIds = if (event.ruleId.isNotEmpty()) {
-            findingsByRuleId[event.ruleId].orEmpty().map { it.ruleId }
-        } else emptyList()
-        TimelineRow.TelemetryRow(event = event, referencedByFindingIds = refIds)
-    }
-    val findingRows = findings.map { finding ->
-        val anchor = events.firstOrNull { it.ruleId == finding.ruleId }
-        TimelineRow.FindingRow(finding = finding, anchorEvent = anchor)
-    }
-    val combined: List<TimelineRow> = rollUpFindings(telemetryRows + findingRows)
-    return if (hideInformationalTelemetry) {
-        combined.filter { row ->
-            when (row) {
-                is TimelineRow.TelemetryRow -> row.referencedByFindingIds.isNotEmpty()
-                is TimelineRow.FindingRow -> true
-            }
-        }
-    } else {
-        combined
-    }
-}
-
-/**
- * Groups duplicate [TimelineRow.FindingRow] entries by (ruleId, packageName)
- * and keeps only the most recent occurrence per group with a `duplicateCount`
- * badge. [TimelineRow.TelemetryRow] entries pass through unchanged.
- *
- * This is a display-only rollup — raw events in the database are untouched.
- */
-internal fun rollUpFindings(rows: List<TimelineRow>): List<TimelineRow> {
-    val telemetryRows = rows.filterIsInstance<TimelineRow.TelemetryRow>()
-    val findingRows = rows.filterIsInstance<TimelineRow.FindingRow>()
-
-    val rolledUp = findingRows
-        .groupBy { it.finding.ruleId to (it.finding.matchContext["package_name"] ?: "") }
-        .map { (_, group) ->
-            val mostRecent = group.maxBy { it.timestamp }
-            val earliest = group.minBy { it.timestamp }
-            mostRecent.copy(
-                duplicateCount = group.size,
-                firstSeenTimestamp = earliest.timestamp,
-            )
-        }
-
-    return (telemetryRows + rolledUp).sortedByDescending { it.timestamp }
-}
-
 sealed interface TimelineRow {
-    /** Timestamp used to sort rows chronologically. */
+    /** The time the row is placed at, in epoch ms. */
     val timestamp: Long
 
-    data class TelemetryRow(
-        val event: ForensicTimelineEvent,
-        val referencedByFindingIds: List<String> = emptyList(),
-    ) : TimelineRow {
-        override val timestamp: Long get() = event.startTimestamp
+    /** A row the Timeline query returned, at its keyset position. */
+    sealed interface Entry : TimelineRow {
+        val entity: TimelineRowEntity
+        val key: TimelineKey get() = entity.key
+        override val timestamp: Long get() = entity.time
     }
 
+    /** An event fact, read in place from the store (never copied into `forensic_timeline`). */
+    data class EventRow(override val entity: TimelineRowEntity, val record: DecodedRecord) : Entry
+
+    /**
+     * A finding row, a correlation signal or a detected change. [evidence] is the fact the row
+     * points at (`recordId`), nested under it: the fact is not also listed on its own.
+     */
+    data class StoredRow(
+        override val entity: TimelineRowEntity,
+        val event: ForensicTimelineEvent,
+        val evidence: DecodedRecord?,
+    ) : Entry
+
+    /**
+     * The start of one day of the list ([com.androdr.data.db.TimelineFilter.dayOf]), placed before
+     * the entry at [anchor]. A day-precision entry sorts at its date's UTC midnight but groups under
+     * its own date (R32), so in a zone far from UTC one day's header can appear twice; [anchor]
+     * keeps each header's list key unique.
+     */
+    data class DayHeader(val day: Long, val anchor: TimelineKey? = null) : TimelineRow {
+        override val timestamp: Long get() = day
+    }
+
+    /** A current finding (the latest scan's), shown in the pinned section. */
     data class FindingRow(
         val finding: Finding,
         val anchorEvent: ForensicTimelineEvent? = null,
         val duplicateCount: Int = 1,
         val firstSeenTimestamp: Long? = null,
     ) : TimelineRow {
-        /**
-         * Timestamp sourced from the anchor event when one exists; otherwise
-         * [Long.MAX_VALUE] so anchorless findings sort to the end of the
-         * timeline (most recent) deterministically. Use an anchor event when
-         * possible for better chronological placement.
-         */
         override val timestamp: Long
             get() = anchorEvent?.startTimestamp ?: Long.MAX_VALUE
-    }
-}
-
-/**
- * Groups a filtered list of [TimelineRow] into date-bucketed [DateGroup]s
- * ready for rendering. Telemetry rows are partitioned into correlation
- * clusters and standalone events via [partitionSignals].
- *
- * Pure function — no Android dependencies — so it can be unit-tested.
- */
-fun buildDateGroups(rows: List<TimelineRow>): List<DateGroup> {
-    if (rows.isEmpty()) return emptyList()
-
-    val telemetryEvents = rows
-        .filterIsInstance<TimelineRow.TelemetryRow>()
-        .map { it.event }
-    val (clusters, standaloneEvents) = if (telemetryEvents.isNotEmpty()) {
-        partitionSignals(telemetryEvents)
-    } else {
-        emptyList<EventCluster>() to emptyList<ForensicTimelineEvent>()
-    }
-
-    val telemetryByEventId = rows
-        .filterIsInstance<TimelineRow.TelemetryRow>()
-        .associateBy { it.event.id }
-    val standaloneRows = standaloneEvents.mapNotNull { telemetryByEventId[it.id] }
-    val findingRows = rows.filterIsInstance<TimelineRow.FindingRow>()
-
-    val fmt = DATE_GROUP_FORMAT.get()!!
-    fun dateKey(ts: Long) = if (ts > 0) fmt.format(Date(ts)) else "Unknown Date"
-
-    data class Bucket(
-        val findings: MutableList<TimelineRow.FindingRow> = mutableListOf(),
-        val clusters: MutableList<EventCluster> = mutableListOf(),
-        val standalone: MutableList<TimelineRow.TelemetryRow> = mutableListOf(),
-    )
-    val buckets = mutableMapOf<String, Bucket>()
-
-    findingRows.forEach { row ->
-        buckets.getOrPut(dateKey(row.timestamp)) { Bucket() }.findings.add(row)
-    }
-    clusters.forEach { cluster ->
-        buckets.getOrPut(dateKey(cluster.events.first().startTimestamp)) { Bucket() }
-            .clusters.add(cluster)
-    }
-    standaloneRows.forEach { row ->
-        buckets.getOrPut(dateKey(row.timestamp)) { Bucket() }.standalone.add(row)
-    }
-
-    return buckets.map { (label, bucket) ->
-        DateGroup(
-            label = label,
-            findingRows = bucket.findings.sortedByDescending { it.timestamp },
-            clusters = bucket.clusters.sortedByDescending { c ->
-                c.events.maxOfOrNull { it.startTimestamp } ?: 0L
-            },
-            standaloneRows = bucket.standalone.sortedByDescending { it.timestamp },
-        )
-    }.sortedByDescending { group ->
-        val maxFinding = group.findingRows.maxOfOrNull { it.timestamp } ?: 0L
-        val maxCluster = group.clusters.maxOfOrNull { c ->
-            c.events.maxOfOrNull { it.startTimestamp } ?: 0L
-        } ?: 0L
-        val maxStandalone = group.standaloneRows.maxOfOrNull { it.timestamp } ?: 0L
-        maxOf(maxFinding, maxCluster, maxStandalone)
     }
 }
 
@@ -191,3 +66,16 @@ fun buildDateGroups(rows: List<TimelineRow>): List<DateGroup> {
  */
 fun timelineFindingRows(findings: List<Finding>): List<Finding> =
     findings.filter { it.triggered && it.category != com.androdr.sigma.FindingCategory.CORRELATION }
+
+/** How many current findings the pinned section lists before "Show all" (ruling R34). */
+internal const val PINNED_FINDINGS_PREVIEW = 3
+
+/**
+ * The pinned section's cards (ruling R34): the current findings most severe first (ties keep their
+ * scan order); only the first [PINNED_FINDINGS_PREVIEW] unless [showAll], so a large import's
+ * findings never bury the Timeline below them.
+ */
+internal fun pinnedFindings(findings: List<Finding>, showAll: Boolean): List<Finding> {
+    val bySeverity = findings.sortedByDescending { severityOrdinal(it.level) }
+    return if (showAll) bySeverity else bySeverity.take(PINNED_FINDINGS_PREVIEW)
+}

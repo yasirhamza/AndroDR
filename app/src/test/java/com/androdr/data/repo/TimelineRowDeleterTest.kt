@@ -1,8 +1,10 @@
 package com.androdr.data.repo
 
+import com.androdr.data.db.getAllForExport
 import androidx.room.withTransaction
 import com.androdr.data.model.ForensicTimelineEvent
 import com.androdr.data.model.ScanState
+import com.androdr.data.model.SignalMember
 import com.androdr.data.store.StoreFixture
 import com.androdr.data.store.StoreFixture.Companion.app
 import kotlinx.coroutines.runBlocking
@@ -21,7 +23,7 @@ import java.io.File
 @RunWith(RobolectricTestRunner::class)
 class TimelineRowDeleterTest {
     private val f = StoreFixture()
-    private val deleter = TimelineRowDeleter(f.db.forensicTimelineEventDao(), f.store)
+    private val deleter = TimelineRowDeleter(f.db.forensicTimelineEventDao(), f.store, f.db.signalMemberDao())
 
     @After fun tearDown() = f.close()
 
@@ -50,7 +52,7 @@ class TimelineRowDeleterTest {
     fun `each delete path releases the facts its rows pinned`() = runBlocking {
         val paths: List<Pair<ForensicTimelineEvent, suspend () -> Unit>> = listOf(
             row(createdAt = 10L) to { deleter.olderThan(11L) },
-            row(source = "intrusion_log") to { deleter.bySource("intrusion_log") },
+            row(source = "legacy") to { deleter.byIds(idsOf("legacy")) },
             row(scan = 7L) to { deleter.byScanId(7L) },
             row(scan = 404L) to { deleter.unownedNonPersistent() },
             row(scan = -1L) to { deleter.unownedNonPersistent() },
@@ -64,11 +66,115 @@ class TimelineRowDeleterTest {
         }
     }
 
+    /**
+     * Spec §5.4/§5.6: a signal row is deleted together with its `signal_member` rows, by every delete
+     * path (the 30-day prune included), and the facts those members alone pinned are released in the
+     * same transaction. Another signal's members are untouched.
+     */
+    @Test
+    fun `each delete path takes a deleted signal's members with it and releases their facts`() = runBlocking {
+        val dao = f.db.forensicTimelineEventDao()
+        val survivor = dao.insert(row(source = "kept", scan = 1L, createdAt = 1_000L).copy(kind = "signal",
+            persistent = true))
+        f.db.signalMemberDao().insertAll(listOf(SignalMember(survivor, SignalMember.KIND_ROW, 5L)))
+        for ((r, delete) in deletePaths()) {
+            f.scan(1L, ScanState.COMPLETE)
+            val fact = f.persist(1L, "app_scanner", listOf(app("com.member"))).factIdByChunkIndex.single()
+            val sig = dao.insert(r.copy(kind = "signal"))
+            f.db.signalMemberDao().insertAll(listOf(SignalMember(sig, SignalMember.KIND_FACT, fact),
+                SignalMember(sig, SignalMember.KIND_ROW, 77L)))
+            f.store.deleteScanTelemetry(1L)
+            f.db.scanResultDao().deleteById(1L)
+            assertEquals("the member pins the fact", 1L, facts())
+
+            f.db.withTransaction { delete() }
+
+            assertEquals(0L, f.count("SELECT COUNT(*) FROM signal_member WHERE signalRowId = $sig"))
+            assertEquals("the fact its member pinned is released", 0L, facts())
+            assertEquals("another signal's members stay", 1L,
+                f.count("SELECT COUNT(*) FROM signal_member WHERE signalRowId = $survivor"))
+            assertEquals("no delete path leaves an orphan member", 0L, orphans())
+        }
+    }
+
+    /** Every TimelineRowDeleter path (prune, legacy cleanup by id, scan delete, clear-all) and a row it deletes. */
+    private fun deletePaths(): List<Pair<ForensicTimelineEvent, suspend () -> Unit>> = listOf(
+        row(createdAt = 10L) to { deleter.olderThan(11L) },
+        row(source = "legacy") to { deleter.byIds(idsOf("legacy")) },
+        row(scan = 7L) to { deleter.byScanId(7L) },
+        row(scan = 404L) to { deleter.unownedNonPersistent() },
+    )
+
+    /** Ids of the rows of [source] (the legacy cleanup deletes by id). */
+    private fun idsOf(source: String): List<Long> = f.db.openHelper.readableDatabase
+        .query("SELECT id FROM forensic_timeline WHERE source = '$source'").use { c ->
+            generateSequence { if (c.moveToNext()) c.getLong(0) else null }.toList()
+        }
+
+    @Test
+    fun `byIds deletes exactly the given rows, past one list parameter's bound`() = runBlocking {
+        val dao = f.db.forensicTimelineEventDao()
+        val ids = dao.insertAll(List(1_000) { row() })
+        f.db.withTransaction { deleter.byIds(ids.dropLast(1)) }
+        assertEquals(listOf(ids.last()), idsOf("s"))
+    }
+
+    private fun orphans() = f.count(
+        "SELECT COUNT(*) FROM signal_member m WHERE NOT EXISTS " +
+            "(SELECT 1 FROM forensic_timeline s WHERE s.id = m.signalRowId)"
+    )
+
+    /**
+     * Review I-2: a delete removes members by the ids of the signals it removes, through the
+     * primary-key prefix. No statement any delete path runs against signal_member may scan it
+     * (a full scan per delete would run inside every live `finish`).
+     */
+    @Test
+    fun `no delete path scans signal_member`() = runBlocking {
+        val dao = f.db.forensicTimelineEventDao()
+        for ((r, delete) in deletePaths()) {
+            // A fact member too (review m-a), so the release step (PinnedFact over signal_member) runs.
+            f.scan(1L, ScanState.COMPLETE)
+            val fact = f.persist(1L, "app_scanner", listOf(app("com.member"))).factIdByChunkIndex.single()
+            val sig = dao.insert(r.copy(kind = "signal"))
+            f.db.signalMemberDao().insertAll(listOf(SignalMember(sig, SignalMember.KIND_ROW, 1L),
+                SignalMember(sig, SignalMember.KIND_FACT, fact)))
+            f.store.deleteScanTelemetry(1L)
+            f.db.scanResultDao().deleteById(1L)
+            f.sql.clear()
+            f.db.withTransaction { delete() }
+            val recorded = synchronized(f.sql) { f.sql.toList() }
+            val statements = recorded.filter { it.contains("signal_member") }.distinct()
+            assertTrue("the path touched signal_member: $recorded", statements.isNotEmpty())
+            for (stmt in statements) {
+                val args = arrayOfNulls<Any>(stmt.count { it == '?' }).apply { fill(1L) }
+                val plan = f.db.openHelper.readableDatabase.query("EXPLAIN QUERY PLAN $stmt", args).use { c ->
+                    buildList { while (c.moveToNext()) add(c.getString(c.columnCount - 1)) }
+                }
+                assertTrue("full scan of signal_member: $stmt -> $plan",
+                    plan.none { Regex("""SCAN( TABLE)? signal_member\b""").containsMatchIn(it) })
+                // The member reads/deletes by signal id use the composite primary key (signalRowId,
+                // kind, refId), SQLite's autoindex. Other statements (the pin test) need only not scan.
+                if (!stmt.startsWith("SELECT DISTINCT refId FROM signal_member") &&
+                    !stmt.startsWith("DELETE FROM signal_member")) continue
+                assertTrue("searches by the primary key: $stmt -> $plan", plan.any {
+                    it.startsWith("SEARCH") && it.contains("signal_member") &&
+                        (it.contains("PRIMARY KEY") || it.contains("sqlite_autoindex_signal_member_1")) &&
+                        it.contains("signalRowId=?")
+                })
+            }
+            assertTrue("the fact's pin test ran too: $statements", statements.any { it.contains("telemetry_record") })
+            assertEquals(0L, orphans())
+            assertEquals("the member's fact was released", 0L, facts())
+        }
+    }
+
     @Test
     fun `the 30-day prune keeps a 31-day-old persistent row and removes a non-persistent one`() = runBlocking {
         val now = 100L * DAY
         val old = now - 31 * DAY
         val dao = f.db.forensicTimelineEventDao()
+        f.scan(7L, ScanState.COMPLETE) // the rows' scan: getAllForExport shows visible rows only
         dao.insert(row(createdAt = old).copy(description = "interrupted", persistent = true))
         dao.insert(row(createdAt = old).copy(description = "stale"))
         dao.insert(row(createdAt = now).copy(description = "fresh"))
@@ -99,7 +205,7 @@ class TimelineRowDeleterTest {
     fun `no production code calls a raw forensic_timeline delete except TimelineRowDeleter`() {
         val root = listOf(File("src/main/java/com/androdr"), File("app/src/main/java/com/androdr"))
             .first { it.isDirectory }
-        val raw = Regex("\\.(deleteOlderThan|deleteBySource|deleteByScanId|deleteUnownedNonPersistent)\\(")
+        val raw = Regex("\\.(deleteOlderThan|deleteByIds|deleteByScanId|deleteUnownedNonPersistent)\\(")
         val offenders = root.walkTopDown().filter { it.extension == "kt" && it.name != "TimelineRowDeleter.kt" }
             .flatMap { file ->
                 file.readLines().withIndex()

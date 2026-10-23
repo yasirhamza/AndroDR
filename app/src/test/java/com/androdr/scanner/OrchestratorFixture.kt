@@ -4,7 +4,6 @@ import android.content.Context
 import com.androdr.data.db.DnsEventDao
 import com.androdr.data.model.ScanResult
 import com.androdr.data.repo.ScanLock
-import com.androdr.data.repo.TimelineRowDeleter
 import com.androdr.ioc.FeedCoverage
 import com.androdr.ioc.IndicatorResolver
 import com.androdr.network.DnsVpnService
@@ -40,8 +39,21 @@ internal class OrchestratorFixture(
     val accessibilityAuditScanner: AccessibilityAuditScanner = mockk(relaxed = true)
     val receiverAuditScanner: ReceiverAuditScanner = mockk(relaxed = true)
     val appOpsScanner: AppOpsScanner = mockk(relaxed = true)
-    val usageStatsScanner: UsageStatsScanner = mockk(relaxed = true)
-    val dnsEventDao: DnsEventDao = mockk(relaxed = true)
+    /** Usage Access granted, no events, unless a test stubs `collectEvents(any(), any())`. */
+    val usageStatsScanner: UsageStatsScanner = mockk<UsageStatsScanner>(relaxed = true).also {
+        coEvery { it.collectEvents(any(), any()) } returns UsageCollection.Ok(emptyList())
+    }
+    /**
+     * Serves the real database's live DNS rows (tests insert them through `db.dnsEventDao()`);
+     * stub a method to make a read fail.
+     */
+    val dnsEventDao: DnsEventDao = mockk<DnsEventDao>(relaxed = true).also { dao ->
+        coEvery { dao.maxId() } coAnswers { db.dnsEventDao().maxId() }
+        coEvery { dao.minIdSince(any()) } coAnswers { db.dnsEventDao().minIdSince(firstArg()) }
+        coEvery { dao.eventsAfterId(any(), any(), any()) } coAnswers {
+            db.dnsEventDao().eventsAfterId(firstArg(), secondArg(), thirdArg())
+        }
+    }
     val installEventEmitter: InstallEventEmitter = mockk(relaxed = true)
     val deviceAdminGrantEmitter: DeviceAdminGrantEmitter = mockk(relaxed = true)
     val sigmaRuleFeed: SigmaRuleFeed = mockk(relaxed = true)
@@ -72,15 +84,13 @@ internal class OrchestratorFixture(
         ScanOrchestrator(
             collector = LiveScanCollector(
                 appScanner, deviceAuditor, processScanner, fileArtifactScanner, accessibilityAuditScanner,
-                receiverAuditScanner, appOpsScanner, usageStatsScanner, dnsEventDao,
+                receiverAuditScanner, appOpsScanner, usageStatsScanner, dnsEventDao, db.eventWatermarkDao(),
             ),
             appScanner = appScanner,
             bugReportAnalyzer = bugReportAnalyzer,
             intrusionLogAnalyzer = this.intrusionLogAnalyzer,
             writer = writer,
             scanLock = lock,
-            forensicTimelineEventDao = timelineDao,
-            timelineRows = TimelineRowDeleter(timelineDao, w.f.store),
             installEventEmitter = installEventEmitter,
             deviceAdminGrantEmitter = deviceAdminGrantEmitter,
             sigmaRuleEngine = engine,

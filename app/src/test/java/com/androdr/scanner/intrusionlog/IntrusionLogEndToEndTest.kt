@@ -94,7 +94,11 @@ class IntrusionLogEndToEndTest {
             assertEquals(1, result.stats.securityEventCount)
             assertEquals(1, result.stats.duplicatesCollapsed)
             assertEquals("one observation per distinct record", 4L, f.count("SELECT COUNT(*) FROM scan_record"))
-            assertTrue(f.timelineDao.getAllForExport().any { it.description.contains("deep.example.com") })
+            // C3: the deep event is a stored fact (the Timeline reads it from the store), not a row.
+            val dnsFacts = f.db.openHelper.readableDatabase
+                .query("SELECT id FROM telemetry_record WHERE service = 'dns_monitor'")
+                .use { c -> generateSequence { if (c.moveToNext()) c.getLong(0) else null }.toList() }
+            assertTrue(f.w.f.reader.records(dnsFacts).any { it.fields?.get("domain") == "deep.example.com" })
             // The dns rule only matches flexispy.com, so the deep event does not
             // add a fourth triggered finding; the duplicate connect adds no second one.
             assertEquals(3, result.findings.count { it.triggered })

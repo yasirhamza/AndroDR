@@ -4,34 +4,18 @@ import com.androdr.data.db.toForensicTimelineEvent
 import com.androdr.data.model.ForensicTimelineEvent
 import com.androdr.data.model.ScanResult
 import com.androdr.data.model.TelemetrySource
+import com.androdr.data.store.AtomReader
+import com.androdr.sigma.CorrelationSignal
 import com.androdr.sigma.Finding
-import com.androdr.sigma.StoreRecord
 
 /**
- * What a writer adds to a writer session's finishing transaction in Phases A–C (spec §5.2
- * Interim). Every member has a no-op default; [NONE] is the plain session.
- *
- * Task A7b fills it per writer: the bounded newest-N event-row heaps (fed from [onChunk], whose
- * fact ids let the rows carry `recordId`), the intrusion-log replace-on-reimport sweep
- * ([sweepPrior]), each writer's finding-row shape ([findingRow]) and its summary ([summarize]).
+ * What a writer adds to a writer session's finishing transaction (spec §5.2): each writer's
+ * finding-row shape ([findingRow]), its other rows ([extraRows]: the live scan's detected
+ * changes), the correlation pass ([correlate]), its summary ([summarize]) and the live event
+ * watermarks ([watermarks]). Event records are never written to `forensic_timeline` (C3): they
+ * live only in the store. Every member has a no-op default; [NONE] is the plain session.
  */
 interface SessionHooks {
-    /**
-     * After each chunk: its fact ids and observed-this-scan flags by chunk index, or null for
-     * both when the chunk was only evaluated (evaluate-only mode).
-     */
-    @Suppress("LongParameterList")
-    fun onChunk(
-        service: String, source: TelemetrySource, chunk: List<StoreRecord>, firstOrdinal: Int,
-        factIds: LongArray?, observed: BooleanArray?,
-    ) = Unit
-
-    /**
-     * First statement of the finishing transaction (e.g. `deletePriorIntrusionLogRows`, excluding
-     * [scanId]). Must delete through [TimelineRowDeleter].
-     */
-    suspend fun sweepPrior(scanId: Long) = Unit
-
     /**
      * The Timeline row of one triggered finding, built from `Finding.toForensicTimelineEvent` (which
      * carries the finding's `level`); `finish` sets its `recordId` and `scanResultId`.
@@ -39,15 +23,19 @@ interface SessionHooks {
     fun findingRow(finding: Finding, scan: ScanResult): ForensicTimelineEvent =
         finding.toForensicTimelineEvent(scan, isBugreport = scan.source != TelemetrySource.LIVE_SCAN)
 
-    /** Bounded event rows written in the finishing transaction, after the finding rows. */
-    fun interimRows(scan: ScanResult): List<ForensicTimelineEvent> = emptyList()
+    /**
+     * Rows written in the finishing transaction after the finding rows: the live scan's detected
+     * changes (first-seen installs, device-admin grants). Never event records (spec §5.6).
+     */
+    fun extraRows(scan: ScanResult): List<ForensicTimelineEvent> = emptyList()
 
     /**
-     * The correlation pass, inside the finishing transaction after this scan's rows were written:
-     * [rows] are those rows with their real ids (finding rows, then interim rows; duplicates Room
-     * ignored are left out). Returns the signal rows to insert and the findings they become (#350).
+     * The correlation pass, inside the finishing transaction after this scan's rows were written
+     * (spec §5.2): reads its atoms through [atoms] — this scan's rows are `Row` atoms with their
+     * real ids — and returns the signals (with their members, written only to `signal_member`) and
+     * the findings they become (#350). Must never throw because of its time budget.
      */
-    suspend fun correlate(rows: List<ForensicTimelineEvent>): Correlation = Correlation.NONE
+    suspend fun correlate(scan: ScanResult, atoms: AtomReader): Correlation = Correlation.NONE
 
     /**
      * Summary columns (counts, scanner errors) of the completed scan. `scan.findings` holds the
@@ -56,13 +44,20 @@ interface SessionHooks {
      */
     fun summarize(scan: ScanResult, totals: FindingTotals): ScanResult = scan
 
+    /**
+     * The event watermarks this session advances, by service (spec §5.2 Watermarks), written in the
+     * finishing transaction once the scan is `COMPLETE`, so a rolled-back finish advances nothing.
+     * [saveFallback]: the session fell back to evaluate-only, so watermarks stay put. Live scans only.
+     */
+    fun watermarks(saveFallback: Boolean): Map<String, Long> = emptyMap()
+
     companion object {
         val NONE: SessionHooks = object : SessionHooks {}
     }
 }
 
 /** What [SessionHooks.correlate] found: signal rows to insert and the findings they become. */
-data class Correlation(val signals: List<ForensicTimelineEvent>, val findings: List<Finding>) {
+data class Correlation(val signals: List<CorrelationSignal>, val findings: List<Finding>) {
     companion object {
         val NONE = Correlation(emptyList(), emptyList())
     }

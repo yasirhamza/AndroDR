@@ -1,5 +1,6 @@
 package com.androdr.scanner.bugreport
 
+import com.androdr.data.model.PackageHistoryEventType
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -16,24 +17,28 @@ class InstallTimeModuleTest {
           lastUpdateTime=2025-01-02 08:00:00
     """.trimIndent()
 
+    /** The INSTALL records (the retired `package_install` rows' successors, C3). */
+    private fun installs(text: String) = InstallTimeModule().parseHistory(text, capturedAt = 1L)
+        .filter { it.eventType == PackageHistoryEventType.INSTALL }
+
     @Test
     fun `parses both packages with first and last install times`() {
-        val mod = InstallTimeModule()
-        val events = mod.parseSection(sample)
+        val events = installs(sample)
         assertEquals(2, events.size)
         assertEquals("com.example.foo", events[0].packageName)
-        assertEquals("package_install", events[0].category)
-        assertTrue(events[0].startTimestamp > 0)
+        assertTrue(events[0].timestamp > 0)
+        val update = InstallTimeModule().parseHistory(sample, 1L)
+            .single { it.eventType == PackageHistoryEventType.UPDATE }
+        assertEquals("only foo was updated after its install", "com.example.foo", update.packageName)
     }
 
     @Test
-    fun `package with only firstInstallTime still emits a row`() {
+    fun `package with only firstInstallTime still emits a record`() {
         val text = """
             Package [com.x] (z):
               firstInstallTime=2024-01-01 00:00:00
         """.trimIndent()
-        val events = InstallTimeModule().parseSection(text)
-        assertEquals(1, events.size)
+        assertEquals(1, installs(text).size)
     }
 
     @Test
@@ -43,16 +48,15 @@ class InstallTimeModuleTest {
               firstInstallTime=GARBAGE
               lastUpdateTime=ALSO BROKEN
         """.trimIndent()
-        val events = InstallTimeModule().parseSection(text)
-        assertTrue(events.isEmpty())
+        assertTrue(InstallTimeModule().parseHistory(text, 1L).isEmpty())
     }
 
     @Test
-    fun `package missing both times produces no row`() {
+    fun `package missing both times produces no record`() {
         val text = """
             Package [com.empty] (a):
               versionName=1
         """.trimIndent()
-        assertTrue(InstallTimeModule().parseSection(text).isEmpty())
+        assertTrue(InstallTimeModule().parseHistory(text, 1L).isEmpty())
     }
 }

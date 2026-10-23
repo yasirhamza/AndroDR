@@ -82,8 +82,7 @@ class ScanOrchestratorErrorHandlingTest {
         coEvery { accessibilityAuditScanner.collectTelemetry() } returns emptyList()
         coEvery { receiverAuditScanner.collectTelemetry() } returns emptyList()
         coEvery { appOpsScanner.collectTelemetry() } returns emptyList()
-        coEvery { usageStatsScanner.collectEvents() } returns emptyList()
-        coEvery { dnsEventDao.getRecentSnapshot() } returns emptyList()
+        coEvery { usageStatsScanner.collectEvents(any(), any()) } returns UsageCollection.Ok(emptyList())
         coEvery { f.sigmaRuleFeed.fetch() } returns emptyList()
         every { sigmaRuleEngine.evaluateRecords(any(), any(), any()) } returns emptyList()
         every { sigmaRuleEngine.getRules() } returns emptyList()
@@ -112,7 +111,7 @@ class ScanOrchestratorErrorHandlingTest {
 
     @Test
     fun `a failed DNS snapshot read is recorded as dnsSnapshot and the scan completes`() = runBlocking {
-        coEvery { dnsEventDao.getRecentSnapshot() } throws IllegalStateException("database is locked")
+        coEvery { dnsEventDao.maxId() } throws IllegalStateException("database is locked")
 
         val result: ScanResult = orchestrator.runFullScan()
 
@@ -124,7 +123,7 @@ class ScanOrchestratorErrorHandlingTest {
 
     @Test
     fun `cancellation during the DNS snapshot read propagates`() = runBlocking {
-        coEvery { dnsEventDao.getRecentSnapshot() } throws CancellationException("user cancelled")
+        coEvery { dnsEventDao.maxId() } throws CancellationException("user cancelled")
         var caught: Throwable? = null
         try { orchestrator.runFullScan() } catch (e: CancellationException) { caught = e }
         assertNotNull(caught)
@@ -148,7 +147,7 @@ class ScanOrchestratorErrorHandlingTest {
         io.mockk.coVerify(exactly = 1) { accessibilityAuditScanner.collectTelemetry() }
         io.mockk.coVerify(exactly = 1) { receiverAuditScanner.collectTelemetry() }
         io.mockk.coVerify(exactly = 1) { appOpsScanner.collectTelemetry() }
-        io.mockk.coVerify(exactly = 1) { usageStatsScanner.collectEvents() }
+        io.mockk.coVerify(exactly = 1) { usageStatsScanner.collectEvents(any(), any()) }
     }
 
     @Test
@@ -354,7 +353,7 @@ class ScanOrchestratorErrorHandlingTest {
     @Test
     fun `bug-report import is stamped BUGREPORT_IMPORT`() = runBlocking {
         coEvery { bugReportAnalyzer.analyze(any()) } returns
-            BugReportAnalyzer.BugReportAnalysisResult(findings = emptyList(), timeline = emptyList())
+            BugReportAnalyzer.BugReportAnalysisResult(findings = emptyList())
 
         orchestrator.analyzeBugReport(mockk<android.net.Uri>(relaxed = true))
 
@@ -373,7 +372,7 @@ class ScanOrchestratorErrorHandlingTest {
         every { sigmaRuleEngine.unevaluableRules() } returns
             mapOf("androdr-010" to "trusted_installer_db")
         coEvery { bugReportAnalyzer.analyze(any()) } returns
-            BugReportAnalyzer.BugReportAnalysisResult(findings = emptyList(), timeline = emptyList())
+            BugReportAnalyzer.BugReportAnalysisResult(findings = emptyList())
 
         orchestrator.analyzeBugReport(mockk<android.net.Uri>(relaxed = true))
 
@@ -385,14 +384,17 @@ class ScanOrchestratorErrorHandlingTest {
     // ── Attribution misses (B5): a live domain hit evaluated without its prefetched
     // row cannot name its family; the scan says so instead of staying silent.
 
-    private fun dnsEvent() = com.androdr.data.model.DnsEvent(timestamp = 1L, domain = "a.com", appUid = 1,
-        appName = null, isBlocked = false, reason = null)
+    private fun dnsEvent() = com.androdr.data.model.DnsEvent(timestamp = System.currentTimeMillis(),
+        domain = "a.com", appUid = 1, appName = null, isBlocked = false, reason = null)
+
+    /** A live DNS row the scan collects (the fixture's DAO serves the real database's rows). */
+    private fun insertDns(e: com.androdr.data.model.DnsEvent) = runBlocking { f.db.dnsEventDao().insert(e) }
 
     @Test
     fun `attribution misses become one scanner failure and are cleared`() = runBlocking {
         val misses = java.util.concurrent.atomic.AtomicReference<Set<String>>(emptySet())
         every { indicatorResolver.attributionMisses } returns misses
-        coEvery { dnsEventDao.getRecentSnapshot() } returns listOf(dnsEvent())
+        insertDns(dnsEvent())
         coEvery { sigmaRuleEngine.evaluateRecords("dns_monitor", any(), any()) } answers {
             misses.set(setOf("a.com", "b.com")); emptyList()
         }
@@ -410,7 +412,7 @@ class ScanOrchestratorErrorHandlingTest {
     fun `no attribution misses means no attribution failure`() = runBlocking {
         val misses = java.util.concurrent.atomic.AtomicReference<Set<String>>(emptySet())
         every { indicatorResolver.attributionMisses } returns misses
-        coEvery { dnsEventDao.getRecentSnapshot() } returns listOf(dnsEvent())
+        insertDns(dnsEvent())
 
         val result = orchestrator.runFullScan()
 
@@ -421,7 +423,7 @@ class ScanOrchestratorErrorHandlingTest {
     fun `a failing domain prefetch keeps the findings and records an attribution failure`() = runBlocking {
         val dnsFinding = com.androdr.sigma.Finding(ruleId = "androdr-003", title = "Malicious Domain",
             level = "critical", category = com.androdr.sigma.FindingCategory.APP_RISK)
-        coEvery { dnsEventDao.getRecentSnapshot() } returns listOf(dnsEvent())
+        insertDns(dnsEvent())
         coEvery { indicatorResolver.prefetchDomainIndicators(any()) } throws
             android.database.sqlite.SQLiteException("database disk image is malformed")
         every { indicatorResolver.attributionMisses } returns
@@ -438,7 +440,7 @@ class ScanOrchestratorErrorHandlingTest {
 
     @Test
     fun `a cancelled domain prefetch propagates instead of becoming a scanner failure`() = runBlocking {
-        coEvery { dnsEventDao.getRecentSnapshot() } returns listOf(dnsEvent())
+        insertDns(dnsEvent())
         coEvery { indicatorResolver.prefetchDomainIndicators(any()) } throws CancellationException("left screen")
 
         var caught: Throwable? = null
@@ -456,7 +458,7 @@ class ScanOrchestratorErrorHandlingTest {
     fun `a failed prefetch records exactly one attribution failure even with misses`() = runBlocking {
         val misses = java.util.concurrent.atomic.AtomicReference<Set<String>>(emptySet())
         every { indicatorResolver.attributionMisses } returns misses
-        coEvery { dnsEventDao.getRecentSnapshot() } returns listOf(dnsEvent())
+        insertDns(dnsEvent())
         coEvery { indicatorResolver.prefetchDomainIndicators(any()) } throws
             android.database.sqlite.SQLiteException("database is locked")
         // After a failed prefetch every live hit is a miss.
@@ -530,7 +532,7 @@ class ScanOrchestratorErrorHandlingTest {
             java.util.concurrent.atomic.AtomicReference<Set<String>>(emptySet())
         val finding = com.androdr.sigma.Finding(ruleId = "androdr-003", title = "Malicious Domain",
             level = "critical", category = com.androdr.sigma.FindingCategory.APP_RISK)
-        coEvery { dnsEventDao.getRecentSnapshot() } returns listOf(dnsEvent())
+        insertDns(dnsEvent())
         coEvery { sigmaRuleEngine.evaluateRecords("dns_monitor", any(), any()) } returns
             listOf(finding.copy(ordinal = 0))
 

@@ -28,34 +28,34 @@ class CompleteVisibilityGateTest {
         "\${VisibleFact.SQL}", "\${VisibleFact.PINNED_ORPHAN}", "\${CompleteScan.SQL}", "\${VisibleRow.SQL}",
     )
 
-    /** Writers, deleters and current-scan reads (AtomReader's current-scan reads join this list in Phase C). */
+    /** Writers, deleters and current-scan reads. */
     private val writerDeleterAllowList = setOf(
         "TelemetryFactDao.idsFor", "TelemetryFactDao.liveObserved", "TelemetryFactDao.deleteUnobservedUnpinned",
         "TelemetryFactDao.unobservedUnpinnedAfter", "TelemetryFactDao.bodyHashesOf",
         "TelemetryFactDao.idsBySourceKey", "RecordBodyDao.deleteUnreferenced",
         "ScanObservationDao.factIdsAfter", "ScanObservationDao.deleteForScan", "ScanObservationDao.deleteThrough",
         "ScanObservationDao.factIdsForOrdinals",
-        "ForensicTimelineEventDao.deleteOlderThan", "ForensicTimelineEventDao.deleteBySource",
+        "ForensicTimelineEventDao.deleteOlderThan", "ForensicTimelineEventDao.deleteByIds",
         "ForensicTimelineEventDao.deleteByScanId", "ForensicTimelineEventDao.deleteUnownedNonPersistent",
         // The pins a delete releases (TimelineRowDeleter), read just before the paired delete.
-        "ForensicTimelineEventDao.recordIdsOlderThan", "ForensicTimelineEventDao.recordIdsBySource",
+        "ForensicTimelineEventDao.recordIdsOlderThan", "ForensicTimelineEventDao.recordIdsByIds",
         "ForensicTimelineEventDao.recordIdsByScanId", "ForensicTimelineEventDao.recordIdsUnownedNonPersistent",
         // Writer-side dedup lookups over everything already emitted (hidden rows included on purpose).
         "ForensicTimelineEventDao.getInstalledPackagesAlreadyEmitted",
         "ForensicTimelineEventDao.getAdminGrantedPackagesAlreadyEmitted",
-        "ForensicTimelineEventDao.getDistinctScanIdsBySource",
-    )
-
-    /**
-     * Pre-store Timeline reads. No writer creates a non-COMPLETE scan's timeline rows before
-     * Phase B, so these are safe today; Task C2 moves each onto [VisibleRow] and empties this.
-     */
-    private val legacyTimelineReadsUntilC2 = setOf(
-        "ForensicTimelineEventDao.getRecentEvents", "ForensicTimelineEventDao.getEventsBySource",
-        "ForensicTimelineEventDao.getEventsBySourceForScan", "ForensicTimelineEventDao.getEventsByPackage",
-        "ForensicTimelineEventDao.getEventsInRange", "ForensicTimelineEventDao.getDistinctSources",
-        "ForensicTimelineEventDao.getDistinctPackages", "ForensicTimelineEventDao.getAllForExport",
-        "ForensicTimelineEventDao.getEventsSince", "ForensicTimelineEventDao.getEventsSinceExcludingTelemetrySource",
+        // AtomReader (spec §5.2): the finishing scan's own rows and observations (it is IN_PROGRESS),
+        // and the lookback's facts, visible as "a COMPLETE live-scan observation" (stricter than
+        // VisibleFact: no pinned orphans, no import observations).
+        "AtomDao.rowsForScan", "AtomDao.factsForScan", "AtomDao.liveFactsBetween",
+        // The signal rows a delete is about to remove (their members go with them, by id).
+        "ForensicTimelineEventDao.signalIdsOlderThan", "ForensicTimelineEventDao.signalIdsByIds",
+        "ForensicTimelineEventDao.signalIdsByScanId",
+        "ForensicTimelineEventDao.signalIdsUnownedNonPersistent",
+        // The one-time signal_member backfill reads and rewrites every legacy signal row.
+        "SignalMemberBackfillDao.legacyAfter", "SignalMemberBackfillDao.signalExists",
+        "SignalMemberBackfillDao.rewrite",
+        // The one-time legacy event-row cleanup (C3) selects rows of every scan by producer.
+        "LegacyEventRowDao.orphanSignalIds", "LegacyEventRowDao.legacyRowsAfter",
     )
 
     private data class DaoQuery(val owner: String, val name: String, val sql: String) {
@@ -119,7 +119,7 @@ class CompleteVisibilityGateTest {
     fun `every guarded query applies the visibility rule or is allow-listed`() {
         val all = daoQueries()
         assertTrue("found only ${all.size} queries", all.size > 40)
-        val bad = violations(all, writerDeleterAllowList + legacyTimelineReadsUntilC2)
+        val bad = violations(all, writerDeleterAllowList)
         assertTrue("queries missing the COMPLETE visibility rule:\n" + bad.joinToString("\n"), bad.isEmpty())
     }
 
@@ -133,7 +133,7 @@ class CompleteVisibilityGateTest {
     @Test
     fun `allow-list entries all still name guarded queries`() {
         val ids = daoQueries().filter { guardedTables.containsMatchIn(it.sql) }.map { it.id }.toSet()
-        val stale = (writerDeleterAllowList + legacyTimelineReadsUntilC2) - ids
+        val stale = writerDeleterAllowList - ids
         assertTrue("stale allow-list entries: $stale", stale.isEmpty())
     }
 

@@ -221,13 +221,15 @@ private fun AndroDRApp() {
                 HistoryScreen()
             }
             composable(
-                "timeline?pkg={pkg}",
-                arguments = listOf(navArgument("pkg") {
-                    type = NavType.StringType; nullable = true; defaultValue = null
-                })
+                "timeline?pkg={pkg}&scan={scan}",
+                arguments = listOf(
+                    navArgument("pkg") { type = NavType.StringType; nullable = true; defaultValue = null },
+                    navArgument("scan") { type = NavType.LongType; defaultValue = NO_SCAN_FILTER },
+                )
             ) { entry ->
                 TimelineScreen(
                     initialPackage = entry.arguments?.getString("pkg"),
+                    initialScanId = entry.arguments?.getLong("scan")?.takeIf { it != NO_SCAN_FILTER },
                     onNavigateToHistory = {
                         navController.navigate("history") {
                             launchSingleTop = true
@@ -236,7 +238,9 @@ private fun AndroDRApp() {
                 )
             }
             composable("bugreport") {
-                BugReportScreen()
+                BugReportScreen(onViewTimeline = { scanId ->
+                    navController.navigate(timelineForScan(scanId)) { launchSingleTop = true }
+                })
             }
             composable("settings") {
                 SettingsScreen()
@@ -244,3 +248,9 @@ private fun AndroDRApp() {
         }
     }
 }
+
+/** The Timeline route's `scan` argument when no scan filter is set (a nav Long argument cannot be null). */
+internal const val NO_SCAN_FILTER = -1L
+
+/** The Timeline filtered to one scan's rows: the import screen's link to an import's records (C3). */
+internal fun timelineForScan(scanId: Long): String = "timeline?scan=$scanId"

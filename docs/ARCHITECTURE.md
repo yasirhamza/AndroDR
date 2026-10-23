@@ -148,7 +148,7 @@ A telemetry emitter is a pure function of device state: given the current state 
 
 **Bug-report analysis** (`scanner/bugreport/`)
 
-Bug-report ZIP parsers are a separate family of emitters that extract structured telemetry from Android bug reports rather than from live device state. Modules include `TombstoneParser` (native crash tombstones → `TombstoneEvent`), `WakelockParser` (`WakelockAcquisition`), `BatteryDailyModule` (`BatteryDailyEvent`), `InstallTimeModule` (`PackageInstallHistoryEntry`), `PlatformCompatModule` (`PlatformCompatChange`), `DbInfoModule` (`DatabasePathObservation`), `AccessibilityModule`, `ActivityModule`, `AdbKeysModule`, `AppOpsModule`, `ReceiverModule`, and `GetpropParser`/`DumpsysSectionParser` for raw section extraction. The overarching coordinator is `BugreportModule` / `BugReportAnalyzer`.
+Bug-report ZIP parsers are a separate family of emitters that extract structured telemetry from Android bug reports rather than from live device state. Modules include `TombstoneParser` (native crash tombstones → `TombstoneEvent`), `WakelockParser` (`WakelockAcquisition`), `BatteryDailyModule` (`BatteryDailyEvent`), `InstallTimeModule` (`PackageInstallHistoryEntry`), `PlatformCompatModule` (`PlatformCompatChange`), `DbInfoModule` (`DatabasePathObservation`), `AccessibilityModule`, `ActivityModule`, `AdbKeysModule`, `AppOpsModule`, `ReceiverModule`, and `GetpropParser`/`DumpsysSectionParser` for raw section extraction. The overarching coordinator is `BugreportModule` / `BugReportAnalyzer`. Every dumpsys wall-clock time of one import is read with a single `DumpsysClock` in the capture device's zone (`persist.sys.timezone`; UTC with a "times assume UTC" import note when absent), so modules never mix time bases and results do not depend on the analyzing device's zone.
 
 **Intrusion log import** (`scanner/intrusionlog/`)
 
@@ -173,7 +173,7 @@ The rule engine is the single place detection logic runs. It is stateless relati
 | `SigmaRuleEvaluator` | Pure evaluation function: `(rules, records, service, iocLookups, evidenceProviders) → findings`. Filters rules by `logsource.service`, evaluates each rule's condition against each record, and calls `buildFinding()` when a condition matches. |
 | `SigmaRule` | Data class representing a parsed detection rule. |
 | `SigmaRuleFeed` | Interface for remote rule feeds that supply additional rules at runtime (beyond the bundled set). |
-| `SigmaCorrelationEngine` | Evaluates `CorrelationRule` objects against a forensic timeline, matching temporal sequences (`temporal_ordered`), co-occurrence windows (`temporal`), and event counts (`event_count`). |
+| `SigmaCorrelationEngine` | Evaluates `CorrelationRule` objects over correlation atoms (`TimelineAtom`: timeline rows and exact-precision stored facts, keyed by `AtomRef` = `Row(id)` / `Fact(id)`), matching temporal sequences (`temporal_ordered`), co-occurrence windows (`temporal`), and event counts (`event_count`), under a `CorrelationBudget`. |
 | `CorrelationRule` | Data class representing a parsed correlation rule. |
 | `TelemetryFieldMaps` | Extension functions (`.toFieldMap()`) that convert each typed telemetry class into the `Map<String, Any?>` record shape `SigmaRuleEvaluator` expects. Field names are `snake_case` to match SIGMA rule conventions. |
 | `TemplateResolver` | Resolves `{variable}` placeholders in rule title and remediation templates using fields from the matched record. |
@@ -195,9 +195,17 @@ A detection rule is a YAML document with these sections:
 
 All string modifiers support list-valued fields element-wise; the `|all` combiner flips the default `any` quantifier to `all`.
 
-**`ioc_lookup` is fail-closed** ([#136] R1). The modifier names a lookup registered in `ScanOrchestrator.initRuleEngine()`'s `iocLookups` map. If the name is not registered on the running binary — or the matcher names no lookup at all — the evaluator does NOT evaluate that matcher as false: it **skips the whole rule** (`SigmaRuleEvaluator.unevaluableRules()` computes the skip set, and `evaluate()` filters the rule out). Matcher-false was a fail-OPEN hole: under `condition: selection and not store_installed` a false matcher makes the negated gate true, so an unresolvable lookup would over-fire on every record instead of under-detecting. The same skip set gates `SigmaRuleEngine.computeAtomBindings()`, so a skipped rule cannot bind timeline events into correlations either.
+**`ioc_lookup` is fail-closed** ([#136] R1). The modifier names a lookup registered in `ScanOrchestrator.initRuleEngine()`'s `iocLookups` map. If the name is not registered on the running binary — or the matcher names no lookup at all — the evaluator does NOT evaluate that matcher as false: it **skips the whole rule** (`SigmaRuleEvaluator.unevaluableRules()` computes the skip set, and `evaluate()` filters the rule out). Matcher-false was a fail-OPEN hole: under `condition: selection and not store_installed` a false matcher makes the negated gate true, so an unresolvable lookup would over-fire on every record instead of under-detecting. The same skip set gates `SigmaRuleEngine.computeAtomBindings()`, so a skipped rule cannot bind correlation atoms either.
 
 A skipped rule is surfaced, never silent: `ScanOrchestrator` records one capability-skip entry per skipped rule per scan (a `ScannerFailure` with `exception = UNREGISTERED_IOC_LOOKUP`, carrying the `ruleId`). Those entries are deliberately NOT scanner failures — they are excluded from `ScanResult.isPartialScan` / `realFailureCount` (accepted under-detection is not a crashed scan), they are excluded from `computeDiff`'s `resolvedFindings` (rendering a skipped CRITICAL as "resolved" would be affirmative false reassurance), and they render as their own report section (§6.1). Build gates keep the registration honest: `IocLookupDefinitionsCrossCheckTest` reads the registered names straight out of `ScanOrchestrator.kt` and asserts no bundled or delivered rule names a lookup this build cannot resolve.
+
+**Correlation over atoms (telemetry store Phase C, Task C2)**
+
+Correlation runs inside the writer session's finishing transaction, after the scan's own timeline rows are inserted. `AtomReader` reads the atoms of the atom-bound categories: the scan's own rows (real ids) and the facts it observed (`atomsForScan`), plus — for a live scan only — a lookback of visible live rows and facts a `COMPLETE` live scan observed, stamped in `[scanStart - window, scanStart]` (`atomsBetween`). Imports, future-dated events, and rows or facts of `IN_PROGRESS`/`DELETING` scans never enter the lookback; an import correlates over its own atoms only. Day-precision facts are never atoms. Facts are categorized so they yield exactly the legacy timeline atoms (ruling R26): an install-history `UPDATE`/`UNINSTALL` is `package_update`/`package_uninstall`, never `package_install`, and a system-UID AppOps op is `system_permission_use`, never `permission_use`. A fact that a timeline row in an atom category stands in for (the row's `recordId`, or `sourceEventKey` = the fact's `sourceKey`) is left out, so an event binds once (live DNS `ioc_match` rows, and legacy event rows that survived the C3 cleanup because a signal lists them). Since C3 imports and live scans write no event rows — intrusion-log, usage-stats and bug-report module records are facts only — so ruling R17's row-to-fact pairing is moot and each such event binds once, as its fact. A re-read usage event is the fact an earlier live scan observed and gets no second observation, so it reaches a live scan's correlation once, through the lookback.
+
+A signal's members are stored only in `signal_member` (`signalRowId`, `kind`, `refId`); the signal row's `details` carries `member_count`, never an id list, and its `correlationId` is `ruleId:` + h128 hex over the members sorted by `(kind, id)`. Every row delete first selects the signal rows it removes and deletes their members by id (primary-key prefix, never a scan of `signal_member`), releasing the facts they pinned (`TimelineRowDeleter`). The Timeline loads a signal's members on expand, 200 at a time (`ClusterMembers`), skipping and counting refs whose row or fact is gone. Legacy signals are moved by a one-time `SignalMemberBackfill` run from `StartupSweep` (per-batch lock and transaction; malformed rows left untouched; DataStore flag `signal_member_backfill_done`).
+
+`CorrelationBudget` bounds the pass: 2 s per (rule, group) and 5 s in total (binding and grouping included), checked by deadline tests that return normally — never a throw inside the transaction. Groups are filtered to the rule's steps and run smallest first. Signals already found are kept; every unfinished or unstarted (rule, group) records `NotEvaluatedReason.CORRELATION_INCOMPLETE` (one entry per rule, at most 20 packages plus a count), shown in the report's not-checked section and as a separate Dashboard warning, never as a scanner failure.
 
 **Bundled rules**
 
@@ -317,7 +325,7 @@ All persistent state lives in a single Room database declared in `AppDatabase` (
 |---|---|---|
 | `ScanResult` | `ScanResult` | One row per completed scan; stores all findings and device-flag results as serialized JSON |
 | `DnsEvent` | `DnsEvent` | DNS queries intercepted by `DnsVpnService`, with timestamp and optional match reason |
-| `ForensicTimelineEvent` | `forensic_timeline` | Every timestamped forensic event — findings, package installs, device-admin grants, IOC-matched DNS hits, usage-stats, correlation signals |
+| `ForensicTimelineEvent` | `forensic_timeline` | Finding rows, correlation signals, detected changes (first-seen package installs, device-admin grants), IOC-matched live DNS hits, and the persistent audit / "import interrupted" rows. Event records (intrusion-log, usage-stats, bug-report module events) live only in the telemetry store since C3; legacy event rows of pre-store (`NONE`) scans remain |
 | `Indicator` | `indicators` | IOC feed entries: package names, cert hashes, APK hashes, and C2 domains sourced from all configured feeds |
 | `KnownAppDbEntry` | (internal) | Known-good app cache (Plexus + UAD-ng) for false-positive suppression |
 | `CveEntity` | (internal) | CVE records for unpatched-CVE detection |
@@ -354,7 +362,7 @@ STIX2 serialization lives in `StixBundle.kt` (in `ioc/`). The extension function
 
 ### 6.1 ReportFormatter
 
-`ReportFormatter` is a stateless `object` whose one entry point, `writeScanReport()`, streams a plaintext report for one scan to a `Writer`: the findings (`FindingsView`, with the campaign vocabulary and rule scopes), the logcat capture, and the scan's own stored telemetry read through `StoredTelemetrySource` (`TelemetryReader`), one generic section per service, record by record. Nothing but the findings and one batch of records is held in memory. Every line passes through `escapeForReport`, which renders `\` and every character in Unicode categories Cc, Cf, Zl, Zp, Co, Cn and Cs as `\uXXXX`, so no device-controlled string, field key, or value nested in a list or map can emit a raw line break, a bidi override, or an ambiguous escape. A `TELEMETRY SECTION` line states what the store holds for the scan (`STORED`, or why not: `PARTIAL_RETENTION`, `NONE`, `FAILED`; a `FAILED` scan that stored records before the disk filled says how many). A `dns_monitor` section carries a note saying its `is_blocked` / `reason` fields are not verdicts: an import's are parser defaults (AndroDR was not in the path, #375), and a live record's null reason means the tunnel had no match at query time. Each record is one block (a `[n] captured` header, then its own `key: value` lines), which the adversary harness's record-scoped `@anchor => regex` assertions rely on. The bug-report timeline export (`TimelineFormatter`) escapes every line the same way.
+`ReportFormatter` is a stateless `object` whose one entry point, `writeScanReport()`, streams a plaintext report for one scan to a `Writer`: the findings (`FindingsView`, with the campaign vocabulary and rule scopes), the logcat capture, and the scan's own stored telemetry read through `StoredTelemetrySource` (`TelemetryReader`), one generic section per service, record by record. Nothing but the findings and one batch of records is held in memory. Every line passes through `escapeForReport`, which renders `\` and every character in Unicode categories Cc, Cf, Zl, Zp, Co, Cn and Cs as `\uXXXX`, so no device-controlled string, field key, or value nested in a list or map can emit a raw line break, a bidi override, or an ambiguous escape. A `TELEMETRY SECTION` line states what the store holds for the scan (`STORED`, or why not: `PARTIAL_RETENTION`, `NONE`, `FAILED`; a `FAILED` scan that stored records before the disk filled says how many). An imported `dns_monitor` record carries no `is_blocked` or `reason` at all (AndroDR was not in the path, so there is no tunnel verdict to state, R22); a live scan's `dns_monitor` section carries a note that a null `reason` means the tunnel had no match at query time. Each record is one block (a `[n] captured` header, then its own `key: value` lines), which the adversary harness's record-scoped `@anchor => regex` assertions rely on. The import screen's Export writes the import's scan report through this same path (C3 retired the separate bug-report timeline export, `TimelineFormatter`).
 
 The report is split into two independently selectable sections via the `ExportMode` enum:
 
@@ -376,7 +384,7 @@ Logcat capture is scoped to AndroDR's own process (`--pid`) and to a specific li
 
 ### 6.3 Timeline export
 
-`TimelineFormatter` formats bug-report analysis results (SIGMA findings and `TimelineEvent` records) into a plaintext timeline, with an assessment header derived from rule guidance priority. `TimelineExporter` serializes `ForensicTimelineEvent` rows to either plaintext (human-readable, date-grouped) or CSV (machine-readable, with all IOC and correlation fields preserved). The CSV format includes `rule_id`, `correlation_id`, and `kind` columns so downstream tools can distinguish raw telemetry rows from correlation signals and reconstruct which rule fired.
+`TimelineExporter` serializes `ForensicTimelineEvent` rows to either plaintext (human-readable, date-grouped) or CSV (machine-readable, with all IOC and correlation fields preserved). The CSV format includes `rule_id`, `correlation_id`, `member_refs` (a signal's still-existing members from `signal_member`, as `kind:id`), and `kind` columns so downstream tools can distinguish raw telemetry rows from correlation signals and reconstruct which rule fired.
 
 ### 6.4 STIX2 export
 
@@ -405,6 +413,8 @@ IOC enrichment happens at flush time: `ScanRepository.logDnsEventsBatch()` perfo
 ### 7.2 Integration with the rule engine
 
 `DnsEvent` records carrying a non-null `reason` field are also written as `ForensicTimelineEvent` rows (category `dns_ioc_match`). These rows participate in the forensic timeline and can trigger correlation rules alongside telemetry from scans and bug-report analysis. A rule with `logsource.service: dns_monitor` can fire whether the matched domain arrived via a scan-time IOC check or a real-time DNS interception, because both paths produce identically shaped telemetry.
+
+A live scan collects each live event once, from per-service watermarks (`event_watermark`, written in the scan's finishing transaction): live DNS rows by `DnsEvent.id` (the first scan starts at the last 24 h; reading by id means a row the log buffer flushes late, with an older timestamp, is never missed), streamed into the writer session in chunks; usage stats by event time, re-read from 5 minutes before the watermark, with Usage Access checked explicitly (`UsageAccess`). A watermark advances on every committed scan whose collection did not fail, even when that service's rules were capability-skipped; it never moves past the scan start, resets when it is ahead of the clock, and stays put on the disk-full fallback. (Known limit of these rules: if the clock jumps forward, a scan runs, and the clock is then corrected by less than the jump, usage events stamped between the corrected time and the bogus watermark minus 5 minutes are never read.) Usage events are store-only facts (C3): a scan writes and deletes no `usage_stats` row, and a re-read event is the same fact, observed once. One usage collection holds at most `UsageStatsScanner.MAX_EVENTS_PER_SCAN` (20,000) events, oldest first; after a long watermark gap the watermark stops at the last event read and the following scans continue from there, so nothing is dropped and no scan loads everything Android keeps at once. (Known limit: the watermark only advances past events read, so 20,000 collapsed events inside one 5-minute re-read window would stall it — over 2,000 apps active in one minute.) Because a stored DNS event is never evaluated again by `append`, each live scan also runs a **late-IOC re-check**: the `dns_monitor` rules re-evaluate the stored live DNS facts of the trailing 24 h (only facts a `COMPLETE` live scan observed, so never the running scan's own facts and never an imported one) through `Session.evaluateStored`. A hit carries `recordId` = the stored fact and `ordinal = -1`, and is kept only when no visible finding for the same `(ruleId, recordId)` exists, so a domain that became an IOC after it was queried fires once.
 
 ### 7.3 Strictly optional; user-consent required
 
@@ -460,13 +470,13 @@ The pipeline runs in six ordered stages:
 
 2. **Parse.** `BugReportAnalyzer.analyze()` opens the ZIP twice: a pre-pass extracts the `SYSTEM PROPERTIES` section to derive the source device identity (manufacturer and brand via `GetpropParser`), which is needed for OEM-prefix filtering. The main pass calls `DumpsysSectionParser.extractSections()` to carve out the sections each module declared, then runs every module in turn.
 
-3. **Emit telemetry.** Each module returns a `ModuleResult` carrying a list of typed telemetry records (as `Map<String, Any?>`) tagged with a `telemetryService` string, plus optional `TimelineEvent` rows. `TombstoneParser` and `WakelockParser` produce their own typed records (`TombstoneEvent`, `WakelockAcquisition`). All of these are collected into a `TelemetryBundle` and flow into the SIGMA rule engine alongside `AppTelemetry` and `DeviceTelemetry`. There is no bug-report-specific detection logic in the evaluator itself.
+3. **Emit telemetry.** Each module returns a `ModuleResult` carrying a list of typed telemetry records (as `Map<String, Any?>`) tagged with a `telemetryService` string, plus typed records. Modules build no Timeline rows (C3 retired `TimelineEvent` and `ModuleResult.timeline`): the import session stores every record as a fact, and the Timeline reads them from the store. `TombstoneParser` and `WakelockParser` produce their own typed records (`TombstoneEvent`, `WakelockAcquisition`). All of these are collected into a `TelemetryBundle` and flow into the SIGMA rule engine alongside `AppTelemetry` and `DeviceTelemetry`. There is no bug-report-specific detection logic in the evaluator itself.
 
 4. **Match.** `SigmaRuleEngine` evaluates rules whose `logsource.service` matches the telemetry service strings emitted by each module (`bugreport`, `tombstone_parser`, `wakelock_parser`, `battery_daily`, `package_install_history`, `platform_compat`, `db_info`, etc.). Any rule in the bundled or remote rule set can fire against bug-report telemetry without any special-casing.
 
-5. **Display findings.** The bug-report screen shows what was detected, grouped by severity, with pointers into the raw dumpsys section (via `TimelineEvent.source` and `details` fields) so an analyst can verify the raw signal. The forensic timeline screen shows the same events in chronological order alongside runtime scan findings.
+5. **Display findings.** The bug-report screen shows what was detected, grouped by severity, and links to the Timeline filtered to the import's scan (`timeline?scan=<id>`), where the import's finding rows are shown; until C4's store union the Timeline does not yet list the stored records themselves, which the scan's report and export carry.
 
-6. **Discard raw.** The original ZIP is not copied or persisted by AndroDR. Only the structured findings and `ForensicTimelineEvent` rows derived from parsing are written to Room (via `ScanRepository.saveScanResults()`). When the user deletes a scan from the history screen, the associated timeline rows are removed in the same Room transaction.
+6. **Discard raw.** The original ZIP is not copied or persisted by AndroDR. The parsed records are stored as facts and observations of the import, and its finding rows and signals are written to `forensic_timeline`, all through the import's writer session. When the user deletes a scan from the history screen, its rows and observations are removed (spec §5.1 Delete).
 
 ### 8.4 Privacy handling
 
@@ -492,18 +502,30 @@ DNS-over-TLS resolutions the VPN monitor cannot observe), `connect_event` →
 `NetworkTelemetry` (`network_monitor`, activated by this feature), and
 `security_event` → `SecurityLogEvent` with a `SecurityLog` tag registry
 (`security_log` service; unknown tags are emitted verbatim as
-`unknown_<tag>`). Rules evaluate the complete parsed stream; only timeline
-persistence is capped (`ScanOrchestrator.DNS_PERSIST_CAP` /
-`CONNECT_PERSIST_CAP`, surfaced in the results UI). Rows persist as
-`ForensicTimelineEvent` with `telemetrySource = INTRUSION_LOG_IMPORT`,
-`source = "intrusion_log"` (raw) / `"intrusion_log_analysis"` (findings). Raw
-imported rows carry **no** correlation id: the finding↔raw-evidence join for the
-new `network_monitor` / `security_log` services is deferred to #352 (to be
-decided with the first starter rules). Stamping a per-type key like `sec:<tag>`
-unconditionally would collapse hundreds of identical events into one meaningless
-`TimelineClusters` cluster, so raw rows stay unlinked until that design lands.
-Each import first deletes the previous import's rows (replace-on-reimport). The
-raw ZIP is never retained.
+`unknown_<tag>`). Rules evaluate the complete parsed stream, and every record is
+stored as a fact and an observation of the import (C3: no raw event rows and no
+row caps). Finding rows persist as `ForensicTimelineEvent` with
+`telemetrySource = INTRUSION_LOG_IMPORT` and `source = "intrusion_log_analysis"`.
+Legacy raw rows (`source = "intrusion_log"`) of pre-store imports carry **no**
+correlation id: stamping a per-type key like `sec:<tag>` unconditionally would
+collapse hundreds of identical events into one meaningless `TimelineClusters`
+cluster; the finding↔raw-evidence join is deferred to #352. Re-importing a log
+replaces nothing: the store already holds its facts, the new import observes
+them again, and the import card reports new facts, already-stored facts and
+dropped duplicates. The raw ZIP is never retained.
+
+**One-time cleanup (C3).** At the first launch after the upgrade,
+`LegacyEventRowCleanup` (run by `StartupSweep`, after the `signal_member`
+backfill) deletes the rows the retired event adapters wrote — chosen by producer
+(`source` in a frozen list: `intrusion_log`, `usage_stats`, `appops`,
+`battery_daily`, `adb_audit`, `bugreport`), never by category, so live
+`package_install` / `device_admin_grant` detected changes stay — in scans whose
+`telemetryState` is `STORED` or `PARTIAL_RETENTION`. Pre-store (`NONE`) and
+evaluate-only (`FAILED`) scans keep their rows (their only record). Rows a signal
+still lists are kept; member refs whose signal row is gone are removed first. It
+runs in batches of 200, each one transaction under `ScanLock`, deletes through
+`TimelineRowDeleter`, and a failing batch is logged and retried next launch; a
+DataStore flag marks it done.
 
 **Relation to D3 (parked IP filtering):** D3 rejected *live VPN-based IP
 inspection* (battery, MITM, breakage). This feature is offline import of

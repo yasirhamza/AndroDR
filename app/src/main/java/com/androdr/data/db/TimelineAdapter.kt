@@ -2,16 +2,11 @@ package com.androdr.data.db
 
 import com.androdr.data.model.DnsEvent
 import com.androdr.data.model.ForensicTimelineEvent
-import com.androdr.data.model.NetworkTelemetry
 import com.androdr.data.model.ScanResult
-import com.androdr.data.model.SecurityLogEvent
-import com.androdr.data.model.TelemetrySource
-import com.androdr.data.model.TimelineEvent
-import com.androdr.data.model.ImportedDnsEvent
-import com.androdr.data.model.UsageEvent
 import com.androdr.sigma.Evidence
 import com.androdr.sigma.Finding
 import com.androdr.sigma.FindingCategory
+import com.androdr.sigma.TAXONOMY_CONTRACT_TABLE
 
 fun DnsEvent.toForensicTimelineEvent(): ForensicTimelineEvent =
     toForensicTimelineEvent(indicator = null)
@@ -87,33 +82,15 @@ fun Finding.toForensicTimelineEvent(
     val dnsIocType = iocEvidence?.iocType ?: (if (dnsMatchedDomain != null) "domain" else "")
     val dnsIocSource = iocEvidence?.source ?: (if (dnsMatchedDomain != null) "dns_monitor" else "")
 
-    // Runtime-scan findings use the scan timestamp. Bug-report findings try
-    // to inherit a real per-event timestamp from their evidence:
-    //
-    //   * Modules that know a real event time (e.g. `AppOpsModule` knows
-    //     `last_access_time` for each dangerous-op record) publish it under
-    //     the telemetry map key `event_time_ms` (epoch ms Long).
-    //   * `SigmaRuleEvaluator.buildFinding` copies scalar record fields
-    //     into `matchContext` as strings, so the Finding inherits the
-    //     `event_time_ms` string automatically.
-    //   * Here we parse it back to a Long and use it as the persisted
-    //     event's `timestamp`. If it's missing or unparseable, we fall
-    //     back to 0L, which the Timeline UI renders as "Unknown" — the
-    //     honest answer for SIGMA rules that fire on stateful data
-    //     without a meaningful event time (e.g. receiver registrations).
-    //
-    // This is strictly better than the previous unconditional 0L for bug
-    // reports: AppOps-derived findings (Camera Access, Microphone Access,
-    // etc.) now show the real time the dangerous op was last invoked,
-    // instead of "Unknown".
-    val eventTimestamp = if (isBugreport) {
-        this.matchContext["event_time_ms"]?.toLongOrNull()?.takeIf { it > 0L } ?: 0L
-    } else {
-        scanResult.timestamp
-    }
+    // Runtime-scan findings use the scan timestamp. Import findings inherit the event time of the
+    // record they matched (FindingEventTime), with its precision; a finding on a record with no
+    // event time (a snapshot) stays at 0L, which the Timeline renders as "Unknown date".
+    val recorded = if (isBugreport) FindingEventTime.of(this) else null
+    val eventTimestamp = if (isBugreport) recorded?.time ?: 0L else scanResult.timestamp
 
     return ForensicTimelineEvent(
         startTimestamp = eventTimestamp,
+        timestampPrecision = if (recorded?.day == true) DAY_PRECISION else EXACT_PRECISION,
         source = if (isBugreport) "bugreport_analysis" else "app_scanner",
         category = when (this.category) {
             FindingCategory.APP_RISK -> "app_risk"
@@ -150,84 +127,6 @@ fun Finding.toForensicTimelineEvent(
     )
 }
 
-fun TimelineEvent.toForensicTimelineEvent(scanResultId: Long = -1): ForensicTimelineEvent =
-    ForensicTimelineEvent(
-        startTimestamp = this.timestamp,
-        source = this.source,
-        category = this.category,
-        description = this.description,
-        packageName = this.packageName ?: "",
-        timestampPrecision = "estimated",
-        scanResultId = scanResultId,
-        telemetrySource = com.androdr.data.model.TelemetrySource.BUGREPORT_IMPORT
-    )
-
-// #342 C2: imported RAW rows carry NO correlationId. The earlier design stamped
-// dns:/net:/sec: ids unconditionally on every raw imported row, but those are
-// cluster-forming keys for TimelineClusters Pass-2: 400 identical
-// keyguard_dismissed security events collapsed into one meaningless 400-member
-// PRE_LINKED cluster (sec:$tag is a TYPE-level key), every twice-resolved domain
-// formed a dns: cluster, etc. The finding↔raw-evidence join for these new
-// services (network_monitor / security_log) is DEFERRED to #352, to be decided
-// alongside the first starter rules; until then raw rows are left with the empty
-// default so they never spuriously pre-link.
-
-/** #342: imported Intrusion Logging dns_event → timeline row. No correlation id
- *  (raw-row correlation-join deferred to #352 — see file note above). */
-fun ImportedDnsEvent.toForensicTimelineEvent(scanResultId: Long): ForensicTimelineEvent =
-    event.toForensicTimelineEvent().copy(
-        source = "intrusion_log",
-        details = if (resolvedIps.isEmpty()) "" else "resolved: ${resolvedIps.joinToString(", ")}",
-        correlationId = "",
-        scanResultId = scanResultId,
-        telemetrySource = TelemetrySource.INTRUSION_LOG_IMPORT
-    )
-
-/** #342: imported Intrusion Logging connect_event → timeline row. No correlation
- *  id (raw-row correlation-join deferred to #352 — see file note above). */
-fun NetworkTelemetry.toForensicTimelineEvent(scanResultId: Long): ForensicTimelineEvent =
-    ForensicTimelineEvent(
-        startTimestamp = timestamp,
-        source = "intrusion_log",
-        category = "network_connect",
-        description = "Connect: $destinationIp:$destinationPort",
-        packageName = appName ?: "",
-        processUid = appUid,
-        correlationId = "",
-        scanResultId = scanResultId,
-        telemetrySource = source
-    )
-
-/** #342: imported Intrusion Logging security_event → timeline row. No correlation
- *  id (raw-row correlation-join deferred to #352 — see file note above). */
-fun SecurityLogEvent.toForensicTimelineEvent(scanResultId: Long): ForensicTimelineEvent =
-    ForensicTimelineEvent(
-        startTimestamp = timestamp,
-        source = "intrusion_log",
-        category = "security_event",
-        description = "Security: $tagName",
-        details = securityData.joinToString(", "),
-        correlationId = "",
-        scanResultId = scanResultId,
-        telemetrySource = source
-    )
-
-/**
- * A live usage transition → today's `usage_stats` Timeline row (interim until Task C3, when event
- * rows leave `forensic_timeline`). The live scan replaces these rows on every scan.
- */
-fun UsageEvent.toForensicTimelineEvent(scanResultId: Long): ForensicTimelineEvent =
-    ForensicTimelineEvent(
-        startTimestamp = timestamp,
-        source = "usage_stats",
-        category = eventType,
-        description = "App ${if (eventType == "app_foreground") "opened" else "closed"}: $appName",
-        packageName = packageName,
-        appName = appName,
-        scanResultId = scanResultId,
-        telemetrySource = TelemetrySource.LIVE_SCAN
-    )
-
 /** Extracts the campaign name from DNS event reason strings like "IOC: Pegasus" */
 private fun extractDnsCampaign(reason: String?): String = when {
     reason == null -> ""
@@ -242,4 +141,30 @@ private fun extractDnsIocSource(reason: String?): String = when {
     reason.startsWith("IOC:") || reason.startsWith("IOC_detect:") -> "domain_ioc_feed"
     reason == "blocklist" || reason == "blocklist_detect" -> "blocklist"
     else -> ""
+}
+
+private const val DAY_PRECISION = "day"
+private const val EXACT_PRECISION = "exact"
+
+/**
+ * The event time a finding inherits from the record it matched (C4 review n1).
+ * `SigmaRuleEvaluator.buildFinding` copies a record's scalar fields into `matchContext` as strings,
+ * so the record's event-time field is there under its taxonomy name: `event_time_ms` (AppOps),
+ * `timestamp` (battery days, security log, DNS, connections, usage, install history),
+ * `crash_timestamp`, `acquired_at`. [FIELDS] is every service's event-time field, read from the
+ * taxonomy (so a new service is covered); only event services carry these names. A day-precision
+ * record's time is its calendar date ([com.androdr.data.model.CivilDay], R32).
+ */
+internal object FindingEventTime {
+    data class Time(val time: Long, val day: Boolean)
+
+    val FIELDS: List<String> = TAXONOMY_CONTRACT_TABLE.values.mapNotNull { it.eventTimeField }.distinct()
+    val PRECISION_FIELDS: List<String> = TAXONOMY_CONTRACT_TABLE.values.mapNotNull { it.precisionField }.distinct()
+
+    fun of(finding: Finding): Time? {
+        val time = FIELDS.firstNotNullOfOrNull { finding.matchContext[it]?.toLongOrNull()?.takeIf { t -> t > 0L } }
+            ?: return null
+        val day = PRECISION_FIELDS.any { finding.matchContext[it].equals(DAY_PRECISION, ignoreCase = true) }
+        return Time(time, day)
+    }
 }

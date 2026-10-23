@@ -85,7 +85,7 @@ class AppOpsModuleTest {
     }
 
     @Test
-    fun `generates timeline events for permission access`() = runBlocking {
+    fun `permission access records are timed permission_use events`() = runBlocking {
         val section = """
             Uid 10150:
               Package com.some.app:
@@ -96,7 +96,11 @@ class AppOpsModuleTest {
         """.trimIndent()
 
         val result = module.analyze(section, mockIndicatorResolver, com.androdr.ioc.DeviceIdentity.UNKNOWN)
-        assertTrue(result.timeline.any { it.category == "permission_use" })
+        // C3: no hand-built rows; the record itself is the event the Timeline reads from the store.
+        assertTrue(result.telemetry.any {
+            com.androdr.sigma.TimelineCategories.categoryOf("appops_audit", it) == "permission_use" &&
+                (it["event_time_ms"] as Long) > 0L
+        })
     }
 
     @Test
@@ -114,10 +118,9 @@ class AppOpsModuleTest {
     }
 
     @Test
-    fun `empty section produces no telemetry or timeline`() = runBlocking {
+    fun `empty section produces no telemetry`() = runBlocking {
         val result = module.analyze("", mockIndicatorResolver, com.androdr.ioc.DeviceIdentity.UNKNOWN)
         assertTrue(result.telemetry.isEmpty())
-        assertTrue(result.timeline.isEmpty())
     }
 
     @Test
@@ -139,7 +142,6 @@ class AppOpsModuleTest {
         val result = module.analyze(section, mockIndicatorResolver, com.androdr.ioc.DeviceIdentity.UNKNOWN)
         // u0a398 = user 0, app 398 = UID 10398 (not system)
         assertTrue("Should have telemetry for user app", result.telemetry.isNotEmpty())
-        assertTrue("Should have timeline for non-system app", result.timeline.isNotEmpty())
         assertTrue(result.telemetry.all { it["is_system_app"] == false })
         assertTrue(result.telemetry.any { it["package_name"] == "com.talabat" })
     }
@@ -158,7 +160,6 @@ class AppOpsModuleTest {
         val result = module.analyze(section, mockIndicatorResolver, com.androdr.ioc.DeviceIdentity.UNKNOWN)
         // u0s1000 = user 0, shared system UID 1000 (is system)
         assertTrue("Should have telemetry", result.telemetry.isNotEmpty())
-        assertTrue("System app should have no timeline", result.timeline.isEmpty())
         assertTrue(result.telemetry.all { it["is_system_app"] == true })
     }
 
@@ -184,7 +185,9 @@ class AppOpsModuleTest {
         val userEntries = result.telemetry.filter { it["is_system_app"] == false }
         assertTrue("Should have system entries", systemEntries.isNotEmpty())
         assertTrue("Should have user entries", userEntries.isNotEmpty())
-        // Only user app should generate timeline
-        assertTrue(result.timeline.all { it.description.contains("com.whatsapp") })
+        // Only the user app's records are permission_use events (system ones are system_permission_use, R26)
+        assertTrue(result.telemetry.filter {
+            com.androdr.sigma.TimelineCategories.categoryOf("appops_audit", it) == "permission_use"
+        }.all { it["package_name"] == "com.whatsapp" })
     }
 }

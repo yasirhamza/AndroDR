@@ -21,6 +21,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
@@ -36,8 +38,19 @@ import androidx.compose.material3.SuggestionChip
 import androidx.compose.material3.SuggestionChipDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import com.androdr.sigma.AtomRef
+import com.androdr.sigma.TaxonomyContract
+import androidx.compose.material3.OutlinedButton
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -48,6 +61,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Surface
 import com.androdr.R
+import com.androdr.data.store.DecodedRecord
+import com.androdr.data.model.TimelineRowEntity
+import com.androdr.sigma.TimePrecision
+import java.util.TimeZone
+import com.androdr.reporting.escapeForReport
 import com.androdr.data.model.ForensicTimelineEvent
 import com.androdr.data.model.TelemetrySource
 import com.androdr.sigma.FindingCategory
@@ -88,7 +106,7 @@ fun TimelineEventCard(
                 verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
                 Text(
-                    text = formatTime(event.startTimestamp),
+                    text = rowTime(event),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -104,21 +122,6 @@ fun TimelineEventCard(
                 }
             }
         }
-    }
-}
-
-/**
- * Neutral telemetry row renderer — thin wrapper over [TimelineEventCard]
- * used by the flat `TimelineRow` rendering path.
- */
-@Composable
-fun TelemetryCard(
-    row: TimelineRow.TelemetryRow,
-    modifier: Modifier = Modifier,
-    onClick: () -> Unit = {},
-) {
-    Box(modifier = modifier) {
-        TimelineEventCard(event = row.event, onClick = onClick)
     }
 }
 
@@ -218,7 +221,8 @@ fun TimelineEventDetailSheet(
     event: ForensicTimelineEvent,
     onDismiss: () -> Unit,
     relatedEvents: List<ForensicTimelineEvent> = emptyList(),
-    onJumpToRelated: (ForensicTimelineEvent) -> Unit = {}
+    onJumpToRelated: (ForensicTimelineEvent) -> Unit = {},
+    onShowOnlyApp: ((String) -> Unit)? = null,
 ) {
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -236,7 +240,7 @@ fun TimelineEventDetailSheet(
                 Text(event.category, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
             }
             Text(
-                text = "${formatTime(event.startTimestamp)}  ${formatDate(event.startTimestamp)}",
+                text = "${rowTime(event)}  ${rowDate(event)}",
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -247,6 +251,7 @@ fun TimelineEventDetailSheet(
             }
             if (event.packageName.isNotEmpty()) {
                 DetailSection(stringResource(R.string.timeline_detail_package), event.packageName)
+                onShowOnlyApp?.let { ShowOnlyAppButton(event.packageName, it) }
             }
             if (event.iocIndicator.isNotEmpty()) {
                 DetailSection(
@@ -332,7 +337,7 @@ private fun LinkedEvidenceRow(
                     overflow = TextOverflow.Ellipsis
                 )
                 Text(
-                    text = "${formatTime(related.startTimestamp)}  ${related.category}",
+                    text = linkedEvidenceLabel(related),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -361,10 +366,16 @@ private fun TagChip(text: String, color: Color) {
     )
 }
 
-@Suppress("LongMethod") // Compose card renders header row, time range, and per-event children with connectors
+/**
+ * A correlation cluster. A pre-linked cluster shows its rows at once; a signal's members live only
+ * in `signal_member` and load page by page through [loadPage] when the card is expanded (spec §5.4).
+ * Members whose row or fact is gone are counted, not shown.
+ */
+@Suppress("LongMethod") // Compose card renders header row, time range, and per-member children with connectors
 @Composable
 fun CorrelationClusterCard(
     cluster: EventCluster,
+    loadPage: suspend (signalRowId: Long, after: AtomRef?) -> ClusterPage,
     onEventTap: (ForensicTimelineEvent) -> Unit
 ) {
     val colors = MaterialTheme.androdrColors
@@ -374,9 +385,29 @@ fun CorrelationClusterCard(
         CorrelationPattern.MULTI_PERMISSION_BURST -> colors.high
         else                                      -> colors.neutral
     }
+    val signalRowId = cluster.signalRowId
+    var expanded by remember(cluster.key) { mutableStateOf(signalRowId == null) }
+    var members by remember(cluster.key) { mutableStateOf(cluster.members) }
+    var missing by remember(cluster.key) { mutableIntStateOf(0) }
+    var next by remember(cluster.key) { mutableStateOf<AtomRef?>(null) }
+    var loaded by remember(cluster.key) { mutableStateOf(signalRowId == null) }
+    val scope = rememberCoroutineScope()
+    fun loadMore() {
+        val id = signalRowId ?: return
+        scope.launch {
+            val page = loadPage(id, next)
+            members = members + page.members
+            missing += page.missing
+            next = page.next
+            loaded = true
+        }
+    }
 
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth().clickable(enabled = signalRowId != null) {
+            expanded = !expanded
+            if (expanded && !loaded) loadMore()
+        },
         border = BorderStroke(2.dp, clusterColor.copy(alpha = 0.5f)),
         colors = CardDefaults.cardColors(
             containerColor = clusterColor.copy(alpha = 0.04f)
@@ -391,11 +422,9 @@ fun CorrelationClusterCard(
                 // Cluster label can be long (e.g. "Multiple surveillance
                 // permissions accessed rapidly (3)") so give it the weighted
                 // flex slot and allow a second line with ellipsis overflow.
-                // Previously this was an unweighted Text next to a
-                // SpaceBetween sibling, which let the label push the time
-                // range off-screen or forced mid-word single-line cutoff.
                 Text(
-                    "${cluster.label} (${cluster.events.size})",
+                    if (cluster.memberCount == null && signalRowId != null) cluster.label
+                    else "${cluster.label} (${cluster.size})",
                     style = MaterialTheme.typography.labelMedium,
                     fontWeight = FontWeight.Bold,
                     color = clusterColor,
@@ -403,29 +432,142 @@ fun CorrelationClusterCard(
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f)
                 )
-                val timeRange = formatTimeRange(cluster.events)
                 Text(
-                    timeRange,
+                    formatTimeRange(cluster.startTimestamp, cluster.endTimestamp),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
-            }
-            Spacer(modifier = Modifier.height(8.dp))
-            cluster.events.forEachIndexed { index, event ->
-                TimelineEventCard(event = event, onClick = { onEventTap(event) })
-                if (index < cluster.events.lastIndex) {
-                    // Vertical connector line
-                    Box(
-                        modifier = Modifier
-                            .padding(start = 10.dp)
-                            .width(2.dp)
-                            .height(4.dp)
-                            .background(clusterColor.copy(alpha = 0.3f))
+                if (signalRowId != null) {
+                    Icon(
+                        imageVector = if (expanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
+                        contentDescription = null,
                     )
                 }
             }
+            if (expanded) {
+                Spacer(modifier = Modifier.height(8.dp))
+                members.forEachIndexed { index, member ->
+                    when (member) {
+                        is TimelineMember.RowMember ->
+                            TimelineEventCard(event = member.row, onClick = { onEventTap(member.row) })
+                        is TimelineMember.FactMember -> FactMemberCard(member)
+                    }
+                    if (index < members.lastIndex) {
+                        // Vertical connector line
+                        Box(
+                            modifier = Modifier
+                                .padding(start = 10.dp)
+                                .width(2.dp)
+                                .height(4.dp)
+                                .background(clusterColor.copy(alpha = 0.3f))
+                        )
+                    }
+                }
+                if (missing > 0) {
+                    Text(
+                        stringResource(R.string.timeline_cluster_members_missing, missing),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                if (next != null) {
+                    TextButton(onClick = { loadMore() }) {
+                        Text(stringResource(R.string.timeline_cluster_load_more))
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** A stored fact that is a correlation member: its service, time and display summary. */
+@Composable
+private fun FactMemberCard(member: TimelineMember.FactMember) {
+    FactCard(record = member.record, timestamp = member.timestamp)
+}
+
+/**
+ * A stored event fact: its time, category (or service) and display summary. Used for a Timeline
+ * event, a cluster member, and (with [label]) a finding row's nested evidence.
+ */
+@Composable
+fun FactCard(
+    record: DecodedRecord,
+    timestamp: Long,
+    label: String? = null,
+    onClick: (() -> Unit)? = null,
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth().let { m -> if (onClick != null) m.clickable(onClick = onClick) else m },
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
+    ) {
+        Column(modifier = Modifier.padding(8.dp)) {
+            Text(
+                listOfNotNull(label, factTime(record, timestamp), record.category ?: record.service).joinToString("  "),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Text(
+                record.summary ?: stringResource(R.string.timeline_cluster_fact_unreadable),
+                style = MaterialTheme.typography.bodySmall,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+    }
+}
+
+/** A stored fact's detail: its provenance, time and decoded fields (spec §6 "Matched record"). */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+@Suppress("LongMethod") // header, provenance lines, the app action and every decoded field
+fun FactDetailSheet(
+    record: DecodedRecord,
+    onDismiss: () -> Unit,
+    loadProvenance: (suspend (Long) -> FactProvenance?)? = null,
+    onShowOnlyApp: ((String) -> Unit)? = null,
+) {
+    // Off the main thread (the ViewModel reads on IO); null until loaded or when no loader is given.
+    var provenance by remember(record.factId) { mutableStateOf<FactProvenance?>(null) }
+    LaunchedEffect(record.factId) { provenance = loadProvenance?.invoke(record.factId) }
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    ) {
+        Column(
+            modifier = Modifier.padding(horizontal = 24.dp, vertical = 16.dp)
+                .verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Text(record.category ?: record.service, style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold)
+            val time = record.eventTime ?: record.capturedAt
+            Text("${factTime(record, time)}  ${factDate(record, time)}", style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant)
+            HorizontalDivider()
+            DetailSection(stringResource(R.string.timeline_detail_description),
+                record.summary ?: stringResource(R.string.timeline_cluster_fact_unreadable))
+            DetailSection(stringResource(R.string.timeline_detail_source), record.service)
+            // Provenance (C5 review I4): the source filter matches "observed by", so show both.
+            provenance?.let { p ->
+                DetailSection(stringResource(R.string.timeline_detail_first_captured_by),
+                    stringResource(telemetrySourceLabel(p.firstCapturedBy)))
+                DetailSection(
+                    stringResource(R.string.timeline_detail_observed_by),
+                    if (p.observedBy.isEmpty()) stringResource(R.string.timeline_detail_observed_none)
+                    else p.observedBy.map { stringResource(telemetrySourceLabel(it)) }.joinToString(", "),
+                )
+            }
+            record.packageName()?.let { pkg ->
+                DetailSection(stringResource(R.string.timeline_detail_package), pkg)
+                onShowOnlyApp?.let { ShowOnlyAppButton(pkg, it) }
+            }
+            record.fields?.forEach { (key, value) ->
+                DetailSection(escapeForReport(key), escapeForReport(value.toString()))
+            }
+            Spacer(modifier = Modifier.height(32.dp))
         }
     }
 }
@@ -434,8 +576,8 @@ fun CorrelationClusterCard(
 @Suppress("LongMethod") // Scan group header with expand/collapse renders type, date, count, severity, chevron
 fun ScanGroupHeader(
     group: ScanGroup,
-    expanded: Boolean = false,
-    onToggle: (() -> Unit)? = null
+    count: Long?,
+    onClick: (() -> Unit)? = null
 ) {
     val dateStr = remember(group.timestamp) {
         if (group.timestamp > 0) SimpleDateFormat("MMM dd, yyyy HH:mm", Locale.US).format(Date(group.timestamp))
@@ -454,7 +596,7 @@ fun ScanGroupHeader(
 
     Card(
         modifier = Modifier.fillMaxWidth().then(
-            if (onToggle != null) Modifier.clickable { onToggle() } else Modifier
+            if (onClick != null) Modifier.clickable { onClick() } else Modifier
         ),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceContainer
@@ -483,37 +625,78 @@ fun ScanGroupHeader(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(
-                    stringResource(R.string.timeline_event_count, group.eventCount),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                SeverityChip(level = group.maxSeverity, active = true)
-                if (onToggle != null) {
-                    Icon(
-                        imageVector = if (expanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
-                        contentDescription = if (expanded) "Collapse" else "Expand",
-                        modifier = Modifier.size(20.dp),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                if (count != null) {
+                    Text(
+                        stringResource(R.string.timeline_event_count, count),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
+                SeverityChip(level = group.maxSeverity, active = true)
             }
         }
     }
 }
 
-private fun formatTimeRange(events: List<ForensicTimelineEvent>): String {
-    if (events.isEmpty()) return ""
+private fun formatTimeRange(first: Long, last: Long): String {
     val fmt = SimpleDateFormat("HH:mm", Locale.US)
-    val first = events.minOf { it.startTimestamp }
-    val last = events.maxOf { it.startTimestamp }
     return if (first > 0 && last > 0) {
         "${fmt.format(Date(first))}\u2013${fmt.format(Date(last))}"
     } else ""
 }
+
+/**
+ * A fact's time of day, or [DATE_ONLY] for a day-precision fact (ruling R31): its stored time is the
+ * start of its day, so a time of day would be invented.
+ */
+internal fun factTime(record: DecodedRecord, timestamp: Long): String =
+    if (record.precision == TimePrecision.DAY) DATE_ONLY else formatTime(timestamp)
+
+/** The marker a day-precision event shows in place of a time of day. */
+internal const val DATE_ONLY = "(date only)"
+
+/**
+ * A fact's date: a day-precision fact's calendar date read in UTC (it is stored as that date's UTC
+ * midnight, ruling R32), so it is the date the source printed in any viewer zone; otherwise the
+ * instant's date on this device.
+ */
+internal fun factDate(record: DecodedRecord, timestamp: Long): String =
+    if (record.precision == TimePrecision.DAY) civilDate(timestamp) else formatDate(timestamp)
+
+/** A row's time of day, or [DATE_ONLY] for a day-precision row (an import finding on a battery day). */
+internal fun rowTime(event: ForensicTimelineEvent): String =
+    if (event.timestampPrecision.equals(TimelineRowEntity.DAY, ignoreCase = true)) DATE_ONLY
+    else formatTime(event.startTimestamp)
+
+/** A Linked Evidence line: the related row's time ([DATE_ONLY] for a day-precision row) and category. */
+internal fun linkedEvidenceLabel(related: ForensicTimelineEvent): String = "${rowTime(related)}  ${related.category}"
+
+/** A row's date; a day-precision row's calendar date in UTC (R32). */
+internal fun rowDate(event: ForensicTimelineEvent): String =
+    if (event.timestampPrecision.equals(TimelineRowEntity.DAY, ignoreCase = true)) civilDate(event.startTimestamp)
+    else formatDate(event.startTimestamp)
+
+private fun civilDate(ts: Long): String =
+    if (ts > 0) SimpleDateFormat("MMM dd, yyyy", Locale.US).apply { timeZone = TimeZone.getTimeZone("UTC") }
+        .format(Date(ts)) else "Unknown"
 
 private fun formatTime(ts: Long) =
     if (ts > 0) SimpleDateFormat("HH:mm:ss", Locale.US).format(Date(ts)) else "??:??:??"
 
 private fun formatDate(ts: Long) =
     if (ts > 0) SimpleDateFormat("MMM dd, yyyy", Locale.US).format(Date(ts)) else "Unknown"
+
+/** "Show only this app" (ruling R33): sets the exact package filter, shown as a dismissible chip. */
+@Composable
+private fun ShowOnlyAppButton(packageName: String, onShowOnlyApp: (String) -> Unit) {
+    OutlinedButton(onClick = { onShowOnlyApp(packageName) }) {
+        Text(stringResource(R.string.timeline_show_only_app))
+    }
+}
+
+/**
+ * The fact's package, computed as the store computes `telemetry_record.packageName` (the service's
+ * taxonomy package field); null when the service has none or the value is absent or empty.
+ */
+internal fun DecodedRecord.packageName(): String? =
+    TaxonomyContract.packageField(service)?.let { fields?.get(it)?.toString() }?.takeIf { it.isNotEmpty() }

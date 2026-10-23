@@ -127,6 +127,8 @@ private val SERVICE_WORDS = mapOf(
     "device_auditor" to "device settings", "process_monitor" to "running processes",
     "accessibility_audit" to "accessibility services", "receiver_audit" to "app receivers",
     "appops_audit" to "app permissions in use",
+    // androdr-110 (R28): a listed app uninstalled before the check, seen in a bug report's battery history.
+    "battery_daily" to "past app uninstalls",
 )
 private fun words(service: String) = SERVICE_WORDS[service] ?: service
 

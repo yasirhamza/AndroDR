@@ -4,7 +4,8 @@
     "label": "Cellebrite",
     "aliases": [],
     "detected_by": [
-      "app_scanner"
+      "app_scanner",
+      "battery_daily"
     ]
   },
   {
@@ -37,6 +38,7 @@
     "aliases": [],
     "detected_by": [
       "app_scanner",
+      "battery_daily",
       "dns_monitor"
     ]
   },

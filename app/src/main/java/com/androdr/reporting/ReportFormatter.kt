@@ -9,6 +9,7 @@ import com.androdr.data.model.TelemetryState
 import com.androdr.sigma.Evidence
 import com.androdr.sigma.Finding
 import com.androdr.sigma.LiveRecordBuilders
+import com.androdr.sigma.SigmaCorrelationEngine
 import java.io.Writer
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -469,10 +470,12 @@ object ReportFormatter {
         chains.sortedByDescending { severityOrdinal(it.level) }.forEach { chain ->
             appendFinding(chain)
             val pkg = chain.matchContext["package_name"].orEmpty()
-            val members = chain.matchContext["member_event_ids"].orEmpty()
-                .split(',').count { it.isNotBlank() }
+            // A chain saved before signal members existed (spec §5.4) has no member_count: it
+            // prints its linked events without a number rather than a false "0".
+            val linked = chain.matchContext[SigmaCorrelationEngine.MEMBER_COUNT]?.toIntOrNull()
+                ?.let { "$it linked event(s)" } ?: "linked events"
             val where = if (pkg.isNotEmpty()) "App: $pkg" else "Device-wide"
-            appendLine("           $where -- $members linked event(s); open the Timeline to see them")
+            appendLine("           $where -- $linked; open the Timeline to see them")
         }
     }
 
@@ -582,10 +585,6 @@ object ReportFormatter {
 
     /** Heading for the checks that produced no verdict (#366, #370). */
     const val NOT_CHECKED_SECTION = "WHAT THIS SCAN COULD NOT CHECK"
-
-    /** Under an import's dns_monitor section: its is_blocked / reason values are not verdicts (#375). */
-    const val DNS_IMPORT_NOTE = "  Imported queries: AndroDR was not in the path, so is_blocked and reason were " +
-        "not recorded by the import (the values below are defaults, not verdicts); detections are in FINDINGS."
 
     /** Under a live scan's dns_monitor section: what a null reason means. */
     const val DNS_LIVE_NOTE = "  reason: null means the tunnel had no match when the domain was queried; " +

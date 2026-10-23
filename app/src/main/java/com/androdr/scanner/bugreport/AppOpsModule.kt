@@ -1,9 +1,9 @@
 package com.androdr.scanner.bugreport
 
 import android.util.Log
-import com.androdr.data.model.TimelineEvent
 import com.androdr.ioc.IndicatorResolver
-import java.text.SimpleDateFormat
+import java.time.LocalDateTime
+import java.time.format.DateTimeFormatter
 import java.util.Locale
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -42,14 +42,21 @@ class AppOpsModule @Inject constructor() : BugreportModule {
     // Line-by-line state machine with emit-on-transition logic — the method is a single
     // sequential pass through UID→Package→Op→Access/Reject states; splitting would fragment
     // the state transitions across functions without reducing real complexity.
+    override suspend fun analyze(
+        sectionText: String,
+        iocResolver: IndicatorResolver,
+        device: com.androdr.ioc.DeviceIdentity,
+    ): ModuleResult = analyze(sectionText, iocResolver, device, DumpsysClock.ASSUMED_UTC)
+
+    /** Access times are the capture device's wall clock, read with the import's [clock] (R27). */
     @Suppress("LongMethod")
     override suspend fun analyze(
         sectionText: String,
         iocResolver: IndicatorResolver,
         device: com.androdr.ioc.DeviceIdentity,
+        clock: DumpsysClock,
     ): ModuleResult {
         val telemetry = mutableListOf<Map<String, Any?>>()
-        val timeline = mutableListOf<TimelineEvent>()
 
         var currentUid = -1
         var isSystemUid = true
@@ -65,11 +72,9 @@ class AppOpsModule @Inject constructor() : BugreportModule {
             if (!isEnumeratedOp) return
 
             val normalizedOp = "android:${op.lowercase()}"
-            // Parse the last-access time once so we can share it between the
-            // telemetry record (as `event_time_ms`, for SIGMA findings to
-            // inherit into their Timeline event) and the timeline event
-            // emitted below.
-            val accessTimestamp = lastAccessTime?.let { parseTimestamp(it) }
+            // The last-access time, published as `event_time_ms` so SIGMA findings inherit it
+            // into their Timeline row (the record itself is an event fact in the store).
+            val accessTimestamp = lastAccessTime?.let { parseTimestamp(it, clock) }
                 ?.takeIf { it > 0L }
 
             telemetry.add(mapOf(
@@ -90,25 +95,6 @@ class AppOpsModule @Inject constructor() : BugreportModule {
                 // TimelineAdapter treats 0L as "unknown" the same way.
                 "event_time_ms" to (accessTimestamp ?: 0L)
             ))
-
-            if (!isSystemUid && accessTimestamp != null) {
-                timeline.add(TimelineEvent(
-                    timestamp = accessTimestamp,
-                    source = "appops",
-                    category = "permission_use",
-                    description = "$pkg used $op" +
-                        (lastAccessTime?.let { " at $it" } ?: ""),
-                    // Severity is not assigned here; rule engine findings derived
-                    // from the emitted telemetry carry their own severity via
-                    // SIGMA YAML. Timeline events for raw ops default to INFO.
-                    severity = "INFO",
-                    // Carried so the ScanOrchestrator dedup pass can match
-                    // this raw event against any SIGMA finding that fired
-                    // on the same (package, timestamp) tuple and drop the
-                    // raw row before persisting. See analyzeBugReport().
-                    packageName = pkg
-                ))
-            }
         }
 
         var lineCount = 0
@@ -167,13 +153,11 @@ class AppOpsModule @Inject constructor() : BugreportModule {
         // Emit the last op if any
         emitCurrentOp()
 
-        Log.d(TAG, "AppOps: $lineCount lines, ${telemetry.size} telemetry, " +
-            "${timeline.size} timeline events")
+        Log.d(TAG, "AppOps: $lineCount lines, ${telemetry.size} telemetry")
 
         return ModuleResult(
             telemetry = telemetry,
             telemetryService = "appops_audit",
-            timeline = timeline
         )
     }
 
@@ -201,13 +185,15 @@ class AppOpsModule @Inject constructor() : BugreportModule {
 
     private val uidStringRegex = Regex("""u(\d+)(ai|[ais])(\d+)""")
 
-    /** Parses "2026-03-27 14:30:00" or "2026-03-27 14:30:00.692" to epoch millis. */
+    /**
+     * Parses "2026-03-27 14:30:00" or "2026-03-27 14:30:00.692", a wall-clock time of the capture
+     * device, to epoch millis with the import's [clock] (never the analyzing device's zone).
+     */
     @Suppress("TooGenericExceptionCaught")
-    private fun parseTimestamp(ts: String): Long = try {
-        val normalized = ts.substringBefore(".")
-        val base = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).parse(normalized)?.time
+    private fun parseTimestamp(ts: String, clock: DumpsysClock): Long = try {
+        val base = clock.epochMs(LocalDateTime.parse(ts.substringBefore(".").trim(), WALL_CLOCK))
         when {
-            base == null || base < 0 -> -1L
+            base < 0 -> -1L
             ts.contains(".") -> {
                 val frac = ts.substringAfter(".")
                 base + frac.take(3).padEnd(3, '0').toLong()
@@ -222,6 +208,7 @@ class AppOpsModule @Inject constructor() : BugreportModule {
     // AOSP constants from android.os.Process / android.os.UserHandle
     private companion object {
         private const val TAG = "AppOpsModule"
+        private val WALL_CLOCK: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss", Locale.US)
         private const val PER_USER_RANGE = 100000
         private const val FIRST_APPLICATION_UID = 10000
         private const val FIRST_ISOLATED_UID = 99000

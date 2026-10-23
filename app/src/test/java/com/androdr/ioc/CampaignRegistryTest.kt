@@ -145,9 +145,10 @@ class CampaignRegistryTest {
         val byKey = CampaignRegistry.parseBundled(bundledJson).associate { it.key to it.detectedBy }
         assertEquals(
             mapOf(
-                "cellebrite" to listOf("app_scanner"), "graphite" to listOf("dns_monitor"),
+                "cellebrite" to listOf("app_scanner", "battery_daily"), "graphite" to listOf("dns_monitor"),
                 "landfall" to emptyList(), "massistant" to listOf("app_scanner"),
-                "midnight-mimosa" to listOf("app_scanner", "dns_monitor"), "pegasus" to listOf("dns_monitor"),
+                "midnight-mimosa" to listOf("app_scanner", "battery_daily", "dns_monitor"),
+                "pegasus" to listOf("dns_monitor"),
                 "predator" to listOf("dns_monitor", "file_scanner"),
             ),
             byKey,

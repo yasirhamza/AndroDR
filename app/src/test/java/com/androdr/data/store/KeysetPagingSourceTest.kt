@@ -91,6 +91,32 @@ class KeysetPagingSourceTest {
         assertFalse(awaitInvalid(s, attempts = 30))
     }
 
+    /** A source Paging drops without invalidating it (its collector cancelled) must be collectable. */
+    @Test
+    fun `an abandoned source is not kept alive by the invalidation tracker`() = runBlocking {
+        val ref = abandon()
+        repeat(50) {
+            if (ref.get() == null) return@runBlocking
+            System.gc()
+            @Suppress("UNUSED_VARIABLE") val pressure = ByteArray(1 shl 20)
+            Thread.sleep(10)
+        }
+        assertNull("the tracker still holds the abandoned source (A5 strong-observer leak)", ref.get())
+    }
+
+    /** Loads a source on a thread of its own (so no caller frame keeps it) and drops it. */
+    private fun abandon(): java.lang.ref.WeakReference<PagingSource<Int, DecodedRecord>> {
+        var ref: java.lang.ref.WeakReference<PagingSource<Int, DecodedRecord>>? = null
+        val t = Thread {
+            val s = source()
+            runBlocking { s.page(PagingSource.LoadParams.Refresh(null, 10, false)) }
+            ref = java.lang.ref.WeakReference(s)
+        }
+        t.start()
+        t.join()
+        return ref!!
+    }
+
     @Test
     fun `observes only tables that exist in the current schema`() {
         val existing = f.db.openHelper.readableDatabase.query("SELECT name FROM sqlite_master WHERE type = 'table'")

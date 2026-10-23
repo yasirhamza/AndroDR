@@ -67,12 +67,11 @@ class WriterEvaluationTest {
             IntrusionLogZips.rule("androdr-e1-app", "app_scanner", "package_name", "com.app5001", "high")))
         s.f.use { f ->
             coEvery { f.appScanner.collectTelemetry() } returns (0..5_001).map { OrchestratorFixture.app("com.app$it") }
-            coEvery { f.dnsEventDao.getRecentSnapshot() } returns listOf(
-                com.androdr.data.model.DnsEvent(id = 3, timestamp = 1L, domain = "a.example", appUid = 1,
-                    appName = null, isBlocked = false, reason = null))
-            coEvery { f.usageStatsScanner.collectEvents() } returns listOf(
+            f.db.dnsEventDao().insert(com.androdr.data.model.DnsEvent(timestamp = System.currentTimeMillis(),
+                domain = "a.example", appUid = 1, appName = null, isBlocked = false, reason = null))
+            coEvery { f.usageStatsScanner.collectEvents(any(), any()) } returns UsageCollection.Ok(listOf(
                 com.androdr.data.model.UsageEvent(5L, "com.a", "A", "app_foreground",
-                    com.androdr.data.model.TelemetrySource.LIVE_SCAN, 6L))
+                    com.androdr.data.model.TelemetrySource.LIVE_SCAN, 6L)))
 
             val scan = f.orchestrator.runFullScan()
 

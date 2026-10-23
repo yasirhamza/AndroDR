@@ -271,13 +271,16 @@ the watermark registry; no other list exists.
 A record is an **event record iff its service declares an `event_time_field`
 and the record's value is present and > 0**.
 
-**Timeline categories** (`TimelineCategories`) preserve today's values exactly:
+**Timeline categories** (`TimelineCategories`) preserve today's values exactly: the atoms a fact
+yields equal the legacy timeline rows' atoms. Where a service's facts include events the legacy
+timeline never wrote as that category, they get their own precise category (ruling R26; rules may
+opt in later):
 
 | Service | Category |
 |---|---|
 | `usage_stats` | the record's `event_type` |
-| `appops_audit` | `permission_use` |
-| `package_install_history` | `package_install` |
+| `appops_audit` | `system_permission_use` when `is_system_app` is true (no legacy row), else `permission_use` |
+| `package_install_history` | by `event_type`: `INSTALL` → `package_install`, `UPDATE` → `package_update`, `UNINSTALL` → `package_uninstall` |
 | `battery_daily` | the record's `event_type` |
 | `network_monitor` | `network_connect` |
 | `security_log` | `security_event` |
@@ -406,7 +409,7 @@ Failure handling:
 **Correlation inputs.**
 - Atoms are restricted to the categories atom rules bind (the correlator's memory bound).
 - Exact-precision facts only.
-- Facts referenced by a `forensic_timeline` row (`recordId`, or `sourceKey` = the row's `sourceEventKey`) are excluded.
+- Facts referenced by a `forensic_timeline` row in an atom-bound category (`recordId`, or `sourceKey` = the row's `sourceEventKey`) are excluded: that row is the event's atom. A finding row (never an atom category) does not exclude its fact. Known residual: the test is global, so a stand-in row outside the atoms being read (e.g. a live `ioc_match` row stamped after `scanStart`) hides the fact and the event binds zero times — never twice.
 - For a live scan, lookback atoms are bounded to `timestamp ≤ scanStart`, exclude every import source, and read rows through `VisibleRow.SQL` (so rows of `DELETING` scans are never bound).
 - An import correlates over its own scan's atoms only (no lookback), so an import's signal never references live rows or facts.
 
@@ -458,6 +461,8 @@ records that fill the `TelemetryBundle`, each emitting every fact it parses:
 
 Other module changes:
 - **`WakelockParser`**: its time base becomes the bug report's own capture time, taken from its header.
+- **One time base per import** (ruling R27): every dumpsys wall-clock time (the capture header, AppOps access times, package install/update times) is read with one `DumpsysClock` in the capture device's zone, `persist.sys.timezone` from SYSTEM PROPERTIES, resolved with `java.time.ZoneId` (DST per timestamp). Without the property, wall-clock times are read as UTC and the import card says "times assume UTC". Bases are never mixed within an import, and the analyzing device's zone is never used.
+- **Day precision is a calendar date** (ruling R32, amending R27 for day boundaries): a `day`-precision time (battery daily stats) is not an instant. It is stored as UTC midnight of the date the report printed (`LocalDate.atStartOfDay(ZoneOffset.UTC)`), whatever the capture zone or whether one is known, and every reader formats it in UTC (CSV `isodate`, plaintext, the detail sheet, the report's stored-telemetry section), so it shows the printed date in any viewer zone. The Timeline groups a day fact under that date started in the filter zone, sorts it at its stored time, and shows it date-only ("(date only)", ruling R31); a day header's count includes the day facts of its date. Day facts never become correlation atoms (K1). Known display limit: west of UTC a day fact sorts at its UTC midnight (the previous local evening), so its date header can appear a second time in the list; no entry is lost or duplicated.
 - **`AdbKeysModule`**: its records are snapshots.
 
 In C3, the hand-built `TimelineEvent` rows, `ModuleResult.timeline`, `BugReportAnalysisResult.timeline`, `TimelineFormatter` and `TimelineEvent.kt` are removed. At the same time, a one-time cleanup deletes legacy event rows.

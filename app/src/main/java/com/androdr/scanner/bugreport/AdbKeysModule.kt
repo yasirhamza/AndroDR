@@ -1,6 +1,5 @@
 package com.androdr.scanner.bugreport
 
-import com.androdr.data.model.TimelineEvent
 import com.androdr.ioc.IndicatorResolver
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -25,7 +24,6 @@ class AdbKeysModule @Inject constructor() : BugreportModule {
         device: com.androdr.ioc.DeviceIdentity,
     ): ModuleResult {
         val telemetry = mutableListOf<Map<String, Any?>>()
-        val timeline = mutableListOf<TimelineEvent>()
 
         val trustKeysStart = sectionText.indexOf("USB debugging")
             .takeIf { it >= 0 }
@@ -47,19 +45,11 @@ class AdbKeysModule @Inject constructor() : BugreportModule {
                 "key_fragment" to keyFragment,
                 "host" to host
             ))
-            timeline.add(TimelineEvent(
-                timestamp = 0,
-                source = SERVICE,
-                category = "adb_trusted_key",
-                description = "ADB trusted key: $host ($keyFragment)",
-                severity = "INFO"
-            ))
         }
 
         return ModuleResult(
             telemetry = telemetry,
             telemetryService = SERVICE,
-            timeline = timeline
         )
     }
 

@@ -1,5 +1,6 @@
 package com.androdr.scanner
 
+import com.androdr.data.db.getAllForExport
 import com.androdr.data.db.Converters
 import com.androdr.data.model.ScanState
 import com.androdr.data.model.TelemetrySource

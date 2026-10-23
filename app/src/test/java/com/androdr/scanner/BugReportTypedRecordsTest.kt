@@ -163,16 +163,18 @@ class BugReportTypedRecordsTest {
     }
 
     @Test
-    fun `install history matches the InstallTimeModule timeline rows`() {
+    fun `install history has one INSTALL record per package with a first-install time`() {
         val section = fixtureText().substringAfter("------ SERVICE package ------")
             .substringBefore("------ SERVICE ")
-        val rows = InstallTimeModule().parseSection(section)
+        // The packages the retired install-time rows covered (C3): every block with a firstInstallTime.
+        val expected = section.split(Regex("(?m)^\\s*(?=Package \\[)")).mapNotNull { block ->
+            val pkg = Regex("^Package \\[([^\\]]+)\\]").find(block)?.groupValues?.get(1)
+            pkg?.takeIf { "firstInstallTime=" in block }
+        }
         val history = InstallTimeModule().parseHistory(section, capturedAt = 1L)
-        assertEquals(
-            rows.map { it.packageName to it.startTimestamp },
-            history.filter { it.eventType == PackageHistoryEventType.INSTALL }
-                .map { it.packageName to it.timestamp },
-        )
+        assertTrue("the fixture has packages: $expected", expected.isNotEmpty())
+        val installs = history.filter { it.eventType == PackageHistoryEventType.INSTALL }
+        assertEquals(expected, installs.map { it.packageName })
     }
 
     @Test
@@ -184,6 +186,28 @@ class BugReportTypedRecordsTest {
             .telemetryBundle.wakelockAcquisitions.single()
         val after = System.currentTimeMillis()
         assertTrue(wakelock.acquiredAt + offset in before..after)
+    }
+
+    /**
+     * Ruling R27: the capture zone (persist.sys.timezone) is the time base of the whole import, so
+     * the header (and the wakelock times derived from it) are read in Asia/Qatar, not as UTC, and no
+     * "times assume UTC" note is added.
+     */
+    @Test
+    fun `the report's own time zone is the import's time base`() {
+        val zoned = fixtureText().replace("[ro.product.brand]: [google]",
+            "[ro.product.brand]: [google]\n[persist.sys.timezone]: [Asia/Qatar]")
+        val result = analyze(buildAnalyzer(zoned, defaultModules()))
+        val header = LocalDateTime.of(2026, 3, 28, 10, 15, 30).toInstant(ZoneOffset.ofHours(3)).toEpochMilli()
+        assertEquals(header - (2 * 3_600_000L + 15 * 60_000L + 30_000L),
+            result.telemetryBundle.wakelockAcquisitions.single().acquiredAt)
+        assertTrue("no assumption to report", result.importNotes.isEmpty())
+    }
+
+    /** R27 fallback: no persist.sys.timezone, so times are read as UTC and the import says so. */
+    @Test
+    fun `a report without a time zone is read as UTC with an import note`() {
+        assertEquals(listOf(com.androdr.scanner.bugreport.DumpsysClock.NOTE_ASSUMED_UTC), analyze().importNotes)
     }
 
     @Test

@@ -1,5 +1,6 @@
 package com.androdr.reporting
 
+import com.androdr.data.model.CivilDay
 import com.androdr.data.db.ServiceSummary
 import com.androdr.data.model.ScanResult
 import com.androdr.data.model.TelemetrySource
@@ -28,31 +29,21 @@ internal suspend fun ReportOut.appendStoredTelemetry(
     appendLine("  ${telemetryLine(scan.telemetryState, services.sumOf { it.records }, services.size)}")
     appendLine()
     val timeFmt = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US)
-    val dayFmt = SimpleDateFormat("yyyy-MM-dd", Locale.US)
     services.forEach { service ->
         section("${ReportFormatter.STORED_TELEMETRY_SECTION}: ${service.service} (${service.records} record(s))")
-        if (service.service == LiveRecordBuilders.DNS_MONITOR) appendDnsNote(scan.source)
-        telemetry.forEach(scan.id, service.service) { r -> appendRecord(r, timeFmt, dayFmt) }
+        if (service.service == LiveRecordBuilders.DNS_MONITOR && scan.source == TelemetrySource.LIVE_SCAN) {
+            appendLine(ReportFormatter.DNS_LIVE_NOTE)
+        }
+        telemetry.forEach(scan.id, service.service) { r -> appendRecord(r, timeFmt) }
     }
 }
 
-/**
- * What a DNS record's `is_blocked` / `reason` fields mean here. An import's parser fills them with
- * the tunnel's defaults although AndroDR was never in the path, so printed bare they read as
- * "seen and allowed" beside a FINDINGS entry naming the same domain (#375). A live record's null
- * reason means the tunnel had no match when it was queried, not that the domain is clean.
- */
-private fun ReportOut.appendDnsNote(source: TelemetrySource) {
-    appendLine(
-        if (source == TelemetrySource.LIVE_SCAN) ReportFormatter.DNS_LIVE_NOTE else ReportFormatter.DNS_IMPORT_NOTE
-    )
-}
-
-private fun ReportOut.appendRecord(r: DecodedRecord, timeFmt: SimpleDateFormat, dayFmt: SimpleDateFormat) {
+private fun ReportOut.appendRecord(r: DecodedRecord, timeFmt: SimpleDateFormat) {
     val head = StringBuilder("  [").append(r.ordinal).append("] captured ").append(timeFmt.format(Date(r.capturedAt)))
     r.eventTime?.let { t ->
-        val fmt = if (r.precision == TimePrecision.DAY) dayFmt else timeFmt
-        head.append("  event ").append(fmt.format(Date(t)))
+        // A day-precision time is a calendar date stored as its UTC midnight (R32): read it in UTC.
+        val event = if (r.precision == TimePrecision.DAY) CivilDay.format(t) else timeFmt.format(Date(t))
+        head.append("  event ").append(event)
     }
     r.category?.let { head.append("  (").append(it).append(')') }
     appendLine(head)

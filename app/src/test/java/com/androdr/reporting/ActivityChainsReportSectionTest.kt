@@ -24,7 +24,7 @@ class ActivityChainsReportSectionTest {
         category = FindingCategory.CORRELATION,
         triggered = true,
         tags = listOf("attack.t1626"),
-        matchContext = mapOf("package_name" to "com.evil.app", "member_event_ids" to "11,12"),
+        matchContext = mapOf("package_name" to "com.evil.app", "member_count" to "2"),
     )
     private val appRisk = Finding(
         ruleId = "androdr-010", title = "Sideloaded Application", level = "medium",
@@ -65,6 +65,38 @@ class ActivityChainsReportSectionTest {
         assertTrue(section.contains("com.evil.app"))
         assertTrue(section.contains("HIGH"))
         assertTrue(section.contains(chain.description))
+    }
+
+    /** Review m-8: a budget cut-off is printed under its own not-checked heading, naming the package. */
+    @Test
+    fun `a correlation cut-off is listed under its own heading with rule and package`() {
+        val cut = com.androdr.data.model.ScannerFailure(
+            scanner = "correlation",
+            exception = com.androdr.data.model.NotEvaluatedReason.CORRELATION_INCOMPLETE.sentinel,
+            message = "Burst (androdr-corr-004): not finished in time for com.flood",
+            ruleId = "androdr-corr-004", packages = listOf("com.flood"),
+        )
+        val text = report(scanOf(chain).copy(scannerErrors = listOf(cut)))
+        assertTrue(text, text.contains(com.androdr.data.model.NotEvaluatedReason.CORRELATION_INCOMPLETE.heading))
+        assertTrue(text, text.contains("- Burst (androdr-corr-004): not finished in time for com.flood"))
+    }
+
+    @Test
+    fun `a chain prints its member count from member_count`() {
+        val text = report(scanOf(chain))
+        assertTrue(text, text.contains("App: com.evil.app -- 2 linked event(s); open the Timeline to see them"))
+    }
+
+    /**
+     * A chain saved before signal members existed carries no `member_count` (its legacy list is not
+     * read by any report code, spec §6 gate). It must never print "0 linked event(s)".
+     */
+    @Test
+    fun `a legacy chain without member_count prints linked events with no number`() {
+        val legacy = chain.copy(matchContext = mapOf("package_name" to "com.evil.app"))
+        val text = report(scanOf(legacy))
+        assertTrue(text, text.contains("App: com.evil.app -- linked events; open the Timeline to see them"))
+        assertTrue(text, !text.contains("0 linked event(s)"))
     }
 
     @Test

@@ -85,14 +85,14 @@ internal class ScanRecordPagingSource(
 
     override fun keyOf(item: DecodedRecord): Int = item.ordinal
 
-    override suspend fun loadFrom(from: Int?, size: Int): List<DecodedRecord> =
-        dao.pageAfter(scanId, service, (from ?: Int.MIN_VALUE + 1) - 1, size).map(decoder::decode)
+    override suspend fun loadFrom(from: Int?, size: Int) =
+        slice(dao.pageAfter(scanId, service, (from ?: Int.MIN_VALUE + 1) - 1, size).map(decoder::decode))
 
-    override suspend fun loadAfter(after: Int, size: Int): List<DecodedRecord> =
-        dao.pageAfter(scanId, service, after, size).map(decoder::decode)
+    override suspend fun loadAfter(after: Int, size: Int) =
+        slice(dao.pageAfter(scanId, service, after, size).map(decoder::decode))
 
-    override suspend fun loadBefore(before: Int, size: Int): List<DecodedRecord> =
-        dao.pageBefore(scanId, service, before, size).map(decoder::decode)
+    override suspend fun loadBefore(before: Int, size: Int) =
+        slice(dao.pageBefore(scanId, service, before, size).map(decoder::decode))
 }
 
 /**
@@ -179,6 +179,13 @@ class TelemetryReader @Inject constructor(
         forEach(scanId, service) { out += it }
         return out
     }
+
+    /**
+     * Up to [size] facts of [service] stamped at or after [since] that a COMPLETE live scan observed,
+     * with fact id > [afterId], ascending by id (the late-IOC re-check's keyset page, spec §5.2).
+     */
+    suspend fun liveFactsSince(service: String, since: Long, afterId: Long, size: Int): List<DecodedRecord> =
+        dao.liveFactsSince(service, since, afterId, size).map(decoder::decode)
 
     /** The visible facts among [factIds] (batched; missing or invisible ids are omitted). */
     suspend fun records(factIds: List<Long>): List<DecodedRecord> =

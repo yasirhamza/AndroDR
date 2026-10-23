@@ -1,11 +1,10 @@
 package com.androdr.scanner.bugreport
 
 import com.androdr.data.model.BatteryDailyEvent
+import com.androdr.data.model.CivilDay
 import com.androdr.data.model.TelemetrySource
-import com.androdr.data.model.TimelineEvent
 import com.androdr.ioc.IndicatorResolver
 import java.time.LocalDate
-import java.time.ZoneOffset
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -25,7 +24,7 @@ class BatteryDailyModule internal constructor(private val maxRecords: Int) : Bug
     private val startTimeRegex =
         Regex("""Current start time:\s*(\d{4})-(\d{2})-(\d{2})-\d{2}-\d{2}-\d{2}""")
 
-    /** One parsed `+pkg=`/`-pkg=` entry, before it becomes a typed record and a timeline row. */
+    /** One parsed `+pkg=`/`-pkg=` entry, before it becomes a typed record. */
     private data class Change(
         val packageName: String,
         val version: Long,
@@ -38,9 +37,19 @@ class BatteryDailyModule internal constructor(private val maxRecords: Int) : Bug
         sectionText: String,
         iocResolver: IndicatorResolver,
         device: com.androdr.ioc.DeviceIdentity,
+    ): ModuleResult = analyze(sectionText, iocResolver, device, DumpsysClock.ASSUMED_UTC)
+
+    /**
+     * Battery days are calendar dates: each is stored as the report's printed date
+     * ([CivilDay], ruling R32), so [clock] (the import's instant base, R27) does not apply to them.
+     */
+    override suspend fun analyze(
+        sectionText: String,
+        iocResolver: IndicatorResolver,
+        device: com.androdr.ioc.DeviceIdentity,
+        clock: DumpsysClock,
     ): ModuleResult {
         val events = mutableListOf<BatteryDailyEvent>()
-        val timeline = mutableListOf<TimelineEvent>()
         val now = System.currentTimeMillis()
         var truncatedAt: Int? = null
 
@@ -60,11 +69,6 @@ class BatteryDailyModule internal constructor(private val maxRecords: Int) : Bug
                 source = TelemetrySource.BUGREPORT_IMPORT,
                 capturedAt = now,
             ))
-            // Severity is assigned by SIGMA rules downstream (plan 6), not here.
-            timeline.add(TimelineEvent(
-                timestamp = -1, source = "battery_daily", category = eventType,
-                description = description, severity = "INFO",
-            ))
             return true
         }
 
@@ -78,17 +82,6 @@ class BatteryDailyModule internal constructor(private val maxRecords: Int) : Bug
                 add(c, "package_update", "App updated: ${c.packageName} (version ${c.version})")
             }
             if (!ok) break
-            val iocHit = if (c.uninstall) iocResolver.isKnownBadPackage(c.packageName) else null
-            if (iocHit != null) {
-                timeline.add(TimelineEvent(
-                    timestamp = -1,
-                    source = "battery_daily",
-                    category = "package_uninstall",
-                    description = "Known ${iocHit.category} package '${c.packageName}' " +
-                        "(${iocHit.name}) was uninstalled — possible anti-forensics",
-                    severity = "INFO",
-                ))
-            }
         }
 
         // Detect version downgrades
@@ -105,8 +98,6 @@ class BatteryDailyModule internal constructor(private val maxRecords: Int) : Bug
         }
 
         return ModuleResult(
-            // Deduplicate timeline by description
-            timeline = timeline.distinctBy { it.description },
             typed = TypedTelemetry(batteryDailyEvents = events),
             truncatedAt = truncatedAt,
         )
@@ -140,9 +131,9 @@ class BatteryDailyModule internal constructor(private val maxRecords: Int) : Bug
         return out
     }
 
+    /** The printed date of a "Current start time" line, as its stored day-precision time (R32). */
     private fun dayMillis(m: MatchResult): Long? = runCatching {
-        LocalDate.of(m.groupValues[1].toInt(), m.groupValues[2].toInt(), m.groupValues[3].toInt())
-            .atStartOfDay().toInstant(ZoneOffset.UTC).toEpochMilli()
+        CivilDay.epochMs(LocalDate.of(m.groupValues[1].toInt(), m.groupValues[2].toInt(), m.groupValues[3].toInt()))
     }.getOrNull()
 
     private fun findBlockEnd(text: String, fromIndex: Int): Int {
