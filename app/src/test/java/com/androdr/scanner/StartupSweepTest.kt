@@ -148,7 +148,8 @@ class StartupSweepTest {
         coEvery { repo.completeDelete(1L) } coAnswers {
             // The sweep released the lock after its snapshot: a new session can begin now.
             w.lock.withWriter { w.writer.begin(w.scan(2L), liveEvents = false) }
-            callOriginal()
+            // The real (unspied) repo, not MockK's callOriginal: see CoAnswersCallOriginalTest.
+            w.repo.completeDelete(1L)
         }
         assertEquals(1, sweep(repo).run())
         assertEquals(null, state(1L))
