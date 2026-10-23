@@ -35,8 +35,8 @@ class PlatformCompatModuleTest {
         """.trimIndent()
 
         val result = module.analyze(section, mockIndicatorResolver, com.androdr.ioc.DeviceIdentity.UNKNOWN)
-        assertTrue(result.telemetry.any {
-            it["package_name"] == "com.suspicious.app" && it["change_id"] == "168419799"
+        assertTrue(result.typed.platformCompatChanges.any {
+            it.packageName == "com.suspicious.app" && it.changeId == "168419799" && it.enabled
         })
     }
 
@@ -48,12 +48,13 @@ class PlatformCompatModuleTest {
         """.trimIndent()
 
         val result = module.analyze(section, mockIndicatorResolver, com.androdr.ioc.DeviceIdentity.UNKNOWN)
-        assertTrue(result.telemetry.any { it["change_id"] == "999999999" })
+        assertTrue(result.typed.platformCompatChanges.any { it.changeId == "999999999" })
     }
 
     @Test
     fun `empty section produces no telemetry`() = runBlocking {
         val result = module.analyze("", mockIndicatorResolver, com.androdr.ioc.DeviceIdentity.UNKNOWN)
         assertTrue(result.telemetry.isEmpty())
+        assertTrue(result.typed.platformCompatChanges.isEmpty())
     }
 }

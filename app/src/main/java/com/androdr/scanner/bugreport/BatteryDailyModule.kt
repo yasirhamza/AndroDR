@@ -1,12 +1,18 @@
 package com.androdr.scanner.bugreport
 
+import com.androdr.data.model.BatteryDailyEvent
+import com.androdr.data.model.TelemetrySource
 import com.androdr.data.model.TimelineEvent
 import com.androdr.ioc.IndicatorResolver
+import java.time.LocalDate
+import java.time.ZoneOffset
 import javax.inject.Inject
 import javax.inject.Singleton
 
 @Singleton
-class BatteryDailyModule @Inject constructor() : BugreportModule {
+class BatteryDailyModule internal constructor(private val maxRecords: Int) : BugreportModule {
+
+    @Inject constructor() : this(BugreportModule.MAX_RECORDS_PER_MODULE)
 
     override val targetSections: List<String> = listOf("batterystats")
 
@@ -15,116 +21,129 @@ class BatteryDailyModule @Inject constructor() : BugreportModule {
         RegexOption.MULTILINE
     )
 
-    @Suppress("LongMethod") // Multi-phase analysis: parse changes, detect downgrades, IOC check, dedup
+    // "Current start time: 2026-03-28-01-00-01" heads a daily-stats entry.
+    private val startTimeRegex =
+        Regex("""Current start time:\s*(\d{4})-(\d{2})-(\d{2})-\d{2}-\d{2}-\d{2}""")
+
+    /** One parsed `+pkg=`/`-pkg=` entry, before it becomes a typed record and a timeline row. */
+    private data class Change(
+        val packageName: String,
+        val version: Long,
+        val uninstall: Boolean,
+        val dayIndex: Int,
+        val day: Long?,
+    )
+
     override suspend fun analyze(
         sectionText: String,
         iocResolver: IndicatorResolver,
         device: com.androdr.ioc.DeviceIdentity,
     ): ModuleResult {
-        val telemetry = mutableListOf<Map<String, Any?>>()
+        val events = mutableListOf<BatteryDailyEvent>()
         val timeline = mutableListOf<TimelineEvent>()
+        val now = System.currentTimeMillis()
+        var truncatedAt: Int? = null
 
-        // Track version history per package to detect downgrades
-        val versionHistory = mutableMapOf<String, MutableList<Long>>()
+        fun add(c: Change, eventType: String, description: String): Boolean {
+            if (events.size >= maxRecords) {
+                truncatedAt = maxRecords
+                return false
+            }
+            events.add(BatteryDailyEvent(
+                dayIndex = c.dayIndex,
+                eventType = eventType,
+                packageName = c.packageName,
+                description = description,
+                version = c.version,
+                timestamp = c.day,
+                timestampPrecision = c.day?.let { DAY_PRECISION },
+                source = TelemetrySource.BUGREPORT_IMPORT,
+                capturedAt = now,
+            ))
+            // Severity is assigned by SIGMA rules downstream (plan 6), not here.
+            timeline.add(TimelineEvent(
+                timestamp = -1, source = "battery_daily", category = eventType,
+                description = description, severity = "INFO",
+            ))
+            return true
+        }
 
-        // Find all Package changes: blocks
-        var searchFrom = 0
-        while (true) {
-            val blockStart = sectionText.indexOf("Package changes:", searchFrom)
-            if (blockStart < 0) break
-            searchFrom = blockStart + 16
-
-            // Find end of this block (next section or end)
-            val blockEnd = findBlockEnd(sectionText, blockStart + 16)
-            val block = sectionText.substring(blockStart, blockEnd)
-
-            packageChangeRegex.findAll(block).forEach { match ->
-                val sign = match.groupValues[1]
-                val packageName = match.groupValues[2]
-                val version = match.groupValues[3].toLongOrNull() ?: 0
-
-                versionHistory.getOrPut(packageName) { mutableListOf() }.add(version)
-
-                when (sign) {
-                    "-" -> {
-                        // Uninstall
-                        timeline.add(TimelineEvent(
-                            timestamp = -1,
-                            source = "battery_daily",
-                            category = "package_uninstall",
-                            description = "App uninstalled: $packageName",
-                            severity = "INFO"
-                        ))
-
-                        // Check IOC
-                        val iocHit = iocResolver.isKnownBadPackage(packageName)
-                        if (iocHit != null) {
-                            timeline.add(TimelineEvent(
-                                timestamp = -1,
-                                source = "battery_daily",
-                                category = "package_uninstall",
-                                description = "Known ${iocHit.category} package '$packageName' " +
-                                    "(${iocHit.name}) was uninstalled — possible anti-forensics",
-                                // Severity is assigned by SIGMA rules downstream (plan 6), not here.
-                                severity = "INFO"
-                            ))
-                        }
-                    }
-                    else -> {
-                        // Install/update — check for IOC match
-                        val iocHit = iocResolver.isKnownBadPackage(packageName)
-                        if (iocHit != null) {
-                            telemetry.add(mapOf(
-                                "package_name" to packageName,
-                                "version" to version,
-                                "event_type" to "package_install",
-                                "is_system_app" to false,
-                                "source" to "bugreport_import"
-                            ))
-                        }
-
-                        timeline.add(TimelineEvent(
-                            timestamp = -1,
-                            source = "battery_daily",
-                            category = "package_update",
-                            description = "App updated: $packageName (version $version)",
-                            severity = "INFO"
-                        ))
-                    }
-                }
+        val changes = parseChanges(sectionText)
+        val versionHistory = mutableMapOf<String, MutableList<Change>>()
+        for (c in changes) {
+            versionHistory.getOrPut(c.packageName) { mutableListOf() }.add(c)
+            val ok = if (c.uninstall) {
+                add(c, "package_uninstall", "App uninstalled: ${c.packageName}")
+            } else {
+                add(c, "package_update", "App updated: ${c.packageName} (version ${c.version})")
+            }
+            if (!ok) break
+            val iocHit = if (c.uninstall) iocResolver.isKnownBadPackage(c.packageName) else null
+            if (iocHit != null) {
+                timeline.add(TimelineEvent(
+                    timestamp = -1,
+                    source = "battery_daily",
+                    category = "package_uninstall",
+                    description = "Known ${iocHit.category} package '${c.packageName}' " +
+                        "(${iocHit.name}) was uninstalled — possible anti-forensics",
+                    severity = "INFO",
+                ))
             }
         }
 
         // Detect version downgrades
-        for ((pkg, versions) in versionHistory) {
-            val nonZero = versions.filter { it > 0 }
-            if (nonZero.size >= 2) {
-                for (i in 1 until nonZero.size) {
-                    if (nonZero[i] < nonZero[i - 1]) {
-                        timeline.add(TimelineEvent(
-                            timestamp = -1,
-                            source = "battery_daily",
-                            category = "package_downgrade",
-                            description = "Version downgrade: $pkg " +
-                                "(${nonZero[i - 1]} → ${nonZero[i]}) — " +
-                                "possible exploit re-application",
-                            // Severity is assigned by SIGMA rules downstream (plan 6), not here.
-                                severity = "INFO"
-                        ))
-                    }
+        downgrades@ for ((pkg, history) in versionHistory) {
+            val nonZero = history.filter { it.version > 0 }
+            for (i in 1 until nonZero.size) {
+                if (nonZero[i].version < nonZero[i - 1].version) {
+                    val description = "Version downgrade: $pkg " +
+                        "(${nonZero[i - 1].version} → ${nonZero[i].version}) — " +
+                        "possible exploit re-application"
+                    if (!add(nonZero[i], "package_downgrade", description)) break@downgrades
                 }
             }
         }
 
-        // Deduplicate timeline by description
-        val dedupedTimeline = timeline.distinctBy { it.description }
-
         return ModuleResult(
-            telemetry = telemetry,
-            telemetryService = "battery_daily",
-            timeline = dedupedTimeline
+            // Deduplicate timeline by description
+            timeline = timeline.distinctBy { it.description },
+            typed = TypedTelemetry(batteryDailyEvents = events),
+            truncatedAt = truncatedAt,
         )
     }
+
+    private fun parseChanges(sectionText: String): List<Change> {
+        val starts = startTimeRegex.findAll(sectionText).toList()
+        val firstDay = starts.firstOrNull()?.let { dayMillis(it) }
+        val out = mutableListOf<Change>()
+        var searchFrom = 0
+        var dayIndex = 0
+        while (true) {
+            val blockStart = sectionText.indexOf("Package changes:", searchFrom)
+            if (blockStart < 0) break
+            searchFrom = blockStart + PACKAGE_CHANGES_LEN
+
+            // Date of this block: nearest "Current start time" above it, else the section's first.
+            val day = starts.lastOrNull { it.range.first < blockStart }?.let { dayMillis(it) } ?: firstDay
+            val block = sectionText.substring(blockStart, findBlockEnd(sectionText, searchFrom))
+            packageChangeRegex.findAll(block).forEach { match ->
+                out.add(Change(
+                    packageName = match.groupValues[2],
+                    version = match.groupValues[3].toLongOrNull() ?: 0,
+                    uninstall = match.groupValues[1] == "-",
+                    dayIndex = dayIndex,
+                    day = day,
+                ))
+            }
+            dayIndex++
+        }
+        return out
+    }
+
+    private fun dayMillis(m: MatchResult): Long? = runCatching {
+        LocalDate.of(m.groupValues[1].toInt(), m.groupValues[2].toInt(), m.groupValues[3].toInt())
+            .atStartOfDay().toInstant(ZoneOffset.UTC).toEpochMilli()
+    }.getOrNull()
 
     private fun findBlockEnd(text: String, fromIndex: Int): Int {
         // Block ends at next "Daily stats:" or "Current start time:" or end of section
@@ -136,5 +155,10 @@ class BatteryDailyModule @Inject constructor() : BugreportModule {
             text.length
         )
         return candidates.min()
+    }
+
+    private companion object {
+        const val DAY_PRECISION = "day"
+        const val PACKAGE_CHANGES_LEN = 16
     }
 }

@@ -88,6 +88,7 @@ class BatteryDailyModuleTest {
         val result = module.analyze("", mockIndicatorResolver, com.androdr.ioc.DeviceIdentity.UNKNOWN)
         assertTrue(result.timeline.isEmpty())
         assertTrue(result.telemetry.isEmpty())
+        assertTrue(result.typed.batteryDailyEvents.isEmpty())
     }
 
     @Test

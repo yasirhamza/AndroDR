@@ -3,11 +3,8 @@ package com.androdr.scanner
 import android.content.Context
 import android.net.Uri
 import android.util.Log
-import com.androdr.data.model.BatteryDailyEvent
-import com.androdr.data.model.DatabasePathObservation
 import com.androdr.data.model.ForensicTimelineEvent
 import com.androdr.data.model.PackageInstallHistoryEntry
-import com.androdr.data.model.PlatformCompatChange
 import com.androdr.data.model.SystemPropertySnapshot
 import com.androdr.data.model.TimelineEvent
 import com.androdr.data.model.TombstoneEvent
@@ -18,7 +15,9 @@ import com.androdr.scanner.bugreport.BugreportModule
 import com.androdr.scanner.bugreport.DumpsysSectionParser
 import com.androdr.scanner.bugreport.GetpropParser
 import com.androdr.scanner.bugreport.InstallTimeModule
+import com.androdr.scanner.bugreport.ModuleResult
 import com.androdr.scanner.bugreport.TombstoneParser
+import com.androdr.scanner.bugreport.TypedTelemetry
 import com.androdr.scanner.bugreport.WakelockParser
 import com.androdr.sigma.Finding
 import com.androdr.sigma.SigmaRuleEngine
@@ -47,26 +46,13 @@ class BugReportAnalyzer @Inject constructor(
         private val EXTRA_SECTIONS = setOf("tombstone", "power")
     }
 
-    /**
-     * Telemetry collected from bugreport modules and plan-6 parsers, ready for
-     * SIGMA rule evaluation. Populated from TombstoneParser / WakelockParser
-     * and the ported modules' typed outputs.
-     */
-    data class TelemetryBundle(
-        val tombstoneEvents: List<TombstoneEvent> = emptyList(),
-        val wakelockAcquisitions: List<WakelockAcquisition> = emptyList(),
-        val batteryDailyEvents: List<BatteryDailyEvent> = emptyList(),
-        val packageInstallHistory: List<PackageInstallHistoryEntry> = emptyList(),
-        val platformCompatChanges: List<PlatformCompatChange> = emptyList(),
-        val databasePathObservations: List<DatabasePathObservation> = emptyList(),
-        val systemPropertySnapshots: List<SystemPropertySnapshot> = emptyList(),
-    )
-
     data class BugReportAnalysisResult(
         val findings: List<Finding>,
         val timeline: List<TimelineEvent>,
         val forensicEvents: List<ForensicTimelineEvent> = emptyList(),
-        val telemetryBundle: TelemetryBundle = TelemetryBundle(),
+        val telemetryBundle: TypedTelemetry = TypedTelemetry(),
+        /** Record bounds a module tripped (it stopped adding records); empty when none. */
+        val boundTrips: List<String> = emptyList(),
     )
 
     private val sectionParser = DumpsysSectionParser()
@@ -89,6 +75,9 @@ class BugReportAnalyzer @Inject constructor(
         var wakelockEvents: List<WakelockAcquisition> = emptyList()
         var systemPropertySnapshots: List<SystemPropertySnapshot> = emptyList()
         var sourceDevice: DeviceIdentity = DeviceIdentity.UNKNOWN
+        val moduleTyped = mutableListOf<TypedTelemetry>()
+        val boundTrips = mutableListOf<String>()
+        var installHistory = emptyList<PackageInstallHistoryEntry>()
 
         // Pre-pass: extract SYSTEM PROPERTIES section from dumpstate to derive
         // the source device identity (#90). Without this, bugreport modules
@@ -159,7 +148,8 @@ class BugReportAnalyzer @Inject constructor(
                         )
                         if (isDumpstate) {
                             Log.d(TAG, "Found dumpstate entry: ${entry.name}")
-                            val sections = sectionParser.extractSections(zip, neededSections)
+                            val dumpstate = sectionParser.extractSectionsAndHeader(zip, neededSections)
+                            val sections = dumpstate.sections
                             Log.d(TAG, "Extracted ${sections.size} sections: ${sections.keys}")
 
                             if (sections.isNotEmpty()) {
@@ -167,12 +157,20 @@ class BugReportAnalyzer @Inject constructor(
                                     allForensicEvents.addAll(
                                         installTimeModule.parseSection(packageSection)
                                     )
+                                    installHistory = capped(
+                                        installTimeModule.parseHistory(
+                                            packageSection, System.currentTimeMillis()
+                                        ),
+                                        "InstallTimeModule", boundTrips,
+                                    )
                                 }
                                 for (mod in sectionModules) {
                                     for (sectionName in mod.targetSections!!) {
                                         val sectionText = sections[sectionName] ?: continue
                                         val result = mod.analyze(sectionText, iocResolver, sourceDevice)
-                                        processModuleResult(result, allFindings, allTimelineEvents)
+                                        processModuleResult(
+                                            mod, result, allFindings, allTimelineEvents, moduleTyped, boundTrips
+                                        )
                                     }
                                 }
 
@@ -186,7 +184,9 @@ class BugReportAnalyzer @Inject constructor(
                                 sections["power"]?.let { text ->
                                     wakelockEvents = wakelockParser.parse(
                                         text.lineSequence(),
-                                        bugreportTimestamp = now,
+                                        // The report's own capture time (dumpstate header); the
+                                        // import time only when the header is missing.
+                                        bugreportTimestamp = dumpstate.captureTimeMs ?: now,
                                         capturedAt = now,
                                     )
                                 }
@@ -226,7 +226,9 @@ class BugReportAnalyzer @Inject constructor(
                     }
                     for (mod in rawModules) {
                         val result = mod.analyzeRaw(entrySequence, iocResolver, sourceDevice)
-                        processModuleResult(result, allFindings, allTimelineEvents)
+                        processModuleResult(
+                            mod, result, allFindings, allTimelineEvents, moduleTyped, boundTrips
+                        )
                     }
                 }
             } catch (e: Exception) {
@@ -235,11 +237,14 @@ class BugReportAnalyzer @Inject constructor(
         }
 
         // Plan 6: evaluate new typed telemetry via the rule engine.
-        val bundle = TelemetryBundle(
-            tombstoneEvents = tombstoneEvents,
-            wakelockAcquisitions = wakelockEvents,
-            systemPropertySnapshots = systemPropertySnapshots,
-        )
+        val bundle = moduleTyped.fold(
+            TypedTelemetry(
+                tombstoneEvents = tombstoneEvents,
+                wakelockAcquisitions = wakelockEvents,
+                packageInstallHistory = installHistory,
+                systemPropertySnapshots = systemPropertySnapshots,
+            )
+        ) { acc, typed -> acc + typed }
         allFindings.addAll(sigmaRuleEngine.evaluateTombstones(bundle.tombstoneEvents))
         allFindings.addAll(sigmaRuleEngine.evaluateWakelocks(bundle.wakelockAcquisitions))
         allFindings.addAll(sigmaRuleEngine.evaluateBatteryDaily(bundle.batteryDailyEvents))
@@ -251,20 +256,32 @@ class BugReportAnalyzer @Inject constructor(
 
         Log.d(TAG, "Collected ${allTimelineEvents.size} timeline events, " +
             "${allFindings.size} SIGMA findings")
-        BugReportAnalysisResult(allFindings, allTimelineEvents, allForensicEvents, bundle)
+        BugReportAnalysisResult(allFindings, allTimelineEvents, allForensicEvents, bundle, boundTrips)
     }
 
     private fun processModuleResult(
-        result: com.androdr.scanner.bugreport.ModuleResult,
+        mod: BugreportModule,
+        result: ModuleResult,
         allFindings: MutableList<Finding>,
-        allTimelineEvents: MutableList<TimelineEvent>
+        allTimelineEvents: MutableList<TimelineEvent>,
+        moduleTyped: MutableList<TypedTelemetry>,
+        boundTrips: MutableList<String>,
     ) {
-        if (result.telemetry.isNotEmpty()) {
-            allFindings.addAll(
-                sigmaRuleEngine.evaluateGeneric(result.telemetry, result.telemetryService)
-            )
+        val name = mod.javaClass.simpleName
+        val telemetry = capped(result.telemetry, name, boundTrips)
+        if (telemetry.isNotEmpty()) {
+            allFindings.addAll(sigmaRuleEngine.evaluateGeneric(telemetry, result.telemetryService))
         }
+        result.truncatedAt?.let { boundTrips += "$name: stopped at $it records" }
         allTimelineEvents.addAll(result.timeline)
+        moduleTyped.add(result.typed)
+    }
+
+    /** Applies the per-module record bound to [list], naming the trip in [boundTrips]. */
+    private fun <T> capped(list: List<T>, name: String, boundTrips: MutableList<String>): List<T> {
+        if (list.size <= BugreportModule.MAX_RECORDS_PER_MODULE) return list
+        boundTrips += "$name: stopped at ${BugreportModule.MAX_RECORDS_PER_MODULE} records"
+        return list.take(BugreportModule.MAX_RECORDS_PER_MODULE)
     }
 
     @Suppress("TooGenericExceptionCaught")

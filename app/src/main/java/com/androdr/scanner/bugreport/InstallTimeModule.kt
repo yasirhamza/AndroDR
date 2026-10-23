@@ -1,6 +1,9 @@
 package com.androdr.scanner.bugreport
 
 import com.androdr.data.model.ForensicTimelineEvent
+import com.androdr.data.model.PackageHistoryEventType
+import com.androdr.data.model.PackageInstallHistoryEntry
+import com.androdr.data.model.TelemetrySource
 import java.time.LocalDateTime
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
@@ -37,7 +40,37 @@ class InstallTimeModule {
     private val dateFormatter: DateTimeFormatter =
         DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss", Locale.US)
 
-    fun parseSection(text: String): List<ForensicTimelineEvent> {
+    private val versionCodeRegex = Regex("""versionCode=(\d+)""")
+
+    private data class ParsedPackage(val name: String, val firstInstallMs: Long, val versionCode: Long?)
+
+    fun parseSection(text: String): List<ForensicTimelineEvent> = parsePackages(text).map {
+        ForensicTimelineEvent(
+            startTimestamp = it.firstInstallMs,
+            kind = "event",
+            category = "package_install",
+            source = "bugreport",
+            description = "Package installed: ${it.name}",
+            packageName = it.name,
+            appName = it.name,
+            telemetrySource = TelemetrySource.BUGREPORT_IMPORT
+        )
+    }
+
+    /** The typed install-history records for the same packages [parseSection] turns into rows. */
+    fun parseHistory(text: String, capturedAt: Long): List<PackageInstallHistoryEntry> =
+        parsePackages(text).map {
+            PackageInstallHistoryEntry(
+                packageName = it.name,
+                eventType = PackageHistoryEventType.INSTALL,
+                timestamp = it.firstInstallMs,
+                versionCode = it.versionCode,
+                source = TelemetrySource.BUGREPORT_IMPORT,
+                capturedAt = capturedAt,
+            )
+        }
+
+    private fun parsePackages(text: String): List<ParsedPackage> {
         val packageStarts = packageHeaderRegex.findAll(text).toList()
         if (packageStarts.isEmpty()) return emptyList()
 
@@ -62,16 +95,8 @@ class InstallTimeModule {
                 }
                 ?: return@mapIndexedNotNull null
 
-            ForensicTimelineEvent(
-                startTimestamp = firstInstallMs,
-                kind = "event",
-                category = "package_install",
-                source = "bugreport",
-                description = "Package installed: $pkg",
-                packageName = pkg,
-                appName = pkg,
-                telemetrySource = com.androdr.data.model.TelemetrySource.BUGREPORT_IMPORT
-            )
+            val versionCode = versionCodeRegex.find(packageBlock)?.groupValues?.get(1)?.toLongOrNull()
+            ParsedPackage(pkg, firstInstallMs, versionCode)
         }
     }
 }
