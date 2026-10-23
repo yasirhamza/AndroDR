@@ -1,22 +1,18 @@
 package com.androdr.ui.history
 
-import android.content.Context
 import android.net.Uri
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.androdr.data.db.DnsEventDao
-import kotlinx.coroutines.flow.first
 import com.androdr.data.model.ScanResult
 import com.androdr.data.repo.ScanRepository
+import com.androdr.reporting.ExportEstimate
 import com.androdr.reporting.ExportMode
 import com.androdr.reporting.ReportExporter
-import com.androdr.reporting.ReportFormatter
-import com.androdr.reporting.ReportInputs
+import com.androdr.reporting.ReportSummary
 import com.androdr.scanner.ScanOrchestrator
-import com.androdr.util.appVersion
 import dagger.hilt.android.lifecycle.HiltViewModel
-import dagger.hilt.android.qualifiers.ApplicationContext
-import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -24,7 +20,6 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import javax.inject.Inject
 
 @HiltViewModel
@@ -32,10 +27,6 @@ class HistoryViewModel @Inject constructor(
     private val repository: ScanRepository,
     private val orchestrator: ScanOrchestrator,
     private val reportExporter: ReportExporter,
-    private val dnsEventDao: DnsEventDao,
-    private val forensicTimelineEventDao: com.androdr.data.db.ForensicTimelineEventDao,
-    private val reportInputs: ReportInputs,
-    @ApplicationContext private val appContext: Context
 ) : ViewModel() {
 
     /** Full scan history, newest first. */
@@ -74,58 +65,93 @@ class HistoryViewModel @Inject constructor(
     private val _exporting = MutableStateFlow(false)
     val exporting: StateFlow<Boolean> = _exporting.asStateFlow()
 
+    /** True after an export failed (nothing was shared); the screen says so. */
+    private val _exportFailed = MutableStateFlow(false)
+    val exportFailed: StateFlow<Boolean> = _exportFailed.asStateFlow()
+
+    fun dismissExportFailed() { _exportFailed.value = false }
+
     /** The scan currently shown in the detail bottom sheet; null when sheet is hidden. */
     private val _sheetScan = MutableStateFlow<ScanResult?>(null)
     val sheetScan: StateFlow<ScanResult?> = _sheetScan.asStateFlow()
 
-    /** Formatted report text for the bottom sheet scan. */
-    private val _sheetReportText = MutableStateFlow("")
-    val sheetReportText: StateFlow<String> = _sheetReportText.asStateFlow()
+    /**
+     * The sheet's summary of [sheetScan] (spec §7: the History sheet shows a summary; the full
+     * report is exported through [ReportExporter]). Null while it loads.
+     */
+    private val _sheetSummary = MutableStateFlow<ReportSummary?>(null)
+    val sheetSummary: StateFlow<ReportSummary?> = _sheetSummary.asStateFlow()
+
+    /** True when the sheet's summary could not be read. */
+    private val _sheetFailed = MutableStateFlow(false)
+    val sheetFailed: StateFlow<Boolean> = _sheetFailed.asStateFlow()
+
+    /** What exporting the scan in the export dialog would carry; null while it loads. */
+    private val _exportEstimate = MutableStateFlow<ExportEstimate?>(null)
+    val exportEstimate: StateFlow<ExportEstimate?> = _exportEstimate.asStateFlow()
 
     fun selectScan(scan: ScanResult) {
         _selectedScan.value = scan
     }
 
-    /** Opens the detail bottom sheet for [scan] and generates the report text. */
+    /** Opens the detail bottom sheet for [scan] and loads its summary (off the main thread). */
+    @Suppress("TooGenericExceptionCaught") // any read failure is shown, never a crash
     fun openSheet(scan: ScanResult) {
         _sheetScan.value = scan
+        _sheetSummary.value = null
+        _sheetFailed.value = false
         viewModelScope.launch {
-            val dnsEvents = dnsEventDao.getRecentSnapshot()
-            val inventory = orchestrator.lastAppTelemetry
-            // Scoped to THIS scan, like ReportExporter: without them an imported
-            // scan's DNS section would report that the import carried no DNS at all.
-            val intrusionEvents = forensicTimelineEventDao
-                .getEventsBySourceForScan("intrusion_log", scan.id, INTRUSION_ROW_LIMIT).first()
-            // Same inputs as ReportExporter, so a History-opened report shows the same campaign rows.
-            val campaigns = withContext(Dispatchers.IO) { reportInputs.campaigns() }
-            val ruleScopes = withContext(Dispatchers.IO) { reportInputs.ruleScopes() }
-            _sheetReportText.value = ReportFormatter.formatScanReport(
-                scan, dnsEvents, emptyList(), inventory,
-                versionName = appContext.appVersion().name,
-                intrusionEvents = intrusionEvents,
-                campaigns = campaigns,
-                ruleScopes = ruleScopes,
-                ruleCategoryById = reportInputs.ruleCategoryById(),
-            )
+            try {
+                val summary = reportExporter.summary(scan)
+                if (_sheetScan.value?.id == scan.id) _sheetSummary.value = summary
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.w(TAG, "summary read failed", e)
+                if (_sheetScan.value?.id == scan.id) _sheetFailed.value = true
+            }
         }
     }
 
     /** Closes the detail bottom sheet. */
     fun closeSheet() {
         _sheetScan.value = null
-        _sheetReportText.value = ""
+        _sheetSummary.value = null
+        _sheetFailed.value = false
+    }
+
+    /** Loads what exporting [scan] would carry, for the export dialog. */
+    @Suppress("TooGenericExceptionCaught") // an unknown estimate is shown as unknown
+    fun loadExportEstimate(scan: ScanResult) {
+        _exportEstimate.value = null
+        viewModelScope.launch {
+            _exportEstimate.value = try {
+                reportExporter.exportEstimate(scan)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.w(TAG, "export estimate failed", e)
+                null
+            }
+        }
     }
 
     /**
      * Exports [scan] to a cached text file and emits its [FileProvider] URI via
      * [shareUri]. The Composable observes [shareUri] and fires the share intent.
      */
+    @Suppress("TooGenericExceptionCaught") // a failed export is reported, never a crash
     fun exportReport(scan: ScanResult, mode: ExportMode = ExportMode.BOTH) {
         if (_exporting.value) return
         viewModelScope.launch {
             _exporting.value = true
             try {
                 _shareUri.value = reportExporter.export(scan, mode)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.w(TAG, "report export failed", e)
+                _exportFailed.value = true
             } finally {
                 _exporting.value = false
             }
@@ -175,7 +201,6 @@ class HistoryViewModel @Inject constructor(
     }
 
     private companion object {
-        /** Same cap ReportExporter embeds, so the sheet and the export agree. */
-        const val INTRUSION_ROW_LIMIT = 500
+        const val TAG = "HistoryViewModel"
     }
 }

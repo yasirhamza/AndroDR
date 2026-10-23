@@ -9,7 +9,7 @@ import com.androdr.ioc.IndicatorResolver
 import com.androdr.ioc.IocDatabase
 import com.androdr.ioc.CampaignRegistry
 import com.androdr.data.model.ScanResult
-import com.androdr.reporting.ReportFormatter
+import com.androdr.reporting.reportText
 import com.androdr.sigma.Evidence
 import com.androdr.sigma.IocMatchEvidenceProvider
 import com.androdr.sigma.SigmaRuleEvaluator
@@ -112,8 +112,7 @@ class IocEvidenceRegistrationTest {
             bugReportFindings = emptyList(), riskySideloadCount = 0, knownMalwareCount = 0)
         val registry = CampaignRegistry.parseBundled(listOf(File("src/main/res/raw/known_campaigns.json"),
             File("app/src/main/res/raw/known_campaigns.json")).first { it.isFile }.readText())
-        val report = ReportFormatter.formatScanReport(scan, emptyList(), emptyList(), versionName = "test",
-            campaigns = registry, ruleScopes = emptyMap(), ruleCategoryById = emptyMap())
+        val report = reportText(scan, campaigns = registry)
         assertTrue(report, report.contains("Graphite (Paragon): DETECTED"))
         assertFalse(report, report.contains("Graphite (Paragon): not detected"))
     }

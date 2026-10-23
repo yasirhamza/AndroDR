@@ -9,9 +9,10 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * The report's DNS rows and app-risk grouping must show WHICH app talked to a
- * domain. Before this every row read `<- unknown` and a DNS-rule finding, whose
- * only app key is `source_package`, was grouped under "unknown".
+ * The report must show WHICH app talked to a domain. Before attribution every DNS row read
+ * `<- unknown` and a DNS-rule finding, whose only app key is `source_package`, was grouped under
+ * "unknown". Since Phase B the DNS rows are the scan's own stored `dns_monitor` records, printed
+ * field by field, so the attribution the tunnel recorded is printed verbatim.
  */
 class DnsAttributionReportTest {
 
@@ -24,44 +25,29 @@ class DnsAttributionReportTest {
         timestamp = 1711900800000, domain = domain, appUid = uid, appName = pkg, isBlocked = false, reason = reason,
     )
 
-    private val names = mapOf("com.instagram.android" to "Instagram")
+    private fun reportWithDns(vararg events: DnsEvent) =
+        reportText(scanOf(), telemetry = FakeTelemetry(mapOf("dns_monitor" to events.map { it.toFieldMap() })))
 
     @Test
-    fun `an attributed DNS row names the app and its package`() {
-        val text = ReportFormatter.formatScanReport(
-            scanOf(), listOf(dns("graph.instagram.com", 10042, "com.instagram.android")), emptyList(),
-            displayNames = names, versionName = "test",
-            campaigns = emptyList(),
-            ruleScopes = emptyMap(), ruleCategoryById = emptyMap(),
-        )
-
-        assertTrue(text, text.contains("graph.instagram.com"))
-        assertTrue(text, text.contains("<- Instagram (com.instagram.android)"))
+    fun `a stored DNS record prints the querying app's uid and package`() {
+        val text = reportWithDns(dns("graph.instagram.com", 10042, "com.instagram.android"))
+        val block = text.substringAfter("${ReportFormatter.STORED_TELEMETRY_SECTION}: dns_monitor")
+        assertTrue(block, block.contains("domain: graph.instagram.com"))
+        assertTrue(block, block.contains("app_uid: 10042"))
+        assertTrue(block, block.contains("source_package: com.instagram.android"))
     }
 
     @Test
-    fun `a query made by the system resolver is labelled as such, not unknown`() {
-        val text = ReportFormatter.formatScanReport(
-            scanOf(), listOf(dns("mtalk.google.com", ConnectionOwnerResolver.DNS_RESOLVER_UID, null)), emptyList(),
-            versionName = "test",
-            campaigns = emptyList(),
-            ruleScopes = emptyMap(), ruleCategoryById = emptyMap(),
-        )
-
-        assertTrue(text, text.contains("<- system resolver"))
-        assertTrue(!text.contains("<- unknown"))
+    fun `a query made by the system resolver keeps the resolver's uid, not a placeholder`() {
+        val text = reportWithDns(dns("mtalk.google.com", ConnectionOwnerResolver.DNS_RESOLVER_UID, null))
+        assertTrue(text, text.contains("app_uid: ${ConnectionOwnerResolver.DNS_RESOLVER_UID}"))
+        assertTrue(text, text.contains("source_package: null"))
     }
 
     @Test
-    fun `an unattributed query still reads unknown`() {
-        val text = ReportFormatter.formatScanReport(
-            scanOf(), listOf(dns("example.com", ConnectionOwnerResolver.UNKNOWN_UID, null)), emptyList(),
-            versionName = "test",
-            campaigns = emptyList(),
-            ruleScopes = emptyMap(), ruleCategoryById = emptyMap(),
-        )
-
-        assertTrue(text, text.contains("<- unknown"))
+    fun `the tunnel's reason is printed beside the domain it matched`() {
+        val text = reportWithDns(dns("c2.evil.example", 10042, "com.evil.app", reason = "IOC_detect: c2.evil.example"))
+        assertTrue(text, text.contains("reason: IOC_detect: c2.evil.example"))
     }
 
     @Test
@@ -73,63 +59,10 @@ class DnsAttributionReportTest {
             matchContext = mapOf("domain" to "c2.evil.example", "source_package" to "com.evil.app"),
         )
 
-        val text = ReportFormatter.formatScanReport(
-            scanOf(c2), emptyList(), emptyList(), versionName = "test", mode = ExportMode.FINDINGS_ONLY,
-            campaigns = emptyList(),
-            ruleScopes = emptyMap(), ruleCategoryById = emptyMap(),
-        )
+        val text = reportText(scanOf(c2), mode = ExportMode.FINDINGS_ONLY)
         val apps = text.substring(text.indexOf("APP RISKS"))
 
         assertTrue(apps, apps.contains("com.evil.app"))
         assertTrue("grouped under unknown: $apps", !apps.contains("unknown"))
     }
-
-    @Test
-    fun `an unchecked event for a domain the scan matched reads NOT CHECKED`() {
-        val text = ReportFormatter.formatScanReport(
-            scanOf(iocDomainFinding("c2.evil.example", "NoviSpy")),
-            listOf(dns("c2.evil.example", 10042, "com.evil.app", reason = null)), emptyList(),
-            versionName = "test",
-            campaigns = emptyList(),
-            ruleScopes = emptyMap(), ruleCategoryById = emptyMap(),
-        )
-
-        assertTrue(text, text.contains("[NOT CHECKED]  "))
-        assertTrue(text, text.contains("reason: threat list not yet loaded when queried; matched at scan time"))
-    }
-
-    @Test
-    fun `an unchecked event for an unmatched domain stays ALLOWED`() {
-        val text = ReportFormatter.formatScanReport(
-            scanOf(iocDomainFinding("c2.evil.example", "NoviSpy")),
-            listOf(dns("example.com", 10042, "com.evil.app", reason = null)), emptyList(),
-            versionName = "test",
-            campaigns = emptyList(),
-            ruleScopes = emptyMap(), ruleCategoryById = emptyMap(),
-        )
-
-        assertTrue(text, text.contains("[ALLOWED]  "))
-        assertTrue(text, !text.contains("[NOT CHECKED]"))
-    }
-
-    @Test
-    fun `a tunnel-matched event stays MATCHED`() {
-        val text = ReportFormatter.formatScanReport(
-            scanOf(iocDomainFinding("c2.evil.example", "NoviSpy")),
-            listOf(dns("c2.evil.example", 10042, "com.evil.app", reason = "IOC_detect: c2.evil.example")),
-            emptyList(), versionName = "test",
-            campaigns = emptyList(),
-            ruleScopes = emptyMap(), ruleCategoryById = emptyMap(),
-        )
-
-        assertTrue(text, text.contains("[MATCHED]  "))
-        assertTrue(text, !text.contains("[NOT CHECKED]"))
-    }
-
-    private fun iocDomainFinding(domain: String, family: String) = Finding(
-        ruleId = "androdr-003", title = "Malicious Domain", level = "critical",
-        category = FindingCategory.APP_RISK, triggered = true,
-        evidence = com.androdr.sigma.Evidence.IocMatch(domain, "domain", "src", family),
-        matchContext = mapOf("domain" to domain, "source_package" to "com.evil.app"),
-    )
 }

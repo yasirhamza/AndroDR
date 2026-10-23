@@ -1,23 +1,18 @@
 package com.androdr.ui.bugreport
 
-import android.content.Context
 import android.net.Uri
 import android.util.Log
-import androidx.core.content.FileProvider
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.androdr.data.model.TimelineEvent
-import com.androdr.reporting.TimelineFormatter
+import com.androdr.reporting.ReportExporter
 import com.androdr.scanner.ArtifactType
 import com.androdr.data.store.Preflight
 import com.androdr.scanner.ImportPreflight
 import com.androdr.scanner.IntrusionLogStats
 import com.androdr.scanner.ScanOrchestrator
 import com.androdr.sigma.Finding
-import com.androdr.util.appVersion
 import dagger.hilt.android.lifecycle.HiltViewModel
-import dagger.hilt.android.qualifiers.ApplicationContext
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -25,18 +20,13 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
-import java.io.File
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
 import javax.inject.Inject
 
 @HiltViewModel
 class BugReportViewModel @Inject constructor(
-    @ApplicationContext private val appContext: Context,
     private val orchestrator: ScanOrchestrator,
-    private val importPreflight: ImportPreflight
+    private val importPreflight: ImportPreflight,
+    private val reportExporter: ReportExporter,
 ) : ViewModel() {
 
     private val _findings = MutableStateFlow<List<Finding>>(emptyList())
@@ -242,32 +232,9 @@ class BugReportViewModel @Inject constructor(
         viewModelScope.launch {
             _exporting.value = true
             try {
-                val telemetry = orchestrator.lastAppTelemetry
-                val hashByPkg = telemetry
-                    .filter { !it.apkHash.isNullOrEmpty() }
-                    .associateBy({ it.packageName }, { it.apkHash!! })
-                val displayNames = telemetry
-                    .associate { it.packageName to it.appName }
-                    .filterValues { it.isNotEmpty() }
-                val text = TimelineFormatter.formatTimeline(
-                    _timeline.value,
-                    _findings.value,
-                    hashByPkg,
-                    displayNames,
-                    versionName = appContext.appVersion().name
-                )
-                _shareUri.value = withContext(Dispatchers.IO) {
-                    val reportsDir = File(appContext.cacheDir, "reports").apply { mkdirs() }
-                    val filenameFmt = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US)
-                    val filename = "androdr_bugreport_${filenameFmt.format(Date())}.txt"
-                    val reportFile = File(reportsDir, filename)
-                    reportFile.writeText(text, Charsets.UTF_8)
-                    FileProvider.getUriForFile(
-                        appContext,
-                        "${appContext.packageName}.fileprovider",
-                        reportFile
-                    )
-                }
+                // One report path: ReportExporter writes the file; APK hashes and app names come
+                // from the newest stored live scan's app records (TelemetryReader.latestLive).
+                _shareUri.value = reportExporter.exportBugReportTimeline(_timeline.value, _findings.value)
             } finally {
                 _exporting.value = false
             }

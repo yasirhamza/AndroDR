@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.selection.selectable
@@ -25,6 +26,8 @@ import com.androdr.reporting.ExportMode
 fun ExportModeDialog(
     onDismiss: () -> Unit,
     onConfirm: (ExportMode) -> Unit,
+    /** What a full export carries (record count, size, sensitive categories; spec §7), when known. */
+    estimate: String? = null,
 ) {
     var selectedMode by remember { mutableStateOf(ExportMode.BOTH) }
     AlertDialog(
@@ -32,6 +35,13 @@ fun ExportModeDialog(
         title = { Text("Export report") },
         text = {
             Column {
+                if (estimate != null) {
+                    Text(estimate)
+                    if (selectedMode == ExportMode.FINDINGS_ONLY) {
+                        Text("Findings only leaves the telemetry out.")
+                    }
+                    Spacer(Modifier.height(8.dp))
+                }
                 ExportMode.values().forEach { mode ->
                     Row(
                         verticalAlignment = Alignment.CenterVertically,

@@ -180,6 +180,10 @@
     <!-- Intrusion Log Import summary card (#342) — externalized -->
     <string name="history_delete_refused_title">Nothing was deleted</string>
     <string name="history_delete_refused_body">A scan or import is running. Try again when it finishes.</string>
+    <string name="history_summary_failed">This scan\'s summary could not be read. Export the report to see it in full.</string>
+    <string name="history_export_estimate_loading">Counting this scan\'s stored telemetry…</string>
+    <string name="history_export_failed_title">The report was not exported</string>
+    <string name="history_export_failed_body">Writing the report failed, so nothing was shared. Try again.</string>
     <string name="import_preflight_title">Not much free space</string>
     <string name="import_preflight_title_unknown">Import size unknown</string>
     <string name="import_preflight_body_estimate">This import is expected to need about %1$s of storage, and %2$s is free. If storage runs short partway, AndroDR keeps the records stored so far, checks the rest of the file, and still shows every finding.</string>

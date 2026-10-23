@@ -85,14 +85,6 @@ class HistoryViewModelDiffTest {
                 repository = repository,
                 orchestrator = orchestrator,
                 reportExporter = mockk(relaxed = true),
-                dnsEventDao = mockk(relaxed = true),
-                forensicTimelineEventDao = mockk(relaxed = true),
-                reportInputs = mockk {
-                    every { campaigns() } returns emptyList()
-                    every { ruleCategoryById() } returns emptyMap()
-                every { ruleScopes() } returns emptyMap()
-                },
-                appContext = mockk(relaxed = true)
             )
 
             viewModel.selectScan(newer)

@@ -237,3 +237,53 @@ def test_negated_regex_ties_both_facts_to_one_line(tmp_path):
     # the regex only fails if the same line carries both.
     result = run_check(tmp_path, DNS_REPORT, "!~\\[MATCHED\\].*paragon-graphite\\.net\n")
     assert result.returncode == 0, result.stdout
+
+
+# Since Phase B the report's DNS rows are the scan's stored dns_monitor records, printed one
+# field per line by the generic per-service renderer (ReportFormatter). The scenario files'
+# DNS checks target that format; this pins them against it.
+STORED_DNS_REPORT = """------------------------------------------------------------
+  STORED TELEMETRY: dns_monitor (2 record(s))
+------------------------------------------------------------
+  [0] captured 2026-10-23 12:00:01
+     app_uid: 2000
+     domain: forti.external-muki.com
+     is_blocked: false
+     reason: IOC_detect: forti.external-muki.com
+     source_package: com.android.shell
+     timestamp: 1792746001000
+  [1] captured 2026-10-23 12:00:02
+     app_uid: 2000
+     domain: paragon-graphite.net
+     is_blocked: false
+     reason: null
+     source_package: com.android.shell
+     timestamp: 1792746002000
+"""
+
+GRAPHITE = Path(__file__).parent / "fixtures" / "expected" / "graphite_dns_attribution.patterns"
+
+
+def graphite_dns_lines():
+    return "".join(line for line in GRAPHITE.read_text().splitlines(keepends=True) if "reason: IOC" in line)
+
+
+def test_graphite_dns_checks_accept_the_stored_record_format(tmp_path):
+    lines = graphite_dns_lines()
+    assert lines.count("\n") == 2, lines
+    result = run_check(tmp_path, STORED_DNS_REPORT, lines)
+    assert result.returncode == 0, result.stdout
+
+
+def test_graphite_dns_checks_reject_a_matched_placeholder(tmp_path):
+    report = STORED_DNS_REPORT.replace("     reason: null", "     reason: IOC: paragon-graphite.net")
+    result = run_check(tmp_path, report, graphite_dns_lines())
+    assert result.returncode == 1
+    assert "UNEXPECTED: forbidden regex matched" in result.stdout
+
+
+def test_graphite_dns_checks_reject_an_unmatched_graphite_domain(tmp_path):
+    report = STORED_DNS_REPORT.replace("     reason: IOC_detect: forti.external-muki.com", "     reason: null")
+    result = run_check(tmp_path, report, graphite_dns_lines())
+    assert result.returncode == 1
+    assert "MISS: regex not matched" in result.stdout

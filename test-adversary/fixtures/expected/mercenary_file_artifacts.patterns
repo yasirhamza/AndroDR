@@ -6,9 +6,9 @@
 # it had not looked (#366). The scanner now looks, so detection is what to demand.
 Spyware artifact: /data/local/tmp/.raptor
 Spyware artifact: /data/local/tmp/.stat
-/data/local/tmp/.raptor : FOUND
-/data/local/tmp/.stat : FOUND
-# ...and a planted path must never be reported as clear. The report renders a
-# checked-and-empty path as "<path> : clear" (ReportFormatter FILE ARTIFACT CHECKS).
-!/data/local/tmp/.raptor : clear
-!/data/local/tmp/.stat : clear
+# Since Phase B the telemetry section prints the scan's stored file_scanner records one field
+# per line (the old "<path> : FOUND" / "<path> : clear" rows are gone), so a path and its
+# file_exists state are no longer on one line: the finding lines above carry the detection,
+# and these require that each planted path's record was stored with the scan.
+~^     file_path: /data/local/tmp/\.raptor$
+~^     file_path: /data/local/tmp/\.stat$

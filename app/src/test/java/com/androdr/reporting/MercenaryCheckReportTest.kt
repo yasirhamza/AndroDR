@@ -79,8 +79,8 @@ class MercenaryCheckReportTest {
         scannerErrors: List<ScannerFailure> = emptyList(),
         ruleCategoryById: Map<String, String> = emptyMap(),
         ruleScopes: Map<String, RuleScope> = BUNDLE_SCOPES,
-    ) = ReportFormatter.formatScanReport(
-        buildScan(appRisks, deviceFlags, scannerErrors), emptyList(), emptyList(), versionName = "test",
+    ) = reportText(
+        buildScan(appRisks, deviceFlags, scannerErrors),
         campaigns = campaigns, ruleScopes = ruleScopes, ruleCategoryById = ruleCategoryById,
     )
 
@@ -91,12 +91,12 @@ class MercenaryCheckReportTest {
         campaigns: List<Campaign>,
         source: TelemetrySource = TelemetrySource.INTRUSION_LOG_IMPORT,
         scannerErrors: List<ScannerFailure> = emptyList(),
-    ) = ReportFormatter.formatScanReport(
+    ) = reportText(
         buildScan(appRisks = appRisks, deviceFlags = deviceFlags, scannerErrors = scannerErrors)
             .copy(source = source),
-        emptyList(), emptyList(), intrusionEvents = intrusionEvents, versionName = "test",
+        // The import's latest stored event: the window the campaign rows count back from.
+        telemetry = FakeTelemetry(latestEvent = intrusionEvents.maxOfOrNull { it.startTimestamp }),
         campaigns = campaigns,
-        ruleScopes = emptyMap(), ruleCategoryById = emptyMap(),
     )
 
     private fun importedEvent(at: Long) = ForensicTimelineEvent(

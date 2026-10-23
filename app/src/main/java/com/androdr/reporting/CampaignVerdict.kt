@@ -1,6 +1,5 @@
 package com.androdr.reporting
 
-import com.androdr.data.model.ForensicTimelineEvent
 import com.androdr.data.model.NotEvaluatedReason
 import com.androdr.data.model.ScanResult
 import com.androdr.data.model.TelemetrySource
@@ -38,12 +37,12 @@ private val CAMPAIGN_KEY = Regex("^[a-z0-9_-]{1,32}$")
 
 /**
  * The time the 30-day window counts back from: the scan's own time for a live scan; for
- * an import, the latest imported timeline event, else the latest IOC observation in the
- * scan (the import's own log stats are not stored with the scan), else the scan time.
+ * an import, [latestImportedEvent] (the latest exact event time among the import's own stored
+ * records), else the latest IOC observation in the scan, else the scan time.
  */
-internal fun campaignReferenceTime(scan: ScanResult, intrusionEvents: List<ForensicTimelineEvent>): Long {
+internal fun campaignReferenceTime(scan: ScanResult, latestImportedEvent: Long?): Long {
     if (scan.source == TelemetrySource.LIVE_SCAN) return scan.timestamp
-    return intrusionEvents.maxOfOrNull { it.startTimestamp }
+    return latestImportedEvent
         ?: scan.appRisks.mapNotNull { (it.evidence as? Evidence.IocMatch)?.observedAt }.filter { it > 0 }.maxOrNull()
         ?: scan.timestamp
 }
@@ -174,7 +173,7 @@ internal fun coverageSummary(coverage: List<ServiceStatus>): Pair<String, List<S
     return parts.joinToString("; ") to missing.mapNotNull { it.second }.distinct()
 }
 
-private fun StringBuilder.appendFixes(fixes: List<String>) {
+private fun ReportOut.appendFixes(fixes: List<String>) {
     if (fixes.isNotEmpty()) appendLine("        ${fixes.joinToString(" ")}")
 }
 
@@ -182,7 +181,7 @@ private fun StringBuilder.appendFixes(fixes: List<String>) {
  * The MERCENARY SPYWARE CHECK rows, then (live scans) the scope note that says what "not detected"
  * covers, then (live scans and imports) the could-not-run pointer and the failed-scanner line.
  */
-internal fun StringBuilder.appendCampaignRows(
+internal fun ReportOut.appendCampaignRows(
     verdicts: List<CampaignVerdict>,
     scan: ScanResult,
     referenceFromLog: Boolean,
@@ -237,7 +236,7 @@ internal fun StringBuilder.appendCampaignRows(
 }
 
 /** The summary's campaign lines, from the same verdicts as the section. */
-internal fun StringBuilder.appendCampaignSummary(verdicts: List<CampaignVerdict>) {
+internal fun ReportOut.appendCampaignSummary(verdicts: List<CampaignVerdict>) {
     if (verdicts.isEmpty()) return
     val detected = verdicts.filter { it.state == CampaignVerdict.State.DETECTED }.map { it.label }
     appendLine("    Campaign detections: ${detected.joinToString(", ").ifEmpty { "none" }}")

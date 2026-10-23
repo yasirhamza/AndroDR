@@ -1,6 +1,5 @@
 package com.androdr.reporting
 
-import com.androdr.data.model.DnsEvent
 import com.androdr.data.model.ScanResult
 import com.androdr.sigma.Evidence
 
@@ -36,28 +35,30 @@ internal fun iocDomainsOf(scan: ScanResult): Set<String> =
 
 /**
  * The rows of "DNS IOC matches linked to:": distinct domains from the scan's domain IOC
- * findings, else (scans whose findings carry no IOC evidence) the tunnel's reason strings.
+ * findings, else (scans whose findings carry no IOC evidence) the `reason` strings of this scan's own
+ * stored DNS records.
  * The summary count and the list both come from here so they cannot disagree.
  */
-internal fun dnsIocRows(scan: ScanResult, dnsEvents: List<DnsEvent>): List<String> {
+internal fun dnsIocRows(scan: ScanResult, dnsReasons: Collection<String>): List<String> {
     val fromEvidence = scan.appRisks.filter { it.triggered }
         .mapNotNull { it.evidence as? Evidence.IocMatch }
         .filter { it.iocType == "domain" }
         .map { iocMatchLabel(it) }
         .distinct()
     return fromEvidence.ifEmpty {
-        dnsEvents
-            .mapNotNull { it.reason }
+        dnsReasons
+            .asSequence()
             .filter { it.startsWith("IOC:") || it.startsWith("IOC_detect:") }
             .map { it.removePrefix("IOC:").removePrefix("IOC_detect:").trim() }
             .filter { it.isNotEmpty() }
             .distinct()
             .map { "$it (domain indicator)" }
+            .toList()
     }
 }
 
 /** "DNS IOC matches linked to:", in its own block so a domain hit with no campaign flag is listed. */
-internal fun StringBuilder.appendDnsIocMatches(rows: List<String>) {
+internal fun ReportOut.appendDnsIocMatches(rows: List<String>) {
     if (rows.isEmpty()) return
     appendLine("  DNS IOC matches linked to:")
     rows.forEach { appendLine("  [!!]  $it") }

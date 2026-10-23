@@ -5,11 +5,13 @@ import androidx.paging.PagingConfig
 import androidx.paging.PagingData
 import com.androdr.data.db.AppDatabase
 import com.androdr.data.db.BodyStatsRow
+import com.androdr.data.db.ScanTotals
 import com.androdr.data.db.ServiceSummary
 import com.androdr.data.db.StoredRecordRow
 import com.androdr.data.db.TelemetryReadDao
 import com.androdr.data.db.chunkedIn
 import com.androdr.data.model.TelemetrySource
+import com.androdr.reporting.StoredTelemetrySource
 import com.androdr.sigma.TimePrecision
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
@@ -104,11 +106,16 @@ class TelemetryReader @Inject constructor(
     private val db: AppDatabase,
     codec: TelemetryRecordCodec,
     display: EventDisplay,
-) {
+) : StoredTelemetrySource {
     private val dao: TelemetryReadDao get() = db.telemetryReadDao()
     private val decoder = RecordDecoder(codec, display)
 
-    suspend fun services(scanId: Long): List<ServiceSummary> = dao.services(scanId)
+    override suspend fun services(scanId: Long): List<ServiceSummary> = dao.services(scanId)
+
+    override suspend fun latestEventTime(scanId: Long): Long? = dao.scanTotals(scanId).latestEventTime
+
+    /** One scan's record count, decoded body bytes and latest exact event time (the export estimate). */
+    suspend fun scanTotals(scanId: Long): ScanTotals = dao.scanTotals(scanId)
 
     fun page(scanId: Long, service: String): Flow<PagingData<DecodedRecord>> =
         Pager(PagingConfig(pageSize = PAGE_SIZE, enablePlaceholders = false)) { pagingSource(scanId, service) }.flow
@@ -116,7 +123,7 @@ class TelemetryReader @Inject constructor(
     internal fun pagingSource(scanId: Long, service: String) = ScanRecordPagingSource(db, scanId, service, decoder)
 
     /** Streams one scan's records of [service] in ordinal order, [BATCH] at a time. */
-    suspend fun forEach(scanId: Long, service: String, block: suspend (DecodedRecord) -> Unit) {
+    override suspend fun forEach(scanId: Long, service: String, block: suspend (DecodedRecord) -> Unit) {
         var after = Int.MIN_VALUE
         while (true) {
             val rows = dao.pageAfter(scanId, service, after, BATCH)

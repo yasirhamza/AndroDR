@@ -394,7 +394,7 @@ scenarios:
         adb_cmd: "shell ping -c1 -W2 2y4nothing.xyz"
     attack: [T1437]
     expected_patterns:
-      - "~\\[MATCHED\\].*2y4nothing\\.xyz"
+      - "~^     reason: IOC(_detect)?: 2y4nothing\\.xyz$"
       - "2y4nothing.xyz -> Predator Spyware Indicators of Compromise"
       - "[!!]  Predator: DETECTED -- domain 2y4nothing.xyz (Predator Spyware Indicators of Compromise),"
 
@@ -632,7 +632,7 @@ scenarios:
     # forti.external-muki.com is a Graphite certificate name from Citizen Lab
     # (March 2025), now in ioc-data/c2-domains.yml; androdr-003 must match it.
     # paragon-graphite.net was an invented placeholder (retired androdr-005)
-    # and must stay [ALLOWED]. Needs the VPN on.
+    # and must never match (its stored record has no IOC reason). Needs the VPN on.
     description: "Graphite domain matches via androdr-003; retired placeholder stays allowed"
     source: adb_inject
     inject:
@@ -642,8 +642,8 @@ scenarios:
         adb_cmd: "shell ping -c1 -W2 paragon-graphite.net"
     attack: [T1437]
     expected_patterns:
-      - "~\\[MATCHED\\].*forti\\.external-muki\\.com"
-      - "!~\\[MATCHED\\].*paragon-graphite\\.net"
+      - "~^     reason: IOC(_detect)?: forti\\.external-muki\\.com$"
+      - "!~reason: IOC(_detect)?: .*paragon-graphite\\.net"
       - "!Graphite/Paragon Spyware"
       - "forti.external-muki.com -> Graphite (Paragon)"
       - "[!!]  Graphite (Paragon): DETECTED -- domain forti.external-muki.com (Graphite (Paragon)),"

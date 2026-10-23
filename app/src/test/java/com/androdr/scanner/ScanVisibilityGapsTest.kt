@@ -8,6 +8,7 @@ import com.androdr.data.model.ScannerFailure
 import com.androdr.ioc.CampaignRegistry
 import com.androdr.ioc.FeedCoverage
 import com.androdr.reporting.ReportFormatter
+import com.androdr.reporting.reportText
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -77,8 +78,7 @@ class ScanVisibilityGapsTest {
             bugReportFindings = emptyList(), riskySideloadCount = 0, knownMalwareCount = 0, scannerErrors = gaps)
         val registry = CampaignRegistry.parseBundled(listOf(File("src/main/res/raw/known_campaigns.json"),
             File("app/src/main/res/raw/known_campaigns.json")).first { it.isFile }.readText())
-        return ReportFormatter.formatScanReport(scan, emptyList(), emptyList(), versionName = "test",
-            campaigns = registry, ruleScopes = emptyMap(), ruleCategoryById = emptyMap())
+        return reportText(scan, campaigns = registry)
     }
 
     @Test

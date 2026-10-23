@@ -12,6 +12,8 @@ import com.androdr.data.model.ScanResult
 import com.androdr.data.model.ScannerFailure
 import com.androdr.data.model.TelemetrySource
 import com.androdr.data.model.UNREGISTERED_IOC_LOOKUP
+import com.androdr.data.store.DecodedRecord
+import com.androdr.data.store.TelemetryReader
 import com.androdr.data.repo.ScanLock
 import com.androdr.data.repo.TimelineRowDeleter
 import com.androdr.ioc.IndicatorResolver
@@ -20,6 +22,7 @@ import com.androdr.sigma.CveEvidenceProvider
 import com.androdr.sigma.EvidenceProvider
 import com.androdr.sigma.Finding
 import com.androdr.sigma.IocMatchEvidenceProvider
+import com.androdr.sigma.LiveRecordBuilders
 import com.androdr.sigma.RuleCoverage
 import com.androdr.sigma.SigmaCorrelationEngine
 import com.androdr.sigma.SigmaRule
@@ -67,6 +70,7 @@ class ScanOrchestrator @Inject constructor(
     private val knownAppResolver: com.androdr.ioc.KnownAppResolver,
     private val oemPrefixResolver: com.androdr.ioc.OemPrefixResolver,
     private val brandImpersonationResolver: com.androdr.ioc.BrandImpersonationResolver,
+    private val telemetryReader: TelemetryReader,
     // #342: the orchestrator itself reads one imported ZIP's entry NAMES to
     // route it (see [sniffArtifact]); the artifact bodies are still read only
     // by the analyzers, which own their own Context.
@@ -75,33 +79,6 @@ class ScanOrchestrator @Inject constructor(
 
     private val initMutex = Mutex()
     private var ruleEngineInitialized = false
-
-    /** Cached app telemetry from the most recent scan, for report export. */
-    @Volatile var lastAppTelemetry: List<AppTelemetry> = emptyList()
-        private set
-
-    /** Cached telemetry from the most recent scan, for report export. */
-    @Volatile var lastDeviceTelemetry: List<com.androdr.data.model.DeviceTelemetry> = emptyList()
-        private set
-    @Volatile var lastProcessTelemetry: List<com.androdr.data.model.ProcessTelemetry> = emptyList()
-        private set
-    @Volatile var lastFileArtifactTelemetry: List<com.androdr.data.model.FileArtifactTelemetry> = emptyList()
-        private set
-    @Volatile var lastAccessibilityTelemetry: List<com.androdr.data.model.AccessibilityTelemetry> = emptyList()
-        private set
-    @Volatile var lastReceiverTelemetry: List<com.androdr.data.model.ReceiverTelemetry> = emptyList()
-        private set
-    @Volatile var lastAppOpsTelemetry: List<com.androdr.data.model.AppOpsTelemetry> = emptyList()
-        private set
-
-    /**
-     * Wall-clock timestamp of the last successful [AppScanner.collectTelemetry]
-     * call, used by [analyzeBugReport] to decide whether the cached
-     * [lastAppTelemetry] is fresh enough to reuse for APK-hash enrichment.
-     * Initialized to 0 so a brand-new process always does a fresh scan on
-     * first bug report analysis.
-     */
-    @Volatile private var lastAppTelemetryTimestamp: Long = 0L
 
     /**
      * Live progress for the currently-running scan (or [ScanProgress.Idle]
@@ -230,8 +207,6 @@ class ScanOrchestrator @Inject constructor(
                 if (p is ScanProgress.Running) p.copy(completedScanners = p.completedScanners + 1) else p
             }
         }
-        cacheForExport(telemetry)
-
         progress(ScanProgress.Running.Phase.EVALUATING_RULES, LiveScanCollector.SCANNER_COUNT)
         // #366: the engine judges only the paths it could read. What went unread is
         // declared, so the report states the limit instead of reading like a clean check.
@@ -279,19 +254,6 @@ class ScanOrchestrator @Inject constructor(
             runCatching { deviceAdminGrantEmitter.emitNew(scanId) }
                 .onFailure { Log.w(TAG, "deviceAdminGrantEmitter failed: ${it.message}", it) }.getOrDefault(emptyList())
 
-    private fun cacheForExport(t: LiveTelemetry) {
-        lastAppTelemetry = t.apps
-        // Stamp the cache freshness so analyzeBugReport() can decide
-        // whether to reuse this telemetry or do its own fresh scan.
-        if (t.apps.isNotEmpty()) lastAppTelemetryTimestamp = System.currentTimeMillis()
-        lastDeviceTelemetry = t.device
-        lastProcessTelemetry = t.processes
-        lastFileArtifactTelemetry = t.files
-        lastAccessibilityTelemetry = t.accessibility
-        lastReceiverTelemetry = t.receivers
-        lastAppOpsTelemetry = t.appOps
-    }
-
     private fun progress(phase: ScanProgress.Running.Phase, completed: Int) {
         _scanProgress.value = ScanProgress.Running(phase, completed, LiveScanCollector.SCANNER_COUNT)
     }
@@ -313,7 +275,7 @@ class ScanOrchestrator @Inject constructor(
         // Dashboard partial-scan banner fires.
         val errors = mutableListOf<ScannerFailure>()
         recordRuleCapabilitySkips(errors)
-        val appTelemetry = enrichmentTelemetry(errors)
+        val apkHashes = enrichmentHashes(errors)
         val now = System.currentTimeMillis()
         val scan = ScanResult(
             id = now, timestamp = now, findings = emptyList(), bugReportFindings = emptyList(),
@@ -322,7 +284,7 @@ class ScanOrchestrator @Inject constructor(
             // the user; History labels it from this field.
             source = TelemetrySource.BUGREPORT_IMPORT,
         )
-        val hooks = BugReportHooks(scan, sigmaRuleEngine, sigmaCorrelationEngine, hashByPackage(appTelemetry),
+        val hooks = BugReportHooks(scan, sigmaRuleEngine, sigmaCorrelationEngine, apkHashes,
             result.timeline, result.forensicEvents)
         hooks.errors.addAll(errors)
         val written = try {
@@ -340,35 +302,35 @@ class ScanOrchestrator @Inject constructor(
     } }
 
     /**
-     * App telemetry for bug-report APK-hash enrichment — same device, same apps. A live scan's
-     * cache within [APP_TELEMETRY_CACHE_MAX_AGE_MS] is reused (AppScanner takes ~14 s with ~500
-     * packages); otherwise a fresh collection runs. A cancellation propagates; any other failure is
-     * recorded in [errors] and enrichment is skipped. Enrichment data is never stored under an import.
+     * APK hashes by package for bug-report enrichment -- same device, same apps. The newest stored
+     * live scan's app records are reused when they were captured within
+     * [TelemetryReader.APP_ENRICHMENT_MAX_AGE_MS] (AppScanner takes ~14 s with ~500 packages);
+     * otherwise a fresh collection runs. A cancellation propagates; any other failure is recorded in
+     * [errors] and enrichment is skipped. Enrichment data is never stored under an import.
      */
     @Suppress("TooGenericExceptionCaught")
-    private suspend fun enrichmentTelemetry(errors: MutableList<ScannerFailure>): List<AppTelemetry> {
-        val cacheAgeMs = System.currentTimeMillis() - lastAppTelemetryTimestamp
-        if (lastAppTelemetryTimestamp > 0L && cacheAgeMs <= APP_TELEMETRY_CACHE_MAX_AGE_MS &&
-            lastAppTelemetry.isNotEmpty()
-        ) {
-            Log.i(TAG, "analyzeBugReport: reusing cached app telemetry " +
-                "(${lastAppTelemetry.size} entries, ${cacheAgeMs}ms old)")
-            return lastAppTelemetry
+    private suspend fun enrichmentHashes(errors: MutableList<ScannerFailure>): Map<String, String> {
+        val stored = try {
+            telemetryReader.latestLive(LiveRecordBuilders.APP_SCANNER, TelemetryReader.APP_ENRICHMENT_MAX_AGE_MS)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.w(TAG, "stored app records unreadable; collecting fresh for enrichment", e)
+            null
+        }
+        if (!stored.isNullOrEmpty()) {
+            Log.i(TAG, "analyzeBugReport: reusing the latest live scan's ${stored.size} stored app records")
+            return storedHashByPackage(stored)
         }
         return try {
-            appScanner.collectTelemetry().also { fresh ->
-                if (fresh.isNotEmpty()) {
-                    lastAppTelemetry = fresh
-                    lastAppTelemetryTimestamp = System.currentTimeMillis()
-                }
-            }
+            hashByPackage(appScanner.collectTelemetry())
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
             Log.e(TAG, "appScanner failed during bug-report enrichment", e)
             errors.add(ScannerFailure(scanner = "appScanner", exception = e::class.simpleName ?: "Exception",
                 message = e.message))
-            emptyList()
+            emptyMap()
         }
     }
 
@@ -602,6 +564,15 @@ class ScanOrchestrator @Inject constructor(
             ScannerFailure(scanner = SCAN_WRITER, exception = t.javaClass.simpleName, message = t.message)
 
         /** APK hash per package, for enriching finding rows that carry none. */
+        /** APK hash by package from stored `app_scanner` records (empty and absent hashes skipped). */
+        internal fun storedHashByPackage(apps: List<DecodedRecord>): Map<String, String> = buildMap {
+            apps.forEach { r ->
+                val pkg = r.fields?.get("package_name") as? String
+                val hash = r.fields?.get("apk_hash") as? String
+                if (!pkg.isNullOrEmpty() && !hash.isNullOrEmpty()) put(pkg, hash)
+            }
+        }
+
         internal fun hashByPackage(apps: List<AppTelemetry>): Map<String, String> =
             apps.filter { !it.apkHash.isNullOrEmpty() }.associateBy({ it.packageName }, { it.apkHash!! })
 
@@ -622,17 +593,6 @@ class ScanOrchestrator @Inject constructor(
                     .thenByDescending { FindingRank.eventTimeMs(it) }
             ).take(FINDINGS_PERSIST_CAP)
         }
-
-        /**
-         * Maximum age of the cached app telemetry that [analyzeBugReport]
-         * will reuse for bug-report APK-hash enrichment instead of running
-         * a fresh [AppScanner.collectTelemetry] call. Chosen to cover the
-         * typical "Run Scan → immediately analyze a bug report" flow
-         * without paying the ~14s AppScanner cost twice on real devices,
-         * but short enough that stale caches don't mask recent app
-         * installations or updates.
-         */
-        private const val APP_TELEMETRY_CACHE_MAX_AGE_MS = 5L * 60_000L // 5 minutes
 
         /**
          * #342 spec §7: Timeline-row caps per import (newest first); rules always see the full

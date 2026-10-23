@@ -54,8 +54,8 @@ class BugReportViewModelImportTest {
     }
 
     private fun vm(orchestrator: ScanOrchestrator, preflight: Preflight) = BugReportViewModel(
-        mockk(relaxed = true), orchestrator,
-        mockk<ImportPreflight> { coEvery { check(any()) } returns preflight },
+        orchestrator,
+        mockk<ImportPreflight> { coEvery { check(any()) } returns preflight }, mockk(relaxed = true),
     )
 
     @Test
@@ -151,8 +151,9 @@ class BugReportViewModelImportTest {
     fun `a preflight that throws asks with an unknown size and invents no free-space figure`() = runTest {
         val orchestrator = orchestratorReturning(IntrusionLogAnalysisResult(emptyList(), stats()))
         val vm = BugReportViewModel(
-            mockk(relaxed = true), orchestrator,
+            orchestrator,
             mockk<ImportPreflight> { coEvery { check(any()) } throws IllegalStateException("provider gone") },
+            mockk(relaxed = true),
         )
         vm.onFilePicked(uri)
         val prompt = vm.preflightPrompt.value!!
@@ -182,7 +183,7 @@ class BugReportViewModelImportTest {
         val gate = kotlinx.coroutines.CompletableDeferred<Preflight>()
         val checker = mockk<ImportPreflight> { coEvery { check(any()) } coAnswers { gate.await() } }
         val orchestrator = orchestratorReturning(IntrusionLogAnalysisResult(emptyList(), stats()))
-        val vm = BugReportViewModel(mockk(relaxed = true), orchestrator, checker)
+        val vm = BugReportViewModel(orchestrator, checker, mockk(relaxed = true))
         vm.onFilePicked(uri)
         assertTrue(vm.checkingSize.value)
         vm.onFilePicked(uri)

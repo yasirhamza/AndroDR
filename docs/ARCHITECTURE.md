@@ -354,23 +354,23 @@ STIX2 serialization lives in `StixBundle.kt` (in `ioc/`). The extension function
 
 ### 6.1 ReportFormatter
 
-`ReportFormatter` is a pure stateless `object` (no I/O). Its `formatScanReport()` function assembles a human-readable ASCII plaintext report from a `ScanResult`, a list of `DnsEvent` rows, a logcat capture, and optional extended telemetry (device posture, processes, file artifacts, accessibility services, broadcast receivers, app-ops). Output is strictly ASCII — no Unicode — so the file is readable in any text viewer and can be passed to forensic processing scripts without encoding surprises.
+`ReportFormatter` is a stateless `object` whose one entry point, `writeScanReport()`, streams a plaintext report for one scan to a `Writer`: the findings (`FindingsView`, with the campaign vocabulary and rule scopes), the logcat capture, and the scan's own stored telemetry read through `StoredTelemetrySource` (`TelemetryReader`), one generic section per service, record by record. Nothing but the findings and one batch of records is held in memory. Every line passes through `escapeForReport`, which renders `\` and every character in Unicode categories Cc, Cf, Zl, Zp, Co, Cn and Cs as `\uXXXX`, so no device-controlled string, field key, or value nested in a list or map can emit a raw line break, a bidi override, or an ambiguous escape. A `TELEMETRY SECTION` line states what the store holds for the scan (`STORED`, or why not: `PARTIAL_RETENTION`, `NONE`, `FAILED`).
 
 The report is split into two independently selectable sections via the `ExportMode` enum:
 
 - `FINDINGS_ONLY` — verdict, device checks, campaign detections, per-app findings, bug-report findings. When any rule produced no verdict, a `WHAT THIS SCAN COULD NOT CHECK` section lists them grouped by `NotEvaluatedReason`, one line per rule: a rule this build cannot evaluate (unresolvable `ioc_lookup`), artifact paths the device refused (#366), or a correlation rule whose legs had no events to bind to (#370). The findings list above it is incomplete in a known, named way rather than silently short, and the verdict line points at the section so "your phone appears secure" never stands alone. The section rides `FINDINGS_ONLY` because it is a caveat on the findings list; feed-controlled text in each line (lookup name, rule title, rule id) is sanitized to printable ASCII and length-capped by `util/reportSafe` before it reaches the report.
-- `TELEMETRY_ONLY` — DNS activity, app hash inventory, extended telemetry, application log. Intended for analyst handoff: the recipient can run their own rules against raw telemetry without being biased by the device's current ruleset.
+- `TELEMETRY_ONLY` — the scan's stored telemetry (every service it recorded) and the application log. Intended for analyst handoff: the recipient can run their own rules against raw telemetry without being biased by the device's current ruleset.
 - `BOTH` — default; produces the full report.
 
 ### 6.2 ReportExporter
 
-`ReportExporter` is a `@Singleton` that orchestrates the export flow. When called, it:
+`ReportExporter` is the one report path (pinned by `SingleReportPathTest`): the Share flow, the History sheet, the Bug Report screen and the debug harness receiver all go through it. `export(scan, mode)`:
 
-1. Fetches a snapshot of recent DNS events from `DnsEventDao.getRecentSnapshot()`.
-2. Collects last-run telemetry from `ScanOrchestrator` (or re-runs `AppScanner.collectTelemetry()` if the cache is stale).
-3. Calls `ReportFormatter.formatScanReport()` to produce the text.
-4. Writes the output to `cacheDir/reports/androdr_report_<timestamp>.txt`.
-5. Returns a `FileProvider` URI (`${applicationId}.fileprovider`) that the caller passes to the Android share sheet.
+1. Deletes files older than one hour from `cacheDir/reports/` (also done at startup by `StartupSweep`).
+2. Streams `ReportFormatter.writeScanReport()` through a buffered UTF-8 writer into `androdr_report_<timestamp>.txt.part`, then renames it into place (a failed write leaves nothing behind).
+3. Returns a `FileProvider` URI (`${applicationId}.fileprovider`) that the caller passes to the Android share sheet.
+
+`summary(scan)` is what the History sheet shows (verdict counts and the scan's stored services), and `exportEstimate(scan)` is what the export dialog states (record count, decoded size, and the categories of telemetry included). The report's telemetry is always the scan's own stored records; there is no last-scan cache. Bug-report timeline exports enrich APK hashes from the newest stored live scan's app records (`TelemetryReader.latestLive`, within `APP_ENRICHMENT_MAX_AGE_MS`).
 
 Logcat capture is scoped to AndroDR's own process (`--pid`) and to a specific list of AndroDR log tags, capped at 500 lines. System-wide logs are never captured. The `FileProvider` path configuration is at `res/xml/file_paths.xml`, which exposes only the `cache/reports/` subdirectory.
 

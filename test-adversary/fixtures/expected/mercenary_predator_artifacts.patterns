@@ -3,13 +3,13 @@
 # wd is made world-searchable here, so wd/fs.db is checkable too.
 Predator artifact: /data/local/tmp/wd/fs.db
 Predator artifact: /data/local/tmp/dropbox
-/data/local/tmp/wd : FOUND
-/data/local/tmp/wd/fs.db : FOUND
-/data/local/tmp/dropbox : FOUND
-# A planted path must never be reported as clear.
-!/data/local/tmp/wd : clear
-!/data/local/tmp/wd/fs.db : clear
-!/data/local/tmp/dropbox : clear
+# Since Phase B the telemetry section prints the scan's stored file_scanner records one field
+# per line (the old "<path> : FOUND" / "<path> : clear" rows are gone), so a path and its
+# file_exists state are no longer on one line: the finding lines above carry the detection,
+# and these require that each planted path's record was stored with the scan.
+~^     file_path: /data/local/tmp/wd$
+~^     file_path: /data/local/tmp/wd/fs\.db$
+~^     file_path: /data/local/tmp/dropbox$
 # androdr-108 is an incident rule tagged campaign.predator: the Predator row is DETECTED
 # and, as a tagged finding, its title is the detail (it wins over any IOC hit).
 [!!]  Predator: DETECTED -- Predator artifact: /data/local/tmp/

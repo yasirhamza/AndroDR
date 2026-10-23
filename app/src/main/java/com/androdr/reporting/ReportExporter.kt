@@ -4,17 +4,19 @@ import android.content.Context
 import android.net.Uri
 import android.util.Log
 import androidx.core.content.FileProvider
-import com.androdr.data.db.DnsEventDao
-import com.androdr.data.db.ForensicTimelineEventDao
+import com.androdr.data.model.NotEvaluatedReason
 import com.androdr.data.model.ScanResult
-import com.androdr.scanner.AppScanner
-import com.androdr.scanner.ScanOrchestrator
+import com.androdr.data.model.TimelineEvent
+import com.androdr.data.store.DecodedRecord
+import com.androdr.data.store.TelemetryReader
+import com.androdr.sigma.Finding
+import com.androdr.sigma.LiveRecordBuilders
 import com.androdr.util.appVersion
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.io.Writer
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -24,14 +26,12 @@ import javax.inject.Singleton
 /**
  * Three-way export mode selector per plan 3 (timeline UI refactor) spec Sec. 10.
  *
- * - [TELEMETRY_ONLY] writes only the telemetry section (DNS activity, app
- *   hash inventory, application log). Intended for analyst handoff: the
- *   recipient can run their own rules against the raw telemetry without
- *   being biased by the device's current ruleset.
- * - [FINDINGS_ONLY] writes only the findings section (verdict, device
- *   checks, campaign, app risks, bug report findings). Useful for sharing
- *   "what the app found" without exposing the raw telemetry.
- * - [BOTH] writes the full report. Default, preserves existing behaviour.
+ * - [TELEMETRY_ONLY] writes only the telemetry section (the scan's stored records and the
+ *   application log). Intended for analyst handoff: the recipient can run their own rules against
+ *   the raw telemetry without being biased by the device's current ruleset.
+ * - [FINDINGS_ONLY] writes only the findings section (verdict, device checks, campaign, app risks,
+ *   bug report findings). Useful for sharing "what the app found" without exposing the telemetry.
+ * - [BOTH] writes the full report. Default.
  */
 enum class ExportMode {
     TELEMETRY_ONLY,
@@ -39,68 +39,113 @@ enum class ExportMode {
     BOTH,
 }
 
+/**
+ * The one report path (spec §7, R2): every scan report is streamed by [ReportFormatter] through a
+ * buffered file writer here, from the scan's own stored telemetry. The History sheet shows
+ * [summary]; the export dialog states [exportEstimate]. Stale files in `cache/reports/` are removed
+ * before each export (and at startup, by `StartupSweep`).
+ */
 @Singleton
 class ReportExporter @Inject constructor(
     @ApplicationContext private val context: Context,
-    private val dnsEventDao: DnsEventDao,
-    private val scanOrchestrator: ScanOrchestrator,
-    private val appScanner: AppScanner,
-    private val forensicTimelineEventDao: ForensicTimelineEventDao,
+    private val telemetryReader: TelemetryReader,
     private val reportInputs: ReportInputs,
+    private val reportFiles: ReportFiles,
 ) {
-    private val filenameFmt = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US)
+    /** Streams [scan]'s report to a cached file and returns its FileProvider URI. */
+    suspend fun export(scan: ScanResult, mode: ExportMode = ExportMode.BOTH): Uri = withContext(Dispatchers.IO) {
+        val file = newReportFile("androdr_report", scan.timestamp)
+        writeTo(file, scan, mode)
+        FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+    }
 
-    suspend fun export(
-        scan: ScanResult,
-        mode: ExportMode = ExportMode.BOTH,
-    ): Uri = withContext(Dispatchers.IO) {
-        val dnsEvents = dnsEventDao.getRecentSnapshot()
-        val logLines  = captureLogcat()
-        val inventory = scanOrchestrator.lastAppTelemetry.ifEmpty {
-            runCatching { appScanner.collectTelemetry() }.getOrDefault(emptyList())
+    /**
+     * Streams [scan]'s report into [file] (the debug harness's fixed path, or [export]'s cached
+     * file); a write that fails leaves no partial file behind.
+     */
+    suspend fun writeTo(file: File, scan: ScanResult, mode: ExportMode = ExportMode.BOTH) =
+        withContext(Dispatchers.IO) {
+            val findings = FindingsView.of(scan, reportInputs)
+            val logLines = captureLogcat()
+            val version = context.appVersion().name
+            writeFile(file) { out ->
+                ReportFormatter.writeScanReport(out, scan, findings, logLines, telemetryReader, mode, version)
+            }
         }
-        val deviceTelemetry = scanOrchestrator.lastDeviceTelemetry
-        val processTelemetry = scanOrchestrator.lastProcessTelemetry
-        val fileTelemetry = scanOrchestrator.lastFileArtifactTelemetry
-        val accessibilityTelemetry = scanOrchestrator.lastAccessibilityTelemetry
-        val receiverTelemetry = scanOrchestrator.lastReceiverTelemetry
-        val appOpsTelemetry = scanOrchestrator.lastAppOpsTelemetry
-        // #342 C4: scope imported intrusion-log evidence to THIS scan. The
-        // unscoped query embedded up to 500 imported rows into every report —
-        // including live-scan reports and historical scans predating any import
-        // (wrong forensic provenance, widened disclosure). An intrusion-log
-        // import's rows carry that import's scanResultId, so a report keyed by
-        // scan.id embeds them only when it is the report for that import.
-        val intrusionEvents = forensicTimelineEventDao
-            .getEventsBySourceForScan("intrusion_log", scan.id, 500).first()
-        val displayNames = inventory
-            .associate { it.packageName to it.appName }
-            .filterValues { it.isNotEmpty() }
-        val text = ReportFormatter.formatScanReport(
-            scan, dnsEvents, logLines, inventory, displayNames, mode,
-            deviceTelemetry = deviceTelemetry,
-            processTelemetry = processTelemetry,
-            fileTelemetry = fileTelemetry,
-            accessibilityTelemetry = accessibilityTelemetry,
-            receiverTelemetry = receiverTelemetry,
-            appOpsTelemetry = appOpsTelemetry,
-            intrusionEvents = intrusionEvents,
-            versionName = context.appVersion().name,
-            campaigns = reportInputs.campaigns(),
-            ruleScopes = reportInputs.ruleScopes(),
-            ruleCategoryById = reportInputs.ruleCategoryById(),
-        )
 
-        val reportsDir = File(context.cacheDir, "reports").apply { mkdirs() }
-        val filename = "androdr_report_${filenameFmt.format(Date(scan.timestamp))}.txt"
-        val reportFile = File(reportsDir, filename)
-        reportFile.writeText(text, Charsets.UTF_8)
-
-        FileProvider.getUriForFile(
-            context,
-            "${context.packageName}.fileprovider",
-            reportFile
+    /** What the History sheet shows for [scan]: counts only, read off the main thread. */
+    suspend fun summary(scan: ScanResult): ReportSummary = withContext(Dispatchers.IO) {
+        ReportSummary(
+            source = scan.source,
+            overallRisk = scan.overallRiskLevel.name,
+            appIssues = scan.appRisks.count { it.triggered && it.level.lowercase() != "informational" },
+            deviceIssues = scan.deviceFlags.count { it.triggered },
+            warningSigns = scan.activityChains.count { it.triggered },
+            checksNotRun = scan.scannerErrors.count { NotEvaluatedReason.fromSentinel(it.exception) != null },
+            failedScanners = scan.realFailureCount,
+            telemetryState = scan.telemetryState,
+            services = telemetryReader.services(scan.id),
         )
+    }
+
+    /** What a full export of [scan] carries: its record count, their size, and their categories. */
+    suspend fun exportEstimate(scan: ScanResult): ExportEstimate = withContext(Dispatchers.IO) {
+        val services = telemetryReader.services(scan.id)
+        if (services.isEmpty()) return@withContext ExportEstimate.NONE
+        val totals = telemetryReader.scanTotals(scan.id)
+        ExportEstimate(totals.records, totals.rawBytes, services.map { serviceLabel(it.service) })
+    }
+
+    /**
+     * Writes an imported bug report's timeline export (the Bug Report screen's Export). APK hashes
+     * and app names come from the newest stored live scan's app records, when one was captured
+     * within [TelemetryReader.APP_ENRICHMENT_MAX_AGE_MS] -- the same device's apps.
+     */
+    suspend fun exportBugReportTimeline(timeline: List<TimelineEvent>, findings: List<Finding>): Uri =
+        withContext(Dispatchers.IO) {
+            val apps = telemetryReader
+                .latestLive(LiveRecordBuilders.APP_SCANNER, TelemetryReader.APP_ENRICHMENT_MAX_AGE_MS).orEmpty()
+            val text = TimelineFormatter.formatTimeline(
+                timeline, findings, apps.fieldMap("apk_hash"), apps.fieldMap("app_name"),
+                versionName = context.appVersion().name,
+            )
+            val file = newReportFile("androdr_bugreport", System.currentTimeMillis())
+            writeFile(file) { it.write(text) }
+            FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+        }
+
+    /** Package name to a non-empty string field of each app record. */
+    private fun List<DecodedRecord>.fieldMap(field: String): Map<String, String> = buildMap {
+        this@fieldMap.forEach { r ->
+            val pkg = r.fields?.get("package_name") as? String
+            val value = r.fields?.get(field) as? String
+            if (!pkg.isNullOrEmpty() && !value.isNullOrEmpty()) put(pkg, value)
+        }
+    }
+
+    /** Removes stale files from `cache/reports/` (spec §7), then names `<prefix>_<time>.txt` there. */
+    private fun newReportFile(prefix: String, time: Long): File {
+        val dir = reportFiles.dir.apply { mkdirs() }
+        runCatching { reportFiles.deleteStale() }.onFailure { Log.w(TAG, "Stale report cleanup failed", it) }
+        return File(dir, "${prefix}_${SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date(time))}.txt")
+    }
+
+    /**
+     * Streams into a `.part` sibling through a buffered UTF-8 writer, then renames it to [file], so
+     * a reader polling for [file] (the debug harness) never sees a half-written report, and a write
+     * that fails leaves nothing behind.
+     */
+    @Suppress("TooGenericExceptionCaught") // any failure removes the partial file, then rethrows
+    private suspend fun writeFile(file: File, write: suspend (Writer) -> Unit) {
+        val part = File(file.parentFile, "${file.name}.part")
+        try {
+            part.bufferedWriter(Charsets.UTF_8).use { write(it) }
+            file.delete()
+            check(part.renameTo(file)) { "could not move the report into place" }
+        } catch (t: Throwable) {
+            part.delete()
+            throw t
+        }
     }
 
     @Suppress("TooGenericExceptionCaught")
@@ -131,8 +176,7 @@ class ReportExporter @Inject constructor(
     companion object {
         private const val TAG = "ReportExporter"
 
-        // plan 3 refactor: explicit TELEMETRY / FINDINGS sections,
-        // severity removed from telemetry rows. Bumped from 1 to 2.
-        const val EXPORT_FORMAT_VERSION = 2
+        // 3: telemetry sections are the scan's own stored records, one generic section per service.
+        const val EXPORT_FORMAT_VERSION = 3
     }
 }
