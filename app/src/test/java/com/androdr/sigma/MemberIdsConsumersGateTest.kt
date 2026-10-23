@@ -30,8 +30,13 @@ class MemberIdsConsumersGateTest {
             mentions(root()).containsAll(allowListed))
     }
 
+    /**
+     * Smoke check only (review m-4): a text search, so a mention in a comment would pass it. The
+     * behaviour of these readers is pinned by ClusterMembersTest, TimelineExporterTest and
+     * ActivityChainsReportSectionTest; the real gate is the test above.
+     */
     @Test
-    fun `former readers resolve members through SignalMemberDao or read member_count`() {
+    fun `smoke - former readers name SignalMemberDao or member_count`() {
         val root = root()
         fun text(path: String) = File(root, path).readText()
         // The Timeline loads a signal's members page by page from signal_member.

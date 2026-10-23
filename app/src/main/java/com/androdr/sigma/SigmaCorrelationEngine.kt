@@ -271,6 +271,9 @@ class SigmaCorrelationEngine @Inject constructor() {
         return CorrelationSignal(row, refs)
     }
 
+    /** A rule-level "not started" entry for every rule (the pass could not read or bind its atoms). */
+    fun notStarted(rules: List<CorrelationRule>): List<ScannerFailure> = rules.map { notStarted(it) }
+
     private fun notStarted(rule: CorrelationRule) = ScannerFailure(
         scanner = SCANNER,
         exception = NotEvaluatedReason.CORRELATION_INCOMPLETE.sentinel,

@@ -2,6 +2,8 @@ package com.androdr.data.repo
 
 import com.androdr.data.db.ForensicTimelineEventDao
 import com.androdr.data.db.SignalMemberDao
+import com.androdr.data.db.chunkedEach
+import com.androdr.data.db.chunkedIn
 import com.androdr.data.store.TelemetryStore
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -25,43 +27,34 @@ class TimelineRowDeleter @Inject constructor(
     private val members: SignalMemberDao,
 ) {
     /** The 30-day prune of non-persistent rows (audit/closure rows are kept). */
-    suspend fun olderThan(cutoff: Long) {
-        val pinned = dao.recordIdsOlderThan(cutoff)
-        dao.deleteOlderThan(cutoff)
-        release(pinned)
-    }
+    suspend fun olderThan(cutoff: Long) =
+        delete(dao.recordIdsOlderThan(cutoff), dao.signalIdsOlderThan(cutoff)) { dao.deleteOlderThan(cutoff) }
 
-    suspend fun bySource(source: String) {
-        val pinned = dao.recordIdsBySource(source)
-        dao.deleteBySource(source)
-        release(pinned)
-    }
+    suspend fun bySource(source: String) =
+        delete(dao.recordIdsBySource(source), dao.signalIdsBySource(source)) { dao.deleteBySource(source) }
 
     /** Rows of [source] stamped in `[since, until]` (the live scan's re-read usage window). */
-    suspend fun bySourceBetween(source: String, since: Long, until: Long) {
-        val pinned = dao.recordIdsBySourceBetween(source, since, until)
-        dao.deleteBySourceBetween(source, since, until)
-        release(pinned)
-    }
+    suspend fun bySourceBetween(source: String, since: Long, until: Long) = delete(
+        dao.recordIdsBySourceBetween(source, since, until), dao.signalIdsBySourceBetween(source, since, until),
+    ) { dao.deleteBySourceBetween(source, since, until) }
 
     /** A scan's own non-persistent rows. */
-    suspend fun byScanId(scanId: Long) {
-        val pinned = dao.recordIdsByScanId(scanId)
-        dao.deleteByScanId(scanId)
-        release(pinned)
-    }
+    suspend fun byScanId(scanId: Long) =
+        delete(dao.recordIdsByScanId(scanId), dao.signalIdsByScanId(scanId)) { dao.deleteByScanId(scanId) }
 
     /** "Clear all": non-persistent rows that are scan-less or whose scan no longer exists. */
-    suspend fun unownedNonPersistent() {
-        val pinned = dao.recordIdsUnownedNonPersistent()
-        dao.deleteUnownedNonPersistent()
-        release(pinned)
-    }
+    suspend fun unownedNonPersistent() = delete(
+        dao.recordIdsUnownedNonPersistent(), dao.signalIdsUnownedNonPersistent(),
+    ) { dao.deleteUnownedNonPersistent() }
 
-    /** Removes the members of signals just deleted, then releases their facts and the rows' pins. */
-    private suspend fun release(rowPins: List<Long>) {
-        val memberPins = members.orphanFactRefs()
-        members.deleteOrphans()
+    /**
+     * Removes the members of the [signals] about to go, by signal id (primary-key prefix, never a
+     * scan of `signal_member`), then the rows, then releases the rows' and the members' fact pins.
+     */
+    private suspend fun delete(rowPins: List<Long>, signals: List<Long>, deleteRows: suspend () -> Unit) {
+        val memberPins = chunkedIn(signals) { members.factRefsOf(it) }
+        chunkedEach(signals) { members.deleteForSignals(it) }
+        deleteRows()
         store.releaseUnpinned(rowPins + memberPins)
     }
 }

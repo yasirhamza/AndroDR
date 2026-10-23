@@ -72,17 +72,11 @@ class TimelineRowDeleterTest {
      */
     @Test
     fun `each delete path takes a deleted signal's members with it and releases their facts`() = runBlocking {
-        val paths: List<Pair<ForensicTimelineEvent, suspend () -> Unit>> = listOf(
-            row(createdAt = 10L) to { deleter.olderThan(11L) },
-            row(source = "intrusion_log") to { deleter.bySource("intrusion_log") },
-            row(scan = 7L) to { deleter.byScanId(7L) },
-            row(scan = 404L) to { deleter.unownedNonPersistent() },
-        )
         val dao = f.db.forensicTimelineEventDao()
         val survivor = dao.insert(row(source = "kept", scan = 1L, createdAt = 1_000L).copy(kind = "signal",
             persistent = true))
         f.db.signalMemberDao().insertAll(listOf(SignalMember(survivor, SignalMember.KIND_ROW, 5L)))
-        for ((r, delete) in paths) {
+        for ((r, delete) in deletePaths()) {
             f.scan(1L, ScanState.COMPLETE)
             val fact = f.persist(1L, "app_scanner", listOf(app("com.member"))).factIdByChunkIndex.single()
             val sig = dao.insert(r.copy(kind = "signal"))
@@ -98,6 +92,55 @@ class TimelineRowDeleterTest {
             assertEquals("the fact its member pinned is released", 0L, facts())
             assertEquals("another signal's members stay", 1L,
                 f.count("SELECT COUNT(*) FROM signal_member WHERE signalRowId = $survivor"))
+            assertEquals("no delete path leaves an orphan member", 0L, orphans())
+        }
+    }
+
+    /** Every TimelineRowDeleter path (prune, import/usage sweeps, scan delete, clear-all) and a row it deletes. */
+    private fun deletePaths(): List<Pair<ForensicTimelineEvent, suspend () -> Unit>> = listOf(
+        row(createdAt = 10L) to { deleter.olderThan(11L) },
+        row(source = "intrusion_log") to { deleter.bySource("intrusion_log") },
+        row(source = "usage_stats").copy(startTimestamp = 50L) to { deleter.bySourceBetween("usage_stats", 40L, 60L) },
+        row(scan = 7L) to { deleter.byScanId(7L) },
+        row(scan = 404L) to { deleter.unownedNonPersistent() },
+    )
+
+    private fun orphans() = f.count(
+        "SELECT COUNT(*) FROM signal_member m WHERE NOT EXISTS " +
+            "(SELECT 1 FROM forensic_timeline s WHERE s.id = m.signalRowId)"
+    )
+
+    /**
+     * Review I-2: a delete removes members by the ids of the signals it removes, through the
+     * primary-key prefix. No statement any delete path runs against signal_member may scan it
+     * (a full scan per delete would run inside every live `finish`).
+     */
+    @Test
+    fun `no delete path scans signal_member`() = runBlocking {
+        val dao = f.db.forensicTimelineEventDao()
+        for ((r, delete) in deletePaths()) {
+            val sig = dao.insert(r.copy(kind = "signal"))
+            f.db.signalMemberDao().insertAll(listOf(SignalMember(sig, SignalMember.KIND_ROW, 1L)))
+            f.sql.clear()
+            f.db.withTransaction { delete() }
+            val recorded = synchronized(f.sql) { f.sql.toList() }
+            val statements = recorded.filter { it.contains("signal_member") }.distinct()
+            assertTrue("the path touched signal_member: $recorded", statements.isNotEmpty())
+            for (stmt in statements) {
+                val args = arrayOfNulls<Any>(stmt.count { it == '?' }).apply { fill(1L) }
+                val plan = f.db.openHelper.readableDatabase.query("EXPLAIN QUERY PLAN $stmt", args).use { c ->
+                    buildList { while (c.moveToNext()) add(c.getString(c.columnCount - 1)) }
+                }
+                assertTrue("full scan of signal_member: $stmt -> $plan",
+                    plan.none { Regex("""SCAN( TABLE)? signal_member\b""").containsMatchIn(it) })
+                // The composite primary key (signalRowId, kind, refId) is SQLite's autoindex.
+                assertTrue("searches by the primary key: $stmt -> $plan", plan.any {
+                    it.startsWith("SEARCH") && it.contains("signal_member") &&
+                        (it.contains("PRIMARY KEY") || it.contains("sqlite_autoindex_signal_member_1")) &&
+                        it.contains("signalRowId=?")
+                })
+            }
+            assertEquals(0L, orphans())
         }
     }
 

@@ -49,8 +49,10 @@ class CompleteVisibilityGateTest {
         // and the lookback's facts, visible as "a COMPLETE live-scan observation" (stricter than
         // VisibleFact: no pinned orphans, no import observations).
         "AtomDao.rowsForScan", "AtomDao.factsForScan", "AtomDao.liveFactsBetween",
-        // A signal row delete takes its members with it (TimelineRowDeleter), and their fact pins.
-        "SignalMemberDao.orphanFactRefs", "SignalMemberDao.deleteOrphans",
+        // The signal rows a delete is about to remove (their members go with them, by id).
+        "ForensicTimelineEventDao.signalIdsOlderThan", "ForensicTimelineEventDao.signalIdsBySource",
+        "ForensicTimelineEventDao.signalIdsBySourceBetween", "ForensicTimelineEventDao.signalIdsByScanId",
+        "ForensicTimelineEventDao.signalIdsUnownedNonPersistent",
         // The one-time signal_member backfill reads and rewrites every legacy signal row.
         "SignalMemberBackfillDao.legacyAfter", "SignalMemberBackfillDao.signalExists",
         "SignalMemberBackfillDao.rewrite",

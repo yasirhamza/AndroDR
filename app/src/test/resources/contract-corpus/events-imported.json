@@ -78,5 +78,28 @@
       "package_name": "com.evil.app", "event_type": "INSTALL", "timestamp": 1787000000000,
       "version_code": 42, "source": "BUGREPORT_IMPORT", "captured_at": 1787400400000
     }
+  },
+  {
+    "service": "package_install_history",
+    "fields": {
+      "package_name": "com.example.chat", "event_type": "UPDATE", "timestamp": 1787300000000,
+      "version_code": 43, "source": "BUGREPORT_IMPORT", "captured_at": 1787400400000
+    }
+  },
+  {
+    "service": "package_install_history",
+    "fields": {
+      "package_name": "com.gone.app", "event_type": "UNINSTALL", "timestamp": 1787350000000,
+      "version_code": null, "source": "BUGREPORT_IMPORT", "captured_at": 1787400400000
+    }
+  },
+  {
+    "service": "appops_audit",
+    "fields": {
+      "package_name": "com.android.phone", "operation": "android:record_audio",
+      "last_access_time": "2026-08-20 10:05:00.000", "last_reject_time": "",
+      "access_count": 1, "is_system_app": true, "source": "bugreport_import",
+      "event_time_ms": 1787220300000
+    }
   }
 ]

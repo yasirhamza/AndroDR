@@ -26,25 +26,19 @@ interface SignalMemberDao {
     )
     suspend fun forSignal(signalRowId: Long, afterKind: Int?, afterRefId: Long?, size: Int): List<SignalMember>
 
+    /** Every member of [ids] (a signal row delete takes them with it). Call through [chunkedEach]. */
     @Query("DELETE FROM signal_member WHERE signalRowId IN (:ids)")
     suspend fun deleteForSignals(ids: List<Long>)
 
     /**
-     * Fact refs of members whose signal row no longer exists: the pins a row delete releases
-     * (read by `TimelineRowDeleter` just before [deleteOrphans], in the same transaction).
+     * Fact refs of [ids]' members: the pins a signal-row delete releases (read by
+     * `TimelineRowDeleter` just before [deleteForSignals], in the same transaction). Uses the
+     * primary-key prefix `signalRowId`. Call through [chunkedIn].
      */
     @Query(
-        "SELECT DISTINCT o.refId FROM signal_member o WHERE o.kind = ${SignalMember.KIND_FACT} " +
-            "AND NOT EXISTS (SELECT 1 FROM forensic_timeline s WHERE s.id = o.signalRowId)"
+        "SELECT DISTINCT refId FROM signal_member WHERE signalRowId IN (:ids) AND kind = ${SignalMember.KIND_FACT}"
     )
-    suspend fun orphanFactRefs(): List<Long>
-
-    /** Members whose signal row is gone: every row delete removes its signals' members with it. */
-    @Query(
-        "DELETE FROM signal_member WHERE NOT EXISTS " +
-            "(SELECT 1 FROM forensic_timeline s WHERE s.id = signal_member.signalRowId)"
-    )
-    suspend fun deleteOrphans()
+    suspend fun factRefsOf(ids: List<Long>): List<Long>
 
     /**
      * Of [signalRowIds]' members, those whose row or fact is still visible, ordered by signal then

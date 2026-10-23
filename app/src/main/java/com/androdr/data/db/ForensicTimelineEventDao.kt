@@ -106,6 +106,30 @@ interface ForensicTimelineEventDao {
     @Query("DELETE FROM forensic_timeline WHERE createdAt < :cutoff AND persistent = 0")
     suspend fun deleteOlderThan(cutoff: Long)
 
+    // The signal rows each delete below is about to remove: their `signal_member` rows go with
+    // them, by id (TimelineRowDeleter; spec §5.4). Same predicates as the paired deletes.
+
+    @Query("SELECT id FROM forensic_timeline WHERE kind = 'signal' AND createdAt < :cutoff AND persistent = 0")
+    suspend fun signalIdsOlderThan(cutoff: Long): List<Long>
+
+    @Query("SELECT id FROM forensic_timeline WHERE kind = 'signal' AND source = :source")
+    suspend fun signalIdsBySource(source: String): List<Long>
+
+    @Query(
+        "SELECT id FROM forensic_timeline WHERE kind = 'signal' AND source = :source " +
+            "AND startTimestamp BETWEEN :since AND :until"
+    )
+    suspend fun signalIdsBySourceBetween(source: String, since: Long, until: Long): List<Long>
+
+    @Query("SELECT id FROM forensic_timeline WHERE kind = 'signal' AND scanResultId = :scanResultId AND persistent = 0")
+    suspend fun signalIdsByScanId(scanResultId: Long): List<Long>
+
+    @Query(
+        "SELECT id FROM forensic_timeline WHERE kind = 'signal' AND persistent = 0 AND (scanResultId = -1 OR " +
+            "NOT EXISTS (SELECT 1 FROM ScanResult s WHERE s.id = forensic_timeline.scanResultId))"
+    )
+    suspend fun signalIdsUnownedNonPersistent(): List<Long>
+
     @Query(
         "SELECT DISTINCT recordId FROM forensic_timeline " +
             "WHERE createdAt < :cutoff AND persistent = 0 AND recordId IS NOT NULL"

@@ -17,6 +17,7 @@ internal fun evidenceName(category: String): String = when (category) {
     RuleCoverage.UNBOUND_LEG -> "an event kind no loaded rule binds to"
     "permission_use" ->
         "records of apps using sensitive permissions (only an imported bug report carries these)"
+    "system_permission_use" -> "records of system components using sensitive permissions"
     "package_install" -> "app installations"
     "package_uninstall" -> "app removals"
     "package_update" -> "app updates"

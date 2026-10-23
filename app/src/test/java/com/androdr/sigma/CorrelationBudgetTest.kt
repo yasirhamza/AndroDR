@@ -128,6 +128,26 @@ class CorrelationBudgetTest {
         assertEquals(0, done.realFailureCount)
     }
 
+    /**
+     * Review m-2: an atom read that cannot run (here, more atom categories than one query binds)
+     * costs correlation only: the scan completes and every chain rule is recorded as not started.
+     */
+    @Test
+    fun `an atom read failure records every rule as not started and the scan completes`() = runBlocking {
+        val engine = io.mockk.mockk<SigmaRuleEngine>(relaxed = true)
+        io.mockk.every { engine.getCorrelationRules() } returns listOf(installThenAdmin, permThenC2)
+        io.mockk.every { engine.atomCategories() } returns
+            (0..com.androdr.data.store.AtomReader.MAX_ATOM_CATEGORIES).associate { "atom-$it" to "category-$it" }
+        val scan = w.scan(3L, TelemetrySource.BUGREPORT_IMPORT)
+        val s = w.writer.begin(scan, liveEvents = false, hooks(scan, engine, Ticker()))
+
+        val done = s.finish().scan
+
+        assertEquals(ScanState.COMPLETE, done.state)
+        assertEquals(listOf("androdr-corr-001", "androdr-corr-003"), incomplete(done).map { it.ruleId })
+        assertTrue(incomplete(done).all { it.message!!.contains("not started") })
+    }
+
     @Test
     fun `a total deadline passed during binding records every rule as not started`() {
         val engine = engine(listOf(installThenAdmin, permThenC2))

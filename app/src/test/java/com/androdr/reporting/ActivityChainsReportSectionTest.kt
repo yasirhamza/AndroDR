@@ -67,6 +67,20 @@ class ActivityChainsReportSectionTest {
         assertTrue(section.contains(chain.description))
     }
 
+    /** Review m-8: a budget cut-off is printed under its own not-checked heading, naming the package. */
+    @Test
+    fun `a correlation cut-off is listed under its own heading with rule and package`() {
+        val cut = com.androdr.data.model.ScannerFailure(
+            scanner = "correlation",
+            exception = com.androdr.data.model.NotEvaluatedReason.CORRELATION_INCOMPLETE.sentinel,
+            message = "Burst (androdr-corr-004): not finished in time for com.flood",
+            ruleId = "androdr-corr-004", packages = listOf("com.flood"),
+        )
+        val text = report(scanOf(chain).copy(scannerErrors = listOf(cut)))
+        assertTrue(text, text.contains(com.androdr.data.model.NotEvaluatedReason.CORRELATION_INCOMPLETE.heading))
+        assertTrue(text, text.contains("- Burst (androdr-corr-004): not finished in time for com.flood"))
+    }
+
     @Test
     fun `a chain prints its member count from member_count`() {
         val text = report(scanOf(chain))

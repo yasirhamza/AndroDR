@@ -115,6 +115,16 @@ class SignalMemberBackfillTest {
         assertEquals(listOf(9L), members(kept).map { it.refId })
     }
 
+    /** Review m-5: a member already present (a re-run after a crash mid-batch) is not duplicated. */
+    @Test
+    fun `a member already present is ignored, not duplicated`() = runBlocking {
+        val id = dao.insert(legacy("3,5,8"))
+        f.db.signalMemberDao().insertAll(listOf(com.androdr.data.model.SignalMember(id, 0, 5L)))
+        backfill().run()
+        assertEquals(listOf(3L, 5L, 8L), members(id).map { it.refId })
+        assertTrue(row(id).details.contains("\"member_count\":3"))
+    }
+
     @Test
     fun `non-numeric entries are dropped`() = runBlocking {
         val id = dao.insert(legacy("3,x,"))

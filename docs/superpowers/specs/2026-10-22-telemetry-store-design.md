@@ -271,13 +271,16 @@ the watermark registry; no other list exists.
 A record is an **event record iff its service declares an `event_time_field`
 and the record's value is present and > 0**.
 
-**Timeline categories** (`TimelineCategories`) preserve today's values exactly:
+**Timeline categories** (`TimelineCategories`) preserve today's values exactly: the atoms a fact
+yields equal the legacy timeline rows' atoms. Where a service's facts include events the legacy
+timeline never wrote as that category, they get their own precise category (ruling R26; rules may
+opt in later):
 
 | Service | Category |
 |---|---|
 | `usage_stats` | the record's `event_type` |
-| `appops_audit` | `permission_use` |
-| `package_install_history` | `package_install` |
+| `appops_audit` | `system_permission_use` when `is_system_app` is true (no legacy row), else `permission_use` |
+| `package_install_history` | by `event_type`: `INSTALL` → `package_install`, `UPDATE` → `package_update`, `UNINSTALL` → `package_uninstall` |
 | `battery_daily` | the record's `event_type` |
 | `network_monitor` | `network_connect` |
 | `security_log` | `security_event` |
@@ -406,7 +409,7 @@ Failure handling:
 **Correlation inputs.**
 - Atoms are restricted to the categories atom rules bind (the correlator's memory bound).
 - Exact-precision facts only.
-- Facts referenced by a `forensic_timeline` row (`recordId`, or `sourceKey` = the row's `sourceEventKey`) are excluded.
+- Facts referenced by a `forensic_timeline` row in an atom-bound category (`recordId`, or `sourceKey` = the row's `sourceEventKey`) are excluded: that row is the event's atom. A finding row (never an atom category) does not exclude its fact. Known residual: the test is global, so a stand-in row outside the atoms being read (e.g. a live `ioc_match` row stamped after `scanStart`) hides the fact and the event binds zero times — never twice.
 - For a live scan, lookback atoms are bounded to `timestamp ≤ scanStart`, exclude every import source, and read rows through `VisibleRow.SQL` (so rows of `DELETING` scans are never bound).
 - An import correlates over its own scan's atoms only (no lookback), so an import's signal never references live rows or facts.
 
