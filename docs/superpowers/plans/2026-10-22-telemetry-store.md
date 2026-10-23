@@ -775,6 +775,43 @@ object Watermarks {
 
 ---
 
+### Task C5: Timeline declutter and search (owner request 2026-10-23)
+
+The owner finds the Timeline "too cluttered" and asked for search as a cheap improvement. Today the screen has four action icons in the top bar. Its filter panel opens by default and stacks a switch plus four chip rows: severity, packages, grouping and date range. The package chips are taken from the rows already loaded, which is wrong once the Timeline is the whole store.
+
+**Decisions (coordinator calls, ruling R30):**
+- **Top bar:** keep the title, add a search action, and add one overflow menu holding History, View report, Copy and Export. No other icons.
+- **Search:** tapping it opens an inline search field. The query is applied in SQL inside `TimelineQueries` (a `TimelineFilter.query` field) against **columns only, never decoded bodies**:
+  - facts: `packageName` and `category`, plus any human-readable key column the store already holds (for example a DNS domain), if one exists;
+  - rows: `packageName`, `category`, `ruleId` and the title.
+  - Matching is case-insensitive `LIKE` with escaped `%`/`_` and a debounce of about 300 ms.
+  - The field's hint states exactly what it searches, for example "Search apps, rules and event types". If DNS domains cannot be searched without decoding, the hint must not claim them.
+  - Search replaces the package chips. Picking a package from a result or from deep-link still sets `packageFilter`.
+- **Filters:** the panel is collapsed by default and replaced by one compact row:
+  - a "Filters" button with a count of active filters, which opens a bottom sheet holding severity, source, date range, grouping and the "Show findings and their evidence only" switch;
+  - then one dismissible chip per active filter;
+  - then the live result count.
+  - The sheet's state survives rotation.
+- No new behaviour beyond search. All C4 filters, counts, keyset paging and query-plan guarantees stay unchanged, and search adds no `OFFSET`, no `TEMP B-TREE` beyond what an indexed `LIKE` prefix needs, and no full scan where an index exists. Record the query plan of the search shape in `TimelineQueryPlanTest`. If a contains-match cannot use an index, say so and justify it at Timeline scale.
+
+**Files:**
+- `ui/timeline/TimelineScreen.kt` and `TimelineViewModel.kt`.
+- `data/db/TimelineFilter.kt` (`query`) and `data/db/TimelineQueries.kt`.
+- New composables as needed (`TimelineSearchBar`, `TimelineFilterSheet`).
+- Strings go in `res/values`.
+
+**Tests:**
+- `ui/timeline/TimelineSearchTest.kt`:
+  - search matches a package and a rule title;
+  - `%` and `_` in the query are literal;
+  - search composes with severity and scan filters;
+  - the count matches the results;
+  - nothing in an `IN_PROGRESS` scan is found.
+- `TimelineViewModelTest` covers the active-filter count and that dismissing a filter chip clears exactly that filter.
+- The query plan test covers the search shape.
+
+- [ ] Steps: failing tests → implement → pass → commit `feat(timeline): search and a decluttered filter bar`.
+
 ## Phase D — Findings, alerts, lifecycle, retention (PR 4)
 
 ### Task D1: Protected confirmation
