@@ -38,6 +38,7 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -152,14 +153,7 @@ fun DashboardScreen(
                 latestScan?.let { PartialScanBanner(scan = it) }
             }
 
-            // The scan ran out of storage: findings are kept, its records are not (A7c).
-            AnimatedVisibility(
-                visible = DashboardViewModel.showStorageFailedBanner(latestScan, isScanning),
-                enter = fadeIn(),
-                exit = fadeOut()
-            ) {
-                StorageFailedBanner()
-            }
+            StorageBanners(viewModel, latestScan, isScanning)
 
             // Usage Access permission banner — shown when PACKAGE_USAGE_STATS
             // hasn't been granted, which silently disables the forensic
@@ -619,9 +613,29 @@ private fun PartialScanBanner(scan: ScanResult) {
     }
 }
 
-/** Warning shown when the latest scan's telemetry state is FAILED (storage ran out while saving it). */
+/** Storage warnings: the latest result not saved / only partly stored, and dropped DNS events. */
 @Composable
-private fun StorageFailedBanner() {
+private fun StorageBanners(viewModel: DashboardViewModel, latestScan: ScanResult?, isScanning: Boolean) {
+    val unsaved by viewModel.latestUnsaved.collectAsStateWithLifecycle()
+    val healthFailed by viewModel.storageHealthFailed.collectAsStateWithLifecycle()
+    val drops by viewModel.dnsDrops.collectAsStateWithLifecycle()
+    when (DashboardViewModel.storageBanner(latestScan, isScanning, unsaved, healthFailed)) {
+        StorageBanner.NOT_SAVED ->
+            WarningBanner(R.string.storage_not_saved_banner_title, R.string.storage_not_saved_banner_body)
+        StorageBanner.PARTLY_STORED ->
+            WarningBanner(R.string.storage_failed_banner_title, R.string.storage_failed_banner_body)
+        StorageBanner.NONE -> Unit
+    }
+    if (drops.any) {
+        WarningBanner(
+            R.string.dns_drops_banner_title, R.string.dns_drops_banner_body, drops.total.toInt(),
+            onDismiss = viewModel::dismissDnsDrops,
+        )
+    }
+}
+
+@Composable
+private fun WarningBanner(titleRes: Int, bodyRes: Int, count: Int? = null, onDismiss: (() -> Unit)? = null) {
     val colors = MaterialTheme.androdrColors
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -635,17 +649,18 @@ private fun StorageFailedBanner() {
             Icon(imageVector = Icons.Filled.Warning, contentDescription = null, tint = colors.high)
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = stringResource(R.string.storage_failed_banner_title),
+                    text = stringResource(titleRes),
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.SemiBold,
                     color = colors.high
                 )
                 Text(
-                    text = stringResource(R.string.storage_failed_banner_body),
+                    text = if (count != null) stringResource(bodyRes, count) else stringResource(bodyRes),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurface
                 )
             }
+            onDismiss?.let { TextButton(onClick = it) { Text(stringResource(R.string.dns_drops_banner_dismiss)) } }
         }
     }
 }

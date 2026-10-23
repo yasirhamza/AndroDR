@@ -213,7 +213,9 @@ fun HistoryScreen(
             title = { Text(stringResource(R.string.history_delete_refused_title)) },
             text = { Text(stringResource(R.string.history_delete_refused_body)) },
             confirmButton = {
-                TextButton(onClick = { viewModel.dismissDeleteRefused() }) { Text("OK") }
+                TextButton(onClick = { viewModel.dismissDeleteRefused() }) {
+                    Text(stringResource(android.R.string.ok))
+                }
             }
         )
     }

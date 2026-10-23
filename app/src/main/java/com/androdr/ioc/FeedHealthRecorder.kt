@@ -111,9 +111,6 @@ class FeedHealthRecorder @Inject constructor(
         const val FEED_SIGMA_RULES = "sigma_rules"
         const val FEED_CVE = "cve"
 
-        /** Not a threat-intel feed: the DNS VPN log, which warns here when it had to drop events. */
-        const val FEED_DNS_EVENT_LOG = "dns_event_log"
-
         /**
          * The detection-content feeds whose staleness matters most: the SIGMA
          * rules and the curated public-repo IOCs both ride raw.githubusercontent.com
@@ -131,7 +128,6 @@ class FeedHealthRecorder @Inject constructor(
             FEED_OEM_PREFIXES to "OEM prefixes",
             FEED_BRAND_REGISTRY to "Brand registry",
             FEED_CVE to "CVE database",
-            FEED_DNS_EVENT_LOG to "DNS event log",
         )
 
         // Staleness thresholds live here (shared by the Settings badge and any

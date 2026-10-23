@@ -134,7 +134,7 @@ class DnsVpnService : VpnService() {
     @Suppress("LateinitUsage") @Inject lateinit var scanRepository: ScanRepository
     @Suppress("LateinitUsage") @Inject lateinit var indicatorResolver: IndicatorResolver
     @Suppress("LateinitUsage") @Inject lateinit var settingsRepository: SettingsRepository
-    @Suppress("LateinitUsage") @Inject lateinit var feedHealthDao: com.androdr.data.db.FeedHealthDao
+    @Suppress("LateinitUsage") @Inject lateinit var dnsDropLog: com.androdr.data.store.DnsDropLog
 
     private var tunFd: ParcelFileDescriptor? = null
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -226,7 +226,7 @@ class DnsVpnService : VpnService() {
         logBuffer = DnsLogBuffer(
             serviceScope,
             flush = { scanRepository.logDnsEventsBatch(it) },
-            health = DnsBufferHealthRecorder(feedHealthDao),
+            health = DnsDropRecorder(dnsDropLog),
         ).also { it.start() }
         resolver = UpstreamResolver(serviceScope, this, outputStream, outputLock, tracker.selection).also {
             if (!it.start()) {

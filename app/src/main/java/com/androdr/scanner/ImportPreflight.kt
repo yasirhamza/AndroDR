@@ -9,8 +9,7 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import java.io.File
-import java.util.zip.ZipFile
+import java.io.FileInputStream
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -30,12 +29,9 @@ class ImportPreflight @Inject constructor(
     @Suppress("TooGenericExceptionCaught")
     private suspend fun decompressedBytes(uri: Uri): Long? = withContext(Dispatchers.IO) {
         try {
+            // The descriptor the provider handed us is read in place; no path is reopened.
             context.contentResolver.openFileDescriptor(uri, "r")?.use { pfd ->
-                // The fd of a seekable document is readable as a path; ZipFile then reads only the
-                // central directory.
-                ZipFile(File("/proc/self/fd/${pfd.fd}")).use { zip ->
-                    sumSizes(zip.entries().asSequence().map { it.size })
-                }
+                ZipCentralDirectory.totalSize(FileInputStream(pfd.fileDescriptor).channel)
             }
         } catch (e: CancellationException) {
             throw e

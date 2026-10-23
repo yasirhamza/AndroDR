@@ -5,18 +5,25 @@ import com.androdr.data.model.TelemetryState
 import com.androdr.scanner.WriteResult
 
 /** What the import preflight asks the user before a tight import starts. */
-data class PreflightPrompt(val uri: Uri, val estimateBytes: Long?, val freeBytes: Long)
+data class PreflightPrompt(val uri: Uri, val estimateBytes: Long?, val freeBytes: Long?) {
+    /** Low space is claimed only when a size estimate exists; otherwise the dialog says the size is unknown. */
+    val sizeUnknown: Boolean get() = estimateBytes == null
+}
 
 /** Why an import was not fully stored, when it was not. */
 sealed interface ImportNotice {
     /** Fully stored. */
     data object None : ImportNotice
 
-    /** The space reserve was breached: findings were kept, records were not stored; free [bytes] to re-import. */
-    data class FreeSpace(val bytes: Long) : ImportNotice
+    /**
+     * Storage ran low partway: [storedFacts] new records were stored before that, the rest were only
+     * checked. Free at least [freeAtLeastBytes] more; [wholeImportBytes] is the preflight estimate for
+     * the whole import, null when unknown.
+     */
+    data class LowSpace(val storedFacts: Int, val freeAtLeastBytes: Long, val wholeImportBytes: Long?) : ImportNotice
 
-    /** Findings were kept but the records were not stored (the database refused them). */
-    data object NotStored : ImportNotice
+    /** The database refused part of the import (not a reserve breach): [storedFacts] were stored. */
+    data class NotFullyStored(val storedFacts: Int) : ImportNotice
 }
 
 /**
@@ -39,15 +46,20 @@ data class ImportCard(
          * [truncated] is the intrusion-log stats flag, [boundTrips] a bug report's per-module bound
          * trips. Null [write] (a result not produced by a session) yields no card.
          */
-        fun from(write: WriteResult?, truncated: Boolean, boundTrips: List<String>): ImportCard? {
+        fun from(
+            write: WriteResult?,
+            truncated: Boolean,
+            boundTrips: List<String>,
+            estimateBytes: Long? = null,
+        ): ImportCard? {
             if (write == null) return null
             val bounds = buildList {
                 if (truncated) add(INTRUSION_LIMIT)
                 addAll(boundTrips)
             }
             val notice = when {
-                write.spaceToFree > 0L -> ImportNotice.FreeSpace(write.spaceToFree)
-                write.telemetryState == TelemetryState.FAILED -> ImportNotice.NotStored
+                write.spaceToFree > 0L -> ImportNotice.LowSpace(write.newFacts, write.spaceToFree, estimateBytes)
+                write.telemetryState == TelemetryState.FAILED -> ImportNotice.NotFullyStored(write.newFacts)
                 else -> ImportNotice.None
             }
             return ImportCard(write.newFacts, write.alreadyStored, write.duplicatesDropped, bounds, notice)

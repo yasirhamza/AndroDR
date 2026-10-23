@@ -5,7 +5,9 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import com.androdr.di.StoreDataStore
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -25,6 +27,9 @@ class StorageHealthFlag @Inject constructor(@StoreDataStore private val dataStor
     suspend fun clear() {
         dataStore.edit { it.remove(KEY) }
     }
+
+    /** Live view of the flag, for the Dashboard banner. */
+    val isSetFlow: Flow<Boolean> = dataStore.data.map { it[KEY] == true }
 
     suspend fun isSet(): Boolean = dataStore.data.first()[KEY] == true
 

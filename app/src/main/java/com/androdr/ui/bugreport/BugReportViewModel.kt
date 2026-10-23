@@ -19,8 +19,11 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -66,8 +69,19 @@ class BugReportViewModel @Inject constructor(
     private val _preflightPrompt = MutableStateFlow<PreflightPrompt?>(null)
     val preflightPrompt: StateFlow<PreflightPrompt?> = _preflightPrompt.asStateFlow()
 
+    /** True while the size preflight runs (a cloud provider can take a while); picks are ignored meanwhile. */
+    private val _checkingSize = MutableStateFlow(false)
+    val checkingSize: StateFlow<Boolean> = _checkingSize.asStateFlow()
+
+    /** The preflight's estimate for the import in progress, carried into its card; null when unknown. */
+    private var importEstimate: Long? = null
+
     private val _isAnalyzing = MutableStateFlow(false)
     val isAnalyzing: StateFlow<Boolean> = _isAnalyzing.asStateFlow()
+
+    /** True while the size check or the analysis runs; the picker is disabled meanwhile. */
+    val importBusy: StateFlow<Boolean> = combine(_checkingSize, _isAnalyzing) { a, b -> a || b }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
     /** True once an analysis has finished (success OR failure, NOT cancellation).
      *  Used to render a completion confirmation distinct from the pre-analysis
@@ -123,19 +137,27 @@ class BugReportViewModel @Inject constructor(
      */
     @Suppress("TooGenericExceptionCaught")
     fun onFilePicked(uri: Uri) {
-        if (_isAnalyzing.value || _preflightPrompt.value != null) return
+        if (_isAnalyzing.value || _preflightPrompt.value != null || _checkingSize.value) return
+        _checkingSize.value = true
         viewModelScope.launch {
-            val verdict = try {
-                importPreflight.check(uri)
-            } catch (e: kotlinx.coroutines.CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                Log.w(TAG, "preflight failed; asking with an unknown size", e)
-                Preflight.Tight(null, 0L)
-            }
-            when (verdict) {
-                Preflight.Ok -> analyzeUri(uri)
-                is Preflight.Tight -> _preflightPrompt.value = PreflightPrompt(uri, verdict.estimate, verdict.free)
+            try {
+                val verdict = try {
+                    importPreflight.check(uri)
+                } catch (e: kotlinx.coroutines.CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    Log.w(TAG, "preflight failed; asking with an unknown size", e)
+                    null
+                }
+                importEstimate = (verdict as? Preflight.Tight)?.estimate
+                when (verdict) {
+                    Preflight.Ok -> analyzeUri(uri)
+                    is Preflight.Tight -> _preflightPrompt.value = PreflightPrompt(uri, verdict.estimate, verdict.free)
+                    // The measurement itself failed: say so, and never invent a free-space figure.
+                    null -> _preflightPrompt.value = PreflightPrompt(uri, null, null)
+                }
+            } finally {
+                _checkingSize.value = false
             }
         }
     }
@@ -176,7 +198,8 @@ class BugReportViewModel @Inject constructor(
                         _timeline.value = analysis.result.timeline
                         _analyzedArtifact.value = ArtifactType.BUG_REPORT
                         _importCard.value = ImportCard.from(
-                            analysis.result.write, truncated = false, boundTrips = analysis.result.boundTrips
+                            analysis.result.write, truncated = false, boundTrips = analysis.result.boundTrips,
+                            estimateBytes = importEstimate
                         )
                     }
                     is ScanOrchestrator.ArtifactAnalysis.IntrusionLog -> {
@@ -185,7 +208,7 @@ class BugReportViewModel @Inject constructor(
                         _intrusionLogSummary.value = analysis.result.stats
                         _analyzedArtifact.value = ArtifactType.INTRUSION_LOG
                         _importCard.value = ImportCard.from(
-                            analysis.result.write, analysis.result.stats.truncated, emptyList()
+                            analysis.result.write, analysis.result.stats.truncated, emptyList(), importEstimate
                         )
                     }
                 }

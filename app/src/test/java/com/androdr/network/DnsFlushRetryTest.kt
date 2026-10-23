@@ -1,13 +1,10 @@
 package com.androdr.network
 
-import com.androdr.data.db.FeedHealthDao
 import com.androdr.data.model.DnsEvent
-import com.androdr.data.model.FeedHealth
-import com.androdr.ioc.FeedHealthRecorder
-import io.mockk.coEvery
-import io.mockk.coVerify
-import io.mockk.mockk
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceTimeBy
@@ -32,9 +29,11 @@ class DnsFlushRetryTest {
 
     private class RecordingHealth : DnsBufferHealth {
         val dropped = mutableListOf<Int>()
-        var recovered = 0
-        override suspend fun onDropped(count: Int) { dropped += count }
-        override suspend fun onRecovered() { recovered++ }
+        var failNext = 0
+        override suspend fun onDropped(count: Int) {
+            if (failNext > 0) { failNext--; error("sink down") }
+            dropped += count
+        }
     }
 
     private class FakeWriter(var failing: Boolean, val now: () -> Long) {
@@ -74,7 +73,6 @@ class DnsFlushRetryTest {
         runCurrent()
         assertEquals("all three events stored once, in order", listOf(1L, 2L, 3L), writer.stored.map { it.timestamp })
         assertEquals(0, buf.pending())
-        assertEquals("recovery is reported once", 1, health.recovered)
         assertTrue("no events dropped", health.dropped.isEmpty())
     }
 
@@ -145,42 +143,99 @@ class DnsFlushRetryTest {
     }
 
     @Test
-    fun `flushAndStop makes one last attempt and keeps the events when it fails`() = runTest {
+    fun `flushAndStop makes one last attempt and reports what still cannot be stored as dropped`() = runTest {
         val writer = FakeWriter(failing = true) { testScheduler.currentTime }
-        val buf = buffer(writer, RecordingHealth()).also { it.start() }
-        buf.add(event(1))
+        val health = RecordingHealth()
+        val buf = buffer(writer, health).also { it.start() }
+        buf.add(event(1)); buf.add(event(2))
         buf.flushAndStop()
         assertEquals(1, writer.attempts.size)
-        assertEquals(1, buf.pending())
+        assertEquals("nothing is left in an unowned buffer", 0, buf.pending())
+        assertEquals("the unstored events are reported, not silently lost", listOf(2), health.dropped)
     }
 
     @Test
-    fun `health recorder writes a failing dns_event_log row and clears it on recovery`() = runTest {
-        val rows = mutableMapOf<String, FeedHealth>()
-        val dao = mockk<FeedHealthDao>()
-        coEvery { dao.get(any()) } answers { rows[firstArg()] }
-        coEvery { dao.upsert(any()) } answers { rows[firstArg<FeedHealth>().feedId] = firstArg() }
-        val recorder = DnsBufferHealthRecorder(dao) { 1_000L }
-
-        recorder.onDropped(7)
-        recorder.onDropped(3)
-        val row = rows.getValue(FeedHealthRecorder.FEED_DNS_EVENT_LOG)
-        assertEquals(2, row.consecutiveFailures)
-        assertTrue(row.lastError!!.contains("dropped 3"))
-
-        recorder.onRecovered()
-        val healed = rows.getValue(FeedHealthRecorder.FEED_DNS_EVENT_LOG)
-        assertEquals(0, healed.consecutiveFailures)
-        assertEquals(null, healed.lastError)
-        coVerify(exactly = 3) { dao.upsert(any()) }
+    fun `flushAndStop waits for a flush in progress and then offers the events added meanwhile`() = runTest {
+        val gate = kotlinx.coroutines.CompletableDeferred<Unit>()
+        val stored = mutableListOf<DnsEvent>()
+        val buf = DnsLogBuffer(
+            backgroundScope,
+            flush = { batch -> gate.await(); stored += batch },
+            health = RecordingHealth(), maxSize = 2, maxBuffered = 50, flushIntervalMs = 2_000L,
+        )
+        buf.add(event(1))
+        buf.add(event(2)) // full buffer: a flush starts at once and is suspended on the gate
+        runCurrent()
+        buf.add(event(3)) // arrives after the in-flight snapshot
+        val stopping = kotlinx.coroutines.CompletableDeferred<Unit>()
+        backgroundScope.launch { buf.flushAndStop(); stopping.complete(Unit) }
+        runCurrent()
+        assertTrue("the stop must wait for the flush in progress", !stopping.isCompleted)
+        gate.complete(Unit)
+        stopping.await()
+        assertEquals("every event was offered, in order", listOf(1L, 2L, 3L), stored.map { it.timestamp })
     }
 
     @Test
-    fun `health recorder never throws when the database is the problem`() = runTest {
-        val dao = mockk<FeedHealthDao>()
-        coEvery { dao.get(any()) } throws IllegalStateException("db closed")
-        DnsBufferHealthRecorder(dao).onDropped(1)
-        DnsBufferHealthRecorder(dao).onRecovered()
+    fun `a drop report that fails during the outage is recorded once the database is back`() = runTest {
+        val writer = FakeWriter(failing = true) { testScheduler.currentTime }
+        val health = RecordingHealth().also { it.failNext = 1 }
+        val buf = buffer(writer, health, maxBuffered = 10).also { it.start() }
+        (1..15).forEach { buf.add(event(it)) } // 5 dropped
+        advanceTimeBy(2_001); runCurrent() // flush fails; the drop report fails too
+        assertTrue(health.dropped.isEmpty())
+        writer.failing = false
+        advanceTimeBy(2_001); runCurrent() // flush succeeds; the pending report goes through
+        assertEquals(listOf(5), health.dropped)
+    }
+
+    @Test
+    fun `a health callback that throws after a successful flush does not store the batch twice`() = runTest {
+        val writer = FakeWriter(failing = false) { testScheduler.currentTime }
+        val health = RecordingHealth().also { it.failNext = 5 }
+        val buf = buffer(writer, health, maxBuffered = 2).also { it.start() }
+        (1..4).forEach { buf.add(event(it)) } // 2 dropped, report pending and failing
+        advanceTimeBy(2_001); runCurrent()
+        advanceTimeBy(2_000); runCurrent()
+        assertEquals("each event stored exactly once", listOf(3L, 4L), writer.stored.map { it.timestamp })
+    }
+
+    @Test
+    fun `drops are recorded in the drop log and survive a later healthy flush`() = runTest {
+        val dir = java.nio.file.Files.createTempDirectory("dnsdrop").toFile()
+        val scope = CoroutineScope(kotlinx.coroutines.Dispatchers.IO + kotlinx.coroutines.SupervisorJob())
+        val log = com.androdr.data.store.DnsDropLog(
+            androidx.datastore.preferences.core.PreferenceDataStoreFactory.create(scope = scope) {
+                java.io.File(dir, "d.preferences_pb")
+            }
+        )
+        try {
+            val writer = FakeWriter(failing = true) { testScheduler.currentTime }
+            val buf = buffer(writer, DnsDropRecorder(log) { 1_000L }, maxBuffered = 10).also { it.start() }
+            (1..15).forEach { buf.add(event(it)) }
+            advanceTimeBy(2_001); runCurrent()
+            writer.failing = false
+            advanceTimeBy(60_000); runCurrent()
+            // The DataStore write runs on a real thread, outside the test's virtual time.
+            val state = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                var s = log.state.first()
+                var tries = 0
+                while (s.total == 0L && tries++ < 200) { Thread.sleep(25); s = log.state.first() }
+                s
+            }
+            assertEquals(5L, state.total)
+            assertEquals(1_000L, state.lastDropAt)
+        } finally {
+            scope.cancel()
+        }
+    }
+
+    @Test
+    fun `source gate - the drop warning is not a feed_health row`() {
+        val buffer = java.io.File("src/main/java/com/androdr/network/DnsLogBuffer.kt").readText()
+        val recorder = java.io.File("src/main/java/com/androdr/ioc/FeedHealthRecorder.kt").readText()
+        assertTrue(!buffer.contains("FeedHealth"))
+        assertTrue(!recorder.contains("dns_event_log"))
     }
 
     @Test
@@ -188,6 +243,6 @@ class DnsFlushRetryTest {
         val src = java.io.File("src/main/java/com/androdr/network/DnsVpnService.kt").readText()
         assertTrue("DnsLogBuffer must not be declared in the service file again",
             !src.contains("class DnsLogBuffer"))
-        assertTrue(src.contains("DnsBufferHealthRecorder("))
+        assertTrue(src.contains("DnsDropRecorder("))
     }
 }

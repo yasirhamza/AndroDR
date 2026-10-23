@@ -1,71 +1,32 @@
 package com.androdr.network
 
 import android.util.Log
-import com.androdr.data.db.FeedHealthDao
 import com.androdr.data.model.DnsEvent
-import com.androdr.data.model.FeedHealth
-import com.androdr.ioc.FeedHealthRecorder
+import com.androdr.data.store.DnsDropLog
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 
-/** Where [DnsLogBuffer] reports that it had to give up events, and that it caught up again. */
-internal interface DnsBufferHealth {
-    /** [count] oldest events were discarded because the buffer was full while flushes kept failing. */
+/** Where [DnsLogBuffer] reports events it gave up on. May throw: the buffer then keeps the count and retries. */
+internal fun interface DnsBufferHealth {
+    /** [count] events were discarded (buffer full while flushes failed, or still pending at shutdown). */
     suspend fun onDropped(count: Int)
-
-    /** A flush succeeded after one or more failures. */
-    suspend fun onRecovered()
 }
 
-/**
- * Records [DnsBufferHealth] as the `dns_event_log` row of `feed_health`, so a DNS log that
- * silently lost events shows up beside the other health signals. Never throws.
- */
-internal class DnsBufferHealthRecorder(
-    private val dao: FeedHealthDao,
+/** Records drops in [DnsDropLog] (DataStore, outside the database that is likely failing). */
+internal class DnsDropRecorder(
+    private val log: DnsDropLog,
     private val now: () -> Long = System::currentTimeMillis,
 ) : DnsBufferHealth {
-
-    @Suppress("TooGenericExceptionCaught")
-    override suspend fun onDropped(count: Int) {
-        try {
-            val prior = dao.get(FeedHealthRecorder.FEED_DNS_EVENT_LOG)
-            dao.upsert(
-                FeedHealth(
-                    feedId = FeedHealthRecorder.FEED_DNS_EVENT_LOG,
-                    lastAttemptAt = now(),
-                    lastSuccessAt = prior?.lastSuccessAt ?: 0L,
-                    lastError = "dropped $count DNS events (database unavailable)",
-                    consecutiveFailures = (prior?.consecutiveFailures ?: 0) + 1,
-                ),
-            )
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            Log.w(TAG, "health warning not recorded: ${e.message}")
-        }
-    }
-
-    @Suppress("TooGenericExceptionCaught")
-    override suspend fun onRecovered() {
-        try {
-            if (dao.get(FeedHealthRecorder.FEED_DNS_EVENT_LOG) == null) return
-            val t = now()
-            dao.upsert(FeedHealth(FeedHealthRecorder.FEED_DNS_EVENT_LOG, t, t, null, 0))
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            Log.w(TAG, "recovery not recorded: ${e.message}")
-        }
-    }
-
-    private companion object {
-        const val TAG = "DnsBufferHealth"
-    }
+    override suspend fun onDropped(count: Int) = log.record(count, now())
 }
 
 /**
@@ -73,13 +34,13 @@ internal class DnsBufferHealthRecorder(
  * transaction per DNS query" hot path).
  *
  * A failed flush puts its batch back in front of newer events and the next attempt waits twice as
- * long as the last ([INITIAL_BACKOFF_MS] up to [MAX_BACKOFF_MS]); a success resets the wait. While
- * flushes fail the buffer is held to [maxBuffered] events: the oldest beyond it are dropped and
- * reported to [health], so a long database outage cannot grow the heap without bound.
+ * long as the last ([INITIAL_BACKOFF_MS] up to [MAX_BACKOFF_MS]); a success resets the wait. The
+ * buffer is held to [maxBuffered] events: the oldest beyond it are dropped and reported to [health]
+ * (a report that fails is kept and retried after the next successful flush, so a drop made while the
+ * database was down is recorded once it is back).
  *
- * Thread model: [add] is called from the VPN read loop (single-threaded). The flush runs on the
- * periodic coroutine (and on a full buffer). Buffer and failure state are guarded by `synchronized`;
- * one flush runs at a time.
+ * One flush runs at a time, under [flushLock]; the periodic and full-buffer paths skip when one is
+ * running, while [flushAndStop] waits for it and then drains what is left.
  */
 internal class DnsLogBuffer(
     private val scope: CoroutineScope,
@@ -90,17 +51,18 @@ internal class DnsLogBuffer(
     private val flushIntervalMs: Long = 2_000L,
 ) {
     private val lock = Any()
+    private val flushLock = Mutex()
     private val buffer = ArrayList<DnsEvent>(128)
     private var flushJob: Job? = null
     private var failures = 0
-    private var flushing = false
     private var unreportedDrops = 0
+    private var stopped = false
 
     fun start() {
         flushJob = scope.launch {
             while (scope.isActive) {
                 delay(nextDelayMs())
-                flushNow()
+                flushIfIdle()
             }
         }
     }
@@ -111,25 +73,35 @@ internal class DnsLogBuffer(
     }
 
     /**
-     * Cancels the periodic flush job and runs one final flush *synchronously*. Called
-     * from [DnsVpnService.stopVpn] inside `runBlocking { withTimeoutOrNull(...) }` so
-     * the last batch of events is persisted before the service scope is cancelled.
+     * Called from [DnsVpnService.stopVpn] inside `runBlocking { withTimeoutOrNull(...) }`. Stops the
+     * periodic job, waits for a flush already in progress to finish, then makes one last attempt at
+     * everything buffered. Whatever still cannot be stored is reported as dropped (not silently lost).
      */
     suspend fun flushAndStop() {
-        stop()
-        flushNow()
+        synchronized(lock) { stopped = true }
+        try {
+            flushJob?.cancelAndJoin()
+            flushJob = null
+            flushLock.withLock { flushOnce() }
+        } finally {
+            withContext(NonCancellable) { dropRemaining() }
+        }
     }
 
     fun add(event: DnsEvent) {
         val shouldFlushImmediately: Boolean
         synchronized(lock) {
+            if (stopped) {
+                unreportedDrops++
+                return
+            }
             buffer.add(event)
             // A full buffer flushes at once only while flushes work; in backoff the periodic loop retries.
             shouldFlushImmediately = buffer.size >= maxSize && failures == 0
             trimLocked()
         }
         if (shouldFlushImmediately) {
-            scope.launch { flushNow() }
+            scope.launch { flushIfIdle() }
         }
     }
 
@@ -141,37 +113,52 @@ internal class DnsLogBuffer(
         if (failures == 0) flushIntervalMs else backoffMs(failures)
     }
 
+    private suspend fun flushIfIdle() {
+        if (!flushLock.tryLock()) return
+        try {
+            flushOnce()
+        } finally {
+            flushLock.unlock()
+        }
+    }
+
+    /** One flush attempt of everything buffered. Caller holds [flushLock]. */
     @Suppress("TooGenericExceptionCaught")
-    private suspend fun flushNow() {
+    private suspend fun flushOnce() {
         val snapshot: List<DnsEvent>
         synchronized(lock) {
-            if (flushing || buffer.isEmpty()) return
-            flushing = true
+            if (buffer.isEmpty()) return
             snapshot = buffer.toList()
             buffer.clear()
         }
-        try {
-            flush(snapshot)
-            val recovered = synchronized(lock) { (failures > 0).also { failures = 0 } }
-            if (recovered) health.onRecovered()
-            reportDrops()
-        } catch (e: CancellationException) {
-            synchronized(lock) {
-                buffer.addAll(0, snapshot)
-                trimLocked()
-            }
-            throw e
+        val stored = try {
+            // A batch that has started is allowed to finish: cancelling an insert halfway would
+            // re-queue rows that may already be stored.
+            withContext(NonCancellable) { flush(snapshot) }
+            true
         } catch (e: Exception) {
             Log.w(TAG, "flush failed: ${e.message}")
-            synchronized(lock) {
+            false
+        }
+        synchronized(lock) {
+            if (stored) {
+                failures = 0
+            } else {
                 failures++
                 buffer.addAll(0, snapshot)
                 trimLocked()
             }
-            reportDrops()
-        } finally {
-            synchronized(lock) { flushing = false }
         }
+        reportDrops()
+    }
+
+    /** Discards what is still buffered after the final attempt, and reports it. */
+    private suspend fun dropRemaining() {
+        synchronized(lock) {
+            unreportedDrops += buffer.size
+            buffer.clear()
+        }
+        reportDrops()
     }
 
     /** Drops the oldest events beyond [maxBuffered] and counts them for [reportDrops]. Caller holds [lock]. */
@@ -182,10 +169,20 @@ internal class DnsLogBuffer(
         unreportedDrops += excess
     }
 
-    /** Tells [health] about events dropped since the last report (the health write is a suspend call). */
+    /** Tells [health] about events dropped since the last report; a failed report is kept for next time. */
+    @Suppress("TooGenericExceptionCaught")
     private suspend fun reportDrops() {
         val n = synchronized(lock) { unreportedDrops.also { unreportedDrops = 0 } }
-        if (n > 0) health.onDropped(n)
+        if (n == 0) return
+        try {
+            health.onDropped(n)
+        } catch (e: CancellationException) {
+            synchronized(lock) { unreportedDrops += n }
+            throw e
+        } catch (e: Exception) {
+            Log.w(TAG, "drop report failed, will retry: ${e.message}")
+            synchronized(lock) { unreportedDrops += n }
+        }
     }
 
     companion object {

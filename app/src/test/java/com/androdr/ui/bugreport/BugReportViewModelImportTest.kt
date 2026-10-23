@@ -129,7 +129,7 @@ class BugReportViewModelImportTest {
         vm.onFilePicked(uri)
         val card = vm.importCard.value!!
         assertEquals(listOf("M: stopped at 9 records"), card.trippedBounds)
-        assertEquals(ImportNotice.FreeSpace(123L), card.notice)
+        assertEquals(ImportNotice.LowSpace(4, 123L, null), card.notice)
     }
 
     @Test
@@ -148,10 +148,67 @@ class BugReportViewModelImportTest {
     }
 
     @Test
+    fun `a preflight that throws asks with an unknown size and invents no free-space figure`() = runTest {
+        val orchestrator = orchestratorReturning(IntrusionLogAnalysisResult(emptyList(), stats()))
+        val vm = BugReportViewModel(
+            mockk(relaxed = true), orchestrator,
+            mockk<ImportPreflight> { coEvery { check(any()) } throws IllegalStateException("provider gone") },
+        )
+        vm.onFilePicked(uri)
+        val prompt = vm.preflightPrompt.value!!
+        assertTrue(prompt.sizeUnknown)
+        assertNull("0 B free would be made up", prompt.freeBytes)
+    }
+
+    @Test
+    fun `only a known estimate is presented as low space`() {
+        assertTrue(PreflightPrompt(uri, null, 40L shl 30).sizeUnknown)
+        assertTrue(!PreflightPrompt(uri, 500L, 600L).sizeUnknown)
+    }
+
+    @Test
+    fun `the preflight estimate reaches the card of a low-space import`() = runTest {
+        val orchestrator = orchestratorReturning(
+            IntrusionLogAnalysisResult(emptyList(), stats(), write = write(TelemetryState.FAILED, space = 5L))
+        )
+        val vm = vm(orchestrator, Preflight.Tight(estimate = 800L, free = 900L))
+        vm.onFilePicked(uri)
+        vm.confirmImportAnyway()
+        assertEquals(ImportNotice.LowSpace(4, 5L, 800L), vm.importCard.value!!.notice)
+    }
+
+    @Test
+    fun `a second pick while the size check runs is ignored`() = runTest {
+        val gate = kotlinx.coroutines.CompletableDeferred<Preflight>()
+        val checker = mockk<ImportPreflight> { coEvery { check(any()) } coAnswers { gate.await() } }
+        val orchestrator = orchestratorReturning(IntrusionLogAnalysisResult(emptyList(), stats()))
+        val vm = BugReportViewModel(mockk(relaxed = true), orchestrator, checker)
+        vm.onFilePicked(uri)
+        assertTrue(vm.checkingSize.value)
+        vm.onFilePicked(uri)
+        gate.complete(Preflight.Ok)
+        coVerify(exactly = 1) { checker.check(any()) }
+        coVerify(exactly = 1) { orchestrator.analyzeArtifact(any()) }
+        assertTrue(!vm.checkingSize.value)
+    }
+
+    @Test
+    fun `source gate - copy never claims nothing was stored and the unknown size has its own title`() {
+        val strings = java.io.File("src/main/res/values/strings.xml").readText()
+        assertTrue(strings.contains("import_preflight_title_unknown"))
+        assertTrue("no blanket 'keeps no records' promise", !strings.contains("keeps no records"))
+        assertTrue("no 'checked but not stored' without the stored count",
+            !strings.contains("so the records were checked but not stored"))
+        val composables = java.io.File("src/main/java/com/androdr/ui/bugreport/ImportComposables.kt").readText()
+        assertTrue(composables.contains("import_preflight_title_unknown"))
+    }
+
+    @Test
     fun `source gate - the file picker goes through the preflight`() {
         val src = java.io.File("src/main/java/com/androdr/ui/bugreport/BugReportScreen.kt").readText()
         assertTrue(src.contains("viewModel.onFilePicked(it)"))
         assertTrue("the picker must not bypass the preflight", !src.contains("viewModel.analyzeUri("))
-        assertTrue(src.contains("import_preflight_anyway"))
+        val composables = java.io.File("src/main/java/com/androdr/ui/bugreport/ImportComposables.kt").readText()
+        assertTrue(composables.contains("import_preflight_anyway"))
     }
 }

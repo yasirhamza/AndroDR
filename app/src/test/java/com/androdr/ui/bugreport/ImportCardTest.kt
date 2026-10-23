@@ -46,14 +46,16 @@ class ImportCardTest {
 
     @Test
     fun `a reserve breach says how much space to free`() {
-        val card = ImportCard.from(write(TelemetryState.FAILED, space = 42L), false, emptyList())!!
-        assertEquals(ImportNotice.FreeSpace(42L), card.notice)
+        val failed = write(TelemetryState.FAILED, space = 42L)
+        val card = ImportCard.from(failed, false, emptyList(), estimateBytes = 900L)!!
+        assertEquals("says how many were stored before storage ran low, and how much the whole import needs",
+            ImportNotice.LowSpace(storedFacts = 7, freeAtLeastBytes = 42L, wholeImportBytes = 900L), card.notice)
     }
 
     @Test
-    fun `a failed store without a reserve breach says the records were not stored`() {
+    fun `a failed store without a reserve breach never claims low space and keeps the stored count`() {
         val card = ImportCard.from(write(TelemetryState.FAILED), false, emptyList())!!
-        assertEquals(ImportNotice.NotStored, card.notice)
+        assertEquals(ImportNotice.NotFullyStored(storedFacts = 7), card.notice)
     }
 
     @Test
