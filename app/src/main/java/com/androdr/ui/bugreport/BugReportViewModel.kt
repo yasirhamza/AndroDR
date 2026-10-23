@@ -2,12 +2,15 @@ package com.androdr.ui.bugreport
 
 import android.content.Context
 import android.net.Uri
+import android.util.Log
 import androidx.core.content.FileProvider
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.androdr.data.model.TimelineEvent
 import com.androdr.reporting.TimelineFormatter
 import com.androdr.scanner.ArtifactType
+import com.androdr.data.store.Preflight
+import com.androdr.scanner.ImportPreflight
 import com.androdr.scanner.IntrusionLogStats
 import com.androdr.scanner.ScanOrchestrator
 import com.androdr.sigma.Finding
@@ -29,7 +32,8 @@ import javax.inject.Inject
 @HiltViewModel
 class BugReportViewModel @Inject constructor(
     @ApplicationContext private val appContext: Context,
-    private val orchestrator: ScanOrchestrator
+    private val orchestrator: ScanOrchestrator,
+    private val importPreflight: ImportPreflight
 ) : ViewModel() {
 
     private val _findings = MutableStateFlow<List<Finding>>(emptyList())
@@ -53,6 +57,14 @@ class BugReportViewModel @Inject constructor(
      */
     private val _analyzedArtifact = MutableStateFlow<ArtifactType?>(null)
     val analyzedArtifact: StateFlow<ArtifactType?> = _analyzedArtifact.asStateFlow()
+
+    /** What the last import stored: new / already-stored / dropped-duplicate facts, tripped bounds, space notice. */
+    private val _importCard = MutableStateFlow<ImportCard?>(null)
+    val importCard: StateFlow<ImportCard?> = _importCard.asStateFlow()
+
+    /** Non-null while the storage preflight waits for the user's "Import anyway" (or cancel). */
+    private val _preflightPrompt = MutableStateFlow<PreflightPrompt?>(null)
+    val preflightPrompt: StateFlow<PreflightPrompt?> = _preflightPrompt.asStateFlow()
 
     private val _isAnalyzing = MutableStateFlow(false)
     val isAnalyzing: StateFlow<Boolean> = _isAnalyzing.asStateFlow()
@@ -105,6 +117,42 @@ class BugReportViewModel @Inject constructor(
     """.trimIndent()
 
     /**
+     * Entry point for a picked file: runs the storage preflight first. Plenty of room starts the
+     * import; a tight (or unknown) estimate raises [preflightPrompt] and waits for
+     * [confirmImportAnyway] or [dismissPreflight].
+     */
+    @Suppress("TooGenericExceptionCaught")
+    fun onFilePicked(uri: Uri) {
+        if (_isAnalyzing.value || _preflightPrompt.value != null) return
+        viewModelScope.launch {
+            val verdict = try {
+                importPreflight.check(uri)
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.w(TAG, "preflight failed; asking with an unknown size", e)
+                Preflight.Tight(null, 0L)
+            }
+            when (verdict) {
+                Preflight.Ok -> analyzeUri(uri)
+                is Preflight.Tight -> _preflightPrompt.value = PreflightPrompt(uri, verdict.estimate, verdict.free)
+            }
+        }
+    }
+
+    /** The user chose "Import anyway" on the preflight dialog. */
+    fun confirmImportAnyway() {
+        val prompt = _preflightPrompt.value ?: return
+        _preflightPrompt.value = null
+        analyzeUri(prompt.uri)
+    }
+
+    /** The user cancelled the preflight dialog; nothing is imported. */
+    fun dismissPreflight() {
+        _preflightPrompt.value = null
+    }
+
+    /**
      * Analyzes the imported artifact zip at the given [uri] — either a bug report
      * or an Advanced Protection Intrusion Logging export (#342); [ScanOrchestrator.analyzeArtifact]
      * sniffs which one it is.
@@ -119,6 +167,7 @@ class BugReportViewModel @Inject constructor(
             _findings.value = emptyList()
             _timeline.value = emptyList()
             _analyzedArtifact.value = null
+            _importCard.value = null
             try {
                 _intrusionLogSummary.value = null
                 when (val analysis = orchestrator.analyzeArtifact(uri)) {
@@ -126,12 +175,18 @@ class BugReportViewModel @Inject constructor(
                         _findings.value = analysis.result.findings
                         _timeline.value = analysis.result.timeline
                         _analyzedArtifact.value = ArtifactType.BUG_REPORT
+                        _importCard.value = ImportCard.from(
+                            analysis.result.write, truncated = false, boundTrips = analysis.result.boundTrips
+                        )
                     }
                     is ScanOrchestrator.ArtifactAnalysis.IntrusionLog -> {
                         _findings.value = analysis.result.findings.filter { it.triggered }
                         _timeline.value = emptyList()
                         _intrusionLogSummary.value = analysis.result.stats
                         _analyzedArtifact.value = ArtifactType.INTRUSION_LOG
+                        _importCard.value = ImportCard.from(
+                            analysis.result.write, analysis.result.stats.truncated, emptyList()
+                        )
                     }
                 }
                 _analysisFinished.value = true
@@ -203,5 +258,6 @@ class BugReportViewModel @Inject constructor(
 
     private companion object {
         const val MAX_ERROR_MESSAGE_LEN = 280
+        const val TAG = "BugReportViewModel"
     }
 }

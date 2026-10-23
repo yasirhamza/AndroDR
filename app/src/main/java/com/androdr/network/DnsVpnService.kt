@@ -134,6 +134,7 @@ class DnsVpnService : VpnService() {
     @Suppress("LateinitUsage") @Inject lateinit var scanRepository: ScanRepository
     @Suppress("LateinitUsage") @Inject lateinit var indicatorResolver: IndicatorResolver
     @Suppress("LateinitUsage") @Inject lateinit var settingsRepository: SettingsRepository
+    @Suppress("LateinitUsage") @Inject lateinit var feedHealthDao: com.androdr.data.db.FeedHealthDao
 
     private var tunFd: ParcelFileDescriptor? = null
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -222,7 +223,11 @@ class DnsVpnService : VpnService() {
 
         val outputStream = FileOutputStream(fd.fileDescriptor)
 
-        logBuffer = DnsLogBuffer(serviceScope, scanRepository).also { it.start() }
+        logBuffer = DnsLogBuffer(
+            serviceScope,
+            flush = { scanRepository.logDnsEventsBatch(it) },
+            health = DnsBufferHealthRecorder(feedHealthDao),
+        ).also { it.start() }
         resolver = UpstreamResolver(serviceScope, this, outputStream, outputLock, tracker.selection).also {
             if (!it.start()) {
                 Log.w(TAG, "DnsVpnService: upstream resolver failed to start; aborting")
@@ -892,72 +897,3 @@ private class Pending(
     val srcPort: Int,
     val expiresAt: Long
 )
-
-/**
- * In-memory ring of [DnsEvent]s flushed to [ScanRepository] in batches. Replaces the
- * previous "one Room transaction per DNS query" hot path.
- *
- * Thread model: [add] is called from the VPN read loop (single-threaded). [flushNow]
- * runs on the periodic flush coroutine. The buffer list is guarded by `synchronized`.
- */
-private class DnsLogBuffer(
-    private val scope: CoroutineScope,
-    private val repository: ScanRepository
-) {
-    private val maxSize: Int = 100
-    private val flushIntervalMs: Long = 2_000L
-
-    private val lock = Any()
-    private val buffer = ArrayList<DnsEvent>(128)
-    private var flushJob: Job? = null
-
-    fun start() {
-        flushJob = scope.launch {
-            while (scope.isActive) {
-                delay(flushIntervalMs)
-                flushNow()
-            }
-        }
-    }
-
-    fun stop() {
-        flushJob?.cancel()
-        flushJob = null
-    }
-
-    /**
-     * Cancels the periodic flush job and runs one final flush *synchronously*. Called
-     * from [DnsVpnService.stopVpn] inside `runBlocking { withTimeoutOrNull(...) }` so
-     * the last batch of events is persisted before the service scope is cancelled.
-     */
-    suspend fun flushAndStop() {
-        stop()
-        flushNow()
-    }
-
-    fun add(event: DnsEvent) {
-        val shouldFlushImmediately: Boolean
-        synchronized(lock) {
-            buffer.add(event)
-            shouldFlushImmediately = buffer.size >= maxSize
-        }
-        if (shouldFlushImmediately) {
-            scope.launch { flushNow() }
-        }
-    }
-
-    private suspend fun flushNow() {
-        val snapshot: List<DnsEvent>
-        synchronized(lock) {
-            if (buffer.isEmpty()) return
-            snapshot = buffer.toList()
-            buffer.clear()
-        }
-        @Suppress("TooGenericExceptionCaught", "SwallowedException")
-        try {
-            repository.logDnsEventsBatch(snapshot)
-        } catch (e: Exception) {
-            Log.w("DnsLogBuffer", "flush failed: ${e.message}")
-        }
-    }
-}

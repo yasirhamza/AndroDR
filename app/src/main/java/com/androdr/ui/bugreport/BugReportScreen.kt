@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.BugReport
@@ -36,7 +37,9 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -80,8 +83,11 @@ fun BugReportScreen(
     val errorMessage by viewModel.errorMessage.collectAsStateWithLifecycle()
     val exporting by viewModel.exporting.collectAsStateWithLifecycle()
     val shareUri by viewModel.shareUri.collectAsStateWithLifecycle()
+    val importCard by viewModel.importCard.collectAsStateWithLifecycle()
 
     val context = LocalContext.current
+
+    PreflightDialogHost(viewModel)
 
     var instructionsExpanded by remember { mutableStateOf(false) }
     var intrusionInstructionsExpanded by remember { mutableStateOf(false) }
@@ -104,7 +110,7 @@ fun BugReportScreen(
     val filePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument()
     ) { uri: Uri? ->
-        uri?.let { viewModel.analyzeUri(it) }
+        uri?.let { viewModel.onFilePicked(it) }
     }
 
     val hasResults = findings.isNotEmpty()
@@ -257,6 +263,8 @@ fun BugReportScreen(
                     }
                 }
             }
+
+            importCardItem(if (isAnalyzing) null else importCard)
 
             // Intrusion log summary card — shown whenever the imported artifact was an
             // Advanced Protection Intrusion Logging export (#342), independent of whether
@@ -666,4 +674,95 @@ private fun findingIconAndColor(
     "MEDIUM"   -> Pair(Icons.Filled.Warning, colors.medium)
     "ERROR"    -> Pair(Icons.Filled.Error, colors.critical)
     else       -> Pair(Icons.Filled.Info, colors.neutral)
+}
+
+private fun LazyListScope.importCardItem(card: ImportCard?) {
+    card?.let { item { ImportCardView(it) } }
+}
+
+/** Shows the preflight dialog while the ViewModel waits for the user's choice. */
+@Composable
+private fun PreflightDialogHost(viewModel: BugReportViewModel) {
+    val prompt by viewModel.preflightPrompt.collectAsStateWithLifecycle()
+    prompt?.let {
+        PreflightDialog(it, onImportAnyway = viewModel::confirmImportAnyway, onCancel = viewModel::dismissPreflight)
+    }
+}
+
+@Composable
+private fun preflightBody(estimate: Long?, free: String, format: (Long) -> String): String =
+    if (estimate == null) {
+        stringResource(R.string.import_preflight_body_unknown, free)
+    } else {
+        stringResource(R.string.import_preflight_body_estimate, format(estimate), free)
+    }
+
+/** The storage preflight: how much the import is expected to need (or that it is unknown) and what is free. */
+@Composable
+private fun PreflightDialog(prompt: PreflightPrompt, onImportAnyway: () -> Unit, onCancel: () -> Unit) {
+    val context = LocalContext.current
+    val free = android.text.format.Formatter.formatShortFileSize(context, prompt.freeBytes)
+    val body = preflightBody(prompt.estimateBytes, free) {
+        android.text.format.Formatter.formatShortFileSize(context, it)
+    }
+    AlertDialog(
+        onDismissRequest = onCancel,
+        title = { Text(stringResource(R.string.import_preflight_title)) },
+        text = { Text(body) },
+        confirmButton = {
+            TextButton(onClick = onImportAnyway) { Text(stringResource(R.string.import_preflight_anyway)) }
+        },
+        dismissButton = {
+            TextButton(onClick = onCancel) { Text(stringResource(R.string.import_preflight_cancel)) }
+        },
+    )
+}
+
+/** What the import stored, and why not all of it when it was not. */
+@Composable
+private fun ImportCardView(card: ImportCard) {
+    val context = LocalContext.current
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHighest)
+    ) {
+        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text(
+                text = stringResource(R.string.import_card_title),
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Text(
+                text = stringResource(
+                    R.string.import_card_counts, card.newFacts, card.alreadyStored, card.duplicatesDropped
+                ),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            card.trippedBounds.forEach { bound ->
+                Text(
+                    text = stringResource(R.string.import_card_bound, bound),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            val notice = when (val n = card.notice) {
+                ImportNotice.None -> null
+                is ImportNotice.FreeSpace -> stringResource(
+                    R.string.import_card_free_space,
+                    android.text.format.Formatter.formatShortFileSize(context, n.bytes)
+                )
+                ImportNotice.NotStored -> stringResource(R.string.import_card_not_stored)
+            }
+            notice?.let {
+                Text(
+                    text = it,
+                    style = MaterialTheme.typography.bodySmall,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.error
+                )
+            }
+        }
+    }
 }

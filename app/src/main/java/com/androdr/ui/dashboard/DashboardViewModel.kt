@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.androdr.data.db.IndicatorDao
 import com.androdr.data.model.ScanResult
+import com.androdr.data.model.TelemetryState
 import com.androdr.data.repo.ScanRepository
 import com.androdr.data.repo.ScanRepository.Companion.preferRuntimeScan
 import com.androdr.ioc.IntelRefresher
@@ -152,6 +153,14 @@ class DashboardViewModel @Inject constructor(
     }
 
     companion object {
+        /**
+         * Whether the Dashboard warns that the latest scan's records were not stored (storage ran out
+         * mid-scan, [TelemetryState.FAILED]): its findings were evaluated and kept, but the device's
+         * history for that scan is missing, so the Timeline and later re-checks are incomplete.
+         */
+        fun showStorageFailedBanner(scan: ScanResult?, isScanning: Boolean): Boolean =
+            !isScanning && scan?.telemetryState == TelemetryState.FAILED
+
         /**
          * A manual scan refreshes threat intel first, but only if the last
          * refresh is older than this. Prevents back-to-back full syncs

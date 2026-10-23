@@ -53,7 +53,7 @@ class BugReportViewModelIntrusionLogTest {
         val orchestrator = mockk<ScanOrchestrator>()
         coEvery { orchestrator.analyzeArtifact(any()) } throws
             ScanOrchestrator.IntrusionLogPersistException(RuntimeException("db write failed"))
-        val vm = BugReportViewModel(mockk(relaxed = true), orchestrator)
+        val vm = BugReportViewModel(mockk(relaxed = true), orchestrator, mockk(relaxed = true))
 
         vm.analyzeUri(mockk<Uri>(relaxed = true))
 
@@ -75,7 +75,7 @@ class BugReportViewModelIntrusionLogTest {
         )
         coEvery { orchestrator.analyzeArtifact(any()) } returns
             ScanOrchestrator.ArtifactAnalysis.IntrusionLog(result)
-        val vm = BugReportViewModel(mockk(relaxed = true), orchestrator)
+        val vm = BugReportViewModel(mockk(relaxed = true), orchestrator, mockk(relaxed = true))
 
         vm.analyzeUri(mockk<Uri>(relaxed = true))
 
@@ -96,7 +96,7 @@ class BugReportViewModelIntrusionLogTest {
         val orchestrator = mockk<ScanOrchestrator>()
         coEvery { orchestrator.analyzeArtifact(any()) } throws
             IntrusionLogAnalyzer.IntrusionLogAnalysisException(RuntimeException("unreadable zip"))
-        val vm = BugReportViewModel(mockk(relaxed = true), orchestrator)
+        val vm = BugReportViewModel(mockk(relaxed = true), orchestrator, mockk(relaxed = true))
 
         vm.analyzeUri(mockk<Uri>(relaxed = true))
 
@@ -126,7 +126,7 @@ class BugReportViewModelIntrusionLogTest {
         )
         coEvery { orchestrator.analyzeArtifact(any()) } returns
             ScanOrchestrator.ArtifactAnalysis.IntrusionLog(result)
-        val vm = BugReportViewModel(mockk(relaxed = true), orchestrator)
+        val vm = BugReportViewModel(mockk(relaxed = true), orchestrator, mockk(relaxed = true))
 
         vm.analyzeUri(mockk<Uri>(relaxed = true))
 
@@ -140,7 +140,7 @@ class BugReportViewModelIntrusionLogTest {
             ScanOrchestrator.ArtifactAnalysis.BugReport(
                 BugReportAnalyzer.BugReportAnalysisResult(findings = emptyList(), timeline = emptyList())
             )
-        val vm = BugReportViewModel(mockk(relaxed = true), orchestrator)
+        val vm = BugReportViewModel(mockk(relaxed = true), orchestrator, mockk(relaxed = true))
 
         vm.analyzeUri(mockk<Uri>(relaxed = true))
 
@@ -155,7 +155,7 @@ class BugReportViewModelIntrusionLogTest {
         )
         coEvery { orchestrator.analyzeArtifact(any()) } returns
             ScanOrchestrator.ArtifactAnalysis.IntrusionLog(result)
-        val vm = BugReportViewModel(mockk(relaxed = true), orchestrator)
+        val vm = BugReportViewModel(mockk(relaxed = true), orchestrator, mockk(relaxed = true))
         vm.analyzeUri(mockk<Uri>(relaxed = true))
         assertEquals(ArtifactType.INTRUSION_LOG, vm.analyzedArtifact.value)
 

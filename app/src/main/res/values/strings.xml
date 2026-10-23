@@ -25,6 +25,8 @@
     <string name="scan_progress_counter" tools:ignore="PluralsCandidate">%1$d of %2$d checks complete</string>
 
     <!-- Partial-scan warning banner — shown when scannerErrors is non-empty -->
+    <string name="storage_failed_banner_title">Scan records not saved</string>
+    <string name="storage_failed_banner_body">This device ran out of storage while saving the scan. The findings were checked and are shown, but the scan\'s records were not kept, so its history is incomplete. Free some space and scan again.</string>
     <string name="partial_scan_banner_title">Scan incomplete</string>
     <!-- PluralsCandidate: compact failure counter -->
     <string name="partial_scan_banner_body" tools:ignore="PluralsCandidate">%1$d check(s) failed — results may be inaccurate. Retry the scan to get a complete picture.</string>
@@ -169,6 +171,18 @@
     <string name="cd_expand">Expand</string>
 
     <!-- Intrusion Log Import summary card (#342) — externalized -->
+    <string name="history_delete_refused_title">Nothing was deleted</string>
+    <string name="history_delete_refused_body">A scan or import is running. Try again when it finishes.</string>
+    <string name="import_preflight_title">Not much free space</string>
+    <string name="import_preflight_body_estimate">This import is expected to need about %1$s of storage, and %2$s is free. If space runs out, AndroDR still checks the file and shows its findings, but keeps no records.</string>
+    <string name="import_preflight_body_unknown">The size of this import is unknown, and %1$s is free. If space runs out, AndroDR still checks the file and shows its findings, but keeps no records.</string>
+    <string name="import_preflight_anyway">Import anyway</string>
+    <string name="import_preflight_cancel">Cancel</string>
+    <string name="import_card_title">What was stored</string>
+    <string name="import_card_counts" tools:ignore="PluralsCandidate">%1$d new \u00b7 %2$d already stored \u00b7 %3$d duplicates dropped</string>
+    <string name="import_card_bound">Limit reached: %1$s</string>
+    <string name="import_card_free_space">Storage ran low, so the records were checked but not stored; the findings below are kept. Free about %1$s and import again to keep the records.</string>
+    <string name="import_card_not_stored">The records could not be stored, so they were checked but not kept; the findings below are kept.</string>
     <string name="intrusion_log_summary_title">Intrusion log analyzed</string>
     <!-- PluralsCandidate: compact multi-count summary; matches bugreport_finding_count style -->
     <string name="intrusion_log_summary_counts" tools:ignore="PluralsCandidate">%1$d DNS events \u00b7 %2$d connections \u00b7 %3$d security events</string>

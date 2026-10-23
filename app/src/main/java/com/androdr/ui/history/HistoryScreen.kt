@@ -91,6 +91,7 @@ fun HistoryScreen(
     val sheetReportText by viewModel.sheetReportText.collectAsStateWithLifecycle()
     val showDeleteConfirm by viewModel.showDeleteConfirm.collectAsStateWithLifecycle()
     val showClearAllConfirm by viewModel.showClearAllConfirm.collectAsStateWithLifecycle()
+    val deleteRefused by viewModel.deleteRefused.collectAsStateWithLifecycle()
 
     val context = LocalContext.current
 
@@ -201,6 +202,18 @@ fun HistoryScreen(
                 TextButton(onClick = { viewModel.dismissDeleteConfirm() }) {
                     Text("Cancel")
                 }
+            }
+        )
+    }
+
+    // A delete refused because a scan or import is writing: nothing was deleted
+    if (deleteRefused) {
+        AlertDialog(
+            onDismissRequest = { viewModel.dismissDeleteRefused() },
+            title = { Text(stringResource(R.string.history_delete_refused_title)) },
+            text = { Text(stringResource(R.string.history_delete_refused_body)) },
+            confirmButton = {
+                TextButton(onClick = { viewModel.dismissDeleteRefused() }) { Text("OK") }
             }
         )
     }

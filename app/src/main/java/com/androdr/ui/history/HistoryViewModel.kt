@@ -146,10 +146,21 @@ class HistoryViewModel @Inject constructor(
     fun requestDeleteScan(scanId: Long) { _showDeleteConfirm.value = scanId }
     fun dismissDeleteConfirm() { _showDeleteConfirm.value = null }
 
+    /**
+     * True after a delete was refused because a scan or import holds the writer lock (or the lock
+     * stayed busy): nothing was deleted, and the screen says so instead of silently doing nothing.
+     */
+    private val _deleteRefused = MutableStateFlow(false)
+    val deleteRefused: StateFlow<Boolean> = _deleteRefused.asStateFlow()
+
+    fun dismissDeleteRefused() { _deleteRefused.value = false }
+
     fun confirmDeleteScan() {
         val id = _showDeleteConfirm.value ?: return
         _showDeleteConfirm.value = null
-        viewModelScope.launch { repository.deleteScan(id) }
+        viewModelScope.launch {
+            if (!repository.deleteScan(id)) _deleteRefused.value = true
+        }
     }
 
     fun requestClearAll() { _showClearAllConfirm.value = true }
@@ -157,8 +168,10 @@ class HistoryViewModel @Inject constructor(
 
     fun confirmClearAll() {
         _showClearAllConfirm.value = false
-        _selectedScan.value = null
-        viewModelScope.launch { repository.deleteAllScans() }
+        viewModelScope.launch {
+            // Only a delete that ran empties the selection; a refused one leaves everything in place.
+            if (repository.deleteAllScans()) _selectedScan.value = null else _deleteRefused.value = true
+        }
     }
 
     private companion object {

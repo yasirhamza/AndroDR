@@ -152,6 +152,15 @@ fun DashboardScreen(
                 latestScan?.let { PartialScanBanner(scan = it) }
             }
 
+            // The scan ran out of storage: findings are kept, its records are not (A7c).
+            AnimatedVisibility(
+                visible = DashboardViewModel.showStorageFailedBanner(latestScan, isScanning),
+                enter = fadeIn(),
+                exit = fadeOut()
+            ) {
+                StorageFailedBanner()
+            }
+
             // Usage Access permission banner — shown when PACKAGE_USAGE_STATS
             // hasn't been granted, which silently disables the forensic
             // timeline feature. Previously the app just returned empty
@@ -602,6 +611,37 @@ private fun PartialScanBanner(scan: ScanResult) {
                         R.string.partial_scan_banner_body,
                         scan.realFailureCount
                     ),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+            }
+        }
+    }
+}
+
+/** Warning shown when the latest scan's telemetry state is FAILED (storage ran out while saving it). */
+@Composable
+private fun StorageFailedBanner() {
+    val colors = MaterialTheme.androdrColors
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = colors.high.copy(alpha = 0.15f))
+    ) {
+        Row(
+            modifier = Modifier.padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Icon(imageVector = Icons.Filled.Warning, contentDescription = null, tint = colors.high)
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = stringResource(R.string.storage_failed_banner_title),
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    color = colors.high
+                )
+                Text(
+                    text = stringResource(R.string.storage_failed_banner_body),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurface
                 )
