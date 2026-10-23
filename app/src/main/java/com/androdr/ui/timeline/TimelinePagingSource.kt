@@ -1,6 +1,5 @@
 package com.androdr.ui.timeline
 
-import androidx.room.withTransaction
 import com.androdr.data.db.AppDatabase
 import com.androdr.data.db.TimelineDirection
 import com.androdr.data.db.TimelineFilter
@@ -39,8 +38,12 @@ class TimelinePagingSource(
 
 /**
  * Reads Timeline pages and turns them into rows: a `forensic_timeline` row read in full (visible
- * rows only) with its nested evidence fact decoded, a fact decoded through [TelemetryReader]. The
- * keyset page and its hydration share one transaction, so every entry the page selected is found.
+ * rows only) with its nested evidence fact decoded, a fact decoded through [TelemetryReader].
+ *
+ * No read takes a transaction (a Room transaction holds the writer lock, which would stall an
+ * import's chunk commits and the DNS monitor's inserts). The keyset page is one statement, so the
+ * merge of its two arms is consistent; hydration follows in separate reads, and an entry deleted in
+ * between is skipped while the page keys still come from what the keyset read ([KeysetPagingSource.Slice]).
  */
 @Singleton
 class TimelineEntries @Inject constructor(
@@ -49,9 +52,12 @@ class TimelineEntries @Inject constructor(
 ) {
     suspend fun page(
         filter: TimelineFilter, key: TimelineKey?, direction: TimelineDirection, size: Int,
-    ): List<TimelineRow.Entry> = db.withTransaction { hydrate(db.timelineDao().page(filter, key, direction, size)) }
+    ): KeysetPagingSource.Slice<TimelineKey, TimelineRow.Entry> {
+        val entities = db.timelineDao().page(filter, key, direction, size)
+        return KeysetPagingSource.Slice(hydrate(entities), entities.map { it.key })
+    }
 
-    /** The rows [filter] matches, by its count ([com.androdr.data.db.TimelineDao.count]). */
+    /** What the list shows for [filter] ([com.androdr.data.db.TimelineDao.count]). */
     suspend fun count(filter: TimelineFilter): Long = db.timelineDao().count(filter)
 
     /**
@@ -67,9 +73,9 @@ class TimelineEntries @Inject constructor(
         while (true) {
             val page = page(filter, key, if (first && !oldestFirst) TimelineDirection.FROM else direction, size)
             first = false
-            if (page.isNotEmpty()) block(page)
-            if (page.size < size) return
-            key = page.last().key
+            if (page.items.isNotEmpty()) block(page.items)
+            if (page.keys.size < size) return
+            key = page.keys.last()
         }
     }
 

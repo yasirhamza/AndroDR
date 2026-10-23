@@ -77,7 +77,8 @@ object TimelineExporter {
         private var currentDate = ""
         private var empty = true
 
-        fun header(stats: PlaintextStats, versionName: String) {
+        /** [filter]: the active Timeline filter in words, or null for the whole Timeline. */
+        fun header(stats: PlaintextStats, versionName: String, filter: String? = null) {
             out.line(RULE)
             out.line("  AndroDR Forensic Timeline")
             out.line("  Version: ${escapeForReport(versionName)}")
@@ -86,6 +87,7 @@ object TimelineExporter {
             out.line("  Device: ${Build.MANUFACTURER} ${Build.MODEL}")
             out.line("  Patch: ${Build.VERSION.SECURITY_PATCH}")
             out.line("  Events: ${stats.total}")
+            if (filter != null) out.line("  Filtered: ${escapeForReport(filter)}")
             out.line(RULE)
             out.line("")
             empty = stats.total == 0L

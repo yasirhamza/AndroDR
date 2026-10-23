@@ -30,18 +30,30 @@ class NoPersistenceCapsGateTest {
         .first { it.isDirectory }
 
     private val funRe = Regex("""\bfun\s+(\w+)""")
-    private val ownerRe = Regex("""(?:interface|class|object)\s+(\w+)""")
+
+    /** A declaration at the start of a line (so "class" or "object" in a KDoc sentence is not one). */
+    private val ownerRe = Regex(
+        """^\s*(?:@\w+(?:\([^)]*\))?\s+)*(?:(?:private|internal|public|abstract|open|data|sealed|enum)\s+)*""" +
+            """(?:interface|class|object)\s+(\w+)""",
+        RegexOption.MULTILINE,
+    )
     private val wordRe = Regex("""\w*$""")
 
-    /** Each disallowed match in [src] (file [name]) as `name:line: text`. */
+    /**
+     * Each disallowed match in [src] (file [name]) as `name:line: text`. A match inside an
+     * annotation (`@Query(…)` after the previous `fun`) belongs to the function it annotates; any
+     * other match belongs to the function whose body encloses it.
+     */
     private fun violations(name: String, src: String): List<String> = cap.findAll(src).mapNotNull { m ->
-        val word = wordRe.find(src.substring(0, m.range.first))!!.value + m.value
+        val before = src.substring(0, m.range.first)
+        val word = wordRe.find(before)!!.value + m.value
         if (word in allowedNames) return@mapNotNull null
-        val owner = ownerRe.findAll(src.substring(0, m.range.first)).lastOrNull()?.groupValues?.get(1) ?: "?"
-        // The function a match belongs to: the next `fun` after an annotation, or the enclosing one.
-        val fn = funRe.find(src, m.range.first)?.groupValues?.get(1)
+        val owner = ownerRe.findAll(before).lastOrNull()?.groupValues?.get(1) ?: "?"
+        val lastFun = funRe.findAll(before).lastOrNull()
+        val inAnnotation = before.lastIndexOf("@Query(") > (lastFun?.range?.first ?: -1)
+        val fn = if (inAnnotation) funRe.find(src, m.range.first)?.groupValues?.get(1) else lastFun?.groupValues?.get(1)
         if ("$owner.$fn" in allowedFunctions) return@mapNotNull null
-        val line = src.substring(0, m.range.first).count { it == '\n' } + 1
+        val line = before.count { it == '\n' } + 1
         "$name:$line: ${m.value} ($owner.$fn)"
     }.toList()
 
@@ -62,13 +74,17 @@ class NoPersistenceCapsGateTest {
                 fun page(limit: Int = 200): List<X>
             }
             object Caps { const val DNS_PERSIST_CAP = 1; const val INTRUSION_ROW_LIMIT = 2 }
+            /** This class holds an object. */
             interface ScanResultDao {
+                fun helper() { db.query("SELECT * FROM t LIMIT 3") }
                 @Query("SELECT * FROM ScanResult LIMIT 2")
                 fun getLatestTwo(): List<X>
             }
             val k = ScanOrchestrator.FINDINGS_PERSIST_CAP
         """.trimIndent()
-        assertEquals(listOf("LIMIT 500", "limit: Int = 200", "_PERSIST_CAP", "_ROW_LIMIT"),
+        assertEquals(listOf("LIMIT 500", "limit: Int = 200", "_PERSIST_CAP", "_ROW_LIMIT", "LIMIT 3"),
             violations("F.kt", src).map { it.substringAfter(": ").substringBefore(" (") })
+        assertEquals("a body match belongs to its enclosing function, under the real owner",
+            "ScanResultDao.helper", violations("F.kt", src).last().substringAfter("(").substringBefore(")"))
     }
 }

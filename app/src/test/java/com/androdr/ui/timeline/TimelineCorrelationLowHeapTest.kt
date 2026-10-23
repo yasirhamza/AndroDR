@@ -75,7 +75,9 @@ class TimelineCorrelationLowHeapTest {
                     assertEquals(0, page.missing)
                     after = page.next
                 } while (after != null)
-                assertTrue(loaded >= 3)
+                val memberCount = Regex("\"member_count\"\\s*:\\s*\"?(\\d+)").find(signal.event.details)
+                    ?.groupValues?.get(1)?.toInt()
+                assertEquals("every member of the signal loads", memberCount, loaded)
             }
         }
     }

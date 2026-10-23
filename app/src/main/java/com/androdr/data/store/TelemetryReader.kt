@@ -85,14 +85,14 @@ internal class ScanRecordPagingSource(
 
     override fun keyOf(item: DecodedRecord): Int = item.ordinal
 
-    override suspend fun loadFrom(from: Int?, size: Int): List<DecodedRecord> =
-        dao.pageAfter(scanId, service, (from ?: Int.MIN_VALUE + 1) - 1, size).map(decoder::decode)
+    override suspend fun loadFrom(from: Int?, size: Int) =
+        slice(dao.pageAfter(scanId, service, (from ?: Int.MIN_VALUE + 1) - 1, size).map(decoder::decode))
 
-    override suspend fun loadAfter(after: Int, size: Int): List<DecodedRecord> =
-        dao.pageAfter(scanId, service, after, size).map(decoder::decode)
+    override suspend fun loadAfter(after: Int, size: Int) =
+        slice(dao.pageAfter(scanId, service, after, size).map(decoder::decode))
 
-    override suspend fun loadBefore(before: Int, size: Int): List<DecodedRecord> =
-        dao.pageBefore(scanId, service, before, size).map(decoder::decode)
+    override suspend fun loadBefore(before: Int, size: Int) =
+        slice(dao.pageBefore(scanId, service, before, size).map(decoder::decode))
 }
 
 /**

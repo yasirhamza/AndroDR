@@ -109,7 +109,8 @@ class TimelineUncappedTest {
         val high = everything(TimelineFilter(levels = setOf("HIGH")))
         assertEquals(highIds, high.map { it.entity.id }.toSet())
         assertTrue(high.all { it is TimelineRow.StoredRow && it.event.ruleId == HIGH_RULE })
-        assertEquals(20L, entries.count(TimelineFilter(levels = setOf("HIGH"))))
+        assertEquals("the 20 rows and their nested evidence (what the list shows)", 40L,
+            entries.count(TimelineFilter(levels = setOf("HIGH"))))
         // No OFFSET in anything the Timeline ran.
         val sql = synchronized(w.f.sql) { w.f.sql.toList() }
         assertTrue(sql.any { "forensic_timeline r" in it })

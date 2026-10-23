@@ -17,6 +17,7 @@ import com.androdr.data.model.ForensicTimelineEvent
 import com.androdr.data.model.ScanResult
 import com.androdr.data.model.TelemetrySource
 import com.androdr.data.repo.ScanRepository
+import com.androdr.data.store.DecodedRecord
 import com.androdr.data.store.KeysetPagingSource
 import com.androdr.data.store.tableChanges
 import com.androdr.ioc.KnownAppResolver
@@ -27,6 +28,8 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -121,9 +124,13 @@ class TimelineViewModel @Inject constructor(
 
     fun clearFilters() = _filter.update { TimelineFilter(zone = it.zone) }
 
-    /** Bumps whenever a scan completes or is deleted, or a Timeline row changes (what changes counts). */
+    /**
+     * Bumps when a scan completes or is deleted, or Timeline rows change (what changes counts),
+     * coalesced over [COUNT_DEBOUNCE_MS] so a burst of row inserts (live DNS IOC matches, a scan's
+     * finish) re-counts once, not once per change.
+     */
     private val tableVersion: StateFlow<Int> = db.tableChanges(KeysetPagingSource.OBSERVED_TABLES)
-        .runningFold(0) { n, _ -> n + 1 }
+        .coalescedVersions(COUNT_DEBOUNCE_MS)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
 
     /** The paged list: the union under [filter], a [TimelineRow.DayHeader] before each day. */
@@ -253,28 +260,32 @@ class TimelineViewModel @Inject constructor(
         file.bufferedWriter(Charsets.UTF_8).use { out ->
             TimelineExporter.writeCsvHeader(out)
             entries.forEachPage(filter, oldestFirst = true, size = EXPORT_PAGE) { page ->
-                val events = page.map { it.asExportEvent() }
+                val events = page.flatMap { it.exportEvents() }
                 val refs = memberRefs(events)
                 events.forEach { TimelineExporter.writeCsvRow(out, it, refs[it.id].orEmpty()) }
             }
         }
     }
 
-    /** Streams the current filter's Timeline as plaintext, newest first: one pass for the header, one to write. */
+    /**
+     * Streams the current filter's Timeline as plaintext, newest first: one pass for the header, one
+     * to write. The two passes are separate reads, so a scan completing between them can make the
+     * header's totals differ slightly from the body; neither pass holds the whole Timeline.
+     */
     private suspend fun writePlaintext(file: File) {
         val filter = _filter.value
         val stats = TimelineExporter.PlaintextStats(buildRuleGuidance())
         entries.forEachPage(filter, oldestFirst = false, size = EXPORT_PAGE) { page ->
-            page.forEach { stats.add(it.asExportEvent()) }
+            page.forEach { entry -> entry.exportEvents().forEach(stats::add) }
         }
         val names = HashMap<String, String?>()
         file.bufferedWriter(Charsets.UTF_8).use { out: Writer ->
             val writer = TimelineExporter.PlaintextWriter(out) { pkg ->
                 names.getOrPut(pkg) { knownAppResolver.lookup(pkg)?.displayName }
             }
-            writer.header(stats, appContext.appVersion().name)
+            writer.header(stats, appContext.appVersion().name, filter.describe())
             entries.forEachPage(filter, oldestFirst = false, size = EXPORT_PAGE) { page ->
-                page.forEach { writer.event(it.asExportEvent()) }
+                page.forEach { entry -> entry.exportEvents().forEach(writer::event) }
             }
             writer.footer()
         }
@@ -291,7 +302,8 @@ class TimelineViewModel @Inject constructor(
     private fun newReportFile(extension: String): File {
         val reportsDir = File(appContext.cacheDir, "reports").apply { mkdirs() }
         val ts = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
-        return File(reportsDir, "androdr_timeline_$ts.$extension")
+        val suffix = if (_filter.value.describe() != null) "_filtered" else ""
+        return File(reportsDir, "androdr_timeline_$ts$suffix.$extension")
     }
 
     private fun uriOf(file: File): Uri =
@@ -341,6 +353,7 @@ class TimelineViewModel @Inject constructor(
         private const val TAG = "TimelineViewModel"
         private const val PAGE_SIZE = 100
         private const val EXPORT_PAGE = 500
+        private const val COUNT_DEBOUNCE_MS = 300L
 
         /** The report sheet shows (and Copy copies) at most this much; a longer report is shared as a file. */
         const val PREVIEW_CHARS = 200_000
@@ -348,22 +361,51 @@ class TimelineViewModel @Inject constructor(
 }
 
 /**
- * A Timeline entry as the exporters write it: a row as stored, a fact as an `event` row of its
- * service (its display summary as the description, its fact id as `recordId`). The fact's row id
- * is 0, so it never collides with a signal row's member refs.
+ * A Timeline entry as the exporters write it, in display order: a row as stored, then its nested
+ * evidence fact (so every `record_id` resolves within the file and the export's total is the
+ * on-screen count); a fact as an `event` row of its service.
  */
-internal fun TimelineRow.Entry.asExportEvent(): ForensicTimelineEvent = when (this) {
-    is TimelineRow.StoredRow -> event
-    is TimelineRow.EventRow -> ForensicTimelineEvent(
-        startTimestamp = entity.time,
-        kind = "event",
-        source = record.service,
-        category = entity.category.ifEmpty { record.service },
-        description = record.summary.orEmpty(),
-        packageName = entity.packageName,
-        scanResultId = if (entity.scanId >= 0) entity.scanId else record.scanId,
-        telemetrySource = record.source,
-        createdAt = record.capturedAt,
-        recordId = record.factId,
-    )
+internal fun TimelineRow.Entry.exportEvents(): List<ForensicTimelineEvent> = when (this) {
+    is TimelineRow.StoredRow -> listOfNotNull(event, evidence?.asExportEvent(event.scanResultId))
+    is TimelineRow.EventRow -> listOf(record.asExportEvent(entity.scanId, entity.packageName))
 }
+
+/**
+ * A stored fact as an exported `event` row: its display summary as the description, its fact id as
+ * `recordId`, and row id 0 (never colliding with a signal row's member refs). [scanId] is the scan
+ * the Timeline read it under, when known (≥ 0); [packageName] the fact's computed package, when the
+ * caller has it (else the record's `package_name` field).
+ */
+internal fun DecodedRecord.asExportEvent(
+    scanId: Long,
+    packageName: String = (fields?.get("package_name") as? String).orEmpty(),
+): ForensicTimelineEvent = ForensicTimelineEvent(
+    startTimestamp = eventTime ?: capturedAt,
+    kind = "event",
+    source = service,
+    category = category?.ifEmpty { null } ?: service,
+    description = summary.orEmpty(),
+    packageName = packageName,
+    scanResultId = if (scanId >= 0) scanId else this.scanId,
+    telemetrySource = source,
+    createdAt = capturedAt,
+    recordId = factId,
+)
+
+/**
+ * A version number that bumps once per burst of changes: a change followed by quiet for [quietMs]
+ * bumps it once, however many changes the burst held (counts re-run per burst, not per change).
+ */
+@OptIn(FlowPreview::class)
+internal fun Flow<Unit>.coalescedVersions(quietMs: Long): Flow<Int> =
+    debounce(quietMs).runningFold(0) { n, _ -> n + 1 }
+
+/** The active filter in words for an export header, or null when nothing is filtered. */
+internal fun TimelineFilter.describe(): String? = buildList {
+    scanId?.let { add("scan $it") }
+    packageName?.let { add("package $it") }
+    source?.let { add("source $it") }
+    if (from != null || to != null) add("time ${from ?: "-"}..${to ?: "-"}")
+    if (levels.isNotEmpty()) add("severity ${levels.sorted().joinToString("/")}")
+    if (findingsAndEvidenceOnly) add("findings and their evidence only")
+}.takeIf { it.isNotEmpty() }?.joinToString(", ")

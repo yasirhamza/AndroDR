@@ -40,14 +40,24 @@ abstract class KeysetPagingSource<K : Any, V : Any>(
 
     protected abstract fun keyOf(item: V): K
 
-    /** Items with key >= [from] (from the start when null), ascending, at most [size]. */
-    protected abstract suspend fun loadFrom(from: K?, size: Int): List<V>
+    /**
+     * One read: the [items] to show and the [keys] of every entry the keyset read selected, in read
+     * order. Page keys and the end of the list come from [keys], so an entry that fails to load
+     * after it was selected (deleted in between) is skipped without ending the list early.
+     */
+    class Slice<K : Any, V : Any>(val items: List<V>, val keys: List<K>)
 
-    /** Items with key > [after], ascending, at most [size]. */
-    protected abstract suspend fun loadAfter(after: K, size: Int): List<V>
+    /** A slice whose items are exactly the entries read. */
+    protected fun slice(items: List<V>): Slice<K, V> = Slice(items, items.map(::keyOf))
 
-    /** Items with key < [before], DESCENDING (nearest first), at most [size]. */
-    protected abstract suspend fun loadBefore(before: K, size: Int): List<V>
+    /** Entries with key >= [from] (from the start when null), ascending, at most [size]. */
+    protected abstract suspend fun loadFrom(from: K?, size: Int): Slice<K, V>
+
+    /** Entries with key > [after], ascending, at most [size]. */
+    protected abstract suspend fun loadAfter(after: K, size: Int): Slice<K, V>
+
+    /** Entries with key < [before], DESCENDING (nearest first), at most [size]. */
+    protected abstract suspend fun loadBefore(before: K, size: Int): Slice<K, V>
 
     override val jumpingSupported: Boolean get() = false
 
@@ -59,21 +69,22 @@ abstract class KeysetPagingSource<K : Any, V : Any>(
         }
         val size = params.loadSize
         val page = when (params) {
-            is LoadParams.Refresh -> loadFrom(params.key, size).let { items ->
-                val prev = if (params.key == null) null else items.firstOrNull()?.let(::keyOf) ?: params.key
-                LoadResult.Page(items, prev, nextKeyOf(items, size))
+            is LoadParams.Refresh -> loadFrom(params.key, size).let { s ->
+                val prev = if (params.key == null) null else s.keys.firstOrNull() ?: params.key
+                LoadResult.Page(s.items, prev, nextKeyOf(s, size))
             }
-            is LoadParams.Append -> loadAfter(params.key, size).let { items ->
-                LoadResult.Page(items, null, nextKeyOf(items, size))
+            is LoadParams.Append -> loadAfter(params.key, size).let { s ->
+                LoadResult.Page(s.items, null, nextKeyOf(s, size))
             }
-            is LoadParams.Prepend -> loadBefore(params.key, size).asReversed().let { items ->
-                LoadResult.Page(items, if (items.size < size) null else keyOf(items.first()), null)
+            is LoadParams.Prepend -> loadBefore(params.key, size).let { s ->
+                // Read nearest first; shown ascending. The next prepend continues past the farthest read.
+                LoadResult.Page(s.items.asReversed(), if (s.keys.size < size) null else s.keys.last(), null)
             }
         }
         return if (invalid) LoadResult.Invalid() else page
     }
 
-    private fun nextKeyOf(items: List<V>, size: Int): K? = if (items.size < size) null else keyOf(items.last())
+    private fun nextKeyOf(s: Slice<K, V>, size: Int): K? = if (s.keys.size < size) null else s.keys.last()
 
     /** Backs off half a load from the anchor, so the reloaded page still covers it. */
     override fun getRefreshKey(state: PagingState<K, V>): K? {

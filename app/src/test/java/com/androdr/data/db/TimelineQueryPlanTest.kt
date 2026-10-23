@@ -4,7 +4,6 @@ import androidx.sqlite.db.SimpleSQLiteQuery
 import com.androdr.data.model.TimelineRowEntity
 import com.androdr.data.store.StoreFixture
 import org.junit.After
-import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -25,10 +24,14 @@ class TimelineQueryPlanTest {
         .query(SimpleSQLiteQuery("EXPLAIN QUERY PLAN ${sql.sql}", sql.args.toTypedArray()))
         .use { c -> buildList { while (c.moveToNext()) add(c.getString(c.getColumnIndexOrThrow("detail"))) } }
 
-    /** A plan line that reads a whole table rather than an index range or an index in order. */
+    /**
+     * A plan line that reads a whole table rather than an index range or an index in order. Reading
+     * back a `LIMIT`ed arm's co-routine (`SCAN (subquery-N)`) or the count's constant row is bounded.
+     */
     private fun fullScan(line: String): Boolean {
-        val t = line.trim()
-        return t.startsWith("SCAN") && !t.contains("USING INDEX") && !t.contains("USING COVERING INDEX")
+        val t = line.replace(Regex("^[|`\\s-]+"), "")
+        return t.startsWith("SCAN") && !t.contains("USING INDEX") && !t.contains("USING COVERING INDEX") &&
+            !t.startsWith("SCAN (subquery") && t != "SCAN CONSTANT ROW"
     }
 
     private val shapes: Map<String, TimelineFilter> = buildMap {
@@ -56,10 +59,8 @@ class TimelineQueryPlanTest {
     private fun statements(): List<Pair<String, TimelineSql>> = buildList {
         for ((name, filter) in shapes) {
             for (direction in TimelineDirection.entries) {
-                TimelineQueries.page(filter, null, direction, 100).forEach { add("$name $direction null" to it) }
-                for (key in keys) {
-                    TimelineQueries.page(filter, key, direction, 100).forEach { add("$name $direction $key" to it) }
-                }
+                add("$name $direction null" to TimelineQueries.page(filter, null, direction, 100))
+                for (key in keys) add("$name $direction $key" to TimelineQueries.page(filter, key, direction, 100))
             }
         }
     }
@@ -80,7 +81,7 @@ class TimelineQueryPlanTest {
     /** Q1 for the Timeline's built SQL (the source gate sees only `@Query` strings). */
     @Test
     fun `every built statement applies the visibility rules`() {
-        val all = statements().map { it.second } + shapes.values.flatMap { TimelineQueries.counts(it) }
+        val all = statements().map { it.second } + shapes.values.map { TimelineQueries.count(it) }
         val bad = all.filter { q ->
             val rowsOk = "FROM forensic_timeline r" !in q.sql || VisibleRow.SQL in q.sql
             val factsOk = "telemetry_record f" !in q.sql || VisibleFact.SQL in q.sql ||
@@ -92,7 +93,7 @@ class TimelineQueryPlanTest {
 
     @Test
     fun `fact arms use the shape's index`() {
-        fun factPlan(filter: TimelineFilter) = plan(TimelineQueries.page(filter, null, TimelineDirection.FROM, 10)[1])
+        fun factPlan(filter: TimelineFilter) = plan(TimelineQueries.page(filter, null, TimelineDirection.FROM, 10))
         assertTrue(factPlan(TimelineFilter()).any { "index_telemetry_record_eventTime" in it })
         assertTrue(factPlan(TimelineFilter(packageName = "p"))
             .any { "index_telemetry_record_packageName_eventTime" in it })
@@ -101,8 +102,7 @@ class TimelineQueryPlanTest {
 
     @Test
     fun `counts never sort, and no statement uses OFFSET`() {
-        val counts = shapes.values.flatMap { TimelineQueries.counts(it) }
-        assertEquals(shapes.values.sumOf { if (it.includesFacts) 2L else 1L }.toInt(), counts.size)
+        val counts = shapes.values.map { TimelineQueries.count(it) }
         val sorting = counts.filter { c -> plan(c).any { "TEMP B-TREE" in it } }
         assertTrue(sorting.joinToString("\n") { it.sql }, sorting.isEmpty())
         val offsets = (statements().map { it.second } + counts).filter { "OFFSET" in it.sql.uppercase() }

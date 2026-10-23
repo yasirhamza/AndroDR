@@ -40,33 +40,53 @@ class TimelineSql(val sql: String, val args: List<Any?>) {
  * the fact arm by `telemetry_record.eventTime` (or `(packageName, eventTime)`, or
  * `scan_record(scanId, eventTime)` under the scan filter). One SQL `UNION ALL … ORDER BY time,
  * rowKind, id` would sort: SQLite does not treat an arm's constant `rowKind` as ordered and adds a
- * TEMP B-TREE per arm, so the merge is done here, inside one read transaction.
+ * TEMP B-TREE per arm. So each arm is a `LIMIT`ed subquery of one `UNION ALL` statement with no
+ * outer `ORDER BY` — one statement, so one consistent read with no transaction (no writer lock) —
+ * and [TimelineDao.page] merges the two by [TimelineKey.DISPLAY_ORDER].
  *
  * Visibility: the row arm applies [VisibleRow.SQL]; the fact arm applies [VisibleFact.SQL] (a
  * `COMPLETE` observation, or no observation and pinned, [PinnedFact.SQL]), or under the scan filter
- * the observation's own scan must be `COMPLETE` ([CompleteScan.SQL]). Only exact-precision facts
- * with an event time are events: day-precision facts and snapshot records never appear.
+ * the observation's own scan must be `COMPLETE` ([CompleteScan.SQL]).
+ *
+ * Events only (spec §3): a record is an event record when it carries an event time, so
+ * [EVENT_RECORD] (`f.eventTime IS NOT NULL`) is what excludes every snapshot record (the taxonomy
+ * gives a snapshot service no event-time field, and an absent value leaves it null). [EXACT_TIME]
+ * then leaves out day-precision event facts.
  *
  * Nesting: a fact referenced (`recordId`) by a visible row this same filter shows is nested under
- * that row and left out of the fact arm. Counts include nested facts (they are shown, under their
- * row), so a count equals the rows plus the facts the filter matches.
+ * that row and left out of the fact arm. A count is what the list shows: the rows, the standalone
+ * facts, and each counted row's visible evidence fact (shown nested under it).
+ *
+ * Under the scan filter the fact arm's tie-break is `scan_record`'s rowid, the column its
+ * `(scanId, eventTime)` index orders by. That rowid is not an INTEGER PRIMARY KEY alias, so a
+ * `VACUUM` may renumber it: harmless across pagers, but a `VACUUM` must never run while a Timeline
+ * pager is open.
  *
  * Columns that have their own index but are not the shape's driving column are written `+col`, so
  * the planner never trades the ordered index for an equality one and a sort.
  */
 object TimelineQueries {
 
-    /** The arms of one page: the row arm, then (when the filter includes facts) the fact arm. */
-    fun page(filter: TimelineFilter, key: TimelineKey?, direction: TimelineDirection, size: Int): List<TimelineSql> =
-        buildList {
+    /**
+     * One page as one statement: the row arm and (when the filter includes facts) the fact arm, each
+     * a subquery holding its first [size] entries in [direction]'s order, joined by `UNION ALL`.
+     */
+    fun page(filter: TimelineFilter, key: TimelineKey?, direction: TimelineDirection, size: Int): TimelineSql {
+        val arms = buildList {
             add(rowArm(filter, key, direction, size))
             if (filter.includesFacts) add(factArm(filter, key, direction, size))
         }
+        return TimelineSql(arms.joinToString(" UNION ALL ") { "SELECT * FROM (${it.sql})" }, arms.flatMap { it.args })
+    }
 
-    /** One count per arm (rows, then facts when included); their sum is the filter's count. */
-    fun counts(filter: TimelineFilter): List<TimelineSql> = buildList {
-        add(rowCount(filter))
-        if (filter.includesFacts) add(factCount(filter))
+    /** The filter's count as one statement: rows + standalone facts + the counted rows' evidence. */
+    fun count(filter: TimelineFilter): TimelineSql {
+        val parts = buildList {
+            add(rowCount(filter))
+            add(evidenceCount(filter))
+            if (filter.includesFacts) add(factCount(filter))
+        }
+        return TimelineSql("SELECT " + parts.joinToString(" + ") { "(${it.sql})" }, parts.flatMap { it.args })
     }
 
     private const val ROW_COLS = "SELECT ${TimelineRowEntity.ROW} AS rowKind, r.id AS id, r.id AS seq, " +
@@ -88,8 +108,11 @@ object TimelineQueries {
         "f.bodyHash AS bodyHash, NULL AS recordId FROM scan_record o JOIN ScanResult s ON s.id = o.scanId " +
         "JOIN telemetry_record f ON f.id = o.recordId"
 
-    /** An event fact: exact precision with an event time (no snapshot record, no day-precision fact). */
-    private const val EVENT_FACT = "f.timePrecision = 'EXACT'"
+    /** An event record (spec §3): it carries an event time. This is what excludes snapshot records. */
+    private const val EVENT_RECORD = "f.eventTime IS NOT NULL"
+
+    /** Exact precision: leaves out day-precision event facts (they have no time of day to place). */
+    private const val EXACT_TIME = "f.timePrecision = 'EXACT'"
 
     /** Predicates and their arguments, joined with AND. */
     private class Where {
@@ -144,8 +167,9 @@ object TimelineQueries {
 
     /** The fact predicates of [filter] except visibility, nesting and the keyset. */
     private fun factFilter(filter: TimelineFilter, time: String): Where = Where().apply {
-        add(EVENT_FACT)
-        add("$time IS NOT NULL")
+        add(EVENT_RECORD)
+        add(EXACT_TIME)
+        if (time != "f.eventTime") add("$time IS NOT NULL")
         val shape = filter.shape
         filter.packageName?.let {
             add(if (shape == TimelineShape.PACKAGE) "f.packageName = ?" else "+f.packageName = ?", it)
@@ -215,17 +239,27 @@ object TimelineQueries {
         return TimelineSql("SELECT COUNT(*) FROM forensic_timeline r WHERE ${where.sql}", where.args)
     }
 
+    /** The counted rows' evidence: each row of the filter whose `recordId` fact is visible (shown nested). */
+    private fun evidenceCount(filter: TimelineFilter): TimelineSql {
+        val where = rowFilter(filter, driving = true)
+        where.add("r.recordId IS NOT NULL AND EXISTS (SELECT 1 FROM telemetry_record f WHERE f.id = r.recordId " +
+            "AND ${VisibleFact.SQL})")
+        return TimelineSql("SELECT COUNT(*) FROM forensic_timeline r WHERE ${where.sql}", where.args)
+    }
+
     private fun factCount(filter: TimelineFilter): TimelineSql {
         val scan = filter.scanId
         val where = Where()
         return if (scan != null) {
             where.add("o.scanId = ? AND ${CompleteScan.SQL}", scan)
             where.addAll(factFilter(filter, "o.eventTime"))
+            where.addAll(notNested(filter))
             TimelineSql("SELECT COUNT(*) FROM scan_record o JOIN ScanResult s ON s.id = o.scanId " +
                 "JOIN telemetry_record f ON f.id = o.recordId WHERE ${where.sql}", where.args)
         } else {
             where.add(VisibleFact.SQL)
             where.addAll(factFilter(filter, "f.eventTime"))
+            where.addAll(notNested(filter))
             TimelineSql("SELECT COUNT(*) FROM telemetry_record f WHERE ${where.sql}", where.args)
         }
     }
