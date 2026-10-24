@@ -248,9 +248,14 @@
     </plurals>
     <string name="import_card_findings_complete">The findings below are complete.</string>
     <plurals name="import_card_findings_unsaved">
-        <item quantity="one">%1$d finding could not be saved and is not listed below; free %2$s and import again.</item>
-        <item quantity="other">%1$d findings could not be saved and are not listed below; free %2$s and import again.</item>
+        <item quantity="one">%1$d finding could not be saved and is not listed below; free at least %2$s and import again.</item>
+        <item quantity="other">%1$d findings could not be saved and are not listed below; free at least %2$s and import again.</item>
     </plurals>
+    <plurals name="import_card_findings_unsaved_unknown">
+        <item quantity="one">%1$d finding could not be saved and is not listed below; free more space and import again.</item>
+        <item quantity="other">%1$d findings could not be saved and are not listed below; free more space and import again.</item>
+    </plurals>
+    <string name="import_card_unsaved_levels">Not saved, by severity: %1$s.</string>
     <string name="intrusion_log_summary_title">Intrusion log analyzed</string>
     <!-- PluralsCandidate: compact multi-count summary; matches bugreport_finding_count style -->
     <string name="intrusion_log_summary_counts" tools:ignore="PluralsCandidate">%1$d DNS events \u00b7 %2$d connections \u00b7 %3$d security events</string>

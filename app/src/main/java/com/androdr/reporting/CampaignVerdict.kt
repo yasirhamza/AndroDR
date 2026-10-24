@@ -57,6 +57,13 @@ private fun Finding.isPatchLevel(ruleCategoryById: Map<String, String>): Boolean
 private data class CampaignHit(val time: Long, val text: String)
 
 /**
+ * The hit a verdict names: the latest, and among equally latest ones the greatest text — a total
+ * order, so the named indicator never depends on list order (review Minor C: the folded report
+ * lists findings in fold order, not arrival order).
+ */
+private val LATEST_HIT = compareBy<CampaignHit>({ it.time }, { it.text })
+
+/**
  * The only place a campaign verdict is computed: the section rows and the summary's
  * "Campaign detections" / "Campaign exposure (unpatched)" lines both render from this list.
  *
@@ -106,13 +113,13 @@ internal fun campaignVerdicts(
         val tagged = scan.findings.filter { it.triggered && key in tagKeys(it) }
         val (patchLevel, evidence) = tagged.partition { it.isPatchLevel(ruleCategoryById) }
         val (recent, old) = hitsByKey[key].orEmpty().partition { referenceTime - it.time <= CAMPAIGN_HIT_WINDOW_MS }
-        val latestOld = old.maxByOrNull { it.time }
+        val latestOld = old.maxWithOrNull(LATEST_HIT)
         val coverage = coverageOf(key)
         fun verdict(state: CampaignVerdict.State, detail: String, earlierHit: String? = null) =
             CampaignVerdict(key, label, state, detail, earlierHit, coverage)
         when {
             evidence.isNotEmpty() -> verdict(CampaignVerdict.State.DETECTED, evidence.first().title)
-            recent.isNotEmpty() -> verdict(CampaignVerdict.State.DETECTED, recent.maxBy { it.time }.text)
+            recent.isNotEmpty() -> verdict(CampaignVerdict.State.DETECTED, recent.maxWith(LATEST_HIT).text)
             live && patchLevel.isNotEmpty() ->
                 verdict(CampaignVerdict.State.EXPOSED, patchLevel.first().title, earlierHit = latestOld?.text)
             latestOld != null -> verdict(CampaignVerdict.State.EARLIER_HIT, latestOld.text)

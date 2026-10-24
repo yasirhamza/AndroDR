@@ -64,11 +64,8 @@ interface ScanFindingDao {
     )
     suspend fun recheckRecordIdsForScan(scanId: Long): List<Long>
 
-    /** Deletes up to [size] of a scan's findings (one keyset batch); returns how many went. */
-    @Query(
-        "DELETE FROM scan_finding WHERE id IN (SELECT id FROM scan_finding WHERE scanId = :scanId " +
-            "ORDER BY id LIMIT :size)"
-    )
+    /** Deletes up to [size] of a scan's findings (one batch, any order); returns how many went. */
+    @Query("$DELETE_FINDINGS_BATCH")
     suspend fun deleteBatchForScan(scanId: Long, size: Int): Int
 
     /** Keyset page of one COMPLETE scan's findings with [triggered], by id. */
@@ -104,12 +101,7 @@ interface ScanFindingDao {
     suspend fun triggeredRuleCounts(scanId: Long): List<RuleCount>
 
     /** Up to [size] of a COMPLETE scan's triggered findings of one rule, in recording order (a diff's sample). */
-    @Query(
-        "SELECT sf.id, sf.scanId, sf.ruleId, sf.triggered, sf.level, sf.kind, sf.recordId, sf.alertId, " +
-            "sf.findingJson FROM scan_finding sf JOIN ScanResult s ON s.id = sf.scanId " +
-            "WHERE sf.scanId = :scanId AND sf.triggered = 1 AND sf.ruleId = :ruleId AND ${CompleteScan.SQL} " +
-            "ORDER BY sf.id LIMIT :size"
-    )
+    @Query("$RULE_SAMPLE")
     suspend fun ruleSample(scanId: Long, ruleId: String, size: Int): List<FindingRow>
 
     /** The History sheet's counts: triggered app issues (informational excluded), device issues, warning signs. */
@@ -141,6 +133,16 @@ internal const val FINDINGS_PAGE = "SELECT sf.id, sf.scanId, sf.ruleId, sf.trigg
     "sf.recordId, sf.alertId, sf.findingJson FROM scan_finding sf JOIN ScanResult s ON s.id = sf.scanId " +
     "WHERE sf.scanId = :scanId AND sf.triggered = :triggered AND sf.id > :afterId " +
     "AND ${CompleteScan.SQL} ORDER BY sf.id LIMIT :size"
+
+/** Up to `size` of a COMPLETE scan's triggered findings of one rule, in recording order (a diff's sample). */
+internal const val RULE_SAMPLE = "SELECT sf.id, sf.scanId, sf.ruleId, sf.triggered, sf.level, sf.kind, " +
+    "sf.recordId, sf.alertId, sf.findingJson FROM scan_finding sf JOIN ScanResult s ON s.id = sf.scanId " +
+    "WHERE sf.scanId = :scanId AND sf.triggered = 1 AND sf.ruleId = :ruleId AND ${CompleteScan.SQL} " +
+    "ORDER BY sf.id LIMIT :size"
+
+/** One delete batch of a scan's findings; no order is needed, so it is an index range read. */
+internal const val DELETE_FINDINGS_BATCH = "DELETE FROM scan_finding WHERE id IN (SELECT id FROM scan_finding " +
+    "WHERE scanId = :scanId LIMIT :size)"
 
 /** Triggered findings per rule of one COMPLETE scan (index `(scanId, triggered)`). */
 internal const val TRIGGERED_RULE_COUNTS = "SELECT sf.ruleId AS ruleId, COUNT(*) AS count FROM scan_finding sf " +

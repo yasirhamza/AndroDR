@@ -140,6 +140,20 @@ class FindingLifecycleTest {
             assertEquals(1, findings.currentOnce().openAlertCount)
         }
 
+    /** Review Minor G: a scan with more findings than one delete batch loses every one of them. */
+    @Test
+    fun `deleting a scan with more findings than one batch removes them all`() = runBlocking {
+        val n = ScanWriteRepository.FINDINGS_DELETE_BATCH + 1_000
+        val s = w.writer.begin(w.scan(1L, il), liveEvents = false)
+        s.appendAll("security_log", il, IMPORT_CAPTURED, (1L..n.toLong()).asSequence().map { securityLine(it) })
+        s.finish()
+        assertEquals(n.toLong(), w.count("SELECT COUNT(*) FROM scan_finding"))
+        w.repo.markForDelete(1L)
+        w.repo.completeDelete(1L)
+        assertEquals(0L, w.count("SELECT COUNT(*) FROM scan_finding"))
+        assertEquals("its alerts survive", n.toLong(), w.count("SELECT COUNT(*) FROM alert"))
+    }
+
     @Test
     fun `import B attaches to A's alert and keeps its own scan_finding row`() = runBlocking {
         intrusionLog(10L, securityLine())

@@ -45,11 +45,36 @@ data class ImportCard(
      */
     val unsavedFindings: Long = 0L,
     val freeBytes: Long = 0L,
+    /**
+     * The unsaved findings' exact counts by level, most severe first (ruling R38, review Minor E):
+     * so the card says how serious what was lost is, not only how many.
+     */
+    val unsavedByLevel: List<Pair<String, Long>> = emptyList(),
 ) {
     /** True when the findings listed below the card are every finding of the import. */
     val findingsComplete: Boolean get() = unsavedFindings == 0L
 
+    /**
+     * Whether the card can name an amount to free. The shortfall is the gap to the 150 MB reserve:
+     * it is 0 when the database refused writes for another reason, and then the card must not say
+     * "free 0 B" (review Minor F) — it asks for more space without a number.
+     */
+    val freeAmountKnown: Boolean get() = freeBytes > 0L
+
+    /** The most severe level among the unsaved findings, or null when every finding was saved. */
+    val mostSevereUnsaved: String? get() = unsavedByLevel.firstOrNull()?.first
+
     companion object {
+        private val SEVERITY = listOf("critical", "high", "medium", "low", "informational")
+
+        /** Exact counts by level, most severe first (unknown levels last, by name). */
+        fun byLevel(byRuleLevel: Map<Pair<String, String>, Long>): List<Pair<String, Long>> =
+            byRuleLevel.entries.groupBy({ it.key.second.lowercase() }, { it.value })
+                .mapValues { (_, v) -> v.sum() }.entries
+                .sortedWith(compareBy({ SEVERITY.indexOf(it.key).let { i -> if (i < 0) SEVERITY.size else i } },
+                    { it.key }))
+                .map { it.key to it.value }
+
         /** Shown for an intrusion log whose parser hit a line-length or per-type record limit. */
         const val INTRUSION_LIMIT = "A line-length or per-type record limit dropped some records."
 
@@ -75,7 +100,7 @@ data class ImportCard(
                 else -> ImportNotice.None
             }
             return ImportCard(write.newFacts, write.alreadyStored, write.duplicatesDropped, bounds, notice, notes,
-                write.unsaved.count, write.spaceToFree)
+                write.unsaved.count, write.spaceToFree, byLevel(write.unsaved.byRuleLevel))
         }
     }
 }

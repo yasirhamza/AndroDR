@@ -43,7 +43,8 @@ class FindingsView(
             scan: ScanResult, inputs: ReportInputs, findings: FindingsRepository, telemetry: StoredTelemetrySource,
         ): FindingsView {
             val reference = referenceTime(scan, findings, telemetry)
-            val digest = FindingsDigest(reference - CAMPAIGN_HIT_WINDOW_MS, scan.timestamp)
+            val digest = FindingsDigest(reference - CAMPAIGN_HIT_WINDOW_MS, scan.timestamp,
+                live = scan.source == TelemetrySource.LIVE_SCAN)
             findings.forEachFinding(scan.id) { digest.add(it) }
             val folded = digest.result()
             return FindingsView(

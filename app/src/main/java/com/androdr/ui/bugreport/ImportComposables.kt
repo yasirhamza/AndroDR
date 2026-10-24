@@ -97,6 +97,23 @@ internal fun lowSpaceText(n: ImportNotice.LowSpace, size: (Long) -> String): Str
     return "$what $advice"
 }
 
+/**
+ * How many findings could not be saved, how serious they are (counts by level, most severe first),
+ * and how much to free — "at least X", or no number when the amount is unknown (review Minors E, F).
+ */
+@Composable
+internal fun unsavedText(card: ImportCard, size: (Long) -> String): String {
+    val n = card.unsavedFindings.coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
+    val head = if (card.freeAmountKnown) {
+        pluralStringResource(R.plurals.import_card_findings_unsaved, n, card.unsavedFindings, size(card.freeBytes))
+    } else {
+        pluralStringResource(R.plurals.import_card_findings_unsaved_unknown, n, card.unsavedFindings)
+    }
+    if (card.unsavedByLevel.isEmpty()) return head
+    val levels = card.unsavedByLevel.joinToString(" \u00b7 ") { (level, count) -> "$count $level" }
+    return head + " " + stringResource(R.string.import_card_unsaved_levels, levels)
+}
+
 /** What the import stored, and why not all of it when it was not. */
 @Suppress("LongMethod") // one card: counts, notes, bounds, the storage notice and the findings line
 @Composable
@@ -145,9 +162,7 @@ internal fun ImportCardView(card: ImportCard) {
                 )
             }
             val findingsLine = when {
-                !card.findingsComplete -> pluralStringResource(R.plurals.import_card_findings_unsaved,
-                    card.unsavedFindings.coerceAtMost(Int.MAX_VALUE.toLong()).toInt(), card.unsavedFindings,
-                    size(card.freeBytes))
+                !card.findingsComplete -> unsavedText(card, size)
                 notice != null -> stringResource(R.string.import_card_findings_complete)
                 else -> null
             }

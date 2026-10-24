@@ -30,21 +30,26 @@ class FindingQueryPlanTest {
         "scan_record", "o", "vo", "p", "forensic_timeline", "m", "signal_member")
 
     /**
-     * A whole-table read of a guarded table — including a full walk of one of its indices
-     * (`SCAN x USING INDEX …`, review Minor 9); only a covering-index walk or a SEARCH passes.
+     * A whole-table read of a guarded table — including a full walk of one of its indices, covering
+     * or not (`SCAN x USING [COVERING] INDEX …`, review Minors 9 and H); only a SEARCH passes.
      */
     private fun fullScanOfGuarded(line: String): Boolean {
         val t = line.replace(Regex("^[|`\\s-]+"), "")
-        if (!t.startsWith("SCAN ") || t.contains("USING COVERING INDEX")) return false
+        if (!t.startsWith("SCAN ")) return false
         val name = t.removePrefix("SCAN ").substringBefore(' ')
         return name in guarded
     }
 
-    private fun assertIndexed(what: String, sql: String, mustUse: List<String> = emptyList()) {
+    private fun assertIndexed(
+        what: String, sql: String, mustUse: List<String> = emptyList(), groupBySort: Boolean = false,
+    ) {
         val p = plan(sql)
         val bad = p.filter(::fullScanOfGuarded)
         assertTrue("$what reads a whole guarded table:\n${p.joinToString("\n")}", bad.isEmpty())
-        assertTrue("$what sorts in a temp b-tree:\n${p.joinToString("\n")}", p.none { "TEMP B-TREE" in it })
+        // A GROUP BY over one scan's rows (bounded output: one row per rule) may sort in SQLite's own
+        // temp b-tree, never the Java heap; an ORDER BY sort is never allowed.
+        val sorts = p.filter { "TEMP B-TREE" in it && !(groupBySort && "GROUP BY" in it) }
+        assertTrue("$what sorts in a temp b-tree:\n${p.joinToString("\n")}", sorts.isEmpty())
         for (index in mustUse) assertTrue("$what does not use $index:\n${p.joinToString("\n")}", p.any { index in it })
     }
 
@@ -81,12 +86,24 @@ class FindingQueryPlanTest {
         assertIndexed("a scan's findings page", FINDINGS_PAGE, listOf("index_scan_finding_scanId_triggered"))
     }
 
+    /** Review Minor H: the fix round's statements are plan-gated too. */
+    @Test
+    fun `the diff, summary and batched-delete statements use indices`() {
+        assertIndexed("triggered rule counts", TRIGGERED_RULE_COUNTS, listOf("index_scan_finding_scanId_triggered"),
+            groupBySort = true)
+        assertIndexed("summary counts", SUMMARY_COUNTS, listOf("index_scan_finding_scanId_triggered"))
+        assertIndexed("rule sample", RULE_SAMPLE, listOf("index_scan_finding_scanId_triggered"))
+        assertIndexed("batched delete", DELETE_FINDINGS_BATCH, listOf("index_scan_finding_scanId"))
+    }
+
     @Test
     fun `the gate flags a whole-table read and a temp b-tree`() {
         assertTrue(fullScanOfGuarded("SCAN sf"))
         assertTrue(fullScanOfGuarded("|--SCAN alert"))
         assertTrue(!fullScanOfGuarded("SCAN l"))
         assertTrue("a full index walk is a whole-table read", fullScanOfGuarded("SCAN sf USING INDEX ix"))
+        assertTrue("so is a covering one", fullScanOfGuarded("SCAN alert USING COVERING INDEX ix"))
+        assertTrue(plan("SELECT COUNT(*) FROM scan_finding").any(::fullScanOfGuarded))
         assertTrue(!fullScanOfGuarded("SEARCH sf USING INDEX index_scan_finding_scanId_triggered (scanId=?)"))
         assertTrue(plan("SELECT * FROM scan_finding ORDER BY level").any { "TEMP B-TREE" in it })
         assertTrue(plan("SELECT * FROM alert WHERE level = 'x'").any(::fullScanOfGuarded))
