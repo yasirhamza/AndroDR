@@ -131,16 +131,13 @@ class DashboardViewModel @Inject constructor(
         UsageStatsPermission.openSettings(context)
     }
 
-    /** The diff between the two newest scans, from their triggered findings. */
-    val scanDiff: StateFlow<ScanOrchestrator.ScanDiff?> = repository.latestTwo
-        .map { scans ->
-            if (scans.size >= 2) {
-                orchestrator.computeDiff(findings.withFindings(scans[0], triggeredOnly = true),
-                    findings.withFindings(scans[1], triggeredOnly = true))
-            } else {
-                null
-            }
-        }
+    /**
+     * The diff between the two newest LIVE scans (spec §5.4: imports never displace live state),
+     * computed from rule counts in SQL with a bounded sample ([ScanOrchestrator.boundedDiff]): an
+     * import of any size is never read here (review C1).
+     */
+    val scanDiff: StateFlow<ScanOrchestrator.ScanDiff?> = repository.latestTwoLive
+        .map { scans -> if (scans.size >= 2) ScanOrchestrator.boundedDiff(findings, scans[0], scans[1]) else null }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
     val matchedDnsCount: StateFlow<Int> = repository.matchedDnsEvents

@@ -243,6 +243,8 @@ val lowHeapTest by tasks.registering(Test::class) {
     testClassesDirs = unitTest.get().testClassesDirs
     classpath = unitTest.get().classpath
     maxHeapSize = "256m"
+    // One JVM per class: each *LowHeap* gate proves its own bound, never inheriting another's heap.
+    forkEvery = 1
     filter { includeTestsMatching("*LowHeap*") }
 }
 

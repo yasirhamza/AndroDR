@@ -15,6 +15,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -97,6 +98,7 @@ internal fun lowSpaceText(n: ImportNotice.LowSpace, size: (Long) -> String): Str
 }
 
 /** What the import stored, and why not all of it when it was not. */
+@Suppress("LongMethod") // one card: counts, notes, bounds, the storage notice and the findings line
 @Composable
 internal fun ImportCardView(card: ImportCard) {
     val context = LocalContext.current
@@ -132,8 +134,24 @@ internal fun ImportCardView(card: ImportCard) {
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
-            val notice = noticeText(card.notice) { android.text.format.Formatter.formatShortFileSize(context, it) }
+            val size = { b: Long -> android.text.format.Formatter.formatShortFileSize(context, b) }
+            val notice = noticeText(card.notice, size)
             notice?.let {
+                Text(
+                    text = it,
+                    style = MaterialTheme.typography.bodySmall,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.error
+                )
+            }
+            val findingsLine = when {
+                !card.findingsComplete -> pluralStringResource(R.plurals.import_card_findings_unsaved,
+                    card.unsavedFindings.coerceAtMost(Int.MAX_VALUE.toLong()).toInt(), card.unsavedFindings,
+                    size(card.freeBytes))
+                notice != null -> stringResource(R.string.import_card_findings_complete)
+                else -> null
+            }
+            findingsLine?.let {
                 Text(
                     text = it,
                     style = MaterialTheme.typography.bodySmall,

@@ -105,7 +105,7 @@ class BugReportTelemetryPersistedTest {
     fun `a bug report whose finishing write is not saved fails with BugReportPersistException`() = runBlocking {
         val repo = io.mockk.spyk(f.w.repo)
         f.w.repo = repo
-        coEvery { repo.finish(any(), any(), any(), any(), any()) } throws
+        coEvery { repo.finish(any(), any(), any(), any()) } throws
             android.database.sqlite.SQLiteFullException("database or disk is full")
 
         val thrown = runCatching { f.orchestrator.analyzeBugReport(uri) }.exceptionOrNull()

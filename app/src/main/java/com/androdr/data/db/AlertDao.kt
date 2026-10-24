@@ -4,6 +4,9 @@ import androidx.room.Dao
 import androidx.room.Query
 import com.androdr.data.model.Alert
 
+/** An alert's key and id. Plain: holds a `ByteArray`. */
+class AlertKeyId(val key: ByteArray, val id: Long)
+
 /**
  * `alert` (spec §5.4): created set-based in a session's finishing transaction from that scan's
  * `scan_finding.alertKey` values, never deleted. List-parameter queries go through [chunkedIn].
@@ -21,9 +24,9 @@ interface AlertDao {
     @Query("$TOUCH_ALERTS_FOR_SCAN")
     suspend fun touchForScan(scanId: Long, at: Long)
 
-    /** Of [keys], those that already have an alert. */
-    @Query("SELECT alertKey FROM alert WHERE alertKey IN (:keys)")
-    suspend fun existingKeys(keys: List<ByteArray>): List<ByteArray>
+    /** Of [keys], those that already have an alert, with its id. */
+    @Query("SELECT alertKey AS `key`, id FROM alert WHERE alertKey IN (:keys)")
+    suspend fun idsForKeys(keys: List<ByteArray>): List<AlertKeyId>
 
     @Query("$OPEN_ALERT_COUNT")
     suspend fun openCount(): Int
@@ -57,19 +60,24 @@ interface AlertDao {
 
 /**
  * Opens one alert per new key among a scan's findings (spec §5.2 finish), from the rows that carry
- * opening evidence (a key that already has an alert is ignored). Rows are read in the
+ * opening evidence — a fact row's transient `evidenceJson`, or a no-fact row's own `findingJson`,
+ * which keeps its `matchContext` (a key that already has an alert is ignored). Rows are read in the
  * `(scanId, alertKey)` index's order — by key, then by id — so the first row per key wins without a
  * sort.
  */
 internal const val OPEN_ALERTS_FOR_SCAN = "INSERT OR IGNORE INTO alert (alertKey, ruleId, status, openedAt, " +
     "openedScanId, lastActivityAt, closedAt, closedReason, closedWithCredential, level, recordId, evidenceJson) " +
     "SELECT sf.alertKey, sf.ruleId, 'OPEN', :openedAt, sf.scanId, :openedAt, NULL, NULL, 0, sf.level, " +
-    "sf.recordId, sf.evidenceJson FROM scan_finding sf WHERE sf.scanId = :scanId " +
-    "AND sf.alertKey IS NOT NULL AND sf.evidenceJson IS NOT NULL ORDER BY sf.alertKey, sf.id"
+    "sf.recordId, COALESCE(sf.evidenceJson, sf.findingJson) FROM scan_finding sf WHERE sf.scanId = :scanId " +
+    "AND sf.alertKey IS NOT NULL AND sf.alertId IS NULL AND (sf.evidenceJson IS NOT NULL OR sf.recordId IS NULL) " +
+    "ORDER BY sf.alertKey, sf.id"
 
-/** Attaches every keyed finding of a scan to its alert (by the unique `alertKey` index). */
+/**
+ * Attaches every keyed finding of a scan that is not attached yet (rows whose key already had an
+ * alert were attached at insert) to its alert (by the unique `alertKey` index).
+ */
 internal const val ATTACH_ALERTS_FOR_SCAN = "UPDATE scan_finding SET alertId = (SELECT a.id FROM alert a " +
-    "WHERE a.alertKey = scan_finding.alertKey) WHERE scanId = :scanId AND alertKey IS NOT NULL"
+    "WHERE a.alertKey = scan_finding.alertKey) WHERE scanId = :scanId AND alertKey IS NOT NULL AND alertId IS NULL"
 
 /** Re-surfaces every alert a finding of a scan attached to (a closed alert stays closed). */
 internal const val TOUCH_ALERTS_FOR_SCAN = "UPDATE alert SET lastActivityAt = :at WHERE lastActivityAt < :at " +

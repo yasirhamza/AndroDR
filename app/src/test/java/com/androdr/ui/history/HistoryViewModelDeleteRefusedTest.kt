@@ -38,7 +38,6 @@ class HistoryViewModelDeleteRefusedTest {
 
     private fun vm(repository: ScanRepository) = HistoryViewModel(
         repository = repository,
-        orchestrator = mockk(relaxed = true),
         reportExporter = mockk(relaxed = true),
         findings = mockk(relaxed = true),
     )

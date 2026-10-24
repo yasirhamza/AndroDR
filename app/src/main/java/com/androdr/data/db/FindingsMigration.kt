@@ -47,11 +47,13 @@ class FindingsMigration(private val clock: () -> Long = System::currentTimeMilli
         )
         val now = clock()
         val openers = HashMap<ByteBuffer, Opener>()
+        var unreadable = 0
         val scans = db.query("SELECT id, timestamp, state FROM ScanResult ORDER BY timestamp, id").use { c ->
             buildList { while (c.moveToNext()) add(Triple(c.getLong(0), c.getLong(1), c.getString(2))) }
         }
         for ((scanId, timestamp, state) in scans) {
             val summary = migrateScan(db, scanId, timestamp, state == COMPLETE, openers)
+            if (summary.unreadable) unreadable++
             db.execSQL(
                 "UPDATE ScanResult_new SET triggeredCount = ?, maxLevel = ? WHERE id = ?",
                 arrayOf(summary.triggered, summary.maxLevel, scanId)
@@ -61,9 +63,10 @@ class FindingsMigration(private val clock: () -> Long = System::currentTimeMilli
         db.execSQL("DROP TABLE ScanResult")
         db.execSQL("ALTER TABLE ScanResult_new RENAME TO ScanResult")
         createAlerts(db, openers.values, now)
+        if (unreadable > 0) recordUnreadable(db, unreadable, now)
     }
 
-    private class Summary(var triggered: Int = 0, var maxLevel: String? = null)
+    private class Summary(var triggered: Int = 0, var maxLevel: String? = null, var unreadable: Boolean = false)
 
     /** The earliest finding with one alert key (its scan_finding row) and the latest scan time with it. */
     private class Opener(val rowId: Long, var lastActivityAt: Long)
@@ -73,8 +76,9 @@ class FindingsMigration(private val clock: () -> Long = System::currentTimeMilli
         openers: HashMap<ByteBuffer, Opener>,
     ): Summary {
         val summary = Summary()
-        val all = MigrationFindingsReader.read(db, scanId)
-            .mapNotNull { f -> migrated(db, scanId, f)?.let { f to it } }
+        val read = MigrationFindingsReader.readOrNull(db, scanId)
+        summary.unreadable = read == null
+        val all = read.orEmpty().mapNotNull { f -> migrated(db, scanId, f)?.let { f to it } }
         for ((f, m) in all) {
             if (m.triggered) {
                 summary.triggered++
@@ -82,7 +86,8 @@ class FindingsMigration(private val clock: () -> Long = System::currentTimeMilli
             }
             // Untriggered findings are stored only for snapshot services (spec §5.4).
             if (!m.triggered && m.service in FrozenRuleServices.EVENT_TIME_FIELD_BY_SERVICE) continue
-            val rowId = db.insert("scan_finding", SQLiteDatabase.CONFLICT_ABORT, m.values(scanId, f.toString()))
+            val values = m.values(scanId, f.toString(), complete)
+            val rowId = db.insert("scan_finding", SQLiteDatabase.CONFLICT_ABORT, values)
             val key = m.alertKey?.takeIf { complete }
             if (key != null) {
                 val opener = openers.getOrPut(HashKeys.key(key)) { Opener(rowId, timestamp) }
@@ -96,7 +101,8 @@ class FindingsMigration(private val clock: () -> Long = System::currentTimeMilli
         val ruleId: String, val triggered: Boolean, val level: String, val category: String,
         val service: String?, val ordinal: Int, val recordId: Long?, val kind: FindingKind, val alertKey: ByteArray?,
     ) {
-        fun values(scanId: Long, json: String) = ContentValues().apply {
+        /** [complete]: only a COMPLETE scan's rows carry their key — others open no alert (review Minor 1). */
+        fun values(scanId: Long, json: String, complete: Boolean) = ContentValues().apply {
             put("scanId", scanId)
             put("ruleId", ruleId)
             put("triggered", if (triggered) 1 else 0)
@@ -106,7 +112,7 @@ class FindingsMigration(private val clock: () -> Long = System::currentTimeMilli
             put("recordId", recordId)
             put("service", service.orEmpty())
             put("ordinal", ordinal)
-            put("alertKey", alertKey)
+            put("alertKey", alertKey?.takeIf { complete })
             put("findingJson", json)
         }
     }
@@ -184,10 +190,30 @@ class FindingsMigration(private val clock: () -> Long = System::currentTimeMilli
         )
     }
 
+    /**
+     * One persistent Timeline row saying how many scans' findings could not be migrated (over 2 MB or
+     * not readable): the old column is dropped here, so the loss is permanent and must not be silent
+     * (review Minor 2). Persistent rows survive deletes and "Clear all".
+     */
+    private fun recordUnreadable(db: SupportSQLiteDatabase, scans: Int, now: Long) {
+        db.execSQL(
+            "INSERT INTO forensic_timeline (startTimestamp, kind, timestampPrecision, source, category, " +
+                "description, details, packageName, appName, processUid, iocIndicator, iocType, iocSource, " +
+                "campaignName, apkHash, correlationId, ruleId, scanResultId, attackTechniqueId, telemetrySource, " +
+                "createdAt, persistent) VALUES (?, 'event', 'exact', ?, ?, ?, ?, '', '', -1, '', '', '', '', '', " +
+                "'', '', -1, '', 'LIVE_SCAN', ?, 1)",
+            arrayOf<Any>(now, UNREADABLE_SOURCE, UNREADABLE_CATEGORY,
+                "Findings of $scans earlier scan(s) could not be carried over",
+                "They were too large or damaged to read during the upgrade; the scans themselves are kept.", now)
+        )
+    }
+
     private fun JsonObject.str(key: String): String? = (this[key] as? JsonPrimitive)?.contentOrNull
 
     companion object {
         const val MIGRATED_CLOSED_REASON = "migrated (older than 30 days)"
+        const val UNREADABLE_SOURCE = "androdr_store"
+        const val UNREADABLE_CATEGORY = "findings_not_migrated"
         const val OPEN_WINDOW_MS = 30L * 24 * 60 * 60 * 1000
         private const val COMPLETE = "COMPLETE"
         private const val CORRELATION = "CORRELATION"

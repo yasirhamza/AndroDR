@@ -27,19 +27,30 @@ interface ScanResultDao {
     @Query("SELECT * FROM ScanResult WHERE id = ($LATEST_LIVE_ID)")
     suspend fun latestLiveOnce(): ScanResult?
 
-    /** Keyset page, newest first: up to [size] `COMPLETE` scans older than [afterTimestamp]. */
+    /**
+     * Keyset page, newest first: up to [size] `COMPLETE` scans after `(afterTimestamp, afterId)` in
+     * `(timestamp, id)` descending order — the id breaks timestamp ties, so two scans stamped the same
+     * millisecond across a page boundary both appear (review Minor 9).
+     */
     @Query(
-        "SELECT * FROM ScanResult WHERE state = 'COMPLETE' AND timestamp < :afterTimestamp " +
-            "ORDER BY timestamp DESC LIMIT :size"
+        "SELECT * FROM ScanResult WHERE state = 'COMPLETE' AND (timestamp < :afterTimestamp " +
+            "OR (timestamp = :afterTimestamp AND id < :afterId)) ORDER BY timestamp DESC, id DESC LIMIT :size"
     )
-    suspend fun pagedAfter(afterTimestamp: Long, size: Int): List<ScanResult>
+    suspend fun pagedAfter(afterTimestamp: Long, afterId: Long, size: Int): List<ScanResult>
 
-    /** The prepend query: up to [size] `COMPLETE` scans newer than [beforeTimestamp], oldest first. */
+    /** Keyset page of `COMPLETE` live scans, newest first (the Dashboard diffs the newest two, spec §5.4). */
     @Query(
-        "SELECT * FROM ScanResult WHERE state = 'COMPLETE' AND timestamp > :beforeTimestamp " +
-            "ORDER BY timestamp ASC LIMIT :size"
+        "SELECT * FROM ScanResult WHERE state = 'COMPLETE' AND source = 'LIVE_SCAN' " +
+            "AND timestamp < :afterTimestamp ORDER BY timestamp DESC, id DESC LIMIT :size"
     )
-    suspend fun pagedBefore(beforeTimestamp: Long, size: Int): List<ScanResult>
+    suspend fun livePagedAfter(afterTimestamp: Long, size: Int): List<ScanResult>
+
+    /** The prepend query: up to [size] `COMPLETE` scans before `(beforeTimestamp, beforeId)`, nearest first. */
+    @Query(
+        "SELECT * FROM ScanResult WHERE state = 'COMPLETE' AND (timestamp > :beforeTimestamp " +
+            "OR (timestamp = :beforeTimestamp AND id > :beforeId)) ORDER BY timestamp ASC, id ASC LIMIT :size"
+    )
+    suspend fun pagedBefore(beforeTimestamp: Long, beforeId: Long, size: Int): List<ScanResult>
 
     /** The `COMPLETE` scan just before [timestamp] (History's diff baseline). */
     @Query(

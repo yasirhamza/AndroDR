@@ -29,9 +29,13 @@ class FindingQueryPlanTest {
     private val guarded = setOf("sf", "scan_finding", "a", "pa", "alert", "pf", "f", "telemetry_record", "u",
         "scan_record", "o", "vo", "p", "forensic_timeline", "m", "signal_member")
 
+    /**
+     * A whole-table read of a guarded table — including a full walk of one of its indices
+     * (`SCAN x USING INDEX …`, review Minor 9); only a covering-index walk or a SEARCH passes.
+     */
     private fun fullScanOfGuarded(line: String): Boolean {
         val t = line.replace(Regex("^[|`\\s-]+"), "")
-        if (!t.startsWith("SCAN ") || t.contains("USING INDEX") || t.contains("USING COVERING INDEX")) return false
+        if (!t.startsWith("SCAN ") || t.contains("USING COVERING INDEX")) return false
         val name = t.removePrefix("SCAN ").substringBefore(' ')
         return name in guarded
     }
@@ -82,6 +86,7 @@ class FindingQueryPlanTest {
         assertTrue(fullScanOfGuarded("SCAN sf"))
         assertTrue(fullScanOfGuarded("|--SCAN alert"))
         assertTrue(!fullScanOfGuarded("SCAN l"))
+        assertTrue("a full index walk is a whole-table read", fullScanOfGuarded("SCAN sf USING INDEX ix"))
         assertTrue(!fullScanOfGuarded("SEARCH sf USING INDEX index_scan_finding_scanId_triggered (scanId=?)"))
         assertTrue(plan("SELECT * FROM scan_finding ORDER BY level").any { "TEMP B-TREE" in it })
         assertTrue(plan("SELECT * FROM alert WHERE level = 'x'").any(::fullScanOfGuarded))

@@ -31,7 +31,6 @@ import javax.inject.Inject
 @Suppress("TooManyFunctions") // the sheet, export, delete and selection actions share the history state
 class HistoryViewModel @Inject constructor(
     private val repository: ScanRepository,
-    private val orchestrator: ScanOrchestrator,
     private val reportExporter: ReportExporter,
     private val findings: FindingsRepository,
 ) : ViewModel() {
@@ -56,7 +55,8 @@ class HistoryViewModel @Inject constructor(
      * The selected scan is the NEWER one: [ScanOrchestrator.computeDiff] takes
      * `(newer, older)` in that order. Passing them the other way round silently
      * inverts the whole section — new risks render as resolved and resolved
-     * risks as new. Both scans' triggered findings are read from `scan_finding`.
+     * risks as new. Computed from rule counts in SQL with a bounded sample
+     * ([ScanOrchestrator.boundedDiff]), so selecting a 100k-finding import reads no whole scan.
      */
     @OptIn(ExperimentalCoroutinesApi::class)
     val selectedDiff: StateFlow<ScanOrchestrator.ScanDiff?> = _selectedScan
@@ -65,10 +65,7 @@ class HistoryViewModel @Inject constructor(
 
     @Suppress("TooGenericExceptionCaught") // a diff that cannot be read is not shown, never a crash
     private suspend fun diffWithPredecessor(selected: ScanResult): ScanOrchestrator.ScanDiff? = try {
-        repository.previousOf(selected)?.let { older ->
-            orchestrator.computeDiff(findings.withFindings(selected, triggeredOnly = true),
-                findings.withFindings(older, triggeredOnly = true))
-        }
+        repository.previousOf(selected)?.let { older -> ScanOrchestrator.boundedDiff(findings, selected, older) }
     } catch (e: CancellationException) {
         throw e
     } catch (e: Exception) {

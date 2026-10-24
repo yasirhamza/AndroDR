@@ -103,6 +103,8 @@ object ReportFormatter {
         val dnsIocRows: List<String>,
         val verdicts: List<CampaignVerdict>,
         val referenceFromLog: Boolean,
+        /** The folded findings' multiplicities ([FindingsView.count]): every count printed is exact. */
+        val view: FindingsView,
     )
 
     @Suppress("LongParameterList") // the report's fixed inputs (spec §7 / plan B1 signature)
@@ -206,7 +208,7 @@ object ReportFormatter {
         return FindingsContext(
             appCount = appCountText(scan, appRecords), displayNames = displayNames,
             dnsIocRows = dnsIocRows(scan, reasons),
-            verdicts = verdicts, referenceFromLog = latestImported != null,
+            verdicts = verdicts, referenceFromLog = latestImported != null, view = findings,
         )
     }
 
@@ -228,11 +230,11 @@ object ReportFormatter {
         val campaignVerdicts = ctx.verdicts
         val referenceFromLog = ctx.referenceFromLog
         // -- Verdict + Summary + Action Guidance ----------------------------------
-        appendVerdict(scan, ctx.appCount, ctx.dnsIocRows, campaignVerdicts)
+        appendVerdict(scan, ctx.appCount, ctx.dnsIocRows, campaignVerdicts, ctx.view)
 
         // -- Warning signs that add up -------------------------------------------
         // First, because a chain of events is the strongest evidence in the report.
-        appendActivityChains(scan)
+        appendActivityChains(scan, ctx.view)
 
         // -- Device checks --------------------------------------------------------
         val allDeviceFlags = scan.deviceFlags
@@ -240,18 +242,19 @@ object ReportFormatter {
             section("DEVICE CHECKS")
             val triggered = allDeviceFlags.filter { it.triggered }
             val passed    = allDeviceFlags.filter { !it.triggered }
-            appendLine("  ${triggered.size} of ${allDeviceFlags.size} checks triggered")
+            val view = ctx.view
+            appendLine("  ${view.countOf(triggered)} of ${view.countOf(allDeviceFlags)} checks triggered")
             appendLine()
 
             if (triggered.isNotEmpty()) {
                 appendLine("  Issues found:")
                 triggered.sortedByDescending { severityOrdinal(it.level) }.forEach { finding ->
-                    appendFinding(finding)
+                    appendFinding(finding, view.count(finding))
                 }
             }
             if (passed.isNotEmpty()) {
                 appendLine("  Checks passed:")
-                passed.forEach { finding -> appendFinding(finding) }
+                passed.forEach { finding -> appendFinding(finding, view.count(finding)) }
             }
         } else {
             section("DEVICE CHECKS")
@@ -343,11 +346,12 @@ object ReportFormatter {
         appCount: String,
         dnsIocRows: List<String>,
         campaignVerdicts: List<CampaignVerdict>,
+        view: FindingsView,
     ) {
-        val appRiskCount = scan.appRisks.count {
+        val appRiskCount = view.countOf(scan.appRisks.filter {
             it.triggered && it.level.lowercase() != "informational"
-        }
-        val deviceIssueCount = scan.deviceFlags.count { it.triggered }
+        })
+        val deviceIssueCount = view.countOf(scan.deviceFlags.filter { it.triggered })
 
         // One-liner verdict
         val verdict = when {
@@ -383,7 +387,7 @@ object ReportFormatter {
         val chains = scan.activityChains.filter { it.triggered }
         if (chains.isNotEmpty()) {
             val labels = chains.map { it.title }.distinct().joinToString(", ")
-            appendLine("    Warning signs that add up: ${chains.size} ($labels)")
+            appendLine("    Warning signs that add up: ${view.countOf(chains)} ($labels)")
         }
         if (triggeredDeviceFlags.isNotEmpty()) {
             val titles = triggeredDeviceFlags.take(3).map { it.title }
@@ -438,7 +442,7 @@ object ReportFormatter {
 
     // A chain of events -- several things that look minor on their own but add up.
     // Rendered first, and never again under APP RISKS or DEVICE CHECKS.
-    private fun ReportOut.appendActivityChains(scan: ScanWithFindings) {
+    private fun ReportOut.appendActivityChains(scan: ScanWithFindings, view: FindingsView) {
         section(WARNING_SIGNS_SECTION)
         val chains = scan.activityChains.filter { it.triggered }
         // A pattern with no events to bind to was not checked at all; saying only
@@ -457,7 +461,7 @@ object ReportFormatter {
             return
         }
         appendLine(
-            "  ${chains.size} pattern(s) found -- separate events that look minor alone " +
+            "  ${view.countOf(chains)} pattern(s) found -- separate events that look minor alone " +
                 "but mean something together"
         )
         appendLine()
@@ -469,7 +473,7 @@ object ReportFormatter {
             appendLine()
         }
         chains.sortedByDescending { severityOrdinal(it.level) }.forEach { chain ->
-            appendFinding(chain)
+            appendFinding(chain, view.count(chain))
             val pkg = chain.matchContext["package_name"].orEmpty()
             // A chain saved before signal members existed (spec §5.4) has no member_count: it
             // prints its linked events without a number rather than a false "0".
@@ -480,13 +484,15 @@ object ReportFormatter {
         }
     }
 
-    private fun ReportOut.appendFinding(finding: Finding) {
+    /** One finding; [times] > 1 when it stands for that many identical findings ([FindingsDigest]). */
+    private fun ReportOut.appendFinding(finding: Finding, times: Int = 1) {
         val icon = if (finding.triggered) "[!!]" else "[OK]"
         val sev = finding.level.uppercase().padEnd(8)
         val mitre = finding.tags.filter { it.startsWith("attack.t") }
             .joinToString(", ") { it.removePrefix("attack.").uppercase() }
         val mitreSuffix = if (mitre.isNotEmpty() && finding.triggered) "  ($mitre)" else ""
-        appendLine("  $icon  $sev  ${finding.title}$mitreSuffix")
+        val timesSuffix = if (times > 1) "  ($times times)" else ""
+        appendLine("  $icon  $sev  ${finding.title}$mitreSuffix$timesSuffix")
         if (finding.triggered && finding.description.isNotEmpty()) {
             appendLine("           ${finding.description}")
         }

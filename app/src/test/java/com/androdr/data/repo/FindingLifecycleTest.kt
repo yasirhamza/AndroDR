@@ -212,7 +212,7 @@ class FindingLifecycleTest {
     }
 
     private suspend fun finishBare(scanId: Long) =
-        w.repo.finish(w.scan(scanId), PendingFindings(), FindingTotals(), SessionHooks.NONE, TelemetryState.STORED)
+        w.repo.finish(w.scan(scanId), FindingTotals(), SessionHooks.NONE, TelemetryState.STORED)
 
     @Test
     fun `two evidence results on one record yield two alerts`() = runBlocking {

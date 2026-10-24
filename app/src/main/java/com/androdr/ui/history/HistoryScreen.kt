@@ -59,6 +59,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -605,8 +606,9 @@ private fun ScanHistoryItem(
 @Composable
 private fun DiffSection(diff: ScanOrchestrator.ScanDiff) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        val totalNew      = diff.newFindings.size
-        val totalResolved = diff.resolvedFindings.size
+        // Exact counts; the listed findings are up to DIFF_DISPLAY_LIMIT examples per rule (review C1).
+        val totalNew      = diff.newCount
+        val totalResolved = diff.resolvedCount
 
         if (totalNew > 0) {
             Text(
@@ -622,6 +624,7 @@ private fun DiffSection(diff: ScanOrchestrator.ScanDiff) {
                     color = MaterialTheme.androdrColors.critical
                 )
             }
+            DiffMore(totalNew - diff.newFindings.size, MaterialTheme.androdrColors.critical)
         }
 
         if (totalResolved > 0) {
@@ -638,6 +641,7 @@ private fun DiffSection(diff: ScanOrchestrator.ScanDiff) {
                     color = MaterialTheme.colorScheme.primary
                 )
             }
+            DiffMore(totalResolved - diff.resolvedFindings.size, MaterialTheme.colorScheme.primary)
         }
 
         if (totalNew == 0 && totalResolved == 0) {
@@ -648,6 +652,17 @@ private fun DiffSection(diff: ScanOrchestrator.ScanDiff) {
             )
         }
     }
+}
+
+/** "…and N more" under a diff list that shows only examples of its findings. */
+@Composable
+private fun DiffMore(more: Int, color: androidx.compose.ui.graphics.Color) {
+    if (more <= 0) return
+    Text(
+        text = pluralStringResource(R.plurals.diff_more, more, more),
+        style = MaterialTheme.typography.bodySmall,
+        color = color
+    )
 }
 
 /**

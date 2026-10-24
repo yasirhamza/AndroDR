@@ -14,7 +14,8 @@ import java.io.File
  */
 class NoPersistenceCapsGateTest {
 
-    private val cap = Regex("""_PERSIST_CAP|_ROW_LIMIT|\bLIMIT\s+\d+|limit:\s*Int\s*=\s*\d+""")
+    /** Persistence caps, plus display limits (`_DISPLAY_LIMIT`), which must be named on [allowedNames]. */
+    private val cap = Regex("""_PERSIST_CAP|_ROW_LIMIT|_DISPLAY_LIMIT|\bLIMIT\s+\d+|limit:\s*Int\s*=\s*\d+""")
 
     /** Allowed queries, as `Owner.function` of the `@Query` (or function) the match belongs to. */
     private val allowedFunctions = setOf(
@@ -22,8 +23,15 @@ class NoPersistenceCapsGateTest {
         "DnsEventDao.getRecentEvents", "DnsEventDao.getRecentSnapshot",
     )
 
-    /** Allowed identifiers: none since D2. */
-    private val allowedNames = emptySet<String>()
+    /**
+     * Allowed identifiers: display bounds only, never persistence caps. They bound how data is shown,
+     * while every finding stays stored:
+     * - `UNSAVED_DISPLAY_LIMIT` (ruling R38): the sample of findings a full disk could not take; their
+     *   counts stay exact and the import card says how many could not be saved.
+     * - `DIFF_DISPLAY_LIMIT` (review C1): example findings per new or resolved rule in a scan diff; the
+     *   diff's counts stay exact and every finding is listed in its own scan.
+     */
+    private val allowedNames = setOf("UNSAVED_DISPLAY_LIMIT", "DIFF_DISPLAY_LIMIT")
 
     private fun root(): File = listOf(File("src/main/java/com/androdr"), File("app/src/main/java/com/androdr"))
         .first { it.isDirectory }
@@ -65,10 +73,14 @@ class NoPersistenceCapsGateTest {
     }
 
     @Test
-    fun `the allow-list is the permanent four and no identifier is allowed`() {
+    fun `the allow-list is the permanent four plus the two display bounds`() {
         assertEquals(setOf("ScanResultDao.getLatestTwo", "IndicatorDao.lookup", "DnsEventDao.getRecentEvents",
             "DnsEventDao.getRecentSnapshot"), allowedFunctions)
-        assertTrue(allowedNames.isEmpty())
+        assertEquals(setOf("UNSAVED_DISPLAY_LIMIT", "DIFF_DISPLAY_LIMIT"), allowedNames)
+        assertEquals(listOf("_DISPLAY_LIMIT"),
+            violations("F.kt", "object X { const val OTHER_DISPLAY_LIMIT = 3 }").map {
+                it.substringAfter(": ").substringBefore(" (")
+            })
     }
 
     @Test

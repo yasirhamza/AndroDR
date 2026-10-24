@@ -381,7 +381,7 @@ Covered paths: scan deletion, "Clear all", retention and the prune. References a
    - These rows carry `alertKey` only; no alerts are created yet.
    - Nothing is written to `forensic_timeline` during `append`.
 3. Before each `append` on an import, `StatFs` free space is checked against a fixed **150 MB reserve that nothing overrides**.
-   - When the reserve is breached, the import stops storing telemetry and **finishes evaluate-only**: findings are kept with their `matchContext`, `telemetryState = FAILED`, and the import card says how much space to free.
+   - When the reserve is breached, the import stops storing telemetry and **finishes evaluate-only**: `telemetryState = FAILED`, and the import card says how much space to free. Its findings are still stored, chunk by chunk (ruling R38, below).
 4. Before `finish`, the 150 MB reserve is checked once more. The finishing transaction's growth — mostly the finding-row copy, about 10–20 MB per 100k findings — fits inside the reserve.
 5. `finish` opens **the session's single finishing transaction**, which does the following in order (as today's `saveScanWithCorrelation` does):
    - Writes this scan's `forensic_timeline` rows, so they have ids:
@@ -443,10 +443,11 @@ Failure handling:
   - The per-chunk 150 MB reserve still applies.
 - **Input bounds**: the intrusion-log parser is bounded at 2,000,000 per type; bug-report modules at 200,000 records each (they still materialise per-module lists). Each bound is named on the import card when tripped.
 - **Errors**: writers catch `Throwable`.
-- **Live scan on `SQLiteFullException`**: the rest of the same pass continues evaluate-only.
-  - Findings are buffered in memory; live findings are bounded by rules × live records.
-  - `finish` writes them with `recordId = null` and `telemetryState = FAILED`. Watermarks are unchanged.
-  - If that write fails too, the in-memory result is still shown, and a storage-health flag is recorded in DataStore, outside the database.
+- **Live scan on `SQLiteFullException`**: the rest of the same pass continues evaluate-only. `telemetryState = FAILED`; watermarks are unchanged.
+- **Evaluate-only findings (ruling R38, live and imports)**:
+  - Each chunk's findings (after the exact-duplicate filter, and only those `scan_finding` keeps: untriggered findings of event services are dropped first) are stored at once as no-fact `scan_finding` rows (`recordId = null`, keeping `matchContext`), each chunk in its own small transaction. Nothing is buffered; only the running `FindingTotals` are held. So a failed `finish` never loses stored findings because of a buffered write.
+  - If a no-fact write itself hits `SQLiteFullException`, the rest of the session's findings are not stored. They are kept only as a **display bound**: exact counts by (rule, level) plus the 1,000 most severe (severity, then the finding's event time, then arrival). The import card says "N findings could not be saved; free X MB and import again". This bounds only how data the disk could not take is shown; it is not a persistence cap (C1 allow-list: `UnsavedFindings.UNSAVED_DISPLAY_LIMIT`).
+  - If the finishing write fails too, the in-memory result is still shown, and a storage-health flag is recorded in DataStore, outside the database.
 - **DNS logging failures**: `DnsLogBuffer` re-queues a failed batch, with exponential backoff and dropping the oldest beyond its bound, and records a health warning.
 
 ### 5.3 Typed bug-report records; `TimelineEvent` retired
@@ -530,7 +531,8 @@ Schema 21 (Phase D).
   - findings of category `CORRELATION` are STATE and open no alert;
   - unknown rule ids are STATE;
   - rule id → service comes from a frozen table.
-- **Alerts**: created from the migrated findings. They are OPEN if their scan is within 30 days, otherwise CLOSED "migrated (older than 30 days)". They keep `matchContext`.
+- **Alerts**: created from the migrated findings of `COMPLETE` scans (other scans' rows carry no key; the sweep removes them). An alert is OPEN if the latest scan with a finding of its key is within 30 days — an alert spanning scans follows its latest activity (ruling R39) — otherwise CLOSED "migrated (older than 30 days)". They keep `matchContext`.
+- **Unreadable findings**: a scan whose `findings` value is over 2 MB or not readable keeps its scan with zero findings, and one persistent Timeline row (`findings_not_migrated`) says how many scans' findings could not be carried over, since the old column is dropped.
 
 ### 5.5 Caps removed
 
@@ -552,6 +554,12 @@ Allow-listed permanently:
 - `ScanResultDao.getLatestTwo`
 - `IndicatorDao.lookup` (`LIMIT 1`)
 - `DnsEventDao.getRecentEvents` / `getRecentSnapshot` (the DNS monitor screen)
+
+Display bounds, allow-listed by name (they bound what is shown, never what is stored):
+- `UnsavedFindings.UNSAVED_DISPLAY_LIMIT`: the sample of findings a full disk could not take (ruling R38).
+- `ScanOrchestrator.DIFF_DISPLAY_LIMIT`: example findings per new or resolved rule in a scan diff; the diff's counts are exact, and every finding is listed in its scan.
+
+Readers never hold a whole scan's findings: an import can hold 100k. The Dashboard diffs the two newest live scans from rule counts in SQL; the History diff and sheet count in SQL; the report streams and folds findings that would print the same ([FindingsDigest]). Only bounded scans (live: rules × live records) are read whole.
 
 ### 5.6 Timeline rows
 

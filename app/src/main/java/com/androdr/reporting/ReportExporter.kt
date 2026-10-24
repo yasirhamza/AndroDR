@@ -70,7 +70,7 @@ class ReportExporter @Inject constructor(
         includeLog: Boolean = true,
     ) =
         withContext(Dispatchers.IO) {
-            val view = FindingsView.of(scan, reportInputs, findings)
+            val view = FindingsView.of(scan, reportInputs, findings, telemetryReader)
             val logLines = if (includeLog) logSource() else emptyList()
             val version = context.appVersion().name
             writeFile(file) { out ->
@@ -80,13 +80,14 @@ class ReportExporter @Inject constructor(
 
     /** What the History sheet shows for [scan]: counts only, read off the main thread. */
     suspend fun summary(scan: ScanResult): ReportSummary = withContext(Dispatchers.IO) {
-        val s = findings.withFindings(scan, triggeredOnly = true)
+        // Counted in SQL, never decoded (review I1): a 100k-finding import's sheet reads three numbers.
+        val counts = findings.summaryCounts(scan.id)
         ReportSummary(
             source = scan.source,
-            overallRisk = s.overallRiskLevel.name,
-            appIssues = s.appRisks.count { it.triggered && it.level.lowercase() != "informational" },
-            deviceIssues = s.deviceFlags.count { it.triggered },
-            warningSigns = s.activityChains.count { it.triggered },
+            overallRisk = scan.overallRiskLevel.name,
+            appIssues = counts.appIssues,
+            deviceIssues = counts.deviceIssues,
+            warningSigns = counts.warningSigns,
             checksNotRun = scan.scannerErrors.count { NotEvaluatedReason.fromSentinel(it.exception) != null },
             failedScanners = scan.realFailureCount,
             telemetryState = scan.telemetryState,

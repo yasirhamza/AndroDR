@@ -56,7 +56,7 @@ class SessionOffMainThreadTest {
     }
 
     private fun spyRepo(repo: ScanWriteRepository): ScanWriteRepository = spyk(repo).also { r ->
-        coEvery { r.finish(any(), any(), any(), any(), any()) } coAnswers {
+        coEvery { r.finish(any(), any(), any(), any()) } coAnswers {
             calls += "finish" to onMain()
             callOriginal()
         }

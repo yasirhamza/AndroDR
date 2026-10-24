@@ -182,12 +182,12 @@ fun DashboardScreen(
             PostScanGuidance(riskLevel = latestScan?.overallRiskLevel, latestScan = latestScan)
 
             AnimatedVisibility(
-                visible = scanDiff != null && scanDiff!!.newFindings.isNotEmpty(),
+                visible = (scanDiff?.newCount ?: 0) > 0,
                 enter = fadeIn(),
                 exit = fadeOut()
             ) {
                 scanDiff?.let { diff ->
-                    val newCount = diff.newFindings.size
+                    val newCount = diff.newCount
                     DiffBanner(newCount = newCount)
                 }
             }

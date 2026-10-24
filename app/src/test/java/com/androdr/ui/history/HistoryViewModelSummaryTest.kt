@@ -49,7 +49,6 @@ class HistoryViewModelSummaryTest {
             every { pagedScans() } returns flowOf(androidx.paging.PagingData.from(listOf(scan)))
             every { hasScans } returns flowOf(true)
         },
-        orchestrator = mockk(relaxed = true),
         reportExporter = exporter,
         findings = mockk(relaxed = true),
     )

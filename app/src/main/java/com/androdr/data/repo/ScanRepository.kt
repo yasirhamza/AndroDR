@@ -57,6 +57,11 @@ class ScanRepository @Inject constructor(
         .map { scanResultDao.getLatestTwo() }
         .flowOn(Dispatchers.IO)
 
+    /** The two newest COMPLETE live scans (the Dashboard's diff, spec §5.4), re-read when scans change. */
+    val latestTwoLive: Flow<List<ScanResult>> = db.tableChanges(arrayOf("ScanResult"))
+        .map { scanResultDao.livePagedAfter(Long.MAX_VALUE, 2) }
+        .flowOn(Dispatchers.IO)
+
     /** Whether scan [id] is saved (COMPLETE). */
     suspend fun isSaved(id: Long): Boolean = scanResultDao.completeById(id) != null
 
@@ -199,18 +204,26 @@ class ScanRepository @Inject constructor(
     }
 }
 
+/** A scan list position: `(timestamp, id)`, newest first. */
+data class ScanCursor(val timestamp: Long, val id: Long)
+
 /**
- * COMPLETE scans newest first, keyset on `timestamp` ([ScanResultDao.pagedAfter]); the key is the
- * negated timestamp so "ascending key" is "newest first". Observes `ScanResult`.
+ * COMPLETE scans newest first, keyset on `(timestamp, id)` ([ScanResultDao.pagedAfter]), so equal
+ * timestamps never lose a scan at a page boundary. Observes `ScanResult`.
  */
 internal class ScanPagingSource(db: AppDatabase, private val dao: ScanResultDao) :
-    KeysetPagingSource<Long, ScanResult>(db, KeysetPagingSource.OBSERVED_TABLES) {
-    override fun keyOf(item: ScanResult): Long = -item.timestamp
+    KeysetPagingSource<ScanCursor, ScanResult>(db, KeysetPagingSource.OBSERVED_TABLES) {
+    override fun keyOf(item: ScanResult) = ScanCursor(item.timestamp, item.id)
 
-    override suspend fun loadFrom(from: Long?, size: Int) =
-        slice(dao.pagedAfter(if (from == null) Long.MAX_VALUE else -from + 1, size))
+    // The refresh key is inclusive: start just past it in descending order (same timestamp, id + 1).
+    override suspend fun loadFrom(from: ScanCursor?, size: Int) = slice(
+        if (from == null) dao.pagedAfter(Long.MAX_VALUE, Long.MAX_VALUE, size)
+        else dao.pagedAfter(from.timestamp, from.id + 1, size)
+    )
 
-    override suspend fun loadAfter(after: Long, size: Int) = slice(dao.pagedAfter(-after, size))
+    override suspend fun loadAfter(after: ScanCursor, size: Int) =
+        slice(dao.pagedAfter(after.timestamp, after.id, size))
 
-    override suspend fun loadBefore(before: Long, size: Int) = slice(dao.pagedBefore(-before, size))
+    override suspend fun loadBefore(before: ScanCursor, size: Int) =
+        slice(dao.pagedBefore(before.timestamp, before.id, size))
 }

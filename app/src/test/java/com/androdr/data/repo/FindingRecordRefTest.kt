@@ -53,7 +53,7 @@ class FindingRecordRefTest {
             w.f.findings.recordChunk(scanId, 0, listOf(evaluated), chunk) {
                 it.toForensicTimelineEvent(scan, isBugreport = true)
             }
-            w.repo.finish(scan, PendingFindings(), FindingTotals(), SessionHooks.NONE, TelemetryState.STORED)
+            w.repo.finish(scan, FindingTotals(), SessionHooks.NONE, TelemetryState.STORED)
 
             val observed = w.count("SELECT recordId FROM scan_record WHERE scanId = $scanId AND ordinal = 1")
             assertEquals(service, observed, w.count("SELECT recordId FROM scan_finding WHERE scanId = $scanId"))
@@ -80,7 +80,7 @@ class FindingRecordRefTest {
                 triggered = false, service = service, ordinal = 0)
             w.f.findings.recordChunk(1L, 0, listOf(safe), chunk) { it.toForensicTimelineEvent(scan, true) }
         }
-        w.repo.finish(scan, PendingFindings(), FindingTotals(), SessionHooks.NONE, TelemetryState.STORED)
+        w.repo.finish(scan, FindingTotals(), SessionHooks.NONE, TelemetryState.STORED)
         assertEquals(listOf("safe-0"), w.findingsOf(1L).map { it.ruleId })
         assertEquals("no Timeline row for an untriggered finding", 0L,
             w.count("SELECT COUNT(*) FROM forensic_timeline"))

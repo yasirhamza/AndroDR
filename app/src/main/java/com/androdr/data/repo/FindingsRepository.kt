@@ -9,6 +9,7 @@ import com.androdr.data.db.AppDatabase
 import com.androdr.data.db.Converters
 import com.androdr.data.db.FindingKinds
 import com.androdr.data.db.FindingRow
+import com.androdr.data.db.FindingSummaryCounts
 import com.androdr.data.db.chunkedIn
 import com.androdr.data.model.Alert
 import com.androdr.data.model.AlertStatus
@@ -165,29 +166,36 @@ class FindingsRepository @Inject constructor(
     }
 
     /** Of [keys], those that already have an alert (byte content compared). */
-    suspend fun existingAlertKeys(keys: Collection<ByteArray>): Set<java.nio.ByteBuffer> =
-        chunkedIn(keys.distinctBy(HashKeys::key)) { alerts.existingKeys(it) }.mapTo(HashSet(), HashKeys::key)
+    suspend fun existingAlertKeys(keys: Collection<ByteArray>): Set<java.nio.ByteBuffer> = alertIdsByKey(keys).keys
+
+    /** Of [keys], those that already have an alert, with that alert's id (byte content compared). */
+    private suspend fun alertIdsByKey(keys: Collection<ByteArray>): Map<java.nio.ByteBuffer, Long> =
+        chunkedIn(keys.distinctBy(HashKeys::key)) { alerts.idsForKeys(it) }.associate { HashKeys.key(it.key) to it.id }
 
     private class Pending(val finding: Finding, val recordId: Long?, val kind: FindingKind)
 
     /** Untriggered (safe-state) findings are stored only for snapshot services (spec §5.4). */
-    private fun keepsRow(f: Finding): Boolean = f.triggered || f.service !in TaxonomyContract.eventServices
+    fun keepsRow(f: Finding): Boolean = f.triggered || f.service !in TaxonomyContract.eventServices
 
     private suspend fun insert(scanId: Long, pending: List<Pending>, row: (Finding) -> ForensicTimelineEvent) {
         if (pending.isEmpty()) return
         val keys = pending.map { alertKey(scanId, it) }
-        val existing = existingAlertKeys(keys.filterNotNull())
+        val existing = alertIdsByKey(keys.filterNotNull())
         findings.insertAll(pending.mapIndexed { i, p ->
             val f = p.finding
             val key = keys[i]
             val full = f.copy(recordId = p.recordId)
             // matchContext is dropped only when the fact is stored (readers rebuild it from there).
             val stored = if (p.recordId != null) full.copy(matchContext = emptyMap()) else full
-            val opens = key != null && HashKeys.key(key) !in existing
+            // A key that already has an alert is attached now (review Minor 7); only a new key may open one.
+            val alertId = key?.let { existing[HashKeys.key(it)] }
+            // A row with a stored fact carries its full opening finding transiently; a no-fact row's
+            // findingJson already is that finding, so it carries nothing extra (review Minor 5).
+            val opens = key != null && alertId == null && p.recordId != null
             ScanFinding(
                 scanId = scanId, ruleId = f.ruleId, triggered = f.triggered, level = f.level,
                 category = f.category.name, kind = p.kind, recordId = p.recordId, service = f.service,
-                ordinal = f.ordinal, alertKey = key, alertId = null,
+                ordinal = f.ordinal, alertKey = key, alertId = alertId,
                 findingJson = Converters.encodeFinding(stored),
                 evidenceJson = if (opens) Converters.encodeFinding(full) else null,
                 row = if (f.triggered) rowColumns(f, row) else null,
@@ -214,24 +222,47 @@ class FindingsRepository @Inject constructor(
 
     // ── Reader side ───────────────────────────────────────────────────────────────────────────
 
-    /** Every finding of COMPLETE scan [scanId] (triggered first), in recording order. */
+    /**
+     * Every finding of COMPLETE scan [scanId] (triggered first), in recording order, as one list. Only
+     * for scans whose findings are bounded — live scans (rules × live records) and tests; anything
+     * that may read an import streams with [forEachFinding] (review C1/I1: an import can hold 100k).
+     */
     suspend fun findingsOf(scanId: Long, triggeredOnly: Boolean = false): List<Finding> {
         val out = ArrayList<Finding>()
+        forEachFinding(scanId, triggeredOnly) { out += it }
+        return out
+    }
+
+    /**
+     * Streams every finding of COMPLETE scan [scanId] (triggered first, in recording order) through
+     * [block], one keyset page ([READ_BATCH]) decoded at a time, so no reader holds a whole scan.
+     */
+    suspend fun forEachFinding(scanId: Long, triggeredOnly: Boolean = false, block: suspend (Finding) -> Unit) {
         for (triggered in if (triggeredOnly) listOf(true) else listOf(true, false)) {
             var after = 0L
             while (true) {
                 val page = findings.page(scanId, triggered, after, READ_BATCH)
-                out += decode(scanId, page)
+                for (f in decode(scanId, page)) block(f)
                 if (page.size < READ_BATCH) break
                 after = page.last().id
             }
         }
-        return out
     }
 
-    /** [scan] with its findings ([findingsOf]). */
+    /** [scan] with its findings ([findingsOf]): bounded scans only (live scans, tests). */
     suspend fun withFindings(scan: ScanResult, triggeredOnly: Boolean = false): ScanWithFindings =
         ScanWithFindings(scan, findingsOf(scan.id, triggeredOnly))
+
+    /** Triggered findings per rule of COMPLETE scan [scanId] (bounded by the rule count), in SQL. */
+    suspend fun triggeredRuleCounts(scanId: Long): Map<String, Int> =
+        findings.triggeredRuleCounts(scanId).associate { it.ruleId to it.count }
+
+    /** Up to [size] triggered findings of [ruleId] in COMPLETE scan [scanId], in recording order. */
+    suspend fun ruleSample(scanId: Long, ruleId: String, size: Int): List<Finding> =
+        decode(scanId, findings.ruleSample(scanId, ruleId, size))
+
+    /** The History sheet's counts for COMPLETE scan [scanId], computed in SQL (never decoded). */
+    suspend fun summaryCounts(scanId: Long): FindingSummaryCounts = findings.summaryCounts(scanId)
 
     /** The newest COMPLETE live scan with every finding (bounded by rules × live records), on change. */
     fun latestLive(): Flow<ScanWithFindings?> = db.tableChanges(arrayOf("ScanResult"))

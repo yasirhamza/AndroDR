@@ -200,7 +200,11 @@ class Migration20To21Test {
         assertEquals(3L, db.long("SELECT COUNT(*) FROM scan_record"))
         assertEquals(1L, db.long("SELECT COUNT(*) FROM signal_member"))
         assertEquals(listOf("high", "low"),
-            db.rows("SELECT level FROM forensic_timeline ORDER BY scanResultId").map { it[0] })
+            db.rows("SELECT level FROM forensic_timeline WHERE persistent = 0 ORDER BY scanResultId").map { it[0] })
+        // Review Minor 2: the corrupt and the 3 MB scans' findings are lost for good; one row says so.
+        val lost = "Findings of 2 earlier scan(s) could not be carried over"
+        assertEquals(listOf(listOf(FindingsMigration.UNREADABLE_CATEGORY, lost)),
+            db.rows("SELECT category, description FROM forensic_timeline WHERE persistent = 1"))
         db.close()
     }
 
@@ -238,6 +242,31 @@ class Migration20To21Test {
         } finally {
             room.close()
         }
+    }
+
+    /** Ruling R39: an alert spanning scans follows its latest activity, not its opener's age. */
+    @Test
+    fun `an alert opened over 30 days ago with a finding within 30 days stays OPEN`() {
+        seed {
+            scan(A, NOW - 40 * DAY, "[" + dns(service = false, time = 1_234L) + "]")
+            scan(B, NOW - 10 * DAY, "[" + dns(service = false, time = 1_234L) + "]")
+        }
+        val db = migrate()
+        assertEquals(listOf(listOf("$A", "OPEN", "${NOW - 10 * DAY}")),
+            db.rows("SELECT openedScanId, status, lastActivityAt FROM alert"))
+        assertEquals(2L, db.long("SELECT COUNT(*) FROM scan_finding WHERE alertId IS NOT NULL"))
+        db.close()
+    }
+
+    /** Review Minor 1: a scan the sweep will remove opens no alert and leaves no unattached key. */
+    @Test
+    fun `an IN_PROGRESS scan's findings carry no alert key`() {
+        seed { scan(A, NOW, "[" + dns(service = false) + "]", state = "IN_PROGRESS") }
+        val db = migrate()
+        assertEquals(1L, db.long("SELECT COUNT(*) FROM scan_finding"))
+        assertEquals(0L, db.long("SELECT COUNT(*) FROM scan_finding WHERE alertKey IS NOT NULL"))
+        assertEquals(0L, db.long("SELECT COUNT(*) FROM alert"))
+        db.close()
     }
 
     @Test

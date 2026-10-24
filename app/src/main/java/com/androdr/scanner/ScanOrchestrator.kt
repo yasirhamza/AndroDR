@@ -13,6 +13,7 @@ import com.androdr.data.model.TelemetrySource
 import com.androdr.data.model.UNREGISTERED_IOC_LOOKUP
 import com.androdr.data.store.DecodedRecord
 import com.androdr.data.store.TelemetryReader
+import com.androdr.data.repo.FindingsRepository
 import com.androdr.data.repo.ScanLock
 import com.androdr.ioc.IndicatorResolver
 import com.androdr.network.DnsVpnService
@@ -469,39 +470,34 @@ class ScanOrchestrator @Inject constructor(
         // written for. A rule the newer scan could not evaluate has not been fixed,
         // and "resolved" on a CRITICAL nobody checked is the false reassurance this
         // function's contract forbids.
-        val skippedRuleIds = newer.scannerErrors
-            .filter { it.exception in NotEvaluatedReason.SENTINELS }
-            .mapNotNull { it.ruleId }
-            .toSet()
-        val olderTriggeredIds = older.findings
-            .filter { it.triggered }
-            .map { it.ruleId }
-            .toSet()
-        val newerTriggeredIds = newer.findings
-            .filter { it.triggered }
-            .map { it.ruleId }
-            .toSet()
-
-        val newFindings = newer.findings.filter { it.triggered && it.ruleId !in olderTriggeredIds }
-        val resolvedFindings = older.findings.filter {
-            it.triggered && it.ruleId !in newerTriggeredIds && it.ruleId !in skippedRuleIds
-        }
-
+        val rules = diffRules(ruleCounts(newer.findings), ruleCounts(older.findings), newer.scan)
         return ScanDiff(
-            newFindings      = newFindings,
-            resolvedFindings = resolvedFindings
+            newFindings = newer.findings.filter { it.triggered && it.ruleId in rules.newRules },
+            resolvedFindings = older.findings.filter { it.triggered && it.ruleId in rules.resolvedRules },
+            newCount = rules.newCount,
+            resolvedCount = rules.resolvedCount,
         )
     }
 
     /**
      * Describes the delta between two consecutive scans.
      *
-     * @property newFindings      Findings present in [newer] but not in [older].
+     * @property newFindings      Findings present in [newer] but not in [older] (all of them from
+     *   [computeDiff]; at most [DIFF_DISPLAY_LIMIT] per rule from [boundedDiff]).
      * @property resolvedFindings Findings that were in [older] but are no longer in [newer].
      */
     data class ScanDiff(
         val newFindings:      List<Finding>,
-        val resolvedFindings: List<Finding>
+        val resolvedFindings: List<Finding>,
+        /** Exact count of new triggered findings; [newFindings] may be a bounded sample of them. */
+        val newCount: Int = newFindings.size,
+        /** Exact count of resolved triggered findings; [resolvedFindings] may be a bounded sample. */
+        val resolvedCount: Int = resolvedFindings.size,
+    )
+
+    /** Which rules a diff reports, and how many triggered findings they hold (one definition for both paths). */
+    class DiffRules(
+        val newRules: Set<String>, val resolvedRules: Set<String>, val newCount: Int, val resolvedCount: Int,
     )
 
     companion object {
@@ -579,6 +575,48 @@ class ScanOrchestrator @Inject constructor(
         /** APK hash per package, for enriching finding rows that carry none. */
         internal fun hashByPackage(apps: List<AppTelemetry>): Map<String, String> =
             apps.filter { !it.apkHash.isNullOrEmpty() }.associateBy({ it.packageName }, { it.apkHash!! })
+
+        /**
+         * How many example findings per new or resolved rule a bounded diff shows. A display bound —
+         * the diff's counts stay exact and every finding stays stored and listed per scan — not a
+         * persistence cap (allow-listed by name in NoPersistenceCapsGateTest, review C1).
+         */
+        const val DIFF_DISPLAY_LIMIT = 5
+
+        private fun ruleCounts(findings: List<Finding>): Map<String, Int> =
+            findings.filter { it.triggered }.groupingBy { it.ruleId }.eachCount()
+
+        /**
+         * The diff's rule sets (PURE): new = rules triggered in [newer] only; resolved = rules
+         * triggered in the older scan only, minus every rule [newerScan] could not evaluate — a rule
+         * the newer scan did not check has not been fixed (false reassurance on a skipped CRITICAL).
+         */
+        internal fun diffRules(newer: Map<String, Int>, older: Map<String, Int>, newerScan: ScanResult): DiffRules {
+            val skipped = newerScan.scannerErrors
+                .filter { it.exception in NotEvaluatedReason.SENTINELS }
+                .mapNotNull { it.ruleId }
+                .toSet()
+            val newRules = newer.keys - older.keys
+            val resolvedRules = older.keys - newer.keys - skipped
+            return DiffRules(newRules, resolvedRules, newRules.sumOf { newer.getValue(it) },
+                resolvedRules.sumOf { older.getValue(it) })
+        }
+
+        /**
+         * [computeDiff] from `scan_finding` without loading either scan (review C1): rule counts in
+         * SQL, then up to [DIFF_DISPLAY_LIMIT] example findings per new or resolved rule. Bounded by
+         * the rule count whatever the scans hold, so a 100k-finding import cannot exhaust the heap.
+         */
+        suspend fun boundedDiff(findings: FindingsRepository, newer: ScanResult, older: ScanResult): ScanDiff {
+            val rules = diffRules(findings.triggeredRuleCounts(newer.id), findings.triggeredRuleCounts(older.id), newer)
+            return ScanDiff(
+                newFindings = rules.newRules.sorted().flatMap { findings.ruleSample(newer.id, it, DIFF_DISPLAY_LIMIT) },
+                resolvedFindings = rules.resolvedRules.sorted()
+                    .flatMap { findings.ruleSample(older.id, it, DIFF_DISPLAY_LIMIT) },
+                newCount = rules.newCount,
+                resolvedCount = rules.resolvedCount,
+            )
+        }
 
         /** App categories treated as trusted by the known_good_app_db IOC lookup. */
         private val TRUSTED_CATEGORIES = setOf(

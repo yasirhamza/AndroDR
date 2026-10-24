@@ -130,6 +130,49 @@ class StoragePreflightTest {
         assertEquals(0L, w.count("SELECT COUNT(*) FROM telemetry_record"))
     }
 
+    /** Ruling R38: evaluate-only findings are stored chunk by chunk, never buffered until finish. */
+    @Test
+    fun `evaluate-only findings are stored as no-fact rows chunk by chunk`() = runBlocking {
+        w.freeBytes = 10 * mb // reserve breached from the first append
+        val s = w.writer.begin(w.scan(1L, il), liveEvents = false)
+        s.append("security_log", il, IMPORT_CAPTURED, listOf(securityLine(1L)))
+        assertEquals("written by the append itself", 1L,
+            w.count("SELECT COUNT(*) FROM scan_finding WHERE scanId = 1 AND recordId IS NULL"))
+        s.append("security_log", il, IMPORT_CAPTURED, listOf(securityLine(2L)))
+        assertEquals(2L, w.count("SELECT COUNT(*) FROM scan_finding WHERE scanId = 1 AND recordId IS NULL"))
+        assertEquals("a no-fact row's findingJson is its evidence; no second copy (review Minor 5)", 0L,
+            w.count("SELECT COUNT(*) FROM scan_finding WHERE evidenceJson IS NOT NULL"))
+        val r = s.finish()
+        assertEquals(TelemetryState.FAILED, r.telemetryState)
+        assertEquals("an import holds nothing in memory", 0, r.findings.size)
+        assertEquals(0L, r.unsaved.count)
+        assertEquals(2, w.findingsOf(1L).size)
+    }
+
+    /** Ruling R38: once a no-fact write hits a full disk, the rest are counted exactly and sampled for display. */
+    @Test
+    fun `a full disk on the no-fact write keeps exact counts and a bounded display sample`() = runBlocking {
+        w.freeBytes = 10 * mb
+        val findings = spyk(w.f.findings)
+        coEvery { findings.recordNoFact(any(), any(), any()) } throws SQLiteFullException("full")
+        val writer = ChunkedScanWriter(w.engine, w.store, w.repo, findings, w.preflight, w.health)
+        val s = writer.begin(w.scan(1L, il), liveEvents = false)
+        s.appendAll("security_log", il, IMPORT_CAPTURED, (1L..1_200L).asSequence().map { securityLine(it) })
+        val r = s.finish()
+        assertTrue(r.persisted)
+        assertEquals("exact count", 1_200L, r.unsaved.count)
+        assertEquals(mapOf((SEC_RULE to "medium") to 1_200L), r.unsaved.byRuleLevel)
+        assertEquals("display sample bounded", com.androdr.scanner.UnsavedFindings.UNSAVED_DISPLAY_LIMIT,
+            r.findings.size)
+        assertEquals("newest first within a severity", 1_200L, r.findings.first().matchContext["timestamp"]?.toLong())
+        assertEquals(1_200, r.scan.triggeredCount)
+        assertEquals(0L, w.count("SELECT COUNT(*) FROM scan_finding"))
+        assertTrue("the card says how much to free", r.spaceToFree > 0)
+        val card = com.androdr.ui.bugreport.ImportCard.from(r, truncated = false, boundTrips = emptyList())!!
+        assertEquals(1_200L, card.unsavedFindings)
+        assertTrue(!card.findingsComplete)
+    }
+
     /** M1, Phase D half (spec §5.4): a fallback DNS IOC finding has no fact, so it keys on noFactKey. */
     @Test
     fun `a disk-full fallback DNS IOC finding opens an OPEN alert keyed by noFactKey`() = runBlocking {
@@ -163,7 +206,7 @@ class StoragePreflightTest {
                 store.persistChunk(any(), any(), any(), any(), any(), any(), any(), any(), any())
             } throws SQLiteFullException("full")
             val repo = spyk(w.repo)
-            coEvery { repo.finish(any(), any(), any(), any(), any()) } throws SQLiteFullException("still full")
+            coEvery { repo.finish(any(), any(), any(), any()) } throws SQLiteFullException("still full")
             w.store = store
             w.repo = repo
             val s = w.writer.begin(w.scan(1L), liveEvents = true)

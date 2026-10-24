@@ -39,7 +39,16 @@ data class ImportCard(
     val notice: ImportNotice,
     /** How the file was read, e.g. "times assume UTC" when a bug report names no zone (R27). */
     val notes: List<String> = emptyList(),
+    /**
+     * Findings that could not be saved even as no-fact rows (ruling R38): they are not in the list
+     * below, so the card says how many and how much space to free ([freeBytes]) before re-importing.
+     */
+    val unsavedFindings: Long = 0L,
+    val freeBytes: Long = 0L,
 ) {
+    /** True when the findings listed below the card are every finding of the import. */
+    val findingsComplete: Boolean get() = unsavedFindings == 0L
+
     companion object {
         /** Shown for an intrusion log whose parser hit a line-length or per-type record limit. */
         const val INTRUSION_LIMIT = "A line-length or per-type record limit dropped some records."
@@ -65,7 +74,8 @@ data class ImportCard(
                 write.telemetryState == TelemetryState.FAILED -> ImportNotice.NotFullyStored(write.newFacts)
                 else -> ImportNotice.None
             }
-            return ImportCard(write.newFacts, write.alreadyStored, write.duplicatesDropped, bounds, notice, notes)
+            return ImportCard(write.newFacts, write.alreadyStored, write.duplicatesDropped, bounds, notice, notes,
+                write.unsaved.count, write.spaceToFree)
         }
     }
 }

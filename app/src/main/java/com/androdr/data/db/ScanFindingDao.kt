@@ -19,6 +19,12 @@ class FindingRow(
     val findingJson: String,
 )
 
+/** How many triggered findings one rule has in a scan. */
+data class RuleCount(val ruleId: String, val count: Int)
+
+/** A scan's triggered-finding counts the History sheet shows (spec §7), computed in SQL. */
+data class FindingSummaryCounts(val appIssues: Int, val deviceIssues: Int, val warningSigns: Int)
+
 /**
  * `scan_finding` (spec §5.4). Writer statements run in a session's transactions; every read requires
  * the finding's scan to be `COMPLETE` ([CompleteScan], spec §5.1 Visibility). List-parameter
@@ -47,15 +53,23 @@ interface ScanFindingDao {
     @Query("SELECT COUNT(*) FROM scan_finding WHERE scanId = :scanId AND alertKey IS NOT NULL AND alertId IS NULL")
     suspend fun unattachedCount(scanId: Long): Int
 
-    /** The facts a scan's triggered findings pin, read just before [deleteForScan] (TimelineRowDeleter). */
+    /**
+     * The facts a scan's late-IOC re-check findings (`ordinal < 0`) pin: facts it did not observe, so
+     * deleting its observations would never release them. Read before [deleteBatchForScan] (review
+     * Minor 8); the facts it observed are released batch by batch with its observations.
+     */
     @Query(
         "SELECT DISTINCT recordId FROM scan_finding WHERE scanId = :scanId AND triggered = 1 " +
-            "AND recordId IS NOT NULL"
+            "AND ordinal < 0 AND recordId IS NOT NULL"
     )
-    suspend fun recordIdsForScan(scanId: Long): List<Long>
+    suspend fun recheckRecordIdsForScan(scanId: Long): List<Long>
 
-    @Query("DELETE FROM scan_finding WHERE scanId = :scanId")
-    suspend fun deleteForScan(scanId: Long)
+    /** Deletes up to [size] of a scan's findings (one keyset batch); returns how many went. */
+    @Query(
+        "DELETE FROM scan_finding WHERE id IN (SELECT id FROM scan_finding WHERE scanId = :scanId " +
+            "ORDER BY id LIMIT :size)"
+    )
+    suspend fun deleteBatchForScan(scanId: Long, size: Int): Int
 
     /** Keyset page of one COMPLETE scan's findings with [triggered], by id. */
     @Query("$FINDINGS_PAGE")
@@ -84,6 +98,23 @@ interface ScanFindingDao {
             "AND ${CompleteScan.SQL}"
     )
     suspend fun triggeredShownCount(scanId: Long): Int
+
+    /** A COMPLETE scan's triggered findings per rule (bounded by the rule count): the diff's input. */
+    @Query("$TRIGGERED_RULE_COUNTS")
+    suspend fun triggeredRuleCounts(scanId: Long): List<RuleCount>
+
+    /** Up to [size] of a COMPLETE scan's triggered findings of one rule, in recording order (a diff's sample). */
+    @Query(
+        "SELECT sf.id, sf.scanId, sf.ruleId, sf.triggered, sf.level, sf.kind, sf.recordId, sf.alertId, " +
+            "sf.findingJson FROM scan_finding sf JOIN ScanResult s ON s.id = sf.scanId " +
+            "WHERE sf.scanId = :scanId AND sf.triggered = 1 AND sf.ruleId = :ruleId AND ${CompleteScan.SQL} " +
+            "ORDER BY sf.id LIMIT :size"
+    )
+    suspend fun ruleSample(scanId: Long, ruleId: String, size: Int): List<FindingRow>
+
+    /** The History sheet's counts: triggered app issues (informational excluded), device issues, warning signs. */
+    @Query("$SUMMARY_COUNTS")
+    suspend fun summaryCounts(scanId: Long): FindingSummaryCounts
 }
 
 // Statements [ScanFindingDao] shares with the query-plan gate (FindingQueryPlanTest), so the plan is
@@ -110,6 +141,19 @@ internal const val FINDINGS_PAGE = "SELECT sf.id, sf.scanId, sf.ruleId, sf.trigg
     "sf.recordId, sf.alertId, sf.findingJson FROM scan_finding sf JOIN ScanResult s ON s.id = sf.scanId " +
     "WHERE sf.scanId = :scanId AND sf.triggered = :triggered AND sf.id > :afterId " +
     "AND ${CompleteScan.SQL} ORDER BY sf.id LIMIT :size"
+
+/** Triggered findings per rule of one COMPLETE scan (index `(scanId, triggered)`). */
+internal const val TRIGGERED_RULE_COUNTS = "SELECT sf.ruleId AS ruleId, COUNT(*) AS count FROM scan_finding sf " +
+    "JOIN ScanResult s ON s.id = sf.scanId WHERE sf.scanId = :scanId AND sf.triggered = 1 " +
+    "AND ${CompleteScan.SQL} GROUP BY sf.ruleId"
+
+/** The History sheet's counts, by display category (index `(scanId, triggered)`). */
+internal const val SUMMARY_COUNTS = "SELECT " +
+    "COALESCE(SUM(CASE WHEN sf.category = 'APP_RISK' AND lower(sf.level) != 'informational' THEN 1 ELSE 0 END), 0) " +
+    "AS appIssues, COALESCE(SUM(CASE WHEN sf.category = 'DEVICE_POSTURE' THEN 1 ELSE 0 END), 0) AS deviceIssues, " +
+    "COALESCE(SUM(CASE WHEN sf.category = 'CORRELATION' THEN 1 ELSE 0 END), 0) AS warningSigns " +
+    "FROM scan_finding sf JOIN ScanResult s ON s.id = sf.scanId WHERE sf.scanId = :scanId " +
+    "AND sf.triggered = 1 AND ${CompleteScan.SQL}"
 
 /**
  * The current state findings (spec §5.4 Lifecycle): the newest COMPLETE live scan's triggered

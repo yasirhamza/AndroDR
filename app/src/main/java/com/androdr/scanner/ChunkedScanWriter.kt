@@ -9,7 +9,6 @@ import com.androdr.data.model.TelemetryState
 import com.androdr.data.repo.AlertIdentity
 import com.androdr.data.repo.FindingCounter
 import com.androdr.data.repo.FindingsRepository
-import com.androdr.data.repo.PendingFindings
 import com.androdr.data.repo.ScanWriteRepository
 import com.androdr.data.repo.SessionHooks
 import com.androdr.data.store.ChunkResult
@@ -36,10 +35,11 @@ import javax.inject.Inject
  * @property scan the completed scan (its summary columns; the findings are `scan_finding` rows), or —
  *   when [persisted] is false (the finishing write failed on a full disk) — the in-memory summary.
  * @property findings the findings the session holds in memory: every recorded finding of a live
- *   scan (bounded by rules × live records), and an import's evaluate-only findings. An import's
- *   stored findings are read from `scan_finding` (`FindingsRepository`), never held.
- * @property spaceToFree bytes to free so the 150 MB import reserve holds again; > 0 only when an
- *   import fell back to evaluate-only on the reserve.
+ *   scan (bounded by rules × live records); for an import, only the display sample of findings
+ *   that could not be saved ([unsaved]). An import's stored findings are read from `scan_finding`
+ *   (`FindingsRepository`), never held.
+ * @property spaceToFree bytes to free so the 150 MB import reserve holds again; > 0 when an import
+ *   fell back to evaluate-only on the reserve, or when findings could not be saved.
  */
 data class WriteResult(
     val newFacts: Int,
@@ -52,6 +52,8 @@ data class WriteResult(
     /** [duplicatesDropped] by service (an intrusion-log card nets them out of each type's count). */
     val duplicatesByService: Map<String, Int> = emptyMap(),
     val findings: List<Finding> = emptyList(),
+    /** Findings that could not be saved even as no-fact rows (ruling R38): exact counts and a display sample. */
+    val unsaved: UnsavedSummary = UnsavedSummary.NONE,
 )
 
 /**
@@ -91,8 +93,9 @@ class ChunkedScanWriter @Inject constructor(
 
         /** A live scan's recorded findings (bounded by rules × live records); empty for an import. */
         private val memory = ArrayList<Finding>()
-        private val pendingNoFact = ArrayList<Finding>()
-        private val pendingStored = ArrayList<Finding>()
+
+        /** Set once a no-fact findings write itself hit a full disk (ruling R38); null while all are saved. */
+        private var unsaved: UnsavedFindings? = null
         private var dedup: EvaluateOnlyDedup? = null
         private var reserveBreached = false
         private var newFacts = 0
@@ -146,10 +149,25 @@ class ChunkedScanWriter @Inject constructor(
                 recordTotals(service, result.chunk, result.kept)
             } else {
                 val dup = checkNotNull(dedup).duplicates(service, chunk) { store.sourceFactKey(source, capturedAt, it) }
-                found.filter { f -> dup.getOrNull(f.ordinal - first) != true }.forEach { f ->
-                    pendingNoFact += f
-                    count(f)
-                }
+                val kept = found.filter { f -> dup.getOrNull(f.ordinal - first) != true && findings.keepsRow(f) }
+                kept.forEach(::count)
+                saveEvaluateOnly(kept) { findings.recordNoFact(scan.id, it, row) }
+            }
+        }
+
+        /**
+         * Evaluate-only findings are stored chunk by chunk as no-fact rows, each chunk in its own small
+         * transaction, so nothing is held (spec §5.2, ruling R38). Once such a write itself hits a full
+         * disk, the rest are only counted and sampled for display ([UnsavedFindings]).
+         */
+        private suspend fun saveEvaluateOnly(kept: List<Finding>, write: suspend (List<Finding>) -> Unit) {
+            if (kept.isEmpty()) return
+            val pending = unsaved
+            if (pending != null) return pending.addAll(kept)
+            try {
+                repo.inTransaction { write(kept) }
+            } catch (_: SQLiteFullException) {
+                unsaved = UnsavedFindings().also { it.addAll(kept) }
             }
         }
 
@@ -179,12 +197,12 @@ class ChunkedScanWriter @Inject constructor(
                 val fired = findings.existingAlertKeys(keys)
                 val fresh = found.filterIndexed { i, _ -> HashKeys.key(keys[i]) !in fired }
                 if (fresh.isEmpty()) return@forEach
+                fresh.forEach(::count)
                 if (evaluateOnly) {
-                    pendingStored += fresh
+                    saveEvaluateOnly(fresh) { findings.recordStored(scan.id, it, row) }
                 } else {
                     repo.inTransaction { findings.recordStored(scan.id, fresh, row) }
                 }
-                fresh.forEach(::count)
             }
         }
 
@@ -204,15 +222,17 @@ class ChunkedScanWriter @Inject constructor(
                 stored -> TelemetryState.STORED
                 else -> TelemetryState.NONE
             }
-            val spaceToFree = if (reserveBreached) preflight.shortfall() else 0L
+            val spaceToFree = if (reserveBreached || unsaved != null) preflight.shortfall() else 0L
+            // Nothing is buffered: every finding that could be stored already is, so a failed finish
+            // never loses stored findings to a buffered write (ruling R38).
             val finished = try {
-                repo.finish(scan, PendingFindings(pendingNoFact, pendingStored), counter.totals(), hooks, state)
+                repo.finish(scan, counter.totals(), hooks, state)
             } catch (e: SQLiteFullException) {
                 return inMemoryResult(spaceToFree, e)
             }
             val held = if (isImport) heldFindings() else heldFindings() + finished.correlationFindings
             return WriteResult(newFacts, alreadyStored, duplicatesDropped, state, finished.scan, true, spaceToFree,
-                duplicatesByService.toMap(), held)
+                duplicatesByService.toMap(), held, UnsavedSummary.of(unsaved))
         }
 
         /**
@@ -269,8 +289,8 @@ class ChunkedScanWriter @Inject constructor(
             if (!isImport) memory += f
         }
 
-        /** Live: every recorded finding; import: only what it buffered evaluate-only. */
-        private fun heldFindings(): List<Finding> = if (isImport) pendingNoFact + pendingStored else memory.toList()
+        /** Live: every recorded finding; import: the display sample of what could not be saved. */
+        private fun heldFindings(): List<Finding> = if (isImport) unsaved?.sample().orEmpty() else memory.toList()
 
         private fun enterEvaluateOnly() {
             if (dedup == null) dedup = EvaluateOnlyDedup()
@@ -283,7 +303,7 @@ class ChunkedScanWriter @Inject constructor(
             }
             val kept = keptScan()
             return WriteResult(newFacts, alreadyStored, duplicatesDropped, TelemetryState.FAILED, kept.scan, false,
-                spaceToFree, duplicatesByService.toMap(), kept.findings)
+                spaceToFree, duplicatesByService.toMap(), kept.findings, UnsavedSummary.of(unsaved))
         }
     }
 

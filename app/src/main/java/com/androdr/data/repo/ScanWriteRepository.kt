@@ -20,13 +20,6 @@ import javax.inject.Singleton
 class ScanNotInProgressException(scanId: Long) : IllegalStateException("scan $scanId is no longer IN_PROGRESS")
 
 /**
- * Findings an evaluate-only session (spec §5.2: full disk, breached import reserve) buffered in
- * memory, written by `finish`: [noFact] with no stored fact, [stored] the late-IOC re-check's (on a
- * stored fact, `recordId` set).
- */
-class PendingFindings(val noFact: List<Finding> = emptyList(), val stored: List<Finding> = emptyList())
-
-/**
  * The writer session's and the scan deleters' transactions (spec §5.1 Delete, §5.2), split out of
  * [ScanRepository]. Never takes `ScanLock`: callers hold it as the spec requires (the session
  * through `ScanLock.withWriter`, user deletes for [markForDelete] only, the sweep for its snapshot).
@@ -52,9 +45,9 @@ class ScanWriteRepository @Inject constructor(
     suspend fun <T> inTransaction(block: suspend () -> T): T = db.withTransaction { block() }
 
     /**
-     * The session's single finishing transaction (spec §5.2 step 5, Phase D):
-     *  1. the evaluate-only findings the session buffered ([pending]: with no fact, or a late-IOC
-     *     re-check's on a stored fact), recorded now;
+     * The session's single finishing transaction (spec §5.2 step 5, Phase D). Every finding is
+     * already a `scan_finding` row — evaluate-only ones too, written per chunk (ruling R38) — so:
+     *  1. (nothing is buffered);
      *  2. this scan's finding rows, `INSERT … SELECT` from its triggered `scan_finding` rows, and its
      *     detected-change rows;
      *  3. the correlation pass over the atoms read after those inserts (so this scan's rows are `Row`
@@ -66,12 +59,8 @@ class ScanWriteRepository @Inject constructor(
      * Throws — rolling everything back — with [ScanNotInProgressException] when the guard changes no row.
      */
     suspend fun finish(
-        scan: ScanResult, pending: PendingFindings, totals: FindingTotals, hooks: SessionHooks,
-        telemetryState: TelemetryState,
+        scan: ScanResult, totals: FindingTotals, hooks: SessionHooks, telemetryState: TelemetryState,
     ): Finished = db.withTransaction {
-        val row = { f: Finding -> hooks.findingRow(f, scan) }
-        findings.recordNoFact(scan.id, pending.noFact, row)
-        if (pending.stored.isNotEmpty()) findings.recordStored(scan.id, pending.stored, row)
         db.scanFindingDao().insertFindingRows(scan.id, System.currentTimeMillis())
         hooks.extraRows(scan).takeIf { it.isNotEmpty() }?.let { timeline.insertAll(it) }
         val correlation = hooks.correlate(scan, atoms)
@@ -88,6 +77,11 @@ class ScanWriteRepository @Inject constructor(
             .copy(id = scan.id, state = ScanState.COMPLETE, telemetryState = telemetryState)
         writes.update(completed)
         Finished(completed, correlation.findings)
+    }
+
+    companion object {
+        /** `scan_finding` rows per delete transaction. */
+        const val FINDINGS_DELETE_BATCH = 5_000
     }
 
     /** What [finish] committed: the completed scan and the correlation findings it recorded. */
@@ -128,12 +122,15 @@ class ScanWriteRepository @Inject constructor(
      * deleted and keep pinning theirs), its telemetry, then the `ScanResult` row.
      */
     suspend fun completeDelete(scanId: Long) {
-        db.withTransaction {
-            rows.byScanId(scanId)
-            val findingPins = db.scanFindingDao().recordIdsForScan(scanId)
-            db.scanFindingDao().deleteForScan(scanId)
-            store.releaseUnpinned(findingPins)
-        }
+        db.withTransaction { rows.byScanId(scanId) }
+        // A 100k-finding import's rows go in keyset batches, each its own transaction, so deleting an
+        // import to free space never needs one huge transaction (review Minor 8). Resumable: a killed
+        // delete leaves the scan DELETING and the sweep runs this again.
+        val recheckPins = db.scanFindingDao().recheckRecordIdsForScan(scanId)
+        do {
+            val deleted = db.withTransaction { db.scanFindingDao().deleteBatchForScan(scanId, FINDINGS_DELETE_BATCH) }
+        } while (deleted > 0)
+        db.withTransaction { store.releaseUnpinned(recheckPins) }
         store.deleteScanTelemetry(scanId)
         scans.deleteById(scanId)
     }
