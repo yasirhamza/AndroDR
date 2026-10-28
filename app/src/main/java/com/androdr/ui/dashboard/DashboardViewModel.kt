@@ -204,6 +204,7 @@ class DashboardViewModel @Inject constructor(
         /**
          * [NOT_SAVED]: the latest result exists only in memory, or the "findings could not be saved"
          * flag is set. [PARTLY_STORED]: the latest scan is saved but its [TelemetryState] is FAILED
+         * (or FAILED_PARTIAL_RETENTION)
          * (some records were not stored; findings are complete). Nothing while a scan runs.
          */
         fun storageBanner(
@@ -212,7 +213,8 @@ class DashboardViewModel @Inject constructor(
             isScanning -> StorageBanner.NONE
             unsaved -> StorageBanner.NOT_SAVED
         healthFailed -> StorageBanner.EARLIER_SCAN_SHOWN
-            scan?.telemetryState == TelemetryState.FAILED -> StorageBanner.PARTLY_STORED
+            scan?.telemetryState == TelemetryState.FAILED ||
+                scan?.telemetryState == TelemetryState.FAILED_PARTIAL_RETENTION -> StorageBanner.PARTLY_STORED
             else -> StorageBanner.NONE
         }
 

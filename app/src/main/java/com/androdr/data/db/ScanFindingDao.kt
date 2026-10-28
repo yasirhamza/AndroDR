@@ -63,15 +63,13 @@ interface ScanFindingDao {
     suspend fun unattachedCount(scanId: Long): Int
 
     /**
-     * The facts a scan's late-IOC re-check findings (`ordinal < 0`) pin: facts it did not observe, so
-     * deleting its observations would never release them. Read before [deleteBatchForScan] (review
-     * Minor 8); the facts it observed are released batch by batch with its observations.
+     * The facts a scan's triggered findings pin that the scan does not (or no longer) observe: its
+     * late-IOC re-check facts, and facts whose observations retention removed (D4). Deleting its
+     * observations would never release them. Read before [deleteBatchForScan] (review Minor 8); the
+     * facts it still observes are released batch by batch with its observations.
      */
-    @Query(
-        "SELECT DISTINCT recordId FROM scan_finding WHERE scanId = :scanId AND triggered = 1 " +
-            "AND ordinal < 0 AND recordId IS NOT NULL"
-    )
-    suspend fun recheckRecordIdsForScan(scanId: Long): List<Long>
+    @Query("$UNOBSERVED_FINDING_PINS")
+    suspend fun unobservedRecordIdsForScan(scanId: Long): List<Long>
 
     /** Deletes up to [size] of a scan's findings (one batch, any order); returns how many went. */
     @Query("$DELETE_FINDINGS_BATCH")
@@ -197,6 +195,11 @@ internal const val RULE_SAMPLE = "SELECT sf.id, sf.scanId, sf.ruleId, sf.trigger
     "sf.recordId, sf.alertId, sf.findingJson FROM scan_finding sf JOIN ScanResult s ON s.id = sf.scanId " +
     "WHERE sf.scanId = :scanId AND sf.triggered = 1 AND sf.ruleId = :ruleId AND ${CompleteScan.SQL} " +
     "ORDER BY sf.id LIMIT :size"
+
+/** [ScanFindingDao.unobservedRecordIdsForScan]: index `(scanId, triggered)`, then the unique `(scanId, recordId)`. */
+internal const val UNOBSERVED_FINDING_PINS = "SELECT sf.recordId FROM scan_finding sf " +
+    "WHERE sf.scanId = :scanId AND sf.triggered = 1 AND sf.recordId IS NOT NULL AND NOT EXISTS " +
+    "(SELECT 1 FROM scan_record o WHERE o.scanId = sf.scanId AND o.recordId = sf.recordId)"
 
 /** One delete batch of a scan's findings; no order is needed, so it is an index range read. */
 internal const val DELETE_FINDINGS_BATCH = "DELETE FROM scan_finding WHERE id IN (SELECT id FROM scan_finding " +

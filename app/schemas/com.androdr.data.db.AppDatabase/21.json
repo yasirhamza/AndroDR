@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "database": {
     "version": 21,
-    "identityHash": "5ac1618e22100619d2cb926eebdde74b",
+    "identityHash": "d35b373e95433efccf6e54a2f3185b32",
     "entities": [
       {
         "tableName": "ScanResult",
@@ -467,13 +467,14 @@
             "createSql": "CREATE INDEX IF NOT EXISTS `index_forensic_timeline_kind` ON `${TABLE_NAME}` (`kind`)"
           },
           {
-            "name": "index_forensic_timeline_telemetrySource",
+            "name": "index_forensic_timeline_telemetrySource_createdAt",
             "unique": false,
             "columnNames": [
-              "telemetrySource"
+              "telemetrySource",
+              "createdAt"
             ],
             "orders": [],
-            "createSql": "CREATE INDEX IF NOT EXISTS `index_forensic_timeline_telemetrySource` ON `${TABLE_NAME}` (`telemetrySource`)"
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_forensic_timeline_telemetrySource_createdAt` ON `${TABLE_NAME}` (`telemetrySource`, `createdAt`)"
           },
           {
             "name": "index_forensic_timeline_recordId",
@@ -1395,7 +1396,7 @@
     "views": [],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '5ac1618e22100619d2cb926eebdde74b')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'd35b373e95433efccf6e54a2f3185b32')"
     ]
   }
 }

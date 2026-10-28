@@ -103,9 +103,20 @@ interface ScanResultDao {
     )
     suspend fun liveKeysAfter(afterTimestamp: Long, afterId: Long, size: Int): List<ScanKey>
 
+    /** True while [id] is `COMPLETE` (a retention batch never touches a scan being deleted). */
+    @Query("SELECT EXISTS (SELECT 1 FROM ScanResult WHERE id = :id AND state = 'COMPLETE')")
+    suspend fun isComplete(id: Long): Boolean
+
+    /** How many `COMPLETE` live scans are newer than `(timestamp, id)` now (retention re-checks a rank). */
+    @Query(
+        "SELECT COUNT(*) FROM ScanResult WHERE state = 'COMPLETE' AND source = 'LIVE_SCAN' " +
+            "AND (timestamp > :timestamp OR (timestamp = :timestamp AND id > :id))"
+    )
+    suspend fun liveNewerThan(timestamp: Long, id: Long): Int
+
     /**
-     * Sets [id]'s `telemetryState` to [state] only while it is [from] (retention marks a `STORED`
-     * scan `PARTIAL_RETENTION`, never a `FAILED` one). Returns the number of rows changed.
+     * Sets [id]'s `telemetryState` to [state] only while it is [from] (retention marks a `STORED` scan
+     * `PARTIAL_RETENTION` and a `FAILED` one `FAILED_PARTIAL_RETENTION`). Returns the number of rows changed.
      */
     @Query("UPDATE ScanResult SET telemetryState = :state WHERE id = :id AND telemetryState = :from")
     suspend fun setTelemetryState(id: Long, state: TelemetryState, from: TelemetryState): Int

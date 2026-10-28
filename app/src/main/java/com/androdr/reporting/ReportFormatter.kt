@@ -220,7 +220,7 @@ object ReportFormatter {
      */
     private fun appCountText(scan: ScanWithFindings, appRecords: ServiceSummary?): String = when {
         appRecords == null -> "N/A"
-        scan.telemetryState == TelemetryState.PARTIAL_RETENTION || scan.telemetryState == TelemetryState.FAILED ->
+        scan.telemetryState != TelemetryState.STORED && scan.telemetryState != TelemetryState.NONE ->
             "N/A (only part of this scan's telemetry is stored)"
         else -> appRecords.records.toString()
     }
@@ -619,6 +619,13 @@ object ReportFormatter {
      * records written before the disk filled stay, and are printed below it.
      */
     const val TELEMETRY_FAILED_PARTWAY = "Stored telemetry: FAILED -- storage failed partway;"
+
+    /**
+     * The state line for a FAILED scan that retention later trimmed (followed by the count left): it
+     * states both facts and never presents the count left as what was stored before the failure.
+     */
+    const val TELEMETRY_FAILED_RETAINED =
+        "Stored telemetry: FAILED -- storage failed during this scan, and retention later removed older records;"
 
     private const val RULE = "============================================================"
 }

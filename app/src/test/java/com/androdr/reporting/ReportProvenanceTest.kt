@@ -7,7 +7,10 @@ import com.androdr.data.model.ScanResult
 import com.androdr.data.model.ScanState
 import com.androdr.data.model.TelemetrySource
 import com.androdr.data.model.TelemetryState
+import com.androdr.data.repo.ScanLock
+import com.androdr.data.repo.SettingsRepository
 import com.androdr.data.store.StoreFixture
+import com.androdr.data.store.TelemetryRetention
 import com.androdr.data.store.StoreFixture.Companion.app
 import com.androdr.data.store.StoreFixture.Companion.dns
 import com.androdr.ioc.Campaign
@@ -173,6 +176,60 @@ class ReportProvenanceTest {
                 .any { it.contains(ReportFormatter.TELEMETRY_FAILED) })
             assertTrue("a partly stored scan's app count is not the number scanned",
                 text.contains("Apps scanned: N/A (only part of this scan's telemetry is stored)"))
+        }
+
+    /** A real retention pass over the fixture (snapshots kept for the newest [keep] live scans). */
+    private suspend fun retain(keep: Int, now: Long) {
+        val settings = SettingsRepository(f.dataStore)
+        settings.setSnapshotRetentionScans(keep)
+        TelemetryRetention(f.db, f.store, ScanLock(), f.dirty, settings).run(now)
+    }
+
+    private suspend fun reloaded(id: Long): ScanResult = checkNotNull(f.db.scanResultDao().completeById(id))
+
+    /** Neither the report nor the History summary may tell a retention-trimmed FAILED scan's story wrong. */
+    private suspend fun assertHonestFailedLine(id: Long, remaining: Int) {
+        val s = reloaded(id)
+        assertEquals(TelemetryState.FAILED_PARTIAL_RETENTION, s.telemetryState)
+        val expected = "${ReportFormatter.TELEMETRY_FAILED_RETAINED} $remaining record(s) remain."
+        val text = report(s)
+        val summary = exporter.summary(s).lines()
+        for ((where, lines) in listOf("report" to text.lines(), "summary" to summary)) {
+            assertTrue("$where: $lines", lines.any { it.trim() == expected })
+            assertFalse("$where claims nothing was saved", lines.any { it.contains(ReportFormatter.TELEMETRY_FAILED) })
+            assertFalse("$where presents a post-retention count as stored before the failure",
+                lines.any { it.contains("stored before it failed") })
+        }
+    }
+
+    @Test
+    fun `I1 a FAILED scan whose records retention removed entirely never says nothing was saved`() = runBlocking {
+        val failed = scan(1_000L, telemetryState = TelemetryState.FAILED)
+        f.persist(failed.id, "app_scanner", listOf(app("com.kept.a"), app("com.kept.b")))
+        complete(failed.id)
+        val newer = scan(2_000L)
+        f.persist(newer.id, "app_scanner", listOf(app("com.newer")))
+        complete(newer.id)
+
+        retain(keep = 1, now = 1_800_000_000_000L)
+
+        assertEquals(0L, f.count("SELECT COUNT(*) FROM scan_record WHERE scanId = 1000"))
+        assertHonestFailedLine(failed.id, remaining = 0)
+    }
+
+    @Test
+    fun `I1 a FAILED scan that retention partly trimmed never shows the count left as stored before it failed`() =
+        runBlocking {
+            val failed = scan(1_000L, telemetryState = TelemetryState.FAILED)
+            f.persist(failed.id, "app_scanner", listOf(app("com.kept.a")))
+            f.persist(failed.id, "dns_monitor", listOf(dns("old.example", key = "dns:1")), live = true)
+            complete(failed.id)
+
+            retain(keep = 20, now = 1_729_600_000_000L + 31L * 24 * 60 * 60 * 1000)
+
+            assertEquals("the snapshot stays, the old event goes", 1L,
+                f.count("SELECT COUNT(*) FROM scan_record WHERE scanId = 1000"))
+            assertHonestFailedLine(failed.id, remaining = 1)
         }
 
     @Test

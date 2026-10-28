@@ -65,7 +65,7 @@ class CompleteVisibilityGateTest {
         "ScanFindingDao.insertFindingRows", "ScanFindingDao.clearEvidence", "ScanFindingDao.unattachedCount",
         "AlertDao.openForScan", "AlertDao.attachForScan", "AlertDao.touchForScan",
         // A scan delete's scan_finding pins and rows (TimelineRowDeleter-style: read, delete, release).
-        "ScanFindingDao.recheckRecordIdsForScan", "ScanFindingDao.deleteBatchForScan",
+        "ScanFindingDao.unobservedRecordIdsForScan", "ScanFindingDao.deleteBatchForScan",
     )
 
     private data class DaoQuery(val owner: String, val name: String, val sql: String) {

@@ -27,24 +27,40 @@ class IocUpdateWorker @AssistedInject constructor(
     private val retention: TelemetryRetention,
 ) : CoroutineWorker(context, params) {
 
+    /**
+     * The IOC fetch, then storage upkeep (the 30-day prunes and retention). Upkeep runs even when the
+     * fetch fails, so storage is trimmed without a working network fetch (review m2); either failing
+     * asks for a retry. Cancellation is never turned into a retry (review m1).
+     */
     @Suppress("TooGenericExceptionCaught")
     override suspend fun doWork(): Result {
-        return try {
+        val refreshed = try {
             val report = intelRefresher.refreshAll(skipIfRefreshedWithinMs = RECENT_REFRESH_SKIP_MS)
+            Log.i(
+                TAG,
+                "IOC refresh finished — ${report.bulkFetchedCount} IOC entries, " +
+                    "${sigmaRuleEngine.ruleCount()} SIGMA rules",
+            )
+            true
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.e(TAG, "IOC update failed: ${e.message}")
+            false
+        }
+        val prunedOk = try {
             val thirtyDaysAgo = System.currentTimeMillis() - (30L * 24 * 60 * 60 * 1000)
             scanRepository.pruneOldDnsEvents(thirtyDaysAgo)
             database.withTransaction { timelineRows.olderThan(thirtyDaysAgo) }
-            runRetention()
-            Log.i(
-                TAG,
-                "Worker finished — ${report.bulkFetchedCount} IOC entries, " +
-                    "${sigmaRuleEngine.ruleCount()} SIGMA rules",
-            )
-            Result.success()
+            true
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
-            Log.e(TAG, "IOC update failed: ${e.message}")
-            Result.retry()
+            Log.e(TAG, "Prune failed: ${e.message}")
+            false
         }
+        runRetention()
+        return if (refreshed && prunedOk) Result.success() else Result.retry()
     }
 
     /**

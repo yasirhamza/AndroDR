@@ -10,11 +10,14 @@ import com.androdr.data.store.StoreFixture
 import com.androdr.data.store.TelemetryRetention
 import com.androdr.sigma.SigmaRuleEngine
 import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.coVerifyOrder
 import io.mockk.mockk
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -41,6 +44,21 @@ class IocUpdateWorkerRetentionTest {
             refresher.refreshAll(any())
             retention.run(any())
         }
+    }
+
+    /** Review m2: storage upkeep does not depend on the network fetch succeeding. */
+    @Test
+    fun `retention still runs when the IOC fetch fails, and the fetch is retried`() = runBlocking {
+        coEvery { refresher.refreshAll(any()) } throws java.io.IOException("offline")
+        assertEquals(ListenableWorker.Result.retry(), worker().doWork())
+        coVerify { retention.run(any()) }
+    }
+
+    /** Review m1: a stopped worker is cancelled, never turned into a retry. */
+    @Test
+    fun `cancellation of the fetch propagates`() {
+        coEvery { refresher.refreshAll(any()) } throws CancellationException("stopped")
+        assertTrue(runCatching { runBlocking { worker().doWork() } }.exceptionOrNull() is CancellationException)
     }
 
     @Test

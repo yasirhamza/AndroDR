@@ -120,15 +120,15 @@ class TelemetryRetentionTest {
         assertEquals(listOf(0L, 0L, 1L, 1L), (1L..4L).map { observations(it) })
     }
 
-    /** `FAILED` already says the scan's telemetry is incomplete; retention never overwrites it. */
+    /** A trimmed `FAILED` scan keeps the failure and records that retention trimmed it (D4 fix I1). */
     @Test
-    fun `a FAILED scan stays FAILED when retention trims it`() = runBlocking {
+    fun `a FAILED scan that retention trims becomes FAILED_PARTIAL_RETENTION`() = runBlocking {
         for (id in 1L..2L) liveScan(id, listOf(app("com.s$id")))
         w.f.db.openHelper.writableDatabase.execSQL("UPDATE ScanResult SET telemetryState = 'FAILED' WHERE id = 1")
         settings.setSnapshotRetentionScans(1)
         retention.run(NOW)
         assertEquals(0L, observations(1L))
-        assertEquals(TelemetryState.FAILED.name, state(1L))
+        assertEquals(TelemetryState.FAILED_PARTIAL_RETENTION.name, state(1L))
     }
 
     @Test
@@ -233,5 +233,107 @@ class TelemetryRetentionTest {
         assertEquals("the batch rolled back", 1L, observations(1L))
         assertEquals(TelemetryState.STORED.name, state(1L))
         assertFalse("the lock is released", w.lock.mutex.isLocked)
+    }
+
+    /** Review m7: a scan taking the lock mid-cycle stops it after partial progress; the next cycle resumes. */
+    @Test
+    fun `a lock taken mid-cycle stops the cycle and the next cycle finishes the work`() = runBlocking {
+        for (id in 1L..3L) liveScan(id, listOf(app("com.s$id")))
+        settings.setSnapshotRetentionScans(1)
+        val spy = spyk(retention)
+        var calls = 0
+        coEvery { spy.batch(any(), TelemetryRetention.Phase.SNAPSHOTS, any()) } coAnswers {
+            if (++calls == 2) w.lock.mutex.lock() // a scan starts after the first snapshot batch
+            callOriginal()
+        }
+
+        val first = spy.run(NOW)
+
+        assertFalse(first.completed)
+        assertEquals("scan 2 was trimmed before the lock was taken; scan 1 was not reached",
+            listOf(1L, 0L, 1L), (1L..3L).map { observations(it) })
+        assertEquals(TelemetryState.PARTIAL_RETENTION.name, state(2L))
+        assertEquals(TelemetryState.STORED.name, state(1L))
+        assertNoUnpinnedOrphan()
+        w.lock.mutex.unlock()
+
+        assertTrue(retention.run(NOW).completed)
+        assertEquals(listOf(0L, 0L, 1L), (1L..3L).map { observations(it) })
+        assertNoUnpinnedOrphan()
+    }
+
+    /** Review m7: a batch that reaches a scan the user marked DELETING leaves nothing the delete cannot finish. */
+    @Test
+    fun `a retention batch on a scan that turned DELETING leaves no orphan and the delete completes`() =
+        runBlocking {
+            liveScan(1L, listOf(app(EVIL_APP)) + (0 until 600).map { app("com.old$it") })
+            liveScan(2L, listOf(app("com.new")))
+            settings.setSnapshotRetentionScans(1)
+            val spy = spyk(retention)
+            var marked = false
+            coEvery { spy.batch(1L, TelemetryRetention.Phase.SNAPSHOTS, any()) } coAnswers {
+                if (!marked) {
+                    marked = true
+                    w.repo.markForDelete(1L) // the user deletes scan 1 after the walk read it
+                }
+                callOriginal()
+            }
+
+            assertTrue(spy.run(NOW).completed)
+            assertEquals("DELETING", w.f.db.openHelper.readableDatabase
+                .query("SELECT state FROM ScanResult WHERE id = 1").use { c -> c.moveToFirst(); c.getString(0) })
+            assertEquals("the batch leaves a DELETING scan to its delete", 601L, observations(1L))
+            assertNoUnpinnedOrphan()
+
+            w.repo.completeDelete(1L)
+
+            assertEquals(0L, w.count("SELECT COUNT(*) FROM ScanResult WHERE id = 1"))
+            assertEquals(0L, observations(1L))
+            assertNoUnpinnedOrphan()
+            assertEquals("scan 2 is untouched", 1L, observations(2L))
+        }
+
+    /**
+     * D4 fix: retention leaves a finding's fact pinned only by that finding; deleting the scan later
+     * removes the pin and must release the fact in the same pass (A5), not leave it for a GC.
+     */
+    @Test
+    fun `deleting a scan that retention trimmed releases the facts its findings pinned`() = runBlocking {
+        liveScan(1L, listOf(app(EVIL_APP), app("com.s1")))
+        liveScan(2L, listOf(app("com.s2")))
+        settings.setSnapshotRetentionScans(1)
+        retention.run(NOW)
+        assertEquals(0L, observations(1L))
+        assertEquals("the finding pins EVIL_APP's fact", 1L,
+            w.count("SELECT COUNT(*) FROM telemetry_record WHERE packageName = '$EVIL_APP'"))
+
+        w.repo.markForDelete(1L)
+        w.repo.completeDelete(1L)
+
+        assertEquals(0L, w.count("SELECT COUNT(*) FROM telemetry_record WHERE packageName = '$EVIL_APP'"))
+        assertNoUnpinnedOrphan()
+    }
+
+    /** Review m4: a newer scan deleted mid-cycle never makes a scan within the newest N lose its snapshots. */
+    @Test
+    fun `a newer scan deleted mid-cycle does not trim a scan that is now within the newest N`() = runBlocking {
+        for (id in 1L..4L) liveScan(id, listOf(app("com.s$id")))
+        settings.setSnapshotRetentionScans(2)
+        val spy = spyk(retention)
+        var deleted = false
+        coEvery { spy.batch(3L, TelemetryRetention.Phase.EVENTS, any()) } coAnswers {
+            if (!deleted) {
+                deleted = true
+                w.repo.markForDelete(4L) // the newest scan goes after the walk ranked it
+                w.repo.completeDelete(4L)
+            }
+            callOriginal()
+        }
+
+        assertTrue(spy.run(NOW).completed)
+
+        assertEquals("scan 2 is now among the newest 2 and keeps its snapshots", 1L, observations(2L))
+        assertEquals(TelemetryState.STORED.name, state(2L))
+        assertEquals("scan 1 is beyond them", 0L, observations(1L))
     }
 }

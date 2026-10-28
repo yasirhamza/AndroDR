@@ -251,6 +251,10 @@ class FindingsMigration(private val clock: () -> Long = System::currentTimeMilli
             "CREATE INDEX IF NOT EXISTS `index_alert_status_ruleId_matchedValue_lastActivityAt` " +
                 "ON `alert` (`status`, `ruleId`, `matchedValue`, `lastActivityAt`)",
             "CREATE INDEX IF NOT EXISTS `index_alert_status_level` ON `alert` (`status`, `level`)",
+            // The 30-day prune's range index (D4) replaces the telemetrySource-only index in place.
+            "DROP INDEX IF EXISTS `index_forensic_timeline_telemetrySource`",
+            "CREATE INDEX IF NOT EXISTS `index_forensic_timeline_telemetrySource_createdAt` " +
+                "ON `forensic_timeline` (`telemetrySource`, `createdAt`)",
             "CREATE TABLE IF NOT EXISTS `ScanResult_new` (`id` INTEGER NOT NULL, `timestamp` INTEGER NOT NULL, " +
                 "`bugReportFindings` TEXT NOT NULL, `riskySideloadCount` INTEGER NOT NULL, " +
                 "`knownMalwareCount` INTEGER NOT NULL, `scannerErrors` TEXT NOT NULL, `source` TEXT NOT NULL, " +

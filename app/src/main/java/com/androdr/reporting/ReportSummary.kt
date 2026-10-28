@@ -77,6 +77,8 @@ internal fun telemetryLine(state: TelemetryState, records: Int, services: Int): 
         "${ReportFormatter.TELEMETRY_FAILED_PARTWAY} $records record(s) were stored before it failed; " +
             "the rest were checked but not saved."
     }
+    // Retention later removed records: the count left is neither "stored before it failed" nor zero saved.
+    TelemetryState.FAILED_PARTIAL_RETENTION -> "${ReportFormatter.TELEMETRY_FAILED_RETAINED} $records record(s) remain."
 }
 
 /** Plain words for each telemetry service: the export notice's sensitive categories. */

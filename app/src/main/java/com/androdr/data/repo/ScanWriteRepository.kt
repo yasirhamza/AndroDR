@@ -154,11 +154,11 @@ class ScanWriteRepository @Inject constructor(
         // A 100k-finding import's rows go in keyset batches, each its own transaction, so deleting an
         // import to free space never needs one huge transaction (review Minor 8). Resumable: a killed
         // delete leaves the scan DELETING and the sweep runs this again.
-        val recheckPins = db.scanFindingDao().recheckRecordIdsForScan(scanId)
+        val unobservedPins = db.scanFindingDao().unobservedRecordIdsForScan(scanId)
         do {
             val deleted = db.withTransaction { db.scanFindingDao().deleteBatchForScan(scanId, FINDINGS_DELETE_BATCH) }
         } while (deleted > 0)
-        db.withTransaction { store.releaseUnpinned(recheckPins) }
+        db.withTransaction { store.releaseUnpinned(unobservedPins) }
         store.deleteScanTelemetry(scanId)
         scans.deleteById(scanId)
     }

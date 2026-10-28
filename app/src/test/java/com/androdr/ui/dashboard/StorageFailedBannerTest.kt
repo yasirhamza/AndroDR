@@ -25,6 +25,11 @@ class StorageFailedBannerTest {
     fun `a saved FAILED scan says some records were not saved`() =
         assertEquals(StorageBanner.PARTLY_STORED, banner(scan(state = TelemetryState.FAILED)))
 
+    /** D4 fix I1: retention trimming a FAILED scan must not hide that its storage failed. */
+    @Test
+    fun `a FAILED scan that retention trimmed still says some records were not saved`() =
+        assertEquals(StorageBanner.PARTLY_STORED, banner(scan(state = TelemetryState.FAILED_PARTIAL_RETENTION)))
+
     @Test
     fun `stored, partial-retention and none show nothing`() {
         for (s in listOf(TelemetryState.STORED, TelemetryState.PARTIAL_RETENTION, TelemetryState.NONE)) {

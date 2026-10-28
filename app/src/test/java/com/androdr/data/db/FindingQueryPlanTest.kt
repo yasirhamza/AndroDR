@@ -98,6 +98,8 @@ class FindingQueryPlanTest {
         assertIndexed("summary counts", SUMMARY_COUNTS, listOf("index_scan_finding_scanId_triggered"))
         assertIndexed("rule sample", RULE_SAMPLE, listOf("index_scan_finding_scanId_triggered"))
         assertIndexed("batched delete", DELETE_FINDINGS_BATCH, listOf("index_scan_finding_scanId"))
+        assertIndexed("a deleted scan's unobserved finding pins", UNOBSERVED_FINDING_PINS,
+            listOf("index_scan_finding_scanId_triggered", "index_scan_record_scanId_recordId"))
     }
 
     /**
@@ -142,9 +144,11 @@ class FindingQueryPlanTest {
         assertIndexed("prune delete", PRUNE_DELETE, listOf(memberIndex))
         assertIndexed("prune pins", PRUNE_RECORD_IDS, listOf(memberIndex))
         assertIndexed("prune signals", PRUNE_SIGNAL_IDS, listOf(memberIndex))
+        // D4 fix m5: the prune's rows are a range of index (telemetrySource, createdAt), never every live row.
+        val pruneRange = "SEARCH forensic_timeline USING INDEX index_forensic_timeline_telemetrySource_createdAt " +
+            "(telemetrySource=? AND createdAt<?)"
         for (sql in listOf(PRUNE_DELETE, PRUNE_RECORD_IDS, PRUNE_SIGNAL_IDS)) {
-            assertTrue("the prune finds its rows through an index:\n${plan(sql)}",
-                plan(sql).any { it.contains("SEARCH forensic_timeline USING INDEX") })
+            assertTrue("the prune reads a createdAt range:\n${plan(sql)}", plan(sql).any { it.contains(pruneRange) })
         }
     }
 

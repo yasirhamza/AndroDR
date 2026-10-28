@@ -31,8 +31,8 @@ data class RetentionOutcome(val completed: Boolean, val observationsRemoved: Lon
  *
  * Each batch takes `scanMutex.tryLock()` outside its Room transaction; when the lock is held the cycle
  * stops. Each batch is one transaction: delete its observations, then its candidate facts that now
- * have no observation and no pin, then bodies no fact uses, and mark the scan `PARTIAL_RETENTION` (a
- * `STORED` scan only: `FAILED` already says its telemetry is incomplete). So a kill between batches
+ * have no observation and no pin, then bodies no fact uses, and mark the scan `PARTIAL_RETENTION` (or,
+ * for a `FAILED` scan, `FAILED_PARTIAL_RETENTION`, which keeps the failure). So a kill between batches
  * leaves no unpinned orphan (S3). A batch that throws sets [StoreDirtyFlag] and rethrows.
  */
 @Singleton
@@ -51,7 +51,8 @@ class TelemetryRetention @Inject constructor(
 
     /**
      * One retention cycle at time [now]. Walks the `COMPLETE` live scans newest first by keyset; a
-     * scan that completes meanwhile can only shift older scans' ranks down, which keeps more, never less.
+     * scan that completes meanwhile can only shift older scans' ranks down, which keeps more; a deleted newer scan
+     * would shift them up, so a candidate's rank is re-read before its snapshots are trimmed.
      */
     suspend fun run(now: Long = System.currentTimeMillis()): RetentionOutcome {
         val keep = settings.snapshotRetentionScans.first()
@@ -64,10 +65,12 @@ class TelemetryRetention @Inject constructor(
             val page = scans.liveKeysAfter(afterTimestamp, afterId, SCAN_PAGE)
             if (page.isEmpty()) break
             for (scan in page) {
-                val phases = if (rank++ >= keep) listOf(Phase.EVENTS, Phase.SNAPSHOTS) else listOf(Phase.EVENTS)
-                for (phase in phases) {
-                    val n = drain(scan.id, phase, eventCutoff) ?: return RetentionOutcome(false, removed)
-                    removed += n
+                val beyondKeep = rank++ >= keep
+                removed += drain(scan.id, Phase.EVENTS, eventCutoff) ?: return RetentionOutcome(false, removed)
+                // The walk's rank only grows stale upwards if a newer scan was deleted meanwhile, so a
+                // candidate's rank is re-read before its snapshots go (review m4).
+                if (beyondKeep && scans.liveNewerThan(scan.timestamp, scan.id) >= keep) {
+                    removed += drain(scan.id, Phase.SNAPSHOTS, eventCutoff) ?: return RetentionOutcome(false, removed)
                 }
             }
             afterTimestamp = page.last().timestamp
@@ -100,6 +103,9 @@ class TelemetryRetention @Inject constructor(
         if (!lock.mutex.tryLock()) return null
         try {
             return db.withTransaction {
+                // A scan the user marked DELETING after the walk read it is left to its delete, which
+                // releases the facts its findings pin only once it knows its observations (D4 fix).
+                if (!scans.isComplete(scanId)) return@withTransaction 0
                 val rows: List<ObservationRow> = when (phase) {
                     Phase.EVENTS -> observations.retentionEventBatch(scanId, cutoff, BATCH)
                     Phase.SNAPSHOTS -> observations.retentionSnapshotBatch(scanId, BATCH)
@@ -108,6 +114,7 @@ class TelemetryRetention @Inject constructor(
                     chunkedEach(rows.map { it.rowId }) { observations.deleteRows(it) }
                     store.releaseUnpinned(rows.map { it.recordId })
                     scans.setTelemetryState(scanId, TelemetryState.PARTIAL_RETENTION, TelemetryState.STORED)
+                    scans.setTelemetryState(scanId, TelemetryState.FAILED_PARTIAL_RETENTION, TelemetryState.FAILED)
                 }
                 rows.size
             }

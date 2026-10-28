@@ -109,7 +109,9 @@ class SettingsRepository @Inject constructor(
      * live scans keep only their events (for 30 days) and pinned facts. Default 20.
      */
     val snapshotRetentionScans: Flow<Int> = dataStore.data
-        .map { prefs -> prefs[KEY_SNAPSHOT_RETENTION_SCANS] ?: DEFAULT_SNAPSHOT_RETENTION_SCANS }
+        // Clamped on read too: a stored 0 or below (corrupt store, a writer that skipped the setter)
+        // would otherwise trim every live scan's snapshots, the newest included.
+        .map { prefs -> (prefs[KEY_SNAPSHOT_RETENTION_SCANS] ?: DEFAULT_SNAPSHOT_RETENTION_SCANS).coerceAtLeast(1) }
 
     suspend fun setSnapshotRetentionScans(value: Int) {
         require(value >= 1) { "snapshot retention must keep at least one scan" }
