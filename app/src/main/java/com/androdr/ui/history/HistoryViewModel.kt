@@ -219,13 +219,36 @@ class HistoryViewModel @Inject constructor(
 
     fun dismissDeleteRefused() { _deleteRefused.value = false }
 
+    /**
+     * True after a delete or "Clear all" threw (for example a full disk): the screen says it did not
+     * finish instead of the app crashing (review I1). A delete that failed after its first step leaves
+     * the scan hidden (`DELETING`) and the startup sweep finishes it.
+     */
+    private val _deleteFailed = MutableStateFlow(false)
+    val deleteFailed: StateFlow<Boolean> = _deleteFailed.asStateFlow()
+
+    fun dismissDeleteFailed() { _deleteFailed.value = false }
+
+    /** Runs a delete; any failure but cancellation is reported, never thrown (review I1). */
+    @Suppress("TooGenericExceptionCaught")
+    private suspend fun deleting(run: suspend () -> DeleteResult): DeleteResult? = try {
+        run()
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        Log.w(TAG, "delete failed", e)
+        _deleteFailed.value = true
+        null
+    }
+
     fun confirmDeleteScan() {
         val id = _showDeleteConfirm.value ?: return
         _showDeleteConfirm.value = null
         viewModelScope.launch {
-            when (repository.deleteScan(id)) {
+            when (deleting { repository.deleteScan(id) }) {
                 DeleteResult.ScanRunning -> _deleteRefused.value = true
                 DeleteResult.Done -> if (_selectedScan.value?.id == id) _selectedScan.value = null
+                null -> Unit
             }
         }
     }
@@ -238,9 +261,10 @@ class HistoryViewModel @Inject constructor(
         viewModelScope.launch {
             // A refused "Clear all" is handled first and leaves everything in place, the selection
             // included; only a delete that ran empties the selection.
-            when (repository.deleteAllScans()) {
+            when (deleting { repository.deleteAllScans() }) {
                 DeleteResult.ScanRunning -> _deleteRefused.value = true
                 DeleteResult.Done -> _selectedScan.value = null
+                null -> Unit
             }
         }
     }

@@ -340,13 +340,21 @@ fun TimelineScreen(
         val closeTitle = stringResource(R.string.alerts_credential_title)
         val closeDescription = stringResource(R.string.alerts_credential_description)
         val closeScope = rememberCoroutineScope()
+        var closing by remember(event.id) { mutableStateOf(false) }
         TimelineEventDetailSheet(
             event = event,
             onCloseAlert = alertIds.takeIf { it.isNotEmpty() }?.let { ids ->
                 {
-                    closeScope.launch {
-                        if (viewModel.closeAlerts(ids, null) { confirm(closeTitle, closeDescription) } > 0) {
-                            alertIds = emptyList()
+                    if (!closing) {
+                        closing = true
+                        closeScope.launch {
+                            try {
+                                if (viewModel.closeAlerts(ids, null) { confirm(closeTitle, closeDescription) } > 0) {
+                                    alertIds = emptyList()
+                                }
+                            } finally {
+                                closing = false
+                            }
                         }
                     }
                 }

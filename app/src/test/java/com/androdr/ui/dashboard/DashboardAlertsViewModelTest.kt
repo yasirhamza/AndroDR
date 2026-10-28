@@ -75,7 +75,7 @@ class DashboardAlertsViewModelTest {
         vm.requestCloseSelected()
         vm.close(null) { ConfirmResult.Cancelled }
         coVerify { findings.closeGroups(listOf(a), null, ConfirmResult.Cancelled) }
-        assertEquals(CloseOutcome.NothingClosed, vm.outcome.value)
+        assertEquals(CloseOutcome.NotConfirmed, vm.outcome.value)
         assertEquals(setOf(a), vm.selected.value)
     }
 
@@ -108,6 +108,22 @@ class DashboardAlertsViewModelTest {
     }
 
     @Test
+    fun `a confirmed close that finds nothing open, or throws, says so`() = runTest {
+        val vm = DashboardAlertsViewModel(repo(closed = 0))
+        vm.requestClose(a)
+        vm.close(null) { ConfirmResult.Confirmed }
+        assertEquals(CloseOutcome.NothingToClose, vm.outcome.value)
+        val failing = mockk<FindingsRepository> {
+            every { openAlertGroups() } returns flowOf(PagingData.empty())
+            coEvery { closeGroups(any(), any(), any()) } throws IllegalStateException("disk full")
+        }
+        val vm2 = DashboardAlertsViewModel(failing)
+        vm2.requestClose(a)
+        vm2.close(null) { ConfirmResult.Confirmed }
+        assertEquals(CloseOutcome.Failed, vm2.outcome.value)
+    }
+
+    @Test
     fun `selection is by rule and matched value`() = runTest {
         val vm = DashboardAlertsViewModel(repo(closed = 0))
         vm.toggle(a)
@@ -120,20 +136,18 @@ class DashboardAlertsViewModelTest {
 
     @Test
     fun `source gate - the Dashboard hosts the card and every close goes through ProtectedButton and the credential`() {
-        fun src(path: String) = File("src/main/java/com/androdr/$path").readText()
+        fun src(path: String) = File("src/main/java/com/androdr/$path").readText().replace(Regex("\\s+"), " ")
+        fun String.has(code: String) = contains(code.replace(Regex("\\s+"), " "))
         val screen = src("ui/dashboard/DashboardScreen.kt")
         assertTrue(screen.contains("OpenAlertsCard("))
         assertTrue("import-only empty state", screen.contains("R.string.dashboard_no_live_scan_alerts"))
         val card = src("ui/dashboard/OpenAlertsCard.kt")
-        assertTrue(card.contains(
-            "ProtectedButton(onClick = { viewModel.close(note) { confirm(title, description) } })"))
-        assertTrue(card.contains(
-            "ProtectedButton(\n                    onClick = { viewModel.requestCloseSelected() }"))
+        assertTrue(card.has("ProtectedButton(onClick = { viewModel.close(note) { confirm(title, description) } })"))
+        assertTrue(card.has("ProtectedButton( onClick = { viewModel.requestCloseSelected() }"))
         assertTrue(card.contains("rememberConfirmCredential()"))
         val timeline = src("ui/timeline/TimelineEventCard.kt")
-        assertTrue(timeline.contains("ProtectedButton(onClick = close"))
+        assertTrue(timeline.has("ProtectedButton(onClick = close"))
         val timelineScreen = src("ui/timeline/TimelineScreen.kt")
-        assertTrue(timelineScreen.contains(
-            "viewModel.closeAlerts(ids, null) { confirm(closeTitle, closeDescription) }"))
+        assertTrue(timelineScreen.has("viewModel.closeAlerts(ids, null) { confirm(closeTitle, closeDescription) }"))
     }
 }

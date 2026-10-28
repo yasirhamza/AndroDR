@@ -12,6 +12,9 @@ import kotlinx.coroutines.flow.Flow
  * Every list query shows only `COMPLETE` scans (spec §5.1 Visibility). There is no capped "all
  * scans" list (spec §5.5): lists page by keyset on `timestamp` ([pagedAfter] / [pagedBefore]).
  */
+/** A scan's id and source. */
+data class ScanSourceRow(val id: Long, val source: com.androdr.data.model.TelemetrySource)
+
 @Dao
 @Suppress("TooManyFunctions") // Room DAO: list pages, latest-scan reads, the writer's guarded statements
 interface ScanResultDao {
@@ -62,6 +65,10 @@ interface ScanResultDao {
     /** True when at least one scan is listed (History's empty state). */
     @Query("SELECT EXISTS (SELECT 1 FROM ScanResult WHERE state = 'COMPLETE')")
     fun anyComplete(): Flow<Boolean>
+
+    /** The sources of the scans among [ids] that still exist (a report names who opened an alert). */
+    @Query("SELECT id, source FROM ScanResult WHERE id IN (:ids)")
+    suspend fun sourcesOf(ids: List<Long>): List<ScanSourceRow>
 
     @Query("SELECT * FROM ScanResult WHERE id = :id AND state = 'COMPLETE'")
     suspend fun completeById(id: Long): ScanResult?

@@ -140,7 +140,13 @@ class FindingReadersLowHeapTest {
         val text = file.readText()
         assertTrue(text.lines().first { "app issue(s)" in it }, text.contains("$FINDINGS app issue(s)"))
 
-        assertTrue("the report streams every open alert", text.contains("Open alerts:"))
+        // Review I5: 100k open alerts of one group print one header, a bounded sample and an exact rest.
+        val alerts = text.substringAfter("  ALERTS").substringBefore("Closed alerts:")
+        assertEquals(com.androdr.reporting.ALERT_SAMPLE_DISPLAY_LIMIT, Regex("- opened ").findAll(alerts).count())
+        assertTrue(alerts, alerts.contains("· $FINDINGS alert(s)"))
+        assertTrue(alerts, alerts.contains(
+            "…and ${FINDINGS - com.androdr.reporting.ALERT_SAMPLE_DISPLAY_LIMIT} more alert(s) of this group"))
+        assertTrue(alerts, alerts.contains("$FINDINGS open alert(s) in total"))
 
         // D3: the open-alert list groups the flood of one indicator into one group (SQL GROUP BY).
         val groups = OpenAlertGroupPagingSource(w.f.db)

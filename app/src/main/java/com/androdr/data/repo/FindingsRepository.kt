@@ -11,6 +11,11 @@ import com.androdr.data.db.FindingKinds
 import com.androdr.data.db.FindingRow
 import com.androdr.data.db.FindingSummaryCounts
 import com.androdr.data.db.AlertGroupRow
+import com.androdr.data.model.riskOf
+import com.androdr.data.model.levelToScore
+import com.androdr.data.model.TelemetrySource
+import com.androdr.data.model.RiskLevel
+import com.androdr.data.db.AlertReportGroupRow
 import com.androdr.data.db.StoredFindingCounts
 import com.androdr.data.db.chunkedIn
 import com.androdr.data.model.Alert
@@ -43,7 +48,12 @@ import javax.inject.Singleton
  * What is current (spec §5.4 Lifecycle): the latest live scan's triggered state findings (bounded
  * by rules × live records) and how many alerts are OPEN.
  */
-data class CurrentFindingsSummary(val stateFindings: List<Finding>, val openAlertCount: Int) {
+data class CurrentFindingsSummary(
+    val stateFindings: List<Finding>,
+    val openAlertCount: Int,
+    /** The most severe level among OPEN alerts; null when none is open. */
+    val highestOpenAlertLevel: RiskLevel? = null,
+) {
     /** Current findings = triggered state findings ∪ OPEN alerts. */
     val count: Int get() = stateFindings.size + openAlertCount
 
@@ -74,6 +84,12 @@ data class AlertView(
             a.closedReason, a.closedWithCredential)
     }
 }
+
+/** One alert of a report group: the alert, its matched record, and its opening scan's source (null: deleted). */
+class AlertSample(val alert: AlertView, val record: DecodedRecord?, val openedBy: TelemetrySource?)
+
+/** One report group: its exact counts and its most recent alerts. */
+class AlertReportGroup(val row: AlertReportGroupRow, val samples: List<AlertSample>)
 
 /** Identifies one open-alert group, bounded to the alerts the person saw (`id <= maxId`). */
 data class AlertGroupRef(val ruleId: String, val matchedValue: String, val maxId: Long)
@@ -225,7 +241,9 @@ class FindingsRepository @Inject constructor(
                 category = f.category.name, kind = p.kind, recordId = p.recordId, service = f.service,
                 ordinal = f.ordinal, alertKey = key, alertId = alertId,
                 findingJson = Converters.encodeFinding(stored),
-                matchedValue = key?.let { AlertIdentity.Discriminator.of(f.evidence).matchedValue },
+                matchedValue = key?.let {
+                    AlertIdentity.groupValue(AlertIdentity.Discriminator.of(f.evidence), f.matchContext, p.recordId)
+                },
                 evidenceJson = if (opens) Converters.encodeFinding(full) else null,
                 row = if (f.triggered) rowColumns(f, row) else null,
             )
@@ -306,7 +324,8 @@ class FindingsRepository @Inject constructor(
     /** [current], read once. */
     suspend fun currentOnce(): CurrentFindingsSummary {
         val rows = findings.currentState()
-        return CurrentFindingsSummary(decode(rows.firstOrNull()?.scanId, rows), alerts.openCount())
+        val highest = alerts.openLevels().maxOfOrNull { levelToScore(it) }?.let(::riskOf)
+        return CurrentFindingsSummary(decode(rows.firstOrNull()?.scanId, rows), alerts.openCount(), highest)
     }
 
     /** OPEN alerts, most recent activity first, keyset-paged. */
@@ -414,22 +433,32 @@ class FindingsRepository @Inject constructor(
         if (recordId == null || ruleId.isEmpty()) emptyList() else alerts.openIdsFor(ruleId, recordId)
 
     /**
-     * Streams every alert with [status], most recent activity first, in keyset pages of
-     * [READ_BATCH] (the report, spec §5.4): never more than one page in memory.
+     * Streams the alert groups with [status] (the report, spec §5.4; review I5), grouped and ordered
+     * as the Dashboard lists them: each group's exact counts, and its [sampleSize] most recent alerts
+     * with their matched records and opening-scan sources. Groups are read in keyset pages of
+     * [GROUP_PAGE_SIZE]: at most one page of groups and one group's sample are in memory. Every alert
+     * is counted; only the listing is bounded.
      */
-    suspend fun forEachAlert(status: AlertStatus, block: suspend (AlertView, DecodedRecord?) -> Unit) {
-        var at = Long.MAX_VALUE
-        var id = Long.MAX_VALUE
+    suspend fun forEachAlertGroup(status: AlertStatus, sampleSize: Int, block: suspend (AlertReportGroup) -> Unit) {
+        var cursor = AlertGroupCursor(Long.MAX_VALUE, "", "")
         while (true) {
-            val page = alerts.byStatusAfter(status.name, at, id, READ_BATCH)
-            // Each alert's matched fact ("Matched record"): pinned by the alert, so it survives scans.
-            val records = chunkedIn(page.mapNotNull { it.recordId }.distinct()) { reader.records(it) }
-                .associateBy { it.factId }
-            for (a in page) block(AlertView.of(a), a.recordId?.let(records::get))
-            if (page.size < READ_BATCH) return
-            at = page.last().lastActivityAt
-            id = page.last().id
+            val page = alerts.reportGroupsAfter(
+                status.name, cursor.lastActivityAt, cursor.ruleId, cursor.matchedValue, GROUP_PAGE_SIZE,
+            )
+            for (g in page) block(AlertReportGroup(g, samples(status, g, sampleSize)))
+            if (page.size < GROUP_PAGE_SIZE) return
+            page.last().let { cursor = AlertGroupCursor(it.lastActivityAt, it.ruleId, it.matchedValue) }
         }
+    }
+
+    private suspend fun samples(status: AlertStatus, g: AlertReportGroupRow, size: Int): List<AlertSample> {
+        val rows = alerts.groupSample(status.name, g.ruleId, g.matchedValue, size)
+        // Each alert's matched fact ("Matched record"): pinned by the alert, so it survives scans.
+        val records = chunkedIn(rows.mapNotNull { it.recordId }.distinct()) { reader.records(it) }
+            .associateBy { it.factId }
+        val sources = chunkedIn(rows.map { it.openedScanId }.distinct()) { scans.sourcesOf(it) }
+            .associate { it.id to it.source }
+        return rows.map { a -> AlertSample(AlertView.of(a), a.recordId?.let(records::get), sources[a.openedScanId]) }
     }
 
     /** A History row's stored counts (shown and stored triggered findings), in SQL. */
@@ -510,9 +539,12 @@ internal class OpenAlertPagingSource(db: AppDatabase) :
 /** Keyset cursor of the open-alert groups: `(lastActivityAt DESC, ruleId, matchedValue)`. */
 data class AlertGroupCursor(val lastActivityAt: Long, val ruleId: String, val matchedValue: String)
 
-/** OPEN-alert groups in list order, each with its newest alert; observes `alert` (and the other paged tables). */
+/**
+ * OPEN-alert groups in list order, each with its newest alert; observes `alert` only, so a live DNS
+ * row never re-runs the grouping (review m6).
+ */
 internal class OpenAlertGroupPagingSource(db: AppDatabase) :
-    KeysetPagingSource<AlertGroupCursor, AlertGroup>(db, KeysetPagingSource.OBSERVED_TABLES) {
+    KeysetPagingSource<AlertGroupCursor, AlertGroup>(db, arrayOf("alert")) {
     private val dao = db.alertDao()
 
     override fun keyOf(item: AlertGroup) = AlertGroupCursor(item.lastActivityAt, item.ruleId, item.matchedValue)

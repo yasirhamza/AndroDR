@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.androdr.data.db.IndicatorDao
 import com.androdr.data.model.NotEvaluatedReason
+import com.androdr.data.model.RiskLevel
 import com.androdr.data.model.ScanWithFindings
 import com.androdr.data.model.TelemetryState
 import com.androdr.data.repo.CurrentFindingsSummary
@@ -231,6 +232,37 @@ class DashboardViewModel @Inject constructor(
                     .mapNotNull { it.message }
             }
 
+        /**
+         * The Dashboard's risk badge (review I2): at least the most severe OPEN alert, since alerts are
+         * current until a person closes them (spec §5.4). Null when there is neither a scan nor an alert.
+         */
+        fun displayRisk(scanRisk: RiskLevel?, highestOpenAlert: RiskLevel?): RiskLevel? =
+            listOfNotNull(scanRisk, highestOpenAlert).maxByOrNull { it.score }
+
+        /**
+         * Which guidance the Dashboard shows (review I2). With alerts open, a LOW or MEDIUM scan, or a
+         * scan less severe than the open alerts, never reads as "secure": the open-alerts guidance,
+         * naming their count and highest level, takes its place. Null: no guidance card.
+         */
+        @Suppress("LongParameterList")
+        fun guidanceFor(
+            scanRisk: RiskLevel?, hasCriticalAppRisks: Boolean, hasChains: Boolean,
+            openAlertCount: Int, highestOpenAlert: RiskLevel?,
+        ): Guidance? {
+            val alertsDominate = openAlertCount > 0 && (scanRisk == null ||
+                scanRisk.score <= RiskLevel.MEDIUM.score ||
+                (highestOpenAlert != null && highestOpenAlert.score > scanRisk.score))
+            return when {
+                alertsDominate -> Guidance.OPEN_ALERTS
+                scanRisk == RiskLevel.CRITICAL ->
+                    if (hasCriticalAppRisks) Guidance.CRITICAL else Guidance.CRITICAL_DEVICE
+                scanRisk == RiskLevel.HIGH -> if (hasChains) Guidance.CHAINS else Guidance.HIGH
+                scanRisk == RiskLevel.MEDIUM -> Guidance.MEDIUM
+                scanRisk == RiskLevel.LOW -> Guidance.LOW
+                else -> null
+            }
+        }
+
         /** The unsaved in-memory result wins over history: an older clean scan must not answer for it. */
         fun resolveLatest(persisted: ScanWithFindings?, unsaved: ScanWithFindings?): ScanWithFindings? =
             unsaved ?: persisted
@@ -268,6 +300,9 @@ class DashboardViewModel @Inject constructor(
         private const val PRE_SCAN_REFRESH_THROTTLE_MS = 60L * 60 * 1000 // 1 hour
     }
 }
+
+/** The Dashboard's guidance card ([DashboardViewModel.guidanceFor]). */
+enum class Guidance { CRITICAL, CRITICAL_DEVICE, CHAINS, HIGH, MEDIUM, LOW, OPEN_ALERTS }
 
 /** Which storage warning the Dashboard shows, if any. */
 enum class StorageBanner {

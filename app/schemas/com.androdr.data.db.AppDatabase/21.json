@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "database": {
     "version": 21,
-    "identityHash": "2f9788aaa8bb76edc68dce7bbd888a88",
+    "identityHash": "5ac1618e22100619d2cb926eebdde74b",
     "entities": [
       {
         "tableName": "ScanResult",
@@ -1377,6 +1377,16 @@
             ],
             "orders": [],
             "createSql": "CREATE INDEX IF NOT EXISTS `index_alert_status_ruleId_matchedValue_lastActivityAt` ON `${TABLE_NAME}` (`status`, `ruleId`, `matchedValue`, `lastActivityAt`)"
+          },
+          {
+            "name": "index_alert_status_level",
+            "unique": false,
+            "columnNames": [
+              "status",
+              "level"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_alert_status_level` ON `${TABLE_NAME}` (`status`, `level`)"
           }
         ],
         "foreignKeys": []
@@ -1385,7 +1395,7 @@
     "views": [],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '2f9788aaa8bb76edc68dce7bbd888a88')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '5ac1618e22100619d2cb926eebdde74b')"
     ]
   }
 }

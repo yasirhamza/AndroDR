@@ -70,8 +70,8 @@ interface ForensicTimelineEventDao {
     suspend fun signalIdsByScanId(scanResultId: Long): List<Long>
 
     @Query(
-        "SELECT id FROM forensic_timeline WHERE kind = 'signal' AND persistent = 0 AND scanResultId = -1 " +
-            "AND id <= :maxId"
+        "SELECT id FROM forensic_timeline WHERE kind = 'signal' AND persistent = 0 AND id <= :maxId " +
+            "AND (scanResultId = -1 $SCAN_GONE)"
     )
     suspend fun signalIdsScanLessThrough(maxId: Long): List<Long>
 
@@ -108,7 +108,7 @@ interface ForensicTimelineEventDao {
 
     @Query(
         "SELECT DISTINCT recordId FROM forensic_timeline WHERE persistent = 0 AND recordId IS NOT NULL " +
-            "AND scanResultId = -1 AND id <= :maxId"
+            "AND id <= :maxId AND (scanResultId = -1 $SCAN_GONE)"
     )
     suspend fun recordIdsScanLessThrough(maxId: Long): List<Long>
 
@@ -117,6 +117,13 @@ interface ForensicTimelineEventDao {
     suspend fun maxId(): Long
 }
 
-/** "Clear all"'s scan-less delete (index `(scanResultId, startTimestamp)`). */
+/**
+ * Rows of a scan that no longer exists (left over from before Phase D). Safe in "Clear all" because
+ * the rows of any scan begun after its first transaction have `id > maxId` (review m5).
+ */
+internal const val SCAN_GONE = "OR (scanResultId != -1 AND NOT EXISTS " +
+    "(SELECT 1 FROM ScanResult s WHERE s.id = forensic_timeline.scanResultId))"
+
+/** "Clear all"'s delete: scan-less rows and leftover rows of gone scans, up to `maxId`. */
 internal const val DELETE_SCAN_LESS_THROUGH =
-    "DELETE FROM forensic_timeline WHERE persistent = 0 AND scanResultId = -1 AND id <= :maxId"
+    "DELETE FROM forensic_timeline WHERE persistent = 0 AND id <= :maxId AND (scanResultId = -1 $SCAN_GONE)"

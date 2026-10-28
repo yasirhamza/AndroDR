@@ -244,11 +244,46 @@ class AlertCloseTest {
     }
 
     @Test
-    fun `the writer stores the matched value an alert groups by`() = runBlocking {
+    fun `the writer stores the group value an alert groups by`() = runBlocking {
         dnsScan(1L, 1L)
-        assertEquals(1L,
-            count("SELECT COUNT(*) FROM scan_finding WHERE alertKey IS NOT NULL AND matchedValue IS NOT NULL"))
-        assertEquals(1L, count("SELECT COUNT(*) FROM alert WHERE matchedValue IS NOT NULL"))
+        // The test DNS rule carries no evidence value, so the group is the record's app (review I4).
+        assertEquals(1L, count("SELECT COUNT(*) FROM scan_finding WHERE alertKey IS NOT NULL " +
+            "AND matchedValue = 'com.example'"))
+        assertEquals(1L, count("SELECT COUNT(*) FROM alert WHERE matchedValue = 'com.example'"))
+    }
+
+    /** A live DNS record from [pkg] on EVIL_DOMAIN (the test rule fires; its evidence has no value). */
+    private fun dnsFrom(pkg: String, time: Long) = com.androdr.sigma.StoreRecord(
+        mapOf("domain" to EVIL_DOMAIN, "app_uid" to 10_001, "source_package" to pkg, "is_blocked" to false,
+            "reason" to null, "timestamp" to time), "dns $pkg $time")
+
+    @Test
+    fun `value-less alerts of one rule group per app, and closing one app's group leaves the other open`() =
+        runBlocking {
+            val s = w.writer.begin(w.scan(1L), liveEvents = false)
+            s.append("dns_monitor", TelemetrySource.LIVE_SCAN, CAPTURED,
+                (1L..50L).map { dnsFrom("com.flood", it) } + listOf(dnsFrom("com.quiet", 99L)))
+            s.finish()
+            val g = groups().data
+            assertEquals("one app's flood cannot bury another app's alert", setOf("com.flood", "com.quiet"),
+                g.map { it.matchedValue }.toSet())
+            assertEquals(50, g.single { it.matchedValue == "com.flood" }.count)
+            val flood = g.single { it.matchedValue == "com.flood" }.ref
+            assertEquals(50, findings.closeGroups(listOf(flood), null, ConfirmResult.Confirmed))
+            assertEquals("the other app's alert stays open", 1, openIds().size)
+            assertEquals("com.quiet", w.f.db.alertDao().alertsByIds(openIds()).single().matchedValue)
+        }
+
+    @Test
+    fun `current findings carry the most severe open alert level`() = runBlocking {
+        alert(1L, "r", "a", 1L)
+        w.f.db.openHelper.writableDatabase.execSQL("UPDATE alert SET level = 'critical' WHERE id = 1")
+        alert(2L, "r", "b", 2L)
+        assertEquals(com.androdr.data.model.RiskLevel.CRITICAL, findings.currentOnce().highestOpenAlertLevel)
+        assertEquals(1, findings.close(listOf(1L), null, ConfirmResult.Confirmed))
+        assertEquals(com.androdr.data.model.RiskLevel.HIGH, findings.currentOnce().highestOpenAlertLevel)
+        assertEquals(1, findings.close(listOf(2L), null, ConfirmResult.Confirmed))
+        assertNull(findings.currentOnce().highestOpenAlertLevel)
     }
 
     // ── deletion (L2) ───────────────────────────────────────────────────────────
@@ -568,12 +603,39 @@ class AlertCloseTest {
             val alerts = text.substringAfter("  ALERTS").substringBefore("End of report")
             val open = alerts.substringAfter("Open alerts:").substringBefore("Closed alerts:")
             val closed = alerts.substringAfter("Closed alerts:")
-            assertEquals("one open alert, with its opening scan", 1, Regex("by scan 7,").findAll(open).count())
-            assertTrue(open, open.contains("($DNS_RULE)"))
+            assertEquals("one open alert, with its opening scan and its source", 1,
+                Regex("by scan 7 \\(live scan\\),").findAll(open).count())
+            assertTrue(open, open.contains("($DNS_RULE) · 1 alert(s)"))
+            assertTrue(closed, closed.contains("($DNS_RULE) · 2 alert(s)"))
+            assertTrue(closed, closed.contains("1 of 2 closed with the device credential"))
             assertTrue(closed, closed.contains("note: checked it · closed with device credential: yes"))
             assertTrue(closed, closed.contains("note: (none) · closed with device credential: no"))
             assertFalse("alert $c is open, not closed", closed.contains("by scan"))
         }
+
+    /**
+     * Review I5: the report groups alerts as the Dashboard does, lists at most the display bound per
+     * group with an exact "…and K more", names a deleted opening scan, and words a migrated automatic
+     * closure as automatic, not as a person closing without a lock.
+     */
+    @Test
+    fun `the report groups alerts, bounds each group's listing and counts every alert`() = runBlocking {
+        val total = com.androdr.reporting.ALERT_SAMPLE_DISPLAY_LIMIT + 5
+        for (i in 1L..total) alert(i, "r-group", "flood.example", 100L + i)
+        alert(500L, "r-other", "other.example", 50L)
+        w.f.db.openHelper.writableDatabase.execSQL("INSERT INTO alert (id, alertKey, ruleId, status, openedAt, " +
+            "openedScanId, lastActivityAt, closedAt, closedReason, closedWithCredential, level, recordId, " +
+            "evidenceJson, matchedValue) VALUES (600, X'00000000000000000000000000000600', 'r-old', 'CLOSED', 1, " +
+            "1, 1, 2, '${com.androdr.data.db.FindingsMigration.MIGRATED_CLOSED_REASON}', 0, 'high', NULL, '{}', 'v')")
+        val text = report(dnsScan(9L, 1L, domain = "ok.example"))
+        val alerts = text.substringAfter("  ALERTS").substringBefore("End of report")
+        val group = alerts.substringAfter("(r-group) · $total alert(s)").substringBefore("(r-other)")
+        assertEquals(com.androdr.reporting.ALERT_SAMPLE_DISPLAY_LIMIT, Regex("- opened ").findAll(group).count())
+        assertTrue(group, group.contains("…and 5 more alert(s) of this group"))
+        assertTrue("scan 1 does not exist", group.contains("by scan 1 (scan deleted)"))
+        assertTrue(alerts, alerts.contains("${total + 1} open alert(s) in total"))
+        assertTrue(alerts, alerts.contains("closed automatically") && alerts.contains("(migrated, older than 30 days)"))
+    }
 
     private companion object {
         const val BIG = 50_000

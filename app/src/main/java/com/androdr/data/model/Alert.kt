@@ -12,8 +12,10 @@ import androidx.room.PrimaryKey
  *
  * @property evidenceJson the authoritative evidence: the opening finding, with its `matchContext`.
  * @property lastActivityAt when a finding last attached; re-surfaces the alert in the list.
- * @property matchedValue the evidence's matched value (the alert-key discriminator's value): the
- *   open-alerts list groups by rule and this, so a flood of one indicator cannot bury another.
+ * @property matchedValue the alert's group value: the evidence's matched value (the alert-key
+ *   discriminator's value), or, for evidence with no value, the matched record's package, else the
+ *   record ([com.androdr.data.repo.AlertIdentity.groupValue]). The open-alerts list groups by rule and
+ *   this, so a flood of one indicator, or of one app, cannot bury another.
  */
 @Entity(
     tableName = "alert",
@@ -23,6 +25,7 @@ import androidx.room.PrimaryKey
         Index("recordId"),
         Index(value = ["status", "lastActivityAt"]),
         Index(value = ["status", "ruleId", "matchedValue", "lastActivityAt"]),
+        Index(value = ["status", "level"]),
     ],
 )
 @Suppress("LongParameterList")

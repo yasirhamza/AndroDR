@@ -113,13 +113,16 @@ class FindingQueryPlanTest {
         assertTrue("grouping needs no sort", plan(OPEN_ALERT_GROUPS_AFTER).none { "GROUP BY" in it && "TEMP" in it })
         // SQLite may pick either alert index that leads with the equality columns; both are a SEARCH.
         assertIndexed("group close", CLOSE_ALERT_GROUP, listOf("SEARCH alert USING INDEX index_alert_"))
-        assertIndexed("alerts by status", ALERTS_BY_STATUS_AFTER, listOf("index_alert_status_lastActivityAt"))
+        assertIndexed("report alert groups", ALERT_REPORT_GROUPS_AFTER, listOf(groupIndex), groupOrderSort = true)
+        assertIndexed("a group's sample", ALERT_GROUP_SAMPLE, listOf(groupIndex))
+        assertIndexed("open alert levels", OPEN_ALERT_LEVELS, listOf("index_alert_status_level"))
         assertIndexed("audit groups of a scan", AUDIT_GROUPS_FOR_SCAN, listOf("index_scan_finding_scanId_triggered"),
             groupBySort = true, groupOrderSort = true)
         assertIndexed("audit JSON rows of a scan", AUDIT_JSON_ROWS_FOR_SCAN,
             listOf("index_scan_finding_scanId_triggered"))
-        assertIndexed("clear-all scan-less rows", DELETE_SCAN_LESS_THROUGH,
-            listOf("index_forensic_timeline_scanResultId_startTimestamp"))
+        // "Clear all" removes every scan-less or orphaned row up to clearMaxRowId: a rowid range read,
+        // never a scan of the table beyond it.
+        assertIndexed("clear-all scan-less rows", DELETE_SCAN_LESS_THROUGH, listOf("INTEGER PRIMARY KEY (rowid<?)"))
     }
 
     @Test

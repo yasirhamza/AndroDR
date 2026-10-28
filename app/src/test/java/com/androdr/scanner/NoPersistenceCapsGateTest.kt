@@ -30,8 +30,10 @@ class NoPersistenceCapsGateTest {
      *   counts stay exact and the import card says how many could not be saved.
      * - `DIFF_DISPLAY_LIMIT` (review C1): example findings per new or resolved rule in a scan diff; the
      *   diff's counts stay exact and every finding is listed in its own scan.
+     * - `ALERT_SAMPLE_DISPLAY_LIMIT` (D3 review I5): alerts listed per report group; every alert is
+     *   counted in its group's header and "…and K more" line.
      */
-    private val allowedNames = setOf("UNSAVED_DISPLAY_LIMIT", "DIFF_DISPLAY_LIMIT")
+    private val allowedNames = setOf("UNSAVED_DISPLAY_LIMIT", "DIFF_DISPLAY_LIMIT", "ALERT_SAMPLE_DISPLAY_LIMIT")
 
     private fun root(): File = listOf(File("src/main/java/com/androdr"), File("app/src/main/java/com/androdr"))
         .first { it.isDirectory }
@@ -76,7 +78,7 @@ class NoPersistenceCapsGateTest {
     fun `the allow-list is the permanent four plus the two display bounds`() {
         assertEquals(setOf("ScanResultDao.getLatestTwo", "IndicatorDao.lookup", "DnsEventDao.getRecentEvents",
             "DnsEventDao.getRecentSnapshot"), allowedFunctions)
-        assertEquals(setOf("UNSAVED_DISPLAY_LIMIT", "DIFF_DISPLAY_LIMIT"), allowedNames)
+        assertEquals(setOf("UNSAVED_DISPLAY_LIMIT", "DIFF_DISPLAY_LIMIT", "ALERT_SAMPLE_DISPLAY_LIMIT"), allowedNames)
         assertEquals(listOf("_DISPLAY_LIMIT"),
             violations("F.kt", "object X { const val OTHER_DISPLAY_LIMIT = 3 }").map {
                 it.substringAfter(": ").substringBefore(" (")

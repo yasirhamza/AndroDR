@@ -191,9 +191,12 @@ class TimelineRowDeleterTest {
         f.scan(7L, ScanState.COMPLETE)
         val dao = f.db.forensicTimelineEventDao()
         dao.insert(row(scan = 7L))
+        dao.insert(row(scan = 404L).copy(description = "orphan of a gone scan")) // review m5: removed too
         val old = dao.insert(row(scan = -1L).copy(description = "old live"))
         dao.insert(row(scan = -1L).copy(description = "later live"))
         f.db.withTransaction { deleter.scanLessThrough(old) }
+        assertEquals("the gone scan's leftover row is removed", 0L,
+            f.count("SELECT COUNT(*) FROM forensic_timeline WHERE scanResultId = 404"))
         assertEquals(listOf(7L to "d", -1L to "later live"),
             dao.getAllForExport().map { it.scanResultId to it.description })
     }

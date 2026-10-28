@@ -100,6 +100,7 @@ fun HistoryScreen(
     val showDeleteConfirm by viewModel.showDeleteConfirm.collectAsStateWithLifecycle()
     val showClearAllConfirm by viewModel.showClearAllConfirm.collectAsStateWithLifecycle()
     val deleteRefused by viewModel.deleteRefused.collectAsStateWithLifecycle()
+    val deleteFailed by viewModel.deleteFailed.collectAsStateWithLifecycle()
     // Delete and "Clear all" are disabled while a scan or import runs (they would be refused).
     val deleteEnabled by viewModel.deleteEnabled.collectAsStateWithLifecycle()
 
@@ -239,6 +240,20 @@ fun HistoryScreen(
             text = { Text(stringResource(R.string.history_delete_refused_body)) },
             confirmButton = {
                 TextButton(onClick = { viewModel.dismissDeleteRefused() }) {
+                    Text(stringResource(android.R.string.ok))
+                }
+            }
+        )
+    }
+
+    // A delete that threw (e.g. a full disk): say so honestly instead of crashing (review I1).
+    if (deleteFailed) {
+        AlertDialog(
+            onDismissRequest = { viewModel.dismissDeleteFailed() },
+            title = { Text(stringResource(R.string.history_delete_failed_title)) },
+            text = { Text(stringResource(R.string.history_delete_failed_body)) },
+            confirmButton = {
+                TextButton(onClick = { viewModel.dismissDeleteFailed() }) {
                     Text(stringResource(android.R.string.ok))
                 }
             }

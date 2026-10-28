@@ -120,6 +120,33 @@ class HistoryViewModelTest {
         assertEquals(null, vm.selectedScan.value)
     }
 
+    /** Review I1: a delete that throws (a full disk) is reported, never a crash, and changes no selection. */
+    @Test
+    fun `a delete or clear-all that throws shows the failure instead of crashing`() = runTest {
+        val repository = mockk<ScanRepository> {
+            every { pagedScans() } returns flowOf(androidx.paging.PagingData.from(listOf(scan)))
+            every { hasScans } returns flowOf(true)
+            coEvery { deleteScan(any()) } throws android.database.sqlite.SQLiteFullException("database or disk is full")
+            coEvery { deleteAllScans() } throws java.io.IOException("No space left on device")
+        }
+        val vm = vm(repository)
+        vm.selectScan(scan)
+        vm.requestDeleteScan(1L)
+        vm.confirmDeleteScan()
+        assertTrue(vm.deleteFailed.value)
+        assertFalse(vm.deleteRefused.value)
+        assertEquals(scan, vm.selectedScan.value)
+        vm.dismissDeleteFailed()
+        assertFalse(vm.deleteFailed.value)
+        vm.requestClearAll()
+        vm.confirmClearAll()
+        assertTrue(vm.deleteFailed.value)
+        assertEquals(scan, vm.selectedScan.value)
+        val src = java.io.File("src/main/java/com/androdr/ui/history/HistoryScreen.kt").readText()
+        assertTrue("the screen renders the failure", src.contains("viewModel.deleteFailed") &&
+            src.contains("R.string.history_delete_failed_body"))
+    }
+
     @Test
     fun `a row counts shown stored findings and says how many could not be saved`() = runTest {
         val findings = mockk<FindingsRepository> { coEvery { rowCounts(1L) } returns StoredFindingCounts(3, 4) }

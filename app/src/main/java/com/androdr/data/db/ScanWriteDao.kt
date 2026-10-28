@@ -33,6 +33,10 @@ interface ScanWriteDao {
     @Query("SELECT COUNT(*) FROM ScanResult WHERE state = 'COMPLETE'")
     suspend fun completeCount(): Int
 
+    /** How many scans are IN_PROGRESS (killed writers "Clear all" removes with the rest). */
+    @Query("SELECT COUNT(*) FROM ScanResult WHERE state = 'IN_PROGRESS'")
+    suspend fun inProgressCount(): Int
+
     @Query("SELECT state FROM ScanResult WHERE id = :id")
     suspend fun stateOf(id: Long): ScanState?
 

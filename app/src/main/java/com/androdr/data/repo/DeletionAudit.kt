@@ -38,12 +38,16 @@ internal class DeletionAudit(private val dao: ScanFindingDao) {
         return row(now, "$what of ${format(scan.timestamp)} deleted", details, scan.source)
     }
 
-    /** The single audit row for "Clear all" over every COMPLETE scan ([scans] of them). */
-    suspend fun forAll(scans: Int, now: Long): ForensicTimelineEvent {
+    /**
+     * The single audit row for "Clear all" over every COMPLETE scan ([scans] of them), noting the
+     * [interrupted] scans (killed writers) it removes too (review m11).
+     */
+    suspend fun forAll(scans: Int, interrupted: Int, now: Long): ForensicTimelineEvent {
         val details = details(dao.auditGroupsAll(MAX_ENTRIES), dao.triggeredTotalAll(), "deleted by Clear all") {
                 after, size -> dao.auditJsonRowsAll(after, size)
         }
-        return row(now, "All scan history cleared ($scans scan(s))", details, TelemetrySource.LIVE_SCAN)
+        val extra = if (interrupted > 0) " and $interrupted interrupted scan(s)" else ""
+        return row(now, "All scan history cleared ($scans scan(s)$extra)", details, TelemetrySource.LIVE_SCAN)
     }
 
     private fun row(now: Long, description: String, details: String, source: TelemetrySource) = ForensicTimelineEvent(

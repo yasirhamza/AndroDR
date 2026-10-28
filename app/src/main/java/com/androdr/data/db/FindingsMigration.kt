@@ -152,7 +152,7 @@ class FindingsMigration(private val clock: () -> Long = System::currentTimeMilli
             null
         }
         return Migrated(ruleId, triggered, f.str("level").orEmpty(), category, service, ordinal, recordId, kind,
-            alertKey, d.matchedValue)
+            alertKey, AlertIdentity.groupValue(d, context, recordId))
     }
 
     /** Whether fact [id] is an event (null when the fact no longer exists). */
@@ -250,6 +250,7 @@ class FindingsMigration(private val clock: () -> Long = System::currentTimeMilli
             "CREATE INDEX IF NOT EXISTS `index_alert_status_lastActivityAt` ON `alert` (`status`, `lastActivityAt`)",
             "CREATE INDEX IF NOT EXISTS `index_alert_status_ruleId_matchedValue_lastActivityAt` " +
                 "ON `alert` (`status`, `ruleId`, `matchedValue`, `lastActivityAt`)",
+            "CREATE INDEX IF NOT EXISTS `index_alert_status_level` ON `alert` (`status`, `level`)",
             "CREATE TABLE IF NOT EXISTS `ScanResult_new` (`id` INTEGER NOT NULL, `timestamp` INTEGER NOT NULL, " +
                 "`bugReportFindings` TEXT NOT NULL, `riskySideloadCount` INTEGER NOT NULL, " +
                 "`knownMalwareCount` INTEGER NOT NULL, `scannerErrors` TEXT NOT NULL, `source` TEXT NOT NULL, " +

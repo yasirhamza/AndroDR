@@ -81,9 +81,9 @@ class DashboardAlertsViewModel @Inject constructor(
      */
     @Suppress("TooGenericExceptionCaught") // a failed close is reported as nothing closed, never a crash
     fun close(note: String?, confirm: suspend () -> ConfirmResult) {
+        if (_closing.value) return // the running close finishes first; the dialog stays (review m3)
         val groups = _pendingClose.value ?: return
         _pendingClose.value = null
-        if (_closing.value) return
         _closing.value = true
         viewModelScope.launch {
             try {
@@ -92,14 +92,16 @@ class DashboardAlertsViewModel @Inject constructor(
                 _outcome.value = when {
                     closed > 0 && result == ConfirmResult.NoSecureLock -> CloseOutcome.ClosedWithoutLock(closed)
                     closed > 0 -> CloseOutcome.Closed(closed)
-                    else -> CloseOutcome.NothingClosed
+                    result == ConfirmResult.Cancelled ||
+                        (result == ConfirmResult.NoSecureLock) -> CloseOutcome.NotConfirmed
+                    else -> CloseOutcome.NothingToClose
                 }
                 if (closed > 0) _selected.value = _selected.value - groups.toSet()
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
                 Log.w(TAG, "closing alerts failed", e)
-                _outcome.value = CloseOutcome.NothingClosed
+                _outcome.value = CloseOutcome.Failed
             } finally {
                 _closing.value = false
             }
@@ -119,6 +121,12 @@ sealed interface CloseOutcome {
     /** Closed with no credential because the device has no secure lock screen (verified). */
     data class ClosedWithoutLock(val count: Int) : CloseOutcome
 
-    /** Nothing closed: the credential was not confirmed (or the close failed). */
-    data object NothingClosed : CloseOutcome
+    /** Nothing closed: the credential was not confirmed (or "no lock" on a device that has one). */
+    data object NotConfirmed : CloseOutcome
+
+    /** Confirmed, but nothing was left open to close (closed elsewhere meanwhile). */
+    data object NothingToClose : CloseOutcome
+
+    /** The close threw; nothing was closed. */
+    data object Failed : CloseOutcome
 }

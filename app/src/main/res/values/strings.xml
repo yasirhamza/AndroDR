@@ -319,8 +319,8 @@
     <string name="alerts_close_selected" tools:ignore="PluralsCandidate">Close selected (%1$d)</string>
     <string name="alerts_close_dialog_title">Close alerts</string>
     <plurals name="alerts_close_dialog_body">
-        <item quantity="one">Close %1$d alert? It leaves the open list; it and its evidence stay in reports and the Timeline. You will be asked for your screen lock.</item>
-        <item quantity="other">Close %1$d alerts? They leave the open list; they and their evidence stay in reports and the Timeline. You will be asked for your screen lock.</item>
+        <item quantity="one">Close %1$d alert? It leaves the open list; it and its evidence stay in reports, and the closure is recorded in the Timeline. You will be asked for your screen lock.</item>
+        <item quantity="other">Close %1$d alerts? They leave the open list; they and their evidence stay in reports, and the closure is recorded in the Timeline. You will be asked for your screen lock.</item>
     </plurals>
     <string name="alerts_close_note">Note (optional)</string>
     <string name="alerts_close_confirm">Close</string>
@@ -330,9 +330,20 @@
     <string name="alerts_close_cancelled">Nothing was closed: the screen lock was not confirmed.</string>
     <string name="alerts_close_no_lock">Closed without a screen lock. Set a screen lock so closing alerts needs it.</string>
     <string name="alerts_close_done" tools:ignore="PluralsCandidate">Closed %1$d alert(s).</string>
-    <string name="dashboard_no_live_scan_alerts">No live scan of this device yet. The open alerts below come from imports; run a scan to check this device.</string>
+    <string name="dashboard_no_live_scan_alerts">No current scan of this device. The alerts below stay open until you close them; run a scan to check this device now.</string>
+    <plurals name="guidance_open_alerts">
+        <item quantity="one">%1$d alert is still open (highest: %2$s). Review it below before treating this phone as secure.</item>
+        <item quantity="other">%1$d alerts are still open (highest: %2$s). Review them below before treating this phone as secure.</item>
+    </plurals>
+    <plurals name="dashboard_open_alerts_line">
+        <item quantity="one">%1$d open alert, highest %2$s</item>
+        <item quantity="other">%1$d open alerts, highest %2$s</item>
+    </plurals>
+    <string name="alerts_close_nothing_to_close">Nothing was closed: these alerts were already closed.</string>
+    <string name="alerts_close_failed">Nothing was closed: the alerts could not be updated. Try again.</string>
+    <string name="history_delete_failed_title">The delete did not finish</string>
+    <string name="history_delete_failed_body">Deleting could not complete, possibly because storage is full. If the scan has gone from the list, AndroDR finishes deleting it the next time it starts; otherwise nothing was deleted. Free some space and try again.</string>
     <string name="timeline_close_alert">Close alert</string>
-    <string name="guidance_low_open_alerts">The latest scan found nothing serious, but alerts are still open. Review them below.</string>
     <string name="history_delete_title">Delete scan</string>
     <string name="history_delete_body">Delete this scan, its telemetry and its timeline events? Alerts and their evidence are kept, and an audit entry listing the deleted findings is added to the Timeline.</string>
     <string name="history_delete_confirm">Delete</string>

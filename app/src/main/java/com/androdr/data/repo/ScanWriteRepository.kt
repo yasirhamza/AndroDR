@@ -132,7 +132,7 @@ class ScanWriteRepository @Inject constructor(
      */
     suspend fun markAllForAuditedDelete(now: Long = System.currentTimeMillis()): ClearSnapshot = db.withTransaction {
         val complete = writes.completeCount()
-        timeline.insert(DeletionAudit(db.scanFindingDao()).forAll(complete, now))
+        timeline.insert(DeletionAudit(db.scanFindingDao()).forAll(complete, writes.inProgressCount(), now))
         writes.markAllDeleting()
         ClearSnapshot(writes.sweepTargets().map { it.id }, timeline.maxId())
     }

@@ -4,6 +4,17 @@ import androidx.room.Dao
 import androidx.room.Query
 import com.androdr.data.model.Alert
 
+/** One alert group as the report prints it: counts, first opening, latest activity and closing. */
+data class AlertReportGroupRow(
+    val ruleId: String,
+    val matchedValue: String,
+    val count: Int,
+    val lastActivityAt: Long,
+    val firstOpenedAt: Long,
+    val lastClosedAt: Long?,
+    val withCredential: Int,
+)
+
 /** An alert's key and id. Plain: holds a `ByteArray`. */
 class AlertKeyId(val key: ByteArray, val id: Long)
 
@@ -43,6 +54,20 @@ interface AlertDao {
 
     @Query("$OPEN_ALERT_COUNT")
     suspend fun openCount(): Int
+
+    /** The distinct levels of OPEN alerts (the Dashboard's highest open level; index `(status, level)`). */
+    @Query("$OPEN_ALERT_LEVELS")
+    suspend fun openLevels(): List<String>
+
+    /** Keyset page of alert groups with [status] for the report ([ALERT_REPORT_GROUPS_AFTER]). */
+    @Query("$ALERT_REPORT_GROUPS_AFTER")
+    suspend fun reportGroupsAfter(
+        status: String, at: Long, ruleId: String, value: String, size: Int,
+    ): List<AlertReportGroupRow>
+
+    /** Up to [size] alerts of one group, most recent activity first (the report's sample). */
+    @Query("$ALERT_GROUP_SAMPLE")
+    suspend fun groupSample(status: String, ruleId: String, value: String, size: Int): List<Alert>
 
     @Query("$OPEN_ALERTS_AFTER")
     suspend fun openAfter(at: Long, id: Long, size: Int): List<Alert>
@@ -98,10 +123,6 @@ interface AlertDao {
     suspend fun closeGroup(
         ruleId: String, value: String, maxId: Long, at: Long, reason: String?, withCredential: Boolean,
     ): Int
-
-    /** Keyset page of alerts with [status], most recent activity first (the report streams it). */
-    @Query("$ALERTS_BY_STATUS_AFTER")
-    suspend fun byStatusAfter(status: String, at: Long, id: Long, size: Int): List<Alert>
 
     /** The OPEN alerts of one finding row: its rule on its fact (a Timeline row's Close). */
     @Query("SELECT id FROM alert WHERE recordId = :recordId AND ruleId = :ruleId AND status = 'OPEN'")
@@ -159,11 +180,26 @@ internal const val OPEN_ALERT_GROUPS_AFTER = "SELECT ruleId, matchedValue, COUNT
     "(ruleId > :ruleId OR (ruleId = :ruleId AND matchedValue > :value))) " +
     "ORDER BY lastActivityAt DESC, ruleId ASC, matchedValue ASC LIMIT :size"
 
-/** Keyset page of alerts with one status, `(lastActivityAt, id)` descending (index `(status, lastActivityAt)`). */
-internal const val ALERTS_BY_STATUS_AFTER = "SELECT * FROM alert WHERE status = :status AND (lastActivityAt < :at " +
-    "OR (lastActivityAt = :at AND id < :id)) ORDER BY lastActivityAt DESC, id DESC LIMIT :size"
-
 /** Closes one group's OPEN alerts up to `maxId` (index `(status, ruleId, matchedValue, …)`). */
 internal const val CLOSE_ALERT_GROUP = "UPDATE alert SET status = 'CLOSED', closedAt = :at, closedReason = :reason, " +
     "closedWithCredential = :withCredential WHERE status = 'OPEN' AND ruleId = :ruleId " +
     "AND matchedValue = :value AND id <= :maxId"
+
+/** The levels of OPEN alerts (index `(status, level)`: a covering search, no row reads). */
+internal const val OPEN_ALERT_LEVELS = "SELECT DISTINCT level FROM alert WHERE status = 'OPEN'"
+
+/**
+ * The report's alert groups with one status, in the Dashboard's order and grouping (spec §5.4, review
+ * I5): `(lastActivityAt DESC, ruleId, matchedValue)`, keyset by HAVING. Ordering the groups sorts
+ * groups only.
+ */
+internal const val ALERT_REPORT_GROUPS_AFTER = "SELECT ruleId, matchedValue, COUNT(*) AS count, " +
+    "MAX(lastActivityAt) AS lastActivityAt, MIN(openedAt) AS firstOpenedAt, MAX(closedAt) AS lastClosedAt, " +
+    "COALESCE(SUM(closedWithCredential), 0) AS withCredential FROM alert WHERE status = :status " +
+    "GROUP BY ruleId, matchedValue HAVING MAX(lastActivityAt) < :at OR (MAX(lastActivityAt) = :at AND " +
+    "(ruleId > :ruleId OR (ruleId = :ruleId AND matchedValue > :value))) " +
+    "ORDER BY lastActivityAt DESC, ruleId ASC, matchedValue ASC LIMIT :size"
+
+/** A group's most recent alerts (index `(status, ruleId, matchedValue, lastActivityAt)`, no sort). */
+internal const val ALERT_GROUP_SAMPLE = "SELECT * FROM alert WHERE status = :status AND ruleId = :ruleId " +
+    "AND matchedValue = :value ORDER BY lastActivityAt DESC, id DESC LIMIT :size"

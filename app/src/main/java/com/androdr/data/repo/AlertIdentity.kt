@@ -32,6 +32,21 @@ object AlertIdentity {
     internal fun noFactKey(ruleId: String, d: Discriminator, eventTime: Long?, scanId: Long, ordinal: Int): ByteArray =
         HashKeys.h128("$ruleId|nofact|${d.type}|${d.matchedValue}|${eventTime ?: "$scanId|$ordinal"}")
 
+    /**
+     * The group an alert is listed under with its rule (spec §5.4: "grouped by rule and matched
+     * value, so a flood of one indicator cannot bury another"): the evidence's matched value; for
+     * evidence with no value ([Evidence.None]), the matched record's package (`package_name`, else
+     * `source_package`), so one app's flood cannot bury another app's alerts; else the record itself.
+     * Never part of the alert key.
+     */
+    fun groupValue(d: Discriminator, matchContext: Map<String, String>, recordId: Long?): String =
+        d.matchedValue.ifEmpty {
+            matchContext["package_name"]?.takeIf { it.isNotEmpty() }
+                ?: matchContext["source_package"]?.takeIf { it.isNotEmpty() }
+                ?: recordId?.let { "record #$it" }
+                ?: ""
+        }
+
     /** Evidence type (its serial name) and matched value. */
     data class Discriminator(val type: String, val matchedValue: String) {
         companion object {
