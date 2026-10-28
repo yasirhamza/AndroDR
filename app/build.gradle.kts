@@ -322,6 +322,12 @@ dependencies {
             version { strictly(libs.versions.bouncycastle.get()) }
             because("GHSA-574f-3g2m-x479, GHSA-9pwp-9qqc-pr26 (critical), GHSA-qp49-qgx5-5m26 (high): fixed in 1.85")
         }
+        // Robolectric 4.14.1 brings guava 33.3.1-jre (test classpath only; the APK ships only
+        // listenablefuture:1.0). Gate: GuavaTestClasspathTest.
+        testImplementation(libs.guava) {
+            version { strictly(libs.versions.guava.get()) }
+            because("GHSA-xxph-c9ww-hj94 (high): fixed in 33.7.2")
+        }
     }
 
     // Instrumented tests
