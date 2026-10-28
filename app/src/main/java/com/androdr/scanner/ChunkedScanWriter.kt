@@ -1,6 +1,7 @@
 package com.androdr.scanner
 
 import android.database.sqlite.SQLiteFullException
+import android.util.Log
 import androidx.collection.MutableLongSet
 import com.androdr.data.model.ScanResult
 import com.androdr.data.model.ScanWithFindings
@@ -225,11 +226,14 @@ class ChunkedScanWriter @Inject constructor(
             val spaceToFree = if (reserveBreached || unsaved != null) preflight.shortfall() else 0L
             // Nothing is buffered: every finding that could be stored already is, so a failed finish
             // never loses stored findings to a buffered write (ruling R38).
+            val startNs = System.nanoTime()
             val finished = try {
                 repo.finish(scan, counter.totals(), hooks, state)
             } catch (e: SQLiteFullException) {
                 return inMemoryResult(spaceToFree, e)
             }
+            // Spec §5.2 budget: finish ≤ 2 s on a typical 100k-finding import (verified on device).
+            Log.i(TAG, "finish scan ${scan.id}: ${(System.nanoTime() - startNs) / NANOS_PER_MS} ms")
             val held = if (isImport) heldFindings() else heldFindings() + finished.correlationFindings
             return WriteResult(newFacts, alreadyStored, duplicatesDropped, state, finished.scan, true, spaceToFree,
                 duplicatesByService.toMap(), held, UnsavedSummary.of(unsaved))
@@ -343,3 +347,6 @@ internal class EvaluateOnlyDedup(private val capacity: Int = MAX_KEYS) {
         const val MAX_KEYS = 200_000
     }
 }
+
+private const val TAG = "ChunkedScanWriter"
+private const val NANOS_PER_MS = 1_000_000L
