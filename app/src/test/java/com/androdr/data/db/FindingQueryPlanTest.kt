@@ -125,6 +125,29 @@ class FindingQueryPlanTest {
         assertIndexed("clear-all scan-less rows", DELETE_SCAN_LESS_THROUGH, listOf("INTEGER PRIMARY KEY (rowid<?)"))
     }
 
+    /**
+     * D4 (spec §5.1 Retention, §5.6): each retention batch reads one scan's observations through index
+     * `(scanId, eventTime)` — old live events by range, snapshots by `eventTime IS NULL` — and deletes
+     * them by rowid; the prune finds its rows through an index and tests the surviving-signal exemption
+     * through `signal_member (kind, refId)`. None reads a whole guarded table or sorts.
+     */
+    @Test
+    fun `retention batches and the prune use indices`() {
+        val obsIndex = "index_scan_record_scanId_eventTime"
+        assertIndexed("retention event batch", RETENTION_EVENT_BATCH, listOf("$obsIndex (scanId=? AND eventTime<?)"))
+        assertIndexed("retention snapshot batch", RETENTION_SNAPSHOT_BATCH,
+            listOf("$obsIndex (scanId=? AND eventTime=?)"))
+        assertIndexed("retention delete", DELETE_OBSERVATION_ROWS, listOf("INTEGER PRIMARY KEY (rowid=?)"))
+        val memberIndex = "index_signal_member_kind_refId"
+        assertIndexed("prune delete", PRUNE_DELETE, listOf(memberIndex))
+        assertIndexed("prune pins", PRUNE_RECORD_IDS, listOf(memberIndex))
+        assertIndexed("prune signals", PRUNE_SIGNAL_IDS, listOf(memberIndex))
+        for (sql in listOf(PRUNE_DELETE, PRUNE_RECORD_IDS, PRUNE_SIGNAL_IDS)) {
+            assertTrue("the prune finds its rows through an index:\n${plan(sql)}",
+                plan(sql).any { it.contains("SEARCH forensic_timeline USING INDEX") })
+        }
+    }
+
     @Test
     fun `the gate flags a whole-table read and a temp b-tree`() {
         assertTrue(fullScanOfGuarded("SCAN sf"))

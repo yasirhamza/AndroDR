@@ -35,6 +35,9 @@ class CompleteVisibilityGateTest {
         "TelemetryFactDao.idsBySourceKey", "RecordBodyDao.deleteUnreferenced",
         "ScanObservationDao.factIdsAfter", "ScanObservationDao.deleteForScan", "ScanObservationDao.deleteThrough",
         "ScanObservationDao.factIdsForOrdinals",
+        // Retention (spec §5.1): one COMPLETE live scan's old observations, read and deleted per batch.
+        "ScanObservationDao.retentionEventBatch", "ScanObservationDao.retentionSnapshotBatch",
+        "ScanObservationDao.deleteRows",
         "ForensicTimelineEventDao.deleteOlderThan", "ForensicTimelineEventDao.deleteByIds",
         "ForensicTimelineEventDao.deleteByScanId", "ForensicTimelineEventDao.deleteScanLessThrough",
         // The pins a delete releases (TimelineRowDeleter), read just before the paired delete.

@@ -10,6 +10,7 @@ import com.androdr.data.model.ScanResult
 import com.androdr.data.model.TelemetrySource
 import com.androdr.data.model.TelemetryState
 import com.androdr.data.store.AtomReader
+import com.androdr.data.store.TelemetryRetention
 import com.androdr.data.store.StoreFixture.Companion.CAPTURED
 import com.androdr.data.store.StoreFixture.Companion.app
 import com.androdr.data.store.StoreFixture.Companion.dns
@@ -63,6 +64,9 @@ class FindingLifecycleTest {
     private val findings get() = w.f.findings
     private val live = TelemetrySource.LIVE_SCAN
     private val il = TelemetrySource.INTRUSION_LOG_IMPORT
+
+    /** `dns()`'s default event time. */
+    private val dnsTime = 1_729_600_000_000L
 
     private suspend fun liveScan(
         id: Long, apps: List<StoreRecord> = emptyList(), dnsRecords: List<StoreRecord> = emptyList(),
@@ -257,9 +261,14 @@ class FindingLifecycleTest {
             liveScan(1L, dnsRecords = listOf(dns(EVIL_DOMAIN, key = "dns:5")), apps = listOf(app("com.ok")))
             val alert = findings.alerts(alertIds()).single()
             val factId = checkNotNull(alert.recordId)
-            // A simulated 31-day live-event retention: the event's observations go (D4 adds the pass).
-            w.f.db.openHelper.writableDatabase.execSQL("DELETE FROM scan_record WHERE recordId = $factId")
-            w.f.store.gcUnobservedUnpinned()
+            // A real retention pass 31 days after the query: the event's observation goes (D4).
+            val retention = TelemetryRetention(w.f.db, w.f.store, w.lock, w.f.dirty, SettingsRepository(w.f.dataStore))
+            assertTrue(retention.run(now = dnsTime + 31L * 24 * 60 * 60 * 1000).completed)
+            assertEquals("retention removed the event's observation", 0L,
+                w.count("SELECT COUNT(*) FROM scan_record WHERE recordId = $factId"))
+            assertEquals(1L, w.count("SELECT COUNT(*) FROM telemetry_record f WHERE f.id = $factId " +
+                "AND ${VisibleFact.SQL}"))
+            assertEquals(EVIL_DOMAIN, w.f.reader.records(listOf(factId)).single().fields?.get("domain"))
             w.repo.markForDelete(1L)
             w.repo.completeDelete(1L)
             w.f.store.gcUnobservedUnpinned()

@@ -4,6 +4,7 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import com.androdr.ui.theme.ThemeMode
 import kotlinx.coroutines.flow.Flow
@@ -103,6 +104,18 @@ class SettingsRepository @Inject constructor(
         return false
     }
 
+    /**
+     * How many of the newest live scans keep their snapshot telemetry (spec §5.1 Retention); older
+     * live scans keep only their events (for 30 days) and pinned facts. Default 20.
+     */
+    val snapshotRetentionScans: Flow<Int> = dataStore.data
+        .map { prefs -> prefs[KEY_SNAPSHOT_RETENTION_SCANS] ?: DEFAULT_SNAPSHOT_RETENTION_SCANS }
+
+    suspend fun setSnapshotRetentionScans(value: Int) {
+        require(value >= 1) { "snapshot retention must keep at least one scan" }
+        dataStore.edit { it[KEY_SNAPSHOT_RETENTION_SCANS] = value }
+    }
+
     suspend fun getEtag(cacheKey: String): String? =
         dataStore.data.first()[stringPreferencesKey("etag_$cacheKey")]
 
@@ -118,5 +131,7 @@ class SettingsRepository @Inject constructor(
         private val KEY_DOMAIN_IOC_BLOCK_MODE = booleanPreferencesKey("domain_ioc_block_mode")
         private val KEY_CUSTOM_RULE_URLS = stringPreferencesKey("custom_sigma_rule_urls")
         private val KEY_THEME_MODE = stringPreferencesKey("theme_mode")
+        private val KEY_SNAPSHOT_RETENTION_SCANS = intPreferencesKey("snapshot_retention_scans")
+        const val DEFAULT_SNAPSHOT_RETENTION_SCANS = 20
     }
 }

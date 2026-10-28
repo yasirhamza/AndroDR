@@ -11,6 +11,9 @@ data class ObservationKey(val service: String, val ordinal: Int, val recordId: L
 
 data class OrdinalFact(val ordinal: Int, val recordId: Long)
 
+/** An observation's rowid and the fact it observes (a retention batch deletes by rowid). */
+data class ObservationRow(val rowId: Long, val recordId: Long)
+
 /** Observations (`scan_record`): writer/deleter side. List-parameter queries go through [chunkedIn]. */
 @Dao
 interface ScanObservationDao {
@@ -41,4 +44,28 @@ interface ScanObservationDao {
             "AND ordinal IN (:ordinals)"
     )
     suspend fun factIdsForOrdinals(scanId: Long, service: String, ordinals: List<Int>): List<OrdinalFact>
+
+    /**
+     * Retention (spec §5.1): up to [size] of [scanId]'s event observations stamped before [cutoff]
+     * (index `(scanId, eventTime)`; a NULL event time — a snapshot — is never `<`). Each batch
+     * deletes what it read, so the next call continues where it stopped.
+     */
+    @Query("$RETENTION_EVENT_BATCH")
+    suspend fun retentionEventBatch(scanId: Long, cutoff: Long, size: Int): List<ObservationRow>
+
+    /** Retention: up to [size] of [scanId]'s snapshot observations (`eventTime IS NULL`). */
+    @Query("$RETENTION_SNAPSHOT_BATCH")
+    suspend fun retentionSnapshotBatch(scanId: Long, size: Int): List<ObservationRow>
+
+    /** Deletes the observations [rowIds]. Call through [chunkedEach]. */
+    @Query("$DELETE_OBSERVATION_ROWS")
+    suspend fun deleteRows(rowIds: List<Long>)
 }
+
+internal const val RETENTION_EVENT_BATCH = "SELECT rowid AS rowId, recordId FROM scan_record " +
+    "WHERE scanId = :scanId AND eventTime < :cutoff LIMIT :size"
+
+internal const val RETENTION_SNAPSHOT_BATCH = "SELECT rowid AS rowId, recordId FROM scan_record " +
+    "WHERE scanId = :scanId AND eventTime IS NULL LIMIT :size"
+
+internal const val DELETE_OBSERVATION_ROWS = "DELETE FROM scan_record WHERE rowid IN (:rowIds)"

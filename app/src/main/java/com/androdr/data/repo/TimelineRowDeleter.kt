@@ -26,9 +26,25 @@ class TimelineRowDeleter @Inject constructor(
     private val store: TelemetryStore,
     private val members: SignalMemberDao,
 ) {
-    /** The 30-day prune of non-persistent rows (audit/closure rows are kept). */
-    suspend fun olderThan(cutoff: Long) =
-        delete(dao.recordIdsOlderThan(cutoff), dao.signalIdsOlderThan(cutoff)) { dao.deleteOlderThan(cutoff) }
+    /**
+     * The 30-day prune (spec §5.6): non-persistent `LIVE_SCAN` rows created before [cutoff], whatever
+     * their `scanResultId`, that no surviving signal's `signal_member` row ref points at. Imports and
+     * persistent (audit, closure, "import interrupted") rows are kept.
+     *
+     * Order matters: the pruned signals (those no member ref points at) lose their members first, so
+     * the member refs left are the surviving signals'; only then are the other rows' pins read and the
+     * rows deleted. Signal rows go by id only, so a signal un-referenced by this prune keeps its members
+     * until the next one (no member is left without its signal).
+     */
+    suspend fun olderThan(cutoff: Long) {
+        val signals = dao.signalIdsOlderThan(cutoff)
+        delete(chunkedIn(signals) { dao.recordIdsByIds(it) }, signals) {
+            chunkedEach(signals) { dao.deleteByIds(it) }
+            val rowPins = dao.recordIdsOlderThan(cutoff)
+            dao.deleteOlderThan(cutoff)
+            store.releaseUnpinned(rowPins)
+        }
+    }
 
     /** The rows [ids] (the one-time legacy event-row cleanup, C3). */
     suspend fun byIds(ids: List<Long>) {

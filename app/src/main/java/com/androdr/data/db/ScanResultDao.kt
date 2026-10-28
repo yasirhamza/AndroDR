@@ -15,6 +15,9 @@ import kotlinx.coroutines.flow.Flow
 /** A scan's id and source. */
 data class ScanSourceRow(val id: Long, val source: com.androdr.data.model.TelemetrySource)
 
+/** A scan's id and timestamp (the retention walk's keyset position). */
+data class ScanKey(val id: Long, val timestamp: Long)
+
 @Dao
 @Suppress("TooManyFunctions") // Room DAO: list pages, latest-scan reads, the writer's guarded statements
 interface ScanResultDao {
@@ -88,6 +91,24 @@ interface ScanResultDao {
             "WHERE id = :id AND state = 'IN_PROGRESS'"
     )
     suspend fun complete(id: Long, telemetryState: TelemetryState): Int
+
+    /**
+     * Retention's walk (spec §5.1): up to [size] `COMPLETE` live scans after `(afterTimestamp, afterId)`,
+     * newest first, ids only. `ScanResult` holds one row per scan.
+     */
+    @Query(
+        "SELECT id, timestamp FROM ScanResult WHERE state = 'COMPLETE' AND source = 'LIVE_SCAN' " +
+            "AND (timestamp < :afterTimestamp OR (timestamp = :afterTimestamp AND id < :afterId)) " +
+            "ORDER BY timestamp DESC, id DESC LIMIT :size"
+    )
+    suspend fun liveKeysAfter(afterTimestamp: Long, afterId: Long, size: Int): List<ScanKey>
+
+    /**
+     * Sets [id]'s `telemetryState` to [state] only while it is [from] (retention marks a `STORED`
+     * scan `PARTIAL_RETENTION`, never a `FAILED` one). Returns the number of rows changed.
+     */
+    @Query("UPDATE ScanResult SET telemetryState = :state WHERE id = :id AND telemetryState = :from")
+    suspend fun setTelemetryState(id: Long, state: TelemetryState, from: TelemetryState): Int
 
     /** Scans the startup sweep must finish removing: IN_PROGRESS (killed writer) and DELETING. */
     @Query("SELECT id FROM ScanResult WHERE state IN ('IN_PROGRESS', 'DELETING')")

@@ -7,10 +7,12 @@ import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
+import kotlinx.coroutines.CancellationException
 import androidx.room.withTransaction
 import com.androdr.data.db.AppDatabase
 import com.androdr.data.repo.TimelineRowDeleter
 import com.androdr.data.repo.ScanRepository
+import com.androdr.data.store.TelemetryRetention
 import com.androdr.sigma.SigmaRuleEngine
 
 @HiltWorker
@@ -22,6 +24,7 @@ class IocUpdateWorker @AssistedInject constructor(
     private val scanRepository: ScanRepository,
     private val database: AppDatabase,
     private val timelineRows: TimelineRowDeleter,
+    private val retention: TelemetryRetention,
 ) : CoroutineWorker(context, params) {
 
     @Suppress("TooGenericExceptionCaught")
@@ -31,6 +34,7 @@ class IocUpdateWorker @AssistedInject constructor(
             val thirtyDaysAgo = System.currentTimeMillis() - (30L * 24 * 60 * 60 * 1000)
             scanRepository.pruneOldDnsEvents(thirtyDaysAgo)
             database.withTransaction { timelineRows.olderThan(thirtyDaysAgo) }
+            runRetention()
             Log.i(
                 TAG,
                 "Worker finished — ${report.bulkFetchedCount} IOC entries, " +
@@ -40,6 +44,23 @@ class IocUpdateWorker @AssistedInject constructor(
         } catch (e: Exception) {
             Log.e(TAG, "IOC update failed: ${e.message}")
             Result.retry()
+        }
+    }
+
+    /**
+     * Telemetry retention (spec §5.1), after the IOC fetch. A failed batch has already set the store's
+     * dirty flag (the startup sweep's GC finishes it), so it neither fails nor retries the IOC update.
+     */
+    @Suppress("TooGenericExceptionCaught")
+    private suspend fun runRetention() {
+        try {
+            val outcome = retention.run()
+            Log.i(TAG, "Retention removed ${outcome.observationsRemoved} observation(s)" +
+                if (outcome.completed) "" else "; skipped the rest: a scan holds the lock")
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.e(TAG, "Retention failed: ${e.message}")
         }
     }
 
