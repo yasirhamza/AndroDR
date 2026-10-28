@@ -116,6 +116,7 @@ object ReportFormatter {
         telemetry: StoredTelemetrySource,
         mode: ExportMode,
         versionName: String,
+        alerts: AlertReportSource = AlertReportSource.NONE,
     ) {
         // The findings are the scan's own scan_finding rows (FindingsView); every helper reads them here.
         val s = ScanWithFindings(scan, findings.findings)
@@ -134,6 +135,7 @@ object ReportFormatter {
             o.appendLine()
             o.section("FINDINGS SECTION")
             o.appendFindingsSections(s, findingsContext(s, findings, services, telemetry))
+            o.appendAlerts(alerts)
             // Intentionally inside the includeFindings branch: a capability skip is a
             // caveat ON the findings ("this list is missing these rules"), so it rides
             // the same flag -- a telemetry-only export has no findings list to caveat.
@@ -620,3 +622,4 @@ object ReportFormatter {
 
     private const val RULE = "============================================================"
 }
+

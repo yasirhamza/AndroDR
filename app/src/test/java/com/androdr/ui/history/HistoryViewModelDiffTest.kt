@@ -70,6 +70,7 @@ class HistoryViewModelDiffTest {
             repository = repository,
             reportExporter = mockk(relaxed = true),
             findings = findings,
+            scanLock = com.androdr.data.repo.ScanLock(),
         )
 
         viewModel.selectScan(newer)

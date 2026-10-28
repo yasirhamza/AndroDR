@@ -44,6 +44,8 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -67,8 +69,10 @@ import java.util.Locale
 @Composable
 fun DashboardScreen(
     viewModel: DashboardViewModel = hiltViewModel(),
+    alertsViewModel: DashboardAlertsViewModel = hiltViewModel(),
     onNavigate: (String) -> Unit
 ) {
+    val currentFindings by viewModel.currentFindings.collectAsStateWithLifecycle()
     val latestScan by viewModel.latestScan.collectAsStateWithLifecycle()
     val isScanning by viewModel.isScanning.collectAsStateWithLifecycle()
     val isUpdatingIntel by viewModel.isUpdatingIntel.collectAsStateWithLifecycle()
@@ -78,6 +82,7 @@ fun DashboardScreen(
     val hasUsageStatsPermission by viewModel.hasUsageStatsPermission.collectAsStateWithLifecycle()
 
     val snackbarHostState = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
 
     LaunchedEffect(Unit) {
         viewModel.iocErrorEvent.collect { message ->
@@ -139,7 +144,7 @@ fun DashboardScreen(
                 }
             }
 
-            RiskLevelCard(latestScan = latestScan)
+            RiskLevelCard(latestScan = latestScan, openAlertCount = currentFindings.openAlertCount)
 
             // Warn the user when the previous scan failed to run every check.
             // Without this banner the app would display "Your phone looks secure"
@@ -179,7 +184,10 @@ fun DashboardScreen(
                 UsageAccessBanner(onOpenSettings = { viewModel.openUsageStatsSettings() })
             }
 
-            PostScanGuidance(riskLevel = latestScan?.overallRiskLevel, latestScan = latestScan)
+            PostScanGuidance(
+                riskLevel = latestScan?.overallRiskLevel, latestScan = latestScan,
+                openAlertCount = currentFindings.openAlertCount,
+            )
 
             AnimatedVisibility(
                 visible = (scanDiff?.newCount ?: 0) > 0,
@@ -191,6 +199,14 @@ fun DashboardScreen(
                     DiffBanner(newCount = newCount)
                 }
             }
+
+            // Open alerts (spec §5.4): they stay open until a person closes them, with the device
+            // credential; grouped by rule and matched value, re-surfaced by latest activity.
+            OpenAlertsCard(
+                viewModel = alertsViewModel,
+                current = currentFindings,
+                onMessage = { message -> scope.launch { snackbarHostState.showSnackbar(message) } },
+            )
 
             // Run Scan button — when idle. When a scan is running we show a
             // full progress card instead (stage label + linear progress bar +
@@ -296,7 +312,7 @@ fun DashboardScreen(
 }
 
 @Composable
-private fun PostScanGuidance(riskLevel: RiskLevel?, latestScan: ScanWithFindings?) {
+private fun PostScanGuidance(riskLevel: RiskLevel?, latestScan: ScanWithFindings?, openAlertCount: Int = 0) {
     val colors = MaterialTheme.androdrColors
     val hasCriticalAppRisks = latestScan?.appRisks?.any {
         it.triggered && it.level.lowercase() == "critical"
@@ -324,11 +340,12 @@ private fun PostScanGuidance(riskLevel: RiskLevel?, latestScan: ScanWithFindings
             Icons.Filled.Info,
             colors.medium
         )
-        RiskLevel.LOW -> Triple(
-            stringResource(R.string.guidance_low),
-            Icons.Filled.CheckCircle,
-            colors.low
-        )
+        // Never "all clear" while alerts are open (they stay open until a person closes them).
+        RiskLevel.LOW -> if (openAlertCount > 0) {
+            Triple(stringResource(R.string.guidance_low_open_alerts), Icons.Filled.Info, colors.medium)
+        } else {
+            Triple(stringResource(R.string.guidance_low), Icons.Filled.CheckCircle, colors.low)
+        }
         null -> Triple(
             stringResource(R.string.guidance_low),
             Icons.Filled.CheckCircle,
@@ -361,7 +378,7 @@ private fun PostScanGuidance(riskLevel: RiskLevel?, latestScan: ScanWithFindings
 
 @Suppress("LongMethod") // Compose UI layout with conditional risk display
 @Composable
-private fun RiskLevelCard(latestScan: ScanWithFindings?) {
+private fun RiskLevelCard(latestScan: ScanWithFindings?, openAlertCount: Int) {
     val colors = MaterialTheme.androdrColors
     val (riskColor, riskLabel) = when (latestScan?.overallRiskLevel) {
         RiskLevel.CRITICAL -> Pair(colors.critical, "CRITICAL")
@@ -404,8 +421,15 @@ private fun RiskLevelCard(latestScan: ScanWithFindings?) {
                 }
             }
             if (latestScan == null) {
+                // Import-only: open alerts exist but no live scan, so never "no scan yet" alone.
                 Text(
-                    text = stringResource(R.string.dashboard_no_scan_yet),
+                    text = stringResource(
+                        if (openAlertCount > 0) {
+                            R.string.dashboard_no_live_scan_alerts
+                        } else {
+                            R.string.dashboard_no_scan_yet
+                        }
+                    ),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )

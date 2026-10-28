@@ -44,6 +44,8 @@ class ScanFinding(
     val alertKey: ByteArray?,
     val alertId: Long?,
     val findingJson: String,
+    /** The evidence's matched value, for keyed rows (the opened alert's group, spec §5.4). */
+    val matchedValue: String? = null,
     val evidenceJson: String?,
     @Embedded(prefix = "row_")
     val row: FindingRowColumns?,

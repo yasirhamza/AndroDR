@@ -100,6 +100,8 @@ fun HistoryScreen(
     val showDeleteConfirm by viewModel.showDeleteConfirm.collectAsStateWithLifecycle()
     val showClearAllConfirm by viewModel.showClearAllConfirm.collectAsStateWithLifecycle()
     val deleteRefused by viewModel.deleteRefused.collectAsStateWithLifecycle()
+    // Delete and "Clear all" are disabled while a scan or import runs (they would be refused).
+    val deleteEnabled by viewModel.deleteEnabled.collectAsStateWithLifecycle()
 
     val context = LocalContext.current
 
@@ -159,11 +161,15 @@ fun HistoryScreen(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.End
             ) {
-                IconButton(onClick = { viewModel.requestClearAll() }) {
+                IconButton(onClick = { viewModel.requestClearAll() }, enabled = deleteEnabled) {
                     Icon(
                         imageVector = Icons.Filled.DeleteSweep,
                         contentDescription = "Clear all scan history",
-                        tint = MaterialTheme.colorScheme.error
+                        tint = if (deleteEnabled) {
+                            MaterialTheme.colorScheme.error
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        }
                     )
                 }
             }
@@ -183,7 +189,9 @@ fun HistoryScreen(
                     viewModel.loadExportEstimate(scan)
                 },
                 onViewReport = { viewModel.openSheet(scan) },
-                onDelete = { viewModel.requestDeleteScan(scan.id) }
+                onDelete = { viewModel.requestDeleteScan(scan.id) },
+                deleteEnabled = deleteEnabled,
+                loadCounts = viewModel::rowCounts,
             )
         }
     }
@@ -207,16 +215,17 @@ fun HistoryScreen(
     if (showDeleteConfirm != null) {
         AlertDialog(
             onDismissRequest = { viewModel.dismissDeleteConfirm() },
-            title = { Text("Delete Scan") },
-            text = { Text("Delete this scan and its timeline events?") },
+            title = { Text(stringResource(R.string.history_delete_title)) },
+            // R37: alerts and their evidence are never deleted; the dialog says so.
+            text = { Text(stringResource(R.string.history_delete_body)) },
             confirmButton = {
-                TextButton(onClick = { viewModel.confirmDeleteScan() }) {
-                    Text("Delete", color = MaterialTheme.colorScheme.error)
+                TextButton(onClick = { viewModel.confirmDeleteScan() }, enabled = deleteEnabled) {
+                    Text(stringResource(R.string.history_delete_confirm), color = MaterialTheme.colorScheme.error)
                 }
             },
             dismissButton = {
                 TextButton(onClick = { viewModel.dismissDeleteConfirm() }) {
-                    Text("Cancel")
+                    Text(stringResource(R.string.history_delete_cancel))
                 }
             }
         )
@@ -272,16 +281,17 @@ fun HistoryScreen(
     if (showClearAllConfirm) {
         AlertDialog(
             onDismissRequest = { viewModel.dismissClearAll() },
-            title = { Text("Clear All History") },
-            text = { Text("Delete all scan history? This cannot be undone.") },
+            title = { Text(stringResource(R.string.history_clear_title)) },
+            // R37: "Clear all" keeps alerts and their evidence; the dialog says so.
+            text = { Text(stringResource(R.string.history_clear_body)) },
             confirmButton = {
-                TextButton(onClick = { viewModel.confirmClearAll() }) {
-                    Text("Delete All", color = MaterialTheme.colorScheme.error)
+                TextButton(onClick = { viewModel.confirmClearAll() }, enabled = deleteEnabled) {
+                    Text(stringResource(R.string.history_clear_confirm), color = MaterialTheme.colorScheme.error)
                 }
             },
             dismissButton = {
                 TextButton(onClick = { viewModel.dismissClearAll() }) {
-                    Text("Cancel")
+                    Text(stringResource(R.string.history_delete_cancel))
                 }
             }
         )
@@ -444,8 +454,16 @@ private fun ScanHistoryItem(
     onClick: () -> Unit,
     onExport: () -> Unit,
     onViewReport: () -> Unit,
-    onDelete: () -> Unit
+    onDelete: () -> Unit,
+    deleteEnabled: Boolean = true,
+    loadCounts: (suspend (ScanResult) -> HistoryRowCounts?)? = null,
 ) {
+    // The stored findings shown (informational excluded, as the import screen counts them) and any
+    // that could not be saved, read in SQL per row; the scan's own count until they load.
+    var counts by remember(scan.id) { mutableStateOf<HistoryRowCounts?>(null) }
+    LaunchedEffect(scan.id, scan.triggeredCount) {
+        counts = loadCounts?.invoke(scan)
+    }
     val dateFormatter = remember { SimpleDateFormat("MMM d, yyyy  HH:mm", Locale.getDefault()) }
     val dateString = dateFormatter.format(Date(scan.timestamp))
 
@@ -481,7 +499,13 @@ private fun ScanHistoryItem(
                     // say so, or the row reads as live device state.
                     ImportSourceLabel(scan.source)
                     Text(
-                        text = "${scan.triggeredCount} finding(s)",
+                        text = counts?.let { c ->
+                            if (c.unsaved > 0) {
+                                stringResource(R.string.history_row_findings_unsaved, c.shown, c.unsaved)
+                            } else {
+                                stringResource(R.string.history_row_findings, c.shown)
+                            }
+                        } ?: stringResource(R.string.history_row_findings, scan.triggeredCount),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -585,11 +609,15 @@ private fun ScanHistoryItem(
                                 MaterialTheme.colorScheme.primary
                         )
 
-                        IconButton(onClick = onDelete) {
+                        IconButton(onClick = onDelete, enabled = deleteEnabled) {
                             Icon(
                                 imageVector = Icons.Filled.Delete,
                                 contentDescription = "Delete scan",
-                                tint = MaterialTheme.colorScheme.error
+                                tint = if (deleteEnabled) {
+                                    MaterialTheme.colorScheme.error
+                                } else {
+                                    MaterialTheme.colorScheme.onSurfaceVariant
+                                }
                             )
                         }
                     }

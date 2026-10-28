@@ -42,10 +42,13 @@ class TimelineRowDeleter @Inject constructor(
     suspend fun byScanId(scanId: Long) =
         delete(dao.recordIdsByScanId(scanId), dao.signalIdsByScanId(scanId)) { dao.deleteByScanId(scanId) }
 
-    /** "Clear all": non-persistent rows that are scan-less or whose scan no longer exists. */
-    suspend fun unownedNonPersistent() = delete(
-        dao.recordIdsUnownedNonPersistent(), dao.signalIdsUnownedNonPersistent(),
-    ) { dao.deleteUnownedNonPersistent() }
+    /**
+     * "Clear all": the non-persistent scan-less rows (`scanResultId = -1`) with `id <= maxId`, the
+     * newest row id at its first transaction (spec §5.4). Rows written later survive.
+     */
+    suspend fun scanLessThrough(maxId: Long) = delete(
+        dao.recordIdsScanLessThrough(maxId), dao.signalIdsScanLessThrough(maxId),
+    ) { dao.deleteScanLessThrough(maxId) }
 
     /**
      * Removes the members of the [signals] about to go, by signal id (primary-key prefix, never a

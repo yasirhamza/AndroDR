@@ -36,10 +36,10 @@ class CompleteVisibilityGateTest {
         "ScanObservationDao.factIdsAfter", "ScanObservationDao.deleteForScan", "ScanObservationDao.deleteThrough",
         "ScanObservationDao.factIdsForOrdinals",
         "ForensicTimelineEventDao.deleteOlderThan", "ForensicTimelineEventDao.deleteByIds",
-        "ForensicTimelineEventDao.deleteByScanId", "ForensicTimelineEventDao.deleteUnownedNonPersistent",
+        "ForensicTimelineEventDao.deleteByScanId", "ForensicTimelineEventDao.deleteScanLessThrough",
         // The pins a delete releases (TimelineRowDeleter), read just before the paired delete.
         "ForensicTimelineEventDao.recordIdsOlderThan", "ForensicTimelineEventDao.recordIdsByIds",
-        "ForensicTimelineEventDao.recordIdsByScanId", "ForensicTimelineEventDao.recordIdsUnownedNonPersistent",
+        "ForensicTimelineEventDao.recordIdsByScanId", "ForensicTimelineEventDao.recordIdsScanLessThrough",
         // Writer-side dedup lookups over everything already emitted (hidden rows included on purpose).
         "ForensicTimelineEventDao.getInstalledPackagesAlreadyEmitted",
         "ForensicTimelineEventDao.getAdminGrantedPackagesAlreadyEmitted",
@@ -50,7 +50,9 @@ class CompleteVisibilityGateTest {
         // The signal rows a delete is about to remove (their members go with them, by id).
         "ForensicTimelineEventDao.signalIdsOlderThan", "ForensicTimelineEventDao.signalIdsByIds",
         "ForensicTimelineEventDao.signalIdsByScanId",
-        "ForensicTimelineEventDao.signalIdsUnownedNonPersistent",
+        "ForensicTimelineEventDao.signalIdsScanLessThrough",
+        // "Clear all"'s clearMaxRowId (spec §5.4): the newest row id, hidden rows included on purpose.
+        "ForensicTimelineEventDao.maxId",
         // The one-time signal_member backfill reads and rewrites every legacy signal row.
         "SignalMemberBackfillDao.legacyAfter", "SignalMemberBackfillDao.signalExists",
         "SignalMemberBackfillDao.rewrite",

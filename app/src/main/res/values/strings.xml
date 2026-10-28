@@ -220,7 +220,7 @@
 
     <!-- Intrusion Log Import summary card (#342) — externalized -->
     <string name="history_delete_refused_title">Nothing was deleted</string>
-    <string name="history_delete_refused_body">A scan or import is running. Try again when it finishes.</string>
+    <string name="history_delete_refused_body">A scan is running — try again when it finishes</string>
     <string name="history_summary_failed">This scan\'s summary could not be read. Export the report to see it in full.</string>
     <string name="history_export_estimate_unknown">The size of this scan\'s stored telemetry is unknown; the full report includes all of it.</string>
     <string name="history_export_estimate_loading">Counting this scan\'s stored telemetry…</string>
@@ -302,4 +302,44 @@
     <string name="finding_triggered">Triggered</string>
     <string name="finding_passed">Passed</string>
     <string name="finding_view_details">View details</string>
+    <!-- Open alerts, credential-protected close, audited deletion (telemetry store D3, spec §5.4) -->
+    <string name="alerts_card_title">Open alerts</string>
+    <plurals name="alerts_card_count">
+        <item quantity="one">%1$d alert stays open until you close it.</item>
+        <item quantity="other">%1$d alerts stay open until you close them.</item>
+    </plurals>
+    <string name="alerts_card_none">No open alerts.</string>
+    <string name="alerts_current_findings" tools:ignore="PluralsCandidate">Current findings: %1$d (%2$d from the latest scan, %3$d open alerts)</string>
+    <plurals name="alerts_group_count">
+        <item quantity="one">%1$d alert</item>
+        <item quantity="other">%1$d alerts</item>
+    </plurals>
+    <string name="alerts_group_last_activity">Last activity %1$s</string>
+    <string name="alerts_close">Close</string>
+    <string name="alerts_close_selected" tools:ignore="PluralsCandidate">Close selected (%1$d)</string>
+    <string name="alerts_close_dialog_title">Close alerts</string>
+    <plurals name="alerts_close_dialog_body">
+        <item quantity="one">Close %1$d alert? It leaves the open list; it and its evidence stay in reports and the Timeline. You will be asked for your screen lock.</item>
+        <item quantity="other">Close %1$d alerts? They leave the open list; they and their evidence stay in reports and the Timeline. You will be asked for your screen lock.</item>
+    </plurals>
+    <string name="alerts_close_note">Note (optional)</string>
+    <string name="alerts_close_confirm">Close</string>
+    <string name="alerts_close_cancel">Cancel</string>
+    <string name="alerts_credential_title">Close alerts</string>
+    <string name="alerts_credential_description">Confirm your screen lock to close these alerts.</string>
+    <string name="alerts_close_cancelled">Nothing was closed: the screen lock was not confirmed.</string>
+    <string name="alerts_close_no_lock">Closed without a screen lock. Set a screen lock so closing alerts needs it.</string>
+    <string name="alerts_close_done" tools:ignore="PluralsCandidate">Closed %1$d alert(s).</string>
+    <string name="dashboard_no_live_scan_alerts">No live scan of this device yet. The open alerts below come from imports; run a scan to check this device.</string>
+    <string name="timeline_close_alert">Close alert</string>
+    <string name="guidance_low_open_alerts">The latest scan found nothing serious, but alerts are still open. Review them below.</string>
+    <string name="history_delete_title">Delete scan</string>
+    <string name="history_delete_body">Delete this scan, its telemetry and its timeline events? Alerts and their evidence are kept, and an audit entry listing the deleted findings is added to the Timeline.</string>
+    <string name="history_delete_confirm">Delete</string>
+    <string name="history_delete_cancel">Cancel</string>
+    <string name="history_clear_title">Clear all history</string>
+    <string name="history_clear_body">Delete every scan, its telemetry and timeline events, including live DNS events? This cannot be undone. Alerts and their evidence are kept, and an audit entry listing the deleted findings is added to the Timeline.</string>
+    <string name="history_clear_confirm">Delete all</string>
+    <string name="history_row_findings" tools:ignore="PluralsCandidate">%1$d finding(s)</string>
+    <string name="history_row_findings_unsaved" tools:ignore="PluralsCandidate">%1$d finding(s) · %2$d not saved</string>
 </resources>

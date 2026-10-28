@@ -52,6 +52,9 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import com.androdr.ui.security.rememberConfirmCredential
+import kotlinx.coroutines.launch
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -330,8 +333,24 @@ fun TimelineScreen(
             rows.itemSnapshotList.items.filterIsInstance<TimelineRow.StoredRow>().map { it.event }
                 .filter { it.effectiveCorrelationId() == key && it.id != event.id }
         } else emptyList()
+        // Close on an alert row (spec §5.4): offered while the row's alert is OPEN; asks the credential.
+        var alertIds by remember(event.id) { mutableStateOf<List<Long>>(emptyList()) }
+        LaunchedEffect(event.id) { alertIds = viewModel.openAlertIdsFor(event) }
+        val confirm = rememberConfirmCredential()
+        val closeTitle = stringResource(R.string.alerts_credential_title)
+        val closeDescription = stringResource(R.string.alerts_credential_description)
+        val closeScope = rememberCoroutineScope()
         TimelineEventDetailSheet(
             event = event,
+            onCloseAlert = alertIds.takeIf { it.isNotEmpty() }?.let { ids ->
+                {
+                    closeScope.launch {
+                        if (viewModel.closeAlerts(ids, null) { confirm(closeTitle, closeDescription) } > 0) {
+                            alertIds = emptyList()
+                        }
+                    }
+                }
+            },
             onDismiss = { selectedEvent = null },
             onShowOnlyApp = { pkg ->
                 selectedEvent = null

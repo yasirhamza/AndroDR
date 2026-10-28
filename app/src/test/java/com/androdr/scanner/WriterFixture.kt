@@ -55,7 +55,7 @@ internal class WriterFixture(recordSql: Boolean = true) : Closeable {
     var repo: ScanWriteRepository =
         ScanWriteRepository(
             f.db, f.store, TimelineRowDeleter(f.db.forensicTimelineEventDao(), f.store, f.db.signalMemberDao()),
-            f.findings,
+            f.findings, f.pendingClear,
         )
     val lock = ScanLock()
     val writer by lazy { ChunkedScanWriter(engine, store, repo, f.findings, preflight, health) }

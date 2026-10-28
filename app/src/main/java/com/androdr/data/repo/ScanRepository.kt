@@ -150,25 +150,34 @@ class ScanRepository @Inject constructor(
     }
 
     /**
-     * Deletes one scan (spec §5.1 Delete): `DELETING` first (Task D3 adds the audit row to that
-     * transaction), then its own Timeline rows, its telemetry, and the `ScanResult` row last.
-     * Returns false — deleting nothing — while a scan or import is running, or when the writer lock
-     * stays busy past [DELETE_LOCK_WAIT_MS] ("A scan is running — try again when it finishes").
+     * Deletes one scan (spec §5.4), in order:
+     *  0. refused ([DeleteResult.ScanRunning], nothing changed) while a scan or import runs
+     *     ([ScanLock.writerRunning]) or the writer lock stays busy past [DELETE_LOCK_WAIT_MS];
+     *  1. under the lock, one transaction: the persistent audit row (the scan's triggered findings as
+     *     capped (rule, level, package) entries) and `DELETING`;
+     *  2-4. without the lock: its rows, signals with their members and `scan_finding` rows (releasing
+     *     the facts they alone pinned), its telemetry, then the `ScanResult` row last.
+     * It never deletes an alert, its evidence or the fact an alert pins.
      */
-    suspend fun deleteScan(scanId: Long): Boolean {
-        underLockFirst { scanWrites.markForDelete(scanId) } ?: return false
-        scanWrites.completeDelete(scanId)
-        return true
+    suspend fun deleteScan(scanId: Long): DeleteResult {
+        val marked = underLockFirst { scanWrites.markForAuditedDelete(scanId) } ?: return DeleteResult.ScanRunning
+        if (marked) scanWrites.completeDelete(scanId)
+        return DeleteResult.Done
     }
 
     /**
-     * "Clear all": like [deleteScan] for every scan existing when it starts (a scan begun after its
-     * first transaction survives); persistent audit rows survive.
+     * "Clear all" (spec §5.4): refused like [deleteScan]; otherwise its first transaction writes one
+     * capped audit row over every COMPLETE scan and sets every scan `DELETING`, remembering those ids
+     * and `clearMaxRowId`, which it saves (DataStore) before releasing the lock. It then deletes those
+     * scans only, and the non-persistent scan-less rows with `id <= clearMaxRowId`. A scan begun after
+     * the first transaction survives; persistent rows (audit, closure) and alerts survive.
      */
-    suspend fun deleteAllScans(): Boolean {
-        val ids = underLockFirst { scanWrites.markAllForDelete() } ?: return false
-        scanWrites.completeDeleteAll(ids)
-        return true
+    suspend fun deleteAllScans(): DeleteResult {
+        val snapshot = underLockFirst {
+            scanWrites.markAllForAuditedDelete().also { scanWrites.saveClearMark(it.clearMaxRowId) }
+        } ?: return DeleteResult.ScanRunning
+        scanWrites.completeDeleteAll(snapshot)
+        return DeleteResult.Done
     }
 
     /** How long a user delete waits for the writer lock; tests shorten it. */
@@ -202,6 +211,15 @@ class ScanRepository @Inject constructor(
         }
         return true
     }
+}
+
+/** What a user delete did (spec §5.4). */
+sealed interface DeleteResult {
+    /** The delete ran (or there was nothing left to delete). */
+    data object Done : DeleteResult
+
+    /** Refused, nothing changed: a scan or import holds the writer lock ("try again when it finishes"). */
+    data object ScanRunning : DeleteResult
 }
 
 /** A scan list position: `(timestamp, id)`, newest first. */

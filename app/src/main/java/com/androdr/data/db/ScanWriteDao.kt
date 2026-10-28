@@ -29,6 +29,10 @@ interface ScanWriteDao {
     @Query("UPDATE ScanResult SET state = 'DELETING'")
     suspend fun markAllDeleting()
 
+    /** How many scans are COMPLETE ("Clear all"'s audit row). */
+    @Query("SELECT COUNT(*) FROM ScanResult WHERE state = 'COMPLETE'")
+    suspend fun completeCount(): Int
+
     @Query("SELECT state FROM ScanResult WHERE id = :id")
     suspend fun stateOf(id: Long): ScanState?
 

@@ -140,8 +140,24 @@ class FindingReadersLowHeapTest {
         val text = file.readText()
         assertTrue(text.lines().first { "app issue(s)" in it }, text.contains("$FINDINGS app issue(s)"))
 
+        assertTrue("the report streams every open alert", text.contains("Open alerts:"))
+
+        // D3: the open-alert list groups the flood of one indicator into one group (SQL GROUP BY).
+        val groups = OpenAlertGroupPagingSource(w.f.db)
+            .load(androidx.paging.PagingSource.LoadParams.Refresh(null, 10, false))
+            as androidx.paging.PagingSource.LoadResult.Page<AlertGroupCursor, AlertGroup>
+        assertEquals(listOf(FINDINGS), groups.data.filter { it.ruleId == DNS_RULE }.map { it.count })
+
         coVerify(exactly = 0) { findings.findingsOf(3L, any()) }
         coVerify(exactly = 0) { findings.withFindings(import, any()) }
+
+        // D3: deleting the import builds its audit row in SQL with bounded memory; the row stays small.
+        assertEquals(DeleteResult.Done, repository().deleteScan(import.id))
+        val audit = w.f.db.openHelper.readableDatabase
+            .query("SELECT details FROM forensic_timeline WHERE category = '${DeletionAudit.CATEGORY}'")
+            .use { c -> c.moveToFirst(); c.getString(0) }
+        assertTrue(audit.length < 16 * 1024)
+        assertTrue(audit, audit.startsWith("$FINDINGS triggered finding(s) deleted with this scan."))
     }
 
     private companion object {

@@ -51,6 +51,7 @@ class HistoryViewModelSummaryTest {
         },
         reportExporter = exporter,
         findings = mockk(relaxed = true),
+        scanLock = com.androdr.data.repo.ScanLock(),
     )
 
     @Test

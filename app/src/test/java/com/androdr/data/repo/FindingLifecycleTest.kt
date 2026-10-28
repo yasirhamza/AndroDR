@@ -306,7 +306,8 @@ class FindingLifecycleTest {
                 callOriginal()
             }
             val repo = ScanWriteRepository(w.f.db, store,
-                TimelineRowDeleter(w.f.db.forensicTimelineEventDao(), store, w.f.db.signalMemberDao()), findings)
+                TimelineRowDeleter(w.f.db.forensicTimelineEventDao(), store, w.f.db.signalMemberDao()), findings,
+                w.f.pendingClear)
             repo.markForDelete(1L)
             assertTrue(runCatching { repo.completeDelete(1L) }.isFailure)
             assertEquals("the first batch committed", 2, batches)

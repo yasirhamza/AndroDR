@@ -7,7 +7,6 @@ import com.androdr.data.db.IndicatorDao
 import com.androdr.data.model.NotEvaluatedReason
 import com.androdr.data.model.ScanWithFindings
 import com.androdr.data.model.TelemetryState
-import com.androdr.data.repo.AlertView
 import com.androdr.data.repo.CurrentFindingsSummary
 import com.androdr.data.repo.FindingsRepository
 import com.androdr.data.repo.ScanRepository
@@ -29,9 +28,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
-import androidx.paging.PagingData
-import androidx.paging.cachedIn
-import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -63,13 +59,11 @@ class DashboardViewModel @Inject constructor(
 
     /**
      * Current findings (spec §5.4): the latest live scan's triggered state findings and the OPEN
-     * alerts; [CurrentFindingsSummary.count] is the dashboard's count.
+     * alerts; [CurrentFindingsSummary.count] is the dashboard's count (the alerts card renders it
+     * through [DashboardAlertsViewModel.current]).
      */
     val currentFindings: StateFlow<CurrentFindingsSummary> = findings.current()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), CurrentFindingsSummary.EMPTY)
-
-    /** The OPEN alerts, most recent activity first, as a paged list (the alerts card, D3). */
-    val openAlerts: Flow<PagingData<AlertView>> = findings.openAlerts().cachedIn(viewModelScope)
 
     /** True while [latestScan] is a result that could not be saved at all. */
     val latestUnsaved: StateFlow<Boolean> = _unsavedScan.map { it != null }

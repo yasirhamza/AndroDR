@@ -6,6 +6,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.androdr.data.model.ScanResult
 import com.androdr.data.repo.FindingsRepository
+import com.androdr.data.repo.DeleteResult
+import com.androdr.data.repo.ScanLock
 import com.androdr.data.repo.ScanRepository
 import com.androdr.reporting.ExportEstimate
 import com.androdr.reporting.ExportMode
@@ -23,6 +25,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -33,7 +36,15 @@ class HistoryViewModel @Inject constructor(
     private val repository: ScanRepository,
     private val reportExporter: ReportExporter,
     private val findings: FindingsRepository,
+    scanLock: ScanLock,
 ) : ViewModel() {
+
+    /**
+     * False while a scan or import runs ([ScanLock.writerRunning]): delete and "Clear all" would be
+     * refused, so the screen disables them.
+     */
+    val deleteEnabled: StateFlow<Boolean> = scanLock.writerRunning.map { !it }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, !scanLock.writerRunning.value)
 
     /** Full scan history, newest first, keyset-paged (no cap, spec §5.5). */
     val scans: Flow<PagingData<ScanResult>> = repository.pagedScans().cachedIn(viewModelScope)
@@ -212,7 +223,10 @@ class HistoryViewModel @Inject constructor(
         val id = _showDeleteConfirm.value ?: return
         _showDeleteConfirm.value = null
         viewModelScope.launch {
-            if (!repository.deleteScan(id)) _deleteRefused.value = true
+            when (repository.deleteScan(id)) {
+                DeleteResult.ScanRunning -> _deleteRefused.value = true
+                DeleteResult.Done -> if (_selectedScan.value?.id == id) _selectedScan.value = null
+            }
         }
     }
 
@@ -222,12 +236,35 @@ class HistoryViewModel @Inject constructor(
     fun confirmClearAll() {
         _showClearAllConfirm.value = false
         viewModelScope.launch {
-            // Only a delete that ran empties the selection; a refused one leaves everything in place.
-            if (repository.deleteAllScans()) _selectedScan.value = null else _deleteRefused.value = true
+            // A refused "Clear all" is handled first and leaves everything in place, the selection
+            // included; only a delete that ran empties the selection.
+            when (repository.deleteAllScans()) {
+                DeleteResult.ScanRunning -> _deleteRefused.value = true
+                DeleteResult.Done -> _selectedScan.value = null
+            }
         }
+    }
+
+    /**
+     * A History row's counts: the stored findings shown (informational excluded, as the import screen
+     * counts them) and how many of the scan's findings could not be saved (its `triggeredCount` minus
+     * the stored ones), so the row stays honest after the import card is dismissed.
+     */
+    @Suppress("TooGenericExceptionCaught") // an unreadable count is not shown, never a crash
+    suspend fun rowCounts(scan: ScanResult): HistoryRowCounts? = try {
+        val counts = findings.rowCounts(scan.id)
+        HistoryRowCounts(counts.shown, (scan.triggeredCount - counts.stored).coerceAtLeast(0))
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        Log.w(TAG, "row count read failed", e)
+        null
     }
 
     private companion object {
         const val TAG = "HistoryViewModel"
     }
 }
+
+/** What a History row says: [shown] stored findings, and [unsaved] that could not be saved. */
+data class HistoryRowCounts(val shown: Int, val unsaved: Int)

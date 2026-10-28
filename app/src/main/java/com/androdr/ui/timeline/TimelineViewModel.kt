@@ -16,6 +16,7 @@ import com.androdr.data.db.AppDatabase
 import com.androdr.data.db.TimelineFilter
 import com.androdr.data.db.chunkedIn
 import com.androdr.data.model.ForensicTimelineEvent
+import com.androdr.ui.security.ConfirmResult
 import com.androdr.data.model.ScanResult
 import com.androdr.data.model.TelemetrySource
 import com.androdr.data.repo.ScanRepository
@@ -98,6 +99,21 @@ class TimelineViewModel @Inject constructor(
 
     /** Where reads run; a test swaps in its own dispatcher. */
     internal var io: CoroutineDispatcher = Dispatchers.IO
+
+    /** The OPEN alerts of a finding row (its rule on its fact): non-empty when the row offers Close. */
+    suspend fun openAlertIdsFor(event: ForensicTimelineEvent): List<Long> =
+        if (event.persistent || event.ruleId.isEmpty() || event.recordId == null) {
+            emptyList()
+        } else {
+            withContext(io) { findingsRepository.openAlertIdsFor(event.ruleId, event.recordId) }
+        }
+
+    /**
+     * Closes [ids] after the device credential: [confirm] runs first, and the repository closes
+     * nothing unless its result is confirmed (spec §5.4). Returns how many closed.
+     */
+    suspend fun closeAlerts(ids: List<Long>, note: String?, confirm: suspend () -> ConfirmResult): Int =
+        findingsRepository.close(ids, note, confirm())
 
     /** One page of a correlation signal's members, loaded when its card is expanded (spec §5.4). */
     suspend fun loadClusterPage(signalRowId: Long, after: com.androdr.sigma.AtomRef?): ClusterPage =

@@ -10,6 +10,8 @@ import com.androdr.data.db.Converters
 import com.androdr.data.db.FindingKinds
 import com.androdr.data.db.FindingRow
 import com.androdr.data.db.FindingSummaryCounts
+import com.androdr.data.db.AlertGroupRow
+import com.androdr.data.db.StoredFindingCounts
 import com.androdr.data.db.chunkedIn
 import com.androdr.data.model.Alert
 import com.androdr.data.model.AlertStatus
@@ -20,6 +22,7 @@ import com.androdr.data.model.ScanFinding
 import com.androdr.data.model.ScanResult
 import com.androdr.data.model.ScanWithFindings
 import com.androdr.data.store.ChunkResult
+import com.androdr.data.store.DecodedRecord
 import com.androdr.data.store.HashKeys
 import com.androdr.data.store.KeysetPagingSource
 import com.androdr.data.store.TelemetryReader
@@ -28,6 +31,7 @@ import com.androdr.sigma.Finding
 import com.androdr.sigma.SigmaRuleEvaluator
 import com.androdr.sigma.TaxonomyContract
 import com.androdr.ui.security.ConfirmResult
+import com.androdr.ui.security.DeviceSecurity
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOn
@@ -59,11 +63,34 @@ data class AlertView(
     val lastActivityAt: Long,
     val recordId: Long?,
     val evidence: Finding?,
+    val matchedValue: String = "",
+    val closedAt: Long? = null,
+    val closedReason: String? = null,
+    val closedWithCredential: Boolean = false,
 ) {
     companion object {
         fun of(a: Alert) = AlertView(a.id, a.ruleId, a.level, a.status, a.openedAt, a.openedScanId,
-            a.lastActivityAt, a.recordId, Converters.decodeFinding(a.evidenceJson))
+            a.lastActivityAt, a.recordId, Converters.decodeFinding(a.evidenceJson), a.matchedValue, a.closedAt,
+            a.closedReason, a.closedWithCredential)
     }
+}
+
+/** Identifies one open-alert group, bounded to the alerts the person saw (`id <= maxId`). */
+data class AlertGroupRef(val ruleId: String, val matchedValue: String, val maxId: Long)
+
+/**
+ * One group of OPEN alerts as the dashboard lists it (spec §5.4: grouped by rule and matched value):
+ * how many, their latest activity, and the newest alert ([sample]) for its title and level.
+ */
+data class AlertGroup(
+    val ruleId: String,
+    val matchedValue: String,
+    val count: Int,
+    val lastActivityAt: Long,
+    val maxId: Long,
+    val sample: AlertView?,
+) {
+    val ref: AlertGroupRef get() = AlertGroupRef(ruleId, matchedValue, maxId)
 }
 
 /** A stored finding with its row id (the paging key). */
@@ -84,6 +111,7 @@ class StoredFinding(val id: Long, val finding: Finding)
 class FindingsRepository @Inject constructor(
     private val db: AppDatabase,
     private val reader: TelemetryReader,
+    private val deviceSecurity: DeviceSecurity,
 ) {
     private val findings get() = db.scanFindingDao()
     private val alerts get() = db.alertDao()
@@ -197,6 +225,7 @@ class FindingsRepository @Inject constructor(
                 category = f.category.name, kind = p.kind, recordId = p.recordId, service = f.service,
                 ordinal = f.ordinal, alertKey = key, alertId = alertId,
                 findingJson = Converters.encodeFinding(stored),
+                matchedValue = key?.let { AlertIdentity.Discriminator.of(f.evidence).matchedValue },
                 evidenceJson = if (opens) Converters.encodeFinding(full) else null,
                 row = if (f.triggered) rowColumns(f, row) else null,
             )
@@ -293,14 +322,118 @@ class FindingsRepository @Inject constructor(
     suspend fun shownCount(scanId: Long): Int = findings.triggeredShownCount(scanId)
 
     /**
-     * Closes the OPEN alerts among [alertIds] — only after the device credential was [ConfirmResult.Confirmed];
-     * anything else (cancelled, no secure lock) closes nothing (fails closed). Returns how many closed.
+     * Closes the OPEN alerts among [alertIds] (spec §5.4 Closing an alert) — only after the device
+     * credential was [ConfirmResult.Confirmed] (`closedWithCredential = 1`), or on
+     * [ConfirmResult.NoSecureLock] when a re-check finds no secure lock screen
+     * (`closedWithCredential = 0`). Anything else — cancelled, or "no secure lock" on a device that
+     * is secure — closes nothing (fails closed). A close that changes alerts writes one persistent
+     * `alert_closed` Timeline row in the same transaction. Returns how many closed.
      */
     suspend fun close(alertIds: List<Long>, reason: String?, result: ConfirmResult): Int {
-        if (result != ConfirmResult.Confirmed || alertIds.isEmpty()) return 0
+        if (alertIds.isEmpty()) return 0
+        val withCredential = credentialOf(result) ?: return 0
         val now = System.currentTimeMillis()
-        return db.withTransaction { chunkedIn(alertIds) { listOf(alerts.closeOpen(it, now, reason, true)) }.sum() }
+        return db.withTransaction {
+            val groups = mergeGroups(chunkedIn(alertIds) { alerts.openGroupsOf(it) })
+            val closed = chunkedIn(alertIds) { listOf(alerts.closeOpen(it, now, reason, withCredential)) }.sum()
+            if (closed > 0) {
+                db.forensicTimelineEventDao().insert(
+                    closedRow(
+                        groups.map { it.ruleId to it.matchedValue to it.count }, closed, reason, withCredential, now,
+                    )
+                )
+            }
+            closed
+        }
     }
+
+    /**
+     * Bulk close by group (the open-alerts list, spec §5.4): each group's OPEN alerts up to its
+     * [AlertGroupRef.maxId] — those the person saw — under one confirmation, with the same
+     * confirmation rule and `alert_closed` row as [close]. Returns how many closed.
+     */
+    suspend fun closeGroups(groups: List<AlertGroupRef>, reason: String?, result: ConfirmResult): Int {
+        if (groups.isEmpty()) return 0
+        val withCredential = credentialOf(result) ?: return 0
+        val now = System.currentTimeMillis()
+        return db.withTransaction {
+            val closedByGroup = groups.distinct().map { g ->
+                g to alerts.closeGroup(g.ruleId, g.matchedValue, g.maxId, now, reason, withCredential)
+            }
+            val closed = closedByGroup.sumOf { it.second }
+            if (closed > 0) {
+                val lines = closedByGroup.filter { it.second > 0 }.map { (g, n) -> g.ruleId to g.matchedValue to n }
+                db.forensicTimelineEventDao().insert(closedRow(lines, closed, reason, withCredential, now))
+            }
+            closed
+        }
+    }
+
+    /** `closedWithCredential` for [result], or null when the close must be refused. */
+    private fun credentialOf(result: ConfirmResult): Boolean? = when (result) {
+        ConfirmResult.Confirmed -> true
+        // Honoured only when the lock screen really is insecure; otherwise refused (fails closed).
+        ConfirmResult.NoSecureLock -> if (deviceSecurity.isDeviceSecure()) null else false
+        ConfirmResult.Cancelled -> null
+    }
+
+    private fun mergeGroups(rows: List<AlertGroupRow>): List<AlertGroupRow> =
+        rows.groupBy { it.ruleId to it.matchedValue }.map { (_, g) ->
+            g.first().copy(count = g.sumOf { it.count }, lastActivityAt = g.maxOf { it.lastActivityAt },
+                maxId = g.maxOf { it.maxId })
+        }
+
+    /** The persistent `alert_closed` row: what closed (capped), the note and the credential flag. */
+    private fun closedRow(
+        groups: List<Pair<Pair<String, String>, Int>>, closed: Int, reason: String?, withCredential: Boolean, now: Long,
+    ): ForensicTimelineEvent {
+        val sb = StringBuilder()
+        sb.append("Note: ").append(reason?.takeIf { it.isNotBlank() }?.take(MAX_NOTE) ?: "(none)")
+        sb.append("\nClosed with device credential: ")
+            .append(if (withCredential) "yes" else "no (no secure lock screen)")
+        var listed = 0
+        for ((key, n) in groups.sortedByDescending { it.second }.take(MAX_CLOSED_LINES)) {
+            sb.append("\n").append(key.first.take(MAX_RULE)).append(" · ")
+                .append(key.second.ifEmpty { "—" }.take(MAX_VALUE)).append(" × ").append(n)
+            listed += n
+        }
+        if (closed > listed) sb.append("\n…and ").append(closed - listed).append(" more alert(s)")
+        return ForensicTimelineEvent(
+            startTimestamp = now, source = CLOSED_SOURCE, category = CLOSED_CATEGORY,
+            description = "Closed $closed alert(s)", details = sb.toString(), createdAt = now, persistent = true,
+        )
+    }
+
+    /** OPEN alerts grouped by rule and matched value (spec §5.4), most recent activity first, keyset-paged. */
+    fun openAlertGroups(): Flow<PagingData<AlertGroup>> =
+        Pager(PagingConfig(pageSize = GROUP_PAGE_SIZE, enablePlaceholders = false)) { OpenAlertGroupPagingSource(db) }
+            .flow
+
+    /** The OPEN alerts of a finding row (its rule on its fact): a Timeline row's Close. */
+    suspend fun openAlertIdsFor(ruleId: String, recordId: Long?): List<Long> =
+        if (recordId == null || ruleId.isEmpty()) emptyList() else alerts.openIdsFor(ruleId, recordId)
+
+    /**
+     * Streams every alert with [status], most recent activity first, in keyset pages of
+     * [READ_BATCH] (the report, spec §5.4): never more than one page in memory.
+     */
+    suspend fun forEachAlert(status: AlertStatus, block: suspend (AlertView, DecodedRecord?) -> Unit) {
+        var at = Long.MAX_VALUE
+        var id = Long.MAX_VALUE
+        while (true) {
+            val page = alerts.byStatusAfter(status.name, at, id, READ_BATCH)
+            // Each alert's matched fact ("Matched record"): pinned by the alert, so it survives scans.
+            val records = chunkedIn(page.mapNotNull { it.recordId }.distinct()) { reader.records(it) }
+                .associateBy { it.factId }
+            for (a in page) block(AlertView.of(a), a.recordId?.let(records::get))
+            if (page.size < READ_BATCH) return
+            at = page.last().lastActivityAt
+            id = page.last().id
+        }
+    }
+
+    /** A History row's stored counts (shown and stored triggered findings), in SQL. */
+    suspend fun rowCounts(scanId: Long): StoredFindingCounts = findings.rowCounts(scanId)
 
     /** Alerts by id (the report and detail views). */
     suspend fun alerts(ids: List<Long>): List<AlertView> = chunkedIn(ids) { alerts.alertsByIds(it) }.map(AlertView::of)
@@ -339,6 +472,13 @@ class FindingsRepository @Inject constructor(
     companion object {
         private const val READ_BATCH = 500
         private const val PAGE_SIZE = 50
+        private const val GROUP_PAGE_SIZE = 30
+        const val CLOSED_SOURCE = "androdr_store"
+        const val CLOSED_CATEGORY = "alert_closed"
+        private const val MAX_CLOSED_LINES = 100
+        private const val MAX_NOTE = 500
+        private const val MAX_RULE = 64
+        private const val MAX_VALUE = 128
     }
 }
 
@@ -365,4 +505,40 @@ internal class OpenAlertPagingSource(db: AppDatabase) :
 
     override suspend fun loadBefore(before: AlertCursor, size: Int) =
         slice(dao.openBefore(before.lastActivityAt, before.id, size).map(AlertView::of))
+}
+
+/** Keyset cursor of the open-alert groups: `(lastActivityAt DESC, ruleId, matchedValue)`. */
+data class AlertGroupCursor(val lastActivityAt: Long, val ruleId: String, val matchedValue: String)
+
+/** OPEN-alert groups in list order, each with its newest alert; observes `alert` (and the other paged tables). */
+internal class OpenAlertGroupPagingSource(db: AppDatabase) :
+    KeysetPagingSource<AlertGroupCursor, AlertGroup>(db, KeysetPagingSource.OBSERVED_TABLES) {
+    private val dao = db.alertDao()
+
+    override fun keyOf(item: AlertGroup) = AlertGroupCursor(item.lastActivityAt, item.ruleId, item.matchedValue)
+
+    override suspend fun loadFrom(from: AlertGroupCursor?, size: Int) = slice(
+        withSamples(
+            if (from == null) {
+                dao.openGroupsAfter(Long.MAX_VALUE, "", "", size)
+            } else {
+                dao.openGroupsFrom(from.lastActivityAt, from.ruleId, from.matchedValue, size)
+            }
+        )
+    )
+
+    override suspend fun loadAfter(after: AlertGroupCursor, size: Int) =
+        slice(withSamples(dao.openGroupsAfter(after.lastActivityAt, after.ruleId, after.matchedValue, size)))
+
+    override suspend fun loadBefore(before: AlertGroupCursor, size: Int) =
+        slice(withSamples(dao.openGroupsBefore(before.lastActivityAt, before.ruleId, before.matchedValue, size)))
+
+    private suspend fun withSamples(rows: List<AlertGroupRow>): List<AlertGroup> {
+        val samples = chunkedIn(rows.map { it.maxId }) { dao.alertsByIds(it) }.associateBy { it.id }
+        return rows.map { r ->
+            AlertGroup(
+                r.ruleId, r.matchedValue, r.count, r.lastActivityAt, r.maxId, samples[r.maxId]?.let(AlertView::of),
+            )
+        }
+    }
 }

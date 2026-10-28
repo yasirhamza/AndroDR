@@ -74,7 +74,10 @@ class ReportExporter @Inject constructor(
             val logLines = if (includeLog) logSource() else emptyList()
             val version = context.appVersion().name
             writeFile(file) { out ->
-                ReportFormatter.writeScanReport(out, scan, view, logLines, telemetryReader, mode, version)
+                ReportFormatter.writeScanReport(
+                    out, scan, view, logLines, telemetryReader, mode, version,
+                    AlertReportSource { status, block -> findings.forEachAlert(status, block) },
+                )
             }
         }
 

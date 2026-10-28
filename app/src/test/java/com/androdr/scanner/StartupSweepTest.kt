@@ -228,7 +228,7 @@ class StartupSweepTest {
             category = "scan_deleted", description = "kept", scanResultId = 1L, persistent = true))
         assertEquals(1L, w.count("SELECT COUNT(*) FROM forensic_timeline WHERE recordId IS NOT NULL"))
 
-        assertTrue(scanRepository().deleteScan(1L))
+        assertEquals(com.androdr.data.repo.DeleteResult.Done, scanRepository().deleteScan(1L))
         assertEquals(null, state(1L))
         assertEquals("its findings go with it", 0L, w.count("SELECT COUNT(*) FROM scan_finding"))
         // Spec §5.4: the alert survives the delete and pins its fact; the unmatched fact is gone.
@@ -236,7 +236,11 @@ class StartupSweepTest {
         assertEquals(1L, w.count("SELECT COUNT(*) FROM telemetry_record"))
         assertEquals(1L, w.count("SELECT COUNT(*) FROM telemetry_record WHERE id = (SELECT recordId FROM alert)"))
         assertEquals(1L, w.count("SELECT COUNT(*) FROM record_body"))
-        assertEquals(listOf("kept"), w.f.db.forensicTimelineEventDao().getAllForExport().map { it.description })
+        val left = w.f.db.forensicTimelineEventDao().getAllForExport()
+        assertEquals("only persistent rows are left", listOf(true), left.map { it.persistent }.distinct())
+        assertEquals(listOf("kept"), left.filter { it.source == "audit" }.map { it.description })
+        assertEquals("the delete wrote its one audit row", 1,
+            left.count { it.source == "androdr_store" && it.category == "scan_deleted" })
     }
 
     @Test
@@ -244,7 +248,7 @@ class StartupSweepTest {
         val old = w.writer.begin(w.scan(1L), liveEvents = false)
         old.append("dns_monitor", TelemetrySource.LIVE_SCAN, CAPTURED, listOf(dns(EVIL_DOMAIN, time = 1L)))
         old.finish()
-        val snapshot = w.lock.mutex.withLock { w.repo.markAllForDelete() }
+        val snapshot = w.lock.mutex.withLock { w.repo.markAllForAuditedDelete() }
         // The writer takes the lock after "Clear all" released it, before its second phase runs.
         val s = w.lock.withWriter {
             w.writer.begin(w.scan(2L), liveEvents = false).also {
@@ -253,7 +257,7 @@ class StartupSweepTest {
         }
         w.repo.completeDeleteAll(snapshot)
         s.finish()
-        assertEquals(listOf(1L), snapshot)
+        assertEquals(listOf(1L), snapshot.scanIds)
         assertEquals(null, state(1L))
         assertEquals("COMPLETE", state(2L))
         assertEquals(1, w.findingsOf(2L).size)
@@ -274,13 +278,13 @@ class StartupSweepTest {
             val owner = Any()
             w.lock.mutex.lock(owner) // e.g. a retention or backfill batch: writerRunning stays false
             assertFalse(w.lock.writerRunning.value)
-            assertFalse(repo.deleteScan(1L))
-            assertFalse(repo.deleteAllScans())
+            assertEquals(com.androdr.data.repo.DeleteResult.ScanRunning, repo.deleteScan(1L))
+            assertEquals(com.androdr.data.repo.DeleteResult.ScanRunning, repo.deleteAllScans())
             assertEquals("COMPLETE", state(1L))
             assertTrue("still held by its owner only", w.lock.mutex.holdsLock(owner))
             w.lock.mutex.unlock(owner)
             assertFalse("the refused deletes left no lock behind", w.lock.mutex.isLocked)
-            assertTrue(repo.deleteScan(1L))
+            assertEquals(com.androdr.data.repo.DeleteResult.Done, repo.deleteScan(1L))
             assertFalse(w.lock.mutex.isLocked)
             assertEquals(null, state(1L))
         }
@@ -296,17 +300,21 @@ class StartupSweepTest {
             category = "scan_deleted", description = "kept", persistent = true))
         val repo = scanRepository()
         w.lock.withWriter {
-            assertFalse(repo.deleteScan(1L))
-            assertFalse(repo.deleteAllScans())
+            assertEquals(com.androdr.data.repo.DeleteResult.ScanRunning, repo.deleteScan(1L))
+            assertEquals(com.androdr.data.repo.DeleteResult.ScanRunning, repo.deleteAllScans())
         }
         assertEquals("COMPLETE", state(1L))
-        assertTrue(repo.deleteAllScans())
+        assertEquals(com.androdr.data.repo.DeleteResult.Done, repo.deleteAllScans())
         assertEquals(0L, w.count("SELECT COUNT(*) FROM ScanResult"))
         assertEquals(0L, w.count("SELECT COUNT(*) FROM scan_finding"))
         assertEquals("alerts are never deleted", 2L, w.count("SELECT COUNT(*) FROM alert"))
         assertEquals("only the alerts' facts are left", 0L,
             w.count("SELECT COUNT(*) FROM telemetry_record WHERE id NOT IN (SELECT recordId FROM alert)"))
-        assertEquals(listOf("kept"), w.f.db.forensicTimelineEventDao().getAllForExport().map { it.description })
+        val left = w.f.db.forensicTimelineEventDao().getAllForExport()
+        assertEquals("only persistent rows are left", listOf(true), left.map { it.persistent }.distinct())
+        assertEquals(listOf("kept"), left.filter { it.source == "audit" }.map { it.description })
+        assertEquals("the delete wrote its one audit row", 1,
+            left.count { it.source == "androdr_store" && it.category == "scan_deleted" })
     }
 
     /** Spec §5.4: the one-time signal_member backfill runs from the startup sweep. */

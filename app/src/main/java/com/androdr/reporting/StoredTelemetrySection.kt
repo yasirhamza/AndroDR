@@ -56,7 +56,7 @@ private fun ReportOut.appendRecord(r: DecodedRecord, timeFmt: SimpleDateFormat) 
 }
 
 /** A field value as text. Escaping is applied to the whole line by [ReportOut], once. */
-private fun renderValue(value: Any?): String = when (value) {
+internal fun renderValue(value: Any?): String = when (value) {
     null -> "null"
     is Map<*, *> -> value.entries.joinToString(", ", "{", "}") { (k, v) -> "$k: ${renderValue(v)}" }
     is Collection<*> -> value.joinToString(", ", "[", "]") { renderValue(it) }

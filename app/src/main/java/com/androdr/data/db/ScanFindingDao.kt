@@ -19,8 +19,17 @@ class FindingRow(
     val findingJson: String,
 )
 
+/** One deletion-audit entry: how many triggered findings share (rule, level, package). */
+data class AuditGroup(val ruleId: String, val level: String, val packageName: String, val count: Int)
+
+/** A triggered finding with no stored Timeline columns (migrated or correlation): its package is in the JSON. */
+class AuditJsonRow(val id: Long, val ruleId: String, val level: String, val findingJson: String)
+
 /** How many triggered findings one rule has in a scan. */
 data class RuleCount(val ruleId: String, val count: Int)
+
+/** A History row's stored-finding counts ([ScanFindingDao.rowCounts]). */
+data class StoredFindingCounts(val shown: Int, val stored: Int)
 
 /** A scan's triggered-finding counts the History sheet shows (spec §7), computed in SQL. */
 data class FindingSummaryCounts(val appIssues: Int, val deviceIssues: Int, val warningSigns: Int)
@@ -104,6 +113,55 @@ interface ScanFindingDao {
     @Query("$RULE_SAMPLE")
     suspend fun ruleSample(scanId: Long, ruleId: String, size: Int): List<FindingRow>
 
+    // ── Deletion audit (spec §5.4): built in the delete's first transaction, while the scans are COMPLETE ──
+
+    /** The [limit] largest (rule, level, package) groups of a scan's triggered findings that carry row columns. */
+    @Query("$AUDIT_GROUPS_FOR_SCAN")
+    suspend fun auditGroups(scanId: Long, limit: Int): List<AuditGroup>
+
+    /** Keyset page of a scan's triggered findings without row columns (their package is read from the JSON). */
+    @Query("$AUDIT_JSON_ROWS_FOR_SCAN")
+    suspend fun auditJsonRows(scanId: Long, afterId: Long, size: Int): List<AuditJsonRow>
+
+    /** How many triggered findings a COMPLETE scan has. */
+    @Query(
+        "SELECT COUNT(*) FROM scan_finding sf JOIN ScanResult s ON s.id = sf.scanId " +
+            "WHERE sf.scanId = :scanId AND sf.triggered = 1 AND ${CompleteScan.SQL}"
+    )
+    suspend fun triggeredTotal(scanId: Long): Long
+
+    /** [auditGroups] over every COMPLETE scan ("Clear all"). */
+    @Query("$AUDIT_GROUPS_ALL")
+    suspend fun auditGroupsAll(limit: Int): List<AuditGroup>
+
+    /** [auditJsonRows] over every COMPLETE scan ("Clear all"). */
+    @Query(
+        "SELECT sf.id, sf.ruleId, sf.level, sf.findingJson FROM scan_finding sf " +
+            "JOIN ScanResult s ON s.id = sf.scanId " +
+            "WHERE sf.triggered = 1 AND sf.row_source IS NULL AND sf.id > :afterId AND ${CompleteScan.SQL} " +
+            "ORDER BY sf.id LIMIT :size"
+    )
+    suspend fun auditJsonRowsAll(afterId: Long, size: Int): List<AuditJsonRow>
+
+    /** [triggeredTotal] over every COMPLETE scan. */
+    @Query(
+        "SELECT COUNT(*) FROM scan_finding sf JOIN ScanResult s ON s.id = sf.scanId " +
+            "WHERE sf.triggered = 1 AND ${CompleteScan.SQL}"
+    )
+    suspend fun triggeredTotalAll(): Long
+
+    /**
+     * A History row's counts: stored triggered findings shown (informational excluded, as the import
+     * screen counts them) and every stored triggered finding (the row compares it with the scan's
+     * `triggeredCount` to say how many could not be saved).
+     */
+    @Query(
+        "SELECT COALESCE(SUM(CASE WHEN lower(sf.level) != 'informational' THEN 1 ELSE 0 END), 0) AS shown, " +
+            "COUNT(*) AS stored FROM scan_finding sf JOIN ScanResult s ON s.id = sf.scanId " +
+            "WHERE sf.scanId = :scanId AND sf.triggered = 1 AND ${CompleteScan.SQL}"
+    )
+    suspend fun rowCounts(scanId: Long): StoredFindingCounts
+
     /** The History sheet's counts: triggered app issues (informational excluded), device issues, warning signs. */
     @Query("$SUMMARY_COUNTS")
     suspend fun summaryCounts(scanId: Long): FindingSummaryCounts
@@ -165,3 +223,25 @@ internal const val CURRENT_STATE = "SELECT sf.id, sf.scanId, sf.ruleId, sf.trigg
     "sf.recordId, sf.alertId, sf.findingJson FROM scan_finding sf JOIN ScanResult s ON s.id = sf.scanId " +
     "WHERE sf.scanId = ($LATEST_LIVE_ID) AND sf.triggered = 1 AND sf.kind = 'STATE' " +
     "AND ${CompleteScan.SQL} ORDER BY sf.id"
+
+/**
+ * A scan's triggered findings that carry row columns, grouped by (rule, level, package), largest first,
+ * at most `limit` (the deletion audit, spec §5.4: SQL GROUP BY with LIMIT, so building it holds at most
+ * `limit` groups whatever the scan's size).
+ */
+internal const val AUDIT_GROUPS_FOR_SCAN = "SELECT sf.ruleId AS ruleId, sf.level AS level, " +
+    "sf.row_packageName AS packageName, COUNT(*) AS count FROM scan_finding sf JOIN ScanResult s ON s.id = sf.scanId " +
+    "WHERE sf.scanId = :scanId AND sf.triggered = 1 AND sf.row_source IS NOT NULL AND ${CompleteScan.SQL} " +
+    "GROUP BY sf.ruleId, sf.level, sf.row_packageName ORDER BY count DESC, ruleId, level, packageName LIMIT :limit"
+
+/** A scan's triggered findings without row columns, keyset by id (index `(scanId, triggered)`). */
+internal const val AUDIT_JSON_ROWS_FOR_SCAN = "SELECT sf.id, sf.ruleId, sf.level, sf.findingJson " +
+    "FROM scan_finding sf " +
+    "JOIN ScanResult s ON s.id = sf.scanId WHERE sf.scanId = :scanId AND sf.triggered = 1 " +
+    "AND sf.row_source IS NULL AND sf.id > :afterId AND ${CompleteScan.SQL} ORDER BY sf.id LIMIT :size"
+
+/** [AUDIT_GROUPS_FOR_SCAN] over every COMPLETE scan ("Clear all"). */
+internal const val AUDIT_GROUPS_ALL = "SELECT sf.ruleId AS ruleId, sf.level AS level, " +
+    "sf.row_packageName AS packageName, COUNT(*) AS count FROM scan_finding sf JOIN ScanResult s ON s.id = sf.scanId " +
+    "WHERE sf.triggered = 1 AND sf.row_source IS NOT NULL AND ${CompleteScan.SQL} " +
+    "GROUP BY sf.ruleId, sf.level, sf.row_packageName ORDER BY count DESC, ruleId, level, packageName LIMIT :limit"

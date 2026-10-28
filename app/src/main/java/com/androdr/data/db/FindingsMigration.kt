@@ -100,6 +100,7 @@ class FindingsMigration(private val clock: () -> Long = System::currentTimeMilli
     private class Migrated(
         val ruleId: String, val triggered: Boolean, val level: String, val category: String,
         val service: String?, val ordinal: Int, val recordId: Long?, val kind: FindingKind, val alertKey: ByteArray?,
+        val matchedValue: String?,
     ) {
         /** [complete]: only a COMPLETE scan's rows carry their key — others open no alert (review Minor 1). */
         fun values(scanId: Long, json: String, complete: Boolean) = ContentValues().apply {
@@ -113,6 +114,7 @@ class FindingsMigration(private val clock: () -> Long = System::currentTimeMilli
             put("service", service.orEmpty())
             put("ordinal", ordinal)
             put("alertKey", alertKey?.takeIf { complete })
+            put("matchedValue", matchedValue?.takeIf { complete && alertKey != null })
             put("findingJson", json)
         }
     }
@@ -139,8 +141,8 @@ class FindingsMigration(private val clock: () -> Long = System::currentTimeMilli
             else -> FindingKinds.noFact(service, eventField, context)
         }
         val recordId = fact?.first
+        val d = AlertIdentity.Discriminator.ofJson(f["evidence"] as? JsonObject)
         val alertKey = if (triggered && kind == FindingKind.ALERT) {
-            val d = AlertIdentity.Discriminator.ofJson(f["evidence"] as? JsonObject)
             if (recordId != null) {
                 AlertIdentity.recordKey(ruleId, recordId, d)
             } else {
@@ -150,7 +152,7 @@ class FindingsMigration(private val clock: () -> Long = System::currentTimeMilli
             null
         }
         return Migrated(ruleId, triggered, f.str("level").orEmpty(), category, service, ordinal, recordId, kind,
-            alertKey)
+            alertKey, d.matchedValue)
     }
 
     /** Whether fact [id] is an event (null when the fact no longer exists). */
@@ -175,8 +177,9 @@ class FindingsMigration(private val clock: () -> Long = System::currentTimeMilli
             val open = o.lastActivityAt >= cutoff
             db.execSQL(
                 "INSERT INTO alert (alertKey, ruleId, status, openedAt, openedScanId, lastActivityAt, closedAt, " +
-                    "closedReason, closedWithCredential, level, recordId, evidenceJson) SELECT sf.alertKey, " +
-                    "sf.ruleId, ?, s.timestamp, sf.scanId, ?, ?, ?, 0, sf.level, sf.recordId, sf.findingJson " +
+                    "closedReason, closedWithCredential, level, recordId, evidenceJson, matchedValue) SELECT " +
+                    "sf.alertKey, sf.ruleId, ?, s.timestamp, sf.scanId, ?, ?, ?, 0, sf.level, sf.recordId, " +
+                    "sf.findingJson, COALESCE(sf.matchedValue, '') " +
                     "FROM scan_finding sf JOIN ScanResult s ON s.id = sf.scanId WHERE sf.id = ?",
                 arrayOf<Any?>(
                     if (open) "OPEN" else "CLOSED", o.lastActivityAt, if (open) null else now,
@@ -224,7 +227,8 @@ class FindingsMigration(private val clock: () -> Long = System::currentTimeMilli
                 "`scanId` INTEGER NOT NULL, `ruleId` TEXT NOT NULL, `triggered` INTEGER NOT NULL, " +
                 "`level` TEXT NOT NULL, `category` TEXT NOT NULL, `kind` TEXT NOT NULL, `recordId` INTEGER, " +
                 "`service` TEXT NOT NULL, `ordinal` INTEGER NOT NULL, `alertKey` BLOB, `alertId` INTEGER, " +
-                "`findingJson` TEXT NOT NULL, `evidenceJson` TEXT, `row_startTimestamp` INTEGER, " +
+                "`findingJson` TEXT NOT NULL, `matchedValue` TEXT, `evidenceJson` TEXT, " +
+                "`row_startTimestamp` INTEGER, " +
                 "`row_timestampPrecision` TEXT, `row_source` TEXT, `row_category` TEXT, `row_description` TEXT, " +
                 "`row_details` TEXT, `row_packageName` TEXT, `row_appName` TEXT, `row_apkHash` TEXT, " +
                 "`row_iocIndicator` TEXT, `row_iocType` TEXT, `row_iocSource` TEXT, `row_campaignName` TEXT, " +
@@ -239,11 +243,13 @@ class FindingsMigration(private val clock: () -> Long = System::currentTimeMilli
                 "`openedAt` INTEGER NOT NULL, `openedScanId` INTEGER NOT NULL, `lastActivityAt` INTEGER NOT NULL, " +
                 "`closedAt` INTEGER, " +
                 "`closedReason` TEXT, `closedWithCredential` INTEGER NOT NULL DEFAULT 0, `level` TEXT NOT NULL, " +
-                "`recordId` INTEGER, `evidenceJson` TEXT NOT NULL)",
+                "`recordId` INTEGER, `evidenceJson` TEXT NOT NULL, `matchedValue` TEXT NOT NULL DEFAULT '')",
             "CREATE UNIQUE INDEX IF NOT EXISTS `index_alert_alertKey` ON `alert` (`alertKey`)",
             "CREATE INDEX IF NOT EXISTS `index_alert_ruleId_status` ON `alert` (`ruleId`, `status`)",
             "CREATE INDEX IF NOT EXISTS `index_alert_recordId` ON `alert` (`recordId`)",
             "CREATE INDEX IF NOT EXISTS `index_alert_status_lastActivityAt` ON `alert` (`status`, `lastActivityAt`)",
+            "CREATE INDEX IF NOT EXISTS `index_alert_status_ruleId_matchedValue_lastActivityAt` " +
+                "ON `alert` (`status`, `ruleId`, `matchedValue`, `lastActivityAt`)",
             "CREATE TABLE IF NOT EXISTS `ScanResult_new` (`id` INTEGER NOT NULL, `timestamp` INTEGER NOT NULL, " +
                 "`bugReportFindings` TEXT NOT NULL, `riskySideloadCount` INTEGER NOT NULL, " +
                 "`knownMalwareCount` INTEGER NOT NULL, `scannerErrors` TEXT NOT NULL, `source` TEXT NOT NULL, " +

@@ -10,6 +10,7 @@ import com.androdr.data.model.ScanState
 import com.androdr.data.model.SignalMember
 import com.androdr.data.model.TelemetryState
 import com.androdr.data.store.AtomReader
+import com.androdr.data.store.PendingClear
 import com.androdr.data.store.TelemetryStore
 import com.androdr.sigma.CorrelationSignal
 import com.androdr.sigma.Finding
@@ -30,6 +31,7 @@ class ScanWriteRepository @Inject constructor(
     private val store: TelemetryStore,
     private val rows: TimelineRowDeleter,
     private val findings: FindingsRepository,
+    private val pendingClear: PendingClear,
 ) {
     private val scans get() = db.scanResultDao()
     private val writes get() = db.scanWriteDao()
@@ -98,8 +100,8 @@ class ScanWriteRepository @Inject constructor(
     }
 
     /**
-     * First delete step, one transaction: hide [scanId] (`DELETING`) and write [persistentRow] if
-     * given — the "import interrupted" row from the sweep, or (Task D3) the deletion audit row.
+     * First delete step of an unaudited delete, one transaction: hide [scanId] (`DELETING`) and write
+     * [persistentRow] if given (the sweep's "import interrupted" row).
      */
     suspend fun markForDelete(scanId: Long, persistentRow: ForensicTimelineEvent? = null) = db.withTransaction {
         writes.markDeleting(scanId)
@@ -107,19 +109,45 @@ class ScanWriteRepository @Inject constructor(
     }
 
     /**
-     * "Clear all"'s first step, one transaction: hide every scan and return their ids. Only these
-     * are deleted by [completeDeleteAll]; a scan begun after this (once the caller releases the
-     * lock) is not among them and survives.
+     * A user delete's first step (spec §5.4 step 1), one transaction: build the capped audit summary
+     * from the scan's triggered `scan_finding` rows, insert the persistent `scan_deleted` row, and set
+     * the scan `DELETING`. False (nothing written) when the scan is not COMPLETE (gone, or already
+     * being deleted).
      */
-    suspend fun markAllForDelete(): List<Long> = db.withTransaction {
-        writes.markAllDeleting()
-        writes.sweepTargets().map { it.id }
-    }
+    suspend fun markForAuditedDelete(scanId: Long, now: Long = System.currentTimeMillis()): Boolean =
+        db.withTransaction {
+            val scan = scans.completeById(scanId) ?: return@withTransaction false
+            timeline.insert(DeletionAudit(db.scanFindingDao()).forScan(scan, now))
+            writes.markDeleting(scanId)
+            true
+        }
 
     /**
-     * The rest of a delete, idempotent and resumable by the sweep: the scan's own non-persistent
-     * Timeline rows and its `scan_finding` rows (so they stop pinning facts; its alerts are never
-     * deleted and keep pinning theirs), its telemetry, then the `ScanResult` row.
+     * "Clear all"'s first step (spec §5.4), one transaction: one capped audit row built from every
+     * COMPLETE scan's triggered `scan_finding` rows, every scan set `DELETING`, and `clearMaxRowId`
+     * (the newest `forensic_timeline` id). Returns the ids it set `DELETING` and `clearMaxRowId`;
+     * only these are deleted by [completeDeleteAll], so a scan begun after this (once the caller
+     * releases the lock) survives. The caller saves `clearMaxRowId` ([saveClearMark]) before it
+     * releases the lock.
+     */
+    suspend fun markAllForAuditedDelete(now: Long = System.currentTimeMillis()): ClearSnapshot = db.withTransaction {
+        val complete = writes.completeCount()
+        timeline.insert(DeletionAudit(db.scanFindingDao()).forAll(complete, now))
+        writes.markAllDeleting()
+        ClearSnapshot(writes.sweepTargets().map { it.id }, timeline.maxId())
+    }
+
+    /** What "Clear all"'s first transaction set `DELETING`, and the newest row id at that point. */
+    data class ClearSnapshot(val scanIds: List<Long>, val clearMaxRowId: Long)
+
+    /** Saves a running "Clear all"'s `clearMaxRowId` (DataStore), so `StartupSweep` can finish it. */
+    suspend fun saveClearMark(clearMaxRowId: Long) = pendingClear.save(clearMaxRowId)
+
+    /**
+     * The rest of a delete, idempotent and resumable by the sweep (spec §5.4 steps 2–4): the scan's
+     * own non-persistent Timeline rows (signal rows with their `signal_member` rows) and its
+     * `scan_finding` rows, releasing the facts they alone pinned in the same transactions (its alerts
+     * are never deleted and keep pinning theirs), its telemetry, then the `ScanResult` row last.
      */
     suspend fun completeDelete(scanId: Long) {
         db.withTransaction { rows.byScanId(scanId) }
@@ -136,13 +164,23 @@ class ScanWriteRepository @Inject constructor(
     }
 
     /**
-     * "Clear all" after [markAllForDelete]: completes the delete of each snapshotted scan, then
-     * removes the non-persistent rows no surviving scan owns (scan-less live rows and leftovers).
+     * "Clear all" after [markAllForAuditedDelete]: completes the delete of each snapshotted scan, then
+     * removes the non-persistent scan-less rows (`scanResultId = -1`, live `dns_query`/`ioc_match` rows
+     * among them) with `id <= clearMaxRowId`, and drops the saved mark. No audit row is written here.
      */
-    suspend fun completeDeleteAll(scanIds: List<Long>) {
-        for (id in scanIds) completeDelete(id)
-        db.withTransaction { rows.unownedNonPersistent() }
+    suspend fun completeDeleteAll(snapshot: ClearSnapshot) {
+        for (id in snapshot.scanIds) completeDelete(id)
+        finishClear(snapshot.clearMaxRowId)
     }
+
+    /** The scan-less rows of a "Clear all" (or a pending one the sweep finishes), then the mark. */
+    suspend fun finishClear(clearMaxRowId: Long) {
+        db.withTransaction { rows.scanLessThrough(clearMaxRowId) }
+        pendingClear.clear()
+    }
+
+    /** A pending "Clear all"'s `clearMaxRowId`, if one did not finish. */
+    suspend fun pendingClearMark(): Long? = pendingClear.get()
 
     /** An unaudited cleanup delete (a failed or aborted writer). */
     suspend fun cleanupDelete(scanId: Long) {

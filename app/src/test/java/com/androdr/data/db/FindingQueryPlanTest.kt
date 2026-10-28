@@ -42,13 +42,17 @@ class FindingQueryPlanTest {
 
     private fun assertIndexed(
         what: String, sql: String, mustUse: List<String> = emptyList(), groupBySort: Boolean = false,
+        groupOrderSort: Boolean = false,
     ) {
         val p = plan(sql)
         val bad = p.filter(::fullScanOfGuarded)
         assertTrue("$what reads a whole guarded table:\n${p.joinToString("\n")}", bad.isEmpty())
         // A GROUP BY over one scan's rows (bounded output: one row per rule) may sort in SQLite's own
-        // temp b-tree, never the Java heap; an ORDER BY sort is never allowed.
-        val sorts = p.filter { "TEMP B-TREE" in it && !(groupBySort && "GROUP BY" in it) }
+        // temp b-tree, never the Java heap; an ORDER BY sort is never allowed, except — opt-in, per
+        // statement ([groupOrderSort]) — ordering a GROUP BY's output (groups, not rows) under a LIMIT.
+        val sorts = p.filter {
+            "TEMP B-TREE" in it && !(groupBySort && "GROUP BY" in it) && !(groupOrderSort && "ORDER BY" in it)
+        }
         assertTrue("$what sorts in a temp b-tree:\n${p.joinToString("\n")}", sorts.isEmpty())
         for (index in mustUse) assertTrue("$what does not use $index:\n${p.joinToString("\n")}", p.any { index in it })
     }
@@ -94,6 +98,28 @@ class FindingQueryPlanTest {
         assertIndexed("summary counts", SUMMARY_COUNTS, listOf("index_scan_finding_scanId_triggered"))
         assertIndexed("rule sample", RULE_SAMPLE, listOf("index_scan_finding_scanId_triggered"))
         assertIndexed("batched delete", DELETE_FINDINGS_BATCH, listOf("index_scan_finding_scanId"))
+    }
+
+    /**
+     * D3 (spec §5.4): the open-alert groups walk index `(status, ruleId, matchedValue, lastActivityAt)`
+     * with no GROUP BY sort; ordering the groups by latest activity sorts groups only (bounded by
+     * distinct rule × matched value, never by alerts). The group close, the report's alert stream, the
+     * deletion audit and "Clear all"'s scan-less delete use indices.
+     */
+    @Test
+    fun `the alert groups, group close, report stream, deletion audit and clear-all use indices`() {
+        val groupIndex = "index_alert_status_ruleId_matchedValue_lastActivityAt"
+        assertIndexed("open alert groups", OPEN_ALERT_GROUPS_AFTER, listOf(groupIndex), groupOrderSort = true)
+        assertTrue("grouping needs no sort", plan(OPEN_ALERT_GROUPS_AFTER).none { "GROUP BY" in it && "TEMP" in it })
+        // SQLite may pick either alert index that leads with the equality columns; both are a SEARCH.
+        assertIndexed("group close", CLOSE_ALERT_GROUP, listOf("SEARCH alert USING INDEX index_alert_"))
+        assertIndexed("alerts by status", ALERTS_BY_STATUS_AFTER, listOf("index_alert_status_lastActivityAt"))
+        assertIndexed("audit groups of a scan", AUDIT_GROUPS_FOR_SCAN, listOf("index_scan_finding_scanId_triggered"),
+            groupBySort = true, groupOrderSort = true)
+        assertIndexed("audit JSON rows of a scan", AUDIT_JSON_ROWS_FOR_SCAN,
+            listOf("index_scan_finding_scanId_triggered"))
+        assertIndexed("clear-all scan-less rows", DELETE_SCAN_LESS_THROUGH,
+            listOf("index_forensic_timeline_scanResultId_startTimestamp"))
     }
 
     @Test

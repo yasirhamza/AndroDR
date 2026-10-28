@@ -20,7 +20,8 @@ import javax.inject.Singleton
  * Finishes what a killed process left (spec §5.2 Failure handling): removes every `IN_PROGRESS`
  * (killed writer) and `DELETING` (interrupted delete) scan, then garbage-collects the store when
  * it swept something or the dirty flag is set, and runs the one-time [SignalMemberBackfill] and
- * [LegacyEventRowCleanup].
+ * [LegacyEventRowCleanup]. A pending "Clear all" ([ScanWriteRepository.pendingClearMark]) has its
+ * scan-less rows finished after its scans.
  *
  * [ScanLock.mutex] is held only to snapshot the ids, so a scan started meanwhile is never in the
  * snapshot and survives. A swept `IN_PROGRESS` import gets one persistent "import interrupted"
@@ -53,7 +54,16 @@ class StartupSweep @Inject constructor(
                 dirty.set()
             }
         }
-        if (targets.isNotEmpty() || dirty.isSet()) store.gcUnobservedUnpinned()
+        // A "Clear all" killed after its first transaction: its DELETING scans were swept above; its
+        // scan-less rows (id <= the saved clearMaxRowId) go now, and the mark with them (spec §5.4).
+        val pendingClear = runCatching { repo.pendingClearMark() }.getOrNull()
+        if (pendingClear != null) {
+            runCatching { repo.finishClear(pendingClear) }.onFailure {
+                Log.e(TAG, "Startup sweep could not finish a pending Clear all", it)
+                dirty.set()
+            }
+        }
+        if (targets.isNotEmpty() || pendingClear != null || dirty.isSet()) store.gcUnobservedUnpinned()
         runCatching { reportFiles.deleteStale() }.onFailure { Log.w(TAG, "Stale report cleanup failed", it) }
         // One-time move of legacy signals' member lists into signal_member (spec §5.4); it takes the
         // lock per batch, and a failure is retried next launch.

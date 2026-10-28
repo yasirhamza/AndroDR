@@ -70,6 +70,7 @@ import com.androdr.data.model.ForensicTimelineEvent
 import com.androdr.data.model.TelemetrySource
 import com.androdr.sigma.FindingCategory
 import com.androdr.ui.common.SeverityChip
+import com.androdr.ui.security.ProtectedButton
 import com.androdr.ui.theme.androdrColors
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -223,6 +224,7 @@ fun TimelineEventDetailSheet(
     relatedEvents: List<ForensicTimelineEvent> = emptyList(),
     onJumpToRelated: (ForensicTimelineEvent) -> Unit = {},
     onShowOnlyApp: ((String) -> Unit)? = null,
+    onCloseAlert: (() -> Unit)? = null,
 ) {
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -267,6 +269,12 @@ fun TimelineEventDetailSheet(
             }
             if (event.ruleId.isNotEmpty()) {
                 DetailSection(stringResource(R.string.timeline_detail_rule), event.ruleId)
+            }
+            // An alert row (its alert is still OPEN): closing it asks the device credential (spec §5.4).
+            onCloseAlert?.let { close ->
+                ProtectedButton(onClick = close, modifier = Modifier.fillMaxWidth()) {
+                    Text(stringResource(R.string.timeline_close_alert))
+                }
             }
             if (event.attackTechniqueId.isNotEmpty()) {
                 DetailSection(

@@ -185,6 +185,8 @@ class Migration20To21Test {
             listOf("$B", "CLOSED", FindingsMigration.MIGRATED_CLOSED_REASON, null, "0"),
             listOf("$C", "OPEN", null, "3", "0"),
         ), alerts.sortedBy { it[0]!!.toLong() })
+        // D3: a migrated alert groups by its evidence's matched value (spec §5.4), like a new one.
+        assertEquals("evil.example", db.rows("SELECT matchedValue FROM alert WHERE openedScanId = $A")[0][0])
         assertEquals("every keyed finding is attached", 0L,
             db.long("SELECT COUNT(*) FROM scan_finding WHERE alertKey IS NOT NULL AND alertId IS NULL"))
 
@@ -233,11 +235,11 @@ class Migration20To21Test {
         try {
             val codec = TelemetryRecordCodec(TelemetryDictionaries { rawFile("$it.txt").readBytes() })
             val reader = TelemetryReader(room, codec, EventDisplay.parse(rawFile("event_display.yml").readText()))
-            val f = FindingsRepository(room, reader).findingsOf(A).single()
+            val f = FindingsRepository(room, reader) { true }.findingsOf(A).single()
             assertEquals("androdr-003", f.ruleId)
             assertEquals(1L, f.recordId)
             assertEquals("evil.example", f.matchContext["domain"])
-            assertEquals(1, FindingsRepository(room, reader).currentOnce().openAlertCount)
+            assertEquals(1, FindingsRepository(room, reader) { true }.currentOnce().openAlertCount)
             assertTrue(room.scanResultDao().getLatestTwo().single().maxLevel == "high")
         } finally {
             room.close()

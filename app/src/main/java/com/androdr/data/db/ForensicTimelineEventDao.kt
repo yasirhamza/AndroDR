@@ -70,10 +70,10 @@ interface ForensicTimelineEventDao {
     suspend fun signalIdsByScanId(scanResultId: Long): List<Long>
 
     @Query(
-        "SELECT id FROM forensic_timeline WHERE kind = 'signal' AND persistent = 0 AND (scanResultId = -1 OR " +
-            "NOT EXISTS (SELECT 1 FROM ScanResult s WHERE s.id = forensic_timeline.scanResultId))"
+        "SELECT id FROM forensic_timeline WHERE kind = 'signal' AND persistent = 0 AND scanResultId = -1 " +
+            "AND id <= :maxId"
     )
-    suspend fun signalIdsUnownedNonPersistent(): List<Long>
+    suspend fun signalIdsScanLessThrough(maxId: Long): List<Long>
 
     @Query(
         "SELECT DISTINCT recordId FROM forensic_timeline " +
@@ -98,17 +98,25 @@ interface ForensicTimelineEventDao {
     )
     suspend fun recordIdsByScanId(scanResultId: Long): List<Long>
 
-    /** "Clear all": non-persistent rows that are scan-less or whose scan no longer exists. */
-    @Query(
-        "DELETE FROM forensic_timeline WHERE persistent = 0 AND (scanResultId = -1 OR NOT EXISTS " +
-            "(SELECT 1 FROM ScanResult s WHERE s.id = forensic_timeline.scanResultId))"
-    )
-    suspend fun deleteUnownedNonPersistent()
+    /**
+     * "Clear all" (spec §5.4): the non-persistent scan-less rows (`scanResultId = -1`, live
+     * `dns_query`/`ioc_match` rows among them) that existed at its first transaction (`id <= maxId`).
+     * A row written after that, or a row of a scan begun after it, is untouched.
+     */
+    @Query("$DELETE_SCAN_LESS_THROUGH")
+    suspend fun deleteScanLessThrough(maxId: Long)
 
     @Query(
         "SELECT DISTINCT recordId FROM forensic_timeline WHERE persistent = 0 AND recordId IS NOT NULL " +
-            "AND (scanResultId = -1 OR NOT EXISTS " +
-            "(SELECT 1 FROM ScanResult s WHERE s.id = forensic_timeline.scanResultId))"
+            "AND scanResultId = -1 AND id <= :maxId"
     )
-    suspend fun recordIdsUnownedNonPersistent(): List<Long>
+    suspend fun recordIdsScanLessThrough(maxId: Long): List<Long>
+
+    /** The newest row id ("Clear all"'s `clearMaxRowId`); 0 when the table is empty. */
+    @Query("SELECT COALESCE(MAX(id), 0) FROM forensic_timeline")
+    suspend fun maxId(): Long
 }
+
+/** "Clear all"'s scan-less delete (index `(scanResultId, startTimestamp)`). */
+internal const val DELETE_SCAN_LESS_THROUGH =
+    "DELETE FROM forensic_timeline WHERE persistent = 0 AND scanResultId = -1 AND id <= :maxId"

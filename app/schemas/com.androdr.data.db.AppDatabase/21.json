@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "database": {
     "version": 21,
-    "identityHash": "4af42a27134f03550eec2482d0b16ee2",
+    "identityHash": "2f9788aaa8bb76edc68dce7bbd888a88",
     "entities": [
       {
         "tableName": "ScanResult",
@@ -1002,7 +1002,7 @@
       },
       {
         "tableName": "scan_finding",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `scanId` INTEGER NOT NULL, `ruleId` TEXT NOT NULL, `triggered` INTEGER NOT NULL, `level` TEXT NOT NULL, `category` TEXT NOT NULL, `kind` TEXT NOT NULL, `recordId` INTEGER, `service` TEXT NOT NULL, `ordinal` INTEGER NOT NULL, `alertKey` BLOB, `alertId` INTEGER, `findingJson` TEXT NOT NULL, `evidenceJson` TEXT, `row_startTimestamp` INTEGER, `row_timestampPrecision` TEXT, `row_source` TEXT, `row_category` TEXT, `row_description` TEXT, `row_details` TEXT, `row_packageName` TEXT, `row_appName` TEXT, `row_apkHash` TEXT, `row_iocIndicator` TEXT, `row_iocType` TEXT, `row_iocSource` TEXT, `row_campaignName` TEXT, `row_correlationId` TEXT, `row_attackTechniqueId` TEXT, `row_telemetrySource` TEXT)",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `scanId` INTEGER NOT NULL, `ruleId` TEXT NOT NULL, `triggered` INTEGER NOT NULL, `level` TEXT NOT NULL, `category` TEXT NOT NULL, `kind` TEXT NOT NULL, `recordId` INTEGER, `service` TEXT NOT NULL, `ordinal` INTEGER NOT NULL, `alertKey` BLOB, `alertId` INTEGER, `findingJson` TEXT NOT NULL, `matchedValue` TEXT, `evidenceJson` TEXT, `row_startTimestamp` INTEGER, `row_timestampPrecision` TEXT, `row_source` TEXT, `row_category` TEXT, `row_description` TEXT, `row_details` TEXT, `row_packageName` TEXT, `row_appName` TEXT, `row_apkHash` TEXT, `row_iocIndicator` TEXT, `row_iocType` TEXT, `row_iocSource` TEXT, `row_campaignName` TEXT, `row_correlationId` TEXT, `row_attackTechniqueId` TEXT, `row_telemetrySource` TEXT)",
         "fields": [
           {
             "fieldPath": "id",
@@ -1081,6 +1081,12 @@
             "columnName": "findingJson",
             "affinity": "TEXT",
             "notNull": true
+          },
+          {
+            "fieldPath": "matchedValue",
+            "columnName": "matchedValue",
+            "affinity": "TEXT",
+            "notNull": false
           },
           {
             "fieldPath": "evidenceJson",
@@ -1226,7 +1232,7 @@
       },
       {
         "tableName": "alert",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `alertKey` BLOB NOT NULL, `ruleId` TEXT NOT NULL, `status` TEXT NOT NULL, `openedAt` INTEGER NOT NULL, `openedScanId` INTEGER NOT NULL, `lastActivityAt` INTEGER NOT NULL, `closedAt` INTEGER, `closedReason` TEXT, `closedWithCredential` INTEGER NOT NULL DEFAULT 0, `level` TEXT NOT NULL, `recordId` INTEGER, `evidenceJson` TEXT NOT NULL)",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `alertKey` BLOB NOT NULL, `ruleId` TEXT NOT NULL, `status` TEXT NOT NULL, `openedAt` INTEGER NOT NULL, `openedScanId` INTEGER NOT NULL, `lastActivityAt` INTEGER NOT NULL, `closedAt` INTEGER, `closedReason` TEXT, `closedWithCredential` INTEGER NOT NULL DEFAULT 0, `level` TEXT NOT NULL, `recordId` INTEGER, `evidenceJson` TEXT NOT NULL, `matchedValue` TEXT NOT NULL DEFAULT '')",
         "fields": [
           {
             "fieldPath": "id",
@@ -1306,6 +1312,13 @@
             "columnName": "evidenceJson",
             "affinity": "TEXT",
             "notNull": true
+          },
+          {
+            "fieldPath": "matchedValue",
+            "columnName": "matchedValue",
+            "affinity": "TEXT",
+            "notNull": true,
+            "defaultValue": "''"
           }
         ],
         "primaryKey": {
@@ -1352,6 +1365,18 @@
             ],
             "orders": [],
             "createSql": "CREATE INDEX IF NOT EXISTS `index_alert_status_lastActivityAt` ON `${TABLE_NAME}` (`status`, `lastActivityAt`)"
+          },
+          {
+            "name": "index_alert_status_ruleId_matchedValue_lastActivityAt",
+            "unique": false,
+            "columnNames": [
+              "status",
+              "ruleId",
+              "matchedValue",
+              "lastActivityAt"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_alert_status_ruleId_matchedValue_lastActivityAt` ON `${TABLE_NAME}` (`status`, `ruleId`, `matchedValue`, `lastActivityAt`)"
           }
         ],
         "foreignKeys": []
@@ -1360,7 +1385,7 @@
     "views": [],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '4af42a27134f03550eec2482d0b16ee2')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '2f9788aaa8bb76edc68dce7bbd888a88')"
     ]
   }
 }
