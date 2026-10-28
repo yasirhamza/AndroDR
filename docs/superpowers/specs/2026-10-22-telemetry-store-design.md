@@ -197,7 +197,7 @@ Persistence surfaces:
 
 - **Schema 20 (Phase A)**:
   - New tables: `record_body`, `telemetry_record`, `scan_record` (content, facts, observations — §5.1); `event_watermark` (§5.2); `signal_member` (correlation-signal members, §5.4).
-  - New `forensic_timeline` columns: `recordId`, `sourceEventKey` (h128 BLOB, the same hash as `telemetry_record.sourceKey`), `level`, `persistent` (default 0). New `ScanResult` columns: `state` (`IN_PROGRESS` | `COMPLETE` | `DELETING`, default `COMPLETE`), `telemetryState` (`NONE` | `STORED` | `PARTIAL_RETENTION` | `FAILED`). The migration backfills `level` on legacy finding rows from `ScanResult.findings` by (`scanResultId`, `ruleId`). It uses the same chunked `substr` reader as 20→21, so an oversized or corrupt row leaves `level` null and never aborts the upgrade.
+  - New `forensic_timeline` columns: `recordId`, `sourceEventKey` (h128 BLOB, the same hash as `telemetry_record.sourceKey`), `level`, `persistent` (default 0). New `ScanResult` columns: `state` (`IN_PROGRESS` | `COMPLETE` | `DELETING`, default `COMPLETE`), `telemetryState` (`NONE` | `STORED` | `PARTIAL_RETENTION` | `FAILED` | `FAILED_PARTIAL_RETENTION`). The migration backfills `level` on legacy finding rows from `ScanResult.findings` by (`scanResultId`, `ruleId`). It uses the same chunked `substr` reader as 20→21, so an oversized or corrupt row leaves `level` null and never aborts the upgrade.
   - Composite indices: §5.1 and §6.
 - **Schema 21 (Phase D)**: `scan_finding`, `alert` (§5.4); `ScanResult` loses `findings`.
 - **`forensic_timeline`** keeps only finding rows, correlation signals, detected changes, and audit and closure rows.
@@ -370,7 +370,7 @@ Covered paths: scan deletion, "Clear all", retention and the prune. References a
 - **Live event observations** are kept for 30 days.
 - **Import observations** are kept until the user deletes the import.
 - **Pinned facts** are always kept.
-- A scan that loses any observations becomes `PARTIAL_RETENTION`.
+- A `STORED` scan that loses any observations becomes `PARTIAL_RETENTION`; a `FAILED` scan that loses any becomes `FAILED_PARTIAL_RETENTION` (ruling R40), so the report never presents a post-retention count as what was stored before the failure.
 - Retention runs in `IocUpdateWorker` after the IOC fetch, under `scanMutex.tryLock()` (it is skipped this cycle if a scan or import holds the lock), in keyset batches.
 
 ### 5.2 Writers, watermarks, failure handling
@@ -598,7 +598,7 @@ merges, because retention arrives in D4.
 ## 7. Report and export
 
 - **One report path.** All reports go through `ReportExporter`, streaming to a file `Writer`. The History sheet shows a summary.
-- **Telemetry sections** read only the scan's own observations. When telemetry is missing, the report says why: `NONE`, `PARTIAL_RETENTION` or `FAILED`.
+- **Telemetry sections** read only the scan's own observations. When telemetry is missing, the report says why: `NONE`, `PARTIAL_RETENTION`, `FAILED` or `FAILED_PARTIAL_RETENTION`.
 - **Escaping.**
   - Device-controlled strings, field keys, and values nested in lists and maps are escaped: `\` and every character in Unicode categories Cc, Cf, Zl, Zp, Co, Cn and Cs (lone surrogates) is rendered as `\uXXXX`.
   - So no value can emit a raw line break, a bidi override, or an ambiguous escape.
