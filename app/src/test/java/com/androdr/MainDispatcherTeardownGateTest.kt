@@ -34,7 +34,8 @@ class MainDispatcherTeardownGateTest {
     @Test
     fun `the rule rejects the old tearDown and accepts the ordered one`() {
         val setUp = "Dispatchers.setMain(main.asCoroutineDispatcher())\n"
-        val old = setUp + "created.forEach { it.viewModelScope.cancel() }\nDispatchers.resetMain()\nmain.shutdownNow()\n"
+        val old = setUp + "created.forEach { it.viewModelScope.cancel() }\n" +
+            "Dispatchers.resetMain()\nmain.shutdownNow()\n"
         assertEquals("cancels without joining its coroutines", teardownProblem(old))
         val noWait = setUp + "job.cancelAndJoin()\nDispatchers.resetMain()\nmain.shutdown()\n"
         assertEquals("does not wait for its executor to stop", teardownProblem(noWait))
