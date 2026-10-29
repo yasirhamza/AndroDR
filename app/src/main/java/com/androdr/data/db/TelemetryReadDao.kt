@@ -110,6 +110,19 @@ interface TelemetryReadDao {
     suspend fun history(service: String, subjectKey: String): List<StoredRecordRow>
 
     /**
+     * [history] restricted to snapshot records (`f.eventTime IS NULL`, spec §3) in both halves: a
+     * service that emits events and snapshots under one subject key (e.g. `appops_audit`) keeps its
+     * events out, so the result is bounded by snapshot retention, not by an event time window.
+     */
+    @Query(
+        "SELECT $OBS_COLS $OBS_FROM WHERE f.service = :service AND f.subjectKey = :subjectKey " +
+            "AND f.eventTime IS NULL AND ${CompleteScan.SQL} UNION ALL SELECT $ORPHAN_COLS FROM telemetry_record f " +
+            "JOIN record_body b ON b.hash = f.bodyHash WHERE f.service = :service AND f.subjectKey = :subjectKey " +
+            "AND f.eventTime IS NULL AND ${VisibleFact.PINNED_ORPHAN} ORDER BY capturedAt, scanId, ordinal"
+    )
+    suspend fun snapshotHistory(service: String, subjectKey: String): List<StoredRecordRow>
+
+    /**
      * Of [ids], the visible facts, each with its newest `COMPLETE` observation (or none, for a
      * pinned orphan, which reads with the fact's first-observation envelope). Call through [chunkedIn].
      */
@@ -210,7 +223,12 @@ internal const val ORPHAN_COLS = "f.id AS factId, -1 AS scanId, f.service AS ser
     "f.firstSource AS source, f.firstCapturedAt AS capturedAt, f.firstStrippedKeys AS strippedKeys, " +
     "$FACT_BODY_COLS"
 
-/** The browser search's match on a fact's indexed text columns (binds `:pattern`, escape `\`). */
+/**
+ * The browser search's match (binds `:pattern`, escape `\`) on the fact's package name and subject
+ * key. A `%x%` LIKE cannot seek either column's index: it is a filter applied inside the ordinal
+ * keyset over `scan_record`'s primary key, so a page reads at most the rest of one scan's records
+ * of one service until it fills.
+ */
 internal const val SEARCH_MATCH =
     "(f.packageName LIKE :pattern ESCAPE '\\' OR f.subjectKey LIKE :pattern ESCAPE '\\')"
 

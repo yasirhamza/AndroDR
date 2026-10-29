@@ -104,6 +104,7 @@ class TelemetryBrowserViewModel @Inject constructor(
         factId?.let { id ->
             viewModelScope.launch {
                 val ids = listOf(id)
+                // reader.records chunks internally; the outer chunkedIn satisfies SqlCompatibilityGateTest.
                 val record = (factScan?.let { reader.recordsInScan(it, ids) }
                     ?: chunkedIn(ids) { reader.records(it) }).firstOrNull()
                 _fact.value = record?.let {
@@ -132,7 +133,11 @@ class TelemetryBrowserViewModel @Inject constructor(
     val history: StateFlow<List<HistoryEntry>> = _fact.flatMapLatest { state ->
         val record = (state as? FactState.Loaded)?.record?.takeIf { state.hasHistory }
         val key = record?.subjectKey
-        if (record == null || key == null) flowOf(emptyList()) else reader.history(record.service, key).map(::historyOf)
+        if (record == null || key == null) {
+            flowOf(emptyList())
+        } else {
+            reader.history(record.service, key, snapshotsOnly = true).map(::historyOf)
+        }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), emptyList())
 
     companion object {

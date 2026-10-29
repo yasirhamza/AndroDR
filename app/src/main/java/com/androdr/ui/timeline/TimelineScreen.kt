@@ -91,8 +91,11 @@ fun TimelineScreen(
     onNavigateToHistory: (() -> Unit)? = null,
     /** Opens a scan's telemetry browser (spec §8.1): from a scan header and a row's detail. */
     onViewTelemetry: ((Long) -> Unit)? = null,
-    /** Opens one fact by id: "Matched record" navigates by the row's `recordId` (spec §6). */
-    onOpenFact: ((Long) -> Unit)? = null,
+    /**
+     * Opens one fact by id, as a scan observed it when the scan is given: "Matched record"
+     * navigates by the row's `recordId` and scan ([matchedRecordTarget], spec §6).
+     */
+    onOpenFact: ((factId: Long, scanId: Long?) -> Unit)? = null,
     viewModel: TimelineViewModel = hiltViewModel()
 ) {
     // The deep link (Apps screen: a package, empty meaning "no real package"; import screen: a scan)
@@ -128,10 +131,14 @@ fun TimelineScreen(
     var selectedRecord by remember { mutableStateOf<DecodedRecord?>(null) }
     var showReportSheet by remember { mutableStateOf(false) }
 
-    // "Matched record" opens the fact screen by the row's recordId; without navigation, the sheet.
+    // "Matched record" opens the fact screen by the row's recordId and scan; without navigation, the sheet.
     fun openMatchedRecord(event: ForensicTimelineEvent, evidence: DecodedRecord) {
-        val recordId = event.recordId
-        if (onOpenFact != null && recordId != null) onOpenFact(recordId) else selectedRecord = evidence
+        val target = matchedRecordTarget(event)
+        if (onOpenFact != null && target != null) {
+            onOpenFact(target.factId, target.scanId)
+        } else {
+            selectedRecord = evidence
+        }
     }
 
     fun copy(preview: ReportPreview) {

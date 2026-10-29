@@ -159,11 +159,20 @@ class TelemetryReader @Inject constructor(
 
     /**
      * Every visible record of one subject ([TelemetryStore.subjectKeyOf]) across scans, in
-     * capture order, then its pinned orphans; re-emitted when scans or pins change.
+     * capture order, then its pinned orphans; re-emitted when scans or pins change. With
+     * [snapshotsOnly], only its snapshot records (no event time): what the browser shows for a
+     * snapshot record, bounded by snapshot retention rather than an event time window (spec §8.1).
      */
-    fun history(service: String, subjectKey: String): Flow<List<DecodedRecord>> =
+    fun history(service: String, subjectKey: String, snapshotsOnly: Boolean = false): Flow<List<DecodedRecord>> =
         db.tableChanges(HISTORY_TABLES)
-            .map { dao.history(service, subjectKey).map(decoder::decode) }
+            .map {
+                val rows = if (snapshotsOnly) {
+                    dao.snapshotHistory(service, subjectKey)
+                } else {
+                    dao.history(service, subjectKey)
+                }
+                rows.map(decoder::decode)
+            }
             .flowOn(Dispatchers.IO)
 
     /**

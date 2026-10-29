@@ -226,6 +226,35 @@ class TelemetryBrowserViewModelTest {
     }
 
     @Test
+    fun `subject history holds only snapshot observations, not same-key events`() = runTest(dispatcher) {
+        // appops_audit keys snapshots and events alike by package_name|operation (review I1).
+        fun op(time: Long?) = StoreRecord(mapOf("package_name" to "com.a", "operation" to "CAMERA",
+            "event_time_ms" to time))
+        f.scan(1L)
+        val first = f.persist(1L, "appops_audit", listOf(op(null), op(1_700_000_000_000L), op(1_700_000_001_000L)),
+            capturedAt = 1_000L)
+        f.setState(1L, ScanState.COMPLETE)
+        completeScan(2L, "appops_audit", listOf(op(1_700_000_002_000L), op(null)), capturedAt = 2_000L)
+        val vm = vm(TelemetryBrowserViewModel.ARG_FACT to first.factIdByChunkIndex[0])
+        assertTrue((vm.fact.first { it != FactState.Loading } as FactState.Loaded).hasHistory)
+        val history = vm.history.first { it.isNotEmpty() }
+        assertEquals("the snapshot's two observations only", listOf(1L, 2L), history.map { it.record.scanId })
+        assertTrue(history.all { it.record.eventTime == null })
+        assertEquals(listOf(emptySet<String>(), emptySet()), history.map { it.changed })
+    }
+
+    @Test
+    fun `a fact seen only by an IN_PROGRESS scan opens as missing`() = runTest(dispatcher) {
+        f.scan(1L)
+        val r = f.persist(1L, "app_scanner", listOf(app("com.wip")))
+        for (args in listOf(arrayOf(TelemetryBrowserViewModel.ARG_FACT to r.factIdByChunkIndex[0]),
+                arrayOf(TelemetryBrowserViewModel.ARG_FACT to r.factIdByChunkIndex[0],
+                    TelemetryBrowserViewModel.ARG_FACT_SCAN to 1L))) {
+            assertEquals(FactState.Missing, vm(*args).fact.first { it != FactState.Loading })
+        }
+    }
+
+    @Test
     fun `changed keys cover added and removed fields and skip unreadable neighbours`() {
         assertEquals(setOf("a", "b", "c"),
             changedKeys(mapOf("a" to 1, "b" to 2, "source" to "X"), mapOf("a" to 2, "c" to 3, "source" to "Y")))

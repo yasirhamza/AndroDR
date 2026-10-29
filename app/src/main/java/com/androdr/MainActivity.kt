@@ -240,7 +240,7 @@ private fun AndroDRApp() {
                         }
                     },
                     onViewTelemetry = { scanId -> navController.navigate(telemetryForScan(scanId)) },
-                    onOpenFact = { factId -> navController.navigate(factRoute(factId)) },
+                    onOpenFact = { factId, scanId -> navController.navigate(factRoute(factId, scanId)) },
                 )
             }
             composable("bugreport") {

@@ -195,7 +195,7 @@ fun HistoryScreen(
                 onDelete = { viewModel.requestDeleteScan(scan.id) },
                 deleteEnabled = deleteEnabled,
                 loadCounts = viewModel::rowCounts,
-                onViewTelemetry = onViewTelemetry?.takeIf { scan.state == ScanState.COMPLETE }?.let { open ->
+                onViewTelemetry = onViewTelemetry?.takeIf { offersTelemetry(scan) }?.let { open ->
                     { open(scan.id) }
                 },
             )
@@ -652,6 +652,9 @@ private fun ScanHistoryItem(
         }
     }
 }
+
+/** Whether a History row offers "View telemetry" (spec §8.1): only a COMPLETE scan is browsable. */
+internal fun offersTelemetry(scan: ScanResult): Boolean = scan.state == ScanState.COMPLETE
 
 // ExportModeDialog extracted to com.androdr.ui.common.ExportModeDialog
 
