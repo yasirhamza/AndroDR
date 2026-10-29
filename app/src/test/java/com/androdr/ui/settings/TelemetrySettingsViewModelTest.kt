@@ -11,7 +11,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.asCoroutineDispatcher
-import kotlinx.coroutines.cancel
+import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.job
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.runBlocking
@@ -26,6 +27,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 
 /**
  * Settings' telemetry card (spec §8.2): storage by kind, "Keep snapshot telemetry for the last N
@@ -44,12 +46,27 @@ class TelemetrySettingsViewModelTest {
     // A real thread for viewModelScope: the store and DataStore resume on their own threads.
     @Before fun setUp() = Dispatchers.setMain(main.asCoroutineDispatcher())
 
+    /**
+     * Each test's view models stop here, so none outlives its store into the next test. The order
+     * matters (final review item 12, a CI-only failure at `resetMain`): `cancel()` only requests
+     * cancellation, so a view-model coroutine could still be running on [main], or resuming into
+     * `Dispatchers.Main` from a store or DataStore thread, while `resetMain()` swapped the Main
+     * delegate; kotlinx-coroutines-test then throws "Dispatchers.Main is used concurrently with
+     * setting it". So: cancel and join every view model's job, stop [main] and wait for it, and only
+     * then reset Main and close the fixture.
+     */
     @After fun tearDown() {
-        // Each test's view models stop here, so none outlives its store into the next test.
-        created.forEach { it.viewModelScope.cancel() }
-        Dispatchers.resetMain()
-        main.shutdownNow()
-        w.close()
+        try {
+            runBlocking {
+                withTimeout(TEARDOWN_MS) { created.forEach { it.viewModelScope.coroutineContext.job.cancelAndJoin() } }
+            }
+            main.shutdown()
+            check(main.awaitTermination(TEARDOWN_MS, TimeUnit.MILLISECONDS)) { "the main executor did not stop" }
+        } finally {
+            main.shutdownNow()
+            Dispatchers.resetMain()
+            w.close()
+        }
     }
 
     private val created = mutableListOf<TelemetrySettingsViewModel>()
@@ -131,5 +148,9 @@ class TelemetrySettingsViewModelTest {
         assertTrue((1L..7L).all { observations(it) == 1L })
         vm.dismissCleanup()
         assertEquals(TelemetryCleanup.Idle, vm.cleanup.value)
+    }
+
+    private companion object {
+        const val TEARDOWN_MS = 10_000L
     }
 }
