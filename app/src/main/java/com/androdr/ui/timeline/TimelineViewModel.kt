@@ -25,6 +25,7 @@ import com.androdr.data.store.KeysetPagingSource
 import com.androdr.data.store.tableChanges
 import com.androdr.ioc.KnownAppResolver
 import com.androdr.reporting.TimelineExporter
+import com.androdr.reporting.writeReportFile
 import com.androdr.sigma.Finding
 import com.androdr.sigma.TimePrecision
 import com.androdr.util.appVersion
@@ -357,7 +358,7 @@ class TimelineViewModel @Inject constructor(
         viewModelScope.launch {
             _exporting.value = true
             try {
-                _shareUri.value = withContext(Dispatchers.IO) {
+                _shareUri.value = withContext(io) {
                     uriOf(newReportFile(extension, filter).also { write(it, filter) })
                 }
             } catch (e: Exception) {
@@ -368,9 +369,12 @@ class TimelineViewModel @Inject constructor(
         }
     }
 
-    /** Streams the current filter's Timeline as CSV, oldest first, one page at a time. */
+    /**
+     * Streams the current filter's Timeline as CSV, oldest first, one page at a time, through
+     * [writeReportFile]: a failure partway (a full disk) leaves no truncated file behind.
+     */
     private suspend fun writeCsv(file: File, filter: TimelineFilter) {
-        file.bufferedWriter(Charsets.UTF_8).use { out ->
+        writeReportFile(file) { out ->
             TimelineExporter.writeCsvHeader(out)
             entries.forEachPage(filter, oldestFirst = true, size = EXPORT_PAGE) { page ->
                 val events = page.flatMap { it.exportEvents() }
@@ -383,7 +387,8 @@ class TimelineViewModel @Inject constructor(
     /**
      * Streams the current filter's Timeline as plaintext, newest first: one pass for the header, one
      * to write. The two passes are separate reads, so a scan completing between them can make the
-     * header's totals differ slightly from the body; neither pass holds the whole Timeline.
+     * header's totals differ slightly from the body; neither pass holds the whole Timeline. Written
+     * through [writeReportFile], so a failure partway leaves no truncated file behind.
      */
     private suspend fun writePlaintext(file: File, filter: TimelineFilter) {
         val stats = TimelineExporter.PlaintextStats(buildRuleGuidance())
@@ -391,7 +396,7 @@ class TimelineViewModel @Inject constructor(
             page.forEach { entry -> entry.exportEvents().forEach(stats::add) }
         }
         val names = HashMap<String, String?>()
-        file.bufferedWriter(Charsets.UTF_8).use { out: Writer ->
+        writeReportFile(file) { out: Writer ->
             val writer = TimelineExporter.PlaintextWriter(out) { pkg ->
                 names.getOrPut(pkg) { knownAppResolver.lookup(pkg)?.displayName }
             }

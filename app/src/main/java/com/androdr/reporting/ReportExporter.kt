@@ -75,7 +75,7 @@ class ReportExporter @Inject constructor(
             val view = FindingsView.of(scan, reportInputs, findings, telemetryReader)
             val logLines = if (includeLog) logSource() else emptyList()
             val version = context.appVersion().name
-            writeFile(file) { out ->
+            writeReportFile(file) { out ->
                 ReportFormatter.writeScanReport(
                     out, scan, view, logLines, telemetryReader, mode, version,
                     AlertReportSource { status, block ->
@@ -92,7 +92,7 @@ class ReportExporter @Inject constructor(
      */
     suspend fun exportTelemetry(scan: ScanResult): Uri = withContext(Dispatchers.IO) {
         val file = newReportFile("androdr_telemetry", scan.timestamp, "jsonl.gz")
-        writeFile(file, open = { part ->
+        writeReportFile(file, open = { part ->
             OutputStreamWriter(GZIPOutputStream(part.outputStream().buffered()), Charsets.UTF_8).buffered()
         }) { out -> telemetryReader.exportJsonl(scan.id, out) }
         FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
@@ -129,28 +129,6 @@ class ReportExporter @Inject constructor(
         runCatching { reportFiles.deleteStale() }.onFailure { Log.w(TAG, "Stale report cleanup failed", it) }
         val stamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date(time))
         return File(dir, "${prefix}_$stamp.$extension")
-    }
-
-    /**
-     * Streams into a `.part` sibling through a buffered UTF-8 writer, then renames it to [file], so
-     * a reader polling for [file] (the debug harness) never sees a half-written report, and a write
-     * that fails leaves nothing behind.
-     */
-    @Suppress("TooGenericExceptionCaught") // any failure removes the partial file, then rethrows
-    private suspend fun writeFile(
-        file: File,
-        open: (File) -> Writer = { it.bufferedWriter(Charsets.UTF_8) },
-        write: suspend (Writer) -> Unit,
-    ) {
-        val part = File(file.parentFile, "${file.name}.part")
-        try {
-            open(part).use { write(it) }
-            // rename(2) replaces an existing report atomically: never delete it first.
-            check(part.renameTo(file)) { "could not move the report into place" }
-        } catch (t: Throwable) {
-            part.delete()
-            throw t
-        }
     }
 
     /** The app's own log lines, captured at export. Replaceable so tests can tell whether it is read. */
