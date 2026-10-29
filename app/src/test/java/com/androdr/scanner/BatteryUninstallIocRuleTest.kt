@@ -24,7 +24,8 @@ import org.robolectric.RobolectricTestRunner
  * Ruling R28 (C3 fix round 1, review I1): the battery-stats "known-bad package uninstalled"
  * detection C3 removed from Kotlin is the bundled rule androdr-110. Driven through the real
  * BatteryDailyModule, a bug-report import session and the engine with its real package IOC lookup
- * wiring: an IOC-listed uninstall yields exactly one androdr-110 finding with ioc_match evidence; a
+ * wiring: an IOC-listed uninstall yields exactly one high androdr-110 finding with ioc_match evidence
+ * and an open alert; a
  * clean uninstall, and an IOC-listed install or update, yield none.
  */
 @RunWith(RobolectricTestRunner::class)
@@ -79,9 +80,13 @@ class BatteryUninstallIocRuleTest {
         assertEquals(BAD, hits.single().matchContext["package_name"])
         val evidence = hits.single().evidence as Evidence.IocMatch
         assertEquals(BAD, evidence.matchedIndicator)
-        assertEquals("informational, as the retired hand-built row", "informational", hits.single().level)
+        // Owner decision 2026-10-29: high, not the retired row's informational, so it is a report
+        // finding that counts toward the risk level and opens an alert someone has to close.
+        assertEquals("high", hits.single().level)
         assertTrue("its Timeline finding row is written", f.count(
             "SELECT COUNT(*) FROM forensic_timeline WHERE ruleId = 'androdr-110'") == 1L)
+        assertTrue("it opens one high alert", f.count(
+            "SELECT COUNT(*) FROM alert WHERE ruleId = 'androdr-110' AND status = 'OPEN' AND level = 'high'") == 1L)
     }
 
     @Test
