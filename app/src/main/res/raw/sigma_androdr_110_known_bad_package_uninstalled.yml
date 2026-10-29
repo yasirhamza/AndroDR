@@ -9,9 +9,12 @@ description: >
     threat was on the device. Replaces the hand-built "Known package was
     uninstalled - possible anti-forensics" timeline row that BatteryDailyModule
     wrote until AndroDR's telemetry store (C3, ruling R28): detection is
-    rule-driven, so the module now only emits the parsed record. Same
-    severity as that row (informational: shown on the Timeline, not as a
-    report finding). Fleet: builds before the typed BatteryDailyEvent emit
+    rule-driven, so the module now only emits the parsed record. Level
+    high (raised from that row's informational by owner decision,
+    2026-10-29): the app being gone does not make the past compromise less
+    real, so it is a report finding and counts toward the risk level; not
+    critical, as androdr-001 is for an installed match, because there is no
+    live threat left to remove. Fleet: builds before the typed BatteryDailyEvent emit
     battery_daily records only for IOC-listed installs/updates, with
     event_type package_install, so this positive-only selection never matches
     there.
@@ -28,7 +31,7 @@ detection:
         package_name|ioc_lookup: package_ioc_db
     condition: selection
 category: incident
-level: informational
+level: high
 display:
     category: app_risk
     icon: delete_forever
