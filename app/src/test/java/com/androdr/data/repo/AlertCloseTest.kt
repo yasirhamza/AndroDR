@@ -7,6 +7,7 @@ import androidx.test.core.app.ApplicationProvider
 import com.androdr.data.db.LegacyEventRowCleanup
 import com.androdr.data.db.SignalMemberBackfill
 import com.androdr.data.db.getAllForExport
+import com.androdr.data.model.DnsEvent
 import com.androdr.data.model.ForensicTimelineEvent
 import com.androdr.data.model.ScanResult
 import com.androdr.data.model.ScanState
@@ -329,6 +330,8 @@ class AlertCloseTest {
                 description = "q"))
             val iocRow = dao.insert(ForensicTimelineEvent(startTimestamp = 6L, source = "dns", category = "ioc_match",
                 description = "m"))
+            w.f.db.dnsEventDao().insert(DnsEvent(timestamp = 6L, domain = "m.example", appUid = 1, appName = null,
+                isBlocked = false, reason = "ioc"))
             val snapshot = w.lock.mutex.withLock {
                 w.repo.markAllForAuditedDelete().also { w.repo.saveClearMark(it.clearMaxRowId) }
             }
@@ -346,6 +349,8 @@ class AlertCloseTest {
             assertEquals("one audit row for the clear", 1, auditRows().size)
             assertTrue(auditRows().single().details.startsWith("2 triggered finding(s) deleted by Clear all."))
             assertNull("the mark is dropped when the clear finishes", w.f.pendingClear.get())
+            // Final review M3: the DNS log (DNS screen, Dashboard matched-DNS count) is kept, as the copy says.
+            assertEquals("the DNS log is kept", 1L, count("SELECT COUNT(*) FROM DnsEvent"))
             // The public path writes exactly one more audit row and still keeps everything persistent.
             assertEquals(DeleteResult.Done, repository().deleteAllScans())
             assertEquals(2, auditRows().size)

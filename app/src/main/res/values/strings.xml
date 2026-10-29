@@ -229,9 +229,9 @@
     <string name="history_export_failed_body">Writing the report failed, so nothing was shared. Try again.</string>
     <string name="import_preflight_title">Not much free space</string>
     <string name="import_preflight_title_unknown">Import size unknown</string>
-    <string name="import_preflight_body_estimate">This import is expected to need about %1$s of storage, and %2$s is free. If storage runs short partway, AndroDR keeps the records stored so far, checks the rest of the file, and still shows every finding.</string>
-    <string name="import_preflight_body_unknown">AndroDR cannot tell how large this import is, and %1$s is free. If storage runs short partway, it keeps the records stored so far, checks the rest of the file, and still shows every finding.</string>
-    <string name="import_preflight_body_unknown_nofree">AndroDR cannot tell how large this import is. If storage runs short partway, it keeps the records stored so far, checks the rest of the file, and still shows every finding.</string>
+    <string name="import_preflight_body_estimate">This import is expected to need about %1$s of storage, and %2$s is free. If storage runs short partway, AndroDR keeps the records stored so far, checks the rest of the file, and still counts every finding.</string>
+    <string name="import_preflight_body_unknown">AndroDR cannot tell how large this import is, and %1$s is free. If storage runs short partway, it keeps the records stored so far, checks the rest of the file, and still counts every finding.</string>
+    <string name="import_preflight_body_unknown_nofree">AndroDR cannot tell how large this import is. If storage runs short partway, it keeps the records stored so far, checks the rest of the file, and still counts every finding.</string>
     <string name="import_preflight_anyway">Import anyway</string>
     <string name="import_preflight_cancel">Cancel</string>
     <string name="import_card_title">What was stored</string>
@@ -352,7 +352,7 @@
     <string name="history_delete_confirm">Delete</string>
     <string name="history_delete_cancel">Cancel</string>
     <string name="history_clear_title">Clear all history</string>
-    <string name="history_clear_body">Delete every scan, its telemetry and timeline events, including live DNS events? This cannot be undone. Alerts and their evidence are kept, and an audit entry listing the deleted findings is added to the Timeline.</string>
+    <string name="history_clear_body">Delete every scan, its telemetry and timeline events, including the live DNS events on the Timeline? This cannot be undone. Alerts and their evidence are kept, and so is the DNS log shown on the DNS screen and counted on the Dashboard. An audit entry listing the deleted findings is added to the Timeline.</string>
     <string name="history_clear_confirm">Delete all</string>
     <string name="history_row_findings" tools:ignore="PluralsCandidate">%1$d finding(s)</string>
     <string name="history_row_findings_unsaved" tools:ignore="PluralsCandidate">%1$d finding(s) · %2$d not saved</string>
