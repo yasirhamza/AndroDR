@@ -1,5 +1,6 @@
 package com.androdr.ui.history
 
+import com.androdr.reporting.groupedCount
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
@@ -612,11 +613,7 @@ private fun ScanHistoryItem(
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Text(
-                        text = buildString {
-                            append("\u2022 ${scan.triggeredCount} finding(s) triggered\n")
-                            append("\u2022 ${scan.knownMalwareCount} known malware app(s)\n")
-                            append("\u2022 ${scan.riskySideloadCount} sideloaded app(s)")
-                        },
+                        text = scanCountLines(scan),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurface
                     )
@@ -804,4 +801,11 @@ private fun importSourceLabel(source: TelemetrySource): Int? = when (source) {
     TelemetrySource.LIVE_SCAN -> null
     TelemetrySource.BUGREPORT_IMPORT -> R.string.history_source_bugreport_import
     TelemetrySource.INTRUSION_LOG_IMPORT -> R.string.history_source_intrusion_log_import
+}
+
+/** A History row's counts, each with the locale's digit grouping (battery B4). */
+internal fun scanCountLines(scan: ScanResult): String = buildString {
+    append("\u2022 ${groupedCount(scan.triggeredCount.toLong())} finding(s) triggered\n")
+    append("\u2022 ${groupedCount(scan.knownMalwareCount.toLong())} known malware app(s)\n")
+    append("\u2022 ${groupedCount(scan.riskySideloadCount.toLong())} sideloaded app(s)")
 }

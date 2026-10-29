@@ -3,6 +3,7 @@ package com.androdr.reporting
 import com.androdr.data.db.ServiceSummary
 import com.androdr.data.model.TelemetrySource
 import com.androdr.data.model.TelemetryState
+import java.text.NumberFormat
 import java.util.Locale
 
 /**
@@ -52,7 +53,7 @@ data class ExportEstimate(val records: Long, val bytes: Long, val categories: Li
     fun text(): String = if (records == 0L) {
         "This scan has no stored telemetry; the report carries its findings only."
     } else {
-        "Includes $records telemetry record(s) (about ${humanBytes(bytes)}) from: " +
+        "Includes ${groupedCount(records)} telemetry record(s) (about ${humanBytes(bytes)}) from: " +
             "${categories.joinToString(", ")}. $SENSITIVE"
     }
 
@@ -63,8 +64,9 @@ data class ExportEstimate(val records: Long, val bytes: Long, val categories: Li
     fun jsonlText(): String = if (records == 0L) {
         "This scan has no stored telemetry; the export would be empty."
     } else {
-        "One line per record: $records telemetry record(s) (about ${humanBytes(bytes)} of records before " +
-            "compression; each line also carries a short envelope) from: ${categories.joinToString(", ")}. $SENSITIVE"
+        "One line per record: ${groupedCount(records)} telemetry record(s) (about ${humanBytes(bytes)} of " +
+            "records before compression; each line also carries a short envelope) from: " +
+            "${categories.joinToString(", ")}. $SENSITIVE"
     }
 
     companion object {
@@ -122,6 +124,10 @@ private val SERVICE_LABELS = mapOf(
 internal fun serviceLabel(service: String): String = SERVICE_LABELS[service] ?: service
 
 private const val KIB = 1024.0
+
+/** [n] with [locale]'s digit grouping, e.g. "125,000" in Locale.US (battery B4). */
+internal fun groupedCount(n: Long, locale: Locale = Locale.getDefault()): String =
+    NumberFormat.getIntegerInstance(locale).format(n)
 
 /** [bytes] in plain words (bytes, KB or MB). */
 internal fun humanBytes(bytes: Long): String = when {

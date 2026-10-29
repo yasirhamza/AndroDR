@@ -23,6 +23,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.androdr.data.store.BodyStats
+import com.androdr.reporting.groupedCount
 import com.androdr.reporting.humanBytes
 import kotlin.math.roundToInt
 
@@ -106,10 +107,10 @@ fun TelemetryStorageSection(viewModel: TelemetrySettingsViewModel = hiltViewMode
     }
 }
 
-private fun stats(b: BodyStats): String = "${b.bodies} distinct records · ${humanBytes(b.storedBytes)}"
+internal fun stats(b: BodyStats): String = "${groupedCount(b.bodies)} distinct records · ${humanBytes(b.storedBytes)}"
 
-private fun cleanupMessage(cleanup: TelemetryCleanup): String? = when (cleanup) {
-    is TelemetryCleanup.Done -> "Removed ${cleanup.observationsRemoved} old telemetry record(s)."
+internal fun cleanupMessage(cleanup: TelemetryCleanup): String? = when (cleanup) {
+    is TelemetryCleanup.Done -> "Removed ${groupedCount(cleanup.observationsRemoved)} old telemetry record(s)."
     TelemetryCleanup.Busy -> "Another storage task is running. Try again shortly."
     TelemetryCleanup.Failed -> "Old telemetry could not be deleted."
     TelemetryCleanup.Idle, TelemetryCleanup.Running -> null

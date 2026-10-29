@@ -234,13 +234,13 @@
     <string name="import_preflight_anyway">Import anyway</string>
     <string name="import_preflight_cancel">Cancel</string>
     <string name="import_card_title">What was stored</string>
-    <string name="import_card_counts" tools:ignore="PluralsCandidate">%1$d new \u00b7 %2$d already stored \u00b7 %3$d duplicates dropped</string>
+    <string name="import_card_counts" tools:ignore="PluralsCandidate">%1$,d new \u00b7 %2$,d already stored \u00b7 %3$,d duplicates dropped</string>
     <string name="import_card_bound">Limit reached: %1$s</string>
-    <string name="import_card_low_space_some" tools:ignore="PluralsCandidate">Storage ran low partway through: %1$d new records were stored; the rest were checked but not stored.</string>
+    <string name="import_card_low_space_some" tools:ignore="PluralsCandidate">Storage ran low partway through: %1$,d new records were stored; the rest were checked but not stored.</string>
     <string name="import_card_low_space_none">Storage ran low before any new record could be stored: the file was checked but nothing new was stored.</string>
     <string name="import_card_free_at_least_estimate">Free at least %1$s more (the whole import needs about %2$s) and import again to store the rest.</string>
     <string name="import_card_free_at_least_unknown">Free at least %1$s more, probably much more, and import again to store the rest.</string>
-    <string name="import_card_not_stored_some" tools:ignore="PluralsCandidate">The database refused part of this import: %1$d new records were stored; the rest were checked but not stored.</string>
+    <string name="import_card_not_stored_some" tools:ignore="PluralsCandidate">The database refused part of this import: %1$,d new records were stored; the rest were checked but not stored.</string>
     <string name="import_card_not_stored_none">The database refused this import\'s records: the file was checked but nothing new was stored.</string>
     <plurals name="diff_more">
         <item quantity="one">\u2026and %1$d more finding</item>
@@ -248,12 +248,12 @@
     </plurals>
     <string name="import_card_findings_complete">The findings below are complete.</string>
     <plurals name="import_card_findings_unsaved">
-        <item quantity="one">%1$d finding could not be saved and is not listed below; free at least %2$s and import again.</item>
-        <item quantity="other">%1$d findings could not be saved and are not listed below; free at least %2$s and import again.</item>
+        <item quantity="one">%1$,d finding could not be saved and is not listed below; free at least %2$s and import again.</item>
+        <item quantity="other">%1$,d findings could not be saved and are not listed below; free at least %2$s and import again.</item>
     </plurals>
     <plurals name="import_card_findings_unsaved_unknown">
-        <item quantity="one">%1$d finding could not be saved and is not listed below; free more space and import again.</item>
-        <item quantity="other">%1$d findings could not be saved and are not listed below; free more space and import again.</item>
+        <item quantity="one">%1$,d finding could not be saved and is not listed below; free more space and import again.</item>
+        <item quantity="other">%1$,d findings could not be saved and are not listed below; free more space and import again.</item>
     </plurals>
     <string name="import_card_unsaved_levels">Not saved, by severity: %1$s.</string>
     <string name="intrusion_log_summary_title">Intrusion log analyzed</string>
