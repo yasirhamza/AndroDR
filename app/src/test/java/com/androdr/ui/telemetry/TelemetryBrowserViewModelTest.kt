@@ -4,9 +4,11 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.paging.PagingSource
 import com.androdr.data.db.ServiceSummary
 import com.androdr.data.model.ScanState
+import com.androdr.data.model.TelemetryState
 import com.androdr.data.store.DecodedRecord
 import com.androdr.data.store.StoreFixture
 import com.androdr.data.store.StoreFixture.Companion.dns
+import com.androdr.reporting.ReportFormatter
 import com.androdr.sigma.StoreRecord
 import com.androdr.sigma.TaxonomyContract
 import kotlinx.coroutines.Dispatchers
@@ -83,10 +85,36 @@ class TelemetryBrowserViewModelTest {
         completeScan(2L, "dns_monitor", listOf(dns("y.example"), dns("z.example")))
         val vm = vm(TelemetryBrowserViewModel.ARG_SCAN to 1L)
         assertEquals(
-            ServicesState.Loaded(listOf(ServiceSummary("app_scanner", 2), ServiceSummary("dns_monitor", 1))),
+            ServicesState.Loaded(listOf(ServiceSummary("app_scanner", 2), ServiceSummary("dns_monitor", 1)),
+                TelemetryState.NONE),
             vm.services.first { it != ServicesState.Loading },
         )
     }
+
+    // Final review M1: a scan whose telemetry retention removed said "This scan stored no telemetry".
+    @Test
+    fun `a retention-trimmed scan says retention removed its records, never that it stored none`() =
+        runTest(dispatcher) {
+            suspend fun loaded(id: Long, state: TelemetryState, records: List<StoreRecord>): ServicesState.Loaded {
+                f.scan(id)
+                if (records.isNotEmpty()) f.persist(id, "app_scanner", records)
+                f.setState(id, ScanState.COMPLETE)
+                f.db.scanResultDao().setTelemetryState(id, state, TelemetryState.NONE)
+                return vm(TelemetryBrowserViewModel.ARG_SCAN to id).services.first { it != ServicesState.Loading }
+                    as ServicesState.Loaded
+            }
+            val emptied = loaded(1L, TelemetryState.PARTIAL_RETENTION, emptyList())
+            assertEquals(TelemetryState.PARTIAL_RETENTION, emptied.telemetryState)
+            assertEquals("${ReportFormatter.TELEMETRY_PARTIAL} 0 record(s) remain.", emptied.notice)
+
+            val trimmed = loaded(2L, TelemetryState.PARTIAL_RETENTION, listOf(app("com.a")))
+            assertEquals("${ReportFormatter.TELEMETRY_PARTIAL} 1 record(s) remain.", trimmed.notice)
+
+            val failed = loaded(3L, TelemetryState.FAILED_PARTIAL_RETENTION, emptyList())
+            assertEquals("${ReportFormatter.TELEMETRY_FAILED_RETAINED} 0 record(s) remain.", failed.notice)
+
+            assertNull("a STORED scan needs no notice", loaded(4L, TelemetryState.STORED, listOf(app("com.b"))).notice)
+        }
 
     @Test
     fun `IN_PROGRESS and DELETING scans are not listed`() = runTest(dispatcher) {

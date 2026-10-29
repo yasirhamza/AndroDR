@@ -10,8 +10,11 @@ import androidx.paging.cachedIn
 import com.androdr.data.db.ScanResultDao
 import com.androdr.data.db.chunkedIn
 import com.androdr.data.db.ServiceSummary
+import com.androdr.data.model.TelemetryState
 import com.androdr.data.store.DecodedRecord
 import com.androdr.data.store.TelemetryReader
+import com.androdr.reporting.groupedCount
+import com.androdr.reporting.telemetryLine
 import com.androdr.sigma.TaxonomyContract
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -33,7 +36,24 @@ import javax.inject.Inject
 sealed interface ServicesState {
     data object Loading : ServicesState
     data object Unavailable : ServicesState
-    data class Loaded(val services: List<ServiceSummary>) : ServicesState
+
+    /** The [services] left in the store for the scan, and the scan's [telemetryState]. */
+    data class Loaded(val services: List<ServiceSummary>, val telemetryState: TelemetryState) : ServicesState {
+        /**
+         * The scan's telemetry line when its records are not simply all there: retention removed
+         * some, storage failed, or the scan predates the store. It is the History sheet's and the
+         * report's line ([telemetryLine]), so the browser never says a trimmed scan "stored no
+         * telemetry". Null for a `STORED` scan.
+         */
+        val notice: String?
+            get() = if (telemetryState == TelemetryState.STORED) {
+                null
+            } else {
+                telemetryLine(telemetryState, services.sumOf { it.records }, services.size) {
+                    groupedCount(it.toLong())
+                }
+            }
+    }
 }
 
 /** One field of a fact: its taxonomy [description], null for a key the taxonomy does not declare. */
@@ -91,10 +111,11 @@ class TelemetryBrowserViewModel @Inject constructor(
     init {
         scanId?.let { id ->
             viewModelScope.launch {
-                _services.value = if (scans.completeById(id) == null) {
+                val scan = scans.completeById(id)
+                _services.value = if (scan == null) {
                     ServicesState.Unavailable
                 } else {
-                    ServicesState.Loaded(reader.services(id))
+                    ServicesState.Loaded(reader.services(id), scan.telemetryState)
                 }
             }
         }

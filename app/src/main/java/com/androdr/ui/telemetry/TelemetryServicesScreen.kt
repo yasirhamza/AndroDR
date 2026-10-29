@@ -37,7 +37,8 @@ import com.androdr.R
 /**
  * The telemetry browser's first level (spec §8.1): the services one `COMPLETE` scan stored, each
  * with its record count. A scan that is not `COMPLETE` (still running, being deleted, or gone)
- * shows as not available.
+ * shows as not available. A scan whose records are not all there (retention, a storage failure)
+ * says so above its services, in the History sheet's words.
  */
 @Composable
 fun TelemetryServicesScreen(
@@ -52,13 +53,19 @@ fun TelemetryServicesScreen(
             ServicesState.Loading -> CenteredProgress()
             ServicesState.Unavailable -> CenteredMessage(stringResource(R.string.telemetry_scan_unavailable))
             is ServicesState.Loaded -> if (s.services.isEmpty()) {
-                CenteredMessage(stringResource(R.string.telemetry_scan_empty))
+                CenteredMessage(s.notice ?: stringResource(R.string.telemetry_scan_empty))
             } else {
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),
                     contentPadding = PaddingValues(16.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
+                    s.notice?.let { notice ->
+                        item(key = NOTICE_KEY) {
+                            Text(notice, style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
                     items(s.services, key = { it.service }) { summary ->
                         Card(
                             modifier = Modifier.fillMaxWidth().clickable {
@@ -89,6 +96,9 @@ fun TelemetryServicesScreen(
         }
     }
 }
+
+/** The notice row's list key; service names are never empty, so it cannot collide with one. */
+private const val NOTICE_KEY = ""
 
 /** The browser's top bar: [title] and a back arrow. */
 @OptIn(ExperimentalMaterial3Api::class)
