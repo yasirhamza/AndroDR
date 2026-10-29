@@ -5,10 +5,11 @@ import java.nio.ByteOrder
 import java.nio.channels.FileChannel
 
 /**
- * Reads the summed uncompressed entry sizes of a ZIP from its central directory through a channel the
- * caller already holds (no path is reopened, nothing is inflated). Bounded: the directory is read only
- * if it fits inside the file and within [MAX_DIRECTORY_BYTES], and at most [MAX_ENTRIES] entries are
- * walked. Any malformed structure yields null.
+ * Reads the summed uncompressed entry sizes (and the entry names' artifact type) of a ZIP from its
+ * central directory through a channel the caller already holds (no path is reopened, nothing is
+ * inflated). Bounded: the directory is read only if it fits inside the file and within
+ * [MAX_DIRECTORY_BYTES], and at most [MAX_ENTRIES] entries are walked. Any malformed structure
+ * yields null.
  */
 @Suppress("ReturnCount") // each early return is a distinct "not a readable ZIP" check
 object ZipCentralDirectory {
@@ -28,9 +29,19 @@ object ZipCentralDirectory {
     private const val U32_MAX = 0xFFFFFFFFL
     private const val U16_MAX = 0xFFFF
 
+    /** The archive's summed uncompressed entry size and what its entry names say it is. */
+    data class Contents(val totalSize: Long, val type: ArtifactType)
+
     /** Sum of uncompressed sizes, or null when the structure is not a readable ZIP. */
+    fun totalSize(channel: FileChannel): Long? = contents(channel)?.totalSize
+
+    /**
+     * The summed uncompressed size and the artifact type [ArtifactSniffer.classify] gives the central
+     * directory's entry names (battery B5: the preflight's stored-size factor depends on the type), or
+     * null when the structure is not a readable ZIP. Nothing is inflated.
+     */
     @Suppress("TooGenericExceptionCaught", "SwallowedException")
-    fun totalSize(channel: FileChannel): Long? = try {
+    fun contents(channel: FileChannel): Contents? = try {
         parse(channel)
     } catch (e: java.io.IOException) {
         null
@@ -40,7 +51,7 @@ object ZipCentralDirectory {
         null // a forged directory size on a low-heap device
     }
 
-    private fun parse(ch: FileChannel): Long? {
+    private fun parse(ch: FileChannel): Contents? {
         val fileSize = ch.size()
         if (fileSize < EOCD_MIN) return null
         val tailLen = minOf(fileSize, (EOCD_MIN + MAX_COMMENT).toLong()).toInt()
@@ -56,7 +67,27 @@ object ZipCentralDirectory {
         if (entries !in 0..MAX_ENTRIES || cdSize !in 0..MAX_DIRECTORY_BYTES) return null
         if (cdOffset < 0 || cdOffset > fileSize - cdSize) return null
         val cd = readAt(ch, cdOffset, cdSize.toInt()) ?: return null
-        return sumEntries(cd, entries)
+        val total = sumEntries(cd, entries) ?: return null
+        return Contents(total, ArtifactSniffer.classify(entryNames(cd, entries)))
+    }
+
+    /**
+     * The entry names of a directory [sumEntries] has already walked, decoded as UTF-8 (the names the
+     * sniffer matches are ASCII). A name running past the directory throws, which [contents] maps to null.
+     */
+    private fun entryNames(cd: ByteBuffer, entries: Long): Sequence<String> = sequence {
+        var pos = 0
+        repeat(entries.toInt()) {
+            val nameLen = cd.getShort(pos + 28).toInt() and U16_MAX
+            val extraLen = cd.getShort(pos + 30).toInt() and U16_MAX
+            val commentLen = cd.getShort(pos + 32).toInt() and U16_MAX
+            val name = ByteArray(nameLen)
+            val view = cd.duplicate()
+            view.position(pos + CD_FIXED)
+            view.get(name)
+            yield(String(name, Charsets.UTF_8))
+            pos += CD_FIXED + nameLen + extraLen + commentLen
+        }
     }
 
     private fun findEocd(tail: ByteBuffer): Int? {

@@ -25,11 +25,13 @@ class StoragePreflight(private val statFs: () -> StatFs) {
     /**
      * [decompressedBytes] is the archive's summed decompressed entry sizes; null (or negative)
      * when any entry's size is unknown, which always yields [Preflight.Tight] with no estimate.
+     * [storedSizeFactor] is the measured stored bytes per decompressed byte of the artifact's type
+     * ([com.androdr.scanner.ImportPreflight.storedSizeFactor]).
      */
-    fun check(decompressedBytes: Long?): Preflight {
+    fun check(decompressedBytes: Long?, storedSizeFactor: Double): Preflight {
         val free = freeBytes()
         if (decompressedBytes == null || decompressedBytes < 0) return Preflight.Tight(null, free)
-        val estimate = (decompressedBytes * STORED_SIZE_FACTOR).toLong()
+        val estimate = (decompressedBytes * storedSizeFactor).toLong()
         return if (free - estimate < 2 * estimate + HEADROOM_BYTES) Preflight.Tight(estimate, free) else Preflight.Ok
     }
 
@@ -40,9 +42,6 @@ class StoragePreflight(private val statFs: () -> StatFs) {
     fun shortfall(): Long = (CHUNK_RESERVE_BYTES - freeBytes()).coerceAtLeast(0L)
 
     companion object {
-        /** Measured stored bytes per decompressed input byte (initial value). */
-        const val STORED_SIZE_FACTOR = 0.6
-
         /** The fixed per-chunk reserve. */
         const val CHUNK_RESERVE_BYTES = 150L * 1024 * 1024
 

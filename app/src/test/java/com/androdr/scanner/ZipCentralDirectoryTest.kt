@@ -42,6 +42,23 @@ class ZipCentralDirectoryTest {
         }
     }
 
+    /** A zip of named entries, each [bytes] of zeros (deflates to almost nothing). */
+    private fun namedZip(bytes: Long, vararg names: String): File = tmp.newFile().also { f ->
+        val chunk = ByteArray(1 shl 20)
+        ZipOutputStream(f.outputStream()).use { z ->
+            for (name in names) {
+                z.putNextEntry(ZipEntry(name))
+                var left = bytes
+                while (left > 0) {
+                    val n = minOf(left, chunk.size.toLong()).toInt()
+                    z.write(chunk, 0, n)
+                    left -= n
+                }
+                z.closeEntry()
+            }
+        }
+    }
+
     private fun sizeOf(f: File): Long? = RandomAccessFile(f, "r").use { ZipCentralDirectory.totalSize(it.channel) }
 
     @Test
@@ -108,7 +125,37 @@ class ZipCentralDirectoryTest {
         val uri = Uri.fromFile(f)
         assertEquals(Preflight.Ok, preflight(free = 100L shl 30).check(uri))
         val tight = preflight(free = 150L shl 20).check(uri) as Preflight.Tight
-        assertEquals("estimate is 0.6 x the summed size", 600_000L, tight.estimate)
+        assertEquals("an unrecognized archive is estimated at the largest factor", 4_000_000L, tight.estimate)
+    }
+
+    // ---- battery B5, ruling R45: the stored-size factor is per artifact type ----
+
+    @Test
+    fun `the stored-size factor is per artifact type`() {
+        assertEquals(0.05, ImportPreflight.storedSizeFactor(ArtifactType.BUG_REPORT), 0.0)
+        assertEquals(4.0, ImportPreflight.storedSizeFactor(ArtifactType.INTRUSION_LOG), 0.0)
+        assertEquals("unknown type: the conservative factor", 4.0,
+            ImportPreflight.storedSizeFactor(ArtifactType.UNRECOGNIZED), 0.0)
+    }
+
+    @Test
+    fun `the central directory names give the artifact type`() {
+        fun contentsOf(f: File) = RandomAccessFile(f, "r").use { ZipCentralDirectory.contents(it.channel) }
+        val br = contentsOf(namedZip(10, "dumpstate_board.txt", "dumpstate-2026-10-29-08-18-37.txt"))
+        assertEquals(ZipCentralDirectory.Contents(20L, ArtifactType.BUG_REPORT), br)
+        val il = contentsOf(namedZip(10, "intrusion-logs/2026-10-01.txt", "intrusion-logs/2026-10-01(1).txt"))
+        assertEquals(ZipCentralDirectory.Contents(20L, ArtifactType.INTRUSION_LOG), il)
+        assertEquals(ArtifactType.UNRECOGNIZED, contentsOf(namedZip(10, "photo.jpg"))?.type)
+    }
+
+    @Test
+    fun `a 100 MB bug report on 1 GB free is Ok, a 100 MB intrusion log is Tight`() = runBlocking {
+        val hundredMb = 100L shl 20
+        val gb = 1L shl 30
+        val bugReport = Uri.fromFile(namedZip(hundredMb, "dumpstate-2026-10-29-08-18-37.txt"))
+        assertEquals(Preflight.Ok, preflight(free = gb).check(bugReport))
+        val intrusionLog = Uri.fromFile(namedZip(hundredMb, "2026-10-01.txt"))
+        assertEquals(Preflight.Tight(hundredMb * 4, gb), preflight(free = gb).check(intrusionLog))
     }
 
     @Test

@@ -8,7 +8,9 @@ import com.androdr.data.model.TelemetryState
 import com.androdr.data.store.StoreFixture.Companion.CAPTURED
 import com.androdr.data.store.StoreFixture.Companion.app
 import com.androdr.data.store.StoreFixture.Companion.dns
+import com.androdr.scanner.ArtifactType
 import com.androdr.scanner.ChunkedScanWriter
+import com.androdr.scanner.ImportPreflight
 import com.androdr.scanner.EvaluateOnlyDedup
 import com.androdr.scanner.WriterFixture
 import com.androdr.sigma.StoreRecord
@@ -48,14 +50,14 @@ class StoragePreflightTest {
 
     @Test
     fun `Tight when free minus estimate is below twice the estimate plus 200 MB`() {
-        // 100 MB decompressed × 0.6 = 60 MB estimate; the line is free = 60 + 120 + 200 = 380 MB.
+        // 100 MB decompressed × 0.5 = 50 MB estimate; the line is free = 50 + 100 + 200 = 350 MB.
         val decompressed = 100 * mb
-        val estimate = (decompressed * StoragePreflight.STORED_SIZE_FACTOR).toLong()
+        val estimate = 50 * mb
         val line = estimate + 2 * estimate + 200 * mb
-        assertEquals(Preflight.Tight(estimate, line - 1), preflight(line - 1).check(decompressed))
-        assertEquals(Preflight.Ok, preflight(line).check(decompressed))
-        assertEquals(Preflight.Tight(null, 10L shl 30), preflight(10L shl 30).check(null))
-        assertEquals(Preflight.Tight(null, 10L shl 30), preflight(10L shl 30).check(-1))
+        assertEquals(Preflight.Tight(estimate, line - 1), preflight(line - 1).check(decompressed, 0.5))
+        assertEquals(Preflight.Ok, preflight(line).check(decompressed, 0.5))
+        assertEquals(Preflight.Tight(null, 10L shl 30), preflight(10L shl 30).check(null, 0.5))
+        assertEquals(Preflight.Tight(null, 10L shl 30), preflight(10L shl 30).check(-1, 0.5))
     }
 
     @Test
@@ -69,7 +71,8 @@ class StoragePreflightTest {
     @Test
     fun `import anyway - a Tight preflight does not stop the import storing`() = runBlocking {
         w.freeBytes = 300 * mb
-        assertTrue(w.preflight.check(1_000 * mb) is Preflight.Tight)
+        assertTrue(w.preflight.check(1_000 * mb, ImportPreflight.storedSizeFactor(ArtifactType.INTRUSION_LOG))
+            is Preflight.Tight)
         val s = w.writer.begin(w.scan(1L, il), liveEvents = false)
         s.append("security_log", il, IMPORT_CAPTURED, listOf(securityLine()))
         val r = s.finish()
@@ -79,7 +82,8 @@ class StoragePreflightTest {
 
     @Test
     fun `headers that under-report sizes - the reserve trips and the import finishes evaluate-only`() = runBlocking {
-        assertEquals(Preflight.Ok, w.preflight.check(1 * mb))
+        assertEquals(Preflight.Ok,
+            w.preflight.check(1 * mb, ImportPreflight.storedSizeFactor(ArtifactType.INTRUSION_LOG)))
         val s = w.writer.begin(w.scan(1L, il), liveEvents = false)
         s.append("security_log", il, IMPORT_CAPTURED, listOf(securityLine(1L)))
         w.freeBytes = 100 * mb // the import was far larger than its headers said
