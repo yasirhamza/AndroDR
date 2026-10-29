@@ -225,6 +225,7 @@ fun TimelineEventDetailSheet(
     onJumpToRelated: (ForensicTimelineEvent) -> Unit = {},
     onShowOnlyApp: ((String) -> Unit)? = null,
     onCloseAlert: (() -> Unit)? = null,
+    onViewTelemetry: (() -> Unit)? = null,
 ) {
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -269,6 +270,10 @@ fun TimelineEventDetailSheet(
             }
             if (event.ruleId.isNotEmpty()) {
                 DetailSection(stringResource(R.string.timeline_detail_rule), event.ruleId)
+            }
+            // The row's scan's stored telemetry (spec §8.1 "finding detail").
+            onViewTelemetry?.let { open ->
+                OutlinedButton(onClick = open) { Text(stringResource(R.string.telemetry_view)) }
             }
             // An alert row (its alert is still OPEN): closing it asks the device credential (spec §5.4).
             onCloseAlert?.let { close ->
@@ -585,7 +590,8 @@ fun FactDetailSheet(
 fun ScanGroupHeader(
     group: ScanGroup,
     count: Long?,
-    onClick: (() -> Unit)? = null
+    onClick: (() -> Unit)? = null,
+    onViewTelemetry: (() -> Unit)? = null,
 ) {
     val dateStr = remember(group.timestamp) {
         if (group.timestamp > 0) SimpleDateFormat("MMM dd, yyyy HH:mm", Locale.US).format(Date(group.timestamp))
@@ -628,6 +634,10 @@ fun ScanGroupHeader(
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+                // The scan's stored telemetry (spec §8.1 "scan headers").
+                onViewTelemetry?.let { open ->
+                    TextButton(onClick = open) { Text(stringResource(R.string.telemetry_view)) }
+                }
             }
             Row(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),

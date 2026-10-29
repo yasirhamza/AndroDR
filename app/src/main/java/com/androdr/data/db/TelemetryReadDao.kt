@@ -80,6 +80,23 @@ interface TelemetryReadDao {
     suspend fun pageBefore(scanId: Long, service: String, before: Int, size: Int): List<StoredRecordRow>
 
     /**
+     * [pageAfter] narrowed to records whose package name or subject key (indexed columns) matches
+     * the LIKE [pattern] (escape character `\`); the browser's search (spec §8.1).
+     */
+    @Query("SELECT $OBS_COLS $OBS_FROM WHERE o.scanId = :scanId AND o.service = :service " +
+        "AND o.ordinal > :after AND ${CompleteScan.SQL} AND $SEARCH_MATCH ORDER BY o.ordinal LIMIT :size")
+    suspend fun searchAfter(
+        scanId: Long, service: String, pattern: String, after: Int, size: Int,
+    ): List<StoredRecordRow>
+
+    /** [pageBefore] narrowed as [searchAfter] narrows [pageAfter], DESCENDING. */
+    @Query("SELECT $OBS_COLS $OBS_FROM WHERE o.scanId = :scanId AND o.service = :service " +
+        "AND o.ordinal < :before AND ${CompleteScan.SQL} AND $SEARCH_MATCH ORDER BY o.ordinal DESC LIMIT :size")
+    suspend fun searchBefore(
+        scanId: Long, service: String, pattern: String, before: Int, size: Int,
+    ): List<StoredRecordRow>
+
+    /**
      * Every visible record of a subject: its observations in COMPLETE scans and its pinned
      * orphans (read with their first observation's envelope), in one capture-time order
      * (`capturedAt`, then `scanId`, then `ordinal`; an orphan's `scanId` is −1).
@@ -192,6 +209,10 @@ internal const val OBS_COLS = "f.id AS factId, o.scanId AS scanId, f.service AS 
 internal const val ORPHAN_COLS = "f.id AS factId, -1 AS scanId, f.service AS service, -1 AS ordinal, " +
     "f.firstSource AS source, f.firstCapturedAt AS capturedAt, f.firstStrippedKeys AS strippedKeys, " +
     "$FACT_BODY_COLS"
+
+/** The browser search's match on a fact's indexed text columns (binds `:pattern`, escape `\`). */
+internal const val SEARCH_MATCH =
+    "(f.packageName LIKE :pattern ESCAPE '\\' OR f.subjectKey LIKE :pattern ESCAPE '\\')"
 
 /** Observations joined to their scan (s), fact (f) and body (b). */
 internal const val OBS_FROM = "FROM scan_record o JOIN ScanResult s ON s.id = o.scanId " +

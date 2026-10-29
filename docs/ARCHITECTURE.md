@@ -100,6 +100,7 @@ Current package tree under `app/src/main/java/com/androdr/`:
     ├── network/       DNS monitor screen + ViewModel
     ├── permissions/   Permission prompts + rationales
     ├── settings/      Settings + About
+    ├── telemetry/     Telemetry browser: a scan's services, one service's records, one fact, subject history
     ├── theme/         Material theme tokens
     └── timeline/      Forensic timeline screen + ViewModel
 ```

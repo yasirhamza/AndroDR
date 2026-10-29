@@ -25,12 +25,13 @@ import javax.inject.Singleton
  * or over-long bodies become a placeholder). A pinned orphan (its observations were removed by
  * deletion or retention) has [scanId] and [ordinal] [ORPHAN]; its [source] and [capturedAt]
  * are the fact's first observation's (`firstSource`/`firstCapturedAt`), and its [fields] are
- * restored with that observation's stripped keys, so provenance stays exact.
+ * restored with that observation's stripped keys, so provenance stays exact. [subjectKey] is the
+ * fact's stored subject key ([TelemetryStore.subjectKeyOf]), kept even when the body is unreadable.
  */
 data class DecodedRecord(
     val factId: Long, val scanId: Long, val service: String, val ordinal: Int, val source: TelemetrySource,
     val capturedAt: Long, val eventTime: Long?, val precision: TimePrecision, val category: String?,
-    val fields: Map<String, Any?>?, val summary: String?,
+    val fields: Map<String, Any?>?, val summary: String?, val subjectKey: String? = null,
 ) {
     companion object {
         const val ORPHAN = -1
@@ -70,29 +71,47 @@ internal class RecordDecoder(private val codec: TelemetryRecordCodec, private va
             factId = row.factId, scanId = row.scanId, service = row.service, ordinal = row.ordinal,
             source = row.source, capturedAt = row.capturedAt, eventTime = row.eventTime, precision = precision,
             category = row.category, fields = fields, summary = fields?.let { display.summary(row.service, it) },
+            subjectKey = row.subjectKey,
         )
     }
 }
 
-/** Keyset paging over one scan's records of one service, keyed by ordinal. */
+/**
+ * Keyset paging over one scan's records of one service, keyed by ordinal. A non-blank [search]
+ * narrows it to records whose package name or subject key contains that text (ASCII
+ * case-insensitive, as SQLite's LIKE is), still keyset on ordinal.
+ */
 internal class ScanRecordPagingSource(
     db: AppDatabase,
     private val scanId: Long,
     private val service: String,
     private val decoder: RecordDecoder,
+    search: String? = null,
 ) : KeysetPagingSource<Int, DecodedRecord>(db, KeysetPagingSource.OBSERVED_TABLES) {
     private val dao: TelemetryReadDao = db.telemetryReadDao()
+    private val pattern: String? = search?.trim()?.takeIf { it.isNotEmpty() }?.let { "%${likeEscape(it)}%" }
 
     override fun keyOf(item: DecodedRecord): Int = item.ordinal
 
-    override suspend fun loadFrom(from: Int?, size: Int) =
-        slice(dao.pageAfter(scanId, service, (from ?: Int.MIN_VALUE + 1) - 1, size).map(decoder::decode))
+    override suspend fun loadFrom(from: Int?, size: Int) = after((from ?: Int.MIN_VALUE + 1) - 1, size)
 
-    override suspend fun loadAfter(after: Int, size: Int) =
-        slice(dao.pageAfter(scanId, service, after, size).map(decoder::decode))
+    override suspend fun loadAfter(after: Int, size: Int) = after(after, size)
 
-    override suspend fun loadBefore(before: Int, size: Int) =
-        slice(dao.pageBefore(scanId, service, before, size).map(decoder::decode))
+    override suspend fun loadBefore(before: Int, size: Int) = slice(
+        (pattern?.let { dao.searchBefore(scanId, service, it, before, size) }
+            ?: dao.pageBefore(scanId, service, before, size)).map(decoder::decode)
+    )
+
+    private suspend fun after(after: Int, size: Int) = slice(
+        (pattern?.let { dao.searchAfter(scanId, service, it, after, size) }
+            ?: dao.pageAfter(scanId, service, after, size)).map(decoder::decode)
+    )
+
+    companion object {
+        /** Escapes LIKE's wildcards (`%`, `_`) and its escape character, so a search matches literally. */
+        internal fun likeEscape(text: String): String =
+            text.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+    }
 }
 
 /**
@@ -118,10 +137,14 @@ class TelemetryReader @Inject constructor(
     /** One scan's record count, decoded body bytes and latest exact event time (the export estimate). */
     suspend fun scanTotals(scanId: Long): ScanTotals = dao.scanTotals(scanId)
 
-    fun page(scanId: Long, service: String): Flow<PagingData<DecodedRecord>> =
-        Pager(PagingConfig(pageSize = PAGE_SIZE, enablePlaceholders = false)) { pagingSource(scanId, service) }.flow
+    /** One scan's records of [service], keyset-paged; a non-blank [search] narrows them ([ScanRecordPagingSource]). */
+    fun page(scanId: Long, service: String, search: String? = null): Flow<PagingData<DecodedRecord>> =
+        Pager(PagingConfig(pageSize = PAGE_SIZE, enablePlaceholders = false)) {
+            pagingSource(scanId, service, search)
+        }.flow
 
-    internal fun pagingSource(scanId: Long, service: String) = ScanRecordPagingSource(db, scanId, service, decoder)
+    internal fun pagingSource(scanId: Long, service: String, search: String? = null) =
+        ScanRecordPagingSource(db, scanId, service, decoder, search)
 
     /** Streams one scan's records of [service] in ordinal order, [BATCH] at a time. */
     override suspend fun forEach(scanId: Long, service: String, block: suspend (DecodedRecord) -> Unit) {

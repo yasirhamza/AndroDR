@@ -68,6 +68,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.androdr.R
 import com.androdr.data.model.ScanResult
+import com.androdr.data.model.ScanState
 import com.androdr.data.model.TelemetrySource
 import com.androdr.reporting.ReportSummary
 import com.androdr.scanner.ScanOrchestrator
@@ -83,6 +84,7 @@ import java.util.Locale
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HistoryScreen(
+    onViewTelemetry: ((Long) -> Unit)? = null,
     viewModel: HistoryViewModel = hiltViewModel()
 ) {
     val scans = viewModel.scans.collectAsLazyPagingItems()
@@ -193,6 +195,9 @@ fun HistoryScreen(
                 onDelete = { viewModel.requestDeleteScan(scan.id) },
                 deleteEnabled = deleteEnabled,
                 loadCounts = viewModel::rowCounts,
+                onViewTelemetry = onViewTelemetry?.takeIf { scan.state == ScanState.COMPLETE }?.let { open ->
+                    { open(scan.id) }
+                },
             )
         }
     }
@@ -472,6 +477,7 @@ private fun ScanHistoryItem(
     onDelete: () -> Unit,
     deleteEnabled: Boolean = true,
     loadCounts: (suspend (ScanResult) -> HistoryRowCounts?)? = null,
+    onViewTelemetry: (() -> Unit)? = null,
 ) {
     // The stored findings shown (informational excluded, as the import screen counts them) and any
     // that could not be saved, read in SQL per row; the scan's own count until they load.
@@ -579,6 +585,11 @@ private fun ScanHistoryItem(
                         )
                     } else {
                         DiffSection(diff = diff)
+                    }
+
+                    // The scan's stored telemetry (spec §8.1): only a COMPLETE scan offers it.
+                    onViewTelemetry?.let { open ->
+                        TextButton(onClick = open) { Text(stringResource(R.string.telemetry_view)) }
                     }
 
                     // Action buttons row
