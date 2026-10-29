@@ -1,5 +1,6 @@
 package com.androdr.scanner
 
+import java.nio.Buffer
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.nio.channels.FileChannel
@@ -83,7 +84,9 @@ object ZipCentralDirectory {
             val commentLen = cd.getShort(pos + 32).toInt() and U16_MAX
             val name = ByteArray(nameLen)
             val view = cd.duplicate()
-            view.position(pos + CD_FIXED)
+            // Through java.nio.Buffer: ByteBuffer's covariant position(int) exists only from API 34.
+            val viewAsBuffer: Buffer = view
+            viewAsBuffer.position(pos + CD_FIXED)
             view.get(name)
             yield(String(name, Charsets.UTF_8))
             pos += CD_FIXED + nameLen + extraLen + commentLen
