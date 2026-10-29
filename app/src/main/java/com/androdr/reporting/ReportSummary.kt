@@ -24,21 +24,22 @@ data class ReportSummary(
 ) {
     val records: Int get() = services.sumOf { it.records }
 
-    /** The sheet's lines, plain ASCII, in display order. */
+    /** The sheet's lines in display order; counts use the locale's digit grouping ([groupedCount]). */
     fun lines(): List<String> = buildList {
+        fun n(count: Int) = groupedCount(count.toLong())
         add("Overall risk: $overallRisk")
         when (source) {
             TelemetrySource.LIVE_SCAN -> Unit
             TelemetrySource.BUGREPORT_IMPORT -> add("Source: imported bug report")
             TelemetrySource.INTRUSION_LOG_IMPORT -> add("Source: imported intrusion log")
         }
-        add("App issues: $appIssues")
-        add("Device settings needing attention: $deviceIssues")
-        add("Warning signs that add up: $warningSigns")
-        if (checksNotRun > 0) add("Checks that could not run: $checksNotRun")
-        if (failedScanners > 0) add("Scanners that failed: $failedScanners")
-        add(telemetryLine(telemetryState, records, services.size))
-        services.forEach { add("  ${serviceLabel(it.service)} (${it.service}): ${it.records} record(s)") }
+        add("App issues: ${n(appIssues)}")
+        add("Device settings needing attention: ${n(deviceIssues)}")
+        add("Warning signs that add up: ${n(warningSigns)}")
+        if (checksNotRun > 0) add("Checks that could not run: ${n(checksNotRun)}")
+        if (failedScanners > 0) add("Scanners that failed: ${n(failedScanners)}")
+        add(telemetryLine(telemetryState, records, services.size, ::n))
+        services.forEach { add("  ${serviceLabel(it.service)} (${it.service}): ${n(it.records)} record(s)") }
         add("Export the report for the full findings and telemetry.")
     }
 }
@@ -78,21 +79,33 @@ data class ExportEstimate(val records: Long, val bytes: Long, val categories: Li
 
 /**
  * The one line that says what the store holds for a scan, shared by the report and the summary.
- * Each state has its own line, so a report missing telemetry says why (spec §7).
+ * Each state has its own line, so a report missing telemetry says why (spec §7). [count] formats the
+ * numbers: plain in the exported report, grouped on the History sheet.
  */
-internal fun telemetryLine(state: TelemetryState, records: Int, services: Int): String = when (state) {
-    TelemetryState.STORED -> "Stored telemetry: $records record(s) from $services source(s), captured with this scan."
-    TelemetryState.PARTIAL_RETENTION -> "${ReportFormatter.TELEMETRY_PARTIAL} $records record(s) remain."
-    TelemetryState.NONE -> ReportFormatter.TELEMETRY_NONE
-    // Chunks persisted before an evaluate-only fallback stay: never claim nothing was saved.
-    TelemetryState.FAILED -> if (records == 0) {
-        ReportFormatter.TELEMETRY_FAILED
-    } else {
-        "${ReportFormatter.TELEMETRY_FAILED_PARTWAY} $records record(s) were stored before it failed; " +
-            "the rest were checked but not saved."
+internal fun telemetryLine(
+    state: TelemetryState,
+    recordCount: Int,
+    serviceCount: Int,
+    count: (Int) -> String = { it.toString() },
+): String {
+    val records = count(recordCount)
+    val services = count(serviceCount)
+    return when (state) {
+        TelemetryState.STORED ->
+            "Stored telemetry: $records record(s) from $services source(s), captured with this scan."
+        TelemetryState.PARTIAL_RETENTION -> "${ReportFormatter.TELEMETRY_PARTIAL} $records record(s) remain."
+        TelemetryState.NONE -> ReportFormatter.TELEMETRY_NONE
+        // Chunks persisted before an evaluate-only fallback stay: never claim nothing was saved.
+        TelemetryState.FAILED -> if (recordCount == 0) {
+            ReportFormatter.TELEMETRY_FAILED
+        } else {
+            "${ReportFormatter.TELEMETRY_FAILED_PARTWAY} $records record(s) were stored before it failed; " +
+                "the rest were checked but not saved."
+        }
+        // Retention later removed records: the count left is neither "stored before it failed" nor zero saved.
+        TelemetryState.FAILED_PARTIAL_RETENTION ->
+            "${ReportFormatter.TELEMETRY_FAILED_RETAINED} $records record(s) remain."
     }
-    // Retention later removed records: the count left is neither "stored before it failed" nor zero saved.
-    TelemetryState.FAILED_PARTIAL_RETENTION -> "${ReportFormatter.TELEMETRY_FAILED_RETAINED} $records record(s) remain."
 }
 
 /** Plain words for each telemetry service: the export notice's sensitive categories. */

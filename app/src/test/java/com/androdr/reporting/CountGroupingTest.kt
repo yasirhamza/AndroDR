@@ -3,7 +3,10 @@ package com.androdr.reporting
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import com.androdr.R
+import com.androdr.data.db.ServiceSummary
 import com.androdr.data.model.ScanResult
+import com.androdr.data.model.TelemetrySource
+import com.androdr.data.model.TelemetryState
 import com.androdr.data.store.BodyStats
 import com.androdr.ui.history.scanCountLines
 import com.androdr.ui.settings.TelemetryCleanup
@@ -63,6 +66,20 @@ class CountGroupingTest {
             "• 125,000 finding(s) triggered\n• 2 known malware app(s)\n• 1,500 sideloaded app(s)",
             scanCountLines(scan),
         )
+    }
+
+    @Test
+    fun `the History summary sheet's counts are grouped, the report's telemetry line is not`() {
+        val summary = ReportSummary(TelemetrySource.LIVE_SCAN, "LOW", 1_500, 0, 0, 0, 0, TelemetryState.STORED,
+            listOf(ServiceSummary("app_scanner", 125_000)))
+        val lines = summary.lines()
+        assertTrue(lines.toString(), "App issues: 1,500" in lines)
+        assertTrue(lines.toString(),
+            "Stored telemetry: 125,000 record(s) from 1 source(s), captured with this scan." in lines)
+        assertTrue(lines.toString(), lines.any { it.endsWith("(app_scanner): 125,000 record(s)") })
+        assertEquals("the exported report keeps plain numbers",
+            "Stored telemetry: 125000 record(s) from 1 source(s), captured with this scan.",
+            telemetryLine(TelemetryState.STORED, 125_000, 1))
     }
 
     @Test
