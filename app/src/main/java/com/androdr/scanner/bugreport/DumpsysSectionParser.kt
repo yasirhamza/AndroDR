@@ -17,7 +17,10 @@ class DumpsysSectionParser {
 
         private val DUMP_HEADER = Regex("""^-*\s*DUMP OF SERVICE (\S+?):\s*$""")
         private val DASHED_HEADER = Regex("""^-+ SERVICE (\S+?) -+$""")
-        private val SYSTEM_PROPS_HEADER = Regex("""^-+\s*SYSTEM PROPERTIES\s*-+$""")
+        // Real dumpstate titles the section with its command: "------ SYSTEM PROPERTIES (getprop) ------"
+        // (AOSP RunCommand titles); the bare form is kept for older/synthetic reports. The section
+        // ends at the next dashed line, "------ 0.053s was the duration of 'SYSTEM PROPERTIES' ------".
+        private val SYSTEM_PROPS_HEADER = Regex("""^-+\s*SYSTEM PROPERTIES(\s*\([^)]*\))?\s*-+$""")
         private val GENERIC_DASHED_SECTION = Regex("""^-{3,}\s*\S.*\S\s*-{3,}$""")
 
         private fun isDelimiter(line: String): Boolean =

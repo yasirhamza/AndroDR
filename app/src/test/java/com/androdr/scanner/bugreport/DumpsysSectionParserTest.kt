@@ -6,6 +6,8 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.ByteArrayInputStream
+import java.io.File
+import java.time.ZoneId
 
 class DumpsysSectionParserTest {
 
@@ -132,6 +134,46 @@ class DumpsysSectionParserTest {
         assertNotNull(props)
         assertTrue(props!!.contains("ro.build.version.sdk"))
         assertTrue(!props.contains("other stuff"))
+    }
+
+    private fun realFormatText(): String {
+        val name = "fixtures/bugreport-real-format-headers.txt"
+        return listOf(File("src/test/resources/$name"), File("app/src/test/resources/$name"))
+            .first { it.isFile }.readText()
+    }
+
+    /**
+     * Real dumpstate titles a RunCommand section with its command in parentheses:
+     * `------ SYSTEM PROPERTIES (getprop) ------` (F916B, API 33). The parser matched only the
+     * synthetic `------ SYSTEM PROPERTIES ------`, so no real report ever yielded its properties
+     * (source device UNKNOWN, no snapshots, clock assumed UTC). Battery finding B6.
+     */
+    @Test
+    fun `real SYSTEM PROPERTIES (getprop) header yields the properties up to the duration line`() {
+        val props = parser.extractSystemProperties(streamOf(realFormatText()))
+        assertNotNull("real getprop header not recognised", props)
+        assertTrue(props!!.contains("[persist.sys.timezone]: [Asia/Qatar]"))
+        assertTrue(props.contains("[wlan.driver.status]: [ok]"))
+        assertTrue("stops at the duration line", !props.contains("was the duration"))
+        assertTrue("stops before the next section", !props.contains("vmap"))
+
+        val clock = DumpsysClock.fromSystemProperties(props)
+        assertEquals(ZoneId.of("Asia/Qatar"), clock.zone)
+        assertTrue(!clock.assumedUtc)
+        assertEquals("samsung" to "samsung", GetpropParser().extractManufacturerAndBrand(props.lineSequence()))
+        assertEquals(9, GetpropParser().parse(props.lineSequence(), capturedAt = 0L).size)
+    }
+
+    @Test
+    fun `any parenthesised command suffix on the SYSTEM PROPERTIES title is accepted`() {
+        val text = "------ SYSTEM PROPERTIES (/system/bin/getprop -Z) ------\n[a.b]: [c]\n------ X ------\n"
+        assertEquals("[a.b]: [c]\n", parser.extractSystemProperties(streamOf(text)))
+    }
+
+    @Test
+    fun `the SYSTEM PROPERTIES duration line alone does not open the section`() {
+        val text = "------ 0.053s was the duration of 'SYSTEM PROPERTIES' ------\n[a.b]: [c]\n"
+        assertNull(parser.extractSystemProperties(streamOf(text)))
     }
 
     @Test

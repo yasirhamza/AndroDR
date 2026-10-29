@@ -1,0 +1,29 @@
+========================================================
+== dumpstate: 2026-10-29 08:18:37
+========================================================
+
+Build fingerprint: 'vendor/product/device:13/AAAA.000000.000/0000000:user/release-keys'
+------ 0.001s was the duration of 'UPDATED APEX LIST' ------
+------ 0.221s was the duration of 'DUMP DRBX' ------
+------ SYSTEM PROPERTIES (getprop) ------
+[DEVICE_PROVISIONED]: [1]
+[persist.sys.locale]: [en-US]
+[persist.sys.timezone]: [Asia/Qatar]
+[ro.build.type]: [user]
+[ro.build.version.release]: [13]
+[ro.build.version.sdk]: [33]
+[ro.product.brand]: [samsung]
+[ro.product.manufacturer]: [samsung]
+[wlan.driver.status]: [ok]
+------ 0.053s was the duration of 'SYSTEM PROPERTIES' ------
+------ VMALLOC INFO (/proc/vmallocinfo) ------
+0x0000000000000000-0x0000000000000000 31784960 setup_arch+0x1e4/0x548 vmap
+------ 0.010s was the duration of 'VMALLOC INFO' ------
+--------- 0.042s was the duration of dumpsys pac_proxy, ending at: 2026-10-29 08:19:25
+-------------------------------------------------------------------------------
+DUMP OF SERVICE package:
+Service host process PID: 1553
+Package [com.example.alpha] (ab12cd):
+  versionCode=100 minSdk=26 targetSdk=34
+  firstInstallTime=2026-03-01 08:00:00
+  lastUpdateTime=2026-03-20 09:00:00
