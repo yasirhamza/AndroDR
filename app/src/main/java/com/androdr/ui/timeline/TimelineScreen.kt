@@ -89,6 +89,13 @@ fun TimelineScreen(
     initialPackage: String? = null,
     initialScanId: Long? = null,
     onNavigateToHistory: (() -> Unit)? = null,
+    /** Opens a scan's telemetry browser (spec §8.1): from a scan header and a row's detail. */
+    onViewTelemetry: ((Long) -> Unit)? = null,
+    /**
+     * Opens one fact by id, as a scan observed it when the scan is given: "Matched record"
+     * navigates by the row's `recordId` and scan ([matchedRecordTarget], spec §6).
+     */
+    onOpenFact: ((factId: Long, scanId: Long?) -> Unit)? = null,
     viewModel: TimelineViewModel = hiltViewModel()
 ) {
     // The deep link (Apps screen: a package, empty meaning "no real package"; import screen: a scan)
@@ -123,6 +130,16 @@ fun TimelineScreen(
     var selectedEvent by remember { mutableStateOf<ForensicTimelineEvent?>(null) }
     var selectedRecord by remember { mutableStateOf<DecodedRecord?>(null) }
     var showReportSheet by remember { mutableStateOf(false) }
+
+    // "Matched record" opens the fact screen by the row's recordId and scan; without navigation, the sheet.
+    fun openMatchedRecord(event: ForensicTimelineEvent, evidence: DecodedRecord) {
+        val target = matchedRecordTarget(event)
+        if (onOpenFact != null && target != null) {
+            onOpenFact(target.factId, target.scanId)
+        } else {
+            selectedRecord = evidence
+        }
+    }
 
     fun copy(preview: ReportPreview) {
         if (preview.truncated) {
@@ -249,10 +266,17 @@ fun TimelineScreen(
                     val group = scanGroups[index] ?: return@items
                     val count = rememberCount(group.scanId, filter, countsVersion) { viewModel.scanCount(group.scanId) }
                     // A scan header opens that scan's Timeline.
-                    ScanGroupHeader(group = group, count = count, onClick = {
-                        viewModel.setScanFilter(group.scanId)
-                        viewModel.setGroupMode(TimelineGroupMode.DATE)
-                    })
+                    ScanGroupHeader(
+                        group = group,
+                        count = count,
+                        onClick = {
+                            viewModel.setScanFilter(group.scanId)
+                            viewModel.setGroupMode(TimelineGroupMode.DATE)
+                        },
+                        onViewTelemetry = onViewTelemetry?.takeIf { group.scanId > 0 }?.let { open ->
+                            { open(group.scanId) }
+                        },
+                    )
                 }
             }
         } else {
@@ -313,7 +337,7 @@ fun TimelineScreen(
                             row = row,
                             loadPage = viewModel::loadClusterPage,
                             onEventTap = { selectedEvent = it },
-                            onRecordTap = { selectedRecord = it },
+                            onMatchedRecordTap = { evidence -> openMatchedRecord(row.event, evidence) },
                         )
                         is TimelineRow.EventRow -> FactCard(
                             record = row.record, timestamp = row.timestamp, onClick = { selectedRecord = row.record },
@@ -365,7 +389,13 @@ fun TimelineScreen(
                 viewModel.showOnlyApp(pkg)
             },
             relatedEvents = related,
-            onJumpToRelated = { selectedEvent = it }
+            onJumpToRelated = { selectedEvent = it },
+            onViewTelemetry = onViewTelemetry?.takeIf { event.scanResultId > 0 }?.let { open ->
+                {
+                    selectedEvent = null
+                    open(event.scanResultId)
+                }
+            },
         )
     }
     selectedRecord?.let { record ->
@@ -470,7 +500,7 @@ private fun StoredRowCard(
     row: TimelineRow.StoredRow,
     loadPage: suspend (Long, com.androdr.sigma.AtomRef?) -> ClusterPage,
     onEventTap: (ForensicTimelineEvent) -> Unit,
-    onRecordTap: (DecodedRecord) -> Unit,
+    onMatchedRecordTap: (DecodedRecord) -> Unit,
 ) {
     if (row.event.kind == "signal") {
         CorrelationClusterCard(cluster = signalCluster(row.event), loadPage = loadPage, onEventTap = onEventTap)
@@ -484,7 +514,7 @@ private fun StoredRowCard(
                     record = evidence,
                     timestamp = evidence.eventTime ?: evidence.capturedAt,
                     label = stringResource(R.string.timeline_matched_record),
-                    onClick = { onRecordTap(evidence) },
+                    onClick = { onMatchedRecordTap(evidence) },
                 )
             }
         }

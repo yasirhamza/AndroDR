@@ -37,6 +37,27 @@ object ArtifactSniffer {
     }
 
     /**
+     * A bug report's main dumpstate entry: `dumpstate.txt`, `bugreport-*.txt`, or the
+     * `dumpstate-<YYYY-MM-DD-HH-MM-SS>.txt` that `adb bugreport` writes (named in its
+     * `main_entry.txt`). The `dumpstate_board.txt` / `dumpstate_log.txt` side files of a real zip
+     * do not match (underscore, not hyphen).
+     */
+    private val dumpstateEntry = Regex("""dumpstate\.txt|dumpstate-.+\.txt|bugreport-.+\.txt""")
+
+    /**
+     * True when [entryName] is a bug report's main dumpstate entry ([dumpstateEntry]), by
+     * case-insensitive basename, at the top level or one directory deep.
+     *
+     * THE single definition, shared by [classify] and [BugReportAnalyzer] (battery B7): each
+     * carried its own copy, and neither accepted `dumpstate-<timestamp>.txt`, so every real
+     * `adb bugreport` zip was refused as not a recognized artifact.
+     */
+    fun isDumpstateEntry(entryName: String): Boolean {
+        val base = entryName.substringAfterLast('/').lowercase()
+        return dumpstateEntry.matches(base) && entryName.count { it == '/' } <= 1
+    }
+
+    /**
      * Decompressed-byte budget for one sniff (#342 C3, security M5). Classifying
      * a ZIP needs only entry NAMES, but `ZipInputStream` cannot reach the next
      * name without INFLATING the current entry's body — so an unbounded walk
@@ -60,10 +81,7 @@ object ArtifactSniffer {
     fun classify(entryNames: Sequence<String>): ArtifactType {
         var sawIntrusionLog = false
         for (name in entryNames) {
-            val base = name.substringAfterLast('/').lowercase()
-            val isDumpstate = base == "dumpstate.txt" ||
-                (base.startsWith("bugreport-") && base.endsWith(".txt"))
-            if (isDumpstate) return ArtifactType.BUG_REPORT
+            if (isDumpstateEntry(name)) return ArtifactType.BUG_REPORT
             if (isPerDayLogEntry(name)) sawIntrusionLog = true
         }
         return if (sawIntrusionLog) ArtifactType.INTRUSION_LOG else ArtifactType.UNRECOGNIZED

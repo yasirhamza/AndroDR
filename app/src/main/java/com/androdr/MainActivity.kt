@@ -42,6 +42,10 @@ import com.androdr.ui.dashboard.DashboardScreen
 import com.androdr.ui.device.DeviceAuditScreen
 import com.androdr.ui.history.HistoryScreen
 import com.androdr.ui.network.DnsMonitorScreen
+import com.androdr.ui.telemetry.TelemetryBrowserViewModel
+import com.androdr.ui.telemetry.TelemetryFactScreen
+import com.androdr.ui.telemetry.TelemetryRecordsScreen
+import com.androdr.ui.telemetry.TelemetryServicesScreen
 import com.androdr.ui.timeline.TimelineScreen
 import com.androdr.ui.settings.SettingsScreen
 import com.androdr.data.repo.SettingsRepository
@@ -218,7 +222,7 @@ private fun AndroDRApp() {
                 )
             }
             composable("history") {
-                HistoryScreen()
+                HistoryScreen(onViewTelemetry = { scanId -> navController.navigate(telemetryForScan(scanId)) })
             }
             composable(
                 "timeline?pkg={pkg}&scan={scan}",
@@ -234,7 +238,9 @@ private fun AndroDRApp() {
                         navController.navigate("history") {
                             launchSingleTop = true
                         }
-                    }
+                    },
+                    onViewTelemetry = { scanId -> navController.navigate(telemetryForScan(scanId)) },
+                    onOpenFact = { factId, scanId -> navController.navigate(factRoute(factId, scanId)) },
                 )
             }
             composable("bugreport") {
@@ -245,9 +251,59 @@ private fun AndroDRApp() {
             composable("settings") {
                 SettingsScreen()
             }
+            telemetryBrowser(navController)
         }
     }
 }
+
+/** The telemetry browser's routes (spec §8.1): a scan's services, one service's records, one fact. */
+private fun androidx.navigation.NavGraphBuilder.telemetryBrowser(navController: androidx.navigation.NavController) {
+    val back: () -> Unit = { navController.popBackStack() }
+    composable(
+        "telemetry/{${TelemetryBrowserViewModel.ARG_SCAN}}",
+        arguments = listOf(navArgument(TelemetryBrowserViewModel.ARG_SCAN) { type = NavType.LongType }),
+    ) {
+        TelemetryServicesScreen(
+            onOpenService = { scanId, service -> navController.navigate(telemetryForService(scanId, service)) },
+            onBack = back,
+        )
+    }
+    composable(
+        "telemetry/{${TelemetryBrowserViewModel.ARG_SCAN}}/{${TelemetryBrowserViewModel.ARG_SERVICE}}",
+        arguments = listOf(
+            navArgument(TelemetryBrowserViewModel.ARG_SCAN) { type = NavType.LongType },
+            navArgument(TelemetryBrowserViewModel.ARG_SERVICE) { type = NavType.StringType },
+        ),
+    ) {
+        TelemetryRecordsScreen(
+            onOpenFact = { factId, scanId -> navController.navigate(factRoute(factId, scanId)) },
+            onBack = back,
+        )
+    }
+    composable(
+        "fact/{${TelemetryBrowserViewModel.ARG_FACT}}?${TelemetryBrowserViewModel.ARG_FACT_SCAN}=" +
+            "{${TelemetryBrowserViewModel.ARG_FACT_SCAN}}",
+        arguments = listOf(
+            navArgument(TelemetryBrowserViewModel.ARG_FACT) { type = NavType.LongType },
+            navArgument(TelemetryBrowserViewModel.ARG_FACT_SCAN) {
+                type = NavType.LongType
+                defaultValue = TelemetryBrowserViewModel.NO_SCAN
+            },
+        ),
+    ) {
+        TelemetryFactScreen(onBack = back)
+    }
+}
+
+/** A scan's telemetry services (History, a Timeline scan header, a finding's detail). */
+internal fun telemetryForScan(scanId: Long): String = "telemetry/$scanId"
+
+/** One service's records in one scan. */
+internal fun telemetryForService(scanId: Long, service: String): String = "telemetry/$scanId/${Uri.encode(service)}"
+
+/** One fact ("Matched record" by `recordId`); as scan [scanId] observed it when given. */
+internal fun factRoute(factId: Long, scanId: Long? = null): String =
+    if (scanId == null || scanId < 0) "fact/$factId" else "fact/$factId?scan=$scanId"
 
 /** The Timeline route's `scan` argument when no scan filter is set (a nav Long argument cannot be null). */
 internal const val NO_SCAN_FILTER = -1L

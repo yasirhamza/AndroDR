@@ -1,8 +1,11 @@
 package com.androdr.sigma
 
+import androidx.test.core.app.ApplicationProvider
 import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
 import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
 import java.io.File
 
 /**
@@ -20,27 +23,21 @@ import java.io.File
  * Companion to [BundledRulesSchemaCrossCheckTest] (Kotlin parser vs JSON
  * schema). That test verifies that every loaded rule is well-formed; this
  * one verifies that every rule on disk gets loaded in the first place.
+ *
+ * The manifest is read from [SigmaRuleEngine.BUNDLED_RULE_IDS] itself (each id resolved to its
+ * resource entry name), not from the source text: a scan of the source counted a commented-out
+ * `R.raw` line, or a reference elsewhere in the file, as registered (final review, triage #31).
  */
+@RunWith(RobolectricTestRunner::class)
 class BundledRulesManifestCompletenessTest {
 
     private fun rulesDirectory(): File {
         val candidates = listOf(
             File("app/src/main/res/raw"),
             File("src/main/res/raw"),
-            File("/home/yasir/AndroDR/app/src/main/res/raw"),
         )
         return candidates.firstOrNull { it.isDirectory }
             ?: error("Could not locate res/raw; tried: ${candidates.map { it.absolutePath }}")
-    }
-
-    private fun engineSourceFile(): File {
-        val candidates = listOf(
-            File("app/src/main/java/com/androdr/sigma/SigmaRuleEngine.kt"),
-            File("src/main/java/com/androdr/sigma/SigmaRuleEngine.kt"),
-            File("/home/yasir/AndroDR/app/src/main/java/com/androdr/sigma/SigmaRuleEngine.kt"),
-        )
-        return candidates.firstOrNull { it.isFile }
-            ?: error("Could not locate SigmaRuleEngine.kt; tried: ${candidates.map { it.absolutePath }}")
     }
 
     private fun yamlsOnDisk(): Set<String> =
@@ -49,11 +46,10 @@ class BundledRulesManifestCompletenessTest {
         }?.map { it.nameWithoutExtension }?.toSortedSet()
             ?: emptySet()
 
+    /** The loader's list, each resource id as its `res/raw` entry name (the file name without `.yml`). */
     private fun manifestReferences(): List<String> {
-        val pattern = Regex("""R\.raw\.(sigma_androdr_[A-Za-z0-9_]+)""")
-        return pattern.findAll(engineSourceFile().readText())
-            .map { it.groupValues[1] }
-            .toList()
+        val resources = ApplicationProvider.getApplicationContext<android.content.Context>().resources
+        return SigmaRuleEngine.BUNDLED_RULE_IDS.map(resources::getResourceEntryName)
     }
 
     @Test
@@ -74,7 +70,7 @@ class BundledRulesManifestCompletenessTest {
                     "exist in res/raw/ but are NOT registered in SigmaRuleEngine.kt:\n" +
                     missingFromManifest.joinToString("\n") { "  - $it" } + "\n\n" +
                     "These rules ship in the APK but never load at runtime. Add their R.raw " +
-                    "references to the BUNDLED_RAW_RES_IDS list in SigmaRuleEngine.kt to fix."
+                    "references to the BUNDLED_RULE_IDS list in SigmaRuleEngine.kt to fix."
             )
         }
     }
@@ -90,8 +86,7 @@ class BundledRulesManifestCompletenessTest {
                 "Loader-manifest completeness gate FAILED: ${dangling.size} R.raw reference(s) " +
                     "in SigmaRuleEngine.kt have no matching file in res/raw/:\n" +
                     dangling.joinToString("\n") { "  - $it" } + "\n\n" +
-                    "These references would compile only because R8 doesn't validate resource " +
-                    "existence at compile time; they should be removed or the file added."
+                    "They name a resource that is not a rule YAML on disk; remove them or add the file."
             )
         }
     }
@@ -104,7 +99,7 @@ class BundledRulesManifestCompletenessTest {
         if (duplicates.isNotEmpty()) {
             fail(
                 "Loader-manifest completeness gate FAILED: ${duplicates.size} duplicate " +
-                    "reference(s) in SigmaRuleEngine.kt's BUNDLED_RAW_RES_IDS:\n" +
+                    "reference(s) in SigmaRuleEngine.kt's BUNDLED_RULE_IDS:\n" +
                     duplicates.entries.joinToString("\n") { (ref, count) -> "  - $ref (x$count)" }
             )
         }

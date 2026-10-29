@@ -59,9 +59,9 @@ class HistoryViewModel @Inject constructor(
     val selectedScan: StateFlow<ScanResult?> = _selectedScan.asStateFlow()
 
     /**
-     * The diff between [selectedScan] and the scan that immediately preceded it
-     * in the history list (the next oldest COMPLETE scan, [ScanRepository.previousOf]).
-     * Null when no scan is selected or the selected scan has no predecessor.
+     * The diff between [selectedScan] and its baseline, [ScanRepository.diffBaselineOf]: for a live
+     * scan the previous COMPLETE live scan; an import has none (ruling R44). Null when no scan is
+     * selected, the selected scan is an import, or it has no earlier live scan.
      *
      * The selected scan is the NEWER one: [ScanOrchestrator.computeDiff] takes
      * `(newer, older)` in that order. Passing them the other way round silently
@@ -76,7 +76,7 @@ class HistoryViewModel @Inject constructor(
 
     @Suppress("TooGenericExceptionCaught") // a diff that cannot be read is not shown, never a crash
     private suspend fun diffWithPredecessor(selected: ScanResult): ScanOrchestrator.ScanDiff? = try {
-        repository.previousOf(selected)?.let { older -> ScanOrchestrator.boundedDiff(findings, selected, older) }
+        repository.diffBaselineOf(selected)?.let { older -> ScanOrchestrator.boundedDiff(findings, selected, older) }
     } catch (e: CancellationException) {
         throw e
     } catch (e: Exception) {
@@ -87,6 +87,10 @@ class HistoryViewModel @Inject constructor(
     /** Emits a [Uri] when a report is ready to share; null when idle or after consumption. */
     private val _shareUri = MutableStateFlow<Uri?>(null)
     val shareUri: StateFlow<Uri?> = _shareUri.asStateFlow()
+
+    /** The MIME type of the file behind [shareUri]: a text report, or a gzip telemetry export. */
+    private val _shareMimeType = MutableStateFlow(MIME_TEXT)
+    val shareMimeType: StateFlow<String> = _shareMimeType.asStateFlow()
 
     /** Whether a report export is currently in progress. */
     private val _exporting = MutableStateFlow(false)
@@ -178,17 +182,32 @@ class HistoryViewModel @Inject constructor(
      * Exports [scan] to a cached text file and emits its [FileProvider] URI via
      * [shareUri]. The Composable observes [shareUri] and fires the share intent.
      */
+    fun exportReport(scan: ScanResult, mode: ExportMode = ExportMode.BOTH) =
+        exporting(MIME_TEXT, "report") { reportExporter.export(scan, mode) }
+
+    /**
+     * Exports [scan]'s stored telemetry as gzip JSONL (spec §7) and emits its URI via [shareUri].
+     * Only a COMPLETE scan is exported ([offersTelemetry], the gate "View telemetry" uses).
+     */
+    fun exportTelemetry(scan: ScanResult) {
+        if (!offersTelemetry(scan)) return
+        exporting(MIME_GZIP, "telemetry") { reportExporter.exportTelemetry(scan) }
+    }
+
+    /** Runs one export at a time; a failure is reported through [exportFailed], never thrown. */
     @Suppress("TooGenericExceptionCaught") // a failed export is reported, never a crash
-    fun exportReport(scan: ScanResult, mode: ExportMode = ExportMode.BOTH) {
+    private fun exporting(mimeType: String, what: String, export: suspend () -> Uri) {
         if (_exporting.value) return
         viewModelScope.launch {
             _exporting.value = true
             try {
-                _shareUri.value = reportExporter.export(scan, mode)
+                val uri = export()
+                _shareMimeType.value = mimeType
+                _shareUri.value = uri
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                Log.w(TAG, "report export failed", e)
+                Log.w(TAG, "$what export failed", e)
                 _exportFailed.value = true
             } finally {
                 _exporting.value = false
@@ -287,6 +306,8 @@ class HistoryViewModel @Inject constructor(
 
     private companion object {
         const val TAG = "HistoryViewModel"
+        const val MIME_TEXT = "text/plain"
+        const val MIME_GZIP = "application/gzip"
     }
 }
 

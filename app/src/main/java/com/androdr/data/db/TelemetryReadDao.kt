@@ -38,8 +38,27 @@ data class ServiceSummary(val service: String, val records: Int)
  */
 data class ScanTotals(val records: Long, val rawBytes: Long, val latestEventTime: Long?)
 
-/** Distinct bodies of one encoding (−1 for the pinned-orphan total) and their sizes. */
-data class BodyStatsRow(val encoding: Int, val bodies: Long, val storedBytes: Long, val rawBytes: Long)
+/**
+ * Distinct bodies of one storage kind ([StorageKind]; −1 for the pinned-orphan total) and their sizes.
+ */
+data class BodyStatsRow(val kind: Int, val bodies: Long, val storedBytes: Long, val rawBytes: Long)
+
+/**
+ * The kinds Settings' storage figures are split into (spec §8.2), matching what retention keeps
+ * apart (spec §5.1): snapshot records of live scans (no event time; kept for the newest N live
+ * scans), event records of live scans (kept 30 days), and everything an import observed (kept until
+ * the import is deleted).
+ */
+object StorageKind {
+    // The numbers are also the precedence of a body shared across kinds ([TelemetryReadDao.storageObserved]).
+    const val SNAPSHOT = 0
+    const val LIVE_EVENT = 1
+    const val IMPORT = 2
+
+    /** The kind of observation `o` of fact `f` in scan `s`. */
+    internal const val SQL = "CASE WHEN s.source <> 'LIVE_SCAN' THEN $IMPORT " +
+        "WHEN f.eventTime IS NULL THEN $SNAPSHOT ELSE $LIVE_EVENT END"
+}
 
 /**
  * Reader side of the telemetry store (spec §5.1). Every query applies the visibility rule:
@@ -80,17 +99,37 @@ interface TelemetryReadDao {
     suspend fun pageBefore(scanId: Long, service: String, before: Int, size: Int): List<StoredRecordRow>
 
     /**
-     * Every visible record of a subject: its observations in COMPLETE scans and its pinned
-     * orphans (read with their first observation's envelope), in one capture-time order
-     * (`capturedAt`, then `scanId`, then `ordinal`; an orphan's `scanId` is −1).
+     * [pageAfter] narrowed to records whose package name or subject key (indexed columns) matches
+     * the LIKE [pattern] (escape character `\`); the browser's search (spec §8.1).
+     */
+    @Query("SELECT $OBS_COLS $OBS_FROM WHERE o.scanId = :scanId AND o.service = :service " +
+        "AND o.ordinal > :after AND ${CompleteScan.SQL} AND $SEARCH_MATCH ORDER BY o.ordinal LIMIT :size")
+    suspend fun searchAfter(
+        scanId: Long, service: String, pattern: String, after: Int, size: Int,
+    ): List<StoredRecordRow>
+
+    /** [pageBefore] narrowed as [searchAfter] narrows [pageAfter], DESCENDING. */
+    @Query("SELECT $OBS_COLS $OBS_FROM WHERE o.scanId = :scanId AND o.service = :service " +
+        "AND o.ordinal < :before AND ${CompleteScan.SQL} AND $SEARCH_MATCH ORDER BY o.ordinal DESC LIMIT :size")
+    suspend fun searchBefore(
+        scanId: Long, service: String, pattern: String, before: Int, size: Int,
+    ): List<StoredRecordRow>
+
+    /**
+     * Every visible snapshot record (`f.eventTime IS NULL`, spec §3) of a subject: its observations
+     * in COMPLETE scans and its pinned orphans (read with their first observation's envelope), in
+     * one capture-time order (`capturedAt`, then `scanId`, then `ordinal`; an orphan's `scanId` is
+     * −1). Both halves filter on event time: a service that emits events and snapshots under one
+     * subject key (e.g. `appops_audit`) keeps its events out, so the result is bounded by snapshot
+     * retention, not by an event time window.
      */
     @Query(
         "SELECT $OBS_COLS $OBS_FROM WHERE f.service = :service AND f.subjectKey = :subjectKey " +
-            "AND ${CompleteScan.SQL} UNION ALL SELECT $ORPHAN_COLS FROM telemetry_record f " +
+            "AND f.eventTime IS NULL AND ${CompleteScan.SQL} UNION ALL SELECT $ORPHAN_COLS FROM telemetry_record f " +
             "JOIN record_body b ON b.hash = f.bodyHash WHERE f.service = :service AND f.subjectKey = :subjectKey " +
-            "AND ${VisibleFact.PINNED_ORPHAN} ORDER BY capturedAt, scanId, ordinal"
+            "AND f.eventTime IS NULL AND ${VisibleFact.PINNED_ORPHAN} ORDER BY capturedAt, scanId, ordinal"
     )
-    suspend fun history(service: String, subjectKey: String): List<StoredRecordRow>
+    suspend fun snapshotHistory(service: String, subjectKey: String): List<StoredRecordRow>
 
     /**
      * Of [ids], the visible facts, each with its newest `COMPLETE` observation (or none, for a
@@ -162,18 +201,24 @@ interface TelemetryReadDao {
     )
     suspend fun scanTotals(scanId: Long, eventsNotAfter: Long = Long.MAX_VALUE): ScanTotals
 
-    /** Distinct bodies of facts observed by a COMPLETE scan, by encoding. */
+    /**
+     * Distinct bodies of facts observed by a COMPLETE scan, partitioned by [StorageKind] (ruling R42):
+     * a body observed in more than one kind (the same record seen by a live scan and an import) counts
+     * once, in its first kind in [StorageKind] order (snapshots, then live events, then imports): the
+     * lowest kind number, `MIN` per body. So the rows add up to the distinct bodies stored.
+     */
     @Query(
-        "SELECT b.encoding AS encoding, COUNT(*) AS bodies, COALESCE(SUM(LENGTH(b.body)), 0) AS storedBytes, " +
-            "COALESCE(SUM(b.rawBytes), 0) AS rawBytes FROM record_body b WHERE EXISTS (SELECT 1 FROM " +
-            "telemetry_record f JOIN scan_record o ON o.recordId = f.id JOIN ScanResult s ON s.id = o.scanId " +
-            "WHERE f.bodyHash = b.hash AND ${CompleteScan.SQL}) GROUP BY b.encoding ORDER BY b.encoding"
+        "SELECT k.kind AS kind, COUNT(*) AS bodies, COALESCE(SUM(LENGTH(b.body)), 0) AS storedBytes, " +
+            "COALESCE(SUM(b.rawBytes), 0) AS rawBytes FROM (SELECT f.bodyHash AS hash, " +
+            "MIN(${StorageKind.SQL}) AS kind FROM scan_record o JOIN ScanResult s ON s.id = o.scanId " +
+            "JOIN telemetry_record f ON f.id = o.recordId WHERE ${CompleteScan.SQL} GROUP BY f.bodyHash) k " +
+            "JOIN record_body b ON b.hash = k.hash GROUP BY k.kind ORDER BY k.kind"
     )
     suspend fun storageObserved(): List<BodyStatsRow>
 
     /** Distinct bodies held only by pinned orphan facts (not counted by [storageObserved]). */
     @Query(
-        "SELECT -1 AS encoding, COUNT(*) AS bodies, COALESCE(SUM(LENGTH(b.body)), 0) AS storedBytes, " +
+        "SELECT -1 AS kind, COUNT(*) AS bodies, COALESCE(SUM(LENGTH(b.body)), 0) AS storedBytes, " +
             "COALESCE(SUM(b.rawBytes), 0) AS rawBytes FROM record_body b WHERE EXISTS (SELECT 1 FROM " +
             "telemetry_record f WHERE f.bodyHash = b.hash AND ${VisibleFact.PINNED_ORPHAN}) AND NOT EXISTS " +
             "(SELECT 1 FROM telemetry_record f2 JOIN scan_record o ON o.recordId = f2.id " +
@@ -192,6 +237,15 @@ internal const val OBS_COLS = "f.id AS factId, o.scanId AS scanId, f.service AS 
 internal const val ORPHAN_COLS = "f.id AS factId, -1 AS scanId, f.service AS service, -1 AS ordinal, " +
     "f.firstSource AS source, f.firstCapturedAt AS capturedAt, f.firstStrippedKeys AS strippedKeys, " +
     "$FACT_BODY_COLS"
+
+/**
+ * The browser search's match (binds `:pattern`, escape `\`) on the fact's package name and subject
+ * key. A `%x%` LIKE cannot seek either column's index: it is a filter applied inside the ordinal
+ * keyset over `scan_record`'s primary key, so a page reads at most the rest of one scan's records
+ * of one service until it fills.
+ */
+internal const val SEARCH_MATCH =
+    "(f.packageName LIKE :pattern ESCAPE '\\' OR f.subjectKey LIKE :pattern ESCAPE '\\')"
 
 /** Observations joined to their scan (s), fact (f) and body (b). */
 internal const val OBS_FROM = "FROM scan_record o JOIN ScanResult s ON s.id = o.scanId " +

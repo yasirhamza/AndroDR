@@ -80,8 +80,8 @@ data class AlertView(
 ) {
     companion object {
         fun of(a: Alert) = AlertView(a.id, a.ruleId, a.level, a.status, a.openedAt, a.openedScanId,
-            a.lastActivityAt, a.recordId, Converters.decodeFinding(a.evidenceJson), a.matchedValue, a.closedAt,
-            a.closedReason, a.closedWithCredential)
+            a.lastActivityAt, a.recordId, Converters.decodeFinding(a.evidenceJson, "alert ${a.id}"), a.matchedValue,
+            a.closedAt, a.closedReason, a.closedWithCredential)
     }
 }
 
@@ -472,7 +472,9 @@ class FindingsRepository @Inject constructor(
 
     /** Decodes rows of one scan, rebuilding `matchContext` from each row's fact when it was dropped. */
     private suspend fun decodeStored(scanId: Long?, rows: List<FindingRow>): List<StoredFinding> {
-        val parsed = rows.mapNotNull { r -> Converters.decodeFinding(r.findingJson)?.let { r to it } }
+        val parsed = rows.mapNotNull { r ->
+            Converters.decodeFinding(r.findingJson, "scan_finding ${r.id} of scan ${r.scanId}")?.let { r to it }
+        }
         val missing = parsed.mapNotNull { (r, f) -> r.recordId?.takeIf { f.matchContext.isEmpty() } }
         val context = if (missing.isEmpty() || scanId == null) {
             emptyMap()

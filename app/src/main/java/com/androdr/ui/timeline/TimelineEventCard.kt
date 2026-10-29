@@ -71,6 +71,7 @@ import com.androdr.data.model.TelemetrySource
 import com.androdr.sigma.FindingCategory
 import com.androdr.ui.common.SeverityChip
 import com.androdr.ui.security.ProtectedButton
+import com.androdr.ui.telemetry.recordLine
 import com.androdr.ui.theme.androdrColors
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -225,6 +226,7 @@ fun TimelineEventDetailSheet(
     onJumpToRelated: (ForensicTimelineEvent) -> Unit = {},
     onShowOnlyApp: ((String) -> Unit)? = null,
     onCloseAlert: (() -> Unit)? = null,
+    onViewTelemetry: (() -> Unit)? = null,
 ) {
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -269,6 +271,10 @@ fun TimelineEventDetailSheet(
             }
             if (event.ruleId.isNotEmpty()) {
                 DetailSection(stringResource(R.string.timeline_detail_rule), event.ruleId)
+            }
+            // The row's scan's stored telemetry (spec §8.1 "finding detail").
+            onViewTelemetry?.let { open ->
+                OutlinedButton(onClick = open) { Text(stringResource(R.string.telemetry_view)) }
             }
             // An alert row (its alert is still OPEN): closing it asks the device credential (spec §5.4).
             onCloseAlert?.let { close ->
@@ -518,7 +524,7 @@ fun FactCard(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Text(
-                record.summary ?: stringResource(R.string.timeline_cluster_fact_unreadable),
+                factDescription(record) ?: stringResource(R.string.timeline_cluster_fact_unreadable),
                 style = MaterialTheme.typography.bodySmall,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
@@ -526,6 +532,13 @@ fun FactCard(
         }
     }
 }
+
+/**
+ * A stored fact's description line (battery B1): the telemetry browser's [recordLine] rule, so a
+ * service with no summary rule (e.g. `device_auditor`) shows its subject or first fields. Null, shown
+ * as "Record could not be read", ONLY when the body does not decode (`fields == null`).
+ */
+internal fun factDescription(record: DecodedRecord): String? = recordLine(record)
 
 /** A stored fact's detail: its provenance, time and decoded fields (spec §6 "Matched record"). */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -556,7 +569,7 @@ fun FactDetailSheet(
                 color = MaterialTheme.colorScheme.onSurfaceVariant)
             HorizontalDivider()
             DetailSection(stringResource(R.string.timeline_detail_description),
-                record.summary ?: stringResource(R.string.timeline_cluster_fact_unreadable))
+                factDescription(record) ?: stringResource(R.string.timeline_cluster_fact_unreadable))
             DetailSection(stringResource(R.string.timeline_detail_source), record.service)
             // Provenance (C5 review I4): the source filter matches "observed by", so show both.
             provenance?.let { p ->
@@ -585,7 +598,8 @@ fun FactDetailSheet(
 fun ScanGroupHeader(
     group: ScanGroup,
     count: Long?,
-    onClick: (() -> Unit)? = null
+    onClick: (() -> Unit)? = null,
+    onViewTelemetry: (() -> Unit)? = null,
 ) {
     val dateStr = remember(group.timestamp) {
         if (group.timestamp > 0) SimpleDateFormat("MMM dd, yyyy HH:mm", Locale.US).format(Date(group.timestamp))
@@ -628,6 +642,10 @@ fun ScanGroupHeader(
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+                // The scan's stored telemetry (spec §8.1 "scan headers").
+                onViewTelemetry?.let { open ->
+                    TextButton(onClick = open) { Text(stringResource(R.string.telemetry_view)) }
+                }
             }
             Row(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),

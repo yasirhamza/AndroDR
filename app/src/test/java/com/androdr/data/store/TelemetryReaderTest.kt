@@ -49,7 +49,7 @@ class TelemetryReaderTest {
             assertTrue(names(id).isEmpty())
             assertTrue(firstPage(id, "app_scanner").isEmpty())
         }
-        assertTrue(f.reader.history("app_scanner", "com.a").first().isEmpty())
+        assertTrue(f.reader.snapshotHistory("app_scanner", "com.a").first().isEmpty())
         assertTrue(f.reader.changedBetween(1L, 2L, "app_scanner").isEmpty())
         assertNull(f.reader.latestLive("app_scanner", Long.MAX_VALUE / 2))
         assertTrue(f.reader.records(ids).isEmpty())
@@ -68,9 +68,9 @@ class TelemetryReaderTest {
         assertEquals(listOf(r.factIdByChunkIndex[0]), read.map { it.factId })
         assertEquals(-1L, read.single().scanId)
         assertEquals("com.pinned", read.single().fields!!["package_name"])
-        val history = f.reader.history("app_scanner", "com.pinned").first()
+        val history = f.reader.snapshotHistory("app_scanner", "com.pinned").first()
         assertEquals(listOf(r.factIdByChunkIndex[0]), history.map { it.factId })
-        assertTrue(f.reader.history("app_scanner", "com.loose").first().isEmpty())
+        assertTrue(f.reader.snapshotHistory("app_scanner", "com.loose").first().isEmpty())
         assertEquals(1L, f.reader.storage().pinnedOrphans.bodies)
     }
 
@@ -86,7 +86,7 @@ class TelemetryReaderTest {
         f.setState(1L, ScanState.DELETING)
         f.store.deleteScanTelemetry(1L)
         val viaRecords = f.reader.records(r.factIdByChunkIndex.toList()).single()
-        val viaHistory = f.reader.history("app_scanner", "com.imp").first().single()
+        val viaHistory = f.reader.snapshotHistory("app_scanner", "com.imp").first().single()
         for (rec in listOf(viaRecords, viaHistory)) {
             assertEquals(DecodedRecord.ORPHAN.toLong(), rec.scanId)
             assertEquals(src, rec.source)
@@ -109,7 +109,7 @@ class TelemetryReaderTest {
             f.setState(scan, ScanState.DELETING)
             f.store.deleteScanTelemetry(scan)
         }
-        val h = f.reader.history("app_scanner", "com.h2").first()
+        val h = f.reader.snapshotHistory("app_scanner", "com.h2").first()
         assertEquals(listOf(1L, 2L, 3L), h.map { it.fields!!["version_code"] })
         assertEquals(listOf(1000L, 2000L, 3000L), h.map { it.capturedAt })
         assertEquals(listOf(-1L, 2L, -1L), h.map { it.scanId })
@@ -123,7 +123,7 @@ class TelemetryReaderTest {
             f.persist(scan, "app_scanner", listOf(app("com.h", version)), capturedAt = scan * 1000)
             if (scan != 3L) f.setState(scan, ScanState.COMPLETE)
         }
-        val h = f.reader.history("app_scanner", "com.h").first()
+        val h = f.reader.snapshotHistory("app_scanner", "com.h").first()
         assertEquals(listOf(1L, 2L), h.map { it.scanId })
         assertEquals(listOf(1L, 2L), h.map { it.fields!!["version_code"] })
     }
@@ -181,7 +181,7 @@ class TelemetryReaderTest {
         f.reader.services(1L)
         names(1L)
         firstPage(1L, "app_scanner")
-        f.reader.history("app_scanner", "x").first()
+        f.reader.snapshotHistory("app_scanner", "x").first()
         f.reader.changedBetween(1L, 1L, "app_scanner")
         f.reader.latestLive("app_scanner", 60_000L)
         f.reader.records(r.factIdByChunkIndex.toList())
@@ -210,9 +210,60 @@ class TelemetryReaderTest {
         assertTrue(firstPage(1L, "app_scanner").all { it.summary == null })
         val s = f.reader.storage()
         assertEquals(2L, s.snapshots.bodies)
-        assertEquals(3L, s.events.bodies)
+        assertEquals(3L, s.liveEvents.bodies)
+        assertEquals(BodyStats.NONE, s.imports)
         assertEquals(0L, s.pinnedOrphans.bodies)
-        assertTrue(s.events.storedBytes > 0 && s.events.rawBytes > 0)
+        assertTrue(s.liveEvents.storedBytes > 0 && s.liveEvents.rawBytes > 0)
+    }
+
+    @Test
+    fun `R42 a body shared by a live snapshot and an import counts once, under Snapshots, and rows sum to Total`() =
+        runBlocking {
+            val imp = TelemetrySource.BUGREPORT_IMPORT
+            f.scan(1L)
+            f.persist(1L, "app_scanner", listOf(app("com.shared"), app("com.live")))
+            f.setState(1L, ScanState.COMPLETE)
+            f.db.scanResultDao().insert(com.androdr.data.model.ScanResult(id = 2L, timestamp = 2L,
+                bugReportFindings = emptyList(), riskySideloadCount = 0, knownMalwareCount = 0, source = imp,
+                state = ScanState.IN_PROGRESS))
+            // The envelope is stripped in both, so the import's com.shared has the live scan's body.
+            f.persist(2L, "app_scanner", listOf(app("com.shared", source = imp), app("com.imp", source = imp)),
+                source = imp)
+            f.persist(2L, "dns_monitor", listOf(dns("i.example")), source = imp)
+            f.setState(2L, ScanState.COMPLETE)
+            assertEquals("the fixture shares one body across the two scans", 4L,
+                f.count("SELECT COUNT(*) FROM record_body"))
+            val s = f.reader.storage()
+            assertEquals(2L, s.snapshots.bodies)
+            assertEquals(0L, s.liveEvents.bodies)
+            assertEquals("com.imp and i.example only; com.shared is under Snapshots", 2L, s.imports.bodies)
+            assertEquals(4L, s.total.bodies)
+            assertEquals(s.snapshots.bodies + s.liveEvents.bodies + s.imports.bodies, s.total.bodies)
+            assertEquals(f.count("SELECT COALESCE(SUM(LENGTH(body)), 0) FROM record_body"), s.total.storedBytes)
+        }
+
+    @Test
+    fun `storage splits distinct bodies into snapshots, live events and imports (spec 8_2)`() = runBlocking {
+        f.scan(1L)
+        f.persist(1L, "app_scanner", listOf(app("x"), app("y")))
+        f.persist(1L, "dns_monitor", listOf(dns("a.example")))
+        f.setState(1L, ScanState.COMPLETE)
+        val imp = TelemetrySource.BUGREPORT_IMPORT
+        f.db.scanResultDao().insert(com.androdr.data.model.ScanResult(id = 2L, timestamp = 2L,
+            bugReportFindings = emptyList(), riskySideloadCount = 0, knownMalwareCount = 0, source = imp,
+            state = ScanState.IN_PROGRESS))
+        // An import's snapshot and event records both count as imports, whatever their encoding.
+        f.persist(2L, "app_scanner", listOf(app("i1", source = imp), app("i2", source = imp), app("i3", source = imp)),
+            source = imp)
+        f.persist(2L, "dns_monitor", listOf(dns("i.example"), dns("j.example")), source = imp)
+        f.setState(2L, ScanState.COMPLETE)
+        val s = f.reader.storage()
+        assertEquals(2L, s.snapshots.bodies)
+        assertEquals(1L, s.liveEvents.bodies)
+        assertEquals(5L, s.imports.bodies)
+        assertTrue(s.imports.storedBytes > 0 && s.imports.rawBytes > 0)
+        f.setState(2L, ScanState.DELETING)
+        assertEquals("a scan that is not COMPLETE is not counted", BodyStats.NONE, f.reader.storage().imports)
     }
 
     @Test

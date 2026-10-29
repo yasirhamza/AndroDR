@@ -51,11 +51,17 @@ private fun needsEscapeAt(s: String, i: Int): Boolean {
     if (c == '\\') return true
     // Pairs are stepped over whole, so a low surrogate reached here has no high one before it: lone (Cs).
     val cp = if (unitWidth(s, i) == 2) Character.toCodePoint(c, s[i + 1]) else c.code
-    return when (Character.getType(cp).toByte()) {
-        Character.CONTROL, Character.FORMAT, Character.LINE_SEPARATOR, Character.PARAGRAPH_SEPARATOR,
-        Character.PRIVATE_USE, Character.UNASSIGNED, Character.SURROGATE -> true
-        else -> false
-    }
+    return isUnsafeCodePoint(cp)
+}
+
+/**
+ * Whether [cp] is in Unicode category Cc, Cf, Zl, Zp, Co, Cn or Cs (spec §7): the characters every
+ * report and export renders as `\uXXXX`, so none can emit a raw line break or a bidi override.
+ */
+internal fun isUnsafeCodePoint(cp: Int): Boolean = when (Character.getType(cp).toByte()) {
+    Character.CONTROL, Character.FORMAT, Character.LINE_SEPARATOR, Character.PARAGRAPH_SEPARATOR,
+    Character.PRIVATE_USE, Character.UNASSIGNED, Character.SURROGATE -> true
+    else -> false
 }
 
 private const val ESCAPE_HEADROOM = 16

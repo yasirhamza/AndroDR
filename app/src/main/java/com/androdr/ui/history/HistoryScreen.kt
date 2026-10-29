@@ -68,7 +68,9 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.androdr.R
 import com.androdr.data.model.ScanResult
+import com.androdr.data.model.ScanState
 import com.androdr.data.model.TelemetrySource
+import com.androdr.reporting.ExportEstimate
 import com.androdr.reporting.ReportSummary
 import com.androdr.scanner.ScanOrchestrator
 import com.androdr.ui.common.ExportModeDialog
@@ -83,6 +85,7 @@ import java.util.Locale
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HistoryScreen(
+    onViewTelemetry: ((Long) -> Unit)? = null,
     viewModel: HistoryViewModel = hiltViewModel()
 ) {
     val scans = viewModel.scans.collectAsLazyPagingItems()
@@ -108,12 +111,14 @@ fun HistoryScreen(
 
     // Pending scan awaiting export-mode selection (null = dialog closed).
     var exportModeDialogScan by remember { mutableStateOf<ScanResult?>(null) }
+    // Pending scan awaiting the telemetry (JSONL) export's confirmation (null = dialog closed).
+    var telemetryExportScan by remember { mutableStateOf<ScanResult?>(null) }
 
     // Fire the system share sheet as soon as the URI is ready
     LaunchedEffect(shareUri) {
         val uri = shareUri ?: return@LaunchedEffect
         val intent = Intent(Intent.ACTION_SEND).apply {
-            type = "text/plain"
+            type = viewModel.shareMimeType.value
             putExtra(Intent.EXTRA_STREAM, uri)
             putExtra(Intent.EXTRA_SUBJECT, context.getString(R.string.report_share_subject))
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
@@ -193,6 +198,17 @@ fun HistoryScreen(
                 onDelete = { viewModel.requestDeleteScan(scan.id) },
                 deleteEnabled = deleteEnabled,
                 loadCounts = viewModel::rowCounts,
+                onViewTelemetry = onViewTelemetry?.takeIf { offersTelemetry(scan) }?.let { open ->
+                    { open(scan.id) }
+                },
+                onExportTelemetry = if (offersTelemetry(scan)) {
+                    {
+                        telemetryExportScan = scan
+                        viewModel.loadExportEstimate(scan)
+                    }
+                } else {
+                    null
+                },
             )
         }
     }
@@ -274,6 +290,39 @@ fun HistoryScreen(
             onConfirm = { mode ->
                 exportModeDialogScan = null
                 viewModel.exportReport(scan, mode)
+            }
+        )
+    }
+
+    // Telemetry (JSONL) export: the dialog states the record count, size and categories (spec §7)
+    telemetryExportScan?.let { scan ->
+        AlertDialog(
+            onDismissRequest = { telemetryExportScan = null },
+            title = { Text(stringResource(R.string.telemetry_export_title)) },
+            text = {
+                Text(
+                    exportEstimate?.jsonlText() ?: stringResource(
+                        if (estimateFailed) {
+                            R.string.telemetry_export_estimate_unknown
+                        } else {
+                            R.string.history_export_estimate_loading
+                        }
+                    )
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        telemetryExportScan = null
+                        viewModel.exportTelemetry(scan)
+                    },
+                    enabled = offersTelemetryExport(exportEstimate, estimateFailed),
+                ) { Text(stringResource(R.string.telemetry_export_confirm)) }
+            },
+            dismissButton = {
+                TextButton(onClick = { telemetryExportScan = null }) {
+                    Text(stringResource(R.string.history_delete_cancel))
+                }
             }
         )
     }
@@ -472,6 +521,8 @@ private fun ScanHistoryItem(
     onDelete: () -> Unit,
     deleteEnabled: Boolean = true,
     loadCounts: (suspend (ScanResult) -> HistoryRowCounts?)? = null,
+    onViewTelemetry: (() -> Unit)? = null,
+    onExportTelemetry: (() -> Unit)? = null,
 ) {
     // The stored findings shown (informational excluded, as the import screen counts them) and any
     // that could not be saved, read in SQL per row; the scan's own count until they load.
@@ -561,24 +612,32 @@ private fun ScanHistoryItem(
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Text(
-                        text = buildString {
-                            append("\u2022 ${scan.triggeredCount} finding(s) triggered\n")
-                            append("\u2022 ${scan.knownMalwareCount} known malware app(s)\n")
-                            append("\u2022 ${scan.riskySideloadCount} sideloaded app(s)")
-                        },
+                        text = scanCountLines(scan),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurface
                     )
 
                     // Diff section
-                    if (isFirstScan || diff == null) {
+                    val note = diffNote(scan.source, isFirstScan, diff != null)
+                    if (note != null || diff == null) {
                         Text(
-                            text = stringResource(R.string.first_scan_no_comparison),
+                            text = stringResource(note ?: R.string.first_scan_no_comparison),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     } else {
                         DiffSection(diff = diff)
+                    }
+
+                    // The scan's stored telemetry (spec §8.1): only a COMPLETE scan offers it.
+                    onViewTelemetry?.let { open ->
+                        TextButton(onClick = open) { Text(stringResource(R.string.telemetry_view)) }
+                    }
+                    // Its gzip JSONL export (spec §7), offered for the same COMPLETE scans.
+                    onExportTelemetry?.let { export ->
+                        TextButton(onClick = export, enabled = !exporting) {
+                            Text(stringResource(R.string.telemetry_export_action))
+                        }
                     }
 
                     // Action buttons row
@@ -641,6 +700,17 @@ private fun ScanHistoryItem(
         }
     }
 }
+
+/**
+ * Whether the telemetry (JSONL) export dialog lets the export run: not while its estimate loads, and
+ * not for a scan with no stored records (it would write an empty file). An estimate that could not be
+ * read leaves it enabled: the export still writes whatever the scan holds.
+ */
+internal fun offersTelemetryExport(estimate: ExportEstimate?, estimateFailed: Boolean): Boolean =
+    estimateFailed || (estimate?.records ?: 0L) > 0L
+
+/** Whether a History row offers "View telemetry" (spec §8.1): only a COMPLETE scan is browsable. */
+internal fun offersTelemetry(scan: ScanResult): Boolean = scan.state == ScanState.COMPLETE
 
 // ExportModeDialog extracted to com.androdr.ui.common.ExportModeDialog
 

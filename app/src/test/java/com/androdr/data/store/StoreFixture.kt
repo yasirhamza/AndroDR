@@ -20,6 +20,8 @@ import java.io.File
 import java.nio.file.Files
 import java.util.Collections
 import java.util.concurrent.Executor
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 import java.util.zip.Deflater
 
 /** Reads a file under `app/src/main/res/raw/` from a unit test (cwd is `app/` or the repo root). */
@@ -33,9 +35,19 @@ internal class StoreFixture(recordSql: Boolean = true) : Closeable {
 
     /** Whether [sql] records right now (a test turns it off around a large write). */
     @Volatile var recording: Boolean = true
+
+    /**
+     * Room's query (and transaction) work runs here rather than on the shared `arch_disk_io` pool,
+     * so [close] can wait for it. A cancellable Room query keeps running on its executor after its
+     * caller is cancelled (the coroutine resumes with the cancellation at once), so a view model
+     * cancelled and joined in a tearDown can still have a query in flight; `db.close()` racing it
+     * deadlocked (final review item 12: a query re-opening the database while close held its locks).
+     */
+    private val roomExecutor = Executors.newCachedThreadPool()
+
     val db: AppDatabase = Room.inMemoryDatabaseBuilder(
         ApplicationProvider.getApplicationContext<Context>(), AppDatabase::class.java
-    ).allowMainThreadQueries().apply {
+    ).allowMainThreadQueries().setQueryExecutor(roomExecutor).apply {
         if (recordSql) setQueryCallback({ q, _ -> if (recording) sql += q }, Executor { it.run() })
     }.build()
 
@@ -94,6 +106,9 @@ internal class StoreFixture(recordSql: Boolean = true) : Closeable {
         db.openHelper.readableDatabase.query(query).use { c -> c.moveToFirst(); c.getLong(0) }
 
     override fun close() {
+        // Let every query already handed to Room finish before the database closes under it.
+        roomExecutor.shutdown()
+        check(roomExecutor.awaitTermination(CLOSE_WAIT_MS, TimeUnit.MILLISECONDS)) { "Room queries did not finish" }
         db.close()
         scope.cancel()
         dir.deleteRecursively()
@@ -101,6 +116,7 @@ internal class StoreFixture(recordSql: Boolean = true) : Closeable {
 
     companion object {
         const val CAPTURED = 1_729_612_345_678L
+        private const val CLOSE_WAIT_MS = 10_000L
 
         fun app(pkg: String, version: Long = 1L, source: TelemetrySource = TelemetrySource.LIVE_SCAN) =
             StoreRecord(mapOf("package_name" to pkg, "version_code" to version, "is_system_app" to false,

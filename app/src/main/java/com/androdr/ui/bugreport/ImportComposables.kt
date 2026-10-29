@@ -1,5 +1,6 @@
 package com.androdr.ui.bugreport
 
+import com.androdr.reporting.groupedCount
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -110,7 +111,7 @@ internal fun unsavedText(card: ImportCard, size: (Long) -> String): String {
         pluralStringResource(R.plurals.import_card_findings_unsaved_unknown, n, card.unsavedFindings)
     }
     if (card.unsavedByLevel.isEmpty()) return head
-    val levels = card.unsavedByLevel.joinToString(" \u00b7 ") { (level, count) -> "$count $level" }
+    val levels = card.unsavedByLevel.joinToString(" \u00b7 ") { (level, count) -> "${groupedCount(count)} $level" }
     return head + " " + stringResource(R.string.import_card_unsaved_levels, levels)
 }
 

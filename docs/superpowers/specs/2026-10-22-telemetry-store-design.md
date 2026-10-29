@@ -438,7 +438,7 @@ Failure handling:
   - Today's behaviour is kept: a domain that becomes an IOC after it was queried still fires. Alert identity prevents duplicates.
 
 **Storage protection (nothing is truncated silently).**
-- **Import preflight**: every import is estimated from the archive's decompressed entry sizes × a measured stored-size factor (initial 0.6). Unknown or −1 sizes are shown as "unknown".
+- **Import preflight**: every import is estimated from the archive's decompressed entry sizes × a measured stored-size factor for its artifact type, classified from the central directory's entry names (ruling R45): intrusion log 4.0 (measured ≈3.5 on the F916B: ≈78 MB of telemetry tables and indexes for ≈22 MB decompressed; findings add more, which no size predicts), bug report 0.05 (measured ≈0.0023: ≈236 KB for 302 records from 103 MB decompressed; about 20× headroom for long battery histories), an unrecognized archive 4.0. Unknown or −1 sizes are shown as "unknown".
   - If free space after the estimate would be below `2 × estimate + 200 MB`, the user may cancel or **import anyway**.
   - The per-chunk 150 MB reserve still applies.
 - **Input bounds**: the intrusion-log parser is bounded at 2,000,000 per type; bug-report modules at 200,000 records each (they still materialise per-module lists). Each bound is named on the import card when tripped.

@@ -3,6 +3,7 @@ package com.androdr.sigma
 
 import android.content.Context
 import android.util.Log
+import androidx.annotation.VisibleForTesting
 import com.androdr.data.model.AccessibilityTelemetry
 import com.androdr.data.model.AppOpsTelemetry
 import com.androdr.data.model.AppTelemetry
@@ -383,8 +384,13 @@ class SigmaRuleEngine @Inject constructor(
         /** How many atoms [computeAtomBindings] binds between two total-deadline checks. */
         const val BINDING_CHECK_EVERY = 256
 
-        /** Explicit manifest of bundled SIGMA rule resources — R8-safe (no reflection). */
-        private val BUNDLED_RULE_IDS = listOf(
+        /**
+         * Explicit manifest of bundled SIGMA rule resources — R8-safe (no reflection). Every
+         * `res/raw/sigma_*.yml` must be listed, or it never loads at cold start or offline;
+         * BundledRuleRegistrationTest enforces both directions.
+         */
+        @VisibleForTesting
+        internal val BUNDLED_RULE_IDS = listOf(
             R.raw.sigma_androdr_001_package_ioc,
             R.raw.sigma_androdr_002_cert_hash_ioc,
             R.raw.sigma_androdr_003_domain_ioc,

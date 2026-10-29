@@ -79,3 +79,13 @@ internal fun pinnedFindings(findings: List<Finding>, showAll: Boolean): List<Fin
     val bySeverity = findings.sortedByDescending { severityOrdinal(it.level) }
     return if (showAll) bySeverity else bySeverity.take(PINNED_FINDINGS_PREVIEW)
 }
+
+/** Where "Matched record" navigates: a fact by id, as scan [scanId] observed it when non-null. */
+internal data class FactTarget(val factId: Long, val scanId: Long?)
+
+/**
+ * "Matched record" (spec §6): the row's `recordId`, with the row's scan (when it has one) so the fact
+ * reads with the envelope the finding matched; null for a row without a matched record.
+ */
+internal fun matchedRecordTarget(event: ForensicTimelineEvent): FactTarget? =
+    event.recordId?.let { FactTarget(it, event.scanResultId.takeIf { scan -> scan > 0 }) }

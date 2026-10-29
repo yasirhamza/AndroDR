@@ -14,10 +14,11 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
-import java.io.Writer
+import java.io.OutputStreamWriter
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import java.util.zip.GZIPOutputStream
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -26,7 +27,7 @@ import javax.inject.Singleton
  *
  * - [TELEMETRY_ONLY] writes only the telemetry section (the scan's stored records and the
  *   application log). Intended for analyst handoff: the recipient can run their own rules against
- *   the raw telemetry without being biased by the device's current ruleset.
+ *   the stored records without being biased by the device's current ruleset.
  * - [FINDINGS_ONLY] writes only the findings section (verdict, device checks, campaign, app risks,
  *   bug report findings). Useful for sharing "what the app found" without exposing the telemetry.
  * - [BOTH] writes the full report. Default.
@@ -73,7 +74,7 @@ class ReportExporter @Inject constructor(
             val view = FindingsView.of(scan, reportInputs, findings, telemetryReader)
             val logLines = if (includeLog) logSource() else emptyList()
             val version = context.appVersion().name
-            writeFile(file) { out ->
+            writeReportFile(file) { out ->
                 ReportFormatter.writeScanReport(
                     out, scan, view, logLines, telemetryReader, mode, version,
                     AlertReportSource { status, block ->
@@ -82,6 +83,19 @@ class ReportExporter @Inject constructor(
                 )
             }
         }
+
+    /**
+     * Streams [scan]'s stored telemetry as gzip JSONL ([TelemetryReader.exportJsonl], spec §7) to a
+     * cached `.jsonl.gz` file and returns its FileProvider URI. Stale files in `cache/reports/` are
+     * removed first, as for every export.
+     */
+    suspend fun exportTelemetry(scan: ScanResult): Uri = withContext(Dispatchers.IO) {
+        val file = newReportFile("androdr_telemetry", scan.timestamp, "jsonl.gz")
+        writeReportFile(file, open = { part ->
+            OutputStreamWriter(GZIPOutputStream(part.outputStream().buffered()), Charsets.UTF_8).buffered()
+        }) { out -> telemetryReader.exportJsonl(scan.id, out) }
+        FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+    }
 
     /** What the History sheet shows for [scan]: counts only, read off the main thread. */
     suspend fun summary(scan: ScanResult): ReportSummary = withContext(Dispatchers.IO) {
@@ -108,29 +122,12 @@ class ReportExporter @Inject constructor(
         ExportEstimate(totals.records, totals.rawBytes, services.map { serviceLabel(it.service) })
     }
 
-    /** Removes stale files from `cache/reports/` (spec §7), then names `<prefix>_<time>.txt` there. */
-    private fun newReportFile(prefix: String, time: Long): File {
+    /** Removes stale files from `cache/reports/` (spec §7), then names `<prefix>_<time>.<extension>` there. */
+    private fun newReportFile(prefix: String, time: Long, extension: String = "txt"): File {
         val dir = reportFiles.dir.apply { mkdirs() }
         runCatching { reportFiles.deleteStale() }.onFailure { Log.w(TAG, "Stale report cleanup failed", it) }
-        return File(dir, "${prefix}_${SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date(time))}.txt")
-    }
-
-    /**
-     * Streams into a `.part` sibling through a buffered UTF-8 writer, then renames it to [file], so
-     * a reader polling for [file] (the debug harness) never sees a half-written report, and a write
-     * that fails leaves nothing behind.
-     */
-    @Suppress("TooGenericExceptionCaught") // any failure removes the partial file, then rethrows
-    private suspend fun writeFile(file: File, write: suspend (Writer) -> Unit) {
-        val part = File(file.parentFile, "${file.name}.part")
-        try {
-            part.bufferedWriter(Charsets.UTF_8).use { write(it) }
-            // rename(2) replaces an existing report atomically: never delete it first.
-            check(part.renameTo(file)) { "could not move the report into place" }
-        } catch (t: Throwable) {
-            part.delete()
-            throw t
-        }
+        val stamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date(time))
+        return File(dir, "${prefix}_$stamp.$extension")
     }
 
     /** The app's own log lines, captured at export. Replaceable so tests can tell whether it is read. */

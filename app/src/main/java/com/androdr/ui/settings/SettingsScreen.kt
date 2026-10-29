@@ -269,6 +269,10 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
 
             HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
 
+            TelemetryStorageSection()
+
+            HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+
             // About section
             Text(
                 text = "About",
@@ -384,7 +388,7 @@ private fun ThreatDatabaseSection(
 }
 
 @Composable
-private fun StatRow(label: String, value: String) {
+internal fun StatRow(label: String, value: String) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween

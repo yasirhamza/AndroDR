@@ -66,7 +66,7 @@ internal class DeletionAudit(private val dao: ScanFindingDao) {
         while (true) {
             val page = jsonPage(after, JSON_PAGE)
             for (r in page) {
-                val key = Triple(r.ruleId, r.level, packageOf(r.findingJson))
+                val key = Triple(r.ruleId, r.level, packageOf(r))
                 if (key in counts || jsonKeys < MAX_JSON_KEYS) {
                     if (key !in counts) jsonKeys++
                     counts.merge(key, 1L, Long::plus)
@@ -100,8 +100,8 @@ internal class DeletionAudit(private val dao: ScanFindingDao) {
         return sb.toString()
     }
 
-    private fun packageOf(json: String): String {
-        val ctx = Converters.decodeFinding(json)?.matchContext ?: return ""
+    private fun packageOf(r: AuditJsonRow): String {
+        val ctx = Converters.decodeFinding(r.findingJson, "scan_finding ${r.id}")?.matchContext ?: return ""
         return ctx["package_name"] ?: ctx["source_package"] ?: ""
     }
 

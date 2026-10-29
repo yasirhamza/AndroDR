@@ -61,6 +61,19 @@ class ImportCardTest {
             ui.contains("if (card.freeAmountKnown)") && ui.contains("R.plurals.import_card_findings_unsaved_unknown"))
     }
 
+    // Final review M5: under ruling R38 a no-fact write that itself fills the disk shows only counts and
+    // a display sample, so the preflight must not promise that every finding is still shown.
+    @Test
+    fun `the import preflight promises every finding is counted, never that every finding is shown`() {
+        val strings = java.io.File("src/main/res/values/strings.xml").readText()
+        for (name in listOf("import_preflight_body_estimate", "import_preflight_body_unknown",
+            "import_preflight_body_unknown_nofree")) {
+            val body = Regex("""<string name="$name">([^<]*)</string>""").find(strings)!!.groupValues[1]
+            assertTrue("$name: $body", body.contains("still counts every finding"))
+            assertTrue("$name: $body", !body.contains("shows every finding"))
+        }
+    }
+
     @Test
     fun `counts are the write result's, not recomputed`() {
         val card = ImportCard.from(write(), truncated = false, boundTrips = emptyList())!!

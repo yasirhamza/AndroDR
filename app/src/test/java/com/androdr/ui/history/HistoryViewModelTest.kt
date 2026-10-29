@@ -172,5 +172,10 @@ class HistoryViewModelTest {
         // R37: alerts and their evidence are never deleted; both dialogs say so.
         assertTrue(string("history_delete_body").contains("Alerts and their evidence are kept"))
         assertTrue(string("history_clear_body").contains("Alerts and their evidence are kept"))
+        // Final review M3: Clear all never deletes the DnsEvent table (AlertCloseTest pins that), so the
+        // copy must say the DNS log survives rather than that every live DNS event is deleted.
+        val clear = string("history_clear_body")
+        assertTrue(clear, clear.contains("live DNS events on the Timeline"))
+        assertTrue(clear, clear.contains("so is the DNS log shown on the DNS screen and counted on the Dashboard"))
     }
 }

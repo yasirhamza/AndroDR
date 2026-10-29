@@ -87,6 +87,7 @@
     <string name="run_first_scan_hint">Go to Dashboard and tap "Run Scan" to get started</string>
     <string name="scan_summary_title">Scan Summary</string>
     <string name="first_scan_no_comparison">First scan — no comparison available</string>
+    <string name="history_import_not_compared">Imports are not compared with other scans</string>
     <string name="diff_new_risks">New Risks</string>
     <string name="diff_resolved">Resolved</string>
     <string name="diff_no_changes">No changes since previous scan</string>
@@ -228,19 +229,19 @@
     <string name="history_export_failed_body">Writing the report failed, so nothing was shared. Try again.</string>
     <string name="import_preflight_title">Not much free space</string>
     <string name="import_preflight_title_unknown">Import size unknown</string>
-    <string name="import_preflight_body_estimate">This import is expected to need about %1$s of storage, and %2$s is free. If storage runs short partway, AndroDR keeps the records stored so far, checks the rest of the file, and still shows every finding.</string>
-    <string name="import_preflight_body_unknown">AndroDR cannot tell how large this import is, and %1$s is free. If storage runs short partway, it keeps the records stored so far, checks the rest of the file, and still shows every finding.</string>
-    <string name="import_preflight_body_unknown_nofree">AndroDR cannot tell how large this import is. If storage runs short partway, it keeps the records stored so far, checks the rest of the file, and still shows every finding.</string>
+    <string name="import_preflight_body_estimate">This import is expected to need about %1$s of storage, and %2$s is free. If storage runs short partway, AndroDR keeps the records stored so far, checks the rest of the file, and still counts every finding.</string>
+    <string name="import_preflight_body_unknown">AndroDR cannot tell how large this import is, and %1$s is free. If storage runs short partway, it keeps the records stored so far, checks the rest of the file, and still counts every finding.</string>
+    <string name="import_preflight_body_unknown_nofree">AndroDR cannot tell how large this import is. If storage runs short partway, it keeps the records stored so far, checks the rest of the file, and still counts every finding.</string>
     <string name="import_preflight_anyway">Import anyway</string>
     <string name="import_preflight_cancel">Cancel</string>
     <string name="import_card_title">What was stored</string>
-    <string name="import_card_counts" tools:ignore="PluralsCandidate">%1$d new \u00b7 %2$d already stored \u00b7 %3$d duplicates dropped</string>
+    <string name="import_card_counts" tools:ignore="PluralsCandidate">%1$,d new \u00b7 %2$,d already stored \u00b7 %3$,d duplicates dropped</string>
     <string name="import_card_bound">Limit reached: %1$s</string>
-    <string name="import_card_low_space_some" tools:ignore="PluralsCandidate">Storage ran low partway through: %1$d new records were stored; the rest were checked but not stored.</string>
+    <string name="import_card_low_space_some" tools:ignore="PluralsCandidate">Storage ran low partway through: %1$,d new records were stored; the rest were checked but not stored.</string>
     <string name="import_card_low_space_none">Storage ran low before any new record could be stored: the file was checked but nothing new was stored.</string>
     <string name="import_card_free_at_least_estimate">Free at least %1$s more (the whole import needs about %2$s) and import again to store the rest.</string>
     <string name="import_card_free_at_least_unknown">Free at least %1$s more, probably much more, and import again to store the rest.</string>
-    <string name="import_card_not_stored_some" tools:ignore="PluralsCandidate">The database refused part of this import: %1$d new records were stored; the rest were checked but not stored.</string>
+    <string name="import_card_not_stored_some" tools:ignore="PluralsCandidate">The database refused part of this import: %1$,d new records were stored; the rest were checked but not stored.</string>
     <string name="import_card_not_stored_none">The database refused this import\'s records: the file was checked but nothing new was stored.</string>
     <plurals name="diff_more">
         <item quantity="one">\u2026and %1$d more finding</item>
@@ -248,12 +249,12 @@
     </plurals>
     <string name="import_card_findings_complete">The findings below are complete.</string>
     <plurals name="import_card_findings_unsaved">
-        <item quantity="one">%1$d finding could not be saved and is not listed below; free at least %2$s and import again.</item>
-        <item quantity="other">%1$d findings could not be saved and are not listed below; free at least %2$s and import again.</item>
+        <item quantity="one">%1$,d finding could not be saved and is not listed below; free at least %2$s and import again.</item>
+        <item quantity="other">%1$,d findings could not be saved and are not listed below; free at least %2$s and import again.</item>
     </plurals>
     <plurals name="import_card_findings_unsaved_unknown">
-        <item quantity="one">%1$d finding could not be saved and is not listed below; free more space and import again.</item>
-        <item quantity="other">%1$d findings could not be saved and are not listed below; free more space and import again.</item>
+        <item quantity="one">%1$,d finding could not be saved and is not listed below; free more space and import again.</item>
+        <item quantity="other">%1$,d findings could not be saved and are not listed below; free more space and import again.</item>
     </plurals>
     <string name="import_card_unsaved_levels">Not saved, by severity: %1$s.</string>
     <string name="intrusion_log_summary_title">Intrusion log analyzed</string>
@@ -319,9 +320,11 @@
     <string name="alerts_close_selected" tools:ignore="PluralsCandidate">Close selected (%1$d)</string>
     <string name="alerts_close_dialog_title">Close alerts</string>
     <plurals name="alerts_close_dialog_body">
-        <item quantity="one">Close %1$d alert? It leaves the open list; it and its evidence stay in reports, and the closure is recorded in the Timeline. You will be asked for your screen lock.</item>
-        <item quantity="other">Close %1$d alerts? They leave the open list; they and their evidence stay in reports, and the closure is recorded in the Timeline. You will be asked for your screen lock.</item>
+        <item quantity="one">Close %1$d alert? It leaves the open list; it and its evidence stay in reports, and the closure is recorded in the Timeline.</item>
+        <item quantity="other">Close %1$d alerts? They leave the open list; they and their evidence stay in reports, and the closure is recorded in the Timeline.</item>
     </plurals>
+    <string name="alerts_close_dialog_lock">You will be asked for your screen lock.</string>
+    <string name="alerts_close_dialog_no_lock">No screen lock is set, so you will not be asked to confirm this. Set a screen lock so closing alerts needs it.</string>
     <string name="alerts_close_note">Note (optional)</string>
     <string name="alerts_close_confirm">Close</string>
     <string name="alerts_close_cancel">Cancel</string>
@@ -349,8 +352,36 @@
     <string name="history_delete_confirm">Delete</string>
     <string name="history_delete_cancel">Cancel</string>
     <string name="history_clear_title">Clear all history</string>
-    <string name="history_clear_body">Delete every scan, its telemetry and timeline events, including live DNS events? This cannot be undone. Alerts and their evidence are kept, and an audit entry listing the deleted findings is added to the Timeline.</string>
+    <string name="history_clear_body">Delete every scan, its telemetry and timeline events, including the live DNS events on the Timeline? This cannot be undone. Alerts and their evidence are kept, and so is the DNS log shown on the DNS screen and counted on the Dashboard. An audit entry listing the deleted findings is added to the Timeline.</string>
     <string name="history_clear_confirm">Delete all</string>
     <string name="history_row_findings" tools:ignore="PluralsCandidate">%1$d finding(s)</string>
     <string name="history_row_findings_unsaved" tools:ignore="PluralsCandidate">%1$d finding(s) · %2$d not saved</string>
+    <!-- Telemetry browser (telemetry store E1, spec §8.1) -->
+    <string name="telemetry_title">Telemetry</string>
+    <string name="telemetry_view">View telemetry</string>
+    <string name="telemetry_export_action">Export telemetry (JSONL)</string>
+    <string name="telemetry_export_title">Export telemetry (JSONL)</string>
+    <string name="telemetry_export_confirm">Export</string>
+    <string name="telemetry_export_estimate_unknown">The size of this scan\'s stored telemetry is unknown; the export includes all of it.</string>
+    <string name="telemetry_back">Back</string>
+    <string name="telemetry_scan_unavailable">This scan\'s telemetry is not available. Only completed scans can be browsed.</string>
+    <string name="telemetry_scan_empty">This scan stored no telemetry.</string>
+    <plurals name="telemetry_record_count">
+        <item quantity="one">%1$d record</item>
+        <item quantity="other">%1$d records</item>
+    </plurals>
+    <string name="telemetry_search_hint">Search by package or subject</string>
+    <string name="telemetry_search_clear">Clear search</string>
+    <string name="telemetry_search_no_matches">No records match \u201c%1$s\u201d</string>
+    <string name="telemetry_records_empty">No records</string>
+    <string name="telemetry_record_unreadable">Unreadable: this record\'s stored body could not be decoded</string>
+    <string name="telemetry_fact_missing">This fact is no longer stored.</string>
+    <string name="telemetry_subject_history">History across scans</string>
+    <string name="telemetry_history_first">Earliest observation</string>
+    <string name="telemetry_history_unchanged">No change since the previous observation</string>
+    <plurals name="telemetry_history_changed">
+        <item quantity="one">%1$d field changed since the previous observation</item>
+        <item quantity="other">%1$d fields changed since the previous observation</item>
+    </plurals>
+    <string name="telemetry_field_changed">%1$s (changed)</string>
 </resources>

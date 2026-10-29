@@ -14,6 +14,8 @@ import kotlinx.serialization.modules.polymorphic
 import kotlinx.serialization.modules.subclass
 
 object Converters {
+    private const val TAG = "Converters"
+
     private val module = SerializersModule {
         polymorphic(Evidence::class) {
             subclass(Evidence.None::class)
@@ -37,19 +39,24 @@ object Converters {
     fun toFindingList(value: String): List<Finding> = try {
         json.decodeFromString(ListSerializer(Finding.serializer()), value)
     } catch (e: Exception) {
-        Log.w("Converters", "Failed to deserialize findings (pre-migration data?): ${e.message}")
+        Log.w(TAG, "Failed to deserialize findings (pre-migration data?): ${e.javaClass.simpleName}")
         emptyList()
     }
 
     /** One finding as `scan_finding.findingJson` / `alert.evidenceJson` store it. */
     fun encodeFinding(value: Finding): String = json.encodeToString(Finding.serializer(), value)
 
-    /** A stored finding, or null when it no longer decodes (an unreadable row is skipped, never fatal). */
+    /**
+     * A stored finding, or null when it no longer decodes (an unreadable row is skipped, never fatal).
+     * [where] names the row by its ids only (e.g. `scan_finding 7 of scan 3`). The failure log carries
+     * [where] and the exception's class, never its message: a decode error quotes the JSON input, which
+     * can hold package names or domains, and the app log is copied into exported reports.
+     */
     @Suppress("TooGenericExceptionCaught")
-    fun decodeFinding(value: String): Finding? = try {
+    fun decodeFinding(value: String, where: String): Finding? = try {
         json.decodeFromString(Finding.serializer(), value)
     } catch (e: Exception) {
-        Log.w("Converters", "Failed to deserialize a stored finding: ${e.message}")
+        Log.w(TAG, "Failed to deserialize a stored finding ($where): ${e.javaClass.simpleName}")
         null
     }
 
@@ -70,7 +77,7 @@ object Converters {
     fun toScannerFailureList(value: String): List<ScannerFailure> = try {
         json.decodeFromString(ListSerializer(ScannerFailure.serializer()), value)
     } catch (e: Exception) {
-        Log.w("Converters", "Failed to deserialize scannerErrors: ${e.message}")
+        Log.w(TAG, "Failed to deserialize scannerErrors: ${e.javaClass.simpleName}")
         emptyList()
     }
 
