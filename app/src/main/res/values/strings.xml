@@ -320,9 +320,11 @@
     <string name="alerts_close_selected" tools:ignore="PluralsCandidate">Close selected (%1$d)</string>
     <string name="alerts_close_dialog_title">Close alerts</string>
     <plurals name="alerts_close_dialog_body">
-        <item quantity="one">Close %1$d alert? It leaves the open list; it and its evidence stay in reports, and the closure is recorded in the Timeline. You will be asked for your screen lock.</item>
-        <item quantity="other">Close %1$d alerts? They leave the open list; they and their evidence stay in reports, and the closure is recorded in the Timeline. You will be asked for your screen lock.</item>
+        <item quantity="one">Close %1$d alert? It leaves the open list; it and its evidence stay in reports, and the closure is recorded in the Timeline.</item>
+        <item quantity="other">Close %1$d alerts? They leave the open list; they and their evidence stay in reports, and the closure is recorded in the Timeline.</item>
     </plurals>
+    <string name="alerts_close_dialog_lock">You will be asked for your screen lock.</string>
+    <string name="alerts_close_dialog_no_lock">No screen lock is set, so you will not be asked to confirm this. Set a screen lock so closing alerts needs it.</string>
     <string name="alerts_close_note">Note (optional)</string>
     <string name="alerts_close_confirm">Close</string>
     <string name="alerts_close_cancel">Cancel</string>

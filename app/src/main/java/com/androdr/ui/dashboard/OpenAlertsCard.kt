@@ -1,5 +1,7 @@
 package com.androdr.ui.dashboard
 
+import android.app.KeyguardManager
+import androidx.annotation.StringRes
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -20,6 +22,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -39,6 +42,7 @@ import com.androdr.data.repo.AlertGroup
 import com.androdr.data.repo.AlertGroupRef
 import com.androdr.data.repo.CurrentFindingsSummary
 import com.androdr.ui.common.SeverityChip
+import com.androdr.ui.security.DeviceSecurity
 import com.androdr.ui.security.ProtectedButton
 import com.androdr.ui.security.rememberConfirmCredential
 import java.text.SimpleDateFormat
@@ -185,6 +189,11 @@ private fun AlertGroupRow(group: AlertGroup, checked: Boolean, onToggle: () -> U
 private fun CloseAlertsDialog(viewModel: DashboardAlertsViewModel, refs: List<AlertGroupRef>, shown: List<AlertGroup>) {
     var note by rememberSaveable { mutableStateOf("") }
     val confirm = rememberConfirmCredential()
+    val context = LocalContext.current
+    // What the close will do: ask for the screen lock, or close without one (final review M2).
+    val secure = remember {
+        DeviceSecurity.of(context.getSystemService(KeyguardManager::class.java)).isDeviceSecure()
+    }
     val title = stringResource(R.string.alerts_credential_title)
     val description = stringResource(R.string.alerts_credential_description)
     // The count the close will act on: the alerts seen when each group was chosen (up to its maxId).
@@ -198,6 +207,7 @@ private fun CloseAlertsDialog(viewModel: DashboardAlertsViewModel, refs: List<Al
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(pluralStringResource(R.plurals.alerts_close_dialog_body, count, count))
+                Text(stringResource(closeLockSentence(secure)))
                 OutlinedTextField(
                     value = note,
                     onValueChange = { note = it.take(NOTE_MAX) },
@@ -217,6 +227,14 @@ private fun CloseAlertsDialog(viewModel: DashboardAlertsViewModel, refs: List<Al
         },
     )
 }
+
+/**
+ * The close dialog's sentence about the screen lock: a prompt is promised only when the device has
+ * a secure lock ([secure]); without one, the close goes through unprotected and the dialog says so.
+ */
+@StringRes
+internal fun closeLockSentence(secure: Boolean): Int =
+    if (secure) R.string.alerts_close_dialog_lock else R.string.alerts_close_dialog_no_lock
 
 private fun formatTime(ts: Long): String = SimpleDateFormat("MMM d, HH:mm", Locale.getDefault()).format(Date(ts))
 
