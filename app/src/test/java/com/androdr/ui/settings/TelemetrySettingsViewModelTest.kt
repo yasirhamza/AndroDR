@@ -86,7 +86,8 @@ class TelemetrySettingsViewModelTest {
         assertEquals(20, vm.retentionScans.value)
         assertEquals(5..100, TelemetrySettingsViewModel.RETENTION_RANGE)
         // Each value is awaited on the view model's state (fed by the stored setting), then read back from
-        // the store itself: a DataStore collector that starts before an edit can miss it.
+        // the store. (Hangs seen while writing this test came from earlier tests' view models outliving
+        // their fixture; tearDown now cancels every view model's scope.)
         for ((asked, stored) in listOf(3 to 5, 250 to 100, 42 to 42)) {
             vm.setRetentionScans(asked)
             await { vm.retentionScans.first { it == stored } }

@@ -45,20 +45,26 @@ data class RecordChange(val subjectKey: String, val before: DecodedRecord?, val 
 
 /** Distinct bodies and their sizes. */
 data class BodyStats(val bodies: Long, val storedBytes: Long, val rawBytes: Long) {
+    operator fun plus(o: BodyStats) = BodyStats(bodies + o.bodies, storedBytes + o.storedBytes, rawBytes + o.rawBytes)
+
     companion object {
         val NONE = BodyStats(0, 0, 0)
     }
 }
 
 /**
- * Store size (spec §8.2): distinct bodies of facts observed by COMPLETE scans, split as retention
- * keeps them ([StorageKind]): live scans' [snapshots], live scans' [liveEvents], and [imports]. Plus
+ * Store size (spec §8.2): distinct bodies of facts observed by COMPLETE scans, partitioned as retention
+ * keeps them ([StorageKind]): live scans' [snapshots], live scans' [liveEvents], and [imports]; a body
+ * shared across kinds counts once, in the first of those (ruling R42), so they add up to [total]. Plus
  * bodies held only by pinned orphans and the bytes of alert evidence JSON.
  */
 data class StorageSummary(
     val snapshots: BodyStats, val liveEvents: BodyStats, val imports: BodyStats, val pinnedOrphans: BodyStats,
     val alertEvidenceBytes: Long,
 ) {
+    /** The distinct bodies of facts observed by COMPLETE scans: the three kinds together. */
+    val total: BodyStats get() = snapshots + liveEvents + imports
+
     companion object {
         val EMPTY = StorageSummary(BodyStats.NONE, BodyStats.NONE, BodyStats.NONE, BodyStats.NONE, 0L)
     }

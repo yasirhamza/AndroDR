@@ -54,6 +54,7 @@ fun TelemetryStorageSection(viewModel: TelemetrySettingsViewModel = hiltViewMode
                 StatRow("Snapshots", stats(s.snapshots))
                 StatRow("Live events", stats(s.liveEvents))
                 StatRow("Imports", stats(s.imports))
+                StatRow("Total", stats(s.total))
             }
         }
     }
@@ -109,7 +110,7 @@ private fun stats(b: BodyStats): String = "${b.bodies} distinct records · ${hum
 
 private fun cleanupMessage(cleanup: TelemetryCleanup): String? = when (cleanup) {
     is TelemetryCleanup.Done -> "Removed ${cleanup.observationsRemoved} old telemetry record(s)."
-    TelemetryCleanup.Busy -> "A scan is running — try again when it finishes."
+    TelemetryCleanup.Busy -> "Another storage task is running. Try again shortly."
     TelemetryCleanup.Failed -> "Old telemetry could not be deleted."
     TelemetryCleanup.Idle, TelemetryCleanup.Running -> null
 }

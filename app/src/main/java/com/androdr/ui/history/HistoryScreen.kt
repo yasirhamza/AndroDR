@@ -70,6 +70,7 @@ import com.androdr.R
 import com.androdr.data.model.ScanResult
 import com.androdr.data.model.ScanState
 import com.androdr.data.model.TelemetrySource
+import com.androdr.reporting.ExportEstimate
 import com.androdr.reporting.ReportSummary
 import com.androdr.scanner.ScanOrchestrator
 import com.androdr.ui.common.ExportModeDialog
@@ -310,10 +311,13 @@ fun HistoryScreen(
                 )
             },
             confirmButton = {
-                TextButton(onClick = {
-                    telemetryExportScan = null
-                    viewModel.exportTelemetry(scan)
-                }) { Text(stringResource(R.string.telemetry_export_confirm)) }
+                TextButton(
+                    onClick = {
+                        telemetryExportScan = null
+                        viewModel.exportTelemetry(scan)
+                    },
+                    enabled = offersTelemetryExport(exportEstimate, estimateFailed),
+                ) { Text(stringResource(R.string.telemetry_export_confirm)) }
             },
             dismissButton = {
                 TextButton(onClick = { telemetryExportScan = null }) {
@@ -699,6 +703,14 @@ private fun ScanHistoryItem(
         }
     }
 }
+
+/**
+ * Whether the telemetry (JSONL) export dialog lets the export run: not while its estimate loads, and
+ * not for a scan with no stored records (it would write an empty file). An estimate that could not be
+ * read leaves it enabled: the export still writes whatever the scan holds.
+ */
+internal fun offersTelemetryExport(estimate: ExportEstimate?, estimateFailed: Boolean): Boolean =
+    estimateFailed || (estimate?.records ?: 0L) > 0L
 
 /** Whether a History row offers "View telemetry" (spec §8.1): only a COMPLETE scan is browsable. */
 internal fun offersTelemetry(scan: ScanResult): Boolean = scan.state == ScanState.COMPLETE

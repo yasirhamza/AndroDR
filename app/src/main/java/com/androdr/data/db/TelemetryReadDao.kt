@@ -50,6 +50,7 @@ data class BodyStatsRow(val kind: Int, val bodies: Long, val storedBytes: Long, 
  * the import is deleted).
  */
 object StorageKind {
+    // The numbers are also the precedence of a body shared across kinds ([TelemetryReadDao.storageObserved]).
     const val SNAPSHOT = 0
     const val LIVE_EVENT = 1
     const val IMPORT = 2
@@ -211,14 +212,16 @@ interface TelemetryReadDao {
     suspend fun scanTotals(scanId: Long, eventsNotAfter: Long = Long.MAX_VALUE): ScanTotals
 
     /**
-     * Distinct bodies of facts observed by a COMPLETE scan, by [StorageKind]. A body observed in more
-     * than one kind (the same record seen by a live scan and an import) counts once in each.
+     * Distinct bodies of facts observed by a COMPLETE scan, partitioned by [StorageKind] (ruling R42):
+     * a body observed in more than one kind (the same record seen by a live scan and an import) counts
+     * once, in its first kind in [StorageKind] order (snapshots, then live events, then imports): the
+     * lowest kind number, `MIN` per body. So the rows add up to the distinct bodies stored.
      */
     @Query(
         "SELECT k.kind AS kind, COUNT(*) AS bodies, COALESCE(SUM(LENGTH(b.body)), 0) AS storedBytes, " +
-            "COALESCE(SUM(b.rawBytes), 0) AS rawBytes FROM (SELECT DISTINCT f.bodyHash AS hash, " +
-            "${StorageKind.SQL} AS kind FROM scan_record o JOIN ScanResult s ON s.id = o.scanId " +
-            "JOIN telemetry_record f ON f.id = o.recordId WHERE ${CompleteScan.SQL}) k " +
+            "COALESCE(SUM(b.rawBytes), 0) AS rawBytes FROM (SELECT f.bodyHash AS hash, " +
+            "MIN(${StorageKind.SQL}) AS kind FROM scan_record o JOIN ScanResult s ON s.id = o.scanId " +
+            "JOIN telemetry_record f ON f.id = o.recordId WHERE ${CompleteScan.SQL} GROUP BY f.bodyHash) k " +
             "JOIN record_body b ON b.hash = k.hash GROUP BY k.kind ORDER BY k.kind"
     )
     suspend fun storageObserved(): List<BodyStatsRow>

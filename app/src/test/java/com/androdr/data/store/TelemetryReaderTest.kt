@@ -217,6 +217,32 @@ class TelemetryReaderTest {
     }
 
     @Test
+    fun `R42 a body shared by a live snapshot and an import counts once, under Snapshots, and rows sum to Total`() =
+        runBlocking {
+            val imp = TelemetrySource.BUGREPORT_IMPORT
+            f.scan(1L)
+            f.persist(1L, "app_scanner", listOf(app("com.shared"), app("com.live")))
+            f.setState(1L, ScanState.COMPLETE)
+            f.db.scanResultDao().insert(com.androdr.data.model.ScanResult(id = 2L, timestamp = 2L,
+                bugReportFindings = emptyList(), riskySideloadCount = 0, knownMalwareCount = 0, source = imp,
+                state = ScanState.IN_PROGRESS))
+            // The envelope is stripped in both, so the import's com.shared has the live scan's body.
+            f.persist(2L, "app_scanner", listOf(app("com.shared", source = imp), app("com.imp", source = imp)),
+                source = imp)
+            f.persist(2L, "dns_monitor", listOf(dns("i.example")), source = imp)
+            f.setState(2L, ScanState.COMPLETE)
+            assertEquals("the fixture shares one body across the two scans", 4L,
+                f.count("SELECT COUNT(*) FROM record_body"))
+            val s = f.reader.storage()
+            assertEquals(2L, s.snapshots.bodies)
+            assertEquals(0L, s.liveEvents.bodies)
+            assertEquals("com.imp and i.example only; com.shared is under Snapshots", 2L, s.imports.bodies)
+            assertEquals(4L, s.total.bodies)
+            assertEquals(s.snapshots.bodies + s.liveEvents.bodies + s.imports.bodies, s.total.bodies)
+            assertEquals(f.count("SELECT COALESCE(SUM(LENGTH(body)), 0) FROM record_body"), s.total.storedBytes)
+        }
+
+    @Test
     fun `storage splits distinct bodies into snapshots, live events and imports (spec 8_2)`() = runBlocking {
         f.scan(1L)
         f.persist(1L, "app_scanner", listOf(app("x"), app("y")))

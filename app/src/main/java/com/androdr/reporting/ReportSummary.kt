@@ -56,12 +56,15 @@ data class ExportEstimate(val records: Long, val bytes: Long, val categories: Li
             "${categories.joinToString(", ")}. $SENSITIVE"
     }
 
-    /** The telemetry (JSONL) export dialog's sentence: the same count, size and categories. */
+    /**
+     * The telemetry (JSONL) export dialog's sentence: the same count, size and categories. [bytes] is
+     * the decoded records' size: approximate, before compression, without each line's envelope.
+     */
     fun jsonlText(): String = if (records == 0L) {
         "This scan has no stored telemetry; the export would be empty."
     } else {
-        "One line per record: $records telemetry record(s) (about ${humanBytes(bytes)} before compression) " +
-            "from: ${categories.joinToString(", ")}. $SENSITIVE"
+        "One line per record: $records telemetry record(s) (about ${humanBytes(bytes)} of records before " +
+            "compression; each line also carries a short envelope) from: ${categories.joinToString(", ")}. $SENSITIVE"
     }
 
     companion object {

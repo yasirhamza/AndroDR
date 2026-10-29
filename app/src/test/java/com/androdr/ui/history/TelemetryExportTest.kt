@@ -119,6 +119,39 @@ class TelemetryExportTest {
     }
 
     @Test
+    fun `each line carries its own observation's envelope, not the fact's first one`() = runBlocking {
+        val record = mapOf<String, Any?>("package_name" to "com.a", "version_code" to 1L, "is_system_app" to false)
+        // Scan 1 strips a matching `source`; scan 2's record has none, so both store the same body (one
+        // fact) with different stripped keys and capture times.
+        f.scan(1L)
+        f.persist(1L, "app_scanner", listOf(com.androdr.sigma.StoreRecord(record + ("source" to "LIVE_SCAN"))),
+            capturedAt = 1_000L)
+        f.setState(1L, ScanState.COMPLETE)
+        f.scan(2L)
+        f.persist(2L, "app_scanner", listOf(com.androdr.sigma.StoreRecord(record)), capturedAt = 2_000L)
+        f.setState(2L, ScanState.COMPLETE)
+        assertEquals("one fact, observed by both scans", 1L, f.count("SELECT COUNT(*) FROM telemetry_record"))
+
+        val first = export(1L).single()
+        val second = export(2L).single()
+        assertEquals(first["fact_id"], second["fact_id"])
+        assertEquals(1_000L, (first["captured_at"] as Number).toLong())
+        assertEquals("LIVE_SCAN", (first["fields"] as Map<*, *>)["source"])
+        assertEquals(2_000L, (second["captured_at"] as Number).toLong())
+        assertFalse("scan 2 stripped nothing, so nothing is restored",
+            (second["fields"] as Map<*, *>).containsKey("source"))
+    }
+
+    @Test
+    fun `the JSONL export is disabled for a scan with no stored records and while the estimate loads`() {
+        val none = com.androdr.reporting.ExportEstimate.NONE
+        assertFalse(offersTelemetryExport(none, estimateFailed = false))
+        assertFalse(offersTelemetryExport(null, estimateFailed = false))
+        assertTrue(offersTelemetryExport(com.androdr.reporting.ExportEstimate(1, 10, listOf("installed apps")), false))
+        assertTrue("an unknown estimate still lets the export run", offersTelemetryExport(null, estimateFailed = true))
+    }
+
+    @Test
     fun `an unreadable body still gets a line that says so`() = runBlocking {
         f.scan(1L)
         f.persist(1L, "dns_monitor", listOf(dns("a.example"), dns("b.example")))
@@ -191,7 +224,8 @@ class TelemetryExportTest {
     fun `the JSONL dialog states the record count, the size and the sensitive categories`() {
         val text = com.androdr.reporting.ExportEstimate(3, 2_048, listOf("installed apps", "DNS lookups")).jsonlText()
         assertTrue(text, text.contains("3 telemetry record(s)"))
-        assertTrue(text, text.contains("2.0 KB"))
+        assertTrue(text, text.contains("about 2.0 KB of records before compression"))
+        assertTrue(text, text.contains("envelope"))
         assertTrue(text, text.contains("installed apps, DNS lookups"))
         assertTrue(text, text.contains("share it only with someone you trust"))
         assertTrue(com.androdr.reporting.ExportEstimate.NONE.jsonlText().contains("no stored telemetry"))
