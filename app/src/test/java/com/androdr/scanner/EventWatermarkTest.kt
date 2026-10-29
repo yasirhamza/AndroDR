@@ -405,15 +405,19 @@ class EventWatermarkTest {
     fun `a live scan and an import are serialised`() = runBlocking {
         val gate = CompletableDeferred<Unit>()
         val order = java.util.Collections.synchronizedList(mutableListOf<String>())
+        // "scan" is recorded inside the scan's session, while it still holds the lock: recording it
+        // after runFullScan() returned raced the import, which may legitimately run as soon as the
+        // lock is released (a CI flake, not a lock failure).
         coEvery { f.usageStatsScanner.collectEvents(any(), any()) } coAnswers {
             gate.await()
+            order += "scan"
             UsageCollection.Ok(emptyList())
         }
         coEvery { f.intrusionLogAnalyzer.analyze(any(), any()) } coAnswers {
             order += "import"
             error("stop the import here")
         }
-        val scan = async(Dispatchers.Default) { f.orchestrator.runFullScan().also { order += "scan" } }
+        val scan = async(Dispatchers.Default) { f.orchestrator.runFullScan() }
         withTimeout(5_000) { while (!f.lock.writerRunning.value) delay(5) }
         val import = async(Dispatchers.Default) {
             runCatching { f.orchestrator.analyzeIntrusionLog(android.net.Uri.EMPTY) }
