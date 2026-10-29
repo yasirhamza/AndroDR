@@ -15,30 +15,52 @@ class VocabularyGateTest {
         .first { File(it, "docs/ARCHITECTURE.md").isFile && File(it, "app/src/main").isDirectory }
 
     private val bannedPhrases = listOf(
-        Regex("raw telemetry", RegexOption.IGNORE_CASE),
-        Regex("informational telemetry", RegexOption.IGNORE_CASE),
+        Regex("""raw\s+telemetry""", RegexOption.IGNORE_CASE),
+        Regex("""informational\s+telemetry""", RegexOption.IGNORE_CASE),
         Regex("""(?<![A-Za-z0-9_])class TimelineEvent\b"""),
     )
 
-    private fun scannedFiles(): List<File> {
-        val kotlin = File(root, "app/src/main/java").walkTopDown().filter { it.isFile && it.extension == "kt" }
-        val values = File(root, "app/src/main/res").walkTopDown()
-            .filter { it.isFile && it.parentFile.name.startsWith("values") && it.extension == "xml" }
-        val docs = File(root, "docs").listFiles { f -> f.isFile && f.extension == "md" }.orEmpty().asSequence()
-        return (kotlin + values + docs).toList()
+    private fun kotlinFiles(): List<File> =
+        File(root, "app/src/main/java").walkTopDown().filter { it.isFile && it.extension == "kt" }.toList()
+
+    private fun valuesFiles(): List<File> =
+        File(root, "app/src/main/res").walkTopDown()
+            .filter { it.isFile && it.parentFile.name.startsWith("values") && it.extension == "xml" }.toList()
+
+    private fun docFiles(): List<File> =
+        File(root, "docs").listFiles { f -> f.isFile && f.extension == "md" }.orEmpty().toList()
+
+    private fun hitsIn(name: String, text: String): List<String> =
+        bannedPhrases.flatMap { re ->
+            re.findAll(text).map { m ->
+                val line = text.substring(0, m.range.first).count { it == '\n' } + 1
+                "$name:$line matches /${re.pattern}/"
+            }.toList()
+        }
+
+    @Test
+    fun `every scanned source is non-empty`() {
+        assertTrue("no main Kotlin scanned", kotlinFiles().isNotEmpty())
+        assertTrue("no res/values files scanned", valuesFiles().isNotEmpty())
+        assertTrue("no docs scanned", docFiles().isNotEmpty())
+        assertTrue("ARCHITECTURE.md not scanned", docFiles().any { it.name == "ARCHITECTURE.md" })
     }
 
     @Test
     fun `retired phrases do not appear`() {
-        val files = scannedFiles()
-        assertTrue("the gate found no files to scan", files.size > 50)
-        val hits = files.flatMap { f ->
-            f.readLines().withIndex().flatMap { (i, line) ->
-                bannedPhrases.filter { it.containsMatchIn(line) }
-                    .map { "${f.relativeTo(root).path}:${i + 1} matches /${it.pattern}/" }
-            }
+        val hits = (kotlinFiles() + valuesFiles() + docFiles()).flatMap { f ->
+            hitsIn(f.relativeTo(root).path, f.readText())
         }
         assertTrue("Retired vocabulary (spec §3):\n${hits.joinToString("\n")}", hits.isEmpty())
+    }
+
+    @Test
+    fun `control cases`() {
+        assertTrue(hitsIn("x", "class TimelineEvent(val a: Int)").isNotEmpty())
+        assertTrue(hitsIn("x", "class ForensicTimelineEvent(val a: Int)").isEmpty())
+        assertTrue(hitsIn("x", "the Raw\ntelemetry").isNotEmpty())
+        assertTrue(hitsIn("x", "Informational\n  Telemetry").isNotEmpty())
+        assertTrue(hitsIn("x", "stored telemetry").isEmpty())
     }
 
     @Test

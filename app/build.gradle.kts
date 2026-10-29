@@ -230,7 +230,7 @@ tasks.withType<Test>().configureEach {
     // VocabularyGateTest reads these files from the repo; declare them so an edit re-runs the gate
     // instead of Gradle reporting the test task up to date.
     inputs.files(rootProject.fileTree("docs") { include("*.md") }).withPropertyName("vocabularyGateDocs")
-    inputs.files(fileTree("src/main/res/values")).withPropertyName("vocabularyGateValues")
+    inputs.files(fileTree("src/main/res") { include("values*/**/*.xml") }).withPropertyName("vocabularyGateValues")
     inputs.files(fileTree("src/main/java") { include("**/*.kt") }).withPropertyName("vocabularyGateKotlin")
     systemProperty("robolectric.dependency.dir", robolectricDepsDir.get().asFile.absolutePath)
     // *LowHeap* tests prove a bound on memory, so they run only under lowHeapTest's 256 MB heap.

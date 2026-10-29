@@ -699,14 +699,14 @@ These definitions are the contract for telemetry-store vocabulary. `VocabularyGa
 
 | Term | Definition |
 |---|---|
-| **Telemetry record** | A typed fact an emitter produced, exactly as produced, before any rule saw it. Source-agnostic; provenance belongs to the observation. Every record is one of two time-shapes, decided per record (§4.3). |
+| **Telemetry record** | A typed fact an emitter produced, exactly as produced, before any rule saw it. Source-agnostic; provenance belongs to the observation. Every record is one of two time-shapes, decided per record (spec §4.3). |
 | **Snapshot record** | State observed *at scan time*: app inventory, live app-ops grants, receivers, processes, accessibility services, file-artifact checks, device posture, system properties, database-path observations, platform-compat changes, ADB trusted keys, and any record whose service declares no event-time field or whose value for it is absent. |
 | **Event record** | Something that happened at a time *T* the record carries: usage transitions, DNS queries, connections, security-log events, tombstones, wakelock acquisitions, package install history, bug-report app-ops accesses, battery-daily package events. An event's time has a precision (`exact` or `day`). |
-| **Fact** | One distinct telemetry record, stored once however many scans or imports observed it (§5.1). |
+| **Fact** | One distinct telemetry record, stored once however many scans or imports observed it (spec §5.1). |
 | **Observation** | One scan's or import's sighting of a fact, at a position in that scan's emitted list. Provenance and capture time belong to the observation. |
 | **Timeline event** | A timestamped row on the forensic timeline. Comes from (a) every event fact, read in place — never copied; (b) every triggered finding; (c) correlation signals; (d) detected changes (first-seen install, first-seen device-admin grant, live DNS IOC match, alert closure). **Snapshot records never become timeline events.** |
 | **Finding** | Rule output in one scan (`Finding`), referencing the observation it matched. A finding on an event record belongs to an **alert**; every other finding — on a snapshot record, or a correlation finding — is a **state finding**. |
-| **Alert** | The lasting record of an incident: opened by the first finding with its identity, kept across scans, closed only by a person (§5.4). |
+| **Alert** | The lasting record of an incident: opened by the first finding with its identity, kept across scans, closed only by a person (spec §5.4). |
 | **Provenance** | Where an observation came from: `TelemetrySource` (`LIVE_SCAN`, `BUGREPORT_IMPORT`, `INTRUSION_LOG_IMPORT`). It is not a kind of telemetry. |
 | **Watermark** | Per live event service, the position up to which live events have been collected. The next scan collects from it. |
 
