@@ -87,6 +87,7 @@
     <string name="run_first_scan_hint">Go to Dashboard and tap "Run Scan" to get started</string>
     <string name="scan_summary_title">Scan Summary</string>
     <string name="first_scan_no_comparison">First scan — no comparison available</string>
+    <string name="history_import_not_compared">Imports are not compared with other scans</string>
     <string name="diff_new_risks">New Risks</string>
     <string name="diff_resolved">Resolved</string>
     <string name="diff_no_changes">No changes since previous scan</string>

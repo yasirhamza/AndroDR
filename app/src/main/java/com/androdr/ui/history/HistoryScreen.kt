@@ -1,6 +1,5 @@
 package com.androdr.ui.history
 
-import com.androdr.reporting.groupedCount
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
@@ -619,9 +618,10 @@ private fun ScanHistoryItem(
                     )
 
                     // Diff section
-                    if (isFirstScan || diff == null) {
+                    val note = diffNote(scan.source, isFirstScan, diff != null)
+                    if (note != null || diff == null) {
                         Text(
-                            text = stringResource(R.string.first_scan_no_comparison),
+                            text = stringResource(note ?: R.string.first_scan_no_comparison),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -801,11 +801,4 @@ private fun importSourceLabel(source: TelemetrySource): Int? = when (source) {
     TelemetrySource.LIVE_SCAN -> null
     TelemetrySource.BUGREPORT_IMPORT -> R.string.history_source_bugreport_import
     TelemetrySource.INTRUSION_LOG_IMPORT -> R.string.history_source_intrusion_log_import
-}
-
-/** A History row's counts, each with the locale's digit grouping (battery B4). */
-internal fun scanCountLines(scan: ScanResult): String = buildString {
-    append("\u2022 ${groupedCount(scan.triggeredCount.toLong())} finding(s) triggered\n")
-    append("\u2022 ${groupedCount(scan.knownMalwareCount.toLong())} known malware app(s)\n")
-    append("\u2022 ${groupedCount(scan.riskySideloadCount.toLong())} sideloaded app(s)")
 }
