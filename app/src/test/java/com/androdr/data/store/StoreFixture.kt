@@ -48,9 +48,14 @@ internal class StoreFixture(recordSql: Boolean = true) : Closeable {
     val display = EventDisplay.parse(rawFile("event_display.yml").readText())
     val store = TelemetryStore(db, codec, dirty)
     val reader = TelemetryReader(db, codec, display)
+    /** What the alert close's lock-screen re-check sees (spec §5.4); tests flip it. */
+    @Volatile var deviceSecure: Boolean = true
+    val findings = com.androdr.data.repo.FindingsRepository(db, reader) { deviceSecure }
+    /** "Clear all"'s saved `clearMaxRowId` (the same store DataStore, as in the app). */
+    val pendingClear = PendingClear(dataStore)
 
     suspend fun scan(id: Long, state: ScanState = ScanState.IN_PROGRESS) {
-        db.scanResultDao().insert(ScanResult(id = id, timestamp = id, findings = emptyList(),
+        db.scanResultDao().insert(ScanResult(id = id, timestamp = id,
             bugReportFindings = emptyList(), riskySideloadCount = 0, knownMalwareCount = 0, state = state))
     }
 

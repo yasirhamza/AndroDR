@@ -3,7 +3,7 @@ package com.androdr.scanner
 import com.androdr.data.model.MISSING_SOURCE_MVT
 import com.androdr.data.model.MISSING_SOURCE_RULES_REPO
 import com.androdr.data.model.NotEvaluatedReason
-import com.androdr.data.model.ScanResult
+import com.androdr.data.model.scanWith
 import com.androdr.data.model.ScannerFailure
 import com.androdr.ioc.CampaignRegistry
 import com.androdr.ioc.FeedCoverage
@@ -74,7 +74,7 @@ class ScanVisibilityGapsTest {
 
     private fun report(coverage: FeedCoverage): String {
         val gaps = scanVisibilityGaps(coverage, true)
-        val scan = ScanResult(id = 1L, timestamp = 1_711_900_800_000L, findings = emptyList(),
+        val scan = scanWith(id = 1L, timestamp = 1_711_900_800_000L,
             bugReportFindings = emptyList(), riskySideloadCount = 0, knownMalwareCount = 0, scannerErrors = gaps)
         val registry = CampaignRegistry.parseBundled(listOf(File("src/main/res/raw/known_campaigns.json"),
             File("app/src/main/res/raw/known_campaigns.json")).first { it.isFile }.readText())

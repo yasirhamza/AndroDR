@@ -34,9 +34,9 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
-import kotlin.random.Random
 
-/** The session writer (spec §5.2): E1 writer half, ST1, S3, S2 duplicates, interim top-K, F2 recordId. */
+
+/** The session writer (spec §5.2): E1 writer half, ST1, S3, S2 duplicates, no findings cap, F2 recordId. */
 @RunWith(RobolectricTestRunner::class)
 class ChunkedScanWriterTest {
     private val w = WriterFixture()
@@ -67,11 +67,14 @@ class ChunkedScanWriterTest {
         assertEquals(TelemetryState.STORED, r.telemetryState)
         assertEquals(4, r.newFacts)
         assertEquals("COMPLETE", state(1L))
-        val finding = r.scan.findings.single()
+        val finding = r.findings.single()
         assertEquals(DNS_RULE, finding.ruleId)
         assertEquals(3, finding.ordinal)
         assertNull("recordId is set only by evaluateStored", finding.recordId)
-        assertEquals(listOf(finding), w.f.db.scanResultDao().getLatestTwo().single().findings)
+        // Read back from scan_finding: its fact, and the matchContext rebuilt from that fact exactly.
+        assertEquals(listOf(finding.copy(recordId = factIdAt(1L, "dns_monitor", 3))), w.findingsOf(1L))
+        assertEquals(1, w.f.db.scanResultDao().getLatestTwo().single().triggeredCount)
+        assertEquals("high", w.f.db.scanResultDao().getLatestTwo().single().maxLevel)
 
         val row = w.f.db.forensicTimelineEventDao().getAllForExport().single()
         assertEquals("high", row.level)
@@ -87,7 +90,7 @@ class ChunkedScanWriterTest {
     fun `E1 - each chunk is evaluated and persisted as the same list`() = runBlocking {
         val engine = spyk(w.engine)
         val store = spyk(w.f.store)
-        val writer = ChunkedScanWriter(engine, store, w.repo, w.preflight, w.health)
+        val writer = ChunkedScanWriter(engine, store, w.repo, w.f.findings, w.preflight, w.health)
         val evaluated = mutableListOf<List<StoreRecord>>()
         val persisted = mutableListOf<List<StoreRecord>>()
         every { engine.evaluateRecords(any(), capture(evaluated), any()) } answers { callOriginal() }
@@ -135,7 +138,7 @@ class ChunkedScanWriterTest {
             if (arg<List<StoreRecord>>(4).single().fields["timestamp"] == 1_002L) error("boom on chunk 3")
             callOriginal()
         }
-        val writer = ChunkedScanWriter(w.engine, store, w.repo, w.preflight, w.health)
+        val writer = ChunkedScanWriter(w.engine, store, w.repo, w.f.findings, w.preflight, w.health)
         val s = writer.begin(w.scan(1L, il), liveEvents = false)
         val failure = runCatching {
             for (k in 0 until 4) s.append("security_log", il, IMPORT_CAPTURED, listOf(securityLine(1_000L + k)))
@@ -203,7 +206,7 @@ class ChunkedScanWriterTest {
         val r = s.finish()
         assertEquals(1L, w.count("SELECT COUNT(*) FROM scan_record WHERE scanId = 1"))
         assertEquals(1, r.duplicatesDropped)
-        assertEquals(listOf(SEC_RULE), r.scan.findings.map { it.ruleId })
+        assertEquals(listOf(SEC_RULE), w.findingsOf(1L).map { it.ruleId })
         assertEquals(1L, w.count("SELECT COUNT(*) FROM forensic_timeline WHERE ruleId = '$SEC_RULE'"))
     }
 
@@ -212,10 +215,11 @@ class ChunkedScanWriterTest {
         val evil = dns(EVIL_DOMAIN, key = "dns:42")
         val first = w.writer.begin(w.scan(1L), liveEvents = true)
         first.append("dns_monitor", live, CAPTURED, listOf(evil))
-        assertEquals(1, first.finish().scan.findings.size)
+        assertEquals(1, first.finish().findings.size)
         val second = w.writer.begin(w.scan(2L), liveEvents = true)
         second.append("dns_monitor", live, CAPTURED, listOf(evil))
-        assertEquals(emptyList<Finding>(), second.finish().scan.findings)
+        assertEquals(emptyList<Finding>(), second.finish().findings)
+        assertEquals(emptyList<Finding>(), w.findingsOf(2L))
     }
 
     // ── Late-IOC re-check ───────────────────────────────────────────────────────
@@ -225,72 +229,52 @@ class ChunkedScanWriterTest {
         val first = w.writer.begin(w.scan(1L), liveEvents = true)
         first.append("dns_monitor", live, CAPTURED, listOf(dns(EVIL_DOMAIN, key = "dns:7")))
         val stored = first.finish()
-        // Simulate "the domain became an IOC after it was queried": drop the first scan's finding row.
-        w.f.db.openHelper.writableDatabase.execSQL("DELETE FROM forensic_timeline")
+        // Simulate "the domain became an IOC after it was queried": the first scan never fired, so
+        // drop its finding, its row and its alert.
+        val db = w.f.db.openHelper.writableDatabase
+        listOf("forensic_timeline", "scan_finding", "alert").forEach { db.execSQL("DELETE FROM $it") }
         val factId = factIdAt(1L, "dns_monitor", 0)
         val observations = w.count("SELECT COUNT(*) FROM scan_record")
-        assertEquals(1, stored.scan.findings.size)
+        assertEquals(1, stored.findings.size)
 
         val recheck = w.writer.begin(w.scan(2L), liveEvents = true)
         recheck.evaluateStored("dns_monitor", sequenceOf(factId to dns(EVIL_DOMAIN, key = "dns:7")))
         val r = recheck.finish()
-        val f = r.scan.findings.single()
+        val f = r.findings.single()
         assertEquals(factId, f.recordId)
         assertEquals(-1, f.ordinal)
         assertEquals(observations, w.count("SELECT COUNT(*) FROM scan_record"))
         assertEquals(factId, w.f.db.forensicTimelineEventDao().getAllForExport().single().recordId)
+        assertEquals("the re-check opened the alert", 1L, w.count("SELECT COUNT(*) FROM alert"))
 
         val again = w.writer.begin(w.scan(3L), liveEvents = true)
         again.evaluateStored("dns_monitor", sequenceOf(factId to dns(EVIL_DOMAIN, key = "dns:7")))
-        assertEquals(emptyList<Finding>(), again.finish().scan.findings)
+        assertEquals(emptyList<Finding>(), again.finish().findings)
     }
 
-    // ── Interim findings top-K ──────────────────────────────────────────────────
-
-    private fun fixture(n: Int, seed: Int): List<Finding> {
-        val rnd = Random(seed)
-        val levels = listOf("critical", "high", "medium", "low", "informational", "")
-        return List(n) { i ->
-            Finding(ruleId = "r$i", title = "t$i", level = levels[rnd.nextInt(levels.size)],
-                category = FindingCategory.APP_RISK, triggered = rnd.nextInt(10) != 0,
-                // Few distinct times, so severity/time ties exercise the stable order.
-                matchContext = if (rnd.nextBoolean()) mapOf("timestamp" to "${rnd.nextInt(5)}") else emptyMap())
-        }
-    }
-
+    /**
+     * R24 pin (spec §5.2): "already fired" is the alert with the record key, not a visible finding row,
+     * so deleting the scan that first fired does not let the fact fire again.
+     */
     @Test
-    fun `the findings top-K equals capTriggeredFindings on a 1500-finding fixture`() {
-        for ((n, seed) in listOf(1_500 to 1, 1_500 to 2, 800 to 3, 1_112 to 4)) {
-            val all = fixture(n, seed)
-            val top = FindingsTopK.forSource(il)
-            all.forEach { top.offer(it, null) }
-            assertEquals("n=$n seed=$seed", ScanOrchestrator.capTriggeredFindings(all), top.result().map { it.finding })
-            assertEquals(n.toLong(), top.totals().seen)
-            assertEquals(all.count { it.triggered }.toLong(), top.totals().triggered)
-        }
+    fun `the late-IOC re-check stays silent after the scan that first fired is deleted`() = runBlocking {
+        val first = w.writer.begin(w.scan(1L), liveEvents = true)
+        first.append("dns_monitor", live, CAPTURED, listOf(dns(EVIL_DOMAIN, key = "dns:7")))
+        first.finish()
+        val factId = factIdAt(1L, "dns_monitor", 0)
+        w.repo.markForDelete(1L)
+        w.repo.completeDelete(1L)
+        assertEquals("no finding row of the deleted scan is left", 0L, w.count("SELECT COUNT(*) FROM scan_finding"))
+        assertEquals("its alert survives", 1L, w.count("SELECT COUNT(*) FROM alert"))
+        assertEquals("the alert pins the fact", 1L, w.count("SELECT COUNT(*) FROM telemetry_record WHERE id = $factId"))
+
+        val recheck = w.writer.begin(w.scan(2L), liveEvents = true)
+        recheck.evaluateStored("dns_monitor", sequenceOf(factId to dns(EVIL_DOMAIN, key = "dns:7")))
+        assertEquals(emptyList<Finding>(), recheck.finish().findings)
+        assertEquals(0L, w.count("SELECT COUNT(*) FROM scan_finding"))
     }
 
-    @Test
-    fun `live and bug-report sessions keep every finding in arrival order, as today`() {
-        for (source in listOf(live, TelemetrySource.BUGREPORT_IMPORT)) {
-            val all = fixture(1_500, 9)
-            val top = FindingsTopK.forSource(source)
-            all.forEach { top.offer(it, null) }
-            assertEquals("$source", all, top.result().map { it.finding })
-        }
-    }
-
-    @Test
-    fun `totals count every finding past the cap`() {
-        val top = FindingsTopK(cap = 1)
-        val malware = Finding(ruleId = "m", title = "m", level = "critical", category = FindingCategory.APP_RISK,
-            impliesFlags = listOf("known_malware"))
-        repeat(3) { top.offer(malware, null) }
-        top.offer(malware.copy(ruleId = "x", triggered = false), null)
-        assertEquals(FindingTotals(seen = 4, triggered = 3, knownMalware = 4, triggeredByRule = mapOf("m" to 3L)),
-            top.totals())
-        assertEquals(1, top.result().size)
-    }
+    // ── No findings cap (D2, spec §5.5) ─────────────────────────────────────────
 
     @Test
     fun `a live session with 1500 findings keeps all of them`() = runBlocking {
@@ -298,12 +282,13 @@ class ChunkedScanWriterTest {
         s.appendAll("dns_monitor", live, CAPTURED,
             (0 until 1_500).asSequence().map { dns(EVIL_DOMAIN, time = 1_000L + it, key = "dns:$it") })
         val r = s.finish()
-        assertEquals(1_500, r.scan.findings.size)
+        assertEquals(1_500, r.findings.size)
+        assertEquals(1_500L, w.count("SELECT COUNT(*) FROM scan_finding WHERE scanId = 1"))
         assertEquals(1_500L, w.count("SELECT COUNT(*) FROM forensic_timeline WHERE scanResultId = 1"))
     }
 
     @Test
-    fun `summarize sees the totals of findings dropped by the intrusion-log cap`() = runBlocking {
+    fun `summarize sees the totals of every finding an import recorded`() = runBlocking {
         var seen: FindingTotals? = null
         val hooks = object : SessionHooks {
             override fun summarize(scan: ScanResult, totals: FindingTotals): ScanResult = scan.also { seen = totals }
@@ -311,20 +296,23 @@ class ChunkedScanWriterTest {
         val s = w.writer.begin(w.scan(1L, il), liveEvents = false, hooks)
         s.appendAll("dns_monitor", il, IMPORT_CAPTURED,
             (0 until 1_200).asSequence().map { dns(EVIL_DOMAIN, time = 1_000L + it, key = "dns $it") })
-        assertEquals(1_000, s.finish().scan.findings.size)
+        val r = s.finish()
+        assertEquals("an import holds no findings in memory", 0, r.findings.size)
+        assertEquals(1_200, r.scan.triggeredCount)
         assertEquals(1_200L, seen?.triggered)
         assertEquals(mapOf(DNS_RULE to 1_200L), seen?.triggeredByRule)
     }
 
     @Test
-    fun `a session keeps 1000 of 1500 findings, in the JSON column and as Timeline rows`() = runBlocking {
+    fun `an import keeps all 1500 findings as scan_finding rows and Timeline rows`() = runBlocking {
         val s = w.writer.begin(w.scan(1L, il), liveEvents = false)
         s.appendAll("dns_monitor", il, IMPORT_CAPTURED,
             (0 until 1_500).asSequence().map { dns(EVIL_DOMAIN, time = 1_000L + it, key = "dns $it") })
-        val r = s.finish()
-        assertEquals(ScanOrchestrator.FINDINGS_PERSIST_CAP, r.scan.findings.size)
-        assertEquals(1_000L, w.count("SELECT COUNT(*) FROM forensic_timeline WHERE scanResultId = 1"))
-        assertEquals(1_000L, w.count("SELECT COUNT(*) FROM forensic_timeline WHERE recordId IS NOT NULL"))
+        s.finish()
+        assertEquals(1_500, w.findingsOf(1L).size)
+        assertEquals(1_500L, w.count("SELECT COUNT(*) FROM forensic_timeline WHERE scanResultId = 1"))
+        assertEquals(1_500L, w.count("SELECT COUNT(*) FROM forensic_timeline WHERE recordId IS NOT NULL"))
+        assertEquals("one alert per event fact", 1_500L, w.count("SELECT COUNT(*) FROM alert"))
     }
 
     // ── Finding JSON round-trip (carried gate) ──────────────────────────────────
@@ -355,7 +343,7 @@ class ChunkedScanWriterTest {
         val s = w.writer.begin(w.scan(1L), liveEvents = false)
         s.append("app_scanner", live, CAPTURED, listOf(app(EVIL_APP), app("com.ok")))
         s.finish()
-        val f = w.f.db.scanResultDao().getLatestTwo().single().findings.single()
+        val f = w.findingsOf(1L).single()
         assertEquals(APP_RULE, f.ruleId)
         assertEquals("app_scanner", f.service)
         assertEquals(0, f.ordinal)

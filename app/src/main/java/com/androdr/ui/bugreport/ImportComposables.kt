@@ -15,6 +15,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -96,7 +97,25 @@ internal fun lowSpaceText(n: ImportNotice.LowSpace, size: (Long) -> String): Str
     return "$what $advice"
 }
 
+/**
+ * How many findings could not be saved, how serious they are (counts by level, most severe first),
+ * and how much to free — "at least X", or no number when the amount is unknown (review Minors E, F).
+ */
+@Composable
+internal fun unsavedText(card: ImportCard, size: (Long) -> String): String {
+    val n = card.unsavedFindings.coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
+    val head = if (card.freeAmountKnown) {
+        pluralStringResource(R.plurals.import_card_findings_unsaved, n, card.unsavedFindings, size(card.freeBytes))
+    } else {
+        pluralStringResource(R.plurals.import_card_findings_unsaved_unknown, n, card.unsavedFindings)
+    }
+    if (card.unsavedByLevel.isEmpty()) return head
+    val levels = card.unsavedByLevel.joinToString(" \u00b7 ") { (level, count) -> "$count $level" }
+    return head + " " + stringResource(R.string.import_card_unsaved_levels, levels)
+}
+
 /** What the import stored, and why not all of it when it was not. */
+@Suppress("LongMethod") // one card: counts, notes, bounds, the storage notice and the findings line
 @Composable
 internal fun ImportCardView(card: ImportCard) {
     val context = LocalContext.current
@@ -132,8 +151,22 @@ internal fun ImportCardView(card: ImportCard) {
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
-            val notice = noticeText(card.notice) { android.text.format.Formatter.formatShortFileSize(context, it) }
+            val size = { b: Long -> android.text.format.Formatter.formatShortFileSize(context, b) }
+            val notice = noticeText(card.notice, size)
             notice?.let {
+                Text(
+                    text = it,
+                    style = MaterialTheme.typography.bodySmall,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.error
+                )
+            }
+            val findingsLine = when {
+                !card.findingsComplete -> unsavedText(card, size)
+                notice != null -> stringResource(R.string.import_card_findings_complete)
+                else -> null
+            }
+            findingsLine?.let {
                 Text(
                     text = it,
                     style = MaterialTheme.typography.bodySmall,

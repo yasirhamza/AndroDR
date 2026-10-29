@@ -61,7 +61,6 @@ class BugReportTelemetryPersistedTest {
     fun `generic module telemetry is observed under each module's service`() = runBlocking {
         OrchestratorFixture(engine = IntrusionLogZips.engine(), bugReportAnalyzer = mockk(relaxed = true)).use { g ->
             coEvery { g.bugReportAnalyzer.analyze(any()) } returns BugReportAnalyzer.BugReportAnalysisResult(
-                findings = emptyList(),
                 moduleTelemetry = listOf(
                     BugReportAnalyzer.ModuleTelemetry("receiver_audit", listOf(mapOf("package_name" to "a"),
                         mapOf("package_name" to "b"))),
@@ -85,7 +84,6 @@ class BugReportTelemetryPersistedTest {
         val failing = OrchestratorFixture(engine = IntrusionLogZips.engine(), bugReportAnalyzer = mockk(relaxed = true))
         failing.use { g ->
             coEvery { g.bugReportAnalyzer.analyze(any()) } returns BugReportAnalyzer.BugReportAnalysisResult(
-                findings = emptyList(),
                 moduleTelemetry = listOf(BugReportAnalyzer.ModuleTelemetry("receiver_audit", listOf(mapOf("a" to 1)))),
             )
             val store = io.mockk.spyk(g.w.f.store)
@@ -107,7 +105,7 @@ class BugReportTelemetryPersistedTest {
     fun `a bug report whose finishing write is not saved fails with BugReportPersistException`() = runBlocking {
         val repo = io.mockk.spyk(f.w.repo)
         f.w.repo = repo
-        coEvery { repo.finish(any(), any(), any(), any(), any()) } throws
+        coEvery { repo.finish(any(), any(), any(), any()) } throws
             android.database.sqlite.SQLiteFullException("database or disk is full")
 
         val thrown = runCatching { f.orchestrator.analyzeBugReport(uri) }.exceptionOrNull()

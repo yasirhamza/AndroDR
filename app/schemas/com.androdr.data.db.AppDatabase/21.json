@@ -1,0 +1,1402 @@
+{
+  "formatVersion": 1,
+  "database": {
+    "version": 21,
+    "identityHash": "d35b373e95433efccf6e54a2f3185b32",
+    "entities": [
+      {
+        "tableName": "ScanResult",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER NOT NULL, `timestamp` INTEGER NOT NULL, `bugReportFindings` TEXT NOT NULL, `riskySideloadCount` INTEGER NOT NULL, `knownMalwareCount` INTEGER NOT NULL, `scannerErrors` TEXT NOT NULL, `source` TEXT NOT NULL, `state` TEXT NOT NULL DEFAULT 'COMPLETE', `telemetryState` TEXT NOT NULL DEFAULT 'NONE', `triggeredCount` INTEGER NOT NULL DEFAULT 0, `maxLevel` TEXT, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "timestamp",
+            "columnName": "timestamp",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "bugReportFindings",
+            "columnName": "bugReportFindings",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "riskySideloadCount",
+            "columnName": "riskySideloadCount",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "knownMalwareCount",
+            "columnName": "knownMalwareCount",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "scannerErrors",
+            "columnName": "scannerErrors",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "source",
+            "columnName": "source",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "state",
+            "columnName": "state",
+            "affinity": "TEXT",
+            "notNull": true,
+            "defaultValue": "'COMPLETE'"
+          },
+          {
+            "fieldPath": "telemetryState",
+            "columnName": "telemetryState",
+            "affinity": "TEXT",
+            "notNull": true,
+            "defaultValue": "'NONE'"
+          },
+          {
+            "fieldPath": "triggeredCount",
+            "columnName": "triggeredCount",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "0"
+          },
+          {
+            "fieldPath": "maxLevel",
+            "columnName": "maxLevel",
+            "affinity": "TEXT",
+            "notNull": false
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [],
+        "foreignKeys": []
+      },
+      {
+        "tableName": "DnsEvent",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `timestamp` INTEGER NOT NULL, `domain` TEXT NOT NULL, `appUid` INTEGER NOT NULL, `appName` TEXT, `isBlocked` INTEGER NOT NULL, `reason` TEXT)",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "timestamp",
+            "columnName": "timestamp",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "domain",
+            "columnName": "domain",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "appUid",
+            "columnName": "appUid",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "appName",
+            "columnName": "appName",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "isBlocked",
+            "columnName": "isBlocked",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "reason",
+            "columnName": "reason",
+            "affinity": "TEXT",
+            "notNull": false
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [],
+        "foreignKeys": []
+      },
+      {
+        "tableName": "known_app_entries",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`packageName` TEXT NOT NULL, `displayName` TEXT NOT NULL, `category` TEXT NOT NULL, `sourceId` TEXT NOT NULL, `fetchedAt` INTEGER NOT NULL, PRIMARY KEY(`packageName`))",
+        "fields": [
+          {
+            "fieldPath": "packageName",
+            "columnName": "packageName",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "displayName",
+            "columnName": "displayName",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "category",
+            "columnName": "category",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sourceId",
+            "columnName": "sourceId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "fetchedAt",
+            "columnName": "fetchedAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "packageName"
+          ]
+        },
+        "indices": [],
+        "foreignKeys": []
+      },
+      {
+        "tableName": "cve_entries",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`cveId` TEXT NOT NULL, `description` TEXT NOT NULL, `severity` TEXT NOT NULL, `fixedInPatchLevel` TEXT NOT NULL, `cisaDateAdded` TEXT NOT NULL, `isActivelyExploited` INTEGER NOT NULL, `vendorProject` TEXT NOT NULL, `product` TEXT NOT NULL, `lastUpdated` INTEGER NOT NULL, PRIMARY KEY(`cveId`))",
+        "fields": [
+          {
+            "fieldPath": "cveId",
+            "columnName": "cveId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "description",
+            "columnName": "description",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "severity",
+            "columnName": "severity",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "fixedInPatchLevel",
+            "columnName": "fixedInPatchLevel",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "cisaDateAdded",
+            "columnName": "cisaDateAdded",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "isActivelyExploited",
+            "columnName": "isActivelyExploited",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "vendorProject",
+            "columnName": "vendorProject",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "product",
+            "columnName": "product",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "lastUpdated",
+            "columnName": "lastUpdated",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "cveId"
+          ]
+        },
+        "indices": [],
+        "foreignKeys": []
+      },
+      {
+        "tableName": "forensic_timeline",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `startTimestamp` INTEGER NOT NULL, `endTimestamp` INTEGER, `kind` TEXT NOT NULL, `timestampPrecision` TEXT NOT NULL, `source` TEXT NOT NULL, `category` TEXT NOT NULL, `description` TEXT NOT NULL, `details` TEXT NOT NULL, `packageName` TEXT NOT NULL, `appName` TEXT NOT NULL, `processUid` INTEGER NOT NULL, `iocIndicator` TEXT NOT NULL, `iocType` TEXT NOT NULL, `iocSource` TEXT NOT NULL, `campaignName` TEXT NOT NULL, `apkHash` TEXT NOT NULL, `correlationId` TEXT NOT NULL, `ruleId` TEXT NOT NULL, `scanResultId` INTEGER NOT NULL, `attackTechniqueId` TEXT NOT NULL, `telemetrySource` TEXT NOT NULL, `createdAt` INTEGER NOT NULL, `recordId` INTEGER, `sourceEventKey` BLOB, `level` TEXT, `persistent` INTEGER NOT NULL DEFAULT 0)",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "startTimestamp",
+            "columnName": "startTimestamp",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "endTimestamp",
+            "columnName": "endTimestamp",
+            "affinity": "INTEGER",
+            "notNull": false
+          },
+          {
+            "fieldPath": "kind",
+            "columnName": "kind",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "timestampPrecision",
+            "columnName": "timestampPrecision",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "source",
+            "columnName": "source",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "category",
+            "columnName": "category",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "description",
+            "columnName": "description",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "details",
+            "columnName": "details",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "packageName",
+            "columnName": "packageName",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "appName",
+            "columnName": "appName",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "processUid",
+            "columnName": "processUid",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "iocIndicator",
+            "columnName": "iocIndicator",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "iocType",
+            "columnName": "iocType",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "iocSource",
+            "columnName": "iocSource",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "campaignName",
+            "columnName": "campaignName",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "apkHash",
+            "columnName": "apkHash",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "correlationId",
+            "columnName": "correlationId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "ruleId",
+            "columnName": "ruleId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "scanResultId",
+            "columnName": "scanResultId",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "attackTechniqueId",
+            "columnName": "attackTechniqueId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "telemetrySource",
+            "columnName": "telemetrySource",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "createdAt",
+            "columnName": "createdAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "recordId",
+            "columnName": "recordId",
+            "affinity": "INTEGER",
+            "notNull": false
+          },
+          {
+            "fieldPath": "sourceEventKey",
+            "columnName": "sourceEventKey",
+            "affinity": "BLOB",
+            "notNull": false
+          },
+          {
+            "fieldPath": "level",
+            "columnName": "level",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "persistent",
+            "columnName": "persistent",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "0"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_forensic_timeline_startTimestamp",
+            "unique": false,
+            "columnNames": [
+              "startTimestamp"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_forensic_timeline_startTimestamp` ON `${TABLE_NAME}` (`startTimestamp`)"
+          },
+          {
+            "name": "index_forensic_timeline_packageName",
+            "unique": false,
+            "columnNames": [
+              "packageName"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_forensic_timeline_packageName` ON `${TABLE_NAME}` (`packageName`)"
+          },
+          {
+            "name": "index_forensic_timeline_source",
+            "unique": false,
+            "columnNames": [
+              "source"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_forensic_timeline_source` ON `${TABLE_NAME}` (`source`)"
+          },
+          {
+            "name": "index_forensic_timeline_kind",
+            "unique": false,
+            "columnNames": [
+              "kind"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_forensic_timeline_kind` ON `${TABLE_NAME}` (`kind`)"
+          },
+          {
+            "name": "index_forensic_timeline_telemetrySource_createdAt",
+            "unique": false,
+            "columnNames": [
+              "telemetrySource",
+              "createdAt"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_forensic_timeline_telemetrySource_createdAt` ON `${TABLE_NAME}` (`telemetrySource`, `createdAt`)"
+          },
+          {
+            "name": "index_forensic_timeline_recordId",
+            "unique": false,
+            "columnNames": [
+              "recordId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_forensic_timeline_recordId` ON `${TABLE_NAME}` (`recordId`)"
+          },
+          {
+            "name": "index_forensic_timeline_sourceEventKey",
+            "unique": false,
+            "columnNames": [
+              "sourceEventKey"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_forensic_timeline_sourceEventKey` ON `${TABLE_NAME}` (`sourceEventKey`)"
+          },
+          {
+            "name": "index_forensic_timeline_scanResultId_startTimestamp",
+            "unique": false,
+            "columnNames": [
+              "scanResultId",
+              "startTimestamp"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_forensic_timeline_scanResultId_startTimestamp` ON `${TABLE_NAME}` (`scanResultId`, `startTimestamp`)"
+          },
+          {
+            "name": "index_forensic_timeline_packageName_startTimestamp",
+            "unique": false,
+            "columnNames": [
+              "packageName",
+              "startTimestamp"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_forensic_timeline_packageName_startTimestamp` ON `${TABLE_NAME}` (`packageName`, `startTimestamp`)"
+          }
+        ],
+        "foreignKeys": []
+      },
+      {
+        "tableName": "indicators",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`type` TEXT NOT NULL, `value` TEXT NOT NULL, `family` TEXT NOT NULL, `category` TEXT NOT NULL, `campaignKey` TEXT NOT NULL, `severity` TEXT NOT NULL, `description` TEXT NOT NULL, `source` TEXT NOT NULL, `reference` TEXT NOT NULL, `fetchedAt` INTEGER NOT NULL, PRIMARY KEY(`type`, `value`))",
+        "fields": [
+          {
+            "fieldPath": "type",
+            "columnName": "type",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "value",
+            "columnName": "value",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "family",
+            "columnName": "family",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "category",
+            "columnName": "category",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "campaignKey",
+            "columnName": "campaignKey",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "severity",
+            "columnName": "severity",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "description",
+            "columnName": "description",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "source",
+            "columnName": "source",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "reference",
+            "columnName": "reference",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "fetchedAt",
+            "columnName": "fetchedAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "type",
+            "value"
+          ]
+        },
+        "indices": [],
+        "foreignKeys": []
+      },
+      {
+        "tableName": "feed_health",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`feedId` TEXT NOT NULL, `lastAttemptAt` INTEGER NOT NULL, `lastSuccessAt` INTEGER NOT NULL, `lastError` TEXT, `consecutiveFailures` INTEGER NOT NULL, PRIMARY KEY(`feedId`))",
+        "fields": [
+          {
+            "fieldPath": "feedId",
+            "columnName": "feedId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "lastAttemptAt",
+            "columnName": "lastAttemptAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "lastSuccessAt",
+            "columnName": "lastSuccessAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "lastError",
+            "columnName": "lastError",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "consecutiveFailures",
+            "columnName": "consecutiveFailures",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "feedId"
+          ]
+        },
+        "indices": [],
+        "foreignKeys": []
+      },
+      {
+        "tableName": "record_body",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`hash` BLOB NOT NULL, `encoding` INTEGER NOT NULL, `dictVersion` INTEGER NOT NULL, `body` BLOB NOT NULL, `rawBytes` INTEGER NOT NULL, PRIMARY KEY(`hash`))",
+        "fields": [
+          {
+            "fieldPath": "hash",
+            "columnName": "hash",
+            "affinity": "BLOB",
+            "notNull": true
+          },
+          {
+            "fieldPath": "encoding",
+            "columnName": "encoding",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "dictVersion",
+            "columnName": "dictVersion",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "body",
+            "columnName": "body",
+            "affinity": "BLOB",
+            "notNull": true
+          },
+          {
+            "fieldPath": "rawBytes",
+            "columnName": "rawBytes",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "hash"
+          ]
+        },
+        "indices": [],
+        "foreignKeys": []
+      },
+      {
+        "tableName": "telemetry_record",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `service` TEXT NOT NULL, `factKey` BLOB NOT NULL, `sourceKey` BLOB, `subjectKey` TEXT, `eventTime` INTEGER, `timePrecision` TEXT NOT NULL, `category` TEXT, `packageName` TEXT, `bodyHash` BLOB NOT NULL, `firstSource` TEXT NOT NULL, `firstCapturedAt` INTEGER NOT NULL, `firstStrippedKeys` INTEGER NOT NULL)",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "service",
+            "columnName": "service",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "factKey",
+            "columnName": "factKey",
+            "affinity": "BLOB",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sourceKey",
+            "columnName": "sourceKey",
+            "affinity": "BLOB",
+            "notNull": false
+          },
+          {
+            "fieldPath": "subjectKey",
+            "columnName": "subjectKey",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "eventTime",
+            "columnName": "eventTime",
+            "affinity": "INTEGER",
+            "notNull": false
+          },
+          {
+            "fieldPath": "timePrecision",
+            "columnName": "timePrecision",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "category",
+            "columnName": "category",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "packageName",
+            "columnName": "packageName",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "bodyHash",
+            "columnName": "bodyHash",
+            "affinity": "BLOB",
+            "notNull": true
+          },
+          {
+            "fieldPath": "firstSource",
+            "columnName": "firstSource",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "firstCapturedAt",
+            "columnName": "firstCapturedAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "firstStrippedKeys",
+            "columnName": "firstStrippedKeys",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_telemetry_record_service_factKey",
+            "unique": true,
+            "columnNames": [
+              "service",
+              "factKey"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_telemetry_record_service_factKey` ON `${TABLE_NAME}` (`service`, `factKey`)"
+          },
+          {
+            "name": "index_telemetry_record_service_subjectKey",
+            "unique": false,
+            "columnNames": [
+              "service",
+              "subjectKey"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_telemetry_record_service_subjectKey` ON `${TABLE_NAME}` (`service`, `subjectKey`)"
+          },
+          {
+            "name": "index_telemetry_record_packageName_eventTime",
+            "unique": false,
+            "columnNames": [
+              "packageName",
+              "eventTime"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_telemetry_record_packageName_eventTime` ON `${TABLE_NAME}` (`packageName`, `eventTime`)"
+          },
+          {
+            "name": "index_telemetry_record_eventTime",
+            "unique": false,
+            "columnNames": [
+              "eventTime"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_telemetry_record_eventTime` ON `${TABLE_NAME}` (`eventTime`)"
+          },
+          {
+            "name": "index_telemetry_record_sourceKey",
+            "unique": false,
+            "columnNames": [
+              "sourceKey"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_telemetry_record_sourceKey` ON `${TABLE_NAME}` (`sourceKey`)"
+          },
+          {
+            "name": "index_telemetry_record_bodyHash",
+            "unique": false,
+            "columnNames": [
+              "bodyHash"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_telemetry_record_bodyHash` ON `${TABLE_NAME}` (`bodyHash`)"
+          }
+        ],
+        "foreignKeys": []
+      },
+      {
+        "tableName": "scan_record",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`scanId` INTEGER NOT NULL, `service` TEXT NOT NULL, `ordinal` INTEGER NOT NULL, `recordId` INTEGER NOT NULL, `eventTime` INTEGER, `source` TEXT NOT NULL, `capturedAt` INTEGER NOT NULL, `strippedKeys` INTEGER NOT NULL, PRIMARY KEY(`scanId`, `service`, `ordinal`))",
+        "fields": [
+          {
+            "fieldPath": "scanId",
+            "columnName": "scanId",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "service",
+            "columnName": "service",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "ordinal",
+            "columnName": "ordinal",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "recordId",
+            "columnName": "recordId",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "eventTime",
+            "columnName": "eventTime",
+            "affinity": "INTEGER",
+            "notNull": false
+          },
+          {
+            "fieldPath": "source",
+            "columnName": "source",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "capturedAt",
+            "columnName": "capturedAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "strippedKeys",
+            "columnName": "strippedKeys",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "scanId",
+            "service",
+            "ordinal"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_scan_record_scanId_recordId",
+            "unique": true,
+            "columnNames": [
+              "scanId",
+              "recordId"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_scan_record_scanId_recordId` ON `${TABLE_NAME}` (`scanId`, `recordId`)"
+          },
+          {
+            "name": "index_scan_record_recordId",
+            "unique": false,
+            "columnNames": [
+              "recordId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_scan_record_recordId` ON `${TABLE_NAME}` (`recordId`)"
+          },
+          {
+            "name": "index_scan_record_scanId_eventTime",
+            "unique": false,
+            "columnNames": [
+              "scanId",
+              "eventTime"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_scan_record_scanId_eventTime` ON `${TABLE_NAME}` (`scanId`, `eventTime`)"
+          }
+        ],
+        "foreignKeys": []
+      },
+      {
+        "tableName": "event_watermark",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`service` TEXT NOT NULL, `position` INTEGER NOT NULL, `scanId` INTEGER NOT NULL, PRIMARY KEY(`service`))",
+        "fields": [
+          {
+            "fieldPath": "service",
+            "columnName": "service",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "position",
+            "columnName": "position",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "scanId",
+            "columnName": "scanId",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "service"
+          ]
+        },
+        "indices": [],
+        "foreignKeys": []
+      },
+      {
+        "tableName": "signal_member",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`signalRowId` INTEGER NOT NULL, `kind` INTEGER NOT NULL, `refId` INTEGER NOT NULL, PRIMARY KEY(`signalRowId`, `kind`, `refId`))",
+        "fields": [
+          {
+            "fieldPath": "signalRowId",
+            "columnName": "signalRowId",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "kind",
+            "columnName": "kind",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "refId",
+            "columnName": "refId",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "signalRowId",
+            "kind",
+            "refId"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_signal_member_kind_refId",
+            "unique": false,
+            "columnNames": [
+              "kind",
+              "refId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_signal_member_kind_refId` ON `${TABLE_NAME}` (`kind`, `refId`)"
+          }
+        ],
+        "foreignKeys": []
+      },
+      {
+        "tableName": "scan_finding",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `scanId` INTEGER NOT NULL, `ruleId` TEXT NOT NULL, `triggered` INTEGER NOT NULL, `level` TEXT NOT NULL, `category` TEXT NOT NULL, `kind` TEXT NOT NULL, `recordId` INTEGER, `service` TEXT NOT NULL, `ordinal` INTEGER NOT NULL, `alertKey` BLOB, `alertId` INTEGER, `findingJson` TEXT NOT NULL, `matchedValue` TEXT, `evidenceJson` TEXT, `row_startTimestamp` INTEGER, `row_timestampPrecision` TEXT, `row_source` TEXT, `row_category` TEXT, `row_description` TEXT, `row_details` TEXT, `row_packageName` TEXT, `row_appName` TEXT, `row_apkHash` TEXT, `row_iocIndicator` TEXT, `row_iocType` TEXT, `row_iocSource` TEXT, `row_campaignName` TEXT, `row_correlationId` TEXT, `row_attackTechniqueId` TEXT, `row_telemetrySource` TEXT)",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "scanId",
+            "columnName": "scanId",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "ruleId",
+            "columnName": "ruleId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "triggered",
+            "columnName": "triggered",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "level",
+            "columnName": "level",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "category",
+            "columnName": "category",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "kind",
+            "columnName": "kind",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "recordId",
+            "columnName": "recordId",
+            "affinity": "INTEGER",
+            "notNull": false
+          },
+          {
+            "fieldPath": "service",
+            "columnName": "service",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "ordinal",
+            "columnName": "ordinal",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "alertKey",
+            "columnName": "alertKey",
+            "affinity": "BLOB",
+            "notNull": false
+          },
+          {
+            "fieldPath": "alertId",
+            "columnName": "alertId",
+            "affinity": "INTEGER",
+            "notNull": false
+          },
+          {
+            "fieldPath": "findingJson",
+            "columnName": "findingJson",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "matchedValue",
+            "columnName": "matchedValue",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "evidenceJson",
+            "columnName": "evidenceJson",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "row.startTimestamp",
+            "columnName": "row_startTimestamp",
+            "affinity": "INTEGER",
+            "notNull": false
+          },
+          {
+            "fieldPath": "row.timestampPrecision",
+            "columnName": "row_timestampPrecision",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "row.source",
+            "columnName": "row_source",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "row.category",
+            "columnName": "row_category",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "row.description",
+            "columnName": "row_description",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "row.details",
+            "columnName": "row_details",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "row.packageName",
+            "columnName": "row_packageName",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "row.appName",
+            "columnName": "row_appName",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "row.apkHash",
+            "columnName": "row_apkHash",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "row.iocIndicator",
+            "columnName": "row_iocIndicator",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "row.iocType",
+            "columnName": "row_iocType",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "row.iocSource",
+            "columnName": "row_iocSource",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "row.campaignName",
+            "columnName": "row_campaignName",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "row.correlationId",
+            "columnName": "row_correlationId",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "row.attackTechniqueId",
+            "columnName": "row_attackTechniqueId",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "row.telemetrySource",
+            "columnName": "row_telemetrySource",
+            "affinity": "TEXT",
+            "notNull": false
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_scan_finding_recordId",
+            "unique": false,
+            "columnNames": [
+              "recordId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_scan_finding_recordId` ON `${TABLE_NAME}` (`recordId`)"
+          },
+          {
+            "name": "index_scan_finding_scanId_alertKey",
+            "unique": false,
+            "columnNames": [
+              "scanId",
+              "alertKey"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_scan_finding_scanId_alertKey` ON `${TABLE_NAME}` (`scanId`, `alertKey`)"
+          },
+          {
+            "name": "index_scan_finding_scanId_triggered",
+            "unique": false,
+            "columnNames": [
+              "scanId",
+              "triggered"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_scan_finding_scanId_triggered` ON `${TABLE_NAME}` (`scanId`, `triggered`)"
+          }
+        ],
+        "foreignKeys": []
+      },
+      {
+        "tableName": "alert",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `alertKey` BLOB NOT NULL, `ruleId` TEXT NOT NULL, `status` TEXT NOT NULL, `openedAt` INTEGER NOT NULL, `openedScanId` INTEGER NOT NULL, `lastActivityAt` INTEGER NOT NULL, `closedAt` INTEGER, `closedReason` TEXT, `closedWithCredential` INTEGER NOT NULL DEFAULT 0, `level` TEXT NOT NULL, `recordId` INTEGER, `evidenceJson` TEXT NOT NULL, `matchedValue` TEXT NOT NULL DEFAULT '')",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "alertKey",
+            "columnName": "alertKey",
+            "affinity": "BLOB",
+            "notNull": true
+          },
+          {
+            "fieldPath": "ruleId",
+            "columnName": "ruleId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "status",
+            "columnName": "status",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "openedAt",
+            "columnName": "openedAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "openedScanId",
+            "columnName": "openedScanId",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "lastActivityAt",
+            "columnName": "lastActivityAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "closedAt",
+            "columnName": "closedAt",
+            "affinity": "INTEGER",
+            "notNull": false
+          },
+          {
+            "fieldPath": "closedReason",
+            "columnName": "closedReason",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "closedWithCredential",
+            "columnName": "closedWithCredential",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "0"
+          },
+          {
+            "fieldPath": "level",
+            "columnName": "level",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "recordId",
+            "columnName": "recordId",
+            "affinity": "INTEGER",
+            "notNull": false
+          },
+          {
+            "fieldPath": "evidenceJson",
+            "columnName": "evidenceJson",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "matchedValue",
+            "columnName": "matchedValue",
+            "affinity": "TEXT",
+            "notNull": true,
+            "defaultValue": "''"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_alert_alertKey",
+            "unique": true,
+            "columnNames": [
+              "alertKey"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_alert_alertKey` ON `${TABLE_NAME}` (`alertKey`)"
+          },
+          {
+            "name": "index_alert_ruleId_status",
+            "unique": false,
+            "columnNames": [
+              "ruleId",
+              "status"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_alert_ruleId_status` ON `${TABLE_NAME}` (`ruleId`, `status`)"
+          },
+          {
+            "name": "index_alert_recordId",
+            "unique": false,
+            "columnNames": [
+              "recordId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_alert_recordId` ON `${TABLE_NAME}` (`recordId`)"
+          },
+          {
+            "name": "index_alert_status_lastActivityAt",
+            "unique": false,
+            "columnNames": [
+              "status",
+              "lastActivityAt"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_alert_status_lastActivityAt` ON `${TABLE_NAME}` (`status`, `lastActivityAt`)"
+          },
+          {
+            "name": "index_alert_status_ruleId_matchedValue_lastActivityAt",
+            "unique": false,
+            "columnNames": [
+              "status",
+              "ruleId",
+              "matchedValue",
+              "lastActivityAt"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_alert_status_ruleId_matchedValue_lastActivityAt` ON `${TABLE_NAME}` (`status`, `ruleId`, `matchedValue`, `lastActivityAt`)"
+          },
+          {
+            "name": "index_alert_status_level",
+            "unique": false,
+            "columnNames": [
+              "status",
+              "level"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_alert_status_level` ON `${TABLE_NAME}` (`status`, `level`)"
+          }
+        ],
+        "foreignKeys": []
+      }
+    ],
+    "views": [],
+    "setupQueries": [
+      "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'd35b373e95433efccf6e54a2f3185b32')"
+    ]
+  }
+}

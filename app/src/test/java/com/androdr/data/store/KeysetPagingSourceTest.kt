@@ -121,7 +121,7 @@ class KeysetPagingSourceTest {
     fun `observes only tables that exist in the current schema`() {
         val existing = f.db.openHelper.readableDatabase.query("SELECT name FROM sqlite_master WHERE type = 'table'")
             .use { c -> buildList { while (c.moveToNext()) add(c.getString(0)) } }
-        assertEquals(listOf("ScanResult", "forensic_timeline"), KeysetPagingSource.OBSERVED_TABLES.toList())
+        assertEquals(listOf("ScanResult", "forensic_timeline", "alert"), KeysetPagingSource.OBSERVED_TABLES.toList())
         assertTrue(existing.containsAll(KeysetPagingSource.OBSERVED_TABLES.toList()))
     }
 

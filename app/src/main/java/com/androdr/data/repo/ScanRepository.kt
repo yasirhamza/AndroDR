@@ -1,6 +1,10 @@
 package com.androdr.data.repo
 
 import androidx.annotation.VisibleForTesting
+import androidx.paging.Pager
+import androidx.paging.PagingConfig
+import androidx.paging.PagingData
+import com.androdr.data.db.AppDatabase
 import com.androdr.data.db.DnsEventDao
 import com.androdr.data.db.ForensicTimelineEventDao
 import com.androdr.data.db.ScanResultDao
@@ -8,9 +12,14 @@ import com.androdr.data.db.toForensicTimelineEvent
 import com.androdr.data.model.DnsEvent
 import com.androdr.data.model.ScanResult
 import com.androdr.data.store.HashKeys
+import com.androdr.data.store.KeysetPagingSource
+import com.androdr.data.store.tableChanges
 import com.androdr.ioc.IndicatorResolver
 import com.androdr.sigma.LiveRecordBuilders
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.delay
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -23,17 +32,44 @@ class ScanRepository @Inject constructor(
     private val indicatorResolver: IndicatorResolver,
     private val scanWrites: ScanWriteRepository,
     private val scanLock: ScanLock,
+    private val db: AppDatabase,
 ) {
 
     // ── Scan results ───────────────────────────────────────────────────────────
 
-    /** Emits the full scan history, newest first. */
-    val allScans: Flow<List<ScanResult>> = scanResultDao.getAllScans()
+    /**
+     * The scan history, newest first, keyset-paged on `timestamp` (spec §5.5: no capped list);
+     * re-pages when a scan completes or is deleted.
+     */
+    fun pagedScans(): Flow<PagingData<ScanResult>> =
+        Pager(PagingConfig(pageSize = SCAN_PAGE_SIZE, enablePlaceholders = false)) {
+            ScanPagingSource(db, scanResultDao)
+        }.flow
+
+    /** True while at least one scan is listed (History's empty state). */
+    val hasScans: Flow<Boolean> = scanResultDao.anyComplete()
+
+    /** The newest COMPLETE live scan (null before the first one). */
+    val latestLiveScan: Flow<ScanResult?> = scanResultDao.latestLive()
+
+    /** The two newest COMPLETE scans (the Dashboard's diff), re-read when scans change. */
+    val latestTwo: Flow<List<ScanResult>> = db.tableChanges(arrayOf("ScanResult"))
+        .map { scanResultDao.getLatestTwo() }
+        .flowOn(Dispatchers.IO)
+
+    /** The two newest COMPLETE live scans (the Dashboard's diff, spec §5.4), re-read when scans change. */
+    val latestTwoLive: Flow<List<ScanResult>> = db.tableChanges(arrayOf("ScanResult"))
+        .map { scanResultDao.livePagedAfter(Long.MAX_VALUE, 2) }
+        .flowOn(Dispatchers.IO)
+
+    /** Whether scan [id] is saved (COMPLETE). */
+    suspend fun isSaved(id: Long): Boolean = scanResultDao.completeById(id) != null
+
+    /** The COMPLETE scan listed just before [scan] (History's diff baseline), if any. */
+    suspend fun previousOf(scan: ScanResult): ScanResult? = scanResultDao.previousOf(scan.timestamp).firstOrNull()
 
     companion object {
-        /** Selects the preferred scan: first with device flags (runtime), else latest. */
-        fun List<ScanResult>.preferRuntimeScan(): ScanResult? =
-            firstOrNull { it.deviceFlags.isNotEmpty() } ?: firstOrNull()
+        private const val SCAN_PAGE_SIZE = 30
 
         /** How long a user delete waits for a retention or backfill batch to release the lock. */
         const val DELETE_LOCK_WAIT_MS = 2_000L
@@ -114,25 +150,34 @@ class ScanRepository @Inject constructor(
     }
 
     /**
-     * Deletes one scan (spec §5.1 Delete): `DELETING` first (Task D3 adds the audit row to that
-     * transaction), then its own Timeline rows, its telemetry, and the `ScanResult` row last.
-     * Returns false — deleting nothing — while a scan or import is running, or when the writer lock
-     * stays busy past [DELETE_LOCK_WAIT_MS] ("A scan is running — try again when it finishes").
+     * Deletes one scan (spec §5.4), in order:
+     *  0. refused ([DeleteResult.ScanRunning], nothing changed) while a scan or import runs
+     *     ([ScanLock.writerRunning]) or the writer lock stays busy past [DELETE_LOCK_WAIT_MS];
+     *  1. under the lock, one transaction: the persistent audit row (the scan's triggered findings as
+     *     capped (rule, level, package) entries) and `DELETING`;
+     *  2-4. without the lock: its rows, signals with their members and `scan_finding` rows (releasing
+     *     the facts they alone pinned), its telemetry, then the `ScanResult` row last.
+     * It never deletes an alert, its evidence or the fact an alert pins.
      */
-    suspend fun deleteScan(scanId: Long): Boolean {
-        underLockFirst { scanWrites.markForDelete(scanId) } ?: return false
-        scanWrites.completeDelete(scanId)
-        return true
+    suspend fun deleteScan(scanId: Long): DeleteResult {
+        val marked = underLockFirst { scanWrites.markForAuditedDelete(scanId) } ?: return DeleteResult.ScanRunning
+        if (marked) scanWrites.completeDelete(scanId)
+        return DeleteResult.Done
     }
 
     /**
-     * "Clear all": like [deleteScan] for every scan existing when it starts (a scan begun after its
-     * first transaction survives); persistent audit rows survive.
+     * "Clear all" (spec §5.4): refused like [deleteScan]; otherwise its first transaction writes one
+     * capped audit row over every COMPLETE scan and sets every scan `DELETING`, remembering those ids
+     * and `clearMaxRowId`, which it saves (DataStore) before releasing the lock. It then deletes those
+     * scans only, and the non-persistent scan-less rows with `id <= clearMaxRowId`. A scan begun after
+     * the first transaction survives; persistent rows (audit, closure) and alerts survive.
      */
-    suspend fun deleteAllScans(): Boolean {
-        val ids = underLockFirst { scanWrites.markAllForDelete() } ?: return false
-        scanWrites.completeDeleteAll(ids)
-        return true
+    suspend fun deleteAllScans(): DeleteResult {
+        val snapshot = underLockFirst {
+            scanWrites.markAllForAuditedDelete().also { scanWrites.saveClearMark(it.clearMaxRowId) }
+        } ?: return DeleteResult.ScanRunning
+        scanWrites.completeDeleteAll(snapshot)
+        return DeleteResult.Done
     }
 
     /** How long a user delete waits for the writer lock; tests shorten it. */
@@ -166,4 +211,37 @@ class ScanRepository @Inject constructor(
         }
         return true
     }
+}
+
+/** What a user delete did (spec §5.4). */
+sealed interface DeleteResult {
+    /** The delete ran (or there was nothing left to delete). */
+    data object Done : DeleteResult
+
+    /** Refused, nothing changed: a scan or import holds the writer lock ("try again when it finishes"). */
+    data object ScanRunning : DeleteResult
+}
+
+/** A scan list position: `(timestamp, id)`, newest first. */
+data class ScanCursor(val timestamp: Long, val id: Long)
+
+/**
+ * COMPLETE scans newest first, keyset on `(timestamp, id)` ([ScanResultDao.pagedAfter]), so equal
+ * timestamps never lose a scan at a page boundary. Observes `ScanResult`.
+ */
+internal class ScanPagingSource(db: AppDatabase, private val dao: ScanResultDao) :
+    KeysetPagingSource<ScanCursor, ScanResult>(db, KeysetPagingSource.OBSERVED_TABLES) {
+    override fun keyOf(item: ScanResult) = ScanCursor(item.timestamp, item.id)
+
+    // The refresh key is inclusive: start just past it in descending order (same timestamp, id + 1).
+    override suspend fun loadFrom(from: ScanCursor?, size: Int) = slice(
+        if (from == null) dao.pagedAfter(Long.MAX_VALUE, Long.MAX_VALUE, size)
+        else dao.pagedAfter(from.timestamp, from.id + 1, size)
+    )
+
+    override suspend fun loadAfter(after: ScanCursor, size: Int) =
+        slice(dao.pagedAfter(after.timestamp, after.id, size))
+
+    override suspend fun loadBefore(before: ScanCursor, size: Int) =
+        slice(dao.pagedBefore(before.timestamp, before.id, size))
 }

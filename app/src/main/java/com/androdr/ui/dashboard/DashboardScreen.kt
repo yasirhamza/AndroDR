@@ -44,6 +44,8 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -56,7 +58,9 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.androdr.R
 import com.androdr.data.model.RiskLevel
-import com.androdr.data.model.ScanResult
+import com.androdr.data.model.ScanWithFindings
+import com.androdr.data.repo.CurrentFindingsSummary
+import androidx.compose.ui.res.pluralStringResource
 import com.androdr.scanner.ScanProgress
 import com.androdr.ui.theme.androdrColors
 import java.text.SimpleDateFormat
@@ -67,8 +71,10 @@ import java.util.Locale
 @Composable
 fun DashboardScreen(
     viewModel: DashboardViewModel = hiltViewModel(),
+    alertsViewModel: DashboardAlertsViewModel = hiltViewModel(),
     onNavigate: (String) -> Unit
 ) {
+    val currentFindings by viewModel.currentFindings.collectAsStateWithLifecycle()
     val latestScan by viewModel.latestScan.collectAsStateWithLifecycle()
     val isScanning by viewModel.isScanning.collectAsStateWithLifecycle()
     val isUpdatingIntel by viewModel.isUpdatingIntel.collectAsStateWithLifecycle()
@@ -78,6 +84,7 @@ fun DashboardScreen(
     val hasUsageStatsPermission by viewModel.hasUsageStatsPermission.collectAsStateWithLifecycle()
 
     val snackbarHostState = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
 
     LaunchedEffect(Unit) {
         viewModel.iocErrorEvent.collect { message ->
@@ -139,7 +146,7 @@ fun DashboardScreen(
                 }
             }
 
-            RiskLevelCard(latestScan = latestScan)
+            RiskLevelCard(latestScan = latestScan, current = currentFindings)
 
             // Warn the user when the previous scan failed to run every check.
             // Without this banner the app would display "Your phone looks secure"
@@ -179,18 +186,26 @@ fun DashboardScreen(
                 UsageAccessBanner(onOpenSettings = { viewModel.openUsageStatsSettings() })
             }
 
-            PostScanGuidance(riskLevel = latestScan?.overallRiskLevel, latestScan = latestScan)
+            PostScanGuidance(latestScan = latestScan, current = currentFindings)
 
             AnimatedVisibility(
-                visible = scanDiff != null && scanDiff!!.newFindings.isNotEmpty(),
+                visible = (scanDiff?.newCount ?: 0) > 0,
                 enter = fadeIn(),
                 exit = fadeOut()
             ) {
                 scanDiff?.let { diff ->
-                    val newCount = diff.newFindings.size
+                    val newCount = diff.newCount
                     DiffBanner(newCount = newCount)
                 }
             }
+
+            // Open alerts (spec §5.4): they stay open until a person closes them, with the device
+            // credential; grouped by rule and matched value, re-surfaced by latest activity.
+            OpenAlertsCard(
+                viewModel = alertsViewModel,
+                current = currentFindings,
+                onMessage = { message -> scope.launch { snackbarHostState.showSnackbar(message) } },
+            )
 
             // Run Scan button — when idle. When a scan is running we show a
             // full progress card instead (stage label + linear progress bar +
@@ -296,74 +311,65 @@ fun DashboardScreen(
 }
 
 @Composable
-private fun PostScanGuidance(riskLevel: RiskLevel?, latestScan: ScanResult?) {
+private fun PostScanGuidance(latestScan: ScanWithFindings?, current: CurrentFindingsSummary) {
     val colors = MaterialTheme.androdrColors
-    val hasCriticalAppRisks = latestScan?.appRisks?.any {
-        it.triggered && it.level.lowercase() == "critical"
-    } ?: false
-    // A chain of events is the strongest evidence a scan produces; say so (#350).
-    val hasChains = latestScan?.activityChains?.any { it.triggered } ?: false
-
-    val (message, icon, color) = when (riskLevel) {
-        RiskLevel.CRITICAL -> Triple(
-            if (hasCriticalAppRisks) {
-                stringResource(R.string.guidance_critical)
-            } else {
-                stringResource(R.string.guidance_critical_device)
-            },
-            Icons.Filled.Error,
-            colors.critical
-        )
-        RiskLevel.HIGH -> Triple(
-            if (hasChains) stringResource(R.string.guidance_chains) else stringResource(R.string.guidance_high),
-            Icons.Filled.Warning,
-            colors.high
-        )
-        RiskLevel.MEDIUM -> Triple(
-            stringResource(R.string.guidance_medium),
-            Icons.Filled.Info,
-            colors.medium
-        )
-        RiskLevel.LOW -> Triple(
-            stringResource(R.string.guidance_low),
-            Icons.Filled.CheckCircle,
-            colors.low
-        )
-        null -> Triple(
-            stringResource(R.string.guidance_low),
-            Icons.Filled.CheckCircle,
-            colors.neutral
+    val guidance = DashboardViewModel.guidanceFor(
+        scanRisk = latestScan?.overallRiskLevel,
+        hasCriticalAppRisks = latestScan?.appRisks?.any { it.triggered && it.level.lowercase() == "critical" } ?: false,
+        // A chain of events is the strongest evidence a scan produces; say so (#350).
+        hasChains = latestScan?.activityChains?.any { it.triggered } ?: false,
+        openAlertCount = current.openAlertCount,
+        highestOpenAlert = current.highestOpenAlertLevel,
+    ) ?: return
+    val alertColor = when (current.highestOpenAlertLevel) {
+        RiskLevel.CRITICAL -> colors.critical
+        RiskLevel.HIGH -> colors.high
+        else -> colors.medium
+    }
+    val (message, icon, color) = when (guidance) {
+        Guidance.CRITICAL -> Triple(stringResource(R.string.guidance_critical), Icons.Filled.Error, colors.critical)
+        Guidance.CRITICAL_DEVICE ->
+            Triple(stringResource(R.string.guidance_critical_device), Icons.Filled.Error, colors.critical)
+        Guidance.CHAINS -> Triple(stringResource(R.string.guidance_chains), Icons.Filled.Warning, colors.high)
+        Guidance.HIGH -> Triple(stringResource(R.string.guidance_high), Icons.Filled.Warning, colors.high)
+        Guidance.MEDIUM -> Triple(stringResource(R.string.guidance_medium), Icons.Filled.Info, colors.medium)
+        Guidance.LOW -> Triple(stringResource(R.string.guidance_low), Icons.Filled.CheckCircle, colors.low)
+        // Never "secure" while alerts are open: name how many and the most severe (review I2).
+        Guidance.OPEN_ALERTS -> Triple(
+            pluralStringResource(
+                R.plurals.guidance_open_alerts, current.openAlertCount, current.openAlertCount,
+                current.highestOpenAlertLevel?.name ?: RiskLevel.LOW.name,
+            ),
+            Icons.Filled.Warning, alertColor,
         )
     }
-
-    if (riskLevel != null) {
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            colors = CardDefaults.cardColors(
-                containerColor = color.copy(alpha = 0.08f)
-            )
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = color.copy(alpha = 0.08f))
+    ) {
+        Row(
+            modifier = Modifier.padding(16.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Row(
-                modifier = Modifier.padding(16.dp),
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Icon(icon, contentDescription = null, tint = color, modifier = Modifier.size(24.dp))
-                Text(
-                    text = message,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-            }
+            Icon(icon, contentDescription = null, tint = color, modifier = Modifier.size(24.dp))
+            Text(
+                text = message, style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
         }
     }
 }
 
 @Suppress("LongMethod") // Compose UI layout with conditional risk display
 @Composable
-private fun RiskLevelCard(latestScan: ScanResult?) {
+private fun RiskLevelCard(latestScan: ScanWithFindings?, current: CurrentFindingsSummary) {
     val colors = MaterialTheme.androdrColors
-    val (riskColor, riskLabel) = when (latestScan?.overallRiskLevel) {
+    val openAlertCount = current.openAlertCount
+    // At least the most severe open alert (review I2): alerts are current until a person closes them.
+    val (riskColor, riskLabel) = when (
+        DashboardViewModel.displayRisk(latestScan?.overallRiskLevel, current.highestOpenAlertLevel)
+    ) {
         RiskLevel.CRITICAL -> Pair(colors.critical, "CRITICAL")
         RiskLevel.HIGH     -> Pair(colors.high, "HIGH")
         RiskLevel.MEDIUM   -> Pair(colors.medium, "MEDIUM")
@@ -404,8 +410,15 @@ private fun RiskLevelCard(latestScan: ScanResult?) {
                 }
             }
             if (latestScan == null) {
+                // Import-only: open alerts exist but no live scan, so never "no scan yet" alone.
                 Text(
-                    text = stringResource(R.string.dashboard_no_scan_yet),
+                    text = stringResource(
+                        if (openAlertCount > 0) {
+                            R.string.dashboard_no_live_scan_alerts
+                        } else {
+                            R.string.dashboard_no_scan_yet
+                        }
+                    ),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -419,6 +432,14 @@ private fun RiskLevelCard(latestScan: ScanResult?) {
                     ),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            current.highestOpenAlertLevel?.takeIf { openAlertCount > 0 }?.let { highest ->
+                Text(
+                    text = pluralStringResource(R.plurals.dashboard_open_alerts_line, openAlertCount, openAlertCount,
+                        highest.name),
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.SemiBold,
                 )
             }
         }
@@ -579,12 +600,12 @@ private fun ScanProgressCard(progress: ScanProgress, isUpdatingIntel: Boolean = 
 
 /**
  * Warning banner shown when the most recent scan completed with at least
- * one scanner failure ([ScanResult.isPartialScan] == true). Without this
+ * one scanner failure ([ScanWithFindings.isPartialScan] == true). Without this
  * banner the Dashboard would claim "Your phone looks secure" even if half
  * the scanners crashed.
  */
 @Composable
-private fun PartialScanBanner(scan: ScanResult) {
+private fun PartialScanBanner(scan: ScanWithFindings) {
     val colors = MaterialTheme.androdrColors
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -624,7 +645,7 @@ private fun PartialScanBanner(scan: ScanResult) {
 
 /** Storage warnings: the latest result not saved / only partly stored, and dropped DNS events. */
 @Composable
-private fun StorageBanners(viewModel: DashboardViewModel, latestScan: ScanResult?, isScanning: Boolean) {
+private fun StorageBanners(viewModel: DashboardViewModel, latestScan: ScanWithFindings?, isScanning: Boolean) {
     val unsaved by viewModel.latestUnsaved.collectAsStateWithLifecycle()
     val healthFailed by viewModel.storageHealthFailed.collectAsStateWithLifecycle()
     val drops by viewModel.dnsDrops.collectAsStateWithLifecycle()

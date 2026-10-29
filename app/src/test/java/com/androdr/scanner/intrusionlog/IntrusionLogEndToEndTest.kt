@@ -101,11 +101,11 @@ class IntrusionLogEndToEndTest {
             assertTrue(f.w.f.reader.records(dnsFacts).any { it.fields?.get("domain") == "deep.example.com" })
             // The dns rule only matches flexispy.com, so the deep event does not
             // add a fourth triggered finding; the duplicate connect adds no second one.
-            assertEquals(3, result.findings.count { it.triggered })
+            assertEquals(3, f.findingsOf(result.write!!.scan.id).count { it.triggered })
             assertEquals(3, result.stats.triggeredFindingCount)
-            assertTrue(result.findings.any { it.ruleId == "androdr-e2e-dns" && it.triggered })
-            assertTrue(result.findings.any { it.ruleId == "androdr-e2e-net" && it.triggered })
-            assertTrue(result.findings.any { it.ruleId == "androdr-e2e-sec" && it.triggered })
+            assertTrue(f.findingsOf(result.write!!.scan.id).any { it.ruleId == "androdr-e2e-dns" && it.triggered })
+            assertTrue(f.findingsOf(result.write!!.scan.id).any { it.ruleId == "androdr-e2e-net" && it.triggered })
+            assertTrue(f.findingsOf(result.write!!.scan.id).any { it.ruleId == "androdr-e2e-sec" && it.triggered })
         }
     }
 

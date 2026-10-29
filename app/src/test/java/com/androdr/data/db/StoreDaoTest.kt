@@ -62,7 +62,7 @@ class StoreDaoTest {
         ScanObservation(scanId = scanId, service = service, ordinal = ordinal, recordId = recordId, eventTime = 1_000L,
             source = TelemetrySource.LIVE_SCAN, capturedAt = 5L, strippedKeys = 0)
 
-    private fun scan(id: Long) = ScanResult(id = id, timestamp = id, findings = emptyList(),
+    private fun scan(id: Long) = ScanResult(id = id, timestamp = id,
         bugReportFindings = emptyList(), riskySideloadCount = 0, knownMalwareCount = 0)
 
     private fun plan(sql: String, args: List<Any?>): List<String> =
@@ -201,13 +201,25 @@ class StoreDaoTest {
         assertEquals(EventWatermark("dns_monitor", 25L, 2L), dao.get("dns_monitor"))
     }
 
+    /** Review Minor 9: the scan list's keyset is `(timestamp, id)`, so equal timestamps lose no scan. */
+    @Test
+    fun `scan pages keep two scans with the same timestamp across a page boundary`() = runBlocking {
+        val dao = db.scanResultDao()
+        for (id in listOf(10L, 11L, 12L)) dao.insert(scan(id).copy(timestamp = 5L))
+        val first = dao.pagedAfter(Long.MAX_VALUE, Long.MAX_VALUE, 1).single()
+        val second = dao.pagedAfter(first.timestamp, first.id, 1).single()
+        val third = dao.pagedAfter(second.timestamp, second.id, 1).single()
+        assertEquals(listOf(12L, 11L, 10L), listOf(first.id, second.id, third.id))
+        assertEquals(listOf(11L, 12L), dao.pagedBefore(third.timestamp, third.id, 2).map { it.id })
+    }
+
     @Test
     fun `scan state - in-progress and deleting scans are hidden from lists and sweepable`() = runBlocking {
         val dao = db.scanResultDao()
         dao.insert(scan(1L))
         dao.insertInProgress(scan(2L))
         dao.insertInProgress(scan(3L))
-        assertEquals(listOf(1L), dao.getAllScans().first().map { it.id })
+        assertEquals(listOf(1L), dao.pagedAfter(Long.MAX_VALUE, Long.MAX_VALUE, 10).map { it.id })
         assertEquals(listOf(1L), dao.getLatestTwo().map { it.id })
         assertEquals(setOf(2L, 3L), dao.sweepableIds().toSet())
         assertEquals(1, dao.complete(2L, TelemetryState.STORED))

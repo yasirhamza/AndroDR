@@ -38,7 +38,7 @@ class ScanResultOverallRiskTest {
         triggered = triggered,
     )
 
-    private fun scanOf(vararg findings: Finding) = ScanResult(
+    private fun scanOf(vararg findings: Finding) = scanWith(
         id = 1L,
         timestamp = 1711900800000,
         findings = findings.toList(),

@@ -7,7 +7,7 @@ import androidx.room.PrimaryKey
 import androidx.room.TypeConverters
 import com.androdr.data.db.Converters
 import com.androdr.sigma.Finding
-import com.androdr.sigma.FindingCategory
+
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.Transient
 
@@ -157,7 +157,6 @@ data class ScanResult(
     @PrimaryKey
     val id: Long = System.currentTimeMillis(),
     val timestamp: Long,
-    val findings: List<Finding>,
     val bugReportFindings: List<String>,
     val riskySideloadCount: Int,
     val knownMalwareCount: Int,
@@ -195,6 +194,14 @@ data class ScanResult(
     /** What the store holds for this scan; pre-store scans are [TelemetryState.NONE]. */
     @ColumnInfo(defaultValue = "NONE")
     val telemetryState: TelemetryState = TelemetryState.NONE,
+    /**
+     * How many of the scan's findings triggered (spec §5.4). The findings themselves are
+     * `scan_finding` rows, read through `FindingsRepository`; backfilled by MIGRATION_20_21.
+     */
+    @ColumnInfo(defaultValue = "0")
+    val triggeredCount: Int = 0,
+    /** The level of the scan's most severe triggered finding (lowercase), or null when none triggered. */
+    val maxLevel: String? = null,
 ) {
     /**
      * Number of entries in [scannerErrors] that are real scanner failures — every
@@ -230,56 +237,37 @@ data class ScanResult(
     val hasUnevaluatedRules: Boolean
         get() = scannerErrors.any { NotEvaluatedReason.fromSentinel(it.exception) != null }
 
-    // Overall risk driven by app threats. Device posture is a condition (not an incident)
-    // and caps at MEDIUM. NETWORK findings are included with APP_RISK since DNS IOC rules
-    // (androdr-003) use app_risk category; if future NETWORK-category rules are added,
-    // include them here.
-    @get:Ignore
-    @Transient
     /**
-     * Overall risk is the highest severity among triggered findings -- nothing else.
-     *
-     * The incident-vs-condition distinction is the rule's `category:`, and it is
-     * applied exactly once, by SeverityCapPolicy at finding creation: a posture
-     * condition arrives here already clamped to medium, so it cannot out-shout an
-     * incident. [Finding.category] is `display.category` -- which SECTION a finding
-     * is shown in -- and is presentation only. Reading it here (#364) ceilinged any
-     * incident that happened to be displayed under device posture: a critical
-     * spyware artifact on disk (androdr-020) reported MEDIUM while the same report
-     * listed it as CRITICAL, and low incidents shown under device posture
-     * (androdr-072..076) were floored up to MEDIUM. Pinned by ScanResultOverallRiskTest.
+     * Overall risk from the summary column [maxLevel]: the same ladder as
+     * [ScanWithFindings.overallRiskLevel] applies to the findings themselves, so a surface that
+     * lists only scans (History) and one that holds the findings never disagree.
      */
+    @get:Ignore
+    @Transient
     val overallRiskLevel: RiskLevel
-        get() {
-            val max = findings
-                .filter { it.triggered }
-                .maxOfOrNull { levelToScore(it.level) } ?: 0
-            return when {
-                max >= RiskLevel.CRITICAL.score -> RiskLevel.CRITICAL
-                max >= RiskLevel.HIGH.score -> RiskLevel.HIGH
-                max >= RiskLevel.MEDIUM.score -> RiskLevel.MEDIUM
-                else -> RiskLevel.LOW
-            }
-        }
-
-    @get:Ignore
-    @Transient
-    val deviceFlags: List<Finding>
-        get() = findings.filter { it.category == FindingCategory.DEVICE_POSTURE }
-
-    @get:Ignore
-    @Transient
-    val appRisks: List<Finding>
-        get() = findings.filter { it.category == FindingCategory.APP_RISK }
-
-    /** Chains of events from the correlation engine -- "Warning signs that add up" to the reader (#350). */
-    @get:Ignore
-    @Transient
-    val activityChains: List<Finding>
-        get() = findings.filter { it.category == FindingCategory.CORRELATION }
+        get() = riskOf(maxLevel?.let(::levelToScore) ?: 0)
 }
 
-private fun levelToScore(level: String): Int = when (level.lowercase()) {
+/** The lowercase level of the most severe triggered finding of [findings], or null when none triggered. */
+fun maxTriggeredLevel(findings: Iterable<Finding>): String? =
+    findings.filter { it.triggered }.maxByOrNull { levelToScore(it.level) }?.level?.lowercase()
+
+/** The more severe of two levels (null when both are null). */
+fun moreSevereLevel(a: String?, b: String?): String? = when {
+    a == null -> b?.lowercase()
+    b == null -> a.lowercase()
+    levelToScore(b) > levelToScore(a) -> b.lowercase()
+    else -> a.lowercase()
+}
+
+internal fun riskOf(max: Int): RiskLevel = when {
+    max >= RiskLevel.CRITICAL.score -> RiskLevel.CRITICAL
+    max >= RiskLevel.HIGH.score -> RiskLevel.HIGH
+    max >= RiskLevel.MEDIUM.score -> RiskLevel.MEDIUM
+    else -> RiskLevel.LOW
+}
+
+internal fun levelToScore(level: String): Int = when (level.lowercase()) {
     "critical" -> RiskLevel.CRITICAL.score
     "high" -> RiskLevel.HIGH.score
     "medium" -> RiskLevel.MEDIUM.score

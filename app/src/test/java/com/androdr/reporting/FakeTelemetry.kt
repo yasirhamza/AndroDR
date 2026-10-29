@@ -1,7 +1,7 @@
 package com.androdr.reporting
 
 import com.androdr.data.db.ServiceSummary
-import com.androdr.data.model.ScanResult
+import com.androdr.data.model.ScanWithFindings
 import com.androdr.data.model.TelemetrySource
 import com.androdr.data.store.DecodedRecord
 import com.androdr.ioc.Campaign
@@ -39,7 +39,7 @@ internal class FakeTelemetry(
 /** The report for [scan] as text, through the one formatter entry point. */
 @Suppress("LongParameterList")
 internal fun reportText(
-    scan: ScanResult,
+    scan: ScanWithFindings,
     logLines: List<String> = emptyList(),
     mode: ExportMode = ExportMode.BOTH,
     telemetry: StoredTelemetrySource = FakeTelemetry(),
@@ -49,7 +49,7 @@ internal fun reportText(
 ): String = runBlocking {
     val out = StringWriter()
     ReportFormatter.writeScanReport(
-        out, scan, FindingsView(scan.findings, campaigns, ruleScopes, ruleCategoryById), logLines, telemetry,
+        out, scan.scan, FindingsView(scan.findings, campaigns, ruleScopes, ruleCategoryById), logLines, telemetry,
         mode, versionName = "test",
     )
     out.toString()

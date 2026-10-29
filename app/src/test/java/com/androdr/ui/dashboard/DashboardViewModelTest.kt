@@ -1,7 +1,7 @@
 package com.androdr.ui.dashboard
 
 import com.androdr.data.model.NotEvaluatedReason
-import com.androdr.data.model.ScanResult
+import com.androdr.data.model.scanWith
 import com.androdr.data.model.ScannerFailure
 import com.androdr.sigma.SigmaCorrelationEngine
 import org.junit.Assert.assertEquals
@@ -23,8 +23,8 @@ class DashboardViewModelTest {
         packages = listOf("com.flood"),
     )
 
-    private fun scan(vararg errors: ScannerFailure) = ScanResult(
-        id = 1L, timestamp = 1L, findings = emptyList(), bugReportFindings = emptyList(),
+    private fun scan(vararg errors: ScannerFailure) = scanWith(
+        id = 1L, timestamp = 1L, bugReportFindings = emptyList(),
         riskySideloadCount = 0, knownMalwareCount = 0, scannerErrors = errors.toList(),
     )
 

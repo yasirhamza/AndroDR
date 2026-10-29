@@ -54,8 +54,7 @@ class TimelineRowDeleterTest {
             row(createdAt = 10L) to { deleter.olderThan(11L) },
             row(source = "legacy") to { deleter.byIds(idsOf("legacy")) },
             row(scan = 7L) to { deleter.byScanId(7L) },
-            row(scan = 404L) to { deleter.unownedNonPersistent() },
-            row(scan = -1L) to { deleter.unownedNonPersistent() },
+            row(scan = -1L) to { deleter.scanLessThrough(Long.MAX_VALUE) },
         )
         for ((r, delete) in paths) {
             pinnedOrphan(r)
@@ -102,7 +101,7 @@ class TimelineRowDeleterTest {
         row(createdAt = 10L) to { deleter.olderThan(11L) },
         row(source = "legacy") to { deleter.byIds(idsOf("legacy")) },
         row(scan = 7L) to { deleter.byScanId(7L) },
-        row(scan = 404L) to { deleter.unownedNonPersistent() },
+        row(scan = -1L) to { deleter.scanLessThrough(Long.MAX_VALUE) },
     )
 
     /** Ids of the rows of [source] (the legacy cleanup deletes by id). */
@@ -182,20 +181,31 @@ class TimelineRowDeleterTest {
         assertEquals(listOf("fresh", "interrupted"), dao.getAllForExport().map { it.description }.sorted())
     }
 
+    /**
+     * Spec §5.4: "Clear all" removes only the non-persistent scan-less rows that existed at its first
+     * transaction (`id <= clearMaxRowId`); a scan's own rows (that scan's delete takes them) and rows
+     * written later survive.
+     */
     @Test
-    fun `clear-all keeps rows of a scan that still exists`() = runBlocking {
+    fun `clear-all removes scan-less rows up to clearMaxRowId only`() = runBlocking {
         f.scan(7L, ScanState.COMPLETE)
-        f.db.forensicTimelineEventDao().insert(row(scan = 7L))
-        f.db.forensicTimelineEventDao().insert(row(scan = -1L))
-        f.db.withTransaction { deleter.unownedNonPersistent() }
-        assertEquals(listOf(7L), f.db.forensicTimelineEventDao().getAllForExport().map { it.scanResultId })
+        val dao = f.db.forensicTimelineEventDao()
+        dao.insert(row(scan = 7L))
+        dao.insert(row(scan = 404L).copy(description = "orphan of a gone scan")) // review m5: removed too
+        val old = dao.insert(row(scan = -1L).copy(description = "old live"))
+        dao.insert(row(scan = -1L).copy(description = "later live"))
+        f.db.withTransaction { deleter.scanLessThrough(old) }
+        assertEquals("the gone scan's leftover row is removed", 0L,
+            f.count("SELECT COUNT(*) FROM forensic_timeline WHERE scanResultId = 404"))
+        assertEquals(listOf(7L to "d", -1L to "later live"),
+            dao.getAllForExport().map { it.scanResultId to it.description })
     }
 
     @Test
     fun `persistent rows survive scan deletion and clear-all, and keep their pin`() = runBlocking {
         pinnedOrphan(row(scan = 7L).copy(persistent = true))
         f.db.withTransaction { deleter.byScanId(7L) }
-        f.db.withTransaction { deleter.unownedNonPersistent() }
+        f.db.withTransaction { deleter.scanLessThrough(Long.MAX_VALUE) }
         f.db.withTransaction { deleter.olderThan(Long.MAX_VALUE) }
         assertEquals(1L, f.count("SELECT COUNT(*) FROM forensic_timeline"))
         assertEquals(1L, facts())
@@ -205,7 +215,7 @@ class TimelineRowDeleterTest {
     fun `no production code calls a raw forensic_timeline delete except TimelineRowDeleter`() {
         val root = listOf(File("src/main/java/com/androdr"), File("app/src/main/java/com/androdr"))
             .first { it.isDirectory }
-        val raw = Regex("\\.(deleteOlderThan|deleteByIds|deleteByScanId|deleteUnownedNonPersistent)\\(")
+        val raw = Regex("\\.(deleteOlderThan|deleteByIds|deleteByScanId|deleteScanLessThrough)\\(")
         val offenders = root.walkTopDown().filter { it.extension == "kt" && it.name != "TimelineRowDeleter.kt" }
             .flatMap { file ->
                 file.readLines().withIndex()

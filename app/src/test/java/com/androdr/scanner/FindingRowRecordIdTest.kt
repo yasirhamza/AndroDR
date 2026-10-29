@@ -61,7 +61,7 @@ class FindingRowRecordIdTest {
         val zip = IntrusionLogZips.zip("2026-08-22.txt" to securityLines(5_003, hitFrom = 5_001))
         IntrusionLogZips.fixture(ilEngine) { zip }.use { f ->
             val result = f.orchestrator.analyzeIntrusionLog(uri)
-            assertEquals(listOf(5_001, 5_002), result.findings.map { it.ordinal })
+            assertEquals(listOf(5_001, 5_002), f.findingsOf(result.write!!.scan.id).map { it.ordinal })
             assertResolvable(f, expectedRows = 2)
         }
     }
@@ -84,7 +84,7 @@ class FindingRowRecordIdTest {
             "package_name", "com.example.alpha", "medium"))
         OrchestratorFixture(engine = engine, bugReportAnalyzer = BugReportFixtures.analyzer()).use { f ->
             val result = f.orchestrator.analyzeBugReport(uri)
-            val hits = result.findings.count { it.triggered }
+            val hits = f.findingsOf(result.write!!.scan.id).count { it.triggered }
             assertTrue("the fixture has alpha install-history records", hits >= 1)
             assertResolvable(f, expectedRows = hits)
         }

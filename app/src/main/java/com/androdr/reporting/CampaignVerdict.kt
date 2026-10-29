@@ -1,7 +1,7 @@
 package com.androdr.reporting
 
 import com.androdr.data.model.NotEvaluatedReason
-import com.androdr.data.model.ScanResult
+import com.androdr.data.model.ScanWithFindings
 import com.androdr.data.model.TelemetrySource
 import com.androdr.ioc.Campaign
 import com.androdr.sigma.Evidence
@@ -42,7 +42,7 @@ private val CAMPAIGN_KEY = Regex("^[a-z0-9_-]{1,32}$")
  * observation in the scan that is not dated after the import (a future-dated one would push
  * genuine hits out of the window), else the scan time.
  */
-internal fun campaignReferenceTime(scan: ScanResult, latestImportedEvent: Long?): Long {
+internal fun campaignReferenceTime(scan: ScanWithFindings, latestImportedEvent: Long?): Long {
     if (scan.source == TelemetrySource.LIVE_SCAN) return scan.timestamp
     return latestImportedEvent
         ?: scan.appRisks.mapNotNull { (it.evidence as? Evidence.IocMatch)?.observedAt }
@@ -57,6 +57,13 @@ private fun Finding.isPatchLevel(ruleCategoryById: Map<String, String>): Boolean
 private data class CampaignHit(val time: Long, val text: String)
 
 /**
+ * The hit a verdict names: the latest, and among equally latest ones the greatest text — a total
+ * order, so the named indicator never depends on list order (review Minor C: the folded report
+ * lists findings in fold order, not arrival order).
+ */
+private val LATEST_HIT = compareBy<CampaignHit>({ it.time }, { it.text })
+
+/**
  * The only place a campaign verdict is computed: the section rows and the summary's
  * "Campaign detections" / "Campaign exposure (unpatched)" lines both render from this list.
  *
@@ -66,7 +73,7 @@ private data class CampaignHit(val time: Long, val text: String)
  */
 @Suppress("CyclomaticComplexMethod")
 internal fun campaignVerdicts(
-    scan: ScanResult,
+    scan: ScanWithFindings,
     campaigns: List<Campaign>,
     referenceTime: Long,
     ruleCategoryById: Map<String, String>,
@@ -106,13 +113,13 @@ internal fun campaignVerdicts(
         val tagged = scan.findings.filter { it.triggered && key in tagKeys(it) }
         val (patchLevel, evidence) = tagged.partition { it.isPatchLevel(ruleCategoryById) }
         val (recent, old) = hitsByKey[key].orEmpty().partition { referenceTime - it.time <= CAMPAIGN_HIT_WINDOW_MS }
-        val latestOld = old.maxByOrNull { it.time }
+        val latestOld = old.maxWithOrNull(LATEST_HIT)
         val coverage = coverageOf(key)
         fun verdict(state: CampaignVerdict.State, detail: String, earlierHit: String? = null) =
             CampaignVerdict(key, label, state, detail, earlierHit, coverage)
         when {
             evidence.isNotEmpty() -> verdict(CampaignVerdict.State.DETECTED, evidence.first().title)
-            recent.isNotEmpty() -> verdict(CampaignVerdict.State.DETECTED, recent.maxBy { it.time }.text)
+            recent.isNotEmpty() -> verdict(CampaignVerdict.State.DETECTED, recent.maxWith(LATEST_HIT).text)
             live && patchLevel.isNotEmpty() ->
                 verdict(CampaignVerdict.State.EXPOSED, patchLevel.first().title, earlierHit = latestOld?.text)
             latestOld != null -> verdict(CampaignVerdict.State.EARLIER_HIT, latestOld.text)
@@ -188,7 +195,7 @@ private fun ReportOut.appendFixes(fixes: List<String>) {
  */
 internal fun ReportOut.appendCampaignRows(
     verdicts: List<CampaignVerdict>,
-    scan: ScanResult,
+    scan: ScanWithFindings,
     referenceFromLog: Boolean,
 ) {
     val live = scan.source == TelemetrySource.LIVE_SCAN

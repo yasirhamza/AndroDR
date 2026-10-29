@@ -69,7 +69,7 @@ internal class OrchestratorFixture(
     /** A mock unless given; a real one reads the URI through [context] (see [serving]). */
     val intrusionLogAnalyzer: IntrusionLogAnalyzer = intrusionLogAnalyzer ?: mockk(relaxed = true)
 
-    val writer by lazy { ChunkedScanWriter(engine, w.store, w.repo, w.preflight, w.health) }
+    val writer by lazy { ChunkedScanWriter(engine, w.store, w.repo, w.f.findings, w.preflight, w.health) }
 
     init {
         // DnsVpnService.isRunning (JVM-global, defaults false) adds a DnsMonitorOff entry otherwise.
@@ -109,6 +109,9 @@ internal class OrchestratorFixture(
     suspend fun scans(): List<ScanResult> = db.scanResultDao().getLatestTwo()
 
     fun count(sql: String): Long = w.count(sql)
+
+    /** Every finding of COMPLETE scan [scanId], read back from `scan_finding`. */
+    suspend fun findingsOf(scanId: Long) = w.findingsOf(scanId)
 
     companion object {
         /** A minimal live app record. */

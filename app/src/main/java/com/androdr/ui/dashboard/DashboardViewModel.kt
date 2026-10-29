@@ -5,13 +5,15 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.androdr.data.db.IndicatorDao
 import com.androdr.data.model.NotEvaluatedReason
-import com.androdr.data.model.ScanResult
+import com.androdr.data.model.RiskLevel
+import com.androdr.data.model.ScanWithFindings
 import com.androdr.data.model.TelemetryState
+import com.androdr.data.repo.CurrentFindingsSummary
+import com.androdr.data.repo.FindingsRepository
 import com.androdr.data.repo.ScanRepository
 import com.androdr.data.store.DnsDropLog
 import com.androdr.data.store.DnsDropState
 import com.androdr.data.store.StorageHealthFlag
-import com.androdr.data.repo.ScanRepository.Companion.preferRuntimeScan
 import com.androdr.ioc.IntelRefresher
 import com.androdr.ioc.IocDatabase
 import com.androdr.scanner.ScanOrchestrator
@@ -27,7 +29,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -37,6 +38,7 @@ import javax.inject.Inject
 class DashboardViewModel @Inject constructor(
     private val orchestrator: ScanOrchestrator,
     private val repository: ScanRepository,
+    private val findings: FindingsRepository,
     private val indicatorDao: IndicatorDao,
     private val iocDatabase: IocDatabase,
     private val intelRefresher: IntelRefresher,
@@ -45,16 +47,24 @@ class DashboardViewModel @Inject constructor(
     @ApplicationContext private val context: Context
 ) : ViewModel() {
 
-    // Prefer the latest runtime scan (has device posture flags) over bugreport analysis
     /**
      * The scan that just ran but is not in history (its write failed; only the in-memory result exists).
      * It stands in for the latest scan so an older clean scan never reads as the answer for it.
      */
-    private val _unsavedScan = MutableStateFlow<ScanResult?>(null)
+    private val _unsavedScan = MutableStateFlow<ScanWithFindings?>(null)
 
-    val latestScan: StateFlow<ScanResult?> = combine(repository.allScans, _unsavedScan) { scans, unsaved ->
-        resolveLatest(scans, unsaved)
+    /** The latest live scan with its findings (live state, spec §5.4), or the unsaved in-memory one. */
+    val latestScan: StateFlow<ScanWithFindings?> = combine(findings.latestLive(), _unsavedScan) { live, unsaved ->
+        resolveLatest(live, unsaved)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
+    /**
+     * Current findings (spec §5.4): the latest live scan's triggered state findings and the OPEN
+     * alerts; [CurrentFindingsSummary.count] is the dashboard's count (the alerts card renders it
+     * through [DashboardAlertsViewModel.current]).
+     */
+    val currentFindings: StateFlow<CurrentFindingsSummary> = findings.current()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), CurrentFindingsSummary.EMPTY)
 
     /** True while [latestScan] is a result that could not be saved at all. */
     val latestUnsaved: StateFlow<Boolean> = _unsavedScan.map { it != null }
@@ -116,10 +126,13 @@ class DashboardViewModel @Inject constructor(
         UsageStatsPermission.openSettings(context)
     }
 
-    val scanDiff: StateFlow<ScanOrchestrator.ScanDiff?> = repository.allScans
-        .map { scans ->
-            if (scans.size >= 2) orchestrator.computeDiff(scans[0], scans[1]) else null
-        }
+    /**
+     * The diff between the two newest LIVE scans (spec §5.4: imports never displace live state),
+     * computed from rule counts in SQL with a bounded sample ([ScanOrchestrator.boundedDiff]): an
+     * import of any size is never read here (review C1).
+     */
+    val scanDiff: StateFlow<ScanOrchestrator.ScanDiff?> = repository.latestTwoLive
+        .map { scans -> if (scans.size >= 2) ScanOrchestrator.boundedDiff(findings, scans[0], scans[1]) else null }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
     val matchedDnsCount: StateFlow<Int> = repository.matchedDnsEvents
@@ -158,7 +171,7 @@ class DashboardViewModel @Inject constructor(
                 }
                 val result = orchestrator.runFullScan()
                 // A history read that fails leaves the state as it was: neither "saved" nor "unsaved" is known.
-                outcomeOf(result, readPersisted { repository.allScans.first() })?.let { outcome ->
+                outcomeOf(result, readPersisted { repository.isSaved(result.id) })?.let { outcome ->
                     _unsavedScan.value = outcome.unsaved
                     if (outcome.clearHealthFlag) storageHealth.clear()
                 }
@@ -191,13 +204,17 @@ class DashboardViewModel @Inject constructor(
         /**
          * [NOT_SAVED]: the latest result exists only in memory, or the "findings could not be saved"
          * flag is set. [PARTLY_STORED]: the latest scan is saved but its [TelemetryState] is FAILED
+         * (or FAILED_PARTIAL_RETENTION)
          * (some records were not stored; findings are complete). Nothing while a scan runs.
          */
-        fun storageBanner(scan: ScanResult?, isScanning: Boolean, unsaved: Boolean, healthFailed: Boolean) = when {
+        fun storageBanner(
+            scan: ScanWithFindings?, isScanning: Boolean, unsaved: Boolean, healthFailed: Boolean,
+        ) = when {
             isScanning -> StorageBanner.NONE
             unsaved -> StorageBanner.NOT_SAVED
         healthFailed -> StorageBanner.EARLIER_SCAN_SHOWN
-            scan?.telemetryState == TelemetryState.FAILED -> StorageBanner.PARTLY_STORED
+            scan?.telemetryState == TelemetryState.FAILED ||
+                scan?.telemetryState == TelemetryState.FAILED_PARTIAL_RETENTION -> StorageBanner.PARTLY_STORED
             else -> StorageBanner.NONE
         }
 
@@ -208,7 +225,7 @@ class DashboardViewModel @Inject constructor(
          * the packages and the cause. Separate from the scanner-failure banner. Empty
          * while a scan runs.
          */
-        fun correlationIncomplete(scan: ScanResult?, isScanning: Boolean): List<String> =
+        fun correlationIncomplete(scan: ScanWithFindings?, isScanning: Boolean): List<String> =
             if (isScanning || scan == null) {
                 emptyList()
             } else {
@@ -217,20 +234,51 @@ class DashboardViewModel @Inject constructor(
                     .mapNotNull { it.message }
             }
 
+        /**
+         * The Dashboard's risk badge (review I2): at least the most severe OPEN alert, since alerts are
+         * current until a person closes them (spec §5.4). Null when there is neither a scan nor an alert.
+         */
+        fun displayRisk(scanRisk: RiskLevel?, highestOpenAlert: RiskLevel?): RiskLevel? =
+            listOfNotNull(scanRisk, highestOpenAlert).maxByOrNull { it.score }
+
+        /**
+         * Which guidance the Dashboard shows (review I2). With alerts open, a LOW or MEDIUM scan, or a
+         * scan less severe than the open alerts, never reads as "secure": the open-alerts guidance,
+         * naming their count and highest level, takes its place. Null: no guidance card.
+         */
+        @Suppress("LongParameterList")
+        fun guidanceFor(
+            scanRisk: RiskLevel?, hasCriticalAppRisks: Boolean, hasChains: Boolean,
+            openAlertCount: Int, highestOpenAlert: RiskLevel?,
+        ): Guidance? {
+            val alertsDominate = openAlertCount > 0 && (scanRisk == null ||
+                scanRisk.score <= RiskLevel.MEDIUM.score ||
+                (highestOpenAlert != null && highestOpenAlert.score > scanRisk.score))
+            return when {
+                alertsDominate -> Guidance.OPEN_ALERTS
+                scanRisk == RiskLevel.CRITICAL ->
+                    if (hasCriticalAppRisks) Guidance.CRITICAL else Guidance.CRITICAL_DEVICE
+                scanRisk == RiskLevel.HIGH -> if (hasChains) Guidance.CHAINS else Guidance.HIGH
+                scanRisk == RiskLevel.MEDIUM -> Guidance.MEDIUM
+                scanRisk == RiskLevel.LOW -> Guidance.LOW
+                else -> null
+            }
+        }
+
         /** The unsaved in-memory result wins over history: an older clean scan must not answer for it. */
-        fun resolveLatest(persisted: List<ScanResult>, unsaved: ScanResult?): ScanResult? =
-            unsaved ?: persisted.preferRuntimeScan()
+        fun resolveLatest(persisted: ScanWithFindings?, unsaved: ScanWithFindings?): ScanWithFindings? =
+            unsaved ?: persisted
 
         /** What a finished run means for the Dashboard state. */
-        class ScanOutcome(val unsaved: ScanResult?, val clearHealthFlag: Boolean)
+        class ScanOutcome(val unsaved: ScanWithFindings?, val clearHealthFlag: Boolean)
 
-        /** Null when history could not be read ([persisted] null): nothing can be concluded. */
-        fun outcomeOf(result: ScanResult, persisted: List<ScanResult>?): ScanOutcome? =
-            persisted?.let { ScanOutcome(unsavedOrNull(result, it), shouldClearHealthFlag(result, it)) }
+        /** Null when history could not be read ([saved] null): nothing can be concluded. */
+        fun outcomeOf(result: ScanWithFindings, saved: Boolean?): ScanOutcome? =
+            saved?.let { ScanOutcome(unsavedOrNull(result, it), shouldClearHealthFlag(result, it)) }
 
         /** Reads history; a failed read (the failure mode this feature exists for) gives null. */
         @Suppress("TooGenericExceptionCaught", "SwallowedException")
-        suspend fun readPersisted(read: suspend () -> List<ScanResult>): List<ScanResult>? = try {
+        suspend fun <T : Any> readPersisted(read: suspend () -> T): T? = try {
             read()
         } catch (e: kotlinx.coroutines.CancellationException) {
             throw e
@@ -239,12 +287,11 @@ class DashboardViewModel @Inject constructor(
         }
 
         /** [result] when no saved scan has its id (the write failed), else null. */
-        fun unsavedOrNull(result: ScanResult, persisted: List<ScanResult>): ScanResult? =
-            result.takeIf { r -> persisted.none { it.id == r.id } }
+        fun unsavedOrNull(result: ScanWithFindings, saved: Boolean): ScanWithFindings? = result.takeIf { !saved }
 
         /** A scan that was saved with all its records proves storage works again. */
-        fun shouldClearHealthFlag(result: ScanResult, persisted: List<ScanResult>): Boolean =
-            unsavedOrNull(result, persisted) == null && result.telemetryState != TelemetryState.FAILED
+        fun shouldClearHealthFlag(result: ScanWithFindings, saved: Boolean): Boolean =
+            saved && result.telemetryState != TelemetryState.FAILED
 
         /**
          * A manual scan refreshes threat intel first, but only if the last
@@ -255,6 +302,9 @@ class DashboardViewModel @Inject constructor(
         private const val PRE_SCAN_REFRESH_THROTTLE_MS = 60L * 60 * 1000 // 1 hour
     }
 }
+
+/** The Dashboard's guidance card ([DashboardViewModel.guidanceFor]). */
+enum class Guidance { CRITICAL, CRITICAL_DEVICE, CHAINS, HIGH, MEDIUM, LOW, OPEN_ALERTS }
 
 /** Which storage warning the Dashboard shows, if any. */
 enum class StorageBanner {

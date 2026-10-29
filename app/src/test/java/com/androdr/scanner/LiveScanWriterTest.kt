@@ -38,7 +38,7 @@ class LiveScanWriterTest {
     private fun repo() = ScanRepository(
         scanResultDao = f.db.scanResultDao(), dnsEventDao = f.db.dnsEventDao(),
         forensicTimelineEventDao = f.timelineDao, indicatorResolver = f.indicatorResolver,
-        scanWrites = f.w.repo, scanLock = ScanLock(),
+        scanWrites = f.w.repo, scanLock = ScanLock(), db = f.db,
     )
 
     private fun dns(domain: String, reason: String? = null) =

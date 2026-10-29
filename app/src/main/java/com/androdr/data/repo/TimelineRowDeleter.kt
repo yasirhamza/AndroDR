@@ -26,9 +26,25 @@ class TimelineRowDeleter @Inject constructor(
     private val store: TelemetryStore,
     private val members: SignalMemberDao,
 ) {
-    /** The 30-day prune of non-persistent rows (audit/closure rows are kept). */
-    suspend fun olderThan(cutoff: Long) =
-        delete(dao.recordIdsOlderThan(cutoff), dao.signalIdsOlderThan(cutoff)) { dao.deleteOlderThan(cutoff) }
+    /**
+     * The 30-day prune (spec §5.6): non-persistent `LIVE_SCAN` rows created before [cutoff], whatever
+     * their `scanResultId`, that no surviving signal's `signal_member` row ref points at. Imports and
+     * persistent (audit, closure, "import interrupted") rows are kept.
+     *
+     * Order matters: the pruned signals (those no member ref points at) lose their members first, so
+     * the member refs left are the surviving signals'; only then are the other rows' pins read and the
+     * rows deleted. Signal rows go by id only, so a signal un-referenced by this prune keeps its members
+     * until the next one (no member is left without its signal).
+     */
+    suspend fun olderThan(cutoff: Long) {
+        val signals = dao.signalIdsOlderThan(cutoff)
+        delete(chunkedIn(signals) { dao.recordIdsByIds(it) }, signals) {
+            chunkedEach(signals) { dao.deleteByIds(it) }
+            val rowPins = dao.recordIdsOlderThan(cutoff)
+            dao.deleteOlderThan(cutoff)
+            store.releaseUnpinned(rowPins)
+        }
+    }
 
     /** The rows [ids] (the one-time legacy event-row cleanup, C3). */
     suspend fun byIds(ids: List<Long>) {
@@ -42,10 +58,13 @@ class TimelineRowDeleter @Inject constructor(
     suspend fun byScanId(scanId: Long) =
         delete(dao.recordIdsByScanId(scanId), dao.signalIdsByScanId(scanId)) { dao.deleteByScanId(scanId) }
 
-    /** "Clear all": non-persistent rows that are scan-less or whose scan no longer exists. */
-    suspend fun unownedNonPersistent() = delete(
-        dao.recordIdsUnownedNonPersistent(), dao.signalIdsUnownedNonPersistent(),
-    ) { dao.deleteUnownedNonPersistent() }
+    /**
+     * "Clear all": the non-persistent scan-less rows (`scanResultId = -1`) with `id <= maxId`, the
+     * newest row id at its first transaction (spec §5.4). Rows written later survive.
+     */
+    suspend fun scanLessThrough(maxId: Long) = delete(
+        dao.recordIdsScanLessThrough(maxId), dao.signalIdsScanLessThrough(maxId),
+    ) { dao.deleteScanLessThrough(maxId) }
 
     /**
      * Removes the members of the [signals] about to go, by signal id (primary-key prefix, never a

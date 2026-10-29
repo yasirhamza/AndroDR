@@ -7,24 +7,33 @@ import java.io.File
 
 /**
  * C1 (spec §5.5, §9): no persistence cap anywhere in the scan → store → Timeline path. Every match of
- * the cap pattern in `main` must be on the Phase C allow-list: the permanent ones
+ * the cap pattern in `main` must be on the final allow-list, the permanent four
  * (`ScanResultDao.getLatestTwo`, `IndicatorDao.lookup`, the DNS monitor's
- * `DnsEventDao.getRecentEvents` / `getRecentSnapshot`) and the two D2 removes
- * (`FINDINGS_PERSIST_CAP`, `ScanResultDao.getAllScans`).
+ * `DnsEventDao.getRecentEvents` / `getRecentSnapshot`). D2 removed the last findings cap
+ * (`FINDINGS_PERSIST_CAP`, the findings top-K) and `ScanResultDao.getAllScans`' `LIMIT 50`.
  */
 class NoPersistenceCapsGateTest {
 
-    private val cap = Regex("""_PERSIST_CAP|_ROW_LIMIT|\bLIMIT\s+\d+|limit:\s*Int\s*=\s*\d+""")
+    /** Persistence caps, plus display limits (`_DISPLAY_LIMIT`), which must be named on [allowedNames]. */
+    private val cap = Regex("""_PERSIST_CAP|_ROW_LIMIT|_DISPLAY_LIMIT|\bLIMIT\s+\d+|limit:\s*Int\s*=\s*\d+""")
 
     /** Allowed queries, as `Owner.function` of the `@Query` (or function) the match belongs to. */
     private val allowedFunctions = setOf(
         "ScanResultDao.getLatestTwo", "IndicatorDao.lookup",
         "DnsEventDao.getRecentEvents", "DnsEventDao.getRecentSnapshot",
-        "ScanResultDao.getAllScans",
     )
 
-    /** Allowed identifiers: the interim findings top-K cap, removed in D2. */
-    private val allowedNames = setOf("FINDINGS_PERSIST_CAP")
+    /**
+     * Allowed identifiers: display bounds only, never persistence caps. They bound how data is shown,
+     * while every finding stays stored:
+     * - `UNSAVED_DISPLAY_LIMIT` (ruling R38): the sample of findings a full disk could not take; their
+     *   counts stay exact and the import card says how many could not be saved.
+     * - `DIFF_DISPLAY_LIMIT` (review C1): example findings per new or resolved rule in a scan diff; the
+     *   diff's counts stay exact and every finding is listed in its own scan.
+     * - `ALERT_SAMPLE_DISPLAY_LIMIT` (D3 review I5): alerts listed per report group; every alert is
+     *   counted in its group's header and "…and K more" line.
+     */
+    private val allowedNames = setOf("UNSAVED_DISPLAY_LIMIT", "DIFF_DISPLAY_LIMIT", "ALERT_SAMPLE_DISPLAY_LIMIT")
 
     private fun root(): File = listOf(File("src/main/java/com/androdr"), File("app/src/main/java/com/androdr"))
         .first { it.isDirectory }
@@ -58,11 +67,22 @@ class NoPersistenceCapsGateTest {
     }.toList()
 
     @Test
-    fun `no persistence cap outside the Phase C allow-list`() {
+    fun `no persistence cap outside the permanent allow-list`() {
         val files = root().walkTopDown().filter { it.extension == "kt" }.toList()
         assertTrue(files.size > 100)
         val bad = files.flatMap { violations(it.name, it.readText()) }
         assertTrue("persistence caps (spec §5.5):\n" + bad.joinToString("\n"), bad.isEmpty())
+    }
+
+    @Test
+    fun `the allow-list is the permanent four plus the two display bounds`() {
+        assertEquals(setOf("ScanResultDao.getLatestTwo", "IndicatorDao.lookup", "DnsEventDao.getRecentEvents",
+            "DnsEventDao.getRecentSnapshot"), allowedFunctions)
+        assertEquals(setOf("UNSAVED_DISPLAY_LIMIT", "DIFF_DISPLAY_LIMIT", "ALERT_SAMPLE_DISPLAY_LIMIT"), allowedNames)
+        assertEquals(listOf("_DISPLAY_LIMIT"),
+            violations("F.kt", "object X { const val OTHER_DISPLAY_LIMIT = 3 }").map {
+                it.substringAfter(": ").substringBefore(" (")
+            })
     }
 
     @Test
@@ -74,15 +94,16 @@ class NoPersistenceCapsGateTest {
                 fun page(limit: Int = 200): List<X>
             }
             object Caps { const val DNS_PERSIST_CAP = 1; const val INTRUSION_ROW_LIMIT = 2 }
+            object Orchestrator { fun cap() = ScanOrchestrator.FINDINGS_PERSIST_CAP }
             /** This class holds an object. */
             interface ScanResultDao {
                 fun helper() { db.query("SELECT * FROM t LIMIT 3") }
                 @Query("SELECT * FROM ScanResult LIMIT 2")
                 fun getLatestTwo(): List<X>
             }
-            val k = ScanOrchestrator.FINDINGS_PERSIST_CAP
         """.trimIndent()
-        assertEquals(listOf("LIMIT 500", "limit: Int = 200", "_PERSIST_CAP", "_ROW_LIMIT", "LIMIT 3"),
+        assertEquals("the removed findings cap is no longer allowed by name",
+            listOf("LIMIT 500", "limit: Int = 200", "_PERSIST_CAP", "_ROW_LIMIT", "_PERSIST_CAP", "LIMIT 3"),
             violations("F.kt", src).map { it.substringAfter(": ").substringBefore(" (") })
         assertEquals("a body match belongs to its enclosing function, under the real owner",
             "ScanResultDao.helper", violations("F.kt", src).last().substringAfter("(").substringBefore(")"))

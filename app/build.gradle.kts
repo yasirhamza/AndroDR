@@ -243,6 +243,8 @@ val lowHeapTest by tasks.registering(Test::class) {
     testClassesDirs = unitTest.get().testClassesDirs
     classpath = unitTest.get().classpath
     maxHeapSize = "256m"
+    // One JVM per class: each *LowHeap* gate proves its own bound, never inheriting another's heap.
+    forkEvery = 1
     filter { includeTestsMatching("*LowHeap*") }
 }
 
@@ -309,6 +311,8 @@ dependencies {
     testImplementation(libs.json.schema.validator)
     testImplementation(libs.robolectric)
     testImplementation(libs.androidx.test.core)
+    testImplementation(platform(libs.androidx.compose.bom))
+    testImplementation(libs.androidx.compose.ui.test.junit4)
     testImplementation(libs.androidx.room.testing)
     robolectricAndroidAll(libs.robolectric.android.all)
     constraints {
@@ -317,6 +321,12 @@ dependencies {
         testImplementation(libs.bouncycastle.bcprov) {
             version { strictly(libs.versions.bouncycastle.get()) }
             because("GHSA-574f-3g2m-x479, GHSA-9pwp-9qqc-pr26 (critical), GHSA-qp49-qgx5-5m26 (high): fixed in 1.85")
+        }
+        // Robolectric 4.14.1 brings guava 33.3.1-jre (test classpath only; the APK ships only
+        // listenablefuture:1.0). Gate: GuavaTestClasspathTest.
+        testImplementation(libs.guava) {
+            version { strictly(libs.versions.guava.get()) }
+            because("GHSA-xxph-c9ww-hj94 (high): fixed in 33.7.2")
         }
     }
 

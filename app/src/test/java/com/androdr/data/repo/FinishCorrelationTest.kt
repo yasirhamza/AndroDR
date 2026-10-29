@@ -71,7 +71,7 @@ class FinishCorrelationTest {
         assertEquals(rows.map { Row(it.id) }, hooks.seen.map { it.ref })
         assertEquals(listOf("app_scanner", "test", "test"), rows.map { it.source })
         assertTrue("real, distinct ids", hooks.seen.all { it.ref.id > 0 } && hooks.seen.toSet().size == 3)
-        assertEquals("no signal, scan unchanged", listOf(WriterFixture.DNS_RULE), r.scan.findings.map { it.ruleId })
+        assertEquals("no signal, scan unchanged", listOf(WriterFixture.DNS_RULE), r.findings.map { it.ruleId })
     }
 
     @Test
@@ -88,7 +88,7 @@ class FinishCorrelationTest {
             stored.filter { it.kind == SignalMember.KIND_ROW }.map { it.refId })
         assertTrue("no id list on the signal row", !signal.details.contains(memberIds.joinToString(",")))
         assertTrue("inserted after its members", signal.id > memberIds.max())
-        assertEquals(listOf(chain), r.scan.findings)
-        assertEquals(listOf(chain), w.f.db.scanResultDao().getLatestTwo().single().findings)
+        assertEquals(listOf(chain), r.findings)
+        assertEquals(listOf(chain), w.findingsOf(1L))
     }
 }

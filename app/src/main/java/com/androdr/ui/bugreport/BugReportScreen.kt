@@ -17,7 +17,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.paging.compose.collectAsLazyPagingItems
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.BugReport
 import androidx.compose.material.icons.filled.Error
@@ -52,7 +52,6 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.androdr.R
 import com.androdr.scanner.ArtifactType
-import com.androdr.scanner.ScanOrchestrator
 import com.androdr.ui.common.FindingCard
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -72,7 +71,8 @@ fun BugReportScreen(
     viewModel: BugReportViewModel = hiltViewModel(),
 ) {
     val analyzedArtifact by viewModel.analyzedArtifact.collectAsStateWithLifecycle()
-    val findings by viewModel.findings.collectAsStateWithLifecycle()
+    val findings = viewModel.findings.collectAsLazyPagingItems()
+    val shownCount by viewModel.shownCount.collectAsStateWithLifecycle()
     val importScanId by viewModel.importScanId.collectAsStateWithLifecycle()
     val intrusionSummary by viewModel.intrusionLogSummary.collectAsStateWithLifecycle()
     val isAnalyzing by viewModel.isAnalyzing.collectAsStateWithLifecycle()
@@ -111,7 +111,7 @@ fun BugReportScreen(
         uri?.let { viewModel.onFilePicked(it) }
     }
 
-    val hasResults = findings.isNotEmpty()
+    val hasResults = shownCount > 0
 
     Column(modifier = Modifier.fillMaxSize()) {
         LazyColumn(
@@ -323,18 +323,6 @@ fun BugReportScreen(
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
-                                val findingsCap = ScanOrchestrator.FINDINGS_PERSIST_CAP
-                                if (s.triggeredFindingCount > findingsCap) {
-                                    Text(
-                                        text = stringResource(
-                                            R.string.intrusion_log_summary_capped_findings,
-                                            findingsCap,
-                                            s.triggeredFindingCount
-                                        ),
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                }
                                 if (s.earliestEventMs != null && s.latestEventMs != null) {
                                     Text(
                                         text = stringResource(
@@ -418,9 +406,7 @@ fun BugReportScreen(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        val totalCount = findings.count {
-                            it.triggered && it.level.lowercase() != "informational"
-                        }
+                        val totalCount = shownCount
                         Text(
                             text = stringResource(R.string.bugreport_finding_count, totalCount),
                             style = MaterialTheme.typography.labelLarge,
@@ -442,23 +428,18 @@ fun BugReportScreen(
                     }
                 }
 
-                // SIGMA findings (evaluated by rule engine)
-                // Exclude informational-level findings from display — they appear in timeline/export only
-                val triggeredFindings = findings.filter {
-                    it.triggered && it.level.lowercase() != "informational"
+                // SIGMA findings (evaluated by rule engine), paged from the import's scan_finding rows.
+                // Informational-level findings are left out here — they appear in timeline/export only.
+                item {
+                    Text(
+                        text = stringResource(R.string.bugreport_rule_findings),
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.primary
+                    )
                 }
-                if (triggeredFindings.isNotEmpty()) {
-                    item {
-                        Text(
-                            text = stringResource(R.string.bugreport_rule_findings),
-                            style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.SemiBold,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                    }
-                    items(triggeredFindings) { finding ->
-                        FindingCard(finding = finding)
-                    }
+                items(count = findings.itemCount) { index ->
+                    findings[index]?.let { FindingCard(finding = it) }
                 }
             }
         }

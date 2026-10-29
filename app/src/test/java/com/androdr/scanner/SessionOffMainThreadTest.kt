@@ -56,7 +56,7 @@ class SessionOffMainThreadTest {
     }
 
     private fun spyRepo(repo: ScanWriteRepository): ScanWriteRepository = spyk(repo).also { r ->
-        coEvery { r.finish(any(), any(), any(), any(), any()) } coAnswers {
+        coEvery { r.finish(any(), any(), any(), any()) } coAnswers {
             calls += "finish" to onMain()
             callOriginal()
         }
@@ -87,7 +87,7 @@ class SessionOffMainThreadTest {
                     callOriginal()
                 }
             }
-            val writer = ChunkedScanWriter(engine, w.store, w.repo, w.preflight, w.health)
+            val writer = ChunkedScanWriter(engine, w.store, w.repo, w.f.findings, w.preflight, w.health)
             val session = writer.begin(w.scan(1L), liveEvents = true)
             session.append("app_scanner", TelemetrySource.LIVE_SCAN, 1L,
                 listOf(StoreRecord(mapOf("package_name" to WriterFixture.EVIL_APP))))

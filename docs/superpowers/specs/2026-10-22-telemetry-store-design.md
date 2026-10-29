@@ -197,7 +197,7 @@ Persistence surfaces:
 
 - **Schema 20 (Phase A)**:
   - New tables: `record_body`, `telemetry_record`, `scan_record` (content, facts, observations — §5.1); `event_watermark` (§5.2); `signal_member` (correlation-signal members, §5.4).
-  - New `forensic_timeline` columns: `recordId`, `sourceEventKey` (h128 BLOB, the same hash as `telemetry_record.sourceKey`), `level`, `persistent` (default 0). New `ScanResult` columns: `state` (`IN_PROGRESS` | `COMPLETE` | `DELETING`, default `COMPLETE`), `telemetryState` (`NONE` | `STORED` | `PARTIAL_RETENTION` | `FAILED`). The migration backfills `level` on legacy finding rows from `ScanResult.findings` by (`scanResultId`, `ruleId`). It uses the same chunked `substr` reader as 20→21, so an oversized or corrupt row leaves `level` null and never aborts the upgrade.
+  - New `forensic_timeline` columns: `recordId`, `sourceEventKey` (h128 BLOB, the same hash as `telemetry_record.sourceKey`), `level`, `persistent` (default 0). New `ScanResult` columns: `state` (`IN_PROGRESS` | `COMPLETE` | `DELETING`, default `COMPLETE`), `telemetryState` (`NONE` | `STORED` | `PARTIAL_RETENTION` | `FAILED` | `FAILED_PARTIAL_RETENTION`). The migration backfills `level` on legacy finding rows from `ScanResult.findings` by (`scanResultId`, `ruleId`). It uses the same chunked `substr` reader as 20→21, so an oversized or corrupt row leaves `level` null and never aborts the upgrade.
   - Composite indices: §5.1 and §6.
 - **Schema 21 (Phase D)**: `scan_finding`, `alert` (§5.4); `ScanResult` loses `findings`.
 - **`forensic_timeline`** keeps only finding rows, correlation signals, detected changes, and audit and closure rows.
@@ -370,7 +370,7 @@ Covered paths: scan deletion, "Clear all", retention and the prune. References a
 - **Live event observations** are kept for 30 days.
 - **Import observations** are kept until the user deletes the import.
 - **Pinned facts** are always kept.
-- A scan that loses any observations becomes `PARTIAL_RETENTION`.
+- A `STORED` scan that loses any observations becomes `PARTIAL_RETENTION`; a `FAILED` scan that loses any becomes `FAILED_PARTIAL_RETENTION` (ruling R40), so the report never presents a post-retention count as what was stored before the failure.
 - Retention runs in `IocUpdateWorker` after the IOC fetch, under `scanMutex.tryLock()` (it is skipped this cycle if a scan or import holds the lock), in keyset batches.
 
 ### 5.2 Writers, watermarks, failure handling
@@ -381,7 +381,7 @@ Covered paths: scan deletion, "Clear all", retention and the prune. References a
    - These rows carry `alertKey` only; no alerts are created yet.
    - Nothing is written to `forensic_timeline` during `append`.
 3. Before each `append` on an import, `StatFs` free space is checked against a fixed **150 MB reserve that nothing overrides**.
-   - When the reserve is breached, the import stops storing telemetry and **finishes evaluate-only**: findings are kept with their `matchContext`, `telemetryState = FAILED`, and the import card says how much space to free.
+   - When the reserve is breached, the import stops storing telemetry and **finishes evaluate-only**: `telemetryState = FAILED`, and the import card says how much space to free. Its findings are still stored, chunk by chunk (ruling R38, below).
 4. Before `finish`, the 150 MB reserve is checked once more. The finishing transaction's growth — mostly the finding-row copy, about 10–20 MB per 100k findings — fits inside the reserve.
 5. `finish` opens **the session's single finishing transaction**, which does the following in order (as today's `saveScanWithCorrelation` does):
    - Writes this scan's `forensic_timeline` rows, so they have ids:
@@ -443,10 +443,11 @@ Failure handling:
   - The per-chunk 150 MB reserve still applies.
 - **Input bounds**: the intrusion-log parser is bounded at 2,000,000 per type; bug-report modules at 200,000 records each (they still materialise per-module lists). Each bound is named on the import card when tripped.
 - **Errors**: writers catch `Throwable`.
-- **Live scan on `SQLiteFullException`**: the rest of the same pass continues evaluate-only.
-  - Findings are buffered in memory; live findings are bounded by rules × live records.
-  - `finish` writes them with `recordId = null` and `telemetryState = FAILED`. Watermarks are unchanged.
-  - If that write fails too, the in-memory result is still shown, and a storage-health flag is recorded in DataStore, outside the database.
+- **Live scan on `SQLiteFullException`**: the rest of the same pass continues evaluate-only. `telemetryState = FAILED`; watermarks are unchanged.
+- **Evaluate-only findings (ruling R38, live and imports)**:
+  - Each chunk's findings (after the exact-duplicate filter, and only those `scan_finding` keeps: untriggered findings of event services are dropped first) are stored at once as no-fact `scan_finding` rows (`recordId = null`, keeping `matchContext`), each chunk in its own small transaction. Nothing is buffered; only the running `FindingTotals` are held. So a failed `finish` never loses stored findings because of a buffered write.
+  - If a no-fact write itself hits `SQLiteFullException`, the rest of the session's findings are not stored. They are kept only as a **display bound**: exact counts by (rule, level) plus the 1,000 most severe (severity, then the finding's event time, then arrival). The import card says "N findings could not be saved; free X MB and import again". This bounds only how data the disk could not take is shown; it is not a persistence cap (C1 allow-list: `UnsavedFindings.UNSAVED_DISPLAY_LIMIT`).
+  - If the finishing write fails too, the in-memory result is still shown, and a storage-health flag is recorded in DataStore, outside the database.
 - **DNS logging failures**: `DnsLogBuffer` re-queues a failed batch, with exponential backoff and dropping the oldest beyond its bound, and records a health warning.
 
 ### 5.3 Typed bug-report records; `TimelineEvent` retired
@@ -504,12 +505,12 @@ Schema 21 (Phase D).
 - **State findings** are current while the latest live scan triggers them. Imports never displace live state.
 - **Alerts** are current from opening until a person closes them.
 - **Re-fires** attach findings to the existing alert. New facts open new alerts. A closed alert stays closed.
-- **Current findings** = the latest live scan's triggered state findings ∪ OPEN alerts. The dashboard shows a count and a paged list, grouped by rule and matched value so a flood of one indicator cannot bury another.
+- **Current findings** = the latest live scan's triggered state findings ∪ OPEN alerts. The dashboard shows a count and a paged list, grouped by rule and matched value so a flood of one indicator cannot bury another. For evidence with no matched value, the group value is the matched record's package (else the record), so one app's flood cannot bury another app's alerts (`alert.matchedValue`, never part of the alert key).
 
 **Closing an alert.**
 - **Confirmation**: closing one alert, or a selection (**bulk close** under one confirmation), requires the device credential: platform `BiometricPrompt` with `DEVICE_CREDENTIAL` only on API 30+ (manifest `USE_BIOMETRIC`), and `KeyguardManager.createConfirmDeviceCredentialIntent` on API 26–29.
 - **No secure lock screen**: `NoSecureLock` is returned only when `KeyguardManager.isDeviceSecure()` is false; any other error is `Cancelled`. The repository re-checks `isDeviceSecure()` before honouring `NoSecureLock` and records `closedWithCredential = false`.
-- **Obscured touches**: the views set `filterTouchesWhenObscured = true` (`FLAG_WINDOW_IS_PARTIALLY_OBSCURED` exists only from API 29). Accessibility clicks bypass touch filtering; the credential is the real control.
+- **Obscured touches**: each protected control drops any touch flagged `FLAG_WINDOW_IS_OBSCURED`, or `FLAG_WINDOW_IS_PARTIALLY_OBSCURED` from API 29 (ruling R35: per-event filtering, no shared host-view state, so overlapping controls cannot disable each other). Accessibility clicks bypass touch filtering; the credential is the real control.
 - **Not protected**: a person who knows the PIN, or spyware that has logged it, can close alerts. This is documented as a residual risk.
 
 **Deleting scans.**
@@ -518,7 +519,7 @@ Schema 21 (Phase D).
 - Persistent rows are exempt from the prune and from "Clear all".
 - "Clear all" starts with **one transaction** that writes a single capped audit row (built from every `COMPLETE` scan's triggered `scan_finding` rows) and sets every scan `DELETING`, remembering those ids and `clearMaxRowId` (`MAX(id)` of `forensic_timeline`), which it saves in DataStore so a killed "Clear all" is finished by `StartupSweep`; it then deletes those scans, their observations, their `scan_finding` rows, and the non-persistent timeline rows whose `scanResultId` is one of those ids, or is −1 with `id ≤ clearMaxRowId` — including live `dns_query`/`ioc_match` rows, as it does today. Signal rows are deleted with their `signal_member` rows. A scan that starts after the first transaction is untouched.
 
-**The report** lists state findings, open alerts (with the opening scan), and closed alerts (time, note, credential flag).
+**The report** lists state findings, open alerts (with the opening scan and its source), and closed alerts (time, note, credential flag), grouped as the Dashboard groups them, each group with its exact count and its most recent alerts (`ALERT_SAMPLE_DISPLAY_LIMIT`).
 
 **Migration 20 → 21.**
 - **Reading**: `findings` is read in 256 KB `substr` chunks. A corrupt row keeps its scan with zero findings. `ScanResult` is rebuilt as a new table, then copied and renamed, because API 26 has no `DROP COLUMN`.
@@ -530,7 +531,8 @@ Schema 21 (Phase D).
   - findings of category `CORRELATION` are STATE and open no alert;
   - unknown rule ids are STATE;
   - rule id → service comes from a frozen table.
-- **Alerts**: created from the migrated findings. They are OPEN if their scan is within 30 days, otherwise CLOSED "migrated (older than 30 days)". They keep `matchContext`.
+- **Alerts**: created from the migrated findings of `COMPLETE` scans (other scans' rows carry no key; the sweep removes them). An alert is OPEN if the latest scan with a finding of its key is within 30 days — an alert spanning scans follows its latest activity (ruling R39) — otherwise CLOSED "migrated (older than 30 days)". They keep `matchContext`.
+- **Unreadable findings**: a scan whose `findings` value is over 2 MB or not readable keeps its scan with zero findings, and one persistent Timeline row (`findings_not_migrated`) says how many scans' findings could not be carried over, since the old column is dropped.
 
 ### 5.5 Caps removed
 
@@ -552,6 +554,13 @@ Allow-listed permanently:
 - `ScanResultDao.getLatestTwo`
 - `IndicatorDao.lookup` (`LIMIT 1`)
 - `DnsEventDao.getRecentEvents` / `getRecentSnapshot` (the DNS monitor screen)
+
+Display bounds, allow-listed by name (they bound what is shown, never what is stored):
+- `UnsavedFindings.UNSAVED_DISPLAY_LIMIT`: the sample of findings a full disk could not take (ruling R38).
+- `ScanOrchestrator.DIFF_DISPLAY_LIMIT`: example findings per new or resolved rule in a scan diff; the diff's counts are exact, and every finding is listed in its scan.
+- `ALERT_SAMPLE_DISPLAY_LIMIT` (report): alerts listed per alert group (rule and matched value, or app); each group's count is exact and the rest are "…and K more".
+
+Readers never hold a whole scan's findings: an import can hold 100k. The Dashboard diffs the two newest live scans from rule counts in SQL; the History diff and sheet count in SQL; the report streams and folds findings that would print the same ([FindingsDigest]). Only bounded scans (live: rules × live records) are read whole.
 
 ### 5.6 Timeline rows
 
@@ -589,7 +598,7 @@ merges, because retention arrives in D4.
 ## 7. Report and export
 
 - **One report path.** All reports go through `ReportExporter`, streaming to a file `Writer`. The History sheet shows a summary.
-- **Telemetry sections** read only the scan's own observations. When telemetry is missing, the report says why: `NONE`, `PARTIAL_RETENTION` or `FAILED`.
+- **Telemetry sections** read only the scan's own observations. When telemetry is missing, the report says why: `NONE`, `PARTIAL_RETENTION`, `FAILED` or `FAILED_PARTIAL_RETENTION`.
 - **Escaping.**
   - Device-controlled strings, field keys, and values nested in lists and maps are escaped: `\` and every character in Unicode categories Cc, Cf, Zl, Zp, Co, Cn and Cs (lone surrogates) is rendered as `\uXXXX`.
   - So no value can emit a raw line break, a bidi override, or an ambiguous escape.

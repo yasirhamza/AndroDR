@@ -4,6 +4,7 @@ import android.os.Build
 import com.androdr.data.db.ServiceSummary
 import com.androdr.data.model.NotEvaluatedReason
 import com.androdr.data.model.ScanResult
+import com.androdr.data.model.ScanWithFindings
 import com.androdr.data.model.TelemetrySource
 import com.androdr.data.model.TelemetryState
 import com.androdr.sigma.Evidence
@@ -102,6 +103,8 @@ object ReportFormatter {
         val dnsIocRows: List<String>,
         val verdicts: List<CampaignVerdict>,
         val referenceFromLog: Boolean,
+        /** The folded findings' multiplicities ([FindingsView.count]): every count printed is exact. */
+        val view: FindingsView,
     )
 
     @Suppress("LongParameterList") // the report's fixed inputs (spec §7 / plan B1 signature)
@@ -113,9 +116,10 @@ object ReportFormatter {
         telemetry: StoredTelemetrySource,
         mode: ExportMode,
         versionName: String,
+        alerts: AlertReportSource = AlertReportSource.NONE,
     ) {
-        // Phase B: the findings are the scan's own; every helper reads them from the scan.
-        val s = scan.copy(findings = findings.findings)
+        // The findings are the scan's own scan_finding rows (FindingsView); every helper reads them here.
+        val s = ScanWithFindings(scan, findings.findings)
         val o = ReportOut(out)
         val includeFindings = mode != ExportMode.TELEMETRY_ONLY
         val includeTelemetry = mode != ExportMode.FINDINGS_ONLY
@@ -131,6 +135,7 @@ object ReportFormatter {
             o.appendLine()
             o.section("FINDINGS SECTION")
             o.appendFindingsSections(s, findingsContext(s, findings, services, telemetry))
+            o.appendAlerts(alerts)
             // Intentionally inside the includeFindings branch: a capability skip is a
             // caveat ON the findings ("this list is missing these rules"), so it rides
             // the same flag -- a telemetry-only export has no findings list to caveat.
@@ -138,7 +143,7 @@ object ReportFormatter {
         }
         if (includeTelemetry) {
             o.section("TELEMETRY SECTION")
-            o.appendStoredTelemetry(s, services, telemetry)
+            o.appendStoredTelemetry(s.scan, services, telemetry)
             o.appendLog(logLines)
         }
         o.appendLine()
@@ -147,7 +152,7 @@ object ReportFormatter {
         o.appendLine(RULE)
     }
 
-    private fun ReportOut.appendHeader(scan: ScanResult, mode: ExportMode, versionName: String) {
+    private fun ReportOut.appendHeader(scan: ScanWithFindings, mode: ExportMode, versionName: String) {
         val timestampFmt = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US)
         appendLine(RULE)
         appendLine("  AndroDR Security Report")
@@ -168,7 +173,7 @@ object ReportFormatter {
      * records (only when no finding carries domain IOC evidence), and an import's latest event.
      */
     private suspend fun findingsContext(
-        scan: ScanResult,
+        scan: ScanWithFindings,
         findings: FindingsView,
         services: List<ServiceSummary>,
         telemetry: StoredTelemetrySource,
@@ -205,7 +210,7 @@ object ReportFormatter {
         return FindingsContext(
             appCount = appCountText(scan, appRecords), displayNames = displayNames,
             dnsIocRows = dnsIocRows(scan, reasons),
-            verdicts = verdicts, referenceFromLog = latestImported != null,
+            verdicts = verdicts, referenceFromLog = latestImported != null, view = findings,
         )
     }
 
@@ -213,25 +218,25 @@ object ReportFormatter {
      * This scan's own stored app count. Only a fully stored scan's count is the number scanned:
      * under PARTIAL_RETENTION or a partway FAILED the surviving records would understate it.
      */
-    private fun appCountText(scan: ScanResult, appRecords: ServiceSummary?): String = when {
+    private fun appCountText(scan: ScanWithFindings, appRecords: ServiceSummary?): String = when {
         appRecords == null -> "N/A"
-        scan.telemetryState == TelemetryState.PARTIAL_RETENTION || scan.telemetryState == TelemetryState.FAILED ->
+        scan.telemetryState != TelemetryState.STORED && scan.telemetryState != TelemetryState.NONE ->
             "N/A (only part of this scan's telemetry is stored)"
         else -> appRecords.records.toString()
     }
 
     @Suppress("LongMethod", "CyclomaticComplexMethod")
-    private fun ReportOut.appendFindingsSections(scan: ScanResult, ctx: FindingsContext) {
+    private fun ReportOut.appendFindingsSections(scan: ScanWithFindings, ctx: FindingsContext) {
         val scanSource = scan.source
         val displayNames = ctx.displayNames
         val campaignVerdicts = ctx.verdicts
         val referenceFromLog = ctx.referenceFromLog
         // -- Verdict + Summary + Action Guidance ----------------------------------
-        appendVerdict(scan, ctx.appCount, ctx.dnsIocRows, campaignVerdicts)
+        appendVerdict(scan, ctx.appCount, ctx.dnsIocRows, campaignVerdicts, ctx.view)
 
         // -- Warning signs that add up -------------------------------------------
         // First, because a chain of events is the strongest evidence in the report.
-        appendActivityChains(scan)
+        appendActivityChains(scan, ctx.view)
 
         // -- Device checks --------------------------------------------------------
         val allDeviceFlags = scan.deviceFlags
@@ -239,18 +244,19 @@ object ReportFormatter {
             section("DEVICE CHECKS")
             val triggered = allDeviceFlags.filter { it.triggered }
             val passed    = allDeviceFlags.filter { !it.triggered }
-            appendLine("  ${triggered.size} of ${allDeviceFlags.size} checks triggered")
+            val view = ctx.view
+            appendLine("  ${view.countOf(triggered)} of ${view.countOf(allDeviceFlags)} checks triggered")
             appendLine()
 
             if (triggered.isNotEmpty()) {
                 appendLine("  Issues found:")
                 triggered.sortedByDescending { severityOrdinal(it.level) }.forEach { finding ->
-                    appendFinding(finding)
+                    appendFinding(finding, view.count(finding))
                 }
             }
             if (passed.isNotEmpty()) {
                 appendLine("  Checks passed:")
-                passed.forEach { finding -> appendFinding(finding) }
+                passed.forEach { finding -> appendFinding(finding, view.count(finding)) }
             }
         } else {
             section("DEVICE CHECKS")
@@ -312,7 +318,7 @@ object ReportFormatter {
      * was checked and found clean. Grouped by [NotEvaluatedReason] in enum order so the
      * output is stable whatever order the scanners recorded them in.
      */
-    private fun ReportOut.appendNotChecked(scan: ScanResult) {
+    private fun ReportOut.appendNotChecked(scan: ScanWithFindings) {
         val byReason = scan.scannerErrors
             .mapNotNull { failure -> NotEvaluatedReason.fromSentinel(failure.exception)?.to(failure) }
             .groupBy({ it.first }, { it.second })
@@ -338,15 +344,16 @@ object ReportFormatter {
     @Suppress("CyclomaticComplexMethod") // Verdict assembles summary, device posture, campaign,
     // and action guidance in a structured block -- splitting would fragment the output logic.
     private fun ReportOut.appendVerdict(
-        scan: ScanResult,
+        scan: ScanWithFindings,
         appCount: String,
         dnsIocRows: List<String>,
         campaignVerdicts: List<CampaignVerdict>,
+        view: FindingsView,
     ) {
-        val appRiskCount = scan.appRisks.count {
+        val appRiskCount = view.countOf(scan.appRisks.filter {
             it.triggered && it.level.lowercase() != "informational"
-        }
-        val deviceIssueCount = scan.deviceFlags.count { it.triggered }
+        })
+        val deviceIssueCount = view.countOf(scan.deviceFlags.filter { it.triggered })
 
         // One-liner verdict
         val verdict = when {
@@ -382,7 +389,7 @@ object ReportFormatter {
         val chains = scan.activityChains.filter { it.triggered }
         if (chains.isNotEmpty()) {
             val labels = chains.map { it.title }.distinct().joinToString(", ")
-            appendLine("    Warning signs that add up: ${chains.size} ($labels)")
+            appendLine("    Warning signs that add up: ${view.countOf(chains)} ($labels)")
         }
         if (triggeredDeviceFlags.isNotEmpty()) {
             val titles = triggeredDeviceFlags.take(3).map { it.title }
@@ -404,7 +411,7 @@ object ReportFormatter {
 
     // Collects action guidance from Finding.guidance (rule-driven) and device posture summary.
     // Ordered: CRITICAL-prefixed first, then others, then device posture.
-    private fun ReportOut.appendActionGuidance(scan: ScanResult) {
+    private fun ReportOut.appendActionGuidance(scan: ScanWithFindings) {
         val actions = mutableListOf<String>()
 
         // Collect rule-driven guidance from triggered app risk findings
@@ -437,7 +444,7 @@ object ReportFormatter {
 
     // A chain of events -- several things that look minor on their own but add up.
     // Rendered first, and never again under APP RISKS or DEVICE CHECKS.
-    private fun ReportOut.appendActivityChains(scan: ScanResult) {
+    private fun ReportOut.appendActivityChains(scan: ScanWithFindings, view: FindingsView) {
         section(WARNING_SIGNS_SECTION)
         val chains = scan.activityChains.filter { it.triggered }
         // A pattern with no events to bind to was not checked at all; saying only
@@ -456,7 +463,7 @@ object ReportFormatter {
             return
         }
         appendLine(
-            "  ${chains.size} pattern(s) found -- separate events that look minor alone " +
+            "  ${view.countOf(chains)} pattern(s) found -- separate events that look minor alone " +
                 "but mean something together"
         )
         appendLine()
@@ -468,7 +475,7 @@ object ReportFormatter {
             appendLine()
         }
         chains.sortedByDescending { severityOrdinal(it.level) }.forEach { chain ->
-            appendFinding(chain)
+            appendFinding(chain, view.count(chain))
             val pkg = chain.matchContext["package_name"].orEmpty()
             // A chain saved before signal members existed (spec §5.4) has no member_count: it
             // prints its linked events without a number rather than a false "0".
@@ -479,13 +486,15 @@ object ReportFormatter {
         }
     }
 
-    private fun ReportOut.appendFinding(finding: Finding) {
+    /** One finding; [times] > 1 when it stands for that many identical findings ([FindingsDigest]). */
+    private fun ReportOut.appendFinding(finding: Finding, times: Int = 1) {
         val icon = if (finding.triggered) "[!!]" else "[OK]"
         val sev = finding.level.uppercase().padEnd(8)
         val mitre = finding.tags.filter { it.startsWith("attack.t") }
             .joinToString(", ") { it.removePrefix("attack.").uppercase() }
         val mitreSuffix = if (mitre.isNotEmpty() && finding.triggered) "  ($mitre)" else ""
-        appendLine("  $icon  $sev  ${finding.title}$mitreSuffix")
+        val timesSuffix = if (times > 1) "  ($times times)" else ""
+        appendLine("  $icon  $sev  ${finding.title}$mitreSuffix$timesSuffix")
         if (finding.triggered && finding.description.isNotEmpty()) {
             appendLine("           ${finding.description}")
         }
@@ -611,5 +620,13 @@ object ReportFormatter {
      */
     const val TELEMETRY_FAILED_PARTWAY = "Stored telemetry: FAILED -- storage failed partway;"
 
+    /**
+     * The state line for a FAILED scan that retention later trimmed (followed by the count left): it
+     * states both facts and never presents the count left as what was stored before the failure.
+     */
+    const val TELEMETRY_FAILED_RETAINED =
+        "Stored telemetry: FAILED -- storage failed during this scan, and retention later removed older records;"
+
     private const val RULE = "============================================================"
 }
+

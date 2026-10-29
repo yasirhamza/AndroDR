@@ -35,11 +35,14 @@ class CompleteVisibilityGateTest {
         "TelemetryFactDao.idsBySourceKey", "RecordBodyDao.deleteUnreferenced",
         "ScanObservationDao.factIdsAfter", "ScanObservationDao.deleteForScan", "ScanObservationDao.deleteThrough",
         "ScanObservationDao.factIdsForOrdinals",
+        // Retention (spec §5.1): one COMPLETE live scan's old observations, read and deleted per batch.
+        "ScanObservationDao.retentionEventBatch", "ScanObservationDao.retentionSnapshotBatch",
+        "ScanObservationDao.deleteRows",
         "ForensicTimelineEventDao.deleteOlderThan", "ForensicTimelineEventDao.deleteByIds",
-        "ForensicTimelineEventDao.deleteByScanId", "ForensicTimelineEventDao.deleteUnownedNonPersistent",
+        "ForensicTimelineEventDao.deleteByScanId", "ForensicTimelineEventDao.deleteScanLessThrough",
         // The pins a delete releases (TimelineRowDeleter), read just before the paired delete.
         "ForensicTimelineEventDao.recordIdsOlderThan", "ForensicTimelineEventDao.recordIdsByIds",
-        "ForensicTimelineEventDao.recordIdsByScanId", "ForensicTimelineEventDao.recordIdsUnownedNonPersistent",
+        "ForensicTimelineEventDao.recordIdsByScanId", "ForensicTimelineEventDao.recordIdsScanLessThrough",
         // Writer-side dedup lookups over everything already emitted (hidden rows included on purpose).
         "ForensicTimelineEventDao.getInstalledPackagesAlreadyEmitted",
         "ForensicTimelineEventDao.getAdminGrantedPackagesAlreadyEmitted",
@@ -50,12 +53,19 @@ class CompleteVisibilityGateTest {
         // The signal rows a delete is about to remove (their members go with them, by id).
         "ForensicTimelineEventDao.signalIdsOlderThan", "ForensicTimelineEventDao.signalIdsByIds",
         "ForensicTimelineEventDao.signalIdsByScanId",
-        "ForensicTimelineEventDao.signalIdsUnownedNonPersistent",
+        "ForensicTimelineEventDao.signalIdsScanLessThrough",
+        // "Clear all"'s clearMaxRowId (spec §5.4): the newest row id, hidden rows included on purpose.
+        "ForensicTimelineEventDao.maxId",
         // The one-time signal_member backfill reads and rewrites every legacy signal row.
         "SignalMemberBackfillDao.legacyAfter", "SignalMemberBackfillDao.signalExists",
         "SignalMemberBackfillDao.rewrite",
         // The one-time legacy event-row cleanup (C3) selects rows of every scan by producer.
         "LegacyEventRowDao.orphanSignalIds", "LegacyEventRowDao.legacyRowsAfter",
+        // The finishing transaction's scan_finding statements (spec §5.2): the scan is still IN_PROGRESS.
+        "ScanFindingDao.insertFindingRows", "ScanFindingDao.clearEvidence", "ScanFindingDao.unattachedCount",
+        "AlertDao.openForScan", "AlertDao.attachForScan", "AlertDao.touchForScan",
+        // A scan delete's scan_finding pins and rows (TimelineRowDeleter-style: read, delete, release).
+        "ScanFindingDao.unobservedRecordIdsForScan", "ScanFindingDao.deleteBatchForScan",
     )
 
     private data class DaoQuery(val owner: String, val name: String, val sql: String) {
@@ -168,7 +178,7 @@ class CompleteVisibilityGateTest {
         try {
             val states = listOf(1L to ScanState.COMPLETE, 2L to ScanState.IN_PROGRESS, 3L to ScanState.DELETING)
             for ((id, state) in states) {
-                db.scanResultDao().insert(ScanResult(id = id, timestamp = id, findings = emptyList(),
+                db.scanResultDao().insert(ScanResult(id = id, timestamp = id,
                     bugReportFindings = emptyList(), riskySideloadCount = 0, knownMalwareCount = 0, state = state))
             }
             val dao = db.forensicTimelineEventDao()

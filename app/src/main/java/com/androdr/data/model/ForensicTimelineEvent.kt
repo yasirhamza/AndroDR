@@ -12,7 +12,8 @@ import androidx.room.PrimaryKey
         Index("packageName"),
         Index("source"),
         Index("kind"),
-        Index("telemetrySource"),
+        // Serves telemetrySource lookups through its prefix and the 30-day prune as a range (spec §5.6).
+        Index(value = ["telemetrySource", "createdAt"]),
         Index("recordId"),
         Index("sourceEventKey"),
         Index(value = ["scanResultId", "startTimestamp"]),

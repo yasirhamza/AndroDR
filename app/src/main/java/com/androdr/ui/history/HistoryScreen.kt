@@ -22,7 +22,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.paging.compose.collectAsLazyPagingItems
+import androidx.paging.compose.itemKey
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -58,6 +59,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -83,7 +85,8 @@ import java.util.Locale
 fun HistoryScreen(
     viewModel: HistoryViewModel = hiltViewModel()
 ) {
-    val allScans   by viewModel.allScans.collectAsStateWithLifecycle()
+    val scans = viewModel.scans.collectAsLazyPagingItems()
+    val hasScans by viewModel.hasScans.collectAsStateWithLifecycle()
     val selectedScan by viewModel.selectedScan.collectAsStateWithLifecycle()
     val selectedDiff by viewModel.selectedDiff.collectAsStateWithLifecycle()
     val exporting  by viewModel.exporting.collectAsStateWithLifecycle()
@@ -97,6 +100,9 @@ fun HistoryScreen(
     val showDeleteConfirm by viewModel.showDeleteConfirm.collectAsStateWithLifecycle()
     val showClearAllConfirm by viewModel.showClearAllConfirm.collectAsStateWithLifecycle()
     val deleteRefused by viewModel.deleteRefused.collectAsStateWithLifecycle()
+    val deleteFailed by viewModel.deleteFailed.collectAsStateWithLifecycle()
+    // Delete and "Clear all" are disabled while a scan or import runs (they would be refused).
+    val deleteEnabled by viewModel.deleteEnabled.collectAsStateWithLifecycle()
 
     val context = LocalContext.current
 
@@ -116,7 +122,7 @@ fun HistoryScreen(
         viewModel.onShareConsumed()
     }
 
-    if (allScans.isEmpty()) {
+    if (!hasScans) {
         Box(
             modifier = Modifier.fillMaxSize(),
             contentAlignment = Alignment.Center
@@ -151,29 +157,32 @@ fun HistoryScreen(
         contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        if (allScans.isNotEmpty()) {
-            item {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.End
-                ) {
-                    IconButton(onClick = { viewModel.requestClearAll() }) {
-                        Icon(
-                            imageVector = Icons.Filled.DeleteSweep,
-                            contentDescription = "Clear all scan history",
-                            tint = MaterialTheme.colorScheme.error
-                        )
-                    }
+        item {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End
+            ) {
+                IconButton(onClick = { viewModel.requestClearAll() }, enabled = deleteEnabled) {
+                    Icon(
+                        imageVector = Icons.Filled.DeleteSweep,
+                        contentDescription = "Clear all scan history",
+                        tint = if (deleteEnabled) {
+                            MaterialTheme.colorScheme.error
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        }
+                    )
                 }
             }
         }
-        items(allScans) { scan ->
+        items(count = scans.itemCount, key = scans.itemKey { it.id }) { index ->
+            val scan = scans[index] ?: return@items
             val isSelected = selectedScan?.id == scan.id
             ScanHistoryItem(
                 scan = scan,
                 isSelected = isSelected,
                 diff = if (isSelected) selectedDiff else null,
-                isFirstScan = allScans.last().id == scan.id,
+                isFirstScan = index == scans.itemCount - 1 && scans.loadState.append.endOfPaginationReached,
                 exporting = exporting,
                 onClick = { viewModel.selectScan(scan) },
                 onExport = {
@@ -181,7 +190,9 @@ fun HistoryScreen(
                     viewModel.loadExportEstimate(scan)
                 },
                 onViewReport = { viewModel.openSheet(scan) },
-                onDelete = { viewModel.requestDeleteScan(scan.id) }
+                onDelete = { viewModel.requestDeleteScan(scan.id) },
+                deleteEnabled = deleteEnabled,
+                loadCounts = viewModel::rowCounts,
             )
         }
     }
@@ -205,16 +216,17 @@ fun HistoryScreen(
     if (showDeleteConfirm != null) {
         AlertDialog(
             onDismissRequest = { viewModel.dismissDeleteConfirm() },
-            title = { Text("Delete Scan") },
-            text = { Text("Delete this scan and its timeline events?") },
+            title = { Text(stringResource(R.string.history_delete_title)) },
+            // R37: alerts and their evidence are never deleted; the dialog says so.
+            text = { Text(stringResource(R.string.history_delete_body)) },
             confirmButton = {
-                TextButton(onClick = { viewModel.confirmDeleteScan() }) {
-                    Text("Delete", color = MaterialTheme.colorScheme.error)
+                TextButton(onClick = { viewModel.confirmDeleteScan() }, enabled = deleteEnabled) {
+                    Text(stringResource(R.string.history_delete_confirm), color = MaterialTheme.colorScheme.error)
                 }
             },
             dismissButton = {
                 TextButton(onClick = { viewModel.dismissDeleteConfirm() }) {
-                    Text("Cancel")
+                    Text(stringResource(R.string.history_delete_cancel))
                 }
             }
         )
@@ -228,6 +240,20 @@ fun HistoryScreen(
             text = { Text(stringResource(R.string.history_delete_refused_body)) },
             confirmButton = {
                 TextButton(onClick = { viewModel.dismissDeleteRefused() }) {
+                    Text(stringResource(android.R.string.ok))
+                }
+            }
+        )
+    }
+
+    // A delete that threw (e.g. a full disk): say so honestly instead of crashing (review I1).
+    if (deleteFailed) {
+        AlertDialog(
+            onDismissRequest = { viewModel.dismissDeleteFailed() },
+            title = { Text(stringResource(R.string.history_delete_failed_title)) },
+            text = { Text(stringResource(R.string.history_delete_failed_body)) },
+            confirmButton = {
+                TextButton(onClick = { viewModel.dismissDeleteFailed() }) {
                     Text(stringResource(android.R.string.ok))
                 }
             }
@@ -270,16 +296,17 @@ fun HistoryScreen(
     if (showClearAllConfirm) {
         AlertDialog(
             onDismissRequest = { viewModel.dismissClearAll() },
-            title = { Text("Clear All History") },
-            text = { Text("Delete all scan history? This cannot be undone.") },
+            title = { Text(stringResource(R.string.history_clear_title)) },
+            // R37: "Clear all" keeps alerts and their evidence; the dialog says so.
+            text = { Text(stringResource(R.string.history_clear_body)) },
             confirmButton = {
-                TextButton(onClick = { viewModel.confirmClearAll() }) {
-                    Text("Delete All", color = MaterialTheme.colorScheme.error)
+                TextButton(onClick = { viewModel.confirmClearAll() }, enabled = deleteEnabled) {
+                    Text(stringResource(R.string.history_clear_confirm), color = MaterialTheme.colorScheme.error)
                 }
             },
             dismissButton = {
                 TextButton(onClick = { viewModel.dismissClearAll() }) {
-                    Text("Cancel")
+                    Text(stringResource(R.string.history_delete_cancel))
                 }
             }
         )
@@ -442,8 +469,16 @@ private fun ScanHistoryItem(
     onClick: () -> Unit,
     onExport: () -> Unit,
     onViewReport: () -> Unit,
-    onDelete: () -> Unit
+    onDelete: () -> Unit,
+    deleteEnabled: Boolean = true,
+    loadCounts: (suspend (ScanResult) -> HistoryRowCounts?)? = null,
 ) {
+    // The stored findings shown (informational excluded, as the import screen counts them) and any
+    // that could not be saved, read in SQL per row; the scan's own count until they load.
+    var counts by remember(scan.id) { mutableStateOf<HistoryRowCounts?>(null) }
+    LaunchedEffect(scan.id, scan.triggeredCount) {
+        counts = loadCounts?.invoke(scan)
+    }
     val dateFormatter = remember { SimpleDateFormat("MMM d, yyyy  HH:mm", Locale.getDefault()) }
     val dateString = dateFormatter.format(Date(scan.timestamp))
 
@@ -479,8 +514,13 @@ private fun ScanHistoryItem(
                     // say so, or the row reads as live device state.
                     ImportSourceLabel(scan.source)
                     Text(
-                        text = "${scan.appRisks.count { it.triggered }} app risk(s) \u00b7 " +
-                            "${scan.deviceFlags.count { it.triggered }} device flag(s)",
+                        text = counts?.let { c ->
+                            if (c.unsaved > 0) {
+                                stringResource(R.string.history_row_findings_unsaved, c.shown, c.unsaved)
+                            } else {
+                                stringResource(R.string.history_row_findings, c.shown)
+                            }
+                        } ?: stringResource(R.string.history_row_findings, scan.triggeredCount),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -522,10 +562,9 @@ private fun ScanHistoryItem(
                     )
                     Text(
                         text = buildString {
-                            append("\u2022 ${scan.appRisks.count { it.triggered }} app risk(s) detected\n")
+                            append("\u2022 ${scan.triggeredCount} finding(s) triggered\n")
                             append("\u2022 ${scan.knownMalwareCount} known malware app(s)\n")
-                            append("\u2022 ${scan.riskySideloadCount} sideloaded app(s)\n")
-                            append("\u2022 ${scan.deviceFlags.count { it.triggered }} device flag(s) triggered")
+                            append("\u2022 ${scan.riskySideloadCount} sideloaded app(s)")
                         },
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurface
@@ -585,11 +624,15 @@ private fun ScanHistoryItem(
                                 MaterialTheme.colorScheme.primary
                         )
 
-                        IconButton(onClick = onDelete) {
+                        IconButton(onClick = onDelete, enabled = deleteEnabled) {
                             Icon(
                                 imageVector = Icons.Filled.Delete,
                                 contentDescription = "Delete scan",
-                                tint = MaterialTheme.colorScheme.error
+                                tint = if (deleteEnabled) {
+                                    MaterialTheme.colorScheme.error
+                                } else {
+                                    MaterialTheme.colorScheme.onSurfaceVariant
+                                }
                             )
                         }
                     }
@@ -606,8 +649,9 @@ private fun ScanHistoryItem(
 @Composable
 private fun DiffSection(diff: ScanOrchestrator.ScanDiff) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        val totalNew      = diff.newFindings.size
-        val totalResolved = diff.resolvedFindings.size
+        // Exact counts; the listed findings are up to DIFF_DISPLAY_LIMIT examples per rule (review C1).
+        val totalNew      = diff.newCount
+        val totalResolved = diff.resolvedCount
 
         if (totalNew > 0) {
             Text(
@@ -623,6 +667,7 @@ private fun DiffSection(diff: ScanOrchestrator.ScanDiff) {
                     color = MaterialTheme.androdrColors.critical
                 )
             }
+            DiffMore(totalNew - diff.newFindings.size, MaterialTheme.androdrColors.critical)
         }
 
         if (totalResolved > 0) {
@@ -639,6 +684,7 @@ private fun DiffSection(diff: ScanOrchestrator.ScanDiff) {
                     color = MaterialTheme.colorScheme.primary
                 )
             }
+            DiffMore(totalResolved - diff.resolvedFindings.size, MaterialTheme.colorScheme.primary)
         }
 
         if (totalNew == 0 && totalResolved == 0) {
@@ -649,6 +695,17 @@ private fun DiffSection(diff: ScanOrchestrator.ScanDiff) {
             )
         }
     }
+}
+
+/** "…and N more" under a diff list that shows only examples of its findings. */
+@Composable
+private fun DiffMore(more: Int, color: androidx.compose.ui.graphics.Color) {
+    if (more <= 0) return
+    Text(
+        text = pluralStringResource(R.plurals.diff_more, more, more),
+        style = MaterialTheme.typography.bodySmall,
+        color = color
+    )
 }
 
 /**

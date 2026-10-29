@@ -8,7 +8,7 @@ import com.androdr.ioc.FakeIndicatorDao
 import com.androdr.ioc.IndicatorResolver
 import com.androdr.ioc.IocDatabase
 import com.androdr.ioc.CampaignRegistry
-import com.androdr.data.model.ScanResult
+import com.androdr.data.model.scanWith
 import com.androdr.reporting.reportText
 import com.androdr.sigma.Evidence
 import com.androdr.sigma.IocMatchEvidenceProvider
@@ -108,7 +108,7 @@ class IocEvidenceRegistrationTest {
         val evidence = findings.single().evidence as Evidence.IocMatch
         assertEquals("graphite", evidence.campaign)
 
-        val scan = ScanResult(id = 1L, timestamp = 1_711_900_800_000L, findings = findings,
+        val scan = scanWith(id = 1L, timestamp = 1_711_900_800_000L, findings = findings,
             bugReportFindings = emptyList(), riskySideloadCount = 0, knownMalwareCount = 0)
         val registry = CampaignRegistry.parseBundled(listOf(File("src/main/res/raw/known_campaigns.json"),
             File("app/src/main/res/raw/known_campaigns.json")).first { it.isFile }.readText())

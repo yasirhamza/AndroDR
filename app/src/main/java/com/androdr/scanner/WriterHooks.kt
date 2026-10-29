@@ -14,7 +14,6 @@ import com.androdr.data.repo.SessionHooks
 import com.androdr.data.store.AtomReader
 import com.androdr.sigma.CorrelationBudget
 import com.androdr.sigma.Finding
-import com.androdr.sigma.FindingCategory
 import com.androdr.sigma.IntrusionLogRecordBuilders
 import com.androdr.sigma.LiveRecordBuilders
 import com.androdr.sigma.NotStartedCause
@@ -55,7 +54,7 @@ internal abstract class WriterHooks(
     private var chainSkips: List<ScannerFailure> = emptyList()
     private var incompleteSkips: List<ScannerFailure> = emptyList()
 
-    /** The session's finding totals, once [summarize] ran (counts past the intrusion-log cap). */
+    /** The session's finding totals, once [summarize] ran. */
     var totals: FindingTotals? = null
         private set
 
@@ -172,11 +171,8 @@ internal class LiveScanHooks(
         if (lookbackWindowMs <= 0L) emptyList()
         else atoms.atomsBetween(scan.timestamp - lookbackWindowMs, scan.timestamp, categories)
 
-    override fun summarize(scan: ScanResult, totals: FindingTotals): ScanResult = super.summarize(scan, totals).copy(
-        riskySideloadCount = scan.findings.count {
-            it.category == FindingCategory.APP_RISK && it.matchContext["is_sideloaded"] == "true"
-        },
-    )
+    override fun summarize(scan: ScanResult, totals: FindingTotals): ScanResult =
+        super.summarize(scan, totals).copy(riskySideloadCount = totals.riskySideload)
 
     companion object {
         const val USAGE_STATS = "usage_stats"
@@ -200,7 +196,7 @@ internal class IntrusionLogHooks(
             // The DNS/network/security field maps carry "timestamp" and the evaluator copies scalar
             // record fields into matchContext as strings, so a finding inherits its own event's
             // time. A finding without one falls back to 0L, which the Timeline renders as "Unknown".
-            startTimestamp = FindingRank.eventTimeMs(finding)
+            startTimestamp = finding.matchContext["timestamp"]?.toLongOrNull()?.takeIf { it > 0L } ?: 0L
         )
 }
 

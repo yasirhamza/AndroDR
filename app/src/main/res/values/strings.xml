@@ -220,7 +220,7 @@
 
     <!-- Intrusion Log Import summary card (#342) — externalized -->
     <string name="history_delete_refused_title">Nothing was deleted</string>
-    <string name="history_delete_refused_body">A scan or import is running. Try again when it finishes.</string>
+    <string name="history_delete_refused_body">A scan is running — try again when it finishes</string>
     <string name="history_summary_failed">This scan\'s summary could not be read. Export the report to see it in full.</string>
     <string name="history_export_estimate_unknown">The size of this scan\'s stored telemetry is unknown; the full report includes all of it.</string>
     <string name="history_export_estimate_loading">Counting this scan\'s stored telemetry…</string>
@@ -236,12 +236,26 @@
     <string name="import_card_title">What was stored</string>
     <string name="import_card_counts" tools:ignore="PluralsCandidate">%1$d new \u00b7 %2$d already stored \u00b7 %3$d duplicates dropped</string>
     <string name="import_card_bound">Limit reached: %1$s</string>
-    <string name="import_card_low_space_some" tools:ignore="PluralsCandidate">Storage ran low partway through: %1$d new records were stored; the rest were checked but not stored. The findings below are complete.</string>
-    <string name="import_card_low_space_none">Storage ran low before any new record could be stored: the file was checked but nothing new was stored. The findings below are complete.</string>
+    <string name="import_card_low_space_some" tools:ignore="PluralsCandidate">Storage ran low partway through: %1$d new records were stored; the rest were checked but not stored.</string>
+    <string name="import_card_low_space_none">Storage ran low before any new record could be stored: the file was checked but nothing new was stored.</string>
     <string name="import_card_free_at_least_estimate">Free at least %1$s more (the whole import needs about %2$s) and import again to store the rest.</string>
     <string name="import_card_free_at_least_unknown">Free at least %1$s more, probably much more, and import again to store the rest.</string>
-    <string name="import_card_not_stored_some" tools:ignore="PluralsCandidate">The database refused part of this import: %1$d new records were stored; the rest were checked but not stored. The findings below are complete.</string>
-    <string name="import_card_not_stored_none">The database refused this import\'s records: the file was checked but nothing new was stored. The findings below are complete.</string>
+    <string name="import_card_not_stored_some" tools:ignore="PluralsCandidate">The database refused part of this import: %1$d new records were stored; the rest were checked but not stored.</string>
+    <string name="import_card_not_stored_none">The database refused this import\'s records: the file was checked but nothing new was stored.</string>
+    <plurals name="diff_more">
+        <item quantity="one">\u2026and %1$d more finding</item>
+        <item quantity="other">\u2026and %1$d more findings</item>
+    </plurals>
+    <string name="import_card_findings_complete">The findings below are complete.</string>
+    <plurals name="import_card_findings_unsaved">
+        <item quantity="one">%1$d finding could not be saved and is not listed below; free at least %2$s and import again.</item>
+        <item quantity="other">%1$d findings could not be saved and are not listed below; free at least %2$s and import again.</item>
+    </plurals>
+    <plurals name="import_card_findings_unsaved_unknown">
+        <item quantity="one">%1$d finding could not be saved and is not listed below; free more space and import again.</item>
+        <item quantity="other">%1$d findings could not be saved and are not listed below; free more space and import again.</item>
+    </plurals>
+    <string name="import_card_unsaved_levels">Not saved, by severity: %1$s.</string>
     <string name="intrusion_log_summary_title">Intrusion log analyzed</string>
     <!-- PluralsCandidate: compact multi-count summary; matches bugreport_finding_count style -->
     <string name="intrusion_log_summary_counts" tools:ignore="PluralsCandidate">%1$d DNS events \u00b7 %2$d connections \u00b7 %3$d security events</string>
@@ -249,8 +263,6 @@
     <string name="intrusion_log_summary_collapsed" tools:ignore="PluralsCandidate">%1$d duplicates collapsed \u00b7 %2$d malformed lines skipped</string>
     <!-- PluralsCandidate: compact cap-truncation notice -->
     <!-- PluralsCandidate: security-event cap-truncation notice (#342 B4) -->
-    <!-- PluralsCandidate: findings cap-truncation notice (#342 B3) -->
-    <string name="intrusion_log_summary_capped_findings" tools:ignore="PluralsCandidate">Saved the highest-severity %1$d of %2$d findings.</string>
     <string name="intrusion_log_summary_range">Covers %1$s \u2192 %2$s</string>
 
     <!-- Timeline — externalized -->
@@ -290,4 +302,55 @@
     <string name="finding_triggered">Triggered</string>
     <string name="finding_passed">Passed</string>
     <string name="finding_view_details">View details</string>
+    <!-- Open alerts, credential-protected close, audited deletion (telemetry store D3, spec §5.4) -->
+    <string name="alerts_card_title">Open alerts</string>
+    <plurals name="alerts_card_count">
+        <item quantity="one">%1$d alert stays open until you close it.</item>
+        <item quantity="other">%1$d alerts stay open until you close them.</item>
+    </plurals>
+    <string name="alerts_card_none">No open alerts.</string>
+    <string name="alerts_current_findings" tools:ignore="PluralsCandidate">Current findings: %1$d (%2$d from the latest scan, %3$d open alerts)</string>
+    <plurals name="alerts_group_count">
+        <item quantity="one">%1$d alert</item>
+        <item quantity="other">%1$d alerts</item>
+    </plurals>
+    <string name="alerts_group_last_activity">Last activity %1$s</string>
+    <string name="alerts_close">Close</string>
+    <string name="alerts_close_selected" tools:ignore="PluralsCandidate">Close selected (%1$d)</string>
+    <string name="alerts_close_dialog_title">Close alerts</string>
+    <plurals name="alerts_close_dialog_body">
+        <item quantity="one">Close %1$d alert? It leaves the open list; it and its evidence stay in reports, and the closure is recorded in the Timeline. You will be asked for your screen lock.</item>
+        <item quantity="other">Close %1$d alerts? They leave the open list; they and their evidence stay in reports, and the closure is recorded in the Timeline. You will be asked for your screen lock.</item>
+    </plurals>
+    <string name="alerts_close_note">Note (optional)</string>
+    <string name="alerts_close_confirm">Close</string>
+    <string name="alerts_close_cancel">Cancel</string>
+    <string name="alerts_credential_title">Close alerts</string>
+    <string name="alerts_credential_description">Confirm your screen lock to close these alerts.</string>
+    <string name="alerts_close_cancelled">Nothing was closed: the screen lock was not confirmed.</string>
+    <string name="alerts_close_no_lock">Closed without a screen lock. Set a screen lock so closing alerts needs it.</string>
+    <string name="alerts_close_done" tools:ignore="PluralsCandidate">Closed %1$d alert(s).</string>
+    <string name="dashboard_no_live_scan_alerts">No current scan of this device. The alerts below stay open until you close them; run a scan to check this device now.</string>
+    <plurals name="guidance_open_alerts">
+        <item quantity="one">%1$d alert is still open (highest: %2$s). Review it below before treating this phone as secure.</item>
+        <item quantity="other">%1$d alerts are still open (highest: %2$s). Review them below before treating this phone as secure.</item>
+    </plurals>
+    <plurals name="dashboard_open_alerts_line">
+        <item quantity="one">%1$d open alert, highest %2$s</item>
+        <item quantity="other">%1$d open alerts, highest %2$s</item>
+    </plurals>
+    <string name="alerts_close_nothing_to_close">Nothing was closed: these alerts were already closed.</string>
+    <string name="alerts_close_failed">Nothing was closed: the alerts could not be updated. Try again.</string>
+    <string name="history_delete_failed_title">The delete did not finish</string>
+    <string name="history_delete_failed_body">Deleting could not complete, possibly because storage is full. If the scan has gone from the list, AndroDR finishes deleting it the next time it starts; otherwise nothing was deleted. Free some space and try again.</string>
+    <string name="timeline_close_alert">Close alert</string>
+    <string name="history_delete_title">Delete scan</string>
+    <string name="history_delete_body">Delete this scan, its telemetry and its timeline events? Alerts and their evidence are kept, and an audit entry listing the deleted findings is added to the Timeline.</string>
+    <string name="history_delete_confirm">Delete</string>
+    <string name="history_delete_cancel">Cancel</string>
+    <string name="history_clear_title">Clear all history</string>
+    <string name="history_clear_body">Delete every scan, its telemetry and timeline events, including live DNS events? This cannot be undone. Alerts and their evidence are kept, and an audit entry listing the deleted findings is added to the Timeline.</string>
+    <string name="history_clear_confirm">Delete all</string>
+    <string name="history_row_findings" tools:ignore="PluralsCandidate">%1$d finding(s)</string>
+    <string name="history_row_findings_unsaved" tools:ignore="PluralsCandidate">%1$d finding(s) · %2$d not saved</string>
 </resources>

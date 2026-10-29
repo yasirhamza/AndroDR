@@ -606,6 +606,9 @@ val MIGRATION_19_20 = object : Migration(19, 20) {
     }
 }
 
+/** v21: per-scan findings and lasting alerts ([FindingsMigration], spec §5.4). */
+val MIGRATION_20_21: Migration = FindingsMigration()
+
 private val SCHEMA_20_DDL = listOf(
     "ALTER TABLE ScanResult ADD COLUMN `state` TEXT NOT NULL DEFAULT 'COMPLETE'",
     "ALTER TABLE ScanResult ADD COLUMN `telemetryState` TEXT NOT NULL DEFAULT 'NONE'",
@@ -648,7 +651,7 @@ private val SCHEMA_20_DDL = listOf(
     "CREATE INDEX IF NOT EXISTS `index_signal_member_kind_refId` ON `signal_member` (`kind`, `refId`)",
 )
 
-private fun backfillFindingLevels(db: SupportSQLiteDatabase) {
+internal fun backfillFindingLevels(db: SupportSQLiteDatabase) {
     val scanIds = db.query(
         "SELECT DISTINCT f.scanResultId FROM forensic_timeline f JOIN ScanResult s ON s.id = f.scanResultId " +
             "WHERE f.ruleId != '' AND f.level IS NULL"

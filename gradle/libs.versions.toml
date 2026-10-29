@@ -55,6 +55,8 @@ robolectricAndroidAll = "15-robolectric-12650502-i7"
 # Robolectric 4.14.1 pulls bcprov-jdk18on 1.78.1 (GHSA-574f-3g2m-x479, GHSA-9pwp-9qqc-pr26,
 # GHSA-qp49-qgx5-5m26); 1.85 fixes all three. Pinned strictly on the test classpath (app/build.gradle.kts).
 bouncycastle = "1.85"
+# Robolectric 4.14.1 pulls guava 33.3.1-jre (GHSA-xxph-c9ww-hj94, high: fixed in 33.7.2). Test classpath only.
+guava = "33.7.2-jre"
 androidxTestCore = "1.6.1"
 
 # Paging / collections (telemetry store)
@@ -112,6 +114,7 @@ json-schema-validator = { group = "com.networknt", name = "json-schema-validator
 robolectric = { group = "org.robolectric", name = "robolectric", version.ref = "robolectric" }
 robolectric-android-all = { group = "org.robolectric", name = "android-all-instrumented", version.ref = "robolectricAndroidAll" }
 bouncycastle-bcprov = { group = "org.bouncycastle", name = "bcprov-jdk18on", version.ref = "bouncycastle" }
+guava = { group = "com.google.guava", name = "guava", version.ref = "guava" }
 androidx-test-core = { group = "androidx.test", name = "core", version.ref = "androidxTestCore" }
 
 # Paging / collections

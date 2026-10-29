@@ -4,9 +4,11 @@ import com.androdr.data.db.toForensicTimelineEvent
 import com.androdr.data.model.ForensicTimelineEvent
 import com.androdr.data.model.ScanResult
 import com.androdr.data.model.TelemetrySource
+import com.androdr.data.model.moreSevereLevel
 import com.androdr.data.store.AtomReader
 import com.androdr.sigma.CorrelationSignal
 import com.androdr.sigma.Finding
+import com.androdr.sigma.FindingCategory
 
 /**
  * What a writer adds to a writer session's finishing transaction (spec §5.2): each writer's
@@ -38,9 +40,9 @@ interface SessionHooks {
     suspend fun correlate(scan: ScanResult, atoms: AtomReader): Correlation = Correlation.NONE
 
     /**
-     * Summary columns (counts, scanner errors) of the completed scan. `scan.findings` holds the
-     * kept findings (capped for intrusion-log imports); [totals] counts every finding the session
-     * kept or dropped, so a summary never undercounts past the cap.
+     * Summary columns (counts, scanner errors) of the completed scan; [totals] counts every finding
+     * the session recorded (at finish, with the correlation findings). `triggeredCount` and
+     * `maxLevel` are already set on [scan] from [totals].
      */
     fun summarize(scan: ScanResult, totals: FindingTotals): ScanResult = scan
 
@@ -63,19 +65,53 @@ data class Correlation(val signals: List<CorrelationSignal>, val findings: List<
     }
 }
 
-/** A finding the session keeps, with the fact its Timeline row pins (null when nothing was stored). */
-class KeptFinding(val finding: Finding, val recordId: Long?)
-
 /**
- * Running counts over every finding a session accepted (before any persistence cap).
+ * Running counts over every finding a session recorded.
  *
  * @property knownMalware findings at level `critical` implying `known_malware` — today's
  *   `ScanResult.knownMalwareCount` definition, triggered or not.
  * @property triggeredByRule triggered findings per rule id (bounded by the rule count).
+ * @property maxLevel the most severe triggered level (lowercase), or null.
+ * @property riskySideload APP_RISK findings on a sideloaded app (`ScanResult.riskySideloadCount`).
  */
 data class FindingTotals(
     val seen: Long = 0,
     val triggered: Long = 0,
     val knownMalware: Int = 0,
     val triggeredByRule: Map<String, Long> = emptyMap(),
-)
+    val maxLevel: String? = null,
+    val riskySideload: Int = 0,
+) {
+    /** [scan] with its summary columns from these totals. */
+    fun applyTo(scan: ScanResult): ScanResult =
+        scan.copy(triggeredCount = triggered.coerceAtMost(Int.MAX_VALUE.toLong()).toInt(), maxLevel = maxLevel)
+
+    /** These totals with [findings] counted too. */
+    operator fun plus(findings: List<Finding>): FindingTotals =
+        FindingCounter(this).also { c -> findings.forEach(c::offer) }.totals()
+}
+
+/** Accumulates [FindingTotals] one finding at a time (no finding is held). */
+class FindingCounter(start: FindingTotals = FindingTotals()) {
+    private var seen = start.seen
+    private var triggered = start.triggered
+    private var knownMalware = start.knownMalware
+    private val byRule = HashMap(start.triggeredByRule)
+    private var maxLevel = start.maxLevel
+    private var riskySideload = start.riskySideload
+
+    fun offer(finding: Finding) {
+        seen++
+        if (finding.level == "critical" && "known_malware" in finding.impliesFlags) knownMalware++
+        if (finding.category == FindingCategory.APP_RISK && finding.matchContext["is_sideloaded"] == "true") {
+            riskySideload++
+        }
+        if (finding.triggered) {
+            triggered++
+            byRule[finding.ruleId] = (byRule[finding.ruleId] ?: 0L) + 1
+            maxLevel = moreSevereLevel(maxLevel, finding.level)
+        }
+    }
+
+    fun totals() = FindingTotals(seen, triggered, knownMalware, byRule.toMap(), maxLevel, riskySideload)
+}

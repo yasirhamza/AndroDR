@@ -16,7 +16,7 @@ import org.junit.Test
  * ("Unknown date").
  */
 class FindingEventTimeTest {
-    private val scan = ScanResult(id = 9L, timestamp = 9L, findings = emptyList(), bugReportFindings = emptyList(),
+    private val scan = ScanResult(id = 9L, timestamp = 9L, bugReportFindings = emptyList(),
         riskySideloadCount = 0, knownMalwareCount = 0, source = TelemetrySource.BUGREPORT_IMPORT)
 
     private fun finding(context: Map<String, String>) = Finding(ruleId = "r", title = "t", level = "high",

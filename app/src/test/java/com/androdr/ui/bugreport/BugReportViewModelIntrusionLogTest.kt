@@ -53,7 +53,7 @@ class BugReportViewModelIntrusionLogTest {
         val orchestrator = mockk<ScanOrchestrator>()
         coEvery { orchestrator.analyzeArtifact(any()) } throws
             ScanOrchestrator.IntrusionLogPersistException(RuntimeException("db write failed"))
-        val vm = BugReportViewModel(orchestrator, mockk(relaxed = true), mockk(relaxed = true))
+        val vm = BugReportViewModel(orchestrator, mockk(relaxed = true), mockk(relaxed = true), mockk(relaxed = true))
 
         vm.analyzeUri(mockk<Uri>(relaxed = true))
 
@@ -63,7 +63,7 @@ class BugReportViewModelIntrusionLogTest {
             "the message must be the honest 'failed to save' text: ${vm.errorMessage.value}",
             vm.errorMessage.value!!.contains("failed", ignoreCase = true)
         )
-        assertTrue("no findings render on a failed persist", vm.findings.value.isEmpty())
+        assertEquals("no findings render on a failed persist", 0, vm.shownCount.value)
         assertTrue(vm.analysisFinished.value)
     }
 
@@ -71,11 +71,11 @@ class BugReportViewModelIntrusionLogTest {
     fun `successful import renders the summary card`() = runTest {
         val orchestrator = mockk<ScanOrchestrator>()
         val result = IntrusionLogAnalysisResult(
-            findings = emptyList(), stats = stats()
+            stats = stats()
         )
         coEvery { orchestrator.analyzeArtifact(any()) } returns
             ScanOrchestrator.ArtifactAnalysis.IntrusionLog(result)
-        val vm = BugReportViewModel(orchestrator, mockk(relaxed = true), mockk(relaxed = true))
+        val vm = BugReportViewModel(orchestrator, mockk(relaxed = true), mockk(relaxed = true), mockk(relaxed = true))
 
         vm.analyzeUri(mockk<Uri>(relaxed = true))
 
@@ -96,7 +96,7 @@ class BugReportViewModelIntrusionLogTest {
         val orchestrator = mockk<ScanOrchestrator>()
         coEvery { orchestrator.analyzeArtifact(any()) } throws
             IntrusionLogAnalyzer.IntrusionLogAnalysisException(RuntimeException("unreadable zip"))
-        val vm = BugReportViewModel(orchestrator, mockk(relaxed = true), mockk(relaxed = true))
+        val vm = BugReportViewModel(orchestrator, mockk(relaxed = true), mockk(relaxed = true), mockk(relaxed = true))
 
         vm.analyzeUri(mockk<Uri>(relaxed = true))
 
@@ -107,7 +107,7 @@ class BugReportViewModelIntrusionLogTest {
             "the message must say it failed: ${vm.errorMessage.value}",
             vm.errorMessage.value!!.contains("failed", ignoreCase = true)
         )
-        assertTrue("no findings render on a failed analysis", vm.findings.value.isEmpty())
+        assertEquals("no findings render on a failed analysis", 0, vm.shownCount.value)
         assertTrue(vm.analysisFinished.value)
     }
 
@@ -122,11 +122,11 @@ class BugReportViewModelIntrusionLogTest {
     fun `an intrusion log import records INTRUSION_LOG as the analyzed artifact`() = runTest {
         val orchestrator = mockk<ScanOrchestrator>()
         val result = IntrusionLogAnalysisResult(
-            findings = emptyList(), stats = stats()
+            stats = stats()
         )
         coEvery { orchestrator.analyzeArtifact(any()) } returns
             ScanOrchestrator.ArtifactAnalysis.IntrusionLog(result)
-        val vm = BugReportViewModel(orchestrator, mockk(relaxed = true), mockk(relaxed = true))
+        val vm = BugReportViewModel(orchestrator, mockk(relaxed = true), mockk(relaxed = true), mockk(relaxed = true))
 
         vm.analyzeUri(mockk<Uri>(relaxed = true))
 
@@ -138,9 +138,9 @@ class BugReportViewModelIntrusionLogTest {
         val orchestrator = mockk<ScanOrchestrator>()
         coEvery { orchestrator.analyzeArtifact(any()) } returns
             ScanOrchestrator.ArtifactAnalysis.BugReport(
-                BugReportAnalyzer.BugReportAnalysisResult(findings = emptyList())
+                BugReportAnalyzer.BugReportAnalysisResult()
             )
-        val vm = BugReportViewModel(orchestrator, mockk(relaxed = true), mockk(relaxed = true))
+        val vm = BugReportViewModel(orchestrator, mockk(relaxed = true), mockk(relaxed = true), mockk(relaxed = true))
 
         vm.analyzeUri(mockk<Uri>(relaxed = true))
 
@@ -151,11 +151,11 @@ class BugReportViewModelIntrusionLogTest {
     fun `a failed analysis clears the previous artifact label`() = runTest {
         val orchestrator = mockk<ScanOrchestrator>()
         val result = IntrusionLogAnalysisResult(
-            findings = emptyList(), stats = stats()
+            stats = stats()
         )
         coEvery { orchestrator.analyzeArtifact(any()) } returns
             ScanOrchestrator.ArtifactAnalysis.IntrusionLog(result)
-        val vm = BugReportViewModel(orchestrator, mockk(relaxed = true), mockk(relaxed = true))
+        val vm = BugReportViewModel(orchestrator, mockk(relaxed = true), mockk(relaxed = true), mockk(relaxed = true))
         vm.analyzeUri(mockk<Uri>(relaxed = true))
         assertEquals(ArtifactType.INTRUSION_LOG, vm.analyzedArtifact.value)
 

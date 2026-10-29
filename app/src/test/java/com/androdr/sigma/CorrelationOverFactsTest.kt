@@ -79,14 +79,14 @@ class CorrelationOverFactsTest {
             s.append("appops_audit", TelemetrySource.BUGREPORT_IMPORT, 9L,
                 listOf(appOps("com.spy", "android:camera", 1_000), appOps("com.spy", "android:record_audio", 2_000),
                     appOps("com.spy", "android:read_sms", 3_000)))
-            val r = s.finish()
+            s.finish()
 
             val signal = signals().single()
             val m = members(signal)
             assertEquals("three facts and one row", listOf(SignalMember.KIND_ROW, SignalMember.KIND_FACT,
                 SignalMember.KIND_FACT, SignalMember.KIND_FACT), m.map { it.kind })
-            assertEquals(1, r.scan.findings.count { it.category == FindingCategory.CORRELATION })
-            assertEquals("4", r.scan.findings.single { it.category == FindingCategory.CORRELATION }
+            assertEquals(1, w.findingsOf(1L).count { it.category == FindingCategory.CORRELATION })
+            assertEquals("4", w.findingsOf(1L).single { it.category == FindingCategory.CORRELATION }
                 .matchContext["member_count"])
         }
 

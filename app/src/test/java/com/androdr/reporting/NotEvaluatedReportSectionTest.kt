@@ -1,7 +1,8 @@
 package com.androdr.reporting
 
 import com.androdr.data.model.NotEvaluatedReason
-import com.androdr.data.model.ScanResult
+import com.androdr.data.model.ScanWithFindings
+import com.androdr.data.model.scanWith
 import com.androdr.data.model.ScannerFailure
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -18,12 +19,12 @@ import org.junit.Test
  */
 class NotEvaluatedReportSectionTest {
 
-    private fun scanWith(vararg errors: ScannerFailure) = ScanResult(
-        id = 1L, timestamp = 1711900800000, findings = emptyList(), bugReportFindings = emptyList(),
+    private fun scanWith(vararg errors: ScannerFailure) = scanWith(
+        id = 1L, timestamp = 1711900800000, bugReportFindings = emptyList(),
         riskySideloadCount = 0, knownMalwareCount = 0, scannerErrors = errors.toList(),
     )
 
-    private fun report(scan: ScanResult) = reportText(scan, mode = ExportMode.FINDINGS_ONLY)
+    private fun report(scan: ScanWithFindings) = reportText(scan, mode = ExportMode.FINDINGS_ONLY)
 
     private val missingCapability = ScannerFailure(
         "ruleCapability", NotEvaluatedReason.MISSING_CAPABILITY.sentinel,

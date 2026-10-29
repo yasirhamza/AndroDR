@@ -1,7 +1,8 @@
 package com.androdr.reporting
 
 import com.androdr.data.model.NotEvaluatedReason
-import com.androdr.data.model.ScanResult
+import com.androdr.data.model.ScanWithFindings
+import com.androdr.data.model.scanWith
 import com.androdr.data.model.ScannerFailure
 import com.androdr.data.model.UNREGISTERED_IOC_LOOKUP
 import com.androdr.ioc.Campaign
@@ -20,7 +21,7 @@ class ReportFormatterTest {
         knownMalwareCount: Int = 0,
         riskySideloadCount: Int = 0,
         scannerErrors: List<ScannerFailure> = emptyList()
-    ): ScanResult = ScanResult(
+    ): ScanWithFindings = scanWith(
         id = 1L,
         timestamp = 1711900800000,
         findings = deviceFlags + appRisks,
@@ -338,7 +339,8 @@ class ReportFormatterTest {
         scannerErrors: List<ScannerFailure> = emptyList(),
         ruleCategoryById: Map<String, String> = emptyMap(),
         ruleScopes: Map<String, RuleScope> = emptyMap(),
-        scan: ScanResult = buildScan(appRisks = appRisks, deviceFlags = deviceFlags, scannerErrors = scannerErrors),
+        scan: ScanWithFindings =
+            buildScan(appRisks = appRisks, deviceFlags = deviceFlags, scannerErrors = scannerErrors),
     ) = reportText(scan, campaigns = campaigns, ruleScopes = ruleScopes, ruleCategoryById = ruleCategoryById)
 
     @Test
@@ -410,7 +412,7 @@ class ReportFormatterTest {
     fun `an imported scan renders no Blocked line`() {
         val f = iocFinding("d.example", "Fam", "", "false")
         val scan = buildScan(appRisks = listOf(f))
-            .copy(source = com.androdr.data.model.TelemetrySource.BUGREPORT_IMPORT)
+            .let { it.copy(scan = it.scan.copy(source = com.androdr.data.model.TelemetrySource.BUGREPORT_IMPORT)) }
         val report = formatReportWith(listOf(f), scan = scan)
         assertTrue(report.contains("Matched : d.example -> Fam"))
         assertFalse(report.contains("Blocked :"))

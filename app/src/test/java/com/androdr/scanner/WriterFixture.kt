@@ -55,18 +55,22 @@ internal class WriterFixture(recordSql: Boolean = true) : Closeable {
     var repo: ScanWriteRepository =
         ScanWriteRepository(
             f.db, f.store, TimelineRowDeleter(f.db.forensicTimelineEventDao(), f.store, f.db.signalMemberDao()),
+            f.findings, f.pendingClear,
         )
     val lock = ScanLock()
-    val writer by lazy { ChunkedScanWriter(engine, store, repo, preflight, health) }
+    val writer by lazy { ChunkedScanWriter(engine, store, repo, f.findings, preflight, health) }
 
     fun scan(id: Long, source: TelemetrySource = TelemetrySource.LIVE_SCAN) = ScanResult(
-        id = id, timestamp = id, findings = emptyList(), bugReportFindings = emptyList(),
+        id = id, timestamp = id, bugReportFindings = emptyList(),
         riskySideloadCount = 0, knownMalwareCount = 0, source = source,
     )
 
     fun visibleFacts(): Long = f.count("SELECT COUNT(*) FROM telemetry_record f WHERE ${VisibleFact.SQL}")
     fun visibleRows(): Long = f.count("SELECT COUNT(*) FROM forensic_timeline r WHERE ${VisibleRow.SQL}")
     fun count(sql: String): Long = f.count(sql)
+
+    /** Every finding of COMPLETE scan [scanId], read back from `scan_finding`. */
+    suspend fun findingsOf(scanId: Long) = f.findings.findingsOf(scanId)
 
     override fun close() {
         f.close()

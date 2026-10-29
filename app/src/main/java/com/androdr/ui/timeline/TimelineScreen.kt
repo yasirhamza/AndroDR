@@ -52,6 +52,9 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import com.androdr.ui.security.rememberConfirmCredential
+import kotlinx.coroutines.launch
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -65,6 +68,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.paging.LoadState
 import androidx.paging.compose.collectAsLazyPagingItems
 import androidx.paging.compose.itemKey
 import com.androdr.R
@@ -99,7 +103,7 @@ fun TimelineScreen(
     val shareUri by viewModel.shareUri.collectAsStateWithLifecycle()
     val exporting by viewModel.exporting.collectAsStateWithLifecycle()
     val groupMode by viewModel.groupMode.collectAsStateWithLifecycle()
-    val scanGroups by viewModel.scanGroups.collectAsStateWithLifecycle()
+    val scanGroups = viewModel.scanGroups.collectAsLazyPagingItems()
     val report by viewModel.report.collectAsStateWithLifecycle()
 
     val context = LocalContext.current
@@ -232,7 +236,7 @@ fun TimelineScreen(
                 contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                if (scanGroups.isEmpty()) {
+                if (scanGroups.itemCount == 0 && scanGroups.loadState.refresh is LoadState.NotLoading) {
                     item {
                         Text(
                             text = stringResource(R.string.timeline_scan_empty),
@@ -241,7 +245,8 @@ fun TimelineScreen(
                         )
                     }
                 }
-                items(scanGroups, key = { "scan_${it.scanId}" }) { group ->
+                items(count = scanGroups.itemCount, key = scanGroups.itemKey { "scan_${it.scanId}" }) { index ->
+                    val group = scanGroups[index] ?: return@items
                     val count = rememberCount(group.scanId, filter, countsVersion) { viewModel.scanCount(group.scanId) }
                     // A scan header opens that scan's Timeline.
                     ScanGroupHeader(group = group, count = count, onClick = {
@@ -328,8 +333,32 @@ fun TimelineScreen(
             rows.itemSnapshotList.items.filterIsInstance<TimelineRow.StoredRow>().map { it.event }
                 .filter { it.effectiveCorrelationId() == key && it.id != event.id }
         } else emptyList()
+        // Close on an alert row (spec §5.4): offered while the row's alert is OPEN; asks the credential.
+        var alertIds by remember(event.id) { mutableStateOf<List<Long>>(emptyList()) }
+        LaunchedEffect(event.id) { alertIds = viewModel.openAlertIdsFor(event) }
+        val confirm = rememberConfirmCredential()
+        val closeTitle = stringResource(R.string.alerts_credential_title)
+        val closeDescription = stringResource(R.string.alerts_credential_description)
+        val closeScope = rememberCoroutineScope()
+        var closing by remember(event.id) { mutableStateOf(false) }
         TimelineEventDetailSheet(
             event = event,
+            onCloseAlert = alertIds.takeIf { it.isNotEmpty() }?.let { ids ->
+                {
+                    if (!closing) {
+                        closing = true
+                        closeScope.launch {
+                            try {
+                                if (viewModel.closeAlerts(ids, null) { confirm(closeTitle, closeDescription) } > 0) {
+                                    alertIds = emptyList()
+                                }
+                            } finally {
+                                closing = false
+                            }
+                        }
+                    }
+                }
+            },
             onDismiss = { selectedEvent = null },
             onShowOnlyApp = { pkg ->
                 selectedEvent = null

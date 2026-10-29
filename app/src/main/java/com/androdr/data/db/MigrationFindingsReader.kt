@@ -23,12 +23,19 @@ object MigrationFindingsReader {
 
     private val json = Json { ignoreUnknownKeys = true }
 
-    fun read(db: SupportSQLiteDatabase, scanId: Long): List<JsonObject> {
+    fun read(db: SupportSQLiteDatabase, scanId: Long): List<JsonObject> = readOrNull(db, scanId).orEmpty()
+
+    /**
+     * [read], but null when the value exists and cannot be read (over [MAX_CHARS], or not a JSON
+     * array), so a caller can say that findings were lost; an absent or empty value is an empty list.
+     */
+    fun readOrNull(db: SupportSQLiteDatabase, scanId: Long): List<JsonObject>? {
         val length = db.query("SELECT length(findings) FROM ScanResult WHERE id = ?", arrayOf<Any>(scanId))
             .use { c -> if (c.moveToFirst() && !c.isNull(0)) c.getLong(0) else null }
-        if (length == null || length == 0L || length > MAX_CHARS) {
-            if (length != null && length > MAX_CHARS) Log.w(TAG, "scan $scanId findings too large ($length chars)")
-            return emptyList()
+        if (length == null || length == 0L) return emptyList()
+        if (length > MAX_CHARS) {
+            Log.w(TAG, "scan $scanId findings too large ($length chars)")
+            return null
         }
         val text = StringBuilder(length.toInt())
         var start = 1L
@@ -42,14 +49,14 @@ object MigrationFindingsReader {
         return parse(scanId, text.toString())
     }
 
-    private fun parse(scanId: Long, text: String): List<JsonObject> = try {
-        (json.parseToJsonElement(text) as? JsonArray)?.filterIsInstance<JsonObject>().orEmpty()
+    private fun parse(scanId: Long, text: String): List<JsonObject>? = try {
+        (json.parseToJsonElement(text) as? JsonArray)?.filterIsInstance<JsonObject>()
     } catch (e: SerializationException) {
         Log.w(TAG, "scan $scanId findings unreadable: ${e.message}")
-        emptyList()
+        null
     } catch (e: IllegalArgumentException) {
         Log.w(TAG, "scan $scanId findings unreadable: ${e.message}")
-        emptyList()
+        null
     }
 
     private const val TAG = "MigrationFindings"

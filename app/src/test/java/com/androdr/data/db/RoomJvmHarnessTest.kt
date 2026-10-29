@@ -14,7 +14,7 @@ class RoomJvmHarnessTest {
         val db = RoomTestDb.inMemory()
         try {
             val scan = ScanResult(
-                id = 42L, timestamp = 1_700_000_000_000L, findings = emptyList(),
+                id = 42L, timestamp = 1_700_000_000_000L,
                 bugReportFindings = listOf("a"), riskySideloadCount = 2, knownMalwareCount = 1
             )
             db.scanResultDao().insert(scan)

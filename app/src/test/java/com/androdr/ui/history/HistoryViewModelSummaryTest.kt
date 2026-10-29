@@ -38,16 +38,20 @@ class HistoryViewModelSummaryTest {
     @After fun tearDown() = Dispatchers.resetMain()
 
     private val scan = ScanResult(
-        id = 1L, timestamp = 1L, findings = emptyList(), bugReportFindings = emptyList(),
+        id = 1L, timestamp = 1L, bugReportFindings = emptyList(),
         riskySideloadCount = 0, knownMalwareCount = 0,
     )
     private val summary = ReportSummary(TelemetrySource.LIVE_SCAN, "LOW", 0, 0, 0, 0, 0, TelemetryState.STORED,
         emptyList())
 
     private fun vm(exporter: ReportExporter) = HistoryViewModel(
-        repository = mockk<ScanRepository> { every { allScans } returns flowOf(listOf(scan)) },
-        orchestrator = mockk(relaxed = true),
+        repository = mockk<ScanRepository> {
+            every { pagedScans() } returns flowOf(androidx.paging.PagingData.from(listOf(scan)))
+            every { hasScans } returns flowOf(true)
+        },
         reportExporter = exporter,
+        findings = mockk(relaxed = true),
+        scanLock = com.androdr.data.repo.ScanLock(),
     )
 
     @Test

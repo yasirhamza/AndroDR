@@ -3,6 +3,7 @@ package com.androdr.data.db
 import androidx.room.Database
 import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
+import com.androdr.data.model.Alert
 import com.androdr.data.model.CveEntity
 import com.androdr.data.model.DnsEvent
 import com.androdr.data.model.EventWatermark
@@ -10,6 +11,7 @@ import com.androdr.data.model.FeedHealth
 import com.androdr.data.model.ForensicTimelineEvent
 import com.androdr.data.model.Indicator
 import com.androdr.data.model.RecordBody
+import com.androdr.data.model.ScanFinding
 import com.androdr.data.model.ScanObservation
 import com.androdr.data.model.ScanResult
 import com.androdr.data.model.SignalMember
@@ -20,9 +22,9 @@ import com.androdr.data.model.TelemetryFact
         ScanResult::class, DnsEvent::class, KnownAppDbEntry::class,
         CveEntity::class, ForensicTimelineEvent::class, Indicator::class,
         FeedHealth::class, RecordBody::class, TelemetryFact::class, ScanObservation::class,
-        EventWatermark::class, SignalMember::class
+        EventWatermark::class, SignalMember::class, ScanFinding::class, Alert::class
     ],
-    version = 20,
+    version = 21,
     exportSchema = true
 )
 @TypeConverters(Converters::class)
@@ -64,4 +66,8 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun legacyEventRowDao(): LegacyEventRowDao
 
     abstract fun timelineDao(): TimelineDao
+
+    abstract fun scanFindingDao(): ScanFindingDao
+
+    abstract fun alertDao(): AlertDao
 }

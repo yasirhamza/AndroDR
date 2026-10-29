@@ -5,9 +5,7 @@ import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import com.androdr.data.model.ForensicTimelineEvent
-
-/** A finding row's rule and fact (see [ForensicTimelineEventDao.findingRuleRecords]). */
-data class RuleRecord(val ruleId: String, val recordId: Long)
+import com.androdr.data.model.SignalMember
 
 @Dao
 @Suppress("TooManyFunctions") // Room DAO: the writers', deleters' and pin readers' queries
@@ -56,14 +54,19 @@ interface ForensicTimelineEventDao {
     // `TimelineRowDeleter`, which reads the paired `recordIds*` first and releases those facts in
     // the same transaction (spec §5.1 Pins; gated by TimelineRowDeleterTest).
 
-    /** The 30-day prune; persistent (audit/closure) rows are never pruned. */
-    @Query("DELETE FROM forensic_timeline WHERE createdAt < :cutoff AND persistent = 0")
+    /**
+     * The 30-day prune's non-signal rows ([PRUNABLE], spec §5.6): only non-persistent `LIVE_SCAN`
+     * rows that no surviving signal's `signal_member` row ref points at. Its signal rows go by id
+     * ([signalIdsOlderThan], [deleteByIds]) with their members.
+     */
+    @Query("$PRUNE_DELETE")
     suspend fun deleteOlderThan(cutoff: Long)
 
     // The signal rows each delete below is about to remove: their `signal_member` rows go with
     // them, by id (TimelineRowDeleter; spec §5.4). Same predicates as the paired deletes.
 
-    @Query("SELECT id FROM forensic_timeline WHERE kind = 'signal' AND createdAt < :cutoff AND persistent = 0")
+    /** The prune's signal rows ([PRUNABLE]: a signal another signal lists as a member stays). */
+    @Query("$PRUNE_SIGNAL_IDS")
     suspend fun signalIdsOlderThan(cutoff: Long): List<Long>
 
     @Query("SELECT id FROM forensic_timeline WHERE kind = 'signal' AND id IN (:ids)")
@@ -73,15 +76,13 @@ interface ForensicTimelineEventDao {
     suspend fun signalIdsByScanId(scanResultId: Long): List<Long>
 
     @Query(
-        "SELECT id FROM forensic_timeline WHERE kind = 'signal' AND persistent = 0 AND (scanResultId = -1 OR " +
-            "NOT EXISTS (SELECT 1 FROM ScanResult s WHERE s.id = forensic_timeline.scanResultId))"
+        "SELECT id FROM forensic_timeline WHERE kind = 'signal' AND persistent = 0 AND id <= :maxId " +
+            "AND (scanResultId = -1 $SCAN_GONE)"
     )
-    suspend fun signalIdsUnownedNonPersistent(): List<Long>
+    suspend fun signalIdsScanLessThrough(maxId: Long): List<Long>
 
-    @Query(
-        "SELECT DISTINCT recordId FROM forensic_timeline " +
-            "WHERE createdAt < :cutoff AND persistent = 0 AND recordId IS NOT NULL"
-    )
+    /** The pins of [deleteOlderThan]'s rows (same predicate; read after the pruned signals' members go). */
+    @Query("$PRUNE_RECORD_IDS")
     suspend fun recordIdsOlderThan(cutoff: Long): List<Long>
 
     /** The rows [ids] (the one-time legacy event-row cleanup, C3). At most 900 ids per call. */
@@ -101,27 +102,52 @@ interface ForensicTimelineEventDao {
     )
     suspend fun recordIdsByScanId(scanResultId: Long): List<Long>
 
-    /** "Clear all": non-persistent rows that are scan-less or whose scan no longer exists. */
-    @Query(
-        "DELETE FROM forensic_timeline WHERE persistent = 0 AND (scanResultId = -1 OR NOT EXISTS " +
-            "(SELECT 1 FROM ScanResult s WHERE s.id = forensic_timeline.scanResultId))"
-    )
-    suspend fun deleteUnownedNonPersistent()
+    /**
+     * "Clear all" (spec §5.4): the non-persistent scan-less rows (`scanResultId = -1`, live
+     * `dns_query`/`ioc_match` rows among them) that existed at its first transaction (`id <= maxId`).
+     * A row written after that, or a row of a scan begun after it, is untouched.
+     */
+    @Query("$DELETE_SCAN_LESS_THROUGH")
+    suspend fun deleteScanLessThrough(maxId: Long)
 
     @Query(
         "SELECT DISTINCT recordId FROM forensic_timeline WHERE persistent = 0 AND recordId IS NOT NULL " +
-            "AND (scanResultId = -1 OR NOT EXISTS " +
-            "(SELECT 1 FROM ScanResult s WHERE s.id = forensic_timeline.scanResultId))"
+            "AND id <= :maxId AND (scanResultId = -1 $SCAN_GONE)"
     )
-    suspend fun recordIdsUnownedNonPersistent(): List<Long>
+    suspend fun recordIdsScanLessThrough(maxId: Long): List<Long>
 
-    /**
-     * Of [recordIds], the `(ruleId, recordId)` pairs a visible finding row already carries — the
-     * Phase A–C late-IOC re-check emits a finding only when none exists (spec §5.2).
-     */
-    @Query(
-        "SELECT r.ruleId AS ruleId, r.recordId AS recordId FROM forensic_timeline r " +
-            "WHERE r.recordId IN (:recordIds) AND r.ruleId != '' AND ${VisibleRow.SQL}"
-    )
-    suspend fun findingRuleRecords(recordIds: List<Long>): List<RuleRecord>
+    /** The newest row id ("Clear all"'s `clearMaxRowId`); 0 when the table is empty. */
+    @Query("SELECT COALESCE(MAX(id), 0) FROM forensic_timeline")
+    suspend fun maxId(): Long
 }
+
+/**
+ * Rows of a scan that no longer exists (left over from before Phase D). Safe in "Clear all" because
+ * the rows of any scan begun after its first transaction have `id > maxId` (review m5).
+ */
+internal const val SCAN_GONE = "OR (scanResultId != -1 AND NOT EXISTS " +
+    "(SELECT 1 FROM ScanResult s WHERE s.id = forensic_timeline.scanResultId))"
+
+/**
+ * The 30-day prune's rows (spec §5.6): non-persistent `LIVE_SCAN` rows created before `:cutoff`,
+ * whatever their `scanResultId`, that no `signal_member` row ref points at. Run after the pruned
+ * signals' members are deleted, so the refs left are those of surviving signals. A signal's ref to
+ * itself does not exempt it.
+ */
+internal const val PRUNABLE = "createdAt < :cutoff AND persistent = 0 AND telemetrySource = 'LIVE_SCAN' " +
+    "AND NOT EXISTS (SELECT 1 FROM signal_member m WHERE m.kind = ${SignalMember.KIND_ROW} " +
+    "AND m.refId = forensic_timeline.id AND m.signalRowId != forensic_timeline.id)"
+
+/** The prune's signal rows: deleted by id, together with their members (TimelineRowDeleter). */
+internal const val PRUNE_SIGNAL_IDS = "SELECT id FROM forensic_timeline WHERE kind = 'signal' AND $PRUNABLE"
+
+/** The pins of the prune's other rows, read just before [PRUNE_DELETE]. */
+internal const val PRUNE_RECORD_IDS = "SELECT recordId FROM forensic_timeline " +
+    "WHERE kind != 'signal' AND recordId IS NOT NULL AND $PRUNABLE"
+
+/** The prune's other rows; signal rows are never deleted here (only by id, with their members). */
+internal const val PRUNE_DELETE = "DELETE FROM forensic_timeline WHERE kind != 'signal' AND $PRUNABLE"
+
+/** "Clear all"'s delete: scan-less rows and leftover rows of gone scans, up to `maxId`. */
+internal const val DELETE_SCAN_LESS_THROUGH =
+    "DELETE FROM forensic_timeline WHERE persistent = 0 AND id <= :maxId AND (scanResultId = -1 $SCAN_GONE)"
