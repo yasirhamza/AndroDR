@@ -2,7 +2,6 @@ package com.androdr.network
 
 import com.androdr.data.model.DnsEvent
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -265,34 +264,43 @@ class DnsFlushRetryTest {
         assertEquals("each event stored exactly once", listOf(3L, 4L), writer.stored.map { it.timestamp })
     }
 
+    /**
+     * Triage #34 (flake: "tmp preferences file missing"). The DataStore used to run in its own
+     * `Dispatchers.IO` scope on a real thread while the buffer's drop report (in [backgroundScope],
+     * virtual time) wrote through it. The test polled with `Thread.sleep` until the total showed,
+     * then cancelled that scope in `finally`, racing whatever DataStore work was still on the IO
+     * thread (the end of the edit's write/rename, a re-read of the file). The DataStore now runs in
+     * [backgroundScope] on the test scheduler: one thread, virtual time, no polling, and its work is
+     * finished (and checked by [assertDataStoreIdle]) before runTest cancels the scope.
+     */
     @Test
     fun `drops are recorded in the drop log and survive a later healthy flush`() = runTest {
         val dir = java.nio.file.Files.createTempDirectory("dnsdrop").toFile()
-        val scope = CoroutineScope(kotlinx.coroutines.Dispatchers.IO + kotlinx.coroutines.SupervisorJob())
-        val log = com.androdr.data.store.DnsDropLog(
-            androidx.datastore.preferences.core.PreferenceDataStoreFactory.create(scope = scope) {
-                java.io.File(dir, "d.preferences_pb")
-            }
-        )
         try {
+            val log = com.androdr.data.store.DnsDropLog(
+                androidx.datastore.preferences.core.PreferenceDataStoreFactory.create(scope = backgroundScope) {
+                    java.io.File(dir, "d.preferences_pb")
+                }
+            )
             val writer = FakeWriter(failing = true) { testScheduler.currentTime }
             val buf = buffer(writer, DnsDropRecorder(log) { 1_000L }, maxBuffered = 10).also { it.start() }
             (1..15).forEach { buf.add(event(it)) }
             advanceTimeBy(2_001); runCurrent()
             writer.failing = false
             advanceTimeBy(60_000); runCurrent()
-            // The DataStore write runs on a real thread, outside the test's virtual time.
-            val state = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-                var s = log.state.first()
-                var tries = 0
-                while (s.total == 0L && tries++ < 200) { Thread.sleep(25); s = log.state.first() }
-                s
-            }
+            val state = log.state.first()
             assertEquals(5L, state.total)
             assertEquals(1_000L, state.lastDropAt)
+            assertDataStoreIdle(dir)
         } finally {
-            scope.cancel()
+            dir.deleteRecursively()
         }
+    }
+
+    /** No DataStore write is half done: the preferences file is in place and no scratch file is left. */
+    private fun TestScope.assertDataStoreIdle(dir: java.io.File) {
+        runCurrent()
+        assertEquals(listOf("d.preferences_pb"), dir.list()?.sorted())
     }
 
     @Test
