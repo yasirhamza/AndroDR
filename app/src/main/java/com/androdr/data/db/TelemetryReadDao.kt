@@ -38,8 +38,26 @@ data class ServiceSummary(val service: String, val records: Int)
  */
 data class ScanTotals(val records: Long, val rawBytes: Long, val latestEventTime: Long?)
 
-/** Distinct bodies of one encoding (−1 for the pinned-orphan total) and their sizes. */
-data class BodyStatsRow(val encoding: Int, val bodies: Long, val storedBytes: Long, val rawBytes: Long)
+/**
+ * Distinct bodies of one storage kind ([StorageKind]; −1 for the pinned-orphan total) and their sizes.
+ */
+data class BodyStatsRow(val kind: Int, val bodies: Long, val storedBytes: Long, val rawBytes: Long)
+
+/**
+ * The kinds Settings' storage figures are split into (spec §8.2), matching what retention keeps
+ * apart (spec §5.1): snapshot records of live scans (no event time; kept for the newest N live
+ * scans), event records of live scans (kept 30 days), and everything an import observed (kept until
+ * the import is deleted).
+ */
+object StorageKind {
+    const val SNAPSHOT = 0
+    const val LIVE_EVENT = 1
+    const val IMPORT = 2
+
+    /** The kind of observation `o` of fact `f` in scan `s`. */
+    internal const val SQL = "CASE WHEN s.source <> 'LIVE_SCAN' THEN $IMPORT " +
+        "WHEN f.eventTime IS NULL THEN $SNAPSHOT ELSE $LIVE_EVENT END"
+}
 
 /**
  * Reader side of the telemetry store (spec §5.1). Every query applies the visibility rule:
@@ -192,18 +210,22 @@ interface TelemetryReadDao {
     )
     suspend fun scanTotals(scanId: Long, eventsNotAfter: Long = Long.MAX_VALUE): ScanTotals
 
-    /** Distinct bodies of facts observed by a COMPLETE scan, by encoding. */
+    /**
+     * Distinct bodies of facts observed by a COMPLETE scan, by [StorageKind]. A body observed in more
+     * than one kind (the same record seen by a live scan and an import) counts once in each.
+     */
     @Query(
-        "SELECT b.encoding AS encoding, COUNT(*) AS bodies, COALESCE(SUM(LENGTH(b.body)), 0) AS storedBytes, " +
-            "COALESCE(SUM(b.rawBytes), 0) AS rawBytes FROM record_body b WHERE EXISTS (SELECT 1 FROM " +
-            "telemetry_record f JOIN scan_record o ON o.recordId = f.id JOIN ScanResult s ON s.id = o.scanId " +
-            "WHERE f.bodyHash = b.hash AND ${CompleteScan.SQL}) GROUP BY b.encoding ORDER BY b.encoding"
+        "SELECT k.kind AS kind, COUNT(*) AS bodies, COALESCE(SUM(LENGTH(b.body)), 0) AS storedBytes, " +
+            "COALESCE(SUM(b.rawBytes), 0) AS rawBytes FROM (SELECT DISTINCT f.bodyHash AS hash, " +
+            "${StorageKind.SQL} AS kind FROM scan_record o JOIN ScanResult s ON s.id = o.scanId " +
+            "JOIN telemetry_record f ON f.id = o.recordId WHERE ${CompleteScan.SQL}) k " +
+            "JOIN record_body b ON b.hash = k.hash GROUP BY k.kind ORDER BY k.kind"
     )
     suspend fun storageObserved(): List<BodyStatsRow>
 
     /** Distinct bodies held only by pinned orphan facts (not counted by [storageObserved]). */
     @Query(
-        "SELECT -1 AS encoding, COUNT(*) AS bodies, COALESCE(SUM(LENGTH(b.body)), 0) AS storedBytes, " +
+        "SELECT -1 AS kind, COUNT(*) AS bodies, COALESCE(SUM(LENGTH(b.body)), 0) AS storedBytes, " +
             "COALESCE(SUM(b.rawBytes), 0) AS rawBytes FROM record_body b WHERE EXISTS (SELECT 1 FROM " +
             "telemetry_record f WHERE f.bodyHash = b.hash AND ${VisibleFact.PINNED_ORPHAN}) AND NOT EXISTS " +
             "(SELECT 1 FROM telemetry_record f2 JOIN scan_record o ON o.recordId = f2.id " +

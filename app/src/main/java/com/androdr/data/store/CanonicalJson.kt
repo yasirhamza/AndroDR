@@ -18,6 +18,9 @@ internal object CanonicalJson {
 
     fun write(fields: Map<String, Any?>): String = StringBuilder().also { writeMap(fields, it) }.toString()
 
+    /** [s] as a JSON string literal, escaped exactly as [write] escapes strings. */
+    fun quote(s: String): String = StringBuilder().also { writeString(s, it) }.toString()
+
     /** The decoded map, or null if [json] is not a well-formed canonical object. */
     fun parse(json: String): Map<String, Any?>? = try {
         val p = Parser(json)

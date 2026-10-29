@@ -356,6 +356,10 @@
     <!-- Telemetry browser (telemetry store E1, spec §8.1) -->
     <string name="telemetry_title">Telemetry</string>
     <string name="telemetry_view">View telemetry</string>
+    <string name="telemetry_export_action">Export telemetry (JSONL)</string>
+    <string name="telemetry_export_title">Export telemetry (JSONL)</string>
+    <string name="telemetry_export_confirm">Export</string>
+    <string name="telemetry_export_estimate_unknown">The size of this scan\'s stored telemetry is unknown; the export includes all of it.</string>
     <string name="telemetry_back">Back</string>
     <string name="telemetry_scan_unavailable">This scan\'s telemetry is not available. Only completed scans can be browsed.</string>
     <string name="telemetry_scan_empty">This scan stored no telemetry.</string>

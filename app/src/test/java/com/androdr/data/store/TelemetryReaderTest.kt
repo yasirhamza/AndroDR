@@ -210,9 +210,34 @@ class TelemetryReaderTest {
         assertTrue(firstPage(1L, "app_scanner").all { it.summary == null })
         val s = f.reader.storage()
         assertEquals(2L, s.snapshots.bodies)
-        assertEquals(3L, s.events.bodies)
+        assertEquals(3L, s.liveEvents.bodies)
+        assertEquals(BodyStats.NONE, s.imports)
         assertEquals(0L, s.pinnedOrphans.bodies)
-        assertTrue(s.events.storedBytes > 0 && s.events.rawBytes > 0)
+        assertTrue(s.liveEvents.storedBytes > 0 && s.liveEvents.rawBytes > 0)
+    }
+
+    @Test
+    fun `storage splits distinct bodies into snapshots, live events and imports (spec 8_2)`() = runBlocking {
+        f.scan(1L)
+        f.persist(1L, "app_scanner", listOf(app("x"), app("y")))
+        f.persist(1L, "dns_monitor", listOf(dns("a.example")))
+        f.setState(1L, ScanState.COMPLETE)
+        val imp = TelemetrySource.BUGREPORT_IMPORT
+        f.db.scanResultDao().insert(com.androdr.data.model.ScanResult(id = 2L, timestamp = 2L,
+            bugReportFindings = emptyList(), riskySideloadCount = 0, knownMalwareCount = 0, source = imp,
+            state = ScanState.IN_PROGRESS))
+        // An import's snapshot and event records both count as imports, whatever their encoding.
+        f.persist(2L, "app_scanner", listOf(app("i1", source = imp), app("i2", source = imp), app("i3", source = imp)),
+            source = imp)
+        f.persist(2L, "dns_monitor", listOf(dns("i.example"), dns("j.example")), source = imp)
+        f.setState(2L, ScanState.COMPLETE)
+        val s = f.reader.storage()
+        assertEquals(2L, s.snapshots.bodies)
+        assertEquals(1L, s.liveEvents.bodies)
+        assertEquals(5L, s.imports.bodies)
+        assertTrue(s.imports.storedBytes > 0 && s.imports.rawBytes > 0)
+        f.setState(2L, ScanState.DELETING)
+        assertEquals("a scan that is not COMPLETE is not counted", BodyStats.NONE, f.reader.storage().imports)
     }
 
     @Test

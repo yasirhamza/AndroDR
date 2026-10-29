@@ -53,12 +53,21 @@ data class ExportEstimate(val records: Long, val bytes: Long, val categories: Li
         "This scan has no stored telemetry; the report carries its findings only."
     } else {
         "Includes $records telemetry record(s) (about ${humanBytes(bytes)}) from: " +
-            "${categories.joinToString(", ")}. " +
-            "This can reveal the apps on the phone and what they did; share it only with someone you trust."
+            "${categories.joinToString(", ")}. $SENSITIVE"
+    }
+
+    /** The telemetry (JSONL) export dialog's sentence: the same count, size and categories. */
+    fun jsonlText(): String = if (records == 0L) {
+        "This scan has no stored telemetry; the export would be empty."
+    } else {
+        "One line per record: $records telemetry record(s) (about ${humanBytes(bytes)} before compression) " +
+            "from: ${categories.joinToString(", ")}. $SENSITIVE"
     }
 
     companion object {
         val NONE = ExportEstimate(0, 0, emptyList())
+        private const val SENSITIVE =
+            "This can reveal the apps on the phone and what they did; share it only with someone you trust."
     }
 }
 
@@ -111,7 +120,8 @@ internal fun serviceLabel(service: String): String = SERVICE_LABELS[service] ?: 
 
 private const val KIB = 1024.0
 
-private fun humanBytes(bytes: Long): String = when {
+/** [bytes] in plain words (bytes, KB or MB). */
+internal fun humanBytes(bytes: Long): String = when {
     bytes < KIB -> "$bytes bytes"
     bytes < KIB * KIB -> String.format(Locale.US, "%.1f KB", bytes / KIB)
     else -> String.format(Locale.US, "%.1f MB", bytes / (KIB * KIB))

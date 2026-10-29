@@ -7,6 +7,7 @@ import com.androdr.data.db.AppDatabase
 import com.androdr.data.db.BodyStatsRow
 import com.androdr.data.db.ScanTotals
 import com.androdr.data.db.ServiceSummary
+import com.androdr.data.db.StorageKind
 import com.androdr.data.db.StoredRecordRow
 import com.androdr.data.db.TelemetryReadDao
 import com.androdr.data.db.chunkedIn
@@ -17,6 +18,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
+import java.io.Writer
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -49,15 +51,16 @@ data class BodyStats(val bodies: Long, val storedBytes: Long, val rawBytes: Long
 }
 
 /**
- * Store size: distinct bodies of facts observed by COMPLETE scans, by kind (snapshot bodies are
- * plain JSON, event bodies Deflate), plus bodies held only by pinned orphans and
- * the bytes of alert evidence JSON.
+ * Store size (spec §8.2): distinct bodies of facts observed by COMPLETE scans, split as retention
+ * keeps them ([StorageKind]): live scans' [snapshots], live scans' [liveEvents], and [imports]. Plus
+ * bodies held only by pinned orphans and the bytes of alert evidence JSON.
  */
 data class StorageSummary(
-    val snapshots: BodyStats, val events: BodyStats, val pinnedOrphans: BodyStats, val alertEvidenceBytes: Long,
+    val snapshots: BodyStats, val liveEvents: BodyStats, val imports: BodyStats, val pinnedOrphans: BodyStats,
+    val alertEvidenceBytes: Long,
 ) {
     companion object {
-        val EMPTY = StorageSummary(BodyStats.NONE, BodyStats.NONE, BodyStats.NONE, 0L)
+        val EMPTY = StorageSummary(BodyStats.NONE, BodyStats.NONE, BodyStats.NONE, BodyStats.NONE, 0L)
     }
 }
 
@@ -117,10 +120,10 @@ internal class ScanRecordPagingSource(
 /**
  * Per-scan and cross-scan reads of the telemetry store (spec §5.1). Every read shows only what
  * the visibility rule allows: records of `COMPLETE` scans, plus pinned facts with no observation
- * left. Correlation-atom reads live in `AtomReader` (Phase C), JSONL export in
- * `TelemetryExport` (Phase E).
+ * left. Correlation-atom reads live in `AtomReader` (Phase C); the JSONL export is [exportJsonl].
  */
 @Singleton
+@Suppress("TooManyFunctions") // the store's one read facade: one method per read its consumers need (spec §5.1)
 class TelemetryReader @Inject constructor(
     private val db: AppDatabase,
     codec: TelemetryRecordCodec,
@@ -234,12 +237,31 @@ class TelemetryReader @Inject constructor(
         return own + records(ids.filter { it !in seen })
     }
 
+    /**
+     * Streams COMPLETE scan [scanId]'s own observations to [out] as JSONL (spec §7), one
+     * [TelemetryJsonl] envelope per observation, service by service in ordinal order, read [BATCH] at a
+     * time through [forEach]: no whole-scan list is held, and each line is written as soon as it is
+     * decoded. An unreadable body still gets its line. Returns the number of lines written.
+     */
+    suspend fun exportJsonl(scanId: Long, out: Writer): Long {
+        var lines = 0L
+        for (service in services(scanId)) {
+            forEach(scanId, service.service) { record ->
+                out.write(TelemetryJsonl.line(record))
+                out.write("\n")
+                lines++
+            }
+        }
+        return lines
+    }
+
     suspend fun storage(): StorageSummary {
-        val observed = dao.storageObserved().associateBy { it.encoding }
+        val observed = dao.storageObserved().associateBy { it.kind }
         fun stats(row: BodyStatsRow?) = row?.let { BodyStats(it.bodies, it.storedBytes, it.rawBytes) } ?: BodyStats.NONE
         return StorageSummary(
-            snapshots = stats(observed[TelemetryRecordCodec.ENCODING_PLAIN]),
-            events = stats(observed[TelemetryRecordCodec.ENCODING_DEFLATE]),
+            snapshots = stats(observed[StorageKind.SNAPSHOT]),
+            liveEvents = stats(observed[StorageKind.LIVE_EVENT]),
+            imports = stats(observed[StorageKind.IMPORT]),
             pinnedOrphans = stats(dao.storageOrphans()),
             alertEvidenceBytes = db.alertDao().evidenceBytes(),
         )

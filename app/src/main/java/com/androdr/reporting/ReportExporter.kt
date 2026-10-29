@@ -14,10 +14,12 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.io.OutputStreamWriter
 import java.io.Writer
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import java.util.zip.GZIPOutputStream
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -83,6 +85,19 @@ class ReportExporter @Inject constructor(
             }
         }
 
+    /**
+     * Streams [scan]'s stored telemetry as gzip JSONL ([TelemetryReader.exportJsonl], spec §7) to a
+     * cached `.jsonl.gz` file and returns its FileProvider URI. Stale files in `cache/reports/` are
+     * removed first, as for every export.
+     */
+    suspend fun exportTelemetry(scan: ScanResult): Uri = withContext(Dispatchers.IO) {
+        val file = newReportFile("androdr_telemetry", scan.timestamp, "jsonl.gz")
+        writeFile(file, open = { part ->
+            OutputStreamWriter(GZIPOutputStream(part.outputStream().buffered()), Charsets.UTF_8).buffered()
+        }) { out -> telemetryReader.exportJsonl(scan.id, out) }
+        FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+    }
+
     /** What the History sheet shows for [scan]: counts only, read off the main thread. */
     suspend fun summary(scan: ScanResult): ReportSummary = withContext(Dispatchers.IO) {
         // Counted in SQL, never decoded (review I1): a 100k-finding import's sheet reads three numbers.
@@ -108,11 +123,12 @@ class ReportExporter @Inject constructor(
         ExportEstimate(totals.records, totals.rawBytes, services.map { serviceLabel(it.service) })
     }
 
-    /** Removes stale files from `cache/reports/` (spec §7), then names `<prefix>_<time>.txt` there. */
-    private fun newReportFile(prefix: String, time: Long): File {
+    /** Removes stale files from `cache/reports/` (spec §7), then names `<prefix>_<time>.<extension>` there. */
+    private fun newReportFile(prefix: String, time: Long, extension: String = "txt"): File {
         val dir = reportFiles.dir.apply { mkdirs() }
         runCatching { reportFiles.deleteStale() }.onFailure { Log.w(TAG, "Stale report cleanup failed", it) }
-        return File(dir, "${prefix}_${SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date(time))}.txt")
+        val stamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date(time))
+        return File(dir, "${prefix}_$stamp.$extension")
     }
 
     /**
@@ -121,10 +137,14 @@ class ReportExporter @Inject constructor(
      * that fails leaves nothing behind.
      */
     @Suppress("TooGenericExceptionCaught") // any failure removes the partial file, then rethrows
-    private suspend fun writeFile(file: File, write: suspend (Writer) -> Unit) {
+    private suspend fun writeFile(
+        file: File,
+        open: (File) -> Writer = { it.bufferedWriter(Charsets.UTF_8) },
+        write: suspend (Writer) -> Unit,
+    ) {
         val part = File(file.parentFile, "${file.name}.part")
         try {
-            part.bufferedWriter(Charsets.UTF_8).use { write(it) }
+            open(part).use { write(it) }
             // rename(2) replaces an existing report atomically: never delete it first.
             check(part.renameTo(file)) { "could not move the report into place" }
         } catch (t: Throwable) {
