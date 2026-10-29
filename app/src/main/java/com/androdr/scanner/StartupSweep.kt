@@ -12,6 +12,7 @@ import com.androdr.data.repo.ScanWriteRepository
 import com.androdr.data.store.StoreDirtyFlag
 import com.androdr.data.store.TelemetryStore
 import com.androdr.reporting.ReportFiles
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.sync.withLock
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -40,40 +41,55 @@ class StartupSweep @Inject constructor(
 ) {
     /**
      * Returns how many scans it removed. A target that fails is logged, sets [StoreDirtyFlag] and
-     * is left for the next start; the other targets still go.
+     * is left for the next start; the other targets still go. Every later step (the pending clear,
+     * GC, the stale-file sweep, the backfill, the legacy cleanup) is guarded the same way, so one
+     * step that throws never skips the rest. Cancellation is never swallowed: it ends the sweep.
      */
     suspend fun run(): Int {
         val targets = lock.mutex.withLock { repo.sweepTargets() }
         var removed = 0
         for (target in targets) {
-            try {
+            guarded("remove scan ${target.id}", onFailure = { dirty.set() }) {
                 sweep(target)
                 removed++
-            } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
-                Log.e(TAG, "Startup sweep could not remove scan ${target.id}", e)
-                dirty.set()
             }
         }
         // A "Clear all" killed after its first transaction: its DELETING scans were swept above; its
         // scan-less rows (id <= the saved clearMaxRowId) go now, and the mark with them (spec §5.4).
-        val pendingClear = runCatching { repo.pendingClearMark() }.getOrNull()
-        if (pendingClear != null) {
-            runCatching { repo.finishClear(pendingClear) }.onFailure {
-                Log.e(TAG, "Startup sweep could not finish a pending Clear all", it)
-                dirty.set()
-            }
+        var pendingClear: Long? = null
+        guarded("read a pending Clear all") { pendingClear = repo.pendingClearMark() }
+        pendingClear?.let { mark ->
+            guarded("finish a pending Clear all", onFailure = { dirty.set() }) { repo.finishClear(mark) }
         }
-        if (targets.isNotEmpty() || pendingClear != null || dirty.isSet()) store.gcUnobservedUnpinned()
-        runCatching { reportFiles.deleteStale() }.onFailure { Log.w(TAG, "Stale report cleanup failed", it) }
+        // A failed GC leaves the dirty flag set, so the next start retries it.
+        guarded("garbage-collect the store", onFailure = { dirty.set() }) {
+            if (targets.isNotEmpty() || pendingClear != null || dirty.isSet()) store.gcUnobservedUnpinned()
+        }
+        guarded("clean up stale reports") { reportFiles.deleteStale() }
         // One-time move of legacy signals' member lists into signal_member (spec §5.4); it takes the
         // lock per batch, and a failure is retried next launch.
-        runCatching { backfill.run() }.onFailure { Log.w(TAG, "Signal member backfill failed", it) }
+        guarded("backfill signal members") { backfill.run() }
         // One-time removal of the retired event adapters' rows (C3, spec §5.3), only once the backfill
         // has finished: until then a legacy signal's list is not in signal_member and would protect
         // nothing (review m1). A pending backfill defers the cleanup to a later launch.
-        runCatching { if (backfill.isDone()) legacyRows.run() }
-            .onFailure { Log.w(TAG, "Legacy event-row cleanup failed", it) }
+        guarded("clean up legacy event rows") { if (backfill.isDone()) legacyRows.run() }
         return removed
+    }
+
+    /**
+     * Runs one sweep step: a failure is logged and handed to [onFailure], and the sweep goes on; a
+     * [CancellationException] is rethrown (a `catch (Exception)` or `runCatching` would swallow it).
+     */
+    @Suppress("TooGenericExceptionCaught") // every step failure is logged and the sweep continues
+    private inline fun guarded(what: String, onFailure: () -> Unit = {}, block: () -> Unit) {
+        try {
+            block()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.e(TAG, "Startup sweep could not $what", e)
+            onFailure()
+        }
     }
 
     private suspend fun sweep(target: SweepTarget) {

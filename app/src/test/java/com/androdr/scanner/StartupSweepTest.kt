@@ -50,13 +50,24 @@ class StartupSweepTest {
     private val reportsDir: File = Files.createTempDirectory("reports").toFile()
     private val clock = 10L * 24 * 60 * 60 * 1000
 
-    private fun sweep(repo: ScanWriteRepository = w.repo) =
-        StartupSweep(w.lock, repo, w.f.store, w.f.dirty, ReportFiles(reportsDir) { clock },
-            SignalMemberBackfill(w.f.db, w.f.db.signalMemberBackfillDao(), w.f.db.signalMemberDao(), w.lock,
-                w.f.dataStore),
-            LegacyEventRowCleanup(w.f.db,
-                TimelineRowDeleter(w.f.db.forensicTimelineEventDao(), w.f.store, w.f.db.signalMemberDao()),
-                w.f.db.signalMemberDao(), w.f.store, w.lock, w.f.dataStore))
+    private fun backfill() = SignalMemberBackfill(w.f.db, w.f.db.signalMemberBackfillDao(), w.f.db.signalMemberDao(),
+        w.lock, w.f.dataStore)
+
+    private fun legacyRows() = LegacyEventRowCleanup(w.f.db,
+        TimelineRowDeleter(w.f.db.forensicTimelineEventDao(), w.f.store, w.f.db.signalMemberDao()),
+        w.f.db.signalMemberDao(), w.f.store, w.lock, w.f.dataStore)
+
+    private fun sweep(
+        repo: ScanWriteRepository = w.repo,
+        store: com.androdr.data.store.TelemetryStore = w.f.store,
+        backfill: SignalMemberBackfill = backfill(),
+        legacyRows: LegacyEventRowCleanup = legacyRows(),
+    ) = StartupSweep(w.lock, repo, store, w.f.dirty, ReportFiles(reportsDir) { clock }, backfill, legacyRows)
+
+    private fun staleReport(): File = File(reportsDir, "androdr_report_old.txt").apply {
+        writeText("x")
+        setLastModified(clock - ReportFiles.STALE_AFTER_MS - 1)
+    }
 
     private fun state(id: Long): String? = w.f.db.openHelper.readableDatabase
         .query("SELECT state FROM ScanResult WHERE id = $id").use { c -> if (c.moveToFirst()) c.getString(0) else null }
@@ -137,6 +148,65 @@ class StartupSweepTest {
         assertEquals("left for the next start", "IN_PROGRESS", state(1L))
         assertEquals(null, state(2L))
         assertFalse("gc ran after the failure and cleared the flag", w.f.dirty.isSet())
+    }
+
+    // Final review triage #24: an unguarded GC that threw skipped the stale-file sweep, the backfill
+    // and the legacy cleanup for that launch.
+    @Test
+    fun `a GC that throws does not skip the stale-file sweep, the backfill or the legacy cleanup`() = runBlocking {
+        w.f.scan(1L, ScanState.IN_PROGRESS)
+        val stale = staleReport()
+        val store = spyk(w.f.store)
+        coEvery { store.gcUnobservedUnpinned() } throws IllegalStateException("disk went away")
+        val backfill = spyk(backfill())
+        val legacy = spyk(legacyRows())
+
+        assertEquals(1, sweep(store = store, backfill = backfill, legacyRows = legacy).run())
+
+        assertFalse("the stale-file sweep still ran", stale.exists())
+        io.mockk.coVerify(atLeast = 1) { backfill.run() }
+        io.mockk.coVerify(atLeast = 1) { legacy.run() }
+        assertTrue("the failed GC is retried next start", w.f.dirty.isSet())
+    }
+
+    // Final review triage #24: catch (Exception) and runCatching swallowed cancellation, so a cancelled
+    // sweep logged it as a failed target, set the dirty flag and went on to the next step.
+    @Test
+    fun `a cancelled target ends the sweep instead of being logged as a failure`() = runBlocking {
+        w.f.scan(1L, ScanState.IN_PROGRESS)
+        w.f.scan(2L, ScanState.IN_PROGRESS)
+        val stale = staleReport()
+        val repo = spyk(w.repo)
+        coEvery { repo.completeDelete(1L) } throws kotlinx.coroutines.CancellationException("app closing")
+
+        val thrown = try {
+            sweep(repo).run()
+            null
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            e
+        }
+
+        assertEquals("app closing", thrown?.message)
+        assertEquals("scan 2 is left for the next start", "IN_PROGRESS", state(2L))
+        assertFalse("not recorded as a failed target", w.f.dirty.isSet())
+        assertTrue("no later step ran", stale.exists())
+    }
+
+    @Test
+    fun `a cancelled later step ends the sweep too`() = runBlocking {
+        val backfill = spyk(backfill())
+        val legacy = spyk(legacyRows())
+        coEvery { backfill.run() } throws kotlinx.coroutines.CancellationException("app closing")
+
+        val thrown = try {
+            sweep(backfill = backfill, legacyRows = legacy).run()
+            null
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            e
+        }
+
+        assertEquals("app closing", thrown?.message)
+        io.mockk.coVerify(exactly = 0) { legacy.run() }
     }
 
     @Test
