@@ -97,12 +97,7 @@ class BugReportAnalyzer @Inject constructor(
                 ZipInputStream(stream0.buffered()).use { zip ->
                     var entry = zip.nextEntry
                     while (entry != null) {
-                        val name = entry.name.substringAfterLast("/").lowercase()
-                        val isDumpstate = !entry.isDirectory && (
-                            name == "dumpstate.txt" ||
-                                (name.startsWith("bugreport-") && name.endsWith(".txt"))
-                        )
-                        if (isDumpstate) {
+                        if (!entry.isDirectory && ArtifactSniffer.isDumpstateEntry(entry.name)) {
                             val sysPropsText = sectionParser.extractSystemProperties(zip)
                             clock = DumpsysClock.fromSystemProperties(sysPropsText)
                             if (sysPropsText != null) {
@@ -147,13 +142,7 @@ class BugReportAnalyzer @Inject constructor(
                 ZipInputStream(stream1.buffered()).use { zip ->
                     var entry = zip.nextEntry
                     while (entry != null) {
-                        val entryFileName = entry.name.substringAfterLast("/").lowercase()
-                        val isDumpstate = !entry.isDirectory && (
-                            entryFileName == "dumpstate.txt" ||
-                            entryFileName.startsWith("bugreport-") &&
-                                entryFileName.endsWith(".txt")
-                        )
-                        if (isDumpstate) {
+                        if (!entry.isDirectory && ArtifactSniffer.isDumpstateEntry(entry.name)) {
                             Log.d(TAG, "Found dumpstate entry: ${entry.name}")
                             val dumpstate = sectionParser.extractSectionsAndHeader(zip, neededSections, clock)
                             val sections = dumpstate.sections

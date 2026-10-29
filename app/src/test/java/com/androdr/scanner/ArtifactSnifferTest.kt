@@ -145,6 +145,51 @@ class ArtifactSnifferTest {
         assertFalse("nested deeper than one directory", ArtifactSniffer.isPerDayLogEntry("a/b/2026-08-22(1).txt"))
     }
 
+    // ── Battery B7: `adb bugreport` names its main entry dumpstate-<timestamp>.txt ──
+    //
+    // The real F916B zip has dumpstate-2026-10-29-08-18-37.txt (named in main_entry.txt) beside
+    // dumpstate_board.txt and dumpstate_log.txt; the sniffer took only dumpstate.txt/bugreport-*.txt,
+    // so the import was refused as "Not a recognized artifact".
+
+    @Test
+    fun `the shared dumpstate predicate accepts every main-entry name`() {
+        assertTrue(ArtifactSniffer.isDumpstateEntry("dumpstate.txt"))
+        assertTrue(ArtifactSniffer.isDumpstateEntry("dumpstate-2026-10-29-08-18-37.txt"))
+        assertTrue(ArtifactSniffer.isDumpstateEntry("bugreport-crownqltesq-2026-08-22.txt"))
+        assertTrue("case-insensitive", ArtifactSniffer.isDumpstateEntry("Dumpstate-2026-10-29-08-18-37.TXT"))
+        assertTrue("one directory deep", ArtifactSniffer.isDumpstateEntry("bugreport/dumpstate-2026-10-29.txt"))
+    }
+
+    @Test
+    fun `the shared dumpstate predicate rejects the side files and lookalikes`() {
+        assertFalse(ArtifactSniffer.isDumpstateEntry("dumpstate_board.txt"))
+        assertFalse(ArtifactSniffer.isDumpstateEntry("dumpstate_log.txt"))
+        assertFalse(ArtifactSniffer.isDumpstateEntry("dumpstate-.txt"))
+        assertFalse(ArtifactSniffer.isDumpstateEntry("dumpstate-2026.txt.bak"))
+        assertFalse(ArtifactSniffer.isDumpstateEntry("main_entry.txt"))
+        assertFalse("nested deeper than one directory", ArtifactSniffer.isDumpstateEntry("FS/data/dumpstate.txt"))
+    }
+
+    @Test
+    fun `a real adb bugreport zip layout is a bug report`() {
+        val zip = zipOf(
+            "version.txt" to "2.0".toByteArray(),
+            "dumpstate_board.txt" to "board".toByteArray(),
+            "dumpstate-2026-10-29-08-18-37.txt" to "== dumpstate".toByteArray(),
+            "dumpstate_log.txt" to "log".toByteArray(),
+            "main_entry.txt" to "dumpstate-2026-10-29-08-18-37.txt".toByteArray(),
+        )
+        assertEquals(ArtifactType.BUG_REPORT, ArtifactSniffer.classifyZip(ByteArrayInputStream(zip)).type)
+    }
+
+    @Test
+    fun `a zip of only dumpstate side files is not a bug report`() {
+        assertEquals(
+            ArtifactType.UNRECOGNIZED,
+            ArtifactSniffer.classify(sequenceOf("dumpstate_board.txt", "dumpstate_log.txt")),
+        )
+    }
+
     @Test
     fun `random zip is unrecognized`() {
         assertEquals(
