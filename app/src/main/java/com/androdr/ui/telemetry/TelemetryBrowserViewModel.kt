@@ -157,7 +157,7 @@ class TelemetryBrowserViewModel @Inject constructor(
         if (record == null || key == null) {
             flowOf(emptyList())
         } else {
-            reader.history(record.service, key, snapshotsOnly = true).map(::historyOf)
+            reader.snapshotHistory(record.service, key).map(::historyOf)
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), emptyList())
 

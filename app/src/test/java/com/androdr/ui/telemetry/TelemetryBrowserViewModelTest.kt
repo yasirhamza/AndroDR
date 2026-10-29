@@ -256,19 +256,29 @@ class TelemetryBrowserViewModelTest {
     @Test
     fun `subject history holds only snapshot observations, not same-key events`() = runTest(dispatcher) {
         // appops_audit keys snapshots and events alike by package_name|operation (review I1).
-        fun op(time: Long?) = StoreRecord(mapOf("package_name" to "com.a", "operation" to "CAMERA",
-            "event_time_ms" to time))
+        fun op(time: Long?, mode: String = "allow") = StoreRecord(mapOf("package_name" to "com.a",
+            "operation" to "CAMERA", "mode" to mode, "event_time_ms" to time))
         f.scan(1L)
         val first = f.persist(1L, "appops_audit", listOf(op(null), op(1_700_000_000_000L), op(1_700_000_001_000L)),
             capturedAt = 1_000L)
         f.setState(1L, ScanState.COMPLETE)
         completeScan(2L, "appops_audit", listOf(op(1_700_000_002_000L), op(null)), capturedAt = 2_000L)
+        // Final review triage #40: the orphan half needs its own `eventTime IS NULL`. Scan 3's
+        // same-key event and a changed snapshot are pinned, then scan 3 is deleted, so both become
+        // pinned orphans: the snapshot belongs in the history, the event does not.
+        val third = completeScan(3L, "appops_audit", listOf(op(1_700_000_003_000L), op(null, mode = "ignore")),
+            capturedAt = 3_000L)
+        third.factIdByChunkIndex.forEach { f.pinByTimeline(it) }
+        f.setState(3L, ScanState.DELETING)
+        f.store.deleteScanTelemetry(3L)
         val vm = vm(TelemetryBrowserViewModel.ARG_FACT to first.factIdByChunkIndex[0])
         assertTrue((vm.fact.first { it != FactState.Loading } as FactState.Loaded).hasHistory)
         val history = vm.history.first { it.isNotEmpty() }
-        assertEquals("the snapshot's two observations only", listOf(1L, 2L), history.map { it.record.scanId })
+        assertEquals("the snapshot's two observations, then the pinned snapshot orphan; never the event orphan",
+            listOf(1L, 2L, -1L), history.map { it.record.scanId })
+        assertEquals(third.factIdByChunkIndex[1], history.last().record.factId)
         assertTrue(history.all { it.record.eventTime == null })
-        assertEquals(listOf(emptySet<String>(), emptySet()), history.map { it.changed })
+        assertEquals(listOf(emptySet<String>(), emptySet(), setOf("mode")), history.map { it.changed })
     }
 
     @Test

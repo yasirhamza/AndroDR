@@ -116,22 +116,12 @@ interface TelemetryReadDao {
     ): List<StoredRecordRow>
 
     /**
-     * Every visible record of a subject: its observations in COMPLETE scans and its pinned
-     * orphans (read with their first observation's envelope), in one capture-time order
-     * (`capturedAt`, then `scanId`, then `ordinal`; an orphan's `scanId` is −1).
-     */
-    @Query(
-        "SELECT $OBS_COLS $OBS_FROM WHERE f.service = :service AND f.subjectKey = :subjectKey " +
-            "AND ${CompleteScan.SQL} UNION ALL SELECT $ORPHAN_COLS FROM telemetry_record f " +
-            "JOIN record_body b ON b.hash = f.bodyHash WHERE f.service = :service AND f.subjectKey = :subjectKey " +
-            "AND ${VisibleFact.PINNED_ORPHAN} ORDER BY capturedAt, scanId, ordinal"
-    )
-    suspend fun history(service: String, subjectKey: String): List<StoredRecordRow>
-
-    /**
-     * [history] restricted to snapshot records (`f.eventTime IS NULL`, spec §3) in both halves: a
-     * service that emits events and snapshots under one subject key (e.g. `appops_audit`) keeps its
-     * events out, so the result is bounded by snapshot retention, not by an event time window.
+     * Every visible snapshot record (`f.eventTime IS NULL`, spec §3) of a subject: its observations
+     * in COMPLETE scans and its pinned orphans (read with their first observation's envelope), in
+     * one capture-time order (`capturedAt`, then `scanId`, then `ordinal`; an orphan's `scanId` is
+     * −1). Both halves filter on event time: a service that emits events and snapshots under one
+     * subject key (e.g. `appops_audit`) keeps its events out, so the result is bounded by snapshot
+     * retention, not by an event time window.
      */
     @Query(
         "SELECT $OBS_COLS $OBS_FROM WHERE f.service = :service AND f.subjectKey = :subjectKey " +
