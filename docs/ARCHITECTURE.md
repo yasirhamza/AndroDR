@@ -45,6 +45,7 @@ AndroDR is an on-device Android security scanner and endpoint detection and resp
 - **Chapter 9** — External AI rule-authoring pipeline (Claude Code skills under `.claude/`).
 - **Chapter 10** — Test strategy.
 - **Chapter 11** — Architecture decisions with the reasoning behind each one.
+- **Glossary** — Telemetry-store vocabulary (fact, observation, snapshot and event records, and so on), at the end.
 
 ---
 
@@ -320,24 +321,43 @@ The following steps trace a stalkerware app from installation to a user-visible 
 
 ### 5.1 Room database
 
-All persistent state lives in a single Room database declared in `AppDatabase` (schema version 16 at time of writing). It registers six entities:
+All persistent state lives in a single Room database declared in `AppDatabase` (schema version 21 at time of writing). The tables that matter to detection and storage are:
 
 | Entity | Table | Purpose |
 |---|---|---|
-| `ScanResult` | `ScanResult` | One row per completed scan; stores all findings and device-flag results as serialized JSON |
+| `ScanResult` | `ScanResult` | One row per scan: summary columns, device-flag results, `state` (`IN_PROGRESS`, `COMPLETE`, `DELETING`) and `telemetryState` (`NONE`, `STORED`, `PARTIAL_RETENTION`, `FAILED`, `FAILED_PARTIAL_RETENTION`). It no longer holds findings; they are `scan_finding` rows |
+| `RecordBody` | `record_body` | The stored content of a record, keyed by a 16-byte hash of the content (`hash`). `encoding` is plain JSON (0) or Deflate with a preset dictionary (1, selected by `dictVersion`); `rawBytes` is the decoded size. Identical content is stored once |
+| `TelemetryFact` | `telemetry_record` | One **fact**: a distinct telemetry record, stored once however many scans or imports observed it. Identified by the unique `(service, factKey)`; points at its content through `bodyHash`; carries the computed `subjectKey`, `eventTime`, `timePrecision`, `category` and `packageName`, and the first observation's envelope (`firstSource`, `firstCapturedAt`, `firstStrippedKeys`) |
+| `ScanObservation` | `scan_record` | One **observation**: one scan's or import's sighting of a fact. Primary key `(scanId, service, ordinal)`; `recordId` names the fact; also carries `eventTime`, `source` (`TelemetrySource`), `capturedAt` and `strippedKeys`. An exact duplicate within one scan is dropped (unique `(scanId, recordId)`) |
+| `SignalMember` | `signal_member` | The members of a correlation signal: `(signalRowId, kind, refId)`, where `kind` says whether `refId` is a `forensic_timeline` row or a fact |
+| `ScanFinding` | `scan_finding` | One finding of one scan, with the `recordId` of the fact it matched, `kind`, `triggered`, `alertKey` (set on findings that belong to an alert) and `alertId` |
+| `Alert` | `alert` | The lasting record of an incident: opened by the first finding with its `alertKey`, kept across scans, closed only by a person. Never deleted by scan deletion or "Clear all" |
+| `EventWatermark` | `event_watermark` | Per live event service, the position up to which live events have been collected, and the scan that advanced it |
 | `DnsEvent` | `DnsEvent` | DNS queries intercepted by `DnsVpnService`, with timestamp and optional match reason |
 | `ForensicTimelineEvent` | `forensic_timeline` | Finding rows, correlation signals, detected changes (first-seen package installs, device-admin grants), IOC-matched live DNS hits, and the persistent audit / "import interrupted" rows. Event records (intrusion-log, usage-stats, bug-report module events) live only in the telemetry store since C3; legacy event rows of pre-store (`NONE`) scans remain |
 | `Indicator` | `indicators` | IOC feed entries: package names, cert hashes, APK hashes, and C2 domains sourced from all configured feeds |
 | `KnownAppDbEntry` | (internal) | Known-good app cache (Plexus + UAD-ng) for false-positive suppression |
 | `CveEntity` | (internal) | CVE records for unpatched-CVE detection |
 
-`ScanResult` is annotated with `@Serializable` (kotlinx.serialization). The `findings`, `deviceFlags`, and other list fields are stored as JSON blobs via Room `TypeConverters`. This means rule-level changes — new fields in a `Finding`, new display metadata from YAML — do not require a DB migration for every update; only changes to the outer `ScanResult` entity shape itself need a migration entry in `Migrations.kt`.
+A fact is visible to readers only while one of its observations belongs to a `COMPLETE` scan, or while it is pinned (referenced by a triggered finding, an alert, a signal member or a timeline row) after its observations were removed. The terms fact, observation, snapshot record and event record are defined in the Glossary at the end of this document.
+
+`ScanResult` is annotated with `@Serializable` (kotlinx.serialization). The `deviceFlags` and other list fields are stored as JSON blobs via Room `TypeConverters`. This means rule-level changes — new fields in a `Finding`, new display metadata from YAML — do not require a DB migration for every update; only changes to the outer `ScanResult` entity shape itself need a migration entry in `Migrations.kt`.
 
 The `ScanRepository` is the single access point for scan-related writes. Scan + timeline events are saved in a single `withTransaction` block so the Room `InvalidationTracker` fires exactly one invalidation per scan, avoiding intermediate "half-saved" states visible to UI `Flow` collectors.
 
 ### 5.2 Retention and auto-prune
 
-DNS events and forensic timeline events are pruned to a 30-day rolling window. The pruning runs inside `IocUpdateWorker.doWork()`, which executes on the existing WorkManager IOC-refresh schedule:
+Three rules govern what is kept.
+
+**Telemetry store retention.** `TelemetryRetention` runs in `IocUpdateWorker.doWork()` after the IOC fetch, in keyset batches. Each batch takes `scanMutex.tryLock()` outside its Room transaction; if a scan or import holds the lock, the cycle stops and the next one starts again.
+
+- **Snapshot observations** are kept for the newest N completed live scans. N is `SettingsRepository.snapshotRetentionScans`, default 20, minimum 1.
+- **Live event observations** are kept for 30 days, by event time.
+- **Import observations** are kept until the user deletes the import.
+- **Pinned facts** are always kept. A batch removes only facts left with no observation and no pin, so a pinned fact outlives its observations and still decodes from its `first*` envelope.
+- A `STORED` scan that loses any observation becomes `PARTIAL_RETENTION`; a `FAILED` scan that loses any becomes `FAILED_PARTIAL_RETENTION`, so the report never presents a post-retention count as what was stored before the failure.
+
+**30-day prune.** The same worker also prunes `DnsEvent` and `forensic_timeline` rows older than 30 days:
 
 ```
 val thirtyDaysAgo = System.currentTimeMillis() - (30L * 24 * 60 * 60 * 1000)
@@ -345,7 +365,7 @@ scanRepository.pruneOldDnsEvents(thirtyDaysAgo)   // → DnsEventDao.deleteOlder
 forensicTimelineEventDao.deleteOlderThan(thirtyDaysAgo)
 ```
 
-`ScanResult` rows are not auto-pruned; they persist until the user manually deletes a scan from the history screen. The DAO caps history reads at 50 rows, so the UI never renders stale data regardless of how many rows accumulate.
+**Scans.** `ScanResult` rows are not auto-pruned; they persist until the user deletes a scan from the history screen. Deleting a scan writes a persistent audit row, marks the scan `DELETING`, then removes its observations in batches. A crash is finished by the startup sweep. Alerts and pinned facts survive deletion.
 
 ### 5.3 Cloud backup disabled
 
@@ -368,7 +388,7 @@ STIX2 serialization lives in `StixBundle.kt` (in `ioc/`). The extension function
 The report is split into two independently selectable sections via the `ExportMode` enum:
 
 - `FINDINGS_ONLY` — verdict, device checks, campaign detections, per-app findings, bug-report findings. When any rule produced no verdict, a `WHAT THIS SCAN COULD NOT CHECK` section lists them grouped by `NotEvaluatedReason`, one line per rule: a rule this build cannot evaluate (unresolvable `ioc_lookup`), artifact paths the device refused (#366), or a correlation rule whose legs had no events to bind to (#370). The findings list above it is incomplete in a known, named way rather than silently short, and the verdict line points at the section so "your phone appears secure" never stands alone. The section rides `FINDINGS_ONLY` because it is a caveat on the findings list; feed-controlled text in each line (lookup name, rule title, rule id) is sanitized to printable ASCII and length-capped by `util/reportSafe` before it reaches the report.
-- `TELEMETRY_ONLY` — the scan's stored telemetry (every service it recorded) and the application log. Intended for analyst handoff: the recipient can run their own rules against raw telemetry without being biased by the device's current ruleset.
+- `TELEMETRY_ONLY` — the scan's stored telemetry (every service it recorded) and the application log. Intended for analyst handoff: the recipient can run their own rules against the stored records without being biased by the device's current ruleset.
 - `BOTH` — default; produces the full report.
 
 ### 6.2 ReportExporter
@@ -385,7 +405,7 @@ Logcat capture is scoped to AndroDR's own process (`--pid`) and to a specific li
 
 ### 6.3 Timeline export
 
-`TimelineExporter` serializes `ForensicTimelineEvent` rows to either plaintext (human-readable, date-grouped) or CSV (machine-readable, with all IOC and correlation fields preserved). The CSV format includes `rule_id`, `correlation_id`, `member_refs` (a signal's still-existing members from `signal_member`, as `kind:id`), and `kind` columns so downstream tools can distinguish raw telemetry rows from correlation signals and reconstruct which rule fired.
+`TimelineExporter` serializes `ForensicTimelineEvent` rows to either plaintext (human-readable, date-grouped) or CSV (machine-readable, with all IOC and correlation fields preserved). The CSV format includes `rule_id`, `correlation_id`, `member_refs` (a signal's still-existing members from `signal_member`, as `kind:id`), and `kind` columns so downstream tools can distinguish finding rows from correlation signals and reconstruct which rule fired.
 
 ### 6.4 STIX2 export
 
@@ -670,3 +690,30 @@ The rule engine supports the following verified capabilities, derived from `Sigm
 
 [#96]: https://github.com/yasirhamza/AndroDR/issues/96
 [#139]: https://github.com/yasirhamza/AndroDR/issues/139
+
+---
+
+## Glossary
+
+These definitions are the contract for telemetry-store vocabulary. `VocabularyGateTest` fails the build if the retired phrases listed below, or a bug-report `TimelineEvent` class, reappear in main code, string resources or these docs, or if a term below is removed.
+
+| Term | Definition |
+|---|---|
+| **Telemetry record** | A typed fact an emitter produced, exactly as produced, before any rule saw it. Source-agnostic; provenance belongs to the observation. Every record is one of two time-shapes, decided per record (§4.3). |
+| **Snapshot record** | State observed *at scan time*: app inventory, live app-ops grants, receivers, processes, accessibility services, file-artifact checks, device posture, system properties, database-path observations, platform-compat changes, ADB trusted keys, and any record whose service declares no event-time field or whose value for it is absent. |
+| **Event record** | Something that happened at a time *T* the record carries: usage transitions, DNS queries, connections, security-log events, tombstones, wakelock acquisitions, package install history, bug-report app-ops accesses, battery-daily package events. An event's time has a precision (`exact` or `day`). |
+| **Fact** | One distinct telemetry record, stored once however many scans or imports observed it (§5.1). |
+| **Observation** | One scan's or import's sighting of a fact, at a position in that scan's emitted list. Provenance and capture time belong to the observation. |
+| **Timeline event** | A timestamped row on the forensic timeline. Comes from (a) every event fact, read in place — never copied; (b) every triggered finding; (c) correlation signals; (d) detected changes (first-seen install, first-seen device-admin grant, live DNS IOC match, alert closure). **Snapshot records never become timeline events.** |
+| **Finding** | Rule output in one scan (`Finding`), referencing the observation it matched. A finding on an event record belongs to an **alert**; every other finding — on a snapshot record, or a correlation finding — is a **state finding**. |
+| **Alert** | The lasting record of an incident: opened by the first finding with its identity, kept across scans, closed only by a person (§5.4). |
+| **Provenance** | Where an observation came from: `TelemetrySource` (`LIVE_SCAN`, `BUGREPORT_IMPORT`, `INTRUSION_LOG_IMPORT`). It is not a kind of telemetry. |
+| **Watermark** | Per live event service, the position up to which live events have been collected. The next scan collects from it. |
+
+**Retired phrases.** Two phrases are retired, plus one class.
+
+- The phrase that prefixed "telemetry" with "raw" is retired: every telemetry record is raw by definition. The `raw_fact`/`judgment` grading lives at the field level in the taxonomy.
+- The phrase that prefixed "telemetry" with "informational" is retired: the UI switch meant "timeline events not referenced by a finding" and says so.
+- The bug-report `TimelineEvent` class, a source-shaped, untyped row, is retired.
+
+Field-level naming keeps the taxonomy's `snake_case`.

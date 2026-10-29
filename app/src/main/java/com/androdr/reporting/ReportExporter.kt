@@ -28,7 +28,7 @@ import javax.inject.Singleton
  *
  * - [TELEMETRY_ONLY] writes only the telemetry section (the scan's stored records and the
  *   application log). Intended for analyst handoff: the recipient can run their own rules against
- *   the raw telemetry without being biased by the device's current ruleset.
+ *   the stored records without being biased by the device's current ruleset.
  * - [FINDINGS_ONLY] writes only the findings section (verdict, device checks, campaign, app risks,
  *   bug report findings). Useful for sharing "what the app found" without exposing the telemetry.
  * - [BOTH] writes the full report. Default.
