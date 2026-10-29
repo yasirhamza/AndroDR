@@ -58,12 +58,13 @@ interface ScanResultDao {
     )
     suspend fun pagedBefore(beforeTimestamp: Long, beforeId: Long, size: Int): List<ScanResult>
 
-    /** The `COMPLETE` scan just before [timestamp] (History's diff baseline). */
+    /** The `COMPLETE` live scan(s) just before [timestamp], newest id first (History's diff baseline, R44). */
     @Query(
-        "SELECT * FROM ScanResult WHERE state = 'COMPLETE' AND timestamp = (SELECT MAX(timestamp) " +
-            "FROM ScanResult WHERE state = 'COMPLETE' AND timestamp < :timestamp) ORDER BY id DESC"
+        "SELECT * FROM ScanResult WHERE state = 'COMPLETE' AND source = 'LIVE_SCAN' AND timestamp = " +
+            "(SELECT MAX(timestamp) FROM ScanResult WHERE state = 'COMPLETE' AND source = 'LIVE_SCAN' " +
+            "AND timestamp < :timestamp) ORDER BY id DESC"
     )
-    suspend fun previousOf(timestamp: Long): List<ScanResult>
+    suspend fun previousLiveOf(timestamp: Long): List<ScanResult>
 
     /** True when at least one scan is listed (History's empty state). */
     @Query("SELECT EXISTS (SELECT 1 FROM ScanResult WHERE state = 'COMPLETE')")

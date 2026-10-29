@@ -59,9 +59,9 @@ class HistoryViewModel @Inject constructor(
     val selectedScan: StateFlow<ScanResult?> = _selectedScan.asStateFlow()
 
     /**
-     * The diff between [selectedScan] and the scan that immediately preceded it
-     * in the history list (the next oldest COMPLETE scan, [ScanRepository.previousOf]).
-     * Null when no scan is selected or the selected scan has no predecessor.
+     * The diff between [selectedScan] and its baseline, [ScanRepository.diffBaselineOf]: for a live
+     * scan the previous COMPLETE live scan; an import has none (ruling R44). Null when no scan is
+     * selected, the selected scan is an import, or it has no earlier live scan.
      *
      * The selected scan is the NEWER one: [ScanOrchestrator.computeDiff] takes
      * `(newer, older)` in that order. Passing them the other way round silently
@@ -76,7 +76,7 @@ class HistoryViewModel @Inject constructor(
 
     @Suppress("TooGenericExceptionCaught") // a diff that cannot be read is not shown, never a crash
     private suspend fun diffWithPredecessor(selected: ScanResult): ScanOrchestrator.ScanDiff? = try {
-        repository.previousOf(selected)?.let { older -> ScanOrchestrator.boundedDiff(findings, selected, older) }
+        repository.diffBaselineOf(selected)?.let { older -> ScanOrchestrator.boundedDiff(findings, selected, older) }
     } catch (e: CancellationException) {
         throw e
     } catch (e: Exception) {

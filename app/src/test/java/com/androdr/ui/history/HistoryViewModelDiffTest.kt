@@ -26,7 +26,7 @@ import org.junit.Test
 /**
  * Orientation and boundedness gate for [HistoryViewModel.selectedDiff].
  *
- * The selected scan's predecessor ([ScanRepository.previousOf], the next OLDER COMPLETE scan) is
+ * The selected scan's baseline ([ScanRepository.diffBaselineOf], the next OLDER COMPLETE live scan) is
  * the baseline. Swapping the pair type-checks perfectly and silently inverts the History detail
  * section: new risks render under "resolved" and resolved risks under "new risks"
  * (`HistoryScreen.DiffSection`), and the fail-closed skip set would be read from the wrong scan.
@@ -59,7 +59,7 @@ class HistoryViewModelDiffTest {
         val repository = mockk<ScanRepository>()
         every { repository.pagedScans() } returns flowOf(androidx.paging.PagingData.from(listOf(newer, older)))
         every { repository.hasScans } returns flowOf(true)
-        coEvery { repository.previousOf(newer) } returns older
+        coEvery { repository.diffBaselineOf(newer) } returns older
         val findings = mockk<FindingsRepository>()
         coEvery { findings.triggeredRuleCounts(2L) } returns mapOf("new" to 3, "kept" to 1)
         coEvery { findings.triggeredRuleCounts(1L) } returns mapOf("old" to 2, "kept" to 1)

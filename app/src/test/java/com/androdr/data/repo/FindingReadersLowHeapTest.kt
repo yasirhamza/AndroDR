@@ -39,6 +39,7 @@ import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -125,11 +126,13 @@ class FindingReadersLowHeapTest {
         assertEquals("open alerts include the import's", FINDINGS, vm.currentFindings.filterNotNull()
             .first { it.openAlertCount > 0 }.openAlertCount)
 
-        // History: the sheet's counts in SQL, and the diff of the import against its predecessor.
+        // History: the sheet's counts in SQL. An import has no "since previous scan" diff (R44); the
+        // bounded diff itself still stays bounded on the 100k-finding scan.
         val summary = exporter().summary(import)
         assertEquals(FINDINGS, summary.appIssues)
         assertEquals(0, summary.deviceIssues)
-        val historyDiff = ScanOrchestrator.boundedDiff(findings, import, repository().previousOf(import)!!)
+        assertNull(repository().diffBaselineOf(import))
+        val historyDiff = ScanOrchestrator.boundedDiff(findings, import, w.f.db.scanResultDao().completeById(2L)!!)
         assertEquals(FINDINGS, historyDiff.newCount)
         assertTrue(historyDiff.newFindings.size <= ScanOrchestrator.DIFF_DISPLAY_LIMIT)
         assertEquals(DNS_RULE, historyDiff.newFindings.first().ruleId)

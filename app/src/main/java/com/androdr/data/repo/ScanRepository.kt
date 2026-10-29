@@ -11,6 +11,7 @@ import com.androdr.data.db.ScanResultDao
 import com.androdr.data.db.toForensicTimelineEvent
 import com.androdr.data.model.DnsEvent
 import com.androdr.data.model.ScanResult
+import com.androdr.data.model.TelemetrySource
 import com.androdr.data.store.HashKeys
 import com.androdr.data.store.KeysetPagingSource
 import com.androdr.data.store.tableChanges
@@ -65,8 +66,15 @@ class ScanRepository @Inject constructor(
     /** Whether scan [id] is saved (COMPLETE). */
     suspend fun isSaved(id: Long): Boolean = scanResultDao.completeById(id) != null
 
-    /** The COMPLETE scan listed just before [scan] (History's diff baseline), if any. */
-    suspend fun previousOf(scan: ScanResult): ScanResult? = scanResultDao.previousOf(scan.timestamp).firstOrNull()
+    /**
+     * History's "since previous scan" baseline for [scan] (ruling R44): a live scan diffs against the
+     * previous COMPLETE live scan; an import is evidence from another time or device, so it has no
+     * baseline (null). Battery B2: diffing against the previous scan of ANY source listed the live
+     * device flags as "Resolved" on an import.
+     */
+    suspend fun diffBaselineOf(scan: ScanResult): ScanResult? =
+        if (scan.source != TelemetrySource.LIVE_SCAN) null
+        else scanResultDao.previousLiveOf(scan.timestamp).firstOrNull()
 
     companion object {
         private const val SCAN_PAGE_SIZE = 30
