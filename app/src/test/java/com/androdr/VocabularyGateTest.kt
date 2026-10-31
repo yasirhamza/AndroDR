@@ -7,6 +7,11 @@ import java.io.File
 /**
  * V1 (telemetry store spec §3, §9): the retired phrases stay out of main Kotlin, string resources
  * and the docs (except `docs/superpowers/`), and ARCHITECTURE.md's glossary defines all ten terms.
+ *
+ * A phrase is caught however it wraps: across a KDoc or line-comment break (`raw\n * telemetry`,
+ * `raw\n// telemetry`) as well as plain whitespace. Any declaration named `TimelineEvent` (class,
+ * object, interface, typealias) is retired, and docs are scanned in every subdirectory except
+ * `docs/superpowers/`.
  */
 class VocabularyGateTest {
 
@@ -14,10 +19,13 @@ class VocabularyGateTest {
         .map { it.canonicalFile }
         .first { File(it, "docs/ARCHITECTURE.md").isFile && File(it, "app/src/main").isDirectory }
 
+    /** Whitespace between two words, possibly across a comment line break (` * `, `// `). */
+    private val sep = """(?:\s|\*|//)*\s(?:\s|\*|//)*"""
+
     private val bannedPhrases = listOf(
-        Regex("""raw\s+telemetry""", RegexOption.IGNORE_CASE),
-        Regex("""informational\s+telemetry""", RegexOption.IGNORE_CASE),
-        Regex("""(?<![A-Za-z0-9_])class TimelineEvent\b"""),
+        Regex("""\braw${sep}telemetry""", RegexOption.IGNORE_CASE),
+        Regex("""\binformational${sep}telemetry""", RegexOption.IGNORE_CASE),
+        Regex("""(?<![A-Za-z0-9_])(?:class|object|interface|typealias)\s+TimelineEvent\b"""),
     )
 
     private fun kotlinFiles(): List<File> =
@@ -27,8 +35,11 @@ class VocabularyGateTest {
         File(root, "app/src/main/res").walkTopDown()
             .filter { it.isFile && it.parentFile.name.startsWith("values") && it.extension == "xml" }.toList()
 
-    private fun docFiles(): List<File> =
-        File(root, "docs").listFiles { f -> f.isFile && f.extension == "md" }.orEmpty().toList()
+    private fun docFiles(): List<File> {
+        val superpowers = File(root, "docs/superpowers")
+        return File(root, "docs").walkTopDown().onEnter { it != superpowers }
+            .filter { it.isFile && it.extension == "md" }.toList()
+    }
 
     private fun hitsIn(name: String, text: String): List<String> =
         bannedPhrases.flatMap { re ->
@@ -61,6 +72,24 @@ class VocabularyGateTest {
         assertTrue(hitsIn("x", "the Raw\ntelemetry").isNotEmpty())
         assertTrue(hitsIn("x", "Informational\n  Telemetry").isNotEmpty())
         assertTrue(hitsIn("x", "stored telemetry").isEmpty())
+        // Wrapped across a KDoc or line-comment break.
+        assertTrue(hitsIn("x", "/**\n * The raw\n * telemetry of a scan\n */").isNotEmpty())
+        assertTrue(hitsIn("x", "// informational\n    // telemetry").isNotEmpty())
+        assertTrue(hitsIn("x", "@raw/telemetry_dict_app").isEmpty())
+        assertTrue(hitsIn("x", "drawn telemetry").isEmpty())
+        // Any declaration of the retired name.
+        assertTrue(hitsIn("x", "data class TimelineEvent(val a: Int)").isNotEmpty())
+        assertTrue(hitsIn("x", "typealias TimelineEvent = ForensicTimelineEvent").isNotEmpty())
+        assertTrue(hitsIn("x", "object TimelineEvent").isNotEmpty())
+        assertTrue(hitsIn("x", "interface  TimelineEvent").isNotEmpty())
+        assertTrue(hitsIn("x", "object TimelineEvents").isEmpty())
+    }
+
+    @Test
+    fun `docs in subdirectories are scanned, docs superpowers is not`() {
+        val docs = docFiles().map { it.relativeTo(root).invariantSeparatorsPath }
+        assertTrue(docs.any { it.startsWith("docs/") && it.count { c -> c == '/' } >= 2 })
+        assertTrue(docs.none { it.startsWith("docs/superpowers/") })
     }
 
     @Test
