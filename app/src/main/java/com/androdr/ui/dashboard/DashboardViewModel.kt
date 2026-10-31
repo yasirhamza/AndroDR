@@ -301,9 +301,13 @@ class DashboardViewModel @Inject constructor(
         /** [result] when no saved scan has its id (the write failed), else null. */
         fun unsavedOrNull(result: ScanWithFindings, saved: Boolean): ScanWithFindings? = result.takeIf { !saved }
 
-        /** A scan that was saved with all its records proves storage works again. */
+        /**
+         * A scan that was saved with all its records proves storage works again. Both FAILED states
+         * mean records were lost (FAILED_PARTIAL_RETENTION is a FAILED scan retention later trimmed).
+         */
         fun shouldClearHealthFlag(result: ScanWithFindings, saved: Boolean): Boolean =
-            saved && result.telemetryState != TelemetryState.FAILED
+            saved && result.telemetryState != TelemetryState.FAILED &&
+                result.telemetryState != TelemetryState.FAILED_PARTIAL_RETENTION
 
         /**
          * A manual scan refreshes threat intel first, but only if the last

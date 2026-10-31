@@ -205,6 +205,9 @@ class StorageFailedBannerTest {
         assertTrue(!DashboardViewModel.shouldClearHealthFlag(scan(id = 3L), saved = false))
         val failed = scan(id = 2L, state = TelemetryState.FAILED)
         assertTrue(!DashboardViewModel.shouldClearHealthFlag(failed, saved = true))
+        // #418 re-gate: a FAILED scan later trimmed by retention is still not fully stored.
+        val failedTrimmed = scan(id = 2L, state = TelemetryState.FAILED_PARTIAL_RETENTION)
+        assertTrue(!DashboardViewModel.shouldClearHealthFlag(failedTrimmed, saved = true))
     }
 
     @Test

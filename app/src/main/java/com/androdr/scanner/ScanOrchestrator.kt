@@ -377,10 +377,10 @@ class ScanOrchestrator @Inject constructor(
     }
 
     /**
-     * Classifies an imported ZIP (#342 spec §4.1) with [ImportArchive.type], the classification the
-     * storage preflight sized it by (#418): its central directory's entry names, read without
-     * inflating anything, or a bounded stream sniff when that directory is unreadable. The analyzer
-     * then re-opens the URI to read the content.
+     * Classifies an imported ZIP (#342 spec §4.1) with [ImportArchive.type] (#418): the bounded stream
+     * sniff of the local headers the analyzers read, rejected as UNRECOGNIZED when the central
+     * directory (what the storage preflight sized it by) classifies it differently. The analyzer then
+     * re-opens the URI to read the content.
      */
     private suspend fun sniffArtifact(uri: Uri): ArtifactType = ImportArchive.type(context, uri)
 
