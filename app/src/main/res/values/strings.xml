@@ -242,6 +242,7 @@
     <string name="import_card_free_at_least_estimate">Free at least %1$s more (the whole import needs about %2$s) and import again to store the rest.</string>
     <string name="import_card_free_at_least_unknown">Free at least %1$s more, probably much more, and import again to store the rest.</string>
     <string name="import_card_not_stored_some" tools:ignore="PluralsCandidate">The database refused part of this import: %1$,d new records were stored; the rest were checked but not stored.</string>
+    <string name="import_card_reserve_low_after">Every record of this import was stored, but free space is now below the 150 MB AndroDR keeps in reserve. Free at least %1$s before the next import.</string>
     <string name="import_card_not_stored_none">The database refused this import\'s records: the file was checked but nothing new was stored.</string>
     <plurals name="diff_more">
         <item quantity="one">\u2026and %1$d more finding</item>

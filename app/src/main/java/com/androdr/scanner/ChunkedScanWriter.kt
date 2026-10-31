@@ -40,7 +40,8 @@ import javax.inject.Inject
  *   that could not be saved ([unsaved]). An import's stored findings are read from `scan_finding`
  *   (`FindingsRepository`), never held.
  * @property spaceToFree bytes to free so the 150 MB import reserve holds again; > 0 when an import
- *   fell back to evaluate-only on the reserve, or when findings could not be saved.
+ *   fell back to evaluate-only on the reserve, when the reserve was breached only at finish (every
+ *   record stored, telemetry state not FAILED), or when findings could not be saved.
  */
 data class WriteResult(
     val newFacts: Int,
@@ -214,10 +215,10 @@ class ChunkedScanWriter @Inject constructor(
         suspend fun finish(): WriteResult = withContext(Dispatchers.Default) { finishOnWorker() }
 
         private suspend fun finishOnWorker(): WriteResult {
-            if (isImport && !evaluateOnly && !preflight.reserveOk()) {
-                reserveBreached = true
-                enterEvaluateOnly()
-            }
+            // Spec §5.2 step 4: the reserve is checked once more. A breach here only reports the
+            // shortfall: every record is already stored, so the import is not "partly stored" (#418:
+            // marking it FAILED made the card and History say records were dropped).
+            if (isImport && !evaluateOnly && !preflight.reserveOk()) reserveBreached = true
             val state = when {
                 evaluateOnly -> TelemetryState.FAILED
                 stored -> TelemetryState.STORED

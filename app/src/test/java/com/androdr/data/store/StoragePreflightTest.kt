@@ -105,9 +105,13 @@ class StoragePreflightTest {
         s.append("security_log", il, IMPORT_CAPTURED, listOf(securityLine()))
         w.freeBytes = 149 * mb
         val r = s.finish()
-        assertEquals(TelemetryState.FAILED, r.telemetryState)
-        assertEquals(1 * mb, r.spaceToFree)
+        // #418: every record was stored before the check, so the import is not "partly stored".
+        assertEquals(TelemetryState.STORED, r.telemetryState)
+        assertEquals("the shortfall is still reported", 1 * mb, r.spaceToFree)
         assertEquals(1, w.findingsOf(1L).size)
+        assertEquals(1L, w.count("SELECT COUNT(*) FROM scan_record"))
+        assertEquals("STORED", w.f.db.openHelper.readableDatabase
+            .query("SELECT telemetryState FROM ScanResult WHERE id = 1").use { it.moveToFirst(); it.getString(0) })
     }
 
     @Test
