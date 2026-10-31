@@ -127,6 +127,11 @@ jobs:
           cache-read-only: ${{ github.ref != 'refs/heads/main' }}
       - name: Build debug APK + run unit tests
         run: ./gradlew assembleDebug test lowHeapTest --stacktrace
+      # release.yml generates the SBOM after the signed build; the SBOM resolves .pom files the
+      # build never reads, so a missing verification-metadata entry failed only the release
+      # (2026-10-23..29, paging 3.3.6 poms). Run it on every PR so it fails before merge.
+      - name: Generate CycloneDX SBOM (release dependency-verification gate)
+        run: ./gradlew :app:cyclonedxBom --stacktrace
       - name: Upload debug APK
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         if: always()
