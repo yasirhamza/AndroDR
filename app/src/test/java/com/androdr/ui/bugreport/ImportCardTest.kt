@@ -117,6 +117,14 @@ class ImportCardTest {
         assertTrue(body, !body.contains("not stored"))
     }
 
+    /** Review fix: "every record was stored" is only true of a STORED import, not of one that stored nothing. */
+    @Test
+    fun `a reserve breach on an import that stored nothing never says every record was stored`() {
+        val nothing = write(TelemetryState.NONE, space = 42L)
+        val card = ImportCard.from(nothing, false, emptyList(), estimateBytes = 900L)!!
+        assertTrue(card.notice.toString(), card.notice !is ImportNotice.ReserveLowAfterImport)
+    }
+
     @Test
     fun `a failed store without a reserve breach never claims low space and keeps the stored count`() {
         val card = ImportCard.from(write(TelemetryState.FAILED), false, emptyList())!!

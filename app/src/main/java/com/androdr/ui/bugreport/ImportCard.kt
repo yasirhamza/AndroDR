@@ -101,7 +101,7 @@ data class ImportCard(
                 addAll(boundTrips)
             }
             val notice = when {
-                write.spaceToFree > 0L && write.telemetryState != TelemetryState.FAILED ->
+                write.spaceToFree > 0L && write.telemetryState == TelemetryState.STORED ->
                     ImportNotice.ReserveLowAfterImport(write.spaceToFree)
                 write.spaceToFree > 0L -> ImportNotice.LowSpace(write.newFacts, write.spaceToFree, estimateBytes)
                 write.telemetryState == TelemetryState.FAILED -> ImportNotice.NotFullyStored(write.newFacts)
