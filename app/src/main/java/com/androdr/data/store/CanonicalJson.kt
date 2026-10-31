@@ -87,7 +87,9 @@ internal object CanonicalJson {
      * [d] (nearest-even when two are equally short), laid out as `Double.toString` lays it out: plain
      * for 10^-3 <= |d| < 10^7, else `d.dddE±n`. Exact arithmetic only (#418): `Double.toString`
      * differs across Java releases and Android versions, and the canonical bytes are hashed, so the
-     * platform's formatter must never decide them. Matches JDK 19+ `Double.toString`.
+     * platform's formatter must never decide them. Matches JDK 19+ `Double.toString` (the host JVM
+     * is the test reference). Frozen contract: these bytes are part of every stored fact's identity,
+     * so a change here re-keys stored doubles; version the encoding instead of editing it.
      */
     internal fun formatDouble(d: Double): String {
         require(!d.isNaN() && !d.isInfinite()) { "not finite: canonical doubles tag NaN and infinities" }
@@ -102,22 +104,48 @@ internal object CanonicalJson {
         return if (negative) "-$body" else body
     }
 
-    /** The shortest rounding of [a] (> 0) that lies in its round-to-nearest interval. */
+    /**
+     * The shortest decimal in [a]'s (> 0) round-to-nearest interval; of two that short, the closer
+     * to [a], then the one with an even last digit.
+     */
     private fun shortestDigits(a: Double): BigDecimal {
         val exact = BigDecimal(a)
         val two = BigDecimal.valueOf(2)
         // Halfway points to the neighbouring doubles: a decimal strictly between them reads back as
-        // [a], and one exactly on them does when [a]'s significand is even (ties to even).
+        // [a], and one exactly on them does when [a]'s significand is even (ties to even). Above a
+        // power of two the upper half is twice the lower, so check both p-digit neighbours of [a]
+        // (its floor and ceiling): if neither is in the interval, no p-digit decimal is.
         val low = exact.add(BigDecimal(Math.nextDown(a))).divide(two)
         val high = exact.add(BigDecimal(Math.ulp(a)).divide(two))
         val evenSignificand = (java.lang.Double.doubleToRawLongBits(a) and 1L) == 0L
-        for (precision in MIN_DIGITS..MAX_DIGITS) {
-            val r = exact.round(MathContext(precision, RoundingMode.HALF_EVEN))
+        fun inInterval(r: BigDecimal): Boolean {
             val lo = r.compareTo(low)
             val hi = r.compareTo(high)
-            if ((lo > 0 && hi < 0) || (evenSignificand && (lo == 0 || hi == 0))) return r.stripTrailingZeros()
+            return (lo > 0 && hi < 0) || (evenSignificand && (lo == 0 || hi == 0))
+        }
+        for (precision in MIN_DIGITS..MAX_DIGITS) {
+            val candidates = listOf(RoundingMode.FLOOR, RoundingMode.CEILING)
+                .map { exact.round(MathContext(precision, it)) }
+                .filter(::inInterval)
+            val best = when (candidates.size) {
+                0 -> continue
+                1 -> candidates[0]
+                else -> closer(exact, candidates[0], candidates[1])
+            }
+            return best.stripTrailingZeros()
         }
         return exact.round(MathContext(MAX_DIGITS, RoundingMode.HALF_EVEN)).stripTrailingZeros()
+    }
+
+    /** Of [floor] <= [exact] <= [ceiling], the closer; on a tie, the one whose last digit is even. */
+    private fun closer(exact: BigDecimal, floor: BigDecimal, ceiling: BigDecimal): BigDecimal {
+        val cmp = exact.subtract(floor).compareTo(ceiling.subtract(exact))
+        return when {
+            cmp < 0 -> floor
+            cmp > 0 -> ceiling
+            floor.unscaledValue().testBit(0) -> ceiling
+            else -> floor
+        }
     }
 
     private fun plain(digits: String, exp: Int): String = if (exp >= 0) {

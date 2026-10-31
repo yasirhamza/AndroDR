@@ -53,6 +53,21 @@ class CanonicalJsonDoubleTest {
         }
     }
 
+    /**
+     * Review fix: above a power of two the rounding interval is twice as wide as below it, so the
+     * nearest p-digit rounding can miss while the other p-digit neighbour is in range (2^-24 came out
+     * as 17 digits). Random bit patterns almost never land here; cover every power of two exactly.
+     */
+    @Test fun `it agrees with the JDK 19+ Double toString on every power of two and its neighbours`() {
+        for (e in -1074..1023) {
+            val p = Math.scalb(1.0, e)
+            for (d in listOf(p, Math.nextUp(p), Math.nextDown(p))) {
+                if (d == 0.0 || d.isInfinite()) continue
+                assertEquals("format of 2^$e neighbour ${java.lang.Double.doubleToRawLongBits(d)}", d.toString(), f(d))
+            }
+        }
+    }
+
     @Test fun `NaN and infinities stay tagged and doubles stay exact through write and parse`() {
         val json = CanonicalJson.write(
             mapOf("a" to Double.NaN, "b" to Double.NEGATIVE_INFINITY, "c" to 2.0E-3, "d" to -0.0, "e" to 3.0f),
