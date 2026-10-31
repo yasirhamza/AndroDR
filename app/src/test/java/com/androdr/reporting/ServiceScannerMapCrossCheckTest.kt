@@ -13,10 +13,20 @@ import java.io.File
 /**
  * Every logsource service is either run by a live scan (SCANNER_FOR_SERVICE, keyed to the name the
  * orchestrator records when that scanner crashes), only by an import (IMPORT_ONLY_SERVICES), or
- * never, being stored but not rule-evaluated (EMITTER_ONLY_SERVICES).
+ * never, being stored but not rule-evaluated ([emitterOnlyServices]).
  * A new service or a renamed scanner would otherwise count as "always checked" (#394).
  */
 class ServiceScannerMapCrossCheckTest {
+
+    /**
+     * Services that are stored but never rule-evaluated (taxonomy `status: emitter_only`). Test-only:
+     * no production code branches on them. No rule may target one, so no campaign can name it in
+     * `detected_by`; if one ever did, [campaignCoverage] would report it as an unknown service,
+     * which is the honest answer.
+     */
+    private val emitterOnlyServices: Set<String> = setOf(
+        "usage_stats", "system_property", "adb_audit", "activity_audit",
+    )
 
     private fun file(vararg candidates: String) = candidates.map(::File).first { it.isFile }
 
@@ -31,17 +41,17 @@ class ServiceScannerMapCrossCheckTest {
     @Test
     fun `every taxonomy service is classified exactly once`() {
         val services = taxonomyServices()
-        assertEquals(services, SCANNER_FOR_SERVICE.keys + IMPORT_ONLY_SERVICES + EMITTER_ONLY_SERVICES)
+        assertEquals(services, SCANNER_FOR_SERVICE.keys + IMPORT_ONLY_SERVICES + emitterOnlyServices)
         assertTrue((SCANNER_FOR_SERVICE.keys intersect IMPORT_ONLY_SERVICES).isEmpty())
-        assertTrue((SCANNER_FOR_SERVICE.keys intersect EMITTER_ONLY_SERVICES).isEmpty())
-        assertTrue((IMPORT_ONLY_SERVICES intersect EMITTER_ONLY_SERVICES).isEmpty())
+        assertTrue((SCANNER_FOR_SERVICE.keys intersect emitterOnlyServices).isEmpty())
+        assertTrue((IMPORT_ONLY_SERVICES intersect emitterOnlyServices).isEmpty())
     }
 
     @Test
     fun `emitter-only services are exactly the taxonomy's emitter_only services`() {
         val taxonomy = TestRuleRepo.loadTaxonomy()
         assumeTrue("Skipping: submodule not initialized.", taxonomy != null)
-        assertEquals(taxonomy!!.filterValues { it.status == "emitter_only" }.keys, EMITTER_ONLY_SERVICES)
+        assertEquals(taxonomy!!.filterValues { it.status == "emitter_only" }.keys, emitterOnlyServices)
     }
 
     @Test

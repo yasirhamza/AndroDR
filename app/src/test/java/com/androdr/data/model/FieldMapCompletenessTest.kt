@@ -1,8 +1,10 @@
 package com.androdr.data.model
 
-import com.androdr.sigma.toFieldMap
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.io.File
+import java.lang.reflect.Constructor
 import java.lang.reflect.Modifier
 
 /**
@@ -12,86 +14,101 @@ import java.lang.reflect.Modifier
  * property the map drops is a fact lost at write time. Each class's
  * constructor properties (camelCase -> snake_case) must appear as map keys,
  * unless [ALLOWED] says why not.
+ *
+ * The classes are derived, not hand-listed: every `toFieldMap()` declared in the
+ * main sources (a member of a data class, or an extension `Type.toFieldMap()`) is
+ * found, and one instance of its class is built by reflection with a non-null value
+ * for every constructor parameter, so optional keys (`listOfNotNull`) appear too.
  */
 class FieldMapCompletenessTest {
 
-    private val live = TelemetrySource.LIVE_SCAN
-    private val imported = TelemetrySource.BUGREPORT_IMPORT
+    private fun root(): File = listOf(File("src/main/java/com/androdr"), File("app/src/main/java/com/androdr"))
+        .first { it.isDirectory }
 
-    private val dnsEvent = DnsEvent(
-        timestamp = 1L, domain = "x", appUid = 0, appName = null, isBlocked = false, reason = null,
-    )
+    /** A class declaring (or extended with) `toFieldMap()`, and whether it is an extension. */
+    private data class Projection(val className: String, val extensionFile: String?)
+
+    /**
+     * Every `toFieldMap()` in [src] (one source file named [fileName] in [pkg]): an extension
+     * `fun Type.toFieldMap(` names its receiver; a member names the nearest enclosing `class`.
+     */
+    private fun projections(src: String, fileName: String, pkg: String): List<Projection> =
+        Regex("fun\\s+(?:(\\w+)\\.)?toFieldMap\\s*\\(").findAll(src).map { m ->
+            val receiver = m.groupValues[1]
+            if (receiver.isNotEmpty()) {
+                Projection(receiver, "$pkg.${fileName.removeSuffix(".kt")}Kt")
+            } else {
+                val owner = Regex("\\bclass\\s+(\\w+)").findAll(src.substring(0, m.range.first)).last()
+                Projection(owner.groupValues[1], null)
+            }
+        }.toList()
+
+    private fun allProjections(): List<Projection> = root().walkTopDown().filter { it.extension == "kt" }
+        .flatMap { f ->
+            val pkg = Regex("^package\\s+([\\w.]+)", RegexOption.MULTILINE).find(f.readText())!!.groupValues[1]
+            projections(f.readText(), f.name, pkg)
+        }.toList()
 
     /** One sample per telemetry class, paired with its field map. */
-    private fun samples(): List<Pair<Any, Map<String, Any?>>> = liveSamples() + importedSamples()
+    private fun samples(): List<Pair<Any, Map<String, Any?>>> = allProjections().map { p ->
+        val cls = Class.forName("$MODEL_PACKAGE.${p.className}")
+        val instance = build(cls)
+        val map = if (p.extensionFile == null) {
+            cls.getMethod("toFieldMap").invoke(instance)
+        } else {
+            Class.forName(p.extensionFile).getDeclaredMethod("toFieldMap", cls)
+                .apply { isAccessible = true }.invoke(null, instance)
+        }
+        @Suppress("UNCHECKED_CAST")
+        (instance to map as Map<String, Any?>)
+    }
 
-    private fun liveSamples(): List<Pair<Any, Map<String, Any?>>> = listOf(
-        AppTelemetry(
-            packageName = "x", appName = "x", certHash = null, certHashSha1 = null, apkHash = null,
-            isSystemApp = false, fromTrustedStore = false, installer = null, isSideloaded = false,
-            isKnownOemApp = false, permissions = emptyList(), surveillancePermissionCount = 0,
-            hasAccessibilityService = false, hasDeviceAdmin = false, knownAppCategory = null, source = live,
-        ).let { it to it.toFieldMap() },
-        DeviceTelemetry(checkId = "x", isTriggered = false, source = live).let { it to it.toFieldMap() },
-        dnsEvent.let { it to it.toFieldMap() },
-        ImportedDnsEvent(dnsEvent, listOf("1.2.3.4")).let { it to it.toFieldMap() },
-        ProcessTelemetry(
-            processName = "x", processUid = 0, packageName = null, isForeground = false, source = live,
-        ).let { it to it.toFieldMap() },
-        FileArtifactTelemetry(
-            filePath = "x", fileExists = false, fileSize = null, fileModified = null, source = live,
-        ).let { it to it.toFieldMap() },
-        ReceiverTelemetry(
-            packageName = "x", intentAction = "x", componentName = "x", isSystemApp = false, source = live,
-        ).let { it to it.toFieldMap() },
-        AccessibilityTelemetry(
-            packageName = "x", serviceName = "x", isSystemApp = false, isEnabled = false, source = live,
-        ).let { it to it.toFieldMap() },
-        AppOpsTelemetry(
-            packageName = "x", operation = "x", lastAccessTime = 0L, lastRejectTime = 0L,
-            accessCount = 0, isSystemApp = false, source = live,
-        ).let { it to it.toFieldMap() },
-        NetworkTelemetry(
-            destinationIp = "x", destinationPort = 0, protocol = null, appUid = 0, appName = null,
-            timestamp = 0L, source = live, capturedAt = 0L,
-        ).let { it to it.toFieldMap() },
-        UsageEvent(
-            timestamp = 1L, packageName = "x", appName = "x", eventType = "app_foreground",
-            source = live, capturedAt = 0L,
-        ).let { it to it.toFieldMap() },
-    )
+    /** An instance of [cls] through its primary constructor, every argument non-null. */
+    private fun build(cls: Class<*>): Any {
+        val ctor: Constructor<*> = cls.declaredConstructors
+            .filter { c -> !c.isSynthetic && c.parameterTypes.none { it.name.endsWith("DefaultConstructorMarker") } }
+            .maxBy { it.parameterCount }
+        return ctor.newInstance(*ctor.parameterTypes.map(::sampleValue).toTypedArray())
+    }
 
-    private fun importedSamples(): List<Pair<Any, Map<String, Any?>>> = listOf(
-        TombstoneEvent(
-            processName = "x", packageName = null, signalNumber = null, abortMessage = null,
-            crashTimestamp = 0L, source = imported, capturedAt = 0L,
-        ).let { it to it.toFieldMap() },
-        WakelockAcquisition(
-            packageName = "x", wakelockTag = "x", acquiredAt = 0L, durationMillis = null,
-            source = imported, capturedAt = 0L,
-        ).let { it to it.toFieldMap() },
-        BatteryDailyEvent(
-            dayIndex = 0, eventType = "x", packageName = null, description = "x",
-            version = 0L, timestamp = 0L, timestampPrecision = "day", source = imported, capturedAt = 0L,
-        ).let { it to it.toFieldMap() },
-        PackageInstallHistoryEntry(
-            packageName = "x", eventType = PackageHistoryEventType.INSTALL, timestamp = 0L,
-            versionCode = null, source = imported, capturedAt = 0L,
-        ).let { it to it.toFieldMap() },
-        PlatformCompatChange(
-            changeId = "x", packageName = "x", enabled = false, source = imported, capturedAt = 0L,
-        ).let { it to it.toFieldMap() },
-        DatabasePathObservation(
-            filePath = "x", processName = null, packageName = null, observationTimestamp = 0L,
-            dbPath = "x", recentQueryCount = 0, source = imported, capturedAt = 0L,
-        ).let { it to it.toFieldMap() },
-        SecurityLogEvent(
-            timestamp = 0L, tag = 0, tagName = "x", securityData = emptyList(),
-            source = TelemetrySource.INTRUSION_LOG_IMPORT, capturedAt = 0L,
-        ).let { it to it.toFieldMap() },
-        SystemPropertySnapshot(key = "x", value = "x", source = imported, capturedAt = 0L)
-            .let { it to it.toFieldMap() },
-    )
+    private fun sampleValue(type: Class<*>): Any = when {
+        type == String::class.java -> "x"
+        type == Int::class.javaPrimitiveType || type == Int::class.javaObjectType -> 1
+        type == Long::class.javaPrimitiveType || type == Long::class.javaObjectType -> 1L
+        type == Boolean::class.javaPrimitiveType || type == Boolean::class.javaObjectType -> true
+        type == Double::class.javaPrimitiveType || type == Double::class.javaObjectType -> 1.0
+        type == Float::class.javaPrimitiveType || type == Float::class.javaObjectType -> 1f
+        List::class.java.isAssignableFrom(type) -> emptyList<Any>()
+        Set::class.java.isAssignableFrom(type) -> emptySet<Any>()
+        Map::class.java.isAssignableFrom(type) -> emptyMap<Any, Any>()
+        type.isEnum -> type.enumConstants.first()
+        else -> build(type)
+    }
+
+    @Test
+    fun `samples are derived from every toFieldMap in the sources`() {
+        val names = samples().map { it.first.javaClass.simpleName }
+        assertEquals("one sample per class", names.size, names.toSet().size)
+        // The 19 classes the hand-kept list held when it was replaced; a derivation may only add.
+        assertTrue(names.containsAll(listOf(
+            "AppTelemetry", "DeviceTelemetry", "DnsEvent", "ImportedDnsEvent", "ProcessTelemetry",
+            "FileArtifactTelemetry", "ReceiverTelemetry", "AccessibilityTelemetry", "AppOpsTelemetry",
+            "NetworkTelemetry", "UsageEvent", "TombstoneEvent", "WakelockAcquisition", "BatteryDailyEvent",
+            "PackageInstallHistoryEntry", "PlatformCompatChange", "DatabasePathObservation", "SecurityLogEvent",
+            "SystemPropertySnapshot",
+        )))
+    }
+
+    @Test
+    fun `derivation finds member and extension projections`() {
+        // A class the old hand-kept list never named would have gone unchecked.
+        val src = "package p\ndata class NewEvent(val a: Int) {\n    fun toFieldMap(): Map<String, Any?> = mapOf()\n}\n" +
+            "internal fun OtherEvent.toFieldMap(): Map<String, Any?> = mapOf()\n"
+        assertEquals(
+            listOf(Projection("NewEvent", null), Projection("OtherEvent", "p.NewEventKt")),
+            projections(src, "NewEvent.kt", "p"),
+        )
+    }
 
     private fun constructorProperties(instance: Any): List<String> =
         instance.javaClass.declaredFields
@@ -130,6 +147,8 @@ class FieldMapCompletenessTest {
     }
 
     private companion object {
+        const val MODEL_PACKAGE = "com.androdr.data.model"
+
         /**
          * Properties deliberately absent from the snake_case key, and why.
          * Keep each entry justified; a new gap needs a reason here or a key.
