@@ -76,7 +76,7 @@ class StorageFiguresTest {
             .resolve("com/androdr/ui/settings")
         val literal = Regex(
             """(Text\(\s*(text\s*=\s*)?"|(contentDescription|label|subtitle|title|value)\s*=\s*"|StatRow\(\s*"|""" +
-                """UpdateStatusRow\(\s*"|createChooser\([^,]+,\s*"|\bto\s+")""",
+                """UpdateStatusRow\(\s*"|createChooser\([^,]+,\s*"|\?:\s*"[A-Za-z]|:\s*String\s*=\s*"[A-Za-z])""",
         )
         for (name in listOf("SettingsScreen.kt", "TelemetryStorageSection.kt")) {
             val hits = dir.resolve(name).readLines().filter { literal.containsMatchIn(it) }

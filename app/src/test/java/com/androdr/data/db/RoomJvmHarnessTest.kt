@@ -50,10 +50,16 @@ class RoomJvmHarnessTest {
     fun `every migration helper is a JUnit rule`() {
         val call = "RoomTestDb." + "migrationHelper()"
         val roots = listOf(File("src/test/java"), File("app/src/test/java")).filter { it.isDirectory }
+        // Each use with the line before it, so `@get:Rule` may sit on its own line; the type is optional.
         val uses = roots.flatMap { r -> r.walkTopDown().filter { it.extension == "kt" }.toList() }
-            .flatMap { f -> f.readLines().filter { call in it }.map { "${f.name}: ${it.trim()}" } }
+            .flatMap { f ->
+                val lines = f.readLines()
+                lines.indices.filter { call in lines[it] }
+                    .map { i -> "${f.name}: " + (lines.getOrElse(i - 1) { "" } + " " + lines[i]).trim() }
+            }
         assertTrue("no migration helper uses found", uses.size >= 3)
-        val bad = uses.filterNot { Regex(": @get:Rule val \\w+: MigrationTestHelper = ").containsMatchIn(it) }
+        val rule = Regex("""@get:Rule\s+val\s+\w+(\s*:\s*MigrationTestHelper)?\s*=\s*""" + Regex.escape(call))
+        val bad = uses.filterNot { rule.containsMatchIn(it) }
         assertTrue("migration helper outside a @get:Rule:\n" + bad.joinToString("\n"), bad.isEmpty())
     }
 }

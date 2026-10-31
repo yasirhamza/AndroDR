@@ -434,6 +434,8 @@
     <string name="settings_threat_db_certificates">Threat Certificates</string>
     <!-- %1$d: count; %2$s: where the data came from (bundled or remote) -->
     <string name="settings_threat_db_count_source" tools:ignore="PluralsCandidate">%1$d (%2$s)</string>
+    <string name="settings_threat_db_source_bundled">bundled</string>
+    <string name="settings_threat_db_source_downloaded">downloaded</string>
     <string name="settings_threat_db_cves" tools:ignore="PluralsCandidate">%1$d Android CVEs</string>
     <string name="settings_threat_db_updating">Updating…</string>
     <string name="settings_threat_db_update_now">Update Now</string>

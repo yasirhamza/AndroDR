@@ -319,8 +319,8 @@ private fun ThreatDatabaseSection(
     lastUpdated: Long?,
     updating: Boolean,
     onUpdateClick: () -> Unit,
-    iocSourceLabel: Map<String, String> = emptyMap(),
-    sigmaRuleSource: String = "bundled",
+    iocSourceLabel: Map<String, ThreatDataSource> = emptyMap(),
+    sigmaRuleSource: ThreatDataSource = ThreatDataSource.BUNDLED,
     feedHealth: List<FeedHealthUi> = emptyList()
 ) {
     Text(
@@ -341,15 +341,14 @@ private fun ThreatDatabaseSection(
             // Each count and where it came from: "<count> (<source>)".
             listOf(
                 Triple(R.string.settings_threat_db_rules, sigmaRuleCount, sigmaRuleSource),
-                Triple(R.string.settings_threat_db_domains, domainIocCount, iocSourceLabel["domain"] ?: "bundled"),
-                Triple(R.string.settings_threat_db_apps, packageIocCount, iocSourceLabel["package"] ?: "bundled"),
-                Triple(
-                    R.string.settings_threat_db_certificates,
-                    certHashIocCount,
-                    iocSourceLabel["cert_hash"] ?: "bundled",
-                ),
+                Triple(R.string.settings_threat_db_domains, domainIocCount, iocSourceLabel.sourceOf("domain")),
+                Triple(R.string.settings_threat_db_apps, packageIocCount, iocSourceLabel.sourceOf("package")),
+                Triple(R.string.settings_threat_db_certificates, certHashIocCount, iocSourceLabel.sourceOf("cert_hash")),
             ).forEach { (label, count, source) ->
-                StatRow(stringResource(label), stringResource(R.string.settings_threat_db_count_source, count, source))
+                StatRow(
+                    stringResource(label),
+                    stringResource(R.string.settings_threat_db_count_source, count, stringResource(source.label)),
+                )
             }
             StatRow(
                 stringResource(R.string.settings_update_cve_database),
@@ -538,3 +537,5 @@ private fun ThemeModePicker(
         }
     }
 }
+
+private fun Map<String, ThreatDataSource>.sourceOf(type: String) = this[type] ?: ThreatDataSource.BUNDLED
