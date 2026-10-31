@@ -1,6 +1,10 @@
 package com.androdr.data.store
 
+import java.math.BigDecimal
+import java.math.MathContext
+import java.math.RoundingMode
 import java.util.Base64
+import kotlin.math.abs
 
 /**
  * Canonical, type-exact JSON for telemetry field maps.
@@ -15,6 +19,10 @@ import java.util.Base64
 internal object CanonicalJson {
     private const val MAX_DEPTH = 64
     private val TAGS = setOf("~L", "~D", "~B", "~S")
+    private const val MIN_DIGITS = 2
+    private const val MAX_DIGITS = 17
+    private const val PLAIN_MIN = 1e-3
+    private const val PLAIN_MAX = 1e7
 
     fun write(fields: Map<String, Any?>): String = StringBuilder().also { writeMap(fields, it) }.toString()
 
@@ -65,8 +73,63 @@ internal object CanonicalJson {
     }
 
     private fun writeDouble(d: Double, out: StringBuilder) {
-        if (d.isNaN() || d.isInfinite()) out.append("{\"~D\":\"").append(d).append("\"}") else out.append(d)
+        val special = when {
+            d.isNaN() -> "NaN"
+            d == Double.POSITIVE_INFINITY -> "Infinity"
+            d == Double.NEGATIVE_INFINITY -> "-Infinity"
+            else -> null
+        }
+        if (special != null) out.append("{\"~D\":\"").append(special).append("\"}") else out.append(formatDouble(d))
     }
+
+    /**
+     * A finite [d] as the shortest decimal of at least two significant digits that rounds back to
+     * [d] (nearest-even when two are equally short), laid out as `Double.toString` lays it out: plain
+     * for 10^-3 <= |d| < 10^7, else `d.dddE±n`. Exact arithmetic only (#418): `Double.toString`
+     * differs across Java releases and Android versions, and the canonical bytes are hashed, so the
+     * platform's formatter must never decide them. Matches JDK 19+ `Double.toString`.
+     */
+    internal fun formatDouble(d: Double): String {
+        require(!d.isNaN() && !d.isInfinite()) { "not finite: canonical doubles tag NaN and infinities" }
+        val negative = d < 0.0 || (d == 0.0 && 1.0 / d < 0.0)
+        val a = abs(d)
+        if (a == 0.0) return if (negative) "-0.0" else "0.0"
+        val digits = shortestDigits(a)
+        val unscaled = digits.unscaledValue().toString()
+        // Scientific exponent of the first digit: a = d1.d2d3... * 10^exp.
+        val exp = unscaled.length - 1 - digits.scale()
+        val body = if (a >= PLAIN_MIN && a < PLAIN_MAX) plain(unscaled, exp) else scientific(unscaled, exp)
+        return if (negative) "-$body" else body
+    }
+
+    /** The shortest rounding of [a] (> 0) that lies in its round-to-nearest interval. */
+    private fun shortestDigits(a: Double): BigDecimal {
+        val exact = BigDecimal(a)
+        val two = BigDecimal.valueOf(2)
+        // Halfway points to the neighbouring doubles: a decimal strictly between them reads back as
+        // [a], and one exactly on them does when [a]'s significand is even (ties to even).
+        val low = exact.add(BigDecimal(Math.nextDown(a))).divide(two)
+        val high = exact.add(BigDecimal(Math.ulp(a)).divide(two))
+        val evenSignificand = (java.lang.Double.doubleToRawLongBits(a) and 1L) == 0L
+        for (precision in MIN_DIGITS..MAX_DIGITS) {
+            val r = exact.round(MathContext(precision, RoundingMode.HALF_EVEN))
+            val lo = r.compareTo(low)
+            val hi = r.compareTo(high)
+            if ((lo > 0 && hi < 0) || (evenSignificand && (lo == 0 || hi == 0))) return r.stripTrailingZeros()
+        }
+        return exact.round(MathContext(MAX_DIGITS, RoundingMode.HALF_EVEN)).stripTrailingZeros()
+    }
+
+    private fun plain(digits: String, exp: Int): String = if (exp >= 0) {
+        val whole = if (digits.length > exp + 1) digits.substring(0, exp + 1) else digits.padEnd(exp + 1, '0')
+        val fraction = if (digits.length > exp + 1) digits.substring(exp + 1) else "0"
+        "$whole.$fraction"
+    } else {
+        "0." + "0".repeat(-exp - 1) + digits
+    }
+
+    private fun scientific(digits: String, exp: Int): String =
+        digits[0] + "." + (if (digits.length > 1) digits.substring(1) else "0") + "E" + exp
 
     private fun writeMap(m: Map<*, *>, out: StringBuilder) {
         out.append('{')
