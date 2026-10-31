@@ -38,6 +38,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.compose.ui.res.stringResource
+import com.androdr.R
 import com.androdr.ui.theme.ThemeMode
 import com.androdr.util.appVersion
 import java.text.SimpleDateFormat
@@ -77,7 +79,7 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
                 putExtra(Intent.EXTRA_STREAM, uri)
                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             }
-            context.startActivity(Intent.createChooser(intent, "Share App Hashes"))
+            context.startActivity(Intent.createChooser(intent, context.getString(R.string.settings_hash_export_share)))
             viewModel.onHashShareConsumed()
         }
     }
@@ -88,7 +90,7 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
                 putExtra(Intent.EXTRA_STREAM, uri)
                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             }
-            context.startActivity(Intent.createChooser(intent, "Share STIX2 Bundle"))
+            context.startActivity(Intent.createChooser(intent, context.getString(R.string.settings_stix_export_share)))
             viewModel.onStixShareConsumed()
         }
     }
@@ -98,18 +100,18 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
             onDismissRequest = { viewModel.dismissUpdateResult() },
             confirmButton = {
                 TextButton(onClick = { viewModel.dismissUpdateResult() }) {
-                    Text("OK")
+                    Text(stringResource(android.R.string.ok))
                 }
             },
-            title = { Text("Update Complete") },
+            title = { Text(stringResource(R.string.settings_update_complete_title)) },
             text = {
                 Column {
-                    UpdateStatusRow("IOC Indicators", result.indicators)
-                    UpdateStatusRow("Known Apps", result.knownApps)
-                    UpdateStatusRow("SIGMA Rules", result.sigmaRules)
-                    UpdateStatusRow("CVE Database", result.cveDatabase)
-                    UpdateStatusRow("OEM Prefixes", result.oemPrefixes)
-                    UpdateStatusRow("Brand Registry", result.brandRegistry)
+                    UpdateStatusRow(stringResource(R.string.settings_update_indicators), result.indicators)
+                    UpdateStatusRow(stringResource(R.string.settings_update_known_apps), result.knownApps)
+                    UpdateStatusRow(stringResource(R.string.settings_update_sigma_rules), result.sigmaRules)
+                    UpdateStatusRow(stringResource(R.string.settings_update_cve_database), result.cveDatabase)
+                    UpdateStatusRow(stringResource(R.string.settings_update_oem_prefixes), result.oemPrefixes)
+                    UpdateStatusRow(stringResource(R.string.settings_update_brand_registry), result.brandRegistry)
                 }
             }
         )
@@ -125,19 +127,19 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             Text(
-                text = "Settings",
+                text = stringResource(R.string.settings_title),
                 style = MaterialTheme.typography.headlineMedium,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.primary
             )
 
             Text(
-                text = "Appearance",
+                text = stringResource(R.string.settings_appearance_title),
                 style = MaterialTheme.typography.titleMedium,
                 modifier = Modifier.padding(top = 16.dp)
             )
             Text(
-                text = "Choose how AndroDR adapts to your system theme.",
+                text = stringResource(R.string.settings_appearance_body),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -148,25 +150,25 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
             HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
 
             Text(
-                text = "DNS Blocklist",
+                text = stringResource(R.string.settings_dns_blocklist_title),
                 style = MaterialTheme.typography.titleMedium,
                 modifier = Modifier.padding(top = 16.dp)
             )
             PolicyToggleRow(
-                label = "Block matched domains",
-                subtitle = "Off = detect and log only",
+                label = stringResource(R.string.settings_block_matched_domains),
+                subtitle = stringResource(R.string.settings_block_off_detect_only),
                 checked = blocklistBlockMode,
                 onCheckedChange = { viewModel.setBlocklistBlockMode(it) }
             )
             HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
 
             Text(
-                text = "Threat Intelligence Domains",
+                text = stringResource(R.string.settings_threat_domains_title),
                 style = MaterialTheme.typography.titleMedium
             )
             PolicyToggleRow(
-                label = "Block matched domains",
-                subtitle = "Off = detect and log only (recommended for EDR)",
+                label = stringResource(R.string.settings_block_matched_domains),
+                subtitle = stringResource(R.string.settings_block_off_detect_only_recommended),
                 checked = domainIocBlockMode,
                 onCheckedChange = { viewModel.setDomainIocBlockMode(it) }
             )
@@ -190,12 +192,11 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
 
             // Custom Rule URLs section
             Text(
-                text = "Custom Rule URLs",
+                text = stringResource(R.string.settings_custom_rules_title),
                 style = MaterialTheme.typography.titleMedium
             )
             Text(
-                text = "Detection rule sources (one per line). Each URL should point to a " +
-                    "raw GitHub directory containing a rules.txt manifest.",
+                text = stringResource(R.string.settings_custom_rules_body),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -203,8 +204,8 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
                 value = customRuleUrls,
                 onValueChange = { viewModel.setCustomRuleUrls(it) },
                 modifier = Modifier.fillMaxWidth(),
-                label = { Text("Rule URLs") },
-                placeholder = { Text("https://raw.githubusercontent.com/...") },
+                label = { Text(stringResource(R.string.settings_custom_rules_label)) },
+                placeholder = { Text(stringResource(R.string.settings_custom_rules_placeholder)) },
                 minLines = 3,
                 maxLines = 6
             )
@@ -213,12 +214,11 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
 
             // App Hash Export section
             Text(
-                text = "App Hash Export",
+                text = stringResource(R.string.settings_hash_export_title),
                 style = MaterialTheme.typography.titleMedium
             )
             Text(
-                text = "Export SHA-256 hashes of all installed apps as CSV. " +
-                    "Use these hashes to check apps on VirusTotal.",
+                text = stringResource(R.string.settings_hash_export_body),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -232,9 +232,9 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
                         modifier = Modifier.size(18.dp),
                         strokeWidth = 2.dp
                     )
-                    Text("  Computing hashes...")
+                    Text(stringResource(R.string.settings_hash_export_running), Modifier.padding(start = 8.dp))
                 } else {
-                    Text("Export App Hashes (CSV)")
+                    Text(stringResource(R.string.settings_hash_export_action))
                 }
             }
 
@@ -242,12 +242,11 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
 
             // STIX2 Export section
             Text(
-                text = "Scan Findings Export",
+                text = stringResource(R.string.settings_stix_export_title),
                 style = MaterialTheme.typography.titleMedium
             )
             Text(
-                text = "Export scan findings as a STIX 2.1 JSON bundle for sharing " +
-                    "with forensic analysts. Compatible with MVT, MISP, and SIEM platforms.",
+                text = stringResource(R.string.settings_stix_export_body),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -261,9 +260,9 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
                         modifier = Modifier.size(18.dp),
                         strokeWidth = 2.dp
                     )
-                    Text("  Exporting...")
+                    Text(stringResource(R.string.settings_stix_export_running), Modifier.padding(start = 8.dp))
                 } else {
-                    Text("Export Findings (STIX2 JSON)")
+                    Text(stringResource(R.string.settings_stix_export_action))
                 }
             }
 
@@ -275,7 +274,7 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
 
             // About section
             Text(
-                text = "About",
+                text = stringResource(R.string.settings_about_title),
                 style = MaterialTheme.typography.titleMedium
             )
             Card(
@@ -289,26 +288,15 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
                     modifier = Modifier.padding(16.dp),
                     verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
+                    val device = listOf(Build.MANUFACTURER, Build.MODEL).joinToString(" ")
+                    StatRow(stringResource(R.string.settings_about_version), appVersion.name)
+                    StatRow(stringResource(R.string.settings_about_build), appVersion.code.toString())
                     StatRow(
-                        label = "Version",
-                        value = appVersion.name
+                        stringResource(R.string.settings_about_android),
+                        stringResource(R.string.settings_about_android_value, Build.VERSION.RELEASE, Build.VERSION.SDK_INT),
                     )
-                    StatRow(
-                        label = "Build",
-                        value = appVersion.code.toString()
-                    )
-                    StatRow(
-                        label = "Android",
-                        value = "${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT})"
-                    )
-                    StatRow(
-                        label = "Device",
-                        value = "${Build.MANUFACTURER} ${Build.MODEL}"
-                    )
-                    StatRow(
-                        label = "Security Patch",
-                        value = Build.VERSION.SECURITY_PATCH
-                    )
+                    StatRow(stringResource(R.string.settings_about_device), device)
+                    StatRow(stringResource(R.string.settings_about_security_patch), Build.VERSION.SECURITY_PATCH)
                 }
             }
 
@@ -334,7 +322,7 @@ private fun ThreatDatabaseSection(
     feedHealth: List<FeedHealthUi> = emptyList()
 ) {
     Text(
-        text = "Threat Database",
+        text = stringResource(R.string.settings_threat_db_title),
         style = MaterialTheme.typography.titleMedium
     )
 
@@ -351,11 +339,26 @@ private fun ThreatDatabaseSection(
             val domainSrc = iocSourceLabel["domain"] ?: "bundled"
             val pkgSrc = iocSourceLabel["package"] ?: "bundled"
             val certSrc = iocSourceLabel["cert_hash"] ?: "bundled"
-            StatRow("Detection Rules", "$sigmaRuleCount ($sigmaRuleSource)")
-            StatRow("Threat Domains", "$domainIocCount ($domainSrc)")
-            StatRow("Threat Apps", "$packageIocCount ($pkgSrc)")
-            StatRow("Threat Certificates", "$certHashIocCount ($certSrc)")
-            StatRow("CVE Database", "$cveCount Android CVEs")
+            StatRow(
+                stringResource(R.string.settings_threat_db_rules),
+                stringResource(R.string.settings_threat_db_count_source, sigmaRuleCount, sigmaRuleSource),
+            )
+            StatRow(
+                stringResource(R.string.settings_threat_db_domains),
+                stringResource(R.string.settings_threat_db_count_source, domainIocCount, domainSrc),
+            )
+            StatRow(
+                stringResource(R.string.settings_threat_db_apps),
+                stringResource(R.string.settings_threat_db_count_source, packageIocCount, pkgSrc),
+            )
+            StatRow(
+                stringResource(R.string.settings_threat_db_certificates),
+                stringResource(R.string.settings_threat_db_count_source, certHashIocCount, certSrc),
+            )
+            StatRow(
+                stringResource(R.string.settings_update_cve_database),
+                stringResource(R.string.settings_threat_db_cves, cveCount),
+            )
 
             HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
 
@@ -376,11 +379,12 @@ private fun ThreatDatabaseSection(
                         color = MaterialTheme.colorScheme.onPrimary
                     )
                     Text(
-                        text = "  Updating...",
+                        text = stringResource(R.string.settings_threat_db_updating),
+                        modifier = Modifier.padding(start = 8.dp),
                         style = MaterialTheme.typography.labelLarge
                     )
                 } else {
-                    Text("Update Now")
+                    Text(stringResource(R.string.settings_threat_db_update_now))
                 }
             }
         }
@@ -414,9 +418,9 @@ private fun LastUpdatedText(lastUpdated: Long?) {
     }
     Text(
         text = if (lastUpdated != null) {
-            "Last updated: ${dateFormatter.format(Date(lastUpdated))}"
+            stringResource(R.string.settings_last_updated, dateFormatter.format(Date(lastUpdated)))
         } else {
-            "Last updated: Never"
+            stringResource(R.string.settings_last_updated_never)
         },
         style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -428,7 +432,7 @@ private fun FeedHealthList(feedHealth: List<FeedHealthUi>) {
     if (feedHealth.isEmpty()) return
     Spacer(modifier = Modifier.height(4.dp))
     Text(
-        text = "Feed health  (• = critical detection feed)",
+        text = stringResource(R.string.settings_feed_health_title),
         style = MaterialTheme.typography.labelMedium,
         color = MaterialTheme.colorScheme.onSurfaceVariant
     )
@@ -447,12 +451,12 @@ private fun FeedHealthRow(feed: FeedHealthUi) {
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
         Text(
-            text = if (feed.isCritical) "• ${feed.label}" else feed.label,
+            text = if (feed.isCritical) stringResource(R.string.settings_feed_critical, feed.label) else feed.label,
             style = MaterialTheme.typography.bodySmall,
             color = color
         )
         Text(
-            text = if (feed.isStale) "$ageText — stale" else ageText,
+            text = if (feed.isStale) stringResource(R.string.settings_feed_stale, ageText) else ageText,
             style = MaterialTheme.typography.bodySmall,
             fontWeight = if (feed.isStale) FontWeight.SemiBold else FontWeight.Normal,
             color = color
@@ -461,17 +465,18 @@ private fun FeedHealthRow(feed: FeedHealthUi) {
 }
 
 /** Human "x ago" for a last-success epoch-ms, or "never" for 0. */
+@Composable
 private fun feedRelativeAge(lastSuccessAt: Long): String {
-    if (lastSuccessAt <= 0L) return "never"
+    if (lastSuccessAt <= 0L) return stringResource(R.string.settings_feed_age_never)
     val deltaMs = System.currentTimeMillis() - lastSuccessAt
     val days = deltaMs / (24 * 60 * 60 * 1000)
     val hours = deltaMs / (60 * 60 * 1000)
     val minutes = deltaMs / (60 * 1000)
     return when {
-        days >= 1 -> "${days}d ago"
-        hours >= 1 -> "${hours}h ago"
-        minutes >= 1 -> "${minutes}m ago"
-        else -> "just now"
+        days >= 1 -> stringResource(R.string.settings_feed_age_days, days.toInt())
+        hours >= 1 -> stringResource(R.string.settings_feed_age_hours, hours.toInt())
+        minutes >= 1 -> stringResource(R.string.settings_feed_age_minutes, minutes.toInt())
+        else -> stringResource(R.string.settings_feed_age_just_now)
     }
 }
 
@@ -521,9 +526,9 @@ private fun ThemeModePicker(
     onSelect: (ThemeMode) -> Unit
 ) {
     val options = listOf(
-        ThemeMode.AUTO  to "System",
-        ThemeMode.LIGHT to "Light",
-        ThemeMode.DARK  to "Dark"
+        ThemeMode.AUTO to R.string.settings_theme_system,
+        ThemeMode.LIGHT to R.string.settings_theme_light,
+        ThemeMode.DARK to R.string.settings_theme_dark,
     )
     SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
         options.forEachIndexed { index, (mode, label) ->
@@ -532,7 +537,7 @@ private fun ThemeModePicker(
                 onClick  = { onSelect(mode) },
                 shape    = SegmentedButtonDefaults.itemShape(index = index, count = options.size)
             ) {
-                Text(label)
+                Text(stringResource(label))
             }
         }
     }

@@ -47,8 +47,10 @@ class CountGroupingTest {
 
     @Test
     fun `settings storage rows and the cleanup message are grouped`() {
-        assertTrue(stats(BodyStats(125_000L, 2_048L, 0L)).startsWith("125,000 distinct records"))
-        assertEquals("Removed 100,000 old telemetry record(s).", cleanupMessage(TelemetryCleanup.Done(100_000L)))
+        val res = ApplicationProvider.getApplicationContext<Context>().resources
+        assertTrue(stats(res, BodyStats(125_000L, 2_048L, 0L)).startsWith("125,000 distinct records"))
+        assertEquals("Removed 100,000 old telemetry records.", cleanupMessage(res, TelemetryCleanup.Done(100_000L)))
+        assertEquals("Removed 1 old telemetry record.", cleanupMessage(res, TelemetryCleanup.Done(1L)))
     }
 
     @Test

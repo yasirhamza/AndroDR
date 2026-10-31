@@ -73,6 +73,12 @@ data class StorageSummary(
     /** The distinct bodies of facts observed by COMPLETE scans: the three kinds together. */
     val total: BodyStats get() = snapshots + liveEvents + imports
 
+    /** Every stored body: the three kinds and the bodies only pinned orphans hold. */
+    val allRecords: Long get() = total.bodies + pinnedOrphans.bodies
+
+    /** Everything Settings' Total counts: every stored body's bytes plus the alert evidence. */
+    val allStoredBytes: Long get() = total.storedBytes + pinnedOrphans.storedBytes + alertEvidenceBytes
+
     companion object {
         val EMPTY = StorageSummary(BodyStats.NONE, BodyStats.NONE, BodyStats.NONE, BodyStats.NONE, 0L)
     }

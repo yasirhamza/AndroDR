@@ -1,5 +1,6 @@
 package com.androdr.ui.settings
 
+import android.content.res.Resources
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -26,10 +27,14 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.compose.ui.res.stringResource
+import com.androdr.R
 import com.androdr.data.store.BodyStats
+import com.androdr.data.store.StorageSummary
 import com.androdr.reporting.groupedCount
 import com.androdr.reporting.humanBytes
 import kotlin.math.roundToInt
@@ -46,58 +51,76 @@ fun TelemetryStorageSection(viewModel: TelemetrySettingsViewModel = hiltViewMode
     val cleanup by viewModel.cleanup.collectAsStateWithLifecycle()
     var confirm by remember { mutableStateOf(false) }
 
-    Text(text = "Telemetry storage", style = MaterialTheme.typography.titleMedium)
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
-    ) {
-        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            val s = storage
-            if (s == null) {
-                Text("Storage size unavailable", style = MaterialTheme.typography.bodySmall)
-            } else {
-                StatRow("Snapshots", stats(s.snapshots))
-                StatRow("Live events", stats(s.liveEvents))
-                StatRow("Imports", stats(s.imports))
-                StatRow("Total", stats(s.total))
-            }
-        }
-    }
+    Text(text = stringResource(R.string.telemetry_storage_title), style = MaterialTheme.typography.titleMedium)
+    StorageFigures(storage)
     RetentionControl(keep = keep, onCommit = viewModel::setRetentionScans)
     OutlinedButton(
         onClick = { confirm = true },
         modifier = Modifier.fillMaxWidth(),
         enabled = cleanup != TelemetryCleanup.Running,
     ) {
-        Text(if (cleanup == TelemetryCleanup.Running) "Deleting…" else "Delete old snapshot telemetry now")
+        Text(
+            stringResource(
+                if (cleanup == TelemetryCleanup.Running) R.string.telemetry_cleanup_running else R.string.telemetry_cleanup_action,
+            ),
+        )
     }
 
     if (confirm) {
         AlertDialog(
             onDismissRequest = { confirm = false },
-            title = { Text("Delete old snapshot telemetry?") },
-            text = {
-                Text(
-                    "Removes snapshot telemetry of live scans older than the newest $keep, and live events " +
-                        "older than 30 days. Imports and records behind findings or alerts are kept."
-                )
-            },
+            title = { Text(stringResource(R.string.telemetry_cleanup_confirm_title)) },
+            text = { Text(stringResource(R.string.telemetry_cleanup_confirm_body, keep)) },
             confirmButton = {
                 TextButton(onClick = {
                     confirm = false
                     viewModel.deleteOldSnapshotsNow()
-                }) { Text("Delete", color = MaterialTheme.colorScheme.error) }
+                }) { Text(stringResource(R.string.telemetry_cleanup_confirm), color = MaterialTheme.colorScheme.error) }
             },
-            dismissButton = { TextButton(onClick = { confirm = false }) { Text("Cancel") } },
+            dismissButton = {
+                TextButton(onClick = { confirm = false }) { Text(stringResource(android.R.string.cancel)) }
+            },
         )
     }
 
-    cleanupMessage(cleanup)?.let { message ->
+    cleanupMessage(LocalContext.current.resources, cleanup)?.let { message ->
         AlertDialog(
             onDismissRequest = { viewModel.dismissCleanup() },
             text = { Text(message) },
-            confirmButton = { TextButton(onClick = { viewModel.dismissCleanup() }) { Text("OK") } },
+            confirmButton = {
+                TextButton(onClick = { viewModel.dismissCleanup() }) { Text(stringResource(android.R.string.ok)) }
+            },
         )
+    }
+}
+
+/**
+ * The storage card: each retention kind, what is kept only for findings and alerts (pinned orphans)
+ * and the alert evidence, then a Total of all of them (#418: the Total used to cover only the three
+ * kinds, under a label that read as the whole store).
+ */
+@Composable
+internal fun StorageFigures(storage: StorageSummary?) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
+    ) {
+        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            if (storage == null) {
+                Text(stringResource(R.string.telemetry_storage_unavailable), style = MaterialTheme.typography.bodySmall)
+            } else {
+                val res = LocalContext.current.resources
+                StatRow(stringResource(R.string.telemetry_storage_snapshots), stats(res, storage.snapshots))
+                StatRow(stringResource(R.string.telemetry_storage_live_events), stats(res, storage.liveEvents))
+                StatRow(stringResource(R.string.telemetry_storage_imports), stats(res, storage.imports))
+                StatRow(stringResource(R.string.telemetry_storage_pinned), stats(res, storage.pinnedOrphans))
+                StatRow(stringResource(R.string.telemetry_storage_alert_evidence), humanBytes(storage.alertEvidenceBytes))
+                StatRow(
+                    stringResource(R.string.telemetry_storage_total),
+                    stats(res, storage.allRecords, storage.allStoredBytes),
+                )
+            }
+        }
     }
 }
 
@@ -118,12 +141,12 @@ internal fun RetentionControl(keep: Int, onCommit: (Int) -> Unit) {
         onCommit(next)
     }
     Text(
-        text = "Keep snapshot telemetry for the last $shown scans",
+        text = stringResource(R.string.telemetry_retention_label, shown),
         style = MaterialTheme.typography.bodyMedium,
     )
     Row(verticalAlignment = Alignment.CenterVertically) {
         IconButton(onClick = { step(-1) }, enabled = shown > range.first) {
-            Icon(Icons.Filled.Remove, contentDescription = "Keep one scan fewer")
+            Icon(Icons.Filled.Remove, contentDescription = stringResource(R.string.telemetry_retention_fewer))
         }
         Slider(
             value = position,
@@ -133,7 +156,7 @@ internal fun RetentionControl(keep: Int, onCommit: (Int) -> Unit) {
             modifier = Modifier.weight(1f),
         )
         IconButton(onClick = { step(1) }, enabled = shown < range.last) {
-            Icon(Icons.Filled.Add, contentDescription = "Keep one scan more")
+            Icon(Icons.Filled.Add, contentDescription = stringResource(R.string.telemetry_retention_more))
         }
     }
 }
@@ -147,11 +170,18 @@ internal fun retentionStep(current: Int, delta: Int): Int = clampRetention(curre
 private fun clampRetention(scans: Int): Int =
     scans.coerceIn(TelemetrySettingsViewModel.RETENTION_RANGE.first, TelemetrySettingsViewModel.RETENTION_RANGE.last)
 
-internal fun stats(b: BodyStats): String = "${groupedCount(b.bodies)} distinct records · ${humanBytes(b.storedBytes)}"
+internal fun stats(res: Resources, b: BodyStats): String = stats(res, b.bodies, b.storedBytes)
 
-internal fun cleanupMessage(cleanup: TelemetryCleanup): String? = when (cleanup) {
-    is TelemetryCleanup.Done -> "Removed ${groupedCount(cleanup.observationsRemoved)} old telemetry record(s)."
-    TelemetryCleanup.Busy -> "Another storage task is running. Try again shortly."
-    TelemetryCleanup.Failed -> "Old telemetry could not be deleted."
+private fun stats(res: Resources, records: Long, storedBytes: Long): String =
+    res.getString(R.string.telemetry_storage_stats, groupedCount(records), humanBytes(storedBytes))
+
+internal fun cleanupMessage(res: Resources, cleanup: TelemetryCleanup): String? = when (cleanup) {
+    is TelemetryCleanup.Done -> res.getQuantityString(
+        R.plurals.telemetry_cleanup_done, quantityOf(cleanup.observationsRemoved), groupedCount(cleanup.observationsRemoved),
+    )
+    TelemetryCleanup.Busy -> res.getString(R.string.telemetry_cleanup_busy)
+    TelemetryCleanup.Failed -> res.getString(R.string.telemetry_cleanup_failed)
     TelemetryCleanup.Idle, TelemetryCleanup.Running -> null
 }
+
+private fun quantityOf(n: Long): Int = n.coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
