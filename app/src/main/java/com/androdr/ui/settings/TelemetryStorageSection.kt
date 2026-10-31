@@ -59,11 +59,12 @@ fun TelemetryStorageSection(viewModel: TelemetrySettingsViewModel = hiltViewMode
         modifier = Modifier.fillMaxWidth(),
         enabled = cleanup != TelemetryCleanup.Running,
     ) {
-        Text(
-            stringResource(
-                if (cleanup == TelemetryCleanup.Running) R.string.telemetry_cleanup_running else R.string.telemetry_cleanup_action,
-            ),
-        )
+        val label = if (cleanup == TelemetryCleanup.Running) {
+            R.string.telemetry_cleanup_running
+        } else {
+            R.string.telemetry_cleanup_action
+        }
+        Text(stringResource(label))
     }
 
     if (confirm) {
@@ -114,7 +115,9 @@ internal fun StorageFigures(storage: StorageSummary?) {
                 StatRow(stringResource(R.string.telemetry_storage_live_events), stats(res, storage.liveEvents))
                 StatRow(stringResource(R.string.telemetry_storage_imports), stats(res, storage.imports))
                 StatRow(stringResource(R.string.telemetry_storage_pinned), stats(res, storage.pinnedOrphans))
-                StatRow(stringResource(R.string.telemetry_storage_alert_evidence), humanBytes(storage.alertEvidenceBytes))
+                StatRow(
+                    stringResource(R.string.telemetry_storage_alert_evidence), humanBytes(storage.alertEvidenceBytes),
+                )
                 StatRow(
                     stringResource(R.string.telemetry_storage_total),
                     stats(res, storage.allRecords, storage.allStoredBytes),
@@ -177,7 +180,9 @@ private fun stats(res: Resources, records: Long, storedBytes: Long): String =
 
 internal fun cleanupMessage(res: Resources, cleanup: TelemetryCleanup): String? = when (cleanup) {
     is TelemetryCleanup.Done -> res.getQuantityString(
-        R.plurals.telemetry_cleanup_done, quantityOf(cleanup.observationsRemoved), groupedCount(cleanup.observationsRemoved),
+        R.plurals.telemetry_cleanup_done,
+        quantityOf(cleanup.observationsRemoved),
+        groupedCount(cleanup.observationsRemoved),
     )
     TelemetryCleanup.Busy -> res.getString(R.string.telemetry_cleanup_busy)
     TelemetryCleanup.Failed -> res.getString(R.string.telemetry_cleanup_failed)

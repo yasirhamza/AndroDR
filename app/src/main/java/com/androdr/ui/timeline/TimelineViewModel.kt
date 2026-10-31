@@ -35,8 +35,8 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.channels.ReceiveChannel
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.buffer
 import kotlinx.coroutines.flow.debounce
@@ -537,28 +537,30 @@ internal fun DecodedRecord.asExportEvent(
  * burst that never goes quiet still bumps once every [maxWaitMs] from its first change (#418: a
  * plain debounce starved the counts under a continuous stream). Starts at 0.
  */
-internal fun Flow<Unit>.coalescedVersions(quietMs: Long, maxWaitMs: Long = quietMs * DEFAULT_MAX_WAIT_FACTOR): Flow<Int> =
-    flow {
-        var version = 0
-        emit(version)
-        coroutineScope {
-            val changes = this@coalescedVersions.buffer(Channel.CONFLATED).produceIn(this)
-            var open = true
-            while (open && changes.receiveCatching().isSuccess) {
-                // In a burst: wait for quiet, an end of stream, or the burst's max wait, then bump.
-                withTimeoutOrNull(maxWaitMs) {
-                    while (true) {
-                        val next = withTimeoutOrNull(quietMs) { changes.receiveCatching() } ?: break
-                        if (!next.isSuccess) {
-                            open = false
-                            break
-                        }
-                    }
-                }
-                emit(++version)
-            }
+internal fun Flow<Unit>.coalescedVersions(
+    quietMs: Long,
+    maxWaitMs: Long = quietMs * DEFAULT_MAX_WAIT_FACTOR,
+): Flow<Int> = flow {
+    var version = 0
+    emit(version)
+    coroutineScope {
+        val changes = this@coalescedVersions.buffer(Channel.CONFLATED).produceIn(this)
+        var open = true
+        while (open && changes.receiveCatching().isSuccess) {
+            // In a burst: wait for quiet, an end of stream, or the burst's max wait, then bump.
+            open = withTimeoutOrNull(maxWaitMs) { changes.awaitQuiet(quietMs) } ?: true
+            emit(++version)
         }
     }
+}
+
+/** Receives until [quietMs] pass with nothing new (true) or the channel closes (false). */
+private suspend fun ReceiveChannel<Unit>.awaitQuiet(quietMs: Long): Boolean {
+    while (true) {
+        val next = withTimeoutOrNull(quietMs) { receiveCatching() } ?: return true
+        if (!next.isSuccess) return false
+    }
+}
 
 private const val DEFAULT_MAX_WAIT_FACTOR = 10
 

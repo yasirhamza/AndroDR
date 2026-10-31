@@ -107,7 +107,8 @@ class ImportCardTest {
     /** #418: a reserve breached only at finish stored every record; the card must not say the rest were not. */
     @Test
     fun `a reserve breached only at finish says space is low, not that records were dropped`() {
-        val card = ImportCard.from(write(TelemetryState.STORED, space = 42L), false, emptyList(), estimateBytes = 900L)!!
+        val stored = write(TelemetryState.STORED, space = 42L)
+        val card = ImportCard.from(stored, false, emptyList(), estimateBytes = 900L)!!
         assertEquals(ImportNotice.ReserveLowAfterImport(freeAtLeastBytes = 42L), card.notice)
         val strings = java.io.File("src/main/res/values/strings.xml").readText()
         val body = Regex("""<string name="import_card_reserve_low_after">([^<]*)</string>""").find(strings)!!

@@ -62,7 +62,9 @@ class CanonicalJsonDoubleTest {
         assertTrue((back["a"] as Double).isNaN())
         assertEquals(Double.NEGATIVE_INFINITY, back["b"])
         assertEquals(2.0E-3, back["c"])
-        assertEquals(java.lang.Double.doubleToRawLongBits(-0.0), java.lang.Double.doubleToRawLongBits(back["d"] as Double))
+        assertEquals(
+            java.lang.Double.doubleToRawLongBits(-0.0), java.lang.Double.doubleToRawLongBits(back["d"] as Double),
+        )
     }
 
     /** The writer must not fall back to the platform's double formatting anywhere. */

@@ -293,7 +293,9 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
                     StatRow(stringResource(R.string.settings_about_build), appVersion.code.toString())
                     StatRow(
                         stringResource(R.string.settings_about_android),
-                        stringResource(R.string.settings_about_android_value, Build.VERSION.RELEASE, Build.VERSION.SDK_INT),
+                        stringResource(
+                            R.string.settings_about_android_value, Build.VERSION.RELEASE, Build.VERSION.SDK_INT,
+                        ),
                     )
                     StatRow(stringResource(R.string.settings_about_device), device)
                     StatRow(stringResource(R.string.settings_about_security_patch), Build.VERSION.SECURITY_PATCH)
@@ -336,25 +338,19 @@ private fun ThreatDatabaseSection(
             modifier = Modifier.padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
-            val domainSrc = iocSourceLabel["domain"] ?: "bundled"
-            val pkgSrc = iocSourceLabel["package"] ?: "bundled"
-            val certSrc = iocSourceLabel["cert_hash"] ?: "bundled"
-            StatRow(
-                stringResource(R.string.settings_threat_db_rules),
-                stringResource(R.string.settings_threat_db_count_source, sigmaRuleCount, sigmaRuleSource),
-            )
-            StatRow(
-                stringResource(R.string.settings_threat_db_domains),
-                stringResource(R.string.settings_threat_db_count_source, domainIocCount, domainSrc),
-            )
-            StatRow(
-                stringResource(R.string.settings_threat_db_apps),
-                stringResource(R.string.settings_threat_db_count_source, packageIocCount, pkgSrc),
-            )
-            StatRow(
-                stringResource(R.string.settings_threat_db_certificates),
-                stringResource(R.string.settings_threat_db_count_source, certHashIocCount, certSrc),
-            )
+            // Each count and where it came from: "<count> (<source>)".
+            listOf(
+                Triple(R.string.settings_threat_db_rules, sigmaRuleCount, sigmaRuleSource),
+                Triple(R.string.settings_threat_db_domains, domainIocCount, iocSourceLabel["domain"] ?: "bundled"),
+                Triple(R.string.settings_threat_db_apps, packageIocCount, iocSourceLabel["package"] ?: "bundled"),
+                Triple(
+                    R.string.settings_threat_db_certificates,
+                    certHashIocCount,
+                    iocSourceLabel["cert_hash"] ?: "bundled",
+                ),
+            ).forEach { (label, count, source) ->
+                StatRow(stringResource(label), stringResource(R.string.settings_threat_db_count_source, count, source))
+            }
             StatRow(
                 stringResource(R.string.settings_update_cve_database),
                 stringResource(R.string.settings_threat_db_cves, cveCount),

@@ -116,7 +116,9 @@ class TelemetryBrowserScreensTest {
         val opened = mutableListOf<Pair<Long, Long>>()
         val model = vm(TelemetryBrowserViewModel.ARG_SCAN to 1L, TelemetryBrowserViewModel.ARG_SERVICE to "app_scanner")
         composeRule.setContent {
-            TelemetryRecordsScreen(onOpenFact = { fact, scan -> opened += fact to scan }, onBack = {}, viewModel = model)
+            TelemetryRecordsScreen(
+                onOpenFact = { fact, scan -> opened += fact to scan }, onBack = {}, viewModel = model,
+            )
         }
         awaitText("com.p000")
         // Scrolling to the last record makes the Pager append through the keyset source twice.

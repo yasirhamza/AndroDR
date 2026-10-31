@@ -80,7 +80,9 @@ class StorageFailedBannerTest {
     @Test
     fun `the not-saved marker persists and a fully stored scan clears it`() = kotlinx.coroutines.runBlocking {
         val dir = java.nio.file.Files.createTempDirectory("health").toFile()
-        val scope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO + kotlinx.coroutines.SupervisorJob())
+        val scope = kotlinx.coroutines.CoroutineScope(
+            kotlinx.coroutines.Dispatchers.IO + kotlinx.coroutines.SupervisorJob(),
+        )
         try {
             val store = androidx.datastore.preferences.core.PreferenceDataStoreFactory.create(scope = scope) {
                 java.io.File(dir, "h.preferences_pb")

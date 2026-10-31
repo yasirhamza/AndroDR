@@ -269,7 +269,9 @@ class TelemetryReader @Inject constructor(
                 out.write("\n")
                 written++
             }
-            if (written < service.records) throw IncompleteExportException(scanId, service.service, written, service.records)
+            if (written < service.records) {
+                throw IncompleteExportException(scanId, service.service, written, service.records)
+            }
             lines += written
         }
         return lines
