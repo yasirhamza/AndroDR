@@ -20,6 +20,10 @@ buildscript {
             classpath("com.fasterxml.jackson.core:jackson-databind:2.21.7")
             classpath("com.fasterxml.jackson.core:jackson-core:2.21.7")
 
+            // CycloneDX (via maven-core) pulls guava 33.6.0-jre (GHSA-xxph-c9ww-hj94, fixed in
+            // 33.7.2). The root build file pins the same version for the plugin classpath.
+            classpath(libs.guava) { version { require(libs.versions.guava.get()) } }
+
             // NOTE: the bcprov-jdk18on 1.77 critical (GHSA-574f-3g2m-x479) is
             // NOT fixable here — it is a transitive of the Android Gradle
             // Plugin, resolved on the pluginManagement classpath that a
