@@ -74,6 +74,10 @@ class DashboardViewModel @Inject constructor(
     val storageHealthFailed: StateFlow<Boolean> = storageHealth.isSetFlow
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
 
+    /** The persistent "a recent scan was not saved" marker, whatever the cause (#418). */
+    val scanNotSaved: StateFlow<Boolean> = storageHealth.scanNotSavedFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
+
     /** DNS events the VPN log had to discard; shown until the user dismisses it. */
     val dnsDrops: StateFlow<DnsDropState> = dnsDropLog.state
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), DnsDropState(0L, 0L))
@@ -173,6 +177,7 @@ class DashboardViewModel @Inject constructor(
                 // A history read that fails leaves the state as it was: neither "saved" nor "unsaved" is known.
                 outcomeOf(result, readPersisted { repository.isSaved(result.id) })?.let { outcome ->
                     _unsavedScan.value = outcome.unsaved
+                    if (outcome.unsaved != null) storageHealth.markScanNotSaved()
                     if (outcome.clearHealthFlag) storageHealth.clear()
                 }
             } finally {
@@ -209,10 +214,12 @@ class DashboardViewModel @Inject constructor(
          */
         fun storageBanner(
             scan: ScanWithFindings?, isScanning: Boolean, unsaved: Boolean, healthFailed: Boolean,
+            scanNotSaved: Boolean = false,
         ) = when {
             isScanning -> StorageBanner.NONE
             unsaved -> StorageBanner.NOT_SAVED
-        healthFailed -> StorageBanner.EARLIER_SCAN_SHOWN
+            healthFailed -> StorageBanner.EARLIER_SCAN_SHOWN
+            scanNotSaved -> StorageBanner.EARLIER_SCAN_NOT_SAVED
             scan?.telemetryState == TelemetryState.FAILED ||
                 scan?.telemetryState == TelemetryState.FAILED_PARTIAL_RETENTION -> StorageBanner.PARTLY_STORED
             else -> StorageBanner.NONE
@@ -316,4 +323,10 @@ enum class StorageBanner {
 
     /** A recent scan or import could not be saved, but the scan on screen is an earlier, saved one. */
     EARLIER_SCAN_SHOWN,
+
+    /**
+     * A recent scan was not saved for a reason other than a full disk (#418: such a failure left no
+     * marker once the in-memory result was gone); the scan on screen is an earlier, saved one.
+     */
+    EARLIER_SCAN_NOT_SAVED,
 }

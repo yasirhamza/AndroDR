@@ -648,14 +648,17 @@ private fun PartialScanBanner(scan: ScanWithFindings) {
 private fun StorageBanners(viewModel: DashboardViewModel, latestScan: ScanWithFindings?, isScanning: Boolean) {
     val unsaved by viewModel.latestUnsaved.collectAsStateWithLifecycle()
     val healthFailed by viewModel.storageHealthFailed.collectAsStateWithLifecycle()
+    val scanNotSaved by viewModel.scanNotSaved.collectAsStateWithLifecycle()
     val drops by viewModel.dnsDrops.collectAsStateWithLifecycle()
-    when (DashboardViewModel.storageBanner(latestScan, isScanning, unsaved, healthFailed)) {
+    when (DashboardViewModel.storageBanner(latestScan, isScanning, unsaved, healthFailed, scanNotSaved)) {
         StorageBanner.NOT_SAVED ->
             WarningBanner(R.string.storage_not_saved_banner_title, R.string.storage_not_saved_banner_body)
         StorageBanner.PARTLY_STORED ->
             WarningBanner(R.string.storage_failed_banner_title, R.string.storage_failed_banner_body)
         StorageBanner.EARLIER_SCAN_SHOWN ->
             WarningBanner(R.string.storage_earlier_banner_title, R.string.storage_earlier_banner_body)
+        StorageBanner.EARLIER_SCAN_NOT_SAVED ->
+            WarningBanner(R.string.scan_not_saved_earlier_banner_title, R.string.scan_not_saved_earlier_banner_body)
         StorageBanner.NONE -> Unit
     }
     if (drops.any) {

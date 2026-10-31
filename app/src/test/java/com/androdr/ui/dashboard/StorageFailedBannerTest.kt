@@ -3,6 +3,7 @@ package com.androdr.ui.dashboard
 import com.androdr.data.model.ScanWithFindings
 import com.androdr.data.model.scanWith
 import com.androdr.data.model.TelemetryState
+import kotlinx.coroutines.flow.first
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertSame
@@ -19,7 +20,8 @@ class StorageFailedBannerTest {
 
     private fun banner(
         scan: ScanWithFindings?, scanning: Boolean = false, unsaved: Boolean = false, flag: Boolean = false,
-    ) = DashboardViewModel.storageBanner(scan, scanning, unsaved, flag)
+        notSaved: Boolean = false,
+    ) = DashboardViewModel.storageBanner(scan, scanning, unsaved, flag, notSaved)
 
     @Test
     fun `a saved FAILED scan says some records were not saved`() =
@@ -47,6 +49,52 @@ class StorageFailedBannerTest {
     fun `after a restart the flag alone never says the scan on screen was not saved`() {
         // The in-memory result is gone; the screen shows an older saved scan.
         assertEquals(StorageBanner.EARLIER_SCAN_SHOWN, banner(scan(), unsaved = false, flag = true))
+    }
+
+    /**
+     * #418: a live scan that failed to save for a non-storage reason left only the in-memory result, so
+     * after a restart the earlier saved scan read as the latest with no warning. The persistent
+     * not-saved marker now survives the restart.
+     */
+    @Test
+    fun `after a restart a non-storage save failure still says a recent scan is missing`() {
+        assertEquals(StorageBanner.EARLIER_SCAN_NOT_SAVED, banner(scan(), notSaved = true))
+        assertEquals("the storage cause wins when both are known", StorageBanner.EARLIER_SCAN_SHOWN,
+            banner(scan(), flag = true, notSaved = true))
+        assertEquals(StorageBanner.NOT_SAVED, banner(scan(), unsaved = true, notSaved = true))
+        val strings = java.io.File("src/main/res/values/strings.xml").readText()
+        val body = Regex("name=\"scan_not_saved_earlier_banner_body\">([^<]*)").find(strings)!!.groupValues[1]
+        assertTrue("no storage cause is asserted", !body.contains("ran out") && !body.contains("storage"))
+        assertTrue(body.contains("earlier"))
+    }
+
+    @Test
+    fun `source gate - an unsaved scan sets the persistent marker and the screen renders it`() {
+        val vm = java.io.File("src/main/java/com/androdr/ui/dashboard/DashboardViewModel.kt").readText()
+        assertTrue(vm.contains("if (outcome.unsaved != null) storageHealth.markScanNotSaved()"))
+        val screen = java.io.File("src/main/java/com/androdr/ui/dashboard/DashboardScreen.kt").readText()
+        assertTrue(screen.contains("healthFailed, scanNotSaved)"))
+        assertTrue(screen.contains("R.string.scan_not_saved_earlier_banner_body"))
+    }
+
+    @Test
+    fun `the not-saved marker persists and a fully stored scan clears it`() = kotlinx.coroutines.runBlocking {
+        val dir = java.nio.file.Files.createTempDirectory("health").toFile()
+        val scope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO + kotlinx.coroutines.SupervisorJob())
+        try {
+            val store = androidx.datastore.preferences.core.PreferenceDataStoreFactory.create(scope = scope) {
+                java.io.File(dir, "h.preferences_pb")
+            }
+            val flag = com.androdr.data.store.StorageHealthFlag(store)
+            flag.markScanNotSaved()
+            assertTrue(flag.scanNotSavedFlow.first())
+            assertTrue("the storage flag is separate", !flag.isSet())
+            flag.clear()
+            assertTrue(!flag.scanNotSavedFlow.first())
+        } finally {
+            scope.coroutineContext[kotlinx.coroutines.Job]!!.cancel()
+            dir.deleteRecursively()
+        }
     }
 
     @Test
