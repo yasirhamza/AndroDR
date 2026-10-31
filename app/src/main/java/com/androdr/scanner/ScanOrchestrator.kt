@@ -377,20 +377,12 @@ class ScanOrchestrator @Inject constructor(
     }
 
     /**
-     * Classifies an imported ZIP by its entry names (#342 spec §4.1). Reaching a
-     * ZIP entry's NAME via `ZipInputStream` inflates the PRECEDING entry's body
-     * (`closeEntry()`/`getNextEntry()` decompress and discard it), so this is not
-     * free on a large or crafted archive. [ArtifactSniffer.classifyZip] therefore
-     * (a) short-circuits on the first `dumpstate` entry — a well-formed bug report
-     * is classified without draining bodies — and (b) caps total decompressed
-     * bytes so a deflate bomb cannot inflate unboundedly here (security M5). The
-     * analyzer then re-opens the URI to read the content.
+     * Classifies an imported ZIP (#342 spec §4.1) with [ImportArchive.type], the classification the
+     * storage preflight sized it by (#418): its central directory's entry names, read without
+     * inflating anything, or a bounded stream sniff when that directory is unreadable. The analyzer
+     * then re-opens the URI to read the content.
      */
-    private suspend fun sniffArtifact(uri: Uri): ArtifactType = withContext(Dispatchers.IO) {
-        val stream = context.contentResolver.openInputStream(uri)
-            ?: return@withContext ArtifactType.UNRECOGNIZED
-        stream.use { s -> ArtifactSniffer.classifyZip(s).type }
-    }
+    private suspend fun sniffArtifact(uri: Uri): ArtifactType = ImportArchive.type(context, uri)
 
     /**
      * #342: analyze an Advanced Protection Intrusion Logging export in one pass, appending each

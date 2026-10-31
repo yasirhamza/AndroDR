@@ -158,6 +158,43 @@ class ZipCentralDirectoryTest {
         assertEquals(Preflight.Tight(hundredMb * 4, gb), preflight(free = gb).check(intrusionLog))
     }
 
+    /**
+     * #418: a ZIP whose central directory names a dumpstate while its local headers hold a per-day log.
+     * The preflight sized it as a bug report (factor 0.05) while the analyzer, sniffing the stream,
+     * ran the intrusion-log import (4.0). Both now take [ImportArchive.type].
+     */
+    @Test
+    fun `a forged zip gets one type for its size estimate and its analyzer`() = runBlocking {
+        val local = "a/2026-10-01.txt"
+        val central = "dumpstate-ab.txt"
+        check(local.length == central.length)
+        val f = namedZip(1_000, local)
+        val bytes = f.readBytes()
+        val name = local.toByteArray()
+        val at = (bytes.size - name.size downTo 0).first { i -> name.indices.all { bytes[i + it] == name[it] } }
+        central.toByteArray().copyInto(bytes, at) // the last copy of the name is the central directory's
+        f.writeBytes(bytes)
+        val uri = Uri.fromFile(f)
+        val app = RuntimeEnvironment.getApplication()
+
+        val streamSniff = f.inputStream().use { ArtifactSniffer.classifyZip(it).type }
+        assertEquals("precondition: the two name lists disagree", ArtifactType.INTRUSION_LOG, streamSniff)
+        val type = ImportArchive.type(app, uri)
+        assertEquals(ArtifactType.BUG_REPORT, type)
+        val tight = preflight(free = 1L).check(uri) as Preflight.Tight
+        assertEquals("the estimate uses the type the analyzer is routed by",
+            (1_000 * ImportPreflight.storedSizeFactor(type)).toLong(), tight.estimate)
+    }
+
+    @Test
+    fun `source gate - the analyzer is routed by the preflight's classification`() {
+        val src = listOf(File("src/main/java"), File("app/src/main/java")).first { it.isDirectory }
+            .resolve("com/androdr/scanner/ScanOrchestrator.kt").readText()
+        val sniff = src.substringAfter("private suspend fun sniffArtifact").substringBefore("\n    /**")
+        assertTrue(sniff, sniff.contains("ImportArchive.type(context, uri)"))
+        assertTrue("the orchestrator must not classify on its own", !src.contains("ArtifactSniffer.classifyZip"))
+    }
+
     @Test
     fun `check gives an unknown size for an unreadable file`() = runBlocking {
         val garbage = tmp.newFile().also { it.writeBytes(ByteArray(1_000) { 1 }) }
