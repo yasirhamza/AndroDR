@@ -222,7 +222,7 @@ internal class IntrusionLogSessionChunks(
     private val fallbackCapturedAt: Long,
 ) : IntrusionLogChunks {
     override suspend fun dns(events: List<ImportedDnsEvent>, records: List<StoreRecord>) =
-        put(IntrusionLogRecordBuilders.DNS_MONITOR, records)
+        put(LiveRecordBuilders.DNS_MONITOR, records)
 
     override suspend fun connect(events: List<NetworkTelemetry>, records: List<StoreRecord>) =
         put(IntrusionLogRecordBuilders.NETWORK_MONITOR, records)

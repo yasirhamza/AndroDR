@@ -134,7 +134,7 @@ class RecordBuilderCanonicalTest {
             )
         }
         return mapOf(
-            "importedDns" to chunks.records.getValue(IntrusionLogRecordBuilders.DNS_MONITOR),
+            "importedDns" to chunks.records.getValue(LiveRecordBuilders.DNS_MONITOR),
             "network" to chunks.records.getValue(IntrusionLogRecordBuilders.NETWORK_MONITOR),
             "securityLog" to chunks.records.getValue(IntrusionLogRecordBuilders.SECURITY_LOG),
         )
@@ -266,7 +266,7 @@ class RecordBuilderCanonicalTest {
         val groups = listOf(
             Triple(TelemetrySource.LIVE_SCAN, liveServices(), 1L),
             Triple(TelemetrySource.INTRUSION_LOG_IMPORT, mapOf(
-                IntrusionLogRecordBuilders.DNS_MONITOR to intrusionRecords().getValue("importedDns"),
+                LiveRecordBuilders.DNS_MONITOR to intrusionRecords().getValue("importedDns"),
                 IntrusionLogRecordBuilders.NETWORK_MONITOR to intrusionRecords().getValue("network"),
                 IntrusionLogRecordBuilders.SECURITY_LOG to intrusionRecords().getValue("securityLog"),
             ), 2L),

@@ -245,7 +245,7 @@ internal fun intrusionLogResult(
     val triggered = written.scan.triggeredCount
     fun dropped(service: String) = written.duplicatesByService[service] ?: 0
     val stats = s.copy(
-        dnsEventCount = s.dnsEventCount - dropped(IntrusionLogRecordBuilders.DNS_MONITOR),
+        dnsEventCount = s.dnsEventCount - dropped(LiveRecordBuilders.DNS_MONITOR),
         connectEventCount = s.connectEventCount - dropped(IntrusionLogRecordBuilders.NETWORK_MONITOR),
         securityEventCount = s.securityEventCount - dropped(IntrusionLogRecordBuilders.SECURITY_LOG),
         duplicatesCollapsed = written.duplicatesDropped,
