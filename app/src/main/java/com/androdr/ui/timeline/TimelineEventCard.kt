@@ -114,6 +114,7 @@ fun TimelineEventCard(
             ) {
                 if (level != null) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
+                        // active: finding rows are written only for triggered findings (spec §3).
                         SeverityChip(level = level, active = true)
                         Spacer(Modifier.weight(1f))
                         Text(

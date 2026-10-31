@@ -53,12 +53,6 @@ data class BodyStats(val bodies: Long, val storedBytes: Long, val rawBytes: Long
 }
 
 /**
- * Store size (spec §8.2): distinct bodies of facts observed by COMPLETE scans, partitioned as retention
- * keeps them ([StorageKind]): live scans' [snapshots], live scans' [liveEvents], and [imports]; a body
- * shared across kinds counts once, in the first of those (ruling R42), so they add up to [total]. Plus
- * bodies held only by pinned orphans and the bytes of alert evidence JSON.
- */
-/**
  * A telemetry export that ended short: [service] of [scanId] yielded [written] of the [expected] records
  * it held when the export started (the scan was deleted or retention ran in between). The partial file is
  * discarded and the export reported as failed, never shared as if whole.
@@ -66,6 +60,12 @@ data class BodyStats(val bodies: Long, val storedBytes: Long, val rawBytes: Long
 class IncompleteExportException(scanId: Long, service: String, written: Long, expected: Int) :
     java.io.IOException("telemetry export of scan $scanId cut short: $service gave $written of $expected records")
 
+/**
+ * Store size (spec §8.2): distinct bodies of facts observed by COMPLETE scans, partitioned as retention
+ * keeps them ([StorageKind]): live scans' [snapshots], live scans' [liveEvents], and [imports]; a body
+ * shared across kinds counts once, in the first of those (ruling R42), so they add up to [total]. Plus
+ * bodies held only by pinned orphans and the bytes of alert evidence JSON.
+ */
 data class StorageSummary(
     val snapshots: BodyStats, val liveEvents: BodyStats, val imports: BodyStats, val pinnedOrphans: BodyStats,
     val alertEvidenceBytes: Long,

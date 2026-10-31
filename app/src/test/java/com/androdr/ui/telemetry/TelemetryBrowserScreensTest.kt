@@ -1,9 +1,6 @@
 package com.androdr.ui.telemetry
 
-import android.app.Application
-import android.content.ComponentName
 import android.os.Looper
-import androidx.activity.ComponentActivity
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -16,7 +13,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.SavedStateHandle
-import androidx.test.core.app.ApplicationProvider
+import com.androdr.ui.registerHostActivity
 import com.androdr.data.model.ScanState
 import com.androdr.data.store.StoreFixture
 import com.androdr.sigma.StoreRecord
@@ -26,9 +23,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.RuleChain
-import org.junit.rules.TestRule
 import org.junit.runner.RunWith
-import org.junit.runners.model.Statement
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.Shadows.shadowOf
 import java.time.Duration
@@ -44,18 +39,7 @@ import java.time.Duration
 class TelemetryBrowserScreensTest {
     private val composeRule = createComposeRule()
 
-    private val registerHostActivity = TestRule { base, _ ->
-        object : Statement() {
-            override fun evaluate() {
-                val app = ApplicationProvider.getApplicationContext<Application>()
-                shadowOf(app.packageManager)
-                    .addActivityIfNotPresent(ComponentName(app.packageName, ComponentActivity::class.java.name))
-                base.evaluate()
-            }
-        }
-    }
-
-    @get:Rule val chain: RuleChain = RuleChain.outerRule(registerHostActivity).around(composeRule)
+    @get:Rule val chain: RuleChain = RuleChain.outerRule(registerHostActivity()).around(composeRule)
 
     private val f = StoreFixture()
 

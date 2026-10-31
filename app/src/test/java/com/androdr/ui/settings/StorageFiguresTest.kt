@@ -1,22 +1,16 @@
 package com.androdr.ui.settings
 
-import android.app.Application
-import android.content.ComponentName
-import androidx.activity.ComponentActivity
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
-import androidx.test.core.app.ApplicationProvider
+import com.androdr.ui.registerHostActivity
 import com.androdr.data.store.BodyStats
 import com.androdr.data.store.StorageSummary
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.RuleChain
-import org.junit.rules.TestRule
 import org.junit.runner.RunWith
-import org.junit.runners.model.Statement
 import org.robolectric.RobolectricTestRunner
-import org.robolectric.Shadows.shadowOf
 import java.io.File
 
 /**
@@ -28,18 +22,7 @@ import java.io.File
 class StorageFiguresTest {
     private val composeRule = createComposeRule()
 
-    private val registerHostActivity = TestRule { base, _ ->
-        object : Statement() {
-            override fun evaluate() {
-                val app = ApplicationProvider.getApplicationContext<Application>()
-                shadowOf(app.packageManager)
-                    .addActivityIfNotPresent(ComponentName(app.packageName, ComponentActivity::class.java.name))
-                base.evaluate()
-            }
-        }
-    }
-
-    @get:Rule val chain: RuleChain = RuleChain.outerRule(registerHostActivity).around(composeRule)
+    @get:Rule val chain: RuleChain = RuleChain.outerRule(registerHostActivity()).around(composeRule)
 
     private val summary = StorageSummary(
         snapshots = BodyStats(10, 1_000, 2_000),

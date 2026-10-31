@@ -122,6 +122,8 @@ class SqlCompatibilityGateTest {
         // Longer names that merely contain the query name are other functions; comments are no use.
         assertTrue(unchunkedCalls("dao.byIdsCount(keys); dao.allByIds(keys) /** [byIds] */", names).isEmpty())
         assertTrue(unchunkedCalls("// calls dao.byIds(keys)\n/* dao::byIds */ val u = \"//\"", names).isEmpty())
+        // A '"' char literal is not a string opener: the comment after it is still a comment.
+        assertTrue(unchunkedCalls("val q = '\"' // dao.byIds(keys)\nval s = \"x\"", names).isEmpty())
     }
 
     /**
@@ -230,6 +232,12 @@ class SqlCompatibilityGateTest {
                 src[i] == '"' -> {
                     i++
                     while (i < src.length && src[i] != '"' && src[i] != '\n') i += if (src[i] == '\\') 2 else 1
+                    i++
+                }
+                // A char literal ('"', '\'') skipped whole, so its quote never opens a string.
+                src[i] == '\'' -> {
+                    i++
+                    while (i < src.length && src[i] != '\'' && src[i] != '\n') i += if (src[i] == '\\') 2 else 1
                     i++
                 }
                 src.startsWith("//", i) -> {
