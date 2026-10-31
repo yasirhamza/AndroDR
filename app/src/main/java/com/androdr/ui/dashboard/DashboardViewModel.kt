@@ -21,6 +21,7 @@ import com.androdr.scanner.ScanProgress
 import com.androdr.ui.permissions.UsageStatsPermission
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -32,6 +33,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import javax.inject.Inject
 
 @HiltViewModel
@@ -177,8 +179,11 @@ class DashboardViewModel @Inject constructor(
                 // A history read that fails leaves the state as it was: neither "saved" nor "unsaved" is known.
                 outcomeOf(result, readPersisted { repository.isSaved(result.id) })?.let { outcome ->
                     _unsavedScan.value = outcome.unsaved
-                    if (outcome.unsaved != null) storageHealth.markScanNotSaved()
-                    if (outcome.clearHealthFlag) storageHealth.clear()
+                    // NonCancellable: leaving the Dashboard right after a failed save must not lose the
+                    // marker that says so after a restart.
+                    withContext(NonCancellable) { storageHealth.recordScan(
+                        saved = outcome.unsaved == null, fullyStored = outcome.clearHealthFlag,
+                    ) }
                 }
             } finally {
                 _isScanning.value = false
@@ -214,7 +219,7 @@ class DashboardViewModel @Inject constructor(
          */
         fun storageBanner(
             scan: ScanWithFindings?, isScanning: Boolean, unsaved: Boolean, healthFailed: Boolean,
-            scanNotSaved: Boolean = false,
+            scanNotSaved: Boolean,
         ) = when {
             isScanning -> StorageBanner.NONE
             unsaved -> StorageBanner.NOT_SAVED

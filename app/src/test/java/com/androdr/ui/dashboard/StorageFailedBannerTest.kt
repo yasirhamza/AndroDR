@@ -3,7 +3,15 @@ package com.androdr.ui.dashboard
 import com.androdr.data.model.ScanWithFindings
 import com.androdr.data.model.scanWith
 import com.androdr.data.model.TelemetryState
+import androidx.datastore.preferences.core.PreferenceDataStoreFactory
+import com.androdr.data.store.StorageHealthFlag
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertSame
@@ -69,34 +77,65 @@ class StorageFailedBannerTest {
     }
 
     @Test
-    fun `source gate - an unsaved scan sets the persistent marker and the screen renders it`() {
-        val vm = java.io.File("src/main/java/com/androdr/ui/dashboard/DashboardViewModel.kt").readText()
-        assertTrue(vm.contains("if (outcome.unsaved != null) storageHealth.markScanNotSaved()"))
-        val screen = java.io.File("src/main/java/com/androdr/ui/dashboard/DashboardScreen.kt").readText()
-        assertTrue(screen.contains("healthFailed, scanNotSaved)"))
-        assertTrue(screen.contains("R.string.scan_not_saved_earlier_banner_body"))
+    fun `the Dashboard records every finished scan's outcome, uncancellably, and the screen renders it`() {
+        fun src(path: String) = java.io.File(path).readText().replace(Regex("\\s+"), " ")
+        val vm = src("src/main/java/com/androdr/ui/dashboard/DashboardViewModel.kt")
+        assertTrue(vm.contains("withContext(NonCancellable) { storageHealth.recordScan("))
+        assertTrue(src("src/main/java/com/androdr/ui/dashboard/DashboardScreen.kt")
+            .contains("R.string.scan_not_saved_earlier_banner_body"))
+    }
+
+    /**
+     * Runs [block] over one DataStore file; each `newFlag()` closes the previous DataStore and opens a
+     * new one on the same file, as a process restart does.
+     */
+    private fun withHealthStore(block: suspend (newFlag: suspend () -> StorageHealthFlag) -> Unit) = runBlocking {
+        val dir = java.nio.file.Files.createTempDirectory("health").toFile()
+        val jobs = mutableListOf<Job>()
+        val newFlag: suspend () -> StorageHealthFlag = {
+            jobs.lastOrNull()?.cancelAndJoin()
+            val job = SupervisorJob().also { jobs += it }
+            StorageHealthFlag(
+                PreferenceDataStoreFactory.create(scope = CoroutineScope(Dispatchers.IO + job)) {
+                    java.io.File(dir, "h.preferences_pb")
+                },
+            )
+        }
+        try {
+            block(newFlag)
+        } finally {
+            jobs.forEach { it.cancel() }
+            dir.deleteRecursively()
+        }
     }
 
     @Test
-    fun `the not-saved marker persists and a fully stored scan clears it`() = kotlinx.coroutines.runBlocking {
-        val dir = java.nio.file.Files.createTempDirectory("health").toFile()
-        val scope = kotlinx.coroutines.CoroutineScope(
-            kotlinx.coroutines.Dispatchers.IO + kotlinx.coroutines.SupervisorJob(),
-        )
-        try {
-            val store = androidx.datastore.preferences.core.PreferenceDataStoreFactory.create(scope = scope) {
-                java.io.File(dir, "h.preferences_pb")
-            }
-            val flag = com.androdr.data.store.StorageHealthFlag(store)
-            flag.markScanNotSaved()
-            assertTrue(flag.scanNotSavedFlow.first())
-            assertTrue("the storage flag is separate", !flag.isSet())
-            flag.clear()
-            assertTrue(!flag.scanNotSavedFlow.first())
-        } finally {
-            scope.coroutineContext[kotlinx.coroutines.Job]!!.cancel()
-            dir.deleteRecursively()
-        }
+    fun `the not-saved marker survives a restart and a fully stored scan clears it`() = withHealthStore { newFlag ->
+        newFlag().recordScan(saved = false, fullyStored = false)
+        val reopened = newFlag()
+        assertTrue("survives reopening the DataStore", reopened.scanNotSavedFlow.first())
+        assertTrue("the storage flag is separate", !reopened.isSet())
+        reopened.recordScan(saved = true, fullyStored = true)
+        assertTrue(!reopened.scanNotSavedFlow.first())
+    }
+
+    /** Review fix: a later saved-but-partly-stored scan must not be called "an earlier scan". */
+    @Test
+    fun `an unsaved scan then a saved partly stored scan shows the partly stored banner`() = withHealthStore { newFlag ->
+        val flag = newFlag()
+        flag.recordScan(saved = false, fullyStored = false)
+        flag.recordScan(saved = true, fullyStored = false)
+        val latest = scan(id = 2L, state = TelemetryState.FAILED)
+        assertEquals(StorageBanner.PARTLY_STORED,
+            banner(latest, flag = flag.isSet(), notSaved = flag.scanNotSavedFlow.first()))
+    }
+
+    @Test
+    fun `a saved scan with missing records keeps the storage flag`() = withHealthStore { newFlag ->
+        val flag = newFlag()
+        flag.set()
+        flag.recordScan(saved = true, fullyStored = false)
+        assertTrue(flag.isSet())
     }
 
     @Test

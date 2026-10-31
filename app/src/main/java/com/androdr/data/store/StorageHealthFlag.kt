@@ -19,7 +19,8 @@ import javax.inject.Singleton
  *
  * Beside it, `scan_not_saved` (#418): a live scan ran but is not in history for any other reason (a
  * writer error), so after a restart the Dashboard still says a recent scan is missing instead of
- * showing the earlier, saved scan as if it were the latest. Both clear on the next fully stored scan.
+ * showing the earlier, saved scan as if it were the latest. It clears on the next saved scan; the
+ * storage flag only on the next fully stored one ([recordScan]).
  */
 @Singleton
 class StorageHealthFlag @Inject constructor(@StoreDataStore private val dataStore: DataStore<Preferences>) {
@@ -28,16 +29,15 @@ class StorageHealthFlag @Inject constructor(@StoreDataStore private val dataStor
         dataStore.edit { it[KEY] = true }
     }
 
-    /** Marks that a recent live scan was not saved (whatever the cause). */
-    suspend fun markScanNotSaved() {
-        dataStore.edit { it[NOT_SAVED_KEY] = true }
-    }
-
-    /** Clears both markers: a scan was saved with all its records. */
-    suspend fun clear() {
+    /**
+     * Records a finished live scan: unsaved sets the not-saved marker; saved clears it (the newest
+     * scan is in history, even if partly stored, so "an earlier scan is shown" would be false); saved
+     * with all its records ([fullyStored]) also clears the storage flag.
+     */
+    suspend fun recordScan(saved: Boolean, fullyStored: Boolean) {
         dataStore.edit {
-            it.remove(KEY)
-            it.remove(NOT_SAVED_KEY)
+            if (saved) it.remove(NOT_SAVED_KEY) else it[NOT_SAVED_KEY] = true
+            if (saved && fullyStored) it.remove(KEY)
         }
     }
 
