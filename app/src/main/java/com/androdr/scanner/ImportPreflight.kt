@@ -2,21 +2,15 @@ package com.androdr.scanner
 
 import android.content.Context
 import android.net.Uri
-import android.util.Log
 import com.androdr.data.store.Preflight
 import com.androdr.data.store.StoragePreflight
 import dagger.hilt.android.qualifiers.ApplicationContext
-import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
-import java.io.FileInputStream
 import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
  * Runs the storage preflight for a picked import (spec §5.2): sums the archive's decompressed entry
- * sizes from the ZIP central directory (no inflation), takes its type from [ImportArchive] (the same
- * classification the analyzer is routed by), and asks [StoragePreflight.check] with that type's
+ * sizes from the ZIP central directory (no inflation), takes its type from the central directory ([ImportArchive.centralDirectory]), and asks [StoragePreflight.check] with that type's
  * stored-size factor. An archive whose sizes cannot be read — not seekable, unreadable directory, an
  * entry with unknown size — yields an unknown estimate, which the preflight always treats as tight.
  */
@@ -65,45 +59,4 @@ class ImportPreflight @Inject constructor(
             return total
         }
     }
-}
-
-/**
- * The one classification of a picked import (#418), shared by [ImportPreflight] (its stored-size
- * factor) and [ScanOrchestrator.analyzeArtifact] (which analyzer runs). Both used to classify on their
- * own, the preflight by the central directory's names and the analyzer by the local headers' names, so
- * a forged ZIP whose two name lists disagree got the bug report's 0.05 factor while the intrusion-log
- * analyzer (4.0) ran. Now the central directory decides both when it is readable; only when it is not
- * (the preflight's estimate is then unknown, so no size relied on a type) does [type] fall back to
- * sniffing the stream.
- */
-object ImportArchive {
-    private const val TAG = "ImportArchive"
-
-    /** The archive's central-directory size and type, or null when that directory cannot be read. */
-    @Suppress("TooGenericExceptionCaught")
-    suspend fun centralDirectory(context: Context, uri: Uri): ZipCentralDirectory.Contents? =
-        withContext(Dispatchers.IO) {
-            try {
-                // The descriptor the provider handed us is read in place; no path is reopened.
-                context.contentResolver.openFileDescriptor(uri, "r")?.use { pfd ->
-                    // The stream does not own the descriptor; closing it only releases the channel.
-                    FileInputStream(pfd.fileDescriptor).use { ZipCentralDirectory.contents(it.channel) }
-                }
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                Log.w(TAG, "archive size unknown: ${e.javaClass.simpleName}")
-                null
-            }
-        }
-
-    /**
-     * What the import is: the central directory's type, or (directory unreadable) the bounded stream
-     * sniff ([ArtifactSniffer.classifyZip], which caps inflation against a deflate bomb).
-     */
-    suspend fun type(context: Context, uri: Uri): ArtifactType =
-        centralDirectory(context, uri)?.type ?: withContext(Dispatchers.IO) {
-            val stream = context.contentResolver.openInputStream(uri) ?: return@withContext ArtifactType.UNRECOGNIZED
-            stream.use { s -> ArtifactSniffer.classifyZip(s).type }
-        }
 }
