@@ -1,11 +1,13 @@
 package com.androdr.ui.settings
 
+import androidx.annotation.StringRes
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import android.content.Context
 import android.net.Uri
 import androidx.core.content.FileProvider
+import com.androdr.R
 import com.androdr.data.db.FeedHealthDao
 import com.androdr.data.db.ForensicTimelineEventDao
 import com.androdr.data.db.IndicatorDao
@@ -111,12 +113,12 @@ class SettingsViewModel @Inject constructor(
 
     fun dismissUpdateResult() { _updateResult.value = null }
 
-    /** "downloaded" or "bundled" per IOC type */
-    private val _iocSourceLabel = MutableStateFlow<Map<String, String>>(emptyMap())
-    val iocSourceLabel: StateFlow<Map<String, String>> = _iocSourceLabel.asStateFlow()
+    /** Where each IOC type's indicators came from; the screen resolves the label. */
+    private val _iocSourceLabel = MutableStateFlow<Map<String, ThreatDataSource>>(emptyMap())
+    val iocSourceLabel: StateFlow<Map<String, ThreatDataSource>> = _iocSourceLabel.asStateFlow()
 
-    private val _sigmaRuleSource = MutableStateFlow("bundled")
-    val sigmaRuleSource: StateFlow<String> = _sigmaRuleSource.asStateFlow()
+    private val _sigmaRuleSource = MutableStateFlow(ThreatDataSource.BUNDLED)
+    val sigmaRuleSource: StateFlow<ThreatDataSource> = _sigmaRuleSource.asStateFlow()
 
     private val _customRuleUrlsInput = MutableStateFlow("")
 
@@ -200,7 +202,7 @@ class SettingsViewModel @Inject constructor(
             _feedHealth.value = loadFeedHealth()
 
             // Determine downloaded vs bundled per type
-            val labels = mutableMapOf<String, String>()
+            val labels = mutableMapOf<String, ThreatDataSource>()
             for (type in listOf(
                 IndicatorResolver.TYPE_DOMAIN,
                 IndicatorResolver.TYPE_PACKAGE,
@@ -208,11 +210,12 @@ class SettingsViewModel @Inject constructor(
                 IndicatorResolver.TYPE_APK_HASH
             )) {
                 val count = indicatorDao.countByType(type)
-                labels[type] = if (count > 0) "downloaded" else "bundled"
+                labels[type] = if (count > 0) ThreatDataSource.DOWNLOADED else ThreatDataSource.BUNDLED
             }
             _iocSourceLabel.value = labels
 
-            _sigmaRuleSource.value = if (sigmaRuleEngine.hasRemoteRules()) "downloaded" else "bundled"
+            _sigmaRuleSource.value =
+                if (sigmaRuleEngine.hasRemoteRules()) ThreatDataSource.DOWNLOADED else ThreatDataSource.BUNDLED
         }
     }
 
@@ -396,4 +399,10 @@ private suspend fun com.androdr.data.db.ForensicTimelineEventDao.distinctIndicat
         if (rows.size < STIX_BATCH) return byIndicator.values.toList()
         after = rows.last().id
     }
+}
+
+/** Where a threat-data set came from, shown as "<count> (<source>)" in Settings. */
+enum class ThreatDataSource(@StringRes val label: Int) {
+    BUNDLED(R.string.settings_threat_db_source_bundled),
+    DOWNLOADED(R.string.settings_threat_db_source_downloaded),
 }

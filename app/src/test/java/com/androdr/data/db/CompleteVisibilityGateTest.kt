@@ -8,6 +8,7 @@ import com.androdr.data.model.ScanResult
 import com.androdr.data.model.ScanState
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -93,12 +94,17 @@ class CompleteVisibilityGateTest {
     /**
      * Inlines unqualified `$NAME` / `${NAME}` constant references (recursively), so a guarded table
      * named only inside a shared fragment such as `OBS_FROM` is still seen. Qualified visibility
-     * tokens (`${VisibleFact.SQL}` …) are left in place.
+     * tokens (`${VisibleFact.SQL}` …) are left in place. A reference that names no
+     * `const val "…"` constant (a plain `val`, a constant built from another expression) fails
+     * loudly: left unexpanded, a guarded table inside it would pass the gate unseen.
      */
     private fun expand(sql: String, consts: Map<String, String>): String {
         var text = sql
         repeat(MAX_EXPANSION_DEPTH) {
-            val next = bareRef.replace(text) { m -> consts[m.groupValues[1].ifEmpty { m.groupValues[2] }] ?: m.value }
+            val next = bareRef.replace(text) { m ->
+                val name = m.groupValues[1].ifEmpty { m.groupValues[2] }
+                consts[name] ?: error("unresolved \$$name in @Query (not a const val string literal): $sql")
+            }
             if (next == text) return text
             text = next
         }
@@ -169,6 +175,22 @@ class CompleteVisibilityGateTest {
         val qs = queries(src, "D", constants(src))
         assertTrue(qs.all { "scan_record" in it.sql && "\$" !in it.sql.replace("\${CompleteScan.SQL}", "") })
         assertEquals(listOf("D.bad"), violations(qs, emptySet()))
+    }
+
+    @Test
+    fun `gate fails loudly on a reference to a non-const or unknown constant`() {
+        // A plain val is not collected as a constant; skipping it hid any guarded table inside.
+        val src = "internal val FROM_OBS = \"FROM scan_record o\"\n" +
+            "interface D {\n @Query(\"SELECT * \$FROM_OBS WHERE o.scanId = :id\")\n" +
+            " suspend fun bad(id: Long): List<X>\n}"
+        val e = assertThrows(IllegalStateException::class.java) { queries(src, "D", constants(src)) }
+        assertTrue(e.message!!, "\$FROM_OBS" in e.message!!)
+        val braced = src.replace("\$FROM_OBS", "\${FROM_OBS}")
+        assertThrows(IllegalStateException::class.java) { queries(braced, "D", constants(braced)) }
+        // Qualified tokens are left for the visibility check, not treated as unresolved.
+        val qualified = "interface D {\n @Query(\"SELECT 1 FROM scan_record o WHERE \${CompleteScan.SQL}\")\n" +
+            " suspend fun ok(): Int\n}"
+        assertEquals(1, queries(qualified, "D", emptyMap()).size)
     }
 
     @Test

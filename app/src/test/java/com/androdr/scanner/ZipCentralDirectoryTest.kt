@@ -158,6 +158,52 @@ class ZipCentralDirectoryTest {
         assertEquals(Preflight.Tight(hundredMb * 4, gb), preflight(free = gb).check(intrusionLog))
     }
 
+    /**
+     * #418: a ZIP whose central directory names a dumpstate while its local headers hold a per-day log.
+     * The preflight sized it as a bug report (factor 0.05) while the analyzer, sniffing the stream,
+     * ran the intrusion-log import (4.0). Routing by the directory alone was worse (review): the
+     * analyzers read the local headers, so the bug-report analyzer found nothing and the import
+     * "succeeded" clean. An archive whose two name lists disagree is rejected as unrecognized.
+     */
+    @Test
+    fun `a zip whose central directory and local headers disagree is rejected`() = runBlocking {
+        val local = "a/2026-10-01.txt"
+        val central = "dumpstate-ab.txt"
+        check(local.length == central.length)
+        val f = namedZip(1_000, local)
+        val bytes = f.readBytes()
+        val name = local.toByteArray()
+        val at = (bytes.size - name.size downTo 0).first { i -> name.indices.all { bytes[i + it] == name[it] } }
+        central.toByteArray().copyInto(bytes, at) // the last copy of the name is the central directory's
+        f.writeBytes(bytes)
+        val uri = Uri.fromFile(f)
+        val app = RuntimeEnvironment.getApplication()
+
+        val streamSniff = f.inputStream().use { ArtifactSniffer.classifyZip(it).type }
+        assertEquals("precondition: the two name lists disagree", ArtifactType.INTRUSION_LOG, streamSniff)
+        assertEquals(ArtifactType.BUG_REPORT,
+            RandomAccessFile(f, "r").use { ZipCentralDirectory.contents(it.channel) }?.type)
+        assertEquals(ArtifactType.UNRECOGNIZED, ImportArchive.type(app, uri))
+    }
+
+    @Test
+    fun `a consistent zip is routed by its type`() = runBlocking {
+        val app = RuntimeEnvironment.getApplication()
+        assertEquals(ArtifactType.INTRUSION_LOG,
+            ImportArchive.type(app, Uri.fromFile(namedZip(1_000, "a/2026-10-01.txt"))))
+        assertEquals(ArtifactType.BUG_REPORT,
+            ImportArchive.type(app, Uri.fromFile(namedZip(1_000, "dumpstate-2026-10-29-08-18-37.txt"))))
+    }
+
+    @Test
+    fun `source gate - the analyzer is routed by the preflight's classification`() {
+        val src = listOf(File("src/main/java"), File("app/src/main/java")).first { it.isDirectory }
+            .resolve("com/androdr/scanner/ScanOrchestrator.kt").readText()
+        val sniff = src.substringAfter("private suspend fun sniffArtifact").substringBefore("\n    /**")
+        assertTrue(sniff, sniff.contains("ImportArchive.type(context, uri)"))
+        assertTrue("the orchestrator must not classify on its own", !src.contains("ArtifactSniffer.classifyZip"))
+    }
+
     @Test
     fun `check gives an unknown size for an unreadable file`() = runBlocking {
         val garbage = tmp.newFile().also { it.writeBytes(ByteArray(1_000) { 1 }) }
@@ -174,7 +220,7 @@ class ZipCentralDirectoryTest {
 
     @Test
     fun `source gate - the preflight never reopens a path and closes its stream`() {
-        val src = File("src/main/java/com/androdr/scanner/ImportPreflight.kt").readText()
+        val src = File("src/main/java/com/androdr/scanner/ImportArchive.kt").readText()
         assertTrue(!src.contains("/proc/self/fd"))
         assertTrue(!src.contains("ZipFile("))
         assertTrue(src.contains("openFileDescriptor"))

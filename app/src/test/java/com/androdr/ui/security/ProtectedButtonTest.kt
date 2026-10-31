@@ -1,11 +1,10 @@
 package com.androdr.ui.security
 
+import com.androdr.ui.registerHostActivity
 import android.app.Application
-import android.content.ComponentName
 import android.os.SystemClock
 import android.view.MotionEvent
 import android.view.View
-import androidx.activity.ComponentActivity
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.width
@@ -36,31 +35,15 @@ import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.RuleChain
-import org.junit.rules.TestRule
 import org.junit.runner.RunWith
-import org.junit.runners.model.Statement
 import org.robolectric.RobolectricTestRunner
-import org.robolectric.Shadows.shadowOf
 
 @RunWith(RobolectricTestRunner::class)
 class ProtectedButtonTest {
     private val composeRule = createComposeRule()
     private val rule get() = composeRule
 
-    // ui-test-manifest (which declares ComponentActivity) is debug-only; register the host activity
-    // so the same test also runs in the release unit-test variant.
-    private val registerHostActivity = TestRule { base, _ ->
-        object : Statement() {
-            override fun evaluate() {
-                val app = ApplicationProvider.getApplicationContext<Application>()
-                shadowOf(app.packageManager)
-                    .addActivityIfNotPresent(ComponentName(app.packageName, ComponentActivity::class.java.name))
-                base.evaluate()
-            }
-        }
-    }
-
-    @get:Rule val chain: RuleChain = RuleChain.outerRule(registerHostActivity).around(composeRule)
+    @get:Rule val chain: RuleChain = RuleChain.outerRule(registerHostActivity()).around(composeRule)
 
     // --- pure predicate ---
 

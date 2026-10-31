@@ -80,6 +80,8 @@ internal fun noticeText(notice: ImportNotice, size: (Long) -> String): String? =
         if (notice.storedFacts > 0) R.string.import_card_not_stored_some else R.string.import_card_not_stored_none,
         notice.storedFacts
     )
+    is ImportNotice.ReserveLowAfterImport ->
+        stringResource(R.string.import_card_reserve_low_after, size(notice.freeAtLeastBytes))
 }
 
 @Composable

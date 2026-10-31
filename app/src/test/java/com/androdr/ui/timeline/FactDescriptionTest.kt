@@ -1,13 +1,10 @@
 package com.androdr.ui.timeline
 
-import android.app.Application
-import android.content.ComponentName
-import androidx.activity.ComponentActivity
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
-import androidx.test.core.app.ApplicationProvider
+import com.androdr.ui.registerHostActivity
 import com.androdr.data.model.TelemetrySource
 import com.androdr.data.store.DecodedRecord
 import com.androdr.sigma.TimePrecision
@@ -16,11 +13,8 @@ import org.junit.Assert.assertNull
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.RuleChain
-import org.junit.rules.TestRule
 import org.junit.runner.RunWith
-import org.junit.runners.model.Statement
 import org.robolectric.RobolectricTestRunner
-import org.robolectric.Shadows.shadowOf
 
 /**
  * Battery B1: a Timeline fact whose service has no summary rule (e.g. `device_auditor`) showed
@@ -31,20 +25,7 @@ import org.robolectric.Shadows.shadowOf
 class FactDescriptionTest {
     private val composeRule = createComposeRule()
 
-    // ui-test-manifest (which declares ComponentActivity) is debug-only; register the host activity
-    // so the same test also runs in the release unit-test variant.
-    private val registerHostActivity = TestRule { base, _ ->
-        object : Statement() {
-            override fun evaluate() {
-                val app = ApplicationProvider.getApplicationContext<Application>()
-                shadowOf(app.packageManager)
-                    .addActivityIfNotPresent(ComponentName(app.packageName, ComponentActivity::class.java.name))
-                base.evaluate()
-            }
-        }
-    }
-
-    @get:Rule val chain: RuleChain = RuleChain.outerRule(registerHostActivity).around(composeRule)
+    @get:Rule val chain: RuleChain = RuleChain.outerRule(registerHostActivity()).around(composeRule)
 
     private fun record(fields: Map<String, Any?>?, summary: String? = null, subjectKey: String? = null) =
         DecodedRecord(

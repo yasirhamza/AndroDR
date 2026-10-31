@@ -5,6 +5,7 @@ import com.androdr.data.model.NetworkTelemetry
 import com.androdr.data.model.SecurityLogEvent
 import com.androdr.sigma.Finding
 import com.androdr.sigma.IntrusionLogRecordBuilders
+import com.androdr.sigma.LiveRecordBuilders
 import com.androdr.sigma.SigmaRuleEngine
 import com.androdr.sigma.StoreRecord
 
@@ -23,7 +24,7 @@ internal class CollectingChunks(private val engine: SigmaRuleEngine? = null) : I
 
     override suspend fun dns(events: List<ImportedDnsEvent>, records: List<StoreRecord>) {
         dnsEvents += events
-        take(IntrusionLogRecordBuilders.DNS_MONITOR, records)
+        take(LiveRecordBuilders.DNS_MONITOR, records)
     }
 
     override suspend fun connect(events: List<NetworkTelemetry>, records: List<StoreRecord>) {

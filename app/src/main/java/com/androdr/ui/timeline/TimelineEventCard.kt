@@ -83,30 +83,47 @@ fun TimelineEventCard(
     event: ForensicTimelineEvent,
     onClick: () -> Unit
 ) {
-    // Neutral telemetry card — no severity badge. Severity lives on
-    // Finding rows only; telemetry is pure observation per spec §3.
+    // A stored finding row (it carries the finding's `level`) shows its severity and rule (#418: on
+    // 848 a critical finding drew as this neutral card and read as informational). Any other row is
+    // telemetry: pure observation per spec §3, so no severity badge.
     val colors = MaterialTheme.androdrColors
     val neutralColor = colors.neutral
+    val level = event.level?.takeIf { it.isNotBlank() }
     Card(
         modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+            containerColor = level?.let { severityBackgroundFor(it) }
+                ?: MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
         )
     ) {
         Row(
             modifier = Modifier.padding(12.dp),
             horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            Icon(
-                imageVector = Icons.Filled.Info,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.size(20.dp)
-            )
+            if (level == null) {
+                Icon(
+                    imageVector = Icons.Filled.Info,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
             Column(
                 modifier = Modifier.weight(1f),
                 verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
+                if (level != null) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        // active: finding rows are written only for triggered findings (spec §3).
+                        SeverityChip(level = level, active = true)
+                        Spacer(Modifier.weight(1f))
+                        Text(
+                            text = event.ruleId,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
                 Text(
                     text = rowTime(event),
                     style = MaterialTheme.typography.labelSmall,

@@ -104,6 +104,27 @@ class ImportCardTest {
             ImportNotice.LowSpace(storedFacts = 7, freeAtLeastBytes = 42L, wholeImportBytes = 900L), card.notice)
     }
 
+    /** #418: a reserve breached only at finish stored every record; the card must not say the rest were not. */
+    @Test
+    fun `a reserve breached only at finish says space is low, not that records were dropped`() {
+        val stored = write(TelemetryState.STORED, space = 42L)
+        val card = ImportCard.from(stored, false, emptyList(), estimateBytes = 900L)!!
+        assertEquals(ImportNotice.ReserveLowAfterImport(freeAtLeastBytes = 42L), card.notice)
+        val strings = java.io.File("src/main/res/values/strings.xml").readText()
+        val body = Regex("""<string name="import_card_reserve_low_after">([^<]*)</string>""").find(strings)!!
+            .groupValues[1]
+        assertTrue(body, body.contains("Every record of this import was stored"))
+        assertTrue(body, !body.contains("not stored"))
+    }
+
+    /** Review fix: "every record was stored" is only true of a STORED import, not of one that stored nothing. */
+    @Test
+    fun `a reserve breach on an import that stored nothing never says every record was stored`() {
+        val nothing = write(TelemetryState.NONE, space = 42L)
+        val card = ImportCard.from(nothing, false, emptyList(), estimateBytes = 900L)!!
+        assertTrue(card.notice.toString(), card.notice !is ImportNotice.ReserveLowAfterImport)
+    }
+
     @Test
     fun `a failed store without a reserve breach never claims low space and keeps the stored count`() {
         val card = ImportCard.from(write(TelemetryState.FAILED), false, emptyList())!!

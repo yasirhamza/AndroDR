@@ -1,14 +1,20 @@
 package com.androdr.data.db
 
+import androidx.room.testing.MigrationTestHelper
 import com.androdr.data.model.ScanResult
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
+import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import java.io.File
 
 @RunWith(RobolectricTestRunner::class)
 class RoomJvmHarnessTest {
+    @get:Rule val helper: MigrationTestHelper = RoomTestDb.migrationHelper()
+
     @Test
     fun `in-memory database round-trips a ScanResult`() = runBlocking {
         val db = RoomTestDb.inMemory()
@@ -27,12 +33,33 @@ class RoomJvmHarnessTest {
 
     @Test
     fun `migration helper opens schema 19`() {
-        val helper = RoomTestDb.migrationHelper()
         val db = helper.createDatabase("harness-v19", 19)
         try {
             assertEquals(19, db.version)
         } finally {
             db.close()
         }
+    }
+
+    /**
+     * [MigrationTestHelper] is a JUnit TestWatcher: only its `finished()` closes the databases it
+     * opened, and JUnit calls that only for a `@get:Rule`. A helper held in a plain field or a local
+     * is never finished, so a test failing before its own `close()` leaks the database.
+     */
+    @Test
+    fun `every migration helper is a JUnit rule`() {
+        val call = "RoomTestDb." + "migrationHelper()"
+        val roots = listOf(File("src/test/java"), File("app/src/test/java")).filter { it.isDirectory }
+        // Each use with the line before it, so `@get:Rule` may sit on its own line; the type is optional.
+        val uses = roots.flatMap { r -> r.walkTopDown().filter { it.extension == "kt" }.toList() }
+            .flatMap { f ->
+                val lines = f.readLines()
+                lines.indices.filter { call in lines[it] }
+                    .map { i -> "${f.name}: " + (lines.getOrElse(i - 1) { "" } + " " + lines[i]).trim() }
+            }
+        assertTrue("no migration helper uses found", uses.size >= 3)
+        val rule = Regex("""@get:Rule\s+val\s+\w+(\s*:\s*MigrationTestHelper)?\s*=\s*""" + Regex.escape(call))
+        val bad = uses.filterNot { rule.containsMatchIn(it) }
+        assertTrue("migration helper outside a @get:Rule:\n" + bad.joinToString("\n"), bad.isEmpty())
     }
 }

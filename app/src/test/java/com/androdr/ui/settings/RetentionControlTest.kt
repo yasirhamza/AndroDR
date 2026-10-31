@@ -1,8 +1,6 @@
 package com.androdr.ui.settings
 
-import android.app.Application
-import android.content.ComponentName
-import androidx.activity.ComponentActivity
+import com.androdr.ui.registerHostActivity
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assertIsNotEnabled
@@ -10,16 +8,12 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
-import androidx.test.core.app.ApplicationProvider
 import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.RuleChain
-import org.junit.rules.TestRule
 import org.junit.runner.RunWith
-import org.junit.runners.model.Statement
 import org.robolectric.RobolectricTestRunner
-import org.robolectric.Shadows.shadowOf
 
 /**
  * Battery B3: the retention slider used `steps = 94`, so Material drew 96 tick dots and an exact value
@@ -30,20 +24,7 @@ import org.robolectric.Shadows.shadowOf
 class RetentionControlTest {
     private val composeRule = createComposeRule()
 
-    // ui-test-manifest (which declares ComponentActivity) is debug-only; register the host activity
-    // so the same test also runs in the release unit-test variant.
-    private val registerHostActivity = TestRule { base, _ ->
-        object : Statement() {
-            override fun evaluate() {
-                val app = ApplicationProvider.getApplicationContext<Application>()
-                shadowOf(app.packageManager)
-                    .addActivityIfNotPresent(ComponentName(app.packageName, ComponentActivity::class.java.name))
-                base.evaluate()
-            }
-        }
-    }
-
-    @get:Rule val chain: RuleChain = RuleChain.outerRule(registerHostActivity).around(composeRule)
+    @get:Rule val chain: RuleChain = RuleChain.outerRule(registerHostActivity()).around(composeRule)
 
     @Test
     fun `a slider position rounds to whole scans within 5 to 100`() {

@@ -7,10 +7,10 @@ import com.androdr.data.model.SecurityLogEvent
 /**
  * Projects intrusion-log telemetry to [StoreRecord]s through each type's `toFieldMap()`. [keys], when
  * given, holds each record's source event key index for index (`IntrusionLogParser`'s
- * `"$type $eventId $eventTime"` / `"$type ? $eventTime"`).
+ * `"$type $eventId $eventTime"` / `"$type ? $eventTime"`). Imported DNS records go to the live
+ * service, [LiveRecordBuilders.DNS_MONITOR]: one `dns_monitor` literal, not two.
  */
 object IntrusionLogRecordBuilders {
-    const val DNS_MONITOR = "dns_monitor"
     const val NETWORK_MONITOR = "network_monitor"
     const val SECURITY_LOG = "security_log"
 

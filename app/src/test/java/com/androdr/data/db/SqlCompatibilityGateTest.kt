@@ -35,7 +35,7 @@ class SqlCompatibilityGateTest {
         assertTrue("no data/db sources found", files.isNotEmpty())
         val violations = files.flatMap { f ->
             stringLiterals(f.readText()).flatMap { lit ->
-                forbidden.filter { lit.uppercase().contains(it) }
+                forbiddenIn(lit)
                     .filter { (f.name to lit) !in knownLegacyViolations }
                     .map { "${f.name}: '$it' in \"${lit.take(60)}\"" }
             }
@@ -56,9 +56,22 @@ class SqlCompatibilityGateTest {
         for (token in forbidden) {
             val src = "const val Q = \"SELECT 1 $token x\""
             val lits = stringLiterals(src)
-            assertTrue("literal not extracted for $token", lits.any { it.uppercase().contains(token) })
+            assertTrue("literal not extracted for $token", lits.any { token in forbiddenIn(it) })
         }
         assertEquals(listOf("a b", "c\nd"), stringLiterals("val x = \"a b\"\nval y = \"\"\"c\nd\"\"\""))
+    }
+
+    @Test
+    fun `syntax gate ignores whitespace and case around a forbidden construct`() {
+        // OVER( / FILTER( with no space, a line break before the paren and lower case are the same
+        // SQL as OVER ( / FILTER (; a plain substring match on "OVER (" missed them.
+        assertEquals(listOf("OVER ("), forbiddenIn("SELECT row_number() OVER(ORDER BY id) FROM t"))
+        assertEquals(listOf("FILTER ("), forbiddenIn("SELECT count(*) filter(WHERE x) FROM t"))
+        assertEquals(listOf("OVER ("), forbiddenIn("SELECT sum(x) over\n  (PARTITION BY y) FROM t"))
+        assertEquals(listOf("OVER ("), forbiddenIn("SELECT sum(x) over\\n(PARTITION BY y) FROM t"))
+        assertEquals(listOf("ON CONFLICT"), forbiddenIn("INSERT INTO t VALUES (1) ON  CONFLICT DO NOTHING"))
+        assertEquals(listOf("IIF("), forbiddenIn("SELECT iif (a, b, c) FROM t"))
+        assertEquals(emptyList<String>(), forbiddenIn("SELECT overall, filtered, leftover(x) FROM t WHERE x IN (1)"))
     }
 
     @Test
@@ -88,6 +101,46 @@ class SqlCompatibilityGateTest {
         assertTrue(unchunkedCalls(nested, listOf("byIds")).isEmpty())
         assertEquals(listOf("byIds"), unchunkedCalls("chunkedIn(a) { dao.one() }\ndao.byIds(b)", listOf("byIds")))
     }
+
+    @Test
+    fun `parameter gate detects function references and unqualified calls`() {
+        val names = listOf("byIds")
+        // A bound reference used outside a chunked call binds the whole list at once.
+        assertEquals(listOf("byIds"), unchunkedCalls("val r = keys.let(dao::byIds)", names))
+        assertEquals(listOf("byIds"), unchunkedCalls("keys.let(::byIds)", names))
+        // An unqualified call in the source declaring the query: a DAO default/@Transaction method.
+        val dao = "@Dao interface D {\n @Query(\"SELECT * FROM t WHERE id IN (:ids)\")\n" +
+            " suspend fun byIds(ids: List<Long>): List<T>\n" +
+            " @Transaction suspend fun all(k: List<Long>) = byIds(k)\n}"
+        assertEquals(listOf("byIds"), unchunkedCalls(dao, names))
+        assertTrue(unchunkedCalls(dao.replace("= byIds(k)", "= chunkedIn(k) { byIds(it) }"), names).isEmpty())
+        // Elsewhere an unqualified name(…) is some other function (a wrapper, a lambda parameter).
+        assertTrue(unchunkedCalls("suspend fun all(k: List<Long>) = byIds(k)", names).isEmpty())
+        // Inside a chunked call a reference is fine, and the declaration itself is not a use.
+        assertTrue(unchunkedCalls("chunkedIn(keys, 500, dao::byIds)", names).isEmpty())
+        assertTrue(unchunkedCalls(dao.substringBefore("@Transaction"), names).isEmpty())
+        // Longer names that merely contain the query name are other functions; comments are no use.
+        assertTrue(unchunkedCalls("dao.byIdsCount(keys); dao.allByIds(keys) /** [byIds] */", names).isEmpty())
+        assertTrue(unchunkedCalls("// calls dao.byIds(keys)\n/* dao::byIds */ val u = \"//\"", names).isEmpty())
+        // A '"' char literal is not a string opener: the comment after it is still a comment.
+        assertTrue(unchunkedCalls("val q = '\"' // dao.byIds(keys)\nval s = \"x\"", names).isEmpty())
+    }
+
+    /**
+     * The [forbidden] constructs in one SQL literal. Case and whitespace are normalised first
+     * (any run collapses to one space, none before a paren), so `OVER(` and `over\n (` are
+     * caught as well as `OVER (`.
+     */
+    private fun forbiddenIn(lit: String): List<String> {
+        val sql = normaliseSql(lit.replace("\\n", " ").replace("\\t", " "))
+        return forbidden.filter { token ->
+            val t = normaliseSql(token)
+            Regex((if (t.first().isLetter()) "\\b" else "") + Regex.escape(t)).containsMatchIn(sql)
+        }
+    }
+
+    private fun normaliseSql(s: String): String =
+        s.uppercase().replace(Regex("\\s+"), " ").replace(" (", "(")
 
     private fun root(): File = listOf(File("src/main/java/com/androdr"), File("app/src/main/java/com/androdr"))
         .first { it.isDirectory }
@@ -140,10 +193,66 @@ class SqlCompatibilityGateTest {
         open..end
     }.toList()
 
+    /**
+     * Uses of [names] outside every chunked call, comments ignored: qualified calls (`dao.name(`),
+     * function references (`dao::name`, `::name`), and unqualified calls with an argument
+     * (`name(x)`) in the source that declares the query (a DAO default or @Transaction method).
+     * Elsewhere an unqualified `name(…)` is some other function of the same name (a wrapper, a
+     * lambda parameter), so it is not flagged; `with(dao) { name(x) }` is the one form missed.
+     */
     private fun unchunkedCalls(src: String, names: List<String>): List<String> {
         if (names.isEmpty()) return emptyList()
-        val ranges = chunkedRanges(src)
-        val call = Regex("\\.(" + names.joinToString("|") + ")\\s*\\(")
-        return call.findAll(src).filter { m -> ranges.none { m.range.first in it } }.map { it.groupValues[1] }.toList()
+        val code = blankComments(src)
+        val local = listParamQueryNames(src).toSet()
+        val ranges = chunkedRanges(code)
+        val use = Regex("(\\bfun\\s+)?(::|\\.)?\\b(" + names.joinToString("|") + ")\\b(\\s*\\(\\s*[^)\\s])?")
+        return use.findAll(code)
+            .filter { m ->
+                val name = m.groupValues[3]
+                val calls = m.groups[4] != null
+                m.groups[1] == null && when (m.groups[2]?.value) {
+                    "::" -> true
+                    "." -> calls || code.substring(m.range.last + 1).trimStart().startsWith("(")
+                    else -> calls && name in local
+                }
+            }
+            .filter { m -> ranges.none { m.range.first in it } }
+            .map { it.groupValues[3] }.toList()
+    }
+
+    /** [src] with every `//` and `/* */` comment blanked to spaces (offsets kept); strings are left alone. */
+    private fun blankComments(src: String): String {
+        val out = StringBuilder(src)
+        var i = 0
+        fun blank(from: Int, to: Int) { for (k in from until to) if (out[k] != '\n') out[k] = ' ' }
+        while (i < src.length) {
+            when {
+                src.startsWith("\"\"\"", i) ->
+                    i = src.indexOf("\"\"\"", i + 3).let { if (it < 0) src.length else it + 3 }
+                src[i] == '"' -> {
+                    i++
+                    while (i < src.length && src[i] != '"' && src[i] != '\n') i += if (src[i] == '\\') 2 else 1
+                    i++
+                }
+                // A char literal ('"', '\'') skipped whole, so its quote never opens a string.
+                src[i] == '\'' -> {
+                    i++
+                    while (i < src.length && src[i] != '\'' && src[i] != '\n') i += if (src[i] == '\\') 2 else 1
+                    i++
+                }
+                src.startsWith("//", i) -> {
+                    val end = src.indexOf('\n', i).let { if (it < 0) src.length else it }
+                    blank(i, end)
+                    i = end
+                }
+                src.startsWith("/*", i) -> {
+                    val end = src.indexOf("*/", i + 2).let { if (it < 0) src.length else it + 2 }
+                    blank(i, end)
+                    i = end
+                }
+                else -> i++
+            }
+        }
+        return out.toString()
     }
 }

@@ -53,6 +53,14 @@ data class BodyStats(val bodies: Long, val storedBytes: Long, val rawBytes: Long
 }
 
 /**
+ * A telemetry export that ended short: [service] of [scanId] yielded [written] of the [expected] records
+ * it held when the export started (the scan was deleted or retention ran in between). The partial file is
+ * discarded and the export reported as failed, never shared as if whole.
+ */
+class IncompleteExportException(scanId: Long, service: String, written: Long, expected: Int) :
+    java.io.IOException("telemetry export of scan $scanId cut short: $service gave $written of $expected records")
+
+/**
  * Store size (spec §8.2): distinct bodies of facts observed by COMPLETE scans, partitioned as retention
  * keeps them ([StorageKind]): live scans' [snapshots], live scans' [liveEvents], and [imports]; a body
  * shared across kinds counts once, in the first of those (ruling R42), so they add up to [total]. Plus
@@ -64,6 +72,12 @@ data class StorageSummary(
 ) {
     /** The distinct bodies of facts observed by COMPLETE scans: the three kinds together. */
     val total: BodyStats get() = snapshots + liveEvents + imports
+
+    /** Every stored body: the three kinds and the bodies only pinned orphans hold. */
+    val allRecords: Long get() = total.bodies + pinnedOrphans.bodies
+
+    /** Everything Settings' Total counts: every stored body's bytes plus the alert evidence. */
+    val allStoredBytes: Long get() = total.storedBytes + pinnedOrphans.storedBytes + alertEvidenceBytes
 
     companion object {
         val EMPTY = StorageSummary(BodyStats.NONE, BodyStats.NONE, BodyStats.NONE, BodyStats.NONE, 0L)
@@ -241,15 +255,24 @@ class TelemetryReader @Inject constructor(
      * [TelemetryJsonl] envelope per observation, service by service in ordinal order, read [BATCH] at a
      * time through [forEach]: no whole-scan list is held, and each line is written as soon as it is
      * decoded. An unreadable body still gets its line. Returns the number of lines written.
+     *
+     * The pages are separate reads, so a delete of the scan (or a retention run) between them would end
+     * a service early. A COMPLETE scan's records never grow, so a service yielding fewer lines than it
+     * held at the start throws [IncompleteExportException] rather than passing as a whole export (#418).
      */
     suspend fun exportJsonl(scanId: Long, out: Writer): Long {
         var lines = 0L
         for (service in services(scanId)) {
+            var written = 0L
             forEach(scanId, service.service) { record ->
                 out.write(TelemetryJsonl.line(record))
                 out.write("\n")
-                lines++
+                written++
             }
+            if (written < service.records) {
+                throw IncompleteExportException(scanId, service.service, written, service.records)
+            }
+            lines += written
         }
         return lines
     }

@@ -31,6 +31,8 @@
     <string name="storage_not_saved_banner_body">The scan ran, but its results could not be saved, so they are not in your history and are lost when you close the app. Any findings are shown on this screen only. Scan again; if this repeats, free some storage.</string>
     <string name="storage_earlier_banner_title">A recent scan or import was not saved</string>
     <string name="storage_earlier_banner_body">Storage ran out while saving a recent scan or import, so it is not in your history. The result shown here is from an earlier, saved scan and does not include it. Free some storage and scan again.</string>
+    <string name="scan_not_saved_earlier_banner_title">A recent scan was not saved</string>
+    <string name="scan_not_saved_earlier_banner_body">A recent scan ran, but an error stopped its results being saved, so it is not in your history. The result shown here is from an earlier, saved scan and does not include it. Scan again.</string>
     <string name="dns_drops_banner_title">DNS events were not recorded</string>
     <string name="dns_drops_banner_body" tools:ignore="PluralsCandidate">%1$d DNS event(s) could not be saved (the database was unavailable, or the VPN stopped before they were written), so they are missing from the DNS log.</string>
     <string name="dns_drops_banner_dismiss">Dismiss</string>
@@ -242,6 +244,7 @@
     <string name="import_card_free_at_least_estimate">Free at least %1$s more (the whole import needs about %2$s) and import again to store the rest.</string>
     <string name="import_card_free_at_least_unknown">Free at least %1$s more, probably much more, and import again to store the rest.</string>
     <string name="import_card_not_stored_some" tools:ignore="PluralsCandidate">The database refused part of this import: %1$,d new records were stored; the rest were checked but not stored.</string>
+    <string name="import_card_reserve_low_after">Every record of this import was stored, but free space is now below the 150 MB AndroDR keeps in reserve. Free at least %1$s before the next import.</string>
     <string name="import_card_not_stored_none">The database refused this import\'s records: the file was checked but nothing new was stored.</string>
     <plurals name="diff_more">
         <item quantity="one">\u2026and %1$d more finding</item>
@@ -384,4 +387,92 @@
         <item quantity="other">%1$d fields changed since the previous observation</item>
     </plurals>
     <string name="telemetry_field_changed">%1$s (changed)</string>
+    <!-- Settings screen -->
+    <string name="settings_title">Settings</string>
+    <string name="settings_appearance_title">Appearance</string>
+    <string name="settings_appearance_body">Choose how AndroDR adapts to your system theme.</string>
+    <string name="settings_theme_system">System</string>
+    <string name="settings_theme_light">Light</string>
+    <string name="settings_theme_dark">Dark</string>
+    <string name="settings_dns_blocklist_title">DNS Blocklist</string>
+    <string name="settings_threat_domains_title">Threat Intelligence Domains</string>
+    <string name="settings_block_matched_domains">Block matched domains</string>
+    <string name="settings_block_off_detect_only">Off = detect and log only</string>
+    <string name="settings_block_off_detect_only_recommended">Off = detect and log only (recommended for EDR)</string>
+    <string name="settings_custom_rules_title">Custom Rule URLs</string>
+    <string name="settings_custom_rules_body">Detection rule sources (one per line). Each URL should point to a raw GitHub directory containing a rules.txt manifest.</string>
+    <string name="settings_custom_rules_label">Rule URLs</string>
+    <string name="settings_custom_rules_placeholder" translatable="false">https://raw.githubusercontent.com/…</string>
+    <string name="settings_hash_export_title">App Hash Export</string>
+    <string name="settings_hash_export_body">Export SHA-256 hashes of all installed apps as CSV. Use these hashes to check apps on VirusTotal.</string>
+    <string name="settings_hash_export_running">Computing hashes…</string>
+    <string name="settings_hash_export_action">Export App Hashes (CSV)</string>
+    <string name="settings_hash_export_share">Share App Hashes</string>
+    <string name="settings_stix_export_title">Scan Findings Export</string>
+    <string name="settings_stix_export_body">Export scan findings as a STIX 2.1 JSON bundle for sharing with forensic analysts. Compatible with MVT, MISP, and SIEM platforms.</string>
+    <string name="settings_stix_export_running">Exporting…</string>
+    <string name="settings_stix_export_action">Export Findings (STIX2 JSON)</string>
+    <string name="settings_stix_export_share">Share STIX2 Bundle</string>
+    <string name="settings_about_title">About</string>
+    <string name="settings_about_version">Version</string>
+    <string name="settings_about_build">Build</string>
+    <string name="settings_about_android">Android</string>
+    <string name="settings_about_android_value">%1$s (API %2$d)</string>
+    <string name="settings_about_device">Device</string>
+    <string name="settings_about_security_patch">Security Patch</string>
+    <string name="settings_update_complete_title">Update Complete</string>
+    <string name="settings_update_indicators">IOC Indicators</string>
+    <string name="settings_update_known_apps">Known Apps</string>
+    <string name="settings_update_sigma_rules">SIGMA Rules</string>
+    <string name="settings_update_cve_database">CVE Database</string>
+    <string name="settings_update_oem_prefixes">OEM Prefixes</string>
+    <string name="settings_update_brand_registry">Brand Registry</string>
+    <string name="settings_threat_db_title">Threat Database</string>
+    <string name="settings_threat_db_rules">Detection Rules</string>
+    <string name="settings_threat_db_domains">Threat Domains</string>
+    <string name="settings_threat_db_apps">Threat Apps</string>
+    <string name="settings_threat_db_certificates">Threat Certificates</string>
+    <!-- %1$d: count; %2$s: where the data came from (bundled or remote) -->
+    <string name="settings_threat_db_count_source" tools:ignore="PluralsCandidate">%1$d (%2$s)</string>
+    <string name="settings_threat_db_source_bundled">bundled</string>
+    <string name="settings_threat_db_source_downloaded">downloaded</string>
+    <string name="settings_threat_db_cves" tools:ignore="PluralsCandidate">%1$d Android CVEs</string>
+    <string name="settings_threat_db_updating">Updating…</string>
+    <string name="settings_threat_db_update_now">Update Now</string>
+    <string name="settings_last_updated">Last updated: %1$s</string>
+    <string name="settings_last_updated_never">Last updated: Never</string>
+    <string name="settings_feed_health_title">Feed health (• = critical detection feed)</string>
+    <string name="settings_feed_critical">• %1$s</string>
+    <string name="settings_feed_stale">%1$s — stale</string>
+    <string name="settings_feed_age_never">never</string>
+    <string name="settings_feed_age_just_now">just now</string>
+    <string name="settings_feed_age_days" tools:ignore="PluralsCandidate">%1$dd ago</string>
+    <string name="settings_feed_age_hours" tools:ignore="PluralsCandidate">%1$dh ago</string>
+    <string name="settings_feed_age_minutes" tools:ignore="PluralsCandidate">%1$dm ago</string>
+    <!-- Settings: telemetry storage (telemetry store spec §8.2) -->
+    <string name="telemetry_storage_title">Telemetry storage</string>
+    <string name="telemetry_storage_unavailable">Storage size unavailable</string>
+    <string name="telemetry_storage_snapshots">Snapshots</string>
+    <string name="telemetry_storage_live_events">Live events</string>
+    <string name="telemetry_storage_imports">Imports</string>
+    <string name="telemetry_storage_pinned">Kept for findings and alerts</string>
+    <string name="telemetry_storage_alert_evidence">Alert evidence</string>
+    <string name="telemetry_storage_total">Total</string>
+    <!-- %1$s: a grouped count (for example 1,234); %2$s: a size such as 2.0 KB -->
+    <string name="telemetry_storage_stats" tools:ignore="PluralsCandidate">%1$s distinct records · %2$s</string>
+    <string name="telemetry_retention_label" tools:ignore="PluralsCandidate">Keep snapshot telemetry for the last %1$d scans</string>
+    <string name="telemetry_retention_fewer">Keep one scan fewer</string>
+    <string name="telemetry_retention_more">Keep one scan more</string>
+    <string name="telemetry_cleanup_action">Delete old snapshot telemetry now</string>
+    <string name="telemetry_cleanup_running">Deleting…</string>
+    <string name="telemetry_cleanup_confirm_title">Delete old snapshot telemetry?</string>
+    <string name="telemetry_cleanup_confirm_body">Removes snapshot telemetry of live scans older than the newest %1$d, and live events older than 30 days. Imports and records behind findings or alerts are kept.</string>
+    <string name="telemetry_cleanup_confirm">Delete</string>
+    <!-- %1$s: a grouped count -->
+    <plurals name="telemetry_cleanup_done">
+        <item quantity="one">Removed %1$s old telemetry record.</item>
+        <item quantity="other">Removed %1$s old telemetry records.</item>
+    </plurals>
+    <string name="telemetry_cleanup_busy">Another storage task is running. Try again shortly.</string>
+    <string name="telemetry_cleanup_failed">Old telemetry could not be deleted.</string>
 </resources>

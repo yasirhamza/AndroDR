@@ -294,7 +294,7 @@ class SigmaRuleEngine @Inject constructor(
 
     /** Imported DNS records: the live DNS fields plus `resolved_ips` (D1). */
     fun evaluateImportedDns(events: List<ImportedDnsEvent>): List<Finding> =
-        evaluateRecords(IntrusionLogRecordBuilders.DNS_MONITOR, IntrusionLogRecordBuilders.importedDns(events), 0)
+        evaluateRecords(LiveRecordBuilders.DNS_MONITOR, IntrusionLogRecordBuilders.importedDns(events), 0)
 
     /** Unreadable paths are skipped inside [evaluateRecords] (#366) but keep their ordinal. */
     fun evaluateFiles(telemetry: List<FileArtifactTelemetry>): List<Finding> =

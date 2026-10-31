@@ -8,7 +8,7 @@ import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
-import org.junit.Before
+import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -17,9 +17,8 @@ import org.robolectric.RobolectricTestRunner
 @RunWith(RobolectricTestRunner::class)
 class Migration19To20Test {
     private val name = "migration-19-20"
-    private lateinit var helper: MigrationTestHelper
-
-    @Before fun setUp() { helper = RoomTestDb.migrationHelper() }
+    // A rule, so the helper is finished() and closes every database it opened, even on a failure.
+    @get:Rule val helper: MigrationTestHelper = RoomTestDb.migrationHelper()
 
     @After fun tearDown() {
         ApplicationProvider.getApplicationContext<Context>().deleteDatabase(name)

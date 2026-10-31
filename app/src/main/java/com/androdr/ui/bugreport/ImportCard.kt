@@ -24,6 +24,12 @@ sealed interface ImportNotice {
 
     /** The database refused part of the import (not a reserve breach): [storedFacts] were stored. */
     data class NotFullyStored(val storedFacts: Int) : ImportNotice
+
+    /**
+     * Every record was stored, but free space fell below the import reserve by the end (#418): free
+     * at least [freeAtLeastBytes] before the next import.
+     */
+    data class ReserveLowAfterImport(val freeAtLeastBytes: Long) : ImportNotice
 }
 
 /**
@@ -95,6 +101,8 @@ data class ImportCard(
                 addAll(boundTrips)
             }
             val notice = when {
+                write.spaceToFree > 0L && write.telemetryState == TelemetryState.STORED ->
+                    ImportNotice.ReserveLowAfterImport(write.spaceToFree)
                 write.spaceToFree > 0L -> ImportNotice.LowSpace(write.newFacts, write.spaceToFree, estimateBytes)
                 write.telemetryState == TelemetryState.FAILED -> ImportNotice.NotFullyStored(write.newFacts)
                 else -> ImportNotice.None

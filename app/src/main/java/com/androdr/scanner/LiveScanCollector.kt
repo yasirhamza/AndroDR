@@ -163,7 +163,7 @@ class LiveScanCollector @Inject constructor(
     private suspend fun dnsWindow(scanStart: Long, errors: MutableList<ScannerFailure>): DnsWindow {
         var previous: Long? = null
         return try {
-            previous = watermarks.get(DNS_MONITOR)?.position
+            previous = watermarks.get(LiveRecordBuilders.DNS_MONITOR)?.position
             DnsWindow(previous, DnsRange.of(dnsEventDao, previous, scanStart), failed = false)
         } catch (c: CancellationException) {
             throw c
@@ -182,7 +182,6 @@ class LiveScanCollector @Inject constructor(
         private const val USAGE_SCANNER = "usageStatsScanner"
         const val USAGE_WINDOW_STALLED = "UsageWindowStalled"
         private const val USAGE_STATS = LiveRecordBuilders.USAGE_STATS
-        private const val DNS_MONITOR = LiveRecordBuilders.DNS_MONITOR
 
         /**
          * Number of parallel scanners tracked by the progress indicator. Keep in sync with

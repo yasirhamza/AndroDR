@@ -196,6 +196,29 @@ class TelemetryExportTest {
             pagesAtFirstWrite)
     }
 
+    /** #418: a delete between pages used to end the export early, as if the scan had fewer records. */
+    @Test
+    fun `a scan deleted mid-export fails the export instead of truncating it`() = runBlocking {
+        f.scan(1L)
+        f.persist(1L, "app_scanner", (0 until 1_200).map { app("com.p$it") })
+        f.setState(1L, ScanState.COMPLETE)
+        var deleted = false
+        val sink = object : Writer() {
+            override fun write(cbuf: CharArray, off: Int, len: Int) {
+                if (!deleted) {
+                    deleted = true // after the first page was read: what History's delete does to the rows
+                    f.db.openHelper.writableDatabase.execSQL("DELETE FROM ScanResult WHERE id = 1")
+                }
+            }
+            override fun flush() = Unit
+            override fun close() = Unit
+        }
+        val failure = runCatching { f.reader.exportJsonl(1L, sink) }.exceptionOrNull()
+        assertTrue("expected IncompleteExportException, got $failure",
+            failure is com.androdr.data.store.IncompleteExportException)
+        assertTrue(failure!!.message!!, failure.message!!.contains("500 of 1200"))
+    }
+
     @Test
     fun `the export is gzip JSONL in cache reports, and stale files there are removed first`() = runBlocking {
         val stale = File(reportsDir, "androdr_report_old.txt").apply {

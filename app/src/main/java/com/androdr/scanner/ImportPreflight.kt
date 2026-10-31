@@ -2,23 +2,18 @@ package com.androdr.scanner
 
 import android.content.Context
 import android.net.Uri
-import android.util.Log
 import com.androdr.data.store.Preflight
 import com.androdr.data.store.StoragePreflight
 import dagger.hilt.android.qualifiers.ApplicationContext
-import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
-import java.io.FileInputStream
 import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
  * Runs the storage preflight for a picked import (spec §5.2): sums the archive's decompressed entry
- * sizes from the ZIP central directory (no inflation), classifies its entry names with
- * [ArtifactSniffer.classify], and asks [StoragePreflight.check] with that type's stored-size factor. An archive
- * whose sizes cannot be read — not seekable, unreadable directory, an entry with unknown size —
- * yields an unknown estimate, which the preflight always treats as tight.
+ * sizes from the ZIP central directory (no inflation), takes its type from that directory
+ * ([ImportArchive.centralDirectory]), and asks [StoragePreflight.check] with that type's stored-size
+ * factor. An archive whose sizes cannot be read — not seekable, unreadable directory, an
+ * entry with unknown size — yields an unknown estimate, which the preflight always treats as tight.
  */
 @Singleton
 class ImportPreflight @Inject constructor(
@@ -26,29 +21,11 @@ class ImportPreflight @Inject constructor(
     private val storage: StoragePreflight,
 ) {
     suspend fun check(uri: Uri): Preflight {
-        val contents = contents(uri)
+        val contents = ImportArchive.centralDirectory(context, uri)
         return storage.check(contents?.totalSize, storedSizeFactor(contents?.type ?: ArtifactType.UNRECOGNIZED))
     }
 
-    @Suppress("TooGenericExceptionCaught")
-    private suspend fun contents(uri: Uri): ZipCentralDirectory.Contents? = withContext(Dispatchers.IO) {
-        try {
-            // The descriptor the provider handed us is read in place; no path is reopened.
-            context.contentResolver.openFileDescriptor(uri, "r")?.use { pfd ->
-                // The stream does not own the descriptor; closing it only releases the channel.
-                FileInputStream(pfd.fileDescriptor).use { ZipCentralDirectory.contents(it.channel) }
-            }
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            Log.w(TAG, "archive size unknown: ${e.javaClass.simpleName}")
-            null
-        }
-    }
-
     companion object {
-        private const val TAG = "ImportPreflight"
-
         /**
          * Stored bytes per decompressed byte of an intrusion-log export (ruling R45): measured ≈3.5 on
          * the F916B battery (telemetry tables + indexes ≈78 MB for ≈22 MB decompressed), plus headroom.
