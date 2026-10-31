@@ -242,6 +242,43 @@ class TelemetryReaderTest {
             assertEquals(f.count("SELECT COALESCE(SUM(LENGTH(body)), 0) FROM record_body"), s.total.storedBytes)
         }
 
+    /**
+     * R42 across all three kinds: one body observed as a live snapshot, a live event and an import
+     * counts once, under Snapshots (the lowest [com.androdr.data.db.StorageKind]); each kind's own
+     * body still counts under its kind, and the rows add up to the distinct bodies stored.
+     */
+    @Test
+    fun `R42 a body shared by a snapshot, a live event and an import counts once, under Snapshots`() =
+        runBlocking {
+            val imp = TelemetrySource.BUGREPORT_IMPORT
+            // A body hash is the canonical field map's, whatever the service: the same map stored under
+            // a snapshot service (app_scanner) and an event service (dns_monitor) shares one body.
+            val shared = dns("shared.example")
+            f.scan(1L)
+            f.persist(1L, "app_scanner", listOf(shared, app("com.live")))
+            f.persist(1L, "dns_monitor", listOf(shared, dns("live.example")))
+            f.setState(1L, ScanState.COMPLETE)
+            f.db.scanResultDao().insert(com.androdr.data.model.ScanResult(id = 2L, timestamp = 2L,
+                bugReportFindings = emptyList(), riskySideloadCount = 0, knownMalwareCount = 0, source = imp,
+                state = ScanState.IN_PROGRESS))
+            f.persist(2L, "dns_monitor", listOf(shared, dns("imp.example")), source = imp)
+            f.setState(2L, ScanState.COMPLETE)
+            assertEquals("the fixture shares one body across the three kinds", 4L,
+                f.count("SELECT COUNT(*) FROM record_body"))
+            assertEquals("the shared body is observed in all three kinds", 3L, f.count(
+                "SELECT COUNT(DISTINCT CASE WHEN s.source <> 'LIVE_SCAN' THEN 2 WHEN t.eventTime IS NULL THEN 0 " +
+                    "ELSE 1 END) FROM scan_record o JOIN ScanResult s ON s.id = o.scanId " +
+                    "JOIN telemetry_record t ON t.id = o.recordId WHERE t.bodyHash = " +
+                    "(SELECT bodyHash FROM telemetry_record GROUP BY bodyHash HAVING COUNT(DISTINCT service) = 2)"))
+            val s = f.reader.storage()
+            assertEquals("shared.example and com.live", 2L, s.snapshots.bodies)
+            assertEquals("live.example only", 1L, s.liveEvents.bodies)
+            assertEquals("imp.example only", 1L, s.imports.bodies)
+            assertEquals(4L, s.total.bodies)
+            assertEquals(f.count("SELECT COALESCE(SUM(LENGTH(body)), 0) FROM record_body"), s.total.storedBytes)
+            assertEquals(f.count("SELECT COALESCE(SUM(rawBytes), 0) FROM record_body"), s.total.rawBytes)
+        }
+
     @Test
     fun `storage splits distinct bodies into snapshots, live events and imports (spec 8_2)`() = runBlocking {
         f.scan(1L)
