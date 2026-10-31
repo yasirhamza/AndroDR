@@ -10,8 +10,9 @@ import javax.inject.Singleton
 
 /**
  * Runs the storage preflight for a picked import (spec §5.2): sums the archive's decompressed entry
- * sizes from the ZIP central directory (no inflation), takes its type from the central directory ([ImportArchive.centralDirectory]), and asks [StoragePreflight.check] with that type's
- * stored-size factor. An archive whose sizes cannot be read — not seekable, unreadable directory, an
+ * sizes from the ZIP central directory (no inflation), takes its type from that directory
+ * ([ImportArchive.centralDirectory]), and asks [StoragePreflight.check] with that type's stored-size
+ * factor. An archive whose sizes cannot be read — not seekable, unreadable directory, an
  * entry with unknown size — yields an unknown estimate, which the preflight always treats as tight.
  */
 @Singleton

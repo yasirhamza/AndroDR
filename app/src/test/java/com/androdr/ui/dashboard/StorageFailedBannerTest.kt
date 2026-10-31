@@ -121,14 +121,15 @@ class StorageFailedBannerTest {
 
     /** Review fix: a later saved-but-partly-stored scan must not be called "an earlier scan". */
     @Test
-    fun `an unsaved scan then a saved partly stored scan shows the partly stored banner`() = withHealthStore { newFlag ->
-        val flag = newFlag()
-        flag.recordScan(saved = false, fullyStored = false)
-        flag.recordScan(saved = true, fullyStored = false)
-        val latest = scan(id = 2L, state = TelemetryState.FAILED)
-        assertEquals(StorageBanner.PARTLY_STORED,
-            banner(latest, flag = flag.isSet(), notSaved = flag.scanNotSavedFlow.first()))
-    }
+    fun `an unsaved scan then a saved partly stored scan shows the partly stored banner`() =
+        withHealthStore { newFlag ->
+            val flag = newFlag()
+            flag.recordScan(saved = false, fullyStored = false)
+            flag.recordScan(saved = true, fullyStored = false)
+            val latest = scan(id = 2L, state = TelemetryState.FAILED)
+            assertEquals(StorageBanner.PARTLY_STORED,
+                banner(latest, flag = flag.isSet(), notSaved = flag.scanNotSavedFlow.first()))
+        }
 
     @Test
     fun `a saved scan with missing records keeps the storage flag`() = withHealthStore { newFlag ->
