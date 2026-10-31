@@ -225,7 +225,8 @@ class SqlCompatibilityGateTest {
         fun blank(from: Int, to: Int) { for (k in from until to) if (out[k] != '\n') out[k] = ' ' }
         while (i < src.length) {
             when {
-                src.startsWith("\"\"\"", i) -> i = src.indexOf("\"\"\"", i + 3).let { if (it < 0) src.length else it + 3 }
+                src.startsWith("\"\"\"", i) ->
+                    i = src.indexOf("\"\"\"", i + 3).let { if (it < 0) src.length else it + 3 }
                 src[i] == '"' -> {
                     i++
                     while (i < src.length && src[i] != '"' && src[i] != '\n') i += if (src[i] == '\\') 2 else 1

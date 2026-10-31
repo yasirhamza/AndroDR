@@ -102,7 +102,8 @@ class FieldMapCompletenessTest {
     @Test
     fun `derivation finds member and extension projections`() {
         // A class the old hand-kept list never named would have gone unchecked.
-        val src = "package p\ndata class NewEvent(val a: Int) {\n    fun toFieldMap(): Map<String, Any?> = mapOf()\n}\n" +
+        val src = "package p\ndata class NewEvent(val a: Int) {\n" +
+            "    fun toFieldMap(): Map<String, Any?> = mapOf()\n}\n" +
             "internal fun OtherEvent.toFieldMap(): Map<String, Any?> = mapOf()\n"
         assertEquals(
             listOf(Projection("NewEvent", null), Projection("OtherEvent", "p.NewEventKt")),

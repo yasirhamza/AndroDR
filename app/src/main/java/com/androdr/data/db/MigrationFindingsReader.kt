@@ -14,7 +14,8 @@ import kotlinx.serialization.json.JsonObject
  * [CHUNK_CHARS] characters is at most 1 MB of UTF-8). A value over [MAX_BYTES] UTF-8 bytes, or one
  * that is not a JSON array, yields no findings, so a migration that uses this always completes. The
  * cap counts bytes, not characters: SQLite's `length()` of text counts characters, so a value of
- * multi-byte text could pass a character cap at several times the intended memory. Shared by MIGRATION_19_20 (`level` backfill) and MIGRATION_20_21.
+ * multi-byte text could pass a character cap at several times the intended memory.
+ * Shared by MIGRATION_19_20 (`level` backfill) and MIGRATION_20_21.
  *
  * Findings are returned as raw [JsonObject]s, not decoded [com.androdr.sigma.Finding]s, so the
  * migration does not depend on today's model classes.

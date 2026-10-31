@@ -96,7 +96,7 @@ class EvaluateRecordsTest {
     private val entryPoints = listOf(
         EntryPoint("evaluateApps", "app_scanner") { evaluateApps(listOf(app, app.copy(packageName = "b"))) },
         EntryPoint("evaluateDevice", "device_auditor") {
-            evaluateDevice(listOf(DeviceTelemetry("a", false, source = live), DeviceTelemetry("b", true, source = live)))
+            evaluateDevice(List(2) { DeviceTelemetry("c$it", it == 1, source = live) })
         },
         EntryPoint("evaluateProcesses", "process_monitor") {
             evaluateProcesses(List(2) { ProcessTelemetry("p$it", 1, "a", true, live) })
@@ -125,8 +125,9 @@ class EvaluateRecordsTest {
             evaluateBatteryDaily(List(2) { BatteryDailyEvent(it, "install", "a", "d", source = br, capturedAt = 10L) })
         },
         EntryPoint("evaluatePackageInstallHistory", "package_install_history") {
-            evaluatePackageInstallHistory(
-                List(2) { PackageInstallHistoryEntry("a", PackageHistoryEventType.INSTALL, it.toLong(), null, br, 10L) })
+            evaluatePackageInstallHistory(List(2) {
+                PackageInstallHistoryEntry("a", PackageHistoryEventType.INSTALL, it.toLong(), null, br, 10L)
+            })
         },
         EntryPoint("evaluatePlatformCompat", "platform_compat") {
             evaluatePlatformCompat(List(2) { PlatformCompatChange("$it", "a", true, br, 10L) })
