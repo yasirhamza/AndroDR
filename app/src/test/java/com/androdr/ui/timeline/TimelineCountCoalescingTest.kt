@@ -39,6 +39,31 @@ class TimelineCountCoalescingTest {
         assertEquals("two bursts, two bumps", listOf(0, 1, 2), versions)
     }
 
+    /** #418: a debounce alone never fires while changes keep coming closer than the quiet window. */
+    @Test
+    fun `a continuous stream still bumps once per max wait`() = runTest {
+        val changes = MutableSharedFlow<Unit>()
+        val versions = mutableListOf<Int>()
+        val job = launch { changes.coalescedVersions(quietMs = 300L, maxWaitMs = 2_000L).toList(versions) }
+        runCurrent()
+        repeat(100) { // a change every 100 ms for 10 s: never 300 ms of quiet
+            changes.emit(Unit)
+            advanceTimeBy(100L)
+        }
+        val duringStream = versions.toList()
+        advanceTimeBy(400L)
+        job.cancel()
+        // Bumps at 2, 4, 6 and 8 s; the window ending at 10 s fires on the next tick.
+        assertEquals("one bump per 2 s window while the stream ran", listOf(0, 1, 2, 3, 4), duringStream)
+        assertEquals("the last window still bumps", listOf(0, 1, 2, 3, 4, 5), versions)
+    }
+
+    @Test
+    fun `upstream completion flushes a pending burst`() = runTest {
+        val versions = kotlinx.coroutines.flow.flowOf(Unit, Unit, Unit).coalescedVersions(300L, 2_000L).toList()
+        assertEquals(listOf(0, 1), versions)
+    }
+
     @Test
     fun `the ViewModel's count trigger is the coalesced one`() {
         val src = listOf(File("src/main/java"), File("app/src/main/java")).first { it.isDirectory }

@@ -36,7 +36,13 @@ import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.flow.buffer
 import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.produceIn
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -47,7 +53,6 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.mapLatest
-import kotlinx.coroutines.flow.runningFold
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -226,11 +231,12 @@ class TimelineViewModel @Inject constructor(
 
     /**
      * Bumps when a scan completes or is deleted, or Timeline rows change (what changes counts),
-     * coalesced over [COUNT_DEBOUNCE_MS] so a burst of row inserts (live DNS IOC matches, a scan's
+     * coalesced over [COUNT_DEBOUNCE_MS] (but at least every [COUNT_MAX_WAIT_MS] under a steady
+     * stream) so a burst of row inserts (live DNS IOC matches, a scan's
      * finish) re-counts once, not once per change.
      */
     private val tableVersion: StateFlow<Int> = db.tableChanges(KeysetPagingSource.OBSERVED_TABLES)
-        .coalescedVersions(COUNT_DEBOUNCE_MS)
+        .coalescedVersions(COUNT_DEBOUNCE_MS, COUNT_MAX_WAIT_MS)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
 
     /** The paged list: the union under [filter], a [TimelineRow.DayHeader] before each day. */
@@ -470,6 +476,7 @@ class TimelineViewModel @Inject constructor(
         private const val PAGE_SIZE = 100
         private const val EXPORT_PAGE = 500
         private const val COUNT_DEBOUNCE_MS = 300L
+        private const val COUNT_MAX_WAIT_MS = 3_000L
         private const val SEARCH_DEBOUNCE_MS = 300L
         private const val HOUR_MS = 3_600_000L
         private const val KEY_DEEP_LINK_APPLIED = "timeline.deepLinkApplied"
@@ -526,11 +533,34 @@ internal fun DecodedRecord.asExportEvent(
 
 /**
  * A version number that bumps once per burst of changes: a change followed by quiet for [quietMs]
- * bumps it once, however many changes the burst held (counts re-run per burst, not per change).
+ * bumps it once, however many changes the burst held (counts re-run per burst, not per change). A
+ * burst that never goes quiet still bumps once every [maxWaitMs] from its first change (#418: a
+ * plain debounce starved the counts under a continuous stream). Starts at 0.
  */
-@OptIn(FlowPreview::class)
-internal fun Flow<Unit>.coalescedVersions(quietMs: Long): Flow<Int> =
-    debounce(quietMs).runningFold(0) { n, _ -> n + 1 }
+internal fun Flow<Unit>.coalescedVersions(quietMs: Long, maxWaitMs: Long = quietMs * DEFAULT_MAX_WAIT_FACTOR): Flow<Int> =
+    flow {
+        var version = 0
+        emit(version)
+        coroutineScope {
+            val changes = this@coalescedVersions.buffer(Channel.CONFLATED).produceIn(this)
+            var open = true
+            while (open && changes.receiveCatching().isSuccess) {
+                // In a burst: wait for quiet, an end of stream, or the burst's max wait, then bump.
+                withTimeoutOrNull(maxWaitMs) {
+                    while (true) {
+                        val next = withTimeoutOrNull(quietMs) { changes.receiveCatching() } ?: break
+                        if (!next.isSuccess) {
+                            open = false
+                            break
+                        }
+                    }
+                }
+                emit(++version)
+            }
+        }
+    }
+
+private const val DEFAULT_MAX_WAIT_FACTOR = 10
 
 /** The active filter in words for an export header, or null when nothing is filtered. */
 internal fun TimelineFilter.describe(): String? = buildList {
