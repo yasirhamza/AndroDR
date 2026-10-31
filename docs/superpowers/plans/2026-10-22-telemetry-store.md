@@ -498,7 +498,7 @@ sealed interface Preflight { data object Ok : Preflight; data class Tight(val es
 3. On `finish`, the findings are written, `telemetryState = FAILED` is set, and no watermark advances.
 4. If that write also fails, the in-memory result is returned to the UI and a storage-health flag is written to DataStore.
 
-**Import reserve path:** the reserve is checked before every append **and once more before `finish`**. If `reserveOk()` is false before an append, the session switches to evaluate-only for the rest of the import. `finish` sets `telemetryState = FAILED`, and the card states how much space to free.
+**Import reserve path:** the reserve is checked before every append **and once more before `finish`**. If `reserveOk()` is false before an append, the session switches to evaluate-only for the rest of the import. `finish` sets `telemetryState = FAILED`, and the card states how much space to free. A breach found only by the check before `finish` (no switch to evaluate-only) keeps `STORED`/`NONE`: every record was stored, and the card says so and how much space to free (#418).
 
 **`Finding` change:** `Finding` gains `recordId: Long? = null`, set only by `evaluateStored`.
 

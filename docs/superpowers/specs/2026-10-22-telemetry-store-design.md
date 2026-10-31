@@ -304,6 +304,10 @@ migration exists.
 Hashes are 16-byte BLOBs (SHA-256 truncated to 128 bits). Map lookups on them
 wrap the bytes (`ByteBuffer.wrap`), never use raw `ByteArray` keys.
 
+The canonical JSON a body is hashed over is a frozen contract: doubles use an explicit
+shortest-decimal algorithm, not the platform's `Double.toString`, so the bytes are the same on every
+Android version (#418). Changing the encoding re-keys stored facts; version it instead of editing it.
+
 - **`record_body`**:
   - `hash` BLOB PK
   - `encoding` (0 plain JSON, 1 Deflate with preset dictionary)
@@ -383,6 +387,7 @@ Covered paths: scan deletion, "Clear all", retention and the prune. References a
 3. Before each `append` on an import, `StatFs` free space is checked against a fixed **150 MB reserve that nothing overrides**.
    - When the reserve is breached, the import stops storing telemetry and **finishes evaluate-only**: `telemetryState = FAILED`, and the import card says how much space to free. Its findings are still stored, chunk by chunk (ruling R38, below).
 4. Before `finish`, the 150 MB reserve is checked once more. The finishing transaction's growth — mostly the finding-row copy, about 10–20 MB per 100k findings — fits inside the reserve.
+   - A breach found only here (#418) does not change the state: every record was already stored, so `telemetryState` stays `STORED` (or `NONE`), and the import card says every record was stored and how much space to free before the next import. Only an import that switched to evaluate-only (step 3) is `FAILED`.
 5. `finish` opens **the session's single finishing transaction**, which does the following in order (as today's `saveScanWithCorrelation` does):
    - Writes this scan's `forensic_timeline` rows, so they have ids:
      - detected changes (first-seen install, device-admin grant);
@@ -438,7 +443,7 @@ Failure handling:
   - Today's behaviour is kept: a domain that becomes an IOC after it was queried still fires. Alert identity prevents duplicates.
 
 **Storage protection (nothing is truncated silently).**
-- **Import preflight**: every import is estimated from the archive's decompressed entry sizes × a measured stored-size factor for its artifact type, classified from the central directory's entry names (ruling R45): intrusion log 4.0 (measured ≈3.5 on the F916B: ≈78 MB of telemetry tables and indexes for ≈22 MB decompressed; findings add more, which no size predicts), bug report 0.05 (measured ≈0.0023: ≈236 KB for 302 records from 103 MB decompressed; about 20× headroom for long battery histories), an unrecognized archive 4.0. Unknown or −1 sizes are shown as "unknown".
+- **Import preflight**: every import is estimated from the archive's decompressed entry sizes × a measured stored-size factor for its artifact type, classified from the central directory's entry names (ruling R45; the analyzer is routed by the bounded stream sniff of the local headers, which it reads, and an archive whose two classifications disagree is rejected as unrecognized, #418): intrusion log 4.0 (measured ≈3.5 on the F916B: ≈78 MB of telemetry tables and indexes for ≈22 MB decompressed; findings add more, which no size predicts), bug report 0.05 (measured ≈0.0023: ≈236 KB for 302 records from 103 MB decompressed; about 20× headroom for long battery histories), an unrecognized archive 4.0. Unknown or −1 sizes are shown as "unknown".
   - If free space after the estimate would be below `2 × estimate + 200 MB`, the user may cancel or **import anyway**.
   - The per-chunk 150 MB reserve still applies.
 - **Input bounds**: the intrusion-log parser is bounded at 2,000,000 per type; bug-report modules at 200,000 records each (they still materialise per-module lists). Each bound is named on the import card when tripped.
@@ -448,6 +453,7 @@ Failure handling:
   - Each chunk's findings (after the exact-duplicate filter, and only those `scan_finding` keeps: untriggered findings of event services are dropped first) are stored at once as no-fact `scan_finding` rows (`recordId = null`, keeping `matchContext`), each chunk in its own small transaction. Nothing is buffered; only the running `FindingTotals` are held. So a failed `finish` never loses stored findings because of a buffered write.
   - If a no-fact write itself hits `SQLiteFullException`, the rest of the session's findings are not stored. They are kept only as a **display bound**: exact counts by (rule, level) plus the 1,000 most severe (severity, then the finding's event time, then arrival). The import card says "N findings could not be saved; free X MB and import again". This bounds only how data the disk could not take is shown; it is not a persistence cap (C1 allow-list: `UnsavedFindings.UNSAVED_DISPLAY_LIMIT`).
   - If the finishing write fails too, the in-memory result is still shown, and a storage-health flag is recorded in DataStore, outside the database.
+  - Beside it, a `scan_not_saved` DataStore marker (#418) records a live scan that is not in history for any other reason (a writer error), so after a restart the Dashboard says a recent scan is missing. Any saved scan clears the marker; only a fully stored one clears the storage-health flag.
 - **DNS logging failures**: `DnsLogBuffer` re-queues a failed batch, with exponential backoff and dropping the oldest beyond its bound, and records a health warning.
 
 ### 5.3 Typed bug-report records; `TimelineEvent` retired
