@@ -12,8 +12,11 @@ import com.androdr.data.store.TelemetryDictionaries
 import com.androdr.data.store.TelemetryReader
 import com.androdr.data.store.TelemetryRecordCodec
 import com.androdr.data.store.rawFile
+import com.androdr.sigma.Finding
+import com.androdr.sigma.FindingCategory
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import org.junit.After
 import org.junit.Assert.assertArrayEquals
@@ -21,7 +24,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
-import org.junit.Before
+import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -34,9 +37,8 @@ import org.robolectric.RobolectricTestRunner
 @RunWith(RobolectricTestRunner::class)
 class Migration20To21Test {
     private val name = "migration-20-21"
-    private lateinit var helper: MigrationTestHelper
-
-    @Before fun setUp() { helper = RoomTestDb.migrationHelper() }
+    // A rule, so the helper is finished() and closes every database it opened, even on a failure.
+    @get:Rule val helper: MigrationTestHelper = RoomTestDb.migrationHelper()
 
     @After fun tearDown() {
         ApplicationProvider.getApplicationContext<Context>().deleteDatabase(name)
@@ -207,6 +209,35 @@ class Migration20To21Test {
         val lost = "Findings of 2 earlier scan(s) could not be carried over"
         assertEquals(listOf(listOf(FindingsMigration.UNREADABLE_CATEGORY, lost)),
             db.rows("SELECT category, description FROM forensic_timeline WHERE persistent = 1"))
+        db.close()
+    }
+
+    /**
+     * The `service` / `ordinal` JSON keys the migration reads are the keys [Converters] writes for
+     * [Finding.service] / [Finding.ordinal]. A renamed field would not fail the migration: it would
+     * quietly fall back to [FrozenRuleServices.SERVICE_BY_RULE] and lose the finding's record. The
+     * rule here is in no frozen map, so only the JSON round-trip can resolve the fact.
+     */
+    @Test
+    fun `a finding's service and ordinal round-trip through Converters JSON into the migration`() {
+        val written = Finding(ruleId = "androdr-999", title = "t", level = "high", category = FindingCategory.APP_RISK,
+            service = "appops_audit", ordinal = 1)
+        assertNull(FrozenRuleServices.SERVICE_BY_RULE[written.ruleId])
+        val json = Converters.fromFindingList(listOf(written))
+        val obj = (Json.parseToJsonElement(json) as JsonArray).single() as JsonObject
+        assertEquals("\"appops_audit\"", obj["service"].toString())
+        assertEquals("1", obj["ordinal"].toString())
+        assertEquals(written, Converters.toFindingList(json).single())
+        seed {
+            fact(5L, "appops_audit", eventTime = null, scanId = A, ordinal = 0)
+            fact(6L, "appops_audit", eventTime = null, scanId = A, ordinal = 1)
+            scan(A, NOW, json)
+        }
+        val db = migrate()
+        assertEquals(listOf(listOf("appops_audit", "1", "6")),
+            db.rows("SELECT service, ordinal, recordId FROM scan_finding WHERE scanId = $A"))
+        val stored = Converters.decodeFinding(db.rows("SELECT findingJson FROM scan_finding")[0][0]!!, "test")!!
+        assertEquals("appops_audit" to 1, stored.service to stored.ordinal)
         db.close()
     }
 
