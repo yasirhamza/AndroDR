@@ -76,6 +76,11 @@ fun DashboardScreen(
 ) {
     val currentFindings by viewModel.currentFindings.collectAsStateWithLifecycle()
     val latestScan by viewModel.latestScan.collectAsStateWithLifecycle()
+    val latestUnsaved by viewModel.latestUnsaved.collectAsStateWithLifecycle()
+    // Every count on this screen comes from one set (spec §5.4), so no two can disagree.
+    val counts = remember(latestScan, latestUnsaved, currentFindings) {
+        DashboardCounts.of(latestScan, latestUnsaved, currentFindings)
+    }
     val isScanning by viewModel.isScanning.collectAsStateWithLifecycle()
     val isUpdatingIntel by viewModel.isUpdatingIntel.collectAsStateWithLifecycle()
     val scanProgress by viewModel.scanProgress.collectAsStateWithLifecycle()
@@ -146,7 +151,7 @@ fun DashboardScreen(
                 }
             }
 
-            RiskLevelCard(latestScan = latestScan, current = currentFindings)
+            RiskLevelCard(latestScan = latestScan, current = currentFindings, counts = counts)
 
             // Warn the user when the previous scan failed to run every check.
             // Without this banner the app would display "Your phone looks secure"
@@ -186,7 +191,7 @@ fun DashboardScreen(
                 UsageAccessBanner(onOpenSettings = { viewModel.openUsageStatsSettings() })
             }
 
-            PostScanGuidance(latestScan = latestScan, current = currentFindings)
+            PostScanGuidance(current = currentFindings, counts = counts)
 
             AnimatedVisibility(
                 visible = (scanDiff?.newCount ?: 0) > 0,
@@ -203,7 +208,7 @@ fun DashboardScreen(
             // credential; grouped by rule and matched value, re-surfaced by latest activity.
             OpenAlertsCard(
                 viewModel = alertsViewModel,
-                current = currentFindings,
+                counts = counts,
                 onMessage = { message -> scope.launch { snackbarHostState.showSnackbar(message) } },
             )
 
@@ -225,10 +230,8 @@ fun DashboardScreen(
             }
 
             // Summary cards grid (2x2)
-            val riskyAppCount = latestScan?.appRisks
-                ?.count { it.triggered && it.level.lowercase() != "informational" } ?: 0
-            val deviceFlagCount = latestScan?.deviceFlags
-                ?.count { it.triggered } ?: 0
+            val riskyAppCount = counts.appRisks
+            val deviceFlagCount = counts.deviceFlags
             val lastScanTime = latestScan?.timestamp?.let { ts ->
                 SimpleDateFormat("MMM d, HH:mm", Locale.getDefault()).format(Date(ts))
             } ?: stringResource(R.string.never)
@@ -311,13 +314,13 @@ fun DashboardScreen(
 }
 
 @Composable
-private fun PostScanGuidance(latestScan: ScanWithFindings?, current: CurrentFindingsSummary) {
+private fun PostScanGuidance(current: CurrentFindingsSummary, counts: DashboardCounts) {
     val colors = MaterialTheme.androdrColors
     val guidance = DashboardViewModel.guidanceFor(
-        scanRisk = latestScan?.overallRiskLevel,
-        hasCriticalAppRisks = latestScan?.appRisks?.any { it.triggered && it.level.lowercase() == "critical" } ?: false,
+        scanRisk = counts.scanRisk,
+        hasCriticalAppRisks = counts.hasCriticalAppRisks,
         // A chain of events is the strongest evidence a scan produces; say so (#350).
-        hasChains = latestScan?.activityChains?.any { it.triggered } ?: false,
+        hasChains = counts.hasChains,
         openAlertCount = current.openAlertCount,
         highestOpenAlert = current.highestOpenAlertLevel,
     ) ?: return
@@ -363,12 +366,12 @@ private fun PostScanGuidance(latestScan: ScanWithFindings?, current: CurrentFind
 
 @Suppress("LongMethod") // Compose UI layout with conditional risk display
 @Composable
-private fun RiskLevelCard(latestScan: ScanWithFindings?, current: CurrentFindingsSummary) {
+private fun RiskLevelCard(latestScan: ScanWithFindings?, current: CurrentFindingsSummary, counts: DashboardCounts) {
     val colors = MaterialTheme.androdrColors
     val openAlertCount = current.openAlertCount
     // At least the most severe open alert (review I2): alerts are current until a person closes them.
     val (riskColor, riskLabel) = when (
-        DashboardViewModel.displayRisk(latestScan?.overallRiskLevel, current.highestOpenAlertLevel)
+        DashboardViewModel.displayRisk(counts.scanRisk, current.highestOpenAlertLevel)
     ) {
         RiskLevel.CRITICAL -> Pair(colors.critical, "CRITICAL")
         RiskLevel.HIGH     -> Pair(colors.high, "HIGH")
@@ -425,10 +428,7 @@ private fun RiskLevelCard(latestScan: ScanWithFindings?, current: CurrentFinding
             } else {
                 Text(
                     text = stringResource(
-                        R.string.dashboard_risk_summary,
-                        latestScan.appRisks.count { it.triggered && it.level.lowercase() != "informational" },
-                        latestScan.deviceFlags.count { it.triggered },
-                        latestScan.activityChains.count { it.triggered }
+                        R.string.dashboard_risk_summary, counts.appRisks, counts.deviceFlags, counts.warningSigns,
                     ),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
