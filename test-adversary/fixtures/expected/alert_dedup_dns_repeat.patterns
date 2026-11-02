@@ -1,9 +1,7 @@
-# Spec §5.4: one rule on one matched value is one alert, its repeats are detections.
-# Three lookups of one C2 domain must print one group "seen N time(s)", never "N alert(s)".
-cdn-tp2.xyz
-) · seen
+# Spec §5.4: one rule on one matched value is one alert; its repeats are detections.
+# Each group prints "seen N time(s)", never "N alert(s)" (the count a person read as alerts).
+Malicious Domain — tracookiepixel.xyz  (androdr-003) · seen
+Malicious Domain — x1.tracookiepixel.xyz  (androdr-003) · seen
+!) · 1 alert(s)
 !) · 2 alert(s)
 !) · 3 alert(s)
-!) · 4 alert(s)
-!) · 5 alert(s)
-!) · 6 alert(s)

@@ -403,18 +403,21 @@ scenarios:
     risk: medium
     technique: T1437
     tactic: command-and-control
-    description: "Repeated DNS queries to one C2 domain are one alert, seen N times (spec §5.4)"
+    description: "One alert per rule and matched value, its repeats counted as detections (spec §5.4)"
+    # tracookiepixel.xyz is a live HaGeZi TIF indicator (feed, not bundled): swap it if it ages out.
+    # ping resolves through netd, so it works on images without nslookup; the resolver cache
+    # answers repeats of one name, so each subdomain is its own alert ("seen 1 time(s)").
     source: adb_inject
     inject:
       - type: dns_query
-        adb_cmd: "shell nslookup cdn-tp2.xyz 10.0.0.2"
+        adb_cmd: "shell ping -c 1 -W 1 tracookiepixel.xyz"
       - type: dns_query
-        adb_cmd: "shell nslookup cdn-tp2.xyz 10.0.0.2"
+        adb_cmd: "shell ping -c 1 -W 1 x1.tracookiepixel.xyz"
       - type: dns_query
-        adb_cmd: "shell nslookup cdn-tp2.xyz 10.0.0.2"
+        adb_cmd: "shell ping -c 1 -W 1 x2.tracookiepixel.xyz"
     attack: [T1437]
     expected_patterns:
-      - "cdn-tp2.xyz"
+      - "tracookiepixel.xyz"
       - ") · seen "
 
   - id: mercenary_ip_c2
