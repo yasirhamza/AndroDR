@@ -1340,6 +1340,26 @@
     "reference": "https://raw.githubusercontent.com/DoctorWebLtd/malware-iocs/master/Android.MagicAd.1/README.adoc"
   },
   {
+    "packageName": "io.base.one887",
+    "name": "StreamRat",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "HIGH",
+    "description": "StreamRat Android banking trojan / dropper package (ThreatFabric, 2026-09-02; fake free TV-streaming app spread via Meta/TikTok ads in Spain). Remediation: revoke Accessibility, uninstall, delete stray update_*.apk files from Downloads, contact your bank.",
+    "source": "threat_research",
+    "reference": "https://www.threatfabric.com/blogs/from-meta-ads-to-full-device-takeover-uncovering-streamrat"
+  },
+  {
+    "packageName": "io.meat.hint",
+    "name": "StreamRat",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "HIGH",
+    "description": "StreamRat Android banking trojan / dropper package (ThreatFabric, 2026-09-02; fake free TV-streaming app spread via Meta/TikTok ads in Spain). Remediation: revoke Accessibility, uninstall, delete stray update_*.apk files from Downloads, contact your bank.",
+    "source": "threat_research",
+    "reference": "https://www.threatfabric.com/blogs/from-meta-ads-to-full-device-takeover-uncovering-streamrat"
+  },
+  {
     "packageName": "io.motorola.secure.executor",
     "name": "Manic",
     "category": "MALWARE",
@@ -1348,6 +1368,16 @@
     "description": "Manic implant impersonating a vendor system utility",
     "source": "threat_research",
     "reference": "https://www.threatfabric.com/blogs/manic-blend-between-banking-malware-and-spyware"
+  },
+  {
+    "packageName": "net.yy.vwork",
+    "name": "Gigabud / Vwork (GoldFactory)",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "HIGH",
+    "description": "Vwork, a weaponized fork of the Shelter app cloner installed by GoldFactory's Gigabud banking trojan; it creates an Android Work Profile and clones banking apps into it so fraud runs from a profile without malware signals (Group-IB, 2026-09-09). Remediation: remove the work profile (Settings > Accounts > Work profile > Remove), uninstall the app, and contact your bank.",
+    "source": "threat_research",
+    "reference": "https://www.group-ib.com/blog/vwork-app-cloning-gigabud-goldfactory/"
   },
   {
     "packageName": "nibong.lida531.butler836",

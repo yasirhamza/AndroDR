@@ -110,6 +110,16 @@
     "reference": "feed:mvt-indicators#ResidentBat"
   },
   {
+    "certHash": "86238ec6df27dd0886b701d73397e2da99c74066",
+    "familyName": "EasyPhoneTrack",
+    "category": "STALKERWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "EasyPhoneTrack stalkerware signing certificate.",
+    "source": "stalkerware-indicators",
+    "reference": "feed:stalkerware-indicators#EasyPhoneTrack"
+  },
+  {
     "certHash": "892c4f172ad3262ec398b40bbf8130c6421040a1",
     "familyName": "EasyPhoneTrack",
     "category": "STALKERWARE",
