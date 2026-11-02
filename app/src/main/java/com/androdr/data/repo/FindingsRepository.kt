@@ -55,9 +55,6 @@ data class CurrentFindingsSummary(
     /** The most severe level among OPEN alerts; null when none is open. */
     val highestOpenAlertLevel: RiskLevel? = null,
 ) {
-    /** Current findings = triggered state findings ∪ OPEN alerts. */
-    val count: Int get() = stateFindings.size + openAlertCount
-
     companion object {
         val EMPTY = CurrentFindingsSummary(emptyList(), 0)
     }

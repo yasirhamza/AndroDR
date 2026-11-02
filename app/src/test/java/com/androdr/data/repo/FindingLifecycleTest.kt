@@ -113,7 +113,7 @@ class FindingLifecycleTest {
         liveScan(3L, apps = listOf(app("com.ok")))
         assertEquals("cleared by the next live scan", emptyList<String>(),
             findings.currentOnce().stateFindings.map { it.ruleId })
-        assertEquals(1, findings.currentOnce().count)
+        assertEquals(1, findings.currentOnce().openAlertCount)
     }
 
     @Test

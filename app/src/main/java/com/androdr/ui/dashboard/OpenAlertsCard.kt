@@ -40,7 +40,6 @@ import androidx.paging.compose.itemKey
 import com.androdr.R
 import com.androdr.data.repo.AlertGroup
 import com.androdr.data.repo.AlertGroupRef
-import com.androdr.data.repo.CurrentFindingsSummary
 import com.androdr.ui.common.SeverityChip
 import com.androdr.ui.security.DeviceSecurity
 import com.androdr.ui.security.ProtectedButton
@@ -58,7 +57,7 @@ import java.util.Locale
 @Composable
 fun OpenAlertsCard(
     viewModel: DashboardAlertsViewModel,
-    current: CurrentFindingsSummary,
+    counts: DashboardCounts,
     onMessage: (String) -> Unit,
 ) {
     val groups = viewModel.groups.collectAsLazyPagingItems()
@@ -87,12 +86,12 @@ fun OpenAlertsCard(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
     ) {
         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            AlertsHeader(current)
-            if (current.openAlertCount == 0 && groups.itemCount == 0) {
+            AlertsHeader(counts)
+            if (counts.openAlertCount == 0 && groups.itemCount == 0) {
                 Text(stringResource(R.string.alerts_card_none), style = MaterialTheme.typography.bodyMedium)
                 return@Column
             }
-            val open = current.openAlertCount
+            val open = counts.openAlertCount
             Text(
                 text = pluralStringResource(R.plurals.alerts_card_count, open, open),
                 style = MaterialTheme.typography.bodyMedium,
@@ -114,7 +113,7 @@ fun OpenAlertsCard(
 }
 
 @Composable
-private fun AlertsHeader(current: CurrentFindingsSummary) {
+private fun AlertsHeader(counts: DashboardCounts) {
     Text(
         text = stringResource(R.string.alerts_card_title),
         style = MaterialTheme.typography.titleMedium,
@@ -122,7 +121,7 @@ private fun AlertsHeader(current: CurrentFindingsSummary) {
     )
     Text(
         text = stringResource(
-            R.string.alerts_current_findings, current.count, current.stateFindings.size, current.openAlertCount,
+            R.string.alerts_current_findings, counts.total, counts.stateFindings.size, counts.openAlertCount,
         ),
         style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
