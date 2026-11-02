@@ -123,8 +123,9 @@ class FindingReadersLowHeapTest {
         assertEquals("the live scans' diff: the EVIL_APP finding resolved", 0, diff.newCount)
         assertEquals(1, diff.resolvedCount)
         assertEquals(listOf(APP_RULE), diff.resolvedFindings.map { it.ruleId })
-        assertEquals("open alerts include the import's", FINDINGS, vm.currentFindings.filterNotNull()
-            .first { it.openAlertCount > 0 }.openAlertCount)
+        assertEquals("the import's 100k detections of one domain are one open alert", 1,
+            vm.currentFindings.filterNotNull()
+                .first { it.openAlertCount > 0 }.openAlertCount)
 
         // History: the sheet's counts in SQL. An import has no "since previous scan" diff (R44); the
         // bounded diff itself still stays bounded on the 100k-finding scan.
@@ -146,10 +147,10 @@ class FindingReadersLowHeapTest {
         // Review I5: 100k open alerts of one group print one header, a bounded sample and an exact rest.
         val alerts = text.substringAfter("  ALERTS").substringBefore("Closed alerts:")
         assertEquals(com.androdr.reporting.ALERT_SAMPLE_DISPLAY_LIMIT, Regex("- opened ").findAll(alerts).count())
-        assertTrue(alerts, alerts.contains("· $FINDINGS alert(s)"))
+        assertTrue(alerts, alerts.contains("· seen $FINDINGS time(s)"))
         assertTrue(alerts, alerts.contains(
-            "…and ${FINDINGS - com.androdr.reporting.ALERT_SAMPLE_DISPLAY_LIMIT} more alert(s) of this group"))
-        assertTrue(alerts, alerts.contains("$FINDINGS open alert(s) in total"))
+            "…and ${FINDINGS - com.androdr.reporting.ALERT_SAMPLE_DISPLAY_LIMIT} more detection(s) of this alert"))
+        assertTrue(alerts, alerts.contains("1 open alert(s) in total"))
 
         // D3: the open-alert list groups the flood of one indicator into one group (SQL GROUP BY).
         val groups = OpenAlertGroupPagingSource(w.f.db)

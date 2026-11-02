@@ -512,6 +512,7 @@ Schema 21 (Phase D).
 - **Alerts** are current from opening until a person closes them.
 - **Re-fires** attach findings to the existing alert. New facts open new alerts. A closed alert stays closed.
 - **Current findings** = the latest live scan's triggered state findings ∪ OPEN alerts. The dashboard shows a count and a paged list, grouped by rule and matched value so a flood of one indicator cannot bury another. For evidence with no matched value, the group value is the matched record's package (else the record), so one app's flood cannot bury another app's alerts (`alert.matchedValue`, never part of the alert key).
+- **What a person counts is the group.** One rule on one matched value is *one alert* to the person, however many times it fired: the dashboard headline, guidance banner, current-findings count, close dialog, close message, `alert_closed` row and report totals all count OPEN groups, not `alert` rows. A group's `alert` rows are its *detections*, shown as "Seen N times" (report: "seen N time(s)"). Deduplication that still counts every repeat defeats its purpose: six lookups of one domain read as "6 alerts" beside a single row.
 
 **Closing an alert.**
 - **Confirmation**: closing one alert, or a selection (**bulk close** under one confirmation), requires the device credential: platform `BiometricPrompt` with `DEVICE_CREDENTIAL` only on API 30+ (manifest `USE_BIOMETRIC`), and `KeyguardManager.createConfirmDeviceCredentialIntent` on API 26–29.
@@ -525,7 +526,7 @@ Schema 21 (Phase D).
 - Persistent rows are exempt from the prune and from "Clear all".
 - "Clear all" starts with **one transaction** that writes a single capped audit row (built from every `COMPLETE` scan's triggered `scan_finding` rows) and sets every scan `DELETING`, remembering those ids and `clearMaxRowId` (`MAX(id)` of `forensic_timeline`), which it saves in DataStore so a killed "Clear all" is finished by `StartupSweep`; it then deletes those scans, their observations, their `scan_finding` rows, and the non-persistent timeline rows whose `scanResultId` is one of those ids, or is −1 with `id ≤ clearMaxRowId` — including live `dns_query`/`ioc_match` rows, as it does today. Signal rows are deleted with their `signal_member` rows. A scan that starts after the first transaction is untouched.
 
-**The report** lists state findings, open alerts (with the opening scan and its source), and closed alerts (time, note, credential flag), grouped as the Dashboard groups them, each group with its exact count and its most recent alerts (`ALERT_SAMPLE_DISPLAY_LIMIT`).
+**The report** lists state findings, open alerts (with the opening scan and its source), and closed alerts (time, note, credential flag), grouped as the Dashboard groups them, each group with its exact detection count and its most recent detections (`ALERT_SAMPLE_DISPLAY_LIMIT`).
 
 **Migration 20 → 21.**
 - **Reading**: `findings` is read in 256 KB `substr` chunks. A corrupt row keeps its scan with zero findings. `ScanResult` is rebuilt as a new table, then copied and renamed, because API 26 has no `DROP COLUMN`.

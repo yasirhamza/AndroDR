@@ -85,7 +85,9 @@ class FindingQueryPlanTest {
     @Test
     fun `current findings and the paged lists use indices`() {
         assertIndexed("current state findings", CURRENT_STATE, listOf("index_scan_finding_scanId_triggered"))
-        assertIndexed("open alert count", OPEN_ALERT_COUNT, listOf("index_alert_status_lastActivityAt"))
+        assertIndexed(
+            "open alert count", OPEN_ALERT_COUNT, listOf("index_alert_status_ruleId_matchedValue_lastActivityAt"),
+        )
         assertIndexed("open alerts page", OPEN_ALERTS_AFTER, listOf("index_alert_status_lastActivityAt"))
         assertIndexed("a scan's findings page", FINDINGS_PAGE, listOf("index_scan_finding_scanId_triggered"))
     }

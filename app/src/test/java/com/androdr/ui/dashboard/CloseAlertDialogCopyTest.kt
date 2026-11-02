@@ -30,4 +30,17 @@ class CloseAlertDialogCopyTest {
             assertFalse("the body never promises the lock itself: $body", body.contains("screen lock"))
         }
     }
+
+    /**
+     * Spec §5.4: a group is one alert, so its repeat count reads as detections ("Seen 6 times"), never
+     * as "6 alerts" beside a headline that counts the group once.
+     */
+    @Test
+    fun `a group's repeat count reads as times seen, not as alerts`() {
+        for (count in listOf(1, 6)) {
+            val label = context.resources.getQuantityString(R.plurals.alerts_group_count, count, count)
+            assertTrue(label, label.startsWith("Seen $count time"))
+            assertFalse(label, label.contains("alert"))
+        }
+    }
 }

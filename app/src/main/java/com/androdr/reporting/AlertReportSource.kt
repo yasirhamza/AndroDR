@@ -37,13 +37,14 @@ const val ALERT_SAMPLE_DISPLAY_LIMIT = 20
 internal suspend fun ReportOut.appendAlerts(alerts: AlertReportSource) {
     section("ALERTS")
     appendLine("  Alerts stay open until a person closes them; this scan's state findings are listed above.")
-    appendLine("  Grouped by rule and matched value (or app); each group lists its $ALERT_SAMPLE_DISPLAY_LIMIT " +
-        "most recent alerts.")
+    appendLine("  One alert per rule and matched value (or app); each lists its $ALERT_SAMPLE_DISPLAY_LIMIT " +
+        "most recent detections.")
     appendLine()
     appendLine("  Open alerts:")
+    // One alert per group (spec §5.4); its rows are detections.
     var open = 0
     alerts.forEachGroup(AlertStatus.OPEN) { g ->
-        open += g.row.count
+        open++
         appendGroupHead(g)
         appendLine("           first opened ${reportTime(g.row.firstOpenedAt)}, " +
             "last activity ${reportTime(g.row.lastActivityAt)}")
@@ -59,10 +60,10 @@ internal suspend fun ReportOut.appendAlerts(alerts: AlertReportSource) {
     appendLine("  Closed alerts:")
     var closed = 0
     alerts.forEachGroup(AlertStatus.CLOSED) { g ->
-        closed += g.row.count
+        closed++
         appendGroupHead(g)
         appendLine("           last closed ${g.row.lastClosedAt?.let(::reportTime) ?: "unknown"}, " +
-            "${g.row.withCredential} of ${g.row.count} closed with the device credential")
+            "${g.row.withCredential} of ${g.row.count} detection(s) closed with the device credential")
         for (s in g.samples) {
             appendLine("         - ${closing(s)}")
             appendMatchedRecord(s)
@@ -77,12 +78,12 @@ private fun ReportOut.appendGroupHead(g: AlertReportGroup) {
     val title = sample?.evidence?.title?.takeIf { it.isNotBlank() } ?: g.row.ruleId
     val level = sample?.level?.uppercase().orEmpty().padEnd(8)
     val value = g.row.matchedValue.takeIf { it.isNotEmpty() }?.let { " — $it" }.orEmpty()
-    appendLine("  [!!]  $level  $title$value  (${g.row.ruleId}) · ${g.row.count} alert(s)")
+    appendLine("  [!!]  $level  $title$value  (${g.row.ruleId}) · seen ${g.row.count} time(s)")
 }
 
 private fun ReportOut.appendMore(g: AlertReportGroup) {
     val more = g.row.count - g.samples.size
-    if (more > 0) appendLine("         …and $more more alert(s) of this group")
+    if (more > 0) appendLine("         …and $more more detection(s) of this alert")
 }
 
 /** Who opened the alert: its opening scan and that scan's source, or that the scan was deleted. */

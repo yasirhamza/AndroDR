@@ -398,6 +398,28 @@ scenarios:
       - "2y4nothing.xyz -> Predator Spyware Indicators of Compromise"
       - "[!!]  Predator: DETECTED -- domain 2y4nothing.xyz (Predator Spyware Indicators of Compromise),"
 
+  - id: alert_dedup_dns_repeat
+    track: 3
+    risk: medium
+    technique: T1437
+    tactic: command-and-control
+    description: "One alert per rule and matched value, its repeats counted as detections (spec §5.4)"
+    # tracookiepixel.xyz is a live HaGeZi TIF indicator (feed, not bundled): swap it if it ages out.
+    # ping resolves through netd, so it works on images without nslookup; the resolver cache
+    # answers repeats of one name, so each subdomain is its own alert ("seen 1 time(s)").
+    source: adb_inject
+    inject:
+      - type: dns_query
+        adb_cmd: "shell ping -c 1 -W 1 tracookiepixel.xyz"
+      - type: dns_query
+        adb_cmd: "shell ping -c 1 -W 1 x1.tracookiepixel.xyz"
+      - type: dns_query
+        adb_cmd: "shell ping -c 1 -W 1 x2.tracookiepixel.xyz"
+    attack: [T1437]
+    expected_patterns:
+      - "tracookiepixel.xyz"
+      - ") · seen "
+
   - id: mercenary_ip_c2
     track: 3
     risk: medium

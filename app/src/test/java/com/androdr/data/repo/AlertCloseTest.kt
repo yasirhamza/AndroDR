@@ -183,21 +183,37 @@ class AlertCloseTest {
             val g = groups().data
             assertEquals(3, g.size)
             val chosen = g.filter { it.ruleId != "r-other" }.map { it.ref }
-            assertEquals(5, findings.closeGroups(chosen, "  reviewed ", ConfirmResult.Confirmed))
+            assertEquals("two alerts closed, however often each fired", 2,
+                findings.closeGroups(chosen, "  reviewed ", ConfirmResult.Confirmed))
             assertEquals(listOf(6L), openIds())
             assertEquals(5L, count("SELECT COUNT(*) FROM alert WHERE status = 'CLOSED' AND closedWithCredential = 1"))
             val row = closedRows().single()
             assertTrue(row.persistent)
             assertEquals(-1L, row.scanResultId)
-            assertEquals("Closed 5 alert(s)", row.description)
+            assertEquals("Closed 2 alert(s)", row.description)
             assertTrue(row.details, row.details.contains("Closed with device credential: yes"))
-            assertTrue(row.details, row.details.contains("r-flood · flood.example × 4"))
-            assertTrue(row.details, row.details.contains("r-quiet · quiet.example × 1"))
+            assertTrue(row.details, row.details.contains("r-flood · flood.example (seen 4 times)"))
+            assertTrue(row.details, row.details.contains("r-quiet · quiet.example (seen 1 time)"))
             // A single close by id records its note too.
             assertEquals(1, findings.close(listOf(6L), "one", ConfirmResult.Confirmed))
             assertEquals(2, closedRows().size)
             assertEquals("one", w.f.db.alertDao().alertsByIds(listOf(6L)).single().closedReason)
         }
+
+    /**
+     * A deduplicated group is one alert to the person (spec §5.4): six lookups of one domain were
+     * counted as "6 open alerts" above a single row. The dashboard count is the number of groups.
+     */
+    @Test
+    fun `repeated detections of one rule and value count as one open alert`() = runBlocking {
+        for (id in 1L..6L) alert(id, "r-dns", "tracker.example", 100L + id)
+        alert(7L, "r-dns", "other.example", 50L)
+        val current = findings.currentOnce()
+        assertEquals("the count matches the rows the list shows", groups().data.size, current.openAlertCount)
+        assertEquals(2, current.openAlertCount)
+        // A close by id counts alerts (groups) too: two detections of one group are one alert.
+        assertEquals(1, findings.close(listOf(1L, 2L), null, ConfirmResult.Confirmed))
+    }
 
     @Test
     fun `a group close stops at the alerts the person saw`() = runBlocking {
@@ -205,7 +221,7 @@ class AlertCloseTest {
         alert(2L, "r", "v", 11L)
         val seen = groups().data.single().ref
         alert(3L, "r", "v", 12L) // a new alert of the same group, opened after the person looked
-        assertEquals(2, findings.closeGroups(listOf(seen), null, ConfirmResult.Confirmed))
+        assertEquals(1, findings.closeGroups(listOf(seen), null, ConfirmResult.Confirmed))
         assertEquals(listOf(3L), openIds())
     }
 
@@ -270,7 +286,7 @@ class AlertCloseTest {
                 g.map { it.matchedValue }.toSet())
             assertEquals(50, g.single { it.matchedValue == "com.flood" }.count)
             val flood = g.single { it.matchedValue == "com.flood" }.ref
-            assertEquals(50, findings.closeGroups(listOf(flood), null, ConfirmResult.Confirmed))
+            assertEquals(1, findings.closeGroups(listOf(flood), null, ConfirmResult.Confirmed))
             assertEquals("the other app's alert stays open", 1, openIds().size)
             assertEquals("com.quiet", w.f.db.alertDao().alertsByIds(openIds()).single().matchedValue)
         }
@@ -610,9 +626,9 @@ class AlertCloseTest {
             val closed = alerts.substringAfter("Closed alerts:")
             assertEquals("one open alert, with its opening scan and its source", 1,
                 Regex("by scan 7 \\(live scan\\),").findAll(open).count())
-            assertTrue(open, open.contains("($DNS_RULE) · 1 alert(s)"))
-            assertTrue(closed, closed.contains("($DNS_RULE) · 2 alert(s)"))
-            assertTrue(closed, closed.contains("1 of 2 closed with the device credential"))
+            assertTrue(open, open.contains("($DNS_RULE) · seen 1 time(s)"))
+            assertTrue(closed, closed.contains("($DNS_RULE) · seen 2 time(s)"))
+            assertTrue(closed, closed.contains("1 of 2 detection(s) closed with the device credential"))
             assertTrue(closed, closed.contains("note: checked it · closed with device credential: yes"))
             assertTrue(closed, closed.contains("note: (none) · closed with device credential: no"))
             assertFalse("alert $c is open, not closed", closed.contains("by scan"))
@@ -634,11 +650,12 @@ class AlertCloseTest {
             "1, 1, 2, '${com.androdr.data.db.FindingsMigration.MIGRATED_CLOSED_REASON}', 0, 'high', NULL, '{}', 'v')")
         val text = report(dnsScan(9L, 1L, domain = "ok.example"))
         val alerts = text.substringAfter("  ALERTS").substringBefore("End of report")
-        val group = alerts.substringAfter("(r-group) · $total alert(s)").substringBefore("(r-other)")
+        val group = alerts.substringAfter("(r-group) · seen $total time(s)").substringBefore("(r-other)")
         assertEquals(com.androdr.reporting.ALERT_SAMPLE_DISPLAY_LIMIT, Regex("- opened ").findAll(group).count())
-        assertTrue(group, group.contains("…and 5 more alert(s) of this group"))
+        assertTrue(group, group.contains("…and 5 more detection(s) of this alert"))
         assertTrue("scan 1 does not exist", group.contains("by scan 1 (scan deleted)"))
-        assertTrue(alerts, alerts.contains("${total + 1} open alert(s) in total"))
+        assertTrue(alerts, alerts.contains("2 open alert(s) in total")) // one per group, not per detection
+        assertTrue(alerts, alerts.contains("1 closed alert(s) in total"))
         assertTrue(alerts, alerts.contains("closed automatically") && alerts.contains("(migrated, older than 30 days)"))
     }
 

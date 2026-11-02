@@ -315,8 +315,8 @@
     <string name="alerts_card_none">No open alerts.</string>
     <string name="alerts_current_findings" tools:ignore="PluralsCandidate">Current findings: %1$d (%2$d from the latest scan, %3$d open alerts)</string>
     <plurals name="alerts_group_count">
-        <item quantity="one">%1$d alert</item>
-        <item quantity="other">%1$d alerts</item>
+        <item quantity="one">Seen %1$d time</item>
+        <item quantity="other">Seen %1$d times</item>
     </plurals>
     <string name="alerts_group_last_activity">Last activity %1$s</string>
     <string name="alerts_close">Close</string>

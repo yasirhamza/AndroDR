@@ -161,8 +161,13 @@ internal const val ATTACH_ALERTS_FOR_SCAN = "UPDATE scan_finding SET alertId = (
 internal const val TOUCH_ALERTS_FOR_SCAN = "UPDATE alert SET lastActivityAt = :at WHERE lastActivityAt < :at " +
     "AND id IN (SELECT sf.alertId FROM scan_finding sf WHERE sf.scanId = :scanId AND sf.alertKey IS NOT NULL)"
 
-/** How many alerts are OPEN (the dashboard's count, with the state findings). */
-internal const val OPEN_ALERT_COUNT = "SELECT COUNT(*) FROM alert WHERE status = 'OPEN'"
+/**
+ * How many alerts are OPEN as a person counts them (spec §5.4): one per group of rule and matched
+ * value, however many detections it holds — the rows the open list shows. Walks index
+ * `(status, ruleId, matchedValue, lastActivityAt)` without a sort.
+ */
+internal const val OPEN_ALERT_COUNT = "SELECT COUNT(*) FROM (SELECT 1 FROM alert WHERE status = 'OPEN' " +
+    "GROUP BY ruleId, matchedValue)"
 
 /** Keyset page of OPEN alerts, most recent activity first (`(lastActivityAt, id)` descending). */
 internal const val OPEN_ALERTS_AFTER = "SELECT * FROM alert WHERE status = 'OPEN' AND (lastActivityAt < :at OR " +
