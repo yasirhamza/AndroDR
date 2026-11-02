@@ -116,3 +116,39 @@ def test_workflow_derives_dedup_survivors_from_the_drop_list():
     js = _read(WORKFLOW)
     assert "dedupResult.additive" not in js
     assert re.search(r"survivors = dedupCandidates\.filter\(e => !droppedKeys\.has\(", js)
+
+
+# 2026-11-02, decision-only records: the author returns "no rule" decisions in `candidates`
+# without yaml. They were validated as empty rules ("9 failed") and took IDs in renumbering.
+
+def _is_rule_candidate_js() -> str:
+    m = re.search(r"^const isRuleCandidate = (.+)$", _read(WORKFLOW), re.M)
+    assert m, "isRuleCandidate missing from the workflow script"
+    return m.group(1)
+
+
+def test_decision_only_records_are_not_rule_candidates():
+    import json
+    import shutil
+    import subprocess
+    node = shutil.which("node")
+    assert node, "node is required (preinstalled on GitHub runners)"
+    records = [
+        {"rule_id": "androdr-311", "yaml": "title: x\nid: androdr-311\n", "decisions": []},   # real rule
+        {"rule_id": None, "yaml": None, "decisions": [{"chosen": "skip"}]},                    # 2026-11-02 shape
+        {"rule_id": None, "yaml": None, "decision_only": True, "decisions": []},
+        {"rule_id": None, "yaml": "  \n", "decisions": []},
+        {"rule_id": "androdr-312", "yaml": "title: y\n", "decision_only": True},
+        None,
+    ]
+    script = f"const f = {_is_rule_candidate_js()}; console.log(JSON.stringify({json.dumps(records)}.map(f)))"
+    out = subprocess.run([node, "-e", script], capture_output=True, text=True, check=True, timeout=30).stdout
+    assert json.loads(out) == [True, False, False, False, False, False]
+
+
+def test_only_rule_candidates_reach_renumbering_and_validation():
+    js = _read(WORKFLOW)
+    assert "const candidates = authoredRecords.filter(isRuleCandidate)" in js
+    split = js.index("const candidates = authoredRecords.filter(isRuleCandidate)")
+    assert split < js.index("candidates.forEach((c, i) =>"), "split must happen before ID renumbering"
+    assert "author_decisions: authorDecisions" in js, "decision-only records go to HitL, not validation"

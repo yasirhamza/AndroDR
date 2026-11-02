@@ -476,9 +476,18 @@ const authoredShards = await parallel(
     agent(authorPrompt(shard, shardNextId(i)), { label: `author:shard${i}`, phase: 'Author', schema: AUTHOR_OUT })
   )
 )
-const candidates = authoredShards.filter(Boolean).flatMap(a => a.candidates || [])
+// The author also returns decision-only records (no rule: "pure IOC list", "covered by androdr-0NN",
+// telemetry gaps) in `candidates`, with no yaml. Only entries with a rule body are rule candidates.
+// On 2026-11-02, 9 decision-only records went to validation as empty rules ("9 failed") and took IDs
+// in the renumbering pass, so the two real rules came out as androdr-120/121 instead of 111/112.
+// scripts/test_update_rules_pipeline.py pins this split.
+const isRuleCandidate = c => !!c && !c.decision_only && typeof c.yaml === 'string' && c.yaml.trim() !== ''
+const authoredRecords = authoredShards.filter(Boolean).flatMap(a => a.candidates || [])
+const candidates = authoredRecords.filter(isRuleCandidate)
+const authorDecisions = authoredRecords.filter(c => !isRuleCandidate(c))
 const iocDataRaw = authoredShards.filter(Boolean).flatMap(a => a.ioc_data || [])
-log(`Author produced ${candidates.length} rule candidate(s) + ${iocDataRaw.length} IOC-data entr(ies) across ${sirShards.length} shard(s)`)
+log(`Author produced ${candidates.length} rule candidate(s) + ${authorDecisions.length} decision-only record(s) + ` +
+  `${iocDataRaw.length} IOC-data entr(ies) across ${sirShards.length} shard(s)`)
 
 // Renumber into the allocated sequential block. The per-shard ID_STRIDE ranges
 // exist only to prevent mid-flight collisions between parallel authors — they
@@ -613,6 +622,7 @@ return {
     discover_names: threatNames.length,
     new_sirs: allSirs.length,
     rule_candidates: candidates.length,
+    author_decision_records: authorDecisions.length,
     rules_passed: passed.length,
     rules_failed: failed.length,
     ioc_authored: iocDataRaw.length,
@@ -627,6 +637,8 @@ return {
   dropped_redundant: (dedupResult && dedupResult.dropped) || [],
   passed_candidates: passed,
   failed_candidates: failed,
+  // Author decisions that proposed no rule (skip reasoning, telemetry gaps): shown at HitL, never validated.
+  author_decisions: authorDecisions.map(c => ({ source_sirs: c.source_sirs || [], decisions: c.decisions || [] })),
   ioc_candidates: iocValidation,
   proposed_cursors: proposedCursors,
   deferred_to_main_session: [
