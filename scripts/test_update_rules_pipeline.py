@@ -79,3 +79,40 @@ def test_dispatcher_briefs_carry_execution_limits():
     assert "include this paragraph verbatim in EVERY subagent brief" in dispatcher
     for phrase in LIMITS_PHRASES:
         assert phrase in dispatcher, phrase
+
+
+# 2026-11-02, second stall: the dedup agent finished its feed checks in ~70 s,
+# then spent many minutes retyping all 368 surviving candidates as `additive`
+# because DEDUP_OUT required it. The agent now returns only its drop list and
+# the script derives the survivors.
+
+def _const_block(js: str, name: str) -> str:
+    m = re.search(rf"^const {name} = \{{\n(.*?)^\}}\n", js, re.M | re.S)
+    assert m, f"{name} not found"
+    return m.group(1)
+
+
+def test_dedup_schema_does_not_ask_the_agent_to_echo_survivors():
+    block = _const_block(_read(WORKFLOW), "DEDUP_OUT")
+    code = "\n".join(line.split("//")[0] for line in block.splitlines())
+    assert "additive" not in code, "DEDUP_OUT must not define or require `additive`"
+    assert "required: ['dropped']" in code
+
+
+def test_dedup_prompt_returns_only_the_drop_list():
+    body = _prompt_functions(_read(WORKFLOW))["dedupPrompt"]
+    assert "additive:" not in body
+    assert "Do NOT list the candidates you keep" in body
+    # The agent gets [type, indicator] pairs, not the full candidate objects.
+    assert "iocs.map(e => [e.type, e.indicator])" in body
+
+
+def test_dedup_prompt_checks_parent_domain_labels():
+    body = _flat(_prompt_functions(_read(WORKFLOW))["dedupPrompt"])
+    assert "parent label" in body
+
+
+def test_workflow_derives_dedup_survivors_from_the_drop_list():
+    js = _read(WORKFLOW)
+    assert "dedupResult.additive" not in js
+    assert re.search(r"survivors = dedupCandidates\.filter\(e => !droppedKeys\.has\(", js)

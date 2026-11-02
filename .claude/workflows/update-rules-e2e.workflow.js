@@ -116,10 +116,14 @@ const REPAIR_OUT = {
 }
 const DEDUP_OUT = {
   type: 'object',
-  required: ['additive', 'dropped'],
+  // Drop list only. The script derives the survivors (dedupCandidates minus
+  // dropped). Making the agent echo every surviving candidate back as
+  // `additive` cost ~40k output tokens of verbatim retyping on the 2026-11-02
+  // run (368 candidates) and looked like a hang; scripts/test_update_rules_pipeline.py
+  // fails if `additive` comes back.
+  required: ['dropped'],
   additionalProperties: true,
   properties: {
-    additive: { type: 'array', items: { type: 'object', additionalProperties: true } },
     dropped: { type: 'array', items: { type: 'object', additionalProperties: true } },
     log: { type: 'array', items: { type: 'string' } },
   },
@@ -347,8 +351,8 @@ Return ONLY {rule_id, yaml, decisions, skip_note?} JSON. Entire final message = 
 function dedupPrompt(iocs) {
   return `You enforce the IOC complementarity invariant for the AndroDR SIGMA pipeline, running inside ${REPO} (rules submodule at ${SIGMA}). AndroDR's on-device Kotlin "bypass" feed clients fetch some upstreams DIRECTLY, so any ioc-data entry that duplicates them is REDUNDANT and must be dropped.
 
-Proposed IOC-data candidates (JSON array):
-${JSON.stringify(iocs)}
+Proposed IOC-data candidates, as [type, indicator] pairs (JSON array):
+${JSON.stringify(iocs.map(e => [e.type, e.indicator]))}
 
 The candidates above are pre-filtered to DOMAIN and PACKAGE-NAME types only — file/cert hashes are dropped from your input upstream because NO mirror feed carries them (always additive), so you never need to handle hashes here.
 
@@ -360,11 +364,11 @@ Step 2 — build the authoritative on-device coverage set U for the candidate ty
   - stalkerware-indicators: fetch https://raw.githubusercontent.com/AssoEchap/stalkerware-indicators/master/ioc.yaml directly (PACKAGE_NAME only) if any package candidates exist.
 Use Bash + python3 + urllib for the fetch/traversal (a polite User-Agent). ${TOOLING}
 
-Step 3 — for each candidate, drop it if its normalized (type,value) is in U. Keep the rest.
+Step 3 — for each candidate, drop it if its normalized (type, value) is in U (case-insensitive, whole value: <a>.com does not match <b><a>.com). For a DOMAIN candidate, also drop it if any parent label is in U: <sub>.<x>.com is a duplicate when <x>.com is in U, because the app matches a domain IOC on the domain or any parent label. Keep the rest — you do not return the kept ones.
 
 ${EXEC_LIMITS}
 
-Return ONLY {additive:[...full candidate objects that survive...], dropped:[{indicator, type, reason}], log:[...per-feed counts + which manual fetches you ran...]}. Entire final message = that JSON.`
+Return ONLY {dropped:[{indicator, type, reason}], log:[...per-feed counts + which manual fetches you ran...]}. Copy each dropped candidate's type and indicator exactly as given. Do NOT list the candidates you keep: the workflow derives them from your drop list. Entire final message = that JSON.`
 }
 
 function iocValidatePrompt(iocs) {
@@ -518,10 +522,20 @@ const needsMirrorDedup = (t) => !/hash/i.test(t || '')
 const alwaysAdditive = iocDataRaw.filter(e => !needsMirrorDedup(e.type))
 const dedupCandidates = iocDataRaw.filter(e => needsMirrorDedup(e.type))
 let iocData = iocDataRaw
-let dedupResult = { additive: dedupCandidates, dropped: [], log: ['no domain/package candidates to dedup'] }
+let dedupResult = { dropped: [], log: ['no domain/package candidates to dedup'] }
+const iocKey = (type, indicator) =>
+  `${String(type || '').trim().toLowerCase()}|${String(indicator || '').trim().toLowerCase()}`
 if (dedupCandidates.length) {
   dedupResult = await agent(dedupPrompt(dedupCandidates), { label: 'dedup:mirror-feeds', phase: 'Dedup', schema: DEDUP_OUT })
-  const survivors = (dedupResult && dedupResult.additive) || []
+  const dropped = (dedupResult && dedupResult.dropped) || []
+  const droppedKeys = new Set(dropped.map(d => iocKey(d.type, d.indicator)))
+  const candidateKeys = new Set(dedupCandidates.map(e => iocKey(e.type, e.indicator)))
+  const unmatched = dropped.filter(d => !candidateKeys.has(iocKey(d.type, d.indicator)))
+  if (unmatched.length) {
+    log(`WARN dedup returned ${unmatched.length} drop(s) matching no candidate (kept as additive): ` +
+      unmatched.slice(0, 10).map(d => `${d.type}:${d.indicator}`).join(', '))
+  }
+  const survivors = dedupCandidates.filter(e => !droppedKeys.has(iocKey(e.type, e.indicator)))
   iocData = [...alwaysAdditive, ...survivors]
   log(`Mirror-feed dedup: ${survivors.length}/${dedupCandidates.length} domain+package additive, ` +
     `${(dedupResult.dropped || []).length} dropped; ${alwaysAdditive.length} hash entr(ies) bypassed (always additive)`)
