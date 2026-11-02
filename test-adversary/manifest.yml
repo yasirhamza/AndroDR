@@ -398,6 +398,25 @@ scenarios:
       - "2y4nothing.xyz -> Predator Spyware Indicators of Compromise"
       - "[!!]  Predator: DETECTED -- domain 2y4nothing.xyz (Predator Spyware Indicators of Compromise),"
 
+  - id: alert_dedup_dns_repeat
+    track: 3
+    risk: medium
+    technique: T1437
+    tactic: command-and-control
+    description: "Repeated DNS queries to one C2 domain are one alert, seen N times (spec §5.4)"
+    source: adb_inject
+    inject:
+      - type: dns_query
+        adb_cmd: "shell nslookup cdn-tp2.xyz 10.0.0.2"
+      - type: dns_query
+        adb_cmd: "shell nslookup cdn-tp2.xyz 10.0.0.2"
+      - type: dns_query
+        adb_cmd: "shell nslookup cdn-tp2.xyz 10.0.0.2"
+    attack: [T1437]
+    expected_patterns:
+      - "cdn-tp2.xyz"
+      - ") · seen "
+
   - id: mercenary_ip_c2
     track: 3
     risk: medium
