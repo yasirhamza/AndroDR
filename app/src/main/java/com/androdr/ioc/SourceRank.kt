@@ -4,7 +4,6 @@ import com.androdr.ioc.feeds.HaGeZiTifFeed
 import com.androdr.ioc.feeds.MalwareBazaarCertFeed
 import com.androdr.ioc.feeds.StalkerwareCertHashFeed
 import com.androdr.ioc.feeds.StalkerwareIndicatorsFeed
-import com.androdr.ioc.feeds.ThreatFoxDomainFeed
 
 /** Single source of truth for "which feed's attribution wins" for a shared (type, value). */
 object SourceRank {
@@ -16,7 +15,6 @@ object SourceRank {
         StalkerwareIndicatorsFeed.SOURCE_ID to 60,            // packages
         StalkerwareCertHashFeed.SOURCE_ID to 60,              // certs
         MalwareBazaarCertFeed.SOURCE_ID to 40,                // certs, below the curated stalkerware certs
-        ThreatFoxDomainFeed.SOURCE_ID to 20,
         HaGeZiTifFeed.SOURCE_ID to 10,
     )
     const val MVT_RANK = 80

@@ -49,6 +49,7 @@ class IndicatorUpdater @Inject constructor(
     @Suppress("TooGenericExceptionCaught")
     private suspend fun doUpdate(refreshCache: Boolean): Int = withContext(Dispatchers.IO) {
         var total = 0
+        purgeRetiredSources()
         coroutineScope {
             // Fetch every feed in parallel...
             val jobs = packageFeeds.map { feed ->
@@ -107,8 +108,28 @@ class IndicatorUpdater @Inject constructor(
         return entries.size
     }
 
+    /**
+     * A feed only evicts its own rows when it refreshes, so a removed feed's rows would stay in
+     * the table forever, unrefreshed. Delete them on every update (idempotent; a no-op once gone).
+     */
+    private suspend fun purgeRetiredSources() {
+        RETIRED_SOURCE_IDS.forEach { source ->
+            val removed = dao.deleteStaleEntries(source, Long.MAX_VALUE)
+            if (removed > 0) Log.i(TAG, "Removed $removed indicator(s) of retired feed '$source'")
+        }
+    }
+
     companion object {
         private const val TAG = "IndicatorUpdater"
+
+        /**
+         * `source` ids of feeds removed from the app. Never reuse one for a new feed.
+         * - `threatfox`: ThreatFoxDomainFeed, retired 2026-11. ThreatFox removed its public export
+         *   (threatfox.abuse.ch/export/json/recent/ answers HTTP 410); the replacement needs a
+         *   per-user abuse.ch Auth-Key the app cannot ship. ThreatFox IOCs still reach devices
+         *   through the rules repo's ioc-data (source `androdr_public_repo`).
+         */
+        internal val RETIRED_SOURCE_IDS = listOf("threatfox")
 
         /**
          * Rows per upsert transaction. Bounds how long the single write lock is

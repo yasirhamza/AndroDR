@@ -278,7 +278,7 @@ object ReportFormatter {
         }
 
         val dnsIocRows = ctx.dnsIocRows
-        // Always its own heading: generic-feed hits (HaGeZi, ThreatFox) must never read as
+        // Always its own heading: generic-feed hits (e.g. HaGeZi) must never read as
         // rows of the mercenary check above (R7).
         if (dnsIocRows.isNotEmpty()) section("DNS IOC MATCHES")
         appendDnsIocMatches(dnsIocRows)

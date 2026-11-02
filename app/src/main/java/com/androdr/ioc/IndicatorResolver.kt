@@ -305,7 +305,7 @@ class IndicatorResolver @Inject constructor(
 /**
  * The bundled lists ARE the rules-repo ioc-data (the highest [SourceRank]) as of the build.
  * A stored row wins over the bundled entry only when its source ranks at or above the rules
- * repo (fresher rules-repo data). Otherwise a generic feed row (HaGeZi, ThreatFox, MVT...)
+ * repo (fresher rules-repo data). Otherwise a generic feed row (HaGeZi, MVT...)
  * that loaded while the rules-repo ioc-data did not would shadow the bundled entry and drop
  * its campaign key, so the report said "not detected" beside the hit.
  */

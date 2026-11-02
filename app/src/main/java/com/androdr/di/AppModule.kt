@@ -44,7 +44,6 @@ import com.androdr.ioc.feeds.MvtIndicatorsFeed
 import com.androdr.ioc.feeds.PlexusKnownAppFeed
 import com.androdr.ioc.feeds.StalkerwareCertHashFeed
 import com.androdr.ioc.feeds.StalkerwareIndicatorsFeed
-import com.androdr.ioc.feeds.ThreatFoxDomainFeed
 import com.androdr.network.AppLabelResolver
 import com.androdr.ioc.feeds.UadKnownAppFeed
 import dagger.Module
@@ -110,7 +109,7 @@ object AppModule {
     @Singleton
     fun provideDomainIocFeeds(): @JvmSuppressWildcards List<DomainIocFeed> = listOf(
         MvtIndicatorsFeed(),
-        ThreatFoxDomainFeed(),
+        // ThreatFoxDomainFeed retired 2026-11 (see IndicatorUpdater.RETIRED_SOURCE_IDS).
         HaGeZiTifFeed()
     )
 
