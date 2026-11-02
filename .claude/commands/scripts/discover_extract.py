@@ -241,6 +241,28 @@ def run_parse_posts(args) -> int:
     return 0
 
 
+def tracked_key(name: str) -> str:
+    """Comparison key for already-tracked names: case-insensitive, ignoring spaces, hyphens and
+    underscores, so "RATHat" matches "RatHat" and "SuperCard X" matches "SuperCardX"."""
+    return re.sub(r"[\s_-]+", "", name).casefold()
+
+
+def parse_rule_index(raw: str) -> set:
+    """`--rule-index` as tracked-name keys. Entries are comma-separated and may carry spaces
+    ("Albiriox, AndroRAT") and slash aliases ("BTMOB/BtmobRAT"). Until 2026-11-02 the list was
+    split on "," without trimming, so only the first name of a comma-space list ever matched and
+    already-tracked threats (RatHat, PromptSpy, NGate) passed through. Empty pieces from a
+    trailing/double comma are dropped so they can't match an empty LLM response.
+    """
+    keys = set()
+    for entry in (raw or "").split(","):
+        for alias in entry.split("/"):
+            key = tracked_key(alias)
+            if key:
+                keys.add(key)
+    return keys
+
+
 def run_validate_tokens(args) -> int:
     """Filter a JSON list of candidate names from stdin via token-shape +
     denylist + rule-index. The structural XPIA defense line — see
@@ -259,15 +281,13 @@ def run_validate_tokens(args) -> int:
         print(json.dumps({"error": "--validate-tokens requires --denylist"}))
         return 2
     denylist = set(yaml.safe_load(Path(args.denylist).read_text())["denylist"])
-    # Drop empty strings from a trailing/double comma so '"foo,,bar"' doesn't
-    # produce a '' entry that spuriously matches an empty LLM response.
-    rule_index = {s for s in args.rule_index.split(",") if s} if args.rule_index else set()
+    rule_index = parse_rule_index(args.rule_index)
 
     filtered: list[str] = []
     for name in candidates[:20]:  # Cap at 20 — guards against flood-attack LLM output
         if name in denylist:
             continue
-        if name in rule_index:
+        if tracked_key(name) in rule_index:
             continue
         if not is_valid_token_shape(name):
             continue
