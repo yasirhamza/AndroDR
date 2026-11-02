@@ -110,7 +110,7 @@ fun OpenAlertsCard(
         }
     }
 
-    pending?.let { refs -> CloseAlertsDialog(viewModel, refs, groups.itemSnapshotList.items) }
+    pending?.let { refs -> CloseAlertsDialog(viewModel, refs) }
 }
 
 @Composable
@@ -186,7 +186,7 @@ private fun AlertGroupRow(group: AlertGroup, checked: Boolean, onToggle: () -> U
 }
 
 @Composable
-private fun CloseAlertsDialog(viewModel: DashboardAlertsViewModel, refs: List<AlertGroupRef>, shown: List<AlertGroup>) {
+private fun CloseAlertsDialog(viewModel: DashboardAlertsViewModel, refs: List<AlertGroupRef>) {
     var note by rememberSaveable { mutableStateOf("") }
     val confirm = rememberConfirmCredential()
     val context = LocalContext.current
@@ -196,11 +196,8 @@ private fun CloseAlertsDialog(viewModel: DashboardAlertsViewModel, refs: List<Al
     }
     val title = stringResource(R.string.alerts_credential_title)
     val description = stringResource(R.string.alerts_credential_description)
-    // The count the close will act on: the alerts seen when each group was chosen (up to its maxId).
-    val count = refs.sumOf { ref ->
-        shown.firstOrNull { it.ruleId == ref.ruleId && it.matchedValue == ref.matchedValue }
-            ?.takeIf { it.maxId == ref.maxId }?.count ?: 1
-    }
+    // The alerts the close will act on: one per chosen group, however many times it fired (spec §5.4).
+    val count = refs.size
     AlertDialog(
         onDismissRequest = { viewModel.dismissClose() },
         title = { Text(stringResource(R.string.alerts_close_dialog_title)) },

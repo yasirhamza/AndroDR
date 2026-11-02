@@ -46,7 +46,8 @@ import javax.inject.Singleton
 
 /**
  * What is current (spec §5.4 Lifecycle): the latest live scan's triggered state findings (bounded
- * by rules × live records) and how many alerts are OPEN.
+ * by rules × live records) and how many alerts are OPEN — one per group of rule and matched value,
+ * however many times it fired.
  */
 data class CurrentFindingsSummary(
     val stateFindings: List<Finding>,
@@ -346,7 +347,8 @@ class FindingsRepository @Inject constructor(
      * [ConfirmResult.NoSecureLock] when a re-check finds no secure lock screen
      * (`closedWithCredential = 0`). Anything else — cancelled, or "no secure lock" on a device that
      * is secure — closes nothing (fails closed). A close that changes alerts writes one persistent
-     * `alert_closed` Timeline row in the same transaction. Returns how many closed.
+     * `alert_closed` Timeline row in the same transaction. Returns how many alerts closed, one per
+     * group of rule and matched value (spec §5.4).
      */
     suspend fun close(alertIds: List<Long>, reason: String?, result: ConfirmResult): Int {
         if (alertIds.isEmpty()) return 0
@@ -357,19 +359,17 @@ class FindingsRepository @Inject constructor(
             val closed = chunkedIn(alertIds) { listOf(alerts.closeOpen(it, now, reason, withCredential)) }.sum()
             if (closed > 0) {
                 db.forensicTimelineEventDao().insert(
-                    closedRow(
-                        groups.map { it.ruleId to it.matchedValue to it.count }, closed, reason, withCredential, now,
-                    )
+                    closedRow(groups.map { it.ruleId to it.matchedValue to it.count }, reason, withCredential, now)
                 )
             }
-            closed
+            if (closed > 0) groups.size else 0
         }
     }
 
     /**
      * Bulk close by group (the open-alerts list, spec §5.4): each group's OPEN alerts up to its
      * [AlertGroupRef.maxId] — those the person saw — under one confirmation, with the same
-     * confirmation rule and `alert_closed` row as [close]. Returns how many closed.
+     * confirmation rule and `alert_closed` row as [close]. Returns how many alerts (groups) closed.
      */
     suspend fun closeGroups(groups: List<AlertGroupRef>, reason: String?, result: ConfirmResult): Int {
         if (groups.isEmpty()) return 0
@@ -379,12 +379,11 @@ class FindingsRepository @Inject constructor(
             val closedByGroup = groups.distinct().map { g ->
                 g to alerts.closeGroup(g.ruleId, g.matchedValue, g.maxId, now, reason, withCredential)
             }
-            val closed = closedByGroup.sumOf { it.second }
-            if (closed > 0) {
-                val lines = closedByGroup.filter { it.second > 0 }.map { (g, n) -> g.ruleId to g.matchedValue to n }
-                db.forensicTimelineEventDao().insert(closedRow(lines, closed, reason, withCredential, now))
+            val lines = closedByGroup.filter { it.second > 0 }.map { (g, n) -> g.ruleId to g.matchedValue to n }
+            if (lines.isNotEmpty()) {
+                db.forensicTimelineEventDao().insert(closedRow(lines, reason, withCredential, now))
             }
-            closed
+            lines.size
         }
     }
 
@@ -402,24 +401,27 @@ class FindingsRepository @Inject constructor(
                 maxId = g.maxOf { it.maxId })
         }
 
-    /** The persistent `alert_closed` row: what closed (capped), the note and the credential flag. */
+    /**
+     * The persistent `alert_closed` row: the alerts (groups) that closed, each with its detection
+     * count (capped), the note and the credential flag.
+     */
     private fun closedRow(
-        groups: List<Pair<Pair<String, String>, Int>>, closed: Int, reason: String?, withCredential: Boolean, now: Long,
+        groups: List<Pair<Pair<String, String>, Int>>, reason: String?, withCredential: Boolean, now: Long,
     ): ForensicTimelineEvent {
         val sb = StringBuilder()
         sb.append("Note: ").append(reason?.takeIf { it.isNotBlank() }?.take(MAX_NOTE) ?: "(none)")
         sb.append("\nClosed with device credential: ")
             .append(if (withCredential) "yes" else "no (no secure lock screen)")
-        var listed = 0
-        for ((key, n) in groups.sortedByDescending { it.second }.take(MAX_CLOSED_LINES)) {
+        val shown = groups.sortedByDescending { it.second }.take(MAX_CLOSED_LINES)
+        for ((key, n) in shown) {
             sb.append("\n").append(key.first.take(MAX_RULE)).append(" · ")
-                .append(key.second.ifEmpty { "—" }.take(MAX_VALUE)).append(" × ").append(n)
-            listed += n
+                .append(key.second.ifEmpty { "—" }.take(MAX_VALUE))
+                .append(if (n == 1) " (seen 1 time)" else " (seen $n times)")
         }
-        if (closed > listed) sb.append("\n…and ").append(closed - listed).append(" more alert(s)")
+        if (groups.size > shown.size) sb.append("\n…and ").append(groups.size - shown.size).append(" more alert(s)")
         return ForensicTimelineEvent(
             startTimestamp = now, source = CLOSED_SOURCE, category = CLOSED_CATEGORY,
-            description = "Closed $closed alert(s)", details = sb.toString(), createdAt = now, persistent = true,
+            description = "Closed ${groups.size} alert(s)", details = sb.toString(), createdAt = now, persistent = true,
         )
     }
 
