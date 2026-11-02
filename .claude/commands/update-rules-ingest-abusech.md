@@ -120,9 +120,7 @@ Emit a JSON object extending the existing SIR array:
       }
     }
   ],
-  "upstream_snapshot_hash_set": [
-    ["C2_DOMAIN", "<domain as the feed lists it>"]
-  ]
+  "upstream_snapshot_hash_set": []
 }
 ```
 
@@ -136,13 +134,14 @@ Emit a JSON object extending the existing SIR array:
 
 ### upstream_snapshot_hash_set
 
-The `(type, normalized_value)` set of `C2_DOMAIN` pairs from the ThreatFox
-response. Normalize domains to lowercase, strip protocol and trailing `.`.
-
-MalwareBazaar APK-hash pairs are NOT included in this set — as of AndroDR
-#146, MalwareBazaar is no longer a Kotlin-bypass feed (the snapshot
-represents "what the device direct-fetches"). APK hashes flow through
-`candidate_ioc_entries` only.
+Always the empty list `[]`. The snapshot represents "what the device
+direct-fetches", and neither abuse.ch feed is fetched on-device any more:
+MalwareBazaar stopped being a Kotlin-bypass feed in AndroDR #146, and
+ThreatFox in 2026-11 (ThreatFoxDomainFeed retired: the public export answers
+HTTP 410 and its replacement needs an Auth-Key the app cannot ship). A
+non-empty snapshot here would make the dispatcher's Step 6.5.3 drop every
+ThreatFox candidate as a duplicate of itself. Both feeds' entries flow
+through `candidate_ioc_entries` only.
 
 ### Self-dedup
 

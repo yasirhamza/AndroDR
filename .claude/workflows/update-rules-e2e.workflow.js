@@ -358,9 +358,9 @@ The candidates above are pre-filtered to DOMAIN and PACKAGE-NAME types only — 
 
 Step 1 — read ${SIGMA}/validation/kotlin-mirror-feeds.yml. It lists the feeds the app pulls on-device and the IOC TYPES each delivers.
 
-Step 2 — build the authoritative on-device coverage set U for the candidate types present (domains, package names). CRITICAL: feeds tagged 'parser_limited: true' (currently mvt-indicators and threatfox) are SKIPPED by validate-ioc-complementarity.py, but the Kotlin client still delivers them on-device — so you MUST fetch them MANUALLY rather than trusting the Python parser:
+Step 2 — build the authoritative on-device coverage set U for the candidate types present (domains, package names). CRITICAL: feeds tagged 'parser_limited: true' (currently mvt-indicators) are SKIPPED by validate-ioc-complementarity.py, but the Kotlin client still delivers them on-device — so you MUST fetch them MANUALLY rather than trusting the Python parser:
   - mvt-indicators: fetch https://raw.githubusercontent.com/mvt-project/mvt-indicators/main/indicators.yaml (a dict with key 'indicators'). Each item has a 'github' ref {owner,repo,branch,path}; build the raw URL https://raw.githubusercontent.com/<owner>/<repo>/<branch>/<path> and fetch that STIX2 JSON. From each object of type 'indicator', regex the pattern for domain-name:value and (for package candidates) app/process names. Union every bundle. (As of last run there were 15 bundles incl. a dedicated "Wintego Helios" bundle — MVT mirrors AmnestyTech/investigations, so Amnesty-sourced domains very often ALREADY live in MVT.)
-  - threatfox: its on-device parser is currently broken vs the live schema (#127), so it delivers 0 — treat threatfox C2 domains as ADDITIVE for now, but say so in the log.
+  - threatfox: NOT pulled on-device (ThreatFoxDomainFeed retired 2026-11: the public export is gone and the replacement needs an Auth-Key the app cannot ship). ThreatFox C2 domains are always ADDITIVE; never fetch ThreatFox here.
   - stalkerware-indicators: fetch https://raw.githubusercontent.com/AssoEchap/stalkerware-indicators/master/ioc.yaml directly (PACKAGE_NAME only) if any package candidates exist.
 Use Bash + python3 + urllib for the fetch/traversal (a polite User-Agent). ${TOOLING}
 

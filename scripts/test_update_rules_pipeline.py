@@ -152,3 +152,15 @@ def test_only_rule_candidates_reach_renumbering_and_validation():
     split = js.index("const candidates = authoredRecords.filter(isRuleCandidate)")
     assert split < js.index("candidates.forEach((c, i) =>"), "split must happen before ID renumbering"
     assert "author_decisions: authorDecisions" in js, "decision-only records go to HitL, not validation"
+
+
+# 2026-11: ThreatFoxDomainFeed retired (public export HTTP 410; replacement needs an Auth-Key).
+# ThreatFox is no longer an on-device mirror, so nothing in the pipeline may treat it as one.
+
+def test_threatfox_is_not_treated_as_an_on_device_mirror():
+    dedup = _flat(_prompt_functions(_read(WORKFLOW))["dedupPrompt"])
+    assert "(currently mvt-indicators)" in dedup
+    assert "ThreatFox C2 domains are always ADDITIVE" in dedup
+    abusech = _flat(_read(COMMANDS / "update-rules-ingest-abusech.md"))
+    assert '"upstream_snapshot_hash_set": []' in abusech
+    assert '["C2_DOMAIN"' not in abusech, "a ThreatFox snapshot would make dedup drop every ThreatFox candidate"
