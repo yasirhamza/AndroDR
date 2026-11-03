@@ -31,6 +31,7 @@ URL hostname bindings are locked by `test_discover_source_urls.py`. DO NOT edit 
 | `securelist` | `https://securelist.com/feed/` |
 | `welivesecurity` | `https://www.welivesecurity.com/en/feed/` |
 | `google-tag` | `https://blog.google/security/rss/` |
+| `threatfabric` | `https://www.threatfabric.com/blogs/rss.xml` |
 
 > Note: source-id `google-tag` historically pointed at `https://blog.google/threat-analysis-group/rss/`, which Google retired (returns 404). The id is retained for feed-state cursor continuity, but the feed now covers Google's broader Security blog (which still includes TAG posts among other Google security/privacy content). Per-post LLM extraction handles the broader scope.
 
@@ -40,8 +41,7 @@ URL hostname bindings are locked by `test_discover_source_urls.py`. DO NOT edit 
 | Source ID | Index URL |
 |---|---|
 | `zimperium` | `https://www.zimperium.com/blog/` |
-| `lookout` | `https://www.lookout.com/threat-intelligence` |
-| `threatfabric` | `https://www.threatfabric.com/blogs` |
+| `lookout` | `https://security.lookout.com/threat-intelligence` |
 | `cleafy` | `https://www.cleafy.com/cleafy-labs` |
 | `group-ib` | `https://www.group-ib.com/blog/` |
 
@@ -54,8 +54,14 @@ URL hostname bindings are locked by `test_discover_source_urls.py`. DO NOT edit 
 > (Securelist / WeLiveSecurity / Google) or mobile-EDR-competitor
 > (Zimperium / Lookout). These three are the banking-fraud specialists.
 >
-> **Robustness caveat:** all three sit behind Cloudflare. WebFetch already
-> logs `Cloudflare 403` for `lookout`; expect the same intermittently here.
+> **Source changes (2026-11-02):** `threatfabric` moved to its RSS feed: the
+> `/blogs` index page shows no publication dates, so the helper emitted 0 posts
+> and the cursor never advanced. `lookout` moved to
+> `security.lookout.com/threat-intelligence`: `www.lookout.com` answers 403 to
+> the pipeline for every path. Never disguise the User-Agent to get past a 403.
+>
+> **Robustness caveat:** these sources sit behind Cloudflare; expect an
+> intermittent 403.
 > A 403 is a `fetch_error` — log it and do NOT advance that source's cursor
 > (the threat names still reach a human via the report, and a name known by
 > any other route can always be researched with `/update-rules threat`).
@@ -88,7 +94,7 @@ For securelist / welivesecurity / google-tag:
 
 ### Per-source: Web
 
-For zimperium / lookout / threatfabric / cleafy / group-ib:
+For zimperium / lookout / cleafy / group-ib:
 
 1. Check robots.txt first as for RSS.
 2. WebFetch the index URL with prompt asking for recent posts in structured form:
