@@ -100,6 +100,16 @@
     "reference": "https://raw.githubusercontent.com/deepfield/public-research/main/ipmoyu/report.md"
   },
   {
+    "packageName": "com.android.sso.auth.handler",
+    "name": "XCPE",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "XCPE dropper disguised as a system app, installs monetization modules (GTIG 2026-11-02)",
+    "source": "threat_research",
+    "reference": "https://cloud.google.com/blog/topics/threat-intelligence/shutting-the-door-on-the-xcpe-botnet"
+  },
+  {
     "packageName": "com.android.sys.dts",
     "name": "Midnight Mimosa",
     "category": "MALWARE",
@@ -138,6 +148,16 @@
     "description": "Midnight Mimosa preinstalled enabler - platform-signed fake 'System' app (primary enabler, versionCode 900000; Bitdefender)",
     "source": "threat_research",
     "reference": "https://www.bitdefender.com/en-us/blog/labs/midnight-mimosa-malware"
+  },
+  {
+    "packageName": "com.android.system.ntp",
+    "name": "XCPE",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "XCPE dropper disguised as a system app, installs monetization modules (GTIG 2026-11-02)",
+    "source": "threat_research",
+    "reference": "https://cloud.google.com/blog/topics/threat-intelligence/shutting-the-door-on-the-xcpe-botnet"
   },
   {
     "packageName": "com.android.tigersport",
@@ -960,6 +980,16 @@
     "reference": "https://iverify.io/blog/oblivion-rat-android-spyware-analysis"
   },
   {
+    "packageName": "com.oemservice",
+    "name": "XCPE",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "XCPE botnet firmware backdoor (Videostrong TV boxes, GTIG 2026-11-02); reinstalls from /oem/, needs clean firmware",
+    "source": "threat_research",
+    "reference": "https://cloud.google.com/blog/topics/threat-intelligence/shutting-the-door-on-the-xcpe-botnet"
+  },
+  {
     "packageName": "com.oneplussync.bat",
     "name": "ResidentBat",
     "category": "NATION_STATE_SPYWARE",
@@ -1240,6 +1270,16 @@
     "reference": "https://raw.githubusercontent.com/DoctorWebLtd/malware-iocs/master/Android.MagicAd.1/README.adoc"
   },
   {
+    "packageName": "com.vs.grass",
+    "name": "XCPE",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "XCPE botnet package listed in GTIG IOCs (2026-11-02)",
+    "source": "threat_research",
+    "reference": "https://cloud.google.com/blog/topics/threat-intelligence/shutting-the-door-on-the-xcpe-botnet"
+  },
+  {
     "packageName": "com.water.sorting.funpuzzle",
     "name": "Android.MagicAd",
     "category": "MALWARE",
@@ -1508,5 +1548,15 @@
     "description": "mSpy stalkerware disguised as system update \u2014 if not self-installed, contact a DV hotline",
     "source": "stalkerware-indicators",
     "reference": "feed:stalkerware-indicators#mSpy"
+  },
+  {
+    "packageName": "x.cpe",
+    "name": "XCPE",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "XCPE botnet firmware backdoor (Videostrong TV boxes, GTIG 2026-11-02); reinstalls from /oem/, needs clean firmware",
+    "source": "threat_research",
+    "reference": "https://cloud.google.com/blog/topics/threat-intelligence/shutting-the-door-on-the-xcpe-botnet"
   }
 ]

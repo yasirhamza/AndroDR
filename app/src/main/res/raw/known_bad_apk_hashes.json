@@ -50,6 +50,16 @@
     "reference": "feed:threatfox#SMSspy"
   },
   {
+    "apkHash": "0135b69bab304564628488829b825050d1dd6dab98e86ec6776839dac9365af9",
+    "familyName": "XCPE",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "XCPE sample SHA-256 (GTIG 2026-11-02)",
+    "source": "threat_research",
+    "reference": "https://cloud.google.com/blog/topics/threat-intelligence/shutting-the-door-on-the-xcpe-botnet"
+  },
+  {
     "apkHash": "013642fa369e3f4686339f4de1f7e331bef2c5ece9f1682bc18c02c2f344e797",
     "familyName": "RedWing",
     "category": "MALWARE",
@@ -100,6 +110,16 @@
     "reference": "feed:zimperium-ioc#RedWing"
   },
   {
+    "apkHash": "01b8c78f5509119b3e27ea4d628048985b94b5e00db0431d843519cf1d3e2cde",
+    "familyName": "XCPE",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "XCPE sample SHA-256 (GTIG 2026-11-02)",
+    "source": "threat_research",
+    "reference": "https://cloud.google.com/blog/topics/threat-intelligence/shutting-the-door-on-the-xcpe-botnet"
+  },
+  {
     "apkHash": "01dcbe196953883b1da0d43f890892b77ae53adc74ebdca41d4b0a8b4ede44c0",
     "familyName": "Arsink",
     "category": "SPYWARE",
@@ -130,6 +150,16 @@
     "reference": "https://github.com/eset/malware-ioc/blob/master/prospytospy/samples.sha256"
   },
   {
+    "apkHash": "02490fa9f472ec872723d64d03402967e77932d2df72c588b0d7a7df9e17ae62",
+    "familyName": "XCPE",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "XCPE sample SHA-256 (GTIG 2026-11-02)",
+    "source": "threat_research",
+    "reference": "https://cloud.google.com/blog/topics/threat-intelligence/shutting-the-door-on-the-xcpe-botnet"
+  },
+  {
     "apkHash": "025d3b9b2536394a3e2dfd950f4a4caa53cc05002e990199372ead2e709ae738",
     "familyName": "RedWing",
     "category": "MALWARE",
@@ -138,6 +168,16 @@
     "description": "RedWing Android banking-trojan / device-takeover MaaS APK sample (Zimperium zLabs, 2026-07; new variant of Oblivion). Uninstall immediately.",
     "source": "zimperium-ioc",
     "reference": "feed:zimperium-ioc#RedWing"
+  },
+  {
+    "apkHash": "02b94ae4ee0fd2bab915fe2911d15ee70e51ca0564ba43c746593e7fe0b7ccd3",
+    "familyName": "XCPE",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "XCPE sample SHA-256 (GTIG 2026-11-02)",
+    "source": "threat_research",
+    "reference": "https://cloud.google.com/blog/topics/threat-intelligence/shutting-the-door-on-the-xcpe-botnet"
   },
   {
     "apkHash": "038ddeb937e70aa8e1321f55c5d43b18f4cea9dd6abe63f43141ec22ccbe9825",
@@ -160,6 +200,16 @@
     "reference": "feed:zimperium-ioc#ToxicPanda"
   },
   {
+    "apkHash": "049b626ca9bc4cf552e675dd5bf6215753caa3a3d28fab17b2a8fa9e0c8421c0",
+    "familyName": "XCPE",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "XCPE sample SHA-256 (GTIG 2026-11-02)",
+    "source": "threat_research",
+    "reference": "https://cloud.google.com/blog/topics/threat-intelligence/shutting-the-door-on-the-xcpe-botnet"
+  },
+  {
     "apkHash": "04a37e55db2e73a4af1f60bc25c4377237c73042bf01227f4c4ca05e1342cab5",
     "familyName": "ToxicPanda",
     "category": "MALWARE",
@@ -178,6 +228,16 @@
     "description": "CyberDakait d-passive (TradeSignals) Android banking trojan APK (SMS/OTP interception; Group-IB). Uninstall it, contact your bank, and turn off any call forwarding (dial ##002#).",
     "source": "threat_research",
     "reference": "https://www.group-ib.com/blog/cyberdakait-seven-android-trojans-indian-banking/"
+  },
+  {
+    "apkHash": "04ffe332458931d82c0503daba1859622540828302af1190d2d3c6447094428c",
+    "familyName": "XCPE",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "XCPE sample SHA-256 (GTIG 2026-11-02)",
+    "source": "threat_research",
+    "reference": "https://cloud.google.com/blog/topics/threat-intelligence/shutting-the-door-on-the-xcpe-botnet"
   },
   {
     "apkHash": "0500d1396201f770a6b17f9ff996c603d87c482859a425a8110fb2d83b6d3993",
@@ -240,6 +300,16 @@
     "reference": "feed:malwarebazaar#SpyNote"
   },
   {
+    "apkHash": "05e2e32e08073081adcb8875c3b7350fff53e7ea8f36d6388fb3daa626015d22",
+    "familyName": "XCPE",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "XCPE sample SHA-256 (GTIG 2026-11-02)",
+    "source": "threat_research",
+    "reference": "https://cloud.google.com/blog/topics/threat-intelligence/shutting-the-door-on-the-xcpe-botnet"
+  },
+  {
     "apkHash": "067d5dbbd24f988f0c945a08556dec3a1c789398ae46842038ea96a9b2384427",
     "familyName": "PromptSpy",
     "category": "MALWARE",
@@ -300,6 +370,26 @@
     "reference": "feed:zimperium-ioc#ToxicPanda"
   },
   {
+    "apkHash": "07b511a6f7715ccd2f77b5f51e4cf46542ccaada99564252711f4a142ac26179",
+    "familyName": "XCPE",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "XCPE sample SHA-256 (GTIG 2026-11-02)",
+    "source": "threat_research",
+    "reference": "https://cloud.google.com/blog/topics/threat-intelligence/shutting-the-door-on-the-xcpe-botnet"
+  },
+  {
+    "apkHash": "085662ba43e22d04d6f69b7b5176c68cedee6507c5d34973c94459f324b44c8d",
+    "familyName": "XCPE",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "XCPE sample SHA-256 (GTIG 2026-11-02)",
+    "source": "threat_research",
+    "reference": "https://cloud.google.com/blog/topics/threat-intelligence/shutting-the-door-on-the-xcpe-botnet"
+  },
+  {
     "apkHash": "087fc1217c897033425fe7f1f12b913cd48918c875e99c25bdb9e1ffcf80f57e",
     "familyName": "NoviSpy",
     "category": "NATION_STATE_SPYWARE",
@@ -318,6 +408,16 @@
     "description": "AntiDot Android malware APK (PRODAFT malware-ioc, 2026-07-03 sweep)",
     "source": "prodaft-malware-ioc",
     "reference": "feed:prodaft-malware-ioc#AntiDot"
+  },
+  {
+    "apkHash": "08edc09f4465cd784360c223275c45a5e95d7dc8a5e796537ea5251848b3d2f1",
+    "familyName": "XCPE",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "XCPE sample SHA-256 (GTIG 2026-11-02)",
+    "source": "threat_research",
+    "reference": "https://cloud.google.com/blog/topics/threat-intelligence/shutting-the-door-on-the-xcpe-botnet"
   },
   {
     "apkHash": "08f6c55dd50c9be03504c3c220728b9a141f711ff556191f2e35035caef7938d",
@@ -510,6 +610,16 @@
     "reference": "feed:zimperium-ioc#RedWing"
   },
   {
+    "apkHash": "0d90d0e5009d0c67e978dffb1f78278fa22f296ebc14add1fe338abea8690867",
+    "familyName": "XCPE",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "XCPE sample SHA-256 (GTIG 2026-11-02)",
+    "source": "threat_research",
+    "reference": "https://cloud.google.com/blog/topics/threat-intelligence/shutting-the-door-on-the-xcpe-botnet"
+  },
+  {
     "apkHash": "0db4b9b06c2e05a60017bc0198d1627f55de41565c8ae30c823a99ef504a546b",
     "familyName": "Triada",
     "category": "MALWARE",
@@ -558,6 +668,16 @@
     "description": "AntiDot Android malware APK (PRODAFT malware-ioc, 2026-07-03 sweep)",
     "source": "prodaft-malware-ioc",
     "reference": "feed:prodaft-malware-ioc#AntiDot"
+  },
+  {
+    "apkHash": "0ed2ec71901210b1100c6a4abee48ad36774962496d57577d58630072e30cc60",
+    "familyName": "XCPE",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "XCPE sample SHA-256 (GTIG 2026-11-02)",
+    "source": "threat_research",
+    "reference": "https://cloud.google.com/blog/topics/threat-intelligence/shutting-the-door-on-the-xcpe-botnet"
   },
   {
     "apkHash": "0f2dbe99e5465afd5e0054b066534cd8acded1db6be0f712445bbf4896a886cb",
@@ -1030,6 +1150,16 @@
     "reference": "feed:prodaft-malware-ioc#AntiDot"
   },
   {
+    "apkHash": "17d4929578dac90af7da3a9c8bbd6f516ade8cc803c82a0f64849fb2a346a894",
+    "familyName": "XCPE",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "XCPE sample SHA-256 (GTIG 2026-11-02)",
+    "source": "threat_research",
+    "reference": "https://cloud.google.com/blog/topics/threat-intelligence/shutting-the-door-on-the-xcpe-botnet"
+  },
+  {
     "apkHash": "17d997ff70c869400bb1744d7179dc5952253ded4fc29d9e60a46c19e8b8fea9",
     "familyName": "AntiDot",
     "category": "MALWARE",
@@ -1038,6 +1168,16 @@
     "description": "AntiDot Android malware APK (PRODAFT malware-ioc, 2026-07-03 sweep)",
     "source": "prodaft-malware-ioc",
     "reference": "feed:prodaft-malware-ioc#AntiDot"
+  },
+  {
+    "apkHash": "1806a1a93a6bce28cc6e95e9001f06370eaef9c66846ade9aecaf220d7ac91a4",
+    "familyName": "XCPE",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "XCPE sample SHA-256 (GTIG 2026-11-02)",
+    "source": "threat_research",
+    "reference": "https://cloud.google.com/blog/topics/threat-intelligence/shutting-the-door-on-the-xcpe-botnet"
   },
   {
     "apkHash": "1825427fd4dc930f0d257bac348060332d6a4cde7329df89beba02ffb3ba8dc8",
@@ -1320,6 +1460,16 @@
     "reference": "feed:zimperium-ioc#RedWing"
   },
   {
+    "apkHash": "1c34f551cea557b24f6f3776de7fecaf40536c749d5b9734242acde4dd578c53",
+    "familyName": "XCPE",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "XCPE sample SHA-256 (GTIG 2026-11-02)",
+    "source": "threat_research",
+    "reference": "https://cloud.google.com/blog/topics/threat-intelligence/shutting-the-door-on-the-xcpe-botnet"
+  },
+  {
     "apkHash": "1c6e2a40498927104042e739da3c7d0f6de2497376ce01bf39d94173fb368a36",
     "familyName": "FantasyHub",
     "category": "MALWARE",
@@ -1338,6 +1488,26 @@
     "description": "Mantax Otax hybrid spyware/ransomware APK sample (Zimperium IOC apks.csv)",
     "source": "threat_research",
     "reference": "https://raw.githubusercontent.com/Zimperium/IOC/master/2026-09-MantaxOtax/apks.csv"
+  },
+  {
+    "apkHash": "1c8408f80dcdac5c9cae5b2ac785e6f0aa97ad2ec6c8701e3ab661882e9fdd63",
+    "familyName": "XCPE",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "XCPE sample SHA-256 (GTIG 2026-11-02)",
+    "source": "threat_research",
+    "reference": "https://cloud.google.com/blog/topics/threat-intelligence/shutting-the-door-on-the-xcpe-botnet"
+  },
+  {
+    "apkHash": "1c989cef1b9cc5a39715d172e3f3acb574a958765f4a9df50c952c0a359826cd",
+    "familyName": "XCPE",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "XCPE sample SHA-256 (GTIG 2026-11-02)",
+    "source": "threat_research",
+    "reference": "https://cloud.google.com/blog/topics/threat-intelligence/shutting-the-door-on-the-xcpe-botnet"
   },
   {
     "apkHash": "1c9feb726b51601660408b3ad008d6fccdd8244158ae4179801df14f3df41e37",
@@ -1388,6 +1558,16 @@
     "description": "Rokarolla Android malware APK (Zimperium zLabs, 2026-07-03 sweep)",
     "source": "zimperium-ioc",
     "reference": "feed:zimperium-ioc#Rokarolla"
+  },
+  {
+    "apkHash": "1de0a368599ab04b8863c0e61c2d5a75e00f742a3326325f2870a9a72ee8d200",
+    "familyName": "XCPE",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "XCPE sample SHA-256 (GTIG 2026-11-02)",
+    "source": "threat_research",
+    "reference": "https://cloud.google.com/blog/topics/threat-intelligence/shutting-the-door-on-the-xcpe-botnet"
   },
   {
     "apkHash": "1e13da9071a2a217605c9c30dee8d851f165006276cfbb105d3baa0452571be5",
@@ -1448,6 +1628,16 @@
     "description": "Arsink Android spyware APK (MalwareBazaar, 2026-07-03 sweep)",
     "source": "malwarebazaar",
     "reference": "feed:malwarebazaar#Arsink"
+  },
+  {
+    "apkHash": "1f2ab93c35f0c37d9b88f82268183a2f77491aa6b142a48381524b18e217b960",
+    "familyName": "XCPE",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "XCPE sample SHA-256 (GTIG 2026-11-02)",
+    "source": "threat_research",
+    "reference": "https://cloud.google.com/blog/topics/threat-intelligence/shutting-the-door-on-the-xcpe-botnet"
   },
   {
     "apkHash": "1f333d910158316c6211f7b24d118aadca778abb3964f3a4b7d3914e49278b7d",
@@ -1538,6 +1728,16 @@
     "description": "RedWing Android banking-trojan / device-takeover MaaS APK sample (Zimperium zLabs, 2026-07; new variant of Oblivion). Uninstall immediately.",
     "source": "zimperium-ioc",
     "reference": "feed:zimperium-ioc#RedWing"
+  },
+  {
+    "apkHash": "20af9e1538e1c211687c53e71318d9d265e36ce154457cade3266c7633fb953d",
+    "familyName": "XCPE",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "XCPE sample SHA-256 (GTIG 2026-11-02)",
+    "source": "threat_research",
+    "reference": "https://cloud.google.com/blog/topics/threat-intelligence/shutting-the-door-on-the-xcpe-botnet"
   },
   {
     "apkHash": "20ceabc548bf126d2c8abfb6f6cc3f6de1f9f6bbbd963231d4138f9ef3d67d9d",
@@ -1638,6 +1838,16 @@
     "description": "Triada Android modular backdoor / banking trojan APK sample (ThreatFox tag=Android, apk.triada). Uninstall immediately.",
     "source": "threatfox",
     "reference": "feed:threatfox#Triada"
+  },
+  {
+    "apkHash": "22c0279d23973fd9b3bfd9f42fd19ea1595c6e3f71a89b698828c79fa8e4edd2",
+    "familyName": "XCPE",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "XCPE sample SHA-256 (GTIG 2026-11-02)",
+    "source": "threat_research",
+    "reference": "https://cloud.google.com/blog/topics/threat-intelligence/shutting-the-door-on-the-xcpe-botnet"
   },
   {
     "apkHash": "22e9bf11a1e5281bc2c28eac9a60af3c3b09366572fe36f538bc3be2bed50cc0",
@@ -2060,6 +2270,26 @@
     "reference": "feed:zimperium-ioc#ToxicPanda"
   },
   {
+    "apkHash": "2cdb1f0f0969766142f3debbab55eef5e24c15d49a513753f1f6b67bc3e8438b",
+    "familyName": "XCPE",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "XCPE sample SHA-256 (GTIG 2026-11-02)",
+    "source": "threat_research",
+    "reference": "https://cloud.google.com/blog/topics/threat-intelligence/shutting-the-door-on-the-xcpe-botnet"
+  },
+  {
+    "apkHash": "2d4b5c50e57e3e9b57d4ee02bef1dcd56163550a5e01c966e0f0fb6d46b2aeed",
+    "familyName": "XCPE",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "XCPE sample SHA-256 (GTIG 2026-11-02)",
+    "source": "threat_research",
+    "reference": "https://cloud.google.com/blog/topics/threat-intelligence/shutting-the-door-on-the-xcpe-botnet"
+  },
+  {
     "apkHash": "2d5b155f88f765e895e45eef8c83ca414e60bf531ec553c86a2c92e750126c82",
     "familyName": "ToxicPanda",
     "category": "MALWARE",
@@ -2350,6 +2580,16 @@
     "reference": "feed:threatfox#Triada"
   },
   {
+    "apkHash": "3295d193ac405112ad076d7fab23274d44f8d0be6614a250a474c5ed7c95356f",
+    "familyName": "XCPE",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "XCPE sample SHA-256 (GTIG 2026-11-02)",
+    "source": "threat_research",
+    "reference": "https://cloud.google.com/blog/topics/threat-intelligence/shutting-the-door-on-the-xcpe-botnet"
+  },
+  {
     "apkHash": "32aca11e8f8fa3fad7ab54c6a3b4b7bd02e75f7459a5c9908610b4b9589b9d79",
     "familyName": "ClayRat",
     "category": "SPYWARE",
@@ -2450,6 +2690,16 @@
     "reference": "feed:zimperium-ioc#ClayRat"
   },
   {
+    "apkHash": "350d6db477e8567cf9347c1144b3a0b25550e7ce63bb800b056b8a7a8ef56af4",
+    "familyName": "XCPE",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "XCPE sample SHA-256 (GTIG 2026-11-02)",
+    "source": "threat_research",
+    "reference": "https://cloud.google.com/blog/topics/threat-intelligence/shutting-the-door-on-the-xcpe-botnet"
+  },
+  {
     "apkHash": "3564907f28514f56f245d72d2f507755a23f921eef3591f05de7bbb53caaa159",
     "familyName": "ClayRat",
     "category": "SPYWARE",
@@ -2478,6 +2728,16 @@
     "description": "ToxicPanda 2.0 payload APK",
     "source": "zimperium-ioc",
     "reference": "feed:zimperium-ioc#ToxicPanda"
+  },
+  {
+    "apkHash": "3627f848804f49c041203e8d754e8d89f3ff6243b6d9e1ca6e50bbf08dbd9785",
+    "familyName": "XCPE",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "XCPE sample SHA-256 (GTIG 2026-11-02)",
+    "source": "threat_research",
+    "reference": "https://cloud.google.com/blog/topics/threat-intelligence/shutting-the-door-on-the-xcpe-botnet"
   },
   {
     "apkHash": "36694f4279081afaeefe4dbbc0130c9f97487c554702026d636511f4479276fe",
@@ -2518,6 +2778,16 @@
     "description": "ToxicPanda 2.0 dropper APK",
     "source": "zimperium-ioc",
     "reference": "feed:zimperium-ioc#ToxicPanda"
+  },
+  {
+    "apkHash": "3768f470934a111f1c3e3d098eb1392a3cb6f3e298ef5fd2a6309e6a98ee1e18",
+    "familyName": "XCPE",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "XCPE sample SHA-256 (GTIG 2026-11-02)",
+    "source": "threat_research",
+    "reference": "https://cloud.google.com/blog/topics/threat-intelligence/shutting-the-door-on-the-xcpe-botnet"
   },
   {
     "apkHash": "37ca38979f944ff0aa1a75343a9a5645d8559f6505c3b35615d0b0ae06ab28e6",
@@ -2598,6 +2868,16 @@
     "description": "Triada Android modular backdoor / banking trojan APK sample (ThreatFox tag=Android, apk.triada). Uninstall immediately.",
     "source": "threatfox",
     "reference": "feed:threatfox#Triada"
+  },
+  {
+    "apkHash": "39792bed070b1128cd67178591804fafb82112d371ccdb2b51cd600b2d435922",
+    "familyName": "XCPE",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "XCPE sample SHA-256 (GTIG 2026-11-02)",
+    "source": "threat_research",
+    "reference": "https://cloud.google.com/blog/topics/threat-intelligence/shutting-the-door-on-the-xcpe-botnet"
   },
   {
     "apkHash": "399f5bddd1e30bb612522c9c770e073f5e304165df170c4668550de34f34f7c1",
@@ -2840,6 +3120,16 @@
     "reference": "feed:zimperium-ioc#Rokarolla"
   },
   {
+    "apkHash": "3e891f061daf73c2edc14ed98512cad008346679645e8165320bf96fb8b0e0d6",
+    "familyName": "XCPE",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "XCPE sample SHA-256 (GTIG 2026-11-02)",
+    "source": "threat_research",
+    "reference": "https://cloud.google.com/blog/topics/threat-intelligence/shutting-the-door-on-the-xcpe-botnet"
+  },
+  {
     "apkHash": "3e897bf904bc04b4a2d4e2263e84afd6c586e353a5f3e07517235305dd42d131",
     "familyName": "BTMOB",
     "category": "MALWARE",
@@ -2960,6 +3250,16 @@
     "reference": "feed:prodaft-malware-ioc#AntiDot"
   },
   {
+    "apkHash": "415d54757c2f96fd28404f1ab8da1e90297a381ec3d7fb47d33126644a0a421b",
+    "familyName": "XCPE",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "XCPE sample SHA-256 (GTIG 2026-11-02)",
+    "source": "threat_research",
+    "reference": "https://cloud.google.com/blog/topics/threat-intelligence/shutting-the-door-on-the-xcpe-botnet"
+  },
+  {
     "apkHash": "419a18553df075bc9c76dc68c47e8bb441354e28da793a6fe33ada48c76e7edb",
     "familyName": "AntiDot",
     "category": "MALWARE",
@@ -3038,6 +3338,16 @@
     "description": "AntiDot Android malware APK (PRODAFT malware-ioc, 2026-07-03 sweep)",
     "source": "prodaft-malware-ioc",
     "reference": "feed:prodaft-malware-ioc#AntiDot"
+  },
+  {
+    "apkHash": "42be8f18d6006ca092de191331d38e70a0d8383db701a759466dec59a0986135",
+    "familyName": "XCPE",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "XCPE sample SHA-256 (GTIG 2026-11-02)",
+    "source": "threat_research",
+    "reference": "https://cloud.google.com/blog/topics/threat-intelligence/shutting-the-door-on-the-xcpe-botnet"
   },
   {
     "apkHash": "42d1d3141ff48d01e4f2cc7763108b12d7d45d47f9740308fb697f49d4855344",
@@ -3260,6 +3570,16 @@
     "reference": "feed:zimperium-ioc#RedWing"
   },
   {
+    "apkHash": "471e76cce87e280a2fe11046fcb58c0817558ffbc8a526d84fb40c45b03ac9bc",
+    "familyName": "XCPE",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "XCPE sample SHA-256 (GTIG 2026-11-02)",
+    "source": "threat_research",
+    "reference": "https://cloud.google.com/blog/topics/threat-intelligence/shutting-the-door-on-the-xcpe-botnet"
+  },
+  {
     "apkHash": "475c1ae3a0cb4b2a7a58ae3dc1b3e6fbdd87d7f5378dca106c13e2251d8a3b30",
     "familyName": "ToxicPanda",
     "category": "MALWARE",
@@ -3300,6 +3620,16 @@
     "reference": "feed:zimperium-ioc#RedWing"
   },
   {
+    "apkHash": "486a784cbd6335d31214edd7bed7fcfb486b875374597c139826c77c91ccbbaa",
+    "familyName": "XCPE",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "XCPE sample SHA-256 (GTIG 2026-11-02)",
+    "source": "threat_research",
+    "reference": "https://cloud.google.com/blog/topics/threat-intelligence/shutting-the-door-on-the-xcpe-botnet"
+  },
+  {
     "apkHash": "48a1d2733f8b99a3f3634653e6baa7501d30e6ace6a968a09b087a162af6a324",
     "familyName": "AntiDot",
     "category": "MALWARE",
@@ -3338,6 +3668,16 @@
     "description": "",
     "source": "zimperium-ioc",
     "reference": "feed:zimperium-ioc#ClayRat"
+  },
+  {
+    "apkHash": "498d0862ce2ce972e9ac9bd3ea592b9f9cd8c5119dcc90fcb1b14a547889e9f9",
+    "familyName": "XCPE",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "XCPE sample SHA-256 (GTIG 2026-11-02)",
+    "source": "threat_research",
+    "reference": "https://cloud.google.com/blog/topics/threat-intelligence/shutting-the-door-on-the-xcpe-botnet"
   },
   {
     "apkHash": "4a17171155997754ad735b460be67e344c5939d9cff498ce1d95bf554b93fc1b",
@@ -3590,6 +3930,16 @@
     "reference": "feed:zimperium-ioc#ClayRat"
   },
   {
+    "apkHash": "4f860efa8d8b9b8f35f343d524500181607a0cdc9fac35394cf16b71ff4ad1d0",
+    "familyName": "XCPE",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "XCPE sample SHA-256 (GTIG 2026-11-02)",
+    "source": "threat_research",
+    "reference": "https://cloud.google.com/blog/topics/threat-intelligence/shutting-the-door-on-the-xcpe-botnet"
+  },
+  {
     "apkHash": "4fa2ccd05dc0b3a8dfcb2f089eba1a8cbf90b858dcf8f45c5f3c4c2539e55c63",
     "familyName": "BtmobRAT",
     "category": "MALWARE",
@@ -3598,6 +3948,16 @@
     "description": "BtmobRAT (BTMOB) Android RAT APK (MalwareBazaar signature). Uninstall immediately.",
     "source": "malwarebazaar",
     "reference": "feed:malwarebazaar#BtmobRAT"
+  },
+  {
+    "apkHash": "4fd0ddb15849137df77e8cb86cd951d2d220fd8dd5b8b03c5a7e23e815092fdd",
+    "familyName": "XCPE",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "XCPE sample SHA-256 (GTIG 2026-11-02)",
+    "source": "threat_research",
+    "reference": "https://cloud.google.com/blog/topics/threat-intelligence/shutting-the-door-on-the-xcpe-botnet"
   },
   {
     "apkHash": "4fff28eecc0ab6303e4948df77671009dda5b93ed3d1cead527b02d1317426bc",
@@ -4038,6 +4398,16 @@
     "description": "",
     "source": "malwarebazaar",
     "reference": "feed:malwarebazaar#Arsink"
+  },
+  {
+    "apkHash": "5ae5df84cdce0100eb957cf235d1f3fd85fa634592e7ca137de12535e9f8ad2a",
+    "familyName": "XCPE",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "XCPE sample SHA-256 (GTIG 2026-11-02)",
+    "source": "threat_research",
+    "reference": "https://cloud.google.com/blog/topics/threat-intelligence/shutting-the-door-on-the-xcpe-botnet"
   },
   {
     "apkHash": "5b8e04cf2b647df686f9be2fc3186cdcc070dff5ba772fb9848c8cd0f2a5427d",
@@ -4660,6 +5030,16 @@
     "reference": "feed:malwarebazaar#Arsink"
   },
   {
+    "apkHash": "69116e8f681ea312e7e9e3a8a436f66b3e98566c621412599ecaaa25348daadb",
+    "familyName": "XCPE",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "XCPE sample SHA-256 (GTIG 2026-11-02)",
+    "source": "threat_research",
+    "reference": "https://cloud.google.com/blog/topics/threat-intelligence/shutting-the-door-on-the-xcpe-botnet"
+  },
+  {
     "apkHash": "696ef29f77a91aa91279c83088a07ab137d5049dc096ef862a35f9d890a552b3",
     "familyName": "Rokarolla",
     "category": "MALWARE",
@@ -4728,6 +5108,16 @@
     "description": "AntiDot Android malware APK (PRODAFT malware-ioc, 2026-07-03 sweep)",
     "source": "prodaft-malware-ioc",
     "reference": "feed:prodaft-malware-ioc#AntiDot"
+  },
+  {
+    "apkHash": "6b55b8b3ff7bd31af93b59612f0800c09e49d3badc772e2395736616c87d5612",
+    "familyName": "XCPE",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "XCPE sample SHA-256 (GTIG 2026-11-02)",
+    "source": "threat_research",
+    "reference": "https://cloud.google.com/blog/topics/threat-intelligence/shutting-the-door-on-the-xcpe-botnet"
   },
   {
     "apkHash": "6b85e5cea712e490eee0786a2ac67edc92c6ad8493b60f79a95cf06768b272ec",
@@ -4838,6 +5228,16 @@
     "description": "Triada Android modular backdoor / banking trojan APK sample (ThreatFox tag=Android, apk.triada). Uninstall immediately.",
     "source": "threatfox",
     "reference": "feed:threatfox#Triada"
+  },
+  {
+    "apkHash": "6f7f4b22eb7841d2b828f1eda77173880d42267a33b387bee9cee983c03bf291",
+    "familyName": "XCPE",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "XCPE sample SHA-256 (GTIG 2026-11-02)",
+    "source": "threat_research",
+    "reference": "https://cloud.google.com/blog/topics/threat-intelligence/shutting-the-door-on-the-xcpe-botnet"
   },
   {
     "apkHash": "6f8e0cab5fdc8aca6a16a4c76cdccf1d916fb5ce5b3e6d9c8a9e613a06364e0d",
@@ -5120,6 +5520,16 @@
     "reference": "feed:zimperium-ioc#SaferRat"
   },
   {
+    "apkHash": "76b4bf6f55aaab35428260a830ac9a2c437a09aefd521c5b51618db47beca3b2",
+    "familyName": "XCPE",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "XCPE sample SHA-256 (GTIG 2026-11-02)",
+    "source": "threat_research",
+    "reference": "https://cloud.google.com/blog/topics/threat-intelligence/shutting-the-door-on-the-xcpe-botnet"
+  },
+  {
     "apkHash": "76c59b46a905e40412584e861e0418ea3e7f4469720019da940dee68039dcf85",
     "familyName": "BTMOB",
     "category": "MALWARE",
@@ -5178,6 +5588,16 @@
     "description": "AntiDot Android malware APK (PRODAFT malware-ioc, 2026-07-03 sweep)",
     "source": "prodaft-malware-ioc",
     "reference": "feed:prodaft-malware-ioc#AntiDot"
+  },
+  {
+    "apkHash": "7830ce3c3222dd9b25a77a16116dcf832a24b4b9a0bc998501e12415a828fb42",
+    "familyName": "XCPE",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "XCPE sample SHA-256 (GTIG 2026-11-02)",
+    "source": "threat_research",
+    "reference": "https://cloud.google.com/blog/topics/threat-intelligence/shutting-the-door-on-the-xcpe-botnet"
   },
   {
     "apkHash": "784751e30d2f729ac455a9fc4336ee8ef53fa956fc6e16200328bba81f9c4e62",
@@ -5390,6 +5810,16 @@
     "reference": "feed:zimperium-ioc#masive-apks"
   },
   {
+    "apkHash": "7eb1afbf4428a9a3b41a6faf9a7497aab1d7768a8370d475f580e574145a9e7d",
+    "familyName": "XCPE",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "XCPE sample SHA-256 (GTIG 2026-11-02)",
+    "source": "threat_research",
+    "reference": "https://cloud.google.com/blog/topics/threat-intelligence/shutting-the-door-on-the-xcpe-botnet"
+  },
+  {
     "apkHash": "7f44fc2c0d2dd7f41d6440f26c680f05eb50f20c86c178064141f30e5ba65435",
     "familyName": "RedWing",
     "category": "MALWARE",
@@ -5580,6 +6010,16 @@
     "reference": "feed:zimperium-ioc#GoldPickaxe"
   },
   {
+    "apkHash": "8365658b7c51d7b607fe83d862d05e619cad5249c96db61a3d33a95c615c8194",
+    "familyName": "XCPE",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "XCPE sample SHA-256 (GTIG 2026-11-02)",
+    "source": "threat_research",
+    "reference": "https://cloud.google.com/blog/topics/threat-intelligence/shutting-the-door-on-the-xcpe-botnet"
+  },
+  {
     "apkHash": "836f2b13d8481e9461925303d5295908efbf0a58cd7307c851082ed5e1a074a2",
     "familyName": "Arsink",
     "category": "SPYWARE",
@@ -5588,6 +6028,16 @@
     "description": "Arsink Android spyware APK (MalwareBazaar, 2026-07-03 sweep)",
     "source": "malwarebazaar",
     "reference": "feed:malwarebazaar#Arsink"
+  },
+  {
+    "apkHash": "83b3cfb7655483e0d421737c2bed707fdd1747f105deca6980233c011aaaea30",
+    "familyName": "XCPE",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "XCPE sample SHA-256 (GTIG 2026-11-02)",
+    "source": "threat_research",
+    "reference": "https://cloud.google.com/blog/topics/threat-intelligence/shutting-the-door-on-the-xcpe-botnet"
   },
   {
     "apkHash": "83c1a9e276ab40a1b5226e3ffa8c17b97e41486070efedd14384aa69fa892190",
@@ -5868,6 +6318,16 @@
     "description": "AntiDot Android malware APK (PRODAFT malware-ioc, 2026-07-03 sweep)",
     "source": "prodaft-malware-ioc",
     "reference": "feed:prodaft-malware-ioc#AntiDot"
+  },
+  {
+    "apkHash": "8953f9013eb8c31b27c86ba90edbdb9ecba216ed2cb6a992508c1964d53b8eee",
+    "familyName": "XCPE",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "XCPE sample SHA-256 (GTIG 2026-11-02)",
+    "source": "threat_research",
+    "reference": "https://cloud.google.com/blog/topics/threat-intelligence/shutting-the-door-on-the-xcpe-botnet"
   },
   {
     "apkHash": "89a6a865d33f5e41ac0c3c110514825c5c354ef11a6233cc041e942353ce3275",
@@ -6230,6 +6690,26 @@
     "reference": "feed:malwarebazaar#Arsink"
   },
   {
+    "apkHash": "9216a0a460400403027d4dfc9a6193a776603b64735f174e74a89607567ac6f2",
+    "familyName": "XCPE",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "XCPE sample SHA-256 (GTIG 2026-11-02)",
+    "source": "threat_research",
+    "reference": "https://cloud.google.com/blog/topics/threat-intelligence/shutting-the-door-on-the-xcpe-botnet"
+  },
+  {
+    "apkHash": "92326f3065273d619f866f76e3542b6271886f92b1342c5ccc27cb7150c75176",
+    "familyName": "XCPE",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "XCPE sample SHA-256 (GTIG 2026-11-02)",
+    "source": "threat_research",
+    "reference": "https://cloud.google.com/blog/topics/threat-intelligence/shutting-the-door-on-the-xcpe-botnet"
+  },
+  {
     "apkHash": "924ee3361f4fb3b4a19f91b56127ba54de7a56ceda0aaa5e6f55f8d7aa289b52",
     "familyName": "RedWing",
     "category": "MALWARE",
@@ -6490,6 +6970,16 @@
     "reference": "feed:threatfox#Triada"
   },
   {
+    "apkHash": "99874d087e3f72a9d78439118361f438f7a156af318c788183d338cc315d7fa8",
+    "familyName": "XCPE",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "XCPE sample SHA-256 (GTIG 2026-11-02)",
+    "source": "threat_research",
+    "reference": "https://cloud.google.com/blog/topics/threat-intelligence/shutting-the-door-on-the-xcpe-botnet"
+  },
+  {
     "apkHash": "99ff6067685b9573c9e09e61b4ed910b8a74481bec345cfaa4037ae4a1155495",
     "familyName": "Arsink",
     "category": "SPYWARE",
@@ -6668,6 +7158,16 @@
     "description": "",
     "source": "threat_research",
     "reference": "https://raw.githubusercontent.com/Zimperium/IOC/master/2026-03-PixRevolution/apks.csv"
+  },
+  {
+    "apkHash": "9df157f3975b582074033c80d0d586f3911fb6bd3813539e2edf87ada4eee9fb",
+    "familyName": "XCPE",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "XCPE sample SHA-256 (GTIG 2026-11-02)",
+    "source": "threat_research",
+    "reference": "https://cloud.google.com/blog/topics/threat-intelligence/shutting-the-door-on-the-xcpe-botnet"
   },
   {
     "apkHash": "9df642b7dfda8641fa3ea66ee98e7179865f3a080d64a2b72eaf5188570a5b46",
@@ -6918,6 +7418,16 @@
     "description": "AntiDot Android malware APK (PRODAFT malware-ioc, 2026-07-03 sweep)",
     "source": "prodaft-malware-ioc",
     "reference": "feed:prodaft-malware-ioc#AntiDot"
+  },
+  {
+    "apkHash": "a552bcb7d37c2bdb5c71e923157571598643de4051bfa3e5158fde3cb8709de7",
+    "familyName": "XCPE",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "XCPE sample SHA-256 (GTIG 2026-11-02)",
+    "source": "threat_research",
+    "reference": "https://cloud.google.com/blog/topics/threat-intelligence/shutting-the-door-on-the-xcpe-botnet"
   },
   {
     "apkHash": "a571605812fbd816070e09fce86c2f010673dab8f8a33f8e7de7a89f3ed3ce74",
@@ -7400,6 +7910,16 @@
     "reference": "https://www.group-ib.com/blog/cyberdakait-seven-android-trojans-indian-banking/"
   },
   {
+    "apkHash": "b2e55884c819c210eaf46aeb7970a1ec623944b5d1a8c2178904f998b9682ac0",
+    "familyName": "XCPE",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "XCPE sample SHA-256 (GTIG 2026-11-02)",
+    "source": "threat_research",
+    "reference": "https://cloud.google.com/blog/topics/threat-intelligence/shutting-the-door-on-the-xcpe-botnet"
+  },
+  {
     "apkHash": "b2ea0559ff0f8f385e56c7393b22fa8a3d216f510d7299483d992e316e46dabf",
     "familyName": "RedWing",
     "category": "MALWARE",
@@ -7428,6 +7948,16 @@
     "description": "ToxicPanda 2.0 dropper APK",
     "source": "zimperium-ioc",
     "reference": "feed:zimperium-ioc#ToxicPanda"
+  },
+  {
+    "apkHash": "b3690b3b013ac60752a6d05c3f53ea1f3e844d4603c5b90d258a30c596d0691b",
+    "familyName": "XCPE",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "XCPE sample SHA-256 (GTIG 2026-11-02)",
+    "source": "threat_research",
+    "reference": "https://cloud.google.com/blog/topics/threat-intelligence/shutting-the-door-on-the-xcpe-botnet"
   },
   {
     "apkHash": "b38d466dbb28feb20f4f8cc9d9a3b2204bf38e487e7cc5f057a756dd5f40b7c6",
@@ -7890,6 +8420,16 @@
     "reference": "feed:zimperium-ioc#RedWing"
   },
   {
+    "apkHash": "bcf142ba37e897b7fcbb89353ec9b5a7c3bfb1d167838d3b91c347b9fdfb2230",
+    "familyName": "XCPE",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "XCPE sample SHA-256 (GTIG 2026-11-02)",
+    "source": "threat_research",
+    "reference": "https://cloud.google.com/blog/topics/threat-intelligence/shutting-the-door-on-the-xcpe-botnet"
+  },
+  {
     "apkHash": "be1f07ef8106b96ef157e5a3159b3e287c9a17385755fe3b6605e06cd8308a51",
     "familyName": "AntiDot",
     "category": "MALWARE",
@@ -7938,6 +8478,16 @@
     "description": "RedWing Android banking-trojan / device-takeover MaaS APK sample (Zimperium zLabs, 2026-07; new variant of Oblivion). Uninstall immediately.",
     "source": "zimperium-ioc",
     "reference": "feed:zimperium-ioc#RedWing"
+  },
+  {
+    "apkHash": "be9990489fbf36100ec148f3a83795f2674d17063edb8accd560f1ce2f97dedd",
+    "familyName": "XCPE",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "XCPE sample SHA-256 (GTIG 2026-11-02)",
+    "source": "threat_research",
+    "reference": "https://cloud.google.com/blog/topics/threat-intelligence/shutting-the-door-on-the-xcpe-botnet"
   },
   {
     "apkHash": "bea00c8595bad5df3dfb0a5051eba4295f4f81886744893227dcc9f8384dc657",
@@ -8068,6 +8618,16 @@
     "description": "ToxicPanda 2.0 payload APK",
     "source": "zimperium-ioc",
     "reference": "feed:zimperium-ioc#ToxicPanda"
+  },
+  {
+    "apkHash": "c0e1fad801d87531ee889fa6ec344f14868e7cdac06c93d2d3de742f1a9293c5",
+    "familyName": "XCPE",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "XCPE sample SHA-256 (GTIG 2026-11-02)",
+    "source": "threat_research",
+    "reference": "https://cloud.google.com/blog/topics/threat-intelligence/shutting-the-door-on-the-xcpe-botnet"
   },
   {
     "apkHash": "c1183c6868bf4e006ba412a538a3a07dadbaeded2be6f148765decf69dc284ec",
@@ -8390,6 +8950,16 @@
     "reference": "feed:prodaft-malware-ioc#AntiDot"
   },
   {
+    "apkHash": "cad908ad09d029971b24b4ad653fe680101ccaddd94b4e530c58bf45430fd1a4",
+    "familyName": "XCPE",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "XCPE sample SHA-256 (GTIG 2026-11-02)",
+    "source": "threat_research",
+    "reference": "https://cloud.google.com/blog/topics/threat-intelligence/shutting-the-door-on-the-xcpe-botnet"
+  },
+  {
     "apkHash": "cb0e709592ddb0e75862ab856af8cc887bdf47a2ee69495a8c062ae225e4a773",
     "familyName": "Triada",
     "category": "MALWARE",
@@ -8498,6 +9068,16 @@
     "description": "Triada Android modular backdoor / banking trojan APK sample (ThreatFox tag=Android, apk.triada). Uninstall immediately.",
     "source": "threatfox",
     "reference": "feed:threatfox#Triada"
+  },
+  {
+    "apkHash": "cd8ef4ba20823b926b45a04946f24e45a7bcd4bf2bfc439cac8061a43f146903",
+    "familyName": "XCPE",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "XCPE sample SHA-256 (GTIG 2026-11-02)",
+    "source": "threat_research",
+    "reference": "https://cloud.google.com/blog/topics/threat-intelligence/shutting-the-door-on-the-xcpe-botnet"
   },
   {
     "apkHash": "cd9a5125a210a584bb72730611d0279b8432052b8d696dd61083b703f30bf3c8",
@@ -8678,6 +9258,16 @@
     "description": "",
     "source": "zimperium-ioc",
     "reference": "feed:zimperium-ioc#ClayRat"
+  },
+  {
+    "apkHash": "d4011b684ba389bf0b2dd8ded74fe8a4729b1cad4e6c18cfd928cb99a625a6e4",
+    "familyName": "XCPE",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "XCPE sample SHA-256 (GTIG 2026-11-02)",
+    "source": "threat_research",
+    "reference": "https://cloud.google.com/blog/topics/threat-intelligence/shutting-the-door-on-the-xcpe-botnet"
   },
   {
     "apkHash": "d4139dc84e483ab4bc5d92a54af6c206878bcea987a99e4ca129c7ee80b879f5",
@@ -8950,6 +9540,16 @@
     "reference": "feed:zimperium-ioc#ToxicPanda"
   },
   {
+    "apkHash": "da5246fb62db91eda31df0873835e1c96a3187df1a760ffc87abf9788ba69104",
+    "familyName": "XCPE",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "XCPE sample SHA-256 (GTIG 2026-11-02)",
+    "source": "threat_research",
+    "reference": "https://cloud.google.com/blog/topics/threat-intelligence/shutting-the-door-on-the-xcpe-botnet"
+  },
+  {
     "apkHash": "da6a7e324170acf1eff6721e402ba5c1edb82496b41c71c0a104c6700dda1144",
     "familyName": "RedWing",
     "category": "MALWARE",
@@ -9058,6 +9658,16 @@
     "description": "ESET Android ProSpy/ToSpy sample",
     "source": "threat_research",
     "reference": "https://github.com/eset/malware-ioc/blob/master/prospytospy/samples.sha256"
+  },
+  {
+    "apkHash": "dca25ff0d11d49e9969be3177b50aa8bf120b5ad3946409dedae143a8a69aa99",
+    "familyName": "XCPE",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "XCPE sample SHA-256 (GTIG 2026-11-02)",
+    "source": "threat_research",
+    "reference": "https://cloud.google.com/blog/topics/threat-intelligence/shutting-the-door-on-the-xcpe-botnet"
   },
   {
     "apkHash": "dcc00ebae36b8464d44721629308bf51b9c751dcd4dbf1ca0225480fd2ad4e20",
@@ -9318,6 +9928,16 @@
     "description": "AntiDot Android malware APK (PRODAFT malware-ioc, 2026-07-03 sweep)",
     "source": "prodaft-malware-ioc",
     "reference": "feed:prodaft-malware-ioc#AntiDot"
+  },
+  {
+    "apkHash": "e25616a0c64734f00d1f6dfb064d8f7bf1e4b95aac8b2e4aabb44b2950751bd0",
+    "familyName": "XCPE",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "XCPE sample SHA-256 (GTIG 2026-11-02)",
+    "source": "threat_research",
+    "reference": "https://cloud.google.com/blog/topics/threat-intelligence/shutting-the-door-on-the-xcpe-botnet"
   },
   {
     "apkHash": "e2605d39cffe26b0bec22ae4d809076c493757714f4a81b506c83f8065969728",
@@ -9700,6 +10320,16 @@
     "reference": "feed:threatfox#Triada"
   },
   {
+    "apkHash": "ebcca22b96f7a30ae155efa2f25af29a369c6e9cfc99cb3bb0b72f35bc5528ed",
+    "familyName": "XCPE",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "XCPE sample SHA-256 (GTIG 2026-11-02)",
+    "source": "threat_research",
+    "reference": "https://cloud.google.com/blog/topics/threat-intelligence/shutting-the-door-on-the-xcpe-botnet"
+  },
+  {
     "apkHash": "ec9f58a56596a6d34c9aea55fa25932a5e30cc2d563b323f7b7fe58d132748f6",
     "familyName": "RedWing",
     "category": "MALWARE",
@@ -9978,6 +10608,16 @@
     "description": "",
     "source": "malwarebazaar",
     "reference": "feed:malwarebazaar#Mirai"
+  },
+  {
+    "apkHash": "f451c0b770049c71fb0d8efd45115dfc3336f636fb6a0617ec5a5c58632196f4",
+    "familyName": "XCPE",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "XCPE sample SHA-256 (GTIG 2026-11-02)",
+    "source": "threat_research",
+    "reference": "https://cloud.google.com/blog/topics/threat-intelligence/shutting-the-door-on-the-xcpe-botnet"
   },
   {
     "apkHash": "f456bbd8de30f58c2b986ad1b0bcbd48e1c21a5452c530ad5935af09c51313e0",
@@ -10308,6 +10948,16 @@
     "description": "",
     "source": "malwarebazaar",
     "reference": "feed:malwarebazaar#Arsink"
+  },
+  {
+    "apkHash": "fda3c8fdf7849814e270bbbc00adfa1e15ba8977f5b2508df5febf5dbd3075b2",
+    "familyName": "XCPE",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "XCPE sample SHA-256 (GTIG 2026-11-02)",
+    "source": "threat_research",
+    "reference": "https://cloud.google.com/blog/topics/threat-intelligence/shutting-the-door-on-the-xcpe-botnet"
   },
   {
     "apkHash": "fdbb580294f97ccdbb8f9370f0b8c1d8f81988f73dbd9f7753f9aa69e849117f",
