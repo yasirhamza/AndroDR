@@ -44,6 +44,17 @@ The sigma repo is the git submodule at `third-party/android-sigma-rules/` (see C
 
 ## Step 2: Dispatch Ingesters
 
+**Execution limits — include this paragraph verbatim in EVERY subagent brief
+(ingesters, discover, researchers, Rule Author, Validator, reviewer):** no
+single tool call may block for more than 120 seconds; never start a background
+job or a monitor and then wait on it; never sleep or poll in a loop; never
+fetch from a rate-limited API one item at a time. Optional enrichment (CVSS
+scores, extra context) is skippable: leave the field null and say so in the
+log. If a required fetch is slow or failing, return what you have with an
+error/log note rather than waiting. (On 2026-11-02 the ASB ingester spent ~10
+minutes fetching NVD CVSS per CVE at the anonymous rate limit and looked hung.
+The `update-rules-e2e` workflow carries the same text as `EXEC_LIMITS`.)
+
 Based on the invocation mode:
 
 **Full sweep:** Spawn all feed ingester agents in parallel using the Agent tool:

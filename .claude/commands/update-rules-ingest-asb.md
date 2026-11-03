@@ -14,11 +14,11 @@ You receive the `asb` cursor with:
 
 ## Process
 
-1. Use WebFetch to load `https://source.android.com/docs/security/bulletin` to find the latest bulletin date
-2. If the latest bulletin date is newer than `last_bulletin` (or last_bulletin is null), process it:
-   a. Fetch the bulletin page (e.g., `https://source.android.com/docs/security/bulletin/2026-03-01`)
+1. Use WebFetch to load `https://source.android.com/docs/security/bulletin/asb-overview` to find the published bulletin dates
+2. Process **every** bulletin newer than `last_bulletin` (or only the latest one if last_bulletin is null), oldest first:
+   a. Fetch the bulletin page. Bulletins live under a year directory: `https://source.android.com/docs/security/bulletin/YYYY/YYYY-MM-DD` (e.g. `.../bulletin/2026/2026-10-01`). The flat form without the year directory returns HTTP 404 for 2026 bulletins. A bulletin that is listed but returns 404 is not published yet: stop there and do not advance the cursor past it.
    b. Extract CVE entries from the HTML tables. Each entry has: CVE ID, references, type, severity, updated AOSP versions
-   c. Also check `https://androidvulnerabilities.org/` for structured JSON data on the same CVEs
+   c. Optionally check `https://androidvulnerabilities.org/` for structured JSON data on the same CVEs (one fetch, not per CVE)
 3. For CVEs flagged as "limited, targeted exploitation" in the bulletin, set confidence to `"high"` — these are actively exploited
 4. Group CVEs by patch level date (bulletins have two patch levels: YYYY-MM-01 and YYYY-MM-05)
 
@@ -28,7 +28,11 @@ Build one SIR per bulletin with:
 - `source.feed`: `"asb"`
 - `source.url`: bulletin URL
 - `threat.name`: `"Android Security Bulletin YYYY-MM"`
-- `vulnerabilities`: list of CVE objects with `id`, `cvss` (from NVD if available), `affected_versions`
+- `vulnerabilities`: list of CVE objects with `id`, `cvss`, `affected_versions`. Set `cvss` to `null`:
+  the bulletin gives severity, not CVSS, and the NVD ingester supplies CVSS
+  separately. Do NOT query NVD from this ingester. A bulletin has 25–200 CVEs,
+  and without `NVD_API_KEY` NVD allows 5 requests per 30 seconds, so per-CVE
+  lookups take 10+ minutes and stall the run (2026-11-02).
 - `behavioral_signals`: empty (CVE rules are device posture, not behavioral)
 - `confidence`: `"high"`
 - `rule_hint`: `"device_posture"`
@@ -58,6 +62,7 @@ For actively exploited CVEs, create a separate SIR with:
 - NEVER invent CVE IDs — only include what the bulletin lists
 - If the bulletin page can't be parsed, return empty SIRs with an error note
 - Include the bulletin URL as a reference in every SIR
+- NEVER fetch per CVE from any rate-limited API, never start a background job and wait on it, and never let one command block for more than 120 seconds. If a fetch is slow or failing, return what you have with an `error`/`log` note.
 
 ## IOC data output (added for #117)
 
