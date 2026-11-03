@@ -245,12 +245,13 @@ The known-good side is handled by `KnownAppResolver` / `KnownAppDatabase` (Plexu
 | `StalkerwareIndicatorsFeed` | Package names | `stalkerware-indicators` GitHub repo |
 | `StalkerwareCertHashFeed` / `MalwareBazaarCertFeed` | Cert hashes | stalkerware-indicators + MalwareBazaar |
 | `MvtIndicatorsFeed` | Domains, package names | MVT (Mobile Verification Toolkit) public indicator list |
-| `ThreatFoxDomainFeed` | C2 domains | abuse.ch ThreatFox |
 | `HaGeZiTifFeed` | Domains | HaGeZi threat-intelligence feed |
 | `ZimperiumIocFeed` | Package names / domains | Zimperium public IOC data |
 | `UadKnownAppFeed` / `PlexusKnownAppFeed` | Known-good apps | UAD-ng + Plexus |
 | `RemoteJsonFeed` | Generic (configurable) | Remote JSON endpoint |
 | `PublicRepoIocFeed` | All types | `android-sigma-rules` public repo `ioc-data/` directory |
+
+ThreatFox is not fetched on-device: `ThreatFoxDomainFeed` was retired in 2026-11, after ThreatFox removed its public export and put the replacement behind a per-user Auth-Key. ThreatFox indicators reach devices through the rules repo's `ioc-data/`. `IndicatorUpdater.RETIRED_SOURCE_IDS` purges a retired feed's leftover rows.
 
 **Orchestration and deduplication**
 

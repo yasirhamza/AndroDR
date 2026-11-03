@@ -215,4 +215,34 @@ class IndicatorUpdaterTest {
         updater(fake, listOf(mvt)).update()
         assertEquals("pegasus", fake.lookup("domain", "evil.com")!!.campaignKey)
     }
+
+    // ── Retired feeds (ThreatFox, 2026-11): leftover rows must not outlive the feed ──
+
+    @Test
+    fun `update purges a retired feed's leftover rows and keeps every other source`() = runBlocking {
+        val fake = FakeIndicatorDao()
+        fake.upsertAll(listOf(
+            Indicator(type = "domain", value = "old-c2.example", family = "SMSspy",
+                source = "threatfox", fetchedAt = 10),
+            Indicator(type = "domain", value = "kept.example", family = "RulesFam",
+                source = SourceRank.RULES_REPO, fetchedAt = 10),
+        ))
+        updater(fake).update()
+        assertNull(fake.lookup("domain", "old-c2.example"))
+        assertEquals(SourceRank.RULES_REPO, fake.lookup("domain", "kept.example")!!.source)
+        assertEquals(listOf(SourceRank.RULES_REPO), fake.allSources())
+    }
+
+    @Test
+    fun `retired source ids are no longer ranked or fetched`() {
+        assertEquals(listOf("threatfox"), IndicatorUpdater.RETIRED_SOURCE_IDS)
+        IndicatorUpdater.RETIRED_SOURCE_IDS.forEach { id ->
+            assertEquals("retired feed '$id' must not keep a SourceRank", false, SourceRank.isRanked(id))
+            assertEquals(0, SourceRank.of(id))
+        }
+        val feedIds = com.androdr.di.AppModule.provideDomainIocFeeds().map { it.sourceId }
+        IndicatorUpdater.RETIRED_SOURCE_IDS.forEach { id ->
+            assertEquals("retired feed '$id' is wired into AppModule again", false, id in feedIds)
+        }
+    }
 }

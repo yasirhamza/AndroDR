@@ -26,7 +26,6 @@ class KotlinMirrorFeedsCrossCheckTest {
     private val kotlinBypassFeedIds = setOf(
         "stalkerware-indicators",  // StalkerwareIndicatorsFeed.kt
         "mvt-indicators",          // MvtIndicatorsFeed.kt
-        "threatfox",               // ThreatFoxDomainFeed.kt
     )
 
     private fun mirrorFeedsFile(): File {
