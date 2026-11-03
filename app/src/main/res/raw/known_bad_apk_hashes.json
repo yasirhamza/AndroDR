@@ -40,6 +40,16 @@
     "reference": "https://habr.com/en/companies/pt/articles/1073720/"
   },
   {
+    "apkHash": "01004ec08124a75c496644d11a5a137dc24f5ddfe79e918a3aefd49d24316ca6",
+    "familyName": "SMSspy",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "HIGH",
+    "description": "SMSspy Android SMS-stealer APK (ThreatFox). Uninstall the app and change any banking passwords/OTP-linked accounts.",
+    "source": "threatfox",
+    "reference": "feed:threatfox#SMSspy"
+  },
+  {
     "apkHash": "013642fa369e3f4686339f4de1f7e331bef2c5ece9f1682bc18c02c2f344e797",
     "familyName": "RedWing",
     "category": "MALWARE",
@@ -160,6 +170,16 @@
     "reference": "feed:zimperium-ioc#ToxicPanda"
   },
   {
+    "apkHash": "04b35b0c199ef8a13d6ac18dfc6df2ea66a8ed5b6e464dc3a7db0839093882bd",
+    "familyName": "CyberDakait (d-passive)",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "CyberDakait d-passive (TradeSignals) Android banking trojan APK (SMS/OTP interception; Group-IB). Uninstall it, contact your bank, and turn off any call forwarding (dial ##002#).",
+    "source": "threat_research",
+    "reference": "https://www.group-ib.com/blog/cyberdakait-seven-android-trojans-indian-banking/"
+  },
+  {
     "apkHash": "0500d1396201f770a6b17f9ff996c603d87c482859a425a8110fb2d83b6d3993",
     "familyName": "AntiDot",
     "category": "MALWARE",
@@ -258,6 +278,16 @@
     "description": "",
     "source": "threat_research",
     "reference": "https://github.com/Zimperium/IOC/blob/master/2026-03-Oblivion-RAT/apks.csv"
+  },
+  {
+    "apkHash": "0710ca983741bf6a95db1b6960c1985e45b10f276e5b26f4fae3157db283d1f3",
+    "familyName": "Gigabud / Vwork (GoldFactory)",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "HIGH",
+    "description": "Gigabud/Vwork sample SHA-256 (Group-IB, 2026-09-09; per-sample family split not published). Remediation: uninstall, remove any work profile you did not create, contact your bank.",
+    "source": "threat_research",
+    "reference": "https://www.group-ib.com/blog/vwork-app-cloning-gigabud-goldfactory/"
   },
   {
     "apkHash": "0760d14622d3aea696a99ed3391a5882979c813910badf9f1e47694fb40d7f4b",
@@ -370,6 +400,16 @@
     "reference": "feed:prodaft-malware-ioc#AntiDot"
   },
   {
+    "apkHash": "0a592e8cbc7f6ece7de140a8f49c359fbf152f3d7bab474eb0f52f521f3e56c3",
+    "familyName": "KATARU",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "HIGH",
+    "description": "KATARU Android malware APK (MalwareBazaar). Uninstall the app and change passwords used on the device.",
+    "source": "malwarebazaar",
+    "reference": "feed:malwarebazaar#KATARU"
+  },
+  {
     "apkHash": "0a8160e2242ed9c8ccf37030c646b9d27a7ccb2e48bc71350f011ccfb4ecfa76",
     "familyName": "SaferRat",
     "category": "MALWARE",
@@ -378,6 +418,16 @@
     "description": "SaferRat Android RAT APK",
     "source": "zimperium-ioc",
     "reference": "feed:zimperium-ioc#SaferRat"
+  },
+  {
+    "apkHash": "0ad853b29a7b3677488018061b109bba59b1a518c8f33b48de31ec532be69856",
+    "familyName": "CyberDakait (cyb3rx)",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "CyberDakait cyb3rx Android banking trojan APK (SMS/OTP interception, call forwarding; Group-IB). Uninstall it, contact your bank, and turn off any call forwarding (dial ##002#).",
+    "source": "threat_research",
+    "reference": "https://www.group-ib.com/blog/cyberdakait-seven-android-trojans-indian-banking/"
   },
   {
     "apkHash": "0b10c55cf3df2ef0fb757a4feca1fc48bc1a48de7e22d9c0382d777365675373",
@@ -578,6 +628,16 @@
     "description": "Triada Android modular backdoor / banking trojan APK sample (ThreatFox tag=Android, apk.triada). Uninstall immediately.",
     "source": "threatfox",
     "reference": "feed:threatfox#Triada"
+  },
+  {
+    "apkHash": "112fefc9348fa4acbb82d54d9688c96dd5671bcb2e6288c1f7f384baa8d2fdcf",
+    "familyName": "Gigabud / Vwork (GoldFactory)",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "HIGH",
+    "description": "Gigabud/Vwork sample SHA-256 (Group-IB, 2026-09-09; per-sample family split not published). Remediation: uninstall, remove any work profile you did not create, contact your bank.",
+    "source": "threat_research",
+    "reference": "https://www.group-ib.com/blog/vwork-app-cloning-gigabud-goldfactory/"
   },
   {
     "apkHash": "1199c3cb7707938f48c2611ae29699ad80a16132654f287c957edb36ccd74553",
@@ -1050,6 +1110,16 @@
     "reference": "feed:malwarebazaar#Joker"
   },
   {
+    "apkHash": "19456fbe07ae3d5dc4a493bac27921b02fc75eaa02009a27ab1c6f52d0627423",
+    "familyName": "BankBot-YNRK",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "BankBot-YNRK banking trojan APK posing as IdentitasKependudukanDigital (CYFIRMA). Revoke Accessibility and Device Admin, uninstall, contact your bank.",
+    "source": "threat_research",
+    "reference": "https://www.cyfirma.com/research/investigation-report-android-bankbot-ynrk-mobile-banking-trojan/"
+  },
+  {
     "apkHash": "194b7765b0de4c86a01e9e92005bf8d0c27560872b7f0b739e3ff2c345970602",
     "familyName": "RedWing",
     "category": "MALWARE",
@@ -1120,6 +1190,16 @@
     "reference": "feed:zimperium-ioc#ToxicPanda"
   },
   {
+    "apkHash": "1ae3e8213b07e1d53eca54a1901e2dc6dc9e27a3ca10377a63e6adec2fe15426",
+    "familyName": "SilentNet",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "HIGH",
+    "description": "SilentNet Android malware APK (MalwareBazaar). Uninstall the app and change passwords used on the device.",
+    "source": "malwarebazaar",
+    "reference": "feed:malwarebazaar#SilentNet"
+  },
+  {
     "apkHash": "1ae72c2f58378f765357c4d42ba7352082beee1651923009e79909415a8fbdad",
     "familyName": "Konfety",
     "category": "MALWARE",
@@ -1160,6 +1240,16 @@
     "reference": "feed:threatfox#Triada"
   },
   {
+    "apkHash": "1b40c5c5ede3f9986692526f2e1378fcb5c93fac4e07819c4e2fad2c382a3b06",
+    "familyName": "SMSspy",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "HIGH",
+    "description": "SMSspy Android SMS-stealer APK (ThreatFox). Uninstall the app and change any banking passwords/OTP-linked accounts.",
+    "source": "threatfox",
+    "reference": "feed:threatfox#SMSspy"
+  },
+  {
     "apkHash": "1b4a70cfe4ba581b7685640a8caf8d7653dd4fc31b19477521cbf4a20a95d3b4",
     "familyName": "AntiDot",
     "category": "MALWARE",
@@ -1168,6 +1258,16 @@
     "description": "AntiDot Android malware APK (PRODAFT malware-ioc, 2026-07-03 sweep)",
     "source": "prodaft-malware-ioc",
     "reference": "feed:prodaft-malware-ioc#AntiDot"
+  },
+  {
+    "apkHash": "1b9052d85e12573b4f64f6a47f64803007b19990def1bc62a865de00149a825e",
+    "familyName": "CyberDakait (godz)",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "CyberDakait godz Android banking trojan APK (SMS/OTP interception, call forwarding; Group-IB). Uninstall it, contact your bank, and turn off any call forwarding (dial ##002#).",
+    "source": "threat_research",
+    "reference": "https://www.group-ib.com/blog/cyberdakait-seven-android-trojans-indian-banking/"
   },
   {
     "apkHash": "1ba364113c4cec5542d1b2c76d7c163a66bdf90bc373256d5178f880f9742960",
@@ -1198,6 +1298,16 @@
     "description": "ToxicPanda 2.0 payload APK",
     "source": "zimperium-ioc",
     "reference": "feed:zimperium-ioc#ToxicPanda"
+  },
+  {
+    "apkHash": "1bfaaa9aed67552a2c368df3f264ef6878a4e7b43468546db77f095517b15b56",
+    "familyName": "CyberDakait (d-passive)",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "CyberDakait d-passive (ExampleAdmin) Android banking trojan APK (SMS/OTP interception; Group-IB). Uninstall it, contact your bank, and turn off any call forwarding (dial ##002#).",
+    "source": "threat_research",
+    "reference": "https://www.group-ib.com/blog/cyberdakait-seven-android-trojans-indian-banking/"
   },
   {
     "apkHash": "1c274031f8a092518ab0cc65b16906059b297784d778ef42175dfb6430a4cdec",
@@ -1300,6 +1410,16 @@
     "reference": "feed:zimperium-ioc#Rokarolla"
   },
   {
+    "apkHash": "1e60421e83a317cfbfce980fefa926a847964bcc7b047908db65161148d0f624",
+    "familyName": "CyberDakait (cyb3rx)",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "CyberDakait cyb3rx Android banking trojan APK (SMS/OTP interception, call forwarding; Group-IB). Uninstall it, contact your bank, and turn off any call forwarding (dial ##002#).",
+    "source": "threat_research",
+    "reference": "https://www.group-ib.com/blog/cyberdakait-seven-android-trojans-indian-banking/"
+  },
+  {
     "apkHash": "1e8262c3bf900c2d40912f8038a96bdfcc7a30943264b94d03b240e1a38cd4e8",
     "familyName": "AntiDot",
     "category": "MALWARE",
@@ -1358,6 +1478,16 @@
     "description": "Rokarolla Android malware APK (Zimperium zLabs, 2026-07-03 sweep)",
     "source": "zimperium-ioc",
     "reference": "feed:zimperium-ioc#Rokarolla"
+  },
+  {
+    "apkHash": "1f5d99864564c088a3260e54ad1728a3eadc0b509386cae200993b33673b343c",
+    "familyName": "Gigabud / Vwork (GoldFactory)",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "HIGH",
+    "description": "Gigabud/Vwork sample SHA-256 (Group-IB, 2026-09-09; per-sample family split not published). Remediation: uninstall, remove any work profile you did not create, contact your bank.",
+    "source": "threat_research",
+    "reference": "https://www.group-ib.com/blog/vwork-app-cloning-gigabud-goldfactory/"
   },
   {
     "apkHash": "1fa2150192384a7abb27ad92295aa937efca1b2ac88dc802d3a68082d61c38e9",
@@ -1960,6 +2090,16 @@
     "reference": "feed:zimperium-ioc#ClayRat"
   },
   {
+    "apkHash": "2dbcfb3b86ef108709d44d6a9213c095bb2ea51797ad5ff3e0e61bc99e8e0326",
+    "familyName": "SMSspy",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "HIGH",
+    "description": "SMSspy Android SMS-stealer APK (ThreatFox). Uninstall the app and change any banking passwords/OTP-linked accounts.",
+    "source": "threatfox",
+    "reference": "feed:threatfox#SMSspy"
+  },
+  {
     "apkHash": "2dc7565fc0dcddba8cd378a0582ed4f6f3042165feddf22269664b1645390e93",
     "familyName": "RedWing",
     "category": "MALWARE",
@@ -2040,6 +2180,16 @@
     "reference": "feed:zimperium-ioc#RedWing"
   },
   {
+    "apkHash": "2fa0f3893ca8fff0ba2c2e30d0ba35712ec5dffa27ebe1b87b4a26cb4f7d0aa4",
+    "familyName": "Joker",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "HIGH",
+    "description": "Joker Android malware APK (MalwareBazaar). Uninstall the app and review carrier billing / subscriptions.",
+    "source": "malwarebazaar",
+    "reference": "feed:malwarebazaar#Joker"
+  },
+  {
     "apkHash": "2fb5b01ea5a483d60b659e85327a53c6661bdd630d4afd93dc5fe0941d3ccbbe",
     "familyName": "Manic",
     "category": "MALWARE",
@@ -2048,6 +2198,16 @@
     "description": "Manic May 2026 implant APK (SHA-256)",
     "source": "threat_research",
     "reference": "https://www.threatfabric.com/blogs/manic-blend-between-banking-malware-and-spyware"
+  },
+  {
+    "apkHash": "2fbde057c22b6cb517116d6c797c3474de2f4d3bda09037a9f043a6ad843982f",
+    "familyName": "CyberDakait (cyb3rx)",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "CyberDakait cyb3rx Android banking trojan APK (SMS/OTP interception, call forwarding; Group-IB). Uninstall it, contact your bank, and turn off any call forwarding (dial ##002#).",
+    "source": "threat_research",
+    "reference": "https://www.group-ib.com/blog/cyberdakait-seven-android-trojans-indian-banking/"
   },
   {
     "apkHash": "2feff8bbf445c9ed83bbb047e5540c89043dddeaea60e30e312c4877bcaf7f21",
@@ -2248,6 +2408,16 @@
     "description": "Triada Android modular backdoor / banking trojan APK sample (ThreatFox tag=Android, apk.triada). Uninstall immediately.",
     "source": "threatfox",
     "reference": "feed:threatfox#Triada"
+  },
+  {
+    "apkHash": "34b75b78b6c575c8a9e71f712be9d90aa35a3a04b48839f86282678107f7876d",
+    "familyName": "CyberDakait (GhostBat)",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "CyberDakait GhostBat Android banking trojan APK (SMS/OTP interception, keylogging; Group-IB). Uninstall it, contact your bank, and turn off any call forwarding (dial ##002#).",
+    "source": "threat_research",
+    "reference": "https://www.group-ib.com/blog/cyberdakait-seven-android-trojans-indian-banking/"
   },
   {
     "apkHash": "34f1e4299db414f0beb89c12641f8df9fd1f1e00bf4b2aa11f8c9f072c4d4787",
@@ -2518,6 +2688,26 @@
     "description": "",
     "source": "zimperium-ioc",
     "reference": "feed:zimperium-ioc#ClayRat"
+  },
+  {
+    "apkHash": "3b64eeacacb94d70d498988fe8c6dcc25b133bcaea37fb69dc6f0cc26bde9921",
+    "familyName": "CyberDakait (cyb3rx)",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "CyberDakait cyb3rx Android banking trojan APK (SMS/OTP interception, call forwarding; Group-IB). Uninstall it, contact your bank, and turn off any call forwarding (dial ##002#).",
+    "source": "threat_research",
+    "reference": "https://www.group-ib.com/blog/cyberdakait-seven-android-trojans-indian-banking/"
+  },
+  {
+    "apkHash": "3b6c2dcba751d1ea05b83fd609e13423dff575705920a1c835ff0d5f92403ffc",
+    "familyName": "CyberDakait (d-shine)",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "CyberDakait d-shine Android banking trojan APK (SMS/OTP interception; Group-IB). Uninstall it, contact your bank, and turn off any call forwarding (dial ##002#).",
+    "source": "threat_research",
+    "reference": "https://www.group-ib.com/blog/cyberdakait-seven-android-trojans-indian-banking/"
   },
   {
     "apkHash": "3c0edd3c80f917d0045ac51d177e9a4768df5a66517005b0f7944423aa54b089",
@@ -2820,6 +3010,16 @@
     "reference": "feed:malwarebazaar#Copybara"
   },
   {
+    "apkHash": "425469176c41994bc33ce0582948798875f5c9682b7d0967c925a10f813e1a3d",
+    "familyName": "IRATA",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "HIGH",
+    "description": "IRATA Android malware APK (MalwareBazaar). Uninstall the app and change banking passwords.",
+    "source": "malwarebazaar",
+    "reference": "feed:malwarebazaar#IRATA"
+  },
+  {
     "apkHash": "425cd7072b5e9386ac94e97fe272980b6ef36240df6b5d77b371ab7378004c83",
     "familyName": "Hirudo",
     "category": "MALWARE",
@@ -2870,6 +3070,16 @@
     "reference": "feed:zimperium-ioc#RedWing"
   },
   {
+    "apkHash": "431ae9a0569c52de8fb5abffcf12919b8d685a879f4e777602ae490dbc2a6baa",
+    "familyName": "CyberDakait (cyb3rx)",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "CyberDakait cyb3rx Android banking trojan APK (SMS/OTP interception, call forwarding; Group-IB). Uninstall it, contact your bank, and turn off any call forwarding (dial ##002#).",
+    "source": "threat_research",
+    "reference": "https://www.group-ib.com/blog/cyberdakait-seven-android-trojans-indian-banking/"
+  },
+  {
     "apkHash": "43858f85d02d85d19c84f4267293bf19a8efee6392e4c46e7213b4d82f0c9be2",
     "familyName": "Triada",
     "category": "MALWARE",
@@ -2908,6 +3118,16 @@
     "description": "AntiDot Android malware APK (PRODAFT malware-ioc, 2026-07-03 sweep)",
     "source": "prodaft-malware-ioc",
     "reference": "feed:prodaft-malware-ioc#AntiDot"
+  },
+  {
+    "apkHash": "43b217184f7765c699fd887fe22c07c7656483dc088e0214587a4890b2b6aee6",
+    "familyName": "CyberDakait (GhostBat)",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "CyberDakait GhostBat Android banking trojan APK (SMS/OTP interception, keylogging; Group-IB). Uninstall it, contact your bank, and turn off any call forwarding (dial ##002#).",
+    "source": "threat_research",
+    "reference": "https://www.group-ib.com/blog/cyberdakait-seven-android-trojans-indian-banking/"
   },
   {
     "apkHash": "43bd9ddefa376c5b146d89cfa8b537bd3220945a809e0e7d6185ed3510749f6e",
@@ -3060,6 +3280,16 @@
     "reference": "feed:zimperium-ioc#RedWing"
   },
   {
+    "apkHash": "47ae095fd9e5143798a70805a23eb294fc072170dac19c1fa112beca186d844a",
+    "familyName": "CyberDakait (cyb3rx)",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "CyberDakait cyb3rx Android banking trojan APK (SMS/OTP interception, call forwarding; Group-IB). Uninstall it, contact your bank, and turn off any call forwarding (dial ##002#).",
+    "source": "threat_research",
+    "reference": "https://www.group-ib.com/blog/cyberdakait-seven-android-trojans-indian-banking/"
+  },
+  {
     "apkHash": "47bb1cba0d873d2faf4d0289e792c9fb2f5cc83ee6427df33cfb3e96299f221e",
     "familyName": "RedWing",
     "category": "MALWARE",
@@ -3108,6 +3338,16 @@
     "description": "",
     "source": "zimperium-ioc",
     "reference": "feed:zimperium-ioc#ClayRat"
+  },
+  {
+    "apkHash": "4a17171155997754ad735b460be67e344c5939d9cff498ce1d95bf554b93fc1b",
+    "familyName": "CyberDakait (tenxen)",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "CyberDakait tenxen Android banking trojan APK (SMS/OTP interception, call forwarding; Group-IB). Uninstall it, contact your bank, and turn off any call forwarding (dial ##002#).",
+    "source": "threat_research",
+    "reference": "https://www.group-ib.com/blog/cyberdakait-seven-android-trojans-indian-banking/"
   },
   {
     "apkHash": "4a288f491013e58fa7a790338ecd528f943e86ce03d40488c4d9faf553efbce8",
@@ -3360,6 +3600,16 @@
     "reference": "feed:malwarebazaar#BtmobRAT"
   },
   {
+    "apkHash": "4fff28eecc0ab6303e4948df77671009dda5b93ed3d1cead527b02d1317426bc",
+    "familyName": "Gigabud / Vwork (GoldFactory)",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "HIGH",
+    "description": "Gigabud/Vwork sample SHA-256 (Group-IB, 2026-09-09; per-sample family split not published). Remediation: uninstall, remove any work profile you did not create, contact your bank.",
+    "source": "threat_research",
+    "reference": "https://www.group-ib.com/blog/vwork-app-cloning-gigabud-goldfactory/"
+  },
+  {
     "apkHash": "500eac20206935a6542c4a0f1f0e45109106fefa3a18fa32108b968d04946e47",
     "familyName": "RedWing",
     "category": "MALWARE",
@@ -3530,6 +3780,16 @@
     "reference": "feed:threatfox#Unknown malware"
   },
   {
+    "apkHash": "53f9fcf3a6fdc59e9a28fd129a32064d78628289eac72d47f53d63cbc434de41",
+    "familyName": "CyberDakait (godz)",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "CyberDakait godz Android banking trojan APK (SMS/OTP interception, call forwarding; Group-IB). Uninstall it, contact your bank, and turn off any call forwarding (dial ##002#).",
+    "source": "threat_research",
+    "reference": "https://www.group-ib.com/blog/cyberdakait-seven-android-trojans-indian-banking/"
+  },
+  {
     "apkHash": "545b228aeb9e2163fa028d6ff5604e50c82779f8e9ca914b2167dd4f62440322",
     "familyName": "ProSpy/ToSpy",
     "category": "NATION_STATE_SPYWARE",
@@ -3608,6 +3868,16 @@
     "description": "AntiDot Android malware APK (PRODAFT malware-ioc, 2026-07-03 sweep)",
     "source": "prodaft-malware-ioc",
     "reference": "feed:prodaft-malware-ioc#AntiDot"
+  },
+  {
+    "apkHash": "555e0506979e0b26e4318c0f7dfff0e3dc5c81bb7e3925f2cadd1bdeb843570f",
+    "familyName": "CyberDakait (appkjl)",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "CyberDakait appkjl Android banking trojan APK (SMS/OTP interception; Group-IB). Uninstall it, contact your bank, and turn off any call forwarding (dial ##002#).",
+    "source": "threat_research",
+    "reference": "https://www.group-ib.com/blog/cyberdakait-seven-android-trojans-indian-banking/"
   },
   {
     "apkHash": "557c02b5e9ca8103e6ad5413df1b447fae5c9ce086a0b5330bf9c79a578585df",
@@ -3710,6 +3980,16 @@
     "reference": "feed:prodaft-malware-ioc#AntiDot"
   },
   {
+    "apkHash": "58f639084f153ff5241b8ee7de3aba11dc5db2cebbb755f8c17c1091b030f594",
+    "familyName": "SilentNet",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "HIGH",
+    "description": "SilentNet Android malware APK (MalwareBazaar). Uninstall the app and change passwords used on the device.",
+    "source": "malwarebazaar",
+    "reference": "feed:malwarebazaar#SilentNet"
+  },
+  {
     "apkHash": "590c3fd1f5355493a62d7432c5a7721e6338137daf32f03d27cd89973990040f",
     "familyName": "Arsink",
     "category": "SPYWARE",
@@ -3738,6 +4018,16 @@
     "description": "AntiDot Android malware APK (PRODAFT malware-ioc, 2026-07-03 sweep)",
     "source": "prodaft-malware-ioc",
     "reference": "feed:prodaft-malware-ioc#AntiDot"
+  },
+  {
+    "apkHash": "5a0cd09adb09a79071a85edc931e02c8d565d6cb7cb58e5b0bffd866e6a2ffb4",
+    "familyName": "CyberDakait (cyb3rx)",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "CyberDakait cyb3rx Android banking trojan APK (SMS/OTP interception, call forwarding; Group-IB). Uninstall it, contact your bank, and turn off any call forwarding (dial ##002#).",
+    "source": "threat_research",
+    "reference": "https://www.group-ib.com/blog/cyberdakait-seven-android-trojans-indian-banking/"
   },
   {
     "apkHash": "5a616700a3fa6a7a14bd38ae6155f53ba2e6578b772abfd8c8978fdb2bcaeb44",
@@ -3800,6 +4090,16 @@
     "reference": "feed:zimperium-ioc#ToxicPanda"
   },
   {
+    "apkHash": "5c0f8bca492c9ee79d6bbd7a532945514670321a605002987f69e3331110e447",
+    "familyName": "CyberDakait (godz)",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "CyberDakait godz Android banking trojan APK (SMS/OTP interception, call forwarding; Group-IB). Uninstall it, contact your bank, and turn off any call forwarding (dial ##002#).",
+    "source": "threat_research",
+    "reference": "https://www.group-ib.com/blog/cyberdakait-seven-android-trojans-indian-banking/"
+  },
+  {
     "apkHash": "5ceb97514d87528f88a13616c2c4b2b13ccd239c583836df0460261360c849f4",
     "familyName": "ToxicPanda",
     "category": "MALWARE",
@@ -3828,6 +4128,16 @@
     "description": "",
     "source": "malwarebazaar",
     "reference": "feed:malwarebazaar#SpyNote"
+  },
+  {
+    "apkHash": "5d58978d02b03f6274c3146320d17a1d64642901ae6984c1bddbd7e6293628f6",
+    "familyName": "SMSspy",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "HIGH",
+    "description": "SMSspy Android SMS-stealer APK (ThreatFox). Uninstall the app and change any banking passwords/OTP-linked accounts.",
+    "source": "threatfox",
+    "reference": "feed:threatfox#SMSspy"
   },
   {
     "apkHash": "5d5c21fbab62ec156c8e3897caf31a0dfb1a2bf2e1198a9e9b8ecdea87089a19",
@@ -3868,6 +4178,16 @@
     "description": "",
     "source": "zimperium-ioc",
     "reference": "feed:zimperium-ioc#ClayRat"
+  },
+  {
+    "apkHash": "5f09a31e28b755aab00fbf3669a7369d1205ac5dea85f0b328cb7cd76472e456",
+    "familyName": "CyberDakait (cyb3rx)",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "CyberDakait cyb3rx Android banking trojan APK (SMS/OTP interception, call forwarding; Group-IB). Uninstall it, contact your bank, and turn off any call forwarding (dial ##002#).",
+    "source": "threat_research",
+    "reference": "https://www.group-ib.com/blog/cyberdakait-seven-android-trojans-indian-banking/"
   },
   {
     "apkHash": "5f94e59c132a7ed0e35b60146d973a728ab9f390c8291f9547cee26c56427738",
@@ -3968,6 +4288,16 @@
     "description": "AntiDot Android malware APK (PRODAFT malware-ioc, 2026-07-03 sweep)",
     "source": "prodaft-malware-ioc",
     "reference": "feed:prodaft-malware-ioc#AntiDot"
+  },
+  {
+    "apkHash": "61274cf9f49e04e559b267d18617d352c48ba3b1f453773ee9f30e5a4e25dbbc",
+    "familyName": "Gigabud / Vwork (GoldFactory)",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "HIGH",
+    "description": "Gigabud/Vwork sample SHA-256 (Group-IB, 2026-09-09; per-sample family split not published). Remediation: uninstall, remove any work profile you did not create, contact your bank.",
+    "source": "threat_research",
+    "reference": "https://www.group-ib.com/blog/vwork-app-cloning-gigabud-goldfactory/"
   },
   {
     "apkHash": "613e022027d13bdf91206c1139d27e547ad12e2971b4e9fb0f5c87d4c75313df",
@@ -4160,6 +4490,16 @@
     "reference": "feed:zimperium-ioc#GoldPickaxe"
   },
   {
+    "apkHash": "65e64e65678f849871257dca43fccf8941ee0ee35fe6b72e86a34fe84e752e68",
+    "familyName": "CyberDakait (cyb3rx)",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "CyberDakait cyb3rx Android banking trojan APK (SMS/OTP interception, call forwarding; Group-IB). Uninstall it, contact your bank, and turn off any call forwarding (dial ##002#).",
+    "source": "threat_research",
+    "reference": "https://www.group-ib.com/blog/cyberdakait-seven-android-trojans-indian-banking/"
+  },
+  {
     "apkHash": "6604f33ee0e05c263068433f3e4783f62d210c0e86fa98d7ef365fda46296302",
     "familyName": "AntiDot",
     "category": "MALWARE",
@@ -4178,6 +4518,16 @@
     "description": "",
     "source": "threat_research",
     "reference": "https://raw.githubusercontent.com/Zimperium/IOC/master/2026-03-PixRevolution/apks.csv"
+  },
+  {
+    "apkHash": "66499653c0fff78d81db5dc319b9aaa0288dc5d76f555a5eba73660c0ee810eb",
+    "familyName": "Gigabud / Vwork (GoldFactory)",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "HIGH",
+    "description": "Gigabud/Vwork sample SHA-256 (Group-IB, 2026-09-09; per-sample family split not published). Remediation: uninstall, remove any work profile you did not create, contact your bank.",
+    "source": "threat_research",
+    "reference": "https://www.group-ib.com/blog/vwork-app-cloning-gigabud-goldfactory/"
   },
   {
     "apkHash": "66500b3b4d582a418f608b8fe14c2c8bb6defcdefd30837dd3368bc3954474c6",
@@ -4920,6 +5270,16 @@
     "reference": "feed:zimperium-ioc#Rokarolla"
   },
   {
+    "apkHash": "7add757c3f09d52863fcc07948491ad967a7f0a9a51bbabb8567c26b8bfecfda",
+    "familyName": "SilentNet",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "HIGH",
+    "description": "SilentNet Android malware APK (MalwareBazaar). Uninstall the app and change passwords used on the device.",
+    "source": "malwarebazaar",
+    "reference": "feed:malwarebazaar#SilentNet"
+  },
+  {
     "apkHash": "7b44413023a95b795cf0541d775293023039c3378582d6e158cc628d21f03f82",
     "familyName": "IRATA",
     "category": "MALWARE",
@@ -5010,6 +5370,16 @@
     "reference": "feed:threatfox#Triada"
   },
   {
+    "apkHash": "7e631e9f7791f4648f776419c020ce6c33071c3e195669dd473f1423f098d39d",
+    "familyName": "CyberDakait (cyb3rx)",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "CyberDakait cyb3rx Android banking trojan APK (SMS/OTP interception, call forwarding; Group-IB). Uninstall it, contact your bank, and turn off any call forwarding (dial ##002#).",
+    "source": "threat_research",
+    "reference": "https://www.group-ib.com/blog/cyberdakait-seven-android-trojans-indian-banking/"
+  },
+  {
     "apkHash": "7e7efb8e547d26d8e92bf6e0a86d8fb1146938c2d3d08734056728d74f605ee0",
     "familyName": "Massiv",
     "category": "MALWARE",
@@ -5068,6 +5438,16 @@
     "description": "Manic July 2026 wrapper APK (SHA-256)",
     "source": "threat_research",
     "reference": "https://www.threatfabric.com/blogs/manic-blend-between-banking-malware-and-spyware"
+  },
+  {
+    "apkHash": "80de49a3bd719d62f3b2f24d584a03e3fff3e6ac46ad8bea3c04c8a09071ed3a",
+    "familyName": "CyberDakait (cyb3rx)",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "CyberDakait cyb3rx Android banking trojan APK (SMS/OTP interception, call forwarding; Group-IB). Uninstall it, contact your bank, and turn off any call forwarding (dial ##002#).",
+    "source": "threat_research",
+    "reference": "https://www.group-ib.com/blog/cyberdakait-seven-android-trojans-indian-banking/"
   },
   {
     "apkHash": "81021ea65f7f0dade4472d2be3489492f6421c110c02bc4a9d7b2f5a002eee78",
@@ -5660,6 +6040,16 @@
     "reference": "feed:malwarebazaar#Mirai"
   },
   {
+    "apkHash": "8dfb0686ea46ce428422587f9c835d30a4a39da23c428bca0aba4d716613f1eb",
+    "familyName": "SMSspy",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "HIGH",
+    "description": "SMSspy Android SMS-stealer APK (ThreatFox). Uninstall the app and change any banking passwords/OTP-linked accounts.",
+    "source": "threatfox",
+    "reference": "feed:threatfox#SMSspy"
+  },
+  {
     "apkHash": "8e19018514d35c160a0d1556574457ee609e23c0527f69642a14a3f18645b246",
     "familyName": "Triada",
     "category": "MALWARE",
@@ -5748,6 +6138,16 @@
     "description": "ToxicPanda 2.0 dropper APK",
     "source": "zimperium-ioc",
     "reference": "feed:zimperium-ioc#ToxicPanda"
+  },
+  {
+    "apkHash": "902803b40aa30d12e60a37680b113d5fc7c79695b7e1b72904fa7de06cf9b27b",
+    "familyName": "CyberDakait (cyb3rx)",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "CyberDakait cyb3rx Android banking trojan APK (SMS/OTP interception, call forwarding; Group-IB). Uninstall it, contact your bank, and turn off any call forwarding (dial ##002#).",
+    "source": "threat_research",
+    "reference": "https://www.group-ib.com/blog/cyberdakait-seven-android-trojans-indian-banking/"
   },
   {
     "apkHash": "902c5f46ac101b6f30032d4c5c86ecec115add3605fb0d66057130b6e11c57e6",
@@ -6220,6 +6620,16 @@
     "reference": "feed:malwarebazaar#FantasyHub"
   },
   {
+    "apkHash": "9ca27df7938f12794bab0847434482955ca9adea714a34afd315c7a7be522611",
+    "familyName": "Gigabud / Vwork (GoldFactory)",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "HIGH",
+    "description": "Gigabud/Vwork sample SHA-256 (Group-IB, 2026-09-09; per-sample family split not published). Remediation: uninstall, remove any work profile you did not create, contact your bank.",
+    "source": "threat_research",
+    "reference": "https://www.group-ib.com/blog/vwork-app-cloning-gigabud-goldfactory/"
+  },
+  {
     "apkHash": "9ce859a03c883759048cb702b5b187ac57ec14ab8fd12d1be5d70c39c0aa3deb",
     "familyName": "Triada",
     "category": "MALWARE",
@@ -6278,6 +6688,16 @@
     "description": "Triada Android modular backdoor / banking trojan APK sample (ThreatFox tag=Android, apk.triada). Uninstall immediately.",
     "source": "threatfox",
     "reference": "feed:threatfox#Triada"
+  },
+  {
+    "apkHash": "9e7cdafcb473d28e134f87d758839265e97b03cf260a186d0e21e1de8aeb7fa8",
+    "familyName": "CyberDakait (godz)",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "CyberDakait godz Android banking trojan APK (SMS/OTP interception, call forwarding; Group-IB). Uninstall it, contact your bank, and turn off any call forwarding (dial ##002#).",
+    "source": "threat_research",
+    "reference": "https://www.group-ib.com/blog/cyberdakait-seven-android-trojans-indian-banking/"
   },
   {
     "apkHash": "9e7d018e22473340193a36fb748b474f255add03b6a3af9977fa67fa29546568",
@@ -6470,6 +6890,16 @@
     "reference": "feed:malwarebazaar#Mirax"
   },
   {
+    "apkHash": "a4126a8863d4ff43f4178119336fa25c0c092d56c46c633dc73e7fc00b4d0a07",
+    "familyName": "BankBot-YNRK",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "BankBot-YNRK banking trojan APK posing as IdentitasKependudukanDigital (CYFIRMA). Revoke Accessibility and Device Admin, uninstall, contact your bank.",
+    "source": "threat_research",
+    "reference": "https://www.cyfirma.com/research/investigation-report-android-bankbot-ynrk-mobile-banking-trojan/"
+  },
+  {
     "apkHash": "a45ab4a898a2cc0f5bcd12d0130e6979236276fa463e4fe48ddf0f3d4f431df4",
     "familyName": "RedWing",
     "category": "MALWARE",
@@ -6610,6 +7040,16 @@
     "reference": "feed:zimperium-ioc#ToxicPanda"
   },
   {
+    "apkHash": "a9859c49d20baf131d1e9253acb0118fac412acaa97938d87c7c8daa7554cd54",
+    "familyName": "CECbot",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "HIGH",
+    "description": "CECbot Android malware APK SHA-256 (ThreatFox/MalwareBazaar). Uninstall the app and review account security.",
+    "source": "threatfox",
+    "reference": "feed:threatfox#CECbot"
+  },
+  {
     "apkHash": "a9d431ba0e772ef50f9a8ef40037d75d29ce0bddba95d612d64bf9dc7f0dd732",
     "familyName": "ToxicPanda",
     "category": "MALWARE",
@@ -6710,6 +7150,16 @@
     "reference": "feed:threatfox#Triada"
   },
   {
+    "apkHash": "ae5483625f278378e9d8930562c3be0dc41c9132fbcaad3894c78b76eb986141",
+    "familyName": "KATARU",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "HIGH",
+    "description": "KATARU Android malware APK (MalwareBazaar). Uninstall the app and change passwords used on the device.",
+    "source": "malwarebazaar",
+    "reference": "feed:malwarebazaar#KATARU"
+  },
+  {
     "apkHash": "ae5f66b98563ab9ae022bdb97b15e1acea8ee0ddd70c8f943029812e886fc8c0",
     "familyName": "ToxicPanda",
     "category": "MALWARE",
@@ -6718,6 +7168,16 @@
     "description": "ToxicPanda 2.0 dropper APK",
     "source": "zimperium-ioc",
     "reference": "feed:zimperium-ioc#ToxicPanda"
+  },
+  {
+    "apkHash": "ae6f6eeba2bd4cc948d24610d9447986e52f913f4b5ff960ddea26075ff621ae",
+    "familyName": "Gigabud / Vwork (GoldFactory)",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "HIGH",
+    "description": "Gigabud/Vwork sample SHA-256 (Group-IB, 2026-09-09; per-sample family split not published). Remediation: uninstall, remove any work profile you did not create, contact your bank.",
+    "source": "threat_research",
+    "reference": "https://www.group-ib.com/blog/vwork-app-cloning-gigabud-goldfactory/"
   },
   {
     "apkHash": "aec2a36e8d68b23444348a7cec2d6ec287cb8810d1e190e04743645426ababb1",
@@ -6788,6 +7248,16 @@
     "description": "AntiDot Android malware APK (PRODAFT malware-ioc, 2026-07-03 sweep)",
     "source": "prodaft-malware-ioc",
     "reference": "feed:prodaft-malware-ioc#AntiDot"
+  },
+  {
+    "apkHash": "affbae7d9b039f377dec0fdc18e9a84ec49d77fbf7e10791b1d618d080ae503e",
+    "familyName": "XMRIG",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "MEDIUM",
+    "description": "XMRIG cryptominer Android APK SHA-256 (ThreatFox Android tag). Uninstall the app.",
+    "source": "threatfox",
+    "reference": "feed:threatfox#XMRIG"
   },
   {
     "apkHash": "b0105ccfdc0b7ecd83bce3be22221b3a867b9ec4c6ad06fde568e2f165beb9dc",
@@ -6920,6 +7390,16 @@
     "reference": "https://www.threatfabric.com/blogs/hirudo-from-fake-updates-to-patched-banking-apps"
   },
   {
+    "apkHash": "b2bfa29467c1979c044259d4ffe31fc32aa6ef33939779bd3b1ce6bedb44dea9",
+    "familyName": "CyberDakait (cyb3rx)",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "CyberDakait cyb3rx Android banking trojan APK (SMS/OTP interception, call forwarding; Group-IB). Uninstall it, contact your bank, and turn off any call forwarding (dial ##002#).",
+    "source": "threat_research",
+    "reference": "https://www.group-ib.com/blog/cyberdakait-seven-android-trojans-indian-banking/"
+  },
+  {
     "apkHash": "b2ea0559ff0f8f385e56c7393b22fa8a3d216f510d7299483d992e316e46dabf",
     "familyName": "RedWing",
     "category": "MALWARE",
@@ -6928,6 +7408,16 @@
     "description": "RedWing Android banking-trojan / device-takeover MaaS APK sample (Zimperium zLabs, 2026-07; new variant of Oblivion). Uninstall immediately.",
     "source": "zimperium-ioc",
     "reference": "feed:zimperium-ioc#RedWing"
+  },
+  {
+    "apkHash": "b332fa9c08020fbbc5503091b4f4a61ee66a05a0a76abf9a53db9f3d80c4862a",
+    "familyName": "CyberDakait (cyb3rx)",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "CyberDakait cyb3rx Android banking trojan APK (SMS/OTP interception, call forwarding; Group-IB). Uninstall it, contact your bank, and turn off any call forwarding (dial ##002#).",
+    "source": "threat_research",
+    "reference": "https://www.group-ib.com/blog/cyberdakait-seven-android-trojans-indian-banking/"
   },
   {
     "apkHash": "b3348d8437cca66fb66742be7252be52f459516ad1f505984fbb664ab192b170",
@@ -7180,6 +7670,16 @@
     "reference": "feed:malwarebazaar#IRATA"
   },
   {
+    "apkHash": "b769721621aed0418b193e4a00e51bc772c8383a4149d23a5425b13475e2d501",
+    "familyName": "Gigabud / Vwork (GoldFactory)",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "HIGH",
+    "description": "Gigabud/Vwork sample SHA-256 (Group-IB, 2026-09-09; per-sample family split not published). Remediation: uninstall, remove any work profile you did not create, contact your bank.",
+    "source": "threat_research",
+    "reference": "https://www.group-ib.com/blog/vwork-app-cloning-gigabud-goldfactory/"
+  },
+  {
     "apkHash": "b7f8c6b76b8b1a0f99fbec5eb467983e8fd18f3ef496957bd8fb9c5bfca5e50b",
     "familyName": "FantasyHub",
     "category": "MALWARE",
@@ -7288,6 +7788,16 @@
     "description": "Joker (Bread) Android fleeceware/SMS-fraud APK.",
     "source": "malwarebazaar",
     "reference": "feed:malwarebazaar#Joker"
+  },
+  {
+    "apkHash": "ba83cc3c9535690191018edf73ca5c6001609df9919462796aa2e551f142e4d3",
+    "familyName": "StreamRat",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "HIGH",
+    "description": "StreamRat sample SHA-256 (ThreatFabric, 2026-09-02). Remediation: revoke Accessibility, uninstall, contact your bank.",
+    "source": "threat_research",
+    "reference": "https://www.threatfabric.com/blogs/from-meta-ads-to-full-device-takeover-uncovering-streamrat"
   },
   {
     "apkHash": "baff2c289cc5f5244952ad6a79f7285ef7abc683a19a1731077ca9bbdde170e9",
@@ -7640,6 +8150,16 @@
     "reference": "feed:threatfox#Triada"
   },
   {
+    "apkHash": "c36d2b4480034a409f33cdef8d7c3501e75f14d2c5bd9a914a65fd7f3c47d74a",
+    "familyName": "CyberDakait (cyb3rx)",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "CyberDakait cyb3rx Android banking trojan APK (SMS/OTP interception, call forwarding; Group-IB). Uninstall it, contact your bank, and turn off any call forwarding (dial ##002#).",
+    "source": "threat_research",
+    "reference": "https://www.group-ib.com/blog/cyberdakait-seven-android-trojans-indian-banking/"
+  },
+  {
     "apkHash": "c39b2975a032629c48226e33d0c5044b6feb8e2da06f6f8db890da43958375a5",
     "familyName": "Arsink",
     "category": "SPYWARE",
@@ -7750,6 +8270,16 @@
     "reference": "https://raw.githubusercontent.com/Zimperium/IOC/master/2026-03-PixRevolution/apks.csv"
   },
   {
+    "apkHash": "c6708166e0a6bf3484200fd6dd1569d89e81c36ffd76ff2ab5820b06fd2d5b54",
+    "familyName": "CyberDakait (cyb3rx)",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "CyberDakait cyb3rx Android banking trojan APK (SMS/OTP interception, call forwarding; Group-IB). Uninstall it, contact your bank, and turn off any call forwarding (dial ##002#).",
+    "source": "threat_research",
+    "reference": "https://www.group-ib.com/blog/cyberdakait-seven-android-trojans-indian-banking/"
+  },
+  {
     "apkHash": "c6ac11119bf1eebf704fe8e5be72432549a55ffc74b4f1d2d10ca178da3214e5",
     "familyName": "RecruitRat",
     "category": "MALWARE",
@@ -7820,6 +8350,16 @@
     "reference": "feed:threatfox#Triada"
   },
   {
+    "apkHash": "c9ead89d1bcb09923e1057bb4617726867154d36932ed1c2f82c2466bf11934c",
+    "familyName": "CyberDakait (cyb3rx)",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "CyberDakait cyb3rx Android banking trojan APK (SMS/OTP interception, call forwarding; Group-IB). Uninstall it, contact your bank, and turn off any call forwarding (dial ##002#).",
+    "source": "threat_research",
+    "reference": "https://www.group-ib.com/blog/cyberdakait-seven-android-trojans-indian-banking/"
+  },
+  {
     "apkHash": "c9f0f8875297bccfa81dcae3fdec8cc67f6872e0e58d295cf2dcf89985e7a22b",
     "familyName": "SaferRat",
     "category": "MALWARE",
@@ -7828,6 +8368,16 @@
     "description": "SaferRat Android malware APK (MalwareBazaar, 2026-07-03 sweep)",
     "source": "malwarebazaar",
     "reference": "feed:malwarebazaar#SaferRat"
+  },
+  {
+    "apkHash": "ca394e1603c83b57b41539cc893dc308e3d99e7542c35db4c2c4ece6f068161b",
+    "familyName": "SMSspy",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "HIGH",
+    "description": "SMSspy Android SMS-stealer APK (ThreatFox). Uninstall the app and change any banking passwords/OTP-linked accounts.",
+    "source": "threatfox",
+    "reference": "feed:threatfox#SMSspy"
   },
   {
     "apkHash": "ca9bc053240726f3df4e5aed80b3a5695ff567e46df97f381a5bcd02c4f6f42d",
@@ -7860,6 +8410,16 @@
     "reference": "https://d3lab.net/nfcshare-evolves-from-a-banking-phishing-apk-to-a-github-hosted-android-nfc-fraud-campaign"
   },
   {
+    "apkHash": "cb25b1664a856f0c3e71a318f3e35eef8b331e047acaf8c53320439c3c23ef7c",
+    "familyName": "BankBot-YNRK",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "BankBot-YNRK banking trojan APK posing as IdentitasKependudukanDigital (CYFIRMA). Revoke Accessibility and Device Admin, uninstall, contact your bank.",
+    "source": "threat_research",
+    "reference": "https://www.cyfirma.com/research/investigation-report-android-bankbot-ynrk-mobile-banking-trojan/"
+  },
+  {
     "apkHash": "cb29b6348ae4458b6b506f8de9336d0980bbfaf88b1d68be2771b57090d29889",
     "familyName": "RemControl",
     "category": "MALWARE",
@@ -7868,6 +8428,16 @@
     "description": "RemControl banking-trojan dropper sample (Group-IB)",
     "source": "threat_research",
     "reference": "https://www.group-ib.com/blog/remcontrol-android-banking-trojan/"
+  },
+  {
+    "apkHash": "cb86017411708eb6e5384fc0288b0ec4692ea45ef38586b7c67f99148e1117c3",
+    "familyName": "CyberDakait (cyb3rx)",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "CyberDakait cyb3rx Android banking trojan APK (SMS/OTP interception, call forwarding; Group-IB). Uninstall it, contact your bank, and turn off any call forwarding (dial ##002#).",
+    "source": "threat_research",
+    "reference": "https://www.group-ib.com/blog/cyberdakait-seven-android-trojans-indian-banking/"
   },
   {
     "apkHash": "cb93d5c96ae3e0b358ac2a0c57008a5655a049ac3bc5543f814af5157e2f27de",
@@ -7968,6 +8538,26 @@
     "description": "BTMOB Android malware APK (MalwareBazaar, 2026-07-03 sweep)",
     "source": "malwarebazaar",
     "reference": "feed:malwarebazaar#BtmobRAT"
+  },
+  {
+    "apkHash": "cf32addd82960501859f205b0fca8c0b51a40857f71e4a2aee8d70b2433319b7",
+    "familyName": "CyberDakait (cyb3rx)",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "CyberDakait cyb3rx Android banking trojan APK (SMS/OTP interception, call forwarding; Group-IB). Uninstall it, contact your bank, and turn off any call forwarding (dial ##002#).",
+    "source": "threat_research",
+    "reference": "https://www.group-ib.com/blog/cyberdakait-seven-android-trojans-indian-banking/"
+  },
+  {
+    "apkHash": "cf66a1acebd878d85345377be53ac0b241f517253811ec969c8ff9c751151424",
+    "familyName": "CyberDakait (cyb3rx)",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "CyberDakait cyb3rx Android banking trojan APK (SMS/OTP interception, call forwarding; Group-IB). Uninstall it, contact your bank, and turn off any call forwarding (dial ##002#).",
+    "source": "threat_research",
+    "reference": "https://www.group-ib.com/blog/cyberdakait-seven-android-trojans-indian-banking/"
   },
   {
     "apkHash": "d076268a34eb62ba17aaf3cfb244998bd3a1a9a4c1ca98d21944d94da30f42a8",
@@ -8198,6 +8788,16 @@
     "description": "ToxicPanda 2.0 payload APK",
     "source": "zimperium-ioc",
     "reference": "feed:zimperium-ioc#ToxicPanda"
+  },
+  {
+    "apkHash": "d72335c0cbbcef002274c1a5087702ed4a91d91a79279104aaf111a33984ae5f",
+    "familyName": "CyberDakait (tenxen)",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "CyberDakait tenxen Android banking trojan APK (SMS/OTP interception, call forwarding; Group-IB). Uninstall it, contact your bank, and turn off any call forwarding (dial ##002#).",
+    "source": "threat_research",
+    "reference": "https://www.group-ib.com/blog/cyberdakait-seven-android-trojans-indian-banking/"
   },
   {
     "apkHash": "d7282325ae25b7c3c124cb54c1d2064cd8cdd92e5b46ca8a3a00d8958bed8ad6",
@@ -8590,6 +9190,16 @@
     "reference": "feed:malwarebazaar#SpyNote"
   },
   {
+    "apkHash": "dfa02773f97f552deb7ff04f5c598a81be4d236fe33adca2a47551485a3aeb2a",
+    "familyName": "CyberDakait (cyb3rx)",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "CyberDakait cyb3rx Android banking trojan APK (SMS/OTP interception, call forwarding; Group-IB). Uninstall it, contact your bank, and turn off any call forwarding (dial ##002#).",
+    "source": "threat_research",
+    "reference": "https://www.group-ib.com/blog/cyberdakait-seven-android-trojans-indian-banking/"
+  },
+  {
     "apkHash": "dfb1ac406a25852ae53dce0d23adc7dc053aab274965b4c4e4df8e6696304ed2",
     "familyName": "ToxicPanda",
     "category": "MALWARE",
@@ -8618,6 +9228,16 @@
     "description": "AntiDot Android malware APK (PRODAFT malware-ioc, 2026-07-03 sweep)",
     "source": "prodaft-malware-ioc",
     "reference": "feed:prodaft-malware-ioc#AntiDot"
+  },
+  {
+    "apkHash": "e0714788b4e2518b0d9d4cbf18c7217bb97718e01689d77338f1cc4a230fcb6c",
+    "familyName": "StreamRat",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "HIGH",
+    "description": "StreamRat sample SHA-256 (ThreatFabric, 2026-09-02). Remediation: revoke Accessibility, uninstall, contact your bank.",
+    "source": "threat_research",
+    "reference": "https://www.threatfabric.com/blogs/from-meta-ads-to-full-device-takeover-uncovering-streamrat"
   },
   {
     "apkHash": "e084a327fde5523b1803040fc1ea40be84bc8434913d37d01083890c351dec96",
@@ -9438,6 +10058,16 @@
     "description": "",
     "source": "threat_research",
     "reference": "https://raw.githubusercontent.com/Zimperium/IOC/master/2026-03-PixRevolution/apks.csv"
+  },
+  {
+    "apkHash": "f6bf91fd210cf04592949131b3ed1a4a10986c9bdeebb4869f511b42c54c5328",
+    "familyName": "RatHat",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "HIGH",
+    "description": "RatHat Android malware APK (MalwareBazaar). Uninstall the app and change passwords used on the device.",
+    "source": "malwarebazaar",
+    "reference": "feed:malwarebazaar#RatHat"
   },
   {
     "apkHash": "f6d2aa5d3320e29bdc8721c81d00f0416f8ea2f535e27cd6f501abb1ec9daeda",

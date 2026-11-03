@@ -55,6 +55,28 @@
     "blockByDefault": false
   },
   {
+    "domain": "81service.icu",
+    "familyName": "CyberDakait",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "CyberDakait Indian-banking phishing page that delivers SMS/call-forwarding banking trojans (Group-IB). Do not enter card or bank details; remove any app installed from it and call your bank.",
+    "source": "threat_research",
+    "reference": "https://www.group-ib.com/blog/cyberdakait-seven-android-trojans-indian-banking/",
+    "blockByDefault": false
+  },
+  {
+    "domain": "81service.in",
+    "familyName": "CyberDakait",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "CyberDakait Indian-banking phishing page that delivers SMS/call-forwarding banking trojans (Group-IB). Do not enter card or bank details; remove any app installed from it and call your bank.",
+    "source": "threat_research",
+    "reference": "https://www.group-ib.com/blog/cyberdakait-seven-android-trojans-indian-banking/",
+    "blockByDefault": false
+  },
+  {
     "domain": "99soya.shop",
     "familyName": "BADBOX 2.0",
     "category": "MALWARE",
@@ -163,6 +185,17 @@
     "source": "threat_research",
     "reference": "https://securityaffairs.com/193745/cyber-crime/new-rokarolla-android-trojan-targets-217-banking-and-crypto-apps.html",
     "blockByDefault": true
+  },
+  {
+    "domain": "accessor.fud2026.com",
+    "familyName": "CyberDakait",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "CyberDakait C2 / XMRig mining infrastructure (Group-IB). Remove the app that contacts it and call your bank.",
+    "source": "threat_research",
+    "reference": "https://www.group-ib.com/blog/cyberdakait-seven-android-trojans-indian-banking/",
+    "blockByDefault": false
   },
   {
     "domain": "accounts.loginshare.info",
@@ -627,6 +660,17 @@
     "blockByDefault": false
   },
   {
+    "domain": "app2-update2.site",
+    "familyName": "CyberDakait",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "CyberDakait C2 / payload infrastructure (Group-IB). Remove the app that contacts it and call your bank.",
+    "source": "threat_research",
+    "reference": "https://www.group-ib.com/blog/cyberdakait-seven-android-trojans-indian-banking/",
+    "blockByDefault": false
+  },
+  {
     "domain": "appclicking.com",
     "familyName": "BADBOX 2.0",
     "category": "MALWARE",
@@ -669,6 +713,28 @@
     "source": "threat_research",
     "reference": "https://raw.githubusercontent.com/eset/malware-ioc/master/ngate/README.adoc",
     "blockByDefault": true
+  },
+  {
+    "domain": "applypointguides.in",
+    "familyName": "CyberDakait",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "CyberDakait Indian-banking phishing page that delivers SMS/call-forwarding banking trojans (Group-IB). Do not enter card or bank details; remove any app installed from it and call your bank.",
+    "source": "threat_research",
+    "reference": "https://www.group-ib.com/blog/cyberdakait-seven-android-trojans-indian-banking/",
+    "blockByDefault": false
+  },
+  {
+    "domain": "aptabase.fud2026.xyz",
+    "familyName": "CyberDakait",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "CyberDakait C2 / XMRig mining infrastructure (Group-IB; port 8443 removed). Remove the app that contacts it and call your bank.",
+    "source": "threat_research",
+    "reference": "https://www.group-ib.com/blog/cyberdakait-seven-android-trojans-indian-banking/",
+    "blockByDefault": false
   },
   {
     "domain": "aptabase.jesfeoqrj3.xyz",
@@ -990,6 +1056,50 @@
     "blockByDefault": true
   },
   {
+    "domain": "cancelcardprotection.online",
+    "familyName": "CyberDakait",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "CyberDakait Indian-banking phishing page that delivers SMS/call-forwarding banking trojans (Group-IB). Do not enter card or bank details; remove any app installed from it and call your bank.",
+    "source": "threat_research",
+    "reference": "https://www.group-ib.com/blog/cyberdakait-seven-android-trojans-indian-banking/",
+    "blockByDefault": false
+  },
+  {
+    "domain": "cancelcpservice.in",
+    "familyName": "CyberDakait",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "CyberDakait Indian-banking phishing page that delivers SMS/call-forwarding banking trojans (Group-IB). Do not enter card or bank details; remove any app installed from it and call your bank.",
+    "source": "threat_research",
+    "reference": "https://www.group-ib.com/blog/cyberdakait-seven-android-trojans-indian-banking/",
+    "blockByDefault": false
+  },
+  {
+    "domain": "cancelmyservice.in",
+    "familyName": "CyberDakait",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "CyberDakait Indian-banking phishing page that delivers SMS/call-forwarding banking trojans (Group-IB). Do not enter card or bank details; remove any app installed from it and call your bank.",
+    "source": "threat_research",
+    "reference": "https://www.group-ib.com/blog/cyberdakait-seven-android-trojans-indian-banking/",
+    "blockByDefault": false
+  },
+  {
+    "domain": "cancelservice.in",
+    "familyName": "CyberDakait",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "CyberDakait Indian-banking phishing page that delivers SMS/call-forwarding banking trojans (Group-IB). Do not enter card or bank details; remove any app installed from it and call your bank.",
+    "source": "threat_research",
+    "reference": "https://www.group-ib.com/blog/cyberdakait-seven-android-trojans-indian-banking/",
+    "blockByDefault": false
+  },
+  {
     "domain": "capone.claybaster.top",
     "familyName": "ClayRat",
     "category": "SPYWARE",
@@ -1023,6 +1133,72 @@
     "blockByDefault": true
   },
   {
+    "domain": "cardforex.icu",
+    "familyName": "CyberDakait",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "CyberDakait Indian-banking phishing page that delivers SMS/call-forwarding banking trojans (Group-IB). Do not enter card or bank details; remove any app installed from it and call your bank.",
+    "source": "threat_research",
+    "reference": "https://www.group-ib.com/blog/cyberdakait-seven-android-trojans-indian-banking/",
+    "blockByDefault": false
+  },
+  {
+    "domain": "cardplan.online",
+    "familyName": "CyberDakait",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "CyberDakait Indian-banking phishing page that delivers SMS/call-forwarding banking trojans (Group-IB). Do not enter card or bank details; remove any app installed from it and call your bank.",
+    "source": "threat_research",
+    "reference": "https://www.group-ib.com/blog/cyberdakait-seven-android-trojans-indian-banking/",
+    "blockByDefault": false
+  },
+  {
+    "domain": "cardprotections.in",
+    "familyName": "CyberDakait",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "CyberDakait Indian-banking phishing page that delivers SMS/call-forwarding banking trojans (Group-IB). Do not enter card or bank details; remove any app installed from it and call your bank.",
+    "source": "threat_research",
+    "reference": "https://www.group-ib.com/blog/cyberdakait-seven-android-trojans-indian-banking/",
+    "blockByDefault": false
+  },
+  {
+    "domain": "cardsprotection.in",
+    "familyName": "CyberDakait",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "CyberDakait Indian-banking phishing page that delivers SMS/call-forwarding banking trojans (Group-IB). Do not enter card or bank details; remove any app installed from it and call your bank.",
+    "source": "threat_research",
+    "reference": "https://www.group-ib.com/blog/cyberdakait-seven-android-trojans-indian-banking/",
+    "blockByDefault": false
+  },
+  {
+    "domain": "cardsprotection.online",
+    "familyName": "CyberDakait",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "CyberDakait Indian-banking phishing page that delivers SMS/call-forwarding banking trojans (Group-IB). Do not enter card or bank details; remove any app installed from it and call your bank.",
+    "source": "threat_research",
+    "reference": "https://www.group-ib.com/blog/cyberdakait-seven-android-trojans-indian-banking/",
+    "blockByDefault": false
+  },
+  {
+    "domain": "careidf.online",
+    "familyName": "CyberDakait",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "CyberDakait Indian-banking phishing page that delivers SMS/call-forwarding banking trojans (Group-IB). Do not enter card or bank details; remove any app installed from it and call your bank.",
+    "source": "threat_research",
+    "reference": "https://www.group-ib.com/blog/cyberdakait-seven-android-trojans-indian-banking/",
+    "blockByDefault": false
+  },
+  {
     "domain": "carelessfielding.xyz",
     "familyName": "DragonDoll",
     "category": "SPYWARE",
@@ -1031,6 +1207,17 @@
     "description": "DragonDoll network IOC (PT ESC; IP 93.124.129.202)",
     "source": "threat_research",
     "reference": "https://habr.com/en/companies/pt/articles/1073720/",
+    "blockByDefault": false
+  },
+  {
+    "domain": "carep.online",
+    "familyName": "CyberDakait",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "CyberDakait Indian-banking phishing page that delivers SMS/call-forwarding banking trojans (Group-IB). Do not enter card or bank details; remove any app installed from it and call your bank.",
+    "source": "threat_research",
+    "reference": "https://www.group-ib.com/blog/cyberdakait-seven-android-trojans-indian-banking/",
     "blockByDefault": false
   },
   {
@@ -1419,6 +1606,28 @@
     "blockByDefault": false
   },
   {
+    "domain": "cpmanaged.in",
+    "familyName": "CyberDakait",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "CyberDakait Indian-banking phishing page that delivers SMS/call-forwarding banking trojans (Group-IB). Do not enter card or bank details; remove any app installed from it and call your bank.",
+    "source": "threat_research",
+    "reference": "https://www.group-ib.com/blog/cyberdakait-seven-android-trojans-indian-banking/",
+    "blockByDefault": false
+  },
+  {
+    "domain": "cppmanage.in",
+    "familyName": "CyberDakait",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "CyberDakait Indian-banking phishing page that delivers SMS/call-forwarding banking trojans (Group-IB). Do not enter card or bank details; remove any app installed from it and call your bank.",
+    "source": "threat_research",
+    "reference": "https://www.group-ib.com/blog/cyberdakait-seven-android-trojans-indian-banking/",
+    "blockByDefault": false
+  },
+  {
     "domain": "csok997.com",
     "familyName": "Vo1d",
     "category": "MALWARE",
@@ -1570,6 +1779,28 @@
     "description": "BADBOX 2.0 botnet C2 (HUMAN Satori appendix; single source).",
     "source": "threat_research",
     "reference": "https://www.humansecurity.com/learn/blog/satori-threat-intelligence-disruption-badbox-2-0/",
+    "blockByDefault": false
+  },
+  {
+    "domain": "deactivatecpplan.in",
+    "familyName": "CyberDakait",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "CyberDakait Indian-banking phishing page that delivers SMS/call-forwarding banking trojans (Group-IB). Do not enter card or bank details; remove any app installed from it and call your bank.",
+    "source": "threat_research",
+    "reference": "https://www.group-ib.com/blog/cyberdakait-seven-android-trojans-indian-banking/",
+    "blockByDefault": false
+  },
+  {
+    "domain": "deactivatecpservice.in",
+    "familyName": "CyberDakait",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "CyberDakait Indian-banking phishing page that delivers SMS/call-forwarding banking trojans (Group-IB). Do not enter card or bank details; remove any app installed from it and call your bank.",
+    "source": "threat_research",
+    "reference": "https://www.group-ib.com/blog/cyberdakait-seven-android-trojans-indian-banking/",
     "blockByDefault": false
   },
   {
@@ -2123,6 +2354,17 @@
     "blockByDefault": true
   },
   {
+    "domain": "fud2026.com",
+    "familyName": "CyberDakait",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "CyberDakait C2 / XMRig mining infrastructure (Group-IB). Remove the app that contacts it and call your bank.",
+    "source": "threat_research",
+    "reference": "https://www.group-ib.com/blog/cyberdakait-seven-android-trojans-indian-banking/",
+    "blockByDefault": false
+  },
+  {
     "domain": "fuhidd.com",
     "familyName": "BADBOX 2.0",
     "category": "MALWARE",
@@ -2299,6 +2541,28 @@
     "blockByDefault": true
   },
   {
+    "domain": "ghostx-panel-default-rtdb.firebaseio.com",
+    "familyName": "SMSspy",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "HIGH",
+    "description": "SMSspy Android SMS-stealer C2/exfiltration or phishing-delivery host (fake mParivahan lure; ThreatFox). Uninstall the app and change any banking passwords/OTP-linked accounts.",
+    "source": "threatfox",
+    "reference": "feed:threatfox#SMSspy",
+    "blockByDefault": false
+  },
+  {
+    "domain": "ghostx-panel.firebasestorage.app",
+    "familyName": "SMSspy",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "HIGH",
+    "description": "SMSspy Android SMS-stealer C2/exfiltration or phishing-delivery host (fake mParivahan lure; ThreatFox). Uninstall the app and change any banking passwords/OTP-linked accounts.",
+    "source": "threatfox",
+    "reference": "feed:threatfox#SMSspy",
+    "blockByDefault": false
+  },
+  {
     "domain": "gich.etherraffleexchange.us",
     "familyName": "Glitch SPY",
     "category": "MALWARE",
@@ -2398,6 +2662,17 @@
     "blockByDefault": false
   },
   {
+    "domain": "hamzaansari1612-ux.github.io",
+    "familyName": "CyberDakait",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "CyberDakait attacker GitHub Pages host serving phishing pages and banking-trojan APKs (Group-IB). Remove any app installed from it and call your bank.",
+    "source": "threat_research",
+    "reference": "https://www.group-ib.com/blog/cyberdakait-seven-android-trojans-indian-banking/",
+    "blockByDefault": false
+  },
+  {
     "domain": "haveits.com",
     "familyName": "Vo1d",
     "category": "MALWARE",
@@ -2406,6 +2681,28 @@
     "description": "Legacy Vo1d C2 (Xlab; single source).",
     "source": "threat_research",
     "reference": "https://blog.xlab.qianxin.com/long-live-the-vo1d_botnet/",
+    "blockByDefault": false
+  },
+  {
+    "domain": "hdmanage.online",
+    "familyName": "CyberDakait",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "CyberDakait Indian-banking phishing page that delivers SMS/call-forwarding banking trojans (Group-IB). Do not enter card or bank details; remove any app installed from it and call your bank.",
+    "source": "threat_research",
+    "reference": "https://www.group-ib.com/blog/cyberdakait-seven-android-trojans-indian-banking/",
+    "blockByDefault": false
+  },
+  {
+    "domain": "he2o9t.com",
+    "familyName": "Triada",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "HIGH",
+    "description": "Triada Android trojan C2 infrastructure (ThreatFox Android tag). A device contacting it may run Triada-infected firmware or apps; reflash or contact the vendor.",
+    "source": "threatfox",
+    "reference": "feed:threatfox#Triada",
     "blockByDefault": false
   },
   {
@@ -2497,6 +2794,50 @@
     "blockByDefault": false
   },
   {
+    "domain": "icppuser.in",
+    "familyName": "CyberDakait",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "CyberDakait Indian-banking phishing page that delivers SMS/call-forwarding banking trojans (Group-IB). Do not enter card or bank details; remove any app installed from it and call your bank.",
+    "source": "threat_research",
+    "reference": "https://www.group-ib.com/blog/cyberdakait-seven-android-trojans-indian-banking/",
+    "blockByDefault": false
+  },
+  {
+    "domain": "icppuser.online",
+    "familyName": "CyberDakait",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "CyberDakait Indian-banking phishing page that delivers SMS/call-forwarding banking trojans (Group-IB). Do not enter card or bank details; remove any app installed from it and call your bank.",
+    "source": "threat_research",
+    "reference": "https://www.group-ib.com/blog/cyberdakait-seven-android-trojans-indian-banking/",
+    "blockByDefault": false
+  },
+  {
+    "domain": "icservice.online",
+    "familyName": "CyberDakait",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "CyberDakait Indian-banking phishing page that delivers SMS/call-forwarding banking trojans (Group-IB). Do not enter card or bank details; remove any app installed from it and call your bank.",
+    "source": "threat_research",
+    "reference": "https://www.group-ib.com/blog/cyberdakait-seven-android-trojans-indian-banking/",
+    "blockByDefault": false
+  },
+  {
+    "domain": "icuser.online",
+    "familyName": "CyberDakait",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "CyberDakait Indian-banking phishing page that delivers SMS/call-forwarding banking trojans (Group-IB). Do not enter card or bank details; remove any app installed from it and call your bank.",
+    "source": "threat_research",
+    "reference": "https://www.group-ib.com/blog/cyberdakait-seven-android-trojans-indian-banking/",
+    "blockByDefault": false
+  },
+  {
     "domain": "id.btyrw.cc",
     "familyName": "GoldPickaxe",
     "category": "MALWARE",
@@ -2517,6 +2858,50 @@
     "source": "zimperium-ioc",
     "reference": "feed:zimperium-ioc#GoldPickaxe",
     "blockByDefault": true
+  },
+  {
+    "domain": "idcare.in",
+    "familyName": "CyberDakait",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "CyberDakait Indian-banking phishing page that delivers SMS/call-forwarding banking trojans (Group-IB). Do not enter card or bank details; remove any app installed from it and call your bank.",
+    "source": "threat_research",
+    "reference": "https://www.group-ib.com/blog/cyberdakait-seven-android-trojans-indian-banking/",
+    "blockByDefault": false
+  },
+  {
+    "domain": "idfcare.in",
+    "familyName": "CyberDakait",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "CyberDakait Indian-banking phishing page that delivers SMS/call-forwarding banking trojans (Group-IB). Do not enter card or bank details; remove any app installed from it and call your bank.",
+    "source": "threat_research",
+    "reference": "https://www.group-ib.com/blog/cyberdakait-seven-android-trojans-indian-banking/",
+    "blockByDefault": false
+  },
+  {
+    "domain": "idmanagecp.online",
+    "familyName": "CyberDakait",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "CyberDakait Indian-banking phishing page that delivers SMS/call-forwarding banking trojans (Group-IB). Do not enter card or bank details; remove any app installed from it and call your bank.",
+    "source": "threat_research",
+    "reference": "https://www.group-ib.com/blog/cyberdakait-seven-android-trojans-indian-banking/",
+    "blockByDefault": false
+  },
+  {
+    "domain": "idservice.in",
+    "familyName": "CyberDakait",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "CyberDakait Indian-banking phishing page that delivers SMS/call-forwarding banking trojans (Group-IB). Do not enter card or bank details; remove any app installed from it and call your bank.",
+    "source": "threat_research",
+    "reference": "https://www.group-ib.com/blog/cyberdakait-seven-android-trojans-indian-banking/",
+    "blockByDefault": false
   },
   {
     "domain": "ikeymonitor.com",
@@ -2596,6 +2981,50 @@
     "blockByDefault": true
   },
   {
+    "domain": "imanagec.online",
+    "familyName": "CyberDakait",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "CyberDakait Indian-banking phishing page that delivers SMS/call-forwarding banking trojans (Group-IB; published as 'Imanagec.online'). Do not enter card or bank details; remove any app installed from it and call your bank.",
+    "source": "threat_research",
+    "reference": "https://www.group-ib.com/blog/cyberdakait-seven-android-trojans-indian-banking/",
+    "blockByDefault": false
+  },
+  {
+    "domain": "imobile.services",
+    "familyName": "CyberDakait",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "CyberDakait Indian-banking phishing page that delivers SMS/call-forwarding banking trojans (Group-IB). Do not enter card or bank details; remove any app installed from it and call your bank.",
+    "source": "threat_research",
+    "reference": "https://www.group-ib.com/blog/cyberdakait-seven-android-trojans-indian-banking/",
+    "blockByDefault": false
+  },
+  {
+    "domain": "imobilelite.in",
+    "familyName": "CyberDakait",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "CyberDakait Indian-banking phishing page that delivers SMS/call-forwarding banking trojans (Group-IB). Do not enter card or bank details; remove any app installed from it and call your bank.",
+    "source": "threat_research",
+    "reference": "https://www.group-ib.com/blog/cyberdakait-seven-android-trojans-indian-banking/",
+    "blockByDefault": false
+  },
+  {
+    "domain": "imobileservices.online",
+    "familyName": "CyberDakait",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "CyberDakait Indian-banking phishing page that delivers SMS/call-forwarding banking trojans (Group-IB). Do not enter card or bank details; remove any app installed from it and call your bank.",
+    "source": "threat_research",
+    "reference": "https://www.group-ib.com/blog/cyberdakait-seven-android-trojans-indian-banking/",
+    "blockByDefault": false
+  },
+  {
     "domain": "imonitussyberon.store",
     "familyName": "AntiDot",
     "category": "MALWARE",
@@ -2629,6 +3058,50 @@
     "blockByDefault": true
   },
   {
+    "domain": "indeemanage.in",
+    "familyName": "CyberDakait",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "CyberDakait Indian-banking phishing page that delivers SMS/call-forwarding banking trojans (Group-IB). Do not enter card or bank details; remove any app installed from it and call your bank.",
+    "source": "threat_research",
+    "reference": "https://www.group-ib.com/blog/cyberdakait-seven-android-trojans-indian-banking/",
+    "blockByDefault": false
+  },
+  {
+    "domain": "indemanage.in",
+    "familyName": "CyberDakait",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "CyberDakait Indian-banking phishing page that delivers SMS/call-forwarding banking trojans (Group-IB). Do not enter card or bank details; remove any app installed from it and call your bank.",
+    "source": "threat_research",
+    "reference": "https://www.group-ib.com/blog/cyberdakait-seven-android-trojans-indian-banking/",
+    "blockByDefault": false
+  },
+  {
+    "domain": "indiuser.com",
+    "familyName": "CyberDakait",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "CyberDakait Indian-banking phishing page that delivers SMS/call-forwarding banking trojans (Group-IB). Do not enter card or bank details; remove any app installed from it and call your bank.",
+    "source": "threat_research",
+    "reference": "https://www.group-ib.com/blog/cyberdakait-seven-android-trojans-indian-banking/",
+    "blockByDefault": false
+  },
+  {
+    "domain": "inducare.online",
+    "familyName": "CyberDakait",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "CyberDakait Indian-banking phishing page that delivers SMS/call-forwarding banking trojans (Group-IB). Do not enter card or bank details; remove any app installed from it and call your bank.",
+    "source": "threat_research",
+    "reference": "https://www.group-ib.com/blog/cyberdakait-seven-android-trojans-indian-banking/",
+    "blockByDefault": false
+  },
+  {
     "domain": "infocontablidades.it.com",
     "familyName": "Rokarolla",
     "category": "MALWARE",
@@ -2638,6 +3111,17 @@
     "source": "threat_research",
     "reference": "https://securityaffairs.com/193745/cyber-crime/new-rokarolla-android-trojan-targets-217-banking-and-crypto-apps.html",
     "blockByDefault": true
+  },
+  {
+    "domain": "install-update.xyz",
+    "familyName": "CyberDakait",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "CyberDakait C2 / payload infrastructure (Group-IB). Remove the app that contacts it and call your bank.",
+    "source": "threat_research",
+    "reference": "https://www.group-ib.com/blog/cyberdakait-seven-android-trojans-indian-banking/",
+    "blockByDefault": false
   },
   {
     "domain": "internal-abba.com",
@@ -3014,6 +3498,116 @@
     "blockByDefault": true
   },
   {
+    "domain": "managebworld.com",
+    "familyName": "CyberDakait",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "CyberDakait Indian-banking phishing page that delivers SMS/call-forwarding banking trojans (Group-IB). Do not enter card or bank details; remove any app installed from it and call your bank.",
+    "source": "threat_research",
+    "reference": "https://www.group-ib.com/blog/cyberdakait-seven-android-trojans-indian-banking/",
+    "blockByDefault": false
+  },
+  {
+    "domain": "managecare.in",
+    "familyName": "CyberDakait",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "CyberDakait Indian-banking phishing page that delivers SMS/call-forwarding banking trojans (Group-IB). Do not enter card or bank details; remove any app installed from it and call your bank.",
+    "source": "threat_research",
+    "reference": "https://www.group-ib.com/blog/cyberdakait-seven-android-trojans-indian-banking/",
+    "blockByDefault": false
+  },
+  {
+    "domain": "managecare.online",
+    "familyName": "CyberDakait",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "CyberDakait Indian-banking phishing page that delivers SMS/call-forwarding banking trojans (Group-IB). Do not enter card or bank details; remove any app installed from it and call your bank.",
+    "source": "threat_research",
+    "reference": "https://www.group-ib.com/blog/cyberdakait-seven-android-trojans-indian-banking/",
+    "blockByDefault": false
+  },
+  {
+    "domain": "managecp.co.in",
+    "familyName": "CyberDakait",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "CyberDakait Indian-banking phishing page that delivers SMS/call-forwarding banking trojans (Group-IB). Do not enter card or bank details; remove any app installed from it and call your bank.",
+    "source": "threat_research",
+    "reference": "https://www.group-ib.com/blog/cyberdakait-seven-android-trojans-indian-banking/",
+    "blockByDefault": false
+  },
+  {
+    "domain": "managecp.com",
+    "familyName": "CyberDakait",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "CyberDakait Indian-banking phishing page that delivers SMS/call-forwarding banking trojans (Group-IB). Do not enter card or bank details; remove any app installed from it and call your bank.",
+    "source": "threat_research",
+    "reference": "https://www.group-ib.com/blog/cyberdakait-seven-android-trojans-indian-banking/",
+    "blockByDefault": false
+  },
+  {
+    "domain": "manageici.com",
+    "familyName": "CyberDakait",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "CyberDakait Indian-banking phishing page that delivers SMS/call-forwarding banking trojans (Group-IB). Do not enter card or bank details; remove any app installed from it and call your bank.",
+    "source": "threat_research",
+    "reference": "https://www.group-ib.com/blog/cyberdakait-seven-android-trojans-indian-banking/",
+    "blockByDefault": false
+  },
+  {
+    "domain": "manageinsurances.online",
+    "familyName": "CyberDakait",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "CyberDakait Indian-banking phishing page that delivers SMS/call-forwarding banking trojans (Group-IB). Do not enter card or bank details; remove any app installed from it and call your bank.",
+    "source": "threat_research",
+    "reference": "https://www.group-ib.com/blog/cyberdakait-seven-android-trojans-indian-banking/",
+    "blockByDefault": false
+  },
+  {
+    "domain": "manageprotection.in",
+    "familyName": "CyberDakait",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "CyberDakait Indian-banking phishing page that delivers SMS/call-forwarding banking trojans (Group-IB). Do not enter card or bank details; remove any app installed from it and call your bank.",
+    "source": "threat_research",
+    "reference": "https://www.group-ib.com/blog/cyberdakait-seven-android-trojans-indian-banking/",
+    "blockByDefault": false
+  },
+  {
+    "domain": "manageprotectionplan.in",
+    "familyName": "CyberDakait",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "CyberDakait Indian-banking phishing page that delivers SMS/call-forwarding banking trojans (Group-IB). Do not enter card or bank details; remove any app installed from it and call your bank.",
+    "source": "threat_research",
+    "reference": "https://www.group-ib.com/blog/cyberdakait-seven-android-trojans-indian-banking/",
+    "blockByDefault": false
+  },
+  {
+    "domain": "manageprotections.com",
+    "familyName": "CyberDakait",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "CyberDakait Indian-banking phishing page that delivers SMS/call-forwarding banking trojans (Group-IB). Do not enter card or bank details; remove any app installed from it and call your bank.",
+    "source": "threat_research",
+    "reference": "https://www.group-ib.com/blog/cyberdakait-seven-android-trojans-indian-banking/",
+    "blockByDefault": false
+  },
+  {
     "domain": "mangasiso.top",
     "familyName": "Donot Team",
     "category": "NATION_STATE_SPYWARE",
@@ -3256,6 +3850,28 @@
     "blockByDefault": false
   },
   {
+    "domain": "mparivahan.hs.vc",
+    "familyName": "SMSspy",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "HIGH",
+    "description": "SMSspy Android SMS-stealer C2/exfiltration or phishing-delivery host (fake mParivahan lure; ThreatFox). Uninstall the app and change any banking passwords/OTP-linked accounts.",
+    "source": "threatfox",
+    "reference": "feed:threatfox#SMSspy",
+    "blockByDefault": false
+  },
+  {
+    "domain": "mparivahan772.s.gy",
+    "familyName": "SMSspy",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "HIGH",
+    "description": "SMSspy Android SMS-stealer C2/exfiltration or phishing-delivery host (fake mParivahan lure; ThreatFox). Uninstall the app and change any banking passwords/OTP-linked accounts.",
+    "source": "threatfox",
+    "reference": "feed:threatfox#SMSspy",
+    "blockByDefault": false
+  },
+  {
     "domain": "mpfcms.mio-tvplus.com",
     "familyName": "MoYu tigertv",
     "category": "MALWARE",
@@ -3410,6 +4026,28 @@
     "blockByDefault": false
   },
   {
+    "domain": "myicuser.in",
+    "familyName": "CyberDakait",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "CyberDakait Indian-banking phishing page that delivers SMS/call-forwarding banking trojans (Group-IB). Do not enter card or bank details; remove any app installed from it and call your bank.",
+    "source": "threat_research",
+    "reference": "https://www.group-ib.com/blog/cyberdakait-seven-android-trojans-indian-banking/",
+    "blockByDefault": false
+  },
+  {
+    "domain": "myinsuranceservice.in",
+    "familyName": "CyberDakait",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "CyberDakait Indian-banking phishing page that delivers SMS/call-forwarding banking trojans (Group-IB). Do not enter card or bank details; remove any app installed from it and call your bank.",
+    "source": "threat_research",
+    "reference": "https://www.group-ib.com/blog/cyberdakait-seven-android-trojans-indian-banking/",
+    "blockByDefault": false
+  },
+  {
     "domain": "mymoyu.shop",
     "familyName": "BADBOX 2.0",
     "category": "MALWARE",
@@ -3418,6 +4056,50 @@
     "description": "BADBOX 2.0 / MoYu C2 apex (HUMAN Satori appendix); task. subdomain is the host.dex activation C2 per Deepfield and a 'spirit' C2 per Xlab \u2014 multiple independent vendors.",
     "source": "threat_research",
     "reference": "https://raw.githubusercontent.com/deepfield/public-research/main/ipmoyu/report.md",
+    "blockByDefault": false
+  },
+  {
+    "domain": "mypnhelp.online",
+    "familyName": "CyberDakait",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "CyberDakait Indian-banking phishing page that delivers SMS/call-forwarding banking trojans (Group-IB). Do not enter card or bank details; remove any app installed from it and call your bank.",
+    "source": "threat_research",
+    "reference": "https://www.group-ib.com/blog/cyberdakait-seven-android-trojans-indian-banking/",
+    "blockByDefault": false
+  },
+  {
+    "domain": "mypolicyservice.in",
+    "familyName": "CyberDakait",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "CyberDakait Indian-banking phishing page that delivers SMS/call-forwarding banking trojans (Group-IB). Do not enter card or bank details; remove any app installed from it and call your bank.",
+    "source": "threat_research",
+    "reference": "https://www.group-ib.com/blog/cyberdakait-seven-android-trojans-indian-banking/",
+    "blockByDefault": false
+  },
+  {
+    "domain": "myuse-60542-default-rtdb.asia-southeast1.firebasedatabase.app",
+    "familyName": "SMSspy",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "HIGH",
+    "description": "SMSspy Android SMS-stealer C2/exfiltration or phishing-delivery host (fake mParivahan lure; ThreatFox). Uninstall the app and change any banking passwords/OTP-linked accounts.",
+    "source": "threatfox",
+    "reference": "feed:threatfox#SMSspy",
+    "blockByDefault": false
+  },
+  {
+    "domain": "myuse-60542.firebasestorage.app",
+    "familyName": "SMSspy",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "HIGH",
+    "description": "SMSspy Android SMS-stealer C2/exfiltration or phishing-delivery host (fake mParivahan lure; ThreatFox). Uninstall the app and change any banking passwords/OTP-linked accounts.",
+    "source": "threatfox",
+    "reference": "feed:threatfox#SMSspy",
     "blockByDefault": false
   },
   {
@@ -3606,6 +4288,28 @@
     "source": "zimperium-ioc",
     "reference": "feed:zimperium-ioc#ClayRat",
     "blockByDefault": true
+  },
+  {
+    "domain": "nsx1-7f7aa-default-rtdb.asia-southeast1.firebasedatabase.app",
+    "familyName": "SMSspy",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "HIGH",
+    "description": "SMSspy Android SMS-stealer C2/exfiltration or phishing-delivery host (fake mParivahan lure; ThreatFox). Uninstall the app and change any banking passwords/OTP-linked accounts.",
+    "source": "threatfox",
+    "reference": "feed:threatfox#SMSspy",
+    "blockByDefault": false
+  },
+  {
+    "domain": "nsx1-7f7aa.firebasestorage.app",
+    "familyName": "SMSspy",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "HIGH",
+    "description": "SMSspy Android SMS-stealer C2/exfiltration or phishing-delivery host (fake mParivahan lure; ThreatFox). Uninstall the app and change any banking passwords/OTP-linked accounts.",
+    "source": "threatfox",
+    "reference": "feed:threatfox#SMSspy",
+    "blockByDefault": false
   },
   {
     "domain": "oblvn.sbs",
@@ -3927,6 +4631,17 @@
     "blockByDefault": true
   },
   {
+    "domain": "ping.ynrkone.top",
+    "familyName": "BankBot-YNRK",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "BankBot-YNRK banking trojan C2 server (CYFIRMA). Remove the app, revoke its Accessibility and Device Admin access, and contact your bank.",
+    "source": "threat_research",
+    "reference": "https://www.cyfirma.com/research/investigation-report-android-bankbot-ynrk-mobile-banking-trojan/",
+    "blockByDefault": false
+  },
+  {
     "domain": "pis2ray.online",
     "familyName": "MarkiRAT",
     "category": "SPYWARE",
@@ -3993,6 +4708,39 @@
     "blockByDefault": true
   },
   {
+    "domain": "plp.e1in2.top",
+    "familyName": "BankBot-YNRK",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "BankBot-YNRK banking trojan WebView domain (CYFIRMA; published as Plp.e1in2.top). Remove the app and contact your bank.",
+    "source": "threat_research",
+    "reference": "https://www.cyfirma.com/research/investigation-report-android-bankbot-ynrk-mobile-banking-trojan/",
+    "blockByDefault": false
+  },
+  {
+    "domain": "plp.en1inei2.top",
+    "familyName": "BankBot-YNRK",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "BankBot-YNRK banking trojan WebView domain (CYFIRMA; published as Plp.en1inei2.top). Remove the app and contact your bank.",
+    "source": "threat_research",
+    "reference": "https://www.cyfirma.com/research/investigation-report-android-bankbot-ynrk-mobile-banking-trojan/",
+    "blockByDefault": false
+  },
+  {
+    "domain": "plp.foundzd.vip",
+    "familyName": "BankBot-YNRK",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "BankBot-YNRK banking trojan WebView domain (CYFIRMA; published as Plp.foundzd.vip). Remove the app and contact your bank.",
+    "source": "threat_research",
+    "reference": "https://www.cyfirma.com/research/investigation-report-android-bankbot-ynrk-mobile-banking-trojan/",
+    "blockByDefault": false
+  },
+  {
     "domain": "pm2za.cc",
     "familyName": "BADBOX 2.0",
     "category": "MALWARE",
@@ -4001,6 +4749,28 @@
     "description": "BADBOX 2.0 botnet C2 (HUMAN Satori appendix; single source).",
     "source": "threat_research",
     "reference": "https://www.humansecurity.com/learn/blog/satori-threat-intelligence-disruption-badbox-2-0/",
+    "blockByDefault": false
+  },
+  {
+    "domain": "pmanage.online",
+    "familyName": "CyberDakait",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "CyberDakait Indian-banking phishing page that delivers SMS/call-forwarding banking trojans (Group-IB). Do not enter card or bank details; remove any app installed from it and call your bank.",
+    "source": "threat_research",
+    "reference": "https://www.group-ib.com/blog/cyberdakait-seven-android-trojans-indian-banking/",
+    "blockByDefault": false
+  },
+  {
+    "domain": "pncare.online",
+    "familyName": "CyberDakait",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "CyberDakait Indian-banking phishing page that delivers SMS/call-forwarding banking trojans (Group-IB). Do not enter card or bank details; remove any app installed from it and call your bank.",
+    "source": "threat_research",
+    "reference": "https://www.group-ib.com/blog/cyberdakait-seven-android-trojans-indian-banking/",
     "blockByDefault": false
   },
   {
@@ -4013,6 +4783,39 @@
     "source": "threat_research",
     "reference": "https://raw.githubusercontent.com/eset/malware-ioc/master/ngate/README.adoc",
     "blockByDefault": true
+  },
+  {
+    "domain": "policydeactivate.in",
+    "familyName": "CyberDakait",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "CyberDakait Indian-banking phishing page that delivers SMS/call-forwarding banking trojans (Group-IB). Do not enter card or bank details; remove any app installed from it and call your bank.",
+    "source": "threat_research",
+    "reference": "https://www.group-ib.com/blog/cyberdakait-seven-android-trojans-indian-banking/",
+    "blockByDefault": false
+  },
+  {
+    "domain": "pool-proxy.fud2026.com",
+    "familyName": "CyberDakait",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "CyberDakait XMRig mining pool proxy (Group-IB; port 9000 removed). Remove the app that contacts it.",
+    "source": "threat_research",
+    "reference": "https://www.group-ib.com/blog/cyberdakait-seven-android-trojans-indian-banking/",
+    "blockByDefault": false
+  },
+  {
+    "domain": "pool.fud2026.com",
+    "familyName": "CyberDakait",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "CyberDakait XMRig mining pool (Group-IB; port 9000 removed). Remove the app that contacts it.",
+    "source": "threat_research",
+    "reference": "https://www.group-ib.com/blog/cyberdakait-seven-android-trojans-indian-banking/",
+    "blockByDefault": false
   },
   {
     "domain": "portal.android007.com",
@@ -4101,6 +4904,28 @@
     "source": "threat_research",
     "reference": "https://raw.githubusercontent.com/eset/malware-ioc/master/ngate/README.adoc",
     "blockByDefault": true
+  },
+  {
+    "domain": "protectcc.online",
+    "familyName": "CyberDakait",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "CyberDakait Indian-banking phishing page that delivers SMS/call-forwarding banking trojans (Group-IB). Do not enter card or bank details; remove any app installed from it and call your bank.",
+    "source": "threat_research",
+    "reference": "https://www.group-ib.com/blog/cyberdakait-seven-android-trojans-indian-banking/",
+    "blockByDefault": false
+  },
+  {
+    "domain": "protectionmanage.online",
+    "familyName": "CyberDakait",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "CyberDakait Indian-banking phishing page that delivers SMS/call-forwarding banking trojans (Group-IB). Do not enter card or bank details; remove any app installed from it and call your bank.",
+    "source": "threat_research",
+    "reference": "https://www.group-ib.com/blog/cyberdakait-seven-android-trojans-indian-banking/",
+    "blockByDefault": false
   },
   {
     "domain": "proxyforu.com",
@@ -4334,6 +5159,17 @@
     "blockByDefault": true
   },
   {
+    "domain": "rohansingh253641-spec.github.io",
+    "familyName": "CyberDakait",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "CyberDakait attacker GitHub Pages host serving phishing pages and banking-trojan APKs (Group-IB). Remove any app installed from it and call your bank.",
+    "source": "threat_research",
+    "reference": "https://www.group-ib.com/blog/cyberdakait-seven-android-trojans-indian-banking/",
+    "blockByDefault": false
+  },
+  {
     "domain": "rythemsjoy.club",
     "familyName": "Donot Team",
     "category": "NATION_STATE_SPYWARE",
@@ -4411,6 +5247,17 @@
     "blockByDefault": true
   },
   {
+    "domain": "secureici.online",
+    "familyName": "CyberDakait",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "CyberDakait Indian-banking phishing page that delivers SMS/call-forwarding banking trojans (Group-IB). Do not enter card or bank details; remove any app installed from it and call your bank.",
+    "source": "threat_research",
+    "reference": "https://www.group-ib.com/blog/cyberdakait-seven-android-trojans-indian-banking/",
+    "blockByDefault": false
+  },
+  {
     "domain": "seha-ksa.online",
     "familyName": "NGate",
     "category": "MALWARE",
@@ -4475,6 +5322,83 @@
     "source": "threat_research",
     "reference": "https://blog.quimerax.com/btmob-exposed-inside-a-fraud-as-a-service-platform-with-1400-live-servers/",
     "blockByDefault": true
+  },
+  {
+    "domain": "servicecpp.in",
+    "familyName": "CyberDakait",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "CyberDakait Indian-banking phishing page that delivers SMS/call-forwarding banking trojans (Group-IB). Do not enter card or bank details; remove any app installed from it and call your bank.",
+    "source": "threat_research",
+    "reference": "https://www.group-ib.com/blog/cyberdakait-seven-android-trojans-indian-banking/",
+    "blockByDefault": false
+  },
+  {
+    "domain": "serviceic.in",
+    "familyName": "CyberDakait",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "CyberDakait Indian-banking phishing page that delivers SMS/call-forwarding banking trojans (Group-IB). Do not enter card or bank details; remove any app installed from it and call your bank.",
+    "source": "threat_research",
+    "reference": "https://www.group-ib.com/blog/cyberdakait-seven-android-trojans-indian-banking/",
+    "blockByDefault": false
+  },
+  {
+    "domain": "serviceici.in",
+    "familyName": "CyberDakait",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "CyberDakait Indian-banking phishing page that delivers SMS/call-forwarding banking trojans (Group-IB). Do not enter card or bank details; remove any app installed from it and call your bank.",
+    "source": "threat_research",
+    "reference": "https://www.group-ib.com/blog/cyberdakait-seven-android-trojans-indian-banking/",
+    "blockByDefault": false
+  },
+  {
+    "domain": "serviceidf.in",
+    "familyName": "CyberDakait",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "CyberDakait Indian-banking phishing page that delivers SMS/call-forwarding banking trojans (Group-IB). Do not enter card or bank details; remove any app installed from it and call your bank.",
+    "source": "threat_research",
+    "reference": "https://www.group-ib.com/blog/cyberdakait-seven-android-trojans-indian-banking/",
+    "blockByDefault": false
+  },
+  {
+    "domain": "serviceidf.online",
+    "familyName": "CyberDakait",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "CyberDakait Indian-banking phishing page that delivers SMS/call-forwarding banking trojans (Group-IB). Do not enter card or bank details; remove any app installed from it and call your bank.",
+    "source": "threat_research",
+    "reference": "https://www.group-ib.com/blog/cyberdakait-seven-android-trojans-indian-banking/",
+    "blockByDefault": false
+  },
+  {
+    "domain": "servicescard.online",
+    "familyName": "CyberDakait",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "CyberDakait Indian-banking phishing page that delivers SMS/call-forwarding banking trojans (Group-IB). Do not enter card or bank details; remove any app installed from it and call your bank.",
+    "source": "threat_research",
+    "reference": "https://www.group-ib.com/blog/cyberdakait-seven-android-trojans-indian-banking/",
+    "blockByDefault": false
+  },
+  {
+    "domain": "serviceshelp.online",
+    "familyName": "CyberDakait",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "CyberDakait Indian-banking phishing page that delivers SMS/call-forwarding banking trojans (Group-IB). Do not enter card or bank details; remove any app installed from it and call your bank.",
+    "source": "threat_research",
+    "reference": "https://www.group-ib.com/blog/cyberdakait-seven-android-trojans-indian-banking/",
+    "blockByDefault": false
   },
   {
     "domain": "sgnlapp.info",
@@ -4892,6 +5816,17 @@
     "description": "BADBOX 2.0 botnet C2 (HUMAN Satori appendix; single source).",
     "source": "threat_research",
     "reference": "https://www.humansecurity.com/learn/blog/satori-threat-intelligence-disruption-badbox-2-0/",
+    "blockByDefault": false
+  },
+  {
+    "domain": "suraj527526-cmyk.github.io",
+    "familyName": "CyberDakait",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "CyberDakait attacker GitHub Pages host serving phishing pages and banking-trojan APKs (Group-IB). Remove any app installed from it and call your bank.",
+    "source": "threat_research",
+    "reference": "https://www.group-ib.com/blog/cyberdakait-seven-android-trojans-indian-banking/",
     "blockByDefault": false
   },
   {
@@ -5533,6 +6468,17 @@
     "blockByDefault": true
   },
   {
+    "domain": "update-app.online",
+    "familyName": "CyberDakait",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "CyberDakait C2 / payload infrastructure (Group-IB). Remove the app that contacts it and call your bank.",
+    "source": "threat_research",
+    "reference": "https://www.group-ib.com/blog/cyberdakait-seven-android-trojans-indian-banking/",
+    "blockByDefault": false
+  },
+  {
     "domain": "update.ad3g.com",
     "familyName": "Mzmess",
     "category": "MALWARE",
@@ -5797,6 +6743,28 @@
     "blockByDefault": true
   },
   {
+    "domain": "www.icppuser.online",
+    "familyName": "CyberDakait",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "CyberDakait Indian-banking phishing page that delivers SMS/call-forwarding banking trojans (Group-IB). Do not enter card or bank details; remove any app installed from it and call your bank.",
+    "source": "threat_research",
+    "reference": "https://www.group-ib.com/blog/cyberdakait-seven-android-trojans-indian-banking/",
+    "blockByDefault": false
+  },
+  {
+    "domain": "www.icuser.online",
+    "familyName": "CyberDakait",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "CyberDakait Indian-banking phishing page that delivers SMS/call-forwarding banking trojans (Group-IB). Do not enter card or bank details; remove any app installed from it and call your bank.",
+    "source": "threat_research",
+    "reference": "https://www.group-ib.com/blog/cyberdakait-seven-android-trojans-indian-banking/",
+    "blockByDefault": false
+  },
+  {
     "domain": "www.pis2ray.online",
     "familyName": "MarkiRAT",
     "category": "SPYWARE",
@@ -5805,6 +6773,50 @@
     "description": "TAG-182 fake 'Pis2ray VPN' distribution/C2 domain (MarkiRAT campaign)",
     "source": "threat_research",
     "reference": "https://www.recordedfuture.com/research/nexus-tag182-disseminates-markirat",
+    "blockByDefault": false
+  },
+  {
+    "domain": "www.protectcc.online",
+    "familyName": "CyberDakait",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "CyberDakait Indian-banking phishing page that delivers SMS/call-forwarding banking trojans (Group-IB). Do not enter card or bank details; remove any app installed from it and call your bank.",
+    "source": "threat_research",
+    "reference": "https://www.group-ib.com/blog/cyberdakait-seven-android-trojans-indian-banking/",
+    "blockByDefault": false
+  },
+  {
+    "domain": "www.secureici.online",
+    "familyName": "CyberDakait",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "CyberDakait Indian-banking phishing page that delivers SMS/call-forwarding banking trojans (Group-IB). Do not enter card or bank details; remove any app installed from it and call your bank.",
+    "source": "threat_research",
+    "reference": "https://www.group-ib.com/blog/cyberdakait-seven-android-trojans-indian-banking/",
+    "blockByDefault": false
+  },
+  {
+    "domain": "www.servicecpp.com",
+    "familyName": "CyberDakait",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "CyberDakait Indian-banking phishing page that delivers SMS/call-forwarding banking trojans (Group-IB). Do not enter card or bank details; remove any app installed from it and call your bank.",
+    "source": "threat_research",
+    "reference": "https://www.group-ib.com/blog/cyberdakait-seven-android-trojans-indian-banking/",
+    "blockByDefault": false
+  },
+  {
+    "domain": "www.serviceic.com",
+    "familyName": "CyberDakait",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "CyberDakait Indian-banking phishing page that delivers SMS/call-forwarding banking trojans (Group-IB). Do not enter card or bank details; remove any app installed from it and call your bank.",
+    "source": "threat_research",
+    "reference": "https://www.group-ib.com/blog/cyberdakait-seven-android-trojans-indian-banking/",
     "blockByDefault": false
   },
   {
@@ -6102,6 +7114,17 @@
     "description": "BADBOX 2.0 botnet C2 (HUMAN Satori appendix; corroborated by Bitsight sinkhole telemetry).",
     "source": "threat_research",
     "reference": "https://www.bitsight.com/blog/badbox-botnet-back",
+    "blockByDefault": false
+  },
+  {
+    "domain": "z59ux9.he2o9t.com",
+    "familyName": "Triada",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "HIGH",
+    "description": "Triada Android trojan C2 infrastructure (ThreatFox Android tag). A device contacting it may run Triada-infected firmware or apps; reflash or contact the vendor.",
+    "source": "threatfox",
+    "reference": "feed:threatfox#Triada",
     "blockByDefault": false
   },
   {
