@@ -440,6 +440,17 @@
     "blockByDefault": true
   },
   {
+    "domain": "anyevonline.com",
+    "familyName": "XCPE",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "XCPE bootstrap/C2 (GTIG 2026-11-02)",
+    "source": "threat_research",
+    "reference": "https://cloud.google.com/blog/topics/threat-intelligence/shutting-the-door-on-the-xcpe-botnet",
+    "blockByDefault": false
+  },
+  {
     "domain": "api-sync-service.mdkd1184.workers.dev",
     "familyName": "RedWing",
     "category": "MALWARE",
@@ -3124,6 +3135,17 @@
     "blockByDefault": false
   },
   {
+    "domain": "intermedia-arts.tv",
+    "familyName": "XCPE",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "XCPE C2 (GTIG 2026-11-02)",
+    "source": "threat_research",
+    "reference": "https://cloud.google.com/blog/topics/threat-intelligence/shutting-the-door-on-the-xcpe-botnet",
+    "blockByDefault": false
+  },
+  {
     "domain": "internal-abba.com",
     "familyName": "Graphite (Paragon)",
     "category": "NATION_STATE_SPYWARE",
@@ -3641,6 +3663,17 @@
     "blockByDefault": false
   },
   {
+    "domain": "mcstb.anyevonline.com",
+    "familyName": "XCPE",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "XCPE bootstrap/C2 (GTIG 2026-11-02)",
+    "source": "threat_research",
+    "reference": "https://cloud.google.com/blog/topics/threat-intelligence/shutting-the-door-on-the-xcpe-botnet",
+    "blockByDefault": false
+  },
+  {
     "domain": "mdsjhd.sbs",
     "familyName": "MoYu",
     "category": "MALWARE",
@@ -3880,6 +3913,17 @@
     "description": "MoYu tigertv getDomainList bootstrap seed (:2052). Contact proves vehicle-app install, not payload-path entry (Deepfield).",
     "source": "threat_research",
     "reference": "https://raw.githubusercontent.com/deepfield/public-research/main/ipmoyu/report.md",
+    "blockByDefault": false
+  },
+  {
+    "domain": "mqtt.szbboys.com",
+    "familyName": "XCPE",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "XCPE MQTT tasking C2 (GTIG 2026-11-02)",
+    "source": "threat_research",
+    "reference": "https://cloud.google.com/blog/topics/threat-intelligence/shutting-the-door-on-the-xcpe-botnet",
     "blockByDefault": false
   },
   {
@@ -4430,6 +4474,17 @@
     "description": "Attacker-controlled S3 bucket hosting ToxicPanda 2.0 droppers (exact hostname only \u2014 do NOT block parent amazonaws.com)",
     "source": "zimperium-ioc",
     "reference": "feed:zimperium-ioc#ToxicPanda",
+    "blockByDefault": false
+  },
+  {
+    "domain": "ott.szbboys.com",
+    "familyName": "XCPE",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "XCPE upload C2 (GTIG 2026-11-02)",
+    "source": "threat_research",
+    "reference": "https://cloud.google.com/blog/topics/threat-intelligence/shutting-the-door-on-the-xcpe-botnet",
     "blockByDefault": false
   },
   {
@@ -5951,6 +6006,17 @@
     "blockByDefault": false
   },
   {
+    "domain": "szbboys.com",
+    "familyName": "XCPE",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "XCPE C2 (GTIG 2026-11-02)",
+    "source": "threat_research",
+    "reference": "https://cloud.google.com/blog/topics/threat-intelligence/shutting-the-door-on-the-xcpe-botnet",
+    "blockByDefault": false
+  },
+  {
     "domain": "t1.ishano456.sbs",
     "familyName": "BADBOX",
     "category": "MALWARE",
@@ -7037,6 +7103,17 @@
     "description": "BADBOX 2.0 botnet C2 (HUMAN Satori appendix; single source).",
     "source": "threat_research",
     "reference": "https://www.humansecurity.com/learn/blog/satori-threat-intelligence-disruption-badbox-2-0/",
+    "blockByDefault": false
+  },
+  {
+    "domain": "yokatvonline.com",
+    "familyName": "XCPE",
+    "category": "MALWARE",
+    "campaign": "",
+    "severity": "CRITICAL",
+    "description": "XCPE C2 (GTIG 2026-11-02)",
+    "source": "threat_research",
+    "reference": "https://cloud.google.com/blog/topics/threat-intelligence/shutting-the-door-on-the-xcpe-botnet",
     "blockByDefault": false
   },
   {
