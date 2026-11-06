@@ -209,7 +209,7 @@ fun DashboardScreen(
             )
 
             // Privacy scan (one tap to its screen; the bottom bar keeps its five tabs).
-            PrivacyCard(state = privacyCard,onNavigate = onNavigate)
+            PrivacyCard(state = privacyCard, onNavigate = onNavigate)
 
             // Run Scan button — when idle. When a scan is running we show a
             // full progress card instead (stage label + linear progress bar +

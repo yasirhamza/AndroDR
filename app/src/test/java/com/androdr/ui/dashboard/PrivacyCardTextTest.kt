@@ -64,5 +64,4 @@ class PrivacyCardTextTest {
         assertEquals(PrivacyCardState.NeverScanned, state.value)
         job.cancel()
     }
-
 }
