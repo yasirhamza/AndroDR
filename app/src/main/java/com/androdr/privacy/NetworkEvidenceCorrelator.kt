@@ -5,8 +5,10 @@ import com.androdr.privacy.model.TrackerSet
 
 /**
  * Correlates the attributed DNS log with the tracker registry. The log is app-writable in effect (any app can
- * flood it with lookups), so every step is bounded per installed app: a flooding app can only hide its own
- * network evidence, never another app's. See [CorrelationRun] for the mechanics.
+ * flood it with lookups), so every step is bounded per installed app: the per-app quotas mean a flood can only
+ * hide the flooding app's own network evidence. The time limit, though, is shared by the whole network step: a
+ * flood that uses it up leaves the apps after it unread, and the result is then marked truncated (the screen
+ * says network evidence is incomplete). It never touches code evidence. See [CorrelationRun] for the mechanics.
  */
 object NetworkEvidenceCorrelator {
     data class Key(val packageName: String, val trackerId: Int)
@@ -33,7 +35,8 @@ object NetworkEvidenceCorrelator {
      * Either per-app quota reached with work left, or [MAX_MATCHED_PAIRS] overall -> truncated.
      * Phase 3 — background: [DnsSource.times] with limit [MAX_TIMES_PER_PAIR] + 1 for the [MAX_TIMED_PAIRS] pairs
      * with the most lookups; a pair beyond that cap, or with more than [MAX_TIMES_PER_PAIR] lookups, gets
-     * background = null. [expired] is checked before each page and each count/times call; when true, stop and
+     * background = null. [expired] is checked before each page, every 64 domains within a page, and before each
+     * count/times call; when true, stop and
      * return truncated = true with the evidence so far (untimed pairs have background = null).
      */
     suspend fun correlate(

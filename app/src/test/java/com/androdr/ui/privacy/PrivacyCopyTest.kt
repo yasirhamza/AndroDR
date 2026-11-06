@@ -35,6 +35,31 @@ class PrivacyCopyTest {
         }
     }
 
+    @Test fun `the truncated notice names the size of the DNS log, not only the time limit`() {
+        // TRUNCATED also comes from the per-app quotas and caps, so the copy must not blame the time limit alone.
+        val body = privacyStringBodies().getValue("privacy_network_truncated")
+        assertEquals("Network evidence is incomplete: the DNS log was too large to read in full.", body)
+    }
+
+    @Test fun `PrivacyScreen shows registry-unavailable only for the UNAVAILABLE state`() {
+        val screen = source("java/com/androdr/ui/privacy/PrivacyScreen.kt")
+        val gate = screen.substringBefore("R.string.privacy_registry_unavailable").takeLast(80)
+        assertTrue(gate, gate.contains("state.showRegistryUnavailable"))
+        assertTrue(!screen.contains("registryAvailable"))
+    }
+
+    @Test fun `the Apps-tab line goes through TrackerCrossoverText and its network strings never say in code`() {
+        val apps = source("java/com/androdr/ui/apps/AppScanScreen.kt")
+        assertTrue(apps.contains("TrackerCrossoverText.line("))
+        assertTrue(!apps.contains("R.string.apps_tracker_line") && !apps.contains("R.plurals.apps_tracker_line"))
+        val network = Regex("""<(string|plurals) name="(apps_tracker_network_[a-z_]+)"[^>]*>(.*?)</\1>""",
+            RegexOption.DOT_MATCHES_ALL).findAll(strings).map { it.groupValues[3] }.toList()
+        assertEquals(2, network.size)
+        for (body in network) {
+            assertTrue(body, !body.contains("in code") && !body.contains("carries", ignoreCase = true))
+        }
+    }
+
     @Test fun `PrivacyScreen references privacy_limits, privacy_network_caveat and privacy_attribution`() {
         val screen = source("java/com/androdr/ui/privacy/PrivacyScreen.kt")
         val names = listOf("R.string.privacy_limits", "R.string.privacy_network_caveat", "R.string.privacy_attribution")

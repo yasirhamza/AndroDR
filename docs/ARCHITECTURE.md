@@ -708,7 +708,7 @@ The scan collects two facts per app and joins them on the device against a track
 - **Code evidence.** The app's distinct Java packages, read from the dex files Android actually loads for it (`DexPackageReader`, driven by `ApkPackageInspector`).
 - **Network evidence.** The app's attributed DNS lookups over the last 30 days, from the DNS monitor's log (Chapter 7).
 
-The registry is `ioc-data/trackers.yml` in the rules repository: a mirror of Exodus Privacy's tracker list under ODbL 1.0 (attribution is shown in the UI), produced by `validation/mirror-exodus-trackers.py`. It follows the same delivery rules as the other `ioc-data` files: manifest-verified and fail-closed (`ioc-data.sha256`), refreshed every 12 hours, with a bundled cold-start copy at `res/raw/trackers.yml`. `TrackerRegistry` (in `ioc/`) loads it. The mirror script, the rules-repo validator and the app share one restricted regex grammar.
+The registry is `ioc-data/trackers.yml` in the rules repository: a mirror of Exodus Privacy's tracker list under ODbL 1.0 (attribution is shown in the UI), produced by `validation/mirror-exodus-trackers.py`. It follows the same delivery rules as the other `ioc-data` files: manifest-verified and fail-closed (`ioc-data.sha256`), refreshed every 12 hours, with a bundled cold-start copy at `res/raw/trackers.yml`. `TrackerRegistry` (in `ioc/`) loads it, lazily and off the main thread. Its state (`RegistryState`, in `privacy/model`) is `LOADING` until the bundled copy is parsed, then `AVAILABLE`, or `UNAVAILABLE` when the bundled copy is unusable and no verified refresh has landed (a later refresh still makes it `AVAILABLE`). Run is disabled unless it is `AVAILABLE`, and only `UNAVAILABLE` is shown as "could not be loaded". The mirror script, the rules-repo validator and the app share one restricted regex grammar.
 
 Normalisation is applied by the mirror (`mirror-exodus-trackers.py`):
 
@@ -753,7 +753,8 @@ Every installed APK is untrusted input, and the scan opens all of them. The read
 - Descriptor decoding is bounded.
 - Each dex is isolated: a malformed dex costs only that dex, and the app is reported as partly inspected.
 - The package cap applies while parsing, not after, so a dex with tens of thousands of packages cannot exhaust memory first.
-- The runner catches `Throwable` per app, and the whole scan body is also guarded, so no input can leave the scan stuck in a running state.
+- The runner catches `Throwable` per app, and the whole scan body is also guarded, so no input can leave the scan stuck in a running state. Only `OutOfMemoryError` and `StackOverflowError` are recorded as "resource limit"; anything else is "could not read".
+- An app that declares code (`FLAG_HAS_CODE`) but has no `classes.dex` in any of its APKs (a system app whose dex was moved into `oat/` as an odex) is "could not inspect: code stored outside the APK", never "none of the trackers were found". A package with no code at all, such as a resource overlay, is inspected with an empty result.
 
 ### 12.5 Hostile DNS logs
 
@@ -762,11 +763,12 @@ The DNS log is also attacker-influenced, since any app can issue lookups for any
 - Matching happens before counting, so only registry-matching domains are tallied.
 - Pages are fetched per app, with per-app quotas, rather than loading the log whole.
 - The network step has its own deadline and is isolated from the code step. Its outcome is recorded as `networkStatus`: `COMPLETE`, `TRUNCATED` or `FAILED`. A `FAILED` step hides the coverage line instead of reporting a misleading empty result.
+- The per-app quotas mean a flood can hide only the flooding app's own network evidence. The deadline is different: it is shared by the whole network step (checked before each page, every 64 domains within a page, and before each count). A flood that uses it up leaves later apps' network evidence unread, so the step is `TRUNCATED` and the screen says network evidence is incomplete. Code evidence is never affected.
 - Accepted residual: a single (app, domain) pair flooded with millions of rows makes one count query slow. A per-app row cap on the DNS log is a follow-up.
 
 ### 12.6 Background evidence
 
-Telling whether a lookup happened while the app was in use needs usage access. Without it the scan still runs and the background column is absent.
+Telling whether a lookup happened while the app was in use needs usage access. Without it the scan still runs and each network evidence line reads "background use unknown" instead of a background count.
 
 - There is no system-app filter and no event cap on the usage read.
 - Foreground state is tracked per activity class, so split-screen apps with two visible activities are handled.

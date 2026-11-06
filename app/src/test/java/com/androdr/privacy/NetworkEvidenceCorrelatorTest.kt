@@ -15,6 +15,7 @@ import com.androdr.privacy.NetworkEvidenceCorrelator.PAGE_SIZE
 import com.androdr.privacy.model.Tracker
 import com.androdr.privacy.model.TrackerCategory
 import com.androdr.privacy.model.TrackerSet
+import io.mockk.every
 import io.mockk.spyk
 import io.mockk.verify
 import kotlinx.coroutines.runBlocking
@@ -217,6 +218,28 @@ class NetworkEvidenceCorrelatorTest {
         assertTrue(out.truncated)
         assertEquals(1, out.evidence[Key("a", FLURRY)]?.lookups)
         assertEquals(2, source.pages.count { it.first == "b" })
+    }
+
+    @Test fun `a deadline that expires mid-page stops within 64 domains, truncated with the evidence so far`() {
+        val many = padded("d", PAGE_SIZE, ".example.org")
+        val source = FakeSource(
+            domainsOf = { app -> if (app == "b") many else listOf("x.flurry.com") },
+            countOf = { _, _ -> FakeSource.countRows(listOf(5 * DAY)) },
+            timesOf = { _, _, _ -> emptyList() },
+        )
+        val registry = spyk(small)
+        val matched = ArrayList<String>()
+        every { registry.matchDomain(any()) } answers {
+            matched += firstArg<String>()
+            callOriginal()
+        }
+        // Passes the moment b's first page has been served: everything after is past the deadline.
+        val out = correlate(source, setOf("a", "b"), registry = registry,
+            expired = { source.pages.any { it.first == "b" } })
+        assertTrue(out.truncated)
+        assertEquals(1, out.evidence[Key("a", FLURRY)]?.lookups)
+        assertEquals(1, source.pages.count { it.first == "b" })
+        assertEquals(64, matched.count { it.startsWith("d") })
     }
 
     @Test fun `more than MAX_MATCHED_PAIRS matches is truncated`() {

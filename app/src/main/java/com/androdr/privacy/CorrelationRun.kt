@@ -61,7 +61,9 @@ internal class CorrelationRun(
         while (more && seen < MAX_DOMAINS_PER_APP && !deadlinePassed()) {
             val limit = minOf(PAGE_SIZE, MAX_DOMAINS_PER_APP - seen)
             val page = source.domainsAfter(app, after, limit)
-            for (raw in page) {
+            for ((i, raw) in page.withIndex()) {
+                // Also checked inside a page: a page of hostile names must not run on long past the deadline.
+                if (i > 0 && i % DEADLINE_STRIDE == 0 && deadlinePassed()) break
                 val ids = trackersOf(raw)
                 if (ids.isNotEmpty()) out.add(raw to ids)
             }
@@ -164,6 +166,9 @@ internal class CorrelationRun(
     }
 
     private companion object {
+        /** Domains matched between deadline checks inside one page. */
+        const val DEADLINE_STRIDE = 64
+
         fun inAny(t: Long, ranges: List<LongRange>): Boolean {
             var lo = 0
             var hi = ranges.size - 1
