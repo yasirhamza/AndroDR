@@ -197,12 +197,30 @@ class MvtIndicatorsFeedTest {
 
     @Test
     fun `the three repos the live registry points at are all allowed`() {
+        val raw = "https://raw.githubusercontent.com"
         val refs = listOf(
-            MvtIndicatorsFeed.CampaignRef("a", "https://raw.githubusercontent.com/mvt-project/mvt-indicators/main/x/x.stix2"),
-            MvtIndicatorsFeed.CampaignRef("b", "https://raw.githubusercontent.com/AmnestyTech/investigations/master/x/x.stix2"),
-            MvtIndicatorsFeed.CampaignRef("c", "https://raw.githubusercontent.com/AssoEchap/stalkerware-indicators/master/generated/stalkerware.stix2"),
+            MvtIndicatorsFeed.CampaignRef("a", "$raw/mvt-project/mvt-indicators/main/x/x.stix2"),
+            MvtIndicatorsFeed.CampaignRef("b", "$raw/AmnestyTech/investigations/master/x/x.stix2"),
+            MvtIndicatorsFeed.CampaignRef("c", "$raw/AssoEchap/stalkerware-indicators/master/generated/sw.stix2"),
         )
         assertEquals(refs, feed.allowedCampaigns(refs))
+    }
+
+    @Test
+    fun `duplicate refs collapse and the registry cannot schedule more than the ref cap`() {
+        // A per-response size cap alone is defeated by a registry listing the same
+        // allowed file thousands of times: N fetches x 16 MB. The live registry has
+        // 19 refs; the cap is a multiple of that, and duplicates by URL count once.
+        val many = (1..200).map {
+            MvtIndicatorsFeed.CampaignRef(
+                "c$it", "https://raw.githubusercontent.com/mvt-project/mvt-indicators/main/$it.stix2",
+            )
+        }
+        val dupes = List(50) { many[0] }
+
+        assertEquals(1, feed.allowedCampaigns(dupes).size)
+        assertEquals(MvtIndicatorsFeed.MAX_CAMPAIGN_REFS, feed.allowedCampaigns(many).size)
+        assertTrue(MvtIndicatorsFeed.MAX_CAMPAIGN_REFS in 19..128)
     }
 
     @Test

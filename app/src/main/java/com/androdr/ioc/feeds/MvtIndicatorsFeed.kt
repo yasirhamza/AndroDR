@@ -8,6 +8,8 @@ import com.androdr.util.readTextCapped
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
@@ -33,11 +35,13 @@ class MvtIndicatorsFeed : DomainIocFeed {
             if (campaigns.isEmpty()) return@withContext emptyList()
 
             val now = System.currentTimeMillis()
+            // At most MAX_CONCURRENT_FETCHES bodies are in flight (and in memory) at once.
+            val gate = Semaphore(MAX_CONCURRENT_FETCHES)
             coroutineScope {
                 campaigns.map { campaign ->
                     async {
                         try {
-                            val stix2 = httpGet(campaign.url) ?: return@async emptyList()
+                            val stix2 = gate.withPermit { httpGet(campaign.url) } ?: return@async emptyList()
                             entriesFor(campaign, stix2, now)
                         } catch (e: Exception) {
                             Log.w(TAG, "Failed to fetch campaign '${campaign.name}': ${e.message}")
@@ -106,7 +110,17 @@ class MvtIndicatorsFeed : DomainIocFeed {
      */
     internal fun allowedCampaigns(refs: List<CampaignRef>): List<CampaignRef> =
         refs.filter { ref -> ALLOWED_CAMPAIGN_PREFIXES.any { ref.url.startsWith(it) } }
-            .also { kept -> if (kept.size < refs.size) Log.w(TAG, "Dropped ${refs.size - kept.size} campaign ref(s) outside the allowed repos") }
+            // A per-response size cap alone is defeated by a registry that lists the
+            // same allowed file thousands of times (N fetches x the cap): one fetch
+            // per URL, and no more than MAX_CAMPAIGN_REFS of them.
+            .distinctBy { it.url }
+            .take(MAX_CAMPAIGN_REFS)
+            .also { kept ->
+                if (kept.size < refs.size) {
+                    Log.w(TAG, "Kept ${kept.size} of ${refs.size} campaign ref(s): " +
+                        "outside allowed repos, duplicate, or over the cap")
+                }
+            }
 
     /** Rows for one collection, stamped with its compiled campaign key (or none). */
     internal fun entriesFor(ref: CampaignRef, stix: String, now: Long): List<DomainIocEntry> =
@@ -186,6 +200,9 @@ class MvtIndicatorsFeed : DomainIocFeed {
         private const val INDICATORS_YAML_URL =
             "https://raw.githubusercontent.com/mvt-project/mvt-indicators/main/indicators.yaml"
         private const val MAX_RESPONSE_CHARS = 16 * 1024 * 1024
+        /** Live registry: 19 refs (2026-11-06). Bounds total fetch volume with MAX_RESPONSE_CHARS. */
+        internal const val MAX_CAMPAIGN_REFS = 64
+        private const val MAX_CONCURRENT_FETCHES = 4
 
         /**
          * Repos a campaign ref may point at: exactly the owners the live registry
