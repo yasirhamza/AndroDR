@@ -4,6 +4,7 @@ import android.util.Log
 import com.androdr.data.model.DomainIocEntry
 import com.androdr.ioc.DomainIocFeed
 import com.androdr.ioc.MvtCampaigns
+import com.androdr.util.readTextCapped
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
@@ -28,7 +29,7 @@ class MvtIndicatorsFeed : DomainIocFeed {
     override suspend fun fetch(): List<DomainIocEntry> = withContext(Dispatchers.IO) {
         try {
             val yaml = httpGet(INDICATORS_YAML_URL) ?: return@withContext emptyList()
-            val campaigns = parseIndicatorsYaml(yaml)
+            val campaigns = allowedCampaigns(parseIndicatorsYaml(yaml))
             if (campaigns.isEmpty()) return@withContext emptyList()
 
             val now = System.currentTimeMillis()
@@ -96,6 +97,17 @@ class MvtIndicatorsFeed : DomainIocFeed {
         return results
     }
 
+    /**
+     * The refs whose URL lives in one of the repos the upstream registry is known
+     * to point at (PASTA F-004). The SPKI pin vouches for the TLS host, not for
+     * which owner/repo a fetched `indicators.yaml` names, so a poisoned registry
+     * must not turn this feed into a fetcher of arbitrary repositories. Kept out
+     * of [parseIndicatorsYaml] so the parser stays a pure function of the yaml.
+     */
+    internal fun allowedCampaigns(refs: List<CampaignRef>): List<CampaignRef> =
+        refs.filter { ref -> ALLOWED_CAMPAIGN_PREFIXES.any { ref.url.startsWith(it) } }
+            .also { kept -> if (kept.size < refs.size) Log.w(TAG, "Dropped ${refs.size - kept.size} campaign ref(s) outside the allowed repos") }
+
     /** Rows for one collection, stamped with its compiled campaign key (or none). */
     internal fun entriesFor(ref: CampaignRef, stix: String, now: Long): List<DomainIocEntry> =
         parseStix2(stix, ref.name, toSlug(ref.name), now,
@@ -155,7 +167,9 @@ class MvtIndicatorsFeed : DomainIocFeed {
                 if (responseCode != HttpURLConnection.HTTP_OK) {
                     Log.w(TAG, "HTTP $responseCode from $url"); null
                 } else {
-                    inputStream.bufferedReader().readText()
+                    // Capped: the largest live collection is ~4.7 MB (stalkerware.stix2,
+                    // 2026-11); a body past the cap is dropped, not buffered (F-004).
+                    inputStream.bufferedReader().readTextCapped(MAX_RESPONSE_CHARS)
                 }
             } finally { disconnect() }
         }
@@ -171,6 +185,19 @@ class MvtIndicatorsFeed : DomainIocFeed {
         const val SOURCE_ID = "mvt_indicators"
         private const val INDICATORS_YAML_URL =
             "https://raw.githubusercontent.com/mvt-project/mvt-indicators/main/indicators.yaml"
+        private const val MAX_RESPONSE_CHARS = 16 * 1024 * 1024
+
+        /**
+         * Repos a campaign ref may point at: exactly the owners the live registry
+         * referenced when this was measured (mvt-project 14, AmnestyTech 4,
+         * AssoEchap 1 — 2026-11-06). Trailing slash so `mvt-indicators-evil` does
+         * not pass as `mvt-indicators`.
+         */
+        internal val ALLOWED_CAMPAIGN_PREFIXES = listOf(
+            "https://raw.githubusercontent.com/mvt-project/mvt-indicators/",
+            "https://raw.githubusercontent.com/AmnestyTech/investigations/",
+            "https://raw.githubusercontent.com/AssoEchap/stalkerware-indicators/",
+        )
         private val DOMAIN_REGEX = Regex("""domain-name:value\s*=\s*'([^']+)'""")
     }
 }

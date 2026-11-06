@@ -177,6 +177,42 @@ class MvtIndicatorsFeedTest {
               path: pegasus.stix2
     """.trimIndent()
 
+    // ── allowedCampaigns (PASTA F-004) ─────────────────────────────────────────
+
+    @Test
+    fun `a campaign ref pointing outside the upstream registry repos is not fetched`() {
+        // indicators.yaml is fetched over a pinned TLS host, but the pin vouches
+        // for raw.githubusercontent.com, not for which owner/repo the yaml names.
+        // A poisoned yaml must not turn the feed into a fetcher of arbitrary repos.
+        val refs = feed.parseIndicatorsYaml(spoofYaml)
+        assertEquals(2, refs.size)
+
+        val allowed = feed.allowedCampaigns(refs)
+
+        assertEquals(
+            listOf("https://raw.githubusercontent.com/AmnestyTech/investigations/master/2021-07-18_nso/pegasus.stix2"),
+            allowed.map { it.url },
+        )
+    }
+
+    @Test
+    fun `the three repos the live registry points at are all allowed`() {
+        val refs = listOf(
+            MvtIndicatorsFeed.CampaignRef("a", "https://raw.githubusercontent.com/mvt-project/mvt-indicators/main/x/x.stix2"),
+            MvtIndicatorsFeed.CampaignRef("b", "https://raw.githubusercontent.com/AmnestyTech/investigations/master/x/x.stix2"),
+            MvtIndicatorsFeed.CampaignRef("c", "https://raw.githubusercontent.com/AssoEchap/stalkerware-indicators/master/generated/stalkerware.stix2"),
+        )
+        assertEquals(refs, feed.allowedCampaigns(refs))
+    }
+
+    @Test
+    fun `a repo name that merely starts with an allowed one is not allowed`() {
+        val lookalike = MvtIndicatorsFeed.CampaignRef(
+            "x", "https://raw.githubusercontent.com/mvt-project/mvt-indicators-evil/main/x.stix2",
+        )
+        assertTrue(feed.allowedCampaigns(listOf(lookalike)).isEmpty())
+    }
+
     @Test
     fun `entriesFor stamps the compiled key only on the real Pegasus collection`() {
         val refs = feed.parseIndicatorsYaml(spoofYaml)
