@@ -13,6 +13,7 @@ import com.androdr.data.model.PrivacyTrackerEvidence
 import com.androdr.data.repo.ScanLock
 import com.androdr.ioc.TrackerRegistry
 import com.androdr.privacy.DexPackageReader.ReadBudget
+import com.androdr.privacy.model.RegistryState
 import com.androdr.privacy.model.Tracker
 import com.androdr.privacy.model.TrackerCategory
 import com.androdr.privacy.model.TrackerSet
@@ -116,7 +117,7 @@ class PrivacyScanRunnerTest {
 
     private fun registryOf(s: TrackerSet?): TrackerRegistry = mockk {
         every { current() } returns s
-        every { available } returns MutableStateFlow(s != null)
+        every { state } returns MutableStateFlow(if (s != null) RegistryState.AVAILABLE else RegistryState.UNAVAILABLE)
     }
 
     private fun usageReader(u: UsageIntervals?): UsageIntervalReader = mockk {
@@ -195,6 +196,20 @@ class PrivacyScanRunnerTest {
         assertEquals(1, latest().appsFailed)
         assertEquals(1, latest().appsInspected)
         assertNotNull(evidence("b", FLURRY))
+    }
+
+    @Test fun `an ordinary exception reads could not read, never resource limit`() {
+        inspector.apps = listOf(app("a"), app("b"))
+        inspector.onInspect = {
+            when (it.packageName) {
+                "a" -> throw java.io.IOException("bad zip")
+                else -> throw StackOverflowError()
+            }
+        }
+        assertTrue(scan(runner()) is PrivacyScanProgress.Finished)
+        assertEquals("could not read: IOException", result("a").reason)
+        assertEquals("resource limit: StackOverflowError", result("b").reason)
+        assertEquals("COULD_NOT_INSPECT", result("a").outcome)
     }
 
     @Test fun `the runner passes a deadline PER_APP_TIMEOUT_MS ahead and one budget per app`() {
@@ -654,10 +669,10 @@ class PrivacyScanRunnerTest {
 
     // --- registry availability ------------------------------------------------------------------
 
-    @Test fun `registryAvailable is the registry's flow and construction triggers the lazy load`() {
+    @Test fun `registryState is the registry's flow and construction triggers the lazy load`() {
         val registry = registryOf(set)
         val r = runner(registry = registry)
         verify(atLeast = 1) { registry.current() }
-        assertSame(registry.available, r.registryAvailable)
+        assertSame(registry.state, r.registryState)
     }
 }

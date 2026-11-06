@@ -3,6 +3,7 @@ package com.androdr.ioc
 import android.content.Context
 import android.content.res.Resources
 import com.androdr.privacy.model.DomainGrammar
+import com.androdr.privacy.model.RegistryState
 import com.androdr.privacy.model.TrackerCategory
 import io.mockk.every
 import io.mockk.mockk
@@ -221,28 +222,48 @@ class TrackerRegistryTest {
         val ctx = contextWith { opened++; error("boom") }
         val registry = TrackerRegistry(ctx, IocDataManifest(FakeRemote(emptyMap())))
         assertEquals(0, opened)
-        assertFalse(registry.available.value)
+        assertEquals(RegistryState.LOADING, registry.state.value)
     }
 
     @Test
-    fun `a corrupt bundled file gives null until a verified refresh succeeds`() = runBlocking {
+    fun `a corrupt bundled file gives UNAVAILABLE until a verified refresh makes it AVAILABLE`() = runBlocking {
         val good = file(listOf(entry(1)))
         val registry = TrackerRegistry(
             contextWith { "version: 1\ntrackers: [" },
             IocDataManifest(FakeRemote(mapOf(TrackerRegistry.PATH to good))),
         )
+        assertEquals(RegistryState.LOADING, registry.state.value)
         assertNull(registry.current())
-        assertFalse(registry.available.value)
+        assertEquals(RegistryState.UNAVAILABLE, registry.state.value)
         assertTrue(registry.refresh() > 0)
         assertNotNull(registry.current())
-        assertTrue(registry.available.value)
+        assertEquals(RegistryState.AVAILABLE, registry.state.value)
+    }
+
+    @Test
+    fun `a bundled file that throws on open gives UNAVAILABLE`() {
+        val registry = TrackerRegistry(contextWith { error("boom") }, IocDataManifest(FakeRemote(emptyMap())))
+        assertNull(registry.current())
+        assertEquals(RegistryState.UNAVAILABLE, registry.state.value)
+    }
+
+    @Test
+    fun `a refresh that lands before the bundled load keeps AVAILABLE even if the bundle is corrupt`() = runBlocking {
+        val good = file(listOf(entry(1)))
+        val registry = TrackerRegistry(
+            contextWith { "version: 1\ntrackers: [" },
+            IocDataManifest(FakeRemote(mapOf(TrackerRegistry.PATH to good))),
+        )
+        assertTrue(registry.refresh() > 0)
+        assertNotNull(registry.current())
+        assertEquals(RegistryState.AVAILABLE, registry.state.value)
     }
 
     @Test
     fun `a good bundled file makes the registry available on first use`() {
         val registry = TrackerRegistry(contextWith { bundledText() }, IocDataManifest(FakeRemote(emptyMap())))
-        assertFalse(registry.available.value)
+        assertEquals(RegistryState.LOADING, registry.state.value)
         assertNotNull(registry.current())
-        assertTrue(registry.available.value)
+        assertEquals(RegistryState.AVAILABLE, registry.state.value)
     }
 }

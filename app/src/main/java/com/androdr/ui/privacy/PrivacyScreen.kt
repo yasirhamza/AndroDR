@@ -173,7 +173,7 @@ private fun Header(state: PrivacyUiState, onRun: () -> Unit) {
         }
         state.networkNotice?.let { Text(stringResource(it), style = MaterialTheme.typography.bodySmall) }
         RunControl(state, onRun)
-        if (!state.registryAvailable) {
+        if (state.showRegistryUnavailable) {
             Text(stringResource(R.string.privacy_registry_unavailable), style = MaterialTheme.typography.bodySmall)
         }
     }

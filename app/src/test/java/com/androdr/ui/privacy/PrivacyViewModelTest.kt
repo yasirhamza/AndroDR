@@ -12,6 +12,7 @@ import com.androdr.privacy.PrivacyRanking
 import com.androdr.privacy.PrivacyScanProgress
 import com.androdr.privacy.PrivacyScanRunner
 import com.androdr.privacy.RowSection
+import com.androdr.privacy.model.RegistryState
 import com.androdr.privacy.model.TrackerCategory
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -66,7 +67,7 @@ class PrivacyViewModelTest {
         val refused = MutableStateFlow(setOf(TrackerCategory.ADVERTISEMENT))
         val showSystem = MutableStateFlow(false)
         val progress = MutableStateFlow<PrivacyScanProgress>(PrivacyScanProgress.Idle)
-        val available = MutableStateFlow(true)
+        val registry = MutableStateFlow(RegistryState.AVAILABLE)
     }
 
     private fun vm(f: Fixture, runner: PrivacyScanRunner = runner(f)): PrivacyViewModel {
@@ -84,7 +85,7 @@ class PrivacyViewModelTest {
 
     private fun runner(f: Fixture) = mockk<PrivacyScanRunner>(relaxed = true) {
         every { progress } returns f.progress
-        every { registryAvailable } returns f.available
+        every { registryState } returns f.registry
         every { start() } returns true
         coEvery { deleteAll() } returns true
     }
@@ -95,7 +96,6 @@ class PrivacyViewModelTest {
         val s = vm.state.first { it.scan != null }
         assertEquals(PrivacyRanking.rows(results, evidence, f.refused.value, false), s.sections)
         assertEquals(428, s.registrySizeAtScan)
-        assertEquals(7, s.networkDays)
         assertEquals(f.refused.value, s.refused)
         assertEquals(PrivacyRanking.byTracker(s.sections.flatMap { it.second }), s.byTracker)
         f.showSystem.value = true
@@ -185,21 +185,33 @@ class PrivacyViewModelTest {
         assertEquals(NetworkCoverage.Hidden, s.networkCoverage)
     }
 
-    @Test fun `a null registry disables Run and exposes registry-unavailable`() = runTest {
+    @Test fun `an UNAVAILABLE registry disables Run and exposes registry-unavailable`() = runTest {
         val f = Fixture(scan())
-        f.available.value = false
+        f.registry.value = RegistryState.UNAVAILABLE
         val s = vm(f).state.first { it.scan != null }
-        assertFalse(s.registryAvailable)
+        assertTrue(s.showRegistryUnavailable)
         assertFalse(s.canRun)
+    }
+
+    @Test fun `a LOADING registry disables Run but never shows registry-unavailable`() = runTest {
+        val f = Fixture(scan())
+        f.registry.value = RegistryState.LOADING
+        val s = vm(f).state.first { it.scan != null }
+        assertFalse(s.showRegistryUnavailable)
+        assertFalse(s.canRun)
+        assertFalse(PrivacyUiState().showRegistryUnavailable)
+        assertFalse(PrivacyUiState().canRun)
     }
 
     @Test fun `a later successful refresh enables Run without recreating the ViewModel`() = runTest {
         val f = Fixture(scan())
-        f.available.value = false
+        f.registry.value = RegistryState.UNAVAILABLE
         val vm = vm(f)
         assertFalse(vm.state.first { it.scan != null }.canRun)
-        f.available.value = true
-        assertTrue(vm.state.first { it.registryAvailable }.canRun)
+        f.registry.value = RegistryState.AVAILABLE
+        val s = vm.state.first { it.registryState == RegistryState.AVAILABLE }
+        assertTrue(s.canRun)
+        assertFalse(s.showRegistryUnavailable)
     }
 
     @Test fun `Run is disabled while a scan is in progress`() = runTest {

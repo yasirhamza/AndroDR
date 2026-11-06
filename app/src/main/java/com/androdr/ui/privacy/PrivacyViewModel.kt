@@ -16,6 +16,7 @@ import com.androdr.privacy.PrivacyScanProgress
 import com.androdr.privacy.PrivacyScanRunner
 import com.androdr.privacy.RowSection
 import com.androdr.privacy.TrackerGroup
+import com.androdr.privacy.model.RegistryState
 import com.androdr.privacy.model.TrackerCategory
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -51,12 +52,14 @@ data class PrivacyUiState(
     val showSystemApps: Boolean = false,
     val progress: PrivacyScanProgress = PrivacyScanProgress.Idle,
     val registrySizeAtScan: Int? = null,
-    /** UTC days of attributed lookups in the scan's window; 0 means the network monitor recorded nothing. */
-    val networkDays: Int? = null,
-    val registryAvailable: Boolean = true,
+    val registryState: RegistryState = RegistryState.LOADING,
 ) {
     /** Run is offered only with a loaded registry and no scan in progress. */
-    val canRun: Boolean get() = registryAvailable && progress !is PrivacyScanProgress.Running
+    val canRun: Boolean
+        get() = registryState == RegistryState.AVAILABLE && progress !is PrivacyScanProgress.Running
+
+    /** "Could not be loaded" is said only of a failed load, never while the registry is still loading. */
+    val showRegistryUnavailable: Boolean get() = registryState == RegistryState.UNAVAILABLE
 
     /** A line about incomplete network evidence, or null when it is complete. */
     @get:StringRes
@@ -120,15 +123,14 @@ class PrivacyViewModel @Inject constructor(
             refused = refused,
             showSystemApps = showSystem,
             registrySizeAtScan = scan?.registrySize,
-            networkDays = scan?.dnsCoverageDays,
         )
     }
 
-    val state: StateFlow<PrivacyUiState> = combine(stored, runner.progress, runner.registryAvailable) { s, p, a ->
-        s.copy(progress = p, registryAvailable = a)
+    val state: StateFlow<PrivacyUiState> = combine(stored, runner.progress, runner.registryState) { s, p, r ->
+        s.copy(progress = p, registryState = r)
     }.stateIn(
         viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS),
-        PrivacyUiState(progress = runner.progress.value, registryAvailable = runner.registryAvailable.value),
+        PrivacyUiState(progress = runner.progress.value, registryState = runner.registryState.value),
     )
 
     fun runScan() {

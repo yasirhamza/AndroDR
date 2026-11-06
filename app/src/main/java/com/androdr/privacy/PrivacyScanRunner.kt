@@ -15,6 +15,7 @@ import com.androdr.privacy.DexPackageReader.ReadBudget
 import com.androdr.privacy.NetworkEvidenceCorrelator.DnsSource
 import com.androdr.privacy.NetworkEvidenceCorrelator.Key
 import com.androdr.privacy.NetworkEvidenceCorrelator.NetworkEvidence
+import com.androdr.privacy.model.RegistryState
 import com.androdr.privacy.model.Tracker
 import com.androdr.privacy.model.TrackerSet
 import com.androdr.util.reportSafe
@@ -62,11 +63,11 @@ class PrivacyScanRunner @Inject constructor(
     private val state = MutableStateFlow<PrivacyScanProgress>(PrivacyScanProgress.Idle)
     val progress: StateFlow<PrivacyScanProgress> = state.asStateFlow()
 
-    /** = registry.available; the bundled load is triggered on IO here. The UI reads this, never the registry. */
-    val registryAvailable: StateFlow<Boolean> = registry.available
+    /** = registry.state; the bundled load is triggered on IO here. The UI reads this, never the registry. */
+    val registryState: StateFlow<RegistryState> = registry.state
 
     init {
-        // available stays false until the first current() call, which parses the bundled file (slow).
+        // The state stays LOADING until the first current() call, which parses the bundled file (slow).
         scope.launch(Dispatchers.IO) { registry.current() }
     }
 
@@ -176,8 +177,7 @@ class PrivacyScanRunner @Inject constructor(
         throw c
     } catch (t: Throwable) {
         Log.w(TAG, "Could not inspect ${app.packageName}: ${t.javaClass.simpleName}")
-        val reason = "resource limit: ${reportSafe(t.javaClass.simpleName)}"
-        AppInspection(app, emptySet(), InspectOutcome.COULD_NOT_INSPECT, reason) to emptySet()
+        AppInspection(app, emptySet(), InspectOutcome.COULD_NOT_INSPECT, failureReason(t)) to emptySet()
     }
 
     /** The cached package set when version, update time and reader version all match; an unreadable row is deleted. */
@@ -267,7 +267,8 @@ class PrivacyScanRunner @Inject constructor(
         const val DNS_WINDOW_MS = 30L * 24 * 3600 * 1000
         const val PER_APP_TIMEOUT_MS = 30_000L
         const val NETWORK_TIMEOUT_MS = 60_000L
-        const val READER_VERSION = 1
+        /** 2: an app with code stored outside its APKs is no longer INSPECTED, so v1 cache rows are not reused. */
+        const val READER_VERSION = 2
 
         /** UTF-8 bytes, below the 2 MB CursorWindow. */
         const val MAX_PACKAGES_TEXT_BYTES = 1_000_000
@@ -275,5 +276,15 @@ class PrivacyScanRunner @Inject constructor(
 
         /** The run ended by cancellation (the process scope, say) without finishing or failing. */
         const val CANCELLED = "scan cancelled"
+
+        /**
+         * The could-not-inspect reason for a throwable caught while inspecting one app: only the memory and stack
+         * errors are a "resource limit"; anything else (an unreadable file, a parser bug) "could not read".
+         */
+        private fun failureReason(t: Throwable): String {
+            val name = reportSafe(t.javaClass.simpleName)
+            val limit = t is OutOfMemoryError || t is StackOverflowError
+            return if (limit) "resource limit: $name" else "could not read: $name"
+        }
     }
 }

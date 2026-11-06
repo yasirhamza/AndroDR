@@ -5,6 +5,7 @@ import android.util.Log
 import com.androdr.R
 import com.androdr.integrity.ManifestVerifier
 import com.androdr.privacy.model.DomainGrammar
+import com.androdr.privacy.model.RegistryState
 import com.androdr.privacy.model.Tracker
 import com.androdr.privacy.model.TrackerCategory
 import com.androdr.privacy.model.TrackerSet
@@ -34,13 +35,15 @@ class TrackerRegistry @Inject constructor(
     private val set = AtomicReference<TrackerSet?>(null)
     private val bundledAttempted = Any()
     private var bundledLoaded = false
-    private val _available = MutableStateFlow(false)
+    private val _state = MutableStateFlow(RegistryState.LOADING)
 
     /**
-     * True once a usable set is held (bundled load or verified refresh); updated by both, so a
-     * refresh after a corrupt bundled file turns it true without a restart.
+     * LOADING until the first [current] call finishes the bundled load; AVAILABLE once a usable set
+     * is held (bundled load or verified refresh); UNAVAILABLE when the bundled file was unusable and
+     * no verified refresh has landed. A later verified refresh turns UNAVAILABLE into AVAILABLE
+     * without a restart.
      */
-    val available: StateFlow<Boolean> = _available.asStateFlow()
+    val state: StateFlow<RegistryState> = _state.asStateFlow()
 
     /**
      * Lazily loads the bundled file on first call, never on construction. null = no usable
@@ -51,9 +54,12 @@ class TrackerRegistry @Inject constructor(
         synchronized(bundledAttempted) {
             if (!bundledLoaded) {
                 bundledLoaded = true
-                loadBundled()?.let { loaded ->
+                val loaded = loadBundled()
+                when {
                     // A refresh that landed first wins; never overwrite it with the bundled copy.
-                    if (set.compareAndSet(null, loaded)) _available.value = true
+                    loaded != null -> if (set.compareAndSet(null, loaded)) _state.value = RegistryState.AVAILABLE
+                    // Only LOADING becomes UNAVAILABLE: a refresh that already made it AVAILABLE stays so.
+                    set.get() == null -> _state.compareAndSet(RegistryState.LOADING, RegistryState.UNAVAILABLE)
                 }
             }
         }
@@ -80,7 +86,7 @@ class TrackerRegistry @Inject constructor(
                 return@withContext 0
             }
             set.set(parsed)
-            _available.value = true
+            _state.value = RegistryState.AVAILABLE
             Log.i(TAG, "Tracker registry refreshed: ${parsed.size} trackers")
             parsed.size
         } catch (e: Exception) {
