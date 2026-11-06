@@ -78,20 +78,32 @@ class PrivacyEvidenceTextTest {
         assertEquals("Partly inspected: abc", s)
     }
 
-    @Test fun `an all-Arabic app label renders as its package name`() {
-        val arabic = AppPrivacyRow(
-            "com.example.bank", 1, "تطبيق", false, InspectOutcome.INSPECTED, null,
-            emptyList(), 0, emptySet(), false,
-        )
-        assertEquals("com.example.bank", PrivacyEvidenceText.appName(arabic))
+    private fun labelled(label: String) = AppPrivacyRow(
+        "com.example.bank", 1, label, false, InspectOutcome.INSPECTED, null, emptyList(), 0, emptySet(), false,
+    )
+
+    @Test fun `non-ASCII app labels keep their letters (R15)`() {
+        assertEquals("Résumé", PrivacyEvidenceText.appName(labelled("Résumé")))
+        assertEquals("تطبيق البنك", PrivacyEvidenceText.appName(labelled("تطبيق البنك")))
         assertEquals("App", PrivacyEvidenceText.appName(app(InspectOutcome.INSPECTED)))
     }
 
-    @Test fun `a non-ASCII tracker name falls back to the host, then to Tracker id`() {
-        val cjk = "追踪"
-        assertEquals("tracker.example", PrivacyEvidenceText.trackerName(cjk, "https://Tracker.Example/x", 7))
-        assertEquals("Tracker #7", PrivacyEvidenceText.trackerName(cjk, "javascript:x", 7))
-        assertEquals("Tracker #7", PrivacyEvidenceText.trackerName(cjk, "", 7))
+    @Test fun `bidi overrides and controls are stripped from an app label`() {
+        assertEquals("Bankevil.apk", PrivacyEvidenceText.appName(labelled("Bank‮evil.apk")))
+        assertEquals("a b", PrivacyEvidenceText.appName(labelled("  a\n\r\t b‏ ")))
+    }
+
+    @Test fun `a label of only control and format characters falls back to the package name`() {
+        assertEquals("com.example.bank", PrivacyEvidenceText.appName(labelled("\u0000‮\n⁦​")))
+        assertEquals("com.example.bank", PrivacyEvidenceText.appName(labelled("")))
+    }
+
+    @Test fun `a non-ASCII tracker name is kept, a blank one falls back to the host, then to Tracker id`() {
+        assertEquals("追踪", PrivacyEvidenceText.trackerName("追踪", "https://Tracker.Example/x", 7))
+        val blank = "‮\u0007"
+        assertEquals("tracker.example", PrivacyEvidenceText.trackerName(blank, "https://Tracker.Example/x", 7))
+        assertEquals("Tracker #7", PrivacyEvidenceText.trackerName(blank, "javascript:x", 7))
+        assertEquals("Tracker #7", PrivacyEvidenceText.trackerName(blank, "", 7))
         assertEquals("AdCo", PrivacyEvidenceText.trackerName("AdCo", "https://x.example", 7))
     }
 

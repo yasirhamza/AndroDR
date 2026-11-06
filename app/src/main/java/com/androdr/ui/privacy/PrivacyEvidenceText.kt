@@ -7,6 +7,8 @@ import com.androdr.privacy.AppPrivacyRow
 import com.androdr.privacy.Evidence
 import com.androdr.privacy.InspectOutcome
 import com.androdr.privacy.TrackerRow
+import com.androdr.util.MAX_DISPLAY_NAME_CHARS
+import com.androdr.util.displaySafe
 import com.androdr.util.reportSafe
 import java.net.URI
 
@@ -56,15 +58,17 @@ object PrivacyEvidenceText {
         }
     }
 
-    private const val NAME_MAX = 80
+    /**
+     * An app's label through [displaySafe] (every script kept, controls and bidi overrides removed); the package
+     * name (printable ASCII) only when nothing displayable remains.
+     */
+    fun appName(row: AppPrivacyRow): String =
+        displaySafe(row.appLabel).ifBlank { reportSafe(row.packageName, MAX_DISPLAY_NAME_CHARS) }
 
-    /** An app's label as printable ASCII; an all-non-ASCII label (Arabic, CJK) falls back to the package name. */
-    fun appName(row: AppPrivacyRow): String = reportSafe(row.appLabel, NAME_MAX).ifBlank { row.packageName }
-
-    /** A tracker's name; falls back to its website host, then to "Tracker #id", when nothing printable remains. */
+    /** A tracker's name; falls back to its website host, then to "Tracker #id", when nothing displayable remains. */
     fun trackerName(name: String, website: String, id: Int): String =
-        reportSafe(name, NAME_MAX).ifBlank {
-            websiteHost(website)?.let { reportSafe(it, NAME_MAX) }?.ifBlank { null } ?: "Tracker #$id"
+        displaySafe(name).ifBlank {
+            websiteHost(website)?.let { reportSafe(it, MAX_DISPLAY_NAME_CHARS) }?.ifBlank { null } ?: "Tracker #$id"
         }
 
     private fun parse(url: String): URI? = try {
