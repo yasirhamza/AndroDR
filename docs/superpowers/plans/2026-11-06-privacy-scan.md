@@ -44,7 +44,8 @@
   - `is_restricted_pattern(p) -> bool`: the grammar as specified under Task 2.
   - `FIELD_CHECKS: dict[str, Callable[[str], bool]]`: the per-field shape checks for prefix, segment, suffix, label and pattern.
   - `matches_host(kind: str, value: str, host: str) -> bool`: the one definition of suffix, label and pattern matching. It is used by the mirror and validator for the first-party check and ported to Kotlin as `TrackerSet.matchDomain`'s primitive.
-  - `MAX_PATTERNS_PER_TRACKER = 4`, `MAX_PATTERNS_TOTAL = 64`. with `validation/test_domain_grammar.py` driven by `validation/domain_grammar_fixtures.txt` (lines `ACCEPT <pattern>` / `REJECT <pattern>`: accepts the three real patterns; rejects the four backtracking fixtures listed in Task 2, `.*`, and samples with `(`, `|`, `{`, `^`, `$`, `\d`; Task 4's Kotlin port reads the same file); `validation/first_party_hosts.txt`
+  - `MAX_PATTERNS_PER_TRACKER = 4`, `MAX_PATTERNS_TOTAL = 64`.
+- Create: `validation/test_domain_grammar.py`, driven by `validation/domain_grammar_fixtures.txt` (lines `ACCEPT <pattern>` / `REJECT <pattern>`: accepts the three real patterns; rejects the four backtracking fixtures listed in Task 2, `.*`, and samples with `(`, `|`, `{`, `^`, `$`, `\d`; Task 4's Kotlin port reads the same file); `validation/first_party_hosts.txt`
 - Create (generated): `third-party/android-sigma-rules/ioc-data/trackers.yml`
 - Modify: `third-party/android-sigma-rules/README.md` (ODbL paragraph)
 
@@ -71,7 +72,7 @@ trackers:
 ```
 No `generated_at` (keeps the manifest hash stable when Exodus is unchanged).
 
-Create `validation/first_party_hosts.txt` (one host per line, read by both the mirror and the validator): `www.google.com mail.google.com accounts.google.com www.facebook.com m.facebook.com www.youtube.com www.instagram.com www.amazon.com www.microsoft.com www.apple.com login.microsoftonline.com www.hicloud.com`. Create `validation/domain_grammar.py` with `PATTERN_RE` and `is_restricted_pattern(p: str) -> bool` (Task 2 defines the grammar; Task 1 imports it).
+Create `validation/first_party_hosts.txt` (one host per line, read by both the mirror and the validator): `www.google.com mail.google.com accounts.google.com www.facebook.com m.facebook.com www.youtube.com www.instagram.com www.amazon.com www.microsoft.com www.apple.com login.microsoftonline.com www.hicloud.com`. `validation/domain_grammar.py` is described under Files (Task 2 defines the grammar; Task 1 implements and imports it).
 
 CLI: `python3 validation/mirror-exodus-trackers.py --out ioc-data/trackers.yml [--from-json FILE] [--previous FILE]`. Exit 1 when: fewer than 300 trackers; the count shrinks by more than 10% versus `--previous`.
 
@@ -87,7 +88,7 @@ CLI: `python3 validation/mirror-exodus-trackers.py --out ioc-data/trackers.yml [
 - **Broad**: any suffix, label or pattern that matches a first-party host (suffix: host equals it or ends with `.`+it; label: a label of the host; pattern: as on device) moves to `excluded_domains` — **per signature**, the tracker keeps its others.
 - **Field checks before emitting:** every derived value goes through the same per-field check the validator uses (`domain_grammar.FIELD_CHECKS`: prefix, segment, suffix, label, pattern). A value that fails is dropped and reported, so the mirror's output always validates by construction, not just for this snapshot. Example: `com.foo-bar.sdk.Cls`, or `\.ad\.server\.`, which would produce a label containing a dot.
 - **Pattern caps:** at most `MAX_PATTERNS_PER_TRACKER = 4` and `MAX_PATTERNS_TOTAL = 64` (the real data has 3). Excess patterns are dropped and reported, keeping them in Exodus order.
-- **Website:** kept only if it parses as `http(s)://host[/…]` with no userinfo (`@`) part; otherwise emitted as `""`.
+- **Website:** kept only if it parses as `http(s)://host[/…]` with no userinfo (`@`) part — scheme and host compared case-insensitively (the snapshot has `http://AppsFlyer.com`); otherwise emitted as `""`. Add `test_upper_case_website_host_is_kept`.
 - **Categories**: Exodus labels verbatim; an empty list becomes `["Uncategorised"]`.
 - Trackers with no code prefix, segment, suffix, label or pattern left are dropped and reported.
 
@@ -107,10 +108,14 @@ def test_facebook_class_name_never_widens_to_com_facebook():
 def test_derived_values_failing_the_field_checks_are_dropped():   # mirror output must always satisfy the validator
     doc, report = render(api(code="com.foo-bar.sdk.Cls|com.ok.sdk", net="\\.ad\\.server\\.|ok\\.example\\.com"), None)
     t = doc["trackers"][0]
-    assert t["code_prefixes"] == ["com.ok.sdk"] and t["domain_labels"] == [] and len(report) == 2
-def test_pattern_caps_drop_and_report():                           # > 4 patterns on one tracker -> first 4 kept
-    doc, report = render(api(code="com.x.y", net="|".join(f"a{i}[0-9]*\\.ex\\.com" for i in range(6))), None)
-    assert len(doc["trackers"][0]["domain_patterns"]) == 4 and report
+    assert t["code_prefixes"] == ["com.ok.sdk"] and t["domain_labels"] == [] and t["domain_patterns"] == []
+    assert len(report) == 2                  # one line per dropped value; render() prints no summary lines into report
+def test_pattern_caps_keep_the_first_four_in_exodus_order():       # input deliberately unsorted
+    pats = [f"{c}[0-9]*\\.ex\\.com" for c in "fbdaec"]
+    doc, report = render(api(code="com.x.y", net="|".join(pats)), None)
+    assert doc["trackers"][0]["domain_patterns"] == pats[:4] and len(report) == 2
+def test_pattern_cap_per_file_keeps_the_first_64_in_id_order():   # 33 trackers x 2 patterns = 66 -> trackers 1..32 keep both, 33 keeps none
+    ...
 def test_class_name_with_a_two_segment_package_is_dropped():
     doc, report = render(api(code="com.baidu.BaiduMap|com.baidu.mapapi"), None)
     assert doc["trackers"][0]["code_prefixes"] == ["com.baidu.mapapi"] and report
@@ -171,7 +176,7 @@ def test_main_from_json_writes_file(tmp_path): ...        # 320 synthetic tracke
   - Labels {`alimama`, `adsmogo`, `exacttarget`, `fidzup`}.
   - **113** trackers in the file are `Uncategorised`. 116 Exodus trackers have no category, and 3 of them are among the dropped.
   - No tracker has a prefix `com.facebook`, `com.baidu`, `com.dv` or `com.prime31`.
-  - `validate_trackers_file(doc)` returns `[]`, which proves the mirror and the validator agree.
+  - `validate_trackers_file(doc, "trackers.yml")` returns `[]`, which proves the mirror and the validator agree.
 
   Then generate the live file: `python3 validation/mirror-exodus-trackers.py --out ioc-data/trackers.yml`. A live fetch may differ slightly from the snapshot; investigate any large difference. Add the README ODbL paragraph (mirror of Exodus, ODbL 1.0 link, derived copies stay ODbL, regenerated by this script).
 - [ ] **Step 6: Commit** `feat(ioc-data): mirror the Exodus Privacy tracker registry (ODbL)`.
@@ -267,6 +272,9 @@ object DomainGrammar { fun isRestrictedPattern(p: String): Boolean; val FIELD_CH
      *  (bundled file corrupt and no verified refresh yet); the privacy scan cannot run. */
     fun current(): TrackerSet?
     suspend fun refresh(): Int         // trackers accepted; 0 = previous kept
+    /** true once a usable set is held (bundled load or verified refresh); updated by both, so a refresh after a corrupt
+     *  bundled file turns it true without a restart. */
+    val available: StateFlow<Boolean>
     companion object {
         const val PATH = "ioc-data/trackers.yml"; const val MAX_RESPONSE_CHARS = 2_000_000
         const val MIN_TRACKERS = 300; const val MAX_TRACKERS = 2_000; const val MAX_HOST_CHARS = 253
@@ -296,7 +304,7 @@ Per-entry policy: a prefix, segment, suffix, label or pattern failing its `Domai
 @Test fun `refresh keeps the previous set when the manifest refuses`()
 @Test fun `refresh replaces the set when a verified file parses`()
 @Test fun `construction does not parse`()                           // a context whose raw resource throws: constructing succeeds
-@Test fun `a corrupt bundled file gives null until a verified refresh succeeds`()
+@Test fun `a corrupt bundled file gives null until a verified refresh succeeds`()  // and available goes false -> true
 ```
 - [ ] **Step 2: Run** `./gradlew :app:testDebugUnitTest --tests com.androdr.ioc.TrackerRegistryTest --tests com.androdr.privacy.model.TrackerSetTest -q` → FAIL (unresolved).
 - [ ] **Step 3: Implement** per Interfaces; `refresh()` mirrors `OemPrefixResolver.refresh()` (`manifest.verified(PATH, MAX_RESPONSE_CHARS)`, parse, swap atomically).
@@ -434,7 +442,7 @@ Hilt: create `di/PrivacyModule.kt` — `@Module @InstallIn(SingletonComponent::c
     val appsFailed: Int, val registrySize: Int, val registrySha256: String, val dnsWindowStart: Long,
     val dnsCoverageDays: Int,                                  // UTC calendar days in the window with ≥ 1 attributed lookup
     val usageCoverageFrom: Long?,                              // oldest usage event available; null = no usage access
-    val networkStatus: String)                                 // NetworkStatus.name: COMPLETE, TRUNCATED, FAILED
+    val networkStatus: String)                                 // NetworkStatus.name; inserted as PENDING
 @Entity(tableName = "privacy_app_result", primaryKeys = ["scanId", "packageName"])
 data class PrivacyAppResult(val scanId: Long, val packageName: String, val versionCode: Long, val appLabel: String,
     val isSystemApp: Boolean, val outcome: String /* InspectOutcome.name */, val reason: String?)
@@ -489,13 +497,13 @@ object PrivacyRanking {
 - **Counting refused trackers.** `refusedInCode` counts the trackers that have `inCode` and **any** refused category. A tracker with several categories counts once; e.g. [Crash reporting, Analytics] counts under the default threshold.
 - **Crossing.** An app is CROSSING iff `refusedInCode > 0`, **whatever its outcome**. Network-only evidence never crosses.
   - A PARTIAL app with refused trackers in code is therefore CROSSING, shown with its "partly inspected" reason. Padding an app until inspection is cut short must never take it out of the crossing count.
-- **Needs attention.** NEEDS_ATTENTION holds the COULD_NOT_INSPECT apps and the PARTIAL apps with `refusedInCode == 0`.
+- **Needs attention.** NEEDS_ATTENTION holds the COULD_NOT_INSPECT apps, the PARTIAL apps with `refusedInCode == 0`, and — when system apps are hidden — PARTIAL **system** apps that would otherwise be CROSSING (they keep their refused-tracker detail). Invariant: every app counted in `notInspected` appears in exactly one visible section, for both toggle values.
 - **Order.** Inside CROSSING, order by `refusedInCode` desc, then `appLabel`. Inside an app, trackers with refused categories come first, then by name.
 - **New crossing.** `newCrossing` = crossing and any refused in-code tracker has `newSinceLastScan`.
 - **Not inspected.** `summary.notInspected` counts **every** PARTIAL or COULD_NOT_INSPECT app, including PARTIAL apps listed under CROSSING. Such an app counts in both clauses of the card.
 - **System apps.** The toggle hides system apps from CROSSING and OTHER only. NEEDS_ATTENTION lists every app regardless of the toggle, and `notInspected` ignores the toggle. So the failure clause can never be hidden by the toggle. `summary` is computed from `rows` (one source of truth for the card, the screen and the Apps tab).
 
-- [ ] **Step 1: Write failing tests** — `PrivacyRankingTest`: `network-only refused evidence does not make an app cross`; `code evidence of a refused category does`; `failed apps and partial apps without refused code trackers are in NEEDS_ATTENTION, never OTHER`; `a PARTIAL app with a refused tracker in code is CROSSING and counted in notInspected`; `a tracker with categories Crash reporting and Analytics counts under the default threshold`; `a failed system app is in NEEDS_ATTENTION and counted even when system apps are hidden`; `notInspected counts every PARTIAL and COULD_NOT_INSPECT app`; `crossing apps order by refused-in-code count then label`; `system apps are excluded from CROSSING and OTHER unless showSystemApps`; `summary equals the counts of rows for the same inputs`; `changing refused changes summary and rows identically`; `an Uncategorised tracker in code crosses under the default threshold`; `OTHER category is not refused by default`; `byTracker lists most apps first`; `evidence is CODE, NETWORK or BOTH`. `SettingsRepositoryPrivacyTest`: default (contains UNCATEGORISED, not CRASH_REPORTING or OTHER); round-trip; unknown stored name ignored.
+- [ ] **Step 1: Write failing tests** — `PrivacyRankingTest`: `network-only refused evidence does not make an app cross`; `code evidence of a refused category does`; `failed apps and partial apps without refused code trackers are in NEEDS_ATTENTION, never OTHER`; `a PARTIAL app with a refused tracker in code is CROSSING and counted in notInspected`; `a tracker with categories Crash reporting and Analytics counts under the default threshold`; `a failed system app is in NEEDS_ATTENTION and counted even when system apps are hidden`; `notInspected counts every PARTIAL and COULD_NOT_INSPECT app`; `crossing apps order by refused-in-code count then label`; `system apps are excluded from CROSSING and OTHER unless showSystemApps`; `summary equals the counts of rows for the same inputs`; `every app counted in notInspected is visible in some section, with system apps shown and hidden` (includes a PARTIAL system app with a refused tracker in code); `changing refused changes summary and rows identically`; `an Uncategorised tracker in code crosses under the default threshold`; `OTHER category is not refused by default`; `byTracker lists most apps first`; `evidence is CODE, NETWORK or BOTH`. `SettingsRepositoryPrivacyTest`: default (contains UNCATEGORISED, not CRASH_REPORTING or OTHER); round-trip; unknown stored name ignored.
 - [ ] **Step 2: Run → FAIL. Step 3: Implement. Step 4: Run → pass.**
 - [ ] **Step 5: Commit** `feat(privacy): threshold setting and the single ranking/summary function`.
 
@@ -511,13 +519,20 @@ object PrivacyRanking {
 **Interfaces:**
 ```kotlin
 // DnsEventDao
-// The DNS log has no row cap (only age-based deletion), and a hostile app can flood it: every read here is bounded.
-data class DomainLookupCount(val appName: String, val domain: String, val lookups: Int, val dayList: String /* comma-joined UTC day numbers */,
-    val firstAt: Long, val lastAt: Long)
-@Query("SELECT appName, domain, COUNT(*) AS lookups, GROUP_CONCAT(DISTINCT timestamp / 86400000) AS dayList, " +
-       "MIN(timestamp) AS firstAt, MAX(timestamp) AS lastAt FROM DnsEvent WHERE timestamp >= :since AND appName IS NOT NULL " +
-       "GROUP BY appName, domain ORDER BY lookups DESC LIMIT :limit")
-suspend fun lookupCountsSince(since: Long, limit: Int): List<DomainLookupCount>
+// The DNS log has no row cap (only age-based deletion), and a hostile app can flood it: every read here is bounded,
+// and nothing is ranked by lookup count before matching, so junk domains can cost time (deadline -> TRUNCATED)
+// but can never push a real tracker pair out of a top-N window.
+data class AppDomain(val appName: String, val domain: String)
+// Keyset paging over index_DnsEvent_appName_domain_timestamp; start with afterApp = "", afterDomain = "".
+@Query("SELECT DISTINCT appName, domain FROM DnsEvent WHERE appName IS NOT NULL AND timestamp >= :since " +
+       "AND (appName > :afterApp OR (appName = :afterApp AND domain > :afterDomain)) ORDER BY appName, domain LIMIT :limit")
+suspend fun distinctPairsAfter(since: Long, afterApp: String, afterDomain: String, limit: Int): List<AppDomain>
+data class DomainLookupCount(val lookups: Int, val dayList: String? /* comma-joined UTC day numbers */,
+    val firstAt: Long?, val lastAt: Long?)
+// Called only for pairs that matched the registry.
+@Query("SELECT COUNT(*) AS lookups, GROUP_CONCAT(DISTINCT timestamp / 86400000) AS dayList, MIN(timestamp) AS firstAt, " +
+       "MAX(timestamp) AS lastAt FROM DnsEvent WHERE appName = :app AND domain = :domain AND timestamp >= :since")
+suspend fun lookupCount(since: Long, app: String, domain: String): DomainLookupCount
 // served by index_DnsEvent_appName_domain_timestamp (Task 7); [domain] is the raw stored value, never the normalised one
 @Query("SELECT timestamp FROM DnsEvent WHERE appName = :app AND domain = :domain AND timestamp >= :since " +
        "ORDER BY timestamp LIMIT :limit")
@@ -537,28 +552,37 @@ object NetworkEvidenceCorrelator {
     data class Key(val packageName: String, val trackerId: Int)
     data class NetworkEvidence(val lookups: Int, val days: Int, val background: Int?, val first: Long, val last: Long)
     data class Correlation(val evidence: Map<Key, NetworkEvidence>, val truncated: Boolean)
-    /** Matches each distinct normalised domain once; returns evidence per (app, tracker). [times] is called with the RAW
-     *  domain, only for matched (app, raw domain) pairs, at most MAX_TIMED_PAIRS of them (most lookups first).
-     *  A pair beyond that cap, or one with more than MAX_TIMES_PER_PAIR lookups, gets background = null.
-     *  [expired] is checked before each distinct domain; when true, stop and return truncated = true. */
-    suspend fun correlate(counts: List<DomainLookupCount>, registry: TrackerSet, installed: Set<String>,
-        usage: UsageIntervals?, times: suspend (app: String, rawDomain: String, limit: Int) -> List<Long>,
+    /** The runner adapts DnsEventDao to this; tests use a fake. */
+    interface DnsSource {
+        suspend fun pairsAfter(after: AppDomain?, limit: Int): List<AppDomain>
+        suspend fun count(app: String, rawDomain: String): DomainLookupCount
+        suspend fun times(app: String, rawDomain: String, limit: Int): List<Long>
+    }
+    /** Phase 1 — match: page through distinct (app, raw domain) pairs PAGE_SIZE at a time, skipping apps not in [installed];
+     *  normalise each domain and match it against [registry] once (memo per normalised domain, at most MAX_MEMO entries).
+     *  Phase 2 — count: [DnsSource.count] for each matched pair, at most MAX_MATCHED_PAIRS (beyond: truncated).
+     *  Phase 3 — background: [DnsSource.times] with limit MAX_TIMES_PER_PAIR + 1 for the MAX_TIMED_PAIRS pairs with the most
+     *  lookups; a pair beyond that cap, or with more than MAX_TIMES_PER_PAIR lookups, gets background = null.
+     *  [expired] is checked before each page and each count/times call; when true, stop and return truncated = true. */
+    suspend fun correlate(source: DnsSource, registry: TrackerSet, installed: Set<String>, usage: UsageIntervals?,
         expired: () -> Boolean): Correlation
+    const val PAGE_SIZE = 5_000
+    const val MAX_MEMO = 100_000
+    const val MAX_MATCHED_PAIRS = 20_000
     const val MAX_TIMED_PAIRS = 5_000
-    const val MAX_TIMES_PER_PAIR = 10_000      // lookupTimes is called with limit MAX_TIMES_PER_PAIR + 1
-    const val MAX_DOMAIN_ROWS = 50_000         // lookupCountsSince limit; hitting it sets truncated = true
+    const val MAX_TIMES_PER_PAIR = 10_000
 }
 
 sealed class PrivacyScanProgress { object Idle : PrivacyScanProgress(); data class Running(val done: Int, val total: Int) : PrivacyScanProgress()
     data class Finished(val scanId: Long) : PrivacyScanProgress(); data class Failed(val message: String) : PrivacyScanProgress() }
-enum class NetworkStatus { COMPLETE, TRUNCATED, FAILED }
+enum class NetworkStatus { PENDING, COMPLETE, TRUNCATED, FAILED }   // PENDING until finishScan
 @Singleton class PrivacyScanRunner @Inject constructor(inspector: AppInspector, registry: TrackerRegistry, dao: PrivacyDao,
     dnsEvents: DnsEventDao, usage: UsageIntervalReader, @ApplicationScope scope: CoroutineScope) {
     // Test seams: Hilt cannot inject function types and the project has no clock abstraction. Production never assigns them.
     @VisibleForTesting internal var clock: () -> Long = System::currentTimeMillis
     @VisibleForTesting internal var nanoTime: () -> Long = System::nanoTime
     val progress: StateFlow<PrivacyScanProgress>
-    /** Whether a usable registry is loaded; computed on IO at construction and after each start(); the UI reads this, never the registry. */
+    /** = registry.available; the runner triggers the lazy bundled load on IO at construction. The UI reads this, never the registry. */
     val registryAvailable: StateFlow<Boolean>
     /** Starts a scan on [scope] (Dispatchers.IO) unless one is running; returns false when one already is. */
     fun start(): Boolean
@@ -570,9 +594,11 @@ enum class NetworkStatus { COMPLETE, TRUNCATED, FAILED }
 ```
 No application-wide scope exists today (checked 2026-11-06). Create `di/ApplicationScopeModule.kt`, its own small module because the scope is not privacy-specific:
 ```kotlin
-@Qualifier annotation class ApplicationScope
-@Provides @Singleton @ApplicationScope fun appScope(): CoroutineScope =
-    CoroutineScope(SupervisorJob() + Dispatchers.IO + CoroutineExceptionHandler { _, t -> Log.e("AppScope", "uncaught", t) })
+@Qualifier @Retention(AnnotationRetention.BINARY) annotation class ApplicationScope
+@Module @InstallIn(SingletonComponent::class) object ApplicationScopeModule {
+    @Provides @Singleton @ApplicationScope fun appScope(): CoroutineScope =
+        CoroutineScope(SupervisorJob() + Dispatchers.IO + CoroutineExceptionHandler { _, t -> Log.e("AppScope", "uncaught", t) })
+}
 ```
 Moving other app-lifetime scopes onto it is a follow-up.
 
@@ -594,21 +620,21 @@ Moving other app-lifetime scopes onto it is a follow-up.
    - **Miss:** `inspect(app, budget)`. Cache only when the outcome is `INSPECTED` and the joined text's UTF-8 size ≤ `MAX_PACKAGES_TEXT_BYTES`.
    - In-code trackers = `set.matchPackages`; write the result row; update progress.
 4. **Network, isolated.** Wrapped in its own `try { … } catch (c: CancellationException) { throw c } catch (t: Throwable) { networkStatus = FAILED; no network evidence }`, so a failure here costs only the network evidence and the code results still finish.
-   - `lookupCountsSince(windowStart, MAX_DOMAIN_ROWS)` → `correlate(..., expired = { nanoTime() > networkDeadline })`, with the deadline `NETWORK_TIMEOUT_MS` ahead.
-   - `networkStatus = TRUNCATED` when the row limit was hit or the correlation was truncated; otherwise `COMPLETE`.
+   - `correlate(DnsSource over dnsEvents with since = windowStart, …, expired = { nanoTime() > networkDeadline })`, deadline `NETWORK_TIMEOUT_MS` ahead. Every DAO call is one bounded query, so the deadline also bounds the database work (one page or one pair at a time).
+   - `networkStatus = TRUNCATED` when the correlation was truncated; otherwise `COMPLETE`.
    - Merge with the in-code results into evidence rows.
 5. **`newSinceLastScan`.** False for every row when `previous == null` (first scan), or when the app has no result in `previous`, or when that result was not `INSPECTED`. Otherwise true when (pkg, trackerId) is absent from `evidenceOnce(previous.id)`.
 6. Upsert evidence; `finishScan(..., dnsCoverageDays = coverageDaysSince(windowStart), usageFrom, networkStatus)`; `deleteScansBefore(scanId)`; `pruneCacheTo(scanId)`; `Finished`.
 
 - [ ] **Step 1: Write failing tests**
   - `ForegroundIntervalsTest`: pairs resume/pause per package; an open interval ends at `until`; system packages are kept.
-  - `NetworkEvidenceCorrelatorTest` (a counting fake for `times` and a counting wrapper on the registry): `each distinct domain is matched once`; `timestamps are fetched only for matched pairs`; `a domain owned by two trackers yields two evidence rows`; `www.google.com yields no evidence with the bundled registry`; `uninstalled apps are ignored`; `background is null without usage`; `background is null for lookups older than usage coverage`; `background counts lookups outside foreground intervals within coverage`; `a system app's foreground use is honoured`.
+  - `NetworkEvidenceCorrelatorTest` (a fake `DnsSource` counting its calls, and a counting wrapper on the registry): `50,001 junk pairs with high counts plus one real tracker pair still yield evidence for the real pair` (security round 4); `pages are requested with the last pair of the previous page as the key`; `count is called only for matched pairs`; `an expired deadline mid-paging returns truncated with the evidence so far`; `more than MAX_MATCHED_PAIRS matches is truncated`; `each distinct domain is matched once`; `timestamps are fetched only for matched pairs`; `a domain owned by two trackers yields two evidence rows`; `www.google.com yields no evidence with the bundled registry`; `uninstalled apps are ignored`; `background is null without usage`; `background is null for lookups older than usage coverage`; `background counts lookups outside foreground intervals within coverage`; `a system app's foreground use is honoured`.
   - `NetworkEvidenceCorrelatorTest` also:
     - `beyond MAX_TIMED_PAIRS, background is null and counts are still exact`;
     - `a pair with more than MAX_TIMES_PER_PAIR lookups gets background null without loading them all` (fake `times` asserts `limit == MAX_TIMES_PER_PAIR + 1`);
     - `three domains of one tracker on the same day give days = 1`;
-    - `Foo.com and foo.com rows merge, and times is called with each raw domain`;
-    - `an expired deadline returns truncated with the evidence so far`.
+    - `Foo.com and foo.com pairs merge, are matched once, and count and times are called with each raw domain`;
+    - `days is the union of dayList sets across a tracker's domains`.
   - `PrivacyScanRunnerTest` also:
     - `20,000 seeded DnsEvent rows for one pair finish the scan, with background null for that pair`;
     - `a network-step failure keeps the code evidence and records networkStatus FAILED` (DnsEventDao mock throws);
@@ -616,7 +642,7 @@ Moving other app-lifetime scopes onto it is a follow-up.
     - `appsTotal equals installedApps().size`;
     - `cancellation during the cache read propagates`.
   - `PrivacyScanRunnerTest` (fake `AppInspector`, in-memory DB, seeded DnsEvent rows; `registry.current()` mocked to return a small hand-built `TrackerSet` — the 300-tracker floor applies to `parse`, not to `TrackerSet`): `in-code trackers come from matchPackages`; `an inspector that throws OutOfMemoryError yields COULD_NOT_INSPECT and the scan finishes`; `the runner passes a deadline PER_APP_TIMEOUT_MS ahead and one budget per app` (fake inspector records the budget); `a PARTIAL inspection is recorded and not cached`; `an over-size package text is not cached`; `a cache row that throws on read is deleted and the app re-inspected`; `an unchanged app (version, update time, reader version) reuses the cached package set`; `a changed lastUpdateTime re-inspects`; `the first scan marks nothing new`; `newSinceLastScan marks pairs absent from the previous completed scan`; `an app not INSPECTED in the previous scan is not marked new`; `completing a scan deletes older scans and prunes package sets of uninstalled apps`; `a throw after the loop (dao fails in finishScan) gives Failed and releases the lock` (a second `start()` returns true); `a null registry gives Failed without a scan row`; `start returns false while a scan runs`; `the scan never touches ScanLock` (a `ScanLock` held by the test does not block completion); `a registry refresh during the scan does not change the set used`; `the scan row records the registry hash and coverage days`; `deleteAll empties the tables and returns false while running`.
-  - `PrivacyBoundaryTest` (source scan): no file under `reporting/`, `sigma/`, `ui/history/`, `data/repo/ScanWriteRepository.kt`, `data/store/` references `com.androdr.privacy` or `privacy_`; no file under `privacy/` references `ScanLock` or `ScanResult`; `DexPackageReader.kt` and `ApkPackageInspector.kt` never reference `TrackerRegistry`, `TrackerSet` or `Tracker` (the emitter stays registry-independent, spec §5.1); no file under `ui/` imports `com.androdr.ioc.TrackerRegistry`; nothing under `privacy/model/` imports `com.androdr.ioc` (no package cycle).
+  - `PrivacyBoundaryTest` (source scan): no file under `reporting/`, `sigma/`, `ui/history/`, `data/repo/ScanWriteRepository.kt`, `data/store/` references `com.androdr.privacy` or `privacy_`; no file under `privacy/` references `ScanLock` or `ScanResult`; `DexPackageReader.kt` and `ApkPackageInspector.kt` never reference `TrackerRegistry`, `TrackerSet` or `Tracker` (the emitter stays registry-independent, spec §5.1); no file under `ui/` imports `com.androdr.ioc.TrackerRegistry`, `DexPackageReader` or `ApkPackageInspector`; nothing under `privacy/model/` imports `com.androdr.ioc` (no package cycle).
 - [ ] **Step 2: Run → FAIL. Step 3: Implement** per Interfaces and rules. **Step 4: Run** these classes, then the full suite once (`./gradlew :app:testDebugUnitTest -q`) → pass.
 - [ ] **Step 5: Commit** `feat(privacy): scan runner — isolated per-app inspection, distinct-domain correlation, usage coverage, own lock`.
 
@@ -631,7 +657,7 @@ Moving other app-lifetime scopes onto it is a follow-up.
 
 **Interfaces:**
 - `PrivacyViewModel(dao, runner, settings)` (no `TrackerRegistry`: the UI has no direct `ioc/` dependency): `state: StateFlow<PrivacyUiState>`; `runScan()` → `runner.start()`; `setRefused(Set<TrackerCategory>)`; `setShowSystemApps(Boolean)`; `deleteResults()` → `runner.deleteAll()`.
-- `PrivacyUiState(scan: PrivacyScan?, sections: List<Pair<RowSection, List<AppPrivacyRow>>>, byTracker: List<TrackerGroup>, refused: Set<TrackerCategory>, showSystemApps: Boolean, progress: PrivacyScanProgress, registrySizeAtScan: Int?, networkDays: Int?, registryAvailable: Boolean)` — `registrySizeAtScan = scan.registrySize`; `networkDays = scan.dnsCoverageDays` (0 → the no-monitor line); `registryAvailable` = `runner.registryAvailable` (computed on IO, refreshed after each run; false → Run disabled, `privacy_registry_unavailable` shown). A tracker's website is shown as its **host only** and is a link only when `PrivacyEvidenceText.websiteLink(url)` returns non-null: `https` scheme, a host, no userinfo; otherwise plain host text or nothing. `networkStatus` TRUNCATED → `privacy_network_truncated`, FAILED → `privacy_network_failed`. `deleteResults()` returning false shows `privacy_delete_refused`.
+- `PrivacyUiState(scan: PrivacyScan?, sections: List<Pair<RowSection, List<AppPrivacyRow>>>, byTracker: List<TrackerGroup>, refused: Set<TrackerCategory>, showSystemApps: Boolean, progress: PrivacyScanProgress, registrySizeAtScan: Int?, networkDays: Int?, registryAvailable: Boolean)` — `registrySizeAtScan = scan.registrySize`; `networkDays = scan.dnsCoverageDays` (0 → the no-monitor line); `registryAvailable` = `runner.registryAvailable` (computed on IO, refreshed after each run; false → Run disabled, `privacy_registry_unavailable` shown). A tracker's website is shown as its **parsed, lower-cased host only** — never the raw string, for links and non-links alike — and is a link only when `PrivacyEvidenceText.websiteLink(url)` returns non-null: `https` scheme, a host, no userinfo; otherwise plain host text or nothing. `networkStatus` TRUNCATED → `privacy_network_truncated`, FAILED → `privacy_network_failed`. `deleteResults()` returning false shows `privacy_delete_refused`.
 - `object PrivacyEvidenceText { fun line(row: TrackerRow, res: Resources): String; fun appStatus(row: AppPrivacyRow, registrySize: Int, res: Resources): String }` — `appStatus` returns `privacy_none_from_registry` only for `INSPECTED` apps with no trackers; `PARTIAL` → `privacy_partial`; `COULD_NOT_INSPECT` → `privacy_could_not_inspect`.
 
 Strings (exact; counts are `<plurals>`):
@@ -646,7 +672,7 @@ Strings (exact; counts are `<plurals>`):
 - `privacy_limits` "Code inspection can miss trackers whose code has been renamed by the app's build tools, or code loaded at runtime. Apps using encrypted DNS, or reporting through Google Play services, are not visible on the network. Domains a tracker shares with its company's ordinary services (such as google.com) are not used as evidence. Tracking by the app's own developer is not covered."
 - `privacy_registry_unavailable` "The tracker registry could not be loaded, so a privacy scan cannot run. It will be retried at the next intelligence update."
 - `privacy_system_toggle` "Include system apps (can only be disabled, not removed)"; `privacy_threshold_title` "What I refuse"; six `privacy_cat_*` labels + explanations from spec §4.1; `privacy_cat_uncategorised` "Uncategorised" with explanation "Exodus lists it as a tracker but gives no purpose; many are ad networks"; `privacy_cat_other` "Other (new category from the registry)"
-- `privacy_network_truncated` "Network evidence is incomplete: the DNS log was too large to read in full."; `privacy_network_failed` "Network evidence could not be read this time; code findings are complete."; `privacy_partly_inspected_tag` "partly inspected"
+- `privacy_network_truncated` "Network evidence is incomplete: the DNS log was too large to read in full within the time limit."; `privacy_network_failed` "Network evidence could not be read this time; code findings are not affected."; `privacy_partly_inspected_tag` "partly inspected"
 - `privacy_delete_refused` "A privacy scan is running; delete the results after it finishes."
 - `privacy_delete` "Delete privacy results"; `privacy_delete_confirm` "Delete the stored list of every app's code packages and tracker findings?"
 - `privacy_attribution` "Tracker data: Exodus Privacy (ODbL 1.0)"; `privacy_last_scan` "Last scan: %1$s"
@@ -656,7 +682,7 @@ Strings (exact; counts are `<plurals>`):
   - `DashboardPrivacySummaryTest`: `null when never scanned`; `failed clause present when notInspected > 0`; `changing the refused set or the system toggle changes the summary exactly as the screen rows` (Review Focus 4).
   - `PrivacyViewModelTest`: `sections come from PrivacyRanking with the current settings`; `runScan when one is running exposes privacy_running_elsewhere`; `deleteResults delegates to the runner`; `a refused delete exposes privacy_delete_refused`; `networkStatus TRUNCATED and FAILED expose their lines`.
   - `PrivacyCopyTest`: `strings contain no "no trackers" and no "carries" in network strings`; `PrivacyScreen references privacy_limits, privacy_network_caveat and privacy_attribution`; `MainActivity has the privacy route and five bottom destinations`; `history clear-all text mentions that privacy results are kept`.
-  - `PrivacyViewModelTest` also: `a null registry disables Run and exposes registry-unavailable`; `websiteLink accepts https with a host and rejects http, javascript and userinfo` (`https://firebase.google.com@evil.example` → null).
+  - `PrivacyViewModelTest` also: `a null registry disables Run and exposes registry-unavailable`; `a later successful refresh enables Run without recreating the ViewModel` (fake runner flow false -> true); `websiteLink accepts https with a host and rejects http, javascript and userinfo` (`https://firebase.google.com@evil.example` → null).
 - [ ] **Step 2: Run → FAIL. Step 3: Implement** the screen (top bar with back; header with last-scan date, network coverage line, Run button or progress; two tabs; By-app in the three sections; app detail sheet listing tracker rows via `PrivacyEvidenceText`; By-tracker list; system toggle; threshold sheet with eight checkboxes (six categories, Uncategorised, Other); footer with limits, network caveat and attribution; overflow menu with Delete, confirmed by dialog), the card (`onNavigate("privacy")`), the route.
 - [ ] **Step 4: Run** the four classes and `:app:lintDebug` → pass.
 - [ ] **Step 5: Commit** `feat(privacy): privacy screen, threshold sheet, dashboard card, delete action`.
@@ -674,7 +700,7 @@ Strings (exact; counts are `<plurals>`):
 
 ### Task 12: Documentation, gates, safe-ordering close, release battery
 
-- [ ] **Step 1: ARCHITECTURE.md** — a new top-level section "Privacy scan" (not under Detection) plus a Module Map row for `com.androdr.privacy`: the two facts, the registry and its normalisation, code-only crossing, own tables and own lock, the hostile-APK rules, limits, ODbL. Commit `docs: privacy scan architecture`.
+- [ ] **Step 1: ARCHITECTURE.md** — a new top-level section "Privacy scan" (not under Detection) plus a Module Map row for `com.androdr.privacy`: the two facts, the registry and its normalisation, code-only crossing, own tables and own lock, the hostile-APK rules, limits, ODbL. State the allowed layering: `ui/` may use `privacy` (runner, ranking) and `privacy.model`, never the readers (`DexPackageReader`, `ApkPackageInspector`) or `ioc.TrackerRegistry`. Commit `docs: privacy scan architecture`.
 - [ ] **Step 2: Full local gates** — `rm -rf app/build/test-results/testDebugUnitTest && ./gradlew :app:testDebugUnitTest detekt :app:lintDebug --continue -q` → 0 failures, detekt and lint clean.
 - [ ] **Step 3: Open the AndroDR PR** (`feat/privacy-scan`; body links spec and plan, states the submodule points at rules `feat/tracker-registry`). Wait for `build-and-test`, `lint-and-detekt`, `instrumented`, CodeQL — **expect `submodule-check` and therefore `ci-success` red** at this step.
 - [ ] **Step 4: Safe-ordering close** — open the rules PR, wait for `validate` green, merge; re-point the submodule at rules main (`git -C third-party/android-sigma-rules checkout main && git -C third-party/android-sigma-rules pull`, `git add`, commit `build: re-point submodule at rules main (tracker registry)`, push); now wait for `ci-success` green; merge the AndroDR PR.
