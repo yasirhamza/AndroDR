@@ -5,6 +5,7 @@ import android.util.Log
 import com.androdr.R
 import com.androdr.data.db.CveDao
 import com.androdr.data.model.CveEntity
+import com.androdr.util.BodyTooLargeException
 import com.androdr.util.readTextCapped
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
@@ -95,7 +96,7 @@ class CveRepository @Inject constructor(
 
     /** Returns null on 304 Not Modified, emptyList on error, or the parsed entries on 200. */
     /** [url] is a parameter only so a unit test can point this at a loopback server. */
-    @Suppress("TooGenericExceptionCaught", "ReturnCount")
+    @Suppress("TooGenericExceptionCaught")
     internal suspend fun fetchCisaKev(url: String = CISA_KEV_URL): List<CveEntity>? {
         val conn = URL(url).openConnection() as HttpURLConnection
         return try {
@@ -137,8 +138,10 @@ class CveRepository @Inject constructor(
                     ))
                 }
             }
-            // Only a body that parsed is remembered as current (same rule as OSV below).
-            conn.getHeaderField("ETag")?.let { settings.setEtag(ETAG_CISA, it) }
+            // Only a body that parsed to rows is remembered as current (same rule as OSV
+            // below): an empty result is reported as errored this cycle and must not 304
+            // green on the next.
+            if (entries.isNotEmpty()) conn.getHeaderField("ETag")?.let { settings.setEtag(ETAG_CISA, it) }
             entries
         } catch (e: Exception) {
             Log.w(TAG, "CISA KEV fetch failed: ${e.message}")
@@ -154,7 +157,7 @@ class CveRepository @Inject constructor(
      * [url] and [maxEntryChars] are parameters only so a unit test can point this
      * at a local server and a small cap; production callers use the defaults.
      */
-    @Suppress("TooGenericExceptionCaught", "ReturnCount")
+    @Suppress("TooGenericExceptionCaught")
     internal suspend fun fetchOsvAndroid(
         url: String = OSV_ANDROID_URL,
         maxEntryChars: Int = MAX_OSV_ENTRY_CHARS,
@@ -207,17 +210,20 @@ class CveRepository @Inject constructor(
         /**
          * Inflation caps for the OSV zip (PASTA F-005). The feed comes from an
          * unpinned host and is inflated into memory entry by entry, so a
-         * high-ratio bomb was a memory DoS. The total cap is the real defence;
-         * the per-entry cap only bounds one StringBuilder. Both carry >= 4x headroom
-         * over the live feed (2026-11-06: 4,073 entries, 35.6 MiB inflated, largest
-         * entry 4.18 MiB) -- a tight cap would abort every cycle and silently stop
-         * CVE enrichment, the failure this app most needs to avoid.
-         * CveRepositoryOsvFetchTest pins the headroom.
+         * high-ratio bomb was a memory DoS. These bound UNBOUNDED input; they are
+         * not a heap budget -- a body just under a cap is still that large.
+         *  - Per entry: an over-cap entry is skipped (not fatal), so this only needs
+         *    to clear the largest real entry (4.18 MiB, 2026-11-06) and small enough
+         *    that one hostile entry's StringBuilder stays well inside a 256 MB heap.
+         *  - Total: the abort. >= 4x over the live feed (35.6 MiB inflated, 4,073
+         *    entries) -- a tight cap would abort every cycle and silently stop CVE
+         *    enrichment, the failure this app most needs to avoid.
+         * CveRepositoryOsvFetchTest pins both headrooms.
          */
-        internal const val MAX_OSV_ENTRY_CHARS = 32 * 1024 * 1024
+        internal const val MAX_OSV_ENTRY_CHARS = 8 * 1024 * 1024
         internal const val MAX_OSV_TOTAL_CHARS = 256L * 1024 * 1024
-        /** CISA KEV JSON (live ~3 MB, 2026-11); capped so an endless body cannot exhaust the heap. */
-        private const val MAX_KEV_CHARS = 32 * 1024 * 1024
+        /** CISA KEV JSON (live 1.8 MB, 2026-11). Bounds unbounded input; see MAX_OSV_ENTRY_CHARS. */
+        private const val MAX_KEV_CHARS = 16 * 1024 * 1024
         private val PATCH_DATE = Regex("""\d{4}-\d{2}-\d{2}""")
 
         /**
@@ -239,12 +245,21 @@ class CveRepository @Inject constructor(
                 var entry = zis.nextEntry
                 while (entry != null) {
                     if (entry.name.endsWith(".json")) {
-                        val content = zis.bufferedReader().readTextCapped(maxEntryChars)
-                        total += content.length
+                        // An over-cap entry is skipped, not fatal: one odd entry must not
+                        // stop the feed. It still counts its cap toward the total, so N
+                        // oversized entries are not free. (nextEntry drains the rest.)
+                        val content = try {
+                            zis.bufferedReader().readTextCapped(maxEntryChars)
+                        } catch (e: BodyTooLargeException) {
+                            Log.w(TAG, "OSV entry ${entry.name} skipped: ${e.message}")
+                            total += maxEntryChars
+                            null
+                        }
+                        total += content?.length ?: 0
                         if (total > maxTotalChars) {
                             throw IOException("OSV zip inflates past $maxTotalChars chars in total")
                         }
-                        parseOsvEntry(content, now)?.let { entries.add(it) }
+                        content?.let { c -> parseOsvEntry(c, now)?.let { entries.add(it) } }
                     }
                     entry = zis.nextEntry
                 }

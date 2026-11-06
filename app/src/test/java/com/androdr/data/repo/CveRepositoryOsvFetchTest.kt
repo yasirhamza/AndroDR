@@ -59,13 +59,33 @@ class CveRepositoryOsvFetchTest {
     }
 
     @Test
-    fun `an entry inflating past the per-entry cap aborts the zip`() {
-        val bytes = zip("CVE-2024-0001.json" to osvEntry("CVE-2024-0001", padding = 5_000))
+    fun `an entry inflating past the per-entry cap is skipped and the rest still parse`() {
+        // One oversized entry must not take the feed down (that would be the
+        // false-reassurance failure), and skipping it bounds the StringBuilder a
+        // hostile entry can grow -- the total cap below is what bounds the zip.
+        val bytes = zip(
+            "CVE-2024-0001.json" to osvEntry("CVE-2024-0001"),
+            "CVE-2024-0002.json" to osvEntry("CVE-2024-0002", padding = 5_000),
+            "CVE-2024-0003.json" to osvEntry("CVE-2024-0003"),
+        )
+
+        val entities = CveRepository.readOsvZip(ByteArrayInputStream(bytes), now = 0L, maxEntryChars = 4_000)
+
+        assertEquals(listOf("CVE-2024-0001", "CVE-2024-0003"), entities.map { it.cveId })
+    }
+
+    @Test
+    fun `a skipped entry still counts its cap toward the total`() {
+        // Otherwise N oversized entries would each be "free" against the total cap.
+        val big = (1..3).map { "big$it.json" to osvEntry("CVE-2024-000$it", padding = 5_000) }
+        val bytes = zip(*big.toTypedArray())
         try {
-            CveRepository.readOsvZip(ByteArrayInputStream(bytes), now = 0L, maxEntryChars = 4_000)
+            CveRepository.readOsvZip(
+                ByteArrayInputStream(bytes), now = 0L, maxEntryChars = 4_000, maxTotalChars = 10_000,
+            )
             fail("expected IOException")
         } catch (e: IOException) {
-            assertTrue(e.message.orEmpty(), e.message.orEmpty().contains("4000"))
+            assertTrue(e.message.orEmpty(), e.message.orEmpty().contains("10000"))
         }
     }
 
@@ -92,9 +112,11 @@ class CveRepositoryOsvFetchTest {
         // inflated, largest entries ASB-A-412662901 (4.18 MiB) and ASB-A-430889718
         // (3.13 MiB). A 1 MiB per-entry cap would have aborted every cycle -- the
         // false-reassurance failure this app most needs to avoid (security review B1).
+        // An over-cap entry is skipped, not fatal, so the per-entry cap only needs to
+        // clear the largest real entry; the total cap is what must never trip.
         val largestLiveEntryChars = 4_400_000
         val liveTotalChars = 37_400_000L
-        assertTrue(CveRepository.MAX_OSV_ENTRY_CHARS >= 4 * largestLiveEntryChars)
+        assertTrue(CveRepository.MAX_OSV_ENTRY_CHARS >= largestLiveEntryChars * 3 / 2)
         assertTrue(CveRepository.MAX_OSV_TOTAL_CHARS >= 4 * liveTotalChars)
     }
 
@@ -103,7 +125,7 @@ class CveRepositoryOsvFetchTest {
     // Android unit tests compile against android.jar, so the JDK's httpserver
     // module is not on the classpath; a one-shot ServerSocket is enough here.
     private var server: ServerSocket? = null
-    private var serverError: Throwable? = null
+    @Volatile private var serverError: Throwable? = null
 
     @After fun stop() {
         server?.close()
@@ -133,7 +155,7 @@ class CveRepositoryOsvFetchTest {
         CveRepository(mockk<Context>(relaxed = true), mockk<CveDao>(relaxed = true), settings)
 
     @Test
-    fun `a zip that fails the cap is not remembered as the current ETag`() = runTest {
+    fun `a zip whose only entry is over the cap yields nothing and is not remembered`() = runTest {
         val settings = mockk<SettingsRepository>(relaxed = true) { coEvery { getEtag(any()) } returns null }
         val url = serve(zip("CVE-2024-0001.json" to osvEntry("CVE-2024-0001", padding = 5_000)), etag = "\"bomb\"")
 
@@ -168,13 +190,26 @@ class CveRepositoryOsvFetchTest {
         coVerify(exactly = 0) { settings.setEtag(any(), any()) }
     }
 
-    private fun kev(vararg cves: String) = buildString {
+    private fun kev(vararg cves: String, vendor: String = "Google", product: String = "Android") = buildString {
         append("""{"vulnerabilities":[""")
         append(cves.joinToString(",") {
-            """{"cveID":"$it","vendorProject":"Google","product":"Android",""" +
+            """{"cveID":"$it","vendorProject":"$vendor","product":"$product",""" +
                 """"shortDescription":"d","dateAdded":"2024-01-02"}"""
         })
         append("]}")
+    }
+
+    @Test
+    fun `a KEV body with no Android rows is not remembered by its ETag, same rule as OSV`() = runTest {
+        // Otherwise the cycle is reported errored (empty) yet the next one 304s green.
+        val settings = mockk<SettingsRepository>(relaxed = true) { coEvery { getEtag(any()) } returns null }
+        val url = serve(kev("CVE-2024-0001", vendor = "Microsoft", product = "Windows").toByteArray(),
+            etag = "\"none\"", path = "/kev.json")
+
+        val result = repo(settings).fetchCisaKev(url)
+
+        assertEquals(emptyList<Any>(), result)
+        coVerify(exactly = 0) { settings.setEtag(any(), any()) }
     }
 
     @Test

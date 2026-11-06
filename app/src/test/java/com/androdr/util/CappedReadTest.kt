@@ -24,12 +24,15 @@ class CappedReadTest {
     }
 
     @Test
-    fun `a body over the cap throws instead of being buffered`() {
+    fun `a body over the cap throws a distinguishable IOException instead of being buffered`() {
+        // A subclass, so a caller can tell "too large" (skip this item) from a broken
+        // stream (give up on the fetch) while still catching plain IOException elsewhere.
         try {
             StringReader("x".repeat(10_001)).readTextCapped(maxChars = 10_000)
-            fail("expected IOException")
-        } catch (e: IOException) {
+            fail("expected BodyTooLargeException")
+        } catch (e: BodyTooLargeException) {
             assertTrue("the message names the cap: ${e.message}", e.message.orEmpty().contains("10000"))
+            assertTrue(e is IOException)
         }
     }
 
