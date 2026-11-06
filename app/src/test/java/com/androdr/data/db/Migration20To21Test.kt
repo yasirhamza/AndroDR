@@ -262,7 +262,8 @@ class Migration20To21Test {
         }
         migrate().close()
         val context = ApplicationProvider.getApplicationContext<Context>()
-        val room = Room.databaseBuilder(context, AppDatabase::class.java, name).allowMainThreadQueries().build()
+        val room = Room.databaseBuilder(context, AppDatabase::class.java, name)
+            .addMigrations(MIGRATION_21_22).allowMainThreadQueries().build()
         try {
             val codec = TelemetryRecordCodec(TelemetryDictionaries { rawFile("$it.txt").readBytes() })
             val reader = TelemetryReader(room, codec, EventDisplay.parse(rawFile("event_display.yml").readText()))

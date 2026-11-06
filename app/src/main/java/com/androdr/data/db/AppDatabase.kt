@@ -10,6 +10,10 @@ import com.androdr.data.model.EventWatermark
 import com.androdr.data.model.FeedHealth
 import com.androdr.data.model.ForensicTimelineEvent
 import com.androdr.data.model.Indicator
+import com.androdr.data.model.PrivacyAppResult
+import com.androdr.data.model.PrivacyPackageSet
+import com.androdr.data.model.PrivacyScan
+import com.androdr.data.model.PrivacyTrackerEvidence
 import com.androdr.data.model.RecordBody
 import com.androdr.data.model.ScanFinding
 import com.androdr.data.model.ScanObservation
@@ -22,9 +26,10 @@ import com.androdr.data.model.TelemetryFact
         ScanResult::class, DnsEvent::class, KnownAppDbEntry::class,
         CveEntity::class, ForensicTimelineEvent::class, Indicator::class,
         FeedHealth::class, RecordBody::class, TelemetryFact::class, ScanObservation::class,
-        EventWatermark::class, SignalMember::class, ScanFinding::class, Alert::class
+        EventWatermark::class, SignalMember::class, ScanFinding::class, Alert::class,
+        PrivacyScan::class, PrivacyAppResult::class, PrivacyTrackerEvidence::class, PrivacyPackageSet::class
     ],
-    version = 21,
+    version = 22,
     exportSchema = true
 )
 @TypeConverters(Converters::class)
@@ -70,4 +75,6 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun scanFindingDao(): ScanFindingDao
 
     abstract fun alertDao(): AlertDao
+
+    abstract fun privacyDao(): PrivacyDao
 }

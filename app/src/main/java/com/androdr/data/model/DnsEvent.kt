@@ -1,10 +1,11 @@
 package com.androdr.data.model
 
 import androidx.room.Entity
+import androidx.room.Index
 import androidx.room.PrimaryKey
 import kotlinx.serialization.Serializable
 
-@Entity
+@Entity(indices = [Index(value = ["appName", "domain", "timestamp"])])
 @Serializable
 data class DnsEvent(
     @PrimaryKey(autoGenerate = true)
