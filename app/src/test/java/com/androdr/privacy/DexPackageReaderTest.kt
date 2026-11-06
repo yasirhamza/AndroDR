@@ -232,6 +232,38 @@ class DexPackageReaderTest {
         assertTrue(r.partial)
     }
 
+    @Test fun `the package cap bounds the in-memory set not just the result`() {
+        val dex = SyntheticDex.dex((0 until 5000).map { "Lp$it/A;" })
+        val b = ReadBudget(deadlineNanos = Long.MAX_VALUE, remainingPackages = 100, nanoTime = { 0L })
+        val peaks = ArrayList<Int>()
+        DexPackageReader.localSetProbe = { peaks.add(it) }
+        try {
+            val r = DexPackageReader.read(apk("classes.dex" to dex), b)
+            assertTrue(r.packages.size <= 100)
+            assertTrue(r.packageCapHit)
+            assertTrue(r.partial)
+            assertEquals(DexOutcome.READ, r.dexOutcomes["classes.dex"])
+            assertEquals(listOf(100), peaks)
+            assertEquals(0, b.remainingPackages)
+        } finally {
+            DexPackageReader.localSetProbe = null
+        }
+    }
+
+    @Test fun `a package already stored from an earlier dex does not consume budget`() {
+        val b = ReadBudget(deadlineNanos = Long.MAX_VALUE, remainingPackages = 3, nanoTime = { 0L })
+        val r = DexPackageReader.read(
+            apk(
+                "classes.dex" to SyntheticDex.dex(listOf("Lcom/a/X;", "Lcom/b/X;")),
+                "classes2.dex" to SyntheticDex.dex(listOf("Lcom/a/Y;", "Lcom/c/Y;")),
+            ),
+            b,
+        )
+        assertEquals(setOf("com.a", "com.b", "com.c"), r.packages)
+        assertFalse(r.packageCapHit)
+        assertEquals(0, b.remainingPackages)
+    }
+
     @Test fun `stored and deflated entries both read`() {
         val dex = SyntheticDex.dex(listOf("Lcom/a/B;"))
         for (stored in listOf(true, false)) {

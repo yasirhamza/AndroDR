@@ -103,10 +103,11 @@ object DexPackageReader {
             bytes += fetched.bytes
             var outcome = fetched.outcome
             if (fetched.data != null) {
-                val parsed = DexTables(fetched.data, budget, scanProbe).parse()
+                val parsed = DexTables(fetched.data, budget, packages, scanProbe).parse()
                 outcome = parsed.outcome
                 if (outcome == DexOutcome.READ || outcome == DexOutcome.TIME_LIMIT) {
-                    capHit = merge(parsed.packages, packages, budget) || capHit
+                    merge(parsed.packages, packages, budget)
+                    capHit = parsed.capHit || capHit
                 }
             }
             if (outcome == DexOutcome.TIME_LIMIT) timedOut = true
@@ -116,19 +117,14 @@ object DexPackageReader {
         return Result(packages, outcomes, capHit, bytes)
     }
 
-    /** Adds [local] to [global] while the package budget lasts; returns true when the cap was hit. */
-    private fun merge(local: Set<String>, global: MutableSet<String>, budget: ReadBudget): Boolean {
-        var hit = false
+    /**
+     * Adds [local] to [global] and charges the shared budget. [DexTables] already bounded [local] by
+     * the remaining budget and excluded packages in [global], so this never exceeds the cap.
+     */
+    private fun merge(local: Set<String>, global: MutableSet<String>, budget: ReadBudget) {
         for (p in local) {
-            if (p in global) continue
-            if (budget.remainingPackages <= 0) {
-                hit = true
-            } else {
-                global.add(p)
-                budget.remainingPackages--
-            }
+            if (global.add(p)) budget.remainingPackages--
         }
-        return hit
     }
 
     private class Fetched(val data: ByteArray?, val outcome: DexOutcome, val bytes: Long)
@@ -175,7 +171,10 @@ object DexPackageReader {
         return if (failed != null) Fetched(null, failed, total) else Fetched(sink.toByteArray(), DexOutcome.READ, total)
     }
 
-    internal class ParsedDex(val outcome: DexOutcome, val packages: Set<String>)
+    /** Test hook: receives the final size of each dex's local package set (never above the budget). */
+    @Volatile internal var localSetProbe: ((Int) -> Unit)? = null
+
+    internal class ParsedDex(val outcome: DexOutcome, val packages: Set<String>, val capHit: Boolean = false)
 
     /** Thrown inside [DexTables] for structural violations; carries no stack trace. */
     private class DexFormatException : RuntimeException(null, null, false, false)
@@ -183,12 +182,15 @@ object DexPackageReader {
     private class DexTables(
         private val d: ByteArray,
         private val budget: ReadBudget,
+        private val global: Set<String>,
         private val probe: ((Int) -> Unit)?,
     ) {
+        /** Packages new to this dex; never grows past the app's remaining package budget. */
         private val packages = LinkedHashSet<String>()
+        private var capHit = false
 
         fun parse(): ParsedDex = try {
-            parseTables()
+            parseTables().also { localSetProbe?.invoke(packages.size) }
         } catch (_: DexFormatException) {
             ParsedDex(DexOutcome.MALFORMED, emptySet())
         }
@@ -232,7 +234,7 @@ object DexPackageReader {
             var i = 0L
             while (i < typeSize) {
                 if (i > 0 && i % CHECK_EVERY == 0L && budget.expired()) {
-                    return ParsedDex(DexOutcome.TIME_LIMIT, packages)
+                    return ParsedDex(DexOutcome.TIME_LIMIT, packages, capHit)
                 }
                 val idx = u4(typeOff + 4 * i)
                 if (idx >= stringSize) malformed()
@@ -244,7 +246,7 @@ object DexPackageReader {
                 }
                 i++
             }
-            return ParsedDex(DexOutcome.READ, packages)
+            return ParsedDex(DexOutcome.READ, packages, capHit)
         }
 
         /** Returns the uleb128 value at [pos] and advances [cursor]; malformed if > 5 bytes or out of range. */
@@ -278,13 +280,19 @@ object DexPackageReader {
         }
 
         private fun addPackage(descriptor: String) {
-            if (descriptor.length > MAX_DESCRIPTOR_CHARS) return
-            if (descriptor.length < 3 || descriptor[0] != 'L' || descriptor.last() != ';') return
-            val body = descriptor.substring(1, descriptor.length - 1)
-            val slash = body.lastIndexOf('/')
-            if (slash <= 0) return
-            val pkg = body.substring(0, slash)
-            if (pkg.split('/').all { SEGMENT.matcher(it).matches() }) packages.add(pkg.replace('/', '.'))
+            val dotted = packageOf(descriptor)
+            if (dotted == null || dotted in global || dotted in packages) return
+            if (packages.size >= budget.remainingPackages) capHit = true else packages.add(dotted)
+        }
+
+        /** Dotted package of a class descriptor, or null for non-class, default-package or odd names. */
+        private fun packageOf(descriptor: String): String? {
+            val isClass = descriptor.length in 3..MAX_DESCRIPTOR_CHARS &&
+                descriptor[0] == 'L' && descriptor.last() == ';'
+            val slash = if (isClass) descriptor.lastIndexOf('/') else -1
+            val pkg = if (slash > 1) descriptor.substring(1, slash) else null
+            val valid = pkg != null && pkg.split('/').all { SEGMENT.matcher(it).matches() }
+            return if (valid) pkg?.replace('/', '.') else null
         }
     }
 
