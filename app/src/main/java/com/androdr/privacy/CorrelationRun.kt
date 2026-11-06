@@ -147,7 +147,7 @@ internal class CorrelationRun(
         if (p.lookups > MAX_TIMES_PER_PAIR || p.first < u.coverageFrom || deadlinePassed()) return null
         val times = source.times(p.app, p.raw, MAX_TIMES_PER_PAIR + 1)
         if (times.size > MAX_TIMES_PER_PAIR || times.any { it < u.coverageFrom }) return null
-        val ranges = foreground.getOrPut(p.app) { merged(u.byPackage[p.app].orEmpty()) }
+        val ranges = foreground.getOrPut(p.app) { ForegroundIntervals.merge(u.byPackage[p.app].orEmpty()) }
         return times.count { !inAny(it, ranges) }
     }
 
@@ -164,17 +164,6 @@ internal class CorrelationRun(
     }
 
     private companion object {
-        /** Sorted, overlap-free copy of [ranges], so a binary search is exact. */
-        fun merged(ranges: List<LongRange>): List<LongRange> {
-            val out = ArrayList<LongRange>()
-            for (r in ranges.filter { !it.isEmpty() }.sortedBy { it.first }) {
-                val last = out.lastOrNull()
-                if (last != null && r.first <= last.last) out[out.size - 1] = last.first..maxOf(last.last, r.last)
-                else out.add(r)
-            }
-            return out
-        }
-
         fun inAny(t: Long, ranges: List<LongRange>): Boolean {
             var lo = 0
             var hi = ranges.size - 1

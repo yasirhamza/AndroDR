@@ -127,27 +127,25 @@ class PrivacyScanRunner @Inject constructor(
         val outcomes = HashMap<String, InspectOutcome>()
         val inCode = HashMap<String, Set<Tracker>>()
         for ((index, app) in apps.withIndex()) {
-            val inspection = inspect(app)
+            val (inspection, trackers) = inspect(app, set)
             dao.upsertResults(listOf(resultRow(scanId, inspection)))
             outcomes[app.packageName] = inspection.outcome
-            inCode[app.packageName] = set.matchPackages(inspection.packages)
+            inCode[app.packageName] = trackers
             state.value = PrivacyScanProgress.Running(index + 1, apps.size)
         }
         val usageIntervals = readUsage(windowStart, startedAt)
-        val (correlated, network) = correlate(set, outcomes.keys, usageIntervals, windowStart)
-        val coverage = coverageDays(windowStart)
-        // Without coverage the network evidence cannot be judged complete.
-        val status = if (coverage == null) NetworkStatus.FAILED else correlated
+        val network = network(set, outcomes.keys, usageIntervals, windowStart)
         val isNew = PrivacyEvidenceRows.newSince(
             previous?.let { dao.resultsOnce(it.id) },
             previous?.let { dao.evidenceOnce(it.id) },
+            previousNetworkComplete = previous?.networkStatus == NetworkStatus.COMPLETE.name,
         )
-        dao.upsertEvidence(PrivacyEvidenceRows.build(scanId, set, inCode, network, isNew))
+        dao.upsertEvidence(PrivacyEvidenceRows.build(scanId, set, inCode, network.evidence, isNew))
         dao.finishScan(
             scanId, clock(), outcomes.values.count { it == InspectOutcome.INSPECTED },
             outcomes.values.count { it == InspectOutcome.PARTIAL },
             outcomes.values.count { it == InspectOutcome.COULD_NOT_INSPECT },
-            coverage ?: 0, usageIntervals?.coverageFrom, status.name,
+            network.coverageDays, usageIntervals?.coverageFrom, network.status.name,
         )
         dao.deleteScansBefore(scanId)
         dao.pruneCacheTo(scanId)
@@ -159,15 +157,27 @@ class PrivacyScanRunner @Inject constructor(
         isSystemApp = i.app.isSystemApp, outcome = i.outcome.name, reason = i.reason,
     )
 
-    /** One app, isolated: whatever its APK does to the reader (OOM included) costs only this app. */
-    private suspend fun inspect(app: InstalledApp): AppInspection = try {
-        cachedPackages(app)?.let { AppInspection(app, it, InspectOutcome.INSPECTED, null) } ?: inspectAndCache(app)
+    /**
+     * One app, isolated: whatever its APK does to the reader or its package set does to the matcher (OOM included)
+     * costs only this app. A package set is cached only once it has been matched.
+     */
+    private suspend fun inspect(app: InstalledApp, set: TrackerSet): Pair<AppInspection, Set<Tracker>> = try {
+        val cached = cachedPackages(app)
+        val inspection = if (cached != null) {
+            AppInspection(app, cached, InspectOutcome.INSPECTED, null)
+        } else {
+            val deadline = nanoTime() + PER_APP_TIMEOUT_MS * NANOS_PER_MS
+            inspector.inspect(app, ReadBudget(deadlineNanos = deadline, nanoTime = nanoTime))
+        }
+        val trackers = set.matchPackages(inspection.packages)
+        if (cached == null && inspection.outcome == InspectOutcome.INSPECTED) cache(app, inspection.packages)
+        inspection to trackers
     } catch (c: CancellationException) {
         throw c
     } catch (t: Throwable) {
         Log.w(TAG, "Could not inspect ${app.packageName}: ${t.javaClass.simpleName}")
         val reason = "resource limit: ${reportSafe(t.javaClass.simpleName)}"
-        AppInspection(app, emptySet(), InspectOutcome.COULD_NOT_INSPECT, reason)
+        AppInspection(app, emptySet(), InspectOutcome.COULD_NOT_INSPECT, reason) to emptySet()
     }
 
     /** The cached package set when version, update time and reader version all match; an unreadable row is deleted. */
@@ -186,13 +196,6 @@ class PrivacyScanRunner @Inject constructor(
                 it.readerVersion == READER_VERSION
         }
         return fresh?.packagesText?.split('\n')?.filterTo(LinkedHashSet()) { it.isNotEmpty() }
-    }
-
-    private suspend fun inspectAndCache(app: InstalledApp): AppInspection {
-        val budget = ReadBudget(deadlineNanos = nanoTime() + PER_APP_TIMEOUT_MS * NANOS_PER_MS, nanoTime = nanoTime)
-        val inspection = inspector.inspect(app, budget)
-        if (inspection.outcome == InspectOutcome.INSPECTED) cache(app, inspection.packages)
-        return inspection
     }
 
     /** Only complete package sets small enough to read back through a cursor window are cached; best effort. */
@@ -218,31 +221,33 @@ class PrivacyScanRunner @Inject constructor(
         null
     }
 
-    /** Network, isolated: a failure here costs only the network evidence; the code results still finish. */
-    private suspend fun correlate(
+    private class NetworkResult(
+        val status: NetworkStatus,
+        val evidence: Map<Key, NetworkEvidence>,
+        val coverageDays: Int,
+    )
+
+    /**
+     * Network, isolated: any failure here (correlation or the coverage read) gives FAILED with no network evidence
+     * and no coverage; the code results still finish. The deadline is checked again after the coverage read.
+     */
+    private suspend fun network(
         set: TrackerSet,
         installed: Set<String>,
         usage: UsageIntervals?,
         since: Long,
-    ): Pair<NetworkStatus, Map<Key, NetworkEvidence>> = try {
+    ): NetworkResult = try {
         val deadline = nanoTime() + NETWORK_TIMEOUT_MS * NANOS_PER_MS
-        val c = NetworkEvidenceCorrelator.correlate(dnsSource(since), set, installed, usage) { nanoTime() > deadline }
-        (if (c.truncated) NetworkStatus.TRUNCATED else NetworkStatus.COMPLETE) to c.evidence
+        val expired = { nanoTime() > deadline }
+        val c = NetworkEvidenceCorrelator.correlate(dnsSource(since), set, installed, usage, expired)
+        val coverageDays = dnsEvents.coverageDaysSince(since)
+        val truncated = c.truncated || expired()
+        NetworkResult(if (truncated) NetworkStatus.TRUNCATED else NetworkStatus.COMPLETE, c.evidence, coverageDays)
     } catch (c: CancellationException) {
         throw c
     } catch (t: Throwable) {
-        Log.w(TAG, "Network correlation failed: ${t.javaClass.simpleName}")
-        NetworkStatus.FAILED to emptyMap()
-    }
-
-    /** null = the DNS log could not be read. */
-    private suspend fun coverageDays(since: Long): Int? = try {
-        dnsEvents.coverageDaysSince(since)
-    } catch (c: CancellationException) {
-        throw c
-    } catch (t: Throwable) {
-        Log.w(TAG, "DNS coverage unavailable: ${t.javaClass.simpleName}")
-        null
+        Log.w(TAG, "Network step failed: ${t.javaClass.simpleName}")
+        NetworkResult(NetworkStatus.FAILED, emptyMap(), 0)
     }
 
     private fun dnsSource(since: Long) = object : DnsSource {

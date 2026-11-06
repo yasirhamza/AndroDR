@@ -16,7 +16,7 @@ internal object PrivacyEvidenceRows {
         set: TrackerSet,
         inCode: Map<String, Set<Tracker>>,
         network: Map<Key, NetworkEvidence>,
-        isNew: (Key) -> Boolean,
+        isNew: (key: Key, inCode: Boolean) -> Boolean,
     ): List<PrivacyTrackerEvidence> {
         val byId = HashMap<Int, Tracker>()
         for (t in set.trackers) byId.putIfAbsent(t.id, t)
@@ -37,23 +37,28 @@ internal object PrivacyEvidenceRows {
                 background = net?.background,
                 firstSeen = net?.first,
                 lastSeen = net?.last,
-                newSinceLastScan = isNew(key),
+                newSinceLastScan = isNew(key, key in codeKeys),
             )
         }
     }
 
     /**
      * New = absent from the previous completed scan's evidence for an app that scan fully INSPECTED. Nothing is new
-     * on a first scan, for an app the previous scan did not have, or one it could not fully inspect.
+     * on a first scan, for an app the previous scan did not have, or one it could not fully inspect. A network-only
+     * pair is never new unless the previous scan's network step was COMPLETE ([previousNetworkComplete]): a truncated
+     * or failed step may simply have missed it.
      */
     fun newSince(
         previousResults: List<PrivacyAppResult>?,
         previousEvidence: List<PrivacyTrackerEvidence>?,
-    ): (Key) -> Boolean {
-        if (previousResults == null || previousEvidence == null) return { false }
+        previousNetworkComplete: Boolean,
+    ): (key: Key, inCode: Boolean) -> Boolean {
+        if (previousResults == null || previousEvidence == null) return { _, _ -> false }
         val inspected = previousResults.filter { it.outcome == InspectOutcome.INSPECTED.name }
             .mapTo(HashSet()) { it.packageName }
         val before = previousEvidence.mapTo(HashSet()) { Key(it.packageName, it.trackerId) }
-        return { key -> key.packageName in inspected && key !in before }
+        return { key, inCode ->
+            (inCode || previousNetworkComplete) && key.packageName in inspected && key !in before
+        }
     }
 }

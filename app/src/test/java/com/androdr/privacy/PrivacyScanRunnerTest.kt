@@ -6,6 +6,7 @@ import com.androdr.data.db.PrivacyDao
 import com.androdr.data.db.RoomTestDb
 import com.androdr.data.model.DnsEvent
 import com.androdr.data.model.NetworkStatus
+import com.androdr.data.model.PrivacyAppResult
 import com.androdr.data.model.PrivacyPackageSet
 import com.androdr.data.model.PrivacyScan
 import com.androdr.data.model.PrivacyTrackerEvidence
@@ -18,12 +19,15 @@ import com.androdr.privacy.model.TrackerSet
 import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.spyk
 import io.mockk.verify
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import org.junit.After
@@ -545,6 +549,107 @@ class PrivacyScanRunnerTest {
         inspector.apps = listOf(app("a"))
         scan(runner())
         assertEquals(listOf("a"), evidence().map { it.packageName })
+    }
+
+    // --- fix round 1 ---------------------------------------------------------------------------
+
+    @Test fun `a package set that makes matchPackages throw costs only that app`() {
+        val spy = spyk(set)
+        every { spy.matchPackages(match { "com.bad.x" in it }) } throws OutOfMemoryError("crafted")
+        inspector.apps = listOf(app("a"), app("b"), app("c"))
+        inspector.packages["a"] = setOf("com.flurry.sdk")
+        inspector.packages["b"] = setOf("com.bad.x", "com.flurry.sdk")
+        inspector.packages["c"] = setOf("io.other.y")
+        assertTrue(scan(runner(registry = registryOf(spy))) is PrivacyScanProgress.Finished)
+        assertEquals("COULD_NOT_INSPECT", result("b").outcome)
+        assertEquals("resource limit: OutOfMemoryError", result("b").reason)
+        assertEquals("INSPECTED", result("a").outcome)
+        assertEquals("INSPECTED", result("c").outcome)
+        assertNotNull(evidence("a", FLURRY))
+        assertNotNull(evidence("c", OTHER))
+        assertTrue(evidence().none { it.packageName == "b" })
+        assertEquals(1, latest().appsFailed)
+        val cached = runBlocking { db.privacyDao().packageSet("b") }
+        assertNull("a package set that could not be matched is not cached", cached)
+    }
+
+    @Test fun `a coverage read failure fails the network step - no network rows, code evidence kept`() {
+        seed(dns("a", "ads.doubleclick.net", 80 * DAY))
+        val real = db.dnsEventDao()
+        val dns = object : DnsEventDao by real {
+            override suspend fun coverageDaysSince(since: Long): Int = error("db locked")
+        }
+        inspector.apps = listOf(app("a"))
+        inspector.packages["a"] = setOf("com.flurry.sdk")
+        assertTrue(scan(runner(dns = dns)) is PrivacyScanProgress.Finished)
+        assertEquals(NetworkStatus.FAILED.name, latest().networkStatus)
+        assertEquals(0, latest().dnsCoverageDays)
+        assertTrue(evidence().all { it.lookups == 0 })
+        assertNull(evidence("a", ADMOB))
+        assertTrue(requireNotNull(evidence("a", FLURRY)).inCode)
+    }
+
+    @Test fun `a network deadline passed during the coverage read records TRUNCATED`() {
+        seed(dns("a", "x.flurry.com", 80 * DAY))
+        val real = db.dnsEventDao()
+        val late = java.util.concurrent.atomic.AtomicBoolean(false)
+        val dns = object : DnsEventDao by real {
+            override suspend fun coverageDaysSince(since: Long): Int =
+                real.coverageDaysSince(since).also { late.set(true) }
+        }
+        inspector.apps = listOf(app("a"))
+        val r = runner(dns = dns)
+        r.nanoTime = { if (late.get()) Long.MAX_VALUE else NANO }
+        scan(r)
+        assertEquals(NetworkStatus.TRUNCATED.name, latest().networkStatus)
+        assertEquals(1, latest().dnsCoverageDays)
+    }
+
+    @Test fun `start on a cancelled scope fails as cancelled and frees the lock`() {
+        inspector.apps = listOf(app("a"))
+        val r = runner()
+        job.cancel()
+        assertTrue(r.start())
+        runBlocking {
+            withTimeout(30_000) { r.progress.first { it is PrivacyScanProgress.Failed } }
+            assertEquals(PrivacyScanProgress.Failed(PrivacyScanRunner.CANCELLED), r.progress.value)
+            // The handler sets the state, then unlocks: allow it to finish.
+            withTimeout(30_000) { while (!r.deleteAll()) delay(10) }
+        }
+        assertEquals(emptyList<String>(), inspector.inspected)
+    }
+
+    private fun seedPrevious(status: NetworkStatus) = runBlocking {
+        val dao = db.privacyDao()
+        val id = dao.insertScan(
+            PrivacyScan(
+                startedAt = 1, finishedAt = null, appsTotal = 1, appsInspected = 0, appsPartial = 0, appsFailed = 0,
+                registrySize = 3, registrySha256 = "sha-a", dnsWindowStart = 0, dnsCoverageDays = 0,
+                usageCoverageFrom = null, networkStatus = NetworkStatus.PENDING.name,
+            )
+        )
+        dao.upsertResults(listOf(PrivacyAppResult(id, "a", 1, "a", false, InspectOutcome.INSPECTED.name, null)))
+        dao.finishScan(id, 2, 1, 0, 0, 0, null, status.name)
+    }
+
+    @Test fun `a network-only pair is not new when the previous scan's network was not COMPLETE`() {
+        seedPrevious(NetworkStatus.TRUNCATED)
+        seed(dns("a", "x.flurry.com", 80 * DAY))
+        inspector.apps = listOf(app("a"))
+        inspector.packages["a"] = setOf("io.other.y")
+        scan(runner())
+        val net = requireNotNull(evidence("a", FLURRY))
+        assertFalse(net.inCode)
+        assertFalse(net.newSinceLastScan)
+        assertTrue("code evidence keeps its rule", requireNotNull(evidence("a", OTHER)).newSinceLastScan)
+    }
+
+    @Test fun `a network-only pair is new when the previous scan's network was COMPLETE`() {
+        seedPrevious(NetworkStatus.COMPLETE)
+        seed(dns("a", "x.flurry.com", 80 * DAY))
+        inspector.apps = listOf(app("a"))
+        scan(runner())
+        assertTrue(requireNotNull(evidence("a", FLURRY)).newSinceLastScan)
     }
 
     // --- registry availability ------------------------------------------------------------------

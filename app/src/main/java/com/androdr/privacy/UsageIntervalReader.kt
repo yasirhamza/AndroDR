@@ -30,7 +30,7 @@ class UsageIntervalReader @Inject constructor(
         return try {
             val events = collect(usm, since, until)
             // The history covers from its oldest event; with none at all, it covers nothing before [until].
-            val coverageFrom = maxOf(since, events.minOfOrNull { it.second.first } ?: until)
+            val coverageFrom = maxOf(since, events.minOfOrNull { it.time } ?: until)
             UsageIntervals(coverageFrom, ForegroundIntervals.build(events, until))
         } catch (e: Exception) {
             Log.w(TAG, "Usage events unavailable: ${e.javaClass.simpleName}")
@@ -38,9 +38,9 @@ class UsageIntervalReader @Inject constructor(
         }
     }
 
-    private fun collect(usm: UsageStatsManager, since: Long, until: Long): List<Pair<String, Pair<Long, Boolean>>> {
+    private fun collect(usm: UsageStatsManager, since: Long, until: Long): List<ActivityTransition> {
         val events: UsageEvents? = usm.queryEvents(since, until)
-        val out = ArrayList<Pair<String, Pair<Long, Boolean>>>()
+        val out = ArrayList<ActivityTransition>()
         val event = UsageEvents.Event()
         while (events != null && events.hasNextEvent()) {
             events.getNextEvent(event)
@@ -51,7 +51,8 @@ class UsageIntervalReader @Inject constructor(
                 else -> null
             }
             if (pkg != null && foreground != null && event.timeStamp in since..until) {
-                out.add(pkg to (event.timeStamp to foreground))
+                // The class name tells activities apart: split screen resumes two of one app at once.
+                out.add(ActivityTransition(pkg, event.className, event.timeStamp, foreground))
             }
         }
         return out

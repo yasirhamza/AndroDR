@@ -8,37 +8,56 @@ data class UsageIntervals(
     val byPackage: Map<String, List<LongRange>>,
 )
 
+/** One activity of [packageName] coming to the foreground (resumed) or leaving it (paused or stopped). */
+data class ActivityTransition(val packageName: String, val className: String?, val time: Long, val foreground: Boolean)
+
 object ForegroundIntervals {
     /**
-     * Pairs each package's foreground and background transitions (by time) into closed intervals. Every package is
-     * kept, system apps included. A foreground event while already open, or a background event while closed, is
-     * ignored, except that a package's first event being a background one means the app was already in the
-     * foreground when the history begins, so that interval starts at [Long.MIN_VALUE]. An interval still open at
-     * the end runs to [until].
+     * Each package's foreground intervals: the package is in the foreground while at least one of its activities is
+     * resumed (split screen and multi-window resume several at once). Every package is kept, system apps included.
+     * A resume of an already-resumed activity, or a pause of one already paused, changes nothing. The first event of
+     * an activity being a pause means it was already resumed when the history begins, so the package was in the
+     * foreground from [Long.MIN_VALUE] to that pause. An interval still open at the end runs to [until].
      */
-    fun build(events: List<Pair<String, Pair<Long, Boolean>>>, until: Long): Map<String, List<LongRange>> {
+    fun build(events: List<ActivityTransition>, until: Long): Map<String, List<LongRange>> {
         val out = HashMap<String, List<LongRange>>()
-        for ((pkg, pkgEvents) in events.groupBy({ it.first }, { it.second })) {
-            out[pkg] = pair(pkgEvents.sortedBy { it.first }, until)
+        for ((pkg, pkgEvents) in events.groupBy { it.packageName }) {
+            out[pkg] = merge(pair(pkgEvents.sortedBy { it.time }, until))
         }
         return out
     }
 
-    private fun pair(sorted: List<Pair<Long, Boolean>>, until: Long): List<LongRange> {
+    private fun pair(sorted: List<ActivityTransition>, until: Long): List<LongRange> {
         val ranges = ArrayList<LongRange>()
+        val resumed = HashSet<String>()
+        val seen = HashSet<String>()
         var open: Long? = null
-        for ((index, event) in sorted.withIndex()) {
-            val (time, foreground) = event
-            when {
-                foreground && open == null -> open = time
-                !foreground && open != null -> {
-                    ranges.add(open..time)
+        for (e in sorted) {
+            val cls = e.className.orEmpty()
+            val firstSight = seen.add(cls)
+            if (e.foreground) {
+                if (resumed.add(cls) && open == null) open = e.time
+            } else if (resumed.remove(cls)) {
+                if (resumed.isEmpty() && open != null) {
+                    ranges.add(open..e.time)
                     open = null
                 }
-                !foreground && index == 0 -> ranges.add(Long.MIN_VALUE..time)
+            } else if (firstSight) {
+                ranges.add(Long.MIN_VALUE..e.time)
             }
         }
         open?.let { ranges.add(it..maxOf(it, until)) }
         return ranges
+    }
+
+    /** Sorted, overlap-free copy of [ranges], so a binary search over them is exact. */
+    fun merge(ranges: List<LongRange>): List<LongRange> {
+        val out = ArrayList<LongRange>()
+        for (r in ranges.filter { !it.isEmpty() }.sortedBy { it.first }) {
+            val last = out.lastOrNull()
+            if (last != null && r.first <= last.last) out[out.size - 1] = last.first..maxOf(last.last, r.last)
+            else out.add(r)
+        }
+        return out
     }
 }
