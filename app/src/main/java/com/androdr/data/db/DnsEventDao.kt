@@ -6,6 +6,7 @@ import androidx.room.Query
 import com.androdr.data.model.DnsEvent
 import kotlinx.coroutines.flow.Flow
 
+@Suppress("TooManyFunctions") // one method per DNS-log access: monitor, live scan, retention and privacy scan
 @Dao
 interface DnsEventDao {
 
@@ -40,4 +41,48 @@ interface DnsEventDao {
 
     @Query("DELETE FROM DnsEvent WHERE timestamp < :cutoff")
     suspend fun deleteOlderThan(cutoff: Long)
+
+    // Privacy scan reads. The DNS log has no row cap (only age-based deletion) and a hostile app can flood it, so
+    // every read here is bounded, and nothing is ranked by lookup count before matching: junk domains can cost
+    // time (deadline -> TRUNCATED) but can never push a real tracker pair out of a top-N window.
+
+    /**
+     * One page of [app]'s distinct raw domains after [afterDomain] (start with ""), in ascending order. Paged per
+     * installed app, so one app (whatever its name sorts as) can only spend its own quota;
+     * `appName = :app AND domain > :afterDomain` seeks `index_DnsEvent_appName_domain_timestamp` directly.
+     */
+    @Query(
+        "SELECT DISTINCT domain FROM DnsEvent WHERE appName = :app AND domain > :afterDomain AND timestamp >= :since " +
+            "ORDER BY domain LIMIT :limit"
+    )
+    suspend fun domainsAfter(since: Long, app: String, afterDomain: String, limit: Int): List<String>
+
+    /** Called only for pairs that matched the tracker registry; [domain] is the raw stored value. */
+    @Query(
+        "SELECT COUNT(*) AS lookups, GROUP_CONCAT(DISTINCT timestamp / 86400000) AS dayList, " +
+            "MIN(timestamp) AS firstAt, MAX(timestamp) AS lastAt " +
+            "FROM DnsEvent WHERE appName = :app AND domain = :domain AND timestamp >= :since"
+    )
+    suspend fun lookupCount(since: Long, app: String, domain: String): DomainLookupCount
+
+    /** Served by `index_DnsEvent_appName_domain_timestamp`; [domain] is the raw stored value, never normalised. */
+    @Query(
+        "SELECT timestamp FROM DnsEvent WHERE appName = :app AND domain = :domain AND timestamp >= :since " +
+            "ORDER BY timestamp LIMIT :limit"
+    )
+    suspend fun lookupTimes(since: Long, app: String, domain: String, limit: Int): List<Long>
+
+    /** UTC days since [since] with at least one attributed lookup; 0 = the monitor recorded nothing attributable. */
+    @Query(
+        "SELECT COUNT(DISTINCT timestamp / 86400000) FROM DnsEvent WHERE timestamp >= :since AND appName IS NOT NULL"
+    )
+    suspend fun coverageDaysSince(since: Long): Int
 }
+
+/** One (app, raw domain) pair's lookups since a window start. [dayList] is comma-joined UTC day numbers. */
+data class DomainLookupCount(
+    val lookups: Int,
+    val dayList: String?,
+    val firstAt: Long?,
+    val lastAt: Long?,
+)

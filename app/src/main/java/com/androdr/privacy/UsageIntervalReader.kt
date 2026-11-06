@@ -1,0 +1,66 @@
+package com.androdr.privacy
+
+import android.app.usage.UsageEvents
+import android.app.usage.UsageStatsManager
+import android.content.Context
+import android.util.Log
+import com.androdr.scanner.UsageAccess
+import dagger.hilt.android.qualifiers.ApplicationContext
+import javax.inject.Inject
+import javax.inject.Singleton
+
+/**
+ * Reads foreground intervals for the privacy scan's background-lookup counts. Unlike the security scan's usage
+ * collection, it keeps every package (system apps included), applies no event cap and never collapses events per
+ * minute: a dropped or collapsed pause would turn background lookups into foreground ones.
+ */
+@Singleton
+class UsageIntervalReader @Inject constructor(
+    @ApplicationContext private val context: Context,
+    private val usageAccess: UsageAccess,
+) {
+    /**
+     * All ACTIVITY_RESUMED / ACTIVITY_PAUSED (and ACTIVITY_STOPPED) events in [since, until], every package.
+     * null when usage access is not granted or the service is unavailable or refuses the query.
+     */
+    @Suppress("TooGenericExceptionCaught") // any failure means "no usage data", never an empty, clean-looking one
+    fun read(since: Long, until: Long): UsageIntervals? {
+        if (!usageAccess.granted()) return null
+        val usm = context.getSystemService(Context.USAGE_STATS_SERVICE) as? UsageStatsManager ?: return null
+        return try {
+            val events = collect(usm, since, until)
+            // The history covers from its oldest event; with none at all, it covers nothing before [until].
+            val coverageFrom = maxOf(since, events.minOfOrNull { it.second.first } ?: until)
+            UsageIntervals(coverageFrom, ForegroundIntervals.build(events, until))
+        } catch (e: Exception) {
+            Log.w(TAG, "Usage events unavailable: ${e.javaClass.simpleName}")
+            null
+        }
+    }
+
+    private fun collect(usm: UsageStatsManager, since: Long, until: Long): List<Pair<String, Pair<Long, Boolean>>> {
+        val events: UsageEvents? = usm.queryEvents(since, until)
+        val out = ArrayList<Pair<String, Pair<Long, Boolean>>>()
+        val event = UsageEvents.Event()
+        while (events != null && events.hasNextEvent()) {
+            events.getNextEvent(event)
+            val pkg: String? = event.packageName
+            val foreground = when (event.eventType) {
+                UsageEvents.Event.ACTIVITY_RESUMED -> true
+                UsageEvents.Event.ACTIVITY_PAUSED, ACTIVITY_STOPPED -> false
+                else -> null
+            }
+            if (pkg != null && foreground != null && event.timeStamp in since..until) {
+                out.add(pkg to (event.timeStamp to foreground))
+            }
+        }
+        return out
+    }
+
+    private companion object {
+        const val TAG = "UsageIntervalReader"
+
+        /** `UsageEvents.Event.ACTIVITY_STOPPED` (API 29); the value is fixed, older releases never report it. */
+        const val ACTIVITY_STOPPED = 23
+    }
+}
