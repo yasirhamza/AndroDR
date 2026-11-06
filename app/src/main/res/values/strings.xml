@@ -492,6 +492,8 @@
         <item quantity="other">%1$d could not be fully inspected</item>
     </plurals>
     <string name="privacy_card_scanned">scanned %1$s</string>
+    <string name="apps_tracker_line" tools:ignore="PluralsCandidate">Trackers: %1$d · %2$d refused, found in code</string>
+    <string name="apps_tracker_as_of">as of %1$s</string>
     <string name="privacy_run">Run privacy scan</string>
     <string name="privacy_progress" tools:ignore="PluralsCandidate">Inspecting %1$d of %2$d apps</string>
     <string name="privacy_running_elsewhere">A privacy scan is already running</string>

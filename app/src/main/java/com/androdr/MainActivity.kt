@@ -210,7 +210,10 @@ private fun AndroDRApp() {
                 )
             }
             composable("apps") {
-                AppScanScreen(onNavigateToTimeline = ::navigateToTimeline)
+                AppScanScreen(
+                    onNavigateToTimeline = ::navigateToTimeline,
+                    onNavigateToPrivacy = { navController.navigate("privacy") }
+                )
             }
             composable("device") {
                 DeviceAuditScreen()
