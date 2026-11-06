@@ -5,6 +5,7 @@ import android.util.Log
 import com.androdr.R
 import com.androdr.data.db.CveDao
 import com.androdr.data.model.CveEntity
+import com.androdr.util.readTextCapped
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -143,10 +144,18 @@ class CveRepository @Inject constructor(
         }
     }
 
-    /** Returns null on 304 Not Modified, emptyList on error, or the parsed entries on 200. */
-    @Suppress("TooGenericExceptionCaught", "NestedBlockDepth")
-    private suspend fun fetchOsvAndroid(): List<CveEntity>? {
-        val conn = URL(OSV_ANDROID_URL).openConnection() as HttpURLConnection
+    /**
+     * Returns null on 304 Not Modified, emptyList on error, or the parsed entries on 200.
+     *
+     * [url] and [maxEntryChars] are parameters only so a unit test can point this
+     * at a local server and a small cap; production callers use the defaults.
+     */
+    @Suppress("TooGenericExceptionCaught", "ReturnCount")
+    internal suspend fun fetchOsvAndroid(
+        url: String = OSV_ANDROID_URL,
+        maxEntryChars: Int = MAX_OSV_ENTRY_CHARS,
+    ): List<CveEntity>? {
+        val conn = URL(url).openConnection() as HttpURLConnection
         return try {
             conn.connectTimeout = TIMEOUT_MS
             conn.readTimeout = TIMEOUT_MS
@@ -162,83 +171,17 @@ class CveRepository @Inject constructor(
                 Log.w(TAG, "OSV fetch failed: HTTP ${conn.responseCode}")
                 return emptyList()
             }
+            val entries = readOsvZip(BufferedInputStream(conn.inputStream), System.currentTimeMillis(), maxEntryChars)
+            // Only a zip that parsed in full is remembered as current (PASTA F-005):
+            // storing the ETag first cached a bomb or a truncated body as
+            // Not-Modified, so every later cycle would 304 against poison.
             conn.getHeaderField("ETag")?.let { settings.setEtag(ETAG_OSV, it) }
-            val now = System.currentTimeMillis()
-            val entries = mutableListOf<CveEntity>()
-            ZipInputStream(BufferedInputStream(conn.inputStream)).use { zis ->
-                var entry = zis.nextEntry
-                while (entry != null) {
-                    if (entry.name.endsWith(".json")) {
-                        val content = zis.bufferedReader().use { it.readText() }
-                        parseOsvEntry(content, now)?.let { entries.add(it) }
-                    }
-                    entry = zis.nextEntry
-                }
-            }
             entries
         } catch (e: Exception) {
             Log.w(TAG, "OSV Android fetch failed: ${e.message}")
             emptyList()
         } finally {
             conn.disconnect()
-        }
-    }
-
-    // Parsing function uses early returns for invalid data and nested loops for JSON traversal
-    @Suppress("TooGenericExceptionCaught", "ReturnCount", "NestedBlockDepth", "SwallowedException")
-    private fun parseOsvEntry(json: String, now: Long): CveEntity? {
-        return try {
-            val obj = JSONObject(json)
-            val id = obj.optString("id", "")
-            if (!id.startsWith("CVE-") && !id.startsWith("A-")) return null
-            val aliases = obj.optJSONArray("aliases")
-            val cveId = if (id.startsWith("CVE-")) id
-            else (0 until (aliases?.length() ?: 0))
-                .map { aliases!!.getString(it) }
-                .firstOrNull { it.startsWith("CVE-") } ?: return null
-            val summary = obj.optString("summary", obj.optString("details", ""))
-            val severity = obj.optJSONArray("severity")?.let { sevArr ->
-                (0 until sevArr.length()).map { sevArr.getJSONObject(it) }
-                    .firstOrNull { it.optString("type") == "CVSS_V3" }
-                    ?.optString("score", "")
-            }?.let { cvssToSeverity(it) } ?: "MEDIUM"
-            var fixedPatchLevel = ""
-            val affected = obj.optJSONArray("affected")
-            if (affected != null && affected.length() > 0) {
-                for (i in 0 until affected.length()) {
-                    val aff = affected.getJSONObject(i)
-                    val ranges = aff.optJSONArray("ranges") ?: continue
-                    for (j in 0 until ranges.length()) {
-                        val range = ranges.getJSONObject(j)
-                        val events = range.optJSONArray("events") ?: continue
-                        for (k in 0 until events.length()) {
-                            val event = events.getJSONObject(k)
-                            val fixed = event.optString("fixed", "")
-                            if (fixed.matches(Regex("""\d{4}-\d{2}-\d{2}"""))) {
-                                fixedPatchLevel = fixed
-                            }
-                        }
-                    }
-                }
-            }
-            if (fixedPatchLevel.isEmpty()) return null
-            CveEntity(
-                cveId = cveId, description = summary.take(500), severity = severity,
-                fixedInPatchLevel = fixedPatchLevel, cisaDateAdded = "",
-                isActivelyExploited = false, vendorProject = "Google", product = "Android",
-                lastUpdated = now
-            )
-        } catch (e: Exception) { null }
-    }
-
-    private fun cvssToSeverity(cvssScore: String): String {
-        val score = cvssScore.substringBefore("/").toDoubleOrNull()
-            ?: cvssScore.toDoubleOrNull() ?: return "MEDIUM"
-        return when {
-            score >= 9.0 -> "CRITICAL"
-            score >= 7.0 -> "HIGH"
-            score >= 4.0 -> "MEDIUM"
-            else -> "LOW"
         }
     }
 
@@ -255,6 +198,106 @@ class CveRepository @Inject constructor(
         private const val TIMEOUT_MS = 30_000
         private const val ETAG_CISA = "cve_cisa"
         private const val ETAG_OSV = "cve_osv"
+
+        /**
+         * Inflation caps for the OSV zip (PASTA F-005). The feed comes from an
+         * unpinned host and is inflated into memory entry by entry, so a
+         * high-ratio bomb was a memory DoS. One OSV advisory is a few KB of
+         * JSON; 1 MB per entry and 64 MB in total are generous, and small enough
+         * that the StringBuilder is never the thing that exhausts the heap.
+         */
+        internal const val MAX_OSV_ENTRY_CHARS = 1024 * 1024
+        internal const val MAX_OSV_TOTAL_CHARS = 64L * 1024 * 1024
+
+        /**
+         * Inflates every `.json` entry of an OSV zip into [CveEntity] rows, with a
+         * per-entry and a total cap on inflated characters.
+         *
+         * @throws java.io.IOException when an entry, or all entries together,
+         *   inflate past the cap — the fetch's catch turns that into "nothing fetched".
+         */
+        internal fun readOsvZip(
+            input: java.io.InputStream,
+            now: Long,
+            maxEntryChars: Int = MAX_OSV_ENTRY_CHARS,
+            maxTotalChars: Long = MAX_OSV_TOTAL_CHARS,
+        ): List<CveEntity> {
+            val entries = mutableListOf<CveEntity>()
+            var total = 0L
+            ZipInputStream(input).use { zis ->
+                var entry = zis.nextEntry
+                while (entry != null) {
+                    if (entry.name.endsWith(".json")) {
+                        val content = zis.bufferedReader().readTextCapped(maxEntryChars)
+                        total += content.length
+                        if (total > maxTotalChars) {
+                            throw java.io.IOException("OSV zip inflates past $maxTotalChars chars in total")
+                        }
+                        parseOsvEntry(content, now)?.let { entries.add(it) }
+                    }
+                    entry = zis.nextEntry
+                }
+            }
+            return entries
+        }
+
+        // Parsing function uses early returns for invalid data and nested loops for JSON traversal
+        @Suppress("TooGenericExceptionCaught", "ReturnCount", "NestedBlockDepth", "SwallowedException")
+        private fun parseOsvEntry(json: String, now: Long): CveEntity? {
+            return try {
+                val obj = JSONObject(json)
+                val id = obj.optString("id", "")
+                if (!id.startsWith("CVE-") && !id.startsWith("A-")) return null
+                val aliases = obj.optJSONArray("aliases")
+                val cveId = if (id.startsWith("CVE-")) id
+                else (0 until (aliases?.length() ?: 0))
+                    .map { aliases!!.getString(it) }
+                    .firstOrNull { it.startsWith("CVE-") } ?: return null
+                val summary = obj.optString("summary", obj.optString("details", ""))
+                val severity = obj.optJSONArray("severity")?.let { sevArr ->
+                    (0 until sevArr.length()).map { sevArr.getJSONObject(it) }
+                        .firstOrNull { it.optString("type") == "CVSS_V3" }
+                        ?.optString("score", "")
+                }?.let { cvssToSeverity(it) } ?: "MEDIUM"
+                var fixedPatchLevel = ""
+                val affected = obj.optJSONArray("affected")
+                if (affected != null && affected.length() > 0) {
+                    for (i in 0 until affected.length()) {
+                        val aff = affected.getJSONObject(i)
+                        val ranges = aff.optJSONArray("ranges") ?: continue
+                        for (j in 0 until ranges.length()) {
+                            val range = ranges.getJSONObject(j)
+                            val events = range.optJSONArray("events") ?: continue
+                            for (k in 0 until events.length()) {
+                                val event = events.getJSONObject(k)
+                                val fixed = event.optString("fixed", "")
+                                if (fixed.matches(Regex("""\d{4}-\d{2}-\d{2}"""))) {
+                                    fixedPatchLevel = fixed
+                                }
+                            }
+                        }
+                    }
+                }
+                if (fixedPatchLevel.isEmpty()) return null
+                CveEntity(
+                    cveId = cveId, description = summary.take(500), severity = severity,
+                    fixedInPatchLevel = fixedPatchLevel, cisaDateAdded = "",
+                    isActivelyExploited = false, vendorProject = "Google", product = "Android",
+                    lastUpdated = now
+                )
+            } catch (e: Exception) { null }
+        }
+
+        private fun cvssToSeverity(cvssScore: String): String {
+            val score = cvssScore.substringBefore("/").toDoubleOrNull()
+                ?: cvssScore.toDoubleOrNull() ?: return "MEDIUM"
+            return when {
+                score >= 9.0 -> "CRITICAL"
+                score >= 7.0 -> "HIGH"
+                score >= 4.0 -> "MEDIUM"
+                else -> "LOW"
+            }
+        }
 
         fun mergeEntries(cisaEntries: List<CveEntity>, osvEntries: List<CveEntity>): List<CveEntity> {
             val now = System.currentTimeMillis()
