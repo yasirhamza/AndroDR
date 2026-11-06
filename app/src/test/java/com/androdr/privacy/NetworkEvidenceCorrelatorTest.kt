@@ -319,6 +319,19 @@ class NetworkEvidenceCorrelatorTest {
         assertEquals(2, ev.background)
     }
 
+    @Test fun `lookups after a shutdown that lost the app's pause count as background`() {
+        val intervals = ForegroundIntervals.build(
+            listOf(
+                ActivityTransition("a", "Main", 100, ActivityTransition.Kind.RESUMED),
+                ActivityTransition("android", null, 200, ActivityTransition.Kind.DEVICE_RESET),
+            ),
+            until = 1_000,
+        )
+        val source = FakeSource.of(listOf(150L, 250L, 300L).map { Triple("a", "x.flurry.com", it) })
+        val out = correlate(source, setOf("a"), usage = UsageIntervals(0, intervals))
+        assertEquals(2, out.evidence.getValue(Key("a", FLURRY)).background)
+    }
+
     @Test fun `an app never in the foreground within coverage has every lookup in the background`() {
         val source = FakeSource.of(listOf(150L, 250L).map { Triple("a", "x.flurry.com", it) })
         val out = correlate(source, setOf("a"), usage = UsageIntervals(0, mapOf("other" to listOf(0L..1_000L))))

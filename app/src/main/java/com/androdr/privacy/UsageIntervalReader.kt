@@ -44,24 +44,37 @@ class UsageIntervalReader @Inject constructor(
         val event = UsageEvents.Event()
         while (events != null && events.hasNextEvent()) {
             events.getNextEvent(event)
-            val pkg: String? = event.packageName
-            val foreground = when (event.eventType) {
-                UsageEvents.Event.ACTIVITY_RESUMED -> true
-                UsageEvents.Event.ACTIVITY_PAUSED, ACTIVITY_STOPPED -> false
-                else -> null
-            }
-            if (pkg != null && foreground != null && event.timeStamp in since..until) {
+            val kind = kindOf(event.eventType)
+            // A device reset carries the system's package name; it applies to every package.
+            val pkg: String? = event.packageName ?: if (kind == ActivityTransition.Kind.DEVICE_RESET) "" else null
+            if (pkg != null && kind != null && event.timeStamp in since..until) {
                 // The class name tells activities apart: split screen resumes two of one app at once.
-                out.add(ActivityTransition(pkg, event.className, event.timeStamp, foreground))
+                out.add(ActivityTransition(pkg, event.className, event.timeStamp, kind))
             }
         }
         return out
     }
 
-    private companion object {
-        const val TAG = "UsageIntervalReader"
+    internal companion object {
+        private const val TAG = "UsageIntervalReader"
 
-        /** `UsageEvents.Event.ACTIVITY_STOPPED` (API 29); the value is fixed, older releases never report it. */
+        // Raw event types, so the constants need no API-level guard: releases that lack them never report them.
+        /** `UsageEvents.Event.ACTIVITY_STOPPED` (API 29). */
         const val ACTIVITY_STOPPED = 23
+
+        /** `UsageEvents.Event.DEVICE_SHUTDOWN` (API 28). */
+        const val DEVICE_SHUTDOWN = 26
+
+        /** `UsageEvents.Event.DEVICE_STARTUP` (API 28). */
+        const val DEVICE_STARTUP = 27
+
+        /** The transition a raw usage event type means, or null for one the privacy scan ignores. */
+        fun kindOf(eventType: Int): ActivityTransition.Kind? = when (eventType) {
+            UsageEvents.Event.ACTIVITY_RESUMED -> ActivityTransition.Kind.RESUMED
+            UsageEvents.Event.ACTIVITY_PAUSED -> ActivityTransition.Kind.PAUSED
+            ACTIVITY_STOPPED -> ActivityTransition.Kind.STOPPED
+            DEVICE_SHUTDOWN, DEVICE_STARTUP -> ActivityTransition.Kind.DEVICE_RESET
+            else -> null
+        }
     }
 }
