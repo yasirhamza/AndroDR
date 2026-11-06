@@ -3,6 +3,7 @@ package com.androdr.sigma
 import android.util.Log
 import com.androdr.data.repo.SettingsRepository
 import com.androdr.integrity.ManifestVerifier
+import com.androdr.util.readTextCapped
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.net.HttpURLConnection
@@ -117,11 +118,8 @@ class SigmaRuleFeed @Inject constructor(
             conn.instanceFollowRedirects = false
             conn.setRequestProperty("User-Agent", "AndroDR/1.0")
             if (conn.responseCode == HttpURLConnection.HTTP_OK) {
-                val body = conn.inputStream.bufferedReader().use { it.readText() }
-                if (body.length > MAX_RESPONSE_SIZE) {
-                    Log.w(TAG, "Response too large: ${body.length} bytes, limit $MAX_RESPONSE_SIZE")
-                    null
-                } else body
+                // Streaming cap: stops reading past the limit instead of buffering first.
+                conn.inputStream.bufferedReader().use { it.readTextCapped(MAX_RESPONSE_SIZE) }
             } else {
                 null
             }
@@ -156,6 +154,7 @@ class SigmaRuleFeed @Inject constructor(
             "https://raw.githubusercontent.com/android-sigma-rules/rules/main/"
         private const val TIMEOUT_MS = 10_000
         private const val MAX_RESPONSE_SIZE = 500_000 // 500 KB per rule file
+        private const val TOO_DEEP = "nested too deeply to parse"
 
         /** Parse a rules.txt manifest into a list of .yml file paths. */
         fun parseManifest(manifest: String): List<String> =
@@ -196,8 +195,8 @@ class SigmaRuleFeed @Inject constructor(
                         // inside the fetch cap -- overflow the parse stack. An Error
                         // passes every `catch (e: Exception)` above this loop, up to
                         // the scan coroutine; cost the one file instead (PASTA F-006).
-                        Log.e(TAG, "Rejected remote rule $file: nested too deeply to parse")
-                        rejected.add(RejectedRuleFile(file, declaredId(yaml), "nested too deeply to parse"))
+                        Log.e(TAG, "Rejected remote rule $file: $TOO_DEEP")
+                        rejected.add(RejectedRuleFile(file, declaredId(yaml), TOO_DEEP))
                     }
                 }
             }

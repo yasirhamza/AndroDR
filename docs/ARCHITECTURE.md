@@ -252,6 +252,8 @@ The known-good side is handled by `KnownAppResolver` / `KnownAppDatabase` (Plexu
 
 ThreatFox is not fetched on-device: `ThreatFoxDomainFeed` was retired in 2026-11, after ThreatFox removed its public export and put the replacement behind a per-user Auth-Key. ThreatFox indicators reach devices through the rules repo's `ioc-data/`. `IndicatorUpdater.RETIRED_SOURCE_IDS` purges a retired feed's leftover rows.
 
+**What the app does with a hostile feed body.** Every remote body is treated as attacker-controlled even over pinned TLS, because a pin vouches for the host, not the content. Bodies are read through `Reader.readTextCapped` (`util/CappedRead.kt`), a streaming cap that stops past the limit instead of buffering first (`SafeHttpFetch`, `SigmaRuleFeed`, `MvtIndicatorsFeed`, `CveRepository`; the remaining feeds are a tracked follow-up, gated by `NetworkBodyReadGateTest`). The OSV `all.zip` is inflated under a per-entry and a total cap sized ~4× over the live feed, and both CVE feeds remember an ETag only after the body parsed to rows, so a bomb or truncated body is never cached as Not-Modified. `MvtIndicatorsFeed` fetches campaign STIX only from the three repos the upstream registry points at (`ALLOWED_CAMPAIGN_PREFIXES`, with plain path segments only — `..` is normalised server-side via 307 — redirects not followed, ≤32 distinct refs, 2 bodies in memory at once); `MvtCampaignsTest` cross-checks the list against the rules repo's `validation/allowed-sources.json`. A remote rule file nested too deeply to parse costs that file (`StackOverflowError` is an `Error`, so it would otherwise pass every `catch (e: Exception)` up to the scan coroutine) and is reported with the other rejected files.
+
 **Orchestration and deduplication**
 
 `IndicatorUpdater` is the unified feed orchestrator. It runs all package, domain, and cert-hash feeds in parallel (`coroutineScope` + `async`), converts results to the unified `Indicator` entity, and upserts into the `indicators` Room table. After each feed run it calls `dao.deleteStaleEntries(sourceId, runStart)` to evict removed indicators. A `Mutex` prevents concurrent update runs. After all feeds complete, `IndicatorResolver.refreshCache()` rebuilds the in-memory caches and the `DomainBloomIndex` atomically.
@@ -365,7 +367,7 @@ scanRepository.pruneOldDnsEvents(thirtyDaysAgo)   // → DnsEventDao.deleteOlder
 forensicTimelineEventDao.deleteOlderThan(thirtyDaysAgo)
 ```
 
-**Scans.** `ScanResult` rows are not auto-pruned; they persist until the user deletes a scan from the history screen. Deleting a scan writes a persistent audit row, marks the scan `DELETING`, then removes its observations in batches. A crash is finished by the startup sweep. Alerts and pinned facts survive deletion.
+**Scans.** `ScanResult` rows are not auto-pruned; they persist until the user deletes a scan from the history screen, which asks for the device credential by the same rule as alert close (`DeviceSecurity.credentialOf`: `NoSecureLock` is honoured only on a device that really has no secure lock). Deleting a scan writes a persistent audit row, marks the scan `DELETING`, then removes its observations in batches. A crash is finished by the startup sweep. Alerts and pinned facts survive deletion.
 
 ### 5.3 Cloud backup disabled
 
