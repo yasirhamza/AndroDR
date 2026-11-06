@@ -115,9 +115,10 @@ object PrivacyRanking {
     private fun sectionOf(row: AppPrivacyRow, showSystemApps: Boolean): Placement {
         val crossing = row.refusedInCode > 0
         val hiddenSystem = row.isSystemApp && !showSystemApps
+        // A COULD_NOT_INSPECT app normally has no in-code evidence, so it normally lands in ATTENTION.
+        val incomplete = row.outcome != InspectOutcome.INSPECTED
         return when {
-            row.outcome == InspectOutcome.COULD_NOT_INSPECT -> Placement.ATTENTION
-            row.outcome == InspectOutcome.PARTIAL && (!crossing || hiddenSystem) -> Placement.ATTENTION
+            incomplete && (!crossing || hiddenSystem) -> Placement.ATTENTION
             hiddenSystem -> Placement.HIDDEN
             crossing -> Placement.CROSSING
             else -> Placement.OTHER
@@ -149,7 +150,12 @@ object PrivacyRanking {
     }
 
     private fun toTrackerRow(e: PrivacyTrackerEvidence): TrackerRow {
-        val raw = if (e.categories.isEmpty()) emptyList() else e.categories.split(CATEGORY_SEPARATOR)
+        // An empty or blank stored string is Uncategorised (refused by default), never an unrefusable empty set.
+        val raw = if (e.categories.isBlank()) {
+            listOf(TrackerCategory.UNCATEGORISED.label)
+        } else {
+            e.categories.split(CATEGORY_SEPARATOR)
+        }
         return TrackerRow(
             trackerId = e.trackerId,
             name = e.trackerName,

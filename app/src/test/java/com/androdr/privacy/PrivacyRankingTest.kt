@@ -195,6 +195,31 @@ class PrivacyRankingTest {
     }
 
     @Test
+    fun `evidence with an empty categories string and inCode crosses under the default threshold`() {
+        val m = sections(listOf(app("a")), listOf(ev("a", 1)))
+        assertEquals(listOf("a"), names(m, RowSection.CROSSING))
+        val tracker = m.getValue(RowSection.CROSSING).single().trackers[0]
+        assertEquals(setOf(TrackerCategory.UNCATEGORISED), tracker.categories)
+    }
+
+    @Test
+    fun `a COULD_NOT_INSPECT app with refused in-code evidence is CROSSING and counted in notInspected`() {
+        val results = listOf(app("f", InspectOutcome.COULD_NOT_INSPECT))
+        val evidence = listOf(ev("f", 1, "Advertisement"))
+        assertEquals(listOf("f"), names(sections(results, evidence), RowSection.CROSSING))
+        val s = PrivacyRanking.summary(scan, results, evidence, default, true)
+        assertEquals(1, s.crossing)
+        assertEquals(1, s.notInspected)
+    }
+
+    @Test
+    fun `a hidden system COULD_NOT_INSPECT app with refused in-code evidence stays visible in NEEDS_ATTENTION`() {
+        val results = listOf(app("f", InspectOutcome.COULD_NOT_INSPECT, system = true))
+        val evidence = listOf(ev("f", 1, "Advertisement"))
+        assertEquals(listOf("f"), names(sections(results, evidence, show = false), RowSection.NEEDS_ATTENTION))
+    }
+
+    @Test
     fun `OTHER category is not refused by default`() {
         val m = sections(listOf(app("a")), listOf(ev("a", 1, "Some Unknown Label")))
         assertEquals(emptyList<String>(), names(m, RowSection.CROSSING))

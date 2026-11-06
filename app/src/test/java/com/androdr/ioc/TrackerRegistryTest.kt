@@ -98,6 +98,14 @@ class TrackerRegistryTest {
     }
 
     @Test
+    fun `a tracker with empty categories parses as UNCATEGORISED`() {
+        val set = TrackerRegistry.parse(file(listOf(entry(1, categories = emptyList()))))!!
+        val t = set.trackers.first { it.id == 1 }
+        assertEquals(setOf(TrackerCategory.UNCATEGORISED), t.categories)
+        assertEquals(listOf("Uncategorised"), t.rawCategories)
+    }
+
+    @Test
     fun `a bad pattern drops the pattern, not the file`() {
         val set = TrackerRegistry.parse(
             file(listOf(entry(1, patterns = listOf("[z-a]x", "(a+)+", "ok[0-9]*\\.ex\\.com", ".*"))))

@@ -146,7 +146,10 @@ class TrackerRegistry @Inject constructor(
             val name = (m["name"] as? String)?.takeIf { it.isNotBlank() }
             if (id == null || name == null) return null
             val website = (m["website"] as? String)?.takeIf(DomainGrammar.FIELD_CHECKS.getValue("website")) ?: ""
-            val rawCategories = (m["categories"] as? List<*>)?.filterIsInstance<String>() ?: emptyList()
+            // A tracker with no usable category is Uncategorised, which is refused by default; an empty set
+            // would never be refused.
+            val rawCategories = (m["categories"] as? List<*>)?.filterIsInstance<String>()
+                ?.takeIf { it.isNotEmpty() } ?: listOf(TrackerCategory.UNCATEGORISED.label)
             val prefixes = strings(m["code_prefixes"], "prefix")
             val segments = strings(m["code_segments"], "segment")
             val suffixes = strings(m["domain_suffixes"], "suffix")
