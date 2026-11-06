@@ -15,6 +15,8 @@ import com.androdr.reporting.ReportExporter
 import com.androdr.reporting.ReportSummary
 import com.androdr.scanner.ScanOrchestrator
 import com.androdr.ui.security.ConfirmResult
+import com.androdr.ui.security.DeviceSecurity
+import com.androdr.ui.security.credentialOf
 import dagger.hilt.android.lifecycle.HiltViewModel
 import androidx.paging.PagingData
 import androidx.paging.cachedIn
@@ -38,6 +40,7 @@ class HistoryViewModel @Inject constructor(
     private val reportExporter: ReportExporter,
     private val findings: FindingsRepository,
     scanLock: ScanLock,
+    private val deviceSecurity: DeviceSecurity,
 ) : ViewModel() {
 
     /**
@@ -264,13 +267,13 @@ class HistoryViewModel @Inject constructor(
     /**
      * Deletes the scan the open dialog names, after [confirm] — the device-credential
      * prompt alert close uses (PASTA F-011): deleting detection history must not be
-     * one dialog tap on an unlocked phone. [ConfirmResult.Cancelled] deletes nothing
-     * and leaves the dialog open; [ConfirmResult.NoSecureLock] proceeds, as alert
-     * close does.
+     * one dialog tap on an unlocked phone. The result is honoured by the same rule as
+     * alert close ([credentialOf], spec §5.4): `Cancelled` — and `NoSecureLock` on a
+     * device that is in fact secure — deletes nothing and leaves the dialog open.
      */
     suspend fun confirmDeleteScan(confirm: suspend () -> ConfirmResult) {
         val id = _showDeleteConfirm.value ?: return
-        if (confirm() == ConfirmResult.Cancelled) return
+        if (deviceSecurity.credentialOf(confirm()) == null) return
         _showDeleteConfirm.value = null
         viewModelScope.launch {
             when (deleting { repository.deleteScan(id) }) {
@@ -286,7 +289,7 @@ class HistoryViewModel @Inject constructor(
 
     /** Clears all history after [confirm]; same gate and semantics as [confirmDeleteScan]. */
     suspend fun confirmClearAll(confirm: suspend () -> ConfirmResult) {
-        if (confirm() == ConfirmResult.Cancelled) return
+        if (deviceSecurity.credentialOf(confirm()) == null) return
         _showClearAllConfirm.value = false
         viewModelScope.launch {
             // A refused "Clear all" is handled first and leaves everything in place, the selection

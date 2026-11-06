@@ -7,6 +7,7 @@ import com.androdr.data.repo.FindingsRepository
 import com.androdr.data.repo.ScanLock
 import com.androdr.data.repo.ScanRepository
 import com.androdr.ui.security.ConfirmResult
+import com.androdr.ui.security.DeviceSecurity
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -50,8 +51,9 @@ class HistoryViewModelTest {
         repository: ScanRepository,
         lock: ScanLock = ScanLock(),
         findings: FindingsRepository = mockk(relaxed = true),
+        deviceSecurity: DeviceSecurity = DeviceSecurity { false },
     ) = HistoryViewModel(repository = repository, reportExporter = mockk(relaxed = true), findings = findings,
-        scanLock = lock)
+        scanLock = lock, deviceSecurity = deviceSecurity)
 
     private fun repo(deleteOne: DeleteResult, deleteAll: DeleteResult) = mockk<ScanRepository> {
         every { pagedScans() } returns flowOf(androidx.paging.PagingData.from(listOf(scan)))
@@ -168,18 +170,37 @@ class HistoryViewModelTest {
         assertTrue(vm.showClearAllConfirm.value)
         val src = java.io.File("src/main/java/com/androdr/ui/history/HistoryScreen.kt").readText()
         assertTrue("the screen routes both confirm buttons through the credential prompt",
-            src.contains("rememberConfirmCredential") && src.contains("viewModel.confirmDeleteScan {") &&
-                src.contains("viewModel.confirmClearAll {"))
+            src.contains("rememberConfirmCredential") &&
+                src.contains("confirmCredential(deleteCredentialTitle, deleteCredentialDescription)") &&
+                src.contains("confirmCredential(clearCredentialTitle, clearCredentialDescription)"))
     }
 
     @Test
     fun `a device without a secure lock still deletes, as alert close does`() = runTest {
         val repository = repo(DeleteResult.Done, DeleteResult.Done)
-        val vm = vm(repository)
+        val vm = vm(repository, deviceSecurity = DeviceSecurity { false })
         vm.requestDeleteScan(1L)
         vm.confirmDeleteScan { ConfirmResult.NoSecureLock }
         coVerify(exactly = 1) { repository.deleteScan(1L) }
         assertEquals(null, vm.showDeleteConfirm.value)
+    }
+
+    @Test
+    fun `NoSecureLock on a device that is secure is refused, as alert close refuses it`() = runTest {
+        // FindingsRepository.close re-checks the keyguard before honouring NoSecureLock
+        // (spec §5.4, fails closed) so a forged or stale result cannot skip the
+        // credential. Deletion must hold the same line (architect review S1).
+        val repository = repo(DeleteResult.Done, DeleteResult.Done)
+        val vm = vm(repository, deviceSecurity = DeviceSecurity { true })
+        vm.requestDeleteScan(1L)
+        vm.confirmDeleteScan { ConfirmResult.NoSecureLock }
+        coVerify(exactly = 0) { repository.deleteScan(any()) }
+        assertEquals(1L, vm.showDeleteConfirm.value)
+        vm.dismissDeleteConfirm()
+        vm.requestClearAll()
+        vm.confirmClearAll { ConfirmResult.NoSecureLock }
+        coVerify(exactly = 0) { repository.deleteAllScans() }
+        assertTrue(vm.showClearAllConfirm.value)
     }
 
     @Test

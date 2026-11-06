@@ -238,6 +238,16 @@ fun HistoryScreen(
     val deleteCredentialDescription = stringResource(R.string.history_delete_credential_description)
     val clearCredentialTitle = stringResource(R.string.history_clear_title)
     val clearCredentialDescription = stringResource(R.string.history_clear_credential_description)
+    // One prompt at a time: a second tap before the system prompt appears must not
+    // launch a second one (mirrors TimelineScreen's `closing` guard).
+    var deleting by remember { mutableStateOf(false) }
+    fun gated(block: suspend () -> Unit) {
+        if (deleting) return
+        deleting = true
+        deleteScope.launch {
+            try { block() } finally { deleting = false }
+        }
+    }
 
     // Single delete confirmation
     if (showDeleteConfirm != null) {
@@ -249,7 +259,7 @@ fun HistoryScreen(
             confirmButton = {
                 TextButton(
                     onClick = {
-                        deleteScope.launch {
+                        gated {
                             viewModel.confirmDeleteScan {
                                 confirmCredential(deleteCredentialTitle, deleteCredentialDescription)
                             }
@@ -371,7 +381,7 @@ fun HistoryScreen(
             confirmButton = {
                 TextButton(
                     onClick = {
-                        deleteScope.launch {
+                        gated {
                             viewModel.confirmClearAll {
                                 confirmCredential(clearCredentialTitle, clearCredentialDescription)
                             }

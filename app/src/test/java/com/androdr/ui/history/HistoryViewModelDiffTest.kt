@@ -71,6 +71,7 @@ class HistoryViewModelDiffTest {
             reportExporter = mockk(relaxed = true),
             findings = findings,
             scanLock = com.androdr.data.repo.ScanLock(),
+            deviceSecurity = com.androdr.ui.security.DeviceSecurity { false },
         )
 
         viewModel.selectScan(newer)

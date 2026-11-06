@@ -37,6 +37,7 @@ import com.androdr.sigma.SigmaRuleEvaluator
 import com.androdr.sigma.TaxonomyContract
 import com.androdr.ui.security.ConfirmResult
 import com.androdr.ui.security.DeviceSecurity
+import com.androdr.ui.security.credentialOf
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOn
@@ -387,13 +388,8 @@ class FindingsRepository @Inject constructor(
         }
     }
 
-    /** `closedWithCredential` for [result], or null when the close must be refused. */
-    private fun credentialOf(result: ConfirmResult): Boolean? = when (result) {
-        ConfirmResult.Confirmed -> true
-        // Honoured only when the lock screen really is insecure; otherwise refused (fails closed).
-        ConfirmResult.NoSecureLock -> if (deviceSecurity.isDeviceSecure()) null else false
-        ConfirmResult.Cancelled -> null
-    }
+    /** `closedWithCredential` for [result], or null when the close must be refused (spec §5.4). */
+    private fun credentialOf(result: ConfirmResult): Boolean? = deviceSecurity.credentialOf(result)
 
     private fun mergeGroups(rows: List<AlertGroupRow>): List<AlertGroupRow> =
         rows.groupBy { it.ruleId to it.matchedValue }.map { (_, g) ->
