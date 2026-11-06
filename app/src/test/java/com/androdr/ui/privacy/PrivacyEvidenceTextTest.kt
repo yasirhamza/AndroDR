@@ -78,6 +78,23 @@ class PrivacyEvidenceTextTest {
         assertEquals("Partly inspected: abc", s)
     }
 
+    @Test fun `an all-Arabic app label renders as its package name`() {
+        val arabic = AppPrivacyRow(
+            "com.example.bank", 1, "تطبيق", false, InspectOutcome.INSPECTED, null,
+            emptyList(), 0, emptySet(), false,
+        )
+        assertEquals("com.example.bank", PrivacyEvidenceText.appName(arabic))
+        assertEquals("App", PrivacyEvidenceText.appName(app(InspectOutcome.INSPECTED)))
+    }
+
+    @Test fun `a non-ASCII tracker name falls back to the host, then to Tracker id`() {
+        val cjk = "追踪"
+        assertEquals("tracker.example", PrivacyEvidenceText.trackerName(cjk, "https://Tracker.Example/x", 7))
+        assertEquals("Tracker #7", PrivacyEvidenceText.trackerName(cjk, "javascript:x", 7))
+        assertEquals("Tracker #7", PrivacyEvidenceText.trackerName(cjk, "", 7))
+        assertEquals("AdCo", PrivacyEvidenceText.trackerName("AdCo", "https://x.example", 7))
+    }
+
     @Test fun `websiteLink accepts https with a host and rejects http, javascript and userinfo`() {
         assertNotNull(PrivacyEvidenceText.websiteLink("https://firebase.google.com"))
         assertNull(PrivacyEvidenceText.websiteLink("http://firebase.google.com"))

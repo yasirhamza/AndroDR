@@ -49,7 +49,7 @@ internal fun AppRow(row: AppPrivacyRow, registrySize: Int, res: Resources, onCli
         modifier = Modifier.fillMaxWidth().clickable(onClick = onClick).padding(vertical = 10.dp),
         verticalArrangement = Arrangement.spacedBy(2.dp),
     ) {
-        Text(safe(row.appLabel), style = MaterialTheme.typography.titleSmall)
+        Text(PrivacyEvidenceText.appName(row), style = MaterialTheme.typography.titleSmall)
         Text(
             PrivacyEvidenceText.appStatus(row, registrySize, res),
             style = MaterialTheme.typography.bodySmall,
@@ -74,7 +74,8 @@ internal fun TrackerCard(group: TrackerGroup, res: Resources) {
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
     ) {
         Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Text(safe(group.name), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+            val title = PrivacyEvidenceText.trackerName(group.name, group.website, group.trackerId)
+            Text(title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
             Website(group.website)
             Text(
                 group.categories.joinToString(", ") { res.getString(categoryLabel(it)) },
@@ -82,7 +83,7 @@ internal fun TrackerCard(group: TrackerGroup, res: Resources) {
             )
             for ((app, tracker) in group.apps) {
                 Text(
-                    "${safe(app.appLabel)}: ${PrivacyEvidenceText.line(tracker, res)}",
+                    "${PrivacyEvidenceText.appName(app)}: ${PrivacyEvidenceText.line(tracker, res)}",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -113,7 +114,11 @@ internal fun AppDetailSheet(row: AppPrivacyRow, registrySize: Int, onDismiss: ()
             modifier = Modifier.verticalScroll(rememberScrollState()).padding(horizontal = 24.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            Text(safe(row.appLabel), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            Text(
+                PrivacyEvidenceText.appName(row),
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+            )
             Text(PrivacyEvidenceText.appStatus(row, registrySize, res), style = MaterialTheme.typography.bodyMedium)
             for (t in row.trackers) TrackerDetail(t, res)
         }
@@ -123,7 +128,8 @@ internal fun AppDetailSheet(row: AppPrivacyRow, registrySize: Int, onDismiss: ()
 @Composable
 private fun TrackerDetail(t: TrackerRow, res: Resources) {
     Column(verticalArrangement = Arrangement.spacedBy(2.dp), modifier = Modifier.padding(vertical = 4.dp)) {
-        Text(safe(t.name), style = MaterialTheme.typography.titleSmall)
+        val title = PrivacyEvidenceText.trackerName(t.name, t.website, t.trackerId)
+        Text(title, style = MaterialTheme.typography.titleSmall)
         Website(t.website)
         Text(
             t.categories.joinToString(", ") { res.getString(categoryLabel(it)) },

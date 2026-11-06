@@ -160,6 +160,31 @@ class PrivacyViewModelTest {
         assertNull(vm.state.first { it.scan?.networkStatus == "COMPLETE" }.networkNotice)
     }
 
+    @Test fun `a FAILED network step never yields the no-monitor line`() = runTest {
+        val f = Fixture(scan(NetworkStatus.FAILED, days = 0))
+        val s = vm(f).state.first { it.scan != null }
+        assertEquals(NetworkCoverage.Hidden, s.networkCoverage)
+        assertEquals(R.string.privacy_network_failed, s.networkNotice)
+    }
+
+    @Test fun `a COMPLETE step with zero days yields the no-monitor line`() = runTest {
+        val s = vm(Fixture(scan(NetworkStatus.COMPLETE, days = 0))).state.first { it.scan != null }
+        assertEquals(NetworkCoverage.NoMonitor, s.networkCoverage)
+        assertNull(s.networkNotice)
+    }
+
+    @Test fun `a TRUNCATED step with days yields coverage plus the truncated line`() = runTest {
+        val s = vm(Fixture(scan(NetworkStatus.TRUNCATED, days = 4))).state.first { it.scan != null }
+        assertEquals(NetworkCoverage.Days(4), s.networkCoverage)
+        assertEquals(R.string.privacy_network_truncated, s.networkNotice)
+    }
+
+    @Test fun `no scan and a PENDING scan show no coverage line`() = runTest {
+        assertEquals(NetworkCoverage.Hidden, PrivacyUiState().networkCoverage)
+        val s = vm(Fixture(scan(NetworkStatus.PENDING, days = 0))).state.first { it.scan != null }
+        assertEquals(NetworkCoverage.Hidden, s.networkCoverage)
+    }
+
     @Test fun `a null registry disables Run and exposes registry-unavailable`() = runTest {
         val f = Fixture(scan())
         f.available.value = false

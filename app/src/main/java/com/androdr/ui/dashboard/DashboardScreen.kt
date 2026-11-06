@@ -76,7 +76,7 @@ fun DashboardScreen(
 ) {
     val currentFindings by viewModel.currentFindings.collectAsStateWithLifecycle()
     val latestScan by viewModel.latestScan.collectAsStateWithLifecycle()
-    val privacySummary by viewModel.privacySummary.collectAsStateWithLifecycle()
+    val privacyCard by viewModel.privacyCard.collectAsStateWithLifecycle()
     val isScanning by viewModel.isScanning.collectAsStateWithLifecycle()
     val isUpdatingIntel by viewModel.isUpdatingIntel.collectAsStateWithLifecycle()
     val scanProgress by viewModel.scanProgress.collectAsStateWithLifecycle()
@@ -209,7 +209,7 @@ fun DashboardScreen(
             )
 
             // Privacy scan (one tap to its screen; the bottom bar keeps its five tabs).
-            PrivacyCard(summary = privacySummary, onNavigate = onNavigate)
+            PrivacyCard(state = privacyCard,onNavigate = onNavigate)
 
             // Run Scan button — when idle. When a scan is running we show a
             // full progress card instead (stage label + linear progress bar +

@@ -86,7 +86,8 @@ class DashboardPrivacySummaryTest {
                     val crossing = rows[RowSection.CROSSING].orEmpty()
                     assertEquals("refused=$r show=$show", crossing.size, summary.crossing)
                     assertEquals(crossing.count { it.newCrossing }, summary.newCrossing)
-                    assertEquals(rows[RowSection.NEEDS_ATTENTION].orEmpty().size, summary.notInspected)
+                    val incomplete = rows.values.flatten().count { it.outcome != InspectOutcome.INSPECTED }
+                    assertEquals(incomplete, summary.notInspected)
                 }
             }
         }

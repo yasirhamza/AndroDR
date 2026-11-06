@@ -37,6 +37,12 @@ private data class Stored(
     val evidence: List<PrivacyTrackerEvidence>,
 )
 
+sealed interface NetworkCoverage {
+    data object Hidden : NetworkCoverage
+    data object NoMonitor : NetworkCoverage
+    data class Days(val days: Int) : NetworkCoverage
+}
+
 data class PrivacyUiState(
     val scan: PrivacyScan? = null,
     val sections: List<Pair<RowSection, List<AppPrivacyRow>>> = emptyList(),
@@ -59,6 +65,21 @@ data class PrivacyUiState(
             NetworkStatus.TRUNCATED.name -> R.string.privacy_network_truncated
             NetworkStatus.FAILED.name -> R.string.privacy_network_failed
             else -> null
+        }
+
+    /**
+     * The coverage line. Only a COMPLETE or TRUNCATED network step has a meaningful day count; under FAILED the
+     * runner stores 0 days, which must never read as "the monitor recorded nothing".
+     */
+    val networkCoverage: NetworkCoverage
+        get() {
+            val s = scan ?: return NetworkCoverage.Hidden
+            val counted = s.networkStatus in setOf(NetworkStatus.COMPLETE.name, NetworkStatus.TRUNCATED.name)
+            return when {
+                !counted -> NetworkCoverage.Hidden
+                s.dnsCoverageDays == 0 -> NetworkCoverage.NoMonitor
+                else -> NetworkCoverage.Days(s.dnsCoverageDays)
+            }
         }
 }
 

@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.MoreVert
@@ -44,6 +45,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -160,17 +162,14 @@ private fun Header(state: PrivacyUiState, onRun: () -> Unit) {
                 ?: stringResource(R.string.privacy_never_scanned),
             style = MaterialTheme.typography.bodyMedium,
         )
-        if (scan != null) {
-            val days = state.networkDays ?: 0
-            Text(
-                text = if (days == 0) {
-                    stringResource(R.string.privacy_no_monitor)
-                } else {
-                    LocalContext.current.resources.getQuantityString(R.plurals.privacy_network_coverage, days, days)
-                },
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+        val coverageText = when (val c = state.networkCoverage) {
+            NetworkCoverage.Hidden -> null
+            NetworkCoverage.NoMonitor -> stringResource(R.string.privacy_no_monitor)
+            is NetworkCoverage.Days ->
+                LocalContext.current.resources.getQuantityString(R.plurals.privacy_network_coverage, c.days, c.days)
+        }
+        coverageText?.let {
+            Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         state.networkNotice?.let { Text(stringResource(it), style = MaterialTheme.typography.bodySmall) }
         RunControl(state, onRun)
@@ -207,13 +206,19 @@ private fun RunControl(state: PrivacyUiState, onRun: () -> Unit) {
 private fun Controls(state: PrivacyUiState, onShowThreshold: () -> Unit, onShowSystem: (Boolean) -> Unit) {
     Column(modifier = Modifier.padding(bottom = 8.dp)) {
         TextButton(onClick = onShowThreshold) { Text(stringResource(R.string.privacy_threshold_open)) }
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth().toggleable(
+                value = state.showSystemApps, role = Role.Switch, onValueChange = onShowSystem,
+            ),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
             Text(
                 stringResource(R.string.privacy_system_toggle),
                 style = MaterialTheme.typography.bodyMedium,
                 modifier = Modifier.weight(1f),
             )
-            Switch(checked = state.showSystemApps, onCheckedChange = onShowSystem)
+            Switch(checked = state.showSystemApps, onCheckedChange = null)
         }
     }
 }

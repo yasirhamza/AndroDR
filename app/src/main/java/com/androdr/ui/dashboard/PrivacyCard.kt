@@ -22,11 +22,16 @@ import com.androdr.data.db.PrivacyDao
 import com.androdr.data.repo.SettingsRepository
 import com.androdr.privacy.PrivacyRanking
 import com.androdr.privacy.PrivacySummary
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 
 /**
  * The Dashboard's privacy summary: the same [PrivacyRanking.summary] the privacy screen's rows come from, under
@@ -68,9 +73,31 @@ internal fun privacyCardText(summary: PrivacySummary?, res: Resources, now: Long
     return clauses.joinToString(CLAUSE_SEPARATOR)
 }
 
+/** The card's state; [Loading] (before the first database read) must never read as "not run yet". */
+sealed interface PrivacyCardState {
+    data object Loading : PrivacyCardState
+    data object NeverScanned : PrivacyCardState
+    data class Scanned(val summary: PrivacySummary) : PrivacyCardState
+}
+
+internal fun PrivacySummary?.toCardState(): PrivacyCardState =
+    if (this == null) PrivacyCardState.NeverScanned else PrivacyCardState.Scanned(this)
+
+/** Starts [PrivacyCardState.Loading]; the first database emission replaces it. */
+internal fun Flow<PrivacySummary?>.asCardState(scope: CoroutineScope): StateFlow<PrivacyCardState> =
+    map { it.toCardState() }.stateIn(scope, SharingStarted.WhileSubscribed(5_000), PrivacyCardState.Loading)
+
+/** The card's text line; empty while loading. */
+internal fun privacyCardText(state: PrivacyCardState, res: Resources, now: Long = System.currentTimeMillis()): String =
+    when (state) {
+        PrivacyCardState.Loading -> ""
+        PrivacyCardState.NeverScanned -> privacyCardText(null, res, now)
+        is PrivacyCardState.Scanned -> privacyCardText(state.summary, res, now)
+    }
+
 /** One tap to the privacy screen (the bottom bar keeps its five tabs). */
 @Composable
-fun PrivacyCard(summary: PrivacySummary?, onNavigate: (String) -> Unit) {
+fun PrivacyCard(state: PrivacyCardState, onNavigate: (String) -> Unit) {
     val res = LocalContext.current.resources
     Card(
         modifier = Modifier.fillMaxWidth().clickable { onNavigate("privacy") },
@@ -82,7 +109,9 @@ fun PrivacyCard(summary: PrivacySummary?, onNavigate: (String) -> Unit) {
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
             )
-            Text(text = privacyCardText(summary, res), style = MaterialTheme.typography.bodyMedium)
+            if (state != PrivacyCardState.Loading) {
+                Text(text = privacyCardText(state, res), style = MaterialTheme.typography.bodyMedium)
+            }
         }
     }
 }

@@ -56,6 +56,17 @@ object PrivacyEvidenceText {
         }
     }
 
+    private const val NAME_MAX = 80
+
+    /** An app's label as printable ASCII; an all-non-ASCII label (Arabic, CJK) falls back to the package name. */
+    fun appName(row: AppPrivacyRow): String = reportSafe(row.appLabel, NAME_MAX).ifBlank { row.packageName }
+
+    /** A tracker's name; falls back to its website host, then to "Tracker #id", when nothing printable remains. */
+    fun trackerName(name: String, website: String, id: Int): String =
+        reportSafe(name, NAME_MAX).ifBlank {
+            websiteHost(website)?.let { reportSafe(it, NAME_MAX) }?.ifBlank { null } ?: "Tracker #$id"
+        }
+
     private fun parse(url: String): URI? = try {
         URI(url.trim())
     } catch (_: java.net.URISyntaxException) {

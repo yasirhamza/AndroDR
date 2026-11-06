@@ -6,7 +6,6 @@ import androidx.lifecycle.viewModelScope
 import com.androdr.data.db.IndicatorDao
 import com.androdr.data.db.PrivacyDao
 import com.androdr.data.repo.SettingsRepository
-import com.androdr.privacy.PrivacySummary
 import com.androdr.data.model.NotEvaluatedReason
 import com.androdr.data.model.RiskLevel
 import com.androdr.data.model.ScanWithFindings
@@ -74,8 +73,7 @@ class DashboardViewModel @Inject constructor(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), CurrentFindingsSummary.EMPTY)
 
     /** The privacy card's summary under the user's current threshold; null until a privacy scan has completed. */
-    val privacySummary: StateFlow<PrivacySummary?> = privacySummaryFlow(privacyDao, settings)
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+    val privacyCard: StateFlow<PrivacyCardState> = privacySummaryFlow(privacyDao, settings).asCardState(viewModelScope)
 
     /** True while [latestScan] is a result that could not be saved at all. */
     val latestUnsaved: StateFlow<Boolean> = _unsavedScan.map { it != null }
