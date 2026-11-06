@@ -40,6 +40,7 @@ import com.androdr.ui.apps.AppScanScreen
 import com.androdr.ui.bugreport.BugReportScreen
 import com.androdr.ui.dashboard.DashboardScreen
 import com.androdr.ui.device.DeviceAuditScreen
+import com.androdr.ui.privacy.PrivacyScreen
 import com.androdr.ui.history.HistoryScreen
 import com.androdr.ui.network.DnsMonitorScreen
 import com.androdr.ui.telemetry.TelemetryBrowserViewModel
@@ -250,6 +251,9 @@ private fun AndroDRApp() {
             }
             composable("settings") {
                 SettingsScreen()
+            }
+            composable("privacy") {
+                PrivacyScreen(onBack = { navController.popBackStack() })
             }
             telemetryBrowser(navController)
         }
