@@ -44,6 +44,33 @@ class MvtCampaignsTest {
     }
 
     @Test
+    fun `every compiled campaign URL is inside the repos the feed will fetch from`() {
+        // MvtIndicatorsFeed.allowedCampaigns gates fetches by repo; a campaign URL
+        // outside that gate would never be fetched, so its key could never be
+        // stamped -- attribution would die silently (the dead-rule-class lesson).
+        val prefixes = com.androdr.ioc.feeds.MvtIndicatorsFeed.ALLOWED_CAMPAIGN_PREFIXES
+        for ((nameAndUrl, _) in MvtCampaigns.entries()) {
+            assertTrue(nameAndUrl.second, prefixes.any { nameAndUrl.second.startsWith(it) })
+        }
+    }
+
+    @Test
+    fun `every repo the feed will fetch from is an allowed source in the rules repo`() {
+        val f = listOf(File("third-party/android-sigma-rules/validation/allowed-sources.json"),
+            File("../third-party/android-sigma-rules/validation/allowed-sources.json")).first { it.isFile }
+        val arr = org.json.JSONArray(f.readText())
+        val repoRoot = Regex("""https://github\.com/[^/]+/[^/]+/?""")
+        val rawPrefixes = (0 until arr.length()).map { arr.getJSONObject(it).getString("url") }
+            .filter { it.startsWith("https://github.com/") }
+            .onEach { require(repoRoot.matches(it)) { "allowed-sources.json GitHub url is not a bare repo root: $it" } }
+            .map { it.replace("https://github.com/", "https://raw.githubusercontent.com/").trimEnd('/') + "/" }
+            .toSet()
+        for (p in com.androdr.ioc.feeds.MvtIndicatorsFeed.ALLOWED_CAMPAIGN_PREFIXES) {
+            assertTrue("$p is not an allowed source in validation/allowed-sources.json", p in rawPrefixes)
+        }
+    }
+
+    @Test
     fun `compiled map equals the rules repo map`() {
         val f = listOf(File("third-party/android-sigma-rules/validation/mvt-campaign-map.json"),
             File("../third-party/android-sigma-rules/validation/mvt-campaign-map.json")).first { it.isFile }

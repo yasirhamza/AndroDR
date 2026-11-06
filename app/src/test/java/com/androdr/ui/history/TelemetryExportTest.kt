@@ -262,6 +262,7 @@ class TelemetryExportTest {
         reportExporter = exporter,
         findings = mockk(relaxed = true),
         scanLock = com.androdr.data.repo.ScanLock(),
+        deviceSecurity = com.androdr.ui.security.DeviceSecurity { false },
     )
 
     private val completeScan = ScanResult(id = 7L, timestamp = 7L, bugReportFindings = emptyList(),

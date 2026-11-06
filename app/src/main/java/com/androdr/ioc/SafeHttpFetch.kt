@@ -1,6 +1,7 @@
 package com.androdr.ioc
 
 import android.util.Log
+import com.androdr.util.readTextCapped
 import java.net.HttpURLConnection
 import java.net.URL
 
@@ -43,12 +44,9 @@ object SafeHttpFetch {
                 Log.w(TAG, "Response too large: $contentLength bytes (limit $maxBytes) from $url")
                 return null
             }
-            val body = conn.inputStream.bufferedReader().use { it.readText() }
-            if (body.length > maxBytes) {
-                Log.w(TAG, "Response body exceeded limit: ${body.length} bytes from $url")
-                return null
-            }
-            body
+            // Streaming cap: Content-Length is advisory (chunked bodies have none), so
+            // the read itself stops past the limit instead of buffering first.
+            conn.inputStream.bufferedReader().use { it.readTextCapped(maxBytes) }
         } catch (e: Exception) {
             Log.w(TAG, "Fetch failed for $url: ${e.message}")
             null

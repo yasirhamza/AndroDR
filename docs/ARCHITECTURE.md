@@ -248,10 +248,11 @@ The known-good side is handled by `KnownAppResolver` / `KnownAppDatabase` (Plexu
 | `HaGeZiTifFeed` | Domains | HaGeZi threat-intelligence feed |
 | `ZimperiumIocFeed` | Package names / domains | Zimperium public IOC data |
 | `UadKnownAppFeed` / `PlexusKnownAppFeed` | Known-good apps | UAD-ng + Plexus |
-| `RemoteJsonFeed` | Generic (configurable) | Remote JSON endpoint |
 | `PublicRepoIocFeed` | All types | `android-sigma-rules` public repo `ioc-data/` directory |
 
 ThreatFox is not fetched on-device: `ThreatFoxDomainFeed` was retired in 2026-11, after ThreatFox removed its public export and put the replacement behind a per-user Auth-Key. ThreatFox indicators reach devices through the rules repo's `ioc-data/`. `IndicatorUpdater.RETIRED_SOURCE_IDS` purges a retired feed's leftover rows.
+
+**What the app does with a hostile feed body.** Every remote body is treated as attacker-controlled even over pinned TLS, because a pin vouches for the host, not the content. Bodies are read through `Reader.readTextCapped` (`util/CappedRead.kt`), a streaming cap that stops past the limit instead of buffering first (`SafeHttpFetch`, `SigmaRuleFeed`, `MvtIndicatorsFeed`, `CveRepository`; the remaining feeds are a tracked follow-up, gated by `NetworkBodyReadGateTest`). The caps bound *unbounded* input; they are not a heap budget, so each is sized to its heap cost. The OSV `all.zip` is inflated under a per-entry cap (an over-cap entry is skipped, not fatal) and a total cap at least 4× over the live feed (the abort), and both CVE feeds remember an ETag only after the body parsed to rows, so a bomb, a truncated body or an empty result is never cached as Not-Modified. `MvtIndicatorsFeed` fetches campaign STIX only from the three repos the upstream registry points at (`ALLOWED_CAMPAIGN_PREFIXES`, with plain path segments only — `..` is normalised server-side via 307 — redirects not followed, ≤32 distinct refs, 2 bodies in memory at once; note GitHub serves a repo's fork network under the same raw prefix by commit SHA, so the gate is the repo's network, not its default branch); `MvtCampaignsTest` cross-checks the list against the rules repo's `validation/allowed-sources.json`. A remote rule file nested too deeply to parse costs that file (`StackOverflowError` is an `Error`, so it would otherwise pass every `catch (e: Exception)` up to the scan coroutine) and is reported with the other rejected files.
 
 **Orchestration and deduplication**
 
@@ -366,7 +367,7 @@ scanRepository.pruneOldDnsEvents(thirtyDaysAgo)   // → DnsEventDao.deleteOlder
 forensicTimelineEventDao.deleteOlderThan(thirtyDaysAgo)
 ```
 
-**Scans.** `ScanResult` rows are not auto-pruned; they persist until the user deletes a scan from the history screen. Deleting a scan writes a persistent audit row, marks the scan `DELETING`, then removes its observations in batches. A crash is finished by the startup sweep. Alerts and pinned facts survive deletion.
+**Scans.** `ScanResult` rows are not auto-pruned; they persist until the user deletes a scan from the history screen, which asks for the device credential by the same rule as alert close (`DeviceSecurity.credentialOf`: `NoSecureLock` is honoured only on a device that really has no secure lock). Deleting a scan writes a persistent audit row, marks the scan `DELETING`, then removes its observations in batches. A crash is finished by the startup sweep. Alerts and pinned facts survive deletion.
 
 ### 5.3 Cloud backup disabled
 
