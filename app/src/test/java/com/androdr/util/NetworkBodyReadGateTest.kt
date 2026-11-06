@@ -5,35 +5,56 @@ import org.junit.Test
 import java.io.File
 
 /**
- * Network bodies are read through [readTextCapped], never `readText()`: `readText()`
- * buffers the whole body before any size check can run, so an endless or oversized
- * response is an OutOfMemoryError however carefully the caller compares lengths
- * afterwards (PASTA F-003/F-005; quality review item 5).
+ * Network bodies are read through [readTextCapped], never `readText()`/`readBytes()`/
+ * `readLines()`: those buffer the whole body before any size check can run, so an
+ * endless or oversized response is an OutOfMemoryError however carefully the caller
+ * compares lengths afterwards (PASTA F-003/F-005).
  *
- * Scope: the fetchers this gate has been applied to. Add a file here when it is
- * migrated; the remaining feeds are tracked as a follow-up.
+ * Every file under `src/main` that opens an HTTP connection is in scope, so a NEW
+ * fetcher written with `readText()` fails here by default. [knownUncapped] lists the
+ * fetchers not yet migrated (tracked follow-up); the second assertion fails when
+ * one of them is migrated and left in the list, so the list only shrinks.
  */
 class NetworkBodyReadGateTest {
 
-    private val guarded = listOf(
-        "ioc/SafeHttpFetch.kt",
-        "sigma/SigmaRuleFeed.kt",
-        "ioc/feeds/MvtIndicatorsFeed.kt",
-        "data/repo/CveRepository.kt",
+    private val knownUncapped = setOf(
+        "ioc/feeds/HaGeZiTifFeed.kt",
+        "ioc/feeds/PlexusKnownAppFeed.kt",
+        "ioc/feeds/StalkerwareCertHashFeed.kt",
+        "ioc/feeds/StalkerwareIndicatorsFeed.kt",
+        "ioc/feeds/UadKnownAppFeed.kt",
+        "ioc/feeds/ZimperiumIocFeed.kt",
     )
 
-    @Test
-    fun `guarded fetchers read network bodies only through readTextCapped`() {
-        val offenders = guarded.flatMap { rel ->
-            val f = listOf(File("src/main/java/com/androdr/$rel"), File("app/src/main/java/com/androdr/$rel"))
-                .first { it.isFile }
-            val lines = f.readLines()
-            lines.mapIndexedNotNull { i, line ->
-                // A bundled raw resource is not a network body; its read may stay uncapped.
-                val bundled = (maxOf(0, i - 1)..i).any { lines[it].contains("openRawResource") }
-                if (line.contains(".readText()") && !bundled) "$rel:${i + 1}: ${line.trim()}" else null
+    private val uncappedRead = Regex("""\.(readText|readBytes|readLines)\(""")
+    private val opensHttp = Regex("""HttpURLConnection|openConnection\(\)""")
+
+    private fun offenders(): Map<String, List<String>> {
+        val root = listOf(File("src/main/java/com/androdr"), File("app/src/main/java/com/androdr"))
+            .first { it.isDirectory }
+        return root.walkTopDown().filter { it.isFile && it.extension == "kt" }
+            .filter { opensHttp.containsMatchIn(it.readText()) }
+            .associate { f ->
+                val lines = f.readLines()
+                val hits = lines.mapIndexedNotNull { i, line ->
+                    // A bundled raw resource is not a network body; its read may stay uncapped.
+                    val bundled = (maxOf(0, i - 1)..i).any { "openRawResource" in lines[it] || "R.raw." in lines[it] }
+                    if (uncappedRead.containsMatchIn(line) && !bundled) "${i + 1}: ${line.trim()}" else null
+                }
+                f.relativeTo(root).path to hits
             }
-        }
-        assertEquals("uncapped readText() on a network body", emptyList<String>(), offenders)
+            .filterValues { it.isNotEmpty() }
+    }
+
+    @Test
+    fun `every HTTP fetcher reads bodies only through readTextCapped, except the listed follow-ups`() {
+        val unexpected = offenders().filterKeys { it !in knownUncapped }
+        assertEquals("uncapped body read in a fetcher not on the follow-up list", emptyMap<String, Any>(), unexpected)
+    }
+
+    @Test
+    fun `the follow-up list names only fetchers that are still uncapped`() {
+        val stale = knownUncapped - offenders().keys
+        assertEquals("migrated fetcher still listed as a follow-up", emptySet<String>(), stale)
     }
 }

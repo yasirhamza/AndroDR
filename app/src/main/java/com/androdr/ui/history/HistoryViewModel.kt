@@ -269,7 +269,9 @@ class HistoryViewModel @Inject constructor(
      * prompt alert close uses (PASTA F-011): deleting detection history must not be
      * one dialog tap on an unlocked phone. The result is honoured by the same rule as
      * alert close ([credentialOf], spec §5.4): `Cancelled` — and `NoSecureLock` on a
-     * device that is in fact secure — deletes nothing and leaves the dialog open.
+     * device that is in fact secure — deletes nothing and leaves the dialog open. The
+     * refusal is silent: the user just cancelled, or (only via a keyguard-state race
+     * between prompt and decision) can simply confirm again.
      */
     suspend fun confirmDeleteScan(confirm: suspend () -> ConfirmResult) {
         val id = _showDeleteConfirm.value ?: return

@@ -121,7 +121,8 @@ class MvtIndicatorsFeed : DomainIocFeed {
             .take(MAX_CAMPAIGN_REFS)
             .also { kept ->
                 if (kept.size < refs.size) {
-                    val dropped = refs.filterNot { it in kept }
+                    // By identity, not equality: an exact duplicate is a dropped ref too.
+                    val dropped = refs.filterNot { ref -> kept.any { it === ref } }
                     Log.w(TAG, "Kept ${kept.size} of ${refs.size} campaign ref(s); dropped (outside allowed " +
                         "repos, malformed, duplicate, or over the cap): " +
                         dropped.take(MAX_LOGGED_DROPS).joinToString { "'${it.name}' ${it.url}" })
@@ -137,8 +138,8 @@ class MvtIndicatorsFeed : DomainIocFeed {
      */
     private fun insideAllowedRepo(url: String): Boolean {
         val prefix = ALLOWED_CAMPAIGN_PREFIXES.firstOrNull { url.startsWith(it) } ?: return false
-        val segments = url.removePrefix(prefix).split('/')
-        return segments.isNotEmpty() && segments.all { it != "." && it != ".." && PLAIN_SEGMENT.matches(it) }
+        // An empty remainder or a trailing slash yields an empty segment, which the regex rejects.
+        return url.removePrefix(prefix).split('/').all { it != "." && it != ".." && PLAIN_SEGMENT.matches(it) }
     }
 
     /** Rows for one collection, stamped with its compiled campaign key (or none). */

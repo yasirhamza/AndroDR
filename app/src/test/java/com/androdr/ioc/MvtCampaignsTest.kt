@@ -59,8 +59,10 @@ class MvtCampaignsTest {
         val f = listOf(File("third-party/android-sigma-rules/validation/allowed-sources.json"),
             File("../third-party/android-sigma-rules/validation/allowed-sources.json")).first { it.isFile }
         val arr = org.json.JSONArray(f.readText())
+        val repoRoot = Regex("""https://github\.com/[^/]+/[^/]+/?""")
         val rawPrefixes = (0 until arr.length()).map { arr.getJSONObject(it).getString("url") }
             .filter { it.startsWith("https://github.com/") }
+            .onEach { require(repoRoot.matches(it)) { "allowed-sources.json GitHub url is not a bare repo root: $it" } }
             .map { it.replace("https://github.com/", "https://raw.githubusercontent.com/").trimEnd('/') + "/" }
             .toSet()
         for (p in com.androdr.ioc.feeds.MvtIndicatorsFeed.ALLOWED_CAMPAIGN_PREFIXES) {
