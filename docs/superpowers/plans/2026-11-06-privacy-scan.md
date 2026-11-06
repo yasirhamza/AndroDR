@@ -14,7 +14,7 @@
 
 - Rules-repo changes follow CLAUDE.md "Safe ordering". During steps 2–4 of that ordering, AndroDR's `submodule-check` job — and therefore `ci-success` — is **red by design**; `build-and-test` and the other jobs are the gate until the submodule is re-pointed at rules main.
 - Any edit under `ioc-data/` regenerates `ioc-data.sha256`; `IocDataManifestIntegrityTest` stays green.
-- Emitters emit facts only. No tracker name or domain is hard-coded in Kotlin; the six category labels plus `Uncategorised` are a UI vocabulary (spec §4.1), and an unknown label maps to `OTHER`, never rejects a file. Default refused set: every category except Crash reporting and Other — **Uncategorised is refused by default (owner, plan gate round 2)**.
+- Emitters emit facts only. No tracker name or domain is hard-coded in Kotlin; the six category labels plus `Uncategorised` are a UI vocabulary (spec §4.1), and an unknown label maps to `OTHER` on device, never rejecting a file. The rules-repo validator, by contrast, rejects an unknown label, so a new Exodus category turns rules CI red and needs a human decision before it ships; `OTHER` is reached only by older app builds after the vocabulary grows. Default refused set: every category except Crash reporting and Other — **Uncategorised is refused by default (owner, plan gate round 2)**.
 - Privacy results are never a `ScanResult`, never `LIVE_SCAN`, never in History, the exported report, alerts or the Timeline. The privacy scan never calls `ScanLock.withWriter`.
 - Only **code** evidence makes an app cross the threshold; network-only evidence is listed, worded "looked up domains of X", with the content-caused caveat (spec §2 goal 2, §4.3).
 - No AndroDR ranking of categories; apps order by refused-tracker count, then label (spec §3).
@@ -30,7 +30,7 @@
 
 1. A crafted APK (lying zip sizes, `size = -1`, thousands of dex entries, out-of-range dex offsets, 20k junk class names, many splits, a read that never ends, an `OutOfMemoryError`) must cost that app only — within one byte budget and one deadline the reader itself checks — show it as could-not / partly inspected, and never abort the scan or hide trackers in the dex files that parsed — Tasks 5, 6, 9.
 2. A first-party lookup (`www.google.com`, `www.facebook.com`, Microsoft sign-in, `hicloud.com`) must not attribute any tracker, and a class-name signature must never widen to a vendor root (`com.facebook`) — Tasks 1, 2, 4.
-3. A system app's lookups and lookups older than usage history must read background "unknown", never "background" — Task 9.
+3. A system app's lookups and lookups older than usage history must read background "unknown", never "background"; a hostile app flooding the DNS log must cost only network evidence, never the scan — Task 9.
 4. Changing the threshold or the system-apps toggle must change the Dashboard card and the screen identically — Tasks 8, 10.
 5. A registry file that is malformed, over cap, deeply nested, carries an unknown category, or carries a backtracking-prone pattern must keep the previous registry or degrade per entry, never freeze the app on bundled data silently or stall a scan — Tasks 2, 4.
 
@@ -40,7 +40,11 @@
 
 **Files:**
 - Create: `third-party/android-sigma-rules/validation/mirror-exodus-trackers.py`, `validation/test_mirror_exodus_trackers.py`
-- Create: `validation/domain_grammar.py` (the grammar as specified under Task 2, implemented here because the mirror needs it first) with `validation/test_domain_grammar.py` driven by `validation/domain_grammar_fixtures.txt` (lines `ACCEPT <pattern>` / `REJECT <pattern>`: accepts the three real patterns; rejects the four backtracking fixtures listed in Task 2, `.*`, and samples with `(`, `|`, `{`, `^`, `$`, `\d`; Task 4's Kotlin port reads the same file); `validation/first_party_hosts.txt`
+- Create: `validation/domain_grammar.py`, implemented here because the mirror needs it first. It holds:
+  - `is_restricted_pattern(p) -> bool`: the grammar as specified under Task 2.
+  - `FIELD_CHECKS: dict[str, Callable[[str], bool]]`: the per-field shape checks for prefix, segment, suffix, label and pattern.
+  - `matches_host(kind: str, value: str, host: str) -> bool`: the one definition of suffix, label and pattern matching. It is used by the mirror and validator for the first-party check and ported to Kotlin as `TrackerSet.matchDomain`'s primitive.
+  - `MAX_PATTERNS_PER_TRACKER = 4`, `MAX_PATTERNS_TOTAL = 64`. with `validation/test_domain_grammar.py` driven by `validation/domain_grammar_fixtures.txt` (lines `ACCEPT <pattern>` / `REJECT <pattern>`: accepts the three real patterns; rejects the four backtracking fixtures listed in Task 2, `.*`, and samples with `(`, `|`, `{`, `^`, `$`, `\d`; Task 4's Kotlin port reads the same file); `validation/first_party_hosts.txt`
 - Create (generated): `third-party/android-sigma-rules/ioc-data/trackers.yml`
 - Modify: `third-party/android-sigma-rules/README.md` (ODbL paragraph)
 
@@ -81,6 +85,9 @@ CLI: `python3 validation/mirror-exodus-trackers.py --out ioc-data/trackers.yml [
   - result is dot-bounded on both sides in the original (`\.alimama\.`) or a single label (`fidzup`) → `domain_labels`;
   - else the original, if `is_restricted_pattern` → `domain_patterns`; else dropped and reported (e.g. `54\.243\.73\.253:8080/SilverPush/`, `data.\altbeacon\.org`).
 - **Broad**: any suffix, label or pattern that matches a first-party host (suffix: host equals it or ends with `.`+it; label: a label of the host; pattern: as on device) moves to `excluded_domains` — **per signature**, the tracker keeps its others.
+- **Field checks before emitting:** every derived value goes through the same per-field check the validator uses (`domain_grammar.FIELD_CHECKS`: prefix, segment, suffix, label, pattern). A value that fails is dropped and reported, so the mirror's output always validates by construction, not just for this snapshot. Example: `com.foo-bar.sdk.Cls`, or `\.ad\.server\.`, which would produce a label containing a dot.
+- **Pattern caps:** at most `MAX_PATTERNS_PER_TRACKER = 4` and `MAX_PATTERNS_TOTAL = 64` (the real data has 3). Excess patterns are dropped and reported, keeping them in Exodus order.
+- **Website:** kept only if it parses as `http(s)://host[/…]` with no userinfo (`@`) part; otherwise emitted as `""`.
 - **Categories**: Exodus labels verbatim; an empty list becomes `["Uncategorised"]`.
 - Trackers with no code prefix, segment, suffix, label or pattern left are dropped and reported.
 
@@ -90,10 +97,20 @@ CLI: `python3 validation/mirror-exodus-trackers.py --out ioc-data/trackers.yml [
 def test_class_name_signature_becomes_its_package():
     doc, _ = render(api(code="com.adobe.mobile.Analytics|com.adobe.mobile.Config."), None)
     assert doc["trackers"][0]["code_prefixes"] == ["com.adobe.mobile"]
-def test_class_name_whose_package_is_a_parent_of_another_signature_is_dropped():
-    doc, report = render(api(code="com.facebook.appevents|com.facebook.marketing.|com.facebook.CampaignTrackingReceiver"), None)
+def test_class_name_whose_package_is_a_parent_of_another_signature_is_dropped():   # real: Mozilla Telemetry (221)
+    doc, report = render(api(code="org.mozilla.fenix.GleanMetrics|org.mozilla.fenix.components.metrics"), None)
+    assert doc["trackers"][0]["code_prefixes"] == ["org.mozilla.fenix.components.metrics"]
+    assert any("GleanMetrics" in r for r in report)
+def test_facebook_class_name_never_widens_to_com_facebook():
+    doc, _ = render(api(code="com.facebook.appevents|com.facebook.marketing.|com.facebook.CampaignTrackingReceiver"), None)
     assert doc["trackers"][0]["code_prefixes"] == ["com.facebook.appevents", "com.facebook.marketing"]
-    assert any("CampaignTrackingReceiver" in r for r in report)
+def test_derived_values_failing_the_field_checks_are_dropped():   # mirror output must always satisfy the validator
+    doc, report = render(api(code="com.foo-bar.sdk.Cls|com.ok.sdk", net="\\.ad\\.server\\.|ok\\.example\\.com"), None)
+    t = doc["trackers"][0]
+    assert t["code_prefixes"] == ["com.ok.sdk"] and t["domain_labels"] == [] and len(report) == 2
+def test_pattern_caps_drop_and_report():                           # > 4 patterns on one tracker -> first 4 kept
+    doc, report = render(api(code="com.x.y", net="|".join(f"a{i}[0-9]*\\.ex\\.com" for i in range(6))), None)
+    assert len(doc["trackers"][0]["domain_patterns"]) == 4 and report
 def test_class_name_with_a_two_segment_package_is_dropped():
     doc, report = render(api(code="com.baidu.BaiduMap|com.baidu.mapapi"), None)
     assert doc["trackers"][0]["code_prefixes"] == ["com.baidu.mapapi"] and report
@@ -144,7 +161,19 @@ def test_main_from_json_writes_file(tmp_path): ...        # 320 synthetic tracke
 - [ ] **Step 2: Run to verify failure** — `cd third-party/android-sigma-rules && python3 -m pytest validation/test_mirror_exodus_trackers.py -q` → FAIL with `FileNotFoundError` (script absent).
 - [ ] **Step 3: Implement `render` and `main(argv) -> int`** per the rules above; network fetch via `urllib.request` (60 s timeout); YAML via `yaml.safe_dump(sort_keys=False, allow_unicode=True, width=120)`.
 - [ ] **Step 4: Run tests** → all pass.
-- [ ] **Step 5: Generate the real file** — `python3 validation/mirror-exodus-trackers.py --out ioc-data/trackers.yml`. Against the 2026-11-06 snapshot (`/tmp/claude-1000/-home-yasir-AndroDR/eac36e08-8c3e-4ac8-b444-91bf05923e7d/scratchpad/exodus/trackers.json`, via `--from-json`) the drop report must show: 16 class-name signatures dropped, 3 upper-case segments dropped, 3 trackers dropped entirely (429 kept), 116 `Uncategorised`, 10 excluded broad signatures, exactly 3 `domain_patterns` in the file (`adservice\.google\..*`, `mst[0-9]*\.is\.autonavi\.com`, `mt[0-9]*\.google\.cn`). A live fetch may differ slightly; investigate any large difference. Spot-check: Google Ads has `\.google\.com` under `excluded_domains`; Facebook Analytics has no `com.facebook` prefix. Then run Task 2's validator on the file before committing (the two must agree). Add the README ODbL paragraph (mirror of Exodus, ODbL 1.0 link, derived copies stay ODbL, regenerated by this script).
+- [ ] **Step 5: Real-data regression test.** Commit the 2026-11-06 Exodus snapshot, trimmed to the fields the mirror reads (`id, name, website, categories, code_signature, network_signature`), as `validation/fixtures/exodus-trackers-2026-11-06.json`, with `validation/fixtures/README.md` stating it is Exodus Privacy data under ODbL 1.0. Source for the trim: `/tmp/claude-1000/-home-yasir-AndroDR/eac36e08-8c3e-4ac8-b444-91bf05923e7d/scratchpad/exodus/trackers.json`. Add `test_snapshot_normalisation` to `test_mirror_exodus_trackers.py`, which renders the fixture and asserts:
+  - 432 in, **428 kept**; the dropped ids are exactly {10 Xiti, 71 Google Ads, 296 Bitly, 431 PlaytestCloud}.
+    - Google Ads: no code signature; its only network signature, `\.google\.com`, is broad.
+    - Xiti: nothing at all.
+    - Bitly and PlaytestCloud: one class-name signature with a 2-segment package.
+  - 16 class-name signatures dropped; 3 upper-case segments dropped; 10 broad signatures excluded (7 × `\.facebook\.com`, `\.google\.com`, `login\.microsoftonline\.com`, `hicloud\.com`).
+  - Exactly 3 `domain_patterns` (`adservice\.google\..*`, `mst[0-9]*\.is\.autonavi\.com`, `mt[0-9]*\.google\.cn`).
+  - Labels {`alimama`, `adsmogo`, `exacttarget`, `fidzup`}.
+  - **113** trackers in the file are `Uncategorised`. 116 Exodus trackers have no category, and 3 of them are among the dropped.
+  - No tracker has a prefix `com.facebook`, `com.baidu`, `com.dv` or `com.prime31`.
+  - `validate_trackers_file(doc)` returns `[]`, which proves the mirror and the validator agree.
+
+  Then generate the live file: `python3 validation/mirror-exodus-trackers.py --out ioc-data/trackers.yml`. A live fetch may differ slightly from the snapshot; investigate any large difference. Add the README ODbL paragraph (mirror of Exodus, ODbL 1.0 link, derived copies stay ODbL, regenerated by this script).
 - [ ] **Step 6: Commit** `feat(ioc-data): mirror the Exodus Privacy tracker registry (ODbL)`.
 
 ---
@@ -159,11 +188,11 @@ def test_main_from_json_writes_file(tmp_path): ...        # 320 synthetic tracke
 
 **Interfaces:** `validate_trackers_file(data: dict, filename: str) -> list[str]`.
 
-**Restricted pattern grammar** (`validation/domain_grammar.py`, created in Task 1, ported line-for-line to Kotlin in Task 4): a pattern is a sequence of atoms, each optionally followed by one of `*`, `+`, `?`; an atom is a lower-case letter, digit or `-`, an escaped `\.` or `\-`, a bare `.`, or a class `[...]` whose content matches `^[a-z0-9-]+$` or ranges `a-z`/`0-9` only. Nothing else: no `(`, `)`, `|`, `{`, `}`, `^`, `$`, backslash-letter, lazy `*?`/`+?`. At most **two** quantifiers per pattern; ≤ 200 chars; must not match the empty string. Implement as a hand-written tokenizer (not a meta-regex), so the Kotlin port is line-for-line.
+**Restricted pattern grammar** (`validation/domain_grammar.py`, created in Task 1, ported line-for-line to Kotlin in Task 4): a pattern is a sequence of atoms, each optionally followed by one of `*`, `+`, `?`; an atom is a lower-case letter, digit or `-`, an escaped `\.` or `\-`, a bare `.`, or a non-empty class `[...]` whose items are each a single `[a-z0-9]`, exactly `a-z`, exactly `0-9`, or a literal `-` in first or last position (so `[0-z]`, `[z-a]`, `[a--]`, `[]` are rejected by the tokenizer, never by a compiler). Nothing else: no `(`, `)`, `|`, `{`, `}`, `^`, `$`, backslash-letter, stacked or lazy quantifiers (`a*+`, `a??`, `*?`). At most **two** quantifiers per pattern; ≤ 200 chars; must not match the empty string. Any compile error after the tokenizer accepts → reject **the pattern**, never the file. Implement as a hand-written tokenizer (not a meta-regex), so the Kotlin port is line-for-line. Fixture rejections also include `[0-z]x`, `[z-a]x`, `[]x`, `a*+`, `a??`. Caps: ≤ 4 patterns per tracker, ≤ 64 in the file.
 
-Rules: `version == 1`; `license == "ODbL-1.0"`; non-empty `attribution`; ≥ 300 trackers; per tracker: int `id` unique ascending; non-empty `name`; `website` empty or starting `http://`/`https://`; `categories` non-empty subset of `{"Advertisement","Profiling","Identification","Location","Analytics","Crash reporting","Uncategorised"}`; `code_prefixes` each `^[a-z0-9_]+(\.[A-Za-z0-9_]+)+$` (shape only: two-segment prefixes such as Exodus's own `com.flurry` are legitimate; the ≥ 3-segment rule applies to class-name conversion in the mirror, which the validator cannot see); `code_segments` each `^[a-z0-9_]+$`; `domain_suffixes` each `^[a-z0-9-]+(\.[a-z0-9-]+)+$`; `domain_labels` each `^[a-z0-9-]+$`; `domain_patterns` each `is_restricted_pattern`; no suffix, label or pattern matches a host in `first_party_hosts.txt`; `excluded_domains` a list of strings; at least one of the five matchable lists non-empty. (The mirror's outputs are exactly what these rules accept — Task 1 Step 5 runs this validator before committing.)
+Rules: `version == 1`; `license == "ODbL-1.0"`; non-empty `attribution`; ≥ 300 trackers; per tracker: int `id` unique ascending; non-empty `name`; `website` empty or `http(s)://host[/…]` with no userinfo; `categories` non-empty subset of `{"Advertisement","Profiling","Identification","Location","Analytics","Crash reporting","Uncategorised"}`; `code_prefixes` each `^[a-z0-9_]+(\.[A-Za-z0-9_]+)+$` (shape only: two-segment prefixes such as Exodus's own `com.flurry` are legitimate; the ≥ 3-segment rule applies to class-name conversion in the mirror, which the validator cannot see); `code_segments` each `^[a-z0-9_]+$`; `domain_suffixes` each `^[a-z0-9-]+(\.[a-z0-9-]+)+$`; `domain_labels` each `^[a-z0-9-]+$`; `domain_patterns` each `is_restricted_pattern`, ≤ 4 per tracker, ≤ 64 in the file; no suffix, label or pattern `matches_host` a host in `first_party_hosts.txt`; `excluded_domains` a list of strings; at least one of the five matchable lists non-empty. (The mirror's outputs are exactly what these rules accept — Task 1 Step 5 runs this validator before committing.)
 
-- [ ] **Step 1: Write failing tests** — in `test_validate_ioc_data.py`: `test_trackers_valid_passes`, `test_trackers_unknown_category_fails`, `test_trackers_uncategorised_passes`, `test_trackers_duplicate_id_fails`, `test_trackers_hyphen_prefix_fails`, `test_trackers_single_label_suffix_fails` (`fidzup` belongs in `domain_labels`), `test_trackers_upper_case_segment_fails`, `test_trackers_empty_matching_pattern_fails`, `test_trackers_backtracking_patterns_fail` (parametrised over `((a+))+$`, `(a+?)+$`, `(a{1,30}){1,30}$`, `a*b*c*d`), `test_trackers_grammar_accepts_the_three_real_patterns`, `test_trackers_first_party_suffix_fails` (`google.com` in `domain_suffixes`), `test_trackers_javascript_website_fails`, `test_trackers_missing_license_fails`, `test_trackers_tracker_with_no_signatures_fails` (helper `_trackers_doc(n=300)`). In `test_validate_ioc_complementarity.py`: `test_trackers_yml_is_skipped` (copy `test_campaigns_yml_is_skipped`).
+- [ ] **Step 1: Write failing tests** — in `test_validate_ioc_data.py`: `test_trackers_valid_passes`, `test_trackers_unknown_category_fails`, `test_trackers_uncategorised_passes`, `test_trackers_duplicate_id_fails`, `test_trackers_hyphen_prefix_fails`, `test_trackers_single_label_suffix_fails` (`fidzup` belongs in `domain_labels`), `test_trackers_upper_case_segment_fails`, `test_trackers_empty_matching_pattern_fails`, `test_trackers_backtracking_patterns_fail` (parametrised over `((a+))+$`, `(a+?)+$`, `(a{1,30}){1,30}$`, `a*b*c*d`), `test_trackers_grammar_accepts_the_three_real_patterns`, `test_trackers_first_party_suffix_fails` (`google.com` in `domain_suffixes`), `test_trackers_javascript_website_fails`, `test_trackers_userinfo_website_fails` (`https://firebase.google.com@evil.example`), `test_trackers_bad_class_range_fails_not_raises` (`[z-a]x` → a failure message, no exception), `test_trackers_pattern_caps_fail` (5 on one tracker; 65 in the file), `test_trackers_missing_license_fails`, `test_trackers_tracker_with_no_signatures_fails` (helper `_trackers_doc(n=300)`). In `test_validate_ioc_complementarity.py`: `test_trackers_yml_is_skipped` (copy `test_campaigns_yml_is_skipped`).
 - [ ] **Step 2: Run** `python3 -m pytest validation/test_validate_ioc_data.py validation/test_validate_ioc_complementarity.py -q -k "trackers"` → FAIL.
 - [ ] **Step 3: Implement** the validator, the dispatch (`if ioc_path.name == "trackers.yml": …` with the brand block's PASS/FAIL printing), and the `NON_IOC_FILES` addition.
 - [ ] **Step 4: Run** the two test files, then `python3 validation/validate-ioc-data.py ioc-data/trackers.yml` → `PASS: trackers.yml`, and `python3 validation/validate-ioc-complementarity.py --file ioc-data/trackers.yml --mode strict` exits 0.
@@ -176,7 +205,7 @@ Rules: `version == 1`; `license == "ODbL-1.0"`; non-empty `attribution`; ≥ 300
 
 **Files:**
 - Modify: submodule pointer; `scripts/merge-ioc-data.py` (`COPIED_FILES = {"trackers.yml": "trackers.yml"}` handled by `generate` and `check` as byte copies); `scripts/test_merge_ioc_data.py`; `.github/workflows/ci.yml` (add `app/src/main/res/raw/trackers.yml` to the `bundle` path filter); `app/src/test/java/com/androdr/ioc/OemPrefixMirrorParityTest.kt` (doc comment: wholesale mirrors use `COPIED_FILES`)
-- Create: `app/src/main/res/raw/trackers.yml` (generated); `app/src/test/java/com/androdr/privacy/TrackerRegistryBundleCrossCheckTest.kt`
+- Create: `app/src/main/res/raw/trackers.yml` (generated); `app/src/test/java/com/androdr/ioc/TrackerRegistryBundleCrossCheckTest.kt`
 
 - [ ] **Step 1: Write failing tests** — Python, using the existing `_repo` helper: `test_trackers_yml_is_copied_verbatim`, `test_check_names_a_stale_trackers_yml`. Kotlin:
 ```kotlin
@@ -189,18 +218,24 @@ Rules: `version == 1`; `license == "ODbL-1.0"`; non-empty `attribution`; ≥ 300
 (`firstExisting` returns the first `File` that `isFile`, else null — so a missing file is an assertion failure, not `NoSuchElementException`.)
 - [ ] **Step 2: Run** the Python tests → FAIL; bump the submodule to `feat/tracker-registry` (`git -C third-party/android-sigma-rules fetch && git -C third-party/android-sigma-rules checkout feat/tracker-registry && git add third-party/android-sigma-rules`), run the Kotlin test → FAIL (bundled file missing).
 - [ ] **Step 3: Implement** `COPIED_FILES`; run `python3 scripts/merge-ioc-data.py`.
-- [ ] **Step 4: Run** `python3 -m pytest scripts/test_merge_ioc_data.py -q` and `./gradlew :app:testDebugUnitTest --tests com.androdr.privacy.TrackerRegistryBundleCrossCheckTest --tests com.androdr.ioc.IocDataManifestIntegrityTest -q` → pass.
+- [ ] **Step 4: Run** `python3 -m pytest scripts/test_merge_ioc_data.py -q` and `./gradlew :app:testDebugUnitTest --tests com.androdr.ioc.TrackerRegistryBundleCrossCheckTest --tests com.androdr.ioc.IocDataManifestIntegrityTest -q` → pass.
 - [ ] **Step 5: Commit** `build: bundle the tracker registry (submodule -> rules feat/tracker-registry)`.
 
 ---
 
 ### Task 4: `TrackerRegistry` — parse, index, verified refresh, feed health
 
+**Package layout (no cycle):**
+- `com.androdr.privacy.model` is a leaf package: `TrackerCategory`, `Tracker`, `TrackerSet` and `DomainGrammar`, depending only on the Kotlin stdlib.
+- `TrackerRegistry` is an `ioc-data` resolver, so it lives in `com.androdr.ioc` beside `OemPrefixResolver`.
+- `ioc` depends on `privacy.model`; `privacy` depends on `ioc` and `privacy.model`; `privacy.model` depends on neither.
+- The UI never takes `TrackerRegistry` (ARCHITECTURE.md: the UI has no direct `ioc/` dependency); it gets availability from the runner (Task 9).
+
 **Files:**
-- Create: `app/src/main/java/com/androdr/privacy/TrackerCategory.kt`, `TrackerRegistry.kt`
+- Create: `app/src/main/java/com/androdr/privacy/model/TrackerCategory.kt`, `privacy/model/TrackerSet.kt` (with `Tracker`), `privacy/model/DomainGrammar.kt`, `app/src/main/java/com/androdr/ioc/TrackerRegistry.kt`
 - Modify: `ioc/FeedHealthRecorder.kt` (`FEED_TRACKER_REGISTRY = "tracker_registry"` + `FEED_LABELS` entry "Tracker registry"); `ioc/IntelRefresher.kt` (`refreshTrackerRegistry()` called **last** in `refreshAll`, reported in `RefreshReport`); `ui/settings/SettingsViewModel.kt` (`UpdateResult` field, `ALL_FEEDS_FAILED` includes it); `ui/settings/SettingsScreen.kt` (`UpdateStatusRow`); `res/values/strings.xml` (`settings_update_tracker_registry` "Tracker registry")
 - Modify tests: `ioc/IntelRefresherTest.kt`, `ioc/FeedHealthRecorderTest.kt`, `ioc/ResolverIocDataVerificationTest.kt` (tracker case: verified accepted, tampered ignored)
-- Create: `app/src/test/java/com/androdr/privacy/TrackerRegistryTest.kt`
+- Create: `app/src/test/java/com/androdr/ioc/TrackerRegistryTest.kt`, `app/src/test/java/com/androdr/privacy/model/TrackerSetTest.kt` (the matching tests below that need no file)
 
 **Interfaces:**
 ```kotlin
@@ -223,7 +258,9 @@ class TrackerSet(val trackers: List<Tracker>, val sourceSha256: String) {
      *  [host] lower-cased, trailing dot removed; longer than MAX_HOST_CHARS -> empty set. */
     fun matchDomain(host: String): Set<Tracker>
 }
-object DomainGrammar { fun isRestrictedPattern(p: String): Boolean }   // line-for-line port of validation/domain_grammar.py
+object DomainGrammar { fun isRestrictedPattern(p: String): Boolean; val FIELD_CHECKS: Map<String, (String) -> Boolean>
+    fun matchesHost(kind: String, value: String, host: String): Boolean; const val MAX_PATTERNS_PER_TRACKER = 4; const val MAX_PATTERNS_TOTAL = 64 }
+    // line-for-line port of validation/domain_grammar.py; a Regex() compile error rejects the pattern, never the file
 @Singleton class TrackerRegistry @Inject constructor(@ApplicationContext context: Context,
     manifest: IocDataManifest = IocDataManifest()) {
     /** Lazily loads the bundled file on first call, never on construction. null = no usable registry
@@ -237,7 +274,7 @@ object DomainGrammar { fun isRestrictedPattern(p: String): Boolean }   // line-f
     }
 }
 ```
-Per-entry policy: an entry with a bad prefix, segment, suffix or label, or a pattern that fails `DomainGrammar.isRestrictedPattern`, drops **that** item; an entry left empty is dropped; a file with fewer than `MIN_TRACKERS` usable entries, more than `MAX_TRACKERS`, wrong `version`, or that throws (incl. `StackOverflowError`) → null. `excluded_domains` is read and ignored. `sourceSha256` = SHA-256 of the parsed text (`ManifestVerifier.sha256`), recorded on each privacy scan. The rule engine's timed regex helper is **not** reused (private; shared ForkJoinPool flagged by PASTA F-007): the restricted grammar (no groups, ≤ 2 quantifiers) plus the 253-char host bound makes the worst case polynomial and small; only 3 real patterns exist.
+Per-entry policy: a prefix, segment, suffix, label or pattern failing its `DomainGrammar.FIELD_CHECKS` entry (the same five checks as Task 2's validator, exercised by the shared fixture file) drops **that** item; patterns beyond 4 on a tracker or 64 in the file are dropped (file order); an entry left empty is dropped; a file with fewer than `MIN_TRACKERS` usable entries, more than `MAX_TRACKERS`, wrong `version`, or that throws (incl. `StackOverflowError`) → null. `excluded_domains` is read and ignored. `sourceSha256` = SHA-256 of the parsed text (`ManifestVerifier.sha256`), recorded on each privacy scan. The rule engine's timed regex helper is **not** reused (private; shared ForkJoinPool flagged by PASTA F-007): the restricted grammar (no groups, ≤ 2 quantifiers) plus the 253-char host bound makes the worst case polynomial and small; only 3 real patterns exist.
 
 - [ ] **Step 1: Write failing tests** in `TrackerRegistryTest.kt`:
 ```kotlin
@@ -250,7 +287,8 @@ Per-entry policy: an entry with a bad prefix, segment, suffix or label, or a pat
 @Test fun `a pattern matches the host or a label-bounded suffix`() // mst[0-9]*\.is\.autonavi\.com: "mst3.is.autonavi.com", "a.mst3.is.autonavi.com" -> {T}; "xmst3.is.autonavi.com" -> {}
 @Test fun `first-party hosts match nothing in the bundled registry`() // every host in first_party_hosts.txt (read from the submodule) -> {}
 @Test fun `an unknown category maps to OTHER and Uncategorised maps to UNCATEGORISED`()
-@Test fun `a bad pattern drops the pattern, not the file`()
+@Test fun `a bad pattern drops the pattern, not the file`()       // includes [z-a]x, which Regex() would throw on
+@Test fun `pattern caps keep 4 per tracker and 64 per file`()
 @Test fun `too few, too many, wrong version, deep nesting -> null`()
 @Test fun `the grammar rejects the probe-confirmed backtracking patterns`()  // ((a+))+$, (a+?)+$, (a{1,30}){1,30}$, a*b*c*d, .* -> false; the 3 real patterns -> true
 @Test fun `DomainGrammar agrees with domain_grammar_py on the shared fixture list`() // fixture file validation/domain_grammar_fixtures.txt in the submodule ("ACCEPT <p>"/"REJECT <p>"), also read by test_domain_grammar.py
@@ -260,7 +298,7 @@ Per-entry policy: an entry with a bad prefix, segment, suffix or label, or a pat
 @Test fun `construction does not parse`()                           // a context whose raw resource throws: constructing succeeds
 @Test fun `a corrupt bundled file gives null until a verified refresh succeeds`()
 ```
-- [ ] **Step 2: Run** `./gradlew :app:testDebugUnitTest --tests com.androdr.privacy.TrackerRegistryTest -q` → FAIL (unresolved).
+- [ ] **Step 2: Run** `./gradlew :app:testDebugUnitTest --tests com.androdr.ioc.TrackerRegistryTest --tests com.androdr.privacy.model.TrackerSetTest -q` → FAIL (unresolved).
 - [ ] **Step 3: Implement** per Interfaces; `refresh()` mirrors `OemPrefixResolver.refresh()` (`manifest.verified(PATH, MAX_RESPONSE_CHARS)`, parse, swap atomically).
 - [ ] **Step 4: Wire feed health and settings** as listed under Files.
 - [ ] **Step 5: Run** `TrackerRegistryTest`, `IntelRefresherTest`, `FeedHealthRecorderTest`, `ResolverIocDataVerificationTest`, `SettingsViewModel*Test` → pass.
@@ -297,7 +335,31 @@ object DexPackageReader {
     const val MAX_DESCRIPTOR_CHARS = 512
 }
 ```
-Reading rules: open with `ZipFile`; for each loaded dex name, read through the entry's stream in 64 KiB chunks with a counting loop that stops and marks `SKIPPED_OVER_CAP` once `maxDexBytes` or `budget.remainingAppBytes` is exceeded — never consult `entry.size`; decrement the budget by bytes actually read. **Deadline:** check `budget.expired()` before each dex, after each chunk, and every 4,096 descriptors; when expired, mark the current and all remaining loaded dex `TIME_LIMIT`, keep the packages already stored, and return. An `IOException`/`ZipException` while reading an entry's stream (e.g. a corrupt or path-traversal entry) marks that dex `MALFORMED`; one opening the zip → `ApkUnreadableException`. Header: magic `dex\n03[5-9]\0` or `dex\n04[01]\0`; all offset/size arithmetic in `Long`, every table bounded by the array; uleb128 at most 5 bytes; string data must end with NUL inside the array — violating any of these makes the dex `MALFORMED` (its packages discarded; other dex files still count). **Descriptors are not structure:** a type descriptor that is not a class (`[I`, `J`), longer than `MAX_DESCRIPTOR_CHARS`, or whose package part has a segment not matching `^[\p{L}\p{N}_$-]+$` is skipped silently — it never marks the dex `MALFORMED`; the class-name part is not validated (`-$$Lambda$Foo`, non-ASCII names are fine). Packages from `Lcom/a/b/C;` → `com.a.b`; default package ignored. When `budget.remainingPackages` reaches 0, stop **storing** new packages (set `packageCapHit`) — the cap exceeds real apps 7×.
+**Reading rules.** Open the APK with `ZipFile`. For each loaded dex name:
+- **Compressed size first.** If `entry.compressedSize > maxDexBytes`, mark the dex `SKIPPED_OVER_CAP` before reading anything.
+  - `ZipFile` limits the raw read to the central-directory compressed size, so that value can be trusted, unlike `entry.size`.
+  - This stops a deflate stream that produces no output from stalling inside a single `read()`.
+- **Counted reads.** Read the entry's stream in 64 KiB chunks with a counting loop. It stops and marks `SKIPPED_OVER_CAP` once `maxDexBytes` or `budget.remainingAppBytes` is exceeded. Never consult `entry.size`; decrement the budget by the bytes actually read.
+- **Too many dex files.** Loaded-sequence names beyond `maxDexFiles` (e.g. `classes101.dex` exists) are marked `SKIPPED_OVER_CAP`, so the app reads as partial rather than silently incomplete.
+- **Deadline.**
+  - Check `budget.expired()` before each dex, after each chunk, and every 4,096 iterations of **every** loop over a table (string_ids, type_ids).
+  - When expired, mark the current and all remaining loaded dex `TIME_LIMIT`, keep the packages already stored, and return.
+- **Read errors.** An `IOException`/`ZipException` while reading an entry's stream (e.g. a corrupt or path-traversal entry) marks that dex `MALFORMED`. One while opening the zip → `ApkUnreadableException`.
+- **Structure.** Any of these violated makes the dex `MALFORMED` (its packages discarded; the other dex files still count):
+  - Magic `dex\n03[5-9]\0` or `dex\n04[01]\0`.
+  - All offset/size arithmetic in `Long`, every table bounded by the array.
+  - uleb128 at most 5 bytes.
+  - A string_data offset inside the array.
+- **Bounded descriptor decode.** Only the strings named by `type_ids` are decoded, each `descriptor_idx` at most once (skip repeats).
+  - Check the uleb128 UTF-16 length ≤ `MAX_DESCRIPTOR_CHARS` **before** touching the bytes.
+  - Then scan at most `3 * MAX_DESCRIPTOR_CHARS + 1` bytes for the NUL.
+  - Over-long, unterminated within the bound, or invalid MUTF-8 → that descriptor is skipped. Never scan on; never MALFORMED; never an exception out of the dex.
+- **Descriptors are not structure.** A type descriptor is skipped silently, without marking the dex `MALFORMED`, when it:
+  - is not a class (`[I`, `J`);
+  - is longer than `MAX_DESCRIPTOR_CHARS`;
+  - has a package segment not matching `^[\p{L}\p{N}_$-]+$`.
+
+  The class-name part is not validated (`-$$Lambda$Foo` and non-ASCII names are fine). Packages from `Lcom/a/b/C;` → `com.a.b`; default package ignored. When `budget.remainingPackages` reaches 0, stop **storing** new packages (set `packageCapHit`) — the cap exceeds real apps 7×.
 
 - [ ] **Step 1: Write `SyntheticDex`** — `dex(descriptors: List<String>, version: String = "035"): ByteArray` (valid header, string_ids, type_ids, string data with correct multi-byte uleb128 and MUTF-8); `apk(entries: Map<String, ByteArray>, stored: Boolean = true): File`; `bomb(declaredSize: Long, realSize: Int): File` (writes a zip whose central-directory size is `declaredSize` while the deflated stream inflates to `realSize`; for `declaredSize = -1` use a streamed entry with data descriptor).
 - [ ] **Step 2: Write failing tests** in `DexPackageReaderTest.kt`:
@@ -311,7 +373,12 @@ Reading rules: open with `ZipFile`; for each loaded dex name, read through the e
 @Test fun `an expired deadline stops reading and marks the remaining dex TIME_LIMIT`() // fake nanoTime past the deadline after the first chunk: classes.dex packages kept, classes2.dex TIME_LIMIT, partial
 @Test fun `a malformed dex costs that dex, the other dex files still count`()      // classes.dex valid {com.a}, classes2.dex out-of-range string_ids_off -> packages {com.a}, partial true
 @Test fun `huge table counts do not overflow`()                                   // string_ids_size 0xFFFFFFF0 -> MALFORMED, no exception
-@Test fun `a string without a terminator is malformed`()
+@Test fun `a string_data offset outside the dex is malformed`()
+@Test fun `a descriptor with no NUL within the bound is skipped and the scan stays bounded`() // 4,096 type_ids all pointing at one 4 MB NUL-free run: READ, that descriptor skipped, bytes scanned per descriptor <= 1,537 (instrumented counter)
+@Test fun `invalid MUTF-8 skips the descriptor, not the dex`()
+@Test fun `an entry whose compressed size exceeds the cap is skipped unread`()   // stored entry of maxDexBytes + 1 -> SKIPPED_OVER_CAP, bytesRead == 0
+@Test fun `a loaded dex beyond MAX_DEX_FILES marks the result partial`()         // maxDexFiles = 2, classes.dex..classes3.dex -> classes3.dex SKIPPED_OVER_CAP
+@Test fun `the deadline is checked inside table loops`()                          // fake nanoTime expiring after N calls during type_ids iteration -> TIME_LIMIT
 @Test fun `multi-byte uleb128 and non-ASCII names are read`()                     // a 200-char package path; Lcom/ex/Café; -> com.ex; Lcom/ünï/A; -> com.ünï
 @Test fun `odd descriptors are skipped without marking the dex malformed`()       // Lcom/a/-$$Lambda$Foo; -> com.a stored; 600-char descriptor and "Lcom/a b/C;" skipped; [I and J ignored; outcome READ
 @Test fun `hitting the package cap marks the result partial`()                    // 30 packages, ReadBudget(remainingPackages = 20)
@@ -345,7 +412,7 @@ interface AppInspector {
 ```
 `inspect(app, budget: DexPackageReader.ReadBudget)` (the interface method takes the budget; the runner creates one per app) unions `DexPackageReader.read` over `apkPaths` with that **one** budget; any APK result `partial` → `PARTIAL` (reason lists skipped/malformed dex names, "package cap" or "time limit"); `ApkUnreadableException` on an APK → that APK contributes nothing, outcome `PARTIAL` if another APK read, else `COULD_NOT_INSPECT`; a `TIME_LIMIT` result with no packages at all → `COULD_NOT_INSPECT` "time limit". `reason` is short, report-safe text (`reportSafe`).
 
-Hilt: create `di/PrivacyModule.kt` — `@Module @InstallIn(SingletonComponent::class) abstract class PrivacyModule { @Binds abstract fun appInspector(impl: ApkPackageInspector): AppInspector }` (plus the `@ApplicationScope` provider in Task 9's companion object section).
+Hilt: create `di/PrivacyModule.kt` — `@Module @InstallIn(SingletonComponent::class) abstract class PrivacyModule { @Binds abstract fun appInspector(impl: ApkPackageInspector): AppInspector }` (the app-wide scope has its own module, Task 9).
 
 - [ ] **Step 1: Write failing tests**: `installedApps lists base and split paths, update time and the system flag`; `inspect unions base and split packages`; `a missing apk file is COULD_NOT_INSPECT with a reason`; `one unreadable split of two is PARTIAL and keeps the readable one`; `a partial dex result makes the app PARTIAL`; `base and split share one byte budget`; `a time limit before any package is COULD_NOT_INSPECT`.
 - [ ] **Step 2: Run → FAIL. Step 3: Implement. Step 4: Run → pass.**
@@ -366,7 +433,8 @@ Hilt: create `di/PrivacyModule.kt` — `@Module @InstallIn(SingletonComponent::c
     val startedAt: Long, val finishedAt: Long?, val appsTotal: Int, val appsInspected: Int, val appsPartial: Int,
     val appsFailed: Int, val registrySize: Int, val registrySha256: String, val dnsWindowStart: Long,
     val dnsCoverageDays: Int,                                  // UTC calendar days in the window with ≥ 1 attributed lookup
-    val usageCoverageFrom: Long?)                              // oldest usage event available; null = no usage access
+    val usageCoverageFrom: Long?,                              // oldest usage event available; null = no usage access
+    val networkStatus: String)                                 // NetworkStatus.name: COMPLETE, TRUNCATED, FAILED
 @Entity(tableName = "privacy_app_result", primaryKeys = ["scanId", "packageName"])
 data class PrivacyAppResult(val scanId: Long, val packageName: String, val versionCode: Long, val appLabel: String,
     val isSystemApp: Boolean, val outcome: String /* InspectOutcome.name */, val reason: String?)
@@ -379,7 +447,7 @@ data class PrivacyTrackerEvidence(val scanId: Long, val packageName: String, val
 data class PrivacyPackageSet(val packageName: String, val versionCode: Long, val lastUpdateTime: Long,
     val readerVersion: Int, val packagesText: String /* "\n"-joined; descriptors validated in Task 5 */)
 ```
-`PrivacyDao`: `insertScan(PrivacyScan): Long`; `finishScan(id, finishedAt, inspected, partial, failed, dnsCoverageDays, usageFrom)`; `upsertResults(List<PrivacyAppResult>)`; `upsertEvidence(List<PrivacyTrackerEvidence>)`; `latestCompleted(): Flow<PrivacyScan?>`; `latestCompletedOnce(): PrivacyScan?` (`finishedAt IS NOT NULL ORDER BY id DESC LIMIT 1`); `results(scanId): Flow<List<PrivacyAppResult>>`; `resultsOnce(scanId): List<PrivacyAppResult>`; `evidence(scanId): Flow<List<PrivacyTrackerEvidence>>`; `evidenceOnce(scanId): List<PrivacyTrackerEvidence>`; `packageSet(pkg): PrivacyPackageSet?`; `upsertPackageSet(PrivacyPackageSet)`; `deletePackageSet(pkg)`; `@Query("DELETE FROM privacy_package_set WHERE packageName NOT IN (SELECT packageName FROM privacy_app_result WHERE scanId = :scanId)") pruneCacheTo(scanId: Long)` (a subquery, never a bound list: 999-variable limit); `@Transaction suspend fun deleteScansBefore(keepFromId: Long)` (three DELETEs: evidence, results, scans); `@Transaction suspend fun deleteAll()` (all four tables). The UI queries never select `privacy_package_set`.
+`PrivacyDao`: `insertScan(PrivacyScan): Long`; `finishScan(id, finishedAt, inspected, partial, failed, dnsCoverageDays, usageFrom, networkStatus)`; `upsertResults(List<PrivacyAppResult>)`; `upsertEvidence(List<PrivacyTrackerEvidence>)`; `latestCompleted(): Flow<PrivacyScan?>`; `latestCompletedOnce(): PrivacyScan?` (`finishedAt IS NOT NULL ORDER BY id DESC LIMIT 1`); `results(scanId): Flow<List<PrivacyAppResult>>`; `resultsOnce(scanId): List<PrivacyAppResult>`; `evidence(scanId): Flow<List<PrivacyTrackerEvidence>>`; `evidenceOnce(scanId): List<PrivacyTrackerEvidence>`; `packageSet(pkg): PrivacyPackageSet?`; `upsertPackageSet(PrivacyPackageSet)`; `deletePackageSet(pkg)`; `@Query("DELETE FROM privacy_package_set WHERE packageName NOT IN (SELECT packageName FROM privacy_app_result WHERE scanId = :scanId)") pruneCacheTo(scanId: Long)` (a subquery, never a bound list: 999-variable limit); `@Transaction suspend fun deleteScansBefore(keepFromId: Long)` (three DELETEs: evidence, results, scans); `@Transaction suspend fun deleteAll()` (all four tables). The UI queries never select `privacy_package_set`.
 
 - [ ] **Step 1: Write failing tests** — `Migration21To22Test` (skeleton of `Migration19To20Test`: seed v21 with a `ScanResult` and a `DnsEvent`, migrate, assert the 4 `privacy_%` tables, the `index_DnsEvent_appName_domain_timestamp` index, and both seeded rows). `PrivacyDaoTest`: `latestCompleted ignores an unfinished scan`; `latestCompletedOnce agrees with latestCompleted`; `deleteScansBefore removes older scans' results and evidence only`; `deleteAll empties all four tables`; `packageSet round-trips`; `pruneCacheTo keeps exactly the packages of that scan with 1,500 results` (proves no variable limit).
 - [ ] **Step 2: Run → FAIL. Step 3: Implement; `./gradlew :app:kspDebugKotlin -q` exports `22.json`; copy its CREATE statements into `MIGRATION_21_22`; register.** Step 4: Run these plus existing `*Migration*Test` → pass.
@@ -404,19 +472,30 @@ data class TrackerRow(val trackerId: Int, val name: String, val website: String,
 data class AppPrivacyRow(val packageName: String, val versionCode: Long, val appLabel: String, val isSystemApp: Boolean, val outcome: InspectOutcome,
     val reason: String?, val trackers: List<TrackerRow>, val refusedInCode: Int, val refusedCategories: Set<TrackerCategory>,
     val newCrossing: Boolean)
-enum class RowSection { NEEDS_ATTENTION /* PARTIAL or COULD_NOT_INSPECT */, CROSSING, OTHER }
+enum class RowSection { NEEDS_ATTENTION, CROSSING, OTHER }
 data class PrivacySummary(val crossing: Int, val newCrossing: Int, val notInspected: Int, val scannedAt: Long)
+/** One tracker and every app it was found in, each with that app's own evidence row. */
+data class TrackerGroup(val trackerId: Int, val name: String, val website: String, val categories: Set<TrackerCategory>,
+    val apps: List<Pair<AppPrivacyRow, TrackerRow>>)
 object PrivacyRanking {
     fun rows(results: List<PrivacyAppResult>, evidence: List<PrivacyTrackerEvidence>, refused: Set<TrackerCategory>,
              showSystemApps: Boolean): List<Pair<RowSection, List<AppPrivacyRow>>>
-    fun byTracker(rows: List<AppPrivacyRow>): List<Pair<TrackerRow, List<AppPrivacyRow>>>   // most apps first
+    fun byTracker(rows: List<AppPrivacyRow>): List<TrackerGroup>   // most apps first, then name
     fun summary(scan: PrivacyScan, results: List<PrivacyAppResult>, evidence: List<PrivacyTrackerEvidence>,
                 refused: Set<TrackerCategory>, showSystemApps: Boolean): PrivacySummary
 }
 ```
-Rules: `refusedInCode` counts trackers with `inCode` and a refused category (a tracker with several categories counts once); an app is CROSSING iff `refusedInCode > 0` (network-only never crosses); inside CROSSING order by `refusedInCode` desc, then `appLabel`; inside an app, trackers with refused categories first, then name; `newCrossing` = crossing and any refused in-code tracker has `newSinceLastScan`. **System apps:** the toggle hides system apps from CROSSING and OTHER only; NEEDS_ATTENTION (PARTIAL or COULD_NOT_INSPECT) lists every app regardless of the toggle, and `summary.notInspected` counts exactly that section — so the card's failure clause never disagrees with the screen and can never be hidden by the toggle. `summary` is computed from `rows` (one source of truth for the card, the screen and the Apps tab).
+**Ranking rules:**
+- **Counting refused trackers.** `refusedInCode` counts the trackers that have `inCode` and **any** refused category. A tracker with several categories counts once; e.g. [Crash reporting, Analytics] counts under the default threshold.
+- **Crossing.** An app is CROSSING iff `refusedInCode > 0`, **whatever its outcome**. Network-only evidence never crosses.
+  - A PARTIAL app with refused trackers in code is therefore CROSSING, shown with its "partly inspected" reason. Padding an app until inspection is cut short must never take it out of the crossing count.
+- **Needs attention.** NEEDS_ATTENTION holds the COULD_NOT_INSPECT apps and the PARTIAL apps with `refusedInCode == 0`.
+- **Order.** Inside CROSSING, order by `refusedInCode` desc, then `appLabel`. Inside an app, trackers with refused categories come first, then by name.
+- **New crossing.** `newCrossing` = crossing and any refused in-code tracker has `newSinceLastScan`.
+- **Not inspected.** `summary.notInspected` counts **every** PARTIAL or COULD_NOT_INSPECT app, including PARTIAL apps listed under CROSSING. Such an app counts in both clauses of the card.
+- **System apps.** The toggle hides system apps from CROSSING and OTHER only. NEEDS_ATTENTION lists every app regardless of the toggle, and `notInspected` ignores the toggle. So the failure clause can never be hidden by the toggle. `summary` is computed from `rows` (one source of truth for the card, the screen and the Apps tab).
 
-- [ ] **Step 1: Write failing tests** — `PrivacyRankingTest`: `network-only refused evidence does not make an app cross`; `code evidence of a refused category does`; `failed and partial apps are in NEEDS_ATTENTION, never OTHER`; `a failed system app is in NEEDS_ATTENTION and counted even when system apps are hidden`; `notInspected counts PARTIAL and COULD_NOT_INSPECT`; `crossing apps order by refused-in-code count then label`; `system apps are excluded from CROSSING and OTHER unless showSystemApps`; `summary equals the counts of rows for the same inputs`; `changing refused changes summary and rows identically`; `an Uncategorised tracker in code crosses under the default threshold`; `OTHER category is not refused by default`; `byTracker lists most apps first`; `evidence is CODE, NETWORK or BOTH`. `SettingsRepositoryPrivacyTest`: default (contains UNCATEGORISED, not CRASH_REPORTING or OTHER); round-trip; unknown stored name ignored.
+- [ ] **Step 1: Write failing tests** — `PrivacyRankingTest`: `network-only refused evidence does not make an app cross`; `code evidence of a refused category does`; `failed apps and partial apps without refused code trackers are in NEEDS_ATTENTION, never OTHER`; `a PARTIAL app with a refused tracker in code is CROSSING and counted in notInspected`; `a tracker with categories Crash reporting and Analytics counts under the default threshold`; `a failed system app is in NEEDS_ATTENTION and counted even when system apps are hidden`; `notInspected counts every PARTIAL and COULD_NOT_INSPECT app`; `crossing apps order by refused-in-code count then label`; `system apps are excluded from CROSSING and OTHER unless showSystemApps`; `summary equals the counts of rows for the same inputs`; `changing refused changes summary and rows identically`; `an Uncategorised tracker in code crosses under the default threshold`; `OTHER category is not refused by default`; `byTracker lists most apps first`; `evidence is CODE, NETWORK or BOTH`. `SettingsRepositoryPrivacyTest`: default (contains UNCATEGORISED, not CRASH_REPORTING or OTHER); round-trip; unknown stored name ignored.
 - [ ] **Step 2: Run → FAIL. Step 3: Implement. Step 4: Run → pass.**
 - [ ] **Step 5: Commit** `feat(privacy): threshold setting and the single ranking/summary function`.
 
@@ -425,20 +504,24 @@ Rules: `refusedInCode` counts trackers with `inCode` and a refused category (a t
 ### Task 9: Scan runner — inspection, network correlation, usage coverage, cache, retention
 
 **Files:**
-- Create: `privacy/PrivacyScanRunner.kt`, `privacy/NetworkEvidenceCorrelator.kt`, `privacy/ForegroundIntervals.kt`, `privacy/UsageIntervalReader.kt`, `di/ApplicationScope.kt`
-- Modify: `data/db/DnsEventDao.kt`; `di/PrivacyModule.kt` (app scope provider)
+- Create: `privacy/PrivacyScanRunner.kt`, `privacy/NetworkEvidenceCorrelator.kt`, `privacy/ForegroundIntervals.kt`, `privacy/UsageIntervalReader.kt`, `di/ApplicationScopeModule.kt`
+- Modify: `data/db/DnsEventDao.kt`
 - Create tests: `privacy/PrivacyScanRunnerTest.kt`, `privacy/NetworkEvidenceCorrelatorTest.kt`, `privacy/ForegroundIntervalsTest.kt`, `privacy/PrivacyBoundaryTest.kt`
 
 **Interfaces:**
 ```kotlin
 // DnsEventDao
-data class DomainLookupCount(val appName: String, val domain: String, val lookups: Int, val days: Int, val first: Long, val last: Long)
-@Query("SELECT appName, domain, COUNT(*) AS lookups, COUNT(DISTINCT timestamp / 86400000) AS days, MIN(timestamp) AS first, " +
-       "MAX(timestamp) AS last FROM DnsEvent WHERE timestamp >= :since AND appName IS NOT NULL GROUP BY appName, domain")
-suspend fun lookupCountsSince(since: Long): List<DomainLookupCount>
-// served by index_DnsEvent_appName_domain_timestamp (Task 7)
-@Query("SELECT timestamp FROM DnsEvent WHERE appName = :app AND domain = :domain AND timestamp >= :since ORDER BY timestamp")
-suspend fun lookupTimes(since: Long, app: String, domain: String): List<Long>
+// The DNS log has no row cap (only age-based deletion), and a hostile app can flood it: every read here is bounded.
+data class DomainLookupCount(val appName: String, val domain: String, val lookups: Int, val dayList: String /* comma-joined UTC day numbers */,
+    val firstAt: Long, val lastAt: Long)
+@Query("SELECT appName, domain, COUNT(*) AS lookups, GROUP_CONCAT(DISTINCT timestamp / 86400000) AS dayList, " +
+       "MIN(timestamp) AS firstAt, MAX(timestamp) AS lastAt FROM DnsEvent WHERE timestamp >= :since AND appName IS NOT NULL " +
+       "GROUP BY appName, domain ORDER BY lookups DESC LIMIT :limit")
+suspend fun lookupCountsSince(since: Long, limit: Int): List<DomainLookupCount>
+// served by index_DnsEvent_appName_domain_timestamp (Task 7); [domain] is the raw stored value, never the normalised one
+@Query("SELECT timestamp FROM DnsEvent WHERE appName = :app AND domain = :domain AND timestamp >= :since " +
+       "ORDER BY timestamp LIMIT :limit")
+suspend fun lookupTimes(since: Long, app: String, domain: String, limit: Int): List<Long>
 @Query("SELECT COUNT(DISTINCT timestamp / 86400000) FROM DnsEvent WHERE timestamp >= :since AND appName IS NOT NULL")
 suspend fun coverageDaysSince(since: Long): Int                // UTC days; 0 = the monitor recorded nothing attributable
 
@@ -453,48 +536,87 @@ object ForegroundIntervals { fun build(events: List<Pair<String, Pair<Long, Bool
 object NetworkEvidenceCorrelator {
     data class Key(val packageName: String, val trackerId: Int)
     data class NetworkEvidence(val lookups: Int, val days: Int, val background: Int?, val first: Long, val last: Long)
-    /** Matches each distinct domain once; returns evidence per (app, tracker). [times] fetches timestamps only for matched
-     *  (app, domain) pairs, at most MAX_TIMED_PAIRS of them (most lookups first); beyond that background = null. */
+    data class Correlation(val evidence: Map<Key, NetworkEvidence>, val truncated: Boolean)
+    /** Matches each distinct normalised domain once; returns evidence per (app, tracker). [times] is called with the RAW
+     *  domain, only for matched (app, raw domain) pairs, at most MAX_TIMED_PAIRS of them (most lookups first).
+     *  A pair beyond that cap, or one with more than MAX_TIMES_PER_PAIR lookups, gets background = null.
+     *  [expired] is checked before each distinct domain; when true, stop and return truncated = true. */
     suspend fun correlate(counts: List<DomainLookupCount>, registry: TrackerSet, installed: Set<String>,
-        usage: UsageIntervals?, times: suspend (app: String, domain: String) -> List<Long>): Map<Key, NetworkEvidence>
+        usage: UsageIntervals?, times: suspend (app: String, rawDomain: String, limit: Int) -> List<Long>,
+        expired: () -> Boolean): Correlation
     const val MAX_TIMED_PAIRS = 5_000
+    const val MAX_TIMES_PER_PAIR = 10_000      // lookupTimes is called with limit MAX_TIMES_PER_PAIR + 1
+    const val MAX_DOMAIN_ROWS = 50_000         // lookupCountsSince limit; hitting it sets truncated = true
 }
 
 sealed class PrivacyScanProgress { object Idle : PrivacyScanProgress(); data class Running(val done: Int, val total: Int) : PrivacyScanProgress()
     data class Finished(val scanId: Long) : PrivacyScanProgress(); data class Failed(val message: String) : PrivacyScanProgress() }
+enum class NetworkStatus { COMPLETE, TRUNCATED, FAILED }
 @Singleton class PrivacyScanRunner @Inject constructor(inspector: AppInspector, registry: TrackerRegistry, dao: PrivacyDao,
     dnsEvents: DnsEventDao, usage: UsageIntervalReader, @ApplicationScope scope: CoroutineScope) {
-    internal var clock: () -> Long = System::currentTimeMillis       // test seams (Hilt cannot inject function types)
-    internal var nanoTime: () -> Long = System::nanoTime
+    // Test seams: Hilt cannot inject function types and the project has no clock abstraction. Production never assigns them.
+    @VisibleForTesting internal var clock: () -> Long = System::currentTimeMillis
+    @VisibleForTesting internal var nanoTime: () -> Long = System::nanoTime
     val progress: StateFlow<PrivacyScanProgress>
+    /** Whether a usable registry is loaded; computed on IO at construction and after each start(); the UI reads this, never the registry. */
+    val registryAvailable: StateFlow<Boolean>
     /** Starts a scan on [scope] (Dispatchers.IO) unless one is running; returns false when one already is. */
     fun start(): Boolean
     suspend fun deleteAll(): Boolean                          // false (nothing deleted) while a scan runs
     companion object { const val DNS_WINDOW_MS = 30L * 24 * 3600 * 1000; const val PER_APP_TIMEOUT_MS = 30_000L
-        const val READER_VERSION = 1; const val MAX_PACKAGES_TEXT_CHARS = 1_000_000 }
+        const val NETWORK_TIMEOUT_MS = 60_000L; const val READER_VERSION = 1
+        const val MAX_PACKAGES_TEXT_BYTES = 1_000_000 /* UTF-8 bytes, below the 2 MB CursorWindow */ }
 }
 ```
-No application-wide scope exists today (checked 2026-11-06): in `di/PrivacyModule.kt` (Task 6) add a companion `@Provides @Singleton @ApplicationScope fun appScope(): CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO + CoroutineExceptionHandler { _, t -> Log.e("AppScope", "uncaught", t) })` and `@Qualifier annotation class ApplicationScope` in `di/ApplicationScope.kt`. Moving other app-lifetime scopes onto it is a follow-up.
+No application-wide scope exists today (checked 2026-11-06). Create `di/ApplicationScopeModule.kt`, its own small module because the scope is not privacy-specific:
+```kotlin
+@Qualifier annotation class ApplicationScope
+@Provides @Singleton @ApplicationScope fun appScope(): CoroutineScope =
+    CoroutineScope(SupervisorJob() + Dispatchers.IO + CoroutineExceptionHandler { _, t -> Log.e("AppScope", "uncaught", t) })
+```
+Moving other app-lifetime scopes onto it is a follow-up.
 
-Correlation rules: a lookup counts toward background only when `usage != null`, the lookup time ≥ `usage.coverageFrom`, and it lies in no foreground interval of that package; lookups before `coverageFrom` or with `usage == null` make `background = null` for that pair. Packages not in `installed` are ignored. Domains are lower-cased and the trailing dot removed before `matchDomain`.
+**Correlation rules:**
+- **Normalisation.** Domains are lower-cased and the trailing dot removed before `matchDomain`. Rows whose normalised domains are equal are matched once.
+- **Merging rows into one (app, tracker) record** (several raw domains, or several domains of one tracker):
+  - `lookups` = sum;
+  - `days` = size of the **union** of the parsed `dayList` sets, so three Flurry domains on one day read as 1 day;
+  - `first` = min; `last` = max;
+  - `background` = sum, or null if any part is null.
+- **Background.** A lookup counts toward background only when `usage != null`, the lookup time ≥ `usage.coverageFrom`, and it lies in no foreground interval of that package. Lookups before `coverageFrom`, or with `usage == null`, make `background = null` for that pair.
+- **Scope.** Packages not in `installed` are ignored.
 
-Run algorithm (own `Mutex`, `tryLock`; never `ScanLock`). The whole launched body is `try { … } catch (c: CancellationException) { throw c } catch (t: Throwable) { progress = Failed(reportSafe(t)) } finally { mutex.unlock() }` — nothing escapes to the scope.
-1. `set = registry.current()`; null → `Failed("tracker registry unavailable")`, no scan row.
-2. `previous = dao.latestCompletedOnce()`; insert scan row (`registrySize = set.size`, `registrySha256 = set.sourceSha256`); `apps = inspector.installedApps()`.
-3. Per app, inside `try { … } catch (c: CancellationException) { throw c } catch (t: Throwable) { COULD_NOT_INSPECT "resource limit: ${t.javaClass.simpleName}" }` — no `withTimeout`; the time limit is `ReadBudget(deadlineNanos = nanoTime() + PER_APP_TIMEOUT_MS * 1_000_000, nanoTime = nanoTime)` passed to `inspect`:
-   - cache: `runCatching { dao.packageSet(pkg) }` — a throw (e.g. an oversized row) → `deletePackageSet(pkg)` and treat as a miss; a hit is used only when versionCode, lastUpdateTime and `READER_VERSION` all match;
-   - miss → `inspect(app, budget)`; cache only when `INSPECTED` and the joined text ≤ `MAX_PACKAGES_TEXT_CHARS`;
-   - in-code trackers = `set.matchPackages`; write the result row; progress.
-4. Network: `lookupCountsSince(windowStart)` → `correlate(...)`; merge with in-code into evidence rows.
-5. `newSinceLastScan`: false for every row when `previous == null` (first scan) **or** the app's result in `previous` was not `INSPECTED`; otherwise true when (pkg, trackerId) is absent from `evidenceOnce(previous.id)`.
-6. Upsert evidence; `finishScan(..., dnsCoverageDays = coverageDaysSince(windowStart), usageFrom)`; `deleteScansBefore(scanId)`; `pruneCacheTo(scanId)`; `Finished`.
+**Run algorithm** (own `Mutex`, `tryLock`; never `ScanLock`). The whole launched body is `try { … } catch (c: CancellationException) { throw c } catch (t: Throwable) { progress = Failed(reportSafe(t.javaClass.simpleName)) } finally { mutex.unlock() }`, so nothing escapes to the scope.
+1. `set = registry.current()`. null → `Failed("tracker registry unavailable")`, no scan row.
+2. `previous = dao.latestCompletedOnce()`; `apps = inspector.installedApps()`; **then** insert the scan row (`appsTotal = apps.size`, `registrySize = set.size`, `registrySha256 = set.sourceSha256`).
+3. Per app, inside `try { … } catch (c: CancellationException) { throw c } catch (t: Throwable) { COULD_NOT_INSPECT "resource limit: ${t.javaClass.simpleName}" }`. There is no `withTimeout`: the time limit is `ReadBudget(deadlineNanos = nanoTime() + PER_APP_TIMEOUT_MS * 1_000_000, nanoTime = nanoTime)`, passed to `inspect`.
+   - **Cache read:** an explicit `try { dao.packageSet(pkg) } catch (c: CancellationException) { throw c } catch (t: Throwable) { deletePackageSet(pkg); null }`. Not `runCatching`, which would swallow cancellation. A hit is used only when versionCode, lastUpdateTime and `READER_VERSION` all match.
+   - **Miss:** `inspect(app, budget)`. Cache only when the outcome is `INSPECTED` and the joined text's UTF-8 size ≤ `MAX_PACKAGES_TEXT_BYTES`.
+   - In-code trackers = `set.matchPackages`; write the result row; update progress.
+4. **Network, isolated.** Wrapped in its own `try { … } catch (c: CancellationException) { throw c } catch (t: Throwable) { networkStatus = FAILED; no network evidence }`, so a failure here costs only the network evidence and the code results still finish.
+   - `lookupCountsSince(windowStart, MAX_DOMAIN_ROWS)` → `correlate(..., expired = { nanoTime() > networkDeadline })`, with the deadline `NETWORK_TIMEOUT_MS` ahead.
+   - `networkStatus = TRUNCATED` when the row limit was hit or the correlation was truncated; otherwise `COMPLETE`.
+   - Merge with the in-code results into evidence rows.
+5. **`newSinceLastScan`.** False for every row when `previous == null` (first scan), or when the app has no result in `previous`, or when that result was not `INSPECTED`. Otherwise true when (pkg, trackerId) is absent from `evidenceOnce(previous.id)`.
+6. Upsert evidence; `finishScan(..., dnsCoverageDays = coverageDaysSince(windowStart), usageFrom, networkStatus)`; `deleteScansBefore(scanId)`; `pruneCacheTo(scanId)`; `Finished`.
 
 - [ ] **Step 1: Write failing tests**
   - `ForegroundIntervalsTest`: pairs resume/pause per package; an open interval ends at `until`; system packages are kept.
   - `NetworkEvidenceCorrelatorTest` (a counting fake for `times` and a counting wrapper on the registry): `each distinct domain is matched once`; `timestamps are fetched only for matched pairs`; `a domain owned by two trackers yields two evidence rows`; `www.google.com yields no evidence with the bundled registry`; `uninstalled apps are ignored`; `background is null without usage`; `background is null for lookups older than usage coverage`; `background counts lookups outside foreground intervals within coverage`; `a system app's foreground use is honoured`.
-  - `NetworkEvidenceCorrelatorTest` also: `beyond MAX_TIMED_PAIRS, background is null and counts are still exact`.
+  - `NetworkEvidenceCorrelatorTest` also:
+    - `beyond MAX_TIMED_PAIRS, background is null and counts are still exact`;
+    - `a pair with more than MAX_TIMES_PER_PAIR lookups gets background null without loading them all` (fake `times` asserts `limit == MAX_TIMES_PER_PAIR + 1`);
+    - `three domains of one tracker on the same day give days = 1`;
+    - `Foo.com and foo.com rows merge, and times is called with each raw domain`;
+    - `an expired deadline returns truncated with the evidence so far`.
+  - `PrivacyScanRunnerTest` also:
+    - `20,000 seeded DnsEvent rows for one pair finish the scan, with background null for that pair`;
+    - `a network-step failure keeps the code evidence and records networkStatus FAILED` (DnsEventDao mock throws);
+    - `an app absent from the previous scan is not marked new`;
+    - `appsTotal equals installedApps().size`;
+    - `cancellation during the cache read propagates`.
   - `PrivacyScanRunnerTest` (fake `AppInspector`, in-memory DB, seeded DnsEvent rows; `registry.current()` mocked to return a small hand-built `TrackerSet` — the 300-tracker floor applies to `parse`, not to `TrackerSet`): `in-code trackers come from matchPackages`; `an inspector that throws OutOfMemoryError yields COULD_NOT_INSPECT and the scan finishes`; `the runner passes a deadline PER_APP_TIMEOUT_MS ahead and one budget per app` (fake inspector records the budget); `a PARTIAL inspection is recorded and not cached`; `an over-size package text is not cached`; `a cache row that throws on read is deleted and the app re-inspected`; `an unchanged app (version, update time, reader version) reuses the cached package set`; `a changed lastUpdateTime re-inspects`; `the first scan marks nothing new`; `newSinceLastScan marks pairs absent from the previous completed scan`; `an app not INSPECTED in the previous scan is not marked new`; `completing a scan deletes older scans and prunes package sets of uninstalled apps`; `a throw after the loop (dao fails in finishScan) gives Failed and releases the lock` (a second `start()` returns true); `a null registry gives Failed without a scan row`; `start returns false while a scan runs`; `the scan never touches ScanLock` (a `ScanLock` held by the test does not block completion); `a registry refresh during the scan does not change the set used`; `the scan row records the registry hash and coverage days`; `deleteAll empties the tables and returns false while running`.
-  - `PrivacyBoundaryTest` (source scan): no file under `reporting/`, `sigma/`, `ui/history/`, `data/repo/ScanWriteRepository.kt`, `data/store/` references `com.androdr.privacy` or `privacy_`; no file under `privacy/` references `ScanLock` or `ScanResult`.
+  - `PrivacyBoundaryTest` (source scan): no file under `reporting/`, `sigma/`, `ui/history/`, `data/repo/ScanWriteRepository.kt`, `data/store/` references `com.androdr.privacy` or `privacy_`; no file under `privacy/` references `ScanLock` or `ScanResult`; `DexPackageReader.kt` and `ApkPackageInspector.kt` never reference `TrackerRegistry`, `TrackerSet` or `Tracker` (the emitter stays registry-independent, spec §5.1); no file under `ui/` imports `com.androdr.ioc.TrackerRegistry`; nothing under `privacy/model/` imports `com.androdr.ioc` (no package cycle).
 - [ ] **Step 2: Run → FAIL. Step 3: Implement** per Interfaces and rules. **Step 4: Run** these classes, then the full suite once (`./gradlew :app:testDebugUnitTest -q`) → pass.
 - [ ] **Step 5: Commit** `feat(privacy): scan runner — isolated per-app inspection, distinct-domain correlation, usage coverage, own lock`.
 
@@ -504,17 +626,17 @@ Run algorithm (own `Mutex`, `tryLock`; never `ScanLock`). The whole launched bod
 
 **Files:**
 - Create: `ui/privacy/PrivacyViewModel.kt`, `PrivacyScreen.kt`, `PrivacyThresholdSheet.kt`, `PrivacyEvidenceText.kt` (pure formatter)
-- Modify: `MainActivity.kt` (`composable("privacy")`, bottom bar unchanged); `ui/dashboard/DashboardScreen.kt` (`PrivacyCard` after `OpenAlertsCard`); `ui/dashboard/DashboardViewModel.kt` (new constructor parameter `privacyDao: PrivacyDao`; `privacySummary: StateFlow<PrivacySummary?>` via `PrivacyRanking.summary` over `latestCompleted` + results + evidence + both settings); `app/src/test/java/com/androdr/data/repo/FindingReadersLowHeapTest.kt` (the only test constructing `DashboardViewModel`: pass `privacyDao = mockk { every { latestCompleted() } returns flowOf(null) }`); `res/values/strings.xml` (new strings below; `history_clear_credential_description` gains "Privacy scan results are kept; delete them from the privacy screen.")
+- Modify: `MainActivity.kt` (`composable("privacy")`, bottom bar unchanged); `ui/dashboard/DashboardScreen.kt` (`PrivacyCard` after `OpenAlertsCard`); `ui/dashboard/DashboardViewModel.kt` (new constructor parameters `privacyDao: PrivacyDao` and `settings: SettingsRepository` — it has no settings dependency today; `privacySummary: StateFlow<PrivacySummary?>` via `PrivacyRanking.summary` over `latestCompleted` + results + evidence + both settings); `app/src/test/java/com/androdr/data/repo/FindingReadersLowHeapTest.kt` (the only test constructing `DashboardViewModel`, with named arguments: pass `privacyDao = mockk { every { latestCompleted() } returns flowOf(null) }` and `settings = mockk { every { refusedTrackerCategories } returns flowOf(emptySet()); every { privacyShowSystemApps } returns flowOf(false) }`); `res/values/strings.xml` (new strings below; `history_clear_credential_description` gains "Privacy scan results are kept; delete them from the privacy screen.")
 - Create tests: `ui/privacy/PrivacyViewModelTest.kt`, `ui/privacy/PrivacyEvidenceTextTest.kt`, `ui/dashboard/DashboardPrivacySummaryTest.kt`, `ui/privacy/PrivacyCopyTest.kt`
 
 **Interfaces:**
-- `PrivacyViewModel(dao, runner, settings, registry)`: `state: StateFlow<PrivacyUiState>`; `runScan()` → `runner.start()`; `setRefused(Set<TrackerCategory>)`; `setShowSystemApps(Boolean)`; `deleteResults()` → `runner.deleteAll()`.
-- `PrivacyUiState(scan: PrivacyScan?, sections: List<Pair<RowSection, List<AppPrivacyRow>>>, byTracker: List<Pair<TrackerRow, List<AppPrivacyRow>>>, refused: Set<TrackerCategory>, showSystemApps: Boolean, progress: PrivacyScanProgress, registrySizeAtScan: Int?, networkDays: Int?, registryAvailable: Boolean)` — `registrySizeAtScan = scan.registrySize`; `networkDays = scan.dnsCoverageDays` (0 → the no-monitor line); `registryAvailable = registry.current() != null` (false → Run disabled, `privacy_registry_unavailable` shown). A tracker's website renders as a link only when it starts with `https://`; otherwise as plain text.
+- `PrivacyViewModel(dao, runner, settings)` (no `TrackerRegistry`: the UI has no direct `ioc/` dependency): `state: StateFlow<PrivacyUiState>`; `runScan()` → `runner.start()`; `setRefused(Set<TrackerCategory>)`; `setShowSystemApps(Boolean)`; `deleteResults()` → `runner.deleteAll()`.
+- `PrivacyUiState(scan: PrivacyScan?, sections: List<Pair<RowSection, List<AppPrivacyRow>>>, byTracker: List<TrackerGroup>, refused: Set<TrackerCategory>, showSystemApps: Boolean, progress: PrivacyScanProgress, registrySizeAtScan: Int?, networkDays: Int?, registryAvailable: Boolean)` — `registrySizeAtScan = scan.registrySize`; `networkDays = scan.dnsCoverageDays` (0 → the no-monitor line); `registryAvailable` = `runner.registryAvailable` (computed on IO, refreshed after each run; false → Run disabled, `privacy_registry_unavailable` shown). A tracker's website is shown as its **host only** and is a link only when `PrivacyEvidenceText.websiteLink(url)` returns non-null: `https` scheme, a host, no userinfo; otherwise plain host text or nothing. `networkStatus` TRUNCATED → `privacy_network_truncated`, FAILED → `privacy_network_failed`. `deleteResults()` returning false shows `privacy_delete_refused`.
 - `object PrivacyEvidenceText { fun line(row: TrackerRow, res: Resources): String; fun appStatus(row: AppPrivacyRow, registrySize: Int, res: Resources): String }` — `appStatus` returns `privacy_none_from_registry` only for `INSPECTED` apps with no trackers; `PARTIAL` → `privacy_partial`; `COULD_NOT_INSPECT` → `privacy_could_not_inspect`.
 
 Strings (exact; counts are `<plurals>`):
 - `privacy_title` "Privacy scan"; `privacy_card_never` "Privacy scan not run yet"
-- plurals `privacy_card_crossing` "%d app crosses your threshold" / "%d apps cross your threshold"; `privacy_card_new` "%d new since last scan"; plurals `privacy_card_failed` "%d could not be inspected"; `privacy_card_scanned` "scanned %s"; the card joins present clauses with " · "
+- plurals `privacy_card_crossing` "%d app crosses your threshold" / "%d apps cross your threshold"; `privacy_card_new` "%d new since last scan"; plurals `privacy_card_failed` "%d could not be fully inspected"; `privacy_card_scanned` "scanned %s"; the card joins present clauses with " · "
 - `privacy_run` "Run privacy scan"; `privacy_progress` "Inspecting %1$d of %2$d apps"; `privacy_running_elsewhere` "A privacy scan is already running"
 - `privacy_tab_by_app` "By app"; `privacy_tab_by_tracker` "By tracker"; `privacy_section_attention` "Could not be fully inspected"; `privacy_section_crossing` "Cross your threshold"; `privacy_section_other` "Other apps"
 - `privacy_none_from_registry` "None of the %1$d trackers in the registry were found in its code"; `privacy_partial` "Partly inspected: %1$s"; `privacy_could_not_inspect` "Could not inspect: %1$s"
@@ -524,15 +646,17 @@ Strings (exact; counts are `<plurals>`):
 - `privacy_limits` "Code inspection can miss trackers whose code has been renamed by the app's build tools, or code loaded at runtime. Apps using encrypted DNS, or reporting through Google Play services, are not visible on the network. Domains a tracker shares with its company's ordinary services (such as google.com) are not used as evidence. Tracking by the app's own developer is not covered."
 - `privacy_registry_unavailable` "The tracker registry could not be loaded, so a privacy scan cannot run. It will be retried at the next intelligence update."
 - `privacy_system_toggle` "Include system apps (can only be disabled, not removed)"; `privacy_threshold_title` "What I refuse"; six `privacy_cat_*` labels + explanations from spec §4.1; `privacy_cat_uncategorised` "Uncategorised" with explanation "Exodus lists it as a tracker but gives no purpose; many are ad networks"; `privacy_cat_other` "Other (new category from the registry)"
+- `privacy_network_truncated` "Network evidence is incomplete: the DNS log was too large to read in full."; `privacy_network_failed` "Network evidence could not be read this time; code findings are complete."; `privacy_partly_inspected_tag` "partly inspected"
+- `privacy_delete_refused` "A privacy scan is running; delete the results after it finishes."
 - `privacy_delete` "Delete privacy results"; `privacy_delete_confirm` "Delete the stored list of every app's code packages and tracker findings?"
 - `privacy_attribution` "Tracker data: Exodus Privacy (ODbL 1.0)"; `privacy_last_scan` "Last scan: %1$s"
 
 - [ ] **Step 1: Write failing tests**
   - `PrivacyEvidenceTextTest`: `a network-only row never says carries or found in code`; `both shows code and the network detail`; `background null renders unknown`; `an INSPECTED app with no trackers renders none-from-registry with the scan's registry size`; `PARTIAL and COULD_NOT_INSPECT never render none-from-registry` (Review Focus 1).
   - `DashboardPrivacySummaryTest`: `null when never scanned`; `failed clause present when notInspected > 0`; `changing the refused set or the system toggle changes the summary exactly as the screen rows` (Review Focus 4).
-  - `PrivacyViewModelTest`: `sections come from PrivacyRanking with the current settings`; `runScan when one is running exposes privacy_running_elsewhere`; `deleteResults delegates to the runner`.
+  - `PrivacyViewModelTest`: `sections come from PrivacyRanking with the current settings`; `runScan when one is running exposes privacy_running_elsewhere`; `deleteResults delegates to the runner`; `a refused delete exposes privacy_delete_refused`; `networkStatus TRUNCATED and FAILED expose their lines`.
   - `PrivacyCopyTest`: `strings contain no "no trackers" and no "carries" in network strings`; `PrivacyScreen references privacy_limits, privacy_network_caveat and privacy_attribution`; `MainActivity has the privacy route and five bottom destinations`; `history clear-all text mentions that privacy results are kept`.
-  - `PrivacyViewModelTest` also: `a null registry disables Run and exposes registry-unavailable`; `a non-https website is not a link` (pure helper `PrivacyEvidenceText.websiteLink(url): String?`).
+  - `PrivacyViewModelTest` also: `a null registry disables Run and exposes registry-unavailable`; `websiteLink accepts https with a host and rejects http, javascript and userinfo` (`https://firebase.google.com@evil.example` → null).
 - [ ] **Step 2: Run → FAIL. Step 3: Implement** the screen (top bar with back; header with last-scan date, network coverage line, Run button or progress; two tabs; By-app in the three sections; app detail sheet listing tracker rows via `PrivacyEvidenceText`; By-tracker list; system toggle; threshold sheet with eight checkboxes (six categories, Uncategorised, Other); footer with limits, network caveat and attribution; overflow menu with Delete, confirmed by dialog), the card (`onNavigate("privacy")`), the route.
 - [ ] **Step 4: Run** the four classes and `:app:lintDebug` → pass.
 - [ ] **Step 5: Commit** `feat(privacy): privacy screen, threshold sheet, dashboard card, delete action`.
@@ -541,7 +665,7 @@ Strings (exact; counts are `<plurals>`):
 
 ### Task 11: Apps-tab crossover line
 
-**Files:** `ui/apps/AppScanScreen.kt` (`AppGroupDetailSheet`: "Trackers: N · M refused, found in code" plus "as of <scan date>"; tap → `privacy`); `ui/apps/AppScanViewModel.kt` (`privacyByPackage: StateFlow<PrivacyCrossover>` where `data class PrivacyCrossover(val scannedAt: Long?, val byPackage: Map<String, AppPrivacyRow>)`, from `PrivacyRanking.rows` with `showSystemApps = true`, keeping only rows whose `versionCode` equals the installed version); `privacy/InstalledVersions.kt` (`@Singleton class InstalledVersions @Inject constructor(@ApplicationContext ctx: Context) { fun versionCode(pkg: String): Long? }`, `PackageInfoCompat.getLongVersionCode`, null when not installed — injected into `AppScanViewModel`); `MainActivity.kt` (`onNavigateToPrivacy`); test `ui/apps/AppScanViewModelPrivacyTest.kt`.
+**Files:** `ui/apps/AppScanScreen.kt` (`AppGroupDetailSheet`: "Trackers: N · M refused, found in code" plus "as of <scan date>"; tap → `privacy`); `ui/apps/AppScanViewModel.kt` (`privacyByPackage: StateFlow<PrivacyCrossover>` where `data class PrivacyCrossover(val scannedAt: Long?, val byPackage: Map<String, AppPrivacyRow>)`, from `PrivacyRanking.rows` with `showSystemApps = true`, keeping only rows whose `versionCode` equals the installed version); `privacy/InstalledVersions.kt` (`@Singleton class InstalledVersions @Inject constructor(@ApplicationContext ctx: Context) { suspend fun versionCodes(pkgs: Collection<String>): Map<String, Long> }` on `Dispatchers.IO`, one batch per emission, `PackageInfoCompat.getLongVersionCode`, absent when not installed); `AppScanViewModel` gains three constructor parameters `privacyDao: PrivacyDao`, `settings: SettingsRepository`, `installedVersions: InstalledVersions` (no existing test constructs it); `MainActivity.kt` (`onNavigateToPrivacy`); test `ui/apps/AppScanViewModelPrivacyTest.kt`.
 
 - [ ] **Step 1: Failing tests** — `privacyByPackage reflects the latest scan under the current threshold`; `empty without a privacy scan`; `an app updated since the privacy scan has no line`; `scannedAt is the scan's finish time`.
 - [ ] **Step 2: Run → FAIL. Step 3: Implement. Step 4: Run → pass. Step 5: Commit** `feat(apps): tracker line on a flagged app's sheet`.
@@ -554,7 +678,7 @@ Strings (exact; counts are `<plurals>`):
 - [ ] **Step 2: Full local gates** — `rm -rf app/build/test-results/testDebugUnitTest && ./gradlew :app:testDebugUnitTest detekt :app:lintDebug --continue -q` → 0 failures, detekt and lint clean.
 - [ ] **Step 3: Open the AndroDR PR** (`feat/privacy-scan`; body links spec and plan, states the submodule points at rules `feat/tracker-registry`). Wait for `build-and-test`, `lint-and-detekt`, `instrumented`, CodeQL — **expect `submodule-check` and therefore `ci-success` red** at this step.
 - [ ] **Step 4: Safe-ordering close** — open the rules PR, wait for `validate` green, merge; re-point the submodule at rules main (`git -C third-party/android-sigma-rules checkout main && git -C third-party/android-sigma-rules pull`, `git add`, commit `build: re-point submodule at rules main (tracker registry)`, push); now wait for `ci-success` green; merge the AndroDR PR.
-- [ ] **Step 5: Release battery** — emulator API 36.1 and the physical F916B, clean install: run a privacy scan; confirm progress, that Chrome or YouTube shows Firebase Analytics "found in code", that no app is attributed "Google Ads" from ordinary Google lookups, the limits/caveat/attribution are visible, the system toggle and threshold change the card and the screen alike, and Delete clears the screen. Hostile-APK fixture: `SyntheticDex.bomb` is not installable (unsigned, no manifest), so build an installable one with `test-adversary/fixtures/privacy/build-hostile-apk.sh` (create it): `aapt2 link` a minimal manifest (package `com.androdr.fixture.privacyhostile`) against the SDK's `android.jar`, add a `classes.dex` from a small Python generator (`gen_dex.py`, 40,000 distinct packages — valid dex, over `MAX_PACKAGES`) and a `classes2.dex` with an out-of-range `string_ids_off`, `zipalign -p 4`, `apksigner sign` with `~/.android/debug.keystore`. Install it (if Android refuses the malformed `classes2.dex` at install, drop it and keep the 40k-package variant), run the scan, and confirm the app shows under "Could not be fully inspected" as partly inspected while the scan completes; uninstall it afterwards.
+- [ ] **Step 5: Release battery** — emulator API 36.1 and the physical F916B, clean install: run a privacy scan; confirm progress, that Chrome or YouTube shows Firebase Analytics "found in code", that no Facebook tracker gets network evidence from ordinary `www.facebook.com` lookups (Google Ads is absent from the registry by construction, Task 1), the limits/caveat/attribution are visible, the system toggle and threshold change the card and the screen alike, and Delete clears the screen. Hostile-APK fixture: `SyntheticDex.bomb` is not installable (unsigned, no manifest), so build an installable one with `test-adversary/fixtures/privacy/build-hostile-apk.sh` (create it): `aapt2 link` a minimal manifest (package `com.androdr.fixture.privacyhostile`) against the SDK's `android.jar`, add a `classes.dex` from a small Python generator (`gen_dex.py`, 40,000 distinct packages — valid dex, over `MAX_PACKAGES`) and a `classes2.dex` with an out-of-range `string_ids_off`, `zipalign -p 4`, `apksigner sign` with `~/.android/debug.keystore`. Install it (if Android refuses the malformed `classes2.dex` at install, drop it and keep the 40k-package variant), run the scan, and confirm the app shows under "Could not be fully inspected" as partly inspected while the scan completes; uninstall it afterwards.
 
 ## Follow-ups to file (not built here)
 
