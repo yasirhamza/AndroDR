@@ -87,7 +87,7 @@ CLI: `python3 validation/mirror-exodus-trackers.py --out ioc-data/trackers.yml [
   - else the original, if `is_restricted_pattern` → `domain_patterns`; else dropped and reported (e.g. `54\.243\.73\.253:8080/SilverPush/`, `data.\altbeacon\.org`).
 - **Broad**: any suffix, label or pattern that matches a first-party host (suffix: host equals it or ends with `.`+it; label: a label of the host; pattern: as on device) moves to `excluded_domains` — **per signature**, the tracker keeps its others.
 - **Field checks before emitting:** every derived value goes through the same per-field check the validator uses (`domain_grammar.FIELD_CHECKS`: prefix, segment, suffix, label, pattern). A value that fails is dropped and reported, so the mirror's output always validates by construction, not just for this snapshot. Example: `com.foo-bar.sdk.Cls`, or `\.ad\.server\.`, which would produce a label containing a dot.
-- **Pattern caps:** at most `MAX_PATTERNS_PER_TRACKER = 4` and `MAX_PATTERNS_TOTAL = 64` (the real data has 3). Excess patterns are dropped and reported, keeping them in Exodus order.
+- **Pattern caps:** at most `MAX_PATTERNS_PER_TRACKER = 4` and `MAX_PATTERNS_TOTAL = 64` (the real data has 3). Count patterns within a tracker in signature order and across trackers in ascending id order (the output order, which is also the order the app reads the file in); the patterns past either cap are dropped and reported.
 - **Website:** kept only if it parses as `http(s)://host[/…]` with no userinfo (`@`) part — scheme and host compared case-insensitively (the snapshot has `http://AppsFlyer.com`); otherwise emitted as `""`. Add `test_upper_case_website_host_is_kept`.
 - **Categories**: Exodus labels verbatim; an empty list becomes `["Uncategorised"]`.
 - Trackers with no code prefix, segment, suffix, label or pattern left are dropped and reported.
@@ -114,8 +114,12 @@ def test_pattern_caps_keep_the_first_four_in_exodus_order():       # input delib
     pats = [f"{c}[0-9]*\\.ex\\.com" for c in "fbdaec"]
     doc, report = render(api(code="com.x.y", net="|".join(pats)), None)
     assert doc["trackers"][0]["domain_patterns"] == pats[:4] and len(report) == 2
-def test_pattern_cap_per_file_keeps_the_first_64_in_id_order():   # 33 trackers x 2 patterns = 66 -> trackers 1..32 keep both, 33 keeps none
-    ...
+def test_pattern_cap_per_file_keeps_the_first_64_in_id_order():   # 33 trackers x 2 patterns = 66
+    ids = list(range(33, 0, -1))                                      # API dict built with ids out of order
+    doc, report = render(api_many([dict(id=i, code="com.x.y", net=f"a{i}[0-9]*\\.ex\\.com|b{i}[0-9]*\\.ex\\.com") for i in ids]), None)
+    by_id = {t["id"]: t for t in doc["trackers"]}
+    assert all(len(by_id[i]["domain_patterns"]) == 2 for i in range(1, 33))
+    assert by_id[33]["domain_patterns"] == [] and by_id[33]["code_prefixes"] == ["com.x.y"] and len(report) == 2
 def test_class_name_with_a_two_segment_package_is_dropped():
     doc, report = render(api(code="com.baidu.BaiduMap|com.baidu.mapapi"), None)
     assert doc["trackers"][0]["code_prefixes"] == ["com.baidu.mapapi"] and report
@@ -161,7 +165,7 @@ def test_output_sorted_by_id_and_has_licence(): ...      # ids [9, 2] in -> [2, 
 def test_main_refuses_a_large_shrink(tmp_path): ...       # previous 400 trackers, new 300 -> exit 1
 def test_main_from_json_writes_file(tmp_path): ...        # 320 synthetic trackers -> file with 320 entries
 ```
-`api(code=..., net=..., cats=["Analytics"], id=1)` builds a one-tracker Exodus API dict.
+`api(code=..., net=..., cats=["Analytics"], id=1)` builds a one-tracker Exodus API dict; `api_many(list_of_kwargs)` builds a multi-tracker one in the given order.
 
 - [ ] **Step 2: Run to verify failure** — `cd third-party/android-sigma-rules && python3 -m pytest validation/test_mirror_exodus_trackers.py -q` → FAIL with `FileNotFoundError` (script absent).
 - [ ] **Step 3: Implement `render` and `main(argv) -> int`** per the rules above; network fetch via `urllib.request` (60 s timeout); YAML via `yaml.safe_dump(sort_keys=False, allow_unicode=True, width=120)`.
@@ -522,11 +526,11 @@ object PrivacyRanking {
 // The DNS log has no row cap (only age-based deletion), and a hostile app can flood it: every read here is bounded,
 // and nothing is ranked by lookup count before matching, so junk domains can cost time (deadline -> TRUNCATED)
 // but can never push a real tracker pair out of a top-N window.
-data class AppDomain(val appName: String, val domain: String)
-// Keyset paging over index_DnsEvent_appName_domain_timestamp; start with afterApp = "", afterDomain = "".
-@Query("SELECT DISTINCT appName, domain FROM DnsEvent WHERE appName IS NOT NULL AND timestamp >= :since " +
-       "AND (appName > :afterApp OR (appName = :afterApp AND domain > :afterDomain)) ORDER BY appName, domain LIMIT :limit")
-suspend fun distinctPairsAfter(since: Long, afterApp: String, afterDomain: String, limit: Int): List<AppDomain>
+// Paged per installed app, so one app (whatever its name sorts as) can only spend its own quota.
+// `appName = :app AND domain > :afterDomain` seeks index_DnsEvent_appName_domain_timestamp directly; start with "".
+@Query("SELECT DISTINCT domain FROM DnsEvent WHERE appName = :app AND domain > :afterDomain AND timestamp >= :since " +
+       "ORDER BY domain LIMIT :limit")
+suspend fun domainsAfter(since: Long, app: String, afterDomain: String, limit: Int): List<String>
 data class DomainLookupCount(val lookups: Int, val dayList: String? /* comma-joined UTC day numbers */,
     val firstAt: Long?, val lastAt: Long?)
 // Called only for pairs that matched the registry.
@@ -554,19 +558,25 @@ object NetworkEvidenceCorrelator {
     data class Correlation(val evidence: Map<Key, NetworkEvidence>, val truncated: Boolean)
     /** The runner adapts DnsEventDao to this; tests use a fake. */
     interface DnsSource {
-        suspend fun pairsAfter(after: AppDomain?, limit: Int): List<AppDomain>
+        suspend fun domainsAfter(app: String, afterDomain: String, limit: Int): List<String>
         suspend fun count(app: String, rawDomain: String): DomainLookupCount
         suspend fun times(app: String, rawDomain: String, limit: Int): List<Long>
     }
-    /** Phase 1 — match: page through distinct (app, raw domain) pairs PAGE_SIZE at a time, skipping apps not in [installed];
-     *  normalise each domain and match it against [registry] once (memo per normalised domain, at most MAX_MEMO entries).
-     *  Phase 2 — count: [DnsSource.count] for each matched pair, at most MAX_MATCHED_PAIRS (beyond: truncated).
+    /** Per installed app, in packageName order, each with its own quota:
+     *  Phase 1 — match: page the app's distinct raw domains PAGE_SIZE at a time, at most MAX_DOMAINS_PER_APP; normalise each
+     *  and match it against [registry] once (memo per normalised domain; once the memo holds MAX_MEMO entries, further
+     *  domains are matched without being memoised — never skipped).
+     *  Phase 2 — count: [DnsSource.count] for the app's matched pairs, at most MAX_MATCHED_PER_APP; a pair whose count comes
+     *  back with lookups = 0 (pruned by age between paging and counting) is skipped, never emitted.
+     *  Either per-app quota reached, or MAX_MATCHED_PAIRS overall -> truncated (that app's remaining pairs only).
      *  Phase 3 — background: [DnsSource.times] with limit MAX_TIMES_PER_PAIR + 1 for the MAX_TIMED_PAIRS pairs with the most
      *  lookups; a pair beyond that cap, or with more than MAX_TIMES_PER_PAIR lookups, gets background = null.
      *  [expired] is checked before each page and each count/times call; when true, stop and return truncated = true. */
     suspend fun correlate(source: DnsSource, registry: TrackerSet, installed: Set<String>, usage: UsageIntervals?,
         expired: () -> Boolean): Correlation
-    const val PAGE_SIZE = 5_000
+    const val PAGE_SIZE = 1_000
+    const val MAX_DOMAINS_PER_APP = 5_000
+    const val MAX_MATCHED_PER_APP = 200
     const val MAX_MEMO = 100_000
     const val MAX_MATCHED_PAIRS = 20_000
     const val MAX_TIMED_PAIRS = 5_000
@@ -620,7 +630,7 @@ Moving other app-lifetime scopes onto it is a follow-up.
    - **Miss:** `inspect(app, budget)`. Cache only when the outcome is `INSPECTED` and the joined text's UTF-8 size ≤ `MAX_PACKAGES_TEXT_BYTES`.
    - In-code trackers = `set.matchPackages`; write the result row; update progress.
 4. **Network, isolated.** Wrapped in its own `try { … } catch (c: CancellationException) { throw c } catch (t: Throwable) { networkStatus = FAILED; no network evidence }`, so a failure here costs only the network evidence and the code results still finish.
-   - `correlate(DnsSource over dnsEvents with since = windowStart, …, expired = { nanoTime() > networkDeadline })`, deadline `NETWORK_TIMEOUT_MS` ahead. Every DAO call is one bounded query, so the deadline also bounds the database work (one page or one pair at a time).
+   - `correlate(DnsSource over dnsEvents with since = windowStart, …, expired = { nanoTime() > networkDeadline })`, deadline `NETWORK_TIMEOUT_MS` ahead. Every DAO call is one index-seeking query over one app's rows, and per-app quotas bound each app's share; the deadline is the overall guard. Accepted residual: a single (app, domain) pair flooded with millions of rows makes its one `count` call slow (seconds); a per-app row cap on the DNS log is a follow-up.
    - `networkStatus = TRUNCATED` when the correlation was truncated; otherwise `COMPLETE`.
    - Merge with the in-code results into evidence rows.
 5. **`newSinceLastScan`.** False for every row when `previous == null` (first scan), or when the app has no result in `previous`, or when that result was not `INSPECTED`. Otherwise true when (pkg, trackerId) is absent from `evidenceOnce(previous.id)`.
@@ -628,7 +638,7 @@ Moving other app-lifetime scopes onto it is a follow-up.
 
 - [ ] **Step 1: Write failing tests**
   - `ForegroundIntervalsTest`: pairs resume/pause per package; an open interval ends at `until`; system packages are kept.
-  - `NetworkEvidenceCorrelatorTest` (a fake `DnsSource` counting its calls, and a counting wrapper on the registry): `50,001 junk pairs with high counts plus one real tracker pair still yield evidence for the real pair` (security round 4); `pages are requested with the last pair of the previous page as the key`; `count is called only for matched pairs`; `an expired deadline mid-paging returns truncated with the evidence so far`; `more than MAX_MATCHED_PAIRS matches is truncated`; `each distinct domain is matched once`; `timestamps are fetched only for matched pairs`; `a domain owned by two trackers yields two evidence rows`; `www.google.com yields no evidence with the bundled registry`; `uninstalled apps are ignored`; `background is null without usage`; `background is null for lookups older than usage coverage`; `background counts lookups outside foreground intervals within coverage`; `a system app's foreground use is honoured`.
+  - `NetworkEvidenceCorrelatorTest` (a fake `DnsSource` counting its calls, and a counting wrapper on the registry): `50,001 junk pairs with high counts from one app plus one real tracker pair of another app still yield evidence for the real pair` (security round 4; an app flooding its own lookups can only hide its own network evidence); `an app sorting first with more than 20,000 tracker-matching subdomains does not stop a later app's real pair` (security round 5); `pages are requested per app with the last domain of the previous page as the key`; `a counted pair with zero lookups is skipped`; `past MAX_MEMO, domains are still matched`; `count is called only for matched pairs`; `an expired deadline mid-paging returns truncated with the evidence so far`; `more than MAX_MATCHED_PAIRS matches is truncated`; `each distinct domain is matched once`; `timestamps are fetched only for matched pairs`; `a domain owned by two trackers yields two evidence rows`; `www.google.com yields no evidence with the bundled registry`; `uninstalled apps are ignored`; `background is null without usage`; `background is null for lookups older than usage coverage`; `background counts lookups outside foreground intervals within coverage`; `a system app's foreground use is honoured`.
   - `NetworkEvidenceCorrelatorTest` also:
     - `beyond MAX_TIMED_PAIRS, background is null and counts are still exact`;
     - `a pair with more than MAX_TIMES_PER_PAIR lookups gets background null without loading them all` (fake `times` asserts `limit == MAX_TIMES_PER_PAIR + 1`);
@@ -713,4 +723,5 @@ Strings (exact; counts are `<plurals>`):
 - If a future SIGMA rule wants "carries a tracker of category X", that is its own design cycle (the facts are outside the telemetry store by owner ruling).
 - Move the OEM/brand hand-copied bundles onto `merge-ioc-data.py` `COPIED_FILES`.
 - Move other app-lifetime coroutine scopes onto `@ApplicationScope`.
+- A per-app row cap on the DNS log (existing code), so a single flooded pair cannot make one query slow.
 - Ask Exodus upstream to categorise the 116 uncategorised trackers (or curate categories in the mirror, as its own decision).
