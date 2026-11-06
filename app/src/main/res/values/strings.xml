@@ -354,7 +354,9 @@
     <string name="history_delete_body">Delete this scan, its telemetry and its timeline events? Alerts and their evidence are kept, and an audit entry listing the deleted findings is added to the Timeline.</string>
     <string name="history_delete_confirm">Delete</string>
     <string name="history_delete_cancel">Cancel</string>
+    <string name="history_delete_credential_description">Confirm your screen lock to delete this scan.</string>
     <string name="history_clear_title">Clear all history</string>
+    <string name="history_clear_credential_description">Confirm your screen lock to clear all scan history.</string>
     <string name="history_clear_body">Delete every scan, its telemetry and timeline events, including the live DNS events on the Timeline? This cannot be undone. Alerts and their evidence are kept, and so is the DNS log shown on the DNS screen and counted on the Dashboard. An audit entry listing the deleted findings is added to the Timeline.</string>
     <string name="history_clear_confirm">Delete all</string>
     <string name="history_row_findings" tools:ignore="PluralsCandidate">%1$d finding(s)</string>

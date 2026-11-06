@@ -6,6 +6,7 @@ import com.androdr.data.repo.DeleteResult
 import com.androdr.data.repo.FindingsRepository
 import com.androdr.data.repo.ScanLock
 import com.androdr.data.repo.ScanRepository
+import com.androdr.ui.security.ConfirmResult
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -84,7 +85,7 @@ class HistoryViewModelTest {
     fun `ScanRunning on a single delete shows the message`() = runTest {
         val vm = vm(repo(deleteOne = DeleteResult.ScanRunning, deleteAll = DeleteResult.Done))
         vm.requestDeleteScan(1L)
-        vm.confirmDeleteScan()
+        vm.confirmDeleteScan { ConfirmResult.Confirmed }
         assertTrue(vm.deleteRefused.value)
         vm.dismissDeleteRefused()
         assertFalse(vm.deleteRefused.value)
@@ -95,7 +96,7 @@ class HistoryViewModelTest {
         val vm = vm(repo(deleteOne = DeleteResult.Done, deleteAll = DeleteResult.Done))
         vm.selectScan(scan)
         vm.requestDeleteScan(1L)
-        vm.confirmDeleteScan()
+        vm.confirmDeleteScan { ConfirmResult.Confirmed }
         assertFalse(vm.deleteRefused.value)
         assertEquals(null, vm.selectedScan.value)
     }
@@ -105,7 +106,7 @@ class HistoryViewModelTest {
         val vm = vm(repo(deleteOne = DeleteResult.Done, deleteAll = DeleteResult.ScanRunning))
         vm.selectScan(scan)
         vm.requestClearAll()
-        vm.confirmClearAll()
+        vm.confirmClearAll { ConfirmResult.Confirmed }
         assertTrue(vm.deleteRefused.value)
         assertEquals(scan, vm.selectedScan.value)
     }
@@ -115,7 +116,7 @@ class HistoryViewModelTest {
         val vm = vm(repo(deleteOne = DeleteResult.Done, deleteAll = DeleteResult.Done))
         vm.selectScan(scan)
         vm.requestClearAll()
-        vm.confirmClearAll()
+        vm.confirmClearAll { ConfirmResult.Confirmed }
         assertFalse(vm.deleteRefused.value)
         assertEquals(null, vm.selectedScan.value)
     }
@@ -132,19 +133,53 @@ class HistoryViewModelTest {
         val vm = vm(repository)
         vm.selectScan(scan)
         vm.requestDeleteScan(1L)
-        vm.confirmDeleteScan()
+        vm.confirmDeleteScan { ConfirmResult.Confirmed }
         assertTrue(vm.deleteFailed.value)
         assertFalse(vm.deleteRefused.value)
         assertEquals(scan, vm.selectedScan.value)
         vm.dismissDeleteFailed()
         assertFalse(vm.deleteFailed.value)
         vm.requestClearAll()
-        vm.confirmClearAll()
+        vm.confirmClearAll { ConfirmResult.Confirmed }
         assertTrue(vm.deleteFailed.value)
         assertEquals(scan, vm.selectedScan.value)
         val src = java.io.File("src/main/java/com/androdr/ui/history/HistoryScreen.kt").readText()
         assertTrue("the screen renders the failure", src.contains("viewModel.deleteFailed") &&
             src.contains("R.string.history_delete_failed_body"))
+    }
+
+    // ── Device-credential gate on deletion (PASTA F-011) ───────────────────────
+    // Alert close asks for the screen lock; deleting a scan or clearing history
+    // only asked for a dialog tap. Same gate, same semantics as alert close:
+    // Cancelled deletes nothing and leaves the dialog open; NoSecureLock proceeds.
+
+    @Test
+    fun `a cancelled credential prompt deletes nothing and keeps the dialog open`() = runTest {
+        val repository = repo(DeleteResult.Done, DeleteResult.Done)
+        val vm = vm(repository)
+        vm.requestDeleteScan(1L)
+        vm.confirmDeleteScan { ConfirmResult.Cancelled }
+        coVerify(exactly = 0) { repository.deleteScan(any()) }
+        assertEquals("the dialog stays open so the user can retry", 1L, vm.showDeleteConfirm.value)
+        vm.dismissDeleteConfirm()
+        vm.requestClearAll()
+        vm.confirmClearAll { ConfirmResult.Cancelled }
+        coVerify(exactly = 0) { repository.deleteAllScans() }
+        assertTrue(vm.showClearAllConfirm.value)
+        val src = java.io.File("src/main/java/com/androdr/ui/history/HistoryScreen.kt").readText()
+        assertTrue("the screen routes both confirm buttons through the credential prompt",
+            src.contains("rememberConfirmCredential") && src.contains("viewModel.confirmDeleteScan {") &&
+                src.contains("viewModel.confirmClearAll {"))
+    }
+
+    @Test
+    fun `a device without a secure lock still deletes, as alert close does`() = runTest {
+        val repository = repo(DeleteResult.Done, DeleteResult.Done)
+        val vm = vm(repository)
+        vm.requestDeleteScan(1L)
+        vm.confirmDeleteScan { ConfirmResult.NoSecureLock }
+        coVerify(exactly = 1) { repository.deleteScan(1L) }
+        assertEquals(null, vm.showDeleteConfirm.value)
     }
 
     @Test

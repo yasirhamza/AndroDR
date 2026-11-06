@@ -55,6 +55,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -75,7 +76,9 @@ import com.androdr.reporting.ReportSummary
 import com.androdr.scanner.ScanOrchestrator
 import com.androdr.ui.common.ExportModeDialog
 import com.androdr.ui.common.severityColor
+import com.androdr.ui.security.rememberConfirmCredential
 import com.androdr.ui.theme.androdrColors
+import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -228,6 +231,14 @@ fun HistoryScreen(
         )
     }
 
+    // Deleting history asks for the screen lock, as closing an alert does (PASTA F-011).
+    val confirmCredential = rememberConfirmCredential()
+    val deleteScope = rememberCoroutineScope()
+    val deleteCredentialTitle = stringResource(R.string.history_delete_title)
+    val deleteCredentialDescription = stringResource(R.string.history_delete_credential_description)
+    val clearCredentialTitle = stringResource(R.string.history_clear_title)
+    val clearCredentialDescription = stringResource(R.string.history_clear_credential_description)
+
     // Single delete confirmation
     if (showDeleteConfirm != null) {
         AlertDialog(
@@ -236,7 +247,16 @@ fun HistoryScreen(
             // R37: alerts and their evidence are never deleted; the dialog says so.
             text = { Text(stringResource(R.string.history_delete_body)) },
             confirmButton = {
-                TextButton(onClick = { viewModel.confirmDeleteScan() }, enabled = deleteEnabled) {
+                TextButton(
+                    onClick = {
+                        deleteScope.launch {
+                            viewModel.confirmDeleteScan {
+                                confirmCredential(deleteCredentialTitle, deleteCredentialDescription)
+                            }
+                        }
+                    },
+                    enabled = deleteEnabled,
+                ) {
                     Text(stringResource(R.string.history_delete_confirm), color = MaterialTheme.colorScheme.error)
                 }
             },
@@ -349,7 +369,16 @@ fun HistoryScreen(
             // R37: "Clear all" keeps alerts and their evidence; the dialog says so.
             text = { Text(stringResource(R.string.history_clear_body)) },
             confirmButton = {
-                TextButton(onClick = { viewModel.confirmClearAll() }, enabled = deleteEnabled) {
+                TextButton(
+                    onClick = {
+                        deleteScope.launch {
+                            viewModel.confirmClearAll {
+                                confirmCredential(clearCredentialTitle, clearCredentialDescription)
+                            }
+                        }
+                    },
+                    enabled = deleteEnabled,
+                ) {
                     Text(stringResource(R.string.history_clear_confirm), color = MaterialTheme.colorScheme.error)
                 }
             },

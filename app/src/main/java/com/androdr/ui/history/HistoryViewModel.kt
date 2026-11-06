@@ -14,6 +14,7 @@ import com.androdr.reporting.ExportMode
 import com.androdr.reporting.ReportExporter
 import com.androdr.reporting.ReportSummary
 import com.androdr.scanner.ScanOrchestrator
+import com.androdr.ui.security.ConfirmResult
 import dagger.hilt.android.lifecycle.HiltViewModel
 import androidx.paging.PagingData
 import androidx.paging.cachedIn
@@ -260,8 +261,16 @@ class HistoryViewModel @Inject constructor(
         null
     }
 
-    fun confirmDeleteScan() {
+    /**
+     * Deletes the scan the open dialog names, after [confirm] — the device-credential
+     * prompt alert close uses (PASTA F-011): deleting detection history must not be
+     * one dialog tap on an unlocked phone. [ConfirmResult.Cancelled] deletes nothing
+     * and leaves the dialog open; [ConfirmResult.NoSecureLock] proceeds, as alert
+     * close does.
+     */
+    suspend fun confirmDeleteScan(confirm: suspend () -> ConfirmResult) {
         val id = _showDeleteConfirm.value ?: return
+        if (confirm() == ConfirmResult.Cancelled) return
         _showDeleteConfirm.value = null
         viewModelScope.launch {
             when (deleting { repository.deleteScan(id) }) {
@@ -275,7 +284,9 @@ class HistoryViewModel @Inject constructor(
     fun requestClearAll() { _showClearAllConfirm.value = true }
     fun dismissClearAll() { _showClearAllConfirm.value = false }
 
-    fun confirmClearAll() {
+    /** Clears all history after [confirm]; same gate and semantics as [confirmDeleteScan]. */
+    suspend fun confirmClearAll(confirm: suspend () -> ConfirmResult) {
+        if (confirm() == ConfirmResult.Cancelled) return
         _showClearAllConfirm.value = false
         viewModelScope.launch {
             // A refused "Clear all" is handled first and leaves everything in place, the selection
