@@ -45,6 +45,18 @@ class ResolverIocDataVerificationTest {
     }
 
     @Test
+    fun `tracker registry accepts verified and ignores tampered content`() = runBlocking {
+        val files = filesOf("trackers.yml")
+        assumeTrue("submodule not checked out", files != null)
+        val good = TrackerRegistry(context(), IocDataManifest(FakeRemote(files!!)))
+        assertTrue(good.refresh() >= TrackerRegistry.MIN_TRACKERS)
+
+        val bad = FakeRemote(files)
+        bad.set("ioc-data/trackers.yml", files["ioc-data/trackers.yml"] + "\n# tampered\n")
+        assertEquals(0, TrackerRegistry(context(), IocDataManifest(bad)).refresh())
+    }
+
+    @Test
     fun `oem resolver accepts verified and ignores tampered content`() = runBlocking {
         val files = filesOf("known-oem-prefixes.yml")
         assumeTrue("submodule not checked out", files != null)

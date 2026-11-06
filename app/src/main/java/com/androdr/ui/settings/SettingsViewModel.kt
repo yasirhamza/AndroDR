@@ -42,7 +42,8 @@ data class UpdateResult(
     val sigmaRules: String = "",
     val cveDatabase: String = "",
     val oemPrefixes: String = "",
-    val brandRegistry: String = ""
+    val brandRegistry: String = "",
+    val trackerRegistry: String = ""
 )
 
 /** One feed's health for the Settings "Threat Database" card (#236). */
@@ -188,6 +189,7 @@ class SettingsViewModel @Inject constructor(
         cveDatabase = if (cveReachable > 0) "Updated" else UPDATE_FAILED,
         oemPrefixes = if (oemPrefixes > 0) "Updated" else UPDATE_FAILED,
         brandRegistry = if (brandRegistry > 0) "Updated" else UPDATE_FAILED,
+        trackerRegistry = if (trackerRegistry > 0) "Updated" else UPDATE_FAILED,
     )
 
     private fun refreshStats() {
@@ -371,6 +373,7 @@ class SettingsViewModel @Inject constructor(
             cveDatabase = UPDATE_FAILED,
             oemPrefixes = UPDATE_FAILED,
             brandRegistry = UPDATE_FAILED,
+            trackerRegistry = UPDATE_FAILED,
         )
     }
 }

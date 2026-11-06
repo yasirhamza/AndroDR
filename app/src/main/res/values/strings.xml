@@ -429,6 +429,7 @@
     <string name="settings_update_cve_database">CVE Database</string>
     <string name="settings_update_oem_prefixes">OEM Prefixes</string>
     <string name="settings_update_brand_registry">Brand Registry</string>
+    <string name="settings_update_tracker_registry">Tracker registry</string>
     <string name="settings_threat_db_title">Threat Database</string>
     <string name="settings_threat_db_rules">Detection Rules</string>
     <string name="settings_threat_db_domains">Threat Domains</string>

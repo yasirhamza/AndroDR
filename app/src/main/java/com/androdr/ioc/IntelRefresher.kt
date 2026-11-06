@@ -35,6 +35,7 @@ class IntelRefresher @Inject constructor(
     private val knownAppResolver: KnownAppResolver,
     private val oemPrefixResolver: OemPrefixResolver,
     private val brandImpersonationResolver: BrandImpersonationResolver,
+    private val trackerRegistry: TrackerRegistry,
     private val sigmaRuleFeed: SigmaRuleFeed,
     private val sigmaRuleEngine: SigmaRuleEngine,
     private val cveRepository: CveRepository,
@@ -62,6 +63,7 @@ class IntelRefresher @Inject constructor(
         val knownApps: Int = 0,
         val oemPrefixes: Int = 0,
         val brandRegistry: Int = 0,
+        val trackerRegistry: Int = 0,
         val sigmaRemoteRules: Int = 0,
         val cveReachable: Int = 0,
     ) {
@@ -121,6 +123,7 @@ class IntelRefresher @Inject constructor(
         val brandRegistry = refreshBrandRegistry()
         val sigmaRemoteRules = refreshSigmaRules()
         val cveReachable = refreshCveDatabase()
+        val trackerRegistryCount = refreshTrackerRegistry()
         lastRefreshAt = System.currentTimeMillis()
         RefreshReport(
             skipped = false,
@@ -130,6 +133,7 @@ class IntelRefresher @Inject constructor(
             brandRegistry = brandRegistry,
             sigmaRemoteRules = sigmaRemoteRules,
             cveReachable = cveReachable,
+            trackerRegistry = trackerRegistryCount,
         )
     }
 
@@ -184,6 +188,14 @@ class IntelRefresher @Inject constructor(
             Log.i(TAG, "SIGMA rules refreshed: ${remoteRules.size} remote rules loaded")
         }
         return remoteRules?.size ?: 0
+    }
+
+    private suspend fun refreshTrackerRegistry(): Int {
+        // refresh() returns trackers accepted this run (0 on any failure) — the same
+        // "empty is failure" signal as the OEM/brand feeds, on the same channel.
+        return feedHealthRecorder.recordCount(FeedHealthRecorder.FEED_TRACKER_REGISTRY) {
+            trackerRegistry.refresh()
+        }
     }
 
     private suspend fun refreshCveDatabase(): Int {
