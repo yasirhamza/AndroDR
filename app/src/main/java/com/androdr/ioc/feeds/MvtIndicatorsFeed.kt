@@ -35,14 +35,18 @@ class MvtIndicatorsFeed : DomainIocFeed {
             if (campaigns.isEmpty()) return@withContext emptyList()
 
             val now = System.currentTimeMillis()
-            // At most MAX_CONCURRENT_FETCHES bodies are in flight (and in memory) at once.
+            // At most MAX_CONCURRENT_FETCHES bodies are in memory at once: the permit is
+            // held through parsing, not just the download, or a slow parse would let
+            // further bodies pile up behind it.
             val gate = Semaphore(MAX_CONCURRENT_FETCHES)
             coroutineScope {
                 campaigns.map { campaign ->
                     async {
                         try {
-                            val stix2 = gate.withPermit { httpGet(campaign.url) } ?: return@async emptyList()
-                            entriesFor(campaign, stix2, now)
+                            gate.withPermit {
+                                val stix2 = httpGet(campaign.url) ?: return@withPermit emptyList()
+                                entriesFor(campaign, stix2, now)
+                            }
                         } catch (e: Exception) {
                             Log.w(TAG, "Failed to fetch campaign '${campaign.name}': ${e.message}")
                             emptyList()
@@ -109,7 +113,7 @@ class MvtIndicatorsFeed : DomainIocFeed {
      * of [parseIndicatorsYaml] so the parser stays a pure function of the yaml.
      */
     internal fun allowedCampaigns(refs: List<CampaignRef>): List<CampaignRef> =
-        refs.filter { ref -> ALLOWED_CAMPAIGN_PREFIXES.any { ref.url.startsWith(it) } }
+        refs.filter { ref -> insideAllowedRepo(ref.url) }
             // A per-response size cap alone is defeated by a registry that lists the
             // same allowed file thousands of times (N fetches x the cap): one fetch
             // per URL, and no more than MAX_CAMPAIGN_REFS of them.
@@ -117,10 +121,25 @@ class MvtIndicatorsFeed : DomainIocFeed {
             .take(MAX_CAMPAIGN_REFS)
             .also { kept ->
                 if (kept.size < refs.size) {
-                    Log.w(TAG, "Kept ${kept.size} of ${refs.size} campaign ref(s): " +
-                        "outside allowed repos, duplicate, or over the cap")
+                    val dropped = refs.filterNot { it in kept }
+                    Log.w(TAG, "Kept ${kept.size} of ${refs.size} campaign ref(s); dropped (outside allowed " +
+                        "repos, malformed, duplicate, or over the cap): " +
+                        dropped.take(MAX_LOGGED_DROPS).joinToString { "'${it.name}' ${it.url}" })
                 }
             }
+
+    /**
+     * The URL starts with an allowed repo prefix AND every path segment after it is a
+     * plain name: raw.githubusercontent.com answers `..` with a 307 to the normalised
+     * path and OkHttp normalises dot segments before sending, so a prefix test alone is
+     * escaped by `branch: ../../other/repo` (security review S1). `%`, `?`, `#`, `\`
+     * and empty segments are rejected for the same reason.
+     */
+    private fun insideAllowedRepo(url: String): Boolean {
+        val prefix = ALLOWED_CAMPAIGN_PREFIXES.firstOrNull { url.startsWith(it) } ?: return false
+        val segments = url.removePrefix(prefix).split('/')
+        return segments.isNotEmpty() && segments.all { it != "." && it != ".." && PLAIN_SEGMENT.matches(it) }
+    }
 
     /** Rows for one collection, stamped with its compiled campaign key (or none). */
     internal fun entriesFor(ref: CampaignRef, stix: String, now: Long): List<DomainIocEntry> =
@@ -176,13 +195,14 @@ class MvtIndicatorsFeed : DomainIocFeed {
         (URL(url).openConnection() as HttpURLConnection).run {
             connectTimeout = 15_000; readTimeout = 15_000
             requestMethod = "GET"
+            // A redirect could leave the allowed repo (or the pinned host); never follow one.
+            instanceFollowRedirects = false
             setRequestProperty("User-Agent", "AndroDR/1.0")
             try {
                 if (responseCode != HttpURLConnection.HTTP_OK) {
                     Log.w(TAG, "HTTP $responseCode from $url"); null
                 } else {
-                    // Capped: the largest live collection is ~4.7 MB (stalkerware.stix2,
-                    // 2026-11); a body past the cap is dropped, not buffered (F-004).
+                    // Capped (F-004): a body past the cap is dropped, not buffered.
                     inputStream.bufferedReader().readTextCapped(MAX_RESPONSE_CHARS)
                 }
             } finally { disconnect() }
@@ -199,10 +219,18 @@ class MvtIndicatorsFeed : DomainIocFeed {
         const val SOURCE_ID = "mvt_indicators"
         private const val INDICATORS_YAML_URL =
             "https://raw.githubusercontent.com/mvt-project/mvt-indicators/main/indicators.yaml"
-        private const val MAX_RESPONSE_CHARS = 16 * 1024 * 1024
-        /** Live registry: 19 refs (2026-11-06). Bounds total fetch volume with MAX_RESPONSE_CHARS. */
-        internal const val MAX_CAMPAIGN_REFS = 64
-        private const val MAX_CONCURRENT_FETCHES = 4
+        /**
+         * Caps, measured against the live registry on 2026-11-06 (19 refs; largest
+         * collection stalkerware.stix2 at 4.68 MiB, next 2.2 MiB; ~10 MB in all) and
+         * sized for a 256 MB app heap: at most 2 bodies of at most 12 MiB chars each
+         * are alive at once, at most 32 fetches per cycle. A body over the cap costs
+         * that one collection, not the feed. MvtIndicatorsFeedTest pins the headroom.
+         */
+        internal const val MAX_RESPONSE_CHARS = 12 * 1024 * 1024
+        internal const val MAX_CAMPAIGN_REFS = 32
+        private const val MAX_CONCURRENT_FETCHES = 2
+        private const val MAX_LOGGED_DROPS = 5
+        private val PLAIN_SEGMENT = Regex("[A-Za-z0-9._-]+")
 
         /**
          * Repos a campaign ref may point at: exactly the owners the live registry

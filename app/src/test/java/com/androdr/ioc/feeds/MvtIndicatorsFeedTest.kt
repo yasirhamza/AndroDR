@@ -196,14 +196,38 @@ class MvtIndicatorsFeedTest {
     }
 
     @Test
-    fun `the three repos the live registry points at are all allowed`() {
-        val raw = "https://raw.githubusercontent.com"
-        val refs = listOf(
-            MvtIndicatorsFeed.CampaignRef("a", "$raw/mvt-project/mvt-indicators/main/x/x.stix2"),
-            MvtIndicatorsFeed.CampaignRef("b", "$raw/AmnestyTech/investigations/master/x/x.stix2"),
-            MvtIndicatorsFeed.CampaignRef("c", "$raw/AssoEchap/stalkerware-indicators/master/generated/sw.stix2"),
-        )
+    fun `every allowed repo accepts a well-formed branch and nested path`() {
+        val refs = MvtIndicatorsFeed.ALLOWED_CAMPAIGN_PREFIXES.mapIndexed { i, prefix ->
+            MvtIndicatorsFeed.CampaignRef("c$i", "${prefix}main/2021-07-18_nso/pegasus.stix2")
+        }
+        assertEquals(3, refs.size)
         assertEquals(refs, feed.allowedCampaigns(refs))
+    }
+
+    @Test
+    fun `dot segments and URL metacharacters in branch or path are not allowed`() {
+        // raw.githubusercontent.com answers `..` with a 307 to the normalised path
+        // (probed 2026-11-06), and OkHttp normalises dot segments client-side, so a
+        // prefix check on the assembled URL is not enough (security review S1).
+        val allowed = MvtIndicatorsFeed.ALLOWED_CAMPAIGN_PREFIXES.first()
+        val hostile = listOf(
+            "../../evil/repo/main/x.stix2",
+            "main/../../evil/repo/main/x.stix2",
+            "%2e%2e/%2e%2e/evil/repo/main/x.stix2",
+            "main/x.stix2?x=1",
+            "main/x.stix2#frag",
+            "main\\x.stix2",
+            "main//x.stix2",
+            "main/./x.stix2",
+        ).map { MvtIndicatorsFeed.CampaignRef("h", allowed + it) }
+
+        assertEquals(emptyList<Any>(), feed.allowedCampaigns(hostile))
+    }
+
+    @Test
+    fun `the response cap leaves headroom over the largest live collection`() {
+        // Measured 2026-11-06: stalkerware.stix2 is 4.68 MiB; next is 2.2 MiB.
+        assertTrue(MvtIndicatorsFeed.MAX_RESPONSE_CHARS >= 2 * 4_910_000)
     }
 
     @Test
