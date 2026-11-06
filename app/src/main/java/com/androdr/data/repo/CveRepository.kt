@@ -230,8 +230,9 @@ class CveRepository @Inject constructor(
          * Inflates every `.json` entry of an OSV zip into [CveEntity] rows, with a
          * per-entry and a total cap on inflated characters.
          *
-         * @throws IOException when an entry, or all entries together, inflate past
-         *   the cap — the fetch's catch turns that into "nothing fetched".
+         * @throws IOException when all entries together (a skipped entry counted at
+         *   [maxEntryChars]) inflate past [maxTotalChars] — the fetch's catch turns
+         *   that into "nothing fetched". An entry over [maxEntryChars] alone is skipped.
          */
         internal fun readOsvZip(
             input: InputStream,
@@ -252,10 +253,9 @@ class CveRepository @Inject constructor(
                             zis.bufferedReader().readTextCapped(maxEntryChars)
                         } catch (e: BodyTooLargeException) {
                             Log.w(TAG, "OSV entry ${entry.name} skipped: ${e.message}")
-                            total += maxEntryChars
                             null
                         }
-                        total += content?.length ?: 0
+                        total += content?.length ?: maxEntryChars
                         if (total > maxTotalChars) {
                             throw IOException("OSV zip inflates past $maxTotalChars chars in total")
                         }

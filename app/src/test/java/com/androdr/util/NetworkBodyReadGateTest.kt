@@ -27,7 +27,8 @@ class NetworkBodyReadGateTest {
     )
 
     private val uncappedRead = Regex("""\.(readText|readBytes|readLines)\(""")
-    private val opensHttp = Regex("""HttpURLConnection|openConnection\(\)""")
+    // Any way this codebase could open a network stream; a fetcher written another way is in scope too.
+    private val opensHttp = Regex("""HttpURLConnection|openConnection\(\)|openStream\(\)|java\.net\.URL\b|okhttp""")
 
     private fun offenders(): Map<String, List<String>> {
         val root = listOf(File("src/main/java/com/androdr"), File("app/src/main/java/com/androdr"))
