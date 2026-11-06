@@ -190,6 +190,14 @@ class SigmaRuleFeed @Inject constructor(
                     } catch (e: SigmaRuleParseException) {
                         Log.e(TAG, "Rejected remote rule $file: ${e.message}")
                         rejected.add(RejectedRuleFile(file, declaredId(yaml), e.message ?: "unreadable"))
+                    } catch (e: StackOverflowError) {
+                        // snakeyaml-engine composes nodes recursively with no depth
+                        // limit, so a few thousand nested brackets -- kilobytes, well
+                        // inside the fetch cap -- overflow the parse stack. An Error
+                        // passes every `catch (e: Exception)` above this loop, up to
+                        // the scan coroutine; cost the one file instead (PASTA F-006).
+                        Log.e(TAG, "Rejected remote rule $file: nested too deeply to parse")
+                        rejected.add(RejectedRuleFile(file, declaredId(yaml), "nested too deeply to parse"))
                     }
                 }
             }

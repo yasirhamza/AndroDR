@@ -103,6 +103,34 @@ class SigmaRuleFeedRejectionTest {
     }
 
     @Test
+    fun `a file nested too deeply to parse costs itself, not the feed and not the process`() {
+        // snakeyaml-engine composes nodes recursively and offers no nesting-depth
+        // limit (2.7: alias cap and code-point cap only), so ~2,000 nested
+        // brackets -- a 4 KB file, far inside the 500 KB fetch cap -- overflow the
+        // parse stack. StackOverflowError is an Error, not an Exception: it used
+        // to pass every catch between here and the scan coroutine (PASTA F-006).
+        val depth = 50_000
+        val deep = "deep.yml" to buildString {
+            appendLine("title: Deep")
+            appendLine("id: androdr-904")
+            append("detection:\n    selection:\n        f: ")
+            repeat(depth) { append('[') }
+            append('1')
+            repeat(depth) { append(']') }
+            appendLine()
+        }
+        val allHashes = hashes + ("deep.yml" to sha(deep.second))
+
+        val result = SigmaRuleFeed.loadRuleFiles(sequenceOf(good1, deep, good2), allHashes, requireManifest = true)
+
+        assertEquals(listOf("androdr-901", "androdr-903"), result.rules.map { it.id })
+        val rejected = result.rejected.single()
+        assertEquals("deep.yml", rejected.file)
+        assertEquals("androdr-904", rejected.ruleId)
+        assertTrue("the reason names the cause: ${rejected.reason}", rejected.reason.contains("nest"))
+    }
+
+    @Test
     fun `the declared id is read without trusting the rest of the file`() {
         assertEquals("androdr-902", SigmaRuleFeed.declaredId(broken.second))
         assertEquals(
