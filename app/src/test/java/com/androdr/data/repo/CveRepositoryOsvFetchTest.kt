@@ -71,11 +71,15 @@ class CveRepositoryOsvFetchTest {
 
     @Test
     fun `entries that are each small but together exceed the total cap abort the zip`() {
-        val entries = (1..10).map { "CVE-2024-%04d.json".format(it) to osvEntry("CVE-2024-%04d".format(it), padding = 500) }
+        val entries = (1..10).map { i ->
+            "CVE-2024-%04d.json".format(i) to osvEntry("CVE-2024-%04d".format(i), padding = 500)
+        }
         val bytes = zip(*entries.toTypedArray())
         // Each entry is ~700 chars; ten of them pass a per-entry cap of 4 000 but not a total of 3 000.
         try {
-            CveRepository.readOsvZip(ByteArrayInputStream(bytes), now = 0L, maxEntryChars = 4_000, maxTotalChars = 3_000)
+            CveRepository.readOsvZip(
+                ByteArrayInputStream(bytes), now = 0L, maxEntryChars = 4_000, maxTotalChars = 3_000,
+            )
             fail("expected IOException")
         } catch (e: IOException) {
             assertTrue(e.message.orEmpty(), e.message.orEmpty().contains("3000"))

@@ -48,7 +48,7 @@ class CappedReadTest {
             endless.readTextCapped(maxChars = 1_000)
             fail("expected IOException")
         } catch (e: IOException) {
-            assertTrue("read ~the cap, not megabytes: served=$served", served < 64 * 1024)
+            assertTrue("read ~the cap, not megabytes: served=$served (${e.message})", served < 64 * 1024)
         }
     }
 }
