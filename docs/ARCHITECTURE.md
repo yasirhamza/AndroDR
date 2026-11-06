@@ -710,12 +710,14 @@ The scan collects two facts per app and joins them on the device against a track
 
 The registry is `ioc-data/trackers.yml` in the rules repository: a mirror of Exodus Privacy's tracker list under ODbL 1.0 (attribution is shown in the UI), produced by `validation/mirror-exodus-trackers.py`. It follows the same delivery rules as the other `ioc-data` files: manifest-verified and fail-closed (`ioc-data.sha256`), refreshed every 12 hours, with a bundled cold-start copy at `res/raw/trackers.yml`. `TrackerRegistry` (in `ioc/`) loads it. The mirror script, the rules-repo validator and the app share one restricted regex grammar.
 
-Normalisation, applied by the mirror and re-checked by the validator:
+Normalisation is applied by the mirror (`mirror-exodus-trackers.py`):
 
 - A class-name signature becomes its package only when that package has at least 3 segments and is not a parent of another signature.
 - Broad first-party domains are excluded per signature, so a tracker's network signature cannot match ordinary traffic to the vendor's main site.
 - Pattern caps: 4 per tracker, 64 per file.
 - An empty Exodus category becomes `Uncategorised`, which the user's threshold refuses by default (owner decision).
+
+The rules-repo validator (`validate_trackers_file` in `validate-ioc-data.py`) re-checks only the result: per-field grammar, first-party host exclusion on domain fields, the pattern caps, the category enum (which includes `Uncategorised`) and a minimum tracker count. It does not re-check the class-name rule (3 segments, not a parent of another signature) or the empty-category mapping; those live only in the mirror. The mirror's real-data regression test (`test_snapshot_normalisation`) pins the class-name rule against the committed Exodus snapshot.
 
 ### 12.2 Code-only crossing
 
@@ -728,7 +730,7 @@ The privacy scan shares nothing with the detection scan beyond reading its input
 - Its own tables: `privacy_*` (Room schema 22), plus an index on `DnsEvent` for the per-app queries.
 - Its own `Mutex` and the app-wide `@ApplicationScope`. It never takes `ScanLock`, never creates a `ScanResult`, and never appears in History, exports, alerts or the Timeline.
 - It emits no telemetry and no findings; its facts live outside the telemetry store (owner ruling). A future rule on tracker categories is its own design cycle.
-- `PrivacyBoundaryTest` enforces these boundaries.
+- The History, Timeline, alert and lock separations above are design statements. `PrivacyBoundaryTest` enforces the source-level rules it asserts: `reporting`, `sigma`, `ui/history`, `ScanWriteRepository` and `data/store` never reference `com.androdr.privacy` or `privacy_`; `privacy` never references `ScanLock` or `ScanResult`; the APK reader and inspector never reference the registry types; `ui/` never imports the registry or the readers; `privacy/model` never imports `ioc`.
 
 Package layering:
 
@@ -739,6 +741,8 @@ privacy         depends on ioc, privacy.model   (runner, ranking, readers, corre
 ui/             may use privacy (runner, ranking) and privacy.model;
                 never DexPackageReader, ApkPackageInspector or ioc.TrackerRegistry
 ```
+
+Test-enforced directions: `privacy/model` never imports `ioc`, and `ui/` never imports the readers or the registry. The other arrows are convention.
 
 ### 12.4 Hostile APKs
 
