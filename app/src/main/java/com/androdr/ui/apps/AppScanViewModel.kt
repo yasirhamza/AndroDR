@@ -19,6 +19,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import javax.inject.Inject
@@ -34,18 +35,24 @@ class AppScanViewModel @Inject constructor(
     /**
      * The last privacy scan's tracker rows, keyed by package, kept only where the stored version is the one
      * installed now: an app updated since the scan has no row (its stored evidence describes older code).
+     * Only apps with tracker evidence get a line, so only those are looked up in the package manager; Room
+     * re-emits equal lists while a new privacy scan writes its rows, which [distinctUntilChanged] absorbs.
      */
     @OptIn(ExperimentalCoroutinesApi::class)
     val privacyByPackage: StateFlow<PrivacyCrossover> = privacyDao.latestCompleted()
+        .distinctUntilChanged()
         .flatMapLatest { scan ->
             if (scan == null) {
                 flowOf(PrivacyCrossover(null, emptyMap()))
             } else {
                 combine(
-                    privacyDao.results(scan.id), privacyDao.evidence(scan.id), settings.refusedTrackerCategories
+                    privacyDao.results(scan.id).distinctUntilChanged(),
+                    privacyDao.evidence(scan.id).distinctUntilChanged(),
+                    settings.refusedTrackerCategories.distinctUntilChanged()
                 ) { results, evidence, refused ->
                     val rows = PrivacyRanking.rows(results, evidence, refused, showSystemApps = true)
                         .flatMap { it.second }
+                        .filter { it.trackers.isNotEmpty() }
                     val installed = installedVersions.versionCodes(rows.map { it.packageName })
                     PrivacyCrossover(
                         scannedAt = scan.finishedAt ?: scan.startedAt,

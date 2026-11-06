@@ -492,7 +492,17 @@
         <item quantity="other">%1$d could not be fully inspected</item>
     </plurals>
     <string name="privacy_card_scanned">scanned %1$s</string>
-    <string name="apps_tracker_line" tools:ignore="PluralsCandidate">Trackers: %1$d · %2$d refused, found in code</string>
+    <!-- Quantity is the second argument (trackers in code that cross the threshold). -->
+    <plurals name="apps_tracker_line">
+        <item quantity="one">Trackers in code: %1$d (%2$d crosses your threshold)</item>
+        <item quantity="other">Trackers in code: %1$d (%2$d cross your threshold)</item>
+    </plurals>
+    <string name="apps_tracker_not_inspected">Its code could not be inspected</string>
+    <string name="apps_tracker_network_more" tools:ignore="PluralsCandidate">; looked up domains of %1$d more</string>
+    <plurals name="apps_tracker_network_only">
+        <item quantity="one">; looked up domains of %1$d tracker</item>
+        <item quantity="other">; looked up domains of %1$d trackers</item>
+    </plurals>
     <string name="apps_tracker_as_of">as of %1$s</string>
     <string name="privacy_run">Run privacy scan</string>
     <string name="privacy_progress" tools:ignore="PluralsCandidate">Inspecting %1$d of %2$d apps</string>
@@ -552,7 +562,7 @@
     <string name="privacy_cat_uncategorised_info">Exodus lists it as a tracker but gives no purpose; many are ad networks</string>
     <string name="privacy_cat_other">Other (new category from the registry)</string>
     <string name="privacy_cat_other_info">A purpose label this version of the app does not know; not refused by default</string>
-    <string name="privacy_network_truncated">Network evidence is incomplete: the DNS log was too large to read in full within the time limit.</string>
+    <string name="privacy_network_truncated">Network evidence is incomplete: the DNS log was too large to read in full.</string>
     <string name="privacy_network_failed">Network evidence could not be read this time; code findings are not affected.</string>
     <string name="privacy_partly_inspected_tag">partly inspected</string>
     <string name="privacy_delete_refused">A privacy scan is running; delete the results after it finishes.</string>

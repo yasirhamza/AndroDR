@@ -244,17 +244,18 @@ private fun AppGroupCard(group: AppGroup, onClick: () -> Unit) {
     }
 }
 
-/** "Trackers: N · M refused, found in code", dated with the scan; tapping opens the privacy screen. */
+/** The [TrackerCrossoverText] line, dated with the scan; tapping opens the privacy screen. */
 @Composable
 private fun TrackerCrossoverLine(row: AppPrivacyRow, scannedAt: Long, onOpen: (() -> Unit)?) {
-    val date = DateUtils.formatDateTime(LocalContext.current, scannedAt, DateUtils.FORMAT_SHOW_DATE)
+    val context = LocalContext.current
+    val date = DateUtils.formatDateTime(context, scannedAt, DateUtils.FORMAT_SHOW_DATE)
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .then(if (onOpen != null) Modifier.clickable(onClick = onOpen) else Modifier)
     ) {
         Text(
-            text = stringResource(R.string.apps_tracker_line, row.trackers.size, row.refusedInCode),
+            text = TrackerCrossoverText.line(row, context.resources),
             style = MaterialTheme.typography.bodyMedium,
             fontWeight = FontWeight.SemiBold
         )
