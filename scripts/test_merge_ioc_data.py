@@ -19,6 +19,7 @@ def repo(tmp_path):
     for f in ["package-names.yml", "cert-hashes.yml", "malware-hashes.yml"]:
         (d / f).write_text("entries: []\n")
     (d / "campaigns.yml").write_text("campaigns:\n- key: graphite\n  label: Graphite (Paragon)\n  aliases: [paragon]\n  references: []\n")
+    (d / "trackers.yml").write_text("entries: []\n")
     return tmp_path / "rules"
 
 
@@ -89,3 +90,24 @@ def test_campaign_vocabulary_carries_detected_by(tmp_path):
     m.generate(root, out)
     assert json.loads((out / "known_campaigns.json").read_text()) == [
         {"key": "graphite", "label": "Graphite (Paragon)", "aliases": ["paragon"], "detected_by": ["dns_monitor"]}]
+
+
+def test_trackers_yml_is_copied_verbatim(tmp_path):
+    root = repo(tmp_path)
+    text = "# registry\nentries:\n- id: x\n  name: \"Xé\"\n"
+    (root / "ioc-data" / "trackers.yml").write_text(text, encoding="utf-8")
+    out = tmp_path / "raw"; out.mkdir()
+    m.generate(root, out)
+    assert (out / "trackers.yml").read_bytes() == text.encode("utf-8")
+
+
+def test_check_names_a_stale_trackers_yml(tmp_path):
+    root = repo(tmp_path)
+    (root / "ioc-data" / "trackers.yml").write_text("entries: []\n")
+    out = tmp_path / "raw"; out.mkdir()
+    m.generate(root, out)
+    assert m.check(root, out) == []
+    (out / "trackers.yml").write_text("entries: [hand-edited]\n")
+    assert m.check(root, out) == ["trackers.yml"]
+    (out / "trackers.yml").unlink()
+    assert m.check(root, out) == ["trackers.yml"]

@@ -1,0 +1,6046 @@
+version: 1
+source: exodus-privacy
+source_url: https://reports.exodus-privacy.eu.org/api/trackers
+license: ODbL-1.0
+attribution: Exodus Privacy — https://exodus-privacy.eu.org — Open Database License 1.0
+trackers:
+- id: 1
+  name: Teemo
+  website: https://www.teemo.co
+  categories:
+  - Analytics
+  code_prefixes:
+  - com.databerries
+  - com.geolocstation
+  code_segments: []
+  domain_suffixes:
+  - databerries.com
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 2
+  name: FidZup
+  website: https://www.fidzup.com
+  categories:
+  - Analytics
+  code_prefixes:
+  - com.fidzup
+  code_segments: []
+  domain_suffixes: []
+  domain_labels:
+  - fidzup
+  domain_patterns: []
+  excluded_domains: []
+- id: 3
+  name: Audience Studio (Krux)
+  website: https://www.salesforce.com/products/marketing-cloud/data-management/?mc=DMP
+  categories:
+  - Analytics
+  - Profiling
+  code_prefixes:
+  - com.krux.androidsdk
+  code_segments: []
+  domain_suffixes:
+  - krxd.net
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 4
+  name: Ad4Screen
+  website: http://www.ad4screen.com
+  categories:
+  - Advertisement
+  code_prefixes:
+  - com.ad4screen.sdk
+  code_segments: []
+  domain_suffixes:
+  - a4.tl
+  - accengage.com
+  - ad4push.com
+  - ad4screen.com
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 5
+  name: Google DoubleClick
+  website: https://www.doubleclickbygoogle.com/
+  categories:
+  - Uncategorised
+  code_prefixes: []
+  code_segments: []
+  domain_suffixes:
+  - 2mdn.net
+  - dmtry.com
+  - doubleclick.com
+  - doubleclick.net
+  - mng-ads.com
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 6
+  name: Weborama
+  website: https://www.weborama.com
+  categories:
+  - Analytics
+  code_prefixes:
+  - com.weborama
+  code_segments: []
+  domain_suffixes:
+  - weborama.fr
+  - weborama.net
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 7
+  name: Smart
+  website: http://smartadserver.com/
+  categories:
+  - Uncategorised
+  code_prefixes:
+  - com.smartadserver
+  code_segments: []
+  domain_suffixes:
+  - adsrvr.org
+  - akamai.smartadserver.com
+  - cdn1.smartadserver.com
+  - diff.smartadserver.com
+  - diff2.smartadserver.com
+  - diff3.smartadserver.com
+  - eqx.smartadserver.com
+  - gallery.smartadserver.com
+  - im2.smartadserver.com
+  - insight.adsrvr.org
+  - itx5-publicidad.smartadserver.com
+  - itx5.smartadserver.com
+  - js.adsrvr.org
+  - match.adsrvr.org
+  - preview.smartadserver.com
+  - rtb-csync.smartadserver.com
+  - saspreview.com
+  - smartadserver.com
+  - smartadserver.ru
+  - tmk.smartadserver.com
+  - usw-lax.adsrvr.org
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 8
+  name: JW Player
+  website: https://jwplayer.com
+  categories:
+  - Uncategorised
+  code_prefixes:
+  - com.longtailvideo.jwplayer
+  code_segments: []
+  domain_suffixes:
+  - g.jwpsrv.com
+  - jwpltx.com
+  - p.jwpcdn.com
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 9
+  name: Loggly
+  website: http://loggly.com/
+  categories:
+  - Analytics
+  code_prefixes:
+  - com.github.tony19.loggly
+  - com.github.tony19.timber.loggly
+  - com.visiware.sync2ad.logger.loggly
+  code_segments: []
+  domain_suffixes:
+  - loggly.com
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 11
+  name: OutBrain
+  website: http://www.outbrain.com/
+  categories:
+  - Uncategorised
+  code_prefixes:
+  - com.outbrain
+  code_segments: []
+  domain_suffixes:
+  - outbrain.com
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 12
+  name: AppsFlyer
+  website: http://AppsFlyer.com
+  categories:
+  - Analytics
+  code_prefixes:
+  - com.appsflyer
+  code_segments: []
+  domain_suffixes:
+  - appsflyer.com
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 13
+  name: Ligatus
+  website: http://ligatus.com
+  categories:
+  - Uncategorised
+  code_prefixes:
+  - com.ligatus.android.adframework
+  code_segments: []
+  domain_suffixes:
+  - ligatus.com
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 14
+  name: Widespace
+  website: http://widespace.com
+  categories:
+  - Uncategorised
+  code_prefixes:
+  - com.widespace
+  code_segments: []
+  domain_suffixes:
+  - widespace.com
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 15
+  name: AppNexus
+  website: https://www.appnexus.com/
+  categories:
+  - Uncategorised
+  code_prefixes:
+  - com.appnexus.opensdk
+  code_segments: []
+  domain_suffixes:
+  - 247realmedia.com
+  - adnxs.com
+  - appnexus.com
+  - appnexus.net
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 16
+  name: Localytics
+  website: http://localytics.com
+  categories:
+  - Analytics
+  - Profiling
+  code_prefixes:
+  - com.localytics.android
+  - com.localytics.androidx
+  - com.localytics.react
+  code_segments: []
+  domain_suffixes:
+  - analytics.localytics.com
+  - manifest.localytics.com
+  - profile.localytics.com
+  - sdk-assets.localytics.com
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 17
+  name: Braze (formerly Appboy)
+  website: https://www.braze.com
+  categories:
+  - Analytics
+  - Advertisement
+  - Location
+  code_prefixes:
+  - com.appboy
+  code_segments: []
+  domain_suffixes:
+  - appboy.com
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 18
+  name: mParticle
+  website: http://mparticle.com
+  categories:
+  - Analytics
+  code_prefixes:
+  - com.mparticle
+  code_segments: []
+  domain_suffixes:
+  - mparticle.com
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 20
+  name: S4M
+  website: http://www.s4m.io/
+  categories:
+  - Analytics
+  code_prefixes:
+  - com.sam4mobile
+  code_segments: []
+  domain_suffixes:
+  - s4m.io
+  - sam4m.com
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 22
+  name: Sizmek
+  website: https://www.sizmek.com
+  categories:
+  - Analytics
+  code_prefixes: []
+  code_segments:
+  - sizmek
+  domain_suffixes:
+  - serving-sys.com
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 23
+  name: Batch
+  website: https://batch.com
+  categories:
+  - Analytics
+  - Profiling
+  code_prefixes:
+  - com.batch.android
+  code_segments: []
+  domain_suffixes:
+  - batch.com
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 24
+  name: Sync2Ad
+  website: https://www.sync2ad.com/
+  categories:
+  - Analytics
+  code_prefixes:
+  - com.visiware.sync2ad.dmp
+  code_segments: []
+  domain_suffixes:
+  - sync2ad.com
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 25
+  name: Flurry
+  website: http://www.flurry.com
+  categories:
+  - Advertisement
+  - Analytics
+  code_prefixes:
+  - com.flurry
+  code_segments: []
+  domain_suffixes:
+  - flurry.com
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 26
+  name: HockeyApp
+  website: http://hockeyapp.net
+  categories:
+  - Crash reporting
+  code_prefixes:
+  - net.hockeyapp
+  code_segments: []
+  domain_suffixes:
+  - hockeyapp.net
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 27
+  name: Google CrashLytics
+  website: http://crashlytics.com
+  categories:
+  - Crash reporting
+  code_prefixes:
+  - com.crashlytics
+  - com.google.firebase.crash
+  - com.google.firebase.crashlytics
+  - io.fabric
+  - io.invertase.firebase.crashlytics
+  code_segments: []
+  domain_suffixes:
+  - crashlytics.com
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 28
+  name: LeanPlum
+  website: https://www.leanplum.com/
+  categories:
+  - Analytics
+  - Profiling
+  - Location
+  code_prefixes:
+  - com.leanplum
+  code_segments: []
+  domain_suffixes:
+  - leanplum.com
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 29
+  name: Tinder Analytics
+  website: http://tinder.com
+  categories:
+  - Analytics
+  code_prefixes:
+  - com.tinder.ads
+  - com.tinder.analytics
+  code_segments: []
+  domain_suffixes:
+  - etl.tindersparks.com
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 30
+  name: Schibsted
+  website: http://www.schibsted.com/en/ir/
+  categories:
+  - Uncategorised
+  code_prefixes: []
+  code_segments:
+  - schibsted
+  domain_suffixes:
+  - schibsted.com
+  - schibsted.io
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 31
+  name: ATInternet
+  website: https://www.atinternet.com/en/
+  categories:
+  - Analytics
+  code_prefixes:
+  - com.atinternet
+  code_segments: []
+  domain_suffixes:
+  - ati-host.net
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 32
+  name: Tealium
+  website: https://tealium.com/
+  categories:
+  - Analytics
+  code_prefixes: []
+  code_segments:
+  - tealium
+  domain_suffixes:
+  - tealiumiq.com
+  - tiqcdn.com
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 33
+  name: Nexage
+  website: http://nexage.com/
+  categories:
+  - Uncategorised
+  code_prefixes:
+  - com.nexage.android
+  - org.nexage
+  code_segments: []
+  domain_suffixes:
+  - nexage.com
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 34
+  name: Ogury Presage
+  website: http://www.presage.io/
+  categories:
+  - Uncategorised
+  code_prefixes:
+  - io.presage
+  code_segments: []
+  domain_suffixes:
+  - presage.io
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 35
+  name: Twitter MoPub
+  website: https://www.mopub.com/
+  categories:
+  - Analytics
+  - Advertisement
+  code_prefixes:
+  - com.mopub
+  code_segments: []
+  domain_suffixes:
+  - mopub.com
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 36
+  name: Add Apt Tr
+  website: https://www.addapptr.com
+  categories:
+  - Uncategorised
+  code_prefixes:
+  - com.intentsoftware.addapptr
+  code_segments: []
+  domain_suffixes:
+  - aatkit.com
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 37
+  name: Vectaury
+  website: http://vectaury.io/
+  categories:
+  - Analytics
+  - Profiling
+  - Location
+  code_prefixes:
+  - io.vectaury
+  code_segments: []
+  domain_suffixes:
+  - vectaury.io
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 38
+  name: Tune
+  website: https://www.tune.com
+  categories:
+  - Analytics
+  code_prefixes:
+  - com.mobileapptracker
+  - com.tune
+  code_segments: []
+  domain_suffixes:
+  - mobileapptracking.com
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 39
+  name: Pushwoosh
+  website: https://www.pushwoosh.com/
+  categories:
+  - Uncategorised
+  code_prefixes:
+  - com.pushwoosh
+  code_segments: []
+  domain_suffixes:
+  - pushwoosh.com
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 40
+  name: Demdex
+  website: https://www.adobe.com/data-analytics-cloud/audience-manager.html
+  categories:
+  - Analytics
+  code_prefixes:
+  - com.adobe.mobile
+  code_segments: []
+  domain_suffixes:
+  - demdex.net
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 41
+  name: AdsWizz
+  website: http://www.adswizz.com/
+  categories:
+  - Uncategorised
+  code_prefixes: []
+  code_segments:
+  - adswizz
+  domain_suffixes:
+  - adswizz.com
+  - cdn.adswizz.com.edgesuite.net
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 42
+  name: ExactTarget
+  website: http://help.exacttarget.com/en/technical_library/API_Overview/
+  categories:
+  - Analytics
+  code_prefixes:
+  - com.exacttarget
+  code_segments: []
+  domain_suffixes: []
+  domain_labels:
+  - exacttarget
+  domain_patterns: []
+  excluded_domains: []
+- id: 43
+  name: Omniture
+  website: https://www.adobe.com/analytics/adobe-analytics-features.html
+  categories:
+  - Analytics
+  - Profiling
+  code_prefixes:
+  - com.adobe.adms.measurement
+  - com.omniture
+  code_segments: []
+  domain_suffixes:
+  - omniture.com
+  - omtrdc.net
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 44
+  name: OpenLocate
+  website: https://www.safegraph.com/
+  categories:
+  - Location
+  code_prefixes:
+  - com.openlocate
+  - com.safegraph
+  code_segments: []
+  domain_suffixes:
+  - api.safegraph.com
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 45
+  name: TagCommander (Commanders Act.)
+  website: https://www.commandersact.com/
+  categories:
+  - Analytics
+  code_prefixes:
+  - com.tagcommander
+  code_segments: []
+  domain_suffixes:
+  - commander1.com
+  - tagcommander.com
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 46
+  name: CrowdTangle
+  website: https://www.crowdtangle.com/
+  categories:
+  - Uncategorised
+  code_prefixes: []
+  code_segments: []
+  domain_suffixes:
+  - api.crowdtangle.com
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 47
+  name: Facebook Audience
+  website: https://developers.facebook.com/docs/android/
+  categories:
+  - Analytics
+  code_prefixes:
+  - com.facebook.audiencenetwork
+  code_segments: []
+  domain_suffixes: []
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains:
+  - \.facebook\.com
+- id: 48
+  name: Google Analytics
+  website: http://www.google.com/analytics/
+  categories:
+  - Analytics
+  code_prefixes:
+  - com.google.analytics
+  - com.google.android.apps.analytics
+  - com.google.android.gms.analytics
+  code_segments: []
+  domain_suffixes:
+  - google-analytics.com
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 49
+  name: Google Firebase Analytics
+  website: https://firebase.google.com/
+  categories:
+  - Analytics
+  code_prefixes:
+  - com.google.android.gms.measurement
+  - com.google.firebase.analytics
+  - com.google.firebase.firebase_analytics
+  code_segments: []
+  domain_suffixes:
+  - firebase.com
+  - firebaselogging-pa.googleapis.com
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 51
+  name: Eulerian
+  website: https://www.eulerian.com/en/
+  categories:
+  - Analytics
+  code_prefixes:
+  - com.eulerian.android.sdk
+  code_segments: []
+  domain_suffixes:
+  - eulerian.com
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 52
+  name: Adjust
+  website: https://www.adjust.com/
+  categories:
+  - Analytics
+  code_prefixes:
+  - com.adjust.android.sdk
+  - com.adjust.sdk
+  code_segments: []
+  domain_suffixes:
+  - adj.st
+  - adjust.com
+  - go.link
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 53
+  name: ChartBoost
+  website: https://answers.chartboost.com/en-us/
+  categories:
+  - Uncategorised
+  code_prefixes:
+  - com.chartboost.sdk
+  code_segments: []
+  domain_suffixes:
+  - chartboost.com
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 54
+  name: Backelite
+  website: https://www.backelite.com/
+  categories:
+  - Analytics
+  code_prefixes:
+  - com.backelite.android
+  - com.backelite.bkdroid
+  code_segments: []
+  domain_suffixes:
+  - backelite.com
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 55
+  name: Areametrics
+  website: https://areametrics.com/
+  categories:
+  - Analytics
+  code_prefixes:
+  - com.areametrics.areametricssdk
+  - com.areametrics.nosdkandroid
+  code_segments: []
+  domain_suffixes:
+  - areametrics.com
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 56
+  name: ComScore
+  website: https://comscore.com/
+  categories:
+  - Analytics
+  - Advertisement
+  code_prefixes:
+  - com.comscore
+  code_segments: []
+  domain_suffixes:
+  - comscore.com
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 57
+  name: Cuebiq
+  website: http://www.cuebiq.com/
+  categories:
+  - Analytics
+  - Location
+  code_prefixes:
+  - com.cuebiq.cuebiqsdk.model
+  - com.cuebiq.cuebiqsdk.receiver
+  code_segments: []
+  domain_suffixes:
+  - cuebiq.com
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 58
+  name: HelpShift
+  website: https://www.helpshift.com
+  categories:
+  - Uncategorised
+  code_prefixes:
+  - com.helpshift
+  code_segments: []
+  domain_suffixes:
+  - helpshift.com
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 59
+  name: Kontakt
+  website: https://kontakt.io/
+  categories:
+  - Analytics
+  code_prefixes:
+  - com.kontakt.sdk.android
+  code_segments: []
+  domain_suffixes:
+  - kontakt.io
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 60
+  name: Locuslabs
+  website: http://locuslabs.com
+  categories:
+  - Uncategorised
+  code_prefixes:
+  - com.locuslabs.sdk
+  code_segments: []
+  domain_suffixes:
+  - locuslabs.com
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 61
+  name: Moat
+  website: https://moat.com/analytics
+  categories:
+  - Analytics
+  - Advertisement
+  code_prefixes:
+  - com.moat.analytics.mobile
+  code_segments: []
+  domain_suffixes:
+  - apx.moatads.com
+  - geo.moatads.com
+  - js.moatads.com
+  - mb.moatads.com
+  - moat.com
+  - pixel.moatads.com
+  - px.moatads.com
+  - sejs.moatads.com
+  - yt.moatads.com
+  - yts.moatads.com
+  - z.moatads.com
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 62
+  name: Segment
+  website: https://segment.com/
+  categories:
+  - Analytics
+  - Profiling
+  code_prefixes:
+  - com.segment.analytics
+  code_segments: []
+  domain_suffixes:
+  - api.segment.io
+  - segment.com
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 63
+  name: Mobile Engagement
+  website: https://docs.microsoft.com/en-us/azure/mobile-engagement/mobile-engagement-android-sdk-overview
+  categories:
+  - Analytics
+  code_prefixes:
+  - com.microsoft.azure.engagement
+  - com.ubikod.capptain
+  code_segments: []
+  domain_suffixes:
+  - management.azure.com
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains:
+  - login\.microsoftonline\.com
+- id: 64
+  name: Colocator
+  website: https://developers.colocator.net
+  categories:
+  - Analytics
+  code_prefixes:
+  - net.crowdconnected.androidcolocator
+  code_segments: []
+  domain_suffixes:
+  - colocator.net
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 65
+  name: Facebook Ads
+  website: https://developers.facebook.com/docs/android
+  categories:
+  - Advertisement
+  code_prefixes:
+  - com.facebook.ads
+  code_segments: []
+  domain_suffixes: []
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains:
+  - \.facebook\.com
+- id: 66
+  name: Facebook Analytics
+  website: https://developers.facebook.com/docs/android
+  categories:
+  - Analytics
+  code_prefixes:
+  - com.facebook.appevents
+  - com.facebook.marketing
+  code_segments: []
+  domain_suffixes: []
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains:
+  - \.facebook\.com
+- id: 67
+  name: Facebook Login
+  website: https://developers.facebook.com/docs/android
+  categories:
+  - Identification
+  code_prefixes:
+  - com.facebook.login
+  code_segments: []
+  domain_suffixes: []
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains:
+  - \.facebook\.com
+- id: 68
+  name: Facebook Notifications
+  website: https://developers.facebook.com/docs/android
+  categories:
+  - Uncategorised
+  code_prefixes:
+  - com.facebook.notifications
+  code_segments: []
+  domain_suffixes: []
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains:
+  - \.facebook\.com
+- id: 69
+  name: Facebook Places
+  website: https://developers.facebook.com/docs/android
+  categories:
+  - Uncategorised
+  code_prefixes:
+  - com.facebook.places
+  code_segments: []
+  domain_suffixes: []
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains:
+  - \.facebook\.com
+- id: 70
+  name: Facebook Share
+  website: https://developers.facebook.com/docs/android
+  categories:
+  - Uncategorised
+  code_prefixes:
+  - com.facebook.share
+  code_segments: []
+  domain_suffixes: []
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains:
+  - \.facebook\.com
+- id: 72
+  name: AppLovin (MAX and SparkLabs)
+  website: https://www.applovin.com/
+  categories:
+  - Analytics
+  - Profiling
+  - Identification
+  - Advertisement
+  code_prefixes:
+  - com.applovin
+  code_segments: []
+  domain_suffixes:
+  - applovin.com
+  - applvn.com
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 73
+  name: Glispa Connect (Formerly Avocarrot)
+  website: https://www.glispa.com
+  categories:
+  - Uncategorised
+  code_prefixes:
+  - com.avocarrot.sdk
+  code_segments: []
+  domain_suffixes:
+  - ads.glispa.com
+  - avocarrot.com
+  - exp.glispa.com
+  - rtb.platform.glispa.com
+  - templates.glispaconnect.com
+  - trk.glispa.com
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 74
+  name: NativeX
+  website: http://www.nativex.com/
+  categories:
+  - Uncategorised
+  code_prefixes:
+  - com.nativex
+  code_segments: []
+  domain_suffixes:
+  - nativex.com
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 75
+  name: Baidu Maps
+  website: https://map.baidu.com
+  categories:
+  - Uncategorised
+  code_prefixes: []
+  code_segments: []
+  domain_suffixes:
+  - map.baidu.com
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 76
+  name: WeChat Location
+  website: https://wechat.com
+  categories:
+  - Uncategorised
+  code_prefixes:
+  - com.tencent.map.geolocation
+  - com.tencent.mm.plugin.location
+  - com.tencent.mm.plugin.location_google
+  - com.tencent.mm.plugin.location_soso
+  code_segments: []
+  domain_suffixes:
+  - map.qq.com
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 77
+  name: HyperTrack
+  website: http://hypertrack.com
+  categories:
+  - Location
+  code_prefixes:
+  - com.hypertrack
+  - com.hypertracklive
+  - io.hypertrack
+  code_segments: []
+  domain_suffixes:
+  - api.hypertrack.com
+  - hypertrack.amazonaws.com
+  - trck.at
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 78
+  name: Uber Analytics
+  website: https://uber.com
+  categories:
+  - Analytics
+  code_prefixes:
+  - com.ubercab.analytics
+  - com.ubercab.client.core.analytics
+  - com.ubercab.library.metrics.analytics
+  code_segments: []
+  domain_suffixes:
+  - events.uber.com
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 79
+  name: Lisnr
+  website: http://lisnr.com
+  categories:
+  - Analytics
+  code_prefixes:
+  - com.lisnr
+  code_segments: []
+  domain_suffixes:
+  - lisnr.com
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 80
+  name: SilverPush
+  website: http://silverpush.co
+  categories:
+  - Analytics
+  code_prefixes:
+  - com.silverpush
+  code_segments: []
+  domain_suffixes:
+  - silverpush.co
+  - silverpush.com
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 81
+  name: Shopkick
+  website: https://shopkick.com
+  categories:
+  - Analytics
+  code_prefixes:
+  - com.shopkick.fetchers
+  - com.shopkick.sdk.api
+  code_segments: []
+  domain_suffixes:
+  - sdk.shopkick.com
+  - shopkick.com
+  - shopkick.de
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 82
+  name: Alphonso
+  website: http://alphonso.tv
+  categories:
+  - Analytics
+  code_prefixes:
+  - tv.alphonso.service
+  code_segments: []
+  domain_suffixes:
+  - api.alphonso.tv
+  - prov.alphonso.tv
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 83
+  name: Smaato
+  website: https://smaato.com
+  categories:
+  - Uncategorised
+  code_prefixes:
+  - com.smaato
+  code_segments: []
+  domain_suffixes:
+  - smaato.net
+  - soma.smaato.net
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 84
+  name: Scandit
+  website: https://scandit.com
+  categories:
+  - Analytics
+  code_prefixes:
+  - com.scandit
+  code_segments: []
+  domain_suffixes:
+  - scandit.com
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 85
+  name: Inrix
+  website: http://inrix.com/
+  categories:
+  - Uncategorised
+  code_prefixes:
+  - com.inrix.sdk
+  code_segments: []
+  domain_suffixes:
+  - inrix.com
+  - inrix.io
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 86
+  name: Signal360
+  website: http://www.signal360.com
+  categories:
+  - Analytics
+  code_prefixes:
+  - com.rnsignal360
+  - com.signal360.sdk.core
+  - com.sonicnotify.sdk.core
+  code_segments: []
+  domain_suffixes:
+  - signal360.com
+  - sonicnotify.com
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 87
+  name: TeleQuid
+  website: http://www.telequid.com/
+  categories:
+  - Uncategorised
+  code_prefixes:
+  - com.telequid
+  code_segments: []
+  domain_suffixes:
+  - mars.telequid.com
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 88
+  name: Retency
+  website: http://retency.com
+  categories:
+  - Analytics
+  code_prefixes:
+  - com.retency.sdk.android
+  code_segments: []
+  domain_suffixes: []
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 89
+  name: MAdvertise
+  website: http://madvertise.com
+  categories:
+  - Uncategorised
+  code_prefixes:
+  - com.mngads
+  - com.mngads.sdk
+  - com.mngads.views
+  code_segments: []
+  domain_suffixes:
+  - dispatcher.mng-ads.com
+  - mobile.mng-ads.com
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 90
+  name: AdColony
+  website: http://adcolony.com/
+  categories:
+  - Advertisement
+  code_prefixes:
+  - com.adcolony
+  - com.jirbo.adcolony
+  code_segments: []
+  domain_suffixes:
+  - adc3-launch.adcolony.com
+  - adcolony.com
+  - ads30.adcolony.com
+  - androidads20.adcolony.com
+  - androidads21.adcolony.com
+  - androidads23.adcolony.com
+  - events3alt.adcolony.com
+  - wd.adcolony.com
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 91
+  name: AccountKit
+  website: https://www.accountkit.com/
+  categories:
+  - Identification
+  code_prefixes:
+  - com.facebook.accountkit
+  code_segments: []
+  domain_suffixes:
+  - graph.accountkit.com
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 92
+  name: Amazon Advertisement
+  website: https://developer.amazon.com/public/apis/earn/mobile-ads/docs/quick-start
+  categories:
+  - Uncategorised
+  code_prefixes:
+  - com.amazon.device.ads
+  code_segments: []
+  domain_suffixes: []
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 93
+  name: Amazon Mobile Associates
+  website: https://developer.amazon.com/mobile-associates
+  categories:
+  - Uncategorised
+  code_prefixes:
+  - com.amazon.device.associates
+  code_segments: []
+  domain_suffixes: []
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 94
+  name: Radius Networks
+  website: https://www.radiusnetworks.com/
+  categories:
+  - Analytics
+  code_prefixes:
+  - com.radiusnetworks
+  code_segments: []
+  domain_suffixes:
+  - proximitykit.radiusnetworks.com
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 95
+  name: Amazon Analytics (Amazon insights)
+  website: https://developer.amazon.com/docs/apps-and-games/sdk-downloads.html
+  categories:
+  - Analytics
+  code_prefixes:
+  - com.amazon.insights
+  - com.amazonaws.mobileconnectors.amazonmobileanalytics
+  - com.amazonaws.mobileconnectors.pinpoint.analytics
+  code_segments: []
+  domain_suffixes:
+  - mobileanalytics.us-east-1.amazonaws.com
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 96
+  name: Baidu APPX
+  website: https://app.baidu.com/
+  categories:
+  - Uncategorised
+  code_prefixes:
+  - com.baidu.appx
+  code_segments: []
+  domain_suffixes: []
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 97
+  name: Baidu Location
+  website: https://developer.baidu.com/
+  categories:
+  - Uncategorised
+  code_prefixes:
+  - com.baidu.location
+  code_segments: []
+  domain_suffixes: []
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 99
+  name: Baidu Map
+  website: http://lbsyun.baidu.com/
+  categories:
+  - Uncategorised
+  code_prefixes:
+  - com.baidu.mapapi
+  code_segments: []
+  domain_suffixes: []
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 100
+  name: Baidu Mobile Ads
+  website: https://developer.baidu.com/
+  categories:
+  - Uncategorised
+  code_prefixes:
+  - com.baidu.mobads
+  code_segments: []
+  domain_suffixes: []
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 101
+  name: Baidu Mobile Stat
+  website: https://developer.baidu.com/
+  categories:
+  - Analytics
+  code_prefixes:
+  - com.baidu.mobstat
+  code_segments: []
+  domain_suffixes: []
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 102
+  name: Estimote
+  website: https://estimote.com/
+  categories:
+  - Analytics
+  - Location
+  code_prefixes:
+  - com.estimote
+  code_segments: []
+  domain_suffixes:
+  - estimote.com
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 103
+  name: Baidu Navigation
+  website: http://lbsyun.baidu.com/index.php?title=android-navsdk
+  categories:
+  - Uncategorised
+  code_prefixes:
+  - com.baidu.navi
+  code_segments: []
+  domain_suffixes: []
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 104
+  name: Fyber
+  website: https://www.fyber.com/
+  categories:
+  - Advertisement
+  code_prefixes:
+  - com.fyber
+  code_segments: []
+  domain_suffixes:
+  - adproxy.fyber.com
+  - appengage-video.fyber.com
+  - banner.fyber.com
+  - engine.fyber.com
+  - interstitial.fyber.com
+  - mbe-cdn.fyber.com
+  - offer.fyber.com
+  - service.fyber.com
+  - tracker.fyber.com
+  - video-interstitial-assets-cdn.fyber.com
+  - video.fyber.com
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 105
+  name: Google Tag Manager
+  website: https://www.google.com/analytics/tag-manager/
+  categories:
+  - Analytics
+  code_prefixes:
+  - com.google.android.gms.tagmanager
+  - com.google.tagmanager
+  code_segments: []
+  domain_suffixes:
+  - www-googletagmanager.l.google.com
+  - www.googletagmanager.com
+  - www.googletagservices.com
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 106
+  name: Inmobi
+  website: http://inmobi.com
+  categories:
+  - Uncategorised
+  code_prefixes:
+  - com.inmobi
+  - in.inmobi
+  code_segments: []
+  domain_suffixes:
+  - c.w.inmobi.com
+  - china.inmobi.com
+  - config-ltvp.inmobi.com
+  - config.inmobi.com
+  - et.w.inmobi.com
+  - i.l.inmobicdn.net
+  - i.w.inmobi.com
+  - inmobi.cn
+  - inmobi.com
+  - inmobi.info
+  - inmobi.net
+  - inmobi.us
+  - inmobicdn.com
+  - inmobicdn.net
+  - inmobisdk-a.akamaihd.net
+  - japan.inmobi.com
+  - r.w.inmobi.com
+  - sdkm.w.inmobi.com
+  - sdktm.w.inmobi.com
+  - w.inmobi.com
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 107
+  name: Millennial Media
+  website: https://www.millennialmedia.com/
+  categories:
+  - Uncategorised
+  code_prefixes:
+  - com.millennialmedia
+  code_segments: []
+  domain_suffixes:
+  - adtech.de
+  - contextual.media.net
+  - media.net
+  - millennialmedia.com
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 108
+  name: Snowplow
+  website: https://snowplowanalytics.com/
+  categories:
+  - Analytics
+  code_prefixes:
+  - com.snowplowanalytics
+  code_segments: []
+  domain_suffixes: []
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 109
+  name: Fyber SponsorPay
+  website: http://www.sponsorpay.com
+  categories:
+  - Uncategorised
+  code_prefixes:
+  - com.sponsorpay
+  code_segments: []
+  domain_suffixes:
+  - appengage-video.sponsorpay.com
+  - cdn1.sponsorpay.com
+  - cdn2.sponsorpay.com
+  - cdn3.sponsorpay.com
+  - cdn4.sponsorpay.com
+  - engine.sponsorpay.com
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 110
+  name: Supersonic Ads
+  website: https://www.supersonic.com/
+  categories:
+  - Uncategorised
+  code_prefixes:
+  - com.supersonic.adapters.supersonicads
+  - com.supersonicads.sdk
+  code_segments: []
+  domain_suffixes:
+  - click-haproxy.supersonicads.com
+  - cx.ssacdn.com
+  - init.supersonicads.com
+  - logs.supersonic.com
+  - outcome.supersonicads.com
+  - ow-gateway.supersonicads.com
+  - pixel-tracking.sonic-us.supersonicads.com
+  - rv-gateway.supersonicads.com
+  - static.ssacdn.com
+  - supersonic.com
+  - supersonicads-a.akamaihd.net
+  - tag-mediation.supersonic.com
+  - ua.supersonicads.com
+  - v.ssacdn.com
+  - www.supersonicads.com
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 111
+  name: Carnival
+  website: http://carnival.io/
+  categories:
+  - Analytics
+  code_prefixes:
+  - com.carnival.sdk
+  - com.carnivalmobile
+  code_segments: []
+  domain_suffixes:
+  - devices.carnivalmobile.com
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 112
+  name: Tencent Map LBS
+  website: https://lbs.qq.com/
+  categories:
+  - Uncategorised
+  code_prefixes:
+  - com.tencent.lbs
+  code_segments: []
+  domain_suffixes: []
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 113
+  name: Tencent MobWin
+  website: https://www.tencent.com/en-us/
+  categories:
+  - Uncategorised
+  code_prefixes:
+  - com.tencent.mobwin
+  code_segments: []
+  domain_suffixes: []
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 114
+  name: Tencent MTA
+  website: https://mta.qq.com/
+  categories:
+  - Analytics
+  code_prefixes:
+  - com.tencent.mta
+  code_segments: []
+  domain_suffixes: []
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 115
+  name: Apptentive
+  website: https://www.apptentive.com/
+  categories:
+  - Analytics
+  code_prefixes:
+  - com.apptentive
+  code_segments: []
+  domain_suffixes:
+  - api.apptentive.com
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 116
+  name: Tencent Stats
+  website: http://stat.qq.com/
+  categories:
+  - Analytics
+  code_prefixes:
+  - com.tencent.stat
+  - com.tencent.wxop.stat
+  code_segments: []
+  domain_suffixes: []
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 117
+  name: Tencent Weiyun
+  website: https://www.weiyun.com
+  categories:
+  - Uncategorised
+  code_prefixes:
+  - com.tencent.weiyun
+  code_segments: []
+  domain_suffixes: []
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 118
+  name: MixPanel
+  website: https://mixpanel.com/
+  categories:
+  - Analytics
+  code_prefixes:
+  - com.mixpanel
+  code_segments: []
+  domain_suffixes:
+  - api.mixpanel.com
+  - decide.mixpanel.com
+  - mixpanel.com
+  - switchboard.mixpanel.com
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 119
+  name: Umeng Analytics
+  website: https://www.umeng.com/analytics
+  categories:
+  - Uncategorised
+  code_prefixes:
+  - com.umeng.analytics
+  code_segments: []
+  domain_suffixes:
+  - alog.umeng.com
+  - alogs.umeng.com
+  - ar.umeng.com
+  - oc.umeng.com
+  - umeng.com
+  - uop.umeng.com
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 120
+  name: Umeng Feedback
+  website: http://dev.umeng.com/feedback
+  categories:
+  - Uncategorised
+  code_prefixes:
+  - com.umeng.fb
+  code_segments: []
+  domain_suffixes:
+  - alog.umeng.com
+  - alogs.umeng.com
+  - ar.umeng.com
+  - oc.umeng.com
+  - umeng.com
+  - uop.umeng.com
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 121
+  name: Unity3d Ads
+  website: https://unity3d.com/
+  categories:
+  - Advertisement
+  code_prefixes:
+  - com.unity3d.ads
+  - com.unity3d.services
+  code_segments: []
+  domain_suffixes:
+  - adserver.unityads.unity3d.com
+  - analytics.social.unity.com
+  - api.uca.cloud.unity3d.com
+  - auction.unityads.unity3d.com
+  - cdn-highwinds.unityads.unity3d.com
+  - cdn.unityads.unity3d.com
+  - config.uca.cloud.unity3d.com
+  - config.unityads.unity3d.com
+  - stats.unity3d.com
+  - webview.unityads.unity3d.com
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 122
+  name: Countly
+  website: https://count.ly/
+  categories:
+  - Analytics
+  - Profiling
+  code_prefixes:
+  - ly.count.android
+  code_segments: []
+  domain_suffixes: []
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 123
+  name: Urbanairship
+  website: https://www.urbanairship.com/
+  categories:
+  - Uncategorised
+  code_prefixes:
+  - com.urbanairship
+  code_segments: []
+  domain_suffixes:
+  - device-api.asnapieu.com
+  - device-api.urbanairship.com
+  - urbanairship.com
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 124
+  name: Yandex Ad
+  website: https://www.yandex.com/
+  categories:
+  - Advertisement
+  code_prefixes:
+  - com.yandex.mobile.ads
+  code_segments: []
+  domain_suffixes:
+  - analytics.mobile.yandex.net
+  - appmetrica.yandex.com
+  - banners-slb.mobile.yandex.net
+  - banners.mobile.yandex.net
+  - mc.yandex.ru
+  - report.appmetrica.yandex.net
+  - startup.mobile.yandex.net
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 125
+  name: Amplitude
+  website: http://www.amplitude.com
+  categories:
+  - Analytics
+  - Profiling
+  code_prefixes:
+  - com.amplitude
+  code_segments: []
+  domain_suffixes:
+  - amplitude.com
+  - api.amplitude.com
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 126
+  name: AppSee
+  website: https://www.appsee.com/
+  categories:
+  - Analytics
+  - Profiling
+  - Identification
+  code_prefixes:
+  - com.appsee
+  code_segments: []
+  domain_suffixes:
+  - api.appsee.com
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 127
+  name: Kochava
+  website: https://www.kochava.com/
+  categories:
+  - Analytics
+  - Profiling
+  - Advertisement
+  code_prefixes:
+  - com.kochava.android.tracker
+  - com.kochava.base
+  code_segments:
+  - kochavaccpa
+  domain_suffixes:
+  - control.kochava.com
+  - kvinit-prod.api.kochava.com
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 129
+  name: Webtrends
+  website: https://www.webtrends.com/
+  categories:
+  - Analytics
+  code_prefixes:
+  - com.webtrends.mobile.analytics
+  - com.webtrends.mobile.android
+  code_segments: []
+  domain_suffixes:
+  - dc.webtrends.com
+  - webtrends.com
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 130
+  name: New Relic
+  website: http://www.newrelic.com
+  categories:
+  - Analytics
+  code_prefixes:
+  - com.newrelic.agent
+  - com.newrelic.mobile
+  code_segments: []
+  domain_suffixes:
+  - js-agent.newrelic.com
+  - mobile-collector.newrelic.com
+  - newrelic.com
+  - nr-data.net
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 131
+  name: AppAnalytics
+  website: http://appanalytics.io/
+  categories:
+  - Analytics
+  code_prefixes:
+  - io.appanalytics.sdk
+  code_segments: []
+  domain_suffixes: []
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 132
+  name: Applause
+  website: http://www.applause.com
+  categories:
+  - Crash reporting
+  - Analytics
+  code_prefixes:
+  - com.applause.android
+  code_segments: []
+  domain_suffixes: []
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 133
+  name: Quantcast
+  website: http://www.quantcast.com
+  categories:
+  - Analytics
+  - Profiling
+  code_prefixes:
+  - com.quantcast.measurement.service
+  code_segments: []
+  domain_suffixes:
+  - quantcast.com
+  - quantcast.net
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 135
+  name: Apptimize
+  website: http://www.apptimize.com
+  categories:
+  - Analytics
+  code_prefixes:
+  - com.apptimize
+  code_segments: []
+  domain_suffixes:
+  - brahe.apptimize.com
+  - md-a-c.apptimize.com
+  - md-a-s.apptimize.com
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 136
+  name: AppBrain
+  website: https://www.appbrain.com/info/help/sdk/index.html
+  categories:
+  - Uncategorised
+  code_prefixes:
+  - com.appbrain
+  code_segments: []
+  domain_suffixes:
+  - sdk.appbrain.com
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 137
+  name: Dynatrace
+  website: https://www.dynatrace.com
+  categories:
+  - Analytics
+  code_prefixes:
+  - com.dynatrace.agent
+  - com.dynatrace.android.app
+  - com.dynatrace.tools
+  code_segments: []
+  domain_suffixes:
+  - dynatrace.com
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 138
+  name: Matomo (Piwik)
+  website: https://matomo.org/mobile
+  categories:
+  - Analytics
+  code_prefixes:
+  - org.matomo
+  - org.piwik
+  - org.piwik.mobile
+  code_segments: []
+  domain_suffixes:
+  - matomo.org
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 140
+  name: AppMetrica
+  website: https://tech.yandex.com/metrica-mobile-sdk/
+  categories:
+  - Uncategorised
+  code_prefixes:
+  - com.yandex.metrica
+  code_segments: []
+  domain_suffixes:
+  - analytics.mobile.yandex.net
+  - appmetrica.yandex.com
+  - banners-slb.mobile.yandex.net
+  - banners.mobile.yandex.net
+  - mc.yandex.ru
+  - report.appmetrica.yandex.net
+  - startup.mobile.yandex.net
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 142
+  name: Singlespot
+  website: https://www.singlespot.com/
+  categories:
+  - Analytics
+  code_prefixes:
+  - com.sptproximitykit
+  code_segments: []
+  domain_suffixes:
+  - singlespot.com
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 143
+  name: Sensoro
+  website: https://www.sensoro.com/
+  categories:
+  - Uncategorised
+  code_prefixes:
+  - com.sensoro.beacon.kit
+  - com.sensoro.cloud
+  code_segments: []
+  domain_suffixes: []
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 144
+  name: Sense360
+  website: https://sense360.com/
+  categories:
+  - Analytics
+  - Location
+  code_prefixes:
+  - com.sense360.android
+  code_segments: []
+  domain_suffixes:
+  - android-quinoa-config-prod.sense360eng.com
+  - incoming-data-sense360.s3.amazonaws.com
+  - quinoa-personal-identify-prod.sense360eng.com
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 145
+  name: Rubicon Project
+  website: https://rubiconproject.com
+  categories:
+  - Analytics
+  code_prefixes:
+  - com.rfm.sdk
+  code_segments: []
+  domain_suffixes:
+  - ads.rubiconproject.com
+  - fastlane.rubiconproject.com
+  - optimized-by.rubiconproject.com
+  - pixel.rubiconproject.com
+  - stats.aws.rubiconproject.com
+  - tap2-cdn.rubiconproject.com
+  - video-ads.rubiconproject.com
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 146
+  name: ironSource
+  website: https://www.ironsrc.com
+  categories:
+  - Analytics
+  code_prefixes:
+  - com.ironsource
+  code_segments: []
+  domain_suffixes: []
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 147
+  name: Heyzap (bought by Fyber)
+  website: https://www.heyzap.com
+  categories:
+  - Uncategorised
+  code_prefixes:
+  - com.heyzap.mediation
+  - com.heyzap.sdk.ads
+  code_segments: []
+  domain_suffixes:
+  - ads.heyzap.com
+  - fyc.heyzap.com
+  - img-cloudflare-2.haizap.com
+  - img-cloudflare.haizap.com
+  - med.heyzap.com
+  - x.heyzap.com
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 148
+  name: SAP CDC (Gigya)
+  website: https://www.sap.com/products/crm/customer-data-management.html
+  categories:
+  - Analytics
+  code_prefixes:
+  - com.gigya
+  code_segments: []
+  domain_suffixes:
+  - cdn.gigya.com
+  - cdn1.gigya.com
+  - cdn2.gigya.com
+  - cdn3.gigya.com
+  - cdns.us1.gigya.com
+  - david.gigya-cs.com
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 149
+  name: Foresee
+  website: https://www.foresee.com
+  categories:
+  - Analytics
+  code_prefixes:
+  - com.foresee.sdk
+  code_segments: []
+  domain_suffixes:
+  - 4seeresults.com
+  - analytics.foresee.com
+  - foresee.com
+  - foreseeresults.com
+  - i.4see.mobi
+  - rec.replay.answerscloud.com
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 150
+  name: Fiksu
+  website: https://fiksu.com
+  categories:
+  - Uncategorised
+  code_prefixes:
+  - com.fiksu.asotracking
+  code_segments: []
+  domain_suffixes:
+  - a.fiksu.com
+  - sdk.fiksu.com
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 151
+  name: Ensighten
+  website: https://www.ensighten.com
+  categories:
+  - Analytics
+  code_prefixes:
+  - com.ensighten
+  code_segments: []
+  domain_suffixes:
+  - nexus.ensighten.com
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 152
+  name: Dynamic Yield
+  website: https://www.dynamicyield.com
+  categories:
+  - Analytics
+  code_prefixes:
+  - com.dynamicyield
+  code_segments: []
+  domain_suffixes:
+  - adm.dynamicyield.com
+  - api.dynamicyield.com
+  - cdn.dynamicyield.com
+  - px.dynamicyield.com
+  - st.dynamicyield.com
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 153
+  name: BlueKai (acquired by Oracle)
+  website: http://bluekai.com/registry/
+  categories:
+  - Analytics
+  code_prefixes:
+  - com.bluekai.sdk
+  code_segments: []
+  domain_suffixes:
+  - stags.bluekai.com
+  - tags.bluekai.com
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 154
+  name: BlueConic
+  website: https://www.blueconic.com
+  categories:
+  - Analytics
+  code_prefixes:
+  - com.blueconic
+  code_segments: []
+  domain_suffixes: []
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 155
+  name: Apteligent by VMWare (formerly Crittercism)
+  website: http://www.apteligent.com
+  categories:
+  - Uncategorised
+  code_prefixes:
+  - com.crittercism.app
+  code_segments: []
+  domain_suffixes:
+  - api.crittercism.com
+  - appload.ingest.crittercism.com
+  - txn.ingest.crittercism.com
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 156
+  name: AdFit (Daum)
+  website: https://www.daum.net
+  categories:
+  - Uncategorised
+  code_prefixes:
+  - com.kakao.adfit
+  code_segments: []
+  domain_suffixes:
+  - analytics.ad.daum.net
+  - statistics.videofarm.daum.net
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 157
+  name: Adform
+  website: https://site.adform.com
+  categories:
+  - Uncategorised
+  code_prefixes:
+  - com.adform.sdk
+  code_segments: []
+  domain_suffixes:
+  - adform.com
+  - adformdsp.net
+  - adx.adform.net
+  - files.adform.net
+  - track.adform.net
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 158
+  name: Adfurikun
+  website: https://adfurikun.jp/adfurikun/
+  categories:
+  - Advertisement
+  code_prefixes:
+  - com.glossomads.sdk
+  - jp.tjkapp.adfurikunsdk
+  code_segments: []
+  domain_suffixes:
+  - adfurikun.jp
+  - ginf.adfurikun.jp
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 159
+  name: Mobvista
+  website: https://www.mobvista.com/
+  categories:
+  - Analytics
+  - Profiling
+  code_prefixes:
+  - com.mobvista
+  code_segments: []
+  domain_suffixes:
+  - mobvista.com
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 160
+  name: Placed
+  website: http://placed.com/
+  categories:
+  - Uncategorised
+  code_prefixes:
+  - com.placed.client
+  code_segments: []
+  domain_suffixes: []
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 161
+  name: Adot
+  website: https://we-are-adot.com/
+  categories:
+  - Uncategorised
+  code_prefixes:
+  - com.adotmob
+  code_segments: []
+  domain_suffixes:
+  - sdk.adotmob.com
+  - sync.adotmob.com
+  - tracker.adotmob.com
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 162
+  name: Appodeal
+  website: https://www.appodeal.com
+  categories:
+  - Uncategorised
+  code_prefixes:
+  - com.appodeal.ads
+  - com.appodealx
+  code_segments: []
+  domain_suffixes:
+  - appodeal.com
+  - appodealx.com
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 163
+  name: AppMonet
+  website: http://appmonet.com
+  categories:
+  - Uncategorised
+  code_prefixes:
+  - com.monet
+  code_segments: []
+  domain_suffixes: []
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 164
+  name: Soomla
+  website: https://soomla.com/
+  categories:
+  - Uncategorised
+  code_prefixes:
+  - com.soomla
+  code_segments: []
+  domain_suffixes:
+  - soom.la
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 165
+  name: Adincube
+  website: https://www.adincube.com/
+  categories:
+  - Uncategorised
+  code_prefixes:
+  - com.adincube.sdk
+  code_segments: []
+  domain_suffixes:
+  - sdk.adincube.com
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 166
+  name: Persona.ly
+  website: http://persona.ly/
+  categories:
+  - Uncategorised
+  code_prefixes:
+  - ly.persona.sdk
+  code_segments: []
+  domain_suffixes:
+  - dev-api.persona.ly
+  - dev.dsp.persona.ly
+  - dev.persona.ly
+  - dsp.persona.ly
+  - persona.ly
+  - rtb.persona.ly
+  - sdk.persona.ly
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 167
+  name: Branch
+  website: https://branch.io/
+  categories:
+  - Analytics
+  code_prefixes:
+  - io.branch
+  code_segments: []
+  domain_suffixes:
+  - api.branch.io
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 168
+  name: Cheetah Ads
+  website: https://www.cmcm.com/
+  categories:
+  - Uncategorised
+  code_prefixes:
+  - com.cmcm
+  code_segments: []
+  domain_suffixes:
+  - cmcm.com
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 169
+  name: Vungle
+  website: https://vungle.com
+  categories:
+  - Advertisement
+  code_prefixes:
+  - com.vungle.publisher
+  - com.vungle.warren
+  code_segments: []
+  domain_suffixes:
+  - ads.api.vungle.com
+  - akamai.vungle-cdn.vungle.com
+  - api.vungle.akadns.net
+  - api.vungle.com
+  - bd.vungle.com
+  - billboard.vungle.com
+  - cdn-lb.vungle.com
+  - ci.vungle.com
+  - data.vungle.com
+  - ingest.vungle.com
+  - jaeger.vungle.com
+  - ltv-data-api.kube-prod.vungle.com
+  - monitoring.vungle.com
+  - ssl.vungle.com
+  - v.vungle.com
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 170
+  name: Criteo
+  website: https://www.criteo.com/
+  categories:
+  - Uncategorised
+  code_prefixes:
+  - com.criteo
+  code_segments: []
+  domain_suffixes:
+  - criteo.com
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 171
+  name: Mapbox
+  website: https://www.mapbox.com/
+  categories:
+  - Uncategorised
+  code_prefixes:
+  - com.mapbox.android.telemetry
+  - com.mapbox.mapboxsdk.maps
+  - com.mapbox.mapboxsdk.module.telemetry
+  code_segments: []
+  domain_suffixes:
+  - a.tiles.mapbox.com
+  - api.tiles.mapbox.com
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 172
+  name: Optimizely
+  website: https://www.optimizely.com/
+  categories:
+  - Analytics
+  code_prefixes:
+  - com.optimizely
+  code_segments: []
+  domain_suffixes:
+  - optimizely.com
+  - optimizelyapis.com
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 173
+  name: Taboola
+  website: https://www.taboola.com/
+  categories:
+  - Uncategorised
+  code_prefixes:
+  - com.taboola
+  code_segments: []
+  domain_suffixes:
+  - taboola.com
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 174
+  name: CleverTap
+  website: https://clevertap.com/
+  categories:
+  - Analytics
+  - Profiling
+  - Location
+  code_prefixes:
+  - com.clevertap
+  code_segments: []
+  domain_suffixes:
+  - wzrkt.com
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 175
+  name: myTracker
+  website: https://tracker.my.com/
+  categories:
+  - Uncategorised
+  code_prefixes:
+  - com.my.tracker
+  code_segments: []
+  domain_suffixes:
+  - tracker-api.my.com
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 176
+  name: Cloudmobi
+  website: http://www.cloudmobi.net/
+  categories:
+  - Uncategorised
+  code_prefixes:
+  - com.cloudtech
+  code_segments: []
+  domain_suffixes:
+  - api.cloudmobi.net
+  - cloudmobi.net
+  - logger.cloudmobi.net
+  - vast.cloudmobi.net
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 177
+  name: ADLIB
+  website: https://adlibr.com
+  categories:
+  - Uncategorised
+  code_prefixes:
+  - com.mocoplex.adlib
+  code_segments: []
+  domain_suffixes:
+  - adlibr.com
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 178
+  name: Brightcove
+  website: https://www.brightcove.com
+  categories:
+  - Uncategorised
+  code_prefixes:
+  - com.brightcove
+  code_segments: []
+  domain_suffixes:
+  - metrics.brightcove.com
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 179
+  name: DOV-E
+  website: https://www.dov-e.com/
+  categories:
+  - Advertisement
+  code_prefixes: []
+  code_segments: []
+  domain_suffixes:
+  - dov-e.com
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 180
+  name: InMarket
+  website: https://inmarket.com/
+  categories:
+  - Uncategorised
+  code_prefixes:
+  - com.inmarket
+  code_segments: []
+  domain_suffixes:
+  - m2m-api.inmarket.com
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 181
+  name: Pilgrim by Foursquare
+  website: https://enterprise.foursquare.com/products/pilgrim
+  categories:
+  - Location
+  code_prefixes:
+  - com.foursquare.pilgrim
+  - com.foursquare.pilgrimsdk.android
+  code_segments: []
+  domain_suffixes:
+  - sdk.foursquare.com
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 182
+  name: OtherLevels
+  website: https://www.otherlevels.com/
+  categories:
+  - Uncategorised
+  code_prefixes:
+  - com.otherlevels
+  code_segments: []
+  domain_suffixes:
+  - api.otherlevels.com
+  - geodata.otherlevels.com
+  - mdn.otherlevels.com
+  - rich.otherlevels.com
+  - tags.otherlevels.com
+  - ws.otherlevels.com
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 183
+  name: PubNative
+  website: https://pubnative.net/
+  categories:
+  - Advertisement
+  code_prefixes:
+  - net.pubnative
+  code_segments: []
+  domain_suffixes:
+  - pubnative.net
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 184
+  name: Appnext
+  website: https://www.appnext.com/
+  categories:
+  - Uncategorised
+  code_prefixes:
+  - com.appnext.sdk
+  code_segments: []
+  domain_suffixes:
+  - appnext.com
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 185
+  name: MobFox
+  website: https://www.mobfox.com/
+  categories:
+  - Analytics
+  - Profiling
+  - Advertisement
+  code_prefixes:
+  - com.adsdk.sdk
+  - com.mobfox
+  code_segments: []
+  domain_suffixes: []
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 186
+  name: ShallWeAD
+  website: http://www.shallwead.com
+  categories:
+  - Uncategorised
+  code_prefixes:
+  - com.co.shallwead.sdk
+  - com.jm.co.shallwead.sdk
+  code_segments: []
+  domain_suffixes: []
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 187
+  name: deltaDNA
+  website: https://deltadna.com/
+  categories:
+  - Analytics
+  code_prefixes:
+  - com.deltadna
+  code_segments: []
+  domain_suffixes:
+  - deltadna.net
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 188
+  name: Display
+  website: https://www.display.io/en/
+  categories:
+  - Uncategorised
+  code_prefixes:
+  - io.display
+  code_segments: []
+  domain_suffixes:
+  - display.io
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 189
+  name: HyprMX
+  website: https://www.hyprmx.com
+  categories:
+  - Advertisement
+  code_prefixes:
+  - com.hyprmx.android.sdk
+  code_segments: []
+  domain_suffixes:
+  - hyprmx.com
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 190
+  name: Bugly
+  website: https://bugly.qq.com/v2/
+  categories:
+  - Uncategorised
+  code_prefixes:
+  - com.tencent.bugly
+  code_segments: []
+  domain_suffixes:
+  - bugly.qq.com
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 191
+  name: Duapps
+  website: http://ad.duapps.com/
+  categories:
+  - Uncategorised
+  code_prefixes:
+  - com.duapps
+  code_segments: []
+  domain_suffixes:
+  - duapps.com
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 192
+  name: Swrve
+  website: https://www.swrve.com/
+  categories:
+  - Analytics
+  - Profiling
+  - Location
+  code_prefixes:
+  - com.swrve.sdk
+  code_segments: []
+  domain_suffixes:
+  - api.swrve.com
+  - content.swrve.com
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 193
+  name: OneSignal
+  website: https://onesignal.com/
+  categories:
+  - Uncategorised
+  code_prefixes:
+  - com.onesignal
+  code_segments: []
+  domain_suffixes:
+  - onesignal.com
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 194
+  name: Appdynamics
+  website: https://www.appdynamics.com/
+  categories:
+  - Analytics
+  - Profiling
+  code_prefixes:
+  - com.appdynamics
+  code_segments: []
+  domain_suffixes:
+  - appdynamics.com
+  - eum-appdynamics.com
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 195
+  name: Startapp
+  website: https://www.startapp.com
+  categories:
+  - Analytics
+  - Advertisement
+  code_prefixes:
+  - com.startapp
+  code_segments: []
+  domain_suffixes:
+  - c2i.startappnetwork.com
+  - c2s.startappnetwork.com
+  - click.startappservice.com
+  - dts.startappservice.com
+  - events.startappservice.com
+  - images.startappservice.com
+  - imp.startappservice.com
+  - info.static.startappservice.com
+  - init.startappservice.com
+  - req.startappservice.com
+  - soda.startappservice.com
+  - startappservice.com
+  - va.origin.startappservice.com
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 196
+  name: AerServ
+  website: https://www.aerserv.com/
+  categories:
+  - Advertisement
+  code_prefixes:
+  - com.aerserv.sdk
+  code_segments: []
+  domain_suffixes:
+  - ads.aerserv.com
+  - debug.aerserv.com
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 197
+  name: INFOnline
+  website: https://www.infonline.de
+  categories:
+  - Uncategorised
+  code_prefixes:
+  - de.infonline
+  code_segments: []
+  domain_suffixes:
+  - de.ioam.de
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 198
+  name: myTarget
+  website: https://target.my.com/
+  categories:
+  - Advertisement
+  code_prefixes:
+  - com.my.target
+  code_segments: []
+  domain_suffixes:
+  - target.my.com
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 199
+  name: Tapjoy
+  website: https://www.tapjoy.com/
+  categories:
+  - Uncategorised
+  code_prefixes:
+  - com.tapjoy
+  code_segments: []
+  domain_suffixes:
+  - tapjoy.com
+  - tapjoyads.com
+  - www.5rocks.io
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 200
+  name: Mintegral
+  website: https://www.mintegral.com/en/
+  categories:
+  - Analytics
+  - Advertisement
+  code_prefixes:
+  - com.mbridge.msdk
+  - com.mintegral
+  code_segments: []
+  domain_suffixes:
+  - analytics.rayjump.com
+  - cdn-adn.rayjump.com
+  - de.rayjump.com
+  - de01.rayjump.com
+  - detect.rayjump.com
+  - fk-mtrack.rayjump.com
+  - hybird.rayjump.com
+  - jssdk.rayjump.com
+  - net.rayjump.com
+  - online.rayjump.com
+  - rayjump.com
+  - setting.rayjump.com
+  - sg-mtrack.rayjump.com
+  - sg.rayjump.com
+  - sg01.rayjump.com
+  - tknet.rayjump.com
+  - us01.rayjump.com
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 201
+  name: Gimbal
+  website: https://gimbal.com/
+  categories:
+  - Uncategorised
+  code_prefixes:
+  - com.gimbal.android
+  code_segments: []
+  domain_suffixes:
+  - analytics-server.gimbal.com
+  - api.gimbal.com
+  - registration.gimbal.com
+  - sdk-info.gimbal.com
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 202
+  name: Conviva
+  website: https://www.conviva.com/
+  categories:
+  - Uncategorised
+  code_prefixes:
+  - com.conviva
+  code_segments: []
+  domain_suffixes:
+  - cws.conviva.com
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 203
+  name: Auditude
+  website: https://www.adobe.com/privacy/policies/auditude.html
+  categories:
+  - Uncategorised
+  code_prefixes:
+  - com.auditude.ads
+  code_segments: []
+  domain_suffixes:
+  - auditude.com
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 204
+  name: Instreamatic (Adman)
+  website: http://instreamatic.com/
+  categories:
+  - Analytics
+  - Advertisement
+  code_prefixes:
+  - com.instreamatic
+  code_segments: []
+  domain_suffixes:
+  - instreamatic.com
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 205
+  name: GameAnalytics
+  website: https://gameanalytics.com/features
+  categories:
+  - Analytics
+  - Profiling
+  code_prefixes:
+  - com.gameanalytics.sdk
+  code_segments: []
+  domain_suffixes: []
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 206
+  name: Instabug
+  website: https://instabug.com/crash-reporting
+  categories:
+  - Crash reporting
+  code_prefixes:
+  - com.instabug
+  code_segments: []
+  domain_suffixes: []
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 207
+  name: Bugsnag
+  website: https://www.bugsnag.com/
+  categories:
+  - Crash reporting
+  code_prefixes:
+  - com.bugsnag
+  code_segments: []
+  domain_suffixes: []
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 208
+  name: Moodmedia
+  website: https://us.moodmedia.com/
+  categories:
+  - Advertisement
+  - Location
+  code_prefixes:
+  - com.moodmedia
+  code_segments: []
+  domain_suffixes:
+  - moodpresence.com
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 209
+  name: Houndify
+  website: https://www.houndify.com/
+  categories:
+  - Identification
+  - Location
+  code_prefixes:
+  - com.hound
+  code_segments: []
+  domain_suffixes:
+  - houndify.com
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 210
+  name: OpenX
+  website: https://www.openx.com/
+  categories:
+  - Analytics
+  - Advertisement
+  - Location
+  code_prefixes:
+  - com.openx.android_sdk_openx
+  - com.openx.view.plugplay
+  code_segments: []
+  domain_suffixes:
+  - openx.com
+  - openx.net
+  - openx.org
+  - us-ads.openx.net
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 211
+  name: Taplytics
+  website: https://taplytics.com
+  categories:
+  - Analytics
+  - Advertisement
+  code_prefixes:
+  - com.taplytics.sdk
+  code_segments: []
+  domain_suffixes:
+  - api.taplytics.com
+  - ping.tapylitics.com
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 212
+  name: Yinzcam Sobek
+  website: http://www.yinzcam.com/
+  categories:
+  - Analytics
+  - Advertisement
+  - Location
+  code_prefixes:
+  - com.yinzcam.sobek
+  code_segments: []
+  domain_suffixes:
+  - analytics.yinzcam.com
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 213
+  name: Ooyala
+  website: https://www.ooyala.com/
+  categories:
+  - Advertisement
+  code_prefixes:
+  - com.ooyala
+  code_segments: []
+  domain_suffixes:
+  - ooyala.com
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 214
+  name: Kiip
+  website: https://www.ninthdecimal.com/
+  categories:
+  - Advertisement
+  code_prefixes:
+  - me.kiip.sdk
+  code_segments: []
+  domain_suffixes:
+  - kiip.me
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 215
+  name: MobPower
+  website: https://home.mobpowertech.com/
+  categories:
+  - Advertisement
+  code_prefixes:
+  - com.mobpower
+  code_segments: []
+  domain_suffixes:
+  - api.mobpowertech.com
+  - log.mobpowertech.com
+  - mobpowertech.com
+  - scheme.mobpowertech.com
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 216
+  name: AdBuddiz
+  website: http://www.adbuddiz.com/abuse?hl=fr
+  categories:
+  - Advertisement
+  code_prefixes:
+  - com.purplebrain.adbuddiz.sdk
+  code_segments: []
+  domain_suffixes:
+  - sdk.adbuddiz.com
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 218
+  name: Integral Ad Science
+  website: https://integralads.com
+  categories:
+  - Uncategorised
+  code_prefixes:
+  - com.integralads.avid.library
+  code_segments: []
+  domain_suffixes:
+  - adsafeprotected.com
+  - iasds01.com
+  - integralads.com
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 219
+  name: AltBeacon
+  website: https://altbeacon.org
+  categories:
+  - Uncategorised
+  code_prefixes:
+  - com.altbeacon.beacon
+  - org.altbeacon.beacon
+  - org.altbeacon.bluetooth
+  code_segments: []
+  domain_suffixes: []
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 220
+  name: Salesforce Marketing Cloud
+  website: https://www.salesforce.com/products/marketing-cloud/
+  categories:
+  - Uncategorised
+  code_prefixes:
+  - com.salesforce.marketingcloud
+  code_segments: []
+  domain_suffixes: []
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 221
+  name: Mozilla Telemetry
+  website: https://wiki.mozilla.org/Telemetry
+  categories:
+  - Uncategorised
+  code_prefixes:
+  - mozilla.telemetry.glean
+  - org.mozilla.fenix.components.metrics
+  - org.mozilla.gecko.telemetry
+  - org.mozilla.telemetry
+  code_segments: []
+  domain_suffixes: []
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 222
+  name: nend
+  website: https://nend.net/en/
+  categories:
+  - Advertisement
+  code_prefixes:
+  - net.nend.android
+  - net.nend.unity
+  code_segments: []
+  domain_suffixes: []
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 223
+  name: Pusher
+  website: https://pusher.com/
+  categories:
+  - Uncategorised
+  code_prefixes:
+  - com.pusher.client
+  code_segments: []
+  domain_suffixes: []
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 224
+  name: FreeWheel
+  website: http://freewheel.tv/
+  categories:
+  - Advertisement
+  code_prefixes:
+  - tv.freewheel.ad
+  code_segments: []
+  domain_suffixes:
+  - fwmrm.net
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 225
+  name: TNK Factory
+  website: http://www.tnkfactory.com
+  categories:
+  - Advertisement
+  code_prefixes:
+  - com.tnkfactory.ad
+  code_segments: []
+  domain_suffixes: []
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 226
+  name: Axonix
+  website: http://axonix.com/
+  categories:
+  - Uncategorised
+  code_prefixes:
+  - com.axonix.android.sdk
+  - com.mobclix.android.sdk
+  code_segments: []
+  domain_suffixes:
+  - ads.mobclix.com
+  - axonix.com
+  - data.mobclix.com
+  - mobclix.com
+  - s.mobclix.com
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 227
+  name: Gemius HeatMap
+  website: https://heatmap.gemius.com
+  categories:
+  - Uncategorised
+  code_prefixes:
+  - com.gemius.sdk
+  code_segments: []
+  domain_suffixes:
+  - gemius.pl
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 228
+  name: YouAppi
+  website: https://www.youappi.com
+  categories:
+  - Uncategorised
+  code_prefixes:
+  - com.youappi.sdk
+  code_segments: []
+  domain_suffixes: []
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 229
+  name: Adobe Experience Cloud
+  website: https://www.adobe.com/experience-cloud.html
+  categories:
+  - Uncategorised
+  code_prefixes:
+  - com.adobe.marketing.mobile
+  code_segments: []
+  domain_suffixes: []
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 230
+  name: Teads
+  website: https://www.teads.tv
+  categories:
+  - Advertisement
+  code_prefixes:
+  - teads.tv
+  - tv.teads
+  code_segments: []
+  domain_suffixes:
+  - teads.tv
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 231
+  name: In Loco
+  website: https://inloco.com.br
+  categories:
+  - Uncategorised
+  code_prefixes:
+  - com.inlocomedia.android
+  code_segments: []
+  domain_suffixes:
+  - inlocomedia.com
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 232
+  name: IQzone
+  website: https://iqzone.com
+  categories:
+  - Advertisement
+  code_prefixes:
+  - com.iqzone
+  code_segments: []
+  domain_suffixes: []
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 233
+  name: Bugfender
+  website: https://bugfender.com/
+  categories:
+  - Crash reporting
+  - Analytics
+  code_prefixes:
+  - com.bugfender.sdk
+  code_segments: []
+  domain_suffixes: []
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 234
+  name: Wootric
+  website: http://wootric.com
+  categories:
+  - Analytics
+  code_prefixes:
+  - com.wootric.androidsdk
+  code_segments: []
+  domain_suffixes:
+  - wootric.com
+  - wootric.com.herokudns.com
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 235
+  name: KIDOZ
+  website: https://kidoz.net/kidoz-sdk/
+  categories:
+  - Advertisement
+  code_prefixes:
+  - com.kidoz.sdk
+  code_segments: []
+  domain_suffixes: []
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 236
+  name: PubMatic
+  website: https://pubmatic.com/
+  categories:
+  - Advertisement
+  code_prefixes:
+  - com.pubmatic.sdk
+  code_segments: []
+  domain_suffixes:
+  - ads.pubmatic.com
+  - aktrack.pubmatic.com
+  - gads.pubmatic.com
+  - image2.pubmatic.com
+  - simage2.pubmatic.com
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 237
+  name: Kissmetrics
+  website: https://www.kissmetricshq.com/
+  categories:
+  - Analytics
+  code_prefixes:
+  - com.kissmetrics
+  code_segments: []
+  domain_suffixes: []
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 238
+  name: Microsoft Visual Studio App Center Crashes
+  website: https://appcenter.ms/
+  categories:
+  - Crash reporting
+  code_prefixes:
+  - com.microsoft.appcenter.crashes
+  code_segments: []
+  domain_suffixes: []
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 239
+  name: Webtrekk
+  website: https://www.webtrekk.com/
+  categories:
+  - Analytics
+  code_prefixes:
+  - com.webtrekk.webtrekksdk
+  code_segments: []
+  domain_suffixes: []
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 240
+  name: Google Analytics Plugin (Cordova)
+  website: https://analytics.withgoogle.com/
+  categories:
+  - Analytics
+  code_prefixes:
+  - com.danielcwilson.plugins.analytics
+  code_segments: []
+  domain_suffixes: []
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 241
+  name: Bugsee
+  website: https://www.bugsee.com/
+  categories:
+  - Crash reporting
+  code_prefixes:
+  - com.bugsee.library
+  code_segments: []
+  domain_suffixes: []
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 242
+  name: Splunk MINT
+  website: https://mint.splunk.com/
+  categories:
+  - Analytics
+  code_prefixes:
+  - com.splunk.mint
+  code_segments: []
+  domain_suffixes: []
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 243
+  name: Microsoft Visual Studio App Center Analytics
+  website: https://appcenter.ms/
+  categories:
+  - Analytics
+  code_prefixes:
+  - com.microsoft.appcenter.analytics
+  - com.microsoft.azure.mobile.analytics
+  code_segments: []
+  domain_suffixes: []
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 244
+  name: Nielsen
+  website: https://www.nielsen.com
+  categories:
+  - Analytics
+  code_prefixes:
+  - com.nielsen.app
+  code_segments: []
+  domain_suffixes: []
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 245
+  name: Reveal Mobile
+  website: https://revealmobile.com/
+  categories:
+  - Analytics
+  - Location
+  code_prefixes:
+  - com.stepleaderdigital.reveal
+  code_segments: []
+  domain_suffixes: []
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 246
+  name: Metrics
+  website: https://metrics.dropwizard.io
+  categories:
+  - Analytics
+  code_prefixes:
+  - com.codahale.metrics
+  code_segments: []
+  domain_suffixes: []
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 247
+  name: Repro
+  website: https://repro.io/
+  categories:
+  - Analytics
+  code_prefixes:
+  - io.repro.android
+  code_segments: []
+  domain_suffixes: []
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 248
+  name: Sensors Analytics
+  website: https://www.sensorsdata.cn
+  categories:
+  - Analytics
+  code_prefixes:
+  - com.sensorsdata.analytics.android.sdk
+  code_segments: []
+  domain_suffixes: []
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 249
+  name: Tenjin
+  website: https://www.tenjin.com/
+  categories:
+  - Analytics
+  code_prefixes:
+  - com.tenjin.android
+  code_segments: []
+  domain_suffixes: []
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 250
+  name: Tapstream
+  website: https://www.tapstream.com/
+  categories:
+  - Analytics
+  code_prefixes:
+  - com.tapstream.sdk
+  code_segments: []
+  domain_suffixes: []
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 251
+  name: Singular
+  website: https://singular.net/
+  categories:
+  - Analytics
+  code_prefixes:
+  - com.singular.sdk
+  code_segments: []
+  domain_suffixes: []
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 252
+  name: CallDorado
+  website: http://calldorado.com
+  categories:
+  - Advertisement
+  code_prefixes:
+  - com.calldorado.android
+  code_segments: []
+  domain_suffixes: []
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 253
+  name: UXCam
+  website: https://uxcam.com/
+  categories:
+  - Analytics
+  - Profiling
+  code_prefixes:
+  - com.uxcam
+  code_segments: []
+  domain_suffixes:
+  - verify.uxcam.com
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 254
+  name: Upsight
+  website: https://www.upsight.com/
+  categories:
+  - Analytics
+  - Profiling
+  - Advertisement
+  code_prefixes:
+  - com.upsight.android
+  code_segments: []
+  domain_suffixes: []
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 255
+  name: Appcelerator Analytics
+  website: https://www.appcelerator.com
+  categories:
+  - Analytics
+  code_prefixes:
+  - com.appcelerator.aps
+  - org.appcelerator.titanium.analytics
+  code_segments: []
+  domain_suffixes:
+  - appcelerator.com
+  - appcelerator.net
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 256
+  name: Adbrix
+  website: http://ad-brix.com/
+  categories:
+  - Analytics
+  - Profiling
+  code_prefixes:
+  - com.igaworks.adbrix
+  code_segments: []
+  domain_suffixes:
+  - ad-brix.com
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 257
+  name: Cauly
+  website: https://www.cauly.net
+  categories:
+  - Advertisement
+  code_prefixes:
+  - com.cauly.android.ad
+  - com.fsn.cauly
+  - com.trid.tridad
+  code_segments: []
+  domain_suffixes:
+  - ad.cauly.co.kr
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 258
+  name: Tapdaq
+  website: https://www.tapdaq.com/
+  categories:
+  - Advertisement
+  code_prefixes:
+  - com.tapdaq.adapters
+  - com.tapdaq.sdk
+  code_segments: []
+  domain_suffixes:
+  - ads.tapdaq.com
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 259
+  name: Verve
+  website: https://www.verve.com
+  categories:
+  - Advertisement
+  code_prefixes:
+  - com.vervewireless.advert
+  code_segments: []
+  domain_suffixes: []
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 260
+  name: Apsalar
+  website: https://singular.net
+  categories:
+  - Analytics
+  - Profiling
+  - Advertisement
+  code_prefixes:
+  - com.apsalar.sdk
+  code_segments: []
+  domain_suffixes:
+  - e-ssl.apsalar.com
+  - e.apsalar.com
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 261
+  name: PingStart
+  website: http://pingstart.com
+  categories:
+  - Advertisement
+  code_prefixes:
+  - com.pingstart.adsdk
+  code_segments: []
+  domain_suffixes:
+  - api.pingstart.com
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 262
+  name: Keen
+  website: https://keen.io
+  categories:
+  - Analytics
+  code_prefixes:
+  - io.keen.client
+  code_segments: []
+  domain_suffixes:
+  - api.keen.io
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 263
+  name: Revmob
+  website: https://www.crunchbase.com/organization/revmob
+  categories:
+  - Advertisement
+  code_prefixes:
+  - com.revmob.ads
+  code_segments: []
+  domain_suffixes: []
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 264
+  name: Emarsys Predict
+  website: https://help.emarsys.com/hc/categories/115000670425-Predict
+  categories:
+  - Uncategorised
+  code_prefixes:
+  - com.emarsys.predict
+  code_segments: []
+  domain_suffixes:
+  - recommender.scarabresearch.com
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 265
+  name: Lotame
+  website: https://www.lotame.com/
+  categories:
+  - Uncategorised
+  code_prefixes:
+  - com.lotame.android
+  code_segments: []
+  domain_suffixes:
+  - ad.crwdcntrl.net
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 266
+  name: FollowAnalytics
+  website: https://www.followanalytics.com
+  categories:
+  - Uncategorised
+  code_prefixes:
+  - com.followanalytics
+  code_segments: []
+  domain_suffixes:
+  - sdk.follow-apps.com
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 267
+  name: Chartbeat
+  website: https://chartbeat.com/
+  categories:
+  - Analytics
+  code_prefixes:
+  - com.chartbeat.androidsdk
+  code_segments: []
+  domain_suffixes:
+  - chartbeat.com
+  - chartbeat.net
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 268
+  name: MoEngage
+  website: https://www.moengage.com/
+  categories:
+  - Analytics
+  code_prefixes:
+  - com.moengage
+  code_segments: []
+  domain_suffixes:
+  - apiv2.moengage.com
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 269
+  name: Altamob
+  website: https://www.altamob.com/en/index.html
+  categories:
+  - Advertisement
+  code_prefixes:
+  - com.altamob.sdk
+  code_segments: []
+  domain_suffixes:
+  - api.altamob.com
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 270
+  name: Tealeaf
+  website: https://acoustic.co/products/experience-analytics/
+  categories:
+  - Analytics
+  code_prefixes:
+  - com.tl.uic
+  code_segments: []
+  domain_suffixes: []
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 271
+  name: AMoAd
+  website: https://www.amoad.com
+  categories:
+  - Uncategorised
+  code_prefixes:
+  - com.amoad
+  code_segments: []
+  domain_suffixes: []
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 272
+  name: AdAdapted
+  website: https://www.adadapted.com
+  categories:
+  - Analytics
+  - Advertisement
+  code_prefixes:
+  - com.adadapted.android.sdk
+  code_segments: []
+  domain_suffixes:
+  - ads.adadapted.com
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 273
+  name: AdMuing
+  website: https://github.com/admuing
+  categories:
+  - Advertisement
+  code_prefixes:
+  - com.admuing.danmaku
+  code_segments: []
+  domain_suffixes: []
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 274
+  name: Adcash
+  website: https://adcash.com
+  categories:
+  - Advertisement
+  code_prefixes:
+  - com.adcash.mobileads
+  code_segments: []
+  domain_suffixes: []
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 275
+  name: Admixer
+  website: http://admixer.co.kr/
+  categories:
+  - Advertisement
+  code_prefixes:
+  - com.admixer
+  - net.admixer.sdk
+  code_segments: []
+  domain_suffixes:
+  - admixer.co.kr
+  - admixer.net
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 276
+  name: Admost
+  website: https://admost.com/
+  categories:
+  - Advertisement
+  code_prefixes:
+  - admost.adserver
+  - admost.sdk
+  code_segments: []
+  domain_suffixes:
+  - cdn-api.admost.com
+  - go.admost.com
+  - med-api.admost.com
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 277
+  name: Alohalytics
+  website: https://github.com/biodranik/Alohalytics
+  categories:
+  - Analytics
+  code_prefixes:
+  - org.alohalytics
+  code_segments: []
+  domain_suffixes: []
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 278
+  name: Amobee
+  website: https://amobee.com
+  categories:
+  - Uncategorised
+  code_prefixes:
+  - com.amobee
+  code_segments: []
+  domain_suffixes:
+  - amobee.com
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 279
+  name: Anagog
+  website: https://anagog.com
+  categories:
+  - Analytics
+  - Location
+  code_prefixes:
+  - com.anagog.jedai
+  code_segments: []
+  domain_suffixes: []
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 280
+  name: Bazaarvoice
+  website: https://www.bazaarvoice.com/
+  categories:
+  - Analytics
+  - Location
+  code_prefixes:
+  - com.bazaarvoice.bvandroidsdk
+  code_segments: []
+  domain_suffixes: []
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 281
+  name: BeaconsInSpace (Fysical)
+  website: https://beaconsinspace.com
+  categories:
+  - Location
+  code_prefixes:
+  - com.beaconsinspace.android.beacon.detector
+  code_segments: []
+  domain_suffixes: []
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 282
+  name: Conversant
+  website: https://www.conversantmedia.com
+  categories:
+  - Uncategorised
+  code_prefixes:
+  - com.conversantmedia
+  - com.greystripe.android
+  code_segments: []
+  domain_suffixes:
+  - conversantmedia.com
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 283
+  name: Glympse
+  website: https://glympse.com
+  categories:
+  - Location
+  code_prefixes:
+  - com.glympse.android
+  code_segments: []
+  domain_suffixes:
+  - glympse.com
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 284
+  name: Herow
+  website: https://herow.io/
+  categories:
+  - Analytics
+  - Profiling
+  - Location
+  code_prefixes:
+  - com.connecthings.herow
+  code_segments: []
+  domain_suffixes: []
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 285
+  name: Placer
+  website: https://placer.io/
+  categories:
+  - Analytics
+  - Profiling
+  - Location
+  code_prefixes:
+  - com.placer.client
+  code_segments: []
+  domain_suffixes: []
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 286
+  name: PushSpring
+  website: http://www.pushspring.com/
+  categories:
+  - Uncategorised
+  code_prefixes:
+  - com.pushspring.sdk
+  code_segments: []
+  domain_suffixes:
+  - api.pushspring.com
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 287
+  name: Pyze
+  website: https://pyze.com/
+  categories:
+  - Analytics
+  code_prefixes:
+  - com.pyze
+  code_segments: []
+  domain_suffixes:
+  - pyze.com
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 288
+  name: Radar
+  website: https://radar.io/
+  categories:
+  - Uncategorised
+  code_prefixes:
+  - io.radar.sdk
+  code_segments: []
+  domain_suffixes: []
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 289
+  name: Roximity
+  website: http://roximity.com/
+  categories:
+  - Location
+  code_prefixes:
+  - com.roximity.sdk
+  code_segments: []
+  domain_suffixes:
+  - app.roximity.com
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 290
+  name: Sentiance
+  website: https://www.sentiance.com/
+  categories:
+  - Uncategorised
+  code_prefixes:
+  - com.sentiance.sdk
+  code_segments: []
+  domain_suffixes:
+  - api.sentiance.com
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 291
+  name: SmartLook
+  website: https://www.smartlook.com/
+  categories:
+  - Profiling
+  - Location
+  code_prefixes:
+  - com.smartlook.sdk.smartlook
+  code_segments: []
+  domain_suffixes:
+  - smartlook.com
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 292
+  name: Square Metrics
+  website: https://www.squaremetrics.com
+  categories:
+  - Uncategorised
+  code_prefixes:
+  - com.beaconinside.proximitysdk
+  code_segments: []
+  domain_suffixes:
+  - api.beaconinside.com
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 293
+  name: TalkingData
+  website: https://www.talkingdata.com/
+  categories:
+  - Analytics
+  - Advertisement
+  code_prefixes:
+  - com.apptalkingdata.push
+  - com.gametalkingdata.push
+  - com.talkingdata.adtracking
+  - com.talkingdata.appanalytics
+  - com.talkingdata.sdk
+  - com.tendcloud.appcpa
+  - com.tendcloud.tenddata
+  code_segments: []
+  domain_suffixes:
+  - account.talkingdata.com
+  - av1.xdrig.com
+  - cloud.xdrig.com
+  - m.talkingdata.com
+  - push.xdrig.com
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 294
+  name: flymob
+  website: https://flymob.com/
+  categories:
+  - Uncategorised
+  code_prefixes:
+  - com.flymob.sdk
+  code_segments: []
+  domain_suffixes: []
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 295
+  name: AdFalcon
+  website: http://adfalcon.com
+  categories:
+  - Advertisement
+  code_prefixes:
+  - com.noqoush.adfalcon.android.sdk
+  code_segments: []
+  domain_suffixes: []
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 297
+  name: Enhance
+  website: https://enhance.co
+  categories:
+  - Uncategorised
+  code_prefixes: []
+  code_segments: []
+  domain_suffixes:
+  - app-config.enhance.co
+  - data-location.enhance.co
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 298
+  name: Esri ArcGIS
+  website: https://www.arcgis.com/
+  categories:
+  - Location
+  code_prefixes:
+  - com.esri.arcgisruntime
+  code_segments: []
+  domain_suffixes: []
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 299
+  name: GIPHY Analytics
+  website: https://giphy.com/
+  categories:
+  - Analytics
+  code_prefixes:
+  - com.giphy.sdk.analytics
+  - com.giphy.sdk.tracking
+  code_segments: []
+  domain_suffixes:
+  - api.giphy.com
+  - pingback.giphy.com
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 300
+  name: Heap
+  website: https://heap.io/
+  categories:
+  - Analytics
+  code_prefixes:
+  - com.heapanalytics
+  code_segments: []
+  domain_suffixes:
+  - heapanalytics.com
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 301
+  name: Inneractive
+  website: https://www.crunchbase.com/organization/inneractive
+  categories:
+  - Advertisement
+  code_prefixes:
+  - com.inneractive.api.ads
+  code_segments: []
+  domain_suffixes: []
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 302
+  name: MDOTM
+  website: http://mdotm.com/
+  categories:
+  - Advertisement
+  code_prefixes:
+  - com.mdotm.android
+  code_segments: []
+  domain_suffixes:
+  - ads.mdotm.com
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 303
+  name: Metaps
+  website: http://www.metaps.com
+  categories:
+  - Advertisement
+  code_prefixes:
+  - com.metaps
+  code_segments: []
+  domain_suffixes: []
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 304
+  name: Parse.ly
+  website: https://www.parse.ly/
+  categories:
+  - Analytics
+  code_prefixes:
+  - com.parsely.parselyandroid
+  code_segments: []
+  domain_suffixes: []
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 305
+  name: Pollfish
+  website: https://www.pollfish.com
+  categories:
+  - Profiling
+  code_prefixes:
+  - com.pollfish
+  code_segments: []
+  domain_suffixes: []
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 306
+  name: Qualtrics
+  website: http://www.qualtrics.com/
+  categories:
+  - Uncategorised
+  code_prefixes:
+  - com.qualtrics.digital
+  code_segments: []
+  domain_suffixes:
+  - qualtrics.com
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 307
+  name: Tamoco
+  website: https://www.tamoco.com/
+  categories:
+  - Location
+  - Analytics
+  code_prefixes:
+  - com.tamoco.sdk
+  code_segments: []
+  domain_suffixes:
+  - evt.tamoco.com
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 308
+  name: Vpon
+  website: https://www.vpon.com/
+  categories:
+  - Analytics
+  - Profiling
+  - Advertisement
+  code_prefixes:
+  - com.vpadn.ads
+  - com.vpadn.analytics
+  - com.vpadn.widget
+  - com.vpon.ads
+  code_segments: []
+  domain_suffixes: []
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 309
+  name: YuMe
+  website: https://www.appbrain.com/stats/libraries/details/yume/yume
+  categories:
+  - Advertisement
+  code_prefixes:
+  - com.yume.android
+  code_segments: []
+  domain_suffixes: []
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 310
+  name: Zapr
+  website: https://www.zapr.in/
+  categories:
+  - Analytics
+  - Advertisement
+  - Location
+  code_prefixes:
+  - com.redbricklane.zapr
+  code_segments: []
+  domain_suffixes:
+  - zapr.in
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 311
+  name: mediba
+  website: https://www.mediba.jp
+  categories:
+  - Advertisement
+  code_prefixes:
+  - com.mediba.jp
+  - mediba.ad.sdk.android.openx
+  code_segments: []
+  domain_suffixes: []
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 312
+  name: Google AdMob
+  website: https://admob.google.com
+  categories:
+  - Advertisement
+  code_prefixes:
+  - com.google.ads
+  - com.google.android.ads
+  - com.google.android.gms.admob
+  - com.google.android.gms.ads.doubleclick
+  - com.google.android.gms.ads.mediation
+  - com.google.firebase.firebase_ads
+  - com.google.unity.ads
+  code_segments: []
+  domain_suffixes:
+  - 2mdn.net
+  - ads.google.com
+  - adservice.g.cn
+  - dmtry.com
+  - doubleclick.com
+  - doubleclick.net
+  - googleads.g.doubleclick.net
+  - googleadservices.com
+  - googlesyndication.com
+  - mng-ads.com
+  - mobileads.google.com
+  domain_labels: []
+  domain_patterns:
+  - adservice\.google\..*
+  excluded_domains: []
+- id: 313
+  name: Unacast Pure
+  website: https://www.unacast.com/
+  categories:
+  - Location
+  code_prefixes:
+  - com.pure.internal
+  - com.pure.sdk
+  code_segments: []
+  domain_suffixes: []
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 314
+  name: Factual
+  website: https://www.factual.com
+  categories:
+  - Uncategorised
+  code_prefixes:
+  - com.factual.engine
+  code_segments: []
+  domain_suffixes:
+  - api.factual.com
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 315
+  name: Footmarks
+  website: https://www.footmarks.com
+  categories:
+  - Location
+  code_prefixes:
+  - com.footmarks.footmarkssdkm2
+  code_segments: []
+  domain_suffixes: []
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 316
+  name: OzTAM
+  website: https://oztam.com.au/
+  categories:
+  - Analytics
+  code_prefixes:
+  - au.com.oztam
+  code_segments: []
+  domain_suffixes:
+  - deliver.oztam.com.au
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 317
+  name: Receptiv (formerly Mediabrix)
+  website: https://www.receptiv.com/
+  categories:
+  - Advertisement
+  code_prefixes:
+  - com.mediabrix.android
+  code_segments: []
+  domain_suffixes: []
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 318
+  name: Tutela
+  website: https://www.tutela.com/
+  categories:
+  - Uncategorised
+  code_prefixes:
+  - com.tutelatechnologies.sdk
+  code_segments: []
+  domain_suffixes: []
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 319
+  name: Twine Data
+  website: https://www.truedata.co/
+  categories:
+  - Uncategorised
+  code_prefixes:
+  - com.twine.sdk
+  code_segments: []
+  domain_suffixes: []
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 320
+  name: Verizon Ads
+  website: https://www.verizonmedia.com/
+  categories:
+  - Analytics
+  - Profiling
+  - Identification
+  - Advertisement
+  - Location
+  code_prefixes:
+  - com.oath.mobile
+  - com.verizon.ads
+  - com.verizondigitalmedia.mobile
+  code_segments: []
+  domain_suffixes: []
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 321
+  name: adPOPcorn
+  website: https://adpopcorn.com/
+  categories:
+  - Advertisement
+  code_prefixes:
+  - com.igaworks.adpopcorn
+  - com.igaworks.ssp
+  code_segments: []
+  domain_suffixes: []
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 322
+  name: maio by i-mobile
+  website: https://adpf-info.i-mobile.co.jp/en/
+  categories:
+  - Uncategorised
+  code_prefixes:
+  - jp.maio.sdk
+  code_segments: []
+  domain_suffixes: []
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 323
+  name: 360Dialog
+  website: https://www.360dialog.com
+  categories:
+  - Analytics
+  - Profiling
+  - Identification
+  - Advertisement
+  - Location
+  code_prefixes:
+  - com.threesixtydialog.sdk
+  code_segments: []
+  domain_suffixes: []
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 324
+  name: ABTasty
+  website: https://www.abtasty.com
+  categories:
+  - Analytics
+  code_prefixes:
+  - com.abtasty
+  code_segments: []
+  domain_suffixes:
+  - abtasty.com
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 325
+  name: ACRCloud
+  website: https://acrcloud.com/
+  categories:
+  - Analytics
+  code_prefixes:
+  - com.acrcloud
+  code_segments: []
+  domain_suffixes:
+  - acrcloud.com
+  - hb-minify-juc1ugur1qwqqqo4.stackpathdns.com
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 326
+  name: Aarki
+  website: https://www.aarki.com
+  categories:
+  - Analytics
+  - Profiling
+  - Identification
+  - Advertisement
+  code_prefixes:
+  - com.aarki
+  code_segments: []
+  domain_suffixes: []
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 327
+  name: Actv8me
+  website: https://www.actv8me.com/
+  categories:
+  - Profiling
+  - Identification
+  - Advertisement
+  - Location
+  code_prefixes:
+  - me.actv8
+  code_segments: []
+  domain_suffixes:
+  - actv8technologies.com
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 328
+  name: IAB Open Measurement
+  website: https://iabtechlab.com/
+  categories:
+  - Identification
+  - Advertisement
+  code_prefixes:
+  - com.iab.omid.library
+  - com.prime31.util
+  code_segments: []
+  domain_suffixes: []
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 333
+  name: Huawei Mobile Services (HMS) Core
+  website: https://developer.huawei.com/consumer/en/hms
+  categories:
+  - Analytics
+  - Advertisement
+  - Location
+  code_prefixes:
+  - com.huawei.agconnect
+  - com.huawei.hms.analytics
+  - com.huawei.hms.flutter.analytics
+  - com.huawei.hms.location
+  - com.huawei.hms.plugin.ads
+  - com.huawei.hms.plugin.analytics
+  - com.huawei.hms.support.api.push
+  - com.huawei.updatesdk
+  code_segments: []
+  domain_suffixes:
+  - dbankcloud.cn
+  - dbankcloud.com
+  - dbankcloud.ru
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains:
+  - hicloud\.com
+- id: 334
+  name: Akamai MAP
+  website: https://www.akamai.com/
+  categories:
+  - Analytics
+  code_prefixes:
+  - com.akamai.android.sdk
+  code_segments: []
+  domain_suffixes: []
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 336
+  name: Mail.ru
+  website: http://mail.ru
+  categories:
+  - Uncategorised
+  code_prefixes:
+  - ru.mail.mrgservice.advertising
+  - ru.mail.mrgservice.analytics
+  code_segments: []
+  domain_suffixes: []
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 337
+  name: Airpush
+  website: https://airpush.com/
+  categories:
+  - Advertisement
+  code_prefixes:
+  - com.airpush
+  code_segments: []
+  domain_suffixes:
+  - api.airpush.com
+  - apidm.airpush.com
+  - apistaging.airpush.com
+  - apportal.airpush.com
+  - appwall.api.airpush.com
+  - beta.airpush.com
+  - cdnap.airpush.com
+  - m.airpush.com
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 338
+  name: Alimama (formerly AdsMogo)
+  website: https://www.alimama.com/
+  categories:
+  - Advertisement
+  code_prefixes:
+  - com.adsmogo
+  - com.alimama
+  code_segments: []
+  domain_suffixes: []
+  domain_labels:
+  - adsmogo
+  - alimama
+  domain_patterns: []
+  excluded_domains: []
+- id: 339
+  name: AnySDK
+  website: http://www.anysdk.com/
+  categories:
+  - Analytics
+  - Advertisement
+  code_prefixes:
+  - com.anysdk.framework
+  code_segments: []
+  domain_suffixes: []
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 340
+  name: Button
+  website: https://www.usebutton.com
+  categories:
+  - Analytics
+  - Profiling
+  - Identification
+  code_prefixes:
+  - com.usebutton.sdk
+  code_segments: []
+  domain_suffixes:
+  - usebutton.com
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 341
+  name: Carto (formerly Nutiteq)
+  website: https://carto.com
+  categories:
+  - Advertisement
+  - Location
+  code_prefixes:
+  - com.carto
+  - com.nutiteq
+  code_segments: []
+  domain_suffixes: []
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 342
+  name: Didomi
+  website: https://www.didomi.io/
+  categories:
+  - Analytics
+  code_prefixes:
+  - io.didomi.sdk
+  code_segments: []
+  domain_suffixes: []
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 343
+  name: JiGuang Aurora Mobile JPush
+  website: https://ir.jiguang.cn/corporate-profile
+  categories:
+  - Analytics
+  code_prefixes:
+  - cn.jpush.android
+  code_segments: []
+  domain_suffixes:
+  - jiguang.cn
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 344
+  name: Jumio
+  website: https://www.jumio.com/
+  categories:
+  - Identification
+  code_prefixes: []
+  code_segments: []
+  domain_suffixes:
+  - mobile-sdk-resources.jumio.com
+  - nv-sdk.jumio.com
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 345
+  name: Lenddo
+  website: https://www.lenddo.com/
+  categories:
+  - Analytics
+  - Identification
+  - Location
+  code_prefixes:
+  - com.lenddo.mobile
+  code_segments: []
+  domain_suffixes:
+  - partner-service.link
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 346
+  name: POKKT
+  website: https://www.pokkt.com
+  categories:
+  - Advertisement
+  code_prefixes:
+  - com.pokkt.sdk
+  code_segments: []
+  domain_suffixes: []
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 347
+  name: Prebid Mobile
+  website: https://prebid.org
+  categories:
+  - Advertisement
+  code_prefixes:
+  - org.prebid.mobile
+  code_segments: []
+  domain_suffixes:
+  - prebid.org
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 348
+  name: SK planet Tad
+  website: https://www.skplanet.com/eng
+  categories:
+  - Advertisement
+  code_prefixes:
+  - com.skplanet.tad
+  code_segments: []
+  domain_suffixes: []
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 349
+  name: Split
+  website: https://www.split.io/
+  categories:
+  - Analytics
+  code_prefixes:
+  - io.split.android
+  code_segments: []
+  domain_suffixes:
+  - event.split.io
+  - sdk.split.io
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 350
+  name: Exponea
+  website: https://exponea.com
+  categories:
+  - Analytics
+  code_prefixes:
+  - com.exponea.sdk
+  - com.infinario.android.infinariosdk
+  - com.sygic.aura
+  code_segments: []
+  domain_suffixes:
+  - api.infinario.com
+  - sygic-api.infinario.com
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 351
+  name: IPQualityScore
+  website: https://www.ipqualityscore.com
+  categories:
+  - Profiling
+  - Location
+  code_prefixes:
+  - com.ipqualityscore
+  code_segments: []
+  domain_suffixes:
+  - ipqualityscore.com
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 352
+  name: Opensignal
+  website: https://www.opensignal.com
+  categories:
+  - Analytics
+  - Location
+  code_prefixes:
+  - com.opensignal.datacollection
+  code_segments: []
+  domain_suffixes: []
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 353
+  name: SignalFrame
+  website: https://signalframe.com/
+  categories:
+  - Location
+  code_prefixes:
+  - com.wirelessregistry.observersdk
+  code_segments: []
+  domain_suffixes: []
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 354
+  name: X-Mode
+  website: https://xmode.io/
+  categories:
+  - Analytics
+  - Location
+  code_prefixes:
+  - io.mysdk
+  - io.xmode.locationsdk
+  code_segments: []
+  domain_suffixes:
+  - api.myendpoint.io
+  - api.smartechmetrics.com
+  - bin5y4muil.execute-api.us-east-1.amazonaws.com
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 355
+  name: OneAudience
+  website: http://www.oneaudience.com/
+  categories:
+  - Analytics
+  - Profiling
+  code_prefixes:
+  - com.oneaudience.sdk
+  code_segments: []
+  domain_suffixes: []
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 356
+  name: OpenBack
+  website: https://www.openback.com
+  categories:
+  - Uncategorised
+  code_prefixes:
+  - com.openback
+  code_segments: []
+  domain_suffixes: []
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 357
+  name: PredicIO
+  website: https://www.predic.io/
+  categories:
+  - Identification
+  - Location
+  - Analytics
+  - Advertisement
+  code_prefixes:
+  - com.telescope.android
+  - io.predic.tracker
+  code_segments: []
+  domain_suffixes:
+  - sdk.predic.io
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 358
+  name: AdLocus
+  website: https://adlocus.com
+  categories:
+  - Profiling
+  - Identification
+  - Advertisement
+  - Location
+  code_prefixes:
+  - com.adlocus
+  code_segments: []
+  domain_suffixes: []
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 359
+  name: Adcenix
+  website: http://adcenix.com
+  categories:
+  - Advertisement
+  code_prefixes:
+  - com.adcenix
+  code_segments: []
+  domain_suffixes: []
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 360
+  name: Admitad
+  website: https://www.admitad.com
+  categories:
+  - Advertisement
+  code_prefixes:
+  - ru.tachos.admitadstatisticsdk
+  code_segments: []
+  domain_suffixes:
+  - admitad.com
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 361
+  name: AutoNavi / Amap
+  website: https://mobile.amap.com/
+  categories:
+  - Location
+  code_prefixes:
+  - com.amap.api
+  code_segments: []
+  domain_suffixes:
+  - abroad.apilocate.amap.com
+  - apiinit.amap.com
+  - apilocate.amap.com
+  - cgicol.amap.com
+  - grid.amap.com
+  - lbs.amap.com
+  - logs.amap.com
+  - m5.amap.com
+  - restapi.amap.com
+  - tm.amap.com
+  - wap.amap.com
+  - wb.amap.com
+  - yuntuapi.amap.com
+  domain_labels: []
+  domain_patterns:
+  - mst[0-9]*\.is\.autonavi\.com
+  - mt[0-9]*\.google\.cn
+  excluded_domains: []
+- id: 362
+  name: IBM Digital Analytics
+  website: https://www.ibm.com/customer-engagement/coremetrics-software
+  categories:
+  - Analytics
+  code_prefixes:
+  - com.digitalanalytics
+  code_segments: []
+  domain_suffixes:
+  - data.de.coremetrics.com
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 363
+  name: Pangle
+  website: https://www.pangleglobal.com
+  categories:
+  - Advertisement
+  code_prefixes:
+  - com.bytedance
+  - com.pangle.global
+  - com.pgl
+  code_segments: []
+  domain_suffixes: []
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 364
+  name: YOC VIS.X
+  website: https://yoc.com
+  categories:
+  - Advertisement
+  code_prefixes:
+  - com.yoc.visx
+  code_segments: []
+  domain_suffixes:
+  - yoc-performance.com
+  - yoc.com
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 365
+  name: Ad Generation
+  website: https://supership.jp/business/adgeneration/
+  categories:
+  - Advertisement
+  code_prefixes:
+  - com.socdm.d.adgeneration
+  code_segments: []
+  domain_suffixes: []
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 366
+  name: Adjoe
+  website: https://adjoe.io/
+  categories:
+  - Advertisement
+  code_prefixes:
+  - io.adjoe.protection
+  - io.adjoe.sdk
+  code_segments: []
+  domain_suffixes: []
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 367
+  name: AppVador
+  website: http://www.appvador.com/
+  categories:
+  - Advertisement
+  code_prefixes:
+  - com.appvador.ads
+  code_segments: []
+  domain_suffixes: []
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 368
+  name: Appodeal Stack
+  website: https://appodealstack.com/about/
+  categories:
+  - Analytics
+  - Advertisement
+  code_prefixes:
+  - com.explorestack
+  code_segments: []
+  domain_suffixes: []
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 369
+  name: AppsGeyser
+  website: https://appsgeyser.com/
+  categories:
+  - Advertisement
+  code_prefixes:
+  - com.appsgeyser.multiTabApp
+  - com.appsgeyser.sdk
+  code_segments: []
+  domain_suffixes: []
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 370
+  name: BidMachine
+  website: https://bidmachine.io/
+  categories:
+  - Advertisement
+  code_prefixes:
+  - io.bidmachine
+  code_segments: []
+  domain_suffixes: []
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 371
+  name: BugSense
+  website: http://www.bugsense.com/
+  categories:
+  - Crash reporting
+  code_prefixes:
+  - com.bugsense.trace
+  code_segments: []
+  domain_suffixes: []
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 372
+  name: BuzzAd Benefit
+  website: https://buzzvil.atlassian.net/wiki/spaces/BDG/pages/486834313/BuzzAd-Benefit+Android+SDK
+  categories:
+  - Advertisement
+  code_prefixes:
+  - com.buzzvil
+  code_segments: []
+  domain_suffixes: []
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 373
+  name: GOM Factory AdPie
+  website: http://www.gomfactory.com
+  categories:
+  - Advertisement
+  code_prefixes:
+  - com.gomfactory.adpie
+  code_segments: []
+  domain_suffixes: []
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 374
+  name: JumpTap
+  website: http://www.millennialmedia.com
+  categories:
+  - Advertisement
+  code_prefixes:
+  - com.jumptap.adtag
+  code_segments: []
+  domain_suffixes: []
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 375
+  name: LoopMe
+  website: https://loopme.com/
+  categories:
+  - Advertisement
+  code_prefixes:
+  - com.loopme
+  code_segments: []
+  domain_suffixes: []
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 376
+  name: Raygun
+  website: https://raygun.com
+  categories:
+  - Crash reporting
+  - Analytics
+  code_prefixes:
+  - com.mindscapehq.android.raygun4android
+  code_segments: []
+  domain_suffixes: []
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 377
+  name: RjFun
+  website: https://rjfun.github.io/
+  categories:
+  - Advertisement
+  code_prefixes:
+  - com.rjfun.cordova.ad
+  - com.rjfun.cordova.admob
+  code_segments: []
+  domain_suffixes: []
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 378
+  name: SuperAwesome
+  website: https://www.superawesome.com/
+  categories:
+  - Advertisement
+  code_prefixes:
+  - tv.superawesome.lib
+  - tv.superawesome.sdk
+  code_segments: []
+  domain_suffixes: []
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 379
+  name: TapResearch
+  website: https://www.tapresearch.com/
+  categories:
+  - Analytics
+  - Profiling
+  code_prefixes:
+  - com.tapr.helpers
+  - com.tapr.internal
+  - com.tapr.sdk
+  code_segments: []
+  domain_suffixes: []
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 380
+  name: Tappx
+  website: https://www.tappx.com/
+  categories:
+  - Advertisement
+  code_prefixes:
+  - com.tappx.sdk.android
+  code_segments: []
+  domain_suffixes: []
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 381
+  name: ThinkingData Analytics
+  website: http://www.thinkingdata.cn/
+  categories:
+  - Analytics
+  - Identification
+  code_prefixes:
+  - cn.thinkingdata
+  code_segments: []
+  domain_suffixes: []
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 382
+  name: VKontakte SDK
+  website: https://vksdk.github.io/vk-sdk-android/
+  categories:
+  - Identification
+  code_prefixes:
+  - com.vk.api.sdk
+  - com.vk.sdk
+  code_segments: []
+  domain_suffixes: []
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 383
+  name: Virgo Mobile
+  website: http://virgomobile.com/
+  categories:
+  - Advertisement
+  code_prefixes:
+  - com.virgo.ads
+  code_segments: []
+  domain_suffixes: []
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 384
+  name: Zoho Analytics
+  website: http://analytics.zoho.com/
+  categories:
+  - Analytics
+  code_prefixes:
+  - com.zoho.zanalytics
+  code_segments: []
+  domain_suffixes: []
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 385
+  name: fineboost
+  website: http://www.yifants.cn/
+  categories:
+  - Analytics
+  - Advertisement
+  code_prefixes:
+  - com.fineboost
+  code_segments: []
+  domain_suffixes: []
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 386
+  name: Acuant
+  website: https://www.acuantcorp.com
+  categories:
+  - Profiling
+  code_prefixes:
+  - com.acuant.acuantcamera
+  code_segments: []
+  domain_suffixes:
+  - frm.acuant.net
+  - medicscan.acuant.net
+  - services.assureid.net
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 387
+  name: Anvato (A Google Company)
+  website: https://cloud.google.com/solutions/media-entertainment/?a=2
+  categories:
+  - Analytics
+  - Profiling
+  - Identification
+  - Advertisement
+  - Location
+  code_prefixes:
+  - com.anvato.androidsdk
+  code_segments: []
+  domain_suffixes:
+  - anvato.net
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 388
+  name: Blesh
+  website: https://www.blesh.com/
+  categories:
+  - Location
+  code_prefixes:
+  - com.blesh.sdk
+  code_segments: []
+  domain_suffixes: []
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 389
+  name: Bluecats
+  website: https://www.bluecats.com/
+  categories:
+  - Location
+  code_prefixes:
+  - com.bluecats.sdk
+  code_segments: []
+  domain_suffixes: []
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 390
+  name: CoolaData
+  website: https://www.cooladata.com/
+  categories:
+  - Analytics
+  - Profiling
+  code_prefixes:
+  - com.cooladata.android
+  code_segments: []
+  domain_suffixes: []
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 391
+  name: FLUZO
+  website: https://www.fluzo.com/
+  categories:
+  - Analytics
+  code_prefixes:
+  - com.fluzo.sdk
+  code_segments: []
+  domain_suffixes: []
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 392
+  name: Facebook Flipper
+  website: https://fbflipper.com
+  categories:
+  - Analytics
+  code_prefixes:
+  - com.facebook.flipper
+  code_segments: []
+  domain_suffixes: []
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 393
+  name: GPShopper
+  website: https://www.crunchbase.com/organization/gpshopper
+  categories:
+  - Analytics
+  code_prefixes:
+  - com.gpshopper
+  code_segments: []
+  domain_suffixes:
+  - sdk.gpshopper.com
+  - sypi.gpshopper.com
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 394
+  name: IndoorAtlas
+  website: http://www.indooratlas.com/
+  categories:
+  - Analytics
+  - Location
+  code_prefixes:
+  - com.indooratlas.android.sdk
+  code_segments: []
+  domain_suffixes:
+  - ipsws.indooratlas.com
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 395
+  name: Janrain
+  website: https://en.wikipedia.org/wiki/Janrain
+  categories:
+  - Identification
+  code_prefixes:
+  - com.janrain.android
+  - com.janrain.android.capture
+  - com.janrain.android.engage
+  code_segments: []
+  domain_suffixes: []
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 396
+  name: MOCA
+  website: https://www.mocaplatform.com/
+  categories:
+  - Analytics
+  - Profiling
+  - Location
+  code_prefixes:
+  - com.innoquant.moca
+  code_segments: []
+  domain_suffixes:
+  - api-device.mocaplatform.com
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 397
+  name: Point Inside
+  website: https://www.pointinside.com/
+  categories:
+  - Analytics
+  - Location
+  code_prefixes:
+  - com.pointinside
+  code_segments: []
+  domain_suffixes: []
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 398
+  name: Proximi.io
+  website: https://proximi.io/
+  categories:
+  - Analytics
+  - Location
+  code_prefixes:
+  - io.proximi.proximiiolibrary
+  code_segments: []
+  domain_suffixes:
+  - api.proximi.fi
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 399
+  name: ScoreLoop
+  website: https://www.scoreloop.com
+  categories:
+  - Uncategorised
+  code_prefixes:
+  - com.scoreloop.client.android
+  code_segments: []
+  domain_suffixes: []
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 400
+  name: Alooma
+  website: https://www.alooma.com
+  categories:
+  - Analytics
+  code_prefixes:
+  - com.github.aloomaio.androidsdk
+  code_segments: []
+  domain_suffixes:
+  - inputs.alooma.com
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 401
+  name: Analytics by NPAW (Youbora Suite)
+  website: https://nicepeopleatwork.com/
+  categories:
+  - Analytics
+  - Profiling
+  - Location
+  code_prefixes:
+  - com.npaw.youbora
+  code_segments: []
+  domain_suffixes: []
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 402
+  name: Beintoo
+  website: https://beintoo.com/
+  categories:
+  - Analytics
+  - Profiling
+  - Advertisement
+  - Location
+  code_prefixes:
+  - com.beintoo.nucleon
+  code_segments: []
+  domain_suffixes: []
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 403
+  name: Bolts
+  website: https://github.com/BoltsFramework/Bolts-Android
+  categories:
+  - Analytics
+  code_prefixes:
+  - com.parse.bolts
+  code_segments: []
+  domain_suffixes: []
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 404
+  name: Cedexis Radar
+  website: https://www.cedexis.com/
+  categories:
+  - Location
+  code_prefixes:
+  - com.cedexis
+  code_segments: []
+  domain_suffixes:
+  - cedexis-radar.net
+  - cedexis.com
+  - radar.cedexis.com
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 405
+  name: Cifrasoft
+  website: http://cifrasoft.com
+  categories:
+  - Identification
+  - Advertisement
+  - Location
+  code_prefixes:
+  - com.cifrasoft
+  code_segments: []
+  domain_suffixes:
+  - tele.fm
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 406
+  name: Flowsense
+  website: https://flowsense.com.br/
+  categories:
+  - Analytics
+  - Profiling
+  - Location
+  code_prefixes:
+  - com.flowsense.flowsensesdk
+  code_segments: []
+  domain_suffixes: []
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 407
+  name: Geniee
+  website: https://geniee.co.jp/
+  categories:
+  - Advertisement
+  code_prefixes:
+  - jp.co.geniee.gnadsdk
+  code_segments: []
+  domain_suffixes: []
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 408
+  name: Huq Sourcekit
+  website: https://huq.io/
+  categories:
+  - Analytics
+  - Location
+  code_prefixes:
+  - io.huq.sourcekit
+  code_segments: []
+  domain_suffixes: []
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 409
+  name: Insider
+  website: https://useinsider.com/
+  categories:
+  - Analytics
+  code_prefixes:
+  - com.useinsider.insider
+  code_segments: []
+  domain_suffixes: []
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 410
+  name: Mopinion
+  website: https://mopinion.com
+  categories:
+  - Analytics
+  - Profiling
+  code_prefixes:
+  - com.mopinion.mopinionsdk
+  code_segments: []
+  domain_suffixes: []
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 411
+  name: OfferToro
+  website: http://www.offertoro.com/
+  categories:
+  - Advertisement
+  code_prefixes:
+  - com.offertoro.sdk
+  code_segments: []
+  domain_suffixes: []
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 412
+  name: OpenTelemetry (OpenCensus, OpenTracing)
+  website: https://opentelemetry.io/
+  categories:
+  - Analytics
+  code_prefixes:
+  - io.opencensus
+  - io.opentelemetry
+  code_segments: []
+  domain_suffixes: []
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 413
+  name: Snapchat Login Kit
+  website: https://kit.snapchat.com/docs/login-kit
+  categories:
+  - Identification
+  code_prefixes:
+  - com.snapchat.kit.sdk
+  code_segments: []
+  domain_suffixes: []
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 414
+  name: Zendrive
+  website: https://www.zendrive.com/
+  categories:
+  - Analytics
+  - Profiling
+  - Location
+  code_prefixes:
+  - com.zendrive.sdk
+  code_segments: []
+  domain_suffixes: []
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 415
+  name: fullstory
+  website: https://www.fullstory.com/
+  categories:
+  - Analytics
+  code_prefixes:
+  - com.fullstory.instrumentation
+  - com.fullstory.jni
+  - com.fullstory.rust
+  - com.fullstory.util
+  code_segments: []
+  domain_suffixes: []
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 416
+  name: Pendo
+  website: https://www.pendo.io
+  categories:
+  - Analytics
+  code_prefixes:
+  - sdk.insert.io
+  - sdk.pendo.io
+  code_segments: []
+  domain_suffixes: []
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 417
+  name: Plexure
+  website: https://www.plexure.com/
+  categories:
+  - Analytics
+  code_prefixes:
+  - co.vmob.sdk
+  code_segments: []
+  domain_suffixes: []
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 418
+  name: Swirl
+  website: http://swirl.com/
+  categories:
+  - Uncategorised
+  code_prefixes:
+  - com.swirl
+  code_segments: []
+  domain_suffixes:
+  - cdn-api.swirl.com
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 419
+  name: Treasure Data
+  website: https://www.treasuredata.com/product/
+  categories:
+  - Analytics
+  - Profiling
+  code_prefixes:
+  - com.treasuredata
+  code_segments: []
+  domain_suffixes: []
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 420
+  name: IBM Mobile Marketing (Acoustic)
+  website: https://acoustic.co/
+  categories:
+  - Analytics
+  - Advertisement
+  code_prefixes:
+  - co.acoustic.mobile.push.sdk
+  - com.ibm.mce.sdk
+  - com.xtify.android.sdk
+  - com.xtify.mce.sdk
+  code_segments: []
+  domain_suffixes:
+  - sdk6.ibm.xtify.com
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 422
+  name: Solar2D (Corona)
+  website: https://solar2d.com/
+  categories:
+  - Analytics
+  - Advertisement
+  code_prefixes:
+  - com.ansca.corona
+  code_segments: []
+  domain_suffixes: []
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 423
+  name: Amazon Mobile Analytics (Amplify)
+  website: https://aws.amazon.com/amplify/
+  categories:
+  - Analytics
+  code_prefixes:
+  - com.amplifyframework.analytics
+  code_segments: []
+  domain_suffixes: []
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 424
+  name: AD(X)
+  website: https://adxcorp.kr/
+  categories:
+  - Advertisement
+  code_prefixes:
+  - com.adxcorp.ads
+  - com.adxcorp.nativead
+  code_segments: []
+  domain_suffixes: []
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 425
+  name: AdGateMedia
+  website: https://adgatemedia.com/
+  categories:
+  - Advertisement
+  code_prefixes:
+  - com.adgatemedia
+  code_segments: []
+  domain_suffixes: []
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 426
+  name: AdMarvel
+  website: https://www.crunchbase.com/organization/admarvel
+  categories:
+  - Advertisement
+  code_prefixes:
+  - com.admarvel
+  code_segments: []
+  domain_suffixes: []
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 427
+  name: AdTiming
+  website: https://www.adtiming.com/
+  categories:
+  - Advertisement
+  code_prefixes:
+  - com.adtiming
+  - com.aiming.mdt
+  code_segments: []
+  domain_suffixes: []
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 428
+  name: Adjust Unbotify
+  website: https://www.adjust.com/product/unbotify/
+  categories:
+  - Analytics
+  code_prefixes:
+  - com.unbotify.mobile.sdk
+  code_segments: []
+  domain_suffixes: []
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 429
+  name: LotaData
+  website: http://lotadata.com
+  categories:
+  - Analytics
+  - Profiling
+  - Location
+  code_prefixes:
+  - com.lotadata.moments
+  code_segments: []
+  domain_suffixes: []
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 430
+  name: Marketo (an Adobe Company)
+  website: https://marketo.com
+  categories:
+  - Analytics
+  code_prefixes:
+  - com.marketo
+  code_segments: []
+  domain_suffixes:
+  - marketo.com
+  - marketo.net
+  - mktoedge.com
+  - mktorest.com
+  - mktossl.com
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 432
+  name: Rollbar
+  website: https://rollbar.com
+  categories:
+  - Crash reporting
+  code_prefixes:
+  - com.rollbar.android
+  code_segments: []
+  domain_suffixes: []
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 433
+  name: Snap Ad Kit
+  website: https://kit.snapchat.com/docs/ad-kit
+  categories:
+  - Advertisement
+  code_prefixes:
+  - com.snap.adkit
+  - com.snap.appadskit
+  code_segments: []
+  domain_suffixes: []
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 434
+  name: Synerise
+  website: https://synerise.com
+  categories:
+  - Profiling
+  - Identification
+  - Advertisement
+  code_prefixes:
+  - com.synerise.sdk
+  code_segments: []
+  domain_suffixes:
+  - synerise.com
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 435
+  name: UserExperior
+  website: https://www.userexperior.com/
+  categories:
+  - Crash reporting
+  - Analytics
+  - Profiling
+  - Location
+  code_prefixes:
+  - com.userexperior
+  code_segments: []
+  domain_suffixes: []
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 436
+  name: Vdopia
+  website: https://chocolateplatform.com/
+  categories:
+  - Advertisement
+  code_prefixes:
+  - com.vdopia.ads
+  - com.vdopia.client.android
+  code_segments: []
+  domain_suffixes: []
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 437
+  name: AdGem
+  website: https://adgem.com/
+  categories:
+  - Advertisement
+  code_prefixes:
+  - com.adgem.android
+  code_segments: []
+  domain_suffixes: []
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 438
+  name: AdTrial
+  website: https://adtrial.com/
+  categories:
+  - Advertisement
+  code_prefixes:
+  - com.adtrial.sdk
+  code_segments: []
+  domain_suffixes: []
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 439
+  name: Pincrux
+  website: https://www.pincrux.com/
+  categories:
+  - Advertisement
+  code_prefixes:
+  - com.pincrux
+  code_segments: []
+  domain_suffixes: []
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 440
+  name: Tutucloud
+  website: https://tutucloud.com
+  categories:
+  - Uncategorised
+  code_prefixes:
+  - org.lasque.tusdk.core
+  - org.lasque.tusdkpulse.core
+  code_segments: []
+  domain_suffixes:
+  - tusdk.com
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 441
+  name: Veloxity
+  website: http://www.veloxity.net/
+  categories:
+  - Advertisement
+  code_prefixes:
+  - net.veloxity
+  code_segments: []
+  domain_suffixes: []
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 442
+  name: Yoadx
+  website: https://yoadx.com/
+  categories:
+  - Advertisement
+  code_prefixes:
+  - com.yoadx.yoadx
+  code_segments: []
+  domain_suffixes: []
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 443
+  name: Coulus Coelib
+  website: https://measurementsys.com/index.php#appdev
+  categories:
+  - Advertisement
+  code_prefixes:
+  - coelib.c.couluslibrary
+  code_segments: []
+  domain_suffixes: []
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 444
+  name: ACRA
+  website: https://www.acra.ch/
+  categories:
+  - Crash reporting
+  code_prefixes:
+  - ch.acra
+  - org.acra
+  code_segments: []
+  domain_suffixes: []
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 445
+  name: Backtrace
+  website: https://backtrace.io
+  categories:
+  - Crash reporting
+  code_prefixes:
+  - backtraceio.library
+  code_segments: []
+  domain_suffixes:
+  - backtrace.io
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 447
+  name: Sentry
+  website: https://sentry.io/
+  categories:
+  - Crash reporting
+  code_prefixes:
+  - com.joshdholtz.sentry
+  - io.sentry
+  code_segments: []
+  domain_suffixes: []
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 448
+  name: Yueying Crash SDK
+  website: https://yueying-docs.effirst.com/
+  categories:
+  - Crash reporting
+  - Analytics
+  code_prefixes:
+  - com.uc.crashsdk
+  - com.uc2.crashsdk
+  code_segments: []
+  domain_suffixes: []
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
