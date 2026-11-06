@@ -25,6 +25,12 @@ object DexPackageReader {
         val bytesRead: Long,
     ) {
         val partial: Boolean get() = packageCapHit || dexOutcomes.values.any { it != DexOutcome.READ }
+
+        /**
+         * False when the APK has no loaded dex entry at all (no classes.dex): its code, if any, lives outside
+         * it (an odex/vdex next to a system app). Distinct from a dex that holds zero class packages.
+         */
+        val hasDex: Boolean get() = dexOutcomes.isNotEmpty()
     }
 
     /** One per app, shared by its base and split APKs. [nanoTime] is injectable for tests. */

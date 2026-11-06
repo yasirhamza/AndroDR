@@ -23,6 +23,12 @@ data class InstalledApp(
     val isSystemApp: Boolean,
     /** Base APK followed by every split APK. */
     val apkPaths: List<String>,
+    /**
+     * `ApplicationInfo.FLAG_HAS_CODE`: the app declares code. When true and no APK holds a loaded dex, the code
+     * was stored outside the APK (stripped into `oat/` as an odex) and was never read. Defaults to true, so an
+     * app is never said to be free of trackers because a caller forgot to set it.
+     */
+    val hasCode: Boolean = true,
 )
 
 data class AppInspection(
@@ -69,6 +75,7 @@ class ApkPackageInspector @Inject constructor(
             appLabel = label,
             isSystemApp = info.flags and ApplicationInfo.FLAG_SYSTEM != 0,
             apkPaths = paths,
+            hasCode = info.flags and ApplicationInfo.FLAG_HAS_CODE != 0,
         )
     }
 
@@ -78,10 +85,12 @@ class ApkPackageInspector @Inject constructor(
         var readable = 0
         var unreadable = 0
         var timedOut = false
+        var anyDex = false
         for (path in app.apkPaths) {
             try {
                 val result = DexPackageReader.read(File(path), budget)
                 readable++
+                anyDex = anyDex || result.hasDex
                 packages.addAll(result.packages)
                 describe(result, notes)
                 timedOut = timedOut || result.dexOutcomes.values.any { it == DexOutcome.TIME_LIMIT }
@@ -90,26 +99,26 @@ class ApkPackageInspector @Inject constructor(
             }
         }
         if (unreadable > 0) notes.add("$unreadable apk unreadable")
-        return conclude(app, packages, notes, readable, timedOut)
+        // Declared code but no loaded dex in any APK read: the code was never read, so nothing may be concluded.
+        val codeOutside = app.hasCode && readable > 0 && !anyDex
+        return conclude(app, packages, notes, Reading(readable, timedOut, codeOutside))
     }
 
-    private fun conclude(
-        app: InstalledApp,
-        packages: Set<String>,
-        notes: Set<String>,
-        readable: Int,
-        timedOut: Boolean,
-    ): AppInspection {
+    private class Reading(val readable: Int, val timedOut: Boolean, val codeOutside: Boolean)
+
+    private fun conclude(app: InstalledApp, packages: Set<String>, notes: Set<String>, r: Reading): AppInspection {
         val outcome = when {
-            readable == 0 -> InspectOutcome.COULD_NOT_INSPECT
-            timedOut && packages.isEmpty() -> InspectOutcome.COULD_NOT_INSPECT
+            r.readable == 0 -> InspectOutcome.COULD_NOT_INSPECT
+            r.codeOutside -> InspectOutcome.COULD_NOT_INSPECT
+            r.timedOut && packages.isEmpty() -> InspectOutcome.COULD_NOT_INSPECT
             notes.isNotEmpty() -> InspectOutcome.PARTIAL
             else -> InspectOutcome.INSPECTED
         }
         val reason = when {
             app.apkPaths.isEmpty() -> "no apk"
             outcome == InspectOutcome.INSPECTED -> null
-            readable == 0 -> "apk unreadable"
+            r.readable == 0 -> "apk unreadable"
+            r.codeOutside && notes.isEmpty() -> CODE_OUTSIDE_APK
             else -> reportSafe(notes.joinToString("; "), REASON_MAX)
         }
         return AppInspection(app, packages, outcome, reason)
@@ -124,7 +133,10 @@ class ApkPackageInspector @Inject constructor(
         if (result.dexOutcomes.values.any { it == DexOutcome.TIME_LIMIT }) notes.add("time limit")
     }
 
-    private companion object {
-        const val REASON_MAX = 160
+    companion object {
+        private const val REASON_MAX = 160
+
+        /** The reason for an app that declares code but has no loaded dex in any of its APKs. */
+        const val CODE_OUTSIDE_APK = "code stored outside the APK"
     }
 }

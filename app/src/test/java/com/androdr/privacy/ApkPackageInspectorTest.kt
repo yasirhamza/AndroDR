@@ -110,6 +110,66 @@ class ApkPackageInspectorTest {
         assertTrue(b.remainingAppBytes < 0)
     }
 
+    // --- R13: code stored outside the APK -------------------------------------------------------
+
+    private fun noDexApk(): File = SyntheticDex.apk(linkedMapOf("resources.arsc" to byteArrayOf(0, 1, 2, 3)))
+
+    @Test fun `declared code with no dex in any apk is COULD_NOT_INSPECT, code stored outside the APK`() {
+        val r = inspector.inspect(app(noDexApk(), noDexApk()).copy(hasCode = true), budget())
+        assertEquals(InspectOutcome.COULD_NOT_INSPECT, r.outcome)
+        assertEquals("code stored outside the APK", r.reason)
+        assertTrue(r.packages.isEmpty())
+    }
+
+    @Test fun `a code-less package with no dex stays INSPECTED with an empty set`() {
+        val r = inspector.inspect(app(noDexApk()).copy(hasCode = false), budget())
+        assertEquals(InspectOutcome.INSPECTED, r.outcome)
+        assertNull(r.reason)
+        assertTrue(r.packages.isEmpty())
+    }
+
+    @Test fun `declared code with a valid dex is INSPECTED`() {
+        val r = inspector.inspect(app(apk("Lcom/a/B;")).copy(hasCode = true), budget())
+        assertEquals(InspectOutcome.INSPECTED, r.outcome)
+        assertEquals(setOf("com.a"), r.packages)
+    }
+
+    @Test fun `declared code with a dex only in a split is INSPECTED`() {
+        val r = inspector.inspect(app(noDexApk(), apk("Lcom/a/B;")).copy(hasCode = true), budget())
+        assertEquals(InspectOutcome.INSPECTED, r.outcome)
+        assertEquals(setOf("com.a"), r.packages)
+    }
+
+    @Test fun `declared code with a dex of zero class packages is INSPECTED, not code outside`() {
+        val r = inspector.inspect(app(apk()).copy(hasCode = true), budget())
+        assertEquals(InspectOutcome.INSPECTED, r.outcome)
+        assertTrue(r.packages.isEmpty())
+    }
+
+    @Test fun `installedApps carries FLAG_HAS_CODE`() {
+        val withCode = PackageInfo().apply {
+            packageName = "com.has.code"
+            applicationInfo = ApplicationInfo().apply {
+                packageName = "com.has.code"
+                sourceDir = "/system/app/c.apk"
+                flags = ApplicationInfo.FLAG_HAS_CODE
+            }
+        }
+        val overlay = PackageInfo().apply {
+            packageName = "com.no.code"
+            applicationInfo = ApplicationInfo().apply {
+                packageName = "com.no.code"
+                sourceDir = "/system/overlay/o.apk"
+                flags = 0
+            }
+        }
+        shadowOf(context.packageManager).installPackage(withCode)
+        shadowOf(context.packageManager).installPackage(overlay)
+        val apps = inspector.installedApps().associateBy { it.packageName }
+        assertTrue(apps.getValue("com.has.code").hasCode)
+        assertFalse(apps.getValue("com.no.code").hasCode)
+    }
+
     @Test fun `a time limit before any package is COULD_NOT_INSPECT`() {
         val b = ReadBudget(deadlineNanos = 1L, nanoTime = { 1L })
         val r = inspector.inspect(app(apk("Lcom/a/B;")), b)
