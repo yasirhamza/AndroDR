@@ -12,6 +12,8 @@ import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.BufferedInputStream
+import java.io.IOException
+import java.io.InputStream
 import java.net.HttpURLConnection
 import java.net.URL
 import java.util.zip.ZipInputStream
@@ -92,9 +94,10 @@ class CveRepository @Inject constructor(
         cveDao.getTotalCount()
 
     /** Returns null on 304 Not Modified, emptyList on error, or the parsed entries on 200. */
-    @Suppress("TooGenericExceptionCaught")
-    private suspend fun fetchCisaKev(): List<CveEntity>? {
-        val conn = URL(CISA_KEV_URL).openConnection() as HttpURLConnection
+    /** [url] is a parameter only so a unit test can point this at a loopback server. */
+    @Suppress("TooGenericExceptionCaught", "ReturnCount")
+    internal suspend fun fetchCisaKev(url: String = CISA_KEV_URL): List<CveEntity>? {
+        val conn = URL(url).openConnection() as HttpURLConnection
         return try {
             conn.connectTimeout = TIMEOUT_MS
             conn.readTimeout = TIMEOUT_MS
@@ -110,8 +113,7 @@ class CveRepository @Inject constructor(
                 Log.w(TAG, "CISA KEV fetch failed: HTTP ${conn.responseCode}")
                 return emptyList()
             }
-            conn.getHeaderField("ETag")?.let { settings.setEtag(ETAG_CISA, it) }
-            val body = conn.inputStream.bufferedReader().use { it.readText() }
+            val body = conn.inputStream.bufferedReader().use { it.readTextCapped(MAX_KEV_CHARS) }
             val json = JSONObject(body)
             val vulnerabilities = json.getJSONArray("vulnerabilities")
             val now = System.currentTimeMillis()
@@ -135,6 +137,8 @@ class CveRepository @Inject constructor(
                     ))
                 }
             }
+            // Only a body that parsed is remembered as current (same rule as OSV below).
+            conn.getHeaderField("ETag")?.let { settings.setEtag(ETAG_CISA, it) }
             entries
         } catch (e: Exception) {
             Log.w(TAG, "CISA KEV fetch failed: ${e.message}")
@@ -172,10 +176,11 @@ class CveRepository @Inject constructor(
                 return emptyList()
             }
             val entries = readOsvZip(BufferedInputStream(conn.inputStream), System.currentTimeMillis(), maxEntryChars)
-            // Only a zip that parsed in full is remembered as current (PASTA F-005):
-            // storing the ETag first cached a bomb or a truncated body as
-            // Not-Modified, so every later cycle would 304 against poison.
-            conn.getHeaderField("ETag")?.let { settings.setEtag(ETAG_OSV, it) }
+            // Only a zip that parsed to real rows is remembered as current (PASTA
+            // F-005): storing the ETag first cached a bomb or a truncated body as
+            // Not-Modified, so every later cycle would 304 against poison; a zip that
+            // parses to nothing is not worth 304-ing against either.
+            if (entries.isNotEmpty()) conn.getHeaderField("ETag")?.let { settings.setEtag(ETAG_OSV, it) }
             entries
         } catch (e: Exception) {
             Log.w(TAG, "OSV Android fetch failed: ${e.message}")
@@ -202,22 +207,28 @@ class CveRepository @Inject constructor(
         /**
          * Inflation caps for the OSV zip (PASTA F-005). The feed comes from an
          * unpinned host and is inflated into memory entry by entry, so a
-         * high-ratio bomb was a memory DoS. One OSV advisory is a few KB of
-         * JSON; 1 MB per entry and 64 MB in total are generous, and small enough
-         * that the StringBuilder is never the thing that exhausts the heap.
+         * high-ratio bomb was a memory DoS. The total cap is the real defence;
+         * the per-entry cap only bounds one StringBuilder. Both carry >= 4x headroom
+         * over the live feed (2026-11-06: 4,073 entries, 35.6 MiB inflated, largest
+         * entry 4.18 MiB) -- a tight cap would abort every cycle and silently stop
+         * CVE enrichment, the failure this app most needs to avoid.
+         * CveRepositoryOsvFetchTest pins the headroom.
          */
-        internal const val MAX_OSV_ENTRY_CHARS = 1024 * 1024
-        internal const val MAX_OSV_TOTAL_CHARS = 64L * 1024 * 1024
+        internal const val MAX_OSV_ENTRY_CHARS = 32 * 1024 * 1024
+        internal const val MAX_OSV_TOTAL_CHARS = 256L * 1024 * 1024
+        /** CISA KEV JSON (live ~3 MB, 2026-11); capped so an endless body cannot exhaust the heap. */
+        private const val MAX_KEV_CHARS = 32 * 1024 * 1024
+        private val PATCH_DATE = Regex("""\d{4}-\d{2}-\d{2}""")
 
         /**
          * Inflates every `.json` entry of an OSV zip into [CveEntity] rows, with a
          * per-entry and a total cap on inflated characters.
          *
-         * @throws java.io.IOException when an entry, or all entries together,
-         *   inflate past the cap — the fetch's catch turns that into "nothing fetched".
+         * @throws IOException when an entry, or all entries together, inflate past
+         *   the cap — the fetch's catch turns that into "nothing fetched".
          */
         internal fun readOsvZip(
-            input: java.io.InputStream,
+            input: InputStream,
             now: Long,
             maxEntryChars: Int = MAX_OSV_ENTRY_CHARS,
             maxTotalChars: Long = MAX_OSV_TOTAL_CHARS,
@@ -231,7 +242,7 @@ class CveRepository @Inject constructor(
                         val content = zis.bufferedReader().readTextCapped(maxEntryChars)
                         total += content.length
                         if (total > maxTotalChars) {
-                            throw java.io.IOException("OSV zip inflates past $maxTotalChars chars in total")
+                            throw IOException("OSV zip inflates past $maxTotalChars chars in total")
                         }
                         parseOsvEntry(content, now)?.let { entries.add(it) }
                     }
@@ -271,7 +282,7 @@ class CveRepository @Inject constructor(
                             for (k in 0 until events.length()) {
                                 val event = events.getJSONObject(k)
                                 val fixed = event.optString("fixed", "")
-                                if (fixed.matches(Regex("""\d{4}-\d{2}-\d{2}"""))) {
+                                if (fixed.matches(PATCH_DATE)) {
                                     fixedPatchLevel = fixed
                                 }
                             }

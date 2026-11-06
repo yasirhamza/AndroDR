@@ -86,15 +86,31 @@ class CveRepositoryOsvFetchTest {
         }
     }
 
-    // ── fetchOsvAndroid: ETag only after a successful parse ────────────────────
+    @Test
+    fun `the caps leave headroom over the live feed, so hardening cannot disable it`() {
+        // Measured 2026-11-06 from the live all.zip: 4,073 .json entries, 35.6 MiB
+        // inflated, largest entries ASB-A-412662901 (4.18 MiB) and ASB-A-430889718
+        // (3.13 MiB). A 1 MiB per-entry cap would have aborted every cycle -- the
+        // false-reassurance failure this app most needs to avoid (security review B1).
+        val largestLiveEntryChars = 4_400_000
+        val liveTotalChars = 37_400_000L
+        assertTrue(CveRepository.MAX_OSV_ENTRY_CHARS >= 4 * largestLiveEntryChars)
+        assertTrue(CveRepository.MAX_OSV_TOTAL_CHARS >= 4 * liveTotalChars)
+    }
+
+    // ── fetchOsvAndroid / fetchCisaKev: ETag only after a successful parse ─────
 
     // Android unit tests compile against android.jar, so the JDK's httpserver
     // module is not on the classpath; a one-shot ServerSocket is enough here.
     private var server: ServerSocket? = null
+    private var serverError: Throwable? = null
 
-    @After fun stop() { server?.close() }
+    @After fun stop() {
+        server?.close()
+        serverError?.let { throw AssertionError("test server failed", it) }
+    }
 
-    private fun serve(body: ByteArray, etag: String): String {
+    private fun serve(body: ByteArray, etag: String, path: String = "/all.zip"): String {
         val s = ServerSocket(0, 1, InetAddress.getLoopbackAddress())
         server = s
         thread(isDaemon = true) {
@@ -103,14 +119,14 @@ class CveRepositoryOsvFetchTest {
                     val reader = client.getInputStream().bufferedReader()
                     while (reader.readLine().orEmpty().isNotEmpty()) { /* drain request headers */ }
                     client.getOutputStream().apply {
-                        write(("HTTP/1.1 200 OK\r\nETag: $etag\r\nContent-Type: application/zip\r\n" +
+                        write(("HTTP/1.1 200 OK\r\nETag: $etag\r\nContent-Type: application/octet-stream\r\n" +
                             "Content-Length: ${body.size}\r\nConnection: close\r\n\r\n").toByteArray())
                         write(body); flush()
                     }
                 }
-            }
+            }.onFailure { serverError = it }
         }
-        return "http://127.0.0.1:${s.localPort}/all.zip"
+        return "http://127.0.0.1:${s.localPort}$path"
     }
 
     private fun repo(settings: SettingsRepository) =
@@ -135,6 +151,54 @@ class CveRepositoryOsvFetchTest {
         val result = repo(settings).fetchOsvAndroid(url)
 
         assertEquals(listOf("CVE-2024-0001"), result?.map { it.cveId })
+        // "cve_osv" is the persisted preference key (CveRepository.ETAG_OSV); pinned on purpose.
         coVerify(exactly = 1) { settings.setEtag("cve_osv", "\"good\"") }
+    }
+
+    @Test
+    fun `a zip that parses to no CVE at all is not remembered by its ETag`() = runTest {
+        // A valid zip of non-CVE advisories "parses" fine and yields nothing. Caching
+        // its ETag would 304 against an empty feed for as long as the server kept it.
+        val settings = mockk<SettingsRepository>(relaxed = true) { coEvery { getEtag(any()) } returns null }
+        val url = serve(zip("GHSA-xxxx.json" to osvEntry("GHSA-xxxx")), etag = "\"empty\"")
+
+        val result = repo(settings).fetchOsvAndroid(url)
+
+        assertEquals(emptyList<Any>(), result)
+        coVerify(exactly = 0) { settings.setEtag(any(), any()) }
+    }
+
+    private fun kev(vararg cves: String) = buildString {
+        append("""{"vulnerabilities":[""")
+        append(cves.joinToString(",") {
+            """{"cveID":"$it","vendorProject":"Google","product":"Android",""" +
+                """"shortDescription":"d","dateAdded":"2024-01-02"}"""
+        })
+        append("]}")
+    }
+
+    @Test
+    fun `a KEV body that does not parse is not remembered as the current ETag`() = runTest {
+        // Same ordering bug as OSV, one method up (architect review S2): the ETag was
+        // stored before the JSON was read, so a truncated body was cached as current.
+        val settings = mockk<SettingsRepository>(relaxed = true) { coEvery { getEtag(any()) } returns null }
+        val truncated = kev("CVE-2024-0001").dropLast(20).toByteArray()
+        val url = serve(truncated, etag = "\"trunc\"", path = "/kev.json")
+
+        val result = repo(settings).fetchCisaKev(url)
+
+        assertEquals(emptyList<Any>(), result)
+        coVerify(exactly = 0) { settings.setEtag(any(), any()) }
+    }
+
+    @Test
+    fun `a KEV body that parses is remembered by its ETag`() = runTest {
+        val settings = mockk<SettingsRepository>(relaxed = true) { coEvery { getEtag(any()) } returns null }
+        val url = serve(kev("CVE-2024-0001", "CVE-2024-0002").toByteArray(), etag = "\"kev\"", path = "/kev.json")
+
+        val result = repo(settings).fetchCisaKev(url)
+
+        assertEquals(listOf("CVE-2024-0001", "CVE-2024-0002"), result?.map { it.cveId })
+        coVerify(exactly = 1) { settings.setEtag("cve_cisa", "\"kev\"") }
     }
 }
