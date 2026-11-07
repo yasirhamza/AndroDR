@@ -356,7 +356,7 @@
     <string name="history_delete_cancel">Cancel</string>
     <string name="history_delete_credential_description">Confirm your screen lock to delete this scan.</string>
     <string name="history_clear_title">Clear all history</string>
-    <string name="history_clear_credential_description">Confirm your screen lock to clear all scan history.</string>
+    <string name="history_clear_credential_description">Confirm your screen lock to clear all scan history. Privacy scan results are kept; delete them from the privacy screen.</string>
     <string name="history_clear_body">Delete every scan, its telemetry and timeline events, including the live DNS events on the Timeline? This cannot be undone. Alerts and their evidence are kept, and so is the DNS log shown on the DNS screen and counted on the Dashboard. An audit entry listing the deleted findings is added to the Timeline.</string>
     <string name="history_clear_confirm">Delete all</string>
     <string name="history_row_findings" tools:ignore="PluralsCandidate">%1$d finding(s)</string>
@@ -429,6 +429,7 @@
     <string name="settings_update_cve_database">CVE Database</string>
     <string name="settings_update_oem_prefixes">OEM Prefixes</string>
     <string name="settings_update_brand_registry">Brand Registry</string>
+    <string name="settings_update_tracker_registry">Tracker registry</string>
     <string name="settings_threat_db_title">Threat Database</string>
     <string name="settings_threat_db_rules">Detection Rules</string>
     <string name="settings_threat_db_domains">Threat Domains</string>
@@ -477,4 +478,102 @@
     </plurals>
     <string name="telemetry_cleanup_busy">Another storage task is running. Try again shortly.</string>
     <string name="telemetry_cleanup_failed">Old telemetry could not be deleted.</string>
+
+    <!-- Privacy scan (docs/superpowers/specs/2026-11-06-privacy-scan-design.md): facts, never judgements. -->
+    <string name="privacy_title">Privacy scan</string>
+    <string name="privacy_card_never">Privacy scan not run yet</string>
+    <plurals name="privacy_card_crossing">
+        <item quantity="one">%1$d app crosses your threshold</item>
+        <item quantity="other">%1$d apps cross your threshold</item>
+    </plurals>
+    <string name="privacy_card_new" tools:ignore="PluralsCandidate">%1$d new since last scan</string>
+    <plurals name="privacy_card_failed">
+        <item quantity="one">%1$d could not be fully inspected</item>
+        <item quantity="other">%1$d could not be fully inspected</item>
+    </plurals>
+    <string name="privacy_card_scanned">scanned %1$s</string>
+    <!-- Quantity is the second argument (trackers in code that cross the threshold). -->
+    <plurals name="apps_tracker_line">
+        <item quantity="one">Trackers in code: %1$d (%2$d crosses your threshold)</item>
+        <item quantity="other">Trackers in code: %1$d (%2$d cross your threshold)</item>
+    </plurals>
+    <string name="apps_tracker_not_inspected">Its code could not be inspected</string>
+    <string name="apps_tracker_network_more" tools:ignore="PluralsCandidate">; looked up domains of %1$d more</string>
+    <plurals name="apps_tracker_network_only">
+        <item quantity="one">; looked up domains of %1$d tracker</item>
+        <item quantity="other">; looked up domains of %1$d trackers</item>
+    </plurals>
+    <string name="apps_tracker_as_of">as of %1$s</string>
+    <string name="privacy_run">Run privacy scan</string>
+    <string name="privacy_progress" tools:ignore="PluralsCandidate">Inspecting %1$d of %2$d apps</string>
+    <string name="privacy_running_elsewhere">A privacy scan is already running</string>
+    <string name="privacy_scan_failed">The privacy scan stopped before it finished.</string>
+    <string name="privacy_tab_by_app">By app</string>
+    <string name="privacy_tab_by_tracker">By tracker</string>
+    <string name="privacy_section_attention">Could not be fully inspected</string>
+    <string name="privacy_section_crossing">Cross your threshold</string>
+    <string name="privacy_section_other">Other apps</string>
+    <string name="privacy_none_from_registry" tools:ignore="PluralsCandidate">None of the %1$d trackers in the registry were found in its code</string>
+    <string name="privacy_partial">Partly inspected: %1$s</string>
+    <string name="privacy_could_not_inspect">Could not inspect: %1$s</string>
+    <string name="privacy_reason_unknown">no reason recorded</string>
+    <plurals name="privacy_tracker_count">
+        <item quantity="one">%1$d tracker from the registry</item>
+        <item quantity="other">%1$d trackers from the registry</item>
+    </plurals>
+    <string name="privacy_evidence_code">found in code</string>
+    <string name="privacy_evidence_network">looked up domains of this tracker — %1$s</string>
+    <string name="privacy_evidence_both">found in code; also looked up its domains — %1$s</string>
+    <plurals name="privacy_lookups">
+        <item quantity="one">%1$d lookup</item>
+        <item quantity="other">%1$d lookups</item>
+    </plurals>
+    <plurals name="privacy_days">
+        <item quantity="one">on %1$d day</item>
+        <item quantity="other">on %1$d days</item>
+    </plurals>
+    <string name="privacy_background" tools:ignore="PluralsCandidate">%1$d in background</string>
+    <string name="privacy_background_unknown">background use unknown</string>
+    <string name="privacy_last_seen">last %1$s</string>
+    <string name="privacy_network_caveat">Lookups can be caused by links, web pages or emails the app displays, so they never count toward your threshold on their own.</string>
+    <plurals name="privacy_network_coverage">
+        <item quantity="one">Network evidence covers %1$d day</item>
+        <item quantity="other">Network evidence covers %1$d days</item>
+    </plurals>
+    <string name="privacy_no_monitor">The network monitor recorded no lookups in the last 30 days, so there is no network evidence.</string>
+    <string name="privacy_limits">Code inspection can miss trackers whose code has been renamed by the app\'s build tools, or code loaded at runtime. Apps using encrypted DNS, or reporting through Google Play services, are not visible on the network. Domains a tracker shares with its company\'s ordinary services (such as google.com) are not used as evidence. Tracking by the app\'s own developer is not covered.</string>
+    <string name="privacy_registry_unavailable">The tracker registry could not be loaded, so a privacy scan cannot run. It will be retried at the next intelligence update.</string>
+    <string name="privacy_system_toggle">Include system apps (can only be disabled, not removed)</string>
+    <string name="privacy_threshold_title">What I refuse</string>
+    <string name="privacy_threshold_open">Change what I refuse</string>
+    <string name="privacy_cat_advertisement">Advertisement</string>
+    <string name="privacy_cat_advertisement_info">Shows ads and reports what you do to the ad company</string>
+    <string name="privacy_cat_profiling">Profiling</string>
+    <string name="privacy_cat_profiling_info">Builds a profile of you across apps</string>
+    <string name="privacy_cat_identification">Identification</string>
+    <string name="privacy_cat_identification_info">Fingerprints your device so you can be recognised elsewhere</string>
+    <string name="privacy_cat_location">Location</string>
+    <string name="privacy_cat_location_info">Reports where you are to a third party</string>
+    <string name="privacy_cat_analytics">Analytics</string>
+    <string name="privacy_cat_analytics_info">Reports how you use the app to a third party (the same data feeds advertising profiles)</string>
+    <string name="privacy_cat_crash_reporting">Crash reporting</string>
+    <string name="privacy_cat_crash_reporting_info">Reports app crashes to the developer</string>
+    <string name="privacy_cat_uncategorised">Uncategorised</string>
+    <string name="privacy_cat_uncategorised_info">Exodus lists it as a tracker but gives no purpose; many are ad networks</string>
+    <string name="privacy_cat_other">Other (new category from the registry)</string>
+    <string name="privacy_cat_other_info">A purpose label this version of the app does not know; not refused by default</string>
+    <string name="privacy_network_truncated">Network evidence is incomplete: the DNS log was too large to read in full.</string>
+    <string name="privacy_network_failed">Network evidence could not be read this time; code findings are not affected.</string>
+    <string name="privacy_partly_inspected_tag">partly inspected</string>
+    <string name="privacy_delete_refused">A privacy scan is running; delete the results after it finishes.</string>
+    <string name="privacy_delete">Delete privacy results</string>
+    <string name="privacy_delete_confirm">Delete the stored list of every app\'s code packages and tracker findings?</string>
+    <string name="privacy_delete_cancel">Cancel</string>
+    <string name="privacy_attribution">Tracker data: Exodus Privacy (ODbL 1.0)</string>
+    <string name="privacy_last_scan">Last scan: %1$s</string>
+    <string name="privacy_never_scanned">No privacy scan has been run yet.</string>
+    <string name="privacy_empty_tracker_list">Nothing to list here.</string>
+    <string name="privacy_new_tag">new since last scan</string>
+    <string name="privacy_back">Back</string>
+    <string name="privacy_more">More options</string>
 </resources>

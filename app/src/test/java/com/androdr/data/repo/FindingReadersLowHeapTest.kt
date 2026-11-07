@@ -117,6 +117,11 @@ class FindingReadersLowHeapTest {
             iocDatabase = mockk { every { getAllBadPackages() } returns emptyList() },
             intelRefresher = mockk(relaxed = true), storageHealth = w.health,
             dnsDropLog = mockk<DnsDropLog> { every { state } returns flowOf(DnsDropState(0L, 0L)) },
+            privacyDao = mockk { every { latestCompleted() } returns flowOf(null) },
+            settings = mockk {
+                every { refusedTrackerCategories } returns flowOf(emptySet())
+                every { privacyShowSystemApps } returns flowOf(false)
+            },
             context = ApplicationProvider.getApplicationContext(),
         )
         val diff = vm.scanDiff.filterNotNull().first()

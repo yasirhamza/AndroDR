@@ -108,6 +108,7 @@ class FeedHealthRecorder @Inject constructor(
         const val FEED_PUBLIC_REPO_IOC = "public_repo_ioc"
         const val FEED_OEM_PREFIXES = "oem_prefixes"
         const val FEED_BRAND_REGISTRY = "brand_registry"
+        const val FEED_TRACKER_REGISTRY = "tracker_registry"
         const val FEED_SIGMA_RULES = "sigma_rules"
         const val FEED_CVE = "cve"
 
@@ -127,6 +128,7 @@ class FeedHealthRecorder @Inject constructor(
             FEED_KNOWN_APPS to "Known apps",
             FEED_OEM_PREFIXES to "OEM prefixes",
             FEED_BRAND_REGISTRY to "Brand registry",
+            FEED_TRACKER_REGISTRY to "Tracker registry",
             FEED_CVE to "CVE database",
         )
 

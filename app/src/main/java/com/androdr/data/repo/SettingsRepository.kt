@@ -6,6 +6,8 @@ import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.datastore.preferences.core.stringSetPreferencesKey
+import com.androdr.privacy.model.TrackerCategory
 import com.androdr.ui.theme.ThemeMode
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
@@ -118,6 +120,29 @@ class SettingsRepository @Inject constructor(
         dataStore.edit { it[KEY_SNAPSHOT_RETENTION_SCANS] = value }
     }
 
+    /**
+     * Tracker categories the user refuses (the privacy threshold). Default: every category except
+     * [TrackerCategory.CRASH_REPORTING] and [TrackerCategory.OTHER], so UNCATEGORISED is refused.
+     * Stored by enum name; an unknown stored name is ignored.
+     */
+    val refusedTrackerCategories: Flow<Set<TrackerCategory>> = dataStore.data
+        .map { prefs ->
+            prefs[KEY_PRIVACY_REFUSED]?.mapNotNull { n -> TrackerCategory.entries.firstOrNull { it.name == n } }
+                ?.toSet() ?: DEFAULT_REFUSED_CATEGORIES
+        }
+
+    suspend fun setRefusedTrackerCategories(value: Set<TrackerCategory>) {
+        dataStore.edit { it[KEY_PRIVACY_REFUSED] = value.map { c -> c.name }.toSet() }
+    }
+
+    /** Whether the privacy views list system apps under Crossing and Other (default false). */
+    val privacyShowSystemApps: Flow<Boolean> = dataStore.data
+        .map { prefs -> prefs[KEY_PRIVACY_SHOW_SYSTEM] ?: false }
+
+    suspend fun setPrivacyShowSystemApps(value: Boolean) {
+        dataStore.edit { it[KEY_PRIVACY_SHOW_SYSTEM] = value }
+    }
+
     suspend fun getEtag(cacheKey: String): String? =
         dataStore.data.first()[stringPreferencesKey("etag_$cacheKey")]
 
@@ -135,5 +160,9 @@ class SettingsRepository @Inject constructor(
         private val KEY_THEME_MODE = stringPreferencesKey("theme_mode")
         private val KEY_SNAPSHOT_RETENTION_SCANS = intPreferencesKey("snapshot_retention_scans")
         const val DEFAULT_SNAPSHOT_RETENTION_SCANS = 20
+        private val KEY_PRIVACY_REFUSED = stringSetPreferencesKey("privacy_refused_categories")
+        private val KEY_PRIVACY_SHOW_SYSTEM = booleanPreferencesKey("privacy_show_system_apps")
+        val DEFAULT_REFUSED_CATEGORIES: Set<TrackerCategory> =
+            TrackerCategory.entries.toSet() - TrackerCategory.CRASH_REPORTING - TrackerCategory.OTHER
     }
 }

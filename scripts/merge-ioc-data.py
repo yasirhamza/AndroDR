@@ -37,6 +37,10 @@ FILES = {
     "known_bad_apk_hashes.json": ("malware-hashes.yml", "apkHash"),
 }
 
+# Wholesale mirrors: ioc-data file -> bundled file, copied byte-for-byte (no
+# transformation), so the bundle equals the pinned submodule file exactly.
+COPIED_FILES = {"trackers.yml": "trackers.yml"}
+
 
 def load_yaml(path):
     with open(path) as f:
@@ -102,10 +106,22 @@ def render(repo_dir):
     return out
 
 
+def render_copies(repo_dir):
+    """bundled filename -> exact bytes of the ioc-data file it mirrors."""
+    out = {}
+    for src, dest in COPIED_FILES.items():
+        with open(os.path.join(repo_dir, "ioc-data", src), "rb") as f:
+            out[dest] = f.read()
+    return out
+
+
 def generate(repo_dir, raw_dir):
     for fname, text in render(repo_dir).items():
         with open(os.path.join(raw_dir, fname), "w") as f:
             f.write(text)
+    for fname, data in render_copies(repo_dir).items():
+        with open(os.path.join(raw_dir, fname), "wb") as f:
+            f.write(data)
 
 
 def check(repo_dir, raw_dir):
@@ -114,6 +130,10 @@ def check(repo_dir, raw_dir):
     for fname, text in render(repo_dir).items():
         path = os.path.join(raw_dir, fname)
         if not os.path.exists(path) or open(path).read() != text:
+            bad.append(fname)
+    for fname, data in render_copies(repo_dir).items():
+        path = os.path.join(raw_dir, fname)
+        if not os.path.exists(path) or open(path, "rb").read() != data:
             bad.append(fname)
     return bad
 

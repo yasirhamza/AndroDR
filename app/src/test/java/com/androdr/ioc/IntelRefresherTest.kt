@@ -46,6 +46,7 @@ class IntelRefresherTest {
     private val knownAppResolver = mockk<KnownAppResolver>(relaxed = true)
     private val oemPrefixResolver = mockk<OemPrefixResolver>()
     private val brandImpersonationResolver = mockk<BrandImpersonationResolver>()
+    private val trackerRegistry = mockk<TrackerRegistry>()
     private val sigmaRuleFeed = mockk<SigmaRuleFeed>()
     // relaxed: refreshSigmaRules calls the Unit setRemoteRules(...) on success.
     private val sigmaRuleEngine = mockk<SigmaRuleEngine>(relaxed = true)
@@ -54,7 +55,7 @@ class IntelRefresherTest {
 
     private fun refresher(indicatorResolver: IndicatorResolver = mockk(relaxed = true)) = IntelRefresher(
         indicatorUpdater, indicatorResolver, knownAppUpdater, publicRepoIocFeed, knownAppResolver,
-        oemPrefixResolver, brandImpersonationResolver, sigmaRuleFeed, sigmaRuleEngine,
+        oemPrefixResolver, brandImpersonationResolver, trackerRegistry, sigmaRuleFeed, sigmaRuleEngine,
         cveRepository, recorder,
     )
 
@@ -64,6 +65,7 @@ class IntelRefresherTest {
         coEvery { publicRepoIocFeed.update() } returns UpdateResult(written = 200, evicted = 0)
         coEvery { oemPrefixResolver.refresh() } returns 10
         coEvery { brandImpersonationResolver.refresh() } returns 25
+        coEvery { trackerRegistry.refresh() } returns 428
         coEvery { sigmaRuleFeed.fetch() } returns listOf(mockk<SigmaRule>(), mockk<SigmaRule>())
         every { sigmaRuleFeed.lastRejected } returns emptyList()
         coEvery { cveRepository.refresh() } returns 5
@@ -80,17 +82,19 @@ class IntelRefresherTest {
         assertEquals(50, report.knownApps)
         assertEquals(10, report.oemPrefixes)
         assertEquals(25, report.brandRegistry)
+        assertEquals(428, report.trackerRegistry)
         assertEquals(2, report.sigmaRemoteRules)
         assertEquals(5, report.cveReachable)
         assertEquals(150, report.bulkFetchedCount)
 
-        // A success row (lastSuccessAt stamped, streak cleared) for all seven feeds.
+        // A success row (lastSuccessAt stamped, streak cleared) for all eight feeds.
         for (feedId in listOf(
             FeedHealthRecorder.FEED_INDICATORS,
             FeedHealthRecorder.FEED_KNOWN_APPS,
             FeedHealthRecorder.FEED_PUBLIC_REPO_IOC,
             FeedHealthRecorder.FEED_OEM_PREFIXES,
             FeedHealthRecorder.FEED_BRAND_REGISTRY,
+            FeedHealthRecorder.FEED_TRACKER_REGISTRY,
             FeedHealthRecorder.FEED_SIGMA_RULES,
             FeedHealthRecorder.FEED_CVE,
         )) {
@@ -139,7 +143,7 @@ class IntelRefresherTest {
         assertEquals(0, second.bulkFetchedCount)
         // The skip must record nothing: only the first refresh's 7 rows exist,
         // so a regressed skip guard that re-ran the feeds would push this past 7.
-        coVerify(exactly = 7) { dao.upsert(any()) }
+        coVerify(exactly = 8) { dao.upsert(any()) }
     }
 
     @Test

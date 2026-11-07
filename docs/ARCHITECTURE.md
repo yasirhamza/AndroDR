@@ -45,6 +45,7 @@ AndroDR is an on-device Android security scanner and endpoint detection and resp
 - **Chapter 9** — External AI rule-authoring pipeline (Claude Code skills under `.claude/`).
 - **Chapter 10** — Test strategy.
 - **Chapter 11** — Architecture decisions with the reasoning behind each one.
+- **Chapter 12** — Privacy scan: the tracker-awareness feature that runs beside, not inside, the detection pipeline.
 - **Glossary** — Telemetry-store vocabulary (fact, observation, snapshot and event records, and so on), at the end.
 
 ---
@@ -86,6 +87,7 @@ Current package tree under `app/src/main/java/com/androdr/`:
 ├── ioc/             IOC resolver, dispatcher, feeds, STIX2 serialization, periodic update worker
 │   └── feeds/       Feed-specific ingesters (stalkerware, MVT, MalwareBazaar, ThreatFox, UAD, Plexus, cert-hash)
 ├── network/         DnsVpnService (local DNS interception) + UnderlyingDnsTracker (the device's own non-VPN resolvers) + DNS event capture
+├── privacy/         Privacy scan (Chapter 12): runner, ranking, dex/APK readers, DNS correlator, usage reader; model/ is a leaf package of data types
 ├── reporting/       ReportFormatter, ReportExporter, timeline formatter/exporter, guidance text helpers
 ├── scanner/         Pure telemetry emitters (app, device, accessibility, app-ops, file artifacts, process, usage stats, receivers, device-admin-grant, install event)
 │   ├── bugreport/   Bug-report ZIP parser and per-section modules
@@ -692,6 +694,96 @@ The rule engine supports the following verified capabilities, derived from `Sigm
 
 [#96]: https://github.com/yasirhamza/AndroDR/issues/96
 [#139]: https://github.com/yasirhamza/AndroDR/issues/139
+
+---
+
+## 12. Privacy scan
+
+The privacy scan answers a question the detection pipeline does not ask: which installed apps carry advertising or analytics trackers, and which of them also talk to those trackers' servers. It is a user-facing awareness feature, not a threat detector. It sits beside the detection pipeline (Chapter 4), not inside it. Spec: `docs/superpowers/specs/2026-11-06-privacy-scan-design.md`.
+
+### 12.1 Two facts, one registry
+
+The scan collects two facts per app and joins them on the device against a tracker registry:
+
+- **Code evidence.** The app's distinct Java packages, read from the dex files Android actually loads for it (`DexPackageReader`, driven by `ApkPackageInspector`).
+- **Network evidence.** The app's attributed DNS lookups over the last 30 days, from the DNS monitor's log (Chapter 7).
+
+The registry is `ioc-data/trackers.yml` in the rules repository: a mirror of Exodus Privacy's tracker list under ODbL 1.0 (attribution is shown in the UI), produced by `validation/mirror-exodus-trackers.py`. It follows the same delivery rules as the other `ioc-data` files: manifest-verified and fail-closed (`ioc-data.sha256`), refreshed every 12 hours, with a bundled cold-start copy at `res/raw/trackers.yml`. `TrackerRegistry` (in `ioc/`) loads it, lazily and off the main thread. Its state (`RegistryState`, in `privacy/model`) is `LOADING` until the bundled copy is parsed, then `AVAILABLE`, or `UNAVAILABLE` when the bundled copy is unusable and no verified refresh has landed (a later refresh still makes it `AVAILABLE`). Run is disabled unless it is `AVAILABLE`, and only `UNAVAILABLE` is shown as "could not be loaded". The mirror script, the rules-repo validator and the app share one restricted regex grammar.
+
+Normalisation is applied by the mirror (`mirror-exodus-trackers.py`):
+
+- A class-name signature becomes its package only when that package has at least 3 segments and is not a parent of another signature.
+- Broad first-party domains are excluded per signature, so a tracker's network signature cannot match ordinary traffic to the vendor's main site.
+- Pattern caps: 4 per tracker, 64 per file.
+- An empty Exodus category becomes `Uncategorised`, which the user's threshold refuses by default (owner decision).
+
+The rules-repo validator (`validate_trackers_file` in `validate-ioc-data.py`) re-checks only the result: per-field grammar, first-party host exclusion on domain fields, the pattern caps, the category enum (which includes `Uncategorised`) and a minimum tracker count. It does not re-check the class-name rule (3 segments, not a parent of another signature) or the empty-category mapping; those live only in the mirror. The mirror's real-data regression test (`test_snapshot_normalisation`) pins the class-name rule against the committed Exodus snapshot.
+
+### 12.2 Code-only crossing
+
+Only code evidence makes an app cross the user's threshold. Network-only evidence is listed on the app's row but never counts toward the threshold, because content an app displays (an ad, an embedded page) can cause lookups for domains the app does not itself contain. `PrivacyRanking` (in `privacy/`) implements the threshold, the system-app toggle and the ordering; the Dashboard card and the privacy screen both read it, so they cannot disagree.
+
+### 12.3 Isolation
+
+The privacy scan shares nothing with the detection scan beyond reading its inputs:
+
+- Its own tables: `privacy_*` (Room schema 22), plus an index on `DnsEvent` for the per-app queries.
+- Its own `Mutex` and the app-wide `@ApplicationScope`. It never takes `ScanLock`, never creates a `ScanResult`, and never appears in History, exports, alerts or the Timeline.
+- It emits no telemetry and no findings; its facts live outside the telemetry store (owner ruling). A future rule on tracker categories is its own design cycle.
+- The History, Timeline, alert and lock separations above are design statements. `PrivacyBoundaryTest` enforces the source-level rules it asserts: `reporting`, `sigma`, `ui/history`, `ScanWriteRepository` and `data/store` never reference `com.androdr.privacy` or `privacy_`; `privacy` never references `ScanLock` or `ScanResult`; the APK reader and inspector never reference the registry types; `ui/` never imports the registry or the readers; `privacy/model` never imports `ioc`.
+
+Package layering:
+
+```
+privacy.model   leaf package: data types only
+ioc             depends on privacy.model   (TrackerRegistry)
+privacy         depends on ioc, privacy.model   (runner, ranking, readers, correlator)
+ui/             may use privacy (runner, ranking) and privacy.model;
+                never DexPackageReader, ApkPackageInspector or ioc.TrackerRegistry
+```
+
+Test-enforced directions: `privacy/model` never imports `ioc`, and `ui/` never imports the readers or the registry. The other arrows are convention.
+
+### 12.4 Hostile APKs
+
+Every installed APK is untrusted input, and the scan opens all of them. The reader is written so one bad app costs only that app:
+
+- Byte caps count inflated bytes, not compressed sizes. There is one byte budget and one deadline per app, and the reader itself checks both.
+- A compressed-size gate rejects an entry before inflation starts.
+- Descriptor decoding is bounded.
+- Each dex is isolated: a malformed dex costs only that dex, and the app is reported as partly inspected.
+- The package cap applies while parsing, not after, so a dex with tens of thousands of packages cannot exhaust memory first.
+- The runner catches `Throwable` per app, and the whole scan body is also guarded, so no input can leave the scan stuck in a running state. Only `OutOfMemoryError` and `StackOverflowError` are recorded as "resource limit"; anything else is "could not read".
+- An app that declares code (`FLAG_HAS_CODE`) but has no `classes.dex` in any of its APKs (a system app whose dex was moved into `oat/` as an odex) is "could not inspect: code stored outside the APK", never "none of the trackers were found". A package with no code at all, such as a resource overlay, is inspected with an empty result.
+
+### 12.5 Hostile DNS logs
+
+The DNS log is also attacker-influenced, since any app can issue lookups for any name:
+
+- Matching happens before counting, so only registry-matching domains are tallied.
+- Pages are fetched per app, with per-app quotas, rather than loading the log whole.
+- The network step has its own deadline and is isolated from the code step. Its outcome is recorded as `networkStatus`: `COMPLETE`, `TRUNCATED` or `FAILED`. A `FAILED` step hides the coverage line instead of reporting a misleading empty result.
+- The per-app quotas mean a flood can hide only the flooding app's own network evidence. The deadline is different: it is shared by the whole network step (checked before each page, every 64 domains within a page, and before each count). A flood that uses it up leaves later apps' network evidence unread, so the step is `TRUNCATED` and the screen says network evidence is incomplete. Code evidence is never affected.
+- Accepted residual: a single (app, domain) pair flooded with millions of rows makes one count query slow. A per-app row cap on the DNS log is a follow-up.
+
+### 12.6 Background evidence
+
+Telling whether a lookup happened while the app was in use needs usage access. Without it the scan still runs and each network evidence line reads "background use unknown" instead of a background count.
+
+- There is no system-app filter and no event cap on the usage read.
+- Foreground state is tracked per activity class, so split-screen apps with two visible activities are handled.
+- Device shutdown and startup events reset the state and close open intervals; foreground intervals fail closed (package-first pause inference only).
+- Lookups outside the window usage stats cover are labelled "unknown", never "background".
+
+### 12.7 Stated limits
+
+The UI states what the scan cannot see:
+
+- Obfuscation: renamed or stripped packages hide code evidence.
+- Code loaded at runtime is not in the dex files Android loads at install.
+- Encrypted DNS, and tracking reported through Play services, are invisible to the DNS log.
+- Broad first-party domains are excluded from network signatures, so some real tracker traffic goes uncounted.
+- First-party tracking (an app tracking its own users with its own code) is not a registry match.
 
 ---
 

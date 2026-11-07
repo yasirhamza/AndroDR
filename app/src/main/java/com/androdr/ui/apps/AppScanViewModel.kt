@@ -2,23 +2,67 @@ package com.androdr.ui.apps
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.androdr.data.db.PrivacyDao
 import com.androdr.data.repo.FindingsRepository
+import com.androdr.data.repo.SettingsRepository
+import com.androdr.privacy.AppPrivacyRow
+import com.androdr.privacy.InstalledVersions
+import com.androdr.privacy.PrivacyRanking
 import com.androdr.sigma.Finding
 import com.androdr.sigma.FindingCategory
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import javax.inject.Inject
 
 @HiltViewModel
 class AppScanViewModel @Inject constructor(
-    private val findings: FindingsRepository
+    private val findings: FindingsRepository,
+    privacyDao: PrivacyDao,
+    settings: SettingsRepository,
+    private val installedVersions: InstalledVersions
 ) : ViewModel() {
+
+    /**
+     * The last privacy scan's tracker rows, keyed by package, kept only where the stored version is the one
+     * installed now: an app updated since the scan has no row (its stored evidence describes older code).
+     * Only apps with tracker evidence get a line, so only those are looked up in the package manager; Room
+     * re-emits equal lists while a new privacy scan writes its rows, which [distinctUntilChanged] absorbs.
+     */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val privacyByPackage: StateFlow<PrivacyCrossover> = privacyDao.latestCompleted()
+        .distinctUntilChanged()
+        .flatMapLatest { scan ->
+            if (scan == null) {
+                flowOf(PrivacyCrossover(null, emptyMap()))
+            } else {
+                combine(
+                    privacyDao.results(scan.id).distinctUntilChanged(),
+                    privacyDao.evidence(scan.id).distinctUntilChanged(),
+                    settings.refusedTrackerCategories.distinctUntilChanged()
+                ) { results, evidence, refused ->
+                    val rows = PrivacyRanking.rows(results, evidence, refused, showSystemApps = true)
+                        .flatMap { it.second }
+                        .filter { it.trackers.isNotEmpty() }
+                    val installed = installedVersions.versionCodes(rows.map { it.packageName })
+                    PrivacyCrossover(
+                        scannedAt = scan.finishedAt ?: scan.startedAt,
+                        byPackage = rows.filter { installed[it.packageName] == it.versionCode }
+                            .associateBy { it.packageName }
+                    )
+                }
+            }
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), PrivacyCrossover(null, emptyMap()))
 
     /**
      * Risks attributable to a specific installed app from the latest runtime scan.
@@ -87,6 +131,9 @@ class AppScanViewModel @Inject constructor(
         _filterLevel.value = level
     }
 }
+
+/** Privacy-scan rows for packages whose installed version is the scanned one; [scannedAt] dates the scan. */
+data class PrivacyCrossover(val scannedAt: Long?, val byPackage: Map<String, AppPrivacyRow>)
 
 /** A group of findings for a single package. */
 data class AppGroup(

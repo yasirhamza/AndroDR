@@ -28,7 +28,9 @@ import java.io.File
  * sweep: the OEM prefix allowlist and (since #299) the brand impersonation
  * registry seeds (`brand_names.yml`, `brand_domains.yml`) are the ioc-data
  * files with a bundled res/raw counterpart — add a case below if another
- * appears.
+ * appears. Wholesale mirrors (bundle == ioc-data file, byte for byte) belong in
+ * `COPIED_FILES` in `scripts/merge-ioc-data.py` rather than a hand-written case
+ * here, e.g. `trackers.yml` (see TrackerRegistryBundleCrossCheckTest).
  *
  * There is a **third** hand-maintained copy at
  * `src/test/resources/raw/known_oem_prefixes.yml`, loaded by every

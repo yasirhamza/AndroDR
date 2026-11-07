@@ -3,6 +3,7 @@ package com.androdr.ui.apps
 import android.content.Intent
 import android.net.Uri
 import android.provider.Settings
+import android.text.format.DateUtils
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -58,6 +59,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.androdr.R
+import com.androdr.privacy.AppPrivacyRow
 import com.androdr.ui.common.severityColor
 import com.androdr.ui.theme.androdrColors
 
@@ -68,10 +70,12 @@ private val FILTER_LEVELS = listOf("critical", "high", "medium", "low")
 @Composable
 fun AppScanScreen(
     onNavigateToTimeline: ((String) -> Unit)? = null,
+    onNavigateToPrivacy: (() -> Unit)? = null,
     viewModel: AppScanViewModel = hiltViewModel()
 ) {
     val filteredGroups by viewModel.filteredGroupedApps.collectAsStateWithLifecycle()
     val filterLevel by viewModel.filterLevel.collectAsStateWithLifecycle()
+    val crossover by viewModel.privacyByPackage.collectAsStateWithLifecycle()
     var selectedGroup by remember { mutableStateOf<AppGroup?>(null) }
 
     Column(modifier = Modifier.fillMaxSize()) {
@@ -140,6 +144,14 @@ fun AppScanScreen(
     selectedGroup?.let { group ->
         AppGroupDetailSheet(
             group = group,
+            trackerRow = crossover.byPackage[group.packageName]?.takeIf { it.trackers.isNotEmpty() },
+            scannedAt = crossover.scannedAt,
+            onOpenPrivacy = onNavigateToPrivacy?.let { nav ->
+                {
+                    nav()
+                    selectedGroup = null
+                }
+            },
             onDismiss = { selectedGroup = null },
             onViewInTimeline = onNavigateToTimeline?.let { nav ->
                 {
@@ -232,11 +244,37 @@ private fun AppGroupCard(group: AppGroup, onClick: () -> Unit) {
     }
 }
 
+/** The [TrackerCrossoverText] line, dated with the scan; tapping opens the privacy screen. */
+@Composable
+private fun TrackerCrossoverLine(row: AppPrivacyRow, scannedAt: Long, onOpen: (() -> Unit)?) {
+    val context = LocalContext.current
+    val date = DateUtils.formatDateTime(context, scannedAt, DateUtils.FORMAT_SHOW_DATE)
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .then(if (onOpen != null) Modifier.clickable(onClick = onOpen) else Modifier)
+    ) {
+        Text(
+            text = TrackerCrossoverText.line(row, context.resources),
+            style = MaterialTheme.typography.bodyMedium,
+            fontWeight = FontWeight.SemiBold
+        )
+        Text(
+            text = stringResource(R.string.apps_tracker_as_of, date),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+}
+
 @Suppress("LongMethod")
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 private fun AppGroupDetailSheet(
     group: AppGroup,
+    trackerRow: AppPrivacyRow?,
+    scannedAt: Long?,
+    onOpenPrivacy: (() -> Unit)?,
     onDismiss: () -> Unit,
     onViewInTimeline: (() -> Unit)? = null
 ) {
@@ -340,6 +378,11 @@ private fun AppGroupDetailSheet(
                             }
                         }
                     }
+                }
+
+                if (trackerRow != null && scannedAt != null) {
+                    HorizontalDivider()
+                    TrackerCrossoverLine(trackerRow, scannedAt, onOpenPrivacy)
                 }
 
                 HorizontalDivider()

@@ -112,6 +112,7 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
                     UpdateStatusRow(stringResource(R.string.settings_update_cve_database), result.cveDatabase)
                     UpdateStatusRow(stringResource(R.string.settings_update_oem_prefixes), result.oemPrefixes)
                     UpdateStatusRow(stringResource(R.string.settings_update_brand_registry), result.brandRegistry)
+                    UpdateStatusRow(stringResource(R.string.settings_update_tracker_registry), result.trackerRegistry)
                 }
             }
         )

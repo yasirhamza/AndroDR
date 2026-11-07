@@ -677,3 +677,33 @@ private fun triggeredLevels(findings: List<JsonObject>): Map<String, String> {
     }
     return out
 }
+
+/** v22: privacy scan tables (own storage, never ScanResult) and the DnsEvent per-(app, domain) index. */
+val MIGRATION_21_22 = object : Migration(21, 22) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        SCHEMA_22_DDL.forEach(db::execSQL)
+    }
+}
+
+/** Copied verbatim from the exported 22.json (`${TABLE_NAME}` expanded). */
+private val SCHEMA_22_DDL = listOf(
+    "CREATE TABLE IF NOT EXISTS `privacy_scan` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+        "`startedAt` INTEGER NOT NULL, `finishedAt` INTEGER, `appsTotal` INTEGER NOT NULL, " +
+        "`appsInspected` INTEGER NOT NULL, `appsPartial` INTEGER NOT NULL, `appsFailed` INTEGER NOT NULL, " +
+        "`registrySize` INTEGER NOT NULL, `registrySha256` TEXT NOT NULL, `dnsWindowStart` INTEGER NOT NULL, " +
+        "`dnsCoverageDays` INTEGER NOT NULL, `usageCoverageFrom` INTEGER, `networkStatus` TEXT NOT NULL)",
+    "CREATE TABLE IF NOT EXISTS `privacy_app_result` (`scanId` INTEGER NOT NULL, `packageName` TEXT NOT NULL, " +
+        "`versionCode` INTEGER NOT NULL, `appLabel` TEXT NOT NULL, `isSystemApp` INTEGER NOT NULL, " +
+        "`outcome` TEXT NOT NULL, `reason` TEXT, PRIMARY KEY(`scanId`, `packageName`))",
+    "CREATE TABLE IF NOT EXISTS `privacy_tracker_evidence` (`scanId` INTEGER NOT NULL, " +
+        "`packageName` TEXT NOT NULL, `trackerId` INTEGER NOT NULL, `trackerName` TEXT NOT NULL, " +
+        "`website` TEXT NOT NULL, `categories` TEXT NOT NULL, `inCode` INTEGER NOT NULL, " +
+        "`lookups` INTEGER NOT NULL, `lookupDays` INTEGER NOT NULL, `background` INTEGER, " +
+        "`firstSeen` INTEGER, `lastSeen` INTEGER, `newSinceLastScan` INTEGER NOT NULL, " +
+        "PRIMARY KEY(`scanId`, `packageName`, `trackerId`))",
+    "CREATE TABLE IF NOT EXISTS `privacy_package_set` (`packageName` TEXT NOT NULL, " +
+        "`versionCode` INTEGER NOT NULL, `lastUpdateTime` INTEGER NOT NULL, `readerVersion` INTEGER NOT NULL, " +
+        "`packagesText` TEXT NOT NULL, PRIMARY KEY(`packageName`))",
+    "CREATE INDEX IF NOT EXISTS `index_DnsEvent_appName_domain_timestamp` " +
+        "ON `DnsEvent` (`appName`, `domain`, `timestamp`)"
+)

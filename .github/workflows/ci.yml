@@ -54,6 +54,7 @@ jobs:
             bundle:
               - 'app/src/main/res/raw/known_bad_*.json'
               - 'app/src/main/res/raw/known_campaigns.json'
+              - 'app/src/main/res/raw/trackers.yml'
               - 'third-party/android-sigma-rules'
               - 'scripts/merge-ioc-data.py'
               - 'scripts/test_merge_ioc_data.py'
