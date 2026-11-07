@@ -114,11 +114,44 @@ class ApkPackageInspectorTest {
 
     private fun noDexApk(): File = SyntheticDex.apk(linkedMapOf("resources.arsc" to byteArrayOf(0, 1, 2, 3)))
 
-    @Test fun `declared code with no dex in any apk is COULD_NOT_INSPECT, code stored outside the APK`() {
-        val r = inspector.inspect(app(noDexApk(), noDexApk()).copy(hasCode = true), budget())
+    /** A fresh folder holding a no-dex base APK, optionally with an `oat/` folder beside it (a stripped system app). */
+    private fun appFolder(withOat: Boolean): File {
+        val dir = kotlin.io.path.createTempDirectory("app-dir").toFile().also { it.deleteOnExit() }
+        if (withOat) File(dir, "oat/arm64").mkdirs()
+        val base = File(dir, "base.apk")
+        noDexApk().copyTo(base)
+        return base
+    }
+
+    @Test fun `declared code with no dex and an oat folder beside the apk is COULD_NOT_INSPECT, code stored outside`() {
+        val base = appFolder(withOat = true)
+        val r = inspector.inspect(app(base, noDexApk()).copy(hasCode = true), budget())
         assertEquals(InspectOutcome.COULD_NOT_INSPECT, r.outcome)
         assertEquals("code stored outside the APK", r.reason)
         assertTrue(r.packages.isEmpty())
+    }
+
+    // #452: resource-only system apps (overlays, *-res, Safety Center Resources) carry HAS_CODE by default but have
+    // no code anywhere; "code stored outside the APK" was false for every one of them.
+    @Test fun `declared code with no dex and no oat folder beside the apk is INSPECTED with an empty set`() {
+        val r = inspector.inspect(app(appFolder(withOat = false)).copy(hasCode = true), budget())
+        assertEquals(InspectOutcome.INSPECTED, r.outcome)
+        assertNull(r.reason)
+        assertTrue(r.packages.isEmpty())
+    }
+
+    @Test fun `declared code with no dex in a folder that cannot be listed stays COULD_NOT_INSPECT`() {
+        val base = appFolder(withOat = false)
+        val dir = base.parentFile!!
+        assertTrue(dir.setReadable(false, false))
+        try {
+            org.junit.Assume.assumeTrue("running as root: every folder is listable", dir.list() == null)
+            val r = inspector.inspect(app(base).copy(hasCode = true), budget())
+            assertEquals(InspectOutcome.COULD_NOT_INSPECT, r.outcome)
+            assertEquals("code stored outside the APK", r.reason)
+        } finally {
+            dir.setReadable(true, false)
+        }
     }
 
     @Test fun `a code-less package with no dex stays INSPECTED with an empty set`() {

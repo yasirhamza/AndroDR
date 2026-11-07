@@ -754,7 +754,7 @@ Every installed APK is untrusted input, and the scan opens all of them. The read
 - Each dex is isolated: a malformed dex costs only that dex, and the app is reported as partly inspected.
 - The package cap applies while parsing, not after, so a dex with tens of thousands of packages cannot exhaust memory first.
 - The runner catches `Throwable` per app, and the whole scan body is also guarded, so no input can leave the scan stuck in a running state. Only `OutOfMemoryError` and `StackOverflowError` are recorded as "resource limit"; anything else is "could not read".
-- An app that declares code (`FLAG_HAS_CODE`) but has no `classes.dex` in any of its APKs (a system app whose dex was moved into `oat/` as an odex) is "could not inspect: code stored outside the APK", never "none of the trackers were found". A package with no code at all, such as a resource overlay, is inspected with an empty result.
+- An app that declares code (`FLAG_HAS_CODE`) but has no `classes.dex` in any of its APKs (a system app whose dex was moved into `oat/` as an odex) is "could not inspect: code stored outside the APK", never "none of the trackers were found". A package with no code at all, such as a resource overlay, is inspected with an empty result. Because `android:hasCode` defaults to true, most resource-only system packages (`*_auto_generated_rro_*`, `*-res`, Safety Center Resources) also declare code they don't have. An APK with no dex whose folder can be listed and holds no `oat` entry therefore counts as code-less and is inspected with an empty result (#452). If the folder can't be listed, the app keeps "code stored outside the APK".
 
 ### 12.5 Hostile DNS logs
 

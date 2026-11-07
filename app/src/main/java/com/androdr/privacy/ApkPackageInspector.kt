@@ -25,7 +25,8 @@ data class InstalledApp(
     val apkPaths: List<String>,
     /**
      * `ApplicationInfo.FLAG_HAS_CODE`: the app declares code. When true and no APK holds a loaded dex, the code
-     * was stored outside the APK (stripped into `oat/` as an odex) and was never read. Defaults to true, so an
+     * was stored outside the APK (stripped into `oat/` as an odex) and was never read — unless the APK's folder
+     * lists no `oat` at all, which proves a resource-only package (#452). Defaults to true, so an
      * app is never said to be free of trackers because a caller forgot to set it.
      */
     val hasCode: Boolean = true,
@@ -99,9 +100,22 @@ class ApkPackageInspector @Inject constructor(
             }
         }
         if (unreadable > 0) notes.add("$unreadable apk unreadable")
-        // Declared code but no loaded dex in any APK read: the code was never read, so nothing may be concluded.
-        val codeOutside = app.hasCode && readable > 0 && !anyDex
+        // Declared code but no loaded dex in any APK read: the code was stripped into oat/ and never read, so nothing
+        // may be concluded — unless the app provably has no code at all (#452).
+        val codeOutside = app.hasCode && readable > 0 && !anyDex && !provablyCodeless(app)
         return conclude(app, packages, notes, Reading(readable, timedOut, codeOutside))
+    }
+
+    /**
+     * `android:hasCode` defaults to true, so resource-only packages (overlays, `*-res` APKs) declare code they do
+     * not have. A system app whose dex was stripped from its APK keeps the precompiled code in an `oat/` folder
+     * beside it; with no dex in the APK and no `oat` there, there is no code anywhere. Only a folder that can be
+     * listed proves the absence: an unlistable one keeps "code stored outside the APK".
+     */
+    private fun provablyCodeless(app: InstalledApp): Boolean {
+        val base = app.apkPaths.firstOrNull() ?: return false
+        val siblings = File(base).parentFile?.list() ?: return false
+        return OAT_DIR !in siblings
     }
 
     private class Reading(val readable: Int, val timedOut: Boolean, val codeOutside: Boolean)
@@ -135,6 +149,7 @@ class ApkPackageInspector @Inject constructor(
 
     companion object {
         private const val REASON_MAX = 160
+        private const val OAT_DIR = "oat"
 
         /** The reason for an app that declares code but has no loaded dex in any of its APKs. */
         const val CODE_OUTSIDE_APK = "code stored outside the APK"
