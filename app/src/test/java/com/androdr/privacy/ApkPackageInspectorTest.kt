@@ -133,11 +133,28 @@ class ApkPackageInspectorTest {
 
     // #452: resource-only system apps (overlays, *-res, Safety Center Resources) carry HAS_CODE by default but have
     // no code anywhere; "code stored outside the APK" was false for every one of them.
-    @Test fun `declared code with no dex and no oat folder beside the apk is INSPECTED with an empty set`() {
-        val r = inspector.inspect(app(appFolder(withOat = false)).copy(hasCode = true), budget())
+    @Test fun `a system-image app with no dex and no oat folder beside the apk is INSPECTED with an empty set`() {
+        val r = inspector.inspect(
+            app(appFolder(withOat = false)).copy(hasCode = true, isSystemApp = true, onSystemImage = true), budget(),
+        )
         assertEquals(InspectOutcome.INSPECTED, r.outcome)
         assertNull(r.reason)
         assertTrue(r.packages.isEmpty())
+    }
+
+    // Security review of #452: a user app (in /data/app) can leave out classes.dex and load code another way; a
+    // listable folder must not turn that into "none found". Only the read-only system image holds resource-only apps.
+    @Test fun `a user app with no dex and no oat folder stays COULD_NOT_INSPECT`() {
+        val r = inspector.inspect(app(appFolder(withOat = false)).copy(hasCode = true), budget())
+        assertEquals(InspectOutcome.COULD_NOT_INSPECT, r.outcome)
+        assertEquals("code stored outside the APK", r.reason)
+    }
+
+    @Test fun `a system app not on the system image (an update in data-app) stays COULD_NOT_INSPECT`() {
+        val r = inspector.inspect(
+            app(appFolder(withOat = false)).copy(hasCode = true, isSystemApp = true, onSystemImage = false), budget(),
+        )
+        assertEquals(InspectOutcome.COULD_NOT_INSPECT, r.outcome)
     }
 
     @Test fun `declared code with no dex in a folder that cannot be listed stays COULD_NOT_INSPECT`() {
@@ -146,7 +163,9 @@ class ApkPackageInspectorTest {
         assertTrue(dir.setReadable(false, false))
         try {
             org.junit.Assume.assumeTrue("running as root: every folder is listable", dir.list() == null)
-            val r = inspector.inspect(app(base).copy(hasCode = true), budget())
+            val r = inspector.inspect(
+                app(base).copy(hasCode = true, isSystemApp = true, onSystemImage = true), budget(),
+            )
             assertEquals(InspectOutcome.COULD_NOT_INSPECT, r.outcome)
             assertEquals("code stored outside the APK", r.reason)
         } finally {
@@ -177,6 +196,26 @@ class ApkPackageInspectorTest {
         val r = inspector.inspect(app(apk()).copy(hasCode = true), budget())
         assertEquals(InspectOutcome.INSPECTED, r.outcome)
         assertTrue(r.packages.isEmpty())
+    }
+
+    @Test fun `installedApps marks only non-updated system apps as on the system image`() {
+        fun pkg(name: String, flags: Int) = PackageInfo().apply {
+            packageName = name
+            applicationInfo = ApplicationInfo().apply {
+                packageName = name
+                sourceDir = "/x/$name.apk"
+                this.flags = flags
+            }
+        }
+        shadowOf(context.packageManager).installPackage(pkg("com.img", ApplicationInfo.FLAG_SYSTEM))
+        shadowOf(context.packageManager).installPackage(
+            pkg("com.upd", ApplicationInfo.FLAG_SYSTEM or ApplicationInfo.FLAG_UPDATED_SYSTEM_APP),
+        )
+        shadowOf(context.packageManager).installPackage(pkg("com.usr", 0))
+        val apps = inspector.installedApps().associateBy { it.packageName }
+        assertTrue(apps.getValue("com.img").onSystemImage)
+        assertFalse(apps.getValue("com.upd").onSystemImage)
+        assertFalse(apps.getValue("com.usr").onSystemImage)
     }
 
     @Test fun `installedApps carries FLAG_HAS_CODE`() {

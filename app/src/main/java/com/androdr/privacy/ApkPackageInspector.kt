@@ -30,6 +30,11 @@ data class InstalledApp(
      * app is never said to be free of trackers because a caller forgot to set it.
      */
     val hasCode: Boolean = true,
+    /**
+     * A system app running from the read-only system image (`FLAG_SYSTEM` without `FLAG_UPDATED_SYSTEM_APP`); only
+     * such an app may be found code-less (#452). Defaults to false, so a caller that forgets it fails closed.
+     */
+    val onSystemImage: Boolean = false,
 )
 
 data class AppInspection(
@@ -77,6 +82,8 @@ class ApkPackageInspector @Inject constructor(
             isSystemApp = info.flags and ApplicationInfo.FLAG_SYSTEM != 0,
             apkPaths = paths,
             hasCode = info.flags and ApplicationInfo.FLAG_HAS_CODE != 0,
+            onSystemImage = info.flags and ApplicationInfo.FLAG_SYSTEM != 0 &&
+                info.flags and ApplicationInfo.FLAG_UPDATED_SYSTEM_APP == 0,
         )
     }
 
@@ -110,10 +117,12 @@ class ApkPackageInspector @Inject constructor(
      * `android:hasCode` defaults to true, so resource-only packages (overlays, `*-res` APKs) declare code they do
      * not have. A system app whose dex was stripped from its APK keeps the precompiled code in an `oat/` folder
      * beside it; with no dex in the APK and no `oat` there, there is no code anywhere. Only a folder that can be
-     * listed proves the absence: an unlistable one keeps "code stored outside the APK".
+     * listed proves the absence: an unlistable one keeps "code stored outside the APK". Only apps on the read-only
+     * system image qualify: a user app (or a system-app update in /data/app) could leave out classes.dex and load
+     * code another way, and a listable folder must never turn that into "none found".
      */
     private fun provablyCodeless(app: InstalledApp): Boolean {
-        val base = app.apkPaths.firstOrNull() ?: return false
+        val base = app.apkPaths.firstOrNull()?.takeIf { app.onSystemImage } ?: return false
         val siblings = File(base).parentFile?.list() ?: return false
         return OAT_DIR !in siblings
     }
