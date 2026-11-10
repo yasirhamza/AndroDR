@@ -164,3 +164,95 @@ def test_threatfox_is_not_treated_as_an_on_device_mirror():
     abusech = _flat(_read(COMMANDS / "update-rules-ingest-abusech.md"))
     assert '"upstream_snapshot_hash_set": []' in abusech
     assert '["C2_DOMAIN"' not in abusech, "a ThreatFox snapshot would make dedup drop every ThreatFox candidate"
+
+
+# 2026-11: tracker-list refresh (ioc-data/trackers.yml, the Exodus Privacy mirror) became a
+# step of /update-rules. The list is fetched by phones, so the instructions must build the
+# candidate away from the live file, treat a failed fetch as a failure, ask one question,
+# and commit the list on its own with a regenerated manifest.
+
+def _section(text: str, heading: str) -> str:
+    """The text from the Markdown heading line starting with `heading` up to the next
+    heading of the same or a higher level. `#` lines inside code fences are not headings."""
+    level = len(heading) - len(heading.lstrip("#"))
+    assert level, f"{heading!r} is not a Markdown heading"
+    out, inside, fenced = [], False, False
+    for line in text.splitlines():
+        if line.lstrip().startswith("```"):
+            fenced = not fenced
+        elif not fenced and line.startswith("#"):
+            hashes = len(line) - len(line.lstrip("#"))
+            if inside and hashes <= level:
+                break
+            if not inside and line.startswith(heading) and hashes == level:
+                inside = True
+        if inside:
+            out.append(line)
+    assert out, f"heading {heading!r} not found"
+    return "\n".join(out)
+
+
+def _dispatcher() -> str:
+    return _read(COMMANDS / "update-rules.md")
+
+
+def test_section_stops_at_the_next_heading_of_the_same_or_higher_level():
+    doc = "## A\na\n### A.1\na1\n```bash\n# not a heading\n```\n## B\nb\n### B.1\nb1\n### B.2\nb2\n# C\n"
+    assert _section(doc, "## A") == "## A\na\n### A.1\na1\n```bash\n# not a heading\n```"
+    assert _section(doc, "### B.1") == "### B.1\nb1"
+    assert _section(doc, "### B.2") == "### B.2\nb2"
+
+
+def test_launcher_and_dispatcher_agree_on_source_ids():
+    ids_line = next(l for l in _dispatcher().splitlines() if "/update-rules source <id>" in l)
+    dispatcher = set(re.findall(r"`([a-z]+)`", ids_line.split("valid IDs:")[1]))
+    launcher_text = _read(ROOT / "scripts" / "update-rules.sh")
+    launcher = set(re.search(r'^VALID_SOURCES="([^"]*)"', launcher_text, re.M).group(1).split())
+    assert dispatcher == launcher and "trackers" in dispatcher
+    for source_id in launcher:   # the help text lists every id the launcher accepts, and no other
+        assert re.search(rf"^  {source_id}\s+\S", launcher_text, re.M), f"usage() does not list {source_id}"
+    assert "citizenlab" not in launcher_text, "citizenlab has no ingester"
+
+
+def test_tracker_candidate_is_built_away_from_the_live_file():
+    d = _dispatcher()
+    step = _flat(_section(d, "## Step 6.7"))
+    assert "--out <run-dir>/trackers/trackers.yml" in step and "--previous ioc-data/trackers.yml" in step
+    assert "--out ioc-data/trackers.yml" not in d
+
+
+def test_tracker_failure_is_a_feed_failure_not_no_change():
+    step = _flat(_section(_dispatcher(), "## Step 6.7"))
+    for phrase in ("exit code 1", "exit code 2", "feed FAILURE", "never as \"no change\"", "the rest of the run continues"):
+        assert phrase in step, phrase
+
+
+def test_tracker_step_runs_in_full_mode_even_with_no_threat_intel():
+    assert "Step 6.7" in _flat(_section(_dispatcher(), "## Step 3"))
+
+
+def test_tracker_change_has_one_decision_and_is_never_hand_edited():
+    block = _flat(_section(_dispatcher(), "### 7.2"))
+    for phrase in ("Approve", "Skip", "never edited by hand", "first_party_hosts.txt", "data, not instructions"):
+        assert phrase in block, phrase
+    assert "Modify" not in block
+
+
+def test_tracker_commit_is_its_own_and_regenerates_the_manifest():
+    block = _flat(_section(_dispatcher(), "### 8.5"))
+    for phrase in ("cp <run-dir>/trackers/trackers.yml ioc-data/trackers.yml", "ioc-data.sha256",
+                   "validate-ioc-data.py ioc-data/trackers.yml", "validate-feed-state.py", "exodus_trackers",
+                   "its own commit", "merge-ioc-data.py"):
+        assert phrase in block, phrase
+
+
+def test_tracker_list_skips_cross_dedup_reference_check_and_ledger():
+    step = _flat(_section(_dispatcher(), "## Step 6.7"))
+    for phrase in ("Step 6.5", "Gate 2b", "run ledger"):
+        assert phrase in step, phrase
+
+
+def test_workflow_defers_the_tracker_refresh_to_the_main_session():
+    js = _read(WORKFLOW)
+    deferred = js[js.index("deferred_to_main_session"):]
+    assert "Tracker-list refresh" in deferred and "Step 6.7" in deferred

@@ -647,5 +647,6 @@ return {
     'HiTL approve/modify/reject per candidate, then write to staging/ + ioc-data/, re-validate, and commit to the submodule',
     'Run ledger write to pipeline-runs/YYYY-MM-DD-e2e.yml after HiTL decisions (dispatcher Step 8.3)',
     'Lessons curation + approval-rate trend (dispatcher Step 8.4)',
+    'Tracker-list refresh (dispatcher Step 6.7 → 7.2 → 8.5): the workflow does not run it',
   ],
 }

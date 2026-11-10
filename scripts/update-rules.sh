@@ -2,11 +2,11 @@
 # update-rules.sh — Launch the AI-powered SIGMA rule update pipeline via Claude Code
 #
 # Usage:
-#   ./scripts/update-rules.sh full                       # Check all feeds
+#   ./scripts/update-rules.sh full                       # Check all feeds and the tracker list
 #   ./scripts/update-rules.sh source stalkerware          # Check one feed
 #   ./scripts/update-rules.sh threat "Sturnus trojan"     # Research a specific threat
 #
-# Valid source IDs: abusech, asb, nvd, amnesty, citizenlab, stalkerware, attack
+# Valid source IDs: abusech, asb, nvd, amnesty, stalkerware, attack, prodaft, trackers
 
 set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
@@ -16,7 +16,7 @@ usage() {
 Usage: $(basename "$0") <mode> [argument]
 
 Modes:
-  full                     Check all 7 threat intel feeds
+  full                     Check all feeds and the tracker list
   source <id>              Check a single feed
   threat "<name>"          Research a specific threat
 
@@ -25,9 +25,10 @@ Valid source IDs:
   asb          Android Security Bulletins
   nvd          NVD/NIST CVE database
   amnesty      AmnestyTech/investigations
-  citizenlab   Citizen Lab malware-indicators
   stalkerware  stalkerware-indicators
   attack       MITRE ATT&CK Mobile
+  prodaft      PRODAFT malware-ioc
+  trackers     Exodus Privacy tracker list (privacy scan)
 
 Examples:
   $(basename "$0") full
@@ -39,7 +40,7 @@ EOF
     exit 1
 }
 
-VALID_SOURCES="abusech asb nvd amnesty citizenlab stalkerware attack"
+VALID_SOURCES="abusech asb nvd amnesty stalkerware attack prodaft trackers"
 
 mode="${1:-}"
 [ -z "$mode" ] && usage
