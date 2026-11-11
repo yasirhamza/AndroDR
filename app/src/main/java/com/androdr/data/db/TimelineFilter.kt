@@ -17,6 +17,8 @@ import java.time.ZoneId
  * - [from] / [to]: an inclusive time range, in epoch ms;
  * - [levels]: finding rows of these severities only (SQL on `level`, case-insensitive); no facts;
  * - [findingsAndEvidenceOnly]: finding and signal rows only, their evidence nested under them; no facts.
+ * - [exportable]: set by the exports (CSV, plain text, the report sheet) only: the privacy scan's entries are
+ *   left out, whatever the other fields (spec 2026-11-10 §5.3), so reporting never sees them;
  * - [query]: a case-insensitive contains-match over columns only, never decoded bodies (ruling R30):
  *   a row's `packageName`, `category`, `ruleId` or title (`description`); a fact's `packageName` or
  *   `category`. Blank means no search. It never drives an index (see [TimelineQueries]).
@@ -39,6 +41,7 @@ data class TimelineFilter(
      */
     val civilDay: Long? = null,
     val query: String? = null,
+    val exportable: Boolean = false,
 ) {
     /** [query] trimmed, or null when blank: the text the search matches. */
     val searchText: String? get() = query?.trim()?.takeIf { it.isNotEmpty() }
@@ -52,8 +55,12 @@ data class TimelineFilter(
             else -> TimelineShape.ALL
         }
 
-    /** Whether event facts take part: the severity and findings-only views show timeline rows alone. */
-    val includesFacts: Boolean get() = levels.isEmpty() && !findingsAndEvidenceOnly
+    /**
+     * Whether event facts take part: the severity and findings-only views show timeline rows alone, and so
+     * does the privacy-scan source (its entries are rows; no fact has that source).
+     */
+    val includesFacts: Boolean
+        get() = levels.isEmpty() && !findingsAndEvidenceOnly && source != TelemetrySource.PRIVACY_SCAN
 
     /**
      * The day an entry at [time] groups under, as the epoch ms of that day's start in [zone];

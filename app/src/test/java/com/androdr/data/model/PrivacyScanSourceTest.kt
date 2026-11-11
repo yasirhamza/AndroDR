@@ -59,6 +59,7 @@ class PrivacyScanSourceTest {
             "com/androdr/ui/timeline/TimelineViewModel.kt",
             "com/androdr/ui/timeline/TimelineScreen.kt",
             "com/androdr/ui/timeline/TimelineEventCard.kt",
+            "com/androdr/ui/timeline/TimelinePrivacy.kt",
             "com/androdr/ui/settings/SettingsViewModel.kt",
         )
     }

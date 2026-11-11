@@ -12,6 +12,7 @@ import androidx.paging.PagingData
 import androidx.paging.cachedIn
 import androidx.paging.insertSeparators
 import androidx.paging.map
+import com.androdr.R
 import com.androdr.data.db.AppDatabase
 import com.androdr.data.db.TimelineFilter
 import com.androdr.data.db.chunkedIn
@@ -294,10 +295,54 @@ class TimelineViewModel @Inject constructor(
         .map { timelineFindingRows(it.stateFindings) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    /** "By scan": one header per completed scan, newest first, keyset-paged (no cap, spec §5.5). */
-    val scanGroups: Flow<PagingData<ScanGroup>> = scanRepository.pagedScans()
-        .map { page -> page.map(::scanGroup) }
-        .cachedIn(viewModelScope)
+    /** When the privacy scan in the Timeline ran (spec 2026-11-10 §5.1), or null when there is none. */
+    private val privacyScanAt: Flow<Long?> = db.forensicTimelineEventDao().privacyScanAt()
+
+    /**
+     * "By scan": one header per completed scan, newest first, keyset-paged (no cap, spec §5.5), with the
+     * privacy scan's header placed by its date ([privacyHeaderBetween]). The security scans' paging source is
+     * History's too, so the privacy header is added here, not there.
+     */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val scanGroups: Flow<PagingData<ScanListItem>> = privacyScanAt.flatMapLatest { at ->
+        scanRepository.pagedScans().map { page ->
+            page.map { ScanListItem.Security(scanGroup(it)) }
+                .insertSeparators<ScanListItem.Security, ScanListItem> { before, after ->
+                    at?.takeIf { privacyHeaderBetween(before?.group, after?.group, it) }?.let { ScanListItem.Privacy(it) }
+                }
+        }
+    }.cachedIn(viewModelScope)
+
+    /** The privacy scan header's count: the current filter narrowed to the privacy scan's entries. */
+    suspend fun privacyCount(): Long? = count(_filter.value.copy(scanId = null, source = TelemetrySource.PRIVACY_SCAN))
+
+    /** The privacy scan header opens the Timeline narrowed to its entries (by source: they have no scan id). */
+    fun showPrivacyScan() {
+        _filter.update { it.copy(scanId = null, source = TelemetrySource.PRIVACY_SCAN) }
+        setGroupMode(TimelineGroupMode.DATE)
+    }
+
+    private val _notice = MutableStateFlow<Int?>(null)
+
+    /** A one-off message for the screen (a string resource), cleared by [noticeShown]. */
+    val notice: StateFlow<Int?> = _notice.asStateFlow()
+
+    fun noticeShown() {
+        _notice.value = null
+    }
+
+    /**
+     * The filter an export reads: the current one with the privacy scan's entries left out (spec 2026-11-10
+     * §5.3), or null — after saying so — when that leaves nothing to export.
+     */
+    private suspend fun exportFilter(): TimelineFilter? {
+        val filter = _filter.value.copy(exportable = true)
+        if (count(filter) == 0L) {
+            _notice.value = R.string.timeline_nothing_to_export
+            return null
+        }
+        return filter
+    }
 
     private fun scanGroup(scan: ScanResult): ScanGroup = ScanGroup(
         scanId = scan.id,
@@ -332,7 +377,7 @@ class TimelineViewModel @Inject constructor(
     fun generateReport() {
         viewModelScope.launch {
             try {
-                val filter = _filter.value
+                val filter = exportFilter() ?: return@launch
                 val file = withContext(Dispatchers.IO) {
                     newReportFile("txt", filter).also { writePlaintext(it, filter) }
                 }
@@ -359,11 +404,11 @@ class TimelineViewModel @Inject constructor(
     // ensures the exporting flag is always reset and the error is logged regardless of type.
     private fun export(extension: String, write: suspend (File, TimelineFilter) -> Unit) {
         if (_exporting.value) return
-        // One filter for the whole export: the file name's label and the content can never disagree.
-        val filter = _filter.value
         viewModelScope.launch {
             _exporting.value = true
             try {
+                // One filter for the whole export: the file name's label and the content can never disagree.
+                val filter = exportFilter() ?: return@launch
                 _shareUri.value = withContext(io) {
                     uriOf(newReportFile(extension, filter).also { write(it, filter) })
                 }

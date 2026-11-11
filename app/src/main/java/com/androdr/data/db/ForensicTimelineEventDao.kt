@@ -6,6 +6,7 @@ import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import com.androdr.data.model.ForensicTimelineEvent
 import com.androdr.data.model.SignalMember
+import kotlinx.coroutines.flow.Flow
 
 @Dao
 @Suppress("TooManyFunctions") // Room DAO: the writers', deleters' and pin readers' queries
@@ -121,6 +122,11 @@ interface ForensicTimelineEventDao {
             "AND id <= :maxId AND (scanResultId = -1 $SCAN_GONE) AND $NOT_PRIVACY"
     )
     suspend fun recordIdsScanLessThrough(maxId: Long): List<Long>
+
+    /** When the privacy scan in the Timeline ran (its entries' time), or null: the "By scan" list's header. */
+    @Query("SELECT MAX(r.startTimestamp) FROM forensic_timeline r WHERE r.telemetrySource = 'PRIVACY_SCAN' " +
+        "AND ${VisibleRow.SQL}")
+    fun privacyScanAt(): Flow<Long?>
 
     /** The privacy scan's Timeline entries (spec 2026-11-10 §5.4); called only by TimelineRowDeleter. */
     @Query("DELETE FROM forensic_timeline WHERE telemetrySource = 'PRIVACY_SCAN'")

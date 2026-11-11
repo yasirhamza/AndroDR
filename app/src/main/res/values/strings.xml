@@ -184,6 +184,8 @@
     <string name="timeline_sheet_group">Group by</string>
     <string name="timeline_sheet_done">Done</string>
     <string name="timeline_source_privacy_scan">Privacy scan</string>
+    <string name="timeline_open_privacy">Open in privacy results</string>
+    <string name="timeline_nothing_to_export">Nothing to export: privacy scan entries are never exported.</string>
     <string name="timeline_source_live">Live scan</string>
 
     <!-- Post-scan guidance -->
