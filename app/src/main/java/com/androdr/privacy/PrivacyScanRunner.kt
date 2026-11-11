@@ -2,6 +2,8 @@ package com.androdr.privacy
 
 import android.util.Log
 import androidx.annotation.VisibleForTesting
+import androidx.room.withTransaction
+import com.androdr.data.db.AppDatabase
 import com.androdr.data.db.DnsEventDao
 import com.androdr.data.db.DomainLookupCount
 import com.androdr.data.db.PrivacyDao
@@ -55,6 +57,8 @@ class PrivacyScanRunner @Inject constructor(
     private val dnsEvents: DnsEventDao,
     private val usage: UsageIntervalReader,
     @ApplicationScope private val scope: CoroutineScope,
+    private val db: AppDatabase,
+    private val timeline: PrivacyTimelineWriter,
 ) {
     // Test seams: Hilt cannot inject function types and the project has no clock abstraction. Production never
     // assigns them.
@@ -99,7 +103,11 @@ class PrivacyScanRunner @Inject constructor(
     suspend fun deleteAll(): Boolean {
         if (!mutex.tryLock()) return false
         try {
-            dao.deleteAll()
+            // The Timeline entries go with the results they describe (spec 2026-11-10 §5.4).
+            db.withTransaction {
+                dao.deleteAll()
+                timeline.clear()
+            }
             state.value = PrivacyScanProgress.Idle
         } finally {
             mutex.unlock()
@@ -146,14 +154,26 @@ class PrivacyScanRunner @Inject constructor(
         )
         dao.upsertEvidence(PrivacyEvidenceRows.build(scanId, set, inCode, network.evidence, isNew))
         dao.upsertDomainDetail(PrivacyDetailRows.domains(scanId, network.domains))
-        dao.finishScan(
-            scanId, clock(), outcomes.values.count { it == InspectOutcome.INSPECTED },
-            outcomes.values.count { it == InspectOutcome.PARTIAL },
-            outcomes.values.count { it == InspectOutcome.COULD_NOT_INSPECT },
-            network.coverageDays, usageIntervals?.coverageFrom, network.status.name,
+        val finishedAt = clock()
+        val counts = PrivacyTimelineRows.ScanCounts(
+            inspected = outcomes.values.count { it == InspectOutcome.INSPECTED },
+            partial = outcomes.values.count { it == InspectOutcome.PARTIAL },
+            failed = outcomes.values.count { it == InspectOutcome.COULD_NOT_INSPECT },
         )
-        dao.deleteScansBefore(scanId)
-        dao.pruneCacheTo(scanId)
+        val entries = PrivacyTimelineRows.build(
+            finishedAt, counts, dao.resultsOnce(scanId), dao.evidenceOnce(scanId), network.status,
+        )
+        // One transaction (spec 2026-11-10 §5.4): the scan completes, the previous results and their Timeline
+        // entries go, and the new entries arrive together; a failure leaves the previous scan as it was.
+        db.withTransaction {
+            dao.finishScan(
+                scanId, finishedAt, counts.inspected, counts.partial, counts.failed,
+                network.coverageDays, usageIntervals?.coverageFrom, network.status.name,
+            )
+            dao.deleteScansBefore(scanId)
+            dao.pruneCacheTo(scanId)
+            timeline.replace(entries)
+        }
         state.value = PrivacyScanProgress.Finished(scanId)
     }
 
