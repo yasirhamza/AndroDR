@@ -338,7 +338,7 @@ All persistent state lives in a single Room database declared in `AppDatabase` (
 | `Alert` | `alert` | The lasting record of an incident: opened by the first finding with its `alertKey`, kept across scans, closed only by a person. Never deleted by scan deletion or "Clear all" |
 | `EventWatermark` | `event_watermark` | Per live event service, the position up to which live events have been collected, and the scan that advanced it |
 | `DnsEvent` | `DnsEvent` | DNS queries intercepted by `DnsVpnService`, with timestamp and optional match reason |
-| `ForensicTimelineEvent` | `forensic_timeline` | Finding rows, correlation signals, detected changes (first-seen package installs, device-admin grants), IOC-matched live DNS hits, and the persistent audit / "import interrupted" rows. Event records (intrusion-log, usage-stats, bug-report module events) live only in the telemetry store since C3; legacy event rows of pre-store (`NONE`) scans remain |
+| `ForensicTimelineEvent` | `forensic_timeline` | Finding rows, correlation signals, detected changes (first-seen package installs, device-admin grants), IOC-matched live DNS hits, the persistent audit / "import interrupted" rows, and the latest privacy scan's information entries (`PRIVACY_SCAN`, 12.9). Event records (intrusion-log, usage-stats, bug-report module events) live only in the telemetry store since C3; legacy event rows of pre-store (`NONE`) scans remain |
 | `Indicator` | `indicators` | IOC feed entries: package names, cert hashes, APK hashes, and C2 domains sourced from all configured feeds |
 | `KnownAppDbEntry` | (internal) | Known-good app cache (Plexus + UAD-ng) for false-positive suppression |
 | `CveEntity` | (internal) | CVE records for unpatched-CVE detection |
@@ -361,7 +361,7 @@ Three rules govern what is kept.
 - **Pinned facts** are always kept. A batch removes only facts left with no observation and no pin, so a pinned fact outlives its observations and still decodes from its `first*` envelope.
 - A `STORED` scan that loses any observation becomes `PARTIAL_RETENTION`; a `FAILED` scan that loses any becomes `FAILED_PARTIAL_RETENTION`, so the report never presents a post-retention count as what was stored before the failure.
 
-**30-day prune.** The same worker also prunes `DnsEvent` and `forensic_timeline` rows older than 30 days:
+**30-day prune.** The same worker also prunes `DnsEvent` and `forensic_timeline` rows older than 30 days (live-scan rows only: imports, persistent rows and the privacy scan's entries are kept):
 
 ```
 val thirtyDaysAgo = System.currentTimeMillis() - (30L * 24 * 60 * 60 * 1000)
@@ -728,7 +728,7 @@ Only code evidence makes an app cross the user's threshold. Network-only evidenc
 The privacy scan shares nothing with the detection scan beyond reading its inputs:
 
 - Its own tables: `privacy_*` (Room schema 22; schema 23 adds the detail tables `privacy_code_detail` and `privacy_domain_detail` and `privacy_scan.hasDetails`, see 12.8), plus an index on `DnsEvent` for the per-app queries.
-- Its own `Mutex` and the app-wide `@ApplicationScope`. It never takes `ScanLock`, never creates a `ScanResult`, and never appears in History, exports, alerts or the Timeline.
+- Its own `Mutex` and the app-wide `@ApplicationScope`. It never takes `ScanLock`, never creates a `ScanResult`, and never appears in History, exports or alerts. It appears in the Timeline only as information entries (12.9), never as detections.
 - It emits no telemetry and no findings; its facts live outside the telemetry store (owner ruling). A future rule on tracker categories is its own design cycle.
 - The History, Timeline, alert and lock separations above are design statements. `PrivacyBoundaryTest` enforces the source-level rules it asserts: `reporting`, `sigma`, `ui/history`, `ScanWriteRepository` and `data/store` never reference `com.androdr.privacy` or `privacy_`; `privacy` never references `ScanLock` or `ScanResult`; the APK reader and inspector never reference the registry types; `ui/` never imports the registry or the APK readers (`DexPackageReader`, `ApkPackageInspector`); `privacy/model` never imports `ioc`.
 
@@ -795,6 +795,14 @@ Every tracker listed for an app opens a details screen (`PrivacyEvidenceScreen`,
 - **Bounded.** At most 200 package names per app and tracker (shared across its signatures) and 2,000 per app, each name cut to 254 characters with a visible "…"; the true number always kept. Domains are bounded by the correlator's existing quotas, and only counted domains are stored, as recorded in the DNS log. A domain's background count is a number only where the scan timed it; elsewhere it is unknown, never zero.
 - **Read on open.** `PrivacyEvidenceReader` (in `privacy/`) loads one app and tracker of the latest completed scan when the screen opens; the lists never load detail. Tapping a domain reads its 50 newest lookups from the DNS log as it is then (`DnsEventDao.recentLookupTimes`, by the recorded spelling), labelled as such. The UI reaches the DNS log for this view only through the reader.
 - **Untrusted text.** Package names, domains and signatures reach the screen through `displaySafe`.
+
+### 12.9 Timeline entries
+
+A completed privacy scan appears in the Timeline as a scan of its own (spec 2026-11-10 §5): one entry for the scan and one per user-installed app with a tracker found in code (`PrivacyTimelineRows`). They are information, not detections.
+
+- **Marked by source.** `telemetrySource = PRIVACY_SCAN`, scan reference `-1`, no rule, no level, categories `privacy_scan` / `privacy_app`. No security scan, import, stored record or finding carries that source (`PrivacyScanSourceTest` pins where it may be named); reporting, History and the deletion audit refuse it.
+- **Same lifetime as the results.** `PrivacyScanRunner` writes them (`PrivacyTimelineWriter`) in the Room transaction that completes the scan and deletes the previous results; "Delete privacy results" removes them in the same transaction as the results. Only `TimelineRowDeleter.privacyRows` deletes them: the 30-day prune (live-scan rows only), a security scan's delete (by scan id) and History's "Clear all" (excludes the source) leave them. No `ScanLock`: they belong to no security scan and pin no fact.
+- **Readers.** Shown, searched (app name in the text, package) and filtered like any entry, and by the Source filter "Privacy scan"; "By scan" shows the privacy scan's header by its date (added in `TimelineViewModel`, narrowing by source). Never in "Findings only" or the severity filters (no rule, no level), never linked evidence, never a correlation input (atoms read live-scan rows or a security scan's own rows). Exports read with `TimelineFilter.exportable`, which leaves them out in SQL, as does the STIX read (`visibleAfter`); an export left with nothing says so. The details sheet's "Open in privacy results" opens `privacy?pkg=`.
 
 ---
 

@@ -38,8 +38,8 @@ All scan data is stored locally in an on-device database. **None of it is ever t
 | Device security flags | Posture assessment | On-device Room database |
 | Scan results and history | Track security state over time | On-device Room database |
 | Security reports | User-initiated export only | Device storage, shared via Android share sheet |
-| Forensic timeline events (e.g., device admin grants; app open/close events if Usage Access is granted) | Displayed in the timeline screen; included in exported reports; auto-deleted after 30 days | On-device Room database |
-| Privacy scan results (trackers found in each app's code, the matching code packages, the tracker domains each app looked up with counts and times) | Displayed on the privacy screen; never included in exported reports; kept until the next privacy scan replaces them or you choose "Delete privacy results" (see "Privacy Scan") | On-device Room database |
+| Forensic timeline events (e.g., device admin grants; app open/close events if Usage Access is granted) | Displayed in the timeline screen; included in exported reports; auto-deleted after 30 days (except the privacy scan's own Timeline entries, which are kept with its results and never exported; see "Privacy Scan") | On-device Room database |
+| Privacy scan results (trackers found in each app's code, the matching code packages, the tracker domains each app looked up with counts and times) | Displayed on the privacy screen and as the privacy scan's entries in the Timeline; never included in exported reports or Timeline exports; kept until the next privacy scan replaces them or you choose "Delete privacy results" (see "Privacy Scan") | On-device Room database |
 | Bug report analysis findings | Displayed with scan results; original bug report ZIP is discarded after analysis | On-device Room database |
 
 **We cannot see your scan results.** There is no cloud backend, no remote dashboard, no server-side processing. Cloud backup is disabled (`android:allowBackup="false"`) — your scan data is never uploaded to Google's backup service.
@@ -105,9 +105,9 @@ AndroDR's DNS monitor uses a local VPN to intercept DNS queries **on your device
 
 The privacy scan runs only when you start it from the privacy screen. It looks for known tracker SDKs, from the Exodus Privacy tracker list, in each installed app's code and, if the optional DNS monitor has been on, in the domains each app looked up. It is a report for you; it never raises alerts and never changes the device's security verdict.
 
-- **What it stores:** for each app, the trackers found; the list signatures that matched; the app's code packages that matched them (at most 200 names per app and tracker, with the full count); and the tracker domains the app looked up, with the number of lookups, the number of days, how many happened while the app was in the background (only if you granted Usage Access), and the first and last lookup. It also keeps each app's list of code package names, so an app that has not changed need not be read again.
-- **How long it is kept:** until the next privacy scan replaces it, or until you choose **Delete privacy results** on the privacy screen. Privacy scan results are not covered by the 30-day automatic deletion of DNS event logs. The DNS event log itself is still deleted after 30 days, even when a privacy scan has recorded tracker domains from it.
-- **Where it goes:** nowhere. Privacy scan results are stored only on your device, are never part of an exported report, and never leave the device.
+- **What it stores:** for each app, the trackers found; the list signatures that matched; the app's code packages that matched them (at most 200 names per app and tracker, with the full count); and the tracker domains the app looked up, with the number of lookups, the number of days, how many happened while the app was in the background (only if you granted Usage Access), and the first and last lookup. It also keeps each app's list of code package names, so an app that has not changed need not be read again. In the Timeline, a privacy scan adds one entry for the scan and one for each user-installed app in whose code a tracker was found; these entries are information only and never count as alerts or toward the device's verdict.
+- **How long it is kept:** until the next privacy scan replaces it, or until you choose **Delete privacy results** on the privacy screen; the scan's Timeline entries go with it. Clearing History does not remove them. Privacy scan results are not covered by the 30-day automatic deletion of DNS event logs. The DNS event log itself is still deleted after 30 days, even when a privacy scan has recorded tracker domains from it.
+- **Where it goes:** nowhere. Privacy scan results and their Timeline entries are stored only on your device, are never part of an exported report or a Timeline export (CSV, text or STIX), and never leave the device.
 - When you open the details of a tracker, AndroDR can show the most recent lookups of one of its domains, read from the DNS event log at that moment. Those lookups are part of the DNS event log and are deleted with it.
 
 ---
@@ -146,7 +146,7 @@ When you export a security report, it includes:
 - **DNS event log:** recent DNS queries with domain names, timestamps, and blocked/allowed status
 - **Application log:** up to 500 lines of AndroDR's own process log (not system-wide logs)
 
-Exported reports never contain privacy scan results.
+Exported reports and Timeline exports never contain privacy scan results or the privacy scan's Timeline entries.
 
 Reports are generated only when you tap the export button. You choose who to share them with via the Android share sheet. **We never see your reports.**
 
