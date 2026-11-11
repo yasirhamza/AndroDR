@@ -83,6 +83,9 @@ jobs:
               - 'app/schemas/**'
               - 'app/src/main/java/com/androdr/ioc/IocSanitizer.kt'
               - 'app/src/main/java/com/androdr/ioc/IndicatorResolver.kt'
+              # scripts/test_privacy_policy_text.py: a policy-only change must run the check
+              # that the policy still states the privacy scan's retention.
+              - 'docs/PRIVACY_POLICY.md'
             code:
               # Kotlin / Java sources across all source sets
               - 'app/src/**/*.kt'
@@ -388,6 +391,10 @@ jobs:
         # background job (2026-11-02). Pins the ASB fix and the EXEC_LIMITS
         # clause in every workflow prompt and dispatcher brief.
         run: python3 -m pytest scripts/test_update_rules_pipeline.py -q
+      - name: Privacy policy states the privacy scan's retention
+        # Every 30-day deletion statement must carry the privacy-scan exception, and the
+        # policy must say how long privacy scan results are kept (spec 2026-11-10, section 8).
+        run: python3 -m pytest scripts/test_privacy_policy_text.py -q
       - name: Discover helper tests (XPIA token filter, tracked-name matching)
         # Were never wired into CI before 2026-11-02, when the rule-index matching bug
         # (only the first comma-space entry matched) let tracked threats through.

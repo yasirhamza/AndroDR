@@ -1,6 +1,6 @@
 # AndroDR Privacy Policy
 
-_Last updated: 2026-06-12_
+_Last updated: 2026-11-11_
 
 ## Our Philosophy
 
@@ -20,6 +20,7 @@ AndroDR scans your device for security threats:
 - Detects accessibility service and device admin abuse
 - Optionally monitors DNS queries for connections to known command-and-control servers (**optional** DNS monitoring — you must explicitly enable the local VPN)
 - Audits device security settings (screen lock, bootloader, debug mode, patch level)
+- Runs a privacy scan when you ask for one: it lists the known tracker SDKs (from the Exodus Privacy tracker list) found in each app's code and, if the optional DNS monitor has been on, the tracker domains each app looked up (see "Privacy Scan")
 - Analyzes Android bug reports for spyware indicators (user-initiated only)
 - Evaluates detection rules expressed as auditable YAML — detection logic is not hidden inside compiled code
 - Imports and exports STIX2-compatible indicators for interoperability with other forensic tools
@@ -38,6 +39,7 @@ All scan data is stored locally in an on-device database. **None of it is ever t
 | Scan results and history | Track security state over time | On-device Room database |
 | Security reports | User-initiated export only | Device storage, shared via Android share sheet |
 | Forensic timeline events (e.g., device admin grants; app open/close events if Usage Access is granted) | Displayed in the timeline screen; included in exported reports; auto-deleted after 30 days | On-device Room database |
+| Privacy scan results (trackers found in each app's code, the matching code packages, the tracker domains each app looked up with counts and times) | Displayed on the privacy screen; never included in exported reports; kept until the next privacy scan replaces them or you choose "Delete privacy results" (see "Privacy Scan") | On-device Room database |
 | Bug report analysis findings | Displayed with scan results; original bug report ZIP is discarded after analysis | On-device Room database |
 
 **We cannot see your scan results.** There is no cloud backend, no remote dashboard, no server-side processing. Cloud backup is disabled (`android:allowBackup="false"`) — your scan data is never uploaded to Google's backup service.
@@ -54,7 +56,7 @@ All scan data is stored locally in an on-device database. **None of it is ever t
 | `ACCESS_NETWORK_STATE` | To check network connectivity before fetching IOC feed updates. |
 | `READ_LOGS` | To capture AndroDR's own process log for inclusion in user-initiated security reports. This permission reads only the app's own log output (`logcat --pid`), not system-wide logs. It is used exclusively when you manually export a report. |
 | `MANAGE_EXTERNAL_STORAGE` | To scan external storage for known spyware file artifacts. On Android 11+, scoped storage prevents apps from checking arbitrary file paths without this permission. AndroDR checks a small set of known artifact paths documented in forensic research — it does not browse or index your files. |
-| `PACKAGE_USAGE_STATS` | **Optional.** Adds app open/close events for user-installed apps to the forensic timeline (useful for spotting surveillance apps activating at unusual times). This special permission must be granted manually via Settings → Special access → Usage access; if you don't grant it, the timeline simply omits usage events. Usage events stay on-device and are auto-deleted after 30 days. |
+| `PACKAGE_USAGE_STATS` | **Optional.** Adds app open/close events for user-installed apps to the forensic timeline (useful for spotting surveillance apps activating at unusual times). This special permission must be granted manually via Settings → Special access → Usage access; if you don't grant it, the timeline simply omits usage events. If granted, a privacy scan also uses it to tell whether an app's tracker lookups happened while the app was in the background. Usage events stay on-device and are auto-deleted after 30 days; a privacy scan keeps only its background counts, with its other results (see "Privacy Scan"). |
 | `FOREGROUND_SERVICE_SPECIAL_USE` | Android 14+ requires declaring a foreground service type; the DNS monitor's long-running on-device tunnel uses the `specialUse` type because it fits no predefined category. |
 
 ---
@@ -73,7 +75,7 @@ AndroDR fetches publicly available threat intelligence feeds to keep its detecti
 | Malicious-domain blocklist | HaGeZi Threat Intelligence Feed (GitHub, hagezi/dns-blocklists) | Domain blocklist used by the optional DNS monitor | 1 HTTP GET |
 | Stalkerware cert-hash indicators | AssoEchap/stalkerware-indicators (GitHub) | Cert hashes of known stalkerware signers | 1 HTTP GET |
 | SIGMA detection rules | android-sigma-rules/rules (GitHub) | Rule manifest (`rules.txt`), SHA-256 integrity manifest (`rules.sha256`), then one GET per rule YAML file listed in the manifest. Downloaded rules are integrity-checked against the SHA-256 manifest when it is available; if the integrity manifest cannot be fetched, rules load without the check. | 2 manifests + 1 per rule |
-| Centralized IOC data | android-sigma-rules/rules (GitHub) | Package names, C2 domains, signing-cert hashes, APK hashes, known-good app lists, and OEM package prefixes from the repo's `ioc-data/` directory | 6 HTTP GETs |
+| Centralized IOC data | android-sigma-rules/rules (GitHub) | Package names, C2 domains, signing-cert hashes, APK hashes, known-good app lists, OEM package prefixes, brand names and domains, campaign data, and the Exodus Privacy tracker list used by the privacy scan, from the repo's `ioc-data/` directory. Each file is used only if it matches the SHA-256 integrity manifest (`ioc-data.sha256`). | 10 HTTP GETs + 1 for the integrity manifest |
 | CISA Known Exploited Vulnerabilities catalog | cisa.gov | Catalog of actively exploited CVEs, used by the patch-level audit | 1 HTTP GET per refresh |
 | Android vulnerability database (OSV) | osv-vulnerabilities.storage.googleapis.com | Android CVE metadata used by the patch-level audit | 1 HTTP GET per refresh |
 | **Optional:** custom rule URLs | URLs you configure in Settings → Custom Rule Sources | Same SIGMA-rule-feed format as above. Disabled by default; only fetched if you add a URL. | Same as above per configured URL |
@@ -93,9 +95,20 @@ AndroDR's DNS monitor uses a local VPN to intercept DNS queries **on your device
 - Intercepted DNS queries are checked against the on-device blocklist. Blocked domains receive a local NXDOMAIN answer and the query is **never sent anywhere**
 - Allowed queries are forwarded to your device's own configured DNS resolvers — the same servers Android itself uses (app versions 0.9.0.615 and later; earlier versions forwarded to Google Public DNS, 8.8.8.8) — over standard DNS (UDP port 53) and the answers are returned to your apps. This is the same unencrypted DNS protocol Android uses by default when Private DNS is off: your resolver sees the domain names your apps look up, exactly as it would without AndroDR. AndroDR attaches no device identifiers or app information to these queries
 - **If you use Private DNS (DNS-over-TLS):** while the monitor is on, queries are sent in plaintext (UDP port 53) to your network's configured resolvers instead of encrypted to your Private DNS server. If you need strict Private DNS transport for every query, leave the DNS monitor off
-- DNS event logs are stored on-device only and automatically deleted after 30 days
+- DNS event logs are stored on-device only and automatically deleted after 30 days (tracker domains a privacy scan recorded from them are kept with the privacy scan's results; see "Privacy Scan")
 - The VPN routes only the DNS server address — it does not route, inspect, or modify your web traffic, app data, or any non-DNS network activity
 - You can enable or disable DNS monitoring at any time
+
+---
+
+## Privacy Scan
+
+The privacy scan runs only when you start it from the privacy screen. It looks for known tracker SDKs, from the Exodus Privacy tracker list, in each installed app's code and, if the optional DNS monitor has been on, in the domains each app looked up. It is a report for you; it never raises alerts and never changes the device's security verdict.
+
+- **What it stores:** for each app, the trackers found; the list signatures that matched; the app's code packages that matched them (at most 200 names per app and tracker, with the full count); and the tracker domains the app looked up, with the number of lookups, the number of days, how many happened while the app was in the background (only if you granted Usage Access), and the first and last lookup. It also keeps each app's list of code package names, so an app that has not changed need not be read again.
+- **How long it is kept:** until the next privacy scan replaces it, or until you choose **Delete privacy results** on the privacy screen. Privacy scan results are not covered by the 30-day automatic deletion of DNS event logs. The DNS event log itself is still deleted after 30 days, even when a privacy scan has recorded tracker domains from it.
+- **Where it goes:** nowhere. Privacy scan results are stored only on your device, are never part of an exported report, and never leave the device.
+- When you open the details of a tracker, AndroDR can show the most recent lookups of one of its domains, read from the DNS event log at that moment. Those lookups are part of the DNS event log and are deleted with it.
 
 ---
 
@@ -133,6 +146,8 @@ When you export a security report, it includes:
 - **DNS event log:** recent DNS queries with domain names, timestamps, and blocked/allowed status
 - **Application log:** up to 500 lines of AndroDR's own process log (not system-wide logs)
 
+Exported reports never contain privacy scan results.
+
 Reports are generated only when you tap the export button. You choose who to share them with via the Android share sheet. **We never see your reports.**
 
 ---
@@ -165,7 +180,8 @@ AndroDR shares data **only when you explicitly choose to**:
 ## Data Retention and Deletion
 
 - Scan history is stored on-device indefinitely until you clear it
-- DNS event logs and forensic timeline events are automatically deleted after 30 days
+- DNS event logs and forensic timeline events are automatically deleted after 30 days (privacy scan results are not: they are kept until the next privacy scan replaces them)
+- Privacy scan results are kept until the next privacy scan replaces them, or until you choose "Delete privacy results" on the privacy screen
 - Cloud backup is disabled — your data is not backed up to Google's servers
 - Uninstalling AndroDR deletes all stored data from the device
 - You can clear all app data at any time via Android Settings > Apps > AndroDR > Clear Data
@@ -198,11 +214,11 @@ The threat-intelligence feeds AndroDR ingests at runtime are listed in the "Netw
 
 For Google Play's Data Safety section, AndroDR declares:
 
-- **Data collected:** Installed app list (package names, permissions, signing certs — on-device only, never transmitted); device info (model, OS version, security patch level — included in user-initiated reports only); DNS query domain names (only when the optional DNS VPN is enabled — on-device only, auto-deleted after 30 days); app usage events (app open/close times for user-installed apps — only if you manually grant Usage Access; on-device only, auto-deleted after 30 days); diagnostic info (app-own logcat — included in user-initiated reports only)
+- **Data collected:** Installed app list (package names, permissions, signing certs — on-device only, never transmitted); device info (model, OS version, security patch level — included in user-initiated reports only); DNS query domain names (only when the optional DNS VPN is enabled — on-device only, auto-deleted after 30 days, except the tracker domains a privacy scan records, which are kept with its results); app usage events (app open/close times for user-installed apps — only if you manually grant Usage Access; on-device only, auto-deleted after 30 days; a privacy scan keeps only background counts); privacy scan results (trackers found in installed apps' code and the tracker domains each app looked up — on-device only, never transmitted, kept until the next privacy scan or "Delete privacy results"); diagnostic info (app-own logcat — included in user-initiated reports only)
 - **Data shared:** None — user-initiated report sharing is under user control and not considered "sharing with third parties"
 - **Data encrypted in transit:** No user data is transmitted to the developer. Threat-intelligence downloads use HTTPS. When the optional DNS monitor is enabled, DNS queries are forwarded to your device's own configured DNS resolvers (app versions 0.9.0.615 and later; earlier versions forwarded to Google Public DNS, 8.8.8.8) over standard unencrypted DNS (UDP/53) — the same protocol Android uses by default when Private DNS is off (see "DNS Monitoring" above, including the Private DNS note)
 - **Data encrypted at rest:** Yes — Room database is stored in the app's private directory on Android's encrypted file system (file-based encryption is standard on Android 10+; on Android 8–9 devices it depends on device configuration); cached reports reside in the app's private storage directory
-- **Data deletion:** Users can clear all stored data at any time via Android Settings > Apps > AndroDR > Clear Data, or by uninstalling the app; DNS events are also automatically deleted after 30 days
+- **Data deletion:** Users can clear all stored data at any time via Android Settings > Apps > AndroDR > Clear Data, or by uninstalling the app; DNS events are also automatically deleted after 30 days; privacy scan results are kept until the next privacy scan or until you choose "Delete privacy results" on the privacy screen
 - **Optional data collection:** DNS query monitoring is entirely optional — the local VPN must be explicitly enabled by the user
 
 ---
