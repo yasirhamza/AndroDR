@@ -67,6 +67,13 @@ class TimelineRowDeleter @Inject constructor(
     ) { dao.deleteScanLessThrough(maxId) }
 
     /**
+     * The privacy scan's Timeline entries (spec 2026-11-10 §5.4): replaced when a newer privacy scan
+     * completes, removed by "Delete privacy results"; nothing else removes them. They pin no fact and
+     * are never signals, so there is nothing to release.
+     */
+    suspend fun privacyRows() = delete(emptyList(), emptyList()) { dao.deletePrivacyRows() }
+
+    /**
      * Removes the members of the [signals] about to go, by signal id (primary-key prefix, never a
      * scan of `signal_member`), then the rows, then releases the rows' and the members' fact pins.
      */

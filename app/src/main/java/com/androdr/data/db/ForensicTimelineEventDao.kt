@@ -24,8 +24,14 @@ interface ForensicTimelineEventDao {
     @Query("SELECT DISTINCT packageName FROM forensic_timeline WHERE category = 'device_admin_grant'")
     suspend fun getAdminGrantedPackagesAlreadyEmitted(): List<String>
 
-    /** Up to [size] visible rows with `id > afterId`, ascending by id (keyset; the STIX export streams it). */
-    @Query("SELECT * FROM forensic_timeline r WHERE r.id > :afterId AND ${VisibleRow.SQL} ORDER BY r.id LIMIT :size")
+    /**
+     * Up to [size] visible rows with `id > afterId`, ascending by id (keyset; the STIX export streams it).
+     * Never a privacy scan's entry: an app with a tracker is not a threat indicator (spec 2026-11-10 §5.3).
+     */
+    @Query(
+        "SELECT * FROM forensic_timeline r WHERE r.id > :afterId AND $NOT_PRIVACY_ROW AND ${VisibleRow.SQL} " +
+            "ORDER BY r.id LIMIT :size"
+    )
     suspend fun visibleAfter(afterId: Long, size: Int): List<ForensicTimelineEvent>
 
     @Query(
@@ -77,7 +83,7 @@ interface ForensicTimelineEventDao {
 
     @Query(
         "SELECT id FROM forensic_timeline WHERE kind = 'signal' AND persistent = 0 AND id <= :maxId " +
-            "AND (scanResultId = -1 $SCAN_GONE)"
+            "AND (scanResultId = -1 $SCAN_GONE) AND $NOT_PRIVACY"
     )
     suspend fun signalIdsScanLessThrough(maxId: Long): List<Long>
 
@@ -112,9 +118,13 @@ interface ForensicTimelineEventDao {
 
     @Query(
         "SELECT DISTINCT recordId FROM forensic_timeline WHERE persistent = 0 AND recordId IS NOT NULL " +
-            "AND id <= :maxId AND (scanResultId = -1 $SCAN_GONE)"
+            "AND id <= :maxId AND (scanResultId = -1 $SCAN_GONE) AND $NOT_PRIVACY"
     )
     suspend fun recordIdsScanLessThrough(maxId: Long): List<Long>
+
+    /** The privacy scan's Timeline entries (spec 2026-11-10 §5.4); called only by TimelineRowDeleter. */
+    @Query("DELETE FROM forensic_timeline WHERE telemetrySource = 'PRIVACY_SCAN'")
+    suspend fun deletePrivacyRows()
 
     /** The newest row id ("Clear all"'s `clearMaxRowId`); 0 when the table is empty. */
     @Query("SELECT COALESCE(MAX(id), 0) FROM forensic_timeline")
@@ -148,6 +158,16 @@ internal const val PRUNE_RECORD_IDS = "SELECT recordId FROM forensic_timeline " 
 /** The prune's other rows; signal rows are never deleted here (only by id, with their members). */
 internal const val PRUNE_DELETE = "DELETE FROM forensic_timeline WHERE kind != 'signal' AND $PRUNABLE"
 
-/** "Clear all"'s delete: scan-less rows and leftover rows of gone scans, up to `maxId`. */
+/**
+ * Not a privacy scan's Timeline entry. Those live exactly as long as the privacy results (spec 2026-11-10
+ * §5.4): "Clear all" and the exports leave them out; only TimelineRowDeleter.privacyRows removes them.
+ */
+internal const val NOT_PRIVACY = "telemetrySource != 'PRIVACY_SCAN'"
+
+/** [NOT_PRIVACY] for a query that reads the table as `r`. */
+internal const val NOT_PRIVACY_ROW = "r.telemetrySource != 'PRIVACY_SCAN'"
+
+/** "Clear all"'s delete: scan-less rows and leftover rows of gone scans, up to `maxId`; never privacy entries. */
 internal const val DELETE_SCAN_LESS_THROUGH =
-    "DELETE FROM forensic_timeline WHERE persistent = 0 AND id <= :maxId AND (scanResultId = -1 $SCAN_GONE)"
+    "DELETE FROM forensic_timeline WHERE persistent = 0 AND id <= :maxId AND (scanResultId = -1 $SCAN_GONE) " +
+        "AND $NOT_PRIVACY"
