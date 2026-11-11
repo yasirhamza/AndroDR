@@ -3,6 +3,7 @@ package com.androdr.privacy
 import com.androdr.data.db.DomainLookupCount
 import com.androdr.privacy.NetworkEvidenceCorrelator.Correlation
 import com.androdr.privacy.NetworkEvidenceCorrelator.DnsSource
+import com.androdr.privacy.NetworkEvidenceCorrelator.DomainEvidence
 import com.androdr.privacy.NetworkEvidenceCorrelator.Key
 import com.androdr.privacy.NetworkEvidenceCorrelator.MAX_DOMAINS_PER_APP
 import com.androdr.privacy.NetworkEvidenceCorrelator.MAX_MATCHED_PAIRS
@@ -12,6 +13,7 @@ import com.androdr.privacy.NetworkEvidenceCorrelator.MAX_TIMED_PAIRS
 import com.androdr.privacy.NetworkEvidenceCorrelator.MAX_TIMES_PER_PAIR
 import com.androdr.privacy.NetworkEvidenceCorrelator.NetworkEvidence
 import com.androdr.privacy.NetworkEvidenceCorrelator.PAGE_SIZE
+import com.androdr.privacy.model.DomainMatch
 import com.androdr.privacy.model.TrackerSet
 
 /** One [NetworkEvidenceCorrelator.correlate] call: its memo, quotas and partial results. Single-use. */
@@ -25,8 +27,11 @@ internal class CorrelationRun(
     private class Part(val app: String, val raw: String, val lookups: Int, val days: Set<Long>, val first: Long,
         val last: Long)
 
-    private val memo = HashMap<String, List<Int>>()
-    private val parts = LinkedHashMap<Key, MutableList<Part>>()
+    /** A [Part] counted for one tracker, with the signature of that tracker that matched its domain. */
+    private class Hit(val part: Part, val match: DomainMatch)
+
+    private val memo = HashMap<String, List<DomainMatch>>()
+    private val parts = LinkedHashMap<Key, MutableList<Hit>>()
     private val partBackground = HashMap<Part, Int?>()
     private val foreground = HashMap<String, List<LongRange>>()
     private var counted = 0
@@ -43,7 +48,7 @@ internal class CorrelationRun(
         // The overall cap stops the remaining apps unread: conservatively, truncated.
         if (left.hasNext()) truncated = true
         val background = if (stopped) emptyMap() else timeBackground()
-        return Correlation(evidence(background), truncated || stopped)
+        return Correlation(evidence(background), truncated || stopped, domains())
     }
 
     /** Checks the deadline once; once passed, it stays passed. */
@@ -52,9 +57,9 @@ internal class CorrelationRun(
         return stopped
     }
 
-    /** Phase 1: the app's matched raw domains, each with the ids of the trackers that own it. */
-    private suspend fun match(app: String): List<Pair<String, List<Int>>> {
-        val out = ArrayList<Pair<String, List<Int>>>()
+    /** Phase 1: the app's matched raw domains, each with the signature of every tracker that owns it. */
+    private suspend fun match(app: String): List<Pair<String, List<DomainMatch>>> {
+        val out = ArrayList<Pair<String, List<DomainMatch>>>()
         var after = ""
         var seen = 0
         var more = true
@@ -64,8 +69,8 @@ internal class CorrelationRun(
             for ((i, raw) in page.withIndex()) {
                 // Also checked inside a page: a page of hostile names must not run on long past the deadline.
                 if (i > 0 && i % DEADLINE_STRIDE == 0 && deadlinePassed()) break
-                val ids = trackersOf(raw)
-                if (ids.isNotEmpty()) out.add(raw to ids)
+                val matches = trackersOf(raw)
+                if (matches.isNotEmpty()) out.add(raw to matches)
             }
             seen += page.size
             more = page.size == limit
@@ -76,19 +81,20 @@ internal class CorrelationRun(
         return out
     }
 
-    private fun trackersOf(raw: String): List<Int> {
+    /** One entry per owning tracker (see [TrackerSet.matchDomainDetailed]). */
+    private fun trackersOf(raw: String): List<DomainMatch> {
         val host = NetworkEvidenceCorrelator.normalise(raw)
         memo[host]?.let { return it }
-        val ids = registry.matchDomain(host).map { it.id }.distinct()
+        val matches = registry.matchDomainDetailed(host)
         // A full memo stops memoising, never matching.
-        if (memo.size < MAX_MEMO) memo[host] = ids
-        return ids
+        if (memo.size < MAX_MEMO) memo[host] = matches
+        return matches
     }
 
     /** Phase 2: counts the app's matched raw domains within its own quota and the overall one. */
-    private suspend fun count(app: String, matched: List<Pair<String, List<Int>>>) {
+    private suspend fun count(app: String, matched: List<Pair<String, List<DomainMatch>>>) {
         var used = 0
-        for ((raw, ids) in coverTrackersFirst(matched)) {
+        for ((raw, matches) in coverTrackersFirst(matched)) {
             if (used >= MAX_MATCHED_PER_APP || counted >= MAX_MATCHED_PAIRS) {
                 truncated = true
                 return
@@ -98,7 +104,7 @@ internal class CorrelationRun(
             used++
             counted++
             val part = toPart(app, raw, c) ?: continue
-            for (id in ids) parts.getOrPut(Key(app, id)) { ArrayList() }.add(part)
+            for (m in matches) parts.getOrPut(Key(app, m.tracker.id)) { ArrayList() }.add(Hit(part, m))
         }
     }
 
@@ -106,9 +112,11 @@ internal class CorrelationRun(
      * Domains that bring a tracker not yet seen for this app first, so many subdomains of one tracker spend the
      * app's quota only after each of its trackers has had one count.
      */
-    private fun coverTrackersFirst(matched: List<Pair<String, List<Int>>>): List<Pair<String, List<Int>>> {
+    private fun coverTrackersFirst(
+        matched: List<Pair<String, List<DomainMatch>>>,
+    ): List<Pair<String, List<DomainMatch>>> {
         val seen = HashSet<Int>()
-        val (first, rest) = matched.partition { (_, ids) -> ids.count { seen.add(it) } > 0 }
+        val (first, rest) = matched.partition { (_, matches) -> matches.count { seen.add(it.tracker.id) } > 0 }
         return first + rest
     }
 
@@ -125,9 +133,10 @@ internal class CorrelationRun(
     private suspend fun timeBackground(): Map<Key, Int?> {
         val u = usage ?: return emptyMap()
         val out = HashMap<Key, Int?>()
-        val ranked = parts.entries.sortedByDescending { (_, ps) -> ps.sumOf { it.lookups.toLong() } }
-        for ((key, ps) in ranked.take(MAX_TIMED_PAIRS)) {
+        val ranked = parts.entries.sortedByDescending { (_, hs) -> hs.sumOf { it.part.lookups.toLong() } }
+        for ((key, hs) in ranked.take(MAX_TIMED_PAIRS)) {
             if (stopped) break
+            val ps = hs.map { it.part }
             if (ps.sumOf { it.lookups.toLong() } <= MAX_TIMES_PER_PAIR) out[key] = backgroundOf(ps, u)
         }
         return out
@@ -153,7 +162,8 @@ internal class CorrelationRun(
         return times.count { !inAny(it, ranges) }
     }
 
-    private fun evidence(background: Map<Key, Int?>): Map<Key, NetworkEvidence> = parts.mapValues { (key, ps) ->
+    private fun evidence(background: Map<Key, Int?>): Map<Key, NetworkEvidence> = parts.mapValues { (key, hs) ->
+        val ps = hs.map { it.part }
         val lookups = ps.sumOf { it.lookups.toLong() }.coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
         NetworkEvidence(
             lookups = lookups,
@@ -163,6 +173,24 @@ internal class CorrelationRun(
             first = ps.minOf { it.first },
             last = ps.maxOf { it.last },
         )
+    }
+
+    /** Per counted part and owning tracker; background only where phase 3 timed that part. */
+    private fun domains(): List<DomainEvidence> = parts.flatMap { (key, hs) ->
+        hs.map { h ->
+            DomainEvidence(
+                key = key,
+                domain = h.part.raw,
+                kind = h.match.kind,
+                signature = h.match.signature,
+                lookups = h.part.lookups,
+                days = h.part.days.size,
+                // Rows can arrive between counting and timing; never report more background than lookups.
+                background = partBackground[h.part]?.coerceAtMost(h.part.lookups),
+                first = h.part.first,
+                last = h.part.last,
+            )
+        }
     }
 
     private companion object {
