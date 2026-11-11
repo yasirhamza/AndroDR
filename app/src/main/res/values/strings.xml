@@ -183,6 +183,7 @@
     <string name="timeline_sheet_range">Date range</string>
     <string name="timeline_sheet_group">Group by</string>
     <string name="timeline_sheet_done">Done</string>
+    <string name="timeline_source_privacy_scan">Privacy scan</string>
     <string name="timeline_source_live">Live scan</string>
 
     <!-- Post-scan guidance -->

@@ -32,6 +32,7 @@ data class ReportSummary(
             TelemetrySource.LIVE_SCAN -> Unit
             TelemetrySource.BUGREPORT_IMPORT -> add("Source: imported bug report")
             TelemetrySource.INTRUSION_LOG_IMPORT -> add("Source: imported intrusion log")
+            TelemetrySource.PRIVACY_SCAN -> error("PRIVACY_SCAN marks only privacy Timeline entries, never a security scan")
         }
         add("App issues: ${n(appIssues)}")
         add("Device settings needing attention: ${n(deviceIssues)}")

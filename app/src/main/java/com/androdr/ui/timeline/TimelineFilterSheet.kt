@@ -122,6 +122,7 @@ internal fun telemetrySourceLabel(source: TelemetrySource): Int = when (source) 
     TelemetrySource.LIVE_SCAN -> R.string.timeline_source_live
     TelemetrySource.BUGREPORT_IMPORT -> R.string.history_source_bugreport_import
     TelemetrySource.INTRUSION_LOG_IMPORT -> R.string.history_source_intrusion_log_import
+    TelemetrySource.PRIVACY_SCAN -> R.string.timeline_source_privacy_scan
 }
 
 /** The preset a range was set from (its length in whole hours), or null for no range or another length. */
