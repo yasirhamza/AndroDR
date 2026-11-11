@@ -162,6 +162,7 @@ class PrivacyScanRunner @Inject constructor(
         )
         val entries = PrivacyTimelineRows.build(
             finishedAt, counts, dao.resultsOnce(scanId), dao.evidenceOnce(scanId), network.status,
+            network.coverageDays,
         )
         // One transaction (spec 2026-11-10 §5.4): the scan completes, the previous results and their Timeline
         // entries go, and the new entries arrive together; a failure leaves the previous scan as it was.

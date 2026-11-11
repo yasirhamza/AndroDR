@@ -34,25 +34,36 @@ internal object PrivacyTimelineRows {
         results: List<PrivacyAppResult>,
         evidence: List<PrivacyTrackerEvidence>,
         networkStatus: NetworkStatus,
+        /** UTC days with at least one attributed lookup; 0 = the network monitor recorded nothing. */
+        dnsCoverageDays: Int,
     ): List<ForensicTimelineEvent> {
         val inCode = evidence.filter { it.inCode }.groupBy { it.packageName }
         val apps = results.filter { !it.isSystemApp && inCode.containsKey(it.packageName) }
             .sortedBy { it.packageName }
             .map { appRow(at, it, inCode.getValue(it.packageName)) }
-        return listOf(scanRow(at, counts, inCode.size, networkStatus)) + apps
+        return listOf(scanRow(at, counts, inCode.size, networkSentence(networkStatus, dnsCoverageDays))) + apps
     }
 
-    private fun scanRow(at: Long, c: ScanCounts, withTrackers: Int, network: NetworkStatus): ForensicTimelineEvent {
+    private fun scanRow(at: Long, c: ScanCounts, withTrackers: Int, network: String): ForensicTimelineEvent {
+        val inspected = c.inspected + c.partial
         val parts = mutableListOf(
-            "Privacy scan: ${c.inspected + c.partial} apps inspected",
+            "Privacy scan: $inspected app${if (inspected == 1) "" else "s"} inspected",
             "trackers found in the code of $withTrackers",
         )
         if (c.failed > 0) parts += "${c.failed} could not be inspected"
         if (c.partial > 0) parts += "${c.partial} partly inspected"
-        return row(at, CATEGORY_SCAN, parts.joinToString(" · "), networkSentence(network))
+        return row(at, CATEGORY_SCAN, parts.joinToString(" · "), network)
     }
 
-    private fun networkSentence(status: NetworkStatus): String = when (status) {
+    /** As the privacy screen says it: a step that read no lookups is "no network evidence", never "complete". */
+    private fun networkSentence(status: NetworkStatus, coverageDays: Int): String = when {
+        status == NetworkStatus.FAILED -> "Network evidence could not be read; code findings are not affected."
+        coverageDays == 0 && status != NetworkStatus.PENDING ->
+            "The network monitor recorded no lookups in the last 30 days, so there is no network evidence."
+        else -> networkStatusSentence(status)
+    }
+
+    private fun networkStatusSentence(status: NetworkStatus): String = when (status) {
         NetworkStatus.COMPLETE -> "Network evidence was complete."
         NetworkStatus.TRUNCATED -> "Network evidence was incomplete: the DNS log was too large to read in full."
         NetworkStatus.FAILED -> "Network evidence could not be read; code findings are not affected."

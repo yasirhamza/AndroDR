@@ -164,9 +164,13 @@ fun TimelineScreen(
 
     // Copy to clipboard once report text is ready
     LaunchedEffect(report, pendingCopy) {
-        if (pendingCopy && report.text.isNotEmpty()) {
-            copy(report)
-            pendingCopy = false
+        when (copyStep(pendingCopy, report)) {
+            CopyStep.WAIT -> Unit
+            CopyStep.COPY -> {
+                copy(report)
+                pendingCopy = false
+            }
+            CopyStep.CANCEL -> pendingCopy = false
         }
     }
 
@@ -286,10 +290,7 @@ fun TimelineScreen(
                     ScanGroupHeader(
                         group = group,
                         count = count,
-                        onClick = {
-                            viewModel.setScanFilter(group.scanId)
-                            viewModel.setGroupMode(TimelineGroupMode.DATE)
-                        },
+                        onClick = { viewModel.showScan(group.scanId) },
                         onViewTelemetry = onViewTelemetry?.takeIf { group.scanId > 0 }?.let { open ->
                             { open(group.scanId) }
                         },
@@ -607,7 +608,12 @@ private fun ReportViewSheet(
             HorizontalDivider()
             Spacer(modifier = Modifier.height(12.dp))
             Column(modifier = Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState())) {
-                if (report.text.isEmpty()) {
+                if (report.nothingToExport) {
+                    Text(
+                        text = stringResource(R.string.timeline_nothing_to_export),
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                } else if (report.text.isEmpty()) {
                     CircularProgressIndicator(modifier = Modifier.align(Alignment.CenterHorizontally))
                 } else {
                     Text(

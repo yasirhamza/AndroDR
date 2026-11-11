@@ -105,6 +105,12 @@ class PrivacyViewModelTest {
         assertTrue(s2.sections.toMap().getValue(RowSection.OTHER).any { it.packageName == "sys" })
     }
 
+    @Test fun `the results are marked loaded once read, with or without a scan`() = runTest {
+        assertTrue(vm(Fixture(scan())).state.first { it.scan != null }.loaded)
+        val none = vm(Fixture(null)).state.first { it.loaded }
+        assertTrue("no scan is loaded too: an app sheet then closes", none.loaded)
+    }
+
     @Test fun `no scan yields empty state`() = runTest {
         val s = vm(Fixture(null)).state.first()
         assertNull(s.scan)

@@ -31,7 +31,8 @@ class PrivacyTimelineRowsTest {
         evidence: List<PrivacyTrackerEvidence>,
         counts: PrivacyTimelineRows.ScanCounts = PrivacyTimelineRows.ScanCounts(inspected = 3, partial = 0, failed = 0),
         network: NetworkStatus = NetworkStatus.COMPLETE,
-    ) = PrivacyTimelineRows.build(at, counts, results, evidence, network)
+        coverageDays: Int = 3,
+    ) = PrivacyTimelineRows.build(at, counts, results, evidence, network, coverageDays)
 
     @Test fun `one scan entry plus one per user app with a tracker found in code`() {
         val rows = build(
@@ -86,6 +87,17 @@ class PrivacyTimelineRowsTest {
         assertTrue(rows[0].details, rows[0].details.contains("incomplete"))
         val failed = build(emptyList(), emptyList(), network = NetworkStatus.FAILED)
         assertTrue(failed[0].details.contains("could not be read"))
+    }
+
+    @Test fun `with no lookups recorded the scan entry never claims complete network evidence`() {
+        val rows = build(emptyList(), emptyList(), network = NetworkStatus.COMPLETE, coverageDays = 0)
+        assertFalse(rows[0].details, rows[0].details.contains("complete"))
+        assertTrue(rows[0].details, rows[0].details.contains("no lookups"))
+    }
+
+    @Test fun `one app inspected is said in the singular`() {
+        val one = PrivacyTimelineRows.ScanCounts(inspected = 1, partial = 0, failed = 0)
+        assertTrue(build(emptyList(), emptyList(), one)[0].description.startsWith("Privacy scan: 1 app inspected"))
     }
 
     @Test fun `a hostile label is sanitised and still found by its name`() {

@@ -131,8 +131,10 @@ class PrivacyScanTimelineTest {
         scan(runner())
         val before = entries().map { it.id }
         val previousScan = runBlocking { db.privacyDao().latestCompletedOnce()!!.id }
-        val failing = spyk(writer())
-        coEvery { failing.replace(any()) } throws IllegalStateException("disk full")
+        // Fails after the previous entries were deleted, so only a rollback can bring them back.
+        val dao = spyk(db.forensicTimelineEventDao())
+        coEvery { dao.insertAll(any()) } throws IllegalStateException("disk full")
+        val failing = PrivacyTimelineWriter(dao, TimelineRowDeleter(dao, f.store, db.signalMemberDao()))
         scan(runner(timeline = failing))
         assertEquals(before, entries().map { it.id })
         assertEquals(previousScan, runBlocking { db.privacyDao().latestCompletedOnce()!!.id })

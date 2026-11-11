@@ -41,6 +41,7 @@ import kotlinx.coroutines.channels.ReceiveChannel
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.buffer
 import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.produceIn
 import kotlinx.coroutines.withTimeoutOrNull
@@ -76,11 +77,31 @@ data class ScanGroup(
 )
 
 /** The report sheet's text: the first [TimelineViewModel.PREVIEW_CHARS] of the report, whole or not. */
-data class ReportPreview(val text: String, val truncated: Boolean) {
+data class ReportPreview(val text: String, val truncated: Boolean, val nothingToExport: Boolean = false) {
     companion object {
         val EMPTY = ReportPreview("", false)
+
+        /** The current filter shows only privacy entries, which are never exported (spec 2026-11-10 §5.3). */
+        val NOTHING = ReportPreview("", false, nothingToExport = true)
     }
 }
+
+/** What a pending "Copy report" does with the [report] it waits for. */
+enum class CopyStep { WAIT, COPY, CANCEL }
+
+/** Copy once the report text is ready; cancel when there is nothing to export, so no later report is copied. */
+fun copyStep(pending: Boolean, report: ReportPreview): CopyStep = when {
+    !pending -> CopyStep.WAIT
+    report.nothingToExport -> CopyStep.CANCEL
+    report.text.isNotEmpty() -> CopyStep.COPY
+    else -> CopyStep.WAIT
+}
+
+/**
+ * The privacy scan's time, passed on only when it changes: Room re-emits on every write to the tables it
+ * reads, and each emission would rebuild the "By scan" pager and lose the scroll position.
+ */
+internal fun privacyTimes(times: Flow<Long?>): Flow<Long?> = times.distinctUntilChanged()
 
 /**
  * The Timeline (spec §6): one keyset-paged union of visible event facts and visible
@@ -296,7 +317,7 @@ class TimelineViewModel @Inject constructor(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     /** When the privacy scan in the Timeline ran (spec 2026-11-10 §5.1), or null when there is none. */
-    private val privacyScanAt: Flow<Long?> = db.forensicTimelineEventDao().privacyScanAt()
+    private val privacyScanAt: Flow<Long?> = privacyTimes(db.forensicTimelineEventDao().privacyScanAt())
 
     /**
      * "By scan": one header per completed scan, newest first, keyset-paged (no cap, spec §5.5), with the
@@ -316,6 +337,17 @@ class TimelineViewModel @Inject constructor(
 
     /** The privacy scan header's count: the current filter narrowed to the privacy scan's entries. */
     suspend fun privacyCount(): Long? = count(_filter.value.copy(scanId = null, source = TelemetrySource.PRIVACY_SCAN))
+
+    /**
+     * A security scan header opens that scan's Timeline; a privacy-scan source filter left by the privacy header
+     * is dropped (no security scan has privacy entries), any other source filter is kept.
+     */
+    fun showScan(scanId: Long) {
+        _filter.update {
+            it.copy(scanId = scanId, source = it.source.takeIf { s -> s != TelemetrySource.PRIVACY_SCAN })
+        }
+        setGroupMode(TimelineGroupMode.DATE)
+    }
 
     /** The privacy scan header opens the Timeline narrowed to its entries (by source: they have no scan id). */
     fun showPrivacyScan() {
@@ -378,7 +410,11 @@ class TimelineViewModel @Inject constructor(
     fun generateReport() {
         viewModelScope.launch {
             try {
-                val filter = exportFilter() ?: return@launch
+                val filter = exportFilter()
+                if (filter == null) {
+                    _report.value = ReportPreview.NOTHING
+                    return@launch
+                }
                 val file = withContext(Dispatchers.IO) {
                     newReportFile("txt", filter).also { writePlaintext(it, filter) }
                 }

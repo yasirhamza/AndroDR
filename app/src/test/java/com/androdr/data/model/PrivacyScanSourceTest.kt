@@ -37,8 +37,7 @@ class PrivacyScanSourceTest {
             .filter { it.isFile && it.extension == "kt" && it.readText().contains("PRIVACY_SCAN") }
             .map { it.relativeTo(root).path }
             .toSortedSet()
-        val extra = users - ALLOWED
-        assertTrue("PRIVACY_SCAN used outside its allowed places: $extra", extra.isEmpty())
+        assertEquals("PRIVACY_SCAN is named exactly where it is allowed", ALLOWED.toSortedSet(), users)
         assertTrue("the enum must define it", "com/androdr/data/model/TelemetrySource.kt" in users)
     }
 
@@ -52,15 +51,10 @@ class PrivacyScanSourceTest {
             "com/androdr/reporting/ReportSummary.kt",
             "com/androdr/ui/history/HistoryScreen.kt",
             "com/androdr/privacy/PrivacyTimelineRows.kt",
-            "com/androdr/data/repo/TimelineRowDeleter.kt",
             "com/androdr/data/db/ForensicTimelineEventDao.kt",
-            "com/androdr/data/db/TimelineQueries.kt",
             "com/androdr/data/db/TimelineFilter.kt",
             "com/androdr/ui/timeline/TimelineViewModel.kt",
-            "com/androdr/ui/timeline/TimelineScreen.kt",
-            "com/androdr/ui/timeline/TimelineEventCard.kt",
             "com/androdr/ui/timeline/TimelinePrivacy.kt",
-            "com/androdr/ui/settings/SettingsViewModel.kt",
         )
     }
 }
