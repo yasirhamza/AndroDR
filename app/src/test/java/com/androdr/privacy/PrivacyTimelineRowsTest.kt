@@ -14,11 +14,17 @@ class PrivacyTimelineRowsTest {
 
     private val at = 1_000L
 
-    private fun app(pkg: String, label: String = pkg, system: Boolean = false, outcome: InspectOutcome = InspectOutcome.INSPECTED) =
+    private fun app(
+        pkg: String,
+        label: String = pkg,
+        system: Boolean = false,
+        outcome: InspectOutcome = InspectOutcome.INSPECTED,
+    ) =
         PrivacyAppResult(9, pkg, 1, label, system, outcome.name, null)
 
     private fun ev(pkg: String, id: Int, name: String = "T$id", inCode: Boolean = true, isNew: Boolean = false) =
-        PrivacyTrackerEvidence(9, pkg, id, name, "", "Analytics", inCode, if (inCode) 0 else 3, 0, null, null, null, isNew)
+        PrivacyTrackerEvidence(9, pkg, id, name, "", "Analytics", inCode, if (inCode) 0 else 3, 0, null, null, null,
+            isNew)
 
     private fun build(
         results: List<PrivacyAppResult>,
@@ -72,12 +78,14 @@ class PrivacyTimelineRowsTest {
     }
 
     @Test fun `the scan entry says what could not be inspected and how the network step went`() {
-        val rows = build(emptyList(), emptyList(), PrivacyTimelineRows.ScanCounts(inspected = 5, partial = 2, failed = 1),
+        val counts = PrivacyTimelineRows.ScanCounts(inspected = 5, partial = 2, failed = 1)
+        val rows = build(emptyList(), emptyList(), counts,
             NetworkStatus.TRUNCATED)
         assertEquals("Privacy scan: 7 apps inspected · trackers found in the code of 0 · 1 could not be inspected · " +
             "2 partly inspected", rows[0].description)
         assertTrue(rows[0].details, rows[0].details.contains("incomplete"))
-        assertTrue(build(emptyList(), emptyList(), network = NetworkStatus.FAILED)[0].details.contains("could not be read"))
+        val failed = build(emptyList(), emptyList(), network = NetworkStatus.FAILED)
+        assertTrue(failed[0].details.contains("could not be read"))
     }
 
     @Test fun `a hostile label is sanitised and still found by its name`() {
@@ -85,7 +93,8 @@ class PrivacyTimelineRowsTest {
         assertTrue(rows[1].description, rows[1].description.startsWith("Bankevil: 1 tracker"))
         assertEquals("Bankevil", rows[1].appName)
         assertTrue(rows[1].details, rows[1].details.contains("Track"))
-        assertFalse(rows.any { r -> (r.description + r.details + r.appName).any { Character.getType(it) == Character.FORMAT.toInt() } })
+        val text = rows.joinToString { it.description + it.details + it.appName }
+        assertFalse(text.any { Character.getType(it) == Character.FORMAT.toInt() })
     }
 
     @Test fun `a label with nothing displayable falls back to the package name`() {

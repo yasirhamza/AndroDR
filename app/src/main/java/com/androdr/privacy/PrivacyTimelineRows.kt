@@ -70,7 +70,9 @@ internal object PrivacyTimelineRows {
             add("Trackers found in code: " + if (more > 0) "$shown and $more more" else shown)
             val fresh = trackers.count { it.newSinceLastScan }
             if (fresh > 0) add("$fresh new since the previous privacy scan")
-            if (app.outcome == InspectOutcome.PARTIAL.name) add("Partly inspected: some of this app's code could not be read.")
+            if (app.outcome == InspectOutcome.PARTIAL.name) {
+                add("Partly inspected: some of this app's code could not be read.")
+            }
         }.joinToString("\n")
         return row(at, CATEGORY_APP, description, details).copy(packageName = app.packageName, appName = label)
     }

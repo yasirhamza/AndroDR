@@ -97,7 +97,9 @@ class PrivacyScanTimelineTest {
         "SELECT id, category, packageName, startTimestamp, scanResultId FROM forensic_timeline " +
             "WHERE telemetrySource = 'PRIVACY_SCAN' ORDER BY id", null,
     ).use { c ->
-        buildList { while (c.moveToNext()) add(Entry(c.getLong(0), c.getString(1), c.getString(2), c.getLong(3), c.getLong(4))) }
+        buildList {
+            while (c.moveToNext()) add(Entry(c.getLong(0), c.getString(1), c.getString(2), c.getLong(3), c.getLong(4)))
+        }
     }
 
     @Test fun `a completed scan writes its Timeline entries`() {

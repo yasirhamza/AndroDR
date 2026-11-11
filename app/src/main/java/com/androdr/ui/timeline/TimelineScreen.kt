@@ -411,7 +411,15 @@ fun TimelineScreen(
                     open(event.scanResultId)
                 }
             },
-            onOpenPrivacy = openPrivacyAction(event, onOpenPrivacy?.let { open -> { pkg -> selectedEvent = null; open(pkg) } }),
+            onOpenPrivacy = openPrivacyAction(
+                event,
+                onOpenPrivacy?.let { open ->
+                    { pkg ->
+                        selectedEvent = null
+                        open(pkg)
+                    }
+                },
+            ),
         )
     }
     selectedRecord?.let { record ->
@@ -641,9 +649,3 @@ private fun ReportViewSheet(
  */
 internal fun showPinnedFindings(filter: TimelineFilter, activeFilters: List<ActiveFilter>): Boolean =
     activeFilters.isEmpty() && filter.searchText == null
-
-/** A stable list key: security scans by id, the privacy scan by its own name. */
-private fun ScanListItem.key(): String = when (this) {
-    is ScanListItem.Security -> "scan_${group.scanId}"
-    is ScanListItem.Privacy -> "privacy_scan"
-}

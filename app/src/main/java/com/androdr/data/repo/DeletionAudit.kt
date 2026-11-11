@@ -34,7 +34,7 @@ internal class DeletionAudit(private val dao: ScanFindingDao) {
             TelemetrySource.LIVE_SCAN -> "Scan"
             TelemetrySource.BUGREPORT_IMPORT -> "Bug report import"
             TelemetrySource.INTRUSION_LOG_IMPORT -> "Intrusion log import"
-            TelemetrySource.PRIVACY_SCAN -> error("PRIVACY_SCAN marks only privacy Timeline entries, never a security scan")
+            TelemetrySource.PRIVACY_SCAN -> error("PRIVACY_SCAN is never a security scan's source")
         }
         return row(now, "$what of ${format(scan.timestamp)} deleted", details, scan.source)
     }

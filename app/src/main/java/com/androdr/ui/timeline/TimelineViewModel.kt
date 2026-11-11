@@ -308,7 +308,8 @@ class TimelineViewModel @Inject constructor(
         scanRepository.pagedScans().map { page ->
             page.map { ScanListItem.Security(scanGroup(it)) }
                 .insertSeparators<ScanListItem.Security, ScanListItem> { before, after ->
-                    at?.takeIf { privacyHeaderBetween(before?.group, after?.group, it) }?.let { ScanListItem.Privacy(it) }
+                    at?.takeIf { privacyHeaderBetween(before?.group, after?.group, it) }
+                        ?.let { ScanListItem.Privacy(it) }
                 }
         }
     }.cachedIn(viewModelScope)

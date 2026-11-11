@@ -263,7 +263,9 @@ private fun AndroDRApp() {
             }
             composable(
                 "privacy?pkg={pkg}",
-                arguments = listOf(navArgument("pkg") { type = NavType.StringType; nullable = true; defaultValue = null }),
+                arguments = listOf(
+                    navArgument("pkg") { type = NavType.StringType; nullable = true; defaultValue = null },
+                ),
             ) { entry ->
                 PrivacyScreen(
                     onBack = { navController.popBackStack() },

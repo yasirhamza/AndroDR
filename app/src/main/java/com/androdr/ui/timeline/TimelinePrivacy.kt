@@ -32,7 +32,10 @@ internal fun privacyHeaderBetween(before: ScanGroup?, after: ScanGroup?, at: Lon
  * entry is never evidence, so it has none and is never listed (the package fallback would otherwise pair
  * an app's privacy entry with that app's findings).
  */
-internal fun linkedEvidence(event: ForensicTimelineEvent, loaded: List<ForensicTimelineEvent>): List<ForensicTimelineEvent> {
+internal fun linkedEvidence(
+    event: ForensicTimelineEvent,
+    loaded: List<ForensicTimelineEvent>,
+): List<ForensicTimelineEvent> {
     if (event.isPrivacyEntry()) return emptyList()
     val key = event.effectiveCorrelationId()
     if (key.isEmpty()) return emptyList()
@@ -47,4 +50,10 @@ internal fun openPrivacyAction(event: ForensicTimelineEvent, open: ((String?) ->
     if (open == null || !event.isPrivacyEntry()) return null
     val pkg = event.packageName.ifEmpty { null }
     return { open(pkg) }
+}
+
+/** A stable "By scan" list key: security scans by id, the privacy scan by its own name. */
+internal fun ScanListItem.key(): String = when (this) {
+    is ScanListItem.Security -> "scan_${group.scanId}"
+    is ScanListItem.Privacy -> "privacy_scan"
 }

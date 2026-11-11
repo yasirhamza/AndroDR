@@ -92,7 +92,7 @@ private fun openedBy(s: AlertSample): String {
         TelemetrySource.LIVE_SCAN -> "live scan"
         TelemetrySource.BUGREPORT_IMPORT -> "bug report import"
         TelemetrySource.INTRUSION_LOG_IMPORT -> "intrusion log import"
-        TelemetrySource.PRIVACY_SCAN -> error("PRIVACY_SCAN marks only privacy Timeline entries, never a security scan")
+        TelemetrySource.PRIVACY_SCAN -> error("PRIVACY_SCAN is never a security scan's source")
         null -> "scan deleted"
     }
     return "scan ${s.alert.openedScanId} ($source)"
