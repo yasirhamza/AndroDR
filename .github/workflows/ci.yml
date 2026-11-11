@@ -86,6 +86,12 @@ jobs:
               # scripts/test_privacy_policy_text.py: a policy-only change must run the check
               # that the policy still states the privacy scan's retention.
               - 'docs/PRIVACY_POLICY.md'
+              # Inputs of scripts/test_mirror_drift_workflow.py: the job runs only on
+              # main, so this is where a change to its address step or to the two
+              # constants it reads is caught before merge.
+              - '.github/workflows/mirror-drift.yml'
+              - 'app/src/main/java/com/androdr/ioc/IocDataManifest.kt'
+              - 'app/src/main/java/com/androdr/ioc/OemPrefixResolver.kt'
             code:
               # Kotlin / Java sources across all source sets
               - 'app/src/**/*.kt'
@@ -395,6 +401,10 @@ jobs:
         # Every 30-day deletion statement must carry the privacy-scan exception, and the
         # policy must say how long privacy scan results are kept (spec 2026-11-10, section 8).
         run: python3 -m pytest scripts/test_privacy_policy_text.py -q
+      - name: mirror-drift address step
+        # The daily OEM-prefix drift job failed from 2026-10-17 because its address
+        # search no longer matched the app's source; nothing gated it before merge.
+        run: python3 -m pytest scripts/test_mirror_drift_workflow.py -q
       - name: Discover helper tests (XPIA token filter, tracked-name matching)
         # Were never wired into CI before 2026-11-02, when the rule-index matching bug
         # (only the first comma-space entry matched) let tracked threats through.
