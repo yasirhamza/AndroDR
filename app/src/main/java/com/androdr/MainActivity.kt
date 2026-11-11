@@ -45,6 +45,7 @@ import com.androdr.ui.privacy.PrivacyEvidenceScreen
 import com.androdr.ui.privacy.PrivacyEvidenceViewModel
 import com.androdr.ui.privacy.PrivacyScreen
 import com.androdr.ui.privacy.privacyEvidenceRoute
+import com.androdr.ui.privacy.privacyRoute
 import com.androdr.ui.history.HistoryScreen
 import com.androdr.ui.network.DnsMonitorScreen
 import com.androdr.ui.telemetry.TelemetryBrowserViewModel
@@ -249,6 +250,7 @@ private fun AndroDRApp() {
                     },
                     onViewTelemetry = { scanId -> navController.navigate(telemetryForScan(scanId)) },
                     onOpenFact = { factId, scanId -> navController.navigate(factRoute(factId, scanId)) },
+                    onOpenPrivacy = { pkg -> navController.navigate(privacyRoute(pkg)) },
                 )
             }
             composable("bugreport") {
@@ -259,9 +261,13 @@ private fun AndroDRApp() {
             composable("settings") {
                 SettingsScreen()
             }
-            composable("privacy") {
+            composable(
+                "privacy?pkg={pkg}",
+                arguments = listOf(navArgument("pkg") { type = NavType.StringType; nullable = true; defaultValue = null }),
+            ) { entry ->
                 PrivacyScreen(
                     onBack = { navController.popBackStack() },
+                    initialPackage = entry.arguments?.getString("pkg"),
                     onOpenEvidence = { pkg, trackerId -> navController.navigate(privacyEvidenceRoute(pkg, trackerId)) },
                 )
             }

@@ -52,6 +52,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.androdr.R
 import com.androdr.data.model.PrivacyScan
+import com.androdr.privacy.AppPrivacyRow
 import com.androdr.privacy.PrivacyScanProgress
 import java.util.Date
 
@@ -63,6 +64,8 @@ import java.util.Date
 @Composable
 fun PrivacyScreen(
     onBack: () -> Unit,
+    /** An app whose sheet to open (the Timeline's "Open in privacy results"), applied once per entry. */
+    initialPackage: String? = null,
     onOpenEvidence: (packageName: String, trackerId: Int) -> Unit,
     viewModel: PrivacyViewModel = hiltViewModel(),
 ) {
@@ -74,6 +77,12 @@ fun PrivacyScreen(
     var confirmDelete by rememberSaveable { mutableStateOf(false) }
     var menuOpen by remember { mutableStateOf(false) }
     var detail by rememberSaveable { mutableStateOf<String?>(null) }
+    // Applied once per navigation entry: recreation must not reopen a sheet the user closed.
+    var initialApplied by rememberSaveable { mutableStateOf(false) }
+    if (!initialApplied) {
+        initialApplied = true
+        if (initialPackage != null) detail = initialPackage
+    }
 
     LaunchedEffect(message) {
         message?.let { snackbar.showSnackbar(context.getString(it)); viewModel.messageShown() }
@@ -126,7 +135,21 @@ fun PrivacyScreen(
     }
 }
 
-/** The app's sheet, or nothing (and [onDismiss]) when the app is no longer listed. */
+/** What an app's sheet shows: nothing yet (results still loading), the app, or nothing because it is gone. */
+internal sealed interface AppSheetState {
+    data object Waiting : AppSheetState
+    data class Open(val row: AppPrivacyRow) : AppSheetState
+    data object Gone : AppSheetState
+}
+
+/** [packageName]'s sheet in [state]: it waits while the results load, so a sheet opened early is not lost. */
+internal fun appSheetState(state: PrivacyUiState, packageName: String): AppSheetState {
+    if (!state.loaded) return AppSheetState.Waiting
+    val row = state.sections.flatMap { it.second }.firstOrNull { it.packageName == packageName }
+    return if (row == null) AppSheetState.Gone else AppSheetState.Open(row)
+}
+
+/** The app's sheet; [onDismiss] when the loaded results no longer list the app. */
 @Composable
 private fun AppSheet(
     state: PrivacyUiState,
@@ -134,8 +157,11 @@ private fun AppSheet(
     onDismiss: () -> Unit,
     onOpenEvidence: (String, Int) -> Unit,
 ) {
-    val row = state.sections.flatMap { it.second }.firstOrNull { it.packageName == packageName }
-    if (row == null) onDismiss() else AppDetailSheet(row, state.registrySizeAtScan ?: 0, onDismiss, onOpenEvidence)
+    when (val s = appSheetState(state, packageName)) {
+        AppSheetState.Waiting -> Unit
+        AppSheetState.Gone -> onDismiss()
+        is AppSheetState.Open -> AppDetailSheet(s.row, state.registrySizeAtScan ?: 0, onDismiss, onOpenEvidence)
+    }
 }
 
 @Composable
