@@ -707,3 +707,27 @@ private val SCHEMA_22_DDL = listOf(
     "CREATE INDEX IF NOT EXISTS `index_DnsEvent_appName_domain_timestamp` " +
         "ON `DnsEvent` (`appName`, `domain`, `timestamp`)"
 )
+
+/** Schema 23: privacy detail tables (evidence details view) and privacy_scan.hasDetails. */
+val MIGRATION_22_23 = object : Migration(22, 23) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        SCHEMA_23_DDL.forEach(db::execSQL)
+    }
+}
+
+/**
+ * The ALTER matches 23.json's `hasDetails` field (INTEGER NOT NULL, default 0); the two CREATE statements are
+ * copied verbatim from 23.json's `createSql` (`${TABLE_NAME}` expanded). Migration22To23Test validates both.
+ */
+private val SCHEMA_23_DDL = listOf(
+    "ALTER TABLE `privacy_scan` ADD COLUMN `hasDetails` INTEGER NOT NULL DEFAULT 0",
+    "CREATE TABLE IF NOT EXISTS `privacy_code_detail` (`scanId` INTEGER NOT NULL, `packageName` TEXT NOT NULL, " +
+        "`trackerId` INTEGER NOT NULL, `kind` TEXT NOT NULL, `signature` TEXT NOT NULL, " +
+        "`packageCount` INTEGER NOT NULL, `packages` TEXT NOT NULL, " +
+        "PRIMARY KEY(`scanId`, `packageName`, `trackerId`, `kind`, `signature`))",
+    "CREATE TABLE IF NOT EXISTS `privacy_domain_detail` (`scanId` INTEGER NOT NULL, `packageName` TEXT NOT NULL, " +
+        "`trackerId` INTEGER NOT NULL, `domain` TEXT NOT NULL, `kind` TEXT NOT NULL, `signature` TEXT NOT NULL, " +
+        "`lookups` INTEGER NOT NULL, `lookupDays` INTEGER NOT NULL, `background` INTEGER, " +
+        "`firstSeen` INTEGER NOT NULL, `lastSeen` INTEGER NOT NULL, " +
+        "PRIMARY KEY(`scanId`, `packageName`, `trackerId`, `domain`))"
+)

@@ -86,6 +86,26 @@ class PrivacyCopyTest {
         assertTrue(body, body.contains("Privacy scan results are kept; delete them from the privacy screen."))
     }
 
+    @Test fun `the details view keeps the standing lookup note and the spec's wording for older results`() {
+        val screen = source("java/com/androdr/ui/privacy/PrivacyEvidenceScreen.kt") +
+            source("java/com/androdr/ui/privacy/PrivacyEvidenceLookups.kt")
+        assertTrue(screen.contains("R.string.privacy_network_caveat"))
+        assertTrue(screen.contains("R.string.privacy_evidence_run_new_scan"))
+        assertEquals(
+            "Run a new privacy scan to record the matching packages and domains.",
+            privacyStringBodies().getValue("privacy_evidence_run_new_scan"),
+        )
+        assertTrue(!Regex("""Text\(\s*\w+\.(appLabel|name|packageName|domain|signature)\b""").containsMatchIn(screen))
+    }
+
+    @Test fun `Delete privacy results names the looked-up domains it deletes`() {
+        assertTrue(privacyStringBodies().getValue("privacy_delete_confirm").contains("looked-up tracker domains"))
+    }
+
+    @Test fun `MainActivity has the privacy details route`() {
+        assertTrue(source("java/com/androdr/MainActivity.kt").contains("PRIVACY_EVIDENCE_ROUTE"))
+    }
+
     @Test fun `app labels and tracker names are rendered through reportSafe`() {
         val ui = source("java/com/androdr/ui/privacy/PrivacyScreen.kt") +
             source("java/com/androdr/ui/privacy/PrivacyDetails.kt")

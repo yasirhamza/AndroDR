@@ -567,7 +567,7 @@
     <string name="privacy_partly_inspected_tag">partly inspected</string>
     <string name="privacy_delete_refused">A privacy scan is running; delete the results after it finishes.</string>
     <string name="privacy_delete">Delete privacy results</string>
-    <string name="privacy_delete_confirm">Delete the stored list of every app\'s code packages and tracker findings?</string>
+    <string name="privacy_delete_confirm">Delete the stored list of every app\'s code packages, tracker findings and looked-up tracker domains?</string>
     <string name="privacy_delete_cancel">Cancel</string>
     <string name="privacy_attribution">Tracker data: Exodus Privacy (ODbL 1.0)</string>
     <string name="privacy_last_scan">Last scan: %1$s</string>
@@ -576,4 +576,37 @@
     <string name="privacy_new_tag">new since last scan</string>
     <string name="privacy_back">Back</string>
     <string name="privacy_more">More options</string>
+    <!-- Privacy evidence details: what the scan matched for one tracker in one app -->
+    <string name="privacy_evidence_title">Tracker details</string>
+    <string name="privacy_evidence_in_app">in %1$s (%2$s)</string>
+    <string name="privacy_evidence_list_entry">Tracker list entry %1$d (Exodus Privacy)</string>
+    <string name="privacy_evidence_run_new_scan">Run a new privacy scan to record the matching packages and domains.</string>
+    <string name="privacy_evidence_found_in_code">Found in code</string>
+    <string name="privacy_evidence_version">Version inspected: %1$s · %2$s</string>
+    <string name="privacy_evidence_fully_inspected">fully inspected</string>
+    <string name="privacy_evidence_partial_note">Only part of this app\'s code could be read, so this list may be incomplete.</string>
+    <string name="privacy_evidence_signature">Signature %1$s (%2$s)</string>
+    <plurals name="privacy_evidence_more">
+        <item quantity="one">… and %1$d more</item>
+        <item quantity="other">… and %1$d more</item>
+    </plurals>
+    <string name="privacy_kind_code_prefix">package prefix</string>
+    <string name="privacy_kind_code_segment">package-name segment</string>
+    <string name="privacy_kind_domain_suffix">domain suffix</string>
+    <string name="privacy_kind_domain_label">label</string>
+    <string name="privacy_kind_domain_pattern">pattern</string>
+    <string name="privacy_evidence_lookups_title">Looked up domains of this tracker</string>
+    <string name="privacy_evidence_window">Recorded %1$s – %2$s</string>
+    <string name="privacy_evidence_lookups_incomplete">This list of domains may be incomplete.</string>
+    <string name="privacy_evidence_matched">matched %1$s (%2$s)</string>
+    <string name="privacy_evidence_first_last">first %1$s, last %2$s</string>
+    <string name="privacy_evidence_lookup_times_note">The most recent lookups of this domain by this app, read from the DNS log as it is now. They can differ from the scan\'s counts.</string>
+    <string name="privacy_evidence_lookup_times_none">The DNS log holds no lookups of this domain by this app now.</string>
+    <string name="privacy_evidence_lookup_times_hint">Tap a domain to see its most recent lookups.</string>
+    <string name="privacy_evidence_close">Close</string>
+    <string name="privacy_evidence_footer" tools:ignore="PluralsCandidate">Privacy scan of %1$s · tracker list: %2$d trackers</string>
+    <string name="privacy_evidence_footer_hash" tools:ignore="PluralsCandidate">Privacy scan of %1$s · tracker list: %2$d trackers (%3$s)</string>
+    <string name="privacy_evidence_gone">This result is no longer stored. Run a new privacy scan.</string>
+    <string name="privacy_evidence_unreadable">These details could not be read. Try opening them again.</string>
+    <string name="privacy_evidence_loading">Loading…</string>
 </resources>

@@ -7,12 +7,14 @@ import com.androdr.data.db.DomainLookupCount
 import com.androdr.data.db.PrivacyDao
 import com.androdr.data.model.NetworkStatus
 import com.androdr.data.model.PrivacyAppResult
+import com.androdr.data.model.PrivacyCodeDetail
 import com.androdr.data.model.PrivacyPackageSet
 import com.androdr.data.model.PrivacyScan
 import com.androdr.di.ApplicationScope
 import com.androdr.ioc.TrackerRegistry
 import com.androdr.privacy.DexPackageReader.ReadBudget
 import com.androdr.privacy.NetworkEvidenceCorrelator.DnsSource
+import com.androdr.privacy.NetworkEvidenceCorrelator.DomainEvidence
 import com.androdr.privacy.NetworkEvidenceCorrelator.Key
 import com.androdr.privacy.NetworkEvidenceCorrelator.NetworkEvidence
 import com.androdr.privacy.model.RegistryState
@@ -121,17 +123,18 @@ class PrivacyScanRunner @Inject constructor(
                 startedAt = startedAt, finishedAt = null, appsTotal = apps.size, appsInspected = 0,
                 appsPartial = 0, appsFailed = 0, registrySize = set.size, registrySha256 = set.sourceSha256,
                 dnsWindowStart = windowStart, dnsCoverageDays = 0, usageCoverageFrom = null,
-                networkStatus = NetworkStatus.PENDING.name,
+                networkStatus = NetworkStatus.PENDING.name, hasDetails = true,
             )
         )
         state.value = PrivacyScanProgress.Running(0, apps.size)
         val outcomes = HashMap<String, InspectOutcome>()
         val inCode = HashMap<String, Set<Tracker>>()
         for ((index, app) in apps.withIndex()) {
-            val (inspection, trackers) = inspect(app, set)
-            dao.upsertResults(listOf(resultRow(scanId, inspection)))
-            outcomes[app.packageName] = inspection.outcome
-            inCode[app.packageName] = trackers
+            val inspected = inspect(app, set, scanId)
+            dao.upsertResults(listOf(resultRow(scanId, inspected.inspection)))
+            dao.upsertCodeDetail(inspected.codeDetail)
+            outcomes[app.packageName] = inspected.inspection.outcome
+            inCode[app.packageName] = inspected.trackers
             state.value = PrivacyScanProgress.Running(index + 1, apps.size)
         }
         val usageIntervals = readUsage(windowStart, startedAt)
@@ -142,6 +145,7 @@ class PrivacyScanRunner @Inject constructor(
             previousNetworkComplete = previous?.networkStatus == NetworkStatus.COMPLETE.name,
         )
         dao.upsertEvidence(PrivacyEvidenceRows.build(scanId, set, inCode, network.evidence, isNew))
+        dao.upsertDomainDetail(PrivacyDetailRows.domains(scanId, network.domains))
         dao.finishScan(
             scanId, clock(), outcomes.values.count { it == InspectOutcome.INSPECTED },
             outcomes.values.count { it == InspectOutcome.PARTIAL },
@@ -158,11 +162,19 @@ class PrivacyScanRunner @Inject constructor(
         isSystemApp = i.app.isSystemApp, outcome = i.outcome.name, reason = i.reason,
     )
 
+    /** One app's inspection, the trackers found in its code, and the detail rows that explain them. */
+    private class Inspected(
+        val inspection: AppInspection,
+        val trackers: Set<Tracker>,
+        val codeDetail: List<PrivacyCodeDetail>,
+    )
+
     /**
      * One app, isolated: whatever its APK does to the reader or its package set does to the matcher (OOM included)
-     * costs only this app. A package set is cached only once it has been matched.
+     * costs only this app. A package set is cached only once it has been matched. The trackers and their detail
+     * rows come from one matching call, so the detail always explains exactly the trackers recorded.
      */
-    private suspend fun inspect(app: InstalledApp, set: TrackerSet): Pair<AppInspection, Set<Tracker>> = try {
+    private suspend fun inspect(app: InstalledApp, set: TrackerSet, scanId: Long): Inspected = try {
         val cached = cachedPackages(app)
         val inspection = if (cached != null) {
             AppInspection(app, cached, InspectOutcome.INSPECTED, null)
@@ -170,14 +182,17 @@ class PrivacyScanRunner @Inject constructor(
             val deadline = nanoTime() + PER_APP_TIMEOUT_MS * NANOS_PER_MS
             inspector.inspect(app, ReadBudget(deadlineNanos = deadline, nanoTime = nanoTime))
         }
-        val trackers = set.matchPackages(inspection.packages)
+        val matches = set.matchPackagesDetailed(inspection.packages)
+        val codeDetail = PrivacyDetailRows.code(scanId, app.packageName, matches)
         if (cached == null && inspection.outcome == InspectOutcome.INSPECTED) cache(app, inspection.packages)
-        inspection to trackers
+        Inspected(inspection, matches.mapTo(LinkedHashSet()) { it.tracker }, codeDetail)
     } catch (c: CancellationException) {
         throw c
     } catch (t: Throwable) {
         Log.w(TAG, "Could not inspect ${app.packageName}: ${t.javaClass.simpleName}")
-        AppInspection(app, emptySet(), InspectOutcome.COULD_NOT_INSPECT, failureReason(t)) to emptySet()
+        Inspected(
+            AppInspection(app, emptySet(), InspectOutcome.COULD_NOT_INSPECT, failureReason(t)), emptySet(), emptyList(),
+        )
     }
 
     /** The cached package set when version, update time and reader version all match; an unreadable row is deleted. */
@@ -225,6 +240,7 @@ class PrivacyScanRunner @Inject constructor(
         val status: NetworkStatus,
         val evidence: Map<Key, NetworkEvidence>,
         val coverageDays: Int,
+        val domains: List<DomainEvidence>,
     )
 
     /**
@@ -242,12 +258,14 @@ class PrivacyScanRunner @Inject constructor(
         val c = NetworkEvidenceCorrelator.correlate(dnsSource(since), set, installed, usage, expired)
         val coverageDays = dnsEvents.coverageDaysSince(since)
         val truncated = c.truncated || expired()
-        NetworkResult(if (truncated) NetworkStatus.TRUNCATED else NetworkStatus.COMPLETE, c.evidence, coverageDays)
+        NetworkResult(
+            if (truncated) NetworkStatus.TRUNCATED else NetworkStatus.COMPLETE, c.evidence, coverageDays, c.domains,
+        )
     } catch (c: CancellationException) {
         throw c
     } catch (t: Throwable) {
         Log.w(TAG, "Network step failed: ${t.javaClass.simpleName}")
-        NetworkResult(NetworkStatus.FAILED, emptyMap(), 0)
+        NetworkResult(NetworkStatus.FAILED, emptyMap(), 0, emptyList())
     }
 
     private fun dnsSource(since: Long) = object : DnsSource {

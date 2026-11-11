@@ -130,7 +130,7 @@ object PrivacyRanking {
         evidence: List<PrivacyTrackerEvidence>,
         refused: Set<TrackerCategory>
     ): AppPrivacyRow {
-        val trackers = evidence.map { toTrackerRow(it) }
+        val trackers = evidence.map { trackerRow(it) }
             .sortedWith(
                 compareByDescending<TrackerRow> { t -> t.categories.any { it in refused } }.thenBy { it.name }
             )
@@ -140,7 +140,7 @@ object PrivacyRanking {
             versionCode = app.versionCode,
             appLabel = app.appLabel,
             isSystemApp = app.isSystemApp,
-            outcome = parseOutcome(app.outcome),
+            outcome = outcomeOf(app.outcome),
             reason = app.reason,
             trackers = trackers,
             refusedInCode = refusedCode.size,
@@ -149,7 +149,8 @@ object PrivacyRanking {
         )
     }
 
-    private fun toTrackerRow(e: PrivacyTrackerEvidence): TrackerRow {
+    /** One stored evidence row as the screens show it; also the details view's totals line. */
+    fun trackerRow(e: PrivacyTrackerEvidence): TrackerRow {
         // An empty or blank stored string is Uncategorised (refused by default), never an unrefusable empty set.
         val raw = if (e.categories.isBlank()) {
             listOf(TrackerCategory.UNCATEGORISED.label)
@@ -175,8 +176,8 @@ object PrivacyRanking {
     /**
      * A stored outcome that does not parse is treated as [InspectOutcome.COULD_NOT_INSPECT]: the
      * never-falsely-reassuring choice, since it surfaces the app under "needs attention" rather than
-     * implying it was inspected.
+     * implying it was inspected. Also used by the details view, so it reads an outcome the way the lists do.
      */
-    private fun parseOutcome(stored: String): InspectOutcome =
+    fun outcomeOf(stored: String): InspectOutcome =
         InspectOutcome.entries.firstOrNull { it.name == stored } ?: InspectOutcome.COULD_NOT_INSPECT
 }

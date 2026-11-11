@@ -11,6 +11,8 @@ import com.androdr.data.model.FeedHealth
 import com.androdr.data.model.ForensicTimelineEvent
 import com.androdr.data.model.Indicator
 import com.androdr.data.model.PrivacyAppResult
+import com.androdr.data.model.PrivacyCodeDetail
+import com.androdr.data.model.PrivacyDomainDetail
 import com.androdr.data.model.PrivacyPackageSet
 import com.androdr.data.model.PrivacyScan
 import com.androdr.data.model.PrivacyTrackerEvidence
@@ -27,9 +29,10 @@ import com.androdr.data.model.TelemetryFact
         CveEntity::class, ForensicTimelineEvent::class, Indicator::class,
         FeedHealth::class, RecordBody::class, TelemetryFact::class, ScanObservation::class,
         EventWatermark::class, SignalMember::class, ScanFinding::class, Alert::class,
-        PrivacyScan::class, PrivacyAppResult::class, PrivacyTrackerEvidence::class, PrivacyPackageSet::class
+        PrivacyScan::class, PrivacyAppResult::class, PrivacyTrackerEvidence::class, PrivacyPackageSet::class,
+        PrivacyCodeDetail::class, PrivacyDomainDetail::class
     ],
-    version = 22,
+    version = 23,
     exportSchema = true
 )
 @TypeConverters(Converters::class)

@@ -83,6 +83,9 @@ jobs:
               - 'app/schemas/**'
               - 'app/src/main/java/com/androdr/ioc/IocSanitizer.kt'
               - 'app/src/main/java/com/androdr/ioc/IndicatorResolver.kt'
+              # scripts/test_privacy_policy_text.py: a policy-only change must run the check
+              # that the policy still states the privacy scan's retention.
+              - 'docs/PRIVACY_POLICY.md'
               # Inputs of scripts/test_mirror_drift_workflow.py: the job runs only on
               # main, so this is where a change to its address step or to the two
               # constants it reads is caught before merge.
@@ -394,6 +397,10 @@ jobs:
         # background job (2026-11-02). Pins the ASB fix and the EXEC_LIMITS
         # clause in every workflow prompt and dispatcher brief.
         run: python3 -m pytest scripts/test_update_rules_pipeline.py -q
+      - name: Privacy policy states the privacy scan's retention
+        # Every 30-day deletion statement must carry the privacy-scan exception, and the
+        # policy must say how long privacy scan results are kept (spec 2026-11-10, section 8).
+        run: python3 -m pytest scripts/test_privacy_policy_text.py -q
       - name: mirror-drift address step
         # The daily OEM-prefix drift job failed from 2026-10-17 because its address
         # search no longer matched the app's source; nothing gated it before merge.

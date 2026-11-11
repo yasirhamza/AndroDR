@@ -1,5 +1,6 @@
 package com.androdr.data.model
 
+import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.PrimaryKey
 
@@ -24,7 +25,9 @@ data class PrivacyScan(
     /** Oldest usage event available; null = no usage access. */
     val usageCoverageFrom: Long?,
     /** [NetworkStatus] name; inserted as PENDING. */
-    val networkStatus: String
+    val networkStatus: String,
+    /** True when this scan recorded the detail tables; false for scans made before schema 23. */
+    @ColumnInfo(defaultValue = "0") val hasDetails: Boolean = false
 )
 
 @Entity(tableName = "privacy_app_result", primaryKeys = ["scanId", "packageName"])
@@ -67,4 +70,45 @@ data class PrivacyPackageSet(
     val readerVersion: Int,
     /** Packages joined with newline. */
     val packagesText: String
+)
+
+/**
+ * One code signature of one tracker that matched one app in one scan. [packages] holds the stored
+ * matching package names joined with newline (at most 200 per app + tracker); [packageCount] is the
+ * true number. Read only by the details view; never exported.
+ */
+@Entity(
+    tableName = "privacy_code_detail",
+    primaryKeys = ["scanId", "packageName", "trackerId", "kind", "signature"]
+)
+data class PrivacyCodeDetail(
+    val scanId: Long,
+    val packageName: String,
+    val trackerId: Int,
+    /** SignatureKind name. */
+    val kind: String,
+    val signature: String,
+    val packageCount: Int,
+    val packages: String
+)
+
+/**
+ * One looked-up domain of one tracker by one app in one scan, as recorded in the DNS log, with the
+ * signature that matched it and its own counts. Only domains the scan counted are stored.
+ */
+@Entity(tableName = "privacy_domain_detail", primaryKeys = ["scanId", "packageName", "trackerId", "domain"])
+data class PrivacyDomainDetail(
+    val scanId: Long,
+    val packageName: String,
+    val trackerId: Int,
+    val domain: String,
+    /** SignatureKind name. */
+    val kind: String,
+    val signature: String,
+    val lookups: Int,
+    val lookupDays: Int,
+    /** Null = unknown (not timed); never 0 for unknown. */
+    val background: Int?,
+    val firstSeen: Long,
+    val lastSeen: Long
 )

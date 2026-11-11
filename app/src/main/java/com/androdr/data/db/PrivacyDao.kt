@@ -6,6 +6,8 @@ import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Transaction
 import com.androdr.data.model.PrivacyAppResult
+import com.androdr.data.model.PrivacyCodeDetail
+import com.androdr.data.model.PrivacyDomainDetail
 import com.androdr.data.model.PrivacyPackageSet
 import com.androdr.data.model.PrivacyScan
 import com.androdr.data.model.PrivacyTrackerEvidence
@@ -52,6 +54,33 @@ interface PrivacyDao {
     @Query("SELECT * FROM privacy_tracker_evidence WHERE scanId = :scanId")
     suspend fun evidenceOnce(scanId: Long): List<PrivacyTrackerEvidence>
 
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertCodeDetail(rows: List<PrivacyCodeDetail>)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertDomainDetail(rows: List<PrivacyDomainDetail>)
+
+    @Query(
+        "SELECT * FROM privacy_code_detail WHERE scanId = :scanId AND packageName = :packageName " +
+            "AND trackerId = :trackerId ORDER BY kind, signature"
+    )
+    suspend fun codeDetail(scanId: Long, packageName: String, trackerId: Int): List<PrivacyCodeDetail>
+
+    @Query(
+        "SELECT * FROM privacy_domain_detail WHERE scanId = :scanId AND packageName = :packageName " +
+            "AND trackerId = :trackerId ORDER BY lookups DESC, domain"
+    )
+    suspend fun domainDetail(scanId: Long, packageName: String, trackerId: Int): List<PrivacyDomainDetail>
+
+    @Query("SELECT * FROM privacy_app_result WHERE scanId = :scanId AND packageName = :packageName")
+    suspend fun resultFor(scanId: Long, packageName: String): PrivacyAppResult?
+
+    @Query(
+        "SELECT * FROM privacy_tracker_evidence WHERE scanId = :scanId AND packageName = :packageName " +
+            "AND trackerId = :trackerId"
+    )
+    suspend fun evidenceFor(scanId: Long, packageName: String, trackerId: Int): PrivacyTrackerEvidence?
+
     @Query("SELECT * FROM privacy_package_set WHERE packageName = :pkg")
     suspend fun packageSet(pkg: String): PrivacyPackageSet?
 
@@ -68,6 +97,12 @@ interface PrivacyDao {
     )
     suspend fun pruneCacheTo(scanId: Long)
 
+    @Query("DELETE FROM privacy_code_detail WHERE scanId < :keepFromId")
+    suspend fun deleteCodeDetailBefore(keepFromId: Long)
+
+    @Query("DELETE FROM privacy_domain_detail WHERE scanId < :keepFromId")
+    suspend fun deleteDomainDetailBefore(keepFromId: Long)
+
     @Query("DELETE FROM privacy_tracker_evidence WHERE scanId < :keepFromId")
     suspend fun deleteEvidenceBefore(keepFromId: Long)
 
@@ -79,10 +114,18 @@ interface PrivacyDao {
 
     @Transaction
     suspend fun deleteScansBefore(keepFromId: Long) {
+        deleteCodeDetailBefore(keepFromId)
+        deleteDomainDetailBefore(keepFromId)
         deleteEvidenceBefore(keepFromId)
         deleteResultsBefore(keepFromId)
         deleteScanRowsBefore(keepFromId)
     }
+
+    @Query("DELETE FROM privacy_code_detail")
+    suspend fun deleteAllCodeDetail()
+
+    @Query("DELETE FROM privacy_domain_detail")
+    suspend fun deleteAllDomainDetail()
 
     @Query("DELETE FROM privacy_tracker_evidence")
     suspend fun deleteAllEvidence()
@@ -98,6 +141,8 @@ interface PrivacyDao {
 
     @Transaction
     suspend fun deleteAll() {
+        deleteAllCodeDetail()
+        deleteAllDomainDetail()
         deleteAllEvidence()
         deleteAllResults()
         deleteAllScans()

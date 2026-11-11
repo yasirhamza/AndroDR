@@ -1,6 +1,7 @@
 package com.androdr.privacy
 
 import com.androdr.data.db.DomainLookupCount
+import com.androdr.privacy.model.SignatureKind
 import com.androdr.privacy.model.TrackerSet
 
 /**
@@ -16,7 +17,29 @@ object NetworkEvidenceCorrelator {
     /** [background] null = unknown (no usage access, lookups before usage coverage, or not timed). */
     data class NetworkEvidence(val lookups: Int, val days: Int, val background: Int?, val first: Long, val last: Long)
 
-    data class Correlation(val evidence: Map<Key, NetworkEvidence>, val truncated: Boolean)
+    /**
+     * One counted (app, domain) for one tracker that owns the domain: [domain] as recorded in the DNS log,
+     * the [signature] that tied it to the tracker, its own counts. [background] null = unknown (the domain
+     * was not timed, or its lookups could not be placed); never 0 for unknown.
+     */
+    data class DomainEvidence(
+        val key: Key,
+        val domain: String,
+        val kind: SignatureKind,
+        val signature: String,
+        val lookups: Int,
+        val days: Int,
+        val background: Int?,
+        val first: Long,
+        val last: Long,
+    )
+
+    /** [domains] are the counted parts each [evidence] total is summed from; nothing ranks or counts from them. */
+    data class Correlation(
+        val evidence: Map<Key, NetworkEvidence>,
+        val truncated: Boolean,
+        val domains: List<DomainEvidence>,
+    )
 
     /** The runner adapts DnsEventDao to this; tests use a fake. */
     interface DnsSource {

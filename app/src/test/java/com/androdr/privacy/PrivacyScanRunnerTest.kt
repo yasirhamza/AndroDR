@@ -570,7 +570,7 @@ class PrivacyScanRunnerTest {
 
     @Test fun `a package set that makes matchPackages throw costs only that app`() {
         val spy = spyk(set)
-        every { spy.matchPackages(match { "com.bad.x" in it }) } throws OutOfMemoryError("crafted")
+        every { spy.matchPackagesDetailed(match { "com.bad.x" in it }) } throws OutOfMemoryError("crafted")
         inspector.apps = listOf(app("a"), app("b"), app("c"))
         inspector.packages["a"] = setOf("com.flurry.sdk")
         inspector.packages["b"] = setOf("com.bad.x", "com.flurry.sdk")

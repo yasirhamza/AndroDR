@@ -87,7 +87,7 @@ Current package tree under `app/src/main/java/com/androdr/`:
 ├── ioc/             IOC resolver, dispatcher, feeds, STIX2 serialization, periodic update worker
 │   └── feeds/       Feed-specific ingesters (stalkerware, MVT, MalwareBazaar, ThreatFox, UAD, Plexus, cert-hash)
 ├── network/         DnsVpnService (local DNS interception) + UnderlyingDnsTracker (the device's own non-VPN resolvers) + DNS event capture
-├── privacy/         Privacy scan (Chapter 12): runner, ranking, dex/APK readers, DNS correlator, usage reader; model/ is a leaf package of data types
+├── privacy/         Privacy scan (Chapter 12): runner, ranking, dex/APK readers, DNS correlator, usage reader, evidence-details reader; model/ is a leaf package of data types
 ├── reporting/       ReportFormatter, ReportExporter, timeline formatter/exporter, guidance text helpers
 ├── scanner/         Pure telemetry emitters (app, device, accessibility, app-ops, file artifacts, process, usage stats, receivers, device-admin-grant, install event)
 │   ├── bugreport/   Bug-report ZIP parser and per-section modules
@@ -727,22 +727,22 @@ Only code evidence makes an app cross the user's threshold. Network-only evidenc
 
 The privacy scan shares nothing with the detection scan beyond reading its inputs:
 
-- Its own tables: `privacy_*` (Room schema 22), plus an index on `DnsEvent` for the per-app queries.
+- Its own tables: `privacy_*` (Room schema 22; schema 23 adds the detail tables `privacy_code_detail` and `privacy_domain_detail` and `privacy_scan.hasDetails`, see 12.8), plus an index on `DnsEvent` for the per-app queries.
 - Its own `Mutex` and the app-wide `@ApplicationScope`. It never takes `ScanLock`, never creates a `ScanResult`, and never appears in History, exports, alerts or the Timeline.
 - It emits no telemetry and no findings; its facts live outside the telemetry store (owner ruling). A future rule on tracker categories is its own design cycle.
-- The History, Timeline, alert and lock separations above are design statements. `PrivacyBoundaryTest` enforces the source-level rules it asserts: `reporting`, `sigma`, `ui/history`, `ScanWriteRepository` and `data/store` never reference `com.androdr.privacy` or `privacy_`; `privacy` never references `ScanLock` or `ScanResult`; the APK reader and inspector never reference the registry types; `ui/` never imports the registry or the readers; `privacy/model` never imports `ioc`.
+- The History, Timeline, alert and lock separations above are design statements. `PrivacyBoundaryTest` enforces the source-level rules it asserts: `reporting`, `sigma`, `ui/history`, `ScanWriteRepository` and `data/store` never reference `com.androdr.privacy` or `privacy_`; `privacy` never references `ScanLock` or `ScanResult`; the APK reader and inspector never reference the registry types; `ui/` never imports the registry or the APK readers (`DexPackageReader`, `ApkPackageInspector`); `privacy/model` never imports `ioc`.
 
 Package layering:
 
 ```
 privacy.model   leaf package: data types only
 ioc             depends on privacy.model   (TrackerRegistry)
-privacy         depends on ioc, privacy.model   (runner, ranking, readers, correlator)
-ui/             may use privacy (runner, ranking) and privacy.model;
+privacy         depends on ioc, privacy.model   (runner, ranking, readers, correlator, evidence reader)
+ui/             may use privacy (runner, ranking, PrivacyEvidenceReader) and privacy.model;
                 never DexPackageReader, ApkPackageInspector or ioc.TrackerRegistry
 ```
 
-Test-enforced directions: `privacy/model` never imports `ioc`, and `ui/` never imports the readers or the registry. The other arrows are convention.
+Test-enforced directions: `privacy/model` never imports `ioc`, and `ui/` never imports the APK readers or the registry (`ui/` does use `PrivacyEvidenceReader`, which reads stored results, not APKs). The other arrows are convention.
 
 ### 12.4 Hostile APKs
 
@@ -784,6 +784,17 @@ The UI states what the scan cannot see:
 - Encrypted DNS, and tracking reported through Play services, are invisible to the DNS log.
 - Broad first-party domains are excluded from network signatures, so some real tracker traffic goes uncounted.
 - First-party tracking (an app tracking its own users with its own code) is not a registry match.
+
+### 12.8 Evidence details
+
+Every tracker listed for an app opens a details screen (`PrivacyEvidenceScreen`, route `privacy/evidence/{packageName}/{trackerId}`) that shows what the scan matched: each list signature, the app's code packages under it, and each looked-up domain with its own counts. Spec: `docs/superpowers/specs/2026-11-10-privacy-details-timeline-pipeline-design.md`, section 4.
+
+- **Recorded at scan time, not recomputed.** The scan writes the detail as it matches, into `privacy_code_detail` (one row per matched code signature) and `privacy_domain_detail` (one row per counted domain and owning tracker). The rows belong to their scan: a newer completed scan and "Delete privacy results" delete them with the rest of the scan's rows, and they are never exported or read by reports, rules, History or the telemetry store. `privacy_scan.hasDetails` tells a result made before schema 23 (shown as "Run a new privacy scan to record the matching packages and domains.") from one where nothing was recorded.
+- **One traversal.** `TrackerSet.matchPackagesDetailed` / `matchDomainDetailed` and the plain `matchPackages` / `matchDomain` are built on one private traversal per evidence kind, and the runner takes an app's trackers and their detail from one call, so the details cannot disagree with the finding (`TrackerSetDetailCrossCheckTest` checks this on the real list). The correlator's per-domain detail (`Correlation.domains`) is the parts each total is summed from.
+- **Totals stay authoritative.** Ranking, counts and the threshold read only `privacy_tracker_evidence`; nothing reads the detail tables except the details view.
+- **Bounded.** At most 200 package names per app and tracker (shared across its signatures) and 2,000 per app, each name cut to 254 characters with a visible "…"; the true number always kept. Domains are bounded by the correlator's existing quotas, and only counted domains are stored, as recorded in the DNS log. A domain's background count is a number only where the scan timed it; elsewhere it is unknown, never zero.
+- **Read on open.** `PrivacyEvidenceReader` (in `privacy/`) loads one app and tracker of the latest completed scan when the screen opens; the lists never load detail. Tapping a domain reads its 50 newest lookups from the DNS log as it is then (`DnsEventDao.recentLookupTimes`, by the recorded spelling), labelled as such. The UI reaches the DNS log for this view only through the reader.
+- **Untrusted text.** Package names, domains and signatures reach the screen through `displaySafe`.
 
 ---
 

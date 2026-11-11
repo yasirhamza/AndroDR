@@ -4,6 +4,7 @@ import com.androdr.data.db.DomainLookupCount
 import com.androdr.ioc.TrackerRegistry
 import com.androdr.privacy.NetworkEvidenceCorrelator.Correlation
 import com.androdr.privacy.NetworkEvidenceCorrelator.DnsSource
+import com.androdr.privacy.NetworkEvidenceCorrelator.DomainEvidence
 import com.androdr.privacy.NetworkEvidenceCorrelator.Key
 import com.androdr.privacy.NetworkEvidenceCorrelator.MAX_DOMAINS_PER_APP
 import com.androdr.privacy.NetworkEvidenceCorrelator.MAX_MATCHED_PAIRS
@@ -12,6 +13,7 @@ import com.androdr.privacy.NetworkEvidenceCorrelator.MAX_MEMO
 import com.androdr.privacy.NetworkEvidenceCorrelator.MAX_TIMED_PAIRS
 import com.androdr.privacy.NetworkEvidenceCorrelator.MAX_TIMES_PER_PAIR
 import com.androdr.privacy.NetworkEvidenceCorrelator.PAGE_SIZE
+import com.androdr.privacy.model.SignatureKind
 import com.androdr.privacy.model.Tracker
 import com.androdr.privacy.model.TrackerCategory
 import com.androdr.privacy.model.TrackerSet
@@ -229,7 +231,7 @@ class NetworkEvidenceCorrelatorTest {
         )
         val registry = spyk(small)
         val matched = ArrayList<String>()
-        every { registry.matchDomain(any()) } answers {
+        every { registry.matchDomainDetailed(any()) } answers {
             matched += firstArg<String>()
             callOriginal()
         }
@@ -276,9 +278,9 @@ class NetworkEvidenceCorrelatorTest {
             ),
         )
         correlate(source, setOf("a", "b", "c"), registry = spy)
-        verify(exactly = 1) { spy.matchDomain("x.flurry.com") }
-        verify(exactly = 1) { spy.matchDomain("www.example.org") }
-        verify(exactly = 2) { spy.matchDomain(any()) }
+        verify(exactly = 1) { spy.matchDomainDetailed("x.flurry.com") }
+        verify(exactly = 1) { spy.matchDomainDetailed("www.example.org") }
+        verify(exactly = 2) { spy.matchDomainDetailed(any()) }
     }
 
     @Test fun `timestamps are fetched only for matched pairs`() {
@@ -431,7 +433,7 @@ class NetworkEvidenceCorrelatorTest {
             ),
         )
         val out = correlate(source, setOf("a"), usage = UsageIntervals(0, emptyMap()), registry = spy)
-        verify(exactly = 1) { spy.matchDomain("x.flurry.com") }
+        verify(exactly = 1) { spy.matchDomainDetailed("x.flurry.com") }
         val raws = setOf("X.Flurry.com", "x.flurry.com.", "x.flurry.com")
         assertEquals(raws, source.counts.map { it.second }.toSet())
         assertEquals(raws, source.times.map { it.second }.toSet())
@@ -454,5 +456,95 @@ class NetworkEvidenceCorrelatorTest {
         assertEquals(3, ev.days)
         assertEquals(1 * DAY + 5, ev.first)
         assertEquals(3 * DAY + 9, ev.last)
+    }
+
+    @Test fun `each counted domain is reported with the signature that matched it`() {
+        val source = FakeSource.of(
+            listOf(
+                Triple("a", "x.flurry.com", 1 * DAY + 5), Triple("a", "x.flurry.com", 2 * DAY + 7),
+                Triple("a", "y.flurry.com", 3 * DAY + 9),
+            ),
+        )
+        val out = correlate(source, setOf("a"))
+        assertEquals(
+            listOf(
+                DomainEvidence(Key("a", FLURRY), "x.flurry.com", SignatureKind.DOMAIN_SUFFIX, "flurry.com", 2, 2, null,
+                    1 * DAY + 5, 2 * DAY + 7),
+                DomainEvidence(Key("a", FLURRY), "y.flurry.com", SignatureKind.DOMAIN_SUFFIX, "flurry.com", 1, 1, null,
+                    3 * DAY + 9, 3 * DAY + 9),
+            ),
+            out.domains.sortedBy { it.domain },
+        )
+    }
+
+    @Test fun `a domain owned by two trackers is reported under each`() {
+        val source = FakeSource.of(listOf(Triple("a", "cdn.shared.example", 5 * DAY)))
+        val out = correlate(source, setOf("a"))
+        assertEquals(setOf(SHARED_A, SHARED_B), out.domains.map { it.key.trackerId }.toSet())
+        assertTrue(out.domains.all { it.domain == "cdn.shared.example" && it.lookups == 1 })
+        assertEquals(2, out.domains.size)
+    }
+
+    @Test fun `the lookups of a key's domains add up to its total`() {
+        val rows = listOf(
+            Triple("a", "x.flurry.com", 1 * DAY), Triple("a", "y.flurry.com", 2 * DAY),
+            Triple("a", "y.flurry.com", 4 * DAY), Triple("a", "ads.doubleclick.net", 3 * DAY),
+            Triple("b", "cdn.shared.example", 5 * DAY), Triple("b", "img.shared.example", 6 * DAY),
+            Triple("b", "x.flurry.com", 7 * DAY),
+        )
+        val out = correlate(FakeSource.of(rows), setOf("a", "b"))
+        assertEquals(out.evidence.keys, out.domains.map { it.key }.toSet())
+        for ((key, total) in out.evidence) {
+            val mine = out.domains.filter { it.key == key }
+            assertEquals(key.toString(), total.lookups, mine.sumOf { it.lookups })
+            assertEquals(key.toString(), total.first, mine.minOf { it.first })
+            assertEquals(key.toString(), total.last, mine.maxOf { it.last })
+        }
+    }
+
+    @Test fun `a domain is reported as recorded`() {
+        val source = FakeSource.of(listOf(Triple("a", "T.Flurry.com.", 5 * DAY)))
+        val out = correlate(source, setOf("a"))
+        assertEquals(listOf("T.Flurry.com."), out.domains.map { it.domain })
+    }
+
+    @Test fun `per-domain background is a number only where it was timed`() {
+        val rows = listOf(150L, 250L, 300L).map { Triple("a", "x.flurry.com", it) }
+        val usage = UsageIntervals(0, mapOf("a" to listOf(100L..200L)))
+        val timed = correlate(FakeSource.of(rows), setOf("a"), usage = usage)
+        assertEquals(listOf(2), timed.domains.map { it.background })
+        val untimed = correlate(FakeSource.of(rows), setOf("a"), usage = null)
+        assertEquals(listOf<Int?>(null), untimed.domains.map { it.background })
+    }
+
+    @Test fun `a flood of junk subdomains cannot displace a real domain from the detail`() {
+        val subs = padded("s", 20_001, ".flurry.com")
+        val source = FakeSource(
+            domainsOf = { app -> if (app == "a.flood") subs else listOf("ads.doubleclick.net") },
+            countOf = { _, _ -> FakeSource.countRows(listOf(5 * DAY)) },
+            timesOf = { _, _, _ -> listOf(5 * DAY) },
+        )
+        val out = correlate(source, setOf("a.flood", "b.real"))
+        val real = out.domains.filter { it.key.packageName == "b.real" }.map { it.domain }
+        assertEquals(listOf("ads.doubleclick.net"), real)
+        assertEquals(MAX_MATCHED_PER_APP, out.domains.count { it.key.packageName == "a.flood" })
+    }
+
+    @Test fun `a shared domain shows background only under the tracker whose total was timed`() {
+        // B also owns big.example, looked up more than MAX_TIMES_PER_PAIR times, so B is never timed; A is.
+        val registry = TrackerSet(
+            listOf(tracker(SHARED_A, "shared.example"), tracker(SHARED_B, "shared.example", "big.example")),
+            "sha",
+        )
+        val rows = listOf(Triple("a", "cdn.shared.example", 300L)) +
+            List(MAX_TIMES_PER_PAIR + 1) { Triple("a", "x.big.example", 400L + it) }
+        val out = correlate(FakeSource.of(rows), setOf("a"), usage = UsageIntervals(0, emptyMap()), registry = registry)
+        assertNotNull(out.evidence.getValue(Key("a", SHARED_A)).background)
+        assertNull(out.evidence.getValue(Key("a", SHARED_B)).background)
+        val underA = out.domains.single { it.key.trackerId == SHARED_A }
+        assertEquals(1, underA.background)
+        val underB = out.domains.filter { it.key.trackerId == SHARED_B }
+        assertEquals(2, underB.size)
+        assertTrue("B's total is unknown, so none of its domains is known", underB.all { it.background == null })
     }
 }
