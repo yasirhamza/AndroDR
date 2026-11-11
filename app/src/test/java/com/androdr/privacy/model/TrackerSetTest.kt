@@ -81,4 +81,81 @@ class TrackerSetTest {
         assertTrue(host.length > TrackerSet.MAX_HOST_CHARS)
         assertEquals(emptySet<Tracker>(), s.matchDomain(host))
     }
+
+    @Test
+    fun `detailed code matching names the prefix and the packages under it`() {
+        val t = tracker(1, prefixes = listOf("com.a"))
+        assertEquals(
+            listOf(CodeMatch(t, SignatureKind.CODE_PREFIX, "com.a", listOf("com.a.x", "com.a.y"))),
+            reg(t).matchPackagesDetailed(listOf("com.a.y", "com.a.x", "com.ab")),
+        )
+    }
+
+    @Test
+    fun `detailed code matching names a package-name segment`() {
+        val t = tracker(1, segments = listOf("sizmek"))
+        assertEquals(
+            listOf(CodeMatch(t, SignatureKind.CODE_SEGMENT, "sizmek", listOf("net.sizmek.sdk"))),
+            reg(t).matchPackagesDetailed(listOf("net.sizmek.sdk", "net.sizmekx")),
+        )
+    }
+
+    @Test
+    fun `a package under two signatures of one tracker is listed under each`() {
+        val t = tracker(1, prefixes = listOf("com.a", "com.a.b"))
+        assertEquals(
+            listOf(
+                CodeMatch(t, SignatureKind.CODE_PREFIX, "com.a", listOf("com.a.b.c")),
+                CodeMatch(t, SignatureKind.CODE_PREFIX, "com.a.b", listOf("com.a.b.c")),
+            ),
+            reg(t).matchPackagesDetailed(listOf("com.a.b.c")),
+        )
+    }
+
+    @Test
+    fun `detailed code matching is sorted by tracker then kind then signature`() {
+        val t2 = tracker(2, prefixes = listOf("com.z"), segments = listOf("a"))
+        val t1 = tracker(1, prefixes = listOf("com.y"))
+        val got = reg(t2, t1).matchPackagesDetailed(listOf("com.z.a", "com.y.q"))
+        assertEquals(
+            listOf(1 to "com.y", 2 to "com.z", 2 to "a"),
+            got.map { it.tracker.id to it.signature },
+        )
+    }
+
+    @Test
+    fun `detailed domain matching names the suffix, the label and the pattern`() {
+        val suffix = tracker(1, suffixes = listOf("doubleclick.net"))
+        val label = tracker(2, labels = listOf("alimama"))
+        val pattern = tracker(3, patterns = listOf("mst[0-9]*\\.is\\.autonavi\\.com"))
+        val s = reg(suffix, label, pattern)
+        assertEquals(
+            listOf(DomainMatch(suffix, SignatureKind.DOMAIN_SUFFIX, "doubleclick.net")),
+            s.matchDomainDetailed("x.doubleclick.net"),
+        )
+        assertEquals(
+            listOf(DomainMatch(label, SignatureKind.DOMAIN_LABEL, "alimama")),
+            s.matchDomainDetailed("alimama.example"),
+        )
+        assertEquals(
+            listOf(DomainMatch(pattern, SignatureKind.DOMAIN_PATTERN, pattern.domainPatterns.single().pattern)),
+            s.matchDomainDetailed("mst01.is.autonavi.com"),
+        )
+    }
+
+    @Test
+    fun `a host gives one detailed match per tracker, the longest tail first`() {
+        val t = tracker(1, suffixes = listOf("b.a.com", "a.com"))
+        assertEquals(
+            listOf(DomainMatch(t, SignatureKind.DOMAIN_SUFFIX, "b.a.com")),
+            reg(t).matchDomainDetailed("x.b.a.com"),
+        )
+    }
+
+    @Test
+    fun `a host longer than 253 characters gives no detailed match`() {
+        val t = tracker(1, suffixes = listOf("doubleclick.net"))
+        assertEquals(emptyList<DomainMatch>(), reg(t).matchDomainDetailed("a".repeat(250) + ".doubleclick.net"))
+        assertEquals(emptyList<DomainMatch>(), reg(t).matchDomainDetailed(""))
+    }
 }
