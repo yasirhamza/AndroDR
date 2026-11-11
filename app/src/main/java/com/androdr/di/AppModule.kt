@@ -32,6 +32,7 @@ import com.androdr.data.db.MIGRATION_18_19
 import com.androdr.data.db.MIGRATION_19_20
 import com.androdr.data.db.MIGRATION_20_21
 import com.androdr.data.db.MIGRATION_21_22
+import com.androdr.data.db.MIGRATION_22_23
 import com.androdr.data.db.JournalSizeLimitCallback
 import com.androdr.data.db.FeedHealthDao
 import com.androdr.data.db.ScanResultDao
@@ -73,7 +74,8 @@ object AppModule {
                 MIGRATION_15_16, MIGRATION_16_17, MIGRATION_17_18, MIGRATION_18_19,
                 MIGRATION_19_20,
                 MIGRATION_20_21,
-                MIGRATION_21_22
+                MIGRATION_21_22,
+                MIGRATION_22_23
             )
             .addCallback(JournalSizeLimitCallback)
             .fallbackToDestructiveMigrationOnDowngrade()
