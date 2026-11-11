@@ -433,7 +433,7 @@ After the edit, this run's tracker change counts as skipped (8.5), in either
 mode: the candidate was built without the edit, so this run commits the check
 time and leaves the edit in the working tree; in `full` mode, finish the run first.
 Then run `/update-rules source trackers` again, which rebuilds the candidate.
-The edit is committed in 8.5 of that run, never in Step 8.
+The edit is committed, on the person's yes, in 8.5 of that run, never in Step 8.
 
 ## Step 8: Process User Decisions
 
@@ -544,9 +544,11 @@ a person's edit for this refresh to `validation/first_party_hosts.txt` or
 `validation/common_packages.txt`, and a test they changed with it (7.2). If it
 lists anything else, stop and report it:
 the tracker commit must not carry another step's work.
+A new file (a line starting `??`) is something else, whatever its name: the
+command below does not show one.
 
 When the command lists such an edit and this run could commit it (on Approve, or
-on "no change"), show the person the output of `git diff -- validation/` and ask
+on "no change"), show the person the output of `git diff HEAD -- validation/` and ask
 whether to commit it. Only the person's own yes, written after that output was
 shown, counts. Without it, this run commits neither the edit nor the tracker
 list, which was built with the edit: say so, and go to the part headed On Skip.
@@ -615,6 +617,8 @@ the edit is why the candidate now equals the live list, and it must not be lost.
 Run `python3 -m pytest validation/ -q` first, with the same time limit.
 If a test fails, report it, change nothing and commit nothing; the person
 updates the test with the edit, and this step starts again from its first check.
+If the person changes either list instead, run `/update-rules source trackers`
+again: the "no change" result came from the lists as they were.
 When the tests pass, set the check time and validate it
 exactly as in the part headed On Skip, then commit `feed-state.json` with the
 edit (and its test), and nothing else:
@@ -622,6 +626,9 @@ edit (and its test), and nothing else:
 ```
 chore(trackers): list edit, tracker list unchanged
 ```
+
+If the validator fails here, restore `feed-state.json` as the next part says,
+report it and commit nothing; the edit stays in the working tree.
 
 **On Skip, on no answer, or on "no change" with no confirmed edit:**
 set only `feeds.exodus_trackers.last_seen_timestamp` (the check happened), to

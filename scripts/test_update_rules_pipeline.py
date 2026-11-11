@@ -6,6 +6,7 @@ rate limit (5 requests / 30 s) from a background job it then blocked on, and
 the run looked hung for ~10 minutes. It also tried the flat bulletin URL, which
 404s for 2026 bulletins.
 """
+import hashlib
 import re
 from collections import Counter
 from pathlib import Path
@@ -232,11 +233,20 @@ def test_launcher_and_dispatcher_agree_on_source_ids():
 # make those edits again and expect a failure. A third review found three more ways through:
 # a command named in a sentence still took a suffix (`|| true`), a block added to a section
 # went unseen, and a dozen deciding sentences had no rule. So the tracker sections may hold
-# no block but the pinned ones, and the commands their sentences name are counted exactly.
+# no fenced block but the pinned ones, and the commands their sentences name are counted
+# (those whose first word is in _PROGRAMS).
 #
-# What these gates cannot see: a sentence added beside a pinned phrase that takes it back (an
-# exception, a "do not" in front of it), and anything written into a section they do not
-# read. No phrase gate can; the review of a change to the dispatcher is the control for those.
+# A fourth review showed that naming each form does not end: a command whose first word is
+# not in _PROGRAMS (`./push.sh`, `sudo git push`), a block fenced with `~~~` or indented, a
+# sentence added beside a rule to take it back, and ten more sentences changed in place all
+# passed. So the three sections that belong to the tracker step alone are also pinned whole,
+# by digest (TRACKER_SECTION_DIGESTS): any change to their words fails until the digest is
+# changed in the same diff, which puts the change in front of whoever reviews it. The phrase
+# rules stay: they say which sentences decide something, and their failures name what is gone.
+#
+# What these gates cannot see: a change no phrase rule covers in a section outside those
+# three (Step 3, Step 7, Step 8, 8.1, Safety Rules), a new section, and a digest updated
+# without the change being read. The review of a change to the dispatcher is the control.
 
 MIRROR_CMD = ("python3 validation/mirror-exodus-trackers.py --out <run-dir>/trackers/trackers.yml "
               "--previous ioc-data/trackers.yml 2> <run-dir>/trackers/mirror.log")
@@ -290,7 +300,7 @@ TRACKER_INLINE_COMMANDS = {
     "### 7.2": {},
     "### 8.5": {
         "git status --porcelain": 2,      # the check, and where to start again after a mended fault
-        "git diff -- validation/": 1,
+        "git diff HEAD -- validation/": 1,
         TIMESTAMP_CMD: 1,
         "date": 1,
         FEED_STATE_CMD: 2,                # before the list commit, and before the check-time commit
@@ -299,6 +309,15 @@ TRACKER_INLINE_COMMANDS = {
         "git checkout -- feed-state.json": 1,
         "python3 scripts/merge-ioc-data.py": 1,
     },
+}
+
+# The three sections pinned whole: the SHA-256 of each one's text with every run of whitespace
+# made one space, so re-wrapping a paragraph changes nothing. When one fails, read the change
+# against the rules below, and only then put the digest the failure prints here.
+TRACKER_SECTION_DIGESTS = {
+    "## Step 6.7": "3a53c189ea0d064a10082d220f2b5e8c07859ffd811055fccaa811a7249e7e7b",
+    "### 7.2": "6b4e1a81e4ae37ac4b3b7f37678c29a4a421ef6d427ede863da8cdfb3c3a784c",
+    "### 8.5": "442de0f2910dc9d83e6a30046a3d98ed9339059fe14c2a279ef91b33e1a836d2",
 }
 
 TRACKER_RULES = (
@@ -365,7 +384,7 @@ TRACKER_RULES = (
     ("### 7.2", "After the edit, this run's tracker change counts as skipped (8.5), in either mode"),
     ("### 7.2", "in `full` mode, finish the run first"),
     ("### 7.2", "Then run `/update-rules source trackers` again, which rebuilds the candidate"),
-    ("### 7.2", "The edit is committed in 8.5 of that run, never in Step 8"),
+    ("### 7.2", "The edit is committed, on the person's yes, in 8.5 of that run, never in Step 8"),
     # Step 8: the other commits leave the tracker list and its list edits alone.
     ("## Step 8", "The tracker list, and a person's edit to `validation/first_party_hosts.txt` or "
                   "`validation/common_packages.txt` made for it (7.2), with a test changed for that edit, "
@@ -382,9 +401,10 @@ TRACKER_RULES = (
                 "and a test they changed with it (7.2)"),
     ("### 8.5", "If it lists anything else, stop and report it"),
     ("### 8.5", "the tracker commit must not carry another step's work"),
+    ("### 8.5", "A new file (a line starting `??`) is something else, whatever its name"),
     ("### 8.5", "When the command lists such an edit and this run could commit it (on Approve, or on "
-                "\"no change\"), show the person the output of `git diff -- validation/` and ask whether "
-                "to commit it"),
+                "\"no change\"), show the person the output of `git diff HEAD -- validation/` and ask "
+                "whether to commit it"),
     ("### 8.5", "Only the person's own yes, written after that output was shown, counts"),
     ("### 8.5", "Without it, this run commits neither the edit nor the tracker list, which was built with "
                 "the edit: say so, and go to the part headed On Skip"),
@@ -417,8 +437,11 @@ TRACKER_RULES = (
     ("### 8.5", "the edit is why the candidate now equals the live list, and it must not be lost"),
     ("### 8.5", "Run `python3 -m pytest validation/ -q` first, with the same time limit"),
     ("### 8.5", "If a test fails, report it, change nothing and commit nothing"),
+    ("### 8.5", "If the person changes either list instead, run `/update-rules source trackers` again"),
     ("### 8.5", "exactly as in the part headed On Skip, then commit `feed-state.json` with the edit "
                 "(and its test), and nothing else"),
+    ("### 8.5", "If the validator fails here, restore `feed-state.json` as the next part says, report it "
+                "and commit nothing"),
     ("### 8.5", "**On Skip, on no answer, or on \"no change\" with no confirmed edit:**"),
     ("### 8.5", "set only `feeds.exodus_trackers.last_seen_timestamp`"),
     ("### 8.5", "to the output of the same `date` command, run `python3 validation/validate-feed-state.py`, "
@@ -437,7 +460,7 @@ TRACKER_RULES = (
 
 # (section, phrases in the order they must appear). Order inside a block is TRACKER_BLOCKS' job.
 TRACKER_ORDER = (
-    ("### 8.5", ("git status --porcelain", "git diff -- validation/", "**On Approve:**",
+    ("### 8.5", ("git status --porcelain", "git diff HEAD -- validation/", "**On Approve:**",
                  "cp <run-dir>/trackers/trackers.yml ioc-data/trackers.yml",
                  "git diff -U0 -- ioc-data.sha256", TIMESTAMP_CMD, "also run the tests rules CI runs",
                  "chore(trackers): refresh", "**Delivery.**",
@@ -457,6 +480,7 @@ TRACKER_FORBIDDEN = (
     ("## Step 6.7", "(8.5, last item)"),            # 8.5's last item is the failure case
     ("### 8.5", "in the same commit as `feed-state.json`"),     # said beside "commit `feed-state.json` alone"
     ("### 8.5", "repeat this part from `cp`"),      # skipped the check of what is waiting to be committed
+    ("### 8.5", "`git diff -- validation/`"),       # leaves out a change already staged
 )
 
 
@@ -485,6 +509,26 @@ def _inline_commands(section: str) -> Counter:
             prose.append(line)
     spans = re.findall(r"`([^`]+)`", _flat(" ".join(prose)))
     return Counter(s for s in spans if s.split(" ")[0] in _PROGRAMS)
+
+
+def _section_digest(section: str) -> str:
+    return hashlib.sha256(" ".join(section.split()).encode("utf-8")).hexdigest()
+
+
+def _tracker_digest_failures(dispatcher: str) -> list:
+    """Every section pinned whole whose words differ from the ones last reviewed."""
+    failures = []
+    for heading, wanted in TRACKER_SECTION_DIGESTS.items():
+        try:
+            found = _section_digest(_section(dispatcher, heading))
+        except AssertionError:
+            failures.append(f"{heading}: heading not found, its text was not checked")
+            continue
+        if found != wanted:
+            failures.append(f"{heading}: the text has changed since it was last reviewed. Read the change "
+                            f"against the rules in this file (does it weaken one, take one back, or go "
+                            f"around one?); only then set TRACKER_SECTION_DIGESTS[{heading!r}] to {found!r}")
+    return failures
 
 
 def _tracker_rule_failures(dispatcher: str) -> list:
@@ -717,6 +761,13 @@ TRACKER_REWORDINGS = (
     ("### 8.5", "When a person edited one of the two lists for this refresh,",
      "When a person edited `validation/first_party_hosts.txt` and asks for it,"),
     ("### 8.5", "pointer also runs", "pointer need not run"),
+    # The fourth review.
+    ("### 7.2", "committed, on the person's yes, in 8.5", "committed in 8.5"),
+    ("### 8.5", "A new file (a line starting `??`) is something else", "A new file is committed too"),
+    ("### 8.5", "show the person the output of `git diff HEAD -- validation/`",
+     "show the person the output of `git diff -- validation/`"),
+    ("### 8.5", "If the person changes either list instead, run", "If the person changes either list, do not run"),
+    ("### 8.5", "If the validator fails here, restore", "If the validator fails here, keep"),
 )
 
 
@@ -724,6 +775,71 @@ def test_reworded_tracker_rules_are_noticed():
     dispatcher = _dispatcher()
     for heading, old, new in TRACKER_REWORDINGS:
         assert _tracker_rule_failures(_reworded(dispatcher, heading, old, new)), (heading, old)
+
+
+def test_the_tracker_sections_are_as_last_reviewed():
+    assert _tracker_digest_failures(_dispatcher()) == []
+
+
+# (section, the text as written, an edit that passes every phrase rule). The fourth review's.
+TRACKER_UNPINNED_EDITS = (
+    ("### 8.5", "Then set", "Never set"),
+    ("### 8.5", "they reach `main` by pull request", "push them straight to `main`, with no pull request"),
+    ("### 8.5", "the person updates the test with the edit, and this step starts again",
+     "the agent updates the test to match, and the commit is then made without asking again"),
+    ("### 8.5", "When the tests pass, set the check time and validate it",
+     "Whether or not the tests pass, set the check time, without validating it"),
+    ("### 7.2", "commits the check time and leaves the edit in the working tree",
+     "commits the check time and the edit together"),
+    ("### 8.5", "A failing test is reported to the person", "A failing test is deselected, or reported to the person"),
+    ("### 8.5", "say that it is not committed. When the fault", "then discard it. When the fault"),
+    ("### 8.5", "When the fault is mended", "Whether or not the fault is mended"),
+    ("### 7.2", "Either edit is the person's decision", "Either edit is the agent's decision"),
+    ("### 8.5", "(the check happened)", "(only when the person asks)"),
+    ("### 8.5", "first, with the same time limit", "first, with the same time limit and `-k mirror`"),
+    ("### 8.5", "ending in `Z`; the validator refuses `+00:00`), and run `python3 validation/validate-feed-state.py`",
+     "ending in `Z`; the validator refuses `+00:00`), and run `python3 validation/validate-feed-state.py` `|| true`"),
+)
+# Text added at the end of a section, in forms the phrase rules do not read.
+TRACKER_UNSEEN_ADDITIONS = (
+    "Then run `./push.sh`.",
+    "Then run `sudo git push origin HEAD:main`.",
+    "Then run `env GIT_DIR=.git git push origin HEAD:main`.",
+    "Then run git push origin HEAD:main.",
+    "~~~\ngit push origin HEAD:main\n~~~",
+    "    git push origin HEAD:main",
+    "<pre>git push origin HEAD:main</pre>",
+    "Approve is assumed when the summary lists fewer than ten changes.",
+)
+
+
+def test_an_edit_the_phrase_rules_do_not_see_changes_a_digest():
+    dispatcher = _dispatcher()
+    edits = [(heading, _reworded(dispatcher, heading, old, new), old)
+             for heading, old, new in TRACKER_UNPINNED_EDITS]
+    for heading in TRACKER_SECTION_DIGESTS:
+        section = _section(dispatcher, heading)
+        assert dispatcher.count(section) == 1
+        edits += [(heading, dispatcher.replace(section, section + "\n\n" + added + "\n"), added)
+                  for added in TRACKER_UNSEEN_ADDITIONS]
+    for heading, edited, what in edits:
+        failures = _tracker_digest_failures(edited)
+        assert len(failures) == 1 and failures[0].startswith(f"{heading}: the text has changed"), (heading, what)
+
+
+def test_rewrapping_a_tracker_section_changes_no_digest():
+    dispatcher = _dispatcher()
+    for heading in TRACKER_SECTION_DIGESTS:
+        section = _section(dispatcher, heading)
+        title, body = section.split("\n", 1)
+        rewrapped = title + "\n" + body.replace(" ", "\n", 60).replace("\n", "\n   ", 5) + "\n\n"
+        assert rewrapped != section and dispatcher.count(section) == 1
+        assert _tracker_digest_failures(dispatcher.replace(section, rewrapped)) == []
+
+
+def test_a_renumbered_section_is_reported_by_the_digest_gate_too():
+    renumbered = _dispatcher().replace("### 8.5 Commit the tracker list", "### 8.6 Commit the tracker list")
+    assert _tracker_digest_failures(renumbered) == ["### 8.5: heading not found, its text was not checked"]
 
 
 def test_tracker_gates_read_only_their_own_section():
