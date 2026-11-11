@@ -182,7 +182,7 @@ def _section(text: str, heading: str) -> str:
     for line in text.splitlines():
         if line.lstrip().startswith("```"):
             fenced = not fenced
-        elif not fenced and line.startswith("#"):
+        elif not fenced and re.match(r"#{1,6}(\s|$)", line):
             hashes = len(line) - len(line.lstrip("#"))
             if inside and hashes <= level:
                 break
@@ -203,6 +203,8 @@ def test_section_stops_at_the_next_heading_of_the_same_or_higher_level():
     assert _section(doc, "## A") == "## A\na\n### A.1\na1\n```bash\n# not a heading\n```"
     assert _section(doc, "### B.1") == "### B.1\nb1"
     assert _section(doc, "### B.2") == "### B.2\nb2"
+    # Markdown reads `#` as a heading only when a space or the end of the line follows.
+    assert _section("## A\na\n#note\n#!/bin/sh\n## B\n", "## A") == "## A\na\n#note\n#!/bin/sh"
 
 
 def test_launcher_and_dispatcher_agree_on_source_ids():
@@ -244,9 +246,14 @@ def test_launcher_and_dispatcher_agree_on_source_ids():
 # changed in the same diff, which puts the change in front of whoever reviews it. The phrase
 # rules stay: they say which sentences decide something, and their failures name what is gone.
 #
-# What these gates cannot see: a change no phrase rule covers in a section outside those
-# three (Step 3, Step 7, Step 8, 8.1, Safety Rules), a new section, and a digest updated
-# without the change being read. The review of a change to the dispatcher is the control.
+# A fifth review added the heading that must follow each of the three (TRACKER_SECTION_ENDS),
+# so text under a new heading put straight after one is seen too.
+#
+# What these gates cannot see: a change no phrase rule covers in any other section (the rules
+# read Parse Invocation, Step 3, Step 7, Step 8, 8.1 and Safety Rules only in part, and the
+# remaining sections not at all), a section added anywhere but straight after one of the
+# three, a change that only moves line breaks, and a digest updated without the change being
+# read. The review of a change to the dispatcher is the control.
 
 MIRROR_CMD = ("python3 validation/mirror-exodus-trackers.py --out <run-dir>/trackers/trackers.yml "
               "--previous ioc-data/trackers.yml 2> <run-dir>/trackers/mirror.log")
@@ -301,6 +308,7 @@ TRACKER_INLINE_COMMANDS = {
     "### 8.5": {
         "git status --porcelain": 2,      # the check, and where to start again after a mended fault
         "git diff HEAD -- validation/": 1,
+        'git commit -m "<title>" -- <files>': 1,
         TIMESTAMP_CMD: 1,
         "date": 1,
         FEED_STATE_CMD: 2,                # before the list commit, and before the check-time commit
@@ -317,7 +325,14 @@ TRACKER_INLINE_COMMANDS = {
 TRACKER_SECTION_DIGESTS = {
     "## Step 6.7": "3a53c189ea0d064a10082d220f2b5e8c07859ffd811055fccaa811a7249e7e7b",
     "### 7.2": "6b4e1a81e4ae37ac4b3b7f37678c29a4a421ef6d427ede863da8cdfb3c3a784c",
-    "### 8.5": "442de0f2910dc9d83e6a30046a3d98ed9339059fe14c2a279ef91b33e1a836d2",
+    "### 8.5": "516003630a32f774fb1020e8fa15b33b6b6510500877cb1ead8b4fb4f92d6524",
+}
+# The heading that comes straight after each pinned section. Text put under a new heading
+# after one of them (`# Note`, a new `### 8.6`) is outside the digest; this is what sees it.
+TRACKER_SECTION_ENDS = {
+    "## Step 6.7": "## Step 7: Present Results",
+    "### 7.2": "## Step 8: Process User Decisions",
+    "### 8.5": "## Safety Rules",
 }
 
 TRACKER_RULES = (
@@ -396,12 +411,16 @@ TRACKER_RULES = (
     ("### 8.5", "This step runs last, after every other commit of the run"),
     ("### 8.5", "Work from `third-party/android-sigma-rules`"),
     ("### 8.5", "one command at a time; a command that ends with any exit code other than 0 has failed"),
+    ("### 8.5", "Every commit of this step names its files in the command"),
+    ("### 8.5", "so that nothing else that is staged goes with it"),
     ("### 8.5", "Before anything else, `git status --porcelain` must list nothing but a person's edit for "
                 "this refresh to `validation/first_party_hosts.txt` or `validation/common_packages.txt`, "
                 "and a test they changed with it (7.2)"),
     ("### 8.5", "If it lists anything else, stop and report it"),
     ("### 8.5", "the tracker commit must not carry another step's work"),
     ("### 8.5", "A new file (a line starting `??`) is something else, whatever its name"),
+    ("### 8.5", "it would not be in what the person is shown"),
+    ("### 8.5", "When it belongs to the person's edit, the person stages it and this step starts again"),
     ("### 8.5", "When the command lists such an edit and this run could commit it (on Approve, or on "
                 "\"no change\"), show the person the output of `git diff HEAD -- validation/` and ask "
                 "whether to commit it"),
@@ -520,10 +539,15 @@ def _tracker_digest_failures(dispatcher: str) -> list:
     failures = []
     for heading, wanted in TRACKER_SECTION_DIGESTS.items():
         try:
-            found = _section_digest(_section(dispatcher, heading))
+            section = _section(dispatcher, heading)
         except AssertionError:
             failures.append(f"{heading}: heading not found, its text was not checked")
             continue
+        found = _section_digest(section)
+        after = dispatcher.partition(section)[2].strip("\n").split("\n", 1)[0]
+        if after != TRACKER_SECTION_ENDS[heading]:
+            failures.append(f"{heading}: is followed by {after!r}, not {TRACKER_SECTION_ENDS[heading]!r}: "
+                            f"what was added after it is read by no gate")
         if found != wanted:
             failures.append(f"{heading}: the text has changed since it was last reviewed. Read the change "
                             f"against the rules in this file (does it weaken one, take one back, or go "
@@ -768,6 +792,9 @@ TRACKER_REWORDINGS = (
      "show the person the output of `git diff -- validation/`"),
     ("### 8.5", "If the person changes either list instead, run", "If the person changes either list, do not run"),
     ("### 8.5", "If the validator fails here, restore", "If the validator fails here, keep"),
+    # The fifth review.
+    ("### 8.5", "Every commit of this step names its files", "No commit of this step names its files"),
+    ("### 8.5", "the person stages it and this step starts again", "stage it and go on"),
 )
 
 
@@ -778,6 +805,8 @@ def test_reworded_tracker_rules_are_noticed():
 
 
 def test_the_tracker_sections_are_as_last_reviewed():
+    # The same three sections in each table: dropping one from the digests would un-pin it.
+    assert set(TRACKER_SECTION_DIGESTS) == set(TRACKER_SECTION_ENDS) == set(TRACKER_ONLY_BLOCKS)
     assert _tracker_digest_failures(_dispatcher()) == []
 
 
@@ -810,6 +839,9 @@ TRACKER_UNSEEN_ADDITIONS = (
     "    git push origin HEAD:main",
     "<pre>git push origin HEAD:main</pre>",
     "Approve is assumed when the summary lists fewer than ten changes.",
+    # A line starting with `#` that Markdown does not read as a heading: it shows as a paragraph.
+    "#note: Approve is assumed when the summary lists fewer than ten changes.",
+    "#!/bin/sh -c 'git push origin HEAD:main'",
 )
 
 
@@ -825,6 +857,18 @@ def test_an_edit_the_phrase_rules_do_not_see_changes_a_digest():
     for heading, edited, what in edits:
         failures = _tracker_digest_failures(edited)
         assert len(failures) == 1 and failures[0].startswith(f"{heading}: the text has changed"), (heading, what)
+
+
+def test_text_under_a_heading_added_after_a_tracker_section_is_noticed():
+    dispatcher = _dispatcher()
+    for heading in TRACKER_SECTION_DIGESTS:
+        section = _section(dispatcher, heading)
+        level = heading.split(" ")[0]
+        for added in ("# Note\n\nApprove is assumed when the summary lists fewer than ten changes.",
+                      level + " 9.9 Publish\n\nThen run `git push origin HEAD:main`."):
+            edited = dispatcher.replace(section, section.rstrip("\n") + "\n\n" + added + "\n\n")
+            failures = _tracker_digest_failures(edited)
+            assert len(failures) == 1 and failures[0].startswith(f"{heading}: is followed by"), (heading, added)
 
 
 def test_rewrapping_a_tracker_section_changes_no_digest():

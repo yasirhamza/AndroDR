@@ -537,6 +537,9 @@ and move on.
 This step runs last, after every other commit of the run (8.1 to 8.4) has been
 made. Work from `third-party/android-sigma-rules`, one command at a time; a
 command that ends with any exit code other than 0 has failed.
+Every commit of this step names its files in the command
+(`git commit -m "<title>" -- <files>`), so that nothing else that is staged
+goes with it.
 
 Before anything else,
 `git status --porcelain` must list nothing but
@@ -544,8 +547,9 @@ a person's edit for this refresh to `validation/first_party_hosts.txt` or
 `validation/common_packages.txt`, and a test they changed with it (7.2). If it
 lists anything else, stop and report it:
 the tracker commit must not carry another step's work.
-A new file (a line starting `??`) is something else, whatever its name: the
-command below does not show one.
+A new file (a line starting `??`) is something else, whatever its name: it would
+not be in what the person is shown. When it belongs to the person's edit, the
+person stages it and this step starts again.
 
 When the command lists such an edit and this run could commit it (on Approve, or
 on "no change"), show the person the output of `git diff HEAD -- validation/` and ask
