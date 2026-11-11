@@ -31,6 +31,8 @@ on:
     paths:
       - 'app/src/main/res/raw/known_oem_prefixes.yml'
       - '.github/workflows/mirror-drift.yml'
+      - 'app/src/main/java/com/androdr/ioc/IocDataManifest.kt'
+      - 'app/src/main/java/com/androdr/ioc/OemPrefixResolver.kt'
 
 permissions:
   contents: read
@@ -43,17 +45,25 @@ jobs:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
 
       # Read the URL out of the Kotlin source rather than hardcoding it, so the
-      # guard cannot drift from the endpoint the app actually calls.
+      # guard cannot drift from the endpoint the app actually calls. The app
+      # fetches IocDataManifest's RULES_REPO_BASE_URL + OemPrefixResolver's
+      # PREFIXES_PATH (through the verified ioc-data manifest).
+      # scripts/test_mirror_drift_workflow.py runs this step on pull requests.
       - name: Resolve the feed URL from OemPrefixResolver
         id: url
         run: |
           set -euo pipefail
+          BASE_SRC=app/src/main/java/com/androdr/ioc/IocDataManifest.kt
           SRC=app/src/main/java/com/androdr/ioc/OemPrefixResolver.kt
-          URL=$(grep -oE 'https://raw\.githubusercontent\.com/[^"]+known-oem-prefixes\.yml' "$SRC" | head -1)
-          if [ -z "$URL" ]; then
-            echo "::error file=$SRC::could not resolve PREFIXES_URL — the constant moved or was renamed, and this guard is no longer watching anything"
+          # `|| true`: under pipefail a grep that finds nothing would end the
+          # step here, before the error below could say why.
+          BASE=$(grep -oE 'const val RULES_REPO_BASE_URL = "https://raw\.githubusercontent\.com/[^"]+/"' "$BASE_SRC" | cut -d'"' -f2 || true)
+          FILE=$(grep -oE 'const val PREFIXES_PATH = "[^"]+known-oem-prefixes\.yml"' "$SRC" | cut -d'"' -f2 || true)
+          if [ -z "$BASE" ] || [ -z "$FILE" ]; then
+            echo "::error file=$SRC::could not resolve RULES_REPO_BASE_URL ($BASE_SRC) + PREFIXES_PATH ($SRC) — a constant moved or was renamed, and this guard is no longer watching anything"
             exit 1
           fi
+          URL="$BASE$FILE"
           echo "url=$URL" >> "$GITHUB_OUTPUT"
           echo "Resolved feed URL: $URL"
 
