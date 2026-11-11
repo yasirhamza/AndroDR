@@ -68,7 +68,7 @@ internal fun AppRow(row: AppPrivacyRow, registrySize: Int, res: Resources, onCli
 }
 
 @Composable
-internal fun TrackerCard(group: TrackerGroup, res: Resources) {
+internal fun TrackerCard(group: TrackerGroup, res: Resources, onOpenEvidence: (String, Int) -> Unit) {
     Card(
         modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
@@ -86,6 +86,9 @@ internal fun TrackerCard(group: TrackerGroup, res: Resources) {
                     "${PrivacyEvidenceText.appName(app)}: ${PrivacyEvidenceText.line(tracker, res)}",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.fillMaxWidth()
+                        .clickable { onOpenEvidence(app.packageName, tracker.trackerId) }
+                        .padding(vertical = 6.dp),
                 )
             }
         }
@@ -94,7 +97,7 @@ internal fun TrackerCard(group: TrackerGroup, res: Resources) {
 
 /** The parsed, lower-cased host only; tappable only for an https address (see [PrivacyEvidenceText.websiteLink]). */
 @Composable
-private fun Website(raw: String) {
+internal fun Website(raw: String) {
     val host = PrivacyEvidenceText.websiteHost(raw) ?: return
     val link = PrivacyEvidenceText.websiteLink(raw)
     val uri = LocalUriHandler.current
@@ -107,7 +110,12 @@ private fun Website(raw: String) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-internal fun AppDetailSheet(row: AppPrivacyRow, registrySize: Int, onDismiss: () -> Unit) {
+internal fun AppDetailSheet(
+    row: AppPrivacyRow,
+    registrySize: Int,
+    onDismiss: () -> Unit,
+    onOpenEvidence: (String, Int) -> Unit,
+) {
     val res = LocalContext.current.resources
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState()) {
         Column(
@@ -120,14 +128,18 @@ internal fun AppDetailSheet(row: AppPrivacyRow, registrySize: Int, onDismiss: ()
                 fontWeight = FontWeight.Bold,
             )
             Text(PrivacyEvidenceText.appStatus(row, registrySize, res), style = MaterialTheme.typography.bodyMedium)
-            for (t in row.trackers) TrackerDetail(t, res)
+            for (t in row.trackers) TrackerDetail(t, res) { onOpenEvidence(row.packageName, t.trackerId) }
         }
     }
 }
 
+/** One tracker in an app's sheet; tapping it opens what the scan matched ([onOpen]). */
 @Composable
-private fun TrackerDetail(t: TrackerRow, res: Resources) {
-    Column(verticalArrangement = Arrangement.spacedBy(2.dp), modifier = Modifier.padding(vertical = 4.dp)) {
+internal fun TrackerDetail(t: TrackerRow, res: Resources, onOpen: () -> Unit) {
+    Column(
+        verticalArrangement = Arrangement.spacedBy(2.dp),
+        modifier = Modifier.fillMaxWidth().clickable(onClick = onOpen).padding(vertical = 4.dp),
+    ) {
         val title = PrivacyEvidenceText.trackerName(t.name, t.website, t.trackerId)
         Text(title, style = MaterialTheme.typography.titleSmall)
         Website(t.website)

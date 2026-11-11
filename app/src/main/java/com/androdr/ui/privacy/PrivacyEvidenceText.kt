@@ -62,8 +62,10 @@ object PrivacyEvidenceText {
      * An app's label through [displaySafe] (every script kept, controls and bidi overrides removed); the package
      * name (printable ASCII) only when nothing displayable remains.
      */
-    fun appName(row: AppPrivacyRow): String =
-        displaySafe(row.appLabel).ifBlank { reportSafe(row.packageName, MAX_DISPLAY_NAME_CHARS) }
+    fun appName(row: AppPrivacyRow): String = appName(row.appLabel, row.packageName)
+
+    fun appName(label: String, packageName: String): String =
+        displaySafe(label).ifBlank { reportSafe(packageName, MAX_DISPLAY_NAME_CHARS) }
 
     /** A tracker's name; falls back to its website host, then to "Tracker #id", when nothing displayable remains. */
     fun trackerName(name: String, website: String, id: Int): String =

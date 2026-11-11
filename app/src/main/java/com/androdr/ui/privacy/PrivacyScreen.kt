@@ -61,7 +61,11 @@ import java.util.Date
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun PrivacyScreen(onBack: () -> Unit, viewModel: PrivacyViewModel = hiltViewModel()) {
+fun PrivacyScreen(
+    onBack: () -> Unit,
+    onOpenEvidence: (packageName: String, trackerId: Int) -> Unit,
+    viewModel: PrivacyViewModel = hiltViewModel(),
+) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val message by viewModel.message.collectAsStateWithLifecycle()
     val snackbar = remember { SnackbarHostState() }
@@ -106,6 +110,7 @@ fun PrivacyScreen(onBack: () -> Unit, viewModel: PrivacyViewModel = hiltViewMode
             onShowThreshold = { showThreshold = true },
             onShowSystem = viewModel::setShowSystemApps,
             onOpenApp = { detail = it },
+            onOpenEvidence = onOpenEvidence,
         )
     }
 
@@ -114,7 +119,11 @@ fun PrivacyScreen(onBack: () -> Unit, viewModel: PrivacyViewModel = hiltViewMode
     }
     detail?.let { pkg ->
         val row = state.sections.flatMap { it.second }.firstOrNull { it.packageName == pkg }
-        if (row == null) detail = null else AppDetailSheet(row, state.registrySizeAtScan ?: 0) { detail = null }
+        if (row == null) {
+            detail = null
+        } else {
+            AppDetailSheet(row, state.registrySizeAtScan ?: 0, { detail = null }, onOpenEvidence)
+        }
     }
     if (confirmDelete) {
         DeleteResultsDialog(
@@ -132,6 +141,7 @@ private fun PrivacyBody(
     onShowThreshold: () -> Unit,
     onShowSystem: (Boolean) -> Unit,
     onOpenApp: (String) -> Unit,
+    onOpenEvidence: (String, Int) -> Unit,
 ) {
     var tab by rememberSaveable { mutableStateOf(0) }
     val res = LocalContext.current.resources
@@ -147,7 +157,7 @@ private fun PrivacyBody(
         if (tab == 0) {
             byApp(state, res, onOpenApp)
         } else {
-            byTracker(state, res)
+            byTracker(state, res, onOpenEvidence)
         }
         item { Footer() }
     }
@@ -241,11 +251,11 @@ private fun LazyListScope.byApp(state: PrivacyUiState, res: Resources, onOpenApp
     }
 }
 
-private fun LazyListScope.byTracker(state: PrivacyUiState, res: Resources) {
+private fun LazyListScope.byTracker(state: PrivacyUiState, res: Resources, onOpenEvidence: (String, Int) -> Unit) {
     if (state.byTracker.isEmpty()) {
         item { Text(stringResource(R.string.privacy_empty_tracker_list), modifier = Modifier.padding(top = 16.dp)) }
     }
-    items(state.byTracker, key = { "t-${it.trackerId}" }) { group -> TrackerCard(group, res) }
+    items(state.byTracker, key = { "t-${it.trackerId}" }) { group -> TrackerCard(group, res, onOpenEvidence) }
 }
 
 @Composable
