@@ -72,6 +72,15 @@ interface DnsEventDao {
     )
     suspend fun lookupTimes(since: Long, app: String, domain: String, limit: Int): List<Long>
 
+    /**
+     * The newest [limit] lookup times of [domain] by [app], newest first, read from the log as it is now (the
+     * privacy details view). Served by `index_DnsEvent_appName_domain_timestamp`; [domain] is the raw stored value.
+     */
+    @Query(
+        "SELECT timestamp FROM DnsEvent WHERE appName = :app AND domain = :domain ORDER BY timestamp DESC LIMIT :limit"
+    )
+    suspend fun recentLookupTimes(app: String, domain: String, limit: Int): List<Long>
+
     /** UTC days since [since] with at least one attributed lookup; 0 = the monitor recorded nothing attributable. */
     @Query(
         "SELECT COUNT(DISTINCT timestamp / 86400000) FROM DnsEvent WHERE timestamp >= :since AND appName IS NOT NULL"
