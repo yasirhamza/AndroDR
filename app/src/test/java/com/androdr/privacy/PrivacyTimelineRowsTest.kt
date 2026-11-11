@@ -95,6 +95,12 @@ class PrivacyTimelineRowsTest {
         assertTrue(rows[0].details, rows[0].details.contains("no lookups"))
     }
 
+    @Test fun `a cut-short network step with no lookups says both`() {
+        val rows = build(emptyList(), emptyList(), network = NetworkStatus.TRUNCATED, coverageDays = 0)
+        assertTrue(rows[0].details, rows[0].details.contains("incomplete"))
+        assertTrue(rows[0].details, rows[0].details.contains("no lookups"))
+    }
+
     @Test fun `one app inspected is said in the singular`() {
         val one = PrivacyTimelineRows.ScanCounts(inspected = 1, partial = 0, failed = 0)
         assertTrue(build(emptyList(), emptyList(), one)[0].description.startsWith("Privacy scan: 1 app inspected"))

@@ -58,8 +58,10 @@ internal object PrivacyTimelineRows {
     /** As the privacy screen says it: a step that read no lookups is "no network evidence", never "complete". */
     private fun networkSentence(status: NetworkStatus, coverageDays: Int): String = when {
         status == NetworkStatus.FAILED -> "Network evidence could not be read; code findings are not affected."
-        coverageDays == 0 && status != NetworkStatus.PENDING ->
-            "The network monitor recorded no lookups in the last 30 days, so there is no network evidence."
+        coverageDays == 0 && status != NetworkStatus.PENDING -> listOfNotNull(
+            networkStatusSentence(status).takeIf { status == NetworkStatus.TRUNCATED },
+            "The network monitor recorded no lookups in the last 30 days, so there is no network evidence.",
+        ).joinToString(" ")
         else -> networkStatusSentence(status)
     }
 

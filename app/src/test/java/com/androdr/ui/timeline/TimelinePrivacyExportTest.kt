@@ -71,6 +71,15 @@ class TimelinePrivacyExportTest {
         assertEquals("the report sheet says so instead of waiting", ReportPreview.NOTHING, model.report.value)
     }
 
+    @Test fun `a new report starts from an empty preview, never the last one`() = runTest(dispatcher) {
+        val model = vm()
+        model.generateReport()
+        advanceUntilIdle()
+        assertEquals(ReportPreview.NOTHING, model.report.value)
+        model.generateReport()
+        assertEquals("a pending Copy must wait for this report", ReportPreview.EMPTY, model.report.value)
+    }
+
     @Test fun `a pending copy is cancelled, not kept for the next report`() {
         assertEquals(CopyStep.WAIT, copyStep(pending = true, report = ReportPreview.EMPTY))
         assertEquals(CopyStep.CANCEL, copyStep(pending = true, report = ReportPreview.NOTHING))

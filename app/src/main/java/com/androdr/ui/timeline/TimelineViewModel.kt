@@ -408,6 +408,8 @@ class TimelineViewModel @Inject constructor(
      */
     @Suppress("TooGenericExceptionCaught") // IO or decoding failures must not crash the sheet
     fun generateReport() {
+        // A new report starts empty: a pending Copy then waits for it, never acting on the previous one.
+        _report.value = ReportPreview.EMPTY
         viewModelScope.launch {
             try {
                 val filter = exportFilter()
