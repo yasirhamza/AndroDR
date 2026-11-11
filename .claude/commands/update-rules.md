@@ -285,7 +285,7 @@ lines.
 **When every command succeeds**
 
 - The summary's first line is `Tracker list: no change`: report exactly that and
-  record the check time (8.5, the part headed On Skip).
+  record the check time (8.5).
 - Anything else: keep the summary script's output, unedited, for 7.2.
 
 Never re-run the mirror between presenting the change and committing it:
@@ -429,8 +429,9 @@ What to look at: the NEW NETWORK SIGNATURES and NEW CODE SIGNATURES sections.
   adding that package to `validation/common_packages.txt`.
 
 Either edit is the person's decision: make it only when the person names the host or package.
-In `full` mode, finish the run first; this run's tracker change counts as
-skipped (8.5).
+After the edit, this run's tracker change counts as skipped (8.5), in either
+mode: the candidate was built without the edit, so this run commits the check
+time and leaves the edit in the working tree; in `full` mode, finish the run first.
 Then run `/update-rules source trackers` again, which rebuilds the candidate.
 The edit is committed in 8.5 of that run, never in Step 8.
 
@@ -447,8 +448,8 @@ After all decisions:
 - Update `ioc-data/*.yml` files if ingesters found new indicators
 - Commit all changes to the sigma repo with descriptive messages
 - The tracker list, and a person's edit to `validation/first_party_hosts.txt` or
-  `validation/common_packages.txt` made for it (7.2), are not part of these
-  commits: they are committed last (8.5)
+  `validation/common_packages.txt` made for it (7.2), with a test changed for
+  that edit, are not part of these commits: they are committed last (8.5)
 
 ### 8.1 Commit IOC candidates (added for #117)
 
@@ -544,6 +545,12 @@ a person's edit for this refresh to `validation/first_party_hosts.txt` or
 lists anything else, stop and report it:
 the tracker commit must not carry another step's work.
 
+When the command lists such an edit and this run could commit it (on Approve, or
+on "no change"), show the person the output of `git diff -- validation/` and ask
+whether to commit it. Only the person's own yes, written after that output was
+shown, counts. Without it, this run commits neither the edit nor the tracker
+list, which was built with the edit: say so, and go to the part headed On Skip.
+
 **On Approve:**
 
 ```bash
@@ -572,7 +579,8 @@ also run the tests rules CI runs, all of them:
 python3 -m pytest validation/ -q
 ```
 
-A list edit can change a count those tests pin (the number of first-party
+The suite takes about 80 seconds: give the command a time limit of at least five
+minutes. A list edit can change a count those tests pin (the number of first-party
 hosts, the mirror's counts on the saved Exodus answer). A failing test is
 reported to the person,
 who updates the test with the edit; nothing is committed until the tests pass.
@@ -590,15 +598,32 @@ command above fails, restore the three files
 (`git checkout -- ioc-data/trackers.yml ioc-data.sha256 feed-state.json`) and
 report it. Do not commit. A person's list edit is left as it is; say that it is
 not committed. When the fault is mended (a test the person updated, for one),
-repeat this part from `cp`: the candidate in `<run-dir>` is still the one that
-was approved.
+repeat this step from `git status --porcelain`: the candidate in `<run-dir>` is
+still the one that was approved, and the edit is shown again. If the mend changes
+either of the two lists, run `/update-rules source trackers` again instead: the
+candidate was built with the lists as they were.
 
 **Delivery.** Phones fetch this file from the rules repository's `main`, so the
 commit reaches `main` only through the safe ordering in CLAUDE.md. The AndroDR
 pull request that moves the submodule pointer also runs
 `python3 scripts/merge-ioc-data.py`, which refreshes the copy bundled in the app.
+The other commits of this step change no file a phone fetches; they reach `main`
+by pull request, like any other change to the rules repository.
 
-**On Skip, on no answer, or on "no change":**
+**On "no change" with a list edit the person confirmed:**
+the edit is why the candidate now equals the live list, and it must not be lost.
+Run `python3 -m pytest validation/ -q` first, with the same time limit.
+If a test fails, report it, change nothing and commit nothing; the person
+updates the test with the edit, and this step starts again from its first check.
+When the tests pass, set the check time and validate it
+exactly as in the part headed On Skip, then commit `feed-state.json` with the
+edit (and its test), and nothing else:
+
+```
+chore(trackers): list edit, tracker list unchanged
+```
+
+**On Skip, on no answer, or on "no change" with no confirmed edit:**
 set only `feeds.exodus_trackers.last_seen_timestamp` (the check happened), to
 the output of the same `date` command, run
 `python3 validation/validate-feed-state.py`, and
@@ -608,14 +633,10 @@ commit `feed-state.json` alone, in `full` mode as in `source trackers` mode:
 chore(trackers): record tracker-list check
 ```
 
-A person's list edit for this refresh (7.2) may be waiting in the working tree.
-
-- On "no change", the edit is why the candidate now equals the live list, and
-  it must not be lost.
-  Run `python3 -m pytest validation/ -q` as on Approve, and
-  commit the edit (and its test) in the same commit as `feed-state.json`.
-  Commit nothing while a test fails.
-- On Skip or no answer, leave the edit as it is and say that it is not committed.
+If that validator fails, restore the file (`git checkout -- feed-state.json`),
+report it and commit nothing.
+A list edit waiting in the working tree is left as it is; say that it is not
+committed.
 
 **On a failure in Step 6.7,**
 change neither field and commit nothing.
