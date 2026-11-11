@@ -74,7 +74,7 @@ class PrivacyEvidenceTextTest {
     }
 
     @Test fun `a hostile reason is reduced to printable ASCII`() {
-        val s = PrivacyEvidenceText.appStatus(app(InspectOutcome.PARTIAL, reason = "a\nb‮c"), 1, res)
+        val s = PrivacyEvidenceText.appStatus(app(InspectOutcome.PARTIAL, reason = "a\nb\u202Ec"), 1, res)
         assertEquals("Partly inspected: abc", s)
     }
 
@@ -89,18 +89,18 @@ class PrivacyEvidenceTextTest {
     }
 
     @Test fun `bidi overrides and controls are stripped from an app label`() {
-        assertEquals("Bankevil.apk", PrivacyEvidenceText.appName(labelled("Bank‮evil.apk")))
-        assertEquals("a b", PrivacyEvidenceText.appName(labelled("  a\n\r\t b‏ ")))
+        assertEquals("Bankevil.apk", PrivacyEvidenceText.appName(labelled("Bank\u202Eevil.apk")))
+        assertEquals("a b", PrivacyEvidenceText.appName(labelled("  a\n\r\t b\u200F ")))
     }
 
     @Test fun `a label of only control and format characters falls back to the package name`() {
-        assertEquals("com.example.bank", PrivacyEvidenceText.appName(labelled("\u0000‮\n⁦​")))
+        assertEquals("com.example.bank", PrivacyEvidenceText.appName(labelled("\u0000\u202E\n\u2066\u200B")))
         assertEquals("com.example.bank", PrivacyEvidenceText.appName(labelled("")))
     }
 
     @Test fun `a non-ASCII tracker name is kept, a blank one falls back to the host, then to Tracker id`() {
         assertEquals("追踪", PrivacyEvidenceText.trackerName("追踪", "https://Tracker.Example/x", 7))
-        val blank = "‮\u0007"
+        val blank = "\u202E\u0007"
         assertEquals("tracker.example", PrivacyEvidenceText.trackerName(blank, "https://Tracker.Example/x", 7))
         assertEquals("Tracker #7", PrivacyEvidenceText.trackerName(blank, "javascript:x", 7))
         assertEquals("Tracker #7", PrivacyEvidenceText.trackerName(blank, "", 7))

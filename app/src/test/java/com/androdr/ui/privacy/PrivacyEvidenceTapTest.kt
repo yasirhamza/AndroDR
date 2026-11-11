@@ -28,14 +28,16 @@ class PrivacyEvidenceTapTest {
     private val res = ApplicationProvider.getApplicationContext<Context>().resources
 
     private val tracker = TrackerRow(
-        trackerId = 12, name = "Flurry", website = "https://www.flurry.com", categories = setOf(TrackerCategory.ANALYTICS),
+        trackerId = 12, name = "Flurry", website = "https://www.flurry.com",
+        categories = setOf(TrackerCategory.ANALYTICS),
         rawCategories = listOf("Analytics"), inCode = true, lookups = 0, lookupDays = 0, background = null,
         firstSeen = null, lastSeen = null, newSinceLastScan = false,
     )
 
     private fun app(pkg: String, label: String) = AppPrivacyRow(
         packageName = pkg, versionCode = 1, appLabel = label, isSystemApp = false, outcome = InspectOutcome.INSPECTED,
-        reason = null, trackers = listOf(tracker), refusedInCode = 0, refusedCategories = emptySet(), newCrossing = false,
+        reason = null, trackers = listOf(tracker), refusedInCode = 0, refusedCategories = emptySet(),
+        newCrossing = false,
     )
 
     @Test fun `tapping an app line of a tracker card opens that app's details`() {

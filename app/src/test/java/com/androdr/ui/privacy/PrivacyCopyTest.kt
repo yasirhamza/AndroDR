@@ -87,7 +87,8 @@ class PrivacyCopyTest {
     }
 
     @Test fun `the details view keeps the standing lookup note and the spec's wording for older results`() {
-        val screen = source("java/com/androdr/ui/privacy/PrivacyEvidenceScreen.kt")
+        val screen = source("java/com/androdr/ui/privacy/PrivacyEvidenceScreen.kt") +
+            source("java/com/androdr/ui/privacy/PrivacyEvidenceLookups.kt")
         assertTrue(screen.contains("R.string.privacy_network_caveat"))
         assertTrue(screen.contains("R.string.privacy_evidence_run_new_scan"))
         assertEquals(

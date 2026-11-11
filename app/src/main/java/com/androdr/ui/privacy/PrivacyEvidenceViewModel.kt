@@ -37,6 +37,7 @@ sealed interface EvidenceUiState {
 data class LookupTimes(val domain: String, val times: List<Long>?)
 
 /** Loads one finding's detail once, when the view opens; lookup times are read only when a domain is tapped. */
+@Suppress("TooGenericExceptionCaught") // a database error is shown as unreadable, never a crash
 @HiltViewModel
 class PrivacyEvidenceViewModel @Inject constructor(
     private val reader: PrivacyEvidenceReader,

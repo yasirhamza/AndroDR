@@ -20,23 +20,23 @@ class PrivacyEvidenceDetailTextTest {
     @Test fun `each signature kind has its own words`() {
         assertEquals(
             listOf("package prefix", "package-name segment", "domain suffix", "label", "pattern"),
-            SignatureKind.entries.map { res.getString(EvidenceDetailText.kindLabel(it)) },
+            SignatureKind.entries.map { res.getString(PrivacyEvidenceDetailText.kindLabel(it)) },
         )
     }
 
     @Test fun `the list hash is shown short`() {
-        assertEquals("a41c…9e", EvidenceDetailText.shortHash("a41c" + "0".repeat(58) + "9e"))
-        assertNull(EvidenceDetailText.shortHash(""))
-        assertNull(EvidenceDetailText.shortHash("abc"))
+        assertEquals("a41c…9e", PrivacyEvidenceDetailText.shortHash("a41c" + "0".repeat(58) + "9e"))
+        assertNull(PrivacyEvidenceDetailText.shortHash(""))
+        assertNull(PrivacyEvidenceDetailText.shortHash("abc"))
     }
 
     @Test fun `packages beyond the stored ones are counted`() {
-        assertEquals("… and 9 more", EvidenceDetailText.more(stored = 200, total = 209, res = res))
-        assertNull(EvidenceDetailText.more(stored = 2, total = 2, res = res))
+        assertEquals("… and 9 more", PrivacyEvidenceDetailText.more(stored = 200, total = 209, res = res))
+        assertNull(PrivacyEvidenceDetailText.more(stored = 2, total = 2, res = res))
     }
 
     @Test fun `unknown background is said, never shown as zero`() {
-        val line = EvidenceDetailText.domainCounts(
+        val line = PrivacyEvidenceDetailText.domainCounts(
             DomainLine("x.flurry.com", SignatureKind.DOMAIN_SUFFIX, "flurry.com", 3, 2, null, 10, 20), res, fmt,
         )
         assertTrue(line, line.contains("background use unknown"))
@@ -45,20 +45,20 @@ class PrivacyEvidenceDetailTextTest {
     }
 
     @Test fun `a timed background count is shown`() {
-        val line = EvidenceDetailText.domainCounts(
+        val line = PrivacyEvidenceDetailText.domainCounts(
             DomainLine("x.flurry.com", SignatureKind.DOMAIN_SUFFIX, "flurry.com", 3, 1, 2, 10, 20), res, fmt,
         )
         assertTrue(line, line.contains("2 in background"))
     }
 
     @Test fun `package and domain text loses bidi controls and keeps a visible cut`() {
-        assertEquals("com.evil.txt", EvidenceDetailText.shown("com.‮evil.txt"))
+        assertEquals("com.evil.txt", PrivacyEvidenceDetailText.shown("com.\u202Eevil.txt"))
         val stored = "a".repeat(254) + "…"
-        assertEquals(stored, EvidenceDetailText.shown(stored))
+        assertEquals(stored, PrivacyEvidenceDetailText.shown(stored))
     }
 
     @Test fun `the Exodus page is linked only for a list entry number`() {
-        assertEquals("https://reports.exodus-privacy.eu.org/en/trackers/12/", EvidenceDetailText.exodusLink(12))
-        assertNull(EvidenceDetailText.exodusLink(0))
+        assertEquals("https://reports.exodus-privacy.eu.org/en/trackers/12/", PrivacyEvidenceDetailText.exodusLink(12))
+        assertNull(PrivacyEvidenceDetailText.exodusLink(0))
     }
 }

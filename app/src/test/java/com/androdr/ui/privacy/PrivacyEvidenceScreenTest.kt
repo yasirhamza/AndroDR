@@ -88,14 +88,17 @@ class PrivacyEvidenceScreenTest {
     @Test fun `packages beyond the stored ones are counted, not hidden`() {
         show(
             EvidenceUiState.Loaded(
-                details(code = listOf(CodeSignature(SignatureKind.CODE_PREFIX, "com.flurry", listOf("com.flurry.a"), 260))),
+                details(
+                    code = listOf(CodeSignature(SignatureKind.CODE_PREFIX, "com.flurry", listOf("com.flurry.a"), 260)),
+                ),
             ),
         )
         assertTrue(exists("… and 259 more"))
     }
 
     @Test fun `a result from before details were recorded says to run a new scan`() {
-        show(EvidenceUiState.Loaded(details(scan = scan(hasDetails = false), code = emptyList(), domains = emptyList())))
+        val old = details(scan = scan(hasDetails = false), code = emptyList(), domains = emptyList())
+        show(EvidenceUiState.Loaded(old))
         assertTrue(exists("Run a new privacy scan to record the matching packages and domains."))
         assertTrue(!exists("Found in code"))
         assertTrue(!exists("Looked up domains of this tracker"))
@@ -108,7 +111,8 @@ class PrivacyEvidenceScreenTest {
     }
 
     @Test fun `a failed network step is stated even when no domain was recorded`() {
-        show(EvidenceUiState.Loaded(details(scan = scan(status = NetworkStatus.FAILED), domains = emptyList(), lookups = 0)))
+        val failed = details(scan = scan(status = NetworkStatus.FAILED), domains = emptyList(), lookups = 0)
+        show(EvidenceUiState.Loaded(failed))
         assertTrue(exists("Looked up domains of this tracker"))
         assertTrue(exists("Network evidence could not be read this time"))
         assertTrue(exists("This list of domains may be incomplete."))
@@ -147,10 +151,10 @@ class PrivacyEvidenceScreenTest {
     @Test fun `hostile package text is shown without its bidi controls`() {
         show(
             EvidenceUiState.Loaded(
-                details(code = listOf(CodeSignature(SignatureKind.CODE_SEGMENT, "x", listOf("com.‮evil.x"), 1))),
+                details(code = listOf(CodeSignature(SignatureKind.CODE_SEGMENT, "x", listOf("com.\u202Eevil.x"), 1))),
             ),
         )
         assertTrue(exists("com.evil.x"))
-        assertTrue(!exists("‮"))
+        assertTrue(!exists("\u202E"))
     }
 }

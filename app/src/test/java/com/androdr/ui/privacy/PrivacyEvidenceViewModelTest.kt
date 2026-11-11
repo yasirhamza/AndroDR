@@ -41,7 +41,9 @@ class PrivacyEvidenceViewModelTest {
 
     private fun vm(reader: PrivacyEvidenceReader) = PrivacyEvidenceViewModel(
         reader,
-        SavedStateHandle(mapOf(PrivacyEvidenceViewModel.ARG_PACKAGE to "com.x", PrivacyEvidenceViewModel.ARG_TRACKER to 12)),
+        SavedStateHandle(
+            mapOf(PrivacyEvidenceViewModel.ARG_PACKAGE to "com.x", PrivacyEvidenceViewModel.ARG_TRACKER to 12),
+        ),
     )
 
     @Test fun `loads the route's app and tracker when created`() {

@@ -117,20 +117,25 @@ fun PrivacyScreen(
     if (showThreshold) {
         PrivacyThresholdSheet(state.refused, viewModel::setRefused) { showThreshold = false }
     }
-    detail?.let { pkg ->
-        val row = state.sections.flatMap { it.second }.firstOrNull { it.packageName == pkg }
-        if (row == null) {
-            detail = null
-        } else {
-            AppDetailSheet(row, state.registrySizeAtScan ?: 0, { detail = null }, onOpenEvidence)
-        }
-    }
+    detail?.let { pkg -> AppSheet(state, pkg, onDismiss = { detail = null }, onOpenEvidence) }
     if (confirmDelete) {
         DeleteResultsDialog(
             onConfirm = { confirmDelete = false; viewModel.deleteResults() },
             onDismiss = { confirmDelete = false },
         )
     }
+}
+
+/** The app's sheet, or nothing (and [onDismiss]) when the app is no longer listed. */
+@Composable
+private fun AppSheet(
+    state: PrivacyUiState,
+    packageName: String,
+    onDismiss: () -> Unit,
+    onOpenEvidence: (String, Int) -> Unit,
+) {
+    val row = state.sections.flatMap { it.second }.firstOrNull { it.packageName == packageName }
+    if (row == null) onDismiss() else AppDetailSheet(row, state.registrySizeAtScan ?: 0, onDismiss, onOpenEvidence)
 }
 
 @Composable

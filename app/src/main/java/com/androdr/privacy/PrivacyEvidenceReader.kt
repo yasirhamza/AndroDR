@@ -49,8 +49,9 @@ class PrivacyEvidenceReader @Inject constructor(
     /** null when there is no completed scan, or it holds no evidence for [packageName] + [trackerId]. */
     suspend fun load(packageName: String, trackerId: Int): EvidenceDetails? {
         val scan = dao.latestCompletedOnce() ?: return null
-        val evidence = dao.evidenceFor(scan.id, packageName, trackerId) ?: return null
-        val app = dao.resultFor(scan.id, packageName) ?: return null
+        val evidence = dao.evidenceFor(scan.id, packageName, trackerId)
+        val app = dao.resultFor(scan.id, packageName)
+        if (evidence == null || app == null) return null
         val code = dao.codeDetail(scan.id, packageName, trackerId).mapNotNull { row ->
             val kind = kindOf(row.kind) ?: return@mapNotNull null
             CodeSignature(kind, row.signature, PrivacyDetailRows.packagesOf(row), row.packageCount)

@@ -510,7 +510,8 @@ class NetworkEvidenceCorrelatorTest {
 
     @Test fun `per-domain background is a number only where it was timed`() {
         val rows = listOf(150L, 250L, 300L).map { Triple("a", "x.flurry.com", it) }
-        val timed = correlate(FakeSource.of(rows), setOf("a"), usage = UsageIntervals(0, mapOf("a" to listOf(100L..200L))))
+        val usage = UsageIntervals(0, mapOf("a" to listOf(100L..200L)))
+        val timed = correlate(FakeSource.of(rows), setOf("a"), usage = usage)
         assertEquals(listOf(2), timed.domains.map { it.background })
         val untimed = correlate(FakeSource.of(rows), setOf("a"), usage = null)
         assertEquals(listOf<Int?>(null), untimed.domains.map { it.background })
@@ -524,7 +525,8 @@ class NetworkEvidenceCorrelatorTest {
             timesOf = { _, _, _ -> listOf(5 * DAY) },
         )
         val out = correlate(source, setOf("a.flood", "b.real"))
-        assertEquals(listOf("ads.doubleclick.net"), out.domains.filter { it.key.packageName == "b.real" }.map { it.domain })
+        val real = out.domains.filter { it.key.packageName == "b.real" }.map { it.domain }
+        assertEquals(listOf("ads.doubleclick.net"), real)
         assertEquals(MAX_MATCHED_PER_APP, out.domains.count { it.key.packageName == "a.flood" })
     }
 }

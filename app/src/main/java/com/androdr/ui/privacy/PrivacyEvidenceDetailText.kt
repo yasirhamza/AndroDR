@@ -12,7 +12,7 @@ import com.androdr.util.displaySafe
  * Pure wording for the details view of one tracker in one app. Package names, domains and signatures
  * come from the app's code, its lookups or the tracker list; they reach the screen only through [shown].
  */
-object EvidenceDetailText {
+object PrivacyEvidenceDetailText {
     /** A full domain plus the stored cut mark ("…"), so stored text is never cut a second time. */
     private const val SHOWN_MAX = 255
     private const val HASH_HEAD = 4
@@ -78,7 +78,10 @@ object EvidenceDetailText {
         return when {
             !counted -> null
             scan.dnsCoverageDays == 0 -> res.getString(R.string.privacy_no_monitor)
-            else -> res.getQuantityString(R.plurals.privacy_network_coverage, scan.dnsCoverageDays, scan.dnsCoverageDays)
+            else -> {
+                val days = scan.dnsCoverageDays
+                res.getQuantityString(R.plurals.privacy_network_coverage, days, days)
+            }
         }
     }
 

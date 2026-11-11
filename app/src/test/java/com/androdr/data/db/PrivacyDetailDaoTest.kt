@@ -69,7 +69,9 @@ class PrivacyDetailDaoTest {
     @Test fun `one result and one evidence row are read by key`() = runBlocking {
         val id = dao.insertScan(scan())
         dao.upsertResults(listOf(PrivacyAppResult(id, "a", 1, "A", false, "INSPECTED", null)))
-        dao.upsertEvidence(listOf(PrivacyTrackerEvidence(id, "a", 1, "T", "w", "Ads", true, 0, 0, null, null, null, false)))
+        dao.upsertEvidence(
+            listOf(PrivacyTrackerEvidence(id, "a", 1, "T", "w", "Ads", true, 0, 0, null, null, null, false)),
+        )
         assertEquals("A", dao.resultFor(id, "a")?.appLabel)
         assertNull(dao.resultFor(id, "b"))
         assertEquals("T", dao.evidenceFor(id, "a", 1)?.trackerName)

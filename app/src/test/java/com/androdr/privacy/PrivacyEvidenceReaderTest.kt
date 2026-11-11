@@ -44,8 +44,10 @@ class PrivacyEvidenceReaderTest {
         )
         dao.upsertResults(listOf(PrivacyAppResult(id, "com.x", 7, "X", false, "INSPECTED", null)))
         dao.upsertEvidence(
-            listOf(PrivacyTrackerEvidence(id, "com.x", 12, "Flurry", "https://flurry.com", "Analytics", true, 4, 2, null,
-                5, 9, false)),
+            listOf(
+                PrivacyTrackerEvidence(id, "com.x", 12, "Flurry", "https://flurry.com", "Analytics", true, 4, 2,
+                    null, 5, 9, false),
+            ),
         )
         id
     }
@@ -107,7 +109,10 @@ class PrivacyEvidenceReaderTest {
 
     @Test fun `recent lookups are read by the recorded spelling`() = runBlocking {
         db.dnsEventDao().insertAll(
-            listOf(dns("com.x", "T.AppsFlyer.com.", 5), dns("com.x", "t.appsflyer.com", 6), dns("com.x", "T.AppsFlyer.com.", 7)),
+            listOf(
+                dns("com.x", "T.AppsFlyer.com.", 5), dns("com.x", "t.appsflyer.com", 6),
+                dns("com.x", "T.AppsFlyer.com.", 7),
+            ),
         )
         assertEquals(listOf(7L, 5L), reader.recentLookups("com.x", "T.AppsFlyer.com."))
     }

@@ -67,10 +67,10 @@ class PrivacyDetailRowsTest {
     }
 
     @Test fun `cutting never splits a character outside the basic plane`() {
-        val text = "😀".repeat(300)
+        val text = "\uD83D\uDE00".repeat(300)
         val cut = PrivacyDetailRows.cut(text)
         assertEquals(255, cut.codePointCount(0, cut.length))
-        assertTrue(cut.endsWith("😀…"))
+        assertTrue(cut.endsWith("\uD83D\uDE00…"))
     }
 
     @Test fun `domain rows keep their counts and unknown background as null`() {

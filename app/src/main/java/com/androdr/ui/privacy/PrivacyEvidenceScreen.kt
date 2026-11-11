@@ -2,17 +2,14 @@ package com.androdr.ui.privacy
 
 import android.content.res.Resources
 import android.text.format.DateFormat
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -35,7 +32,6 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.androdr.R
 import com.androdr.privacy.CodeSignature
-import com.androdr.privacy.DomainLine
 import com.androdr.privacy.EvidenceDetails
 import com.androdr.privacy.InspectOutcome
 import com.androdr.privacy.PrivacyRanking
@@ -98,20 +94,20 @@ private fun dateTimeFormatter(): (Long) -> String {
 @Composable
 private fun Details(d: EvidenceDetails, onOpenLookups: (String) -> Unit, formatTime: (Long) -> String) {
     val res = LocalContext.current.resources
-    val tracker = PrivacyRanking.trackerRow(d.evidence)
     Header(d, res)
-    Text(PrivacyEvidenceText.line(tracker, res), style = MaterialTheme.typography.bodyMedium)
+    val totals = PrivacyEvidenceText.line(PrivacyRanking.trackerRow(d.evidence), res)
+    Text(totals, style = MaterialTheme.typography.bodyMedium)
     if (!d.scan.hasDetails) {
         Text(stringResource(R.string.privacy_evidence_run_new_scan), style = MaterialTheme.typography.bodyMedium)
     } else {
         if (d.evidence.inCode) FoundInCode(d, res)
-        if (d.domains.isNotEmpty() || EvidenceDetailText.networkIncomplete(d.scan)) {
+        if (d.domains.isNotEmpty() || PrivacyEvidenceDetailText.networkIncomplete(d.scan)) {
             LookedUp(d, res, onOpenLookups, formatTime)
         }
     }
     HorizontalDivider(modifier = Modifier.padding(top = 8.dp))
     Text(
-        EvidenceDetailText.footer(d.scan, res, formatTime),
+        PrivacyEvidenceDetailText.footer(d.scan, res, formatTime),
         style = MaterialTheme.typography.labelSmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
@@ -139,12 +135,12 @@ private fun Header(d: EvidenceDetails, res: Resources) {
         stringResource(
             R.string.privacy_evidence_in_app,
             PrivacyEvidenceText.appName(d.app.appLabel, d.app.packageName),
-            EvidenceDetailText.shown(d.app.packageName),
+            PrivacyEvidenceDetailText.shown(d.app.packageName),
         ),
         style = MaterialTheme.typography.bodyMedium,
     )
     val entry = stringResource(R.string.privacy_evidence_list_entry, e.trackerId)
-    val link = EvidenceDetailText.exodusLink(e.trackerId)
+    val link = PrivacyEvidenceDetailText.exodusLink(e.trackerId)
     val uri = LocalUriHandler.current
     if (link != null) {
         TextButton(onClick = { uri.openUri(link) }) { Text(entry) }
@@ -160,106 +156,39 @@ private fun FoundInCode(d: EvidenceDetails, res: Resources) {
     val inspected = stringResource(
         if (partial) R.string.privacy_partly_inspected_tag else R.string.privacy_evidence_fully_inspected,
     )
-    Text(
-        stringResource(R.string.privacy_evidence_version, d.app.versionCode.toString(), inspected),
-        style = MaterialTheme.typography.bodySmall,
-    )
-    if (partial) Text(stringResource(R.string.privacy_evidence_partial_note), style = MaterialTheme.typography.bodySmall)
+    val small = MaterialTheme.typography.bodySmall
+    Text(stringResource(R.string.privacy_evidence_version, d.app.versionCode.toString(), inspected), style = small)
+    if (partial) Text(stringResource(R.string.privacy_evidence_partial_note), style = small)
     for (s in d.code) CodeSignatureBlock(s, res)
 }
 
 @Composable
 private fun CodeSignatureBlock(s: CodeSignature, res: Resources) {
     Column(modifier = Modifier.padding(top = 4.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-        Text(EvidenceDetailText.signatureLine(s.kind, s.signature, res), style = MaterialTheme.typography.bodyMedium)
+        Text(
+            PrivacyEvidenceDetailText.signatureLine(s.kind, s.signature, res),
+            style = MaterialTheme.typography.bodyMedium,
+        )
         for (p in s.packages) {
             Text(
-                EvidenceDetailText.shown(p),
+                PrivacyEvidenceDetailText.shown(p),
                 style = MaterialTheme.typography.bodySmall,
                 fontFamily = FontFamily.Monospace,
                 modifier = Modifier.padding(start = 12.dp),
             )
         }
-        EvidenceDetailText.more(s.packages.size, s.total, res)?.let {
+        PrivacyEvidenceDetailText.more(s.packages.size, s.total, res)?.let {
             Text(it, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(start = 12.dp))
         }
     }
 }
 
 @Composable
-private fun LookedUp(
-    d: EvidenceDetails,
-    res: Resources,
-    onOpenLookups: (String) -> Unit,
-    formatTime: (Long) -> String,
-) {
-    SectionTitle(stringResource(R.string.privacy_evidence_lookups_title))
-    val small = MaterialTheme.typography.bodySmall
-    Text(EvidenceDetailText.window(d.scan, res, formatTime), style = small)
-    EvidenceDetailText.coverage(d.scan, res)?.let { Text(it, style = small) }
-    EvidenceDetailText.networkNotice(d.scan)?.let {
-        Text(stringResource(it), style = small)
-        Text(stringResource(R.string.privacy_evidence_lookups_incomplete), style = small)
-    }
-    Text(
-        stringResource(R.string.privacy_network_caveat),
-        style = small,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-    )
-    if (d.domains.isNotEmpty()) Text(stringResource(R.string.privacy_evidence_lookup_times_hint), style = small)
-    for (line in d.domains) DomainBlock(line, res, onOpenLookups, formatTime)
-}
-
-@Composable
-private fun DomainBlock(line: DomainLine, res: Resources, onOpenLookups: (String) -> Unit, formatTime: (Long) -> String) {
-    Column(
-        modifier = Modifier.fillMaxWidth().clickable { onOpenLookups(line.domain) }.padding(vertical = 6.dp),
-        verticalArrangement = Arrangement.spacedBy(2.dp),
-    ) {
-        Text(
-            EvidenceDetailText.shown(line.domain),
-            style = MaterialTheme.typography.bodyMedium,
-            fontFamily = FontFamily.Monospace,
-        )
-        Text(EvidenceDetailText.matchedLine(line.kind, line.signature, res), style = MaterialTheme.typography.bodySmall)
-        Text(EvidenceDetailText.domainCounts(line, res, formatTime), style = MaterialTheme.typography.bodySmall)
-    }
-}
-
-@Composable
-private fun SectionTitle(text: String) {
+internal fun SectionTitle(text: String) {
     Text(
         text,
         style = MaterialTheme.typography.titleSmall,
         fontWeight = FontWeight.Bold,
         modifier = Modifier.padding(top = 12.dp),
-    )
-}
-
-@Composable
-private fun LookupTimesDialog(lookups: LookupTimes, formatTime: (Long) -> String, onClose: () -> Unit) {
-    AlertDialog(
-        onDismissRequest = onClose,
-        title = { Text(EvidenceDetailText.shown(lookups.domain), fontFamily = FontFamily.Monospace) },
-        text = {
-            Column(
-                modifier = Modifier.verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(4.dp),
-            ) {
-                val times = lookups.times
-                when {
-                    times == null -> Text(stringResource(R.string.privacy_evidence_unreadable))
-                    times.isEmpty() -> Text(stringResource(R.string.privacy_evidence_lookup_times_none))
-                    else -> {
-                        Text(
-                            stringResource(R.string.privacy_evidence_lookup_times_note),
-                            style = MaterialTheme.typography.bodySmall,
-                        )
-                        for (t in times) Text(formatTime(t), style = MaterialTheme.typography.bodySmall)
-                    }
-                }
-            }
-        },
-        confirmButton = { TextButton(onClick = onClose) { Text(stringResource(R.string.privacy_evidence_close)) } },
     )
 }
