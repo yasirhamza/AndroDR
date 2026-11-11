@@ -715,7 +715,10 @@ val MIGRATION_22_23 = object : Migration(22, 23) {
     }
 }
 
-/** Copied verbatim from the exported 23.json (`${TABLE_NAME}` expanded). */
+/**
+ * The ALTER matches 23.json's `hasDetails` field (INTEGER NOT NULL, default 0); the two CREATE statements are
+ * copied verbatim from 23.json's `createSql` (`${TABLE_NAME}` expanded). Migration22To23Test validates both.
+ */
 private val SCHEMA_23_DDL = listOf(
     "ALTER TABLE `privacy_scan` ADD COLUMN `hasDetails` INTEGER NOT NULL DEFAULT 0",
     "CREATE TABLE IF NOT EXISTS `privacy_code_detail` (`scanId` INTEGER NOT NULL, `packageName` TEXT NOT NULL, " +

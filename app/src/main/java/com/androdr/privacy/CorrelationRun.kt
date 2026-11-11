@@ -48,7 +48,7 @@ internal class CorrelationRun(
         // The overall cap stops the remaining apps unread: conservatively, truncated.
         if (left.hasNext()) truncated = true
         val background = if (stopped) emptyMap() else timeBackground()
-        return Correlation(evidence(background), truncated || stopped, domains())
+        return Correlation(evidence(background), truncated || stopped, domains(background))
     }
 
     /** Checks the deadline once; once passed, it stays passed. */
@@ -175,8 +175,11 @@ internal class CorrelationRun(
         )
     }
 
-    /** Per counted part and owning tracker; background only where phase 3 timed that part. */
-    private fun domains(): List<DomainEvidence> = parts.flatMap { (key, hs) ->
+    /**
+     * Per counted part and owning tracker. A domain's background is a number only when its tracker's total is: a
+     * part shared with a timed tracker is not "known" under a tracker the scan did not time (spec 4.3).
+     */
+    private fun domains(background: Map<Key, Int?>): List<DomainEvidence> = parts.flatMap { (key, hs) ->
         hs.map { h ->
             DomainEvidence(
                 key = key,
@@ -186,7 +189,7 @@ internal class CorrelationRun(
                 lookups = h.part.lookups,
                 days = h.part.days.size,
                 // Rows can arrive between counting and timing; never report more background than lookups.
-                background = partBackground[h.part]?.coerceAtMost(h.part.lookups),
+                background = background[key]?.let { partBackground[h.part]?.coerceAtMost(h.part.lookups) },
                 first = h.part.first,
                 last = h.part.last,
             )

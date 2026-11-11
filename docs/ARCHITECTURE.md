@@ -87,7 +87,7 @@ Current package tree under `app/src/main/java/com/androdr/`:
 ├── ioc/             IOC resolver, dispatcher, feeds, STIX2 serialization, periodic update worker
 │   └── feeds/       Feed-specific ingesters (stalkerware, MVT, MalwareBazaar, ThreatFox, UAD, Plexus, cert-hash)
 ├── network/         DnsVpnService (local DNS interception) + UnderlyingDnsTracker (the device's own non-VPN resolvers) + DNS event capture
-├── privacy/         Privacy scan (Chapter 12): runner, ranking, dex/APK readers, DNS correlator, usage reader; model/ is a leaf package of data types
+├── privacy/         Privacy scan (Chapter 12): runner, ranking, dex/APK readers, DNS correlator, usage reader, evidence-details reader; model/ is a leaf package of data types
 ├── reporting/       ReportFormatter, ReportExporter, timeline formatter/exporter, guidance text helpers
 ├── scanner/         Pure telemetry emitters (app, device, accessibility, app-ops, file artifacts, process, usage stats, receivers, device-admin-grant, install event)
 │   ├── bugreport/   Bug-report ZIP parser and per-section modules
@@ -730,7 +730,7 @@ The privacy scan shares nothing with the detection scan beyond reading its input
 - Its own tables: `privacy_*` (Room schema 22; schema 23 adds the detail tables `privacy_code_detail` and `privacy_domain_detail` and `privacy_scan.hasDetails`, see 12.8), plus an index on `DnsEvent` for the per-app queries.
 - Its own `Mutex` and the app-wide `@ApplicationScope`. It never takes `ScanLock`, never creates a `ScanResult`, and never appears in History, exports, alerts or the Timeline.
 - It emits no telemetry and no findings; its facts live outside the telemetry store (owner ruling). A future rule on tracker categories is its own design cycle.
-- The History, Timeline, alert and lock separations above are design statements. `PrivacyBoundaryTest` enforces the source-level rules it asserts: `reporting`, `sigma`, `ui/history`, `ScanWriteRepository` and `data/store` never reference `com.androdr.privacy` or `privacy_`; `privacy` never references `ScanLock` or `ScanResult`; the APK reader and inspector never reference the registry types; `ui/` never imports the registry or the readers; `privacy/model` never imports `ioc`.
+- The History, Timeline, alert and lock separations above are design statements. `PrivacyBoundaryTest` enforces the source-level rules it asserts: `reporting`, `sigma`, `ui/history`, `ScanWriteRepository` and `data/store` never reference `com.androdr.privacy` or `privacy_`; `privacy` never references `ScanLock` or `ScanResult`; the APK reader and inspector never reference the registry types; `ui/` never imports the registry or the APK readers (`DexPackageReader`, `ApkPackageInspector`); `privacy/model` never imports `ioc`.
 
 Package layering:
 
@@ -742,7 +742,7 @@ ui/             may use privacy (runner, ranking, PrivacyEvidenceReader) and pri
                 never DexPackageReader, ApkPackageInspector or ioc.TrackerRegistry
 ```
 
-Test-enforced directions: `privacy/model` never imports `ioc`, and `ui/` never imports the readers or the registry. The other arrows are convention.
+Test-enforced directions: `privacy/model` never imports `ioc`, and `ui/` never imports the APK readers or the registry (`ui/` does use `PrivacyEvidenceReader`, which reads stored results, not APKs). The other arrows are convention.
 
 ### 12.4 Hostile APKs
 

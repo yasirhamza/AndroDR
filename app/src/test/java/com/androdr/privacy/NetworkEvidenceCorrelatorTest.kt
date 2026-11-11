@@ -529,4 +529,22 @@ class NetworkEvidenceCorrelatorTest {
         assertEquals(listOf("ads.doubleclick.net"), real)
         assertEquals(MAX_MATCHED_PER_APP, out.domains.count { it.key.packageName == "a.flood" })
     }
+
+    @Test fun `a shared domain shows background only under the tracker whose total was timed`() {
+        // B also owns big.example, looked up more than MAX_TIMES_PER_PAIR times, so B is never timed; A is.
+        val registry = TrackerSet(
+            listOf(tracker(SHARED_A, "shared.example"), tracker(SHARED_B, "shared.example", "big.example")),
+            "sha",
+        )
+        val rows = listOf(Triple("a", "cdn.shared.example", 300L)) +
+            List(MAX_TIMES_PER_PAIR + 1) { Triple("a", "x.big.example", 400L + it) }
+        val out = correlate(FakeSource.of(rows), setOf("a"), usage = UsageIntervals(0, emptyMap()), registry = registry)
+        assertNotNull(out.evidence.getValue(Key("a", SHARED_A)).background)
+        assertNull(out.evidence.getValue(Key("a", SHARED_B)).background)
+        val underA = out.domains.single { it.key.trackerId == SHARED_A }
+        assertEquals(1, underA.background)
+        val underB = out.domains.filter { it.key.trackerId == SHARED_B }
+        assertEquals(2, underB.size)
+        assertTrue("B's total is unknown, so none of its domains is known", underB.all { it.background == null })
+    }
 }

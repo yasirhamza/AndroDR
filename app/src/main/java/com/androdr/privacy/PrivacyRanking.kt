@@ -176,9 +176,8 @@ object PrivacyRanking {
     /**
      * A stored outcome that does not parse is treated as [InspectOutcome.COULD_NOT_INSPECT]: the
      * never-falsely-reassuring choice, since it surfaces the app under "needs attention" rather than
-     * implying it was inspected.
+     * implying it was inspected. Also used by the details view, so it reads an outcome the way the lists do.
      */
-    /** A stored outcome name; an unknown one reads as could-not-inspect, never as inspected. */
     fun outcomeOf(stored: String): InspectOutcome =
         InspectOutcome.entries.firstOrNull { it.name == stored } ?: InspectOutcome.COULD_NOT_INSPECT
 }

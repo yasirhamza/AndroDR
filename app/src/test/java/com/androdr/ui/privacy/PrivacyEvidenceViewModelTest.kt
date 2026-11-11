@@ -62,6 +62,16 @@ class PrivacyEvidenceViewModelTest {
         assertEquals(EvidenceUiState.Unreadable, vm(reader).state.value)
     }
 
+    @Test fun `lookup times that fail to read are published as unreadable, not as none`() {
+        val reader = mockk<PrivacyEvidenceReader> {
+            coEvery { load(any(), any()) } returns details
+            coEvery { recentLookups(any(), any()) } throws IllegalStateException("db")
+        }
+        val model = vm(reader)
+        model.openLookups("T.Flurry.com.")
+        assertEquals(LookupTimes("T.Flurry.com.", null), model.lookups.value)
+    }
+
     @Test fun `opening a domain publishes its recent lookups and closing clears them`() {
         val reader = mockk<PrivacyEvidenceReader> {
             coEvery { load(any(), any()) } returns details

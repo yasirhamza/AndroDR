@@ -129,6 +129,18 @@ class PrivacyEvidenceScreenTest {
         assertTrue(exists("This result is no longer stored. Run a new privacy scan."))
     }
 
+    @Test fun `details that could not be read say so, not that the result is gone`() {
+        show(EvidenceUiState.Unreadable)
+        assertTrue(exists("These details could not be read."))
+        assertTrue(!exists("no longer stored"))
+    }
+
+    @Test fun `lookup times that could not be read say so, never that there are none`() {
+        show(EvidenceUiState.Loaded(details()), lookups = LookupTimes("T.Flurry.com.", null))
+        assertTrue(exists("These details could not be read."))
+        assertTrue(!exists("holds no lookups"))
+    }
+
     @Test fun `tapping a domain asks for its lookup times by the recorded spelling`() {
         var asked: String? = null
         show(EvidenceUiState.Loaded(details()), onOpenLookups = { asked = it })
