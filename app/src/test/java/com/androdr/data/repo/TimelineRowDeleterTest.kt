@@ -215,7 +215,7 @@ class TimelineRowDeleterTest {
     fun `no production code calls a raw forensic_timeline delete except TimelineRowDeleter`() {
         val root = listOf(File("src/main/java/com/androdr"), File("app/src/main/java/com/androdr"))
             .first { it.isDirectory }
-        val raw = Regex("\\.(deleteOlderThan|deleteByIds|deleteByScanId|deleteScanLessThrough)\\(")
+        val raw = Regex("\\.(deleteOlderThan|deleteByIds|deleteByScanId|deleteScanLessThrough|deletePrivacyRows)\\(")
         val offenders = root.walkTopDown().filter { it.extension == "kt" && it.name != "TimelineRowDeleter.kt" }
             .flatMap { file ->
                 file.readLines().withIndex()

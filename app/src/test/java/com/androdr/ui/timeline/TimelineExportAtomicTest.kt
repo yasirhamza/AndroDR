@@ -48,6 +48,8 @@ class TimelineExportAtomicTest {
     private fun entries(failOnCall: Int): TimelineEntries {
         var calls = 0
         return mockk(relaxed = true) {
+            // Something to export: an empty export now says so instead of writing a file.
+            coEvery { count(any()) } returns 1L
             coEvery { forEachPage(any(), any(), any(), any()) } coAnswers {
                 if (++calls == failOnCall) throw IOException("No space left on device")
             }

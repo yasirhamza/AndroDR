@@ -18,6 +18,10 @@ import javax.inject.Inject
 const val PRIVACY_EVIDENCE_ROUTE =
     "privacy/evidence/{${PrivacyEvidenceViewModel.ARG_PACKAGE}}/{${PrivacyEvidenceViewModel.ARG_TRACKER}}"
 
+/** The privacy screen, on [packageName]'s sheet when given (the Timeline's "Open in privacy results"). */
+fun privacyRoute(packageName: String?): String =
+    if (packageName == null) "privacy" else "privacy?pkg=${Uri.encode(packageName)}"
+
 fun privacyEvidenceRoute(packageName: String, trackerId: Int): String =
     "privacy/evidence/${Uri.encode(packageName)}/$trackerId"
 

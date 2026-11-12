@@ -129,7 +129,7 @@ class PrivacyScanRunnerTest {
         dns: DnsEventDao = db.dnsEventDao(),
         usage: UsageIntervals? = null,
         registry: TrackerRegistry = registryOf(set),
-    ) = PrivacyScanRunner(inspector, registry, dao, dns, usageReader(usage), scope).also {
+    ) = PrivacyScanRunner(inspector, registry, dao, dns, usageReader(usage), scope, db, timelineWriter(db)).also {
         it.clock = { NOW }
         it.nanoTime = { NANO }
         awaitIdle()

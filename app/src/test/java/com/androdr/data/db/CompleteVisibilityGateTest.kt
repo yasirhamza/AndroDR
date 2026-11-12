@@ -41,6 +41,8 @@ class CompleteVisibilityGateTest {
         "ScanObservationDao.deleteRows",
         "ForensicTimelineEventDao.deleteOlderThan", "ForensicTimelineEventDao.deleteByIds",
         "ForensicTimelineEventDao.deleteByScanId", "ForensicTimelineEventDao.deleteScanLessThrough",
+        // The privacy scan's own Timeline entries (spec 2026-11-10 §5.4), replaced or deleted with its results.
+        "ForensicTimelineEventDao.deletePrivacyRows",
         // The pins a delete releases (TimelineRowDeleter), read just before the paired delete.
         "ForensicTimelineEventDao.recordIdsOlderThan", "ForensicTimelineEventDao.recordIdsByIds",
         "ForensicTimelineEventDao.recordIdsByScanId", "ForensicTimelineEventDao.recordIdsScanLessThrough",

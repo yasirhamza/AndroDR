@@ -244,6 +244,8 @@ fun TimelineEventDetailSheet(
     onShowOnlyApp: ((String) -> Unit)? = null,
     onCloseAlert: (() -> Unit)? = null,
     onViewTelemetry: (() -> Unit)? = null,
+    /** A privacy scan's entry only (spec 2026-11-10 §5.1): opens its privacy results. */
+    onOpenPrivacy: (() -> Unit)? = null,
 ) {
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -292,6 +294,9 @@ fun TimelineEventDetailSheet(
             // The row's scan's stored telemetry (spec §8.1 "finding detail").
             onViewTelemetry?.let { open ->
                 OutlinedButton(onClick = open) { Text(stringResource(R.string.telemetry_view)) }
+            }
+            onOpenPrivacy?.let { open ->
+                OutlinedButton(onClick = open) { Text(stringResource(R.string.timeline_open_privacy)) }
             }
             // An alert row (its alert is still OPEN): closing it asks the device credential (spec §5.4).
             onCloseAlert?.let { close ->
@@ -676,6 +681,45 @@ fun ScanGroupHeader(
                     )
                 }
                 SeverityChip(level = group.maxSeverity, active = true)
+            }
+        }
+    }
+}
+
+/**
+ * The privacy scan's header in the "By scan" list (spec 2026-11-10 §5.1): its date and entry count; no
+ * severity (its entries are information, not findings) and no telemetry link (it stores none).
+ */
+@Composable
+fun PrivacyScanHeader(at: Long, count: Long?, onClick: () -> Unit) {
+    val date = remember(at) { SimpleDateFormat("MMM dd, yyyy HH:mm", Locale.US).format(Date(at)) }
+    Card(
+        modifier = Modifier.fillMaxWidth().clickable { onClick() },
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(12.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    stringResource(R.string.timeline_source_privacy_scan),
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                )
+                Text(
+                    date,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            if (count != null) {
+                Text(
+                    stringResource(R.string.timeline_event_count, count),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
         }
     }

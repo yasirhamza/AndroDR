@@ -63,6 +63,8 @@ import java.util.Date
 @Composable
 fun PrivacyScreen(
     onBack: () -> Unit,
+    /** An app whose sheet to open (the Timeline's "Open in privacy results"), applied once per entry. */
+    initialPackage: String? = null,
     onOpenEvidence: (packageName: String, trackerId: Int) -> Unit,
     viewModel: PrivacyViewModel = hiltViewModel(),
 ) {
@@ -73,7 +75,7 @@ fun PrivacyScreen(
     var showThreshold by rememberSaveable { mutableStateOf(false) }
     var confirmDelete by rememberSaveable { mutableStateOf(false) }
     var menuOpen by remember { mutableStateOf(false) }
-    var detail by rememberSaveable { mutableStateOf<String?>(null) }
+    var detail by rememberOpenApp(initialPackage)
 
     LaunchedEffect(message) {
         message?.let { snackbar.showSnackbar(context.getString(it)); viewModel.messageShown() }
@@ -124,18 +126,6 @@ fun PrivacyScreen(
             onDismiss = { confirmDelete = false },
         )
     }
-}
-
-/** The app's sheet, or nothing (and [onDismiss]) when the app is no longer listed. */
-@Composable
-private fun AppSheet(
-    state: PrivacyUiState,
-    packageName: String,
-    onDismiss: () -> Unit,
-    onOpenEvidence: (String, Int) -> Unit,
-) {
-    val row = state.sections.flatMap { it.second }.firstOrNull { it.packageName == packageName }
-    if (row == null) onDismiss() else AppDetailSheet(row, state.registrySizeAtScan ?: 0, onDismiss, onOpenEvidence)
 }
 
 @Composable

@@ -53,6 +53,8 @@ data class PrivacyUiState(
     val progress: PrivacyScanProgress = PrivacyScanProgress.Idle,
     val registrySizeAtScan: Int? = null,
     val registryState: RegistryState = RegistryState.LOADING,
+    /** False until the stored results have been read once: an empty list before that means "not yet". */
+    val loaded: Boolean = false,
 ) {
     /** Run is offered only with a loaded registry and no scan in progress. */
     val canRun: Boolean
@@ -123,6 +125,7 @@ class PrivacyViewModel @Inject constructor(
             refused = refused,
             showSystemApps = showSystem,
             registrySizeAtScan = scan?.registrySize,
+            loaded = true,
         )
     }
 

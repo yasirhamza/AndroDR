@@ -840,4 +840,5 @@ private fun importSourceLabel(source: TelemetrySource): Int? = when (source) {
     TelemetrySource.LIVE_SCAN -> null
     TelemetrySource.BUGREPORT_IMPORT -> R.string.history_source_bugreport_import
     TelemetrySource.INTRUSION_LOG_IMPORT -> R.string.history_source_intrusion_log_import
+    TelemetrySource.PRIVACY_SCAN -> error("PRIVACY_SCAN is never a security scan's source")
 }

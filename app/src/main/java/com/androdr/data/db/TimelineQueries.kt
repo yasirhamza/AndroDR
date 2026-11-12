@@ -193,6 +193,7 @@ object TimelineQueries {
             add(if (driving && shape == TimelineShape.PACKAGE) "r.packageName = ?" else "+r.packageName = ?", it)
         }
         filter.source?.let { add("+r.telemetrySource = ?", it.name) }
+        if (filter.exportable) add("+$NOT_PRIVACY_ROW")
         filter.searchText?.let { addSearch(it, ROW_SEARCH_COLUMNS) }
         val time = if (driving) "r.startTimestamp" else "+r.startTimestamp"
         if (ranged) addAll(timeRange(filter, time, "lower(r.timestampPrecision) = 'day'"))

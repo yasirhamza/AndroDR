@@ -99,7 +99,7 @@ class PrivacyScanRunnerDetailTest {
         }
         val usage: UsageIntervalReader = mockk { every { read(any(), any()) } returns null }
         val dao: PrivacyDao = db.privacyDao()
-        return PrivacyScanRunner(inspector, registry, dao, dns, usage, scope).also {
+        return PrivacyScanRunner(inspector, registry, dao, dns, usage, scope, db, timelineWriter(db)).also {
             it.clock = { NOW }
             it.nanoTime = { 0L }
             awaitIdle()

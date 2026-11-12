@@ -74,7 +74,6 @@ import androidx.paging.compose.itemKey
 import com.androdr.R
 import com.androdr.data.db.TimelineFilter
 import com.androdr.data.model.ForensicTimelineEvent
-import com.androdr.data.model.effectiveCorrelationId
 import com.androdr.data.store.DecodedRecord
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -96,6 +95,11 @@ fun TimelineScreen(
      * navigates by the row's `recordId` and scan ([matchedRecordTarget], spec §6).
      */
     onOpenFact: ((factId: Long, scanId: Long?) -> Unit)? = null,
+    /**
+     * Opens the privacy screen (spec 2026-11-10 §5.1): on that app's sheet for an app's privacy entry, or
+     * the screen itself (null) for the privacy scan's entry.
+     */
+    onOpenPrivacy: ((packageName: String?) -> Unit)? = null,
     viewModel: TimelineViewModel = hiltViewModel()
 ) {
     // The deep link (Apps screen: a package, empty meaning "no real package"; import screen: a scan)
@@ -112,9 +116,16 @@ fun TimelineScreen(
     val groupMode by viewModel.groupMode.collectAsStateWithLifecycle()
     val scanGroups = viewModel.scanGroups.collectAsLazyPagingItems()
     val report by viewModel.report.collectAsStateWithLifecycle()
+    val notice by viewModel.notice.collectAsStateWithLifecycle()
 
     val context = LocalContext.current
     val hasRows = (totalCount ?: 0L) > 0L
+    LaunchedEffect(notice) {
+        notice?.let {
+            Toast.makeText(context, context.getString(it), Toast.LENGTH_LONG).show()
+            viewModel.noticeShown()
+        }
+    }
 
     val searchText by viewModel.searchText.collectAsStateWithLifecycle()
     val activeFilters by viewModel.activeFilters.collectAsStateWithLifecycle()
@@ -153,9 +164,13 @@ fun TimelineScreen(
 
     // Copy to clipboard once report text is ready
     LaunchedEffect(report, pendingCopy) {
-        if (pendingCopy && report.text.isNotEmpty()) {
-            copy(report)
-            pendingCopy = false
+        when (copyStep(pendingCopy, report)) {
+            CopyStep.WAIT -> Unit
+            CopyStep.COPY -> {
+                copy(report)
+                pendingCopy = false
+            }
+            CopyStep.CANCEL -> pendingCopy = false
         }
     }
 
@@ -262,17 +277,20 @@ fun TimelineScreen(
                         )
                     }
                 }
-                items(count = scanGroups.itemCount, key = scanGroups.itemKey { "scan_${it.scanId}" }) { index ->
-                    val group = scanGroups[index] ?: return@items
+                items(count = scanGroups.itemCount, key = scanGroups.itemKey { it.key() }) { index ->
+                    val item = scanGroups[index] ?: return@items
+                    if (item is ScanListItem.Privacy) {
+                        val count = rememberCount("privacy_scan", filter, countsVersion) { viewModel.privacyCount() }
+                        PrivacyScanHeader(at = item.at, count = count, onClick = viewModel::showPrivacyScan)
+                        return@items
+                    }
+                    val group = (item as ScanListItem.Security).group
                     val count = rememberCount(group.scanId, filter, countsVersion) { viewModel.scanCount(group.scanId) }
                     // A scan header opens that scan's Timeline.
                     ScanGroupHeader(
                         group = group,
                         count = count,
-                        onClick = {
-                            viewModel.setScanFilter(group.scanId)
-                            viewModel.setGroupMode(TimelineGroupMode.DATE)
-                        },
+                        onClick = { viewModel.showScan(group.scanId) },
                         onViewTelemetry = onViewTelemetry?.takeIf { group.scanId > 0 }?.let { open ->
                             { open(group.scanId) }
                         },
@@ -351,12 +369,10 @@ fun TimelineScreen(
 
     selectedEvent?.let { event ->
         // Linked Evidence: loaded rows sharing this row's effective correlation key
-        // ("dns:<domain>" or "pkg:<packageName>"; see effectiveCorrelationId).
-        val key = event.effectiveCorrelationId()
-        val related = if (key.isNotEmpty()) {
-            rows.itemSnapshotList.items.filterIsInstance<TimelineRow.StoredRow>().map { it.event }
-                .filter { it.effectiveCorrelationId() == key && it.id != event.id }
-        } else emptyList()
+        // ("dns:<domain>" or "pkg:<packageName>"; see effectiveCorrelationId); never a privacy entry.
+        val related = linkedEvidence(
+            event, rows.itemSnapshotList.items.filterIsInstance<TimelineRow.StoredRow>().map { it.event },
+        )
         // Close on an alert row (spec §5.4): offered while the row's alert is OPEN; asks the credential.
         var alertIds by remember(event.id) { mutableStateOf<List<Long>>(emptyList()) }
         LaunchedEffect(event.id) { alertIds = viewModel.openAlertIdsFor(event) }
@@ -396,6 +412,15 @@ fun TimelineScreen(
                     open(event.scanResultId)
                 }
             },
+            onOpenPrivacy = openPrivacyAction(
+                event,
+                onOpenPrivacy?.let { open ->
+                    { pkg ->
+                        selectedEvent = null
+                        open(pkg)
+                    }
+                },
+            ),
         )
     }
     selectedRecord?.let { record ->
@@ -583,7 +608,12 @@ private fun ReportViewSheet(
             HorizontalDivider()
             Spacer(modifier = Modifier.height(12.dp))
             Column(modifier = Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState())) {
-                if (report.text.isEmpty()) {
+                if (report.nothingToExport) {
+                    Text(
+                        text = stringResource(R.string.timeline_nothing_to_export),
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                } else if (report.text.isEmpty()) {
                     CircularProgressIndicator(modifier = Modifier.align(Alignment.CenterHorizontally))
                 } else {
                     Text(

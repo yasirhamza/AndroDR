@@ -14,7 +14,6 @@ POLICY = pathlib.Path(__file__).resolve().parent.parent / "docs" / "PRIVACY_POLI
 
 # Lines that mention 30 days about something other than DNS, usage or Timeline retention.
 UNRELATED_30_DAY_MARKERS = (
-    "| Forensic timeline events",  # Part B moves this row under the rule.
     "from the import",  # Intrusion-log imports: a different limit.
 )
 
@@ -42,8 +41,13 @@ def bare_thirty_day_lines(text: str) -> list[str]:
 def test_the_policy_says_how_long_privacy_scan_results_are_kept():
     body = _section(_policy(), "Privacy Scan").lower()
     for phrase in ("until the next privacy scan replaces", "delete privacy results", "30 days",
-                   "exported report", "never leave"):
+                   "exported report", "never leave", "timeline", "timeline export"):
         assert phrase in body, phrase
+
+
+def test_the_timeline_row_states_the_privacy_scan_exception():
+    row = next(line for line in _policy().splitlines() if line.startswith("| Forensic timeline events"))
+    assert "privacy scan" in row.lower()
 
 
 def test_every_30_day_statement_names_the_privacy_scan_exception():

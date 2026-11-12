@@ -70,7 +70,11 @@ class PrivacyCopyTest {
 
     @Test fun `MainActivity has the privacy route and five bottom destinations`() {
         val main = source("java/com/androdr/MainActivity.kt")
-        assertTrue(main.contains("""composable("privacy")"""))
+        assertTrue("the privacy route takes an optional app", main.contains(""""privacy?pkg={pkg}""""))
+        assertTrue(
+            "the Timeline opens privacy results",
+            main.contains("onOpenPrivacy = { pkg -> navController.navigate(privacyRoute(pkg)) }"),
+        )
         val list = main.substringAfter("private val bottomNavDestinations").substringBefore("\n)")
         assertEquals(5, Regex("""NavDestination\("""").findAll(list).count())
         assertTrue("privacy must not be a bottom destination", !list.contains("\"privacy\""))

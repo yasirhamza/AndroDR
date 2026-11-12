@@ -41,4 +41,11 @@ enum class TelemetrySource {
      * no app-read API for this stream.
      */
     INTRUSION_LOG_IMPORT,
+
+    /**
+     * Marks only the Timeline entries a privacy scan writes (spec 2026-11-10 §5.5): never a security
+     * scan, import, stored record or finding. Those entries are information, not detections: no rule,
+     * no level, no security scan, and they stay out of every export.
+     */
+    PRIVACY_SCAN,
 }
