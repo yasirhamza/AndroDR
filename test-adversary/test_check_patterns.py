@@ -249,7 +249,7 @@ STORED_DNS_REPORT = """---------------------------------------------------------
      app_uid: 2000
      domain: forti.external-muki.com
      is_blocked: false
-     reason: IOC_detect: forti.external-muki.com
+     reason: blocklist
      source_package: com.android.shell
      timestamp: 1792746001000
   [1] captured 2026-10-23 12:00:02
@@ -287,10 +287,10 @@ def test_graphite_dns_checks_reject_any_reason_on_the_placeholder(tmp_path, reas
 
 
 def test_graphite_dns_checks_reject_an_unmatched_graphite_domain(tmp_path):
-    report = STORED_DNS_REPORT.replace("     reason: IOC_detect: forti.external-muki.com", "     reason: null")
+    report = STORED_DNS_REPORT.replace("     reason: blocklist", "     reason: null")
     result = run_check(tmp_path, report, graphite_dns_lines())
     assert result.returncode == 1
-    assert "MISS: regex not matched" in result.stdout
+    assert "has no line matching" in result.stdout
 
 
 # Record-scoped assertions ("@<anchor> => <regex>", "!@<anchor> => <regex>"): the regexes are
