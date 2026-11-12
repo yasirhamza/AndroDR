@@ -87,4 +87,14 @@ dex_of "$WORK/dex-bomb" com.facebook.ads.internal.AdLoader com.androdr.fixture.b
 apk privacy-dex-bomb com.androdr.fixture.privacy.bomb "Privacy Fixture Dex Bomb" "$WORK/dex-bomb" \
     "$WORK/bomb.dex:classes2.dex"
 
+
+# 5. Hostile label: a right-to-left override and a line break in the label, worded like a warning, with a
+#    tracker in code. Every screen and the Timeline must show it cleaned ("Bankevil Spyware detected").
+dex_of "$WORK/dex-label" com.facebook.ads.internal.AdLoader com.androdr.fixture.label.Main
+apk privacy-hostile-label com.androdr.fixture.privacy.label "Bank&#x202E;evil&#10;Spyware detected" "$WORK/dex-label"
+
+# 6. Flood: no tracker in code. seed-dns-flood.sh gives it 25,000 junk tracker lookups in the DNS log.
+dex_of "$WORK/dex-flood" com.androdr.fixture.flood.Main
+apk privacy-flood com.androdr.fixture.privacy.flood "Privacy Fixture Flood" "$WORK/dex-flood"
+
 sha256sum out/*.apk

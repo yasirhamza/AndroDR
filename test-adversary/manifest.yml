@@ -404,20 +404,21 @@ scenarios:
     technique: T1437
     tactic: command-and-control
     description: "One alert per rule and matched value, its repeats counted as detections (spec §5.4)"
-    # tracookiepixel.xyz is a live HaGeZi TIF indicator (feed, not bundled): swap it if it ages out.
+    # @LIVE_TIF_DOMAIN@ is filled by run.sh with a domain that is in the HaGeZi TIF feed when the
+    # harness runs (feed, not bundled; indicators age out, so no domain is named here).
     # ping resolves through netd, so it works on images without nslookup; the resolver cache
     # answers repeats of one name, so each subdomain is its own alert ("seen 1 time(s)").
     source: adb_inject
     inject:
       - type: dns_query
-        adb_cmd: "shell ping -c 1 -W 1 tracookiepixel.xyz"
+        adb_cmd: "shell ping -c 1 -W 1 @LIVE_TIF_DOMAIN@"
       - type: dns_query
-        adb_cmd: "shell ping -c 1 -W 1 x1.tracookiepixel.xyz"
+        adb_cmd: "shell ping -c 1 -W 1 x1.@LIVE_TIF_DOMAIN@"
       - type: dns_query
-        adb_cmd: "shell ping -c 1 -W 1 x2.tracookiepixel.xyz"
+        adb_cmd: "shell ping -c 1 -W 1 x2.@LIVE_TIF_DOMAIN@"
     attack: [T1437]
     expected_patterns:
-      - "tracookiepixel.xyz"
+      - "@LIVE_TIF_DOMAIN@"
       - ") · seen "
 
   - id: mercenary_ip_c2
