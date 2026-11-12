@@ -9,6 +9,7 @@
             <intent-filter>
                 <action android:name="com.androdr.ACTION_SCAN" />
                 <action android:name="com.androdr.ACTION_UPDATE" />
+                <action android:name="com.androdr.ACTION_SEED_CERT" />
             </intent-filter>
         </receiver>
     </application>

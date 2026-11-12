@@ -257,57 +257,39 @@ sideload_install() {
 
 # ── Cert-hash IOC seeding (mercenary_cert_hash) ───────────────────────────────
 #
-# Writes the fixture's signing cert into the `indicators` table as a feed row, then
-# makes the app reload its indicator cache. The INSERT's column list is the schema-19
-# `indicators` entity (app/schemas/com.androdr.data.db.AppDatabase/19.json), pinned by
-# test_run_sh_seed.py: a schema change fails CI instead of failing on a device.
-# Category must be one IocSanitizer.CATEGORIES accepts; reference "" is what the
-# mirror feeds store (attribution() derives feed:<source>#<family> at read time).
+# Asks the debug build to store the fixture's signing cert as a feed-like indicator and reload its
+# indicator cache: a broadcast to the debug receiver (AdversarySeed.kt), which inserts the row through
+# the app's own DAO. Nothing runs on the device but the app, so this works on images without sqlite3
+# (the API 36.1 image and the SM-F916B have none; #424), and a schema change is a compile error in the
+# app instead of a silent INSERT failure here. The app is not restarted, so the VPN stays on for the
+# DNS scenarios. Pinned by test_run_sh_seed.py and AdversarySeedTest.
 #
-# Returns non-zero, with the reason on stdout, when any step fails, so the caller
-# reports a setup failure. Before schema 19's column renames broke it, this step's
-# errors went to /dev/null and the scenario simply never detected anything.
-SEED_DB="/data/data/com.androdr.debug/databases/androdr.db"
-SEED_UPDATE_TIMEOUT=300
+# Returns non-zero, with the reason on stdout, when any step fails, so the caller reports a setup
+# failure instead of a scenario that simply never detects anything.
+SEED_UPDATE_TIMEOUT=120
 # Logged only by IndicatorResolver.refreshCache(); see seed_cert_hash.
 CACHE_REFRESH_TAG="IndicatorResolver"
 CACHE_REFRESH_LINE="Indicator cache: "
 
 seed_cert_hash() {
-    local apk="$1" cert_hash n before after waited
+    local apk="$1" cert_hash before after waited
     cert_hash=$(keytool -printcert -jarfile "$apk" 2>/dev/null | grep "SHA256:" | head -1 | awk '{print $2}' | tr -d ':' | tr 'A-F' 'a-f' || true)
     if [ -z "$cert_hash" ]; then
         echo "  could not read the fixture's signing cert (keytool -printcert)"
         return 1
     fi
-    local sql="INSERT OR REPLACE INTO indicators (type, value, family, category, campaignKey, severity, description, source, reference, fetchedAt) VALUES ('cert_hash', '$cert_hash', 'Test Fixture', 'MALWARE', '', 'CRITICAL', 'Adversary simulation test cert', 'adversary-test', '', $(date +%s000));"
-    if ! $ADB shell "run-as com.androdr.debug sqlite3 $SEED_DB \"$sql\"" </dev/null; then
-        echo "  seeding INSERT failed (see the sqlite3 error above)"
-        return 1
-    fi
-    # adb shell exit codes are not trusted on every image: read the row back.
-    n=$($ADB shell "run-as com.androdr.debug sqlite3 $SEED_DB \"SELECT COUNT(*) FROM indicators WHERE type='cert_hash' AND value='$cert_hash';\"" </dev/null 2>&1 | tr -d '\r[:space:]')
-    if [ "$n" != "1" ]; then
-        echo "  seeded cert row not found in indicators (read back: '$n')"
-        return 1
-    fi
-    # IndicatorResolver answers cert lookups from an in-memory cache built at app start
-    # and after a feed update, never from Room directly. A threat-DB update ends in
-    # refreshCache() and, unlike a force-stop, leaves the VPN running for DNS scenarios.
-    # Wait for refreshCache()'s own line (IndicatorResolver "Indicator cache: ..."), not
-    # the receiver's "Update complete": when another update holds IndicatorUpdater's
-    # lock, update() returns without refreshing and the receiver still logs that. Any
-    # refresh logged after the INSERT above has read the seeded row, including the
-    # one that ends a concurrent update. Pinned by test_run_sh_seed.py.
+    # IndicatorResolver answers cert lookups from an in-memory cache, never from Room directly, so the
+    # seed is done only when refreshCache() has logged its own line after the broadcast. The receiver
+    # refuses anything that is not a SHA-256 hash and then logs no refresh, which times out here.
     before=$($ADB logcat -d -s "$CACHE_REFRESH_TAG:I" </dev/null 2>/dev/null | grep -c "$CACHE_REFRESH_LINE" || true)
-    $ADB shell am broadcast -a com.androdr.ACTION_UPDATE -n com.androdr.debug/com.androdr.debug.ScanBroadcastReceiver </dev/null >/dev/null 2>&1
+    $ADB shell am broadcast -a com.androdr.ACTION_SEED_CERT --es cert_hash "$cert_hash" -n com.androdr.debug/com.androdr.debug.ScanBroadcastReceiver </dev/null >/dev/null 2>&1
     waited=0
     while [ $waited -lt $SEED_UPDATE_TIMEOUT ]; do
         after=$($ADB logcat -d -s "$CACHE_REFRESH_TAG:I" </dev/null 2>/dev/null | grep -c "$CACHE_REFRESH_LINE" || true)
         [ "${after:-0}" -gt "${before:-0}" ] && return 0
         sleep 3; waited=$((waited + 3))
     done
-    echo "  indicator cache not reloaded: no '$CACHE_REFRESH_TAG: $CACHE_REFRESH_LINE' line within ${SEED_UPDATE_TIMEOUT}s"
+    echo "  cert hash not seeded: no '$CACHE_REFRESH_TAG: $CACHE_REFRESH_LINE' line within ${SEED_UPDATE_TIMEOUT}s (is this debug build older than the seed broadcast?)"
     return 1
 }
 

@@ -4,7 +4,9 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.util.Log
+import com.androdr.data.db.IndicatorDao
 import com.androdr.data.repo.CveRepository
+import com.androdr.ioc.IndicatorResolver
 import com.androdr.ioc.IndicatorUpdater
 import com.androdr.ioc.KnownAppUpdater
 import com.androdr.reporting.ReportExporter
@@ -30,14 +32,18 @@ class ScanBroadcastReceiver : BroadcastReceiver() {
     @Inject lateinit var sigmaRuleFeed: SigmaRuleFeed
     @Inject lateinit var sigmaRuleEngine: SigmaRuleEngine
     @Inject lateinit var reportExporter: ReportExporter
+    @Inject lateinit var indicatorDao: IndicatorDao
+    @Inject lateinit var indicatorResolver: IndicatorResolver
 
     override fun onReceive(context: Context, intent: Intent) {
         val action = intent.action
-        if (action != ACTION_SCAN && action != ACTION_UPDATE) return
+        if (action != ACTION_SCAN && action != ACTION_UPDATE && action != AdversarySeed.ACTION_SEED_CERT) return
         val pending = goAsync()
         CoroutineScope(Dispatchers.IO).launch {
             try {
-                if (action == ACTION_UPDATE) {
+                if (action == AdversarySeed.ACTION_SEED_CERT) {
+                    seedCert(intent.getStringExtra(AdversarySeed.EXTRA_CERT_HASH))
+                } else if (action == ACTION_UPDATE) {
                     doUpdate()
                     Log.i(TAG, "Update complete")
                 } else {
@@ -55,6 +61,22 @@ class ScanBroadcastReceiver : BroadcastReceiver() {
                 pending.finish()
             }
         }
+    }
+
+    /**
+     * Stores the adversary harness's cert-hash row and reloads the indicator cache (cert lookups are
+     * answered from that cache, never from Room directly). The harness waits for refreshCache()'s own
+     * log line. The app keeps running, so the DNS monitor other scenarios need stays on.
+     */
+    private suspend fun seedCert(hash: String?) {
+        val row = AdversarySeed.certIndicator(hash, System.currentTimeMillis())
+        if (row == null) {
+            Log.e(TAG, "Seed refused: not a SHA-256 cert hash")
+            return
+        }
+        indicatorDao.upsertAll(listOf(row))
+        indicatorResolver.refreshCache()
+        Log.i(TAG, "Seeded cert hash")
     }
 
     @Suppress("TooGenericExceptionCaught")
