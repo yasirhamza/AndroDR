@@ -8,7 +8,7 @@ working; later the emulator image and the test phone turned out to have no `sqli
 Now the debug build seeds the row itself: run.sh sends a broadcast with the hash, and the debug
 receiver inserts an `Indicator` through the app's own DAO and reloads the indicator cache. The row is
 type-checked by the compiler (AdversarySeedTest covers it), so nothing here parses SQL any more. These
-tests keep the two sides of that broadcast, and the log line run.sh waits for, from drifting apart.
+tests keep the two sides of that broadcast, and the log lines run.sh waits for, from drifting apart.
 
 CI: the `python-pipeline` job runs this file; test_ci_path_filter_covers_every_input pins its inputs.
 """
@@ -23,7 +23,6 @@ DEBUG = REPO / "app" / "src" / "debug"
 SEED_KT = DEBUG / "java" / "com" / "androdr" / "debug" / "AdversarySeed.kt"
 RECEIVER_KT = DEBUG / "java" / "com" / "androdr" / "debug" / "ScanBroadcastReceiver.kt"
 DEBUG_MANIFEST = DEBUG / "AndroidManifest.xml"
-RESOLVER = REPO / "app" / "src" / "main" / "java" / "com" / "androdr" / "ioc" / "IndicatorResolver.kt"
 CI_YML = REPO / ".github" / "workflows" / "ci.yml"
 
 
@@ -57,25 +56,36 @@ def test_run_sh_sends_the_broadcast_the_debug_receiver_handles():
     assert f'--es {extra} "$cert_hash"' in body
     assert "com.androdr.debug/com.androdr.debug.ScanBroadcastReceiver" in body
     assert f'android:name="{action}"' in DEBUG_MANIFEST.read_text()
-    receiver = RECEIVER_KT.read_text()
-    assert "AdversarySeed.ACTION_SEED_CERT" in receiver
-    assert "refreshCache()" in receiver, "the seeded row must reach the in-memory indicator cache"
+    assert "AdversarySeed.ACTION_SEED_CERT" in RECEIVER_KT.read_text()
 
 
-def test_cache_refresh_wait_matches_indicator_resolver():
-    """run.sh waits for refreshCache()'s own log line, under IndicatorResolver's tag.
+def seed_cert_kotlin():
+    """The body of the receiver's seedCert function."""
+    src = RECEIVER_KT.read_text()
+    body = src[src.index("private suspend fun seedCert("):]
+    return body[: body.index("\n    }\n")]
 
-    The receiver's own "complete" lines are not proof the cache was reloaded.
-    """
-    src = RESOLVER.read_text()
-    tag = re.search(r'TAG\s*=\s*"([^"]+)"', src).group(1)
-    assert shell_var("CACHE_REFRESH_TAG") == tag
-    line = shell_var("CACHE_REFRESH_LINE")
-    refresh = src[src.index("suspend fun refreshCache"):]
-    refresh = refresh[: refresh.index("\n    }\n")]
-    assert f'"{line}' in refresh, f"{line!r} is not logged by refreshCache()"
-    assert "Update complete" not in seed_body()
-    assert "ACTION_UPDATE" not in seed_body(), "a feed update can skip the refresh when another update holds the lock"
+
+def test_seeded_is_logged_only_after_the_row_is_stored_and_the_cache_reloaded():
+    """run.sh starts the scan on the receiver's "Seeded" line. Cert lookups are answered from
+    IndicatorResolver's in-memory cache, so the line must come after the insert AND the reload; another
+    update's cache-refresh line would not do (it may have read the table before the seed)."""
+    body = seed_cert_kotlin()
+    stored, reloaded = body.index("indicatorDao.upsertAll("), body.index("indicatorResolver.refreshCache()")
+    logged = body.index("AdversarySeed.LOG_SEEDED")
+    assert stored < reloaded < logged
+
+
+def test_run_sh_waits_for_the_receivers_own_lines():
+    assert shell_var("SEED_DONE_LINE") == kotlin_const("LOG_SEEDED")
+    assert kotlin_const("LOG_REFUSED").startswith(shell_var("SEED_REFUSED_LINE"))
+    tag = re.search(r'TAG\s*=\s*"([^"]+)"', RECEIVER_KT.read_text()).group(1)
+    assert shell_var("SEED_TAG") == tag
+    body = seed_body()
+    assert '"$SEED_DONE_LINE"' in body and '"$SEED_REFUSED_LINE"' in body
+    assert "ACTION_UPDATE" not in body and "Indicator cache" not in body
+    # The "before" counts are taken before the broadcast, so only this seed's lines are counted.
+    assert body.index("done_before=") < body.index("am broadcast") < body.index("while ")
 
 
 def test_ci_path_filter_covers_every_input():
@@ -85,5 +95,14 @@ def test_ci_path_filter_covers_every_input():
     filters = yaml.safe_load(jobs["changes"]["steps"][1]["with"]["filters"])
     python = filters["python"]
     assert "python" in jobs["python-pipeline"]["if"]
-    for path in ("test-adversary/**", str(RESOLVER.relative_to(REPO)), "app/src/debug/**"):
+    for path in ("test-adversary/**", "app/src/debug/**"):
         assert path in python, f"{path} missing from the python path filter"
+
+
+def test_only_the_adb_shell_can_reach_the_debug_receiver():
+    """The receiver is exported so `adb shell am broadcast` can reach it. Without a permission any
+    app on a test device could plant an indicator (a false "known threat developer") or start scans.
+    DUMP is held by the shell and cannot be granted to an ordinary app."""
+    manifest = DEBUG_MANIFEST.read_text()
+    receiver = manifest[manifest.index("<receiver"):manifest.index("</receiver>")]
+    assert 'android:permission="android.permission.DUMP"' in receiver

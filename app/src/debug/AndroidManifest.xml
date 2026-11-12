@@ -5,7 +5,11 @@
         <receiver
             android:name="com.androdr.debug.ScanBroadcastReceiver"
             android:exported="true"
+            android:permission="android.permission.DUMP"
             tools:ignore="ExportedReceiver">
+            <!-- Exported for `adb shell am broadcast` (the adversary harness). DUMP is held by the shell and
+                 cannot be granted to an ordinary app, so no other app on a test device can start a scan or
+                 plant a seed indicator. -->
             <intent-filter>
                 <action android:name="com.androdr.ACTION_SCAN" />
                 <action android:name="com.androdr.ACTION_UPDATE" />

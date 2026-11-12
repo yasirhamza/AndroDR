@@ -266,30 +266,38 @@ sideload_install() {
 #
 # Returns non-zero, with the reason on stdout, when any step fails, so the caller reports a setup
 # failure instead of a scenario that simply never detects anything.
-SEED_UPDATE_TIMEOUT=120
-# Logged only by IndicatorResolver.refreshCache(); see seed_cert_hash.
-CACHE_REFRESH_TAG="IndicatorResolver"
-CACHE_REFRESH_LINE="Indicator cache: "
+SEED_TIMEOUT=120
+# The debug receiver's own lines (AdversarySeed.LOG_SEEDED / LOG_REFUSED). "Seeded" is logged only after
+# the row is stored and IndicatorResolver.refreshCache() has returned, so it is proof the scan will see
+# the row; another update's cache-refresh line is not (it may have read the table before the seed).
+SEED_TAG="ScanBroadcastReceiver"
+SEED_DONE_LINE="Seeded cert hash"
+SEED_REFUSED_LINE="Seed refused"
+
+seed_log_count() {
+    $ADB logcat -d -s "$SEED_TAG:*" </dev/null 2>/dev/null | grep -c "$1" || true
+}
 
 seed_cert_hash() {
-    local apk="$1" cert_hash before after waited
+    local apk="$1" cert_hash done_before refused_before waited
     cert_hash=$(keytool -printcert -jarfile "$apk" 2>/dev/null | grep "SHA256:" | head -1 | awk '{print $2}' | tr -d ':' | tr 'A-F' 'a-f' || true)
     if [ -z "$cert_hash" ]; then
         echo "  could not read the fixture's signing cert (keytool -printcert)"
         return 1
     fi
-    # IndicatorResolver answers cert lookups from an in-memory cache, never from Room directly, so the
-    # seed is done only when refreshCache() has logged its own line after the broadcast. The receiver
-    # refuses anything that is not a SHA-256 hash and then logs no refresh, which times out here.
-    before=$($ADB logcat -d -s "$CACHE_REFRESH_TAG:I" </dev/null 2>/dev/null | grep -c "$CACHE_REFRESH_LINE" || true)
+    done_before=$(seed_log_count "$SEED_DONE_LINE")
+    refused_before=$(seed_log_count "$SEED_REFUSED_LINE")
     $ADB shell am broadcast -a com.androdr.ACTION_SEED_CERT --es cert_hash "$cert_hash" -n com.androdr.debug/com.androdr.debug.ScanBroadcastReceiver </dev/null >/dev/null 2>&1
     waited=0
-    while [ $waited -lt $SEED_UPDATE_TIMEOUT ]; do
-        after=$($ADB logcat -d -s "$CACHE_REFRESH_TAG:I" </dev/null 2>/dev/null | grep -c "$CACHE_REFRESH_LINE" || true)
-        [ "${after:-0}" -gt "${before:-0}" ] && return 0
+    while [ $waited -lt $SEED_TIMEOUT ]; do
+        [ "$(seed_log_count "$SEED_DONE_LINE")" -gt "${done_before:-0}" ] && return 0
+        if [ "$(seed_log_count "$SEED_REFUSED_LINE")" -gt "${refused_before:-0}" ]; then
+            echo "  the debug app refused the cert hash '$cert_hash' (not a SHA-256 hash)"
+            return 1
+        fi
         sleep 3; waited=$((waited + 3))
     done
-    echo "  cert hash not seeded: no '$CACHE_REFRESH_TAG: $CACHE_REFRESH_LINE' line within ${SEED_UPDATE_TIMEOUT}s (is this debug build older than the seed broadcast?)"
+    echo "  cert hash not seeded: no '$SEED_TAG: $SEED_DONE_LINE' line within ${SEED_TIMEOUT}s (is this debug build older than the seed broadcast?)"
     return 1
 }
 

@@ -71,12 +71,12 @@ class ScanBroadcastReceiver : BroadcastReceiver() {
     private suspend fun seedCert(hash: String?) {
         val row = AdversarySeed.certIndicator(hash, System.currentTimeMillis())
         if (row == null) {
-            Log.e(TAG, "Seed refused: not a SHA-256 cert hash")
+            Log.e(TAG, AdversarySeed.LOG_REFUSED)
             return
         }
         indicatorDao.upsertAll(listOf(row))
         indicatorResolver.refreshCache()
-        Log.i(TAG, "Seeded cert hash")
+        Log.i(TAG, AdversarySeed.LOG_SEEDED)
     }
 
     @Suppress("TooGenericExceptionCaught")

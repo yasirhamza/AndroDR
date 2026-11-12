@@ -15,6 +15,12 @@ internal object AdversarySeed {
     const val EXTRA_CERT_HASH = "cert_hash"
     const val SOURCE = "adversary-test"
 
+    /** Logged by the receiver once the row is stored AND the indicator cache reloaded; run.sh waits for it. */
+    const val LOG_SEEDED = "Seeded cert hash"
+
+    /** Logged when the broadcast carried no SHA-256 hash; run.sh reports it as the setup failure. */
+    const val LOG_REFUSED = "Seed refused: not a SHA-256 cert hash"
+
     private val SHA256_HEX = Regex("^[0-9a-f]{64}$")
 
     /**
