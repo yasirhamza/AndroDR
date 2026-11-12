@@ -1,9 +1,12 @@
 # forti.external-muki.com is a Graphite certificate name (Citizen Lab, March 2025),
 # in ioc-data/c2-domains.yml with campaign: graphite; androdr-003 must match it.
 # paragon-graphite.net was an invented placeholder and must never match. Since Phase B the
-# DNS rows are the scan's stored dns_monitor records, one field per line; the tunnel's match
-# is the record's reason line ("IOC: <indicator>" or "IOC_detect: <indicator>").
-~^     reason: IOC(_detect)?: forti\.external-muki\.com$
+# DNS rows are the scan's stored dns_monitor records, one field per line. This domain is bundled with
+# blockByDefault, and the tunnel checks its block list (BlocklistManager, which holds the bundled
+# block-by-default domains) before the IOC index, so its record's reason is "blocklist" (or
+# "blocklist_detect" in detect-only mode), never "IOC: ...". A feed-only domain reads "IOC: <indicator>"
+# (see mercenary_dns_c2). The line was wrong until 2026-11-12; guided mode never reached it (#424).
+@^     domain: forti\.external-muki\.com$ => ^     reason: blocklist(_detect)?$
 # The placeholder's own record must carry no tunnel reason at all (IOC, IOC_detect,
 # blocklist or blocklist_detect): reason: null, scoped to that record.
 @^     domain: paragon-graphite\.net$ => ^     reason: null$

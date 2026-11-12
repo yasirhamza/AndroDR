@@ -47,6 +47,28 @@ else
 fi
 WORKDIR=$(mktemp -d /tmp/androdr-adversary-XXXXXX)
 
+# ── A live blocklist domain (IOC decay) ──────────────────────────────────────
+# Scenarios that need "a domain the app's blocklist holds" name the placeholder @LIVE_TIF_DOMAIN@, never
+# one domain: indicators age out of the feed. It is filled here, from the feed the app itself downloads,
+# into copies of the manifest and the expected patterns that the rest of the run reads.
+LIVE_TIF_URL=$(grep -rhoE 'https://[^"]*hagezi[^"]*tif[^"]*\.txt' "$SCRIPT_DIR/../app/src/main/java" | head -1 || true)
+LIVE_TIF_DOMAIN=""
+if [ -n "$LIVE_TIF_URL" ]; then
+    LIVE_TIF_DOMAIN=$(curl -fsSL --max-time 120 "$LIVE_TIF_URL" | python3 "$SCRIPT_DIR/live-indicator.py" || true)
+fi
+if [ -z "$LIVE_TIF_DOMAIN" ]; then
+    echo "WARNING: no live blocklist domain could be picked; scenarios using @LIVE_TIF_DOMAIN@ will fail."
+else
+    echo "Live blocklist domain for this run: $LIVE_TIF_DOMAIN"
+    mkdir -p "$WORKDIR/expected"
+    sed "s/@LIVE_TIF_DOMAIN@/$LIVE_TIF_DOMAIN/g" "$MANIFEST" > "$WORKDIR/manifest.yml"
+    for f in "$EXPECTED_DIR"/*.patterns; do
+        sed "s/@LIVE_TIF_DOMAIN@/$LIVE_TIF_DOMAIN/g" "$f" > "$WORKDIR/expected/$(basename "$f")"
+    done
+    MANIFEST="$WORKDIR/manifest.yml"
+    EXPECTED_DIR="$WORKDIR/expected"
+fi
+
 # Track results for summary
 declare -A RESULTS
 
@@ -690,8 +712,11 @@ if [ "$MODE" = "load" ] || [ "$MODE" = "guided" ]; then
                 case "$pattern" in '#'*) continue ;; esac
                 # One assertion through guided-check.sh: the same sigils as check-patterns.sh,
                 # and a MALFORMED pattern always counts as a failure (never an expected fail).
-                bash "$SCRIPT_DIR/guided-check.sh" "$REPORT" "$pattern" "$roadmap" </dev/null
-                case $? in
+                # `|| check_status=$?`: under `set -e` a miss (1) or an expected fail (2) run as a plain
+                # command would end the walkthrough before it is counted (test_run_sh_guided.py).
+                check_status=0
+                bash "$SCRIPT_DIR/guided-check.sh" "$REPORT" "$pattern" "$roadmap" </dev/null || check_status=$?
+                case "$check_status" in
                     0) ((GUIDED_PASS++)) || true ;;
                     2) ((GUIDED_EXPECTED++)) || true ;;
                     *) ((GUIDED_FAIL++)) || true ;;
