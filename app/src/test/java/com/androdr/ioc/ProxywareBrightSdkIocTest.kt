@@ -71,7 +71,10 @@ class ProxywareBrightSdkIocTest {
             remediation.any { it.contains("Residential-proxy SDK") && it.contains("Uninstall that app") },
         )
         val guidance = (rule["display"] as Map<String, Any?>)["guidance"].toString()
-        assertFalse("androdr-003 guidance calls every threat-list domain a C2 server", guidance.contains("known C2 server"))
+        assertFalse(
+            "androdr-003 guidance calls every threat-list domain a C2 server",
+            guidance.contains("known C2 server"),
+        )
         assertEquals("level must stay critical", "critical", rule["level"])
     }
 
