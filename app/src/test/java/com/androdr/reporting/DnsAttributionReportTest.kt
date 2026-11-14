@@ -55,7 +55,7 @@ class DnsAttributionReportTest {
         val c2 = Finding(
             ruleId = "androdr-003", title = "Known C2 Domain Contacted", level = "critical",
             category = FindingCategory.APP_RISK, triggered = true,
-            guidance = "INVESTIGATE -- device contacted a known C2 server",
+            guidance = "INVESTIGATE -- device contacted a threat-list domain; the matched entry names the threat",
             matchContext = mapOf("domain" to "c2.evil.example", "source_package" to "com.evil.app"),
         )
 

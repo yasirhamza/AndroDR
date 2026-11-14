@@ -53,6 +53,6 @@ class BundledDomainDatabaseTest {
         val raw = File(if (File("app/src/main/res/raw").isDirectory) "app/src/main/res/raw" else "src/main/res/raw",
             "known_bad_domains.json").readText()
         val (d, _) = db(raw)
-        assertEquals(291, d.blockedDomains().size)
+        assertEquals(305, d.blockedDomains().size)
     }
 }
