@@ -5,7 +5,7 @@ import com.androdr.data.model.Indicator
 /** Bounds feed-controlled strings before they reach the DB, reports and UI (spec §3.1a, R13). */
 object IocSanitizer {
     internal val CATEGORIES = setOf("STALKERWARE", "SPYWARE", "MALWARE", "NATION_STATE_SPYWARE",
-        "FORENSIC_TOOL", "MONITORING", "DATA_BROKER_SDK")
+        "FORENSIC_TOOL", "MONITORING", "DATA_BROKER_SDK", "PROXYWARE")
     private val KEY = Regex("^[a-z0-9_-]{1,32}$")
     private const val MAX_FAMILY = 120
     private const val MAX_REFERENCE = 512

@@ -935,6 +935,28 @@
     "blockByDefault": false
   },
   {
+    "domain": "brdtest.com",
+    "familyName": "Bright SDK (residential proxy)",
+    "category": "PROXYWARE",
+    "campaign": "",
+    "severity": "HIGH",
+    "description": "Bright SDK connectivity-test domain.",
+    "source": "threat_research",
+    "reference": "https://blazskufca.com/projects/webos-brightdata/",
+    "blockByDefault": true
+  },
+  {
+    "domain": "brdtnet.com",
+    "familyName": "Bright SDK (residential proxy)",
+    "category": "PROXYWARE",
+    "campaign": "",
+    "severity": "HIGH",
+    "description": "Bright SDK peer-channel, config and per-IP relay-node domain (proxyjs., clientsdk., <a-b-c-d>.brdtnet.com).",
+    "source": "threat_research",
+    "reference": "https://blog.includesecurity.com/2026/06/the-smart-tv-in-your-livingroom-is-a-node-in-the-aiscraping-economy/",
+    "blockByDefault": true
+  },
+  {
     "domain": "brigadeirobeach.makeup",
     "familyName": "NGate",
     "category": "MALWARE",
@@ -943,6 +965,17 @@
     "description": "NGate infrastructure (Brazil lure)",
     "source": "threat_research",
     "reference": "https://raw.githubusercontent.com/eset/malware-ioc/master/ngate/README.adoc",
+    "blockByDefault": true
+  },
+  {
+    "domain": "bright-sdk.com",
+    "familyName": "Bright SDK (residential proxy)",
+    "category": "PROXYWARE",
+    "campaign": "",
+    "severity": "HIGH",
+    "description": "Bright SDK config, peer-channel and error-reporting domain (clientsdk., proxyjs., perr.).",
+    "source": "threat_research",
+    "reference": "https://blog.includesecurity.com/2026/06/the-smart-tv-in-your-livingroom-is-a-node-in-the-aiscraping-economy/",
     "blockByDefault": true
   },
   {
@@ -1307,6 +1340,17 @@
     "source": "zimperium-ioc",
     "reference": "feed:zimperium-ioc#ToxicPanda",
     "blockByDefault": false
+  },
+  {
+    "domain": "cdn-cloud.b-cdn.net",
+    "familyName": "Bright SDK (residential proxy)",
+    "category": "PROXYWARE",
+    "campaign": "",
+    "severity": "HIGH",
+    "description": "Exact host serving the Bright SDK cloud config file. Tenant host on a shared CDN: never list the parent b-cdn.net.",
+    "source": "threat_research",
+    "reference": "https://blazskufca.com/projects/webos-brightdata/",
+    "blockByDefault": true
   },
   {
     "domain": "cerberusapp.com",
@@ -3388,6 +3432,17 @@
     "blockByDefault": false
   },
   {
+    "domain": "l-err.biz",
+    "familyName": "Bright SDK (residential proxy)",
+    "category": "PROXYWARE",
+    "campaign": "",
+    "severity": "HIGH",
+    "description": "Bright SDK error-reporting domain (perr.), listed in the SDK cloud config.",
+    "source": "threat_research",
+    "reference": "https://blazskufca.com/projects/webos-brightdata/",
+    "blockByDefault": true
+  },
+  {
     "domain": "lb-ndrq4ayq-1h7mf9psqdkb65lv.clb.sg-tencentclb.net",
     "familyName": "Unknown malware",
     "category": "MALWARE",
@@ -3484,6 +3539,28 @@
     "description": "Donot Team (APT-C-35) spyware C2/APK-delivery domain \u2014 Togo campaign (Amnesty Tech, Oct 2021); domain may have been re-registered since",
     "source": "amnesty-investigations",
     "reference": "feed:amnesty-investigations#2021-10-07_donot",
+    "blockByDefault": true
+  },
+  {
+    "domain": "luminati-china.io",
+    "familyName": "Bright SDK (residential proxy)",
+    "category": "PROXYWARE",
+    "campaign": "",
+    "severity": "HIGH",
+    "description": "Bright SDK config endpoint domain (clientsdk.).",
+    "source": "threat_research",
+    "reference": "https://blazskufca.com/projects/webos-brightdata/",
+    "blockByDefault": true
+  },
+  {
+    "domain": "luminatinet.com",
+    "familyName": "Bright SDK (residential proxy)",
+    "category": "PROXYWARE",
+    "campaign": "",
+    "severity": "HIGH",
+    "description": "Bright SDK peer-channel domain (proxyjs.); also the TLS certificate name served on the peer channel.",
+    "source": "threat_research",
+    "reference": "https://blog.includesecurity.com/2026/06/the-smart-tv-in-your-livingroom-is-a-node-in-the-aiscraping-economy/",
     "blockByDefault": true
   },
   {
@@ -4499,6 +4576,17 @@
     "blockByDefault": true
   },
   {
+    "domain": "p.l-conn.net",
+    "familyName": "Bright SDK (residential proxy)",
+    "category": "PROXYWARE",
+    "campaign": "",
+    "severity": "HIGH",
+    "description": "Bright SDK peer-channel host, listed in the SDK cloud config (proxyjs_domains_a1). Exact host: the parent domain is not listed.",
+    "source": "threat_research",
+    "reference": "https://blazskufca.com/projects/webos-brightdata/",
+    "blockByDefault": true
+  },
+  {
     "domain": "packwa.claydc.top",
     "familyName": "ClayRat",
     "category": "SPYWARE",
@@ -4618,6 +4706,17 @@
     "source": "threat_research",
     "reference": "https://blog.xlab.qianxin.com/long-live-the-vo1d_botnet/",
     "blockByDefault": false
+  },
+  {
+    "domain": "perr.l-agent.me",
+    "familyName": "Bright SDK (residential proxy)",
+    "category": "PROXYWARE",
+    "campaign": "",
+    "severity": "HIGH",
+    "description": "Bright SDK error-reporting host, listed in the SDK cloud config (perr_domains). Exact host: the parent domain is not listed.",
+    "source": "threat_research",
+    "reference": "https://blazskufca.com/projects/webos-brightdata/",
+    "blockByDefault": true
   },
   {
     "domain": "petrel-ip.com",
@@ -7203,6 +7302,61 @@
     "source": "threatfox",
     "reference": "feed:threatfox#Triada",
     "blockByDefault": false
+  },
+  {
+    "domain": "zagent108.l-cdn.com",
+    "familyName": "Bright SDK (residential proxy)",
+    "category": "PROXYWARE",
+    "campaign": "",
+    "severity": "HIGH",
+    "description": "Bright SDK update host, listed in the SDK cloud config (cdn_update_urls). Exact host: the parent domain is not listed.",
+    "source": "threat_research",
+    "reference": "https://blazskufca.com/projects/webos-brightdata/",
+    "blockByDefault": true
+  },
+  {
+    "domain": "zagent110.l-cdn.com",
+    "familyName": "Bright SDK (residential proxy)",
+    "category": "PROXYWARE",
+    "campaign": "",
+    "severity": "HIGH",
+    "description": "Bright SDK update host, listed in the SDK cloud config (cdn_update_urls). Exact host: the parent domain is not listed.",
+    "source": "threat_research",
+    "reference": "https://blazskufca.com/projects/webos-brightdata/",
+    "blockByDefault": true
+  },
+  {
+    "domain": "zagent111.l-cdn.com",
+    "familyName": "Bright SDK (residential proxy)",
+    "category": "PROXYWARE",
+    "campaign": "",
+    "severity": "HIGH",
+    "description": "Bright SDK update host, listed in the SDK cloud config (cdn_update_urls). Exact host: the parent domain is not listed.",
+    "source": "threat_research",
+    "reference": "https://blazskufca.com/projects/webos-brightdata/",
+    "blockByDefault": true
+  },
+  {
+    "domain": "zagent112.l-cdn.com",
+    "familyName": "Bright SDK (residential proxy)",
+    "category": "PROXYWARE",
+    "campaign": "",
+    "severity": "HIGH",
+    "description": "Bright SDK update host, listed in the SDK cloud config (cdn_update_urls). Exact host: the parent domain is not listed.",
+    "source": "threat_research",
+    "reference": "https://blazskufca.com/projects/webos-brightdata/",
+    "blockByDefault": true
+  },
+  {
+    "domain": "zagent113.l-cdn.com",
+    "familyName": "Bright SDK (residential proxy)",
+    "category": "PROXYWARE",
+    "campaign": "",
+    "severity": "HIGH",
+    "description": "Bright SDK update host, listed in the SDK cloud config (cdn_update_urls). Exact host: the parent domain is not listed.",
+    "source": "threat_research",
+    "reference": "https://blazskufca.com/projects/webos-brightdata/",
+    "blockByDefault": true
   },
   {
     "domain": "zam.claydc.top",
