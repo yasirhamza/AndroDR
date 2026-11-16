@@ -22,10 +22,11 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * The tracker-SDK registry (`ioc-data/trackers.yml`, mirrored from Exodus Privacy) behind the
- * privacy scan. The bundled copy (`res/raw/trackers.yml`) is parsed lazily on first use; a
- * hash-verified remote copy replaces it atomically via [refresh] (fail closed, see
- * [IocDataManifest]). Parsing is per-entry tolerant: a bad item drops that item, never the file.
+ * The tracker-SDK registry (`ioc-data/trackers.yml`: a mirror of Exodus Privacy plus AndroDR's own
+ * entries, ids from `ANDRODR_TRACKER_ID_MIN`) behind the privacy scan. The bundled copy
+ * (`res/raw/trackers.yml`) is parsed lazily on first use; a hash-verified remote copy replaces it
+ * atomically via [refresh] (fail closed, see [IocDataManifest]). Parsing is per-entry tolerant: a
+ * bad item drops that item, never the file.
  */
 @Singleton
 class TrackerRegistry @Inject constructor(

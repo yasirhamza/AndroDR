@@ -574,7 +574,7 @@
     <string name="privacy_delete">Delete privacy results</string>
     <string name="privacy_delete_confirm">Delete the stored list of every app\'s code packages, tracker findings and looked-up tracker domains?</string>
     <string name="privacy_delete_cancel">Cancel</string>
-    <string name="privacy_attribution">Tracker data: Exodus Privacy (ODbL 1.0)</string>
+    <string name="privacy_attribution">Tracker data: Exodus Privacy (ODbL 1.0). Proxyware entries are AndroDR\'s own.</string>
     <string name="privacy_last_scan">Last scan: %1$s</string>
     <string name="privacy_never_scanned">No privacy scan has been run yet.</string>
     <string name="privacy_empty_tracker_list">Nothing to list here.</string>
@@ -585,6 +585,7 @@
     <string name="privacy_evidence_title">Tracker details</string>
     <string name="privacy_evidence_in_app">in %1$s (%2$s)</string>
     <string name="privacy_evidence_list_entry">Tracker list entry %1$d (Exodus Privacy)</string>
+    <string name="privacy_evidence_list_entry_androdr">Tracker list entry %1$d (AndroDR\'s own entry, not from Exodus Privacy)</string>
     <string name="privacy_evidence_run_new_scan">Run a new privacy scan to record the matching packages and domains.</string>
     <string name="privacy_evidence_found_in_code">Found in code</string>
     <string name="privacy_evidence_version">Version inspected: %1$s · %2$s</string>

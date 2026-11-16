@@ -45,27 +45,70 @@ class SettingsRepositoryPrivacyTest {
 
     @Test
     fun `an unknown stored category name is ignored`() = runBlocking {
+        repo.setRefusedTrackerCategories(setOf(TrackerCategory.LOCATION))
         dataStore.edit {
             it[stringSetPreferencesKey("privacy_refused_categories")] = setOf("LOCATION", "NOT_A_CATEGORY")
         }
-        // Proxyware comes with it: this stored set predates the category (see the next test).
-        assertEquals(setOf(TrackerCategory.LOCATION, TrackerCategory.PROXYWARE), repo.refusedTrackerCategories.first())
+        assertEquals(setOf(TrackerCategory.LOCATION), repo.refusedTrackerCategories.first())
+    }
+
+    /** What an install that customised its threshold on an earlier build holds after the update. */
+    private suspend fun storedByAnEarlierBuild(vararg names: String) {
+        dataStore.edit { it[stringSetPreferencesKey("privacy_refused_categories")] = names.toSet() }
     }
 
     @Test
     fun `a threshold saved before proxyware existed refuses it until the next save`() = runBlocking {
-        // What an install that customised its threshold holds on its first start after the update.
-        dataStore.edit { it[stringSetPreferencesKey("privacy_refused_categories")] = setOf("LOCATION") }
+        storedByAnEarlierBuild("LOCATION")
         assertEquals(setOf(TrackerCategory.LOCATION, TrackerCategory.PROXYWARE), repo.refusedTrackerCategories.first())
+        storedByAnEarlierBuild()
+        assertEquals(setOf(TrackerCategory.PROXYWARE), repo.refusedTrackerCategories.first())
     }
 
     @Test
     fun `proxyware switched off by the person stays off`() = runBlocking {
-        dataStore.edit { it[stringSetPreferencesKey("privacy_refused_categories")] = setOf("LOCATION") }
-        repo.setRefusedTrackerCategories(setOf(TrackerCategory.LOCATION))
+        storedByAnEarlierBuild("LOCATION")
+        repo.setTrackerCategoryRefused(TrackerCategory.PROXYWARE, false)
         assertEquals(setOf(TrackerCategory.LOCATION), repo.refusedTrackerCategories.first())
         repo.setRefusedTrackerCategories(emptySet())
         assertEquals(emptySet<TrackerCategory>(), repo.refusedTrackerCategories.first())
+    }
+
+    @Test
+    fun `changing another category keeps proxyware refused on an earlier threshold`() = runBlocking {
+        storedByAnEarlierBuild("LOCATION")
+        repo.setTrackerCategoryRefused(TrackerCategory.ANALYTICS, true)
+        assertEquals(
+            setOf(TrackerCategory.LOCATION, TrackerCategory.ANALYTICS, TrackerCategory.PROXYWARE),
+            repo.refusedTrackerCategories.first(),
+        )
+    }
+
+    @Test
+    fun `one category is changed from what is stored, not from what a screen showed`() = runBlocking {
+        // #470 review: the sheet could be tapped before the stored threshold was read, and it then
+        // saved "nothing refused, plus or minus one" over the real threshold.
+        repo.setTrackerCategoryRefused(TrackerCategory.CRASH_REPORTING, true)
+        assertEquals(
+            SettingsRepository.DEFAULT_REFUSED_CATEGORIES + TrackerCategory.CRASH_REPORTING,
+            repo.refusedTrackerCategories.first(),
+        )
+        repo.setTrackerCategoryRefused(TrackerCategory.LOCATION, false)
+        assertEquals(
+            SettingsRepository.DEFAULT_REFUSED_CATEGORIES + TrackerCategory.CRASH_REPORTING - TrackerCategory.LOCATION,
+            repo.refusedTrackerCategories.first(),
+        )
+    }
+
+    @Test
+    fun `the categories of earlier builds are the ones the app had before proxyware`() {
+        // A category added later must not be added to this list: it would then never be refused
+        // for a threshold saved earlier.
+        assertEquals(
+            TrackerCategory.entries.map { it.name }.toSet() - "PROXYWARE",
+            setOf("ADVERTISEMENT", "PROFILING", "IDENTIFICATION", "LOCATION", "ANALYTICS",
+                "CRASH_REPORTING", "UNCATEGORISED", "OTHER"),
+        )
     }
 
     @Test

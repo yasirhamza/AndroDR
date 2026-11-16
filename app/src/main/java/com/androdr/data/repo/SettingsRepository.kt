@@ -1,6 +1,7 @@
 package com.androdr.data.repo
 
 import androidx.datastore.core.DataStore
+import androidx.datastore.preferences.core.MutablePreferences
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
@@ -125,25 +126,26 @@ class SettingsRepository @Inject constructor(
      * [TrackerCategory.CRASH_REPORTING] and [TrackerCategory.OTHER], so UNCATEGORISED is refused.
      * Stored by enum name; an unknown stored name is ignored.
      *
-     * A threshold saved before [TrackerCategory.PROXYWARE] existed says nothing about it, so the
-     * category is refused until the person next saves the threshold; from then on their saved
-     * choice decides (#470).
+     * A saved threshold says nothing about a category the app did not have when it was saved
+     * (PROXYWARE, #470, is the first). Such a category counts as it does by default until the
+     * person next saves the threshold; from then on their saved choice decides. The categories
+     * known at the time of a save are stored with it for this.
      */
-    val refusedTrackerCategories: Flow<Set<TrackerCategory>> = dataStore.data
-        .map { prefs ->
-            val stored = prefs[KEY_PRIVACY_REFUSED]
-                ?.mapNotNull { n -> TrackerCategory.entries.firstOrNull { it.name == n } }?.toSet()
-            when {
-                stored == null -> DEFAULT_REFUSED_CATEGORIES
-                prefs[KEY_PRIVACY_PROXYWARE_DECIDED] == true -> stored
-                else -> stored + TrackerCategory.PROXYWARE
-            }
-        }
+    val refusedTrackerCategories: Flow<Set<TrackerCategory>> = dataStore.data.map(::refusedIn)
 
     suspend fun setRefusedTrackerCategories(value: Set<TrackerCategory>) {
+        dataStore.edit { it.saveRefused(value) }
+    }
+
+    /**
+     * Refuses or accepts one category, starting from what is stored and not from what a screen
+     * happened to show: a tap that lands before the screen has read the threshold must not save
+     * an empty one over it.
+     */
+    suspend fun setTrackerCategoryRefused(category: TrackerCategory, refused: Boolean) {
         dataStore.edit {
-            it[KEY_PRIVACY_REFUSED] = value.map { c -> c.name }.toSet()
-            it[KEY_PRIVACY_PROXYWARE_DECIDED] = true
+            val current = refusedIn(it)
+            it.saveRefused(if (refused) current + category else current - category)
         }
     }
 
@@ -173,9 +175,28 @@ class SettingsRepository @Inject constructor(
         private val KEY_SNAPSHOT_RETENTION_SCANS = intPreferencesKey("snapshot_retention_scans")
         const val DEFAULT_SNAPSHOT_RETENTION_SCANS = 20
         private val KEY_PRIVACY_REFUSED = stringSetPreferencesKey("privacy_refused_categories")
-        private val KEY_PRIVACY_PROXYWARE_DECIDED = booleanPreferencesKey("privacy_proxyware_decided")
+        private val KEY_PRIVACY_KNOWN_AT_SAVE = stringSetPreferencesKey("privacy_categories_known_at_save")
+
+        /** The categories of the builds that saved a threshold without the known-at-save set. */
+        private val CATEGORIES_BEFORE_KNOWN_WAS_STORED = setOf(
+            "ADVERTISEMENT", "PROFILING", "IDENTIFICATION", "LOCATION", "ANALYTICS",
+            "CRASH_REPORTING", "UNCATEGORISED", "OTHER",
+        )
         private val KEY_PRIVACY_SHOW_SYSTEM = booleanPreferencesKey("privacy_show_system_apps")
         val DEFAULT_REFUSED_CATEGORIES: Set<TrackerCategory> =
             TrackerCategory.entries.toSet() - TrackerCategory.CRASH_REPORTING - TrackerCategory.OTHER
+
+        private fun refusedIn(prefs: Preferences): Set<TrackerCategory> {
+            val stored = prefs[KEY_PRIVACY_REFUSED]
+                ?.mapNotNull { n -> TrackerCategory.entries.firstOrNull { it.name == n } }?.toSet()
+                ?: return DEFAULT_REFUSED_CATEGORIES
+            val knownAtSave = prefs[KEY_PRIVACY_KNOWN_AT_SAVE] ?: CATEGORIES_BEFORE_KNOWN_WAS_STORED
+            return stored + DEFAULT_REFUSED_CATEGORIES.filter { it.name !in knownAtSave }
+        }
+
+        private fun MutablePreferences.saveRefused(value: Set<TrackerCategory>) {
+            this[KEY_PRIVACY_REFUSED] = value.map { c -> c.name }.toSet()
+            this[KEY_PRIVACY_KNOWN_AT_SAVE] = TrackerCategory.entries.map { c -> c.name }.toSet()
+        }
     }
 }

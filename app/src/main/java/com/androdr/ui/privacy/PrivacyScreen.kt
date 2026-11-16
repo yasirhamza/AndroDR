@@ -57,7 +57,7 @@ import java.util.Date
 
 /**
  * The privacy screen (one tap from the Dashboard): last-scan header, Run / progress, By app and By tracker tabs,
- * the "What I refuse" sheet, a footer stating the limits and the Exodus attribution, and a confirmed Delete.
+ * the "What I refuse" sheet, a footer stating the limits and where the tracker data comes from, and a confirmed Delete.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -116,7 +116,8 @@ fun PrivacyScreen(
         )
     }
 
-    if (showThreshold) {
+    // Not before the stored threshold has been read: the sheet would show every box unticked.
+    if (showThreshold && state.loaded) {
         PrivacyThresholdSheet(state.refused, viewModel::setRefused) { showThreshold = false }
     }
     detail?.let { pkg -> AppSheet(state, pkg, onDismiss = { detail = null }, onOpenEvidence) }

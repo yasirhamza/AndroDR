@@ -30,6 +30,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.androdr.privacy.model.isAndrodrTrackerId
 import com.androdr.R
 import com.androdr.privacy.CodeSignature
 import com.androdr.privacy.EvidenceDetails
@@ -139,7 +140,14 @@ private fun Header(d: EvidenceDetails, res: Resources) {
         ),
         style = MaterialTheme.typography.bodyMedium,
     )
-    val entry = stringResource(R.string.privacy_evidence_list_entry, e.trackerId)
+    val entry = stringResource(
+        if (isAndrodrTrackerId(e.trackerId)) {
+            R.string.privacy_evidence_list_entry_androdr
+        } else {
+            R.string.privacy_evidence_list_entry
+        },
+        e.trackerId,
+    )
     val link = PrivacyEvidenceDetailText.exodusLink(e.trackerId)
     val uri = LocalUriHandler.current
     if (link != null) {

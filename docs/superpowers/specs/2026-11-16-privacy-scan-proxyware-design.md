@@ -101,6 +101,27 @@ is added.
 The entry appears in a privacy scan as "Bright SDK (residential proxy)" under "Other", which
 is not refused by default. Nothing breaks; it is simply quieter until the update.
 
+Known flaw on those versions (found in review): the tracker's details page says "Tracker list
+entry 900001 (Exodus Privacy)" and links to an Exodus page that does not exist. Versions from
+this change on say the entry is AndroDR's own and show no link. This cannot be fixed for
+installed versions without withholding the entry from the feed.
+
+## Changes made in review (2026-11-16)
+
+- The app marks AndroDR's own entries (ids from 900001) as such on the details page and in the
+  attribution line.
+- The saved-threshold rule is general: a saved threshold stores the categories known at the
+  time, so any category added later counts as it does by default until the next save.
+- The threshold sheet changes one category at a time from what is stored, so a tap before the
+  stored threshold is read cannot overwrite it.
+- The mirror sets aside an Exodus entry that carries the name of one of ours or a category
+  reserved for ours; the supplement loader refuses repeated keys, unknown categories and an
+  empty file.
+- Supplement entries are changed by a rules-repo pull request that regenerates the list, not
+  through `/update-rules`, which refreshes Exodus's part only.
+- Not changed: `docs/PRIVACY_POLICY.md` still says the tracker SDKs come from the Exodus list.
+  That is an owner decision (the policy is published on the site).
+
 ### Regression gates
 
 - Mirror tests: supplement entries are in the output; a regeneration from an Exodus dump keeps
@@ -124,5 +145,4 @@ Safe ordering as for any `ioc-data` change: rules branch, AndroDR PR pinned to i
 
 - Which of the threat-list hosts are valid `domain_suffixes` under the domain grammar and the
   first-party-host guard; drop any that are refused and say so.
-- Whether the weekly mirror workflow needs a change to pass the supplement.
 - Exact wording of the report line, if the privacy text export lists categories.

@@ -2,6 +2,7 @@ package com.androdr.privacy
 
 import com.androdr.data.repo.SettingsRepository
 import com.androdr.ioc.TrackerRegistry
+import com.androdr.privacy.model.ANDRODR_TRACKER_ID_MIN
 import com.androdr.privacy.model.TrackerCategory
 import com.androdr.privacy.model.TrackerSet
 import org.junit.Assert.assertEquals
@@ -73,13 +74,23 @@ class ProxywareTrackerTest {
     }
 
     @Test
-    fun `no exodus entry carries the category or an id in androdr's range`() {
-        val others = set.trackers.filter { it.id != BRIGHT_ID }
-        assertTrue(others.none { TrackerCategory.PROXYWARE in it.categories })
-        assertTrue(others.none { it.id >= BRIGHT_ID })
+    fun `only androdr's own entries carry the category`() {
+        val proxyware = set.trackers.filter { TrackerCategory.PROXYWARE in it.categories }
+        assertTrue(proxyware.isNotEmpty())
+        assertTrue(proxyware.all { it.id >= ANDRODR_TRACKER_ID_MIN })
+    }
+
+    @Test
+    fun `the app and the rules repository agree where androdr's own ids start`() {
+        val guards = listOf(
+            File("../third-party/android-sigma-rules/validation/tracker_guards.py"),
+            File("third-party/android-sigma-rules/validation/tracker_guards.py"),
+        ).first { it.isFile }.readText()
+        val min = Regex("""^SUPPLEMENT_ID_MIN = ([0-9_]+)$""", RegexOption.MULTILINE).find(guards)
+        assertEquals(ANDRODR_TRACKER_ID_MIN, min?.groupValues?.get(1)?.replace("_", "")?.toInt())
     }
 
     private companion object {
-        const val BRIGHT_ID = 900_001
+        const val BRIGHT_ID = ANDRODR_TRACKER_ID_MIN
     }
 }
