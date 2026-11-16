@@ -490,7 +490,7 @@ class TimelineViewModel @Inject constructor(
             val writer = TimelineExporter.PlaintextWriter(out) { pkg ->
                 names.getOrPut(pkg) { knownAppResolver.lookup(pkg)?.displayName }
             }
-            writer.header(stats, appContext.appVersion().name, filter.describe())
+            writer.header(stats, appContext.appVersion().label, filter.describe())
             entries.forEachPage(filter, oldestFirst = false, size = EXPORT_PAGE) { page ->
                 page.forEach(writer::entry)
             }

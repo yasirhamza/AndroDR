@@ -73,7 +73,7 @@ class ReportExporter @Inject constructor(
         withContext(Dispatchers.IO) {
             val view = FindingsView.of(scan, reportInputs, findings, telemetryReader)
             val logLines = if (includeLog) logSource() else emptyList()
-            val version = context.appVersion().name
+            val version = context.appVersion().label
             writeReportFile(file) { out ->
                 ReportFormatter.writeScanReport(
                     out, scan, view, logLines, telemetryReader, mode, version,
