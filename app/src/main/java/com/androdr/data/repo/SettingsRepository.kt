@@ -177,8 +177,11 @@ class SettingsRepository @Inject constructor(
         private val KEY_PRIVACY_REFUSED = stringSetPreferencesKey("privacy_refused_categories")
         private val KEY_PRIVACY_KNOWN_AT_SAVE = stringSetPreferencesKey("privacy_categories_known_at_save")
 
-        /** The categories of the builds that saved a threshold without the known-at-save set. */
-        private val CATEGORIES_BEFORE_KNOWN_WAS_STORED = setOf(
+        /**
+         * The categories of the builds that saved a threshold without the known-at-save set.
+         * Closed for good: a category added later must never be added here.
+         */
+        internal val CATEGORIES_BEFORE_KNOWN_WAS_STORED = setOf(
             "ADVERTISEMENT", "PROFILING", "IDENTIFICATION", "LOCATION", "ANALYTICS",
             "CRASH_REPORTING", "UNCATEGORISED", "OTHER",
         )

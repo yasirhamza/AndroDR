@@ -101,14 +101,29 @@ class SettingsRepositoryPrivacyTest {
     }
 
     @Test
-    fun `the categories of earlier builds are the ones the app had before proxyware`() {
-        // A category added later must not be added to this list: it would then never be refused
-        // for a threshold saved earlier.
+    fun `the categories of earlier builds are exactly the eight the app had before proxyware`() {
+        // The list is closed. A category added to it later would never be refused for a threshold
+        // saved on an earlier build, which is the mistake the known-at-save set exists to prevent.
         assertEquals(
-            TrackerCategory.entries.map { it.name }.toSet() - "PROXYWARE",
             setOf("ADVERTISEMENT", "PROFILING", "IDENTIFICATION", "LOCATION", "ANALYTICS",
                 "CRASH_REPORTING", "UNCATEGORISED", "OTHER"),
+            SettingsRepository.CATEGORIES_BEFORE_KNOWN_WAS_STORED,
         )
+        assertFalse("PROXYWARE" in SettingsRepository.CATEGORIES_BEFORE_KNOWN_WAS_STORED)
+    }
+
+    @Test
+    fun `a category missing from a saved known set counts as it does by default`() = runBlocking {
+        // What a later build with one more category will find in a threshold saved by this one:
+        // here, a threshold whose saved known set lacks LOCATION (refused by default) and OTHER (not).
+        dataStore.edit {
+            it[stringSetPreferencesKey("privacy_refused_categories")] = setOf("ANALYTICS")
+            it[stringSetPreferencesKey("privacy_categories_known_at_save")] =
+                TrackerCategory.entries.map { c -> c.name }.toSet() - "LOCATION" - "OTHER"
+        }
+        assertEquals(setOf(TrackerCategory.ANALYTICS, TrackerCategory.LOCATION), repo.refusedTrackerCategories.first())
+        repo.setTrackerCategoryRefused(TrackerCategory.LOCATION, false)
+        assertEquals(setOf(TrackerCategory.ANALYTICS), repo.refusedTrackerCategories.first())
     }
 
     @Test
