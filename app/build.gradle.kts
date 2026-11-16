@@ -238,7 +238,14 @@ tasks.withType<Test>().configureEach {
     inputs.files(fileTree("src/main/java") { include("**/*.kt") }).withPropertyName("vocabularyGateKotlin")
     systemProperty("robolectric.dependency.dir", robolectricDepsDir.get().asFile.absolutePath)
     // *LowHeap* tests prove a bound on memory, so they run only under lowHeapTest's 256 MB heap.
-    if (name != "lowHeapTest") filter { excludeTestsMatching("*LowHeap*") }
+    if (name != "lowHeapTest") {
+        filter { excludeTestsMatching("*LowHeap*") }
+        // The whole suite shares one JVM. On Gradle's default 512 MB heap, what earlier classes
+        // leave behind put TimelineUncappedTest's 100,000-event import at the limit: it ran out
+        // of memory in full runs (locally and in CI) while passing on its own. Memory bounds are
+        // proven by lowHeapTest, not by this heap.
+        maxHeapSize = "1g"
+    }
 }
 
 // Telemetry store spec §9 "Low heap": a 200,000-line intrusion-log import fits in 256 MB. Reuses the
