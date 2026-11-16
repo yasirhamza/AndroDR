@@ -1,0 +1,6 @@
+Sideloaded Application
+# The report names androdr-113 only on the flagged app's own "Reasons" line (the raw
+# telemetry lists every component name, so the names themselves cannot be forbidden).
+# This app's Reasons line must end without it. Exact when this scenario runs alone or
+# with bright_sdk_proxyware; weaker when other hidden sideloaded fixtures are loaded.
+~Reasons : Sideloaded Application; Hidden App \(No Launcher Icon\)$

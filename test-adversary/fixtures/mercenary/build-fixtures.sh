@@ -49,6 +49,8 @@ MODULES=(
     "notification-listener-abuse"
     "sms-notification-otp-theft"
     "removed-fake-package"
+    "bright-sdk-proxyware"
+    "bright-sdk-lookalike"
 )
 
 echo ""

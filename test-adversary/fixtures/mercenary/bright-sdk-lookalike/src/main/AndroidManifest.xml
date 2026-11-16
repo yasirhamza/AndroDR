@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Negative fixture for androdr-113 (AndroDR #465). Declares components whose
+  packages only resemble Bright SDK's: the rule matches by prefix including the
+  trailing dot, so none of these may fire it.
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+    <application android:label="Bright SDK Lookalike Test" tools:ignore="MissingClass">
+        <service android:name="io.lum.sdkx.svc_host" android:exported="false" />
+        <service android:name="com.android.eapxtra.Service" android:exported="false" />
+        <receiver android:name="com.example.io.lum.sdk.bcast_recv" android:exported="false" />
+    </application>
+</manifest>
