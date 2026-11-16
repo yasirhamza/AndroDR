@@ -549,6 +549,8 @@
     <string name="privacy_system_toggle">Include system apps (can only be disabled, not removed)</string>
     <string name="privacy_threshold_title">What I refuse</string>
     <string name="privacy_threshold_open">Change what I refuse</string>
+    <string name="privacy_cat_proxyware">Proxyware</string>
+    <string name="privacy_cat_proxyware_info">Lets other people\'s internet traffic go out through your connection, so it appears to come from you</string>
     <string name="privacy_cat_advertisement">Advertisement</string>
     <string name="privacy_cat_advertisement_info">Shows ads and reports what you do to the ad company</string>
     <string name="privacy_cat_profiling">Profiling</string>

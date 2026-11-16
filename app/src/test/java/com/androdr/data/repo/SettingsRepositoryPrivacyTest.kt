@@ -48,7 +48,29 @@ class SettingsRepositoryPrivacyTest {
         dataStore.edit {
             it[stringSetPreferencesKey("privacy_refused_categories")] = setOf("LOCATION", "NOT_A_CATEGORY")
         }
+        // Proxyware comes with it: this stored set predates the category (see the next test).
+        assertEquals(setOf(TrackerCategory.LOCATION, TrackerCategory.PROXYWARE), repo.refusedTrackerCategories.first())
+    }
+
+    @Test
+    fun `a threshold saved before proxyware existed refuses it until the next save`() = runBlocking {
+        // What an install that customised its threshold holds on its first start after the update.
+        dataStore.edit { it[stringSetPreferencesKey("privacy_refused_categories")] = setOf("LOCATION") }
+        assertEquals(setOf(TrackerCategory.LOCATION, TrackerCategory.PROXYWARE), repo.refusedTrackerCategories.first())
+    }
+
+    @Test
+    fun `proxyware switched off by the person stays off`() = runBlocking {
+        dataStore.edit { it[stringSetPreferencesKey("privacy_refused_categories")] = setOf("LOCATION") }
+        repo.setRefusedTrackerCategories(setOf(TrackerCategory.LOCATION))
         assertEquals(setOf(TrackerCategory.LOCATION), repo.refusedTrackerCategories.first())
+        repo.setRefusedTrackerCategories(emptySet())
+        assertEquals(emptySet<TrackerCategory>(), repo.refusedTrackerCategories.first())
+    }
+
+    @Test
+    fun `proxyware is refused by default`() = runBlocking {
+        assertTrue(TrackerCategory.PROXYWARE in repo.refusedTrackerCategories.first())
     }
 
     @Test

@@ -124,15 +124,27 @@ class SettingsRepository @Inject constructor(
      * Tracker categories the user refuses (the privacy threshold). Default: every category except
      * [TrackerCategory.CRASH_REPORTING] and [TrackerCategory.OTHER], so UNCATEGORISED is refused.
      * Stored by enum name; an unknown stored name is ignored.
+     *
+     * A threshold saved before [TrackerCategory.PROXYWARE] existed says nothing about it, so the
+     * category is refused until the person next saves the threshold; from then on their saved
+     * choice decides (#470).
      */
     val refusedTrackerCategories: Flow<Set<TrackerCategory>> = dataStore.data
         .map { prefs ->
-            prefs[KEY_PRIVACY_REFUSED]?.mapNotNull { n -> TrackerCategory.entries.firstOrNull { it.name == n } }
-                ?.toSet() ?: DEFAULT_REFUSED_CATEGORIES
+            val stored = prefs[KEY_PRIVACY_REFUSED]
+                ?.mapNotNull { n -> TrackerCategory.entries.firstOrNull { it.name == n } }?.toSet()
+            when {
+                stored == null -> DEFAULT_REFUSED_CATEGORIES
+                prefs[KEY_PRIVACY_PROXYWARE_DECIDED] == true -> stored
+                else -> stored + TrackerCategory.PROXYWARE
+            }
         }
 
     suspend fun setRefusedTrackerCategories(value: Set<TrackerCategory>) {
-        dataStore.edit { it[KEY_PRIVACY_REFUSED] = value.map { c -> c.name }.toSet() }
+        dataStore.edit {
+            it[KEY_PRIVACY_REFUSED] = value.map { c -> c.name }.toSet()
+            it[KEY_PRIVACY_PROXYWARE_DECIDED] = true
+        }
     }
 
     /** Whether the privacy views list system apps under Crossing and Other (default false). */
@@ -161,6 +173,7 @@ class SettingsRepository @Inject constructor(
         private val KEY_SNAPSHOT_RETENTION_SCANS = intPreferencesKey("snapshot_retention_scans")
         const val DEFAULT_SNAPSHOT_RETENTION_SCANS = 20
         private val KEY_PRIVACY_REFUSED = stringSetPreferencesKey("privacy_refused_categories")
+        private val KEY_PRIVACY_PROXYWARE_DECIDED = booleanPreferencesKey("privacy_proxyware_decided")
         private val KEY_PRIVACY_SHOW_SYSTEM = booleanPreferencesKey("privacy_show_system_apps")
         val DEFAULT_REFUSED_CATEGORIES: Set<TrackerCategory> =
             TrackerCategory.entries.toSet() - TrackerCategory.CRASH_REPORTING - TrackerCategory.OTHER
