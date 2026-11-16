@@ -3,7 +3,8 @@
 **Follows:** [#465](https://github.com/yasirhamza/AndroDR/issues/465) (Bright SDK by DNS and by app-scan rule `androdr-113`)
 **Date:** 2026-11-16
 **Size:** small change (one list file, one merge step, one category and its texts)
-**Status:** draft, awaiting owner approval
+**Status:** approved by the owner in conversation, 2026-11-16
+**Issue:** [#470](https://github.com/yasirhamza/AndroDR/issues/470)
 
 ## Intent
 
@@ -88,9 +89,9 @@ is added.
 - Refused by default, through the existing default (everything except crash reporting and
   "Other").
 - **People who changed their threshold:** their saved choice does not contain the new
-  category. On first start after the update it is added once, as refused (author's call: they
-  were never asked about it, and refusing is the safe default). They can turn it off like any
-  other.
+  category. It is treated as refused until they next save the threshold, and from then on
+  their saved choice decides (author's call: they were never asked about it, and refusing is
+  the safe default).
 - Bundled `res/raw/trackers.yml` updated to the merged file; submodule pointer bumped.
 - Saved privacy results keep the category as text, so results from before the update are
   relabelled without a rescan.
@@ -107,10 +108,12 @@ is not refused by default. Nothing breaks; it is simply quieter until the update
 - AndroDR unit test over the pinned submodule: entry 900001 is present with category
   `Proxyware` and the five prefixes; the bundled copy equals the submodule file;
   `Proxyware` maps to `PROXYWARE` and is in the default refused set.
-- Unit test for the one-time addition to a saved threshold (added once; not added again after
-  the person turns it off).
-- Adversary harness: a fixture app with a class under `io.lum.sdk` and no manifest component
-  under it. Expected: the privacy scan lists it under Proxyware; `androdr-113` stays silent.
+- Unit test for a saved threshold: Proxyware is refused before the next save, and stays off
+  once the person saves it switched off.
+- Privacy fixture set (`test-adversary/fixtures/privacy`, checked by hand in the release
+  battery, since the harness drives security scans only): an app with a class under
+  `io.lum.sdk` and no manifest component under it. Expected: the privacy scan lists it under
+  Proxyware; `androdr-113` stays silent.
 
 ### Landing order
 
@@ -122,5 +125,4 @@ Safe ordering as for any `ioc-data` change: rules branch, AndroDR PR pinned to i
 - Which of the threat-list hosts are valid `domain_suffixes` under the domain grammar and the
   first-party-host guard; drop any that are refused and say so.
 - Whether the weekly mirror workflow needs a change to pass the supplement.
-- Where the one-time threshold addition lives (settings repository or a start-up step).
 - Exact wording of the report line, if the privacy text export lists categories.
