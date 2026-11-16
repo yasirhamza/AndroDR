@@ -8,6 +8,7 @@ import com.androdr.data.model.ScanState
 import com.androdr.data.model.TelemetrySource
 import com.androdr.data.model.TimelineRowEntity
 import com.androdr.data.store.StoreFixture
+import com.androdr.data.store.loadFresh
 import com.androdr.scanner.WriterFixture
 import com.androdr.sigma.StoreRecord
 import kotlinx.coroutines.runBlocking
@@ -65,7 +66,7 @@ class TimelineTieBoundaryTest {
     private fun source(filter: TimelineFilter = TimelineFilter()) = TimelinePagingSource(f.db, filter, entries)
 
     private suspend fun load(params: PagingSource.LoadParams<TimelineKey>, filter: TimelineFilter = TimelineFilter()) =
-        source(filter).load(params) as PagingSource.LoadResult.Page<TimelineKey, TimelineRow.Entry>
+        loadFresh(params) { source(filter) }
 
     private suspend fun appendFrom(
         page: PagingSource.LoadResult.Page<TimelineKey, TimelineRow.Entry>, size: Int,

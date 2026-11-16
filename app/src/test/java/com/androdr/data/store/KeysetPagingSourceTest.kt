@@ -43,32 +43,34 @@ class KeysetPagingSourceTest {
     private fun source() = f.reader.pagingSource(1L, service)
 
     private suspend fun PagingSource<Int, DecodedRecord>.page(params: PagingSource.LoadParams<Int>) =
-        load(params) as PagingSource.LoadResult.Page<Int, DecodedRecord>
+        pageOrRestart(params)
 
     private val PagingSource.LoadResult.Page<Int, DecodedRecord>.ordinals get() = data.map { it.ordinal }
 
     @Test
     fun `refresh, append and prepend walk the keyset`() = runBlocking {
-        val s = source()
-        val first = s.page(PagingSource.LoadParams.Refresh(null, 30, false))
+        val (first, next) = withFreshSource(::source) { s ->
+            val p = s.page(PagingSource.LoadParams.Refresh(null, 30, false))
+            p to s.page(PagingSource.LoadParams.Append(p.nextKey!!, 30, false))
+        }
         assertEquals((0..29).toList(), first.ordinals)
         assertNull(first.prevKey)
-        val next = s.page(PagingSource.LoadParams.Append(first.nextKey!!, 30, false))
         assertEquals((30..59).toList(), next.ordinals)
-        val mid = source().page(PagingSource.LoadParams.Refresh(50, 30, false))
+        val mid = loadFresh(PagingSource.LoadParams.Refresh(50, 30, false), ::source)
         assertEquals((50..79).toList(), mid.ordinals)
-        val before = source().page(PagingSource.LoadParams.Prepend(mid.prevKey!!, 20, false))
+        val before = loadFresh(PagingSource.LoadParams.Prepend(mid.prevKey!!, 20, false), ::source)
         assertEquals((30..49).toList(), before.ordinals)
-        val last = source().page(PagingSource.LoadParams.Append(89, 30, false))
+        val last = loadFresh(PagingSource.LoadParams.Append(89, 30, false), ::source)
         assertEquals((90..99).toList(), last.ordinals)
         assertNull(last.nextKey)
     }
 
     @Test
     fun `scroll position survives an invalidation`() = runBlocking {
-        val old = source()
-        val p1 = old.page(PagingSource.LoadParams.Refresh(null, 30, false))
-        val p2 = old.page(PagingSource.LoadParams.Append(p1.nextKey!!, 30, false))
+        val (old, p1, p2) = withFreshSource(::source) { s ->
+            val first = s.page(PagingSource.LoadParams.Refresh(null, 30, false))
+            Triple(s, first, s.page(PagingSource.LoadParams.Append(first.nextKey!!, 30, false)))
+        }
         // A scan completing is what invalidates (ScanResult is observed).
         f.scan(2L, ScanState.COMPLETE)
         assertTrue(awaitInvalid(old))
@@ -76,7 +78,7 @@ class KeysetPagingSourceTest {
             config = PagingConfig(pageSize = 30, initialLoadSize = 30), leadingPlaceholderCount = 0)
         val key = old.getRefreshKey(state)
         assertEquals(30, key)
-        val reloaded = source().page(PagingSource.LoadParams.Refresh(key, 30, false))
+        val reloaded = loadFresh(PagingSource.LoadParams.Refresh(key, 30, false), ::source)
         assertTrue(45 in reloaded.ordinals)
         assertEquals(30, reloaded.ordinals.first())
     }
@@ -85,8 +87,7 @@ class KeysetPagingSourceTest {
     fun `store chunk commits do not invalidate a page`() = runBlocking {
         f.scan(3L)
         f.db.invalidationTracker.refreshVersionsSync()
-        val s = source()
-        s.page(PagingSource.LoadParams.Refresh(null, 30, false))
+        val s = withFreshSource(::source) { it.apply { page(PagingSource.LoadParams.Refresh(null, 30, false)) } }
         f.persist(3L, service, listOf(app("later")))
         assertFalse(awaitInvalid(s, attempts = 30))
     }
@@ -109,7 +110,7 @@ class KeysetPagingSourceTest {
         var ref: java.lang.ref.WeakReference<PagingSource<Int, DecodedRecord>>? = null
         val t = Thread {
             val s = source()
-            runBlocking { s.page(PagingSource.LoadParams.Refresh(null, 10, false)) }
+            runBlocking { s.load(PagingSource.LoadParams.Refresh(null, 10, false)) }
             ref = java.lang.ref.WeakReference(s)
         }
         t.start()
@@ -127,10 +128,11 @@ class KeysetPagingSourceTest {
 
     @Test
     fun `no captured SQL contains OFFSET`() = runBlocking {
-        val s = source()
-        val p = s.page(PagingSource.LoadParams.Refresh(40, 20, false))
-        s.page(PagingSource.LoadParams.Prepend(p.prevKey!!, 20, false))
-        s.page(PagingSource.LoadParams.Append(p.nextKey!!, 20, false))
+        withFreshSource(::source) { s ->
+            val p = s.page(PagingSource.LoadParams.Refresh(40, 20, false))
+            s.page(PagingSource.LoadParams.Prepend(p.prevKey!!, 20, false))
+            s.page(PagingSource.LoadParams.Append(p.nextKey!!, 20, false))
+        }
         f.reader.forEach(1L, service) { }
         assertTrue(f.sql.isNotEmpty())
         assertTrue(f.sql.filter { it.uppercase().contains("OFFSET") }.joinToString("\n"),
