@@ -3,6 +3,15 @@ package com.androdr.privacy.model
 import java.util.Arrays
 import java.util.TreeSet
 
+/**
+ * List entries with an id from here up are AndroDR's own (the rules repository's
+ * `validation/tracker-supplement.yml`), not Exodus Privacy's. Mirrors `tracker_guards.SUPPLEMENT_ID_MIN`.
+ */
+const val ANDRODR_TRACKER_ID_MIN = 900_001
+
+/** True for the id of a list entry that is AndroDR's own, which Exodus Privacy has no page for. */
+fun isAndrodrTrackerId(id: Int): Boolean = id >= ANDRODR_TRACKER_ID_MIN
+
 /** One tracker SDK from the registry, with its code and network signatures. */
 data class Tracker(
     val id: Int,

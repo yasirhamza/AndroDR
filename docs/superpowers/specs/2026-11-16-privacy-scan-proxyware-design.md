@@ -1,0 +1,148 @@
+# Design: proxyware in the privacy scan
+
+**Follows:** [#465](https://github.com/yasirhamza/AndroDR/issues/465) (Bright SDK by DNS and by app-scan rule `androdr-113`)
+**Date:** 2026-11-16
+**Size:** small change (one list file, one merge step, one category and its texts)
+**Status:** approved by the owner in conversation, 2026-11-16
+**Issue:** [#470](https://github.com/yasirhamza/AndroDR/issues/470)
+
+## Intent
+
+The app scan sees only the components an app declares in its manifest, so a build that keeps
+Bright SDK out of the manifest gets past `androdr-113`. The privacy scan reads the code packages
+inside every installed app. Adding residential-proxy SDKs to its tracker list lets it name those
+apps too.
+
+## Goals
+
+- The privacy scan reports an app that contains Bright SDK code, by code package.
+- The result is shown under its own category, **Proxyware**, refused by default.
+- The list part reaches every install through the 12-hour feed; older app versions show the
+  entry safely until they update.
+- The entries survive the next regeneration of the Exodus mirror.
+
+## Non-goals
+
+- **Not a security finding** (owner ruling, 2026-11-16). No alert, no Timeline detection, no
+  change to the overall risk. Feeding code packages to the rule engine is a separate project.
+- No new matcher: entries use the existing fields of `trackers.yml`.
+- No other proxy SDK in this change. Honeygain, IPIDEA, NetNut and similar are added one by one
+  when there is evidence of their package names.
+
+## Anti-goals
+
+- An entry so broad it matches an ordinary library. Every prefix must pass the mirror's existing
+  broad-signature and common-package guards.
+- Our entries presented as Exodus data. They are marked as AndroDR's.
+- Entries lost silently when the mirror is regenerated.
+
+## Approaches considered
+
+1. **A supplement file merged by the mirror script (chosen).** Our entries live in their own
+   reviewed file in the rules repo; the mirror script appends them to `trackers.yml`. The app
+   keeps reading one file, so no app release is needed for the list.
+2. **A second file the app reads itself.** Cleaner separation, but every install needs an app
+   release before it sees anything, and the app gains a second loader, manifest entry and
+   failure mode.
+3. **Entries appended to `trackers.yml` by hand.** The next mirror run rewrites the file and
+   they are gone.
+
+## Design
+
+### Rules repo
+
+**Supplement file** `validation/tracker-supplement.yml`: a `trackers:` list in the same shape
+as `trackers.yml`, plus `references` (public URLs) per entry. It is an input of the mirror
+script, not a file the app fetches.
+
+**One entry:**
+
+| Field | Value |
+|---|---|
+| `id` | `900001` (ids from 900001 are reserved for the supplement; Exodus ids are below 1000 today) |
+| `name` | `Bright SDK (residential proxy)` |
+| `website` | `https://bright-sdk.com` |
+| `categories` | `Proxyware` |
+| `code_prefixes` | `io.lum.sdk`, `io.topvpn.vpn_api`, `org.hola.peer` (verified in samples); `brdat.sdk`, `com.android.eapx` (unverified, reported for current builds; included by the owner's earlier ruling for `androdr-113`) |
+| `domain_suffixes` | the Bright SDK hosts already on the threat list (#466), so the scan's network evidence can show the app's lookups |
+
+The name carries the kind because an older app version shows an unknown category as "Other".
+
+**Mirror script** (`mirror-exodus-trackers.py`):
+- reads the supplement and appends its entries after the Exodus ones, through the same field
+  checks and guards as an Exodus entry;
+- fails (exit 3, nothing written) if the supplement is missing or broken, if an id is below
+  900001 or collides, or if a supplement entry is dropped by a guard; a supplement entry is
+  never dropped quietly;
+- the file header names both sources. The merged file stays ODbL.
+
+**Category vocabulary:** wherever the rules repo checks tracker category labels, `Proxyware`
+is added.
+
+**Manifest:** `ioc-data.sha256` regenerated.
+
+### AndroDR (ships in the next app release)
+
+- `TrackerCategory.PROXYWARE("Proxyware")`.
+- Texts: label "Proxyware"; description "Lets other people's internet traffic go out through
+  your connection, so it appears to come from you".
+- Refused by default, through the existing default (everything except crash reporting and
+  "Other").
+- **People who changed their threshold:** their saved choice does not contain the new
+  category. It is treated as refused until they next save the threshold, and from then on
+  their saved choice decides (author's call: they were never asked about it, and refusing is
+  the safe default).
+- Bundled `res/raw/trackers.yml` updated to the merged file; submodule pointer bumped.
+- Saved privacy results keep the category as text, so results from before the update are
+  relabelled without a rescan.
+
+### What older app versions show
+
+The entry appears in a privacy scan as "Bright SDK (residential proxy)" under "Other", which
+is not refused by default. Nothing breaks; it is simply quieter until the update.
+
+Known flaw on those versions (found in review): the tracker's details page says "Tracker list
+entry 900001 (Exodus Privacy)" and links to an Exodus page that does not exist. Versions from
+this change on say the entry is AndroDR's own and show no link. This cannot be fixed for
+installed versions without withholding the entry from the feed.
+
+## Changes made in review (2026-11-16)
+
+- The app marks AndroDR's own entries (ids from 900001) as such on the details page and in the
+  attribution line.
+- The saved-threshold rule is general: a saved threshold stores the categories known at the
+  time, so any category added later counts as it does by default until the next save.
+- The threshold sheet changes one category at a time from what is stored, so a tap before the
+  stored threshold is read cannot overwrite it.
+- The mirror sets aside an Exodus entry that carries the name of one of ours or a category
+  reserved for ours; the supplement loader refuses repeated keys, unknown categories and an
+  empty file.
+- Supplement entries are changed by a rules-repo pull request that regenerates the list, not
+  through `/update-rules`, which refreshes Exodus's part only.
+- Not changed: `docs/PRIVACY_POLICY.md` still says the tracker SDKs come from the Exodus list.
+  That is an owner decision (the policy is published on the site).
+
+### Regression gates
+
+- Mirror tests: supplement entries are in the output; a regeneration from an Exodus dump keeps
+  them; a bad id, a collision, a missing file or a guard-dropped entry fails the run.
+- AndroDR unit test over the pinned submodule: entry 900001 is present with category
+  `Proxyware` and the five prefixes; the bundled copy equals the submodule file;
+  `Proxyware` maps to `PROXYWARE` and is in the default refused set.
+- Unit test for a saved threshold: Proxyware is refused before the next save, and stays off
+  once the person saves it switched off.
+- Privacy fixture set (`test-adversary/fixtures/privacy`, checked by hand in the release
+  battery, since the harness drives security scans only): an app with a class under
+  `io.lum.sdk` and no manifest component under it. Expected: the privacy scan lists it under
+  Proxyware; `androdr-113` stays silent.
+
+### Landing order
+
+Safe ordering as for any `ioc-data` change: rules branch, AndroDR PR pinned to it,
+`build-and-test` green, merge rules, re-point the submodule, merge AndroDR.
+
+## Left to the builder
+
+- Which of the threat-list hosts are valid `domain_suffixes` under the domain grammar and the
+  first-party-host guard; drop any that are refused and say so.
+- Exact wording of the report line, if the privacy text export lists categories.

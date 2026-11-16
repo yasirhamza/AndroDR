@@ -206,7 +206,11 @@ covers it. The survivors form the **approved delta** that proceeds to Step 7.
 `ioc-data/trackers.yml` is the list of tracker libraries the app's privacy scan
 looks for. It is a mirror of the Exodus Privacy tracker list, not threat
 intelligence, and it is refreshed here and nowhere else: there is no scheduled
-job. This step uses no subagent, no Rule Author and no Validator. The tracker list
+job. The mirror also appends a few entries of AndroDR's own (ids from 900001)
+from `validation/tracker-supplement.yml`. Those entries are changed by a pull
+request to the rules repository that regenerates the list with them, never by
+this step; the mirror's count line counts Exodus's entries only. This step uses
+no subagent, no Rule Author and no Validator. The tracker list
 does not go through Step 6.5 or Gate 2b, and it is
 not a candidate in the run ledger (8.3) or in the approval rate.
 
@@ -250,8 +254,9 @@ fails never leaves an old candidate behind to be validated.
   answer with its tracker list.
 - The mirror ends with exit code 3: a file the mirror reads from the rules
   repository (`validation/first_party_hosts.txt`,
-  `validation/common_packages.txt`, or the list `--previous` names,
-  `ioc-data/trackers.yml`) is missing or broken. The fault is in the rules
+  `validation/common_packages.txt`, `validation/tracker-supplement.yml`, or
+  the list `--previous` names, `ioc-data/trackers.yml`) is missing or broken.
+  The fault is in the rules
   repository, not at Exodus.
 - The mirror ends with exit code 1 and no such `ERROR:` line (a Python traceback
   also ends with exit code 1), or with any other exit code: a fault in the

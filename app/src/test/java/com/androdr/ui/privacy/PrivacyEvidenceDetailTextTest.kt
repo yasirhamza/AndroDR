@@ -2,6 +2,7 @@ package com.androdr.ui.privacy
 
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
+import com.androdr.privacy.model.isAndrodrTrackerId
 import com.androdr.privacy.DomainLine
 import com.androdr.privacy.model.SignatureKind
 import org.junit.Assert.assertEquals
@@ -60,5 +61,17 @@ class PrivacyEvidenceDetailTextTest {
     @Test fun `the Exodus page is linked only for a list entry number`() {
         assertEquals("https://reports.exodus-privacy.eu.org/en/trackers/12/", PrivacyEvidenceDetailText.exodusLink(12))
         assertNull(PrivacyEvidenceDetailText.exodusLink(0))
+    }
+
+    @Test fun `an entry of AndroDR's own is not linked to Exodus and is not called Exodus's`() {
+        // #470 review: entry 900001 was shown as "(Exodus Privacy)" with a link to a page Exodus does not have.
+        assertNull(PrivacyEvidenceDetailText.exodusLink(900_001))
+        assertNull(PrivacyEvidenceDetailText.exodusLink(900_002))
+        assertTrue(isAndrodrTrackerId(900_001))
+        assertFalse(isAndrodrTrackerId(900_000))
+        assertEquals(
+            "https://reports.exodus-privacy.eu.org/en/trackers/900000/",
+            PrivacyEvidenceDetailText.exodusLink(900_000),
+        )
     }
 }

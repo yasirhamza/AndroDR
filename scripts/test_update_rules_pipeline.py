@@ -323,7 +323,7 @@ TRACKER_INLINE_COMMANDS = {
 # made one space, so re-wrapping a paragraph changes nothing. When one fails, read the change
 # against the rules below, and only then put the digest the failure prints here.
 TRACKER_SECTION_DIGESTS = {
-    "## Step 6.7": "3a53c189ea0d064a10082d220f2b5e8c07859ffd811055fccaa811a7249e7e7b",
+    "## Step 6.7": "7bfeb307fceca2bdf9600f608a5999ee93c460cb082a3198443eabd333e1d096",
     "### 7.2": "6b4e1a81e4ae37ac4b3b7f37678c29a4a421ef6d427ede863da8cdfb3c3a784c",
     "### 8.5": "516003630a32f774fb1020e8fa15b33b6b6510500877cb1ead8b4fb4f92d6524",
 }

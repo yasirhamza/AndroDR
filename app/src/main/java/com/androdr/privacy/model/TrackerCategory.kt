@@ -1,7 +1,12 @@
 package com.androdr.privacy.model
 
-/** Exodus tracker categories; any label the app does not know maps to [OTHER]. */
+/**
+ * Tracker categories: Exodus's, plus [PROXYWARE], which is AndroDR's own (entries from the rules
+ * repository's `validation/tracker-supplement.yml`). Any label the app does not know maps to
+ * [OTHER]. The order is the order of the threshold sheet.
+ */
 enum class TrackerCategory(val label: String) {
+    PROXYWARE("Proxyware"),
     ADVERTISEMENT("Advertisement"),
     PROFILING("Profiling"),
     IDENTIFICATION("Identification"),

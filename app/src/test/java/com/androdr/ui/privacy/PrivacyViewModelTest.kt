@@ -236,9 +236,12 @@ class PrivacyViewModelTest {
         }
         val dao = mockk<PrivacyDao> { every { latestCompleted() } returns f.scanFlow }
         val vm = PrivacyViewModel(dao, runner(f), settings)
-        vm.setRefused(setOf(TrackerCategory.LOCATION))
+        // One category at a time, never the set the screen showed: before the stored threshold is
+        // read the screen shows none, and saving that set would wipe the threshold (#470 review).
+        vm.setRefused(TrackerCategory.LOCATION, true)
         vm.setShowSystemApps(true)
-        coVerify { settings.setRefusedTrackerCategories(setOf(TrackerCategory.LOCATION)) }
+        coVerify { settings.setTrackerCategoryRefused(TrackerCategory.LOCATION, true) }
+        coVerify(exactly = 0) { settings.setRefusedTrackerCategories(any()) }
         coVerify { settings.setPrivacyShowSystemApps(true) }
     }
 }

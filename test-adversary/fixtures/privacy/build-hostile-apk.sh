@@ -62,6 +62,17 @@ dex_of "$WORK/dex-pos" com.facebook.ads.internal.AdLoader com.google.firebase.an
     com.androdr.fixture.trackers.Main
 apk privacy-positive com.androdr.fixture.privacy.positive "Privacy Fixture Trackers" "$WORK/dex-pos"
 
+# 1b. Proxyware (#470): Bright SDK code and nothing in the manifest, so the app scan's androdr-113
+# (which reads manifest components) cannot see it and only the privacy scan can.
+dex_of "$WORK/dex-proxy" io.lum.sdk.Agent com.androdr.fixture.proxyware.Main
+apk privacy-proxyware com.androdr.fixture.privacy.proxyware "Privacy Fixture Proxyware" "$WORK/dex-proxy"
+
+# 1c. Proxyware lookalike: packages that only resemble Bright SDK's.
+dex_of "$WORK/dex-proxyneg" io.lum.sdkx.Agent com.android.eapxtra.Service com.example.io.lum.sdk.Agent \
+    com.androdr.fixture.proxylookalike.Main
+apk privacy-proxyware-lookalike com.androdr.fixture.privacy.proxylookalike "Privacy Fixture Proxy Lookalike" \
+    "$WORK/dex-proxyneg"
+
 # 2. Negative: no registry tracker in code.
 dex_of "$WORK/dex-neg" com.androdr.fixture.clean.Main com.androdr.fixture.clean.util.Helper
 apk privacy-negative com.androdr.fixture.privacy.negative "Privacy Fixture Clean" "$WORK/dex-neg"

@@ -140,8 +140,8 @@ class PrivacyViewModel @Inject constructor(
         if (!runner.start()) _message.value = R.string.privacy_running_elsewhere
     }
 
-    fun setRefused(value: Set<TrackerCategory>) {
-        viewModelScope.launch { settings.setRefusedTrackerCategories(value) }
+    fun setRefused(category: TrackerCategory, refused: Boolean) {
+        viewModelScope.launch { settings.setTrackerCategoryRefused(category, refused) }
     }
 
     fun setShowSystemApps(value: Boolean) {

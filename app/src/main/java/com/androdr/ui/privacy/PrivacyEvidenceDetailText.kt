@@ -1,6 +1,7 @@
 package com.androdr.ui.privacy
 
 import android.content.res.Resources
+import com.androdr.privacy.model.isAndrodrTrackerId
 import com.androdr.R
 import com.androdr.data.model.NetworkStatus
 import com.androdr.data.model.PrivacyScan
@@ -56,9 +57,9 @@ object PrivacyEvidenceDetailText {
         res.getString(R.string.privacy_evidence_first_last, formatTime(d.first), formatTime(d.last)),
     ).joinToString(", ")
 
-    /** The Exodus page of a list entry; only for a positive entry number. */
+    /** The Exodus page of a list entry; only for an entry number that is Exodus's. */
     fun exodusLink(id: Int): String? =
-        if (id > 0) "https://reports.exodus-privacy.eu.org/en/trackers/$id/" else null
+        if (id > 0 && !isAndrodrTrackerId(id)) "https://reports.exodus-privacy.eu.org/en/trackers/$id/" else null
 
     /** True when the scan's network step was cut short or failed: its domain list may be incomplete. */
     fun networkIncomplete(scan: PrivacyScan): Boolean =

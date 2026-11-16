@@ -3,6 +3,7 @@ source: exodus-privacy
 source_url: https://reports.exodus-privacy.eu.org/api/trackers
 license: ODbL-1.0
 attribution: Exodus Privacy — https://exodus-privacy.eu.org — Open Database License 1.0
+supplement: Entries with id 900001 and above are AndroDR's own (validation/tracker-supplement.yml), not Exodus Privacy's
 trackers:
 - id: 1
   name: Teemo
@@ -6041,6 +6042,36 @@ trackers:
   - com.uc2.crashsdk
   code_segments: []
   domain_suffixes: []
+  domain_labels: []
+  domain_patterns: []
+  excluded_domains: []
+- id: 900001
+  name: Bright SDK (residential proxy)
+  website: https://bright-sdk.com
+  categories:
+  - Proxyware
+  code_prefixes:
+  - brdat.sdk
+  - com.android.eapx
+  - io.lum.sdk
+  - io.topvpn.vpn_api
+  - org.hola.peer
+  code_segments: []
+  domain_suffixes:
+  - brdtest.com
+  - brdtnet.com
+  - bright-sdk.com
+  - cdn-cloud.b-cdn.net
+  - l-err.biz
+  - luminati-china.io
+  - luminatinet.com
+  - p.l-conn.net
+  - perr.l-agent.me
+  - zagent108.l-cdn.com
+  - zagent110.l-cdn.com
+  - zagent111.l-cdn.com
+  - zagent112.l-cdn.com
+  - zagent113.l-cdn.com
   domain_labels: []
   domain_patterns: []
   excluded_domains: []

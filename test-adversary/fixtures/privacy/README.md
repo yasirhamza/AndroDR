@@ -15,6 +15,8 @@ Use `--no-incremental`: an incremental install loads files lazily, which isn't h
 | APK | Contents | Must show |
 |---|---|---|
 | `privacy-positive` ("Privacy Fixture Trackers") | `com.facebook.ads…` (Facebook Ads, Advertisement) and `com.google.firebase.analytics…` (Firebase Analytics) in `classes.dex` | **Cross your threshold**: "2 trackers from the registry", Advertisement and Analytics |
+| `privacy-proxyware` ("Privacy Fixture Proxyware") | `io.lum.sdk.Agent` in `classes.dex`, nothing in the manifest | **Cross your threshold**: "1 tracker from the registry", **Proxyware**, tracker "Bright SDK (residential proxy)". A security scan raises **no** "Residential-proxy SDK: Bright SDK" finding for it (`androdr-113` reads manifest components only). |
+| `privacy-proxyware-lookalike` ("Privacy Fixture Proxy Lookalike") | `io.lum.sdkx…`, `com.android.eapxtra…`, `com.example.io.lum.sdk…` | **Other apps**: no tracker found. |
 | `privacy-negative` ("Privacy Fixture Clean") | only `com.androdr.fixture.clean…` | **Other apps**: "None of the N trackers in the registry were found in its code" |
 | `privacy-corrupt-dex` ("Privacy Fixture Corrupt Dex") | a valid `classes.dex` with Facebook Ads, plus a `classes2.dex` made of a dex magic followed by random bytes | **Cross your threshold**: "Partly inspected: malformed classes2.dex", "Advertisement (partly inspected)". A broken dex costs only that dex. |
 | `privacy-dex-bomb` ("Privacy Fixture Dex Bomb") | a valid `classes.dex` with Facebook Ads, plus a 40 MiB `classes2.dex` of zeros that compresses to about 40 KiB | **Cross your threshold**: "Partly inspected: skipped classes2.dex", "Advertisement (partly inspected)". The scan finishes, with no out-of-memory error or crash. |
@@ -25,8 +27,10 @@ Use `--no-incremental`: an incremental install loads files lazily, which isn't h
 
 Must not happen: a crash or ANR in logcat, a fixture missing from the list, or a partly inspected fixture missing from **Cross your threshold** (cutting an app's own inspection short must never take it off the list).
 
-Clean up: `adb uninstall com.androdr.fixture.privacy.{positive,negative,corrupt,bomb,label,flood}`; the seeded rows go with the debug app's data (`pm clear` or uninstall), or with a re-run of the seed script (it deletes its own rows first).
+Clean up: `adb uninstall com.androdr.fixture.privacy.{positive,negative,corrupt,bomb,label,flood,proxyware,proxylookalike}`; the seeded rows go with the debug app's data (`pm clear` or uninstall), or with a re-run of the seed script (it deletes its own rows first).
 
 First run: 2026-11-07, API 36.1 emulator, main `eabd102b`. All four matched.
 
 Second run: 2026-11-12, main `2066d094`, API 36.1 emulator and SM-F916B (clean install): all six matched, with the Timeline and details checks above.
+
+Third run (#470, proxyware): 2026-11-16, branch `feat/privacy-scan-proxyware`. API 36.1 emulator with all eight fixtures, and SM-F916B (clean install) with positive, negative, proxyware and lookalike: `privacy-proxyware` under **Cross your threshold** as Proxyware, tracker details "Tracker list entry 900001 (AndroDR's own entry, not from Exodus Privacy)" with no link, lookalike under **Other apps**. Unticking Proxyware in "What I refuse" moved the fixture to **Other apps**; ticking it moved it back. The security scan raised no residential-proxy finding for it. No crash.

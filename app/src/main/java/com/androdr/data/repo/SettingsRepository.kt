@@ -1,6 +1,7 @@
 package com.androdr.data.repo
 
 import androidx.datastore.core.DataStore
+import androidx.datastore.preferences.core.MutablePreferences
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
@@ -124,15 +125,28 @@ class SettingsRepository @Inject constructor(
      * Tracker categories the user refuses (the privacy threshold). Default: every category except
      * [TrackerCategory.CRASH_REPORTING] and [TrackerCategory.OTHER], so UNCATEGORISED is refused.
      * Stored by enum name; an unknown stored name is ignored.
+     *
+     * A saved threshold says nothing about a category the app did not have when it was saved
+     * (PROXYWARE, #470, is the first). Such a category counts as it does by default until the
+     * person next saves the threshold; from then on their saved choice decides. The categories
+     * known at the time of a save are stored with it for this.
      */
-    val refusedTrackerCategories: Flow<Set<TrackerCategory>> = dataStore.data
-        .map { prefs ->
-            prefs[KEY_PRIVACY_REFUSED]?.mapNotNull { n -> TrackerCategory.entries.firstOrNull { it.name == n } }
-                ?.toSet() ?: DEFAULT_REFUSED_CATEGORIES
-        }
+    val refusedTrackerCategories: Flow<Set<TrackerCategory>> = dataStore.data.map(::refusedIn)
 
     suspend fun setRefusedTrackerCategories(value: Set<TrackerCategory>) {
-        dataStore.edit { it[KEY_PRIVACY_REFUSED] = value.map { c -> c.name }.toSet() }
+        dataStore.edit { it.saveRefused(value) }
+    }
+
+    /**
+     * Refuses or accepts one category, starting from what is stored and not from what a screen
+     * happened to show: a tap that lands before the screen has read the threshold must not save
+     * an empty one over it.
+     */
+    suspend fun setTrackerCategoryRefused(category: TrackerCategory, refused: Boolean) {
+        dataStore.edit {
+            val current = refusedIn(it)
+            it.saveRefused(if (refused) current + category else current - category)
+        }
     }
 
     /** Whether the privacy views list system apps under Crossing and Other (default false). */
@@ -161,8 +175,31 @@ class SettingsRepository @Inject constructor(
         private val KEY_SNAPSHOT_RETENTION_SCANS = intPreferencesKey("snapshot_retention_scans")
         const val DEFAULT_SNAPSHOT_RETENTION_SCANS = 20
         private val KEY_PRIVACY_REFUSED = stringSetPreferencesKey("privacy_refused_categories")
+        private val KEY_PRIVACY_KNOWN_AT_SAVE = stringSetPreferencesKey("privacy_categories_known_at_save")
+
+        /**
+         * The categories of the builds that saved a threshold without the known-at-save set.
+         * Closed for good: a category added later must never be added here.
+         */
+        internal val CATEGORIES_BEFORE_KNOWN_WAS_STORED = setOf(
+            "ADVERTISEMENT", "PROFILING", "IDENTIFICATION", "LOCATION", "ANALYTICS",
+            "CRASH_REPORTING", "UNCATEGORISED", "OTHER",
+        )
         private val KEY_PRIVACY_SHOW_SYSTEM = booleanPreferencesKey("privacy_show_system_apps")
         val DEFAULT_REFUSED_CATEGORIES: Set<TrackerCategory> =
             TrackerCategory.entries.toSet() - TrackerCategory.CRASH_REPORTING - TrackerCategory.OTHER
+
+        private fun refusedIn(prefs: Preferences): Set<TrackerCategory> {
+            val stored = prefs[KEY_PRIVACY_REFUSED]
+                ?.mapNotNull { n -> TrackerCategory.entries.firstOrNull { it.name == n } }?.toSet()
+                ?: return DEFAULT_REFUSED_CATEGORIES
+            val knownAtSave = prefs[KEY_PRIVACY_KNOWN_AT_SAVE] ?: CATEGORIES_BEFORE_KNOWN_WAS_STORED
+            return stored + DEFAULT_REFUSED_CATEGORIES.filter { it.name !in knownAtSave }
+        }
+
+        private fun MutablePreferences.saveRefused(value: Set<TrackerCategory>) {
+            this[KEY_PRIVACY_REFUSED] = value.map { c -> c.name }.toSet()
+            this[KEY_PRIVACY_KNOWN_AT_SAVE] = TrackerCategory.entries.map { c -> c.name }.toSet()
+        }
     }
 }

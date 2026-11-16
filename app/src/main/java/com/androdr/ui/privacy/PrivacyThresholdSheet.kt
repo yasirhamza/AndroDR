@@ -27,6 +27,7 @@ import com.androdr.privacy.model.TrackerCategory
 
 @StringRes
 internal fun categoryLabel(c: TrackerCategory): Int = when (c) {
+    TrackerCategory.PROXYWARE -> R.string.privacy_cat_proxyware
     TrackerCategory.ADVERTISEMENT -> R.string.privacy_cat_advertisement
     TrackerCategory.PROFILING -> R.string.privacy_cat_profiling
     TrackerCategory.IDENTIFICATION -> R.string.privacy_cat_identification
@@ -39,6 +40,7 @@ internal fun categoryLabel(c: TrackerCategory): Int = when (c) {
 
 @StringRes
 internal fun categoryInfo(c: TrackerCategory): Int = when (c) {
+    TrackerCategory.PROXYWARE -> R.string.privacy_cat_proxyware_info
     TrackerCategory.ADVERTISEMENT -> R.string.privacy_cat_advertisement_info
     TrackerCategory.PROFILING -> R.string.privacy_cat_profiling_info
     TrackerCategory.IDENTIFICATION -> R.string.privacy_cat_identification_info
@@ -54,7 +56,7 @@ internal fun categoryInfo(c: TrackerCategory): Int = when (c) {
 @Composable
 fun PrivacyThresholdSheet(
     refused: Set<TrackerCategory>,
-    onChange: (Set<TrackerCategory>) -> Unit,
+    onChange: (category: TrackerCategory, refused: Boolean) -> Unit,
     onDismiss: () -> Unit,
 ) {
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState()) {
@@ -72,7 +74,7 @@ fun PrivacyThresholdSheet(
                 Row(
                     modifier = Modifier.fillMaxWidth().toggleable(
                         value = checked, role = Role.Checkbox,
-                        onValueChange = { on -> onChange(if (on) refused + category else refused - category) },
+                        onValueChange = { on -> onChange(category, on) },
                     ).padding(vertical = 6.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
