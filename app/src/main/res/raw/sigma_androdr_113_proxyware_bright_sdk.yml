@@ -4,21 +4,11 @@ status: experimental
 category: incident
 description: >
     This app contains Bright SDK, the residential-proxy SDK of Bright Data
-    (formerly Luminati; the same peer code as the Hola network). An app
-    that embeds it can use this device's internet connection to carry
-    other people's traffic, so that traffic appears to come from this
-    device's address. The app's publisher is paid for this. The SDK asks
-    for consent in wording the publisher chooses, and this rule cannot see
-    whether consent was given. Detection is by the SDK's own manifest
-    component names and native library names. VERIFIED from real apps:
-    io.lum.sdk (about 2019-2021), io.topvpn.vpn_api with its libtopvpn_*
-    libraries (about 2018), and org.hola.peer with libhola_svc* (Hola
-    VPN's own copy). UNVERIFIED, taken from the vendor's public
-    documentation with no sample: brdat.sdk and com.android.eapx (the
-    current generation); these match only if those builds declare manifest
-    components under the same package, as every verified generation does.
-    COVERAGE BOUND: a build shipped under a different package name is not
-    seen by this rule; the DNS rule androdr-003 lists the SDK's domains.
+    (formerly Luminati). An app that embeds it can use this device's
+    internet connection to carry other people's traffic, so that traffic
+    appears to come from this device's address. The app's publisher is paid
+    for this. The SDK asks for consent in wording the publisher chooses,
+    and AndroDR cannot see whether consent was given.
 author: AndroDR (AI-generated)
 date: 2026/11/16
 references:
@@ -30,6 +20,20 @@ tags:
 logsource:
     product: androdr
     service: app_scanner
+# Evidence for the names below (the description above is shown to the person
+# in the app, so these notes live here):
+#   VERIFIED from real apps (2026-11-14): io.lum.sdk (about 2019-2021; Peel
+#   Smart Remote 10.9.5.2, Hola Video Accelerator 1.156.812), io.topvpn.vpn_api
+#   with its libtopvpn_* libraries (about 2018; IQ Test 2.6.16, Hola Video
+#   Accelerator 1.143.268), org.hola.peer with libhola_svc* (Hola VPN's own
+#   copy of the same peer code).
+#   UNVERIFIED, from the vendor's public documentation with no sample:
+#   brdat.sdk and com.android.eapx (the current generation). These match only
+#   if those builds declare manifest components under the same package, as
+#   every verified generation does.
+#   COVERAGE BOUND: a build shipped under a different package name is not seen
+#   by this rule; the DNS rule androdr-003 lists the SDK's domains.
+#   No system-app exemption: a carrier app shipped preinstalled.
 detection:
     bright_sdk_component:
         embedded_component_class|startswith:
