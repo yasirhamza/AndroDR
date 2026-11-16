@@ -74,7 +74,11 @@ android {
                 commandLine("git", "rev-list", "--count", "HEAD")
             }.standardOutput.asText.get().trim().toIntOrNull() ?: 1
         versionCode = maxOf(mainBuildNumber, 439)
-        versionName = "0.9.0.$versionCode"
+        // The version people see. Set by hand: raise it when a build is meant for Play.
+        // The build number above tells builds of one version apart (About shows both, and
+        // reports print "0.9.1 (build N)"). release.yml reads this line to name the GitHub
+        // release, and VersionNameShapeTest pins its shape.
+        versionName = "0.9.1"
 
         // Release note: use the HEAD commit's subject line — that's what was just
         // built. Earlier revisions used `git log --grep=^feat(` which walked HEAD

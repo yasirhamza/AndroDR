@@ -4,7 +4,13 @@ import android.content.Context
 import android.content.pm.PackageManager
 import androidx.core.content.pm.PackageInfoCompat
 
-data class AppVersion(val name: String, val code: Long)
+data class AppVersion(val name: String, val code: Long) {
+    /**
+     * The version as reports print it, for example "0.9.1 (build 1012)". The name is set by hand
+     * and shared by every build of that version, so the build number is what identifies the build.
+     */
+    val label: String get() = "$name (build $code)"
+}
 
 /**
  * Reads versionName and longVersionCode from the installed APK's manifest at runtime.

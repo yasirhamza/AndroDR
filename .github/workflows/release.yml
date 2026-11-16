@@ -152,15 +152,15 @@ jobs:
         id: version
         run: |
           set -euo pipefail
-          BASE_VERSION=$(grep 'versionName' app/build.gradle.kts | head -1 | sed 's/.*"\([0-9.]*\)\..*/\1/')
+          # The hand-set version (for example 0.9.1); the commit count tells builds of it apart.
+          BASE_VERSION=$(sed -n 's/^ *versionName = "\([0-9][0-9.]*\)" *$/\1/p' app/build.gradle.kts | head -1)
           if [ -z "$BASE_VERSION" ]; then
             echo "ERROR: failed to extract BASE_VERSION from app/build.gradle.kts" >&2
             grep 'versionName' app/build.gradle.kts >&2
             exit 1
           fi
           BUILD=$(git rev-list --count HEAD)
-          VERSION="${BASE_VERSION}.${BUILD}"
-          TAG="v${VERSION}"
+          TAG="v${BASE_VERSION}-b${BUILD}"
           PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
           if [ -n "$PREV_TAG" ]; then
             CHANGES=$(git log "$PREV_TAG"..HEAD --pretty=format:"- %s" --no-merges)
