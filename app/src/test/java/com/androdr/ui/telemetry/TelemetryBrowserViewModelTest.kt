@@ -8,6 +8,8 @@ import com.androdr.data.model.TelemetryState
 import com.androdr.data.store.DecodedRecord
 import com.androdr.data.store.StoreFixture
 import com.androdr.data.store.StoreFixture.Companion.dns
+import com.androdr.data.store.pageOrRestart
+import com.androdr.data.store.withFreshSource
 import com.androdr.reporting.ReportFormatter
 import com.androdr.sigma.StoreRecord
 import com.androdr.sigma.TaxonomyContract
@@ -62,19 +64,17 @@ class TelemetryBrowserViewModelTest {
             r
         }
 
-    private suspend fun TelemetryBrowserViewModel.loadAll(pageSize: Int): List<DecodedRecord> {
-        val source = pagingSource(query.value)
-        val out = ArrayList<DecodedRecord>()
-        var page = source.load(PagingSource.LoadParams.Refresh(null, pageSize, false))
-            as PagingSource.LoadResult.Page<Int, DecodedRecord>
-        out += page.data
-        while (page.nextKey != null) {
-            page = source.load(PagingSource.LoadParams.Append(page.nextKey!!, pageSize, false))
-                as PagingSource.LoadResult.Page<Int, DecodedRecord>
+    private suspend fun TelemetryBrowserViewModel.loadAll(pageSize: Int): List<DecodedRecord> =
+        withFreshSource({ pagingSource(query.value) }) { source ->
+            val out = ArrayList<DecodedRecord>()
+            var page = source.pageOrRestart(PagingSource.LoadParams.Refresh(null, pageSize, false))
             out += page.data
+            while (page.nextKey != null) {
+                page = source.pageOrRestart(PagingSource.LoadParams.Append(page.nextKey!!, pageSize, false))
+                out += page.data
+            }
+            out
         }
-        return out
-    }
 
     @Test
     fun `the services level lists each service of a COMPLETE scan with its record count`() = runTest(dispatcher) {

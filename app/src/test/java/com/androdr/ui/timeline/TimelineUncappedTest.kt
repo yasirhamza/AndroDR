@@ -7,6 +7,9 @@ import com.androdr.data.db.TimelineFilter
 import com.androdr.data.db.TimelineKey
 import com.androdr.data.model.ForensicTimelineEvent
 import com.androdr.data.model.TelemetrySource
+import com.androdr.data.store.loadFresh
+import com.androdr.data.store.pageOrRestart
+import com.androdr.data.store.withFreshSource
 import com.androdr.scanner.WriterFixture
 import com.androdr.sigma.StoreRecord
 import kotlinx.coroutines.runBlocking
@@ -47,19 +50,19 @@ class TimelineUncappedTest {
     private fun source(filter: TimelineFilter = TimelineFilter()) = TimelinePagingSource(w.f.db, filter, entries)
 
     private suspend fun TimelinePagingSource.page(params: PagingSource.LoadParams<TimelineKey>) =
-        load(params) as PagingSource.LoadResult.Page<TimelineKey, TimelineRow.Entry>
+        pageOrRestart(params)
 
-    private suspend fun everything(filter: TimelineFilter): List<TimelineRow.Entry> {
-        val s = source(filter)
-        val out = ArrayList<TimelineRow.Entry>()
-        var page = s.page(PagingSource.LoadParams.Refresh(null, PAGE, false))
-        out += page.data
-        while (page.nextKey != null) {
-            page = s.page(PagingSource.LoadParams.Append(page.nextKey!!, PAGE, false))
+    private suspend fun everything(filter: TimelineFilter): List<TimelineRow.Entry> =
+        withFreshSource({ source(filter) }) { s ->
+            val out = ArrayList<TimelineRow.Entry>()
+            var page = s.page(PagingSource.LoadParams.Refresh(null, PAGE, false))
             out += page.data
+            while (page.nextKey != null) {
+                page = s.page(PagingSource.LoadParams.Append(page.nextKey!!, PAGE, false))
+                out += page.data
+            }
+            out
         }
-        return out
-    }
 
     private fun awaitInvalid(s: PagingSource<*, *>): Boolean {
         repeat(200) {
@@ -144,18 +147,19 @@ class TimelineUncappedTest {
     }
 
     private suspend fun assertScrollSurvivesInvalidation(all: List<TimelineRow.Entry>) {
-        val old = source()
-        val p1 = old.page(PagingSource.LoadParams.Refresh(null, PAGE, false))
-        val p2 = old.page(PagingSource.LoadParams.Append(p1.nextKey!!, PAGE, false))
+        val (old, p1, p2) = withFreshSource({ source() }) { s ->
+            val first = s.page(PagingSource.LoadParams.Refresh(null, PAGE, false))
+            Triple(s, first, s.page(PagingSource.LoadParams.Append(first.nextKey!!, PAGE, false)))
+        }
         w.f.db.forensicTimelineEventDao().insert(ForensicTimelineEvent(startTimestamp = 1L, source = "audit",
             category = "audit", description = "later", persistent = true))
         assertTrue(awaitInvalid(old))
         val anchor = PAGE + PAGE / 2
         val state = PagingState(listOf(p1, p2), anchorPosition = anchor,
             config = PagingConfig(pageSize = PAGE, initialLoadSize = PAGE), leadingPlaceholderCount = 0)
-        val reloaded = source().page(PagingSource.LoadParams.Refresh(old.getRefreshKey(state), PAGE, false))
+        val reloaded = loadFresh(PagingSource.LoadParams.Refresh(old.getRefreshKey(state), PAGE, false)) { source() }
         assertTrue("the anchored entry is on the reloaded page", reloaded.data.any { it.key == p2.data[PAGE / 2].key })
-        val back = source().page(PagingSource.LoadParams.Prepend(reloaded.prevKey!!, PAGE, false))
+        val back = loadFresh(PagingSource.LoadParams.Prepend(reloaded.prevKey!!, PAGE, false)) { source() }
         val at = all.indexOfFirst { it.key == reloaded.data.first().key }
         assertEquals("prepend continues the list just above the reloaded page",
             all.subList(at - back.data.size, at).map { it.key }, back.data.map { it.key })
