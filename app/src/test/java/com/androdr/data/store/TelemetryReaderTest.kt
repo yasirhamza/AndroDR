@@ -30,9 +30,8 @@ class TelemetryReaderTest {
     }
 
     private suspend fun firstPage(scanId: Long, service: String): List<DecodedRecord> {
-        val result = f.reader.pagingSource(scanId, service)
-            .load(PagingSource.LoadParams.Refresh(null, 50, false))
-        return (result as PagingSource.LoadResult.Page).data
+        val params = PagingSource.LoadParams.Refresh<Int>(null, 50, false)
+        return loadFresh(params) { f.reader.pagingSource(scanId, service) }.data
     }
 
     @Test

@@ -15,6 +15,9 @@ import com.androdr.data.model.SignalMember
 import com.androdr.data.model.TelemetrySource
 import com.androdr.data.store.StoreFixture.Companion.CAPTURED
 import com.androdr.data.store.StoreFixture.Companion.dns
+import com.androdr.data.store.loadFresh
+import com.androdr.data.store.pageOrRestart
+import com.androdr.data.store.withFreshSource
 import com.androdr.ioc.Campaign
 import com.androdr.reporting.ExportMode
 import com.androdr.reporting.ReportExporter
@@ -133,9 +136,8 @@ class AlertCloseTest {
         )
     }
 
-    private suspend fun groups(size: Int = 50) = OpenAlertGroupPagingSource(w.f.db)
-        .load(PagingSource.LoadParams.Refresh(null, size, false))
-        .let { it as PagingSource.LoadResult.Page<AlertGroupCursor, AlertGroup> }
+    private suspend fun groups(size: Int = 50) =
+        loadFresh(PagingSource.LoadParams.Refresh(null, size, false)) { OpenAlertGroupPagingSource(w.f.db) }
 
     // ── confirmation (L2) ───────────────────────────────────────────────────────
 
@@ -240,23 +242,23 @@ class AlertCloseTest {
         w.f.db.openHelper.writableDatabase.execSQL("UPDATE alert SET lastActivityAt = 5000 WHERE id = 1")
         assertEquals("quiet.example", groups(10).data.first().matchedValue)
         // Keyset paging one group at a time: append, an inclusive refresh at any key, and prepend.
-        val source = OpenAlertGroupPagingSource(w.f.db)
-        val all = mutableListOf<AlertGroup>()
-        var res = source.load(PagingSource.LoadParams.Refresh(null, 1, false)) as
-            PagingSource.LoadResult.Page<AlertGroupCursor, AlertGroup>
-        all += res.data
-        while (res.nextKey != null) {
-            res = source.load(PagingSource.LoadParams.Append(res.nextKey!!, 1, false)) as
-                PagingSource.LoadResult.Page<AlertGroupCursor, AlertGroup>
-            all += res.data
+        val all = withFreshSource({ OpenAlertGroupPagingSource(w.f.db) }) { source ->
+            val walked = mutableListOf<AlertGroup>()
+            var res = source.pageOrRestart(PagingSource.LoadParams.Refresh(null, 1, false))
+            walked += res.data
+            while (res.nextKey != null) {
+                res = source.pageOrRestart(PagingSource.LoadParams.Append(res.nextKey!!, 1, false))
+                walked += res.data
+            }
+            walked
         }
         assertEquals(listOf("quiet.example", "flood.example", ""), all.map { it.matchedValue })
         val middle = AlertGroupCursor(all[1].lastActivityAt, all[1].ruleId, all[1].matchedValue)
-        val refreshed = OpenAlertGroupPagingSource(w.f.db).load(PagingSource.LoadParams.Refresh(middle, 1, false))
-            as PagingSource.LoadResult.Page<AlertGroupCursor, AlertGroup>
+        val refreshed =
+            loadFresh(PagingSource.LoadParams.Refresh(middle, 1, false)) { OpenAlertGroupPagingSource(w.f.db) }
         assertEquals("refresh is inclusive", "flood.example", refreshed.data.single().matchedValue)
-        val before = OpenAlertGroupPagingSource(w.f.db).load(PagingSource.LoadParams.Prepend(middle, 5, false))
-            as PagingSource.LoadResult.Page<AlertGroupCursor, AlertGroup>
+        val before =
+            loadFresh(PagingSource.LoadParams.Prepend(middle, 5, false)) { OpenAlertGroupPagingSource(w.f.db) }
         assertEquals(listOf("quiet.example"), before.data.map { it.matchedValue })
     }
 
@@ -409,10 +411,10 @@ class AlertCloseTest {
             val listed = audit.details.lines().drop(1).dropLast(1).sumOf { it.substringAfterLast("× ").toLong() }
             assertEquals("…and ${BIG - listed} more finding(s)", audit.details.lines().last())
             // The Timeline's first page and the surviving scan's report still load.
-            val page = TimelinePagingSource(w.f.db, TimelineFilter(), TimelineEntries(w.f.db, w.f.reader))
-                .load(PagingSource.LoadParams.Refresh(null, 50, false))
-            assertTrue(page is PagingSource.LoadResult.Page)
-            assertTrue((page as PagingSource.LoadResult.Page).data.isNotEmpty())
+            val page = loadFresh(PagingSource.LoadParams.Refresh(null, 50, false)) {
+                TimelinePagingSource(w.f.db, TimelineFilter(), TimelineEntries(w.f.db, w.f.reader))
+            }
+            assertTrue(page.data.isNotEmpty())
             assertTrue(report(other).contains("ALERTS"))
         }
 

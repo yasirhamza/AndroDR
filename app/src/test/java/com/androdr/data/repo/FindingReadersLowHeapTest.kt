@@ -158,9 +158,9 @@ class FindingReadersLowHeapTest {
         assertTrue(alerts, alerts.contains("1 open alert(s) in total"))
 
         // D3: the open-alert list groups the flood of one indicator into one group (SQL GROUP BY).
-        val groups = OpenAlertGroupPagingSource(w.f.db)
-            .load(androidx.paging.PagingSource.LoadParams.Refresh(null, 10, false))
-            as androidx.paging.PagingSource.LoadResult.Page<AlertGroupCursor, AlertGroup>
+        val groups = com.androdr.data.store.loadFresh(
+            androidx.paging.PagingSource.LoadParams.Refresh(null, 10, false),
+        ) { OpenAlertGroupPagingSource(w.f.db) }
         assertEquals(listOf(FINDINGS), groups.data.filter { it.ruleId == DNS_RULE }.map { it.count })
 
         coVerify(exactly = 0) { findings.findingsOf(3L, any()) }
