@@ -1,0 +1,93 @@
+# Fixture for androdr-113: Bright SDK residential-proxy SDK (AndroDR #465).
+# True positives use the component and library names read from real apps
+# (2026-11-14): Peel Smart Remote 10.9.5.2 and Hola Video Accelerator
+# 1.156.812 (io.lum.sdk), IQ Test 2.6.16 (io.topvpn.vpn_api + libtopvpn_*),
+# Hola VPN (org.hola.peer + libhola_svc*). brdat.sdk and com.android.eapx
+# are from the vendor's documentation only.
+# The prefix guards are load-bearing: the rule matches by startswith with the
+# trailing dot, so a lookalike package or a class that merely contains the
+# SDK's name must not fire.
+rule_file: sigma_androdr_113_proxyware_bright_sdk.yml
+service: app_scanner
+true_positives:
+  # io.lum.sdk generation (Peel Smart Remote, Hola Video Accelerator)
+  - package_name: "tv.peel.app"
+    is_system_app: false
+    embedded_component_class:
+      - "io.lum.sdk.svc_host"
+      - "io.lum.sdk.svc_job"
+      - "io.lum.sdk.bcast_recv"
+  # io.topvpn.vpn_api generation, components only
+  - package_name: "com.example.topvpncomponents"
+    is_system_app: false
+    embedded_component_class:
+      - "io.topvpn.vpn_api.svc"
+      - "io.topvpn.vpn_api.bcast_recv"
+  # Native libraries alone are enough
+  - package_name: "com.example.topvpnlibs"
+    is_system_app: false
+    embedded_component_class: []
+    embedded_native_lib:
+      - "libtopvpn_svc_pie.so"
+      - "libtopvpn_jni_util.so"
+  # Hola VPN's own copy
+  - package_name: "org.hola"
+    is_system_app: false
+    embedded_component_class:
+      - "org.hola.vpn_svc"
+      - "org.hola.peer.svc_host"
+    embedded_native_lib:
+      - "libhola_svc_nopie.so"
+  # Preinstalled carrier: no system-app exemption (Peel shipped preinstalled)
+  - package_name: "tv.peel.app"
+    is_system_app: true
+    embedded_component_class:
+      - "io.lum.sdk.svc_host"
+  # Documented-only generations
+  - package_name: "com.example.brdat"
+    is_system_app: false
+    embedded_component_class:
+      - "brdat.sdk.svc_host"
+  - package_name: "com.example.eapx"
+    is_system_app: false
+    embedded_component_class:
+      - "com.android.eapx.svc_host"
+true_negatives:
+  # Benign app, nothing embedded
+  - package_name: "com.google.android.gm"
+    is_system_app: false
+    embedded_component_class: []
+    embedded_native_lib: []
+  # Hola's ordinary components outside org.hola.peer must not fire
+  - package_name: "com.example.holaother"
+    is_system_app: false
+    embedded_component_class:
+      - "org.hola.vpn_svc"
+      - "org.hola.js_svc"
+  # Lookalike packages: the trailing dot is part of the match
+  - package_name: "com.example.lookalike"
+    is_system_app: false
+    embedded_component_class:
+      - "io.lum.sdkx.svc_host"
+      - "com.android.eapxtra.Service"
+      - "brdat.sdkfoo.Main"
+  # The SDK's name inside another package is not a prefix match
+  - package_name: "com.example.contains"
+    is_system_app: false
+    embedded_component_class:
+      - "com.example.io.lum.sdk.svc_host"
+      - "com.vendor.com.android.eapx.BrightApi"
+  # AOSP-style neighbours of com.android.eapx
+  - package_name: "com.android.providers.media"
+    is_system_app: true
+    embedded_component_class:
+      - "com.android.providers.media.MediaProvider"
+      - "com.android.eap.EapService"
+  # Unrelated native libraries
+  - package_name: "com.example.libs"
+    is_system_app: false
+    embedded_component_class: []
+    embedded_native_lib:
+      - "libtopvpn.so"
+      - "libhola.so"
+      - "libflutter.so"

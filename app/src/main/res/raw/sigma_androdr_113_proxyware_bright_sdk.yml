@@ -1,0 +1,61 @@
+title: Embedded residential-proxy SDK — Bright SDK (Bright Data, formerly Luminati)
+id: androdr-113
+status: experimental
+category: incident
+description: >
+    This app contains Bright SDK, the residential-proxy SDK of Bright Data
+    (formerly Luminati; the same peer code as the Hola network). An app
+    that embeds it can use this device's internet connection to carry
+    other people's traffic, so that traffic appears to come from this
+    device's address. The app's publisher is paid for this. The SDK asks
+    for consent in wording the publisher chooses, and this rule cannot see
+    whether consent was given. Detection is by the SDK's own manifest
+    component names and native library names. VERIFIED from real apps:
+    io.lum.sdk (about 2019-2021), io.topvpn.vpn_api with its libtopvpn_*
+    libraries (about 2018), and org.hola.peer with libhola_svc* (Hola
+    VPN's own copy). UNVERIFIED, taken from the vendor's public
+    documentation with no sample: brdat.sdk and com.android.eapx (the
+    current generation); these match only if those builds declare manifest
+    components under the same package, as every verified generation does.
+    COVERAGE BOUND: a build shipped under a different package name is not
+    seen by this rule; the DNS rule androdr-003 lists the SDK's domains.
+author: AndroDR (AI-generated)
+date: 2026/11/16
+references:
+    - https://blog.includesecurity.com/2026/06/the-smart-tv-in-your-livingroom-is-a-node-in-the-aiscraping-economy/
+    - https://blazskufca.com/projects/webos-brightdata/
+    - https://github.com/BrightSDK/documentation
+tags:
+    - attack.t1604
+logsource:
+    product: androdr
+    service: app_scanner
+detection:
+    bright_sdk_component:
+        embedded_component_class|startswith:
+            - 'io.lum.sdk.'
+            - 'io.topvpn.vpn_api.'
+            - 'org.hola.peer.'
+            - 'brdat.sdk.'
+            - 'com.android.eapx.'
+    bright_sdk_native_lib:
+        embedded_native_lib|startswith:
+            - 'libtopvpn_'
+            - 'libhola_svc'
+    condition: bright_sdk_component or bright_sdk_native_lib
+level: high
+display:
+    category: app_risk
+    icon: warning
+    triggered_title: "Residential-proxy SDK: Bright SDK"
+    evidence_type: ioc_match
+    summary_template: "Bright SDK (residential proxy) detected in this app: {matched_value}"
+    guidance: "This app embeds Bright SDK, which can use this device's internet connection to carry other people's traffic. Uninstall the app, or turn off its connection-sharing option if you keep it."
+falsepositives:
+    - "The person knowingly agreed to share their connection in exchange for a free app or payment (for example Hola VPN). The SDK is present either way; this rule cannot see the consent state."
+    - "An unrelated app declaring a manifest component under one of these package prefixes; none is known. brdat.sdk and com.android.eapx are not confirmed from a sample."
+remediation:
+    - "Uninstall this app if you do not want this device's internet connection used to carry other people's traffic."
+    - "If you keep the app, look in its settings for the option that lets it share this device's connection or resources, and turn it off."
+    - "Blocking the SDK's domains alone does not stop it: it also connects to servers by address, without a domain lookup."
+    - "If the app came preinstalled and cannot be uninstalled, disable it in Settings > Apps."
