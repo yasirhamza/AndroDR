@@ -32,3 +32,5 @@ Clean up: `adb uninstall com.androdr.fixture.privacy.{positive,negative,corrupt,
 First run: 2026-11-07, API 36.1 emulator, main `eabd102b`. All four matched.
 
 Second run: 2026-11-12, main `2066d094`, API 36.1 emulator and SM-F916B (clean install): all six matched, with the Timeline and details checks above.
+
+Third run (#470, proxyware): 2026-11-16, branch `feat/privacy-scan-proxyware`. API 36.1 emulator with all eight fixtures, and SM-F916B (clean install) with positive, negative, proxyware and lookalike: `privacy-proxyware` under **Cross your threshold** as Proxyware, tracker details "Tracker list entry 900001 (AndroDR's own entry, not from Exodus Privacy)" with no link, lookalike under **Other apps**. Unticking Proxyware in "What I refuse" moved the fixture to **Other apps**; ticking it moved it back. The security scan raised no residential-proxy finding for it. No crash.
