@@ -27,5 +27,7 @@ include(
     ":nfc-relay",
     ":overlay-accessibility-combo",
     ":sms-notification-otp-theft",
-    ":removed-fake-package"
+    ":removed-fake-package",
+    ":bright-sdk-proxyware",
+    ":bright-sdk-lookalike"
 )

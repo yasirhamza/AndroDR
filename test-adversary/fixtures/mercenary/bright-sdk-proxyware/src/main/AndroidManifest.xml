@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Fixture for androdr-113 (Bright SDK residential-proxy SDK, AndroDR #465).
+  Declares the three manifest components the io.lum.sdk generation of the SDK
+  declares in real apps (read from Peel Smart Remote 10.9.5.2 and Hola Video
+  Accelerator 1.156.812). Declared, not functional: no SDK code is included and
+  the scanner reads manifest facts only.
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+    <application android:label="Bright SDK Carrier Test" tools:ignore="MissingClass">
+        <service android:name="io.lum.sdk.svc_host" android:exported="false" />
+        <service
+            android:name="io.lum.sdk.svc_job"
+            android:permission="android.permission.BIND_JOB_SERVICE"
+            android:exported="false" />
+        <receiver android:name="io.lum.sdk.bcast_recv" android:exported="false" />
+    </application>
+</manifest>

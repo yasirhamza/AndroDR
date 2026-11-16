@@ -689,6 +689,38 @@ scenarios:
       - "Sideloaded Application"
       - "!Cerberus Banking Trojan"
 
+  # ── 2026-11-16: Bright SDK residential-proxy SDK (androdr-113, #465) ──
+  - id: bright_sdk_proxyware
+    track: 3
+    risk: high
+    technique: T1604
+    tactic: command-and-control
+    description: "App declaring Bright SDK's io.lum.sdk manifest components (names read from real carrier apps) — androdr-113 names the app"
+    source: fixture
+    fixture: fixtures/mercenary/bright-sdk-proxyware.apk
+    sha256: "a1ced867c9bb5a8076fe9321d379fbedeb5faedb4804106bd4dd61f8c6acce24"
+    tags: [android, proxyware, bright-sdk, embedded-sdk]
+    attack: [T1604]
+    expected_patterns:
+      - "Residential-proxy SDK: Bright SDK"
+
+  - id: bright_sdk_lookalike
+    track: 3
+    risk: low
+    technique: T1604
+    tactic: command-and-control
+    # The rule matches by prefix including the trailing dot. Components under
+    # io.lum.sdkx, com.android.eapxtra and com.example.io.lum.sdk must not fire it.
+    description: "App whose components only resemble Bright SDK's packages must not fire androdr-113"
+    source: fixture
+    fixture: fixtures/mercenary/bright-sdk-lookalike.apk
+    sha256: "1964e17e535f4f0bdeff4be9b3568a368f773293c4aadb49824b5e6cf2b7b9ee"
+    tags: [android, proxyware, bright-sdk, negative]
+    attack: [T1604]
+    expected_patterns:
+      - "Sideloaded Application"
+      - "~Reasons : Sideloaded Application; Hidden App \\(No Launcher Icon\\)$"
+
   # ── 2026-10-17: IOC attribution report wording (Plan B, Task B8) ──────
   - id: detect_only_dns_wording
     track: 3
