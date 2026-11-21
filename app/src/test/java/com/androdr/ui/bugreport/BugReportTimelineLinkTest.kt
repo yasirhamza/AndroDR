@@ -1,5 +1,6 @@
 package com.androdr.ui.bugreport
 
+import com.androdr.reporting.ExportMode
 import android.net.Uri
 import com.androdr.data.model.ScanResult
 import com.androdr.data.model.TelemetryState
@@ -60,7 +61,7 @@ class BugReportTimelineLinkTest {
         assertNull(vm.importScanId.value)
 
         vm.onFilePicked(uri)
-        vm.exportReport()
+        vm.exportReport(ExportMode.BOTH)
 
         assertEquals(42L, vm.importScanId.value)
         coVerify(exactly = 1) { exporter.export(scan, any()) }
@@ -78,7 +79,7 @@ class BugReportTimelineLinkTest {
     @Test
     fun `before any import there is no link and export does nothing`() = runTest {
         val vm = vm(bugReport)
-        vm.exportReport()
+        vm.exportReport(ExportMode.BOTH)
         assertNull(vm.importScanId.value)
         coVerify(exactly = 0) { exporter.export(any(), any()) }
     }

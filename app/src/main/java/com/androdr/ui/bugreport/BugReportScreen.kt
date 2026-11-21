@@ -26,6 +26,7 @@ import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -36,6 +37,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -52,6 +54,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.androdr.R
 import com.androdr.scanner.ArtifactType
+import com.androdr.ui.common.ExportModeDialog
 import com.androdr.ui.common.FindingCard
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -79,6 +82,9 @@ fun BugReportScreen(
     val analysisFinished by viewModel.analysisFinished.collectAsStateWithLifecycle()
     val errorMessage by viewModel.errorMessage.collectAsStateWithLifecycle()
     val exporting by viewModel.exporting.collectAsStateWithLifecycle()
+    val exportFailed by viewModel.exportFailed.collectAsStateWithLifecycle()
+    val exportEstimate by viewModel.exportEstimate.collectAsStateWithLifecycle()
+    val estimateFailed by viewModel.estimateFailed.collectAsStateWithLifecycle()
     val shareUri by viewModel.shareUri.collectAsStateWithLifecycle()
     val importCard by viewModel.importCard.collectAsStateWithLifecycle()
     val importBusy by viewModel.importBusy.collectAsStateWithLifecycle()
@@ -89,6 +95,40 @@ fun BugReportScreen(
 
     var instructionsExpanded by remember { mutableStateOf(false) }
     var intrusionInstructionsExpanded by remember { mutableStateOf(false) }
+
+    // Export goes through the same dialog as History: the size first, and a findings-only choice
+    // that stays quick on a large import. Starting the full report directly left the button
+    // inactive for a minute with nothing else on screen.
+    var showExportDialog by remember { mutableStateOf(false) }
+    val openExportDialog: () -> Unit = {
+        viewModel.loadExportEstimate()
+        showExportDialog = true
+    }
+    if (showExportDialog) {
+        ExportModeDialog(
+            estimate = exportEstimate?.text() ?: stringResource(
+                if (estimateFailed) R.string.history_export_estimate_unknown
+                else R.string.history_export_estimate_loading
+            ),
+            onDismiss = { showExportDialog = false },
+            onConfirm = { mode ->
+                showExportDialog = false
+                viewModel.exportReport(mode)
+            },
+        )
+    }
+    if (exportFailed) {
+        AlertDialog(
+            onDismissRequest = { viewModel.dismissExportFailed() },
+            title = { Text(stringResource(R.string.history_export_failed_title)) },
+            text = { Text(stringResource(R.string.history_export_failed_body)) },
+            confirmButton = {
+                TextButton(onClick = { viewModel.dismissExportFailed() }) {
+                    Text(stringResource(android.R.string.ok))
+                }
+            },
+        )
+    }
 
     // Launch share intent when a report URI is ready
     LaunchedEffect(shareUri) {
@@ -270,7 +310,7 @@ fun BugReportScreen(
                     item {
                         ImportTimelineLink(
                             onViewTimeline = { onViewTimeline(scanId) },
-                            onExport = if (hasResults) null else viewModel::exportReport,
+                            onExport = if (hasResults) null else openExportDialog,
                             exporting = exporting,
                         )
                     }
@@ -413,18 +453,7 @@ fun BugReportScreen(
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onSurface
                         )
-                        OutlinedButton(
-                            onClick = { viewModel.exportReport() },
-                            enabled = !exporting
-                        ) {
-                            Icon(
-                                imageVector = Icons.Filled.Share,
-                                contentDescription = stringResource(R.string.report_export_cd),
-                                modifier = Modifier.size(18.dp)
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text(stringResource(R.string.report_export_label))
-                        }
+                        ExportButton(onClick = openExportDialog, exporting = exporting)
                     }
                 }
 
@@ -525,17 +554,28 @@ private fun ImportTimelineLink(onViewTimeline: () -> Unit, onExport: (() -> Unit
         OutlinedButton(onClick = onViewTimeline) {
             Text(stringResource(R.string.bugreport_view_timeline))
         }
-        if (onExport != null) {
-            OutlinedButton(onClick = onExport, enabled = !exporting) {
-                Icon(
-                    imageVector = Icons.Filled.Share,
-                    contentDescription = stringResource(R.string.report_export_cd),
-                    modifier = Modifier.size(18.dp)
-                )
-                Spacer(modifier = Modifier.width(6.dp))
-                Text(stringResource(R.string.report_export_label))
-            }
+        if (onExport != null) ExportButton(onClick = onExport, exporting = exporting)
+    }
+}
+
+/**
+ * Export opens the export dialog ([onClick]); while the report is written the icon turns into a
+ * spinner, since a full report of a large import takes a while (#473).
+ */
+@Composable
+private fun ExportButton(onClick: () -> Unit, exporting: Boolean) {
+    OutlinedButton(onClick = onClick, enabled = !exporting) {
+        if (exporting) {
+            CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+        } else {
+            Icon(
+                imageVector = Icons.Filled.Share,
+                contentDescription = stringResource(R.string.report_export_cd),
+                modifier = Modifier.size(18.dp)
+            )
         }
+        Spacer(modifier = Modifier.width(6.dp))
+        Text(stringResource(R.string.report_export_label))
     }
 }
 
