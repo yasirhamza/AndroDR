@@ -6,6 +6,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.androdr.data.model.ScanResult
 import com.androdr.data.repo.FindingsRepository
+import com.androdr.reporting.ExportEstimate
+import com.androdr.reporting.ExportMode
 import com.androdr.reporting.ReportExporter
 import com.androdr.scanner.ArtifactType
 import com.androdr.data.store.Preflight
@@ -118,6 +120,18 @@ class BugReportViewModel @Inject constructor(
 
     private val _exporting = MutableStateFlow(false)
     val exporting: StateFlow<Boolean> = _exporting.asStateFlow()
+
+    /** True after an export failed (nothing was shared); the screen says so. */
+    private val _exportFailed = MutableStateFlow(false)
+    val exportFailed: StateFlow<Boolean> = _exportFailed.asStateFlow()
+
+    /** What exporting the last import would carry, for the export dialog; null while it loads. */
+    private val _exportEstimate = MutableStateFlow<ExportEstimate?>(null)
+    val exportEstimate: StateFlow<ExportEstimate?> = _exportEstimate.asStateFlow()
+
+    /** True when the estimate could not be read; the dialog says the size is unknown. */
+    private val _estimateFailed = MutableStateFlow(false)
+    val estimateFailed: StateFlow<Boolean> = _estimateFailed.asStateFlow()
 
     /**
      * User-facing instructions for generating a bug report.
@@ -256,15 +270,47 @@ class BugReportViewModel @Inject constructor(
      * through the one report path ([ReportExporter.export], spec §7) and emits its FileProvider URI
      * via [shareUri] for sharing. Does nothing until an import has been saved.
      */
-    fun exportReport() {
+    /**
+     * Writes the last import's report in the [mode] chosen in the export dialog and emits its URI
+     * via [shareUri]. A failure is reported through [exportFailed], never thrown.
+     */
+    @Suppress("TooGenericExceptionCaught") // a failed export is reported, never a crash
+    fun exportReport(mode: ExportMode) {
         if (_exporting.value) return
         val scan = _importScan.value ?: return
         viewModelScope.launch {
             _exporting.value = true
             try {
-                _shareUri.value = reportExporter.export(scan)
+                _shareUri.value = reportExporter.export(scan, mode)
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.w(TAG, "report export failed", e)
+                _exportFailed.value = true
             } finally {
                 _exporting.value = false
+            }
+        }
+    }
+
+    fun dismissExportFailed() { _exportFailed.value = false }
+
+    /** Loads what exporting the last import would carry, for the export dialog. */
+    @Suppress("TooGenericExceptionCaught") // an unknown estimate is shown as unknown
+    fun loadExportEstimate() {
+        _exportEstimate.value = null
+        _estimateFailed.value = false
+        val scan = _importScan.value ?: return
+        viewModelScope.launch {
+            try {
+                val estimate = reportExporter.exportEstimate(scan)
+                // A slower estimate for an earlier import must not land on this one.
+                if (_importScan.value?.id == scan.id) _exportEstimate.value = estimate
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.w(TAG, "export estimate failed", e)
+                if (_importScan.value?.id == scan.id) _estimateFailed.value = true
             }
         }
     }
